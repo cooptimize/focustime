@@ -176,11 +176,87 @@ const colorVar = (c: string | null) => (c ? (c.startsWith("#") ? c : `var(--clie
 
 // ---------- Clients ----------
 
-type ClientRow = { key: string; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; houseStyle: string | null; process: ClientProcess; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
-type ClientsData = { palette: string[]; suggested: string[]; clients: ClientRow[] };
+type ClientRow = { key: string; isClient: boolean; whyText: string; names: string[]; types: string[]; treatAsClient: boolean; hidden: boolean; hasSettings: boolean; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; houseStyle: string | null; process: ClientProcess; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
+type ClientFilterValue = "customers" | "all";
+type ClientCounts = { customers: number; all: number };
+type ClientsData = { palette: string[]; suggested: string[]; filter: ClientFilterValue; accountsRead: boolean; counts: ClientCounts; clients: ClientRow[] };
+
+/** ADM-2: Customers (the default) or All accounts, on Admin › Clients and AI. */
+function ClientFilter({ value, counts, onChange }: { value: ClientFilterValue; counts: ClientCounts | undefined; onChange: (v: ClientFilterValue) => void }) {
+  return (
+    <span className="adm-filter" role="radiogroup" aria-label="Which accounts">
+      {(["customers", "all"] as const).map((v) => (
+        <button key={v} type="button" role="radio" aria-checked={value === v} onClick={() => onChange(v)}>
+          {v === "customers" ? "Customers" : "All accounts"}
+          {counts ? <span className="muted"> {v === "customers" ? counts.customers : counts.all}</span> : null}
+        </button>
+      ))}
+    </span>
+  );
+}
+
+const TYPE_WORDS: Record<string, string> = { customer: "Customer", prospect: "Prospect", partner: "Partner", vendor: "Vendor", consultant: "Consultant", other: "Other", competitor: "Competitor", investor: "Investor", influencer: "Influencer", press: "Press", reseller: "Reseller", supplier: "Supplier" };
+
+/** ADM-2: every account with why it is or isn't a client, and the admins' two overrides (each audited). */
+function AllAccounts({ rows, saver }: { rows: ClientRow[]; saver: Saver }) {
+  return (
+    <div className="adm-scroll">
+      <table className="adm-table adm-accounts">
+        <thead>
+          <tr>
+            <th scope="col">Account</th>
+            <th scope="col">In Dataverse</th>
+            <th scope="col">Client?</th>
+            <th scope="col">Treat as a client <Kind kind="Rule" /></th>
+            <th scope="col">Hide from FocusTime <Kind kind="Rule" /></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((c) => {
+            const scope = `client:${c.key}`;
+            const internal = c.whyText === "Cooptimize Internal";
+            return (
+              <tr key={c.key}>
+                <th scope="row">
+                  {c.key}
+                  {c.names.length > 0 && c.names.join(", ") !== c.key && <span className="muted adm-email">{c.names.join(", ")}</span>}
+                </th>
+                <td>{c.types.length ? c.types.map((t) => TYPE_WORDS[t] ?? t).join(", ") : <span className="muted">No type</span>}</td>
+                <td>
+                  {c.isClient ? "Client" : <span className="muted">Not a client</span>}
+                  <span className="set-hint">{c.whyText}</span>
+                  {c.hasSettings && <span className="adm-mark">Has settings, not a client</span>}
+                </td>
+                <td>
+                  {!internal && (
+                    <label className="adm-switch">
+                      <input type="checkbox" role="switch" checked={saver.shown(scope, "treat_as_client", c.treatAsClient)} aria-label={`Treat ${c.key} as a client`} onChange={(e) => void saver.save(scope, "treat_as_client", e.target.checked ? true : undefined, `${c.key}: treat as a client`)} /> {c.treatAsClient ? "Yes" : "No"}
+                    </label>
+                  )}
+                  <SaveMark s={saver.status(scope, "treat_as_client")} retry={() => void saver.save(scope, "treat_as_client", c.treatAsClient, `${c.key}: treat as a client`)} />
+                </td>
+                <td>
+                  {internal ? (
+                    <span className="muted">Always a client</span>
+                  ) : (
+                    <label className="adm-switch">
+                      <input type="checkbox" role="switch" checked={saver.shown(scope, "hidden", c.hidden)} aria-label={`Hide ${c.key} from FocusTime`} onChange={(e) => void saver.save(scope, "hidden", e.target.checked ? true : undefined, `${c.key}: hide from FocusTime`)} /> {c.hidden ? "Hidden" : "No"}
+                    </label>
+                  )}
+                  <SaveMark s={saver.status(scope, "hidden")} retry={() => void saver.save(scope, "hidden", c.hidden, `${c.key}: hide from FocusTime`)} />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function AdminClients() {
-  const { data, error, load, loadWith } = useSection<ClientsData>("clients");
+  const [filter, setFilter] = useState<ClientFilterValue>("customers");
+  const { data, error, load, loadWith } = useSection<ClientsData>("clients", { filter });
   const saver = useAdminSave(load);
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
@@ -193,12 +269,22 @@ function AdminClients() {
   return (
     <DeliveryChatsProvider>
       <p className="muted">Each client's chats, team color, process settings and house style, for everyone. People see these read-only, marked "Set by your FocusTime admin"; a person may still pick their own color.</p>
-      {data.clients.length === 0 && <p className="muted">No clients yet. They come from Dataverse once people are read (Admin › People › Refresh from Dataverse).</p>}
-      <div className="set-clients">
-        {data.clients.map((c) => (
-          <AdminClientCard key={c.key} c={c} palette={data.palette} saver={saver} onRefresh={onRefresh} refreshing={refreshing} />
-        ))}
+      <div className="set-row-actions">
+        <ClientFilter value={filter} counts={data.counts} onChange={setFilter} />
+        <span className="set-hint">Clients are active Dataverse accounts of type Customer, plus Cooptimize Internal and any account treated as a client below. Nothing is deleted.</span>
       </div>
+      {saver.warning && <p className="set-problem" role="status">{saver.warning}</p>}
+      {!data.accountsRead && <p className="set-problem">Accounts aren't read from Dataverse yet, so every account counts as a client. Admin › People › Refresh from Dataverse.</p>}
+      {data.clients.length === 0 && <p className="muted">No clients yet. They come from Dataverse once people are read (Admin › People › Refresh from Dataverse).</p>}
+      {filter === "all" ? (
+        <AllAccounts rows={data.clients} saver={saver} />
+      ) : (
+        <div className="set-clients">
+          {data.clients.map((c) => (
+            <AdminClientCard key={c.key} c={c} palette={data.palette} saver={saver} onRefresh={onRefresh} refreshing={refreshing} />
+          ))}
+        </div>
+      )}
     </DeliveryChatsProvider>
   );
 }
@@ -243,7 +329,7 @@ function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: Clie
       <DeliveryChatField clientKey={c.key} clientName={c.key} />
       <ProcessView c={c} saver={saver} onRefresh={onRefresh} refreshing={refreshing} />
       <div className="set-form set-house-style">
-        <AField label="House style for Draft stories" kind="Rule" s={saver.status(scope, "house_style")} retry={() => void saver.save(scope, "house_style", c.houseStyle, `${c.key}: house style`)} hint="Sent with every Draft stories request for this client. Empty goes back to the style learned from its own features.">
+        <AField label="House style for Break down" kind="Rule" s={saver.status(scope, "house_style")} retry={() => void saver.save(scope, "house_style", c.houseStyle, `${c.key}: house style`)} hint="Sent with every Break down request for this client. Empty goes back to the style learned from its own features.">
           <textarea
             aria-label={`${c.key}: house style`}
             rows={3}
@@ -355,10 +441,11 @@ function ProcessView({ c, saver, onRefresh, refreshing }: { c: ClientRow; saver:
 
 // ---------- AI ----------
 
-type AiData = { on: boolean; model: string; personCapUsd: number; appCapUsd: number; provider: string; keyConfigured: boolean; appSpentMicros: number; zero: { person: boolean; app: boolean }; clients: { key: string; allowAi: boolean; attachmentsAi: boolean }[] };
+type AiData = { on: boolean; model: string; personCapUsd: number; appCapUsd: number; provider: string; keyConfigured: boolean; appSpentMicros: number; zero: { person: boolean; app: boolean }; filter: ClientFilterValue; counts: ClientCounts; clients: { key: string; isClient: boolean; whyText: string; allowAi: boolean; attachmentsAi: boolean }[] };
 
 function AdminAi() {
-  const { data, error, load } = useSection<AiData>("ai");
+  const [filter, setFilter] = useState<ClientFilterValue>("customers");
+  const { data, error, load } = useSection<AiData>("ai", { filter });
   const saver = useAdminSave(load);
   const [confirmOff, setConfirmOff] = useState(false);
   if (error) return <p className="field-problem">{error}</p>;
@@ -373,7 +460,7 @@ function AdminAi() {
       </AField>
       {confirmOff && (
         <div className="adm-confirm" role="alertdialog" aria-label="Turn AI off for everyone">
-          <p>Turn AI off for everyone? Draft stories, request sorting and promise reading stop until it's on again.</p>
+          <p>Turn AI off for everyone? Break down, request sorting and promise reading stop until it's on again.</p>
           <button type="button" className="mini danger" onClick={() => (setConfirmOff(false), void saver.save(o, "ai.on", false, "AI for FocusTime"))}>
             Turn AI off
           </button>
@@ -396,6 +483,9 @@ function AdminAi() {
         </AField>
       </div>
       <h3>Per client</h3>
+      <div className="set-row-actions">
+        <ClientFilter value={filter} counts={data.counts} onChange={setFilter} />
+      </div>
       {data.clients.length === 0 ? (
         <p className="muted">No clients yet.</p>
       ) : (
@@ -410,7 +500,10 @@ function AdminAi() {
           <tbody>
             {data.clients.map((c) => (
               <tr key={c.key}>
-                <th scope="row">{c.key}</th>
+                <th scope="row">
+                  {c.key}
+                  {!c.isClient && <span className="set-hint">{c.whyText}</span>}
+                </th>
                 <td>
                   <label className="set-check">
                     <input type="checkbox" role="switch" checked={saver.shown(`client:${c.key}`, "allow_ai", c.allowAi)} aria-label={`Allow AI for ${c.key}`} onChange={(e) => void saver.save(`client:${c.key}`, "allow_ai", e.target.checked, `${c.key}: Allow AI`)} /> {c.allowAi ? "Allowed" : "Off"}
@@ -433,7 +526,7 @@ function AdminAi() {
 
 // ---------- Conversations ----------
 
-type ConvData = { pollMinutes: number; retentionDays: number; chatAiDailyCap: number; requestPhrases: string[]; ackPhrases: string[]; promisePhrases: string[]; more: string[] };
+type ConvData = { pollMinutes: number; retentionDays: number; closedShownDays: number; chatAiDailyCap: number; requestPhrases: string[]; ackPhrases: string[]; promisePhrases: string[]; more: string[] };
 
 function AdminConversations() {
   const { data, error, load } = useSection<ConvData>("conversations");
@@ -461,8 +554,9 @@ function AdminConversations() {
       </div>
       <h3>Reading client chats</h3>
       <div className="set-grid">
-        {num("conv.poll_minutes", "Read client chats every (minutes)", data.pollMinutes, 1, 60, "In followers' working hours only.")}
-        {num("conv.retention_days", "Keep messages that aren't requests (days)", data.retentionDays, 1, 90, "Then they're deleted.")}
+        {num("conv.poll_minutes", "Read client chats every (minutes)", data.pollMinutes, 1, 30, "1 to 30, in followers' working hours only. Applies from the next poll.")}
+        {num("conv.retention_days", "Keep messages that aren't requests (days)", data.retentionDays, 1, 90, "Then they're deleted, after each poll.")}
+        {num("conv.closed_shown_days", "Closed conversations stay shown (days)", data.closedShownDays, 1, 90, "In Inbox › Conversations › Closed, then they're no longer listed.")}
         {num("conv.chat_ai_daily_cap", "AI requests per chat per day", data.chatAiDailyCap, 0, 5000, "At most, for each chat.")}
       </div>
     </div>
@@ -486,10 +580,17 @@ type Person = {
   lastSignInAt: string | null;
   setup: "done" | "skipped" | "started" | "not_started" | null;
   dataverseMatch: boolean;
+  /** ADM-2: which key matched ("Matched by email"), or why not. */
+  dataverseText: string;
+  cooptimizer: boolean;
+  notCooptimizerText: string | null;
+  automation: boolean;
+  positionName: string | null;
   clients: string[];
   sources: { microsoft: boolean; google: boolean; devopsWrites: number } | null;
 };
-type PeopleData = { people: Person[]; admins: { id: string; name: string | null; via: string | null; checkedAt: string | null }[]; groupLink: string | null; groupSet: boolean; refreshedAt: string | null; levels: { id: string; name: string }[] };
+type Position = { name: string; people: number; mapped: boolean; level: string | null };
+type PeopleData = { people: Person[]; others: Person[]; positions: Position[]; unmappedPositions: number; noDomains: boolean; leadsShown: number; admins: { id: string; name: string | null; via: string | null; checkedAt: string | null }[]; groupLink: string | null; groupSet: boolean; refreshedAt: string | null; levels: { id: string; name: string }[] };
 
 const SETUP_WORDS = { done: "Done", skipped: "Skipped", started: "Started", not_started: "Not started" } as const;
 
@@ -499,6 +600,8 @@ function AdminPeople() {
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<Person | null>(null);
   const ctx = useSaveContext();
+  const saver = useAdminSave(load);
+  const [othersOpen, setOthersOpen] = useState(false);
   const override = async (input: Record<string, unknown>, what: string, undo?: Record<string, unknown>) => {
     setMsg(null);
     try {
@@ -558,45 +661,161 @@ function AdminPeople() {
         <span className="set-hint">{data.refreshedAt ? `Levels and leads read ${shortDate(data.refreshedAt.slice(0, 10))}; again each day.` : "Not read from Dataverse yet."}</span>
         {msg && <span className="set-hint" role="status">{msg}</span>}
       </div>
-      <p className="muted">Levels change suggestions and emphasis only, never what anyone can see or do.</p>
-      <div className="adm-scroll">
-        <table className="adm-table adm-people-table">
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Level</th>
-              <th scope="col">Client lead</th>
-              <th scope="col">Last sign-in</th>
-              <th scope="col">Setup</th>
-              <th scope="col">Dataverse</th>
-              <th scope="col">Clients</th>
-              <th scope="col">Sources</th>
-              <th scope="col"><span className="sr-only">Remove</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.people.map((p) => (
-              <PersonRow key={p.id} p={p} levels={data.levels} onOverride={override} onRemove={() => setRemoving(p)} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <p className="muted">Cooptimizers only. Levels change suggestions and emphasis only, never what anyone can see or do.</p>
+      {data.noDomains && <p className="set-problem">Set Cooptimize email domains in Admin › Organization. Until then only guest accounts are left out of People.</p>}
+      <PeopleTable people={data.people} levels={data.levels} leadsShown={data.leadsShown} saver={saver} onOverride={override} onRemove={setRemoving} label="People" />
+      {data.others.length > 0 && (
+        <div className="adm-fold">
+          <button type="button" className="fold-line" aria-expanded={othersOpen} onClick={() => setOthersOpen((o) => !o)}>
+            {othersOpen ? "▾" : "▸"} Not Cooptimizers ({data.others.length})
+          </button>
+          {othersOpen && (
+            <>
+              <p className="muted">Guests, people outside the Cooptimize email domains and automation accounts. They have no level, lead no client and never show in pickers. Nothing about them is deleted.</p>
+              <PeopleTable people={data.others} levels={data.levels} leadsShown={data.leadsShown} saver={saver} onOverride={override} onRemove={setRemoving} label="Not Cooptimizers" others />
+            </>
+          )}
+        </div>
+      )}
+      <PositionMap positions={data.positions} unmapped={data.unmappedPositions} levels={data.levels} saver={saver} />
       {removing && <RemovePerson p={removing} onClose={() => setRemoving(null)} onDone={async (m) => (setRemoving(null), setMsg(m), await load())} />}
     </div>
   );
 }
 
-function PersonRow({ p, levels, onOverride, onRemove }: { p: Person; levels: PeopleData["levels"]; onOverride: (input: Record<string, unknown>, what: string, undo?: Record<string, unknown>) => Promise<void>; onRemove: () => void }) {
+/** ADM-2 (D605): Dataverse position names to levels. Applies at once (the next read of levels), audited as one Rule. */
+function PositionMap({ positions, unmapped, levels, saver }: { positions: Position[]; unmapped: number; levels: PeopleData["levels"]; saver: Saver }) {
+  const map = Object.fromEntries(positions.filter((p) => p.mapped).map((p) => [p.name, p.level]));
+  const shown = saver.shown("org", "org.position_levels", map) as Record<string, string | null>;
+  const set = (name: string, level: string | null) => void saver.save("org", "org.position_levels", { ...shown, [name]: level }, `${name} mapped`);
+  return (
+    <section className="adm-positions" aria-label="Positions to levels">
+      <h3>Positions to levels {unmapped > 0 && <span className="adm-kind">{unmapped} not mapped</span>}</h3>
+      <p className="muted">Each Cooptimizer's level comes from their Dataverse position. A position that isn't mapped gives no level: those people show Level not set and use the Consultant defaults.</p>
+      <SaveMark s={saver.status("org", "org.position_levels")} retry={() => void saver.save("org", "org.position_levels", shown, "Positions")} />
+      <div className="adm-scroll">
+        <table className="adm-table">
+        <thead>
+          <tr>
+            <th scope="col">Position in Dataverse</th>
+            <th scope="col">Level</th>
+            <th scope="col">People</th>
+          </tr>
+        </thead>
+        <tbody>
+          {positions.map((p) => {
+            const v = p.name in shown ? shown[p.name] : null;
+            return (
+              <tr key={p.name}>
+                <th scope="row">{p.name}</th>
+                <td>
+                  <select aria-label={`Level for ${p.name}`} value={v ?? ""} onChange={(e) => set(p.name, e.target.value || null)}>
+                    {levels.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                      </option>
+                    ))}
+                    <option value="">Not mapped</option>
+                  </select>
+                </td>
+                <td>{p.people}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+type OnOverride = (input: Record<string, unknown>, what: string, undo?: Record<string, unknown>) => Promise<void>;
+
+function PeopleTable({ people, levels, leadsShown, saver, onOverride, onRemove, label, others = false }: { people: Person[]; levels: PeopleData["levels"]; leadsShown: number; saver: Saver; onOverride: OnOverride; onRemove: (p: Person) => void; label: string; others?: boolean }) {
+  return (
+    <div className="adm-scroll">
+      <table className="adm-table adm-people-table" aria-label={label}>
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">{others ? "Why not" : "Level"}</th>
+            {!others && <th scope="col">Client lead</th>}
+            <th scope="col">Last sign-in</th>
+            <th scope="col">Setup</th>
+            <th scope="col">Dataverse</th>
+            {!others && <th scope="col">Clients</th>}
+            <th scope="col">Sources</th>
+            <th scope="col">Automation <Kind kind="Rule" /></th>
+            <th scope="col"><span className="sr-only">Remove</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {people.map((p) => (
+            <PersonRow key={p.id} p={p} levels={levels} leadsShown={leadsShown} saver={saver} onOverride={onOverride} onRemove={() => onRemove(p)} others={others} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PersonRow({ p, levels, leadsShown, saver, onOverride, onRemove, others }: { p: Person; levels: PeopleData["levels"]; leadsShown: number; saver: Saver; onOverride: OnOverride; onRemove: () => void; others: boolean }) {
   const [adding, setAdding] = useState("");
+  const [allLeads, setAllLeads] = useState(false);
   const leadClients = p.leads.map((l) => l.clientKey);
   const addable = p.clients.filter((k) => !leadClients.includes(k));
+  const shownLeads = allLeads ? p.leads : p.leads.slice(0, leadsShown);
+  const scope = `person:${p.id}`;
+  const automation = (
+    <td>
+      <label className="adm-switch">
+        <input type="checkbox" role="switch" checked={saver.shown(scope, "automation", p.automation)} aria-label={`${p.name}: automation account`} onChange={(e) => void saver.save(scope, "automation", e.target.checked ? true : undefined, `${p.name}: automation account`)} /> {p.automation ? "Yes" : "No"}
+      </label>
+      <SaveMark s={saver.status(scope, "automation")} retry={() => void saver.save(scope, "automation", p.automation ? true : undefined, `${p.name}: automation account`)} />
+    </td>
+  );
+  // The word, then the how on its own line (matched by which key, or why there's no sign-in to match yet).
+  const dvWord = !p.dataverseMatch ? "Not matched" : p.signedIn ? "Matched" : "In Dataverse";
+  const dvHint = p.dataverseText.replace(/^In Dataverse, |^Matched /, "").replace(/^./, (c) => c.toUpperCase());
+  const dataverse = (
+    <td title={p.dataverseText}>
+      <span className={p.dataverseMatch ? undefined : "field-problem"}>{dvWord}</span>
+      <span className="set-hint adm-block">{dvHint}</span>
+    </td>
+  );
+  const name = (
+    <th scope="row">
+      {p.name}
+      {p.me && <span className="muted"> (you)</span>}
+      {p.email && <span className="muted adm-email">{p.email}</span>}
+    </th>
+  );
+  const sources = <td>{p.sources ? [p.sources.microsoft ? "Microsoft" : null, p.sources.google ? "Google" : null, p.sources.devopsWrites ? `DevOps writes for ${p.sources.devopsWrites}` : null].filter(Boolean).join(", ") || <span className="muted">None</span> : <span className="muted">Not signed in</span>}</td>;
+  const remove = (
+    <td>
+      {p.signedIn && !p.me && (
+        <button type="button" className="mini quiet danger" onClick={onRemove}>
+          Remove
+        </button>
+      )}
+    </td>
+  );
+  if (others)
+    return (
+      <tr>
+        {name}
+        <td>{p.notCooptimizerText}</td>
+        <td>{p.lastSignInAt ? shortDate(p.lastSignInAt.slice(0, 10)) : <span className="muted">Never</span>}</td>
+        <td>{p.setup ? SETUP_WORDS[p.setup] : <span className="muted">n/a</span>}</td>
+        {dataverse}
+        {sources}
+        {automation}
+        {remove}
+      </tr>
+    );
   return (
     <tr>
-      <th scope="row">
-        {p.name}
-        {p.me && <span className="muted"> (you)</span>}
-        {p.email && <span className="muted adm-email">{p.email}</span>}
-      </th>
+      {name}
       <td>
         <select
           aria-label={`${p.name}: level`}
@@ -608,7 +827,7 @@ function PersonRow({ p, levels, onOverride, onRemove }: { p: Person; levels: Peo
               : onOverride({ personId: p.id, kind: "level", clear: true }, `${p.name}'s level back to Dataverse's`, p.level ? { personId: p.id, kind: "level", value: p.level } : undefined));
           }}
         >
-          <option value="">{p.dataverseLevel ? `${p.dataverseLevel} (Dataverse)` : "No level (Dataverse)"}</option>
+          <option value="">{p.dataverseLevel ? `${p.dataverseLevel} (Dataverse)` : "Level not set"}</option>
           {levels.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name} (override)
@@ -616,10 +835,11 @@ function PersonRow({ p, levels, onOverride, onRemove }: { p: Person; levels: Peo
           ))}
         </select>
         {p.levelSource === "override" && <span className="adm-mark">Override</span>}
+        {!p.level && <span className="set-hint adm-block">Uses Consultant defaults{p.positionName ? ` (position ${p.positionName} isn't mapped)` : ""}</span>}
       </td>
       <td>
         <ul className="adm-leads">
-          {p.leads.map((l) => (
+          {shownLeads.map((l) => (
             <li key={l.clientKey}>
               <span>{l.clientKey}</span> <span className="muted">{l.whyText.join(", ")}{l.primary ? " · primary" : ""}</span>{" "}
               {l.why.includes("override") && <span className="adm-mark">Override</span>}
@@ -628,6 +848,13 @@ function PersonRow({ p, levels, onOverride, onRemove }: { p: Person; levels: Peo
               </button>
             </li>
           ))}
+          {p.leads.length > leadsShown && (
+            <li>
+              <button type="button" className="mini quiet" onClick={() => setAllLeads((a) => !a)}>
+                {allLeads ? "Show fewer" : `and ${p.leads.length - leadsShown} more`}
+              </button>
+            </li>
+          )}
           {p.removedLeads.map((k) => (
             <li key={`removed-${k}`} className="muted">
               {k}: removed by an admin <span className="adm-mark">Override</span>{" "}
@@ -655,16 +882,11 @@ function PersonRow({ p, levels, onOverride, onRemove }: { p: Person; levels: Peo
       </td>
       <td>{p.lastSignInAt ? shortDate(p.lastSignInAt.slice(0, 10)) : <span className="muted">Never</span>}</td>
       <td>{p.setup ? SETUP_WORDS[p.setup] : <span className="muted">n/a</span>}</td>
-      <td>{p.dataverseMatch ? "Matched" : <span className="field-problem">Not matched</span>}</td>
+      {dataverse}
       <td>{p.clients.length ? p.clients.join(", ") : <span className="muted">None</span>}</td>
-      <td>{p.sources ? [p.sources.microsoft ? "Microsoft" : null, p.sources.google ? "Google" : null, p.sources.devopsWrites ? `DevOps writes for ${p.sources.devopsWrites}` : null].filter(Boolean).join(", ") || <span className="muted">None</span> : <span className="muted">Not signed in</span>}</td>
-      <td>
-        {p.signedIn && !p.me && (
-          <button type="button" className="mini quiet danger" onClick={onRemove}>
-            Remove
-          </button>
-        )}
-      </td>
+      {sources}
+      {automation}
+      {remove}
     </tr>
   );
 }
@@ -796,7 +1018,7 @@ function AdminOrganization() {
           <tr>
             <th scope="col">Level</th>
             <th scope="col">Plan up to (% of free time) <Kind kind="Default by level" /></th>
-            <th scope="col">Draft stories offered</th>
+            <th scope="col">Break down offered</th>
             <th scope="col">Readiness nudges</th>
           </tr>
         </thead>
@@ -811,8 +1033,8 @@ function AdminOrganization() {
                   <SaveMark s={saver.status(scope, "plan_share")} retry={() => void saver.save(scope, "plan_share", g.planShare, "Plan up to")} />
                 </td>
                 <td>
-                  <input type="checkbox" aria-label={`${data.levelNames[lv]}: Draft stories offered`} checked={saver.shown(scope, "draft_stories", g.draftStories)} onChange={(e) => void saver.save(scope, "draft_stories", e.target.checked, `${data.levelNames[lv]}: Draft stories`)} />
-                  <SaveMark s={saver.status(scope, "draft_stories")} retry={() => void saver.save(scope, "draft_stories", g.draftStories, "Draft stories")} />
+                  <input type="checkbox" aria-label={`${data.levelNames[lv]}: Break down offered`} checked={saver.shown(scope, "draft_stories", g.draftStories)} onChange={(e) => void saver.save(scope, "draft_stories", e.target.checked, `${data.levelNames[lv]}: Break down`)} />
+                  <SaveMark s={saver.status(scope, "draft_stories")} retry={() => void saver.save(scope, "draft_stories", g.draftStories, "Break down")} />
                 </td>
                 <td>
                   <input type="checkbox" aria-label={`${data.levelNames[lv]}: readiness nudges`} checked={saver.shown(scope, "readiness_nudges", g.readinessNudges)} onChange={(e) => void saver.save(scope, "readiness_nudges", e.target.checked, `${data.levelNames[lv]}: readiness nudges`)} />
@@ -838,6 +1060,8 @@ type StatusData = {
   chats: { chatId: string; clientKey: string; name: string; reading: boolean; polledAt: string | null; state: string | null; note: string | null; via: string | null }[];
   lastPoll: string | null;
   conversations: { conversationsByStatus: Record<string, number>; messagesByRole: Record<string, number>; commitmentsByState: Record<string, number>; aiCallsToday: { chatName: string; clientKey: string; calls: number }[] } | null;
+  warnings?: { area: string; text: string }[];
+  jobs?: { name: string; every: string; lastRun: string | null; note: string | null }[];
   groups?: StatusGroup[];
 };
 const ROLE_WORDS: Record<string, string> = { work: "work", chatter: "chatter", ack: "short replies", unsorted: "unsorted" };
@@ -854,6 +1078,18 @@ function AdminStatus() {
   return (
     <div className="set-form">
       <p className="muted">Names and states only; never a secret's value.</p>
+      {data.warnings && data.warnings.length > 0 && (
+        <div className="adm-warnings">
+          <h3>To look at ({data.warnings.length})</h3>
+          <ul className="set-list">
+            {data.warnings.map((w, i) => (
+              <li key={i} className="set-problem">
+                {w.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="set-grid">
         <div className="set-field">
           <span className="set-label">This environment</span>
@@ -881,6 +1117,29 @@ function AdminStatus() {
           <span className="set-value">Per person, in Settings › Connections (Microsoft permissions and DevOps write access).</span>
         </div>
       </div>
+      {data.jobs && data.jobs.length > 0 && (
+        <>
+          <h3>Jobs</h3>
+          <table className="adm-table">
+            <thead>
+              <tr>
+                <th scope="col">Job</th>
+                <th scope="col">When</th>
+                <th scope="col">Last run</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.jobs.map((j) => (
+                <tr key={j.name}>
+                  <th scope="row">{j.name}</th>
+                  <td>{j.every}</td>
+                  <td>{j.note ? <span className="muted">{j.note}</span> : when(j.lastRun)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
       {data.groups?.length ? <StatusRows groups={data.groups} /> : null}
       <h3>Client chats</h3>
       <p className="muted">Last poll: {when(data.lastPoll)}.</p>

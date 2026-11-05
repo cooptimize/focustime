@@ -249,7 +249,7 @@ export function Conversations({ data, version, onCount, onPromiseCount, onChange
       )}
       {state && state.hiddenCount > 0 && <p className="muted conv-hidden">{state.hiddenCount} hidden for you. Open one from its ⋯ in the chat's other cards, or ask a teammate.</p>}
       {state?.chatter.map((g) => <Chatter key={g.clientKey} g={g} tz={tz} color={clientColor(g.clientKey, data.clients)} onWork={(m) => void run("conversations.this_is_work", { chatId: m.chatId, messageId: m.messageId }, "Moved into its own conversation")} />)}
-      {state?.lastPoll && <p className="requests-poll muted" role="status">Last checked {whenText(state.lastPoll, tz)} · every 5 minutes in working hours</p>}
+      {state?.lastPoll && <p className="requests-poll muted" role="status">Last checked {whenText(state.lastPoll, tz)} · every {state.pollMinutes ?? 5} {state.pollMinutes === 1 ? "minute" : "minutes"} in working hours</p>}
     </main>
   );
 }

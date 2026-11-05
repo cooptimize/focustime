@@ -10,6 +10,7 @@ import type { ChatKind, ChatMember } from "./chats.ts";
 import { hoursOn, type TimeModel } from "../week/hours.ts";
 
 /** The interval inside working hours. */
+/** The built-in interval; the live one is the Rule conv.poll_minutes (D604). */
 export const POLL_MINUTES = 5;
 /** Members are read again after a day (they decide who sees a chat and whose token can be used). */
 export const MEMBERS_STALE_MS = 24 * 3600_000;
@@ -88,18 +89,18 @@ export function inUnion(now: Temporal.Instant, hours: readonly TimeModel[]): boo
   return hours.some((h) => inWorkingHours(h, now.toZonedDateTimeISO(h.timeZone)));
 }
 
-/** The interval now: every POLL_MINUTES inside the union of working hours, null (no polling) outside it (D514). */
-export function pollEvery(now: Temporal.Instant, hours: readonly TimeModel[]): number | null {
-  return inUnion(now, hours) ? POLL_MINUTES : null;
+/** The interval now: every `minutes` (the Rule, D604) inside the union of working hours, null (no polling) outside it (D514). */
+export function pollEvery(now: Temporal.Instant, hours: readonly TimeModel[], minutes = POLL_MINUTES): number | null {
+  return inUnion(now, hours) ? minutes : null;
 }
 
 /** Whether a chat is read now: inside hours, the interval passed and no retry pending; Refresh any time but a retry. */
-export function chatDue(c: Pick<ClientChat, "polledAt" | "retryAt">, now: string, inHours: boolean, force: boolean): boolean {
+export function chatDue(c: Pick<ClientChat, "polledAt" | "retryAt">, now: string, inHours: boolean, force: boolean, minutes = POLL_MINUTES): boolean {
   const t = Date.parse(now);
   if (c.retryAt && Date.parse(c.retryAt) > t) return false;
   if (force) return true;
   if (!inHours) return false;
-  return !c.polledAt || t - Date.parse(c.polledAt) >= POLL_MINUTES * 60_000;
+  return !c.polledAt || t - Date.parse(c.polledAt) >= minutes * 60_000;
 }
 
 /** The start of the next working span in the union after `now` (within 8 days), or null when nobody has hours. */
@@ -125,13 +126,13 @@ export function nextUnionStart(now: Temporal.Instant, hours: readonly TimeModel[
  * The idle rule: when the next chat is due. Inside a chat's union of hours, its interval after the last poll (or the end
  * of a retry wait); outside, the start of the union's next span. Null with no chats or no followers.
  */
-export function nextPollDue(chats: readonly { chat: Pick<ClientChat, "polledAt" | "retryAt">; hours: readonly TimeModel[] }[], now: Temporal.Instant): Temporal.Instant | null {
+export function nextPollDue(chats: readonly { chat: Pick<ClientChat, "polledAt" | "retryAt">; hours: readonly TimeModel[] }[], now: Temporal.Instant, minutes = POLL_MINUTES): Temporal.Instant | null {
   let best: Temporal.Instant | null = null;
   for (const { chat, hours } of chats) {
     if (!hours.length) continue;
     let due: Temporal.Instant | null;
     if (inUnion(now, hours)) {
-      const after = chat.polledAt ? Temporal.Instant.from(chat.polledAt).add({ minutes: POLL_MINUTES }) : now;
+      const after = chat.polledAt ? Temporal.Instant.from(chat.polledAt).add({ minutes }) : now;
       const retry = chat.retryAt ? Temporal.Instant.from(chat.retryAt) : now;
       due = [after, retry, now].reduce((a, b) => (Temporal.Instant.compare(a, b) >= 0 ? a : b));
     } else due = nextUnionStart(now, hours);

@@ -3,6 +3,7 @@
 // (openid-client, MIT) fetches the tenant's discovery document and keys, redeems the code, and validates the ID token
 // (signature against the tenant's keys, with non-repudiation checks on; issuer, audience, expiry, nonce); FocusTime then checks the tenant id itself.
 // Nothing here logs or returns tokens, codes, secrets or provider error descriptions.
+import { guestToken } from "../../plan/person-match.ts";
 import * as oidc from "openid-client";
 import type { Logger } from "../../log/logger.ts";
 import { groupsOf, type SignInGroups } from "../../actions/admin.ts";
@@ -34,7 +35,8 @@ export type PendingSignIn = { state: string; nonce: string; verifier: string };
 
 /** Who signed in, from the validated ID token. */
 /** ADM-1: `groups` is what the groups claim said (admin membership); used once at sign-in, never stored. */
-export type SignedIn = { oid: string; tid: string; upn: string; name: string; email: string | null; groups?: SignInGroups };
+/** `guest`: why the ID token is a B2B guest's (ADM-2, from the token alone: plan/person-match.ts guestToken), or absent for a member. */
+export type SignedIn = { oid: string; tid: string; upn: string; name: string; email: string | null; groups?: SignInGroups; guest?: "acct" | "idp" | "upn" | null };
 
 export type SignInTokens = { refreshToken: string; accessToken: string; expiresIn: number; scope: string };
 
@@ -137,9 +139,10 @@ export function createEntraSignIn(o: EntraOptions) {
     if (!t.refresh_token || !t.access_token) throw new SignInError("invalid");
     const upn = str(claims.preferred_username) || str(claims.upn) || str(claims.email);
     const email = str(claims.email) || (upn.includes("@") ? upn : "") || null;
-    o.log({ source: "auth", op: "sign_in", kind: "signed_in" });
+    const guest = guestToken(claims as Record<string, unknown>);
+    o.log({ source: "auth", op: "sign_in", kind: guest ? "guest_token" : "signed_in" });
     return {
-      user: { oid, tid, upn, name: str(claims.name) || upn, email: email ? email.toLowerCase() : null, groups: groupsOf(claims as Record<string, unknown>) },
+      user: { oid, tid, upn, name: str(claims.name) || upn, email: email ? email.toLowerCase() : null, groups: groupsOf(claims as Record<string, unknown>), guest },
       tokens: { refreshToken: t.refresh_token, accessToken: t.access_token, expiresIn: typeof t.expires_in === "number" ? t.expires_in : 3599, scope: typeof t.scope === "string" ? t.scope : "" },
     };
   }

@@ -33,7 +33,8 @@ describe("Defaults by level", () => {
     expect(guidanceFor(rules, "consultant", {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 80 });
     expect(guidanceFor(rules, "senior", {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 100 });
     expect(guidanceFor(rules, "lead", {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 100 });
-    expect(guidanceFor(rules, null, {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 100 });
+    // ADM-2 (D605): no level (an unmapped position, or none read) uses the Consultant defaults.
+    expect(guidanceFor(rules, null, {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 80 });
   });
   it("an admin's level default, then the person's own choice over it", () => {
     const r = resolveRules([row("level:senior", "plan_share", 90)], BOOT);

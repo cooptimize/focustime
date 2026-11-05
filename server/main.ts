@@ -44,7 +44,8 @@ import { cancelShutdownRestores } from "../store/vm-restores.ts";
 import { keepRoute, takeRoute } from "./open-route.ts";
 import { join, resolve } from "node:path";
 import type { AppConfig, DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
-import { rememberIdentity, type MicrosoftAccount } from "../actions/account.ts";
+import { rememberIdentity, storedIdentity, type MicrosoftAccount } from "../actions/account.ts";
+import type { SignedInPerson } from "../plan/person-match.ts";
 import { createPresenceClient, type PresenceClient } from "../sources/graph/presence.ts";
 import { createPhotoClient, type PhotoClient } from "../sources/graph/photos.ts";
 import { createAzureClient } from "../sources/azure/client.ts";
@@ -86,7 +87,7 @@ import { createDevOpsStore } from "../store/devops-store.ts";
 import { DEFAULT_MINUTES } from "../plan/devops-pace.ts";
 import type { OrgRules } from "../config/org.ts";
 import type { TimeModel } from "../week/hours.ts";
-import { createAdminStore } from "../store/admin-store.ts";
+import { createAdminStore, FOCUSTIME } from "../store/admin-store.ts";
 import { inGroup } from "../sources/graph/groups.ts";
 import { orgBootstrap, type BootstrapPerson } from "./org-bootstrap.ts";
 import type { FeedbackService } from "../actions/feedback-actions.ts";
@@ -331,6 +332,11 @@ const pollDeps: PollDeps = {
   homeTenant: async () => app.entra?.tenantId ?? null,
   now: () => instantNow().toString(),
   log,
+  // ADM-2 (D604): the team's Rules, read each cycle (the org runtime holds them 30 seconds).
+  rules: async () => {
+    const r = (await org.rules()).conversations;
+    return { pollMinutes: r.pollMinutes, retentionDays: r.retentionDays };
+  },
 };
 // CV-1: conversations, commitments and suggestions, shared like the chats (D521's viewer gates every read).
 const conversations = createConversationStore(db, instantNow, teams);
@@ -460,7 +466,20 @@ const pushFor = (userId: string) => createPush({ devices: createPushDevices({ db
 
 // ADM-1: the team's settings, people's levels and client leads, and admin audit (app tables), and who is an admin.
 const adminStore = createAdminStore(db, instantNow);
-const org = createOrgRuntime({ store: adminStore, bootstrap: { model: app.ai.model, appCapUsd: app.ai.appCapUsd, inviteDomains: app.inviteDomains, feedback: app.feedback } });
+// ADM-2 (D599): who signed in, for the one person match: their Entra id, email and UPN, and the Dataverse user their
+// sign-in was matched to (what matchMe keeps in ms_identity; else a my_systemuserid set in their settings).
+async function signedInPeople(): Promise<SignedInPerson[]> {
+  const out: SignedInPerson[] = [];
+  for (const u of await accounts.users.all()) {
+    if (u.deletedAt) continue;
+    const ident = await storedIdentity(storeOf(u.id, u.timeZone)).catch(() => null);
+    const kept = ident?.systemUserId ?? null;
+    const set = kept ? null : await settingsFor(u.id).load().then((l) => (l.parsed.ok ? l.parsed.config.dataverse.mySystemUserId : null), () => null);
+    out.push({ id: u.id, email: u.email, upn: u.upn, systemUserId: kept ?? set });
+  }
+  return out;
+}
+const org = createOrgRuntime({ store: adminStore, bootstrap: { model: app.ai.model, appCapUsd: app.ai.appCapUsd, inviteDomains: app.inviteDomains, feedback: app.feedback }, signedIn: signedInPeople });
 /** Graph's answer for an admin check, with the person's own token (User.Read; never kept, never logged). */
 const groupAnswer = async (userId: string): Promise<boolean | null> => {
   if (!app.adminGroupId) return false;
@@ -481,8 +500,33 @@ const people = createPeople({
   configFile: { load: () => host.config.load(), raw: () => host.config.raw() },
   mailboxZone: (accessToken) => mailboxZone({ fetch, accessToken, log }),
   hostZone: () => host.clock.zone(),
+  // ADM-2 (D602): guests are refused at sign-in, from the token and the domains Rule (never Dataverse).
+  cooptimizeDomains: async () => (await org.rules()).organization.inviteDomains,
+  refusedGuest: async (u, why) => {
+    const ended = await accounts.sessions.endAllFor(u.oid);
+    await adminStore.audit(FOCUSTIME, { area: "people", target: (u.name || "A guest").slice(0, 200), setting: "sign_in", oldValue: null, newValue: null, note: `refused: not a Cooptimize account (${why})${ended ? `, ${ended} session${ended === 1 ? "" : "s"} ended` : ""}` });
+  },
   log,
 });
+
+/**
+ * ADM-2 (D602): ends the sessions of anyone signed in who turns out to be a guest or outside the Cooptimize domains
+ * (Dataverse's guest mark, or the Rule changed), with an audit line. At start and after each people refresh.
+ */
+async function endGuestSessions(): Promise<number> {
+  const lv = await org.levels();
+  let n = 0;
+  for (const e of lv.people.others) {
+    if (!e.signedIn || e.notCooptimizer === "automation") continue;
+    const ended = await accounts.sessions.endAllFor(e.id);
+    if (!ended) continue;
+    n += ended;
+    const name = (await accounts.users.get(e.id))?.displayName ?? "A guest";
+    await adminStore.audit(FOCUSTIME, { area: "people", target: name.slice(0, 200), setting: "sign_in", oldValue: null, newValue: null, note: `sessions ended: not a Cooptimize account (${e.notCooptimizer})` });
+  }
+  if (n) log({ source: "auth", op: "guest_sessions_ended", count: n });
+  return n;
+}
 
 // Microsoft sign-in (A2): the "FocusTime" web registration, single tenant, confidential client.
 const entra = app.entra
@@ -806,10 +850,6 @@ const adminOps = createAdminOps({
   users: () => accounts.users.all(),
   personStore: storeOf,
   hasSecret: (id, account) => secretsFor(id).has(account),
-  dataverseMatched: async (id) => {
-    const p = (await settingsFor(id).load()).parsed;
-    return p.ok && !!p.config.dataverse?.mySystemUserId;
-  },
   chats: () => teams.chats(),
   conversationCounts: (day) => conversations.counts(day),
   ai: async () => ({ provider: aiProviderKind, keyConfigured: aiProviderKind === "stub" ? true : !!(await aiKey()) }),
@@ -821,6 +861,8 @@ const adminOps = createAdminOps({
     await deleteData(id);
     await hardDeleteUser(db, id, instantNow());
   },
+  // The scheduler starts below; Status asks only once a person opens it.
+  lastRuns: () => scheduler.lastRuns(),
   log,
 });
 const refreshPeople = () => adminOps.refreshPeople();
@@ -876,6 +918,9 @@ devopsPoller = devopsApp && directorySource
 if (devopsPoller) statusRows.register(devopsStatusSource(devopsPoller));
 
 // ADM-1: the one-time move of team settings out of people's own settings, at the first start of this build.
+// ADM-2: once at start, so a guest who signed in before this build is signed out.
+void endGuestSessions().catch(() => 0);
+
 void orgBootstrap({
   store: adminStore,
   log,
@@ -923,6 +968,7 @@ const peopleJob = {
     if (Temporal.Instant.compare(await peopleDue(), instantNow()) > 0) return;
     const r = await refreshPeople();
     peopleRetryAt = r.ok ? null : instantNow().add({ hours: 1 });
+    if (r.ok) await endGuestSessions().catch(() => 0);
     log({ source: "dataverse", op: "people_refresh", kind: r.ok ? "done" : "failed", count: r.people });
   },
   wake: peopleDue,

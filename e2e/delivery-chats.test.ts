@@ -23,7 +23,7 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
     const { page, errors } = await freshPage(h);
     await openSettings(page);
     // ADM-1: registering chats is in Admin › Clients (the demo's person is the demo's admin).
-    await page.locator(".set-admin-nav").getByRole("button", { name: "Clients" }).click();
+    await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Clients" }).click();
     const northwind = page.getByRole("group", { name: /^Delivery chats for Northwind/ });
     await northwind.waitFor();
 
@@ -95,7 +95,7 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
       await route.continue();
     });
     await openSettings(page);
-    await page.locator(".set-admin-nav").getByRole("button", { name: "Clients" }).click();
+    await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Clients" }).click();
     const northwind = page.getByRole("group", { name: /^Delivery chats for Northwind/ });
     await northwind.getByRole("button", { name: "Add a chat" }).click({ timeout: 5_000 });
     await picks(northwind).getByRole("option").first().waitFor();
@@ -106,7 +106,7 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
   it("Connections lists every Microsoft permission, Chat.ReadBasic among them", async () => {
     const { page, errors } = await freshPage(h);
     await openSettings(page);
-    await page.locator(".set-nav").getByRole("button", { name: "Connections" }).click();
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Connections" }).click();
     const row = page.locator(".perms li", { hasText: "Chat.ReadBasic" });
     await row.waitFor();
     await expect(row.textContent()).resolves.toContain("never messages");

@@ -15,7 +15,7 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
   it("Settings > Notifications: a switch per kind and quiet hours, saved", async () => {
     const { page, errors } = await freshPage(h);
     await openSettings(page);
-    await page.locator(".set-nav").getByRole("button", { name: "Notifications" }).click();
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Notifications" }).click();
     const form = page.locator(".set-form", { hasText: "Ritual reminders" });
     await form.waitFor();
     for (const name of ["Plan the day", "Check-in", "Close out", "Plan the week", "Look ahead", "Focus timer", "Meeting warnings", "My VM", "Follow-ups due", "Expiring secrets"])

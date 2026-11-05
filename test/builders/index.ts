@@ -395,6 +395,19 @@ export function aWeekFeature(o: Partial<import("../../plan/types.ts").WeekFeatur
   return { id, weekStart: WEEK, clientKey: "adatum", itemId: 1, title: `Feature ${o.itemId ?? 1}`, itemType: "Feature", url: null, level: "feature", tier: "must", estimate: null, size: null, parentId: null, slots: [], doneAt: null, position: null, createdAt: `${WEEK}T09:00:00-05:00[${ZONE}]`, updatedAt: `${WEEK}T09:00:00-05:00[${ZONE}]`, ...o };
 }
 
+/** ADM-2: an active Dataverse account (store/admin-store.ts DirectoryAccount): a customer named Adatum by default. */
+export function anAccount(o: Partial<import("../../store/admin-store.ts").DirectoryAccount> = {}): import("../../store/admin-store.ts").DirectoryAccount {
+  const n = next();
+  const clientKey = o.clientKey ?? `Account ${n}`;
+  return { accountId: `ac000000-0000-4000-8000-${String(n).padStart(12, "0")}`, clientKey, name: clientKey, type: "customer", workers: 1, focus: 1, ...o };
+}
+
+/** ADM-2: a person in the Dataverse directory, a Cooptimizer (contoso.example) by default. */
+export function aDirectoryPerson(o: Partial<import("../../sources/dataverse/directory.ts").DirectoryRead["people"][number]> = {}): import("../../sources/dataverse/directory.ts").DirectoryRead["people"][number] {
+  const n = next();
+  return { personId: `a4d00000-0000-4000-8000-${String(n).padStart(12, "0")}`, systemUserId: `d3300000-0000-4000-8000-${String(n).padStart(12, "0")}`, name: `Person ${n}`, email: `person${n}@contoso.example`, level: "consultant", positionName: "Consultant", guest: false, ...o };
+}
+
 /** NV-1: an open follow-up as the week load shows it (due null: no due date). */
 export function aFollowUpView(o: Partial<import("../../actions/types.ts").FollowUpView> = {}): import("../../actions/types.ts").FollowUpView {
   return {

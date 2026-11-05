@@ -177,7 +177,7 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
 
       // Admin › Clients: add both chats to Adatum (an admin, once for everyone on them who follows Adatum).
       await openSettings(page);
-      await page.locator(".set-admin-nav").getByRole("button", { name: "Clients" }).click();
+      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Clients" }).click();
       const adatum = page.getByRole("group", { name: /^Delivery chats for Adatum/ });
       for (const word of ["alliance", "delivery"]) {
         await adatum.getByRole("button", { name: "Add a chat" }).click();
