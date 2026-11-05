@@ -1,7 +1,9 @@
 // Azure SQL: a logical server with Entra-only authentication (no SQL logins), its Entra admin the "FocusTime DB Admins"
-// group; one database `focustime`, General Purpose serverless from 0.5 vCore to maxVCores (dev 1, prod 2), auto-pause
-// after 60 minutes, 32 GB, zone redundancy off, retentionDays of point-in-time restore (dev 7, prod 14). Public endpoint with only "Allow Azure services" (a private
-// endpoint is a later step).
+// group; one database `focustime` on a fixed-price DTU Standard tier (HK-2: dev S0, prod S1; it never pauses), 250 GB
+// (included in the price), zone redundancy off, retentionDays of point-in-time restore (dev 7, prod 14). Public endpoint
+// with only "Allow Azure services" (a private endpoint is a later step).
+// Rollback to serverless (before HK-2): sku { name: 'GP_S_Gen5', tier: 'GeneralPurpose', family: 'Gen5', capacity: 1
+// (dev) or 2 (prod) }, properties minCapacity json('0.5'), autoPauseDelay 60, maxSizeBytes 34359738368; see the runbook.
 param name string
 param location string
 param tags object
@@ -9,7 +11,9 @@ param tenantId string
 param adminGroupName string
 param adminGroupObjectId string
 param workspaceId string
-param maxVCores int = 1
+@description('HK-2: the DTU Standard service objective (dev S0, prod S1; S2 or S3 to scale up, docs/azure/runbook.md).')
+@allowed([ 'S0', 'S1', 'S2', 'S3' ])
+param sku string = 'S0'
 param retentionDays int = 7
 
 resource server 'Microsoft.Sql/servers@2023-08-01' = {
@@ -42,11 +46,9 @@ resource database 'Microsoft.Sql/servers/databases@2023-08-01' = {
   name: 'focustime'
   location: location
   tags: tags
-  sku: { name: 'GP_S_Gen5', tier: 'GeneralPurpose', family: 'Gen5', capacity: maxVCores }
+  sku: { name: sku, tier: 'Standard' }
   properties: {
-    minCapacity: json('0.5')
-    autoPauseDelay: 60
-    maxSizeBytes: 34359738368
+    maxSizeBytes: 268435456000 // 250 GB, the largest S0 to S2 allow and included in their price
     zoneRedundant: false
     requestedBackupStorageRedundancy: 'Local'
     collation: 'SQL_Latin1_General_CP1_CI_AS'

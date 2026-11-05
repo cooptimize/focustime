@@ -11,7 +11,7 @@ param imageTag = readEnvironmentVariable('FT_IMAGE_TAG', 'latest')
 param imageDigest = readEnvironmentVariable('FT_IMAGE_DIGEST', '')
 param sharedRegistry = { name: 'ftdevacr5bthbn', resourceGroup: 'FocusTime-dev' } // dev's registry, AcrPull only
 param pullIdentityName = 'ft-prod-pull' // bootstrap.sh --env prod
-param sqlMaxVCores = 2
+param sqlSku = 'S1' // HK-2: fixed price; dev is S0 (main.bicep's default)
 param sqlRetentionDays = 14
 param inviteDomains = 'cooptimize.org' // Settings: "Set by your FocusTime admin"
 param minReplicas = 1 // the in-process scheduler must keep running for reminders and timer ends
@@ -24,3 +24,6 @@ param feedbackLive = true // F1: Send feedback creates stories under Feature #49
 // D522: who registers client chats, from the deploy workflow's FT_ADMINS (the GitHub variable; object ids only).
 param admins = readEnvironmentVariable('FT_ADMINS', '')
 param adminGroupId = readEnvironmentVariable('FT_ADMIN_GROUP_ID', '')
+// HK-2: the monthly budget (USD) and who its alerts go to (the FT_BUDGET_EMAIL GitHub variable; empty: no budget).
+param budgetAmount = 60
+param budgetEmail = readEnvironmentVariable('FT_BUDGET_EMAIL', '')

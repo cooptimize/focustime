@@ -12,7 +12,7 @@ the globally unique ones carry a suffix from the resource group id:
 | Container registry | `ftdevacr5bthbn` | the same one (D471): pulled by `ft-prod-pull`, AcrPull only |
 | Key Vault | `ft-dev-kv-5bthbn` | `ft-prod-kv-kkzllj` (its own `ft-data-key`, never dev's) |
 | Secrets in the vault | `ft-entra-client-secret`, `ft-google-client-secret`, `ft-dataverse-client-secret` | the same names, prod's own copies |
-| SQL server / database | `ft-dev-sql-5bthbn` / `focustime` (serverless 0.5 to 1 vCore, 7 days PITR) | `ft-prod-sql-kkzllj` / `focustime` (serverless 0.5 to 2 vCores, auto-pause 60 min, 14 days PITR) |
+| SQL server / database | `ft-dev-sql-5bthbn` / `focustime` (Standard S0, 10 DTU, fixed price, 7 days PITR; HK-2) | `ft-prod-sql-kkzllj` / `focustime` (Standard S1, 20 DTU, fixed price, 14 days PITR; HK-2) |
 | Log Analytics / App Insights | `ft-dev-log` / `ft-dev-appi` | `ft-prod-log` / `ft-prod-appi` |
 | Deploy identity | `ft-dev-deploy` | `ft-prod-deploy` (also AcrPull on dev's registry, to read digests) |
 | How it deploys | every merge to main (`deploy-dev.yml`) | by hand, by SHA (`deploy-prod.yml`, PROD_DEPLOYERS) |
@@ -169,10 +169,11 @@ and restart the revision.
 
 ## Resume a paused database
 
-Serverless pauses after 60 idle minutes; the first connection resumes it (about a minute; the page shows "Waking up the
-database" and the app retries). Nothing to do. To resume ahead of a demo, any query does it, or open the app.
-Check the state: `az sql db show -g FocusTime-dev -s ft-dev-sql-5bthbn -n focustime --query status -o tsv` (`Online`,
-`Paused`, `Resuming`).
+Since HK-2 neither database pauses: both are DTU Standard (dev S0, prod S1), always on at a fixed price, so there is no
+resume delay. "Waking up the database" now shows only while Azure fails the database over or a tier change switches
+it (under 30 seconds); the app retries. Check the state:
+`az sql db show -g FocusTime-dev -s ft-dev-sql-5bthbn -n focustime --query "[sku.name, status]" -o tsv` (`S0 Online`).
+Before HK-2 (serverless): it paused after 60 idle minutes and the first connection resumed it in about a minute.
 
 ## Read logs
 
@@ -355,34 +356,113 @@ az ad app list --display-name "Coopilot Desktop" --query "[].{name:displayName,a
 az ad app delete --id <that appId>
 ```
 
-### Cost (estimate, list prices for Central US on 2026-11-03)
+### Cost (HK-2: fixed-price databases, list prices for Central US on 2026-11-05)
 
-| | Prod per month | Dev per month |
+**What it cost before (actual, Cost Management, every resource tagged `app: focustime`, by UTC day):**
+
+| Day | Dev | Dev SQL awake | Prod | Prod SQL awake |
+|---|---|---|---|---|
+| Nov 3 | $5.84 (SQL compute $5.59) | 15 h | $1.18 (SQL compute $1.15) | 4 h |
+| Nov 4 | $7.51 (SQL compute $7.15) | 21 h | $6.58 (SQL compute $6.39) | 17 h |
+| Nov 5 (to 09:30 UTC) | $0.86 | 10 h | $0.87 | 10 h |
+
+SQL serverless compute was 95% of it: billed at the 0.5 vCore floor ($0.626 per vCore hour) for every hour the
+database was awake, while the work itself was tiny (prod's busiest day used 9.8 CPU seconds of queries, its worst
+minute 0.06 vCore). Projected for a month: dev $110 to $240, prod $135 to $195 with 7 to 15 people. Nov 1 and 2 had
+no cost rows.
+
+**What it costs now (per month, 30.4 days):**
+
+| | Dev | Prod |
 |---|---|---|
-| SQL compute (serverless, $0.626 per vCore hour; awake about 300 h for working hours and the scheduler's wakes, mostly at the 0.5 vCore floor) | $95 to $140 | $15 to $30 (fewer hours) |
-| SQL storage (32 GB max, $0.138 per GB) and backups (within the free allowance) | $4.50 | $4.50 |
-| Container App (0.5 vCPU, 1 GiB; prod always on, mostly idle at $0.000003 per vCPU and GiB second; the free grant is shared) | $15 to $20 | $0 to $3 |
-| Container registry (Basic, shared) | | $5 |
-| Log Analytics and App Insights (first 5 GB a month free) | $0 to $3 | $0 to $2 |
-| Key Vault | under $1 | under $1 |
-| **Total** | **about $115 to $165** | **about $25 to $45** |
+| SQL database (fixed: S0 $0.4839 a day, S1 $0.9677 a day; 250 GB and backups within the allowance included) | $14.72 (S0) | $29.44 (S1) |
+| Container App (0.5 vCPU, 1 GiB; active vCPU $0.000024/s, idle vCPU and memory $0.000003/s) | about $0 (scales to zero) | $10 to $20 (see below) |
+| Container registry (Basic, shared with prod) | $5.07 | |
+| Log Analytics, App Insights (first 5 GB a month free), Key Vault | $0 to $2 | $0 to $3 |
+| **Total** | **about $20 to $22** | **about $40 to $53** |
 
-SQL compute is most of it; what keeps it down is the idle rule (D431) letting the database pause outside people's
-working hours. The actual cost after the first week goes here (Cost Management, resource group FocusTime, or
-`az consumption usage list --start-date <d> --end-date <d>`): _not measured yet_.
+- **The Container Apps free grant** (180,000 vCPU seconds and 360,000 GiB seconds a month) is per subscription and
+  shared with every other app in it. Prod's one always-on replica uses it up in about 4 days, so from about Nov 7
+  each month expect Container Apps lines for prod: about $10 a month if it is idle all month, about $20 if it is
+  active through working hours.
+- **The idle rule (D431) and DV-1's outside-hours behavior stay.** They no longer save database money (the database
+  never pauses), but they still save container time, Graph calls and DevOps calls.
+- OpenAI usage is billed by OpenAI, not Azure (Settings › AI).
 
-### Watch dev and prod costs (D524)
+**What S0 and S1 give:** S0 is 10 DTU (about 0.1 vCore), S1 20 DTU (about 0.2 vCore); 60 or 90 workers and logins,
+600 or 900 sessions, 250 GB, HDD storage (about 5 ms reads, 10 ms writes), tempdb 13.9 GB, no columnstore (S3 and up)
+and no in-memory OLTP (FocusTime uses neither). The app's pool is at most 10 connections on one replica. Measured
+before the switch: dev's worst minute (a deploy's migration) was about 90% of S0 and slows a little; prod's was about
+30% of S1, its typical load about 3% of S1 at 15 people.
+
+**When to go to S2 ($2.42 a day, $73.62 a month, 50 DTU):** sustained DTU over 80% in working hours (Azure portal ›
+the database › Metrics › DTU percentage, Max, 1 minute, over a few days), a large import, or a restore (Microsoft
+says restores often need S3 or more). Scale up for a while and back:
+
+1. Change `sqlSku` in `infra/prod.bicepparam` (or `infra/dev.bicepparam`, which uses main.bicep's S0 default) to `S2`
+   (or `S3`), on a branch, with a pull request; the what-if shows only the database.
+2. Dev deploys on merge; prod through `deploy-prod.yml` with that SHA. The change is online; at the end connections
+   drop for under 30 seconds (the app retries for up to a minute).
+3. Afterwards the same way back to `S1`.
+
+**Back to serverless (the rollback):** revert HK-2's tier commit (sku `GP_S_Gen5`, capacity 1 for dev and 2 for prod,
+`minCapacity` 0.5, `autoPauseDelay` 60, `maxSizeBytes` 32 GB; the comment in `infra/modules/sql.bicep`), merge, and
+deploy prod by SHA. Online, about a minute per GB of data (it is under 50 MB), then the same brief drop.
+
+**After a deploy:** `infra/scripts/smoke.sh --env dev` (or `--env prod --sha <7 chars>`): the tier and Online,
+`/healthz`, `/readyz`, `/version`, the database through the app, no database errors since the revision started
+(opening the store migrates it, so a served build with a working database is at its head), and whether the Teams
+chats poller and the DevOps checks ran in the last 30 minutes (a warning outside working hours). Read only. Then
+Admin › Status as an admin.
+
+### Budgets and alerts (HK-2)
+
+Each resource group has a monthly Cost Management budget: **ft-dev-budget $30** (FocusTime-dev) and
+**ft-prod-budget $60** (FocusTime), on everything in the group, tagged or not (`infra/modules/budget.bicep`). Four
+alerts each: 50%, 80% and 100% of actual cost, and 100% of forecast cost. They go to the address in the
+`FT_BUDGET_EMAIL` GitHub variable (the deploys read it like `FT_ADMINS` and mask it in the log; it is never in the
+repo) and to the resource group's Owners. The FocusTime Admins group is a security group with no mailbox, so a budget
+can't email it. Without the variable the deploy makes no budget. The start date is fixed at 2026-11-01 (a budget
+keeps a past start date but can't move it).
+
+Set or change who gets them (one repository variable, read by both deploy workflows; takes effect on the next deploy
+of each environment):
+
+```sh
+gh variable set FT_BUDGET_EMAIL --repo cooptimize/focustime --body "<address>"
+```
+
+**Reading an alert:** the mail comes from azure-noreply@microsoft.com (add it to safe senders), names the budget
+(ft-dev-budget or ft-prod-budget), the threshold and the cost so far. Cost Management evaluates budgets about once a
+day and mails within hours, so an alert is a day behind at most. A budget only alerts; it never stops anything.
+
+- 50% or 80% actual before the 20th, or 100% forecast: something runs more than it should. Open FocusTime costs, By
+  resource, and compare with the table above (a new resource, the database on a larger tier, logs over 5 GB).
+- 100% actual: the month is over budget. The fixed part is the database, the registry and prod's container; anything
+  else is new.
+- Early in a month the forecast is rough; a forecast alert on the 2nd or 3rd with an actual far under the line can be
+  ignored.
+
+### Watch dev and prod costs (D524, HK-2)
 
 Azure portal › Monitor › Workbooks › **FocusTime costs** (prod's copy, in FocusTime; dev's is "FocusTime costs (dev
-copy)", the same view). Pick This month, Last month or This week. It shows dev against prod, each day, by service and
-by resource, for everything tagged `app: focustime`. To keep it on a dashboard: open it, then Pin › Pin workbook.
+copy)", the same view). Pick This month (the default), Last month or This week. It shows Dev and prod (this period
+and Yesterday), Each day (newest first), By service and By resource, for everything tagged `app: focustime`. To keep
+it on a dashboard: open it, then Pin › Pin workbook.
 
-- It reads Cost Management as you: you need Cost Management Reader (or Reader) on the subscription.
-- Cost data is 8 to 24 hours behind. The registry is in dev and serves prod too, so its cost shows under dev.
-- "Too many requests" on a chart: Cost Management limits queries per scope; refresh in a minute.
-- A new resource needs the `app` and `env` tags (main.bicep's `tags`) to show; anything made outside the Bicep won't.
-- Prices to compare with are in the Cost table above. First actual figures (Nov 1 to 4, 2026): dev about $9.50, prod
-  about $3.40, nearly all SQL compute; Container Apps inside the free grant.
+- **One query.** Since HK-2 the workbook sends one Cost Management query (daily cost by env, service and resource for
+  the chosen period) and every view is worked out from it; Yesterday's date comes from one Log Analytics `print` on
+  the environment's workspace. Before, each chart sent its own query and opening it hit 429.
+- **The quota (Microsoft Learn, checked 2026-11-05):** Cost Management's query API is limited per tenant, shared by
+  everyone in Cooptimize's tenant: 12 QPU per 10 seconds, 60 per minute, 600 per hour, one QPU per month of data
+  asked for. This month and This week cost one QPU, Last month one. A 429 "Too many requests" means someone in the
+  tenant used it up for now (the response's `x-ms-ratelimit-microsoft.costmanagement-qpu-retry-after` header says how
+  many seconds): wait a minute, then Refresh. On Nov 5 a run of the query from the CLI got 429 for five minutes in a
+  row while nobody had the workbook open.
+- It reads as you: Reader on the subscription (or Cost Management Reader plus Log Analytics Reader).
+- Cost data is 8 to 24 hours behind, so Yesterday may still grow; it is 0.00 when yesterday isn't in the period (the
+  1st of a month, or Monday in This week). The registry is in dev and serves prod too, so its cost shows under dev.
+- A new resource needs the `app` and `env` tags (main.bicep's `tags`) to show; the budgets count it anyway.
 
 ## Requests (AP-1, shared polling)
 
