@@ -1023,6 +1023,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "pick.move": return { next: () => choosePick(env, "Move which pick?", (p) => moveStep(env, p)) };
     case "pick.mark_done": return { next: () => choosePick(env, "Mark which pick done or not done?", (p) => () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" })) };
     case "pick.remove": return { next: () => choosePick(env, "Drop which pick?", (p) => () => env.runPlan("pick.remove", { id: p.id })) };
+    case "pick.uncarry":
+    case "pick.undrop": return { disabled: "Use Undo right after Keep, Move or Drop on a suggested pick" };
+    case "planday.carry_hint": return { run: () => env.setView("week") };
     case "draft.add_story": return { next: () => chooseItem(env, "Draft a story under which epic or feature?", (i) => i.level === "portfolio", (k, i) => draftPrompt(env, k, i)) };
     case "draft.set_parent": return { run: () => env.setView("inbox") };
     case "draft.remove": return { run: () => env.setView("inbox") };

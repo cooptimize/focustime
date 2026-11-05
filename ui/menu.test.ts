@@ -110,7 +110,7 @@ describe("command menu (built from the action registry)", () => {
   });
   it("searches by words in any order", () => {
     const list = commandList(env().e);
-    expect(filterCommands(list, "pick drop").map((c) => c.action)).toEqual(["pick.remove"]);
+    expect(filterCommands(list, "pick drop").map((c) => c.action)).toEqual(["pick.remove", "pick.undrop"]);
     expect(filterCommands(list, "BROWSER open").map((c) => c.action)).toEqual(["ui.open_focused", "link.open"]);
     expect(filterCommands(list, "plan a day")[0]?.label).toBe("Plan a day…");
   });
