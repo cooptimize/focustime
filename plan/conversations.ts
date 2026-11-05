@@ -6,6 +6,7 @@
 // promise at most). Status is decided here from facts, never by the AI: New until a Cooptimizer answers, then In
 // discussion, <Name> committed while a commitment is open, Tracked #id once an item is linked, Resolved and Closed only
 // by a person. Nothing here does I/O or logs.
+import { userZone } from "../week/zone.ts";
 import type { AiErrorKind, JsonSchema } from "../ai/types.ts";
 import { hasPhrase, isAcknowledgement } from "./asks.ts";
 import { withoutEmails } from "./asks-ai.ts";
@@ -634,7 +635,7 @@ export function suggestionDue(c: Pick<Conversation, "itemId" | "itemChange" | "l
  * after it was made (their hours, PTO days skipped); at once when they're on PTO the day it was made.
  */
 export function escalateAt(createdAt: string, hours: TimeModel, ptoDays: ReadonlySet<string>): string {
-  const zone = hours.timeZone;
+  const zone = userZone(hours);
   const made = Temporal.Instant.from(createdAt).toZonedDateTimeISO(zone);
   if (ptoDays.has(made.toPlainDate().toString())) return createdAt;
   let d = made.toPlainDate();

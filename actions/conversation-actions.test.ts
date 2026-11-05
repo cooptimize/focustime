@@ -2,7 +2,7 @@
 // teammates and Closed; visibility (only chats I'm in, clients I follow); Hide (mine) against Not a request (shared,
 // with who and why, reopenable) and a new work message opening a closed one; Move and Split; escalation after one of
 // the committer's working days, Unclaimed for leads, Take it over; follow-through suggestions; and My promises with the
-// W&C promise on Today. Fictional names (the repo's names rule).
+// Wingtip promise on Today. Fictional names (the repo's names rule).
 import { describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
 import { weekConfig } from "../config/defaults.ts";
@@ -11,7 +11,7 @@ import type { ConversationsData, MyPromisesData } from "../plan/conversation-vie
 import type { ClientChat } from "../plan/requests.ts";
 import { planStoreOn } from "../store/plan-store.ts";
 import { aChatMember, aClientChat, aCommitmentAnswer, aConversationUpdate, anUpdateAnswer, aWorkItem, HOME_TENANT } from "../test/builders/index.ts";
-import { BLAKE, CHAT, cscAnswer, EVAN, LENA, SAM, world, ZONE } from "../test/conversations.ts";
+import { BLAKE, CHAT, allianceAnswer, EVAN, LENA, SAM, world, ZONE } from "../test/conversations.ts";
 import { addUsers } from "../test/db.ts";
 import type { WorkItem } from "../week/types.ts";
 import { conversationAction, dayPromises, type ConversationAction, type ConversationContext } from "./conversation-actions.ts";
@@ -65,7 +65,7 @@ async function people(w: W, o: { leads?: string[]; followed?: string[]; items?: 
   return { as };
 }
 
-async function csc(w: W) {
+async function alliance(w: W) {
   const first = [
     await w.say(CHAT, BLAKE, "2026-11-04T19:02:00Z", "Evan we see about a 7.7k lb gap for project 4417001.", { mentions: [{ id: EVAN.userId!, name: "Evan Ford", at: 0 }], html: `<p><at id="0">Evan</at> we see about a 7.7k lb gap for project 4417001.</p>` }),
     await w.say(CHAT, EVAN, "2026-11-04T19:10:00Z", "Looking into it with Lena now"),
@@ -87,9 +87,9 @@ const upkeepDeps = (w: W, items: WorkItem[] = []) => ({
 
 describe("views", () => {
   it("the committer has it in Needs you with one primary action; a teammate sees it in Handled by teammates", async () => {
-    const w = world({ respond: cscAnswer });
+    const w = world({ respond: allianceAnswer });
     const p = await people(w);
-    await csc(w);
+    await alliance(w);
     const evan = await p.as(EVAN).run("conversations.list");
     expect(evan.needsYou).toHaveLength(1);
     const card = evan.needsYou[0]!;
@@ -101,8 +101,8 @@ describe("views", () => {
   });
 
   it("shows only chats I'm in, and only clients I follow", async () => {
-    const w = world({ respond: cscAnswer });
-    await csc(w);
+    const w = world({ respond: allianceAnswer });
+    await alliance(w);
     const p = await people(w);
     const outsider = await p.as(OUTSIDER).run("conversations.list");
     expect([outsider.needsYou, outsider.teammates, outsider.closed].flat()).toEqual([]);
@@ -112,8 +112,8 @@ describe("views", () => {
   });
 
   it("messages render as sanitized HTML with mentions as chips; opening them clears Updated for me only", async () => {
-    const w = world({ respond: cscAnswer });
-    const c = await csc(w);
+    const w = world({ respond: allianceAnswer });
+    const c = await alliance(w);
     const p = await people(w);
     expect((await p.as(EVAN).run("conversations.list")).needsYou[0]!.updated).not.toBeNull();
     const m = await p.as(EVAN).run<{ messages: { html: string; author: string }[] }>("conversations.messages", { id: c.id });
@@ -126,8 +126,8 @@ describe("views", () => {
 
 describe("Hide for me and Not a request", () => {
   it("Hide is mine alone; Not a request closes it for everyone with who and why; reopen; a new work message reopens", async () => {
-    const w = world({ respond: cscAnswer });
-    const c = await csc(w);
+    const w = world({ respond: allianceAnswer });
+    const c = await alliance(w);
     const p = await people(w);
     let lena = await p.as(LENA).run("conversations.hide", { id: c.id, hidden: true });
     expect([lena.teammates.length, lena.hiddenCount]).toEqual([0, 1]);
@@ -149,8 +149,8 @@ describe("Hide for me and Not a request", () => {
 
 describe("Move and Split", () => {
   it("a message moves to a new conversation (Split) and back (Move); This is work pulls a chatter message in", async () => {
-    const w = world({ respond: cscAnswer });
-    const c = await csc(w);
+    const w = world({ respond: allianceAnswer });
+    const c = await alliance(w);
     const p = await people(w);
     const [first, second] = await w.convs.placesIn([c.id]);
     await p.as(EVAN).run("conversations.move", { chatId: CHAT.chatId, messageId: second!.messageId, to: "new" });
@@ -176,8 +176,8 @@ describe("Move and Split", () => {
 
 describe("commitments and escalation", () => {
   it("after one of Evan's working days: Waiting on Evan for everyone, Unclaimed for leads, Take it over tells Evan quietly", async () => {
-    const w = world({ respond: cscAnswer });
-    const c = await csc(w);
+    const w = world({ respond: allianceAnswer });
+    const c = await alliance(w);
     const p = await people(w, { leads: [SAM.userId!] });
     // Same day: nothing yet.
     w.setNow("2026-11-05T15:00:00Z");
@@ -203,8 +203,8 @@ describe("commitments and escalation", () => {
 
 describe("follow-through", () => {
   it("one comment suggestion for the item's owner after a 30-minute pause, at most one a day unless it resolves", async () => {
-    const w = world({ respond: cscAnswer });
-    const c = await csc(w);
+    const w = world({ respond: allianceAnswer });
+    const c = await alliance(w);
     const p = await people(w);
     await p.as(EVAN).run("conversations.link", { id: c.id, itemId: 4101 });
     await w.convs.updateConversation(c.id, { itemChange: { kind: "root_cause", note: "Cause is BOM bridging on a measure change", at: "2026-11-04T19:55:00Z", scope: false } });
@@ -227,7 +227,7 @@ describe("follow-through", () => {
   });
 
   it("internal chat lines are flagged and left out of the comment by default; a scope change also suggests a description", async () => {
-    const w = world({ respond: cscAnswer });
+    const w = world({ respond: allianceAnswer });
     const INTERNAL: ClientChat = aClientChat({ chatId: "19:contoso-team@thread.v2", clientKey: "contoso", kind: "delivery", displayName: "Contoso team (Cooptimize)", members: [EVAN, LENA] });
     await w.say(INTERNAL, EVAN, "2026-11-04T19:00:00Z", "x");
     const c = await w.convs.addConversation({ chatId: INTERNAL.chatId, clientKey: "contoso", title: "Scope", summary: "s", participants: [], firstAt: "2026-11-04T19:00:00Z", lastAt: "2026-11-04T19:00:00Z", lastWorkAt: "2026-11-04T19:00:00Z", item: { id: 4101, url: null, title: null } });
@@ -241,7 +241,7 @@ describe("follow-through", () => {
   });
 });
 
-describe("my promises (the W&C-shaped example)", () => {
+describe("my promises (the Wingtip-shaped example)", () => {
   const WT = aClientChat({ chatId: "19:wingtip-delivery@thread.v2", clientKey: "wingtip", kind: "delivery", displayName: "Wingtip Delivery Team (Cooptimize)", members: [EVAN, SAM] });
   it("one promise to Evan due today 7:30 PM, on Today; a follow-up made from it has Evan as Who", async () => {
     const w = world({

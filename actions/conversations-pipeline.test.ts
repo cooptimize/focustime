@@ -4,12 +4,12 @@
 import { describe, expect, it } from "vitest";
 import type { ProviderCall } from "../ai/types.ts";
 import { aClientChat, aChatMember, aCommitmentAnswer, aConversationUpdate, anUpdateAnswer, aWorkItem, CLIENT_TENANT } from "../test/builders/index.ts";
-import { BLAKE, CHAT, cscAnswer, EVAN, LENA, SAM, world, ZONE } from "../test/conversations.ts";
+import { BLAKE, CHAT, allianceAnswer, EVAN, LENA, SAM, world, ZONE } from "../test/conversations.ts";
 
 
-describe("the CSC-shaped example", () => {
+describe("the Alliance-shaped example", () => {
   it("is one conversation with a living summary, Evan committed, thanks as wind-down, and the original messages kept", async () => {
-    const w = world({ respond: cscAnswer });
+    const w = world({ respond: allianceAnswer });
     const table = `<p><at id="0">Evan</at> we see about a 7.7k lb gap between the Movement Dashboard and the BOM report for project 4417001.</p><table><tr><td>MD</td><td>12,400 lb</td></tr><tr><td>BOM</td><td>4,700 lb</td></tr></table><img src="https://graph.microsoft.com/v1.0/chats/x/messages/1/hostedContents/a/$value"><img src="https://graph.microsoft.com/v1.0/chats/x/messages/1/hostedContents/b/$value">`;
     const first = [
       await w.say(CHAT, BLAKE, "2026-11-04T19:02:00Z", "Evan we see about a 7.7k lb gap between the Movement Dashboard and the BOM report for project 4417001.", { html: table, hasImage: true, mentions: [{ id: EVAN.userId!, name: "Evan Ford", at: 0 }] }),
@@ -47,7 +47,7 @@ describe("the CSC-shaped example", () => {
   });
 });
 
-describe("my promise (the W&C-shaped example)", () => {
+describe("my promise (the Wingtip-shaped example)", () => {
   const WT = aClientChat({ chatId: "19:wingtip-delivery@thread.v2", clientKey: "wingtip", kind: "delivery", displayName: "Wingtip Delivery Team (Cooptimize)", members: [EVAN, SAM] });
   const promiseAnswer = (c: ProviderCall) => {
     const input = JSON.parse(c.input) as { people: { ref: string; name: string }[]; messages: { ref: string; from: string; text: string; group: string | null }[] };

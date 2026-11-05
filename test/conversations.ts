@@ -53,8 +53,8 @@ export function world(o: { respond?: (c: ProviderCall) => string | { ok: false; 
   return { conn, teams, convs, calls, deps, say, ai, users, now: () => now, setNow: (t: string) => void (now = t), run: (chat: ClientChat, batch: TeamsMessage[], more: Partial<PipelineDeps> = {}) => runPipeline(deps(chat, more), chat, batch) };
 }
 
-/** The fake provider's answer for the CSC-shaped example, read from the request's own input (refs only). */
-export function cscAnswer(c: ProviderCall): string {
+/** The fake provider's answer for the Alliance-shaped example, read from the request's own input (refs only). */
+export function allianceAnswer(c: ProviderCall): string {
   const input = JSON.parse(c.input) as { people: { ref: string; name: string }[]; open_conversations: { ref: string }[]; messages: { ref: string; from: string; text: string }[] };
   const ref = (name: string) => input.people.find((p) => p.name === name)!.ref;
   const conv = input.open_conversations[0]?.ref ?? "n1";
