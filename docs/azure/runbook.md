@@ -403,14 +403,14 @@ Nothing to run for Chat.Read. Don't add it to GRAPH_SCOPES: everyone would then 
 
 A FocusTime admin who follows the client and is a member of the chat, once for everyone (D522). Everyone else sees the registered chats read-only. Reading is decided per chat, centrally; there is no per-person switch.
 
-**Who is an admin (until the admin console):** the Entra object ids in the GitHub variable `FT_ADMINS` (comma separated, ids only), which the deploy workflows pass to Bicep as `admins` and the app reads as `FOCUSTIME_ADMINS`. To set it: find the person's object id (`az ad user show --id <their UPN> --query id -o tsv`), then `gh variable set FT_ADMINS --body "<id>[,<id>...]"`, then deploy dev (and prod with its approval). Empty: nobody can add chats; registered chats keep being read. In the developer loop, `admins = ["<id>"]` in `~/.config/focustime/app.toml`. The next step replaces this with the "FocusTime Admins" Entra group inside `isAdmin()` (`actions/admin.ts`), with no migration.
+**Who is an admin:** see Admins (ADM-1) below.
 
 
-1. Settings › Clients › the client › Delivery chats › **Add a chat**. The first time, Microsoft asks to allow FocusTime to read chat messages; accept, and FocusTime comes back and finishes adding it. Reading starts from that moment (no history).
+1. Admin › Clients › the client › Delivery chats › **Add a chat**. The first time, Microsoft asks to allow FocusTime to read chat messages; accept, and FocusTime comes back and finishes adding it. Reading starts from that moment (no history).
 2. Optional: Settings › Clients › Requests holds the phrase lists. The rules run under the settings of whoever's token read the message.
 3. Requests show in Inbox › Requests to every FocusTime user who is a member of the chat now (by the member list FocusTime keeps, read daily and on Refresh) and follows the client; nobody else sees them, and following the client alone isn't enough (D521). Someone who leaves the chat stops seeing it at the next member read. Create bug, story or feature needs that client's DevOps write access (Settings › Clients › DevOps write access).
 
-**Reading on or off (admins, D523):** each chat's card in Settings › Clients has Read for requests or Stop reading. Off stops at once and keeps what was stored; on reads from that moment, never what was said while it was off. A newly added chat is read at once.
+**Reading on or off (admins, D523):** each chat's card in Admin › Clients has Read for requests or Stop reading. Off stops at once and keeps what was stored; on reads from that moment, never what was said while it was off. A newly added chat is read at once.
 
 Registering, relabelling, removing and turning reading on or off are logged with who did it (`client_chat_changes`). A chat belongs to one client.
 
@@ -478,7 +478,7 @@ App settings, the same for everyone; the defaults are in `server/appconfig.ts` (
 | `FOCUSTIME_AI_APP_CAP_USD` | `100` |
 | `FOCUSTIME_AI_PROVIDER` | `off` turns AI off for everyone (Settings › AI says it isn't set up) |
 
-Change the prices whenever the model changes: they are only used to estimate cost and enforce the caps. Each person's own cap is theirs to set in Settings › AI (0 to 1000 USD, default 10).
+Change the prices whenever the model changes: they are only used to estimate cost and enforce the caps. Since ADM-1 the model, each person's cap (default 10 USD) and the app's cap are set by an admin in Admin › AI; `FOCUSTIME_AI_MODEL` and `FOCUSTIME_AI_APP_CAP_USD` are only their starting values, and AI is on or off for FocusTime there too.
 
 ### What "AI isn't set up" means
 
@@ -527,3 +527,27 @@ Prepare shows the estimate before Run, and Review shows what the draft cost so f
 ### Turning it off
 
 Per client: Allow AI off in Settings › Clients (the button then says "Draft stories (AI is off for <client>)" and the Coop brief stays). Per person: Use AI off. Stories already created stay in DevOps; Undo is in Settings › Data › Audit log.
+
+## Admins (ADM-1)
+
+### Create the group (once, both environments share it)
+
+1. `infra/scripts/admin-group.sh --app-id <FocusTime web registration client id> --github cooptimize/focustime --dry-run`: shows what it would do. It creates the security group "FocusTime Admins" when there is none, adds you as the first member, turns on the groups claim (security groups) on the FocusTime web registration (never Coopilot Desktop), and sets the GitHub variable `FT_ADMIN_GROUP_ID`.
+2. Run it again without `--dry-run`; it asks before each change.
+3. Deploy dev (`deploy-dev.yml`), then prod (`deploy-prod.yml` with its approval): Bicep passes the id as `FOCUSTIME_ADMIN_GROUP_ID`.
+
+### Add or remove an admin
+
+In Entra (Groups › FocusTime Admins › Members), or `az ad group member add --group "FocusTime Admins" --member-id <object id>`. FocusTime never changes the group. A change shows within 10 minutes, or at the person's next sign-in. Admin › People lists the admins FocusTime has seen and links to the group.
+
+### Break-glass
+
+The GitHub variable `FT_ADMINS` (Entra object ids, comma separated, ids only) still makes someone an admin with or without the group, so FocusTime is never locked out (for example while the groups claim or Graph is failing). Keep it to one or two people: `gh variable set FT_ADMINS --body "<id>"`, then deploy. In the developer loop, `admins = ["<id>"]` in `~/.config/focustime/app.toml`.
+
+### Override a level or a lead
+
+Admin › People: a person's level select overrides Dataverse's (marked Override, with Dataverse's shown); Add as lead of a client, or Remove a lead Dataverse gave. Each is logged in Admin › Audit and survives the daily refresh. Clear the override to go back to Dataverse. Refresh from Dataverse reads people, levels and leads now.
+
+### What admins see
+
+Team settings, health and the audit; never anyone's plan, picks, follow-ups, captures, focus sessions, PATs, AI request text or chat messages they aren't a member of (D545).

@@ -205,3 +205,7 @@ What DS-1 learned, and what is still open:
 - Q-DS1-5: Created stories are assigned to the person who publishes. Should the sheet offer unassigned, or the feature's owner?
 - Q-DS1-6: Run needs the client's write PAT so nothing is spent on a draft that can't be published (D525). Some people may want to draft and copy the text without writing; a Copy as text button would allow that.
 - Q-DS1-7: The house style is per person (each person's own row). Should a client's team share one edited style?
+- Q-ADM1-1: Plan data retention is shown as a 2-year Rule, but nothing purges yet. A purge job (per person, oldest first, logged as counts) is a later step; which tables it covers and whether people get a notice first is open.
+- Q-ADM1-2: The poll interval, unmatched-message retention and per-chat AI cap in Admin › Conversations are stored and audited but the Teams pipeline still uses its own constants. CV-1 should read them from the org runtime.
+- Q-ADM1-3: Levels come from Dataverse position names (Consultant, Senior Consultant, Lead Consultant). A new position name reads as no level until it is mapped in `levelFromPosition`; should Admin › People offer the mapping?
+- Q-ADM1-4: In the demo, Admin › Clients' process switches change the demo's process view but not the demo week's picks; worth wiring if the demo is used to show them.
