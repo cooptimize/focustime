@@ -945,8 +945,8 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         await v.convs.updateCommitment(k.id, { itemId: hit.id, itemUrl: hit.url, itemTitle: hit.title });
         const c = k.conversationId !== null ? await v.convs.conversation(k.conversationId) : null;
         if (c && !c.itemId) {
-          await v.convs.updateConversation(k.conversationId, { item: { id: hit.id, url: hit.url, title: hit.title }, changeNote: `Linked to #${hit.id}` }, { bump: true });
-          await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, k.conversationId);
+          await v.convs.updateConversation(c.id, { item: { id: hit.id, url: hit.url, title: hit.title }, changeNote: `Linked to #${hit.id}` }, { bump: true });
+          await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, c.id);
         }
         ctx.log({ source: "plan", op: "promise_linked" });
         return promisesNow();
