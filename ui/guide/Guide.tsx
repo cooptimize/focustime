@@ -2,6 +2,7 @@
 // tokens, type scale and components. Every word is in ./content.ts; keys come from ui/keys.ts and the sizing sandbox
 // from the app's own math (./sandbox.ts). Example data only, labeled as such: never the person's own.
 // Lumen appears in the footer only (docs/design/brand.md lists the Guide among the places it may appear).
+import { TypeIcon } from "../TypeIcon.tsx";
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Lumen, WeekMark } from "../brand/Brand.tsx";
 import { reducedMotion } from "../brand/motion.ts";
@@ -433,13 +434,21 @@ function Devops() {
         <div className="guide-ladder">
           {DEVOPS.ladder.map((r) => (
             <div key={r.level} className={`rung${r.flag ? " flag" : ""}`}>
-              <span className="lvl">{r.level}</span>
+              <span className="lvl">{r.icon && <TypeIcon type={r.level} look={{ icon: r.icon, color: null }} decorative />} {r.level}</span>
               <span>
                 <Rich text={r.text} />
               </span>
             </div>
           ))}
         </div>
+        <p className="guide-icons-intro">{DEVOPS.icons.intro}</p>
+        <ul className="guide-icons" aria-label="Work item type icons">
+          {DEVOPS.icons.legend.map((l) => (
+            <li key={l.name}>
+              <TypeIcon type={l.name} look={{ icon: l.icon, color: l.color }} decorative /> <span>{l.name}</span>
+            </li>
+          ))}
+        </ul>
       </div>
       {DEVOPS.draft.map((x) => (
         <details key={x.q} className="guide-q">

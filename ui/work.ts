@@ -45,11 +45,3 @@ export function devopsSummary(devops: ClientWork[] | null): { label: string; lev
   const live = devops.filter((c) => c.status === "ok").length;
   return { label: `${live} of ${devops.length} live`, level: live === devops.length ? "live" : live === 0 ? "down" : "partial" };
 }
-
-/** Short type tag for a card: "Bug", "Task", "Story", "PBI", else the type's initials. */
-export function typeTag(type: string): string {
-  const known: Record<string, string> = { "User Story": "Story", "Product Backlog Item": "PBI", Bug: "Bug", Task: "Task", Feature: "Feature", Epic: "Epic", Issue: "Issue" };
-  if (known[type]) return known[type];
-  if (type.length <= 8) return type || "Item";
-  return type.split(/\s+/).map((w) => w[0]).join("").toUpperCase().slice(0, 4);
-}

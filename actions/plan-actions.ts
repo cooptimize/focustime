@@ -1,5 +1,6 @@
 // Plan the day actions (step 5). Local only: they read DevOps results already in memory to check a pick,
 // and write only to the local plan store. Nothing here calls DevOps, Outlook, Google or Dataverse.
+import { isOpen } from "../plan/process.ts";
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { carryTarget, dayLabel, dayRule, SCAN_DAYS, upcomingStart, type DayRule, type HasHours } from "../plan/days.ts";
@@ -323,7 +324,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         if (!parent) return bad(`Item ${parentItemId} is not among the loaded DevOps items for ${draft.clientKey}. Refresh and try again`, 409);
         const want = draft.level === "feature" ? "epic" : "feature";
         if (parent.level !== "portfolio" || (parent.tier ?? "feature") !== want) return bad(draft.level === "feature" ? "A draft feature goes under an epic" : "A draft story goes under a feature", 422);
-        if (parent.stateCategory === "Completed" || parent.stateCategory === "Removed") return bad(`#${parentItemId} is ${parent.state}; choose an open one`, 422);
+        if (!isOpen(parent.stateCategory)) return bad(`#${parentItemId} is ${parent.state}; choose an open one`, 422);
         return { ok: true, data: { draft: (await plan.setDraftParent(draft.id, parentItemId)) } };
       }
       case "draft.update": {
@@ -362,7 +363,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
           if (!parent) return bad(`Item ${parentItemId} is not among the loaded DevOps items for ${key}. Refresh and try again`, 409);
           const want = draft.level === "feature" ? "epic" : "feature";
           if (parent.level !== "portfolio" || (parent.tier ?? "feature") !== want) return bad(draft.level === "feature" ? "A draft feature goes under an epic" : "A draft story goes under a feature", 422);
-          if (parent.stateCategory === "Completed" || parent.stateCategory === "Removed") return bad(`#${parentItemId} is ${parent.state}; choose an open one`, 422);
+          if (!isOpen(parent.stateCategory)) return bad(`#${parentItemId} is ${parent.state}; choose an open one`, 422);
           patch.parentItemId = parentItemId;
         } else if (o.parentItemId === null) patch.parentItemId = null;
         return { ok: true, data: { draft: (await plan.updateDraft(draft.id, patch)) } };

@@ -28,7 +28,7 @@ function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | Targ
     snapshots: createSnapshotStore(cacheDir),
     timeZone: NY,
     now: () => clock,
-    ...(opts.pickableTypes ? { pickableTypes: () => opts.pickableTypes! } : {}),
+    ...(opts.pickableTypes ? { processOverrides: () => ({ noBreakdown: opts.pickableTypes! }) } : {}),
     ...(opts.onItems ? { onItems: opts.onItems } : {}),
     targets: async (keys) => {
       targetCalls.push(keys);
@@ -383,7 +383,32 @@ describe("story level: children of epics and features (step 5)", () => {
   });
 });
 
-describe("pickable portfolio types from config (Q20)", () => {
+describe("the process model (WT-1)", () => {
+  it("takes levels from the team's ranked backlogs and keeps my bugs at child level when the team has bugs off", async () => {
+    const s = setup({ contoso: "bugs_off" }, [target("Adatum", "contoso")]);
+    const [adatum] = await s.src.load([ref("Adatum")]);
+    const level = Object.fromEntries(adatum!.items.map((i) => [i.id, i.level]));
+    expect(level).toMatchObject({ 101: "story", 110: "portfolio", 140: "story" });
+    expect(adatum!.children.find((c) => c.id === 112)!.level).toBe("other");
+    expect(adatum!.types!.find((t) => t.name === "Bug")).toMatchObject({ level: null });
+    expect(adatum!.types!.find((t) => t.name === "Feature")).toMatchObject({ level: "parent", needsBreakdown: true });
+    expect(s.calls.some((c) => c.url.includes("/Adatum%20Team/_apis/work/backlogs"))).toBe(true);
+  });
+  it("gives ADM-1 the model per client, with the history behind needs breakdown", async () => {
+    const s = setup({ contoso: "bugs_off" }, [target("Adatum", "contoso")]);
+    const [r] = await s.src.processModels(["Adatum"]);
+    if (!r!.ok) throw new Error(r!.message);
+    expect(r!.model.levels).toEqual({ top: ["Epic"], parent: ["Feature"], child: ["User Story"], task: ["Task"] });
+    expect(r!.model.bugsBehavior).toBe("off");
+    expect(Object.keys(r!.model.types.find((t) => t.name === "Feature")!.history ?? {})).toEqual(["items", "withChildren", "share"]);
+    // A second call within the day reads nothing again.
+    const before = s.calls.length;
+    await s.src.processModels(["Adatum"]);
+    expect(s.calls.length - before).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("pickable portfolio types from config (Q20, now the needs-breakdown override, WT-1)", () => {
   it("a listed portfolio type is pickable and is not opened into children", async () => {
     const s = setup({ contoso: "portfolio" }, [target("Adatum", "contoso")], { pickableTypes: ["feature"] });
     const [adatum] = await s.src.load([ref("Adatum")]);

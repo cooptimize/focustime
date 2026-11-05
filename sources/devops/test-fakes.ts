@@ -19,6 +19,7 @@ export type OrgScenario =
   | "server_error" // 500
   | "batch_fails" // metadata and WIQL work, the batch call fails
   | "portfolio"
+  | "bugs_off" // WT-1: portfolio, plus the default team's backlogs (ranked) with bugs off and a bug assigned to me
   | "planweek" // agile; Plan the week (step 8): features I own, features that are parents of my stories, an epic with no open features
   | "no_story_level" // agile, but the process configuration lists no requirement, task or bug backlog (Q47)
   | "flaky"; // agile, but the first try of every request fails at the network level (a blip) // agile process; I own a feature with children, an epic with a feature and a story below it, and a feature with none
@@ -33,8 +34,16 @@ export const PORTFOLIO: Record<number, [string, string, number | null, string]> 
   121: ["Feature", "New", 120, "Feature under the epic"],
   122: ["User Story", "New", 121, "Story two levels down"],
   130: ["Feature", "New", null, "Feature with no children"],
+  140: ["Bug", "Active", null, "Bug assigned to me"],
 };
 const MINE = [110, 101, 120, 130];
+/** WT-1: the team's backlog levels for "bugs_off": Epic over Feature over User Story over Task; no bugs. */
+const TEAM_BACKLOGS = { count: 4, value: [
+  { name: "Epics", rank: 4, type: "portfolio", isHidden: false, workItemTypes: [{ name: "Epic" }], defaultWorkItemType: { name: "Epic" } },
+  { name: "Features", rank: 3, type: "portfolio", isHidden: false, workItemTypes: [{ name: "Feature" }], defaultWorkItemType: { name: "Feature" } },
+  { name: "Stories", rank: 2, type: "requirement", isHidden: false, workItemTypes: [{ name: "User Story" }], defaultWorkItemType: { name: "User Story" } },
+  { name: "Tasks", rank: 1, type: "task", isHidden: false, workItemTypes: [{ name: "Task" }], defaultWorkItemType: { name: "Task" } },
+] };
 
 /**
  * Plan the week (step 8): id → [type, state, parent, title, assignee display name or null, target date or null].
@@ -112,6 +121,13 @@ export function fakeDevOps(orgs: Record<string, OrgScenario>, opts: { ids?: numb
       case "server_error":
         return json('{"message":"boom"}', 500);
     }
+    if (scenario === "bugs_off") {
+      if (path.startsWith("projects/")) return json(JSON.stringify({ id: "p1", name: "Adatum Project", defaultTeam: { id: "t1", name: "Adatum Team" }, capabilities: { processTemplate: { templateName: "Agile" } } }));
+      if (path === "Adatum Team/_apis/work/backlogs") return json(JSON.stringify(TEAM_BACKLOGS));
+      if (path === "Adatum Team/_apis/work/teamsettings") return json(JSON.stringify({ bugsBehavior: "off" }));
+    }
+    const mine = scenario === "bugs_off" ? [...MINE, 140] : MINE;
+    if (scenario === "bugs_off") scenario = "portfolio";
     const proc = scenario === "batch_fails" || scenario === "portfolio" || scenario === "planweek" || scenario === "no_story_level" ? "agile" : scenario;
     if (scenario === "planweek") {
       if (path === "_apis/wit/wiql") {
@@ -147,7 +163,7 @@ export function fakeDevOps(orgs: Record<string, OrgScenario>, opts: { ids?: numb
     if (scenario === "portfolio" && path === "_apis/wit/wiql") {
       const q = (JSON.parse(String(init?.body)) as { query: string }).query;
       const parents = q.match(/\[System\.Parent\] IN \(([\d, ]+)\)/)?.[1]?.split(",").map(Number);
-      const ids = parents ? Object.entries(PORTFOLIO).filter(([, v]) => v[2] !== null && parents.includes(v[2])).map(([k]) => Number(k)) : MINE;
+      const ids = parents ? Object.entries(PORTFOLIO).filter(([, v]) => v[2] !== null && parents.includes(v[2])).map(([k]) => Number(k)) : mine;
       return json(JSON.stringify({ workItems: ids.map((id) => ({ id })) }));
     }
     if (scenario === "portfolio" && path === "_apis/wit/workitemsbatch") {

@@ -5,7 +5,8 @@
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { lookupItems, parseItemRef } from "../plan/lookup.ts";
 import type { WorkItem } from "../week/types.ts";
-import { DevOpsWork, typeTag } from "./work.ts";
+import { DevOpsWork } from "./work.ts";
+import { TypeIcon } from "./TypeIcon.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 
 /** This week's plan items (client and id), so the lookup can rank them first. App provides it. */
@@ -17,7 +18,7 @@ export const NO_ITEM: ItemValue = { itemId: null, title: null, url: null, text: 
 /** Step 15.3: features or epics (from capture.features) as a lookup pool, for a draft's parent. */
 export function parentPool(choices: readonly { id: number; title: string; state: string; type?: string; url?: string }[] | undefined, tier: "feature" | "epic"): { items: WorkItem[]; children: WorkItem[] } | undefined {
   if (!choices) return undefined;
-  const items = choices.map((c): WorkItem => ({ id: c.id, title: c.title, type: c.type ?? (tier === "epic" ? "Epic" : "Feature"), state: c.state, stateCategory: "InProgress", level: "portfolio", tier, order: null, parentId: null, changedAt: "", url: c.url ?? "" }));
+  const items = choices.map((c): WorkItem => ({ id: c.id, title: c.title, type: c.type ?? "", state: c.state, stateCategory: "Unknown", level: "portfolio", tier, order: null, parentId: null, changedAt: "", url: c.url ?? "" }));
   return { items, children: [] };
 }
 
@@ -112,7 +113,7 @@ export function ItemLookup({ clientKey, value, onChange, label = "Work item", na
           {results.map((r, i) => (
             <li key={r.id} role="option" aria-selected={i === active}>
               <button type="button" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={() => link(r)}>
-                <span className="pr-type">{typeTag(r.type)}</span> {r.title} <span className="muted">#{r.id}</span>
+                <TypeIcon clientKey={clientKey} type={r.type} /> {r.title} <span className="muted">#{r.id}</span>
                 {priorities.has(r.id) && <span className="item-lookup-tag">this week</span>}
               </button>
             </li>

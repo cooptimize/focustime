@@ -1,6 +1,7 @@
 // The Roadmap view (step 16, D278 to D282): features and epics I own, per followed client, with stories done and open,
 // who works on them, a three-week trend from local daily snapshots and a plain on-track signal. Read-only: the row ⋯
 // menu uses existing actions, and the only write it can start is Set target date, through the DevOps write flow.
+import { TypeIcon } from "./TypeIcon.tsx";
 import { ModeArea } from "./ModeSwitch.tsx";
 import type React from "react";
 import { useCallback, useContext, useEffect, useRef, useState, type CSSProperties } from "react";
@@ -275,7 +276,7 @@ function Row({ k, name, r, ops }: { k: string; name: string; r: RoadmapRow; ops:
           </span>
           <span className="rm-reason">{r.status.reason}</span>
           <span className="dl-meta muted">
-            <span>{r.type} · {r.state} ·</span>
+            <span><TypeIcon clientKey={k} type={r.type} /> {r.state} ·</span>
             {r.targetDate ? (
               <span>Target {monthDay(r.targetDate)}</span>
             ) : owned ? (

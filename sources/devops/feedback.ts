@@ -4,6 +4,7 @@
 // backlog's story type), the project (its default team) and that team's settings (the default iteration), create a
 // work item with its parent link in the same JSON Patch (validateOnly for the setup check), and read it back. Nothing
 // is ever updated or deleted. Logs carry op, status and duration only.
+import { levelsFromProcessConfig } from "../../plan/process.ts";
 import type { Logger } from "../../log/logger.ts";
 import { PARENT_REL, textToHtml, validOrg, WIT_API } from "../../plan/devopswrite.ts";
 import type { FeedbackPayload } from "../../plan/feedback.ts";
@@ -94,11 +95,14 @@ export function createFeedbackDevOps(d: { fetch: typeof fetch; log: Logger; toke
     }
   }
 
-  /** The process's story type: the requirement backlog's first work item type (User Story in Agile). */
+  /** The process's story type (the child level's first type) and its parent level types (WT-1: levels, not names). */
+  let pc: Promise<unknown> | null = null;
+  const processConfig = () => (pc ??= req<unknown>("process", "GET", `${proj}/_apis/work/processconfiguration`).catch((e: unknown) => ((pc = null), Promise.reject(e))));
   async function storyType(): Promise<string | null> {
-    const r = await req<{ requirementBacklog?: { workItemTypes?: { name?: unknown }[] } }>("process", "GET", `${proj}/_apis/work/processconfiguration`);
-    const n = r.requirementBacklog?.workItemTypes?.[0]?.name;
-    return typeof n === "string" && n ? n : null;
+    return levelsFromProcessConfig(await processConfig()).levels.child[0] ?? null;
+  }
+  async function parentTypes(): Promise<string[]> {
+    return levelsFromProcessConfig(await processConfig()).levels.parent;
   }
 
   /** The default team's default iteration as a full path ("Project\\Iteration 1"), or the project root. */
@@ -133,6 +137,6 @@ export function createFeedbackDevOps(d: { fetch: typeof fetch; log: Logger; toke
     return { id: Number(r.id), rev: Number(r.rev), title: str(r, "System.Title"), type: str(r, "System.WorkItemType"), parentId: parentOf(r), url: itemWebUrl(t, id) };
   }
 
-  return { target: t, parent, storyType, defaultIteration, create, read };
+  return { target: t, parent, storyType, parentTypes, defaultIteration, create, read };
 }
 export type FeedbackDevOps = ReturnType<typeof createFeedbackDevOps>;

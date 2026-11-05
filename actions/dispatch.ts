@@ -1,5 +1,6 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
+import { isClosed, isCompleted } from "../plan/process.ts";
 import { clearPhotos, photoAction } from "./photo-actions.ts";
 import { chatAction, type ChatContext } from "./chat-actions.ts";
 import { storyAction, type StoryContext } from "./story-actions.ts";
@@ -224,7 +225,7 @@ export const nudgeTimes = (cfg: AppConfig): NudgeTimes => ({ thu: cfg.plan.weekN
 /** Settings > Planning as the UI uses it (defaults when the config is invalid). */
 export function planningOf(cfg: AppConfig | null): PlanningSettings {
   if (!cfg) return { ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } };
-  const { pickablePortfolioTypes: _ignored, ...rest } = cfg.plan;
+  const { pickablePortfolioTypes: _ignored, backgroundTypes: _bg, ...rest } = cfg.plan;
   return rest;
 }
 
@@ -699,7 +700,7 @@ export async function requestContext(ctx: ActionContext): Promise<RequestContext
       const r = src.last(clientKey) ?? (await src.load([{ clientKey, clientName: cfg.clientSettings[clientKey]?.name ?? clientKey }]).catch(() => null))?.[0] ?? null;
       if (!r || (r.status !== "ok" && !r.items.length)) return null;
       const seen = new Set<number>();
-      return [...r.items, ...r.children].filter((i) => i.stateCategory !== "Completed" && i.stateCategory !== "Removed" && !seen.has(i.id) && !!seen.add(i.id));
+      return [...r.items, ...r.children].filter((i) => !isClosed(i.stateCategory) && !seen.has(i.id) && !!seen.add(i.id));
     },
     writeClients: async () => (ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : []),
     now: ctx.now,
@@ -709,7 +710,7 @@ export async function requestContext(ctx: ActionContext): Promise<RequestContext
     itemDone: (cfg, clientKey, itemId) => {
       const w = ctx.makeDevOps(cfg.dataverse, userZone(cfg)).last(clientKey);
       const hit = w ? [...w.items, ...w.children, ...(w.watched ?? [])].find((i) => i.id === itemId) : undefined;
-      return hit ? hit.stateCategory === "Completed" : null;
+      return hit ? isCompleted(hit.stateCategory) : null;
     },
   };
 }

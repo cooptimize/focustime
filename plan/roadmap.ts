@@ -1,5 +1,6 @@
 // The Roadmap view (step 16, D278 to D281): features and epics I own, their stories done and open, who works on
 // them, a daily snapshot trend and a plain on-track signal against the target date. Pure: no I/O, no tokens.
+import { countsAsDone, isRemoved } from "./process.ts";
 import type { ClientPortfolio, IsoDate, PortfolioItem } from "../week/types.ts";
 
 export type RoadmapSnapshot = { date: IsoDate; done: number; open: number };
@@ -11,7 +12,6 @@ export const STALE_DAYS = 14;
 export const TREND_DAYS = 21;
 /** How much history the signal needs. */
 export const MIN_HISTORY_DAYS = 7;
-const DONE = new Set(["Resolved", "Completed"]);
 
 /** The features and epics assigned to me (not those only listed as a parent of my stories or above them). */
 export function ownedItems(p: ClientPortfolio): PortfolioItem[] {
@@ -24,8 +24,8 @@ export function ownedItems(p: ClientPortfolio): PortfolioItem[] {
  */
 export function storyCounts(item: PortfolioItem, now: string, sizeKnown: boolean): StoryCounts {
   const level = item.tier === "epic" ? "portfolio" : "story";
-  const kids = item.children.filter((c) => c.level === level && c.stateCategory !== "Removed");
-  const open = kids.filter((c) => !DONE.has(c.stateCategory));
+  const kids = item.children.filter((c) => c.level === level && !isRemoved(c.stateCategory));
+  const open = kids.filter((c) => !countsAsDone(c.stateCategory));
   // Step 16.4: one person per email (DevOps uniqueName) when there is one, so two people with the same display name stay
   // apart and one person's renamed display name doesn't split them; the display name only when there is no email.
   const byKey = new Map<string, { name: string; email: string | null; count: number }>();
@@ -173,7 +173,7 @@ export function rowState(i: RowStateInput): RowState {
 export function lastActivity(item: PortfolioItem): string | null {
   let best: string | null = null;
   for (const c of item.children) {
-    if (c.stateCategory === "Removed" || !c.changedAt) continue;
+    if (isRemoved(c.stateCategory) || !c.changedAt) continue;
     if (!best || Temporal.Instant.compare(Temporal.Instant.from(c.changedAt), Temporal.Instant.from(best)) > 0) best = c.changedAt;
   }
   return best;
@@ -183,7 +183,7 @@ export function lastActivity(item: PortfolioItem): string | null {
 export function firstActivity(item: PortfolioItem): string | null {
   let best: string | null = null;
   for (const c of item.children) {
-    if (c.stateCategory === "Removed" || !c.changedAt) continue;
+    if (isRemoved(c.stateCategory) || !c.changedAt) continue;
     if (!best || Temporal.Instant.compare(Temporal.Instant.from(c.changedAt), Temporal.Instant.from(best)) < 0) best = c.changedAt;
   }
   return best;
@@ -192,7 +192,7 @@ export function firstActivity(item: PortfolioItem): string | null {
 /** Open children that are blocked (one level down, Removed left out). */
 export function blockedCount(item: PortfolioItem): number {
   const level = item.tier === "epic" ? "portfolio" : "story";
-  return item.children.filter((c) => c.level === level && c.stateCategory !== "Removed" && !DONE.has(c.stateCategory) && c.blocked).length;
+  return item.children.filter((c) => c.level === level && !isRemoved(c.stateCategory) && !countsAsDone(c.stateCategory) && c.blocked).length;
 }
 
 /** Features and epics I contribute to: the parent of a story assigned to me, not assigned to me (D347). */

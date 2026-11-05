@@ -25,8 +25,10 @@ export type FeatureSignals = {
   epic: EpicFields | null;
   children: ChildItem[];
   comments: RawComment[];
-  /** The story type to create, from the client's process (the requirement backlog's default type). */
+  /** The story type to create, from the client's process: the feature type's most common child type (WT-1). */
   storyType: string;
+  /** WT-1: every child type the feature's type takes (the next backlog level), the default first. */
+  childTypes?: string[];
 };
 
 /** Comments, newest first, are kept until this many tokens (about 4 characters a token); the rest are counted. */

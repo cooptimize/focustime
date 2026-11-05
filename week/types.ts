@@ -272,6 +272,8 @@ export type PortfolioItem = {
   why: ("assigned" | "parent" | "above")[];
   /** One level down, every state, board order. */
   children: PortfolioChild[];
+  /** WT-1: the type's needs-breakdown setting from the project's process (on by default; missing in older caches). */
+  needsBreakdown?: boolean;
   /** Step 15.3: what a draft under it inherits (shown read-only in the draft editor). Missing in older caches. */
   areaPath?: string | null;
   iterationPath?: string | null;
@@ -315,5 +317,9 @@ export type ClientWork = {
   /** Items read by id because an open follow-up is about them, completed ones included (step 7). */
   watched?: WorkItem[];
   /** Features committed to a week that aren't assigned to me, read by id (open ones) for Plan the day (step 8). */
-  committed?: WorkItem[];
+  committed?: WorkItem[];  /** WT-1: each work item type's icon, color and level from the project's process. Missing in older caches. */
+  types?: TypeLook[];
 };
+
+/** WT-1: a work item type as the UI draws it (plan/process.ts builds it from the project's process). */
+export type TypeLook = { name: string; icon: string | null; color: string | null; level: "top" | "parent" | "child" | "task" | null; countsHours: boolean; needsBreakdown: boolean };

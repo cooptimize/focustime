@@ -7,7 +7,8 @@ import type { SnapshotStore } from "../../host/types.ts";
 import type { Logger } from "../../log/logger.ts";
 import type { ClientPortfolio, ClientWork, ClientWorkStatus, FailureCause, PortfolioItem, WorkItem } from "../../week/types.ts";
 import { formatFetchedAt } from "../when.ts";
-import { withOpenStates, allowPortfolio, backlogLevels, batchFields, buildAllChildrenWiql, buildChildrenWiql, buildWiql, categoriesFrom, detectOrderField, detectSizeField, detectTargetField, DONE_CATEGORIES, START_DATE_FIELD, ACCEPTANCE_FIELD, htmlToText, normalizeWorkItems, portfolioTiers, type BacklogLevels, type FieldInfo, type NormalizeContext, type StateCategories } from "./normalize.ts";
+import { batchFields, buildAllChildrenWiql, buildChildrenWiql, buildWiql, detectOrderField, detectSizeField, detectTargetField, START_DATE_FIELD, ACCEPTANCE_FIELD, htmlToText, normalizeWorkItems, type BacklogLevels, type FieldInfo, type NormalizeContext, type StateCategories } from "./normalize.ts";
+import { buildProcessModel, isClosed, isOpen, looksOf, type TypeLook, planningLevels, stateCategories, typeOf, type ProcessModel, type ProcessOverrides, type RawProcess } from "../../plan/process.ts";
 import type { Pat } from "./pat.ts";
 import type { DevOpsTarget, TargetsResult } from "./types.ts";
 import type { ExemplarCandidate, FeatureSignals } from "../../plan/stories.ts";
@@ -37,8 +38,11 @@ export type DevOpsDeps = {
   minRefreshMs?: number;
   /** Work item types, states and the order field change rarely. */
   metadataTtlMs?: number;
-  /** Portfolio types that can still be picked (config [plan], Q20). Read at each fetch. */
-  pickableTypes?: () => readonly string[];
+  /**
+   * WT-1: the process overrides until ADM-1 hosts them, read at each fetch: parent or top types that don't need
+   * breakdown (the old pickable_portfolio_types, so they can be picked) and background types (no hours).
+   */
+  processOverrides?: () => ProcessOverrides;
   /** A client's "treat as open" states (config [clients], step 6b). Read at each fetch. */
   openStates?: (clientKey: string) => readonly string[];
   /** AP-2: the ids of a client's items just read from DevOps (never from the cache), for the AI guard's map. */
@@ -59,13 +63,19 @@ class DevOpsFailure extends Error {
   }
 }
 
-type Metadata = { orderField: string | null; categories: StateCategories; levels: BacklogLevels; /** Plan the week (step 8): portfolio tiers from the backlog levels. */ tiers: { feature: Set<string>; epic: Set<string> }; /** DS-1: the requirement backlog's default type, the type Draft stories creates. */ storyType: string | null; requirementTypes: string[] };
+type Metadata = { orderField: string | null; /** WT-1: the project's process model, with the person's overrides. */ model: ProcessModel; categories: StateCategories; levels: BacklogLevels; /** Plan the week (step 8): portfolio tiers from the backlog levels. */ tiers: { feature: Set<string>; epic: Set<string> }; /** DS-1: the child level's default type, the type Draft stories creates by default. */ storyType: string | null; requirementTypes: string[] };
+
+/** WT-1: what is cached per project (a day): the raw process responses and the board order field, never a PAT. */
+type ProcessRaw = { raw: RawProcess; orderField: string | null };
+const DAY_MS = 24 * 60 * 60_000;
+/** WT-1: the history behind Admin's "75% broken down": items past Proposed in the last 12 months. */
+const HISTORY_DAYS = 365;
 
 /** What the cache file holds for Plan the week per client: normalized portfolio items only (no descriptions). */
 type PortfolioSnapshot = { fetchedAt: string; items: PortfolioItem[]; targetFields: Record<string, string>; startFields?: Record<string, string>; sizeField?: string | null; acceptanceField?: boolean };
 
 /** What the cache file holds per client: normalized items only. */
-type WorkSnapshot = { fetchedAt: string; items: WorkItem[]; children?: WorkItem[] };
+type WorkSnapshot = { fetchedAt: string; items: WorkItem[]; children?: WorkItem[]; /** WT-1: each type's icon, color and level. */ types?: TypeLook[] };
 
 /** Items cached before step 5 have no level; treat them as story level so nothing becomes unpickable by accident. */
 const withLevel = (i: WorkItem): WorkItem => (i.level ? i : { ...i, level: "story" });
@@ -77,13 +87,8 @@ export function cacheKey(clientKey: string): string {
   return `${slug}-${createHash("sha256").update(clientKey).digest("hex").slice(0, 8)}`;
 }
 
-/** DS-1: the requirement backlog's default type and all its types (the story types Draft stories reads and creates). */
-function requirementOf(pc: unknown): { storyType: string | null; requirementTypes: string[] } {
-  const r = (pc as { requirementBacklog?: { defaultWorkItemType?: { name?: unknown }; workItemTypes?: { name?: unknown }[] } } | null)?.requirementBacklog;
-  const types = (r?.workItemTypes ?? []).map((t) => t?.name).filter((n): n is string => typeof n === "string");
-  const def = r?.defaultWorkItemType?.name;
-  return { storyType: typeof def === "string" ? def : (types[0] ?? null), requirementTypes: types };
-}
+/** WT-1: one client's process model, or a plain reason it can't be read. */
+export type ProcessModelResult = { clientKey: string; ok: true; model: ProcessModel } | { clientKey: string; ok: false; message: string };
 
 /** DS-1: a plain reason Draft stories can't read what it needs (never a body, a header or a PAT). */
 export type SignalsResult<T> = { ok: true; value: T } | { ok: false; message: string };
@@ -95,8 +100,11 @@ export function createDevOpsSource(d: DevOpsDeps) {
   const ttl = d.memoryTtlMs ?? 5 * 60_000;
   const minRefresh = d.minRefreshMs ?? 60_000;
   const metaTtl = d.metadataTtlMs ?? 60 * 60_000;
+  /** WT-1: the process model is refreshed daily (and on demand). */
+  const processTtl = d.metadataTtlMs ?? DAY_MS;
   const memory = new Map<string, { at: number; result: ClientWork; /** The committed features it was read with, sorted ids. */ features: string }>();
-  const metadata = new Map<string, { at: number; meta: Metadata }>();
+  const metadata = new Map<string, { at: number; raw: ProcessRaw }>();
+  const histories = new Map<string, { at: number; history: NonNullable<RawProcess["history"]> }>();
   /** Each client's DevOps organization name (not secret), from its last Dataverse settings. */
   const orgs = new Map<string, string>();
   const log = (op: string, extra: { status?: number; durationMs?: number; count?: number; kind?: string } = {}) => d.log({ source: "devops", op, ...extra });
@@ -148,28 +156,101 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return (await res.json()) as T;
   }
 
-  async function loadMetadata(c: Ctx, project: string): Promise<Metadata> {
+  /** WT-1: the process model's raw responses for a project: memory, then the snapshot (both a day), else DevOps. */
+  async function loadProcess(c: Ctx, project: string, refresh = false): Promise<ProcessRaw> {
     const key = `${c.org.toLowerCase()}/${project.toLowerCase()}`;
     const hit = metadata.get(key);
     const t = now().epochMilliseconds;
-    if (hit && t - hit.at < metaTtl) return hit.meta;
+    if (!refresh && hit && t - hit.at < processTtl) return hit.raw;
+    const snapKey = `process-${cacheKey(key)}`;
+    if (!refresh && !hit) {
+      const snap = (await d.snapshots.read<never>("devops", snapKey).catch(() => null)) as unknown as (ProcessRaw & { fetchedAt: string }) | null;
+      const age = snap ? t - Temporal.Instant.from(snap.raw.fetchedAt).epochMilliseconds : Infinity;
+      if (snap && age >= 0 && age < processTtl) {
+        metadata.set(key, { at: t - age, raw: { raw: snap.raw, orderField: snap.orderField } });
+        return metadata.get(key)!.raw;
+      }
+    }
     const p = encodeURIComponent(project);
-    const [pc, types] = await Promise.all([
+    const [pc, types, proj] = await Promise.all([
       call<unknown>(c, "processconfiguration", `${p}/_apis/work/processconfiguration`),
-      call<{ value?: { name?: unknown; states?: unknown }[] }>(c, "workitemtypes", `${p}/_apis/wit/workitemtypes`),
+      call<{ value?: { name?: unknown; icon?: { id?: unknown } | null; color?: unknown; isDisabled?: unknown; states?: unknown }[] }>(c, "workitemtypes", `${p}/_apis/wit/workitemtypes`),
+      call<{ defaultTeam?: { name?: unknown }; capabilities?: { processTemplate?: { templateName?: unknown } } }>(c, "project", `_apis/projects/${p}?includeCapabilities=true`).catch((e: unknown) => {
+        if (e instanceof DevOpsFailure && e.status === "auth_failed") throw e;
+        return null;
+      }),
     ]);
-    const list = (types.value ?? []).filter((x): x is { name: string; states?: unknown } => typeof x.name === "string");
+    const list = (types.value ?? []).filter((x) => typeof x.name === "string");
     // Some responses list states with each type; otherwise ask the per-type states endpoint.
     const withStates = await Promise.all(
       list.map(async (x) => {
-        if (Array.isArray(x.states) && x.states.length) return { name: x.name, states: x.states as { name?: unknown; category?: unknown }[] };
-        const s = await call<{ value?: { name?: unknown; category?: unknown }[] }>(c, "states", `${p}/_apis/wit/workitemtypes/${encodeURIComponent(x.name)}/states`);
-        return { name: x.name, states: s.value ?? [] };
+        if (Array.isArray(x.states) && x.states.length) return x;
+        const s = await call<{ value?: unknown[] }>(c, "states", `${p}/_apis/wit/workitemtypes/${encodeURIComponent(x.name as string)}/states`);
+        return { ...x, states: s.value ?? [] };
       }),
     );
-    const meta = { orderField: detectOrderField(pc), categories: categoriesFrom(withStates), levels: backlogLevels(pc), tiers: portfolioTiers(pc), ...requirementOf(pc) };
-    metadata.set(key, { at: t, meta });
-    return meta;
+    // The default team's backlog levels (ranked) and bugs behavior. Without them, process configuration decides.
+    const team = typeof proj?.defaultTeam?.name === "string" ? encodeURIComponent(proj.defaultTeam.name) : null;
+    const soft = <T,>(x: Promise<T>) => x.catch((e: unknown) => {
+      if (e instanceof DevOpsFailure && e.status === "auth_failed") throw e;
+      return null;
+    });
+    const [teamBacklogs, teamSettings] = team ? await Promise.all([soft(call<unknown>(c, "backlogs", `${p}/${team}/_apis/work/backlogs`)), soft(call<unknown>(c, "teamsettings", `${p}/${team}/_apis/work/teamsettings`))]) : [null, null];
+    const fetchedAt = now().toString();
+    const tpl = proj?.capabilities?.processTemplate?.templateName;
+    const raw: ProcessRaw = { orderField: detectOrderField(pc), raw: { org: c.org, project: c.projectName || project, process: typeof tpl === "string" ? tpl : null, fetchedAt, teamBacklogs, processConfig: pc, teamSettings, types: withStates } };
+    metadata.set(key, { at: t, raw });
+    await d.snapshots.write("devops", snapKey, { ...raw, fetchedAt } as never).catch(() => log("cache_write", { kind: "failed" }));
+    return raw;
+  }
+
+  /** The model with the person's overrides, and the planning shapes the rest of the source uses. */
+  function metaOf(r: ProcessRaw, history?: RawProcess["history"]): Metadata {
+    const model = buildProcessModel(history ? { ...r.raw, history } : r.raw, d.processOverrides?.() ?? {});
+    const pl = planningLevels(model);
+    const parentDefault = model.levels.parent.map((t) => typeOf(model, t)?.defaultChild).find(Boolean) ?? model.levels.child[0] ?? null;
+    return { orderField: r.orderField, model, categories: stateCategories(model), levels: { known: pl.known, story: pl.story, portfolio: pl.portfolio }, tiers: pl.tiers, storyType: parentDefault, requirementTypes: model.levels.child };
+  }
+
+  async function loadMetadata(c: Ctx, project: string): Promise<Metadata> {
+    return metaOf(await loadProcess(c, project));
+  }
+
+  /**
+   * WT-1: per parent or top type, its items past Proposed (and not Removed) created in the last 12 months, how many have
+   * children, and how often each valid child type appears. Reads only ids and types (link queries); cached a day.
+   */
+  async function loadHistory(c: Ctx, project: string, model: ProcessModel, refresh = false): Promise<NonNullable<RawProcess["history"]>> {
+    const key = `${c.org.toLowerCase()}/${project.toLowerCase()}`;
+    const hit = histories.get(key);
+    const t = now().epochMilliseconds;
+    if (!refresh && hit && t - hit.at < processTtl) return hit.history;
+    const p = encodeURIComponent(project);
+    const q = (v: string) => `'${v.replace(/'/g, "''")}'`;
+    const out: NonNullable<RawProcess["history"]> = {};
+    for (const type of model.types.filter((x) => x.level === "top" || x.level === "parent")) {
+      const skip = type.states.filter((s) => s.category === "Proposed" || s.category === "Removed").map((s) => s.name);
+      const source = `[Source].[System.TeamProject] = @project AND [Source].[System.WorkItemType] = ${q(type.name)} AND [Source].[System.CreatedDate] >= @today - ${HISTORY_DAYS}${skip.length ? ` AND [Source].[System.State] NOT IN (${skip.map(q).join(", ")})` : ""}`;
+      const link = `[System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward'`;
+      const r = await call<{ workItemRelations?: { source?: { id?: unknown } | null; target?: { id?: unknown } | null }[] }>(c, "wiql_links", `${p}/_apis/wit/wiql?$top=20000`, { query: `SELECT [System.Id] FROM WorkItemLinks WHERE (${source}) AND (${link}) MODE (MayContain)` });
+      const all = new Set<unknown>();
+      const parents = new Set<unknown>();
+      for (const x of r.workItemRelations ?? []) {
+        if (!x.source && x.target) all.add(x.target.id);
+        if (x.source && x.target) all.add(x.source.id), parents.add(x.source.id);
+      }
+      const childTypes: Record<string, number> = {};
+      // Only when there is a choice: how often each valid child type sits under this type.
+      if (type.validChildren.length > 1)
+        for (const child of type.validChildren) {
+          const k = await call<{ workItemRelations?: { source?: unknown; target?: { id?: unknown } | null }[] }>(c, "wiql_links", `${p}/_apis/wit/wiql?$top=20000`, { query: `SELECT [System.Id] FROM WorkItemLinks WHERE (${source}) AND (${link}) AND ([Target].[System.WorkItemType] = ${q(child)}) MODE (MustContain)` });
+          childTypes[child] = new Set((k.workItemRelations ?? []).filter((x) => x.source && x.target).map((x) => x.target!.id)).size;
+        }
+      out[type.name] = { items: all.size, withChildren: parents.size, childTypes };
+    }
+    log("process_history", { count: Object.keys(out).length });
+    histories.set(key, { at: t, history: out });
+    return out;
   }
 
   /** WIQL for ids, then the batch call in chunks of 200, normalized. */
@@ -219,12 +300,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
       throw new DevOpsFailure("error", `The process for ${ctx.projectName || project} (${ctx.client}) has no story level in its backlog levels, so FocusTime can't tell stories from features there. Nothing is guessed; check the project's backlog configuration`);
   }
 
-  async function fetchClient(ref: ClientRef, target: DevOpsTarget, watch: readonly number[] = [], features: readonly number[] = []): Promise<{ items: WorkItem[]; children: WorkItem[]; watched: WorkItem[]; committed: WorkItem[] }> {
+  async function fetchClient(ref: ClientRef, target: DevOpsTarget, watch: readonly number[] = [], features: readonly number[] = []): Promise<{ items: WorkItem[]; children: WorkItem[]; watched: WorkItem[]; committed: WorkItem[]; model: ProcessModel }> {
     const { ctx, project } = contextOf(ref, target);
     const raw = await loadMetadata(ctx, project);
     needStoryLevel(raw, ctx, project);
-    const meta = { ...raw, categories: withOpenStates(raw.categories, d.openStates?.(ref.clientKey) ?? []), levels: allowPortfolio(raw.levels, d.pickableTypes?.() ?? []) };
-    const items = await fetchItems(ctx, project, meta, buildWiql(target.email!, meta.categories, meta.orderField));
+    const meta = { ...raw, categories: stateCategories(raw.model, d.openStates?.(ref.clientKey) ?? []) };
+    // WT-1 safety net: a bug assigned to me is always at child level, even when the team has bugs off.
+    const items = (await fetchItems(ctx, project, meta, buildWiql(target.email!, meta.categories, meta.orderField))).map((i) => (i.level === "other" && typeOf(meta.model, i.type)?.bug ? { ...i, level: "story" as const } : i));
     log("items", { count: items.length });
     // Features committed to a week (step 8) that aren't mine: read by id (open ones), so their stories can be offered.
     const mineIds = new Set(items.map((i) => i.id));
@@ -244,7 +326,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const missing = watch.filter((id) => Number.isInteger(id) && id > 0 && !seen.has(id));
     const watched = await fetchWatched(ctx, project, meta, missing);
     if (watched.length) log("watched", { count: watched.length });
-    return { items, children, watched, committed };
+    return { items, children, watched, committed, model: meta.model };
   }
 
   // ---- Plan the week (step 8): features and epics, read-only ----
@@ -297,7 +379,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const { ctx, project } = contextOf(ref, target);
     const raw = await loadMetadata(ctx, project);
     needStoryLevel(raw, ctx, project);
-    const categories = withOpenStates(raw.categories, d.openStates?.(ref.clientKey) ?? []);
+    const categories = stateCategories(raw.model, d.openStates?.(ref.clientKey) ?? []);
     const portfolioTypes = new Set([...raw.tiers.feature, ...raw.tiers.epic]);
     // Assigned to me, or the parent of a story-level item assigned to me (raw backlog levels, not the pickable list).
     const assigned = new Set(mine.filter((i) => portfolioTypes.has(i.type)).map((i) => i.id));
@@ -307,14 +389,14 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const { fields: targetFields, starts: startFields, size: sizeField, ac: acceptanceField } = await targetFieldsFor(ctx, project, [...portfolioTypes], [...raw.levels.story]);
     const fields = [...batchFields(raw.orderField), "System.AssignedTo", "System.AreaPath", "System.IterationPath", ...new Set([...Object.values(targetFields), ...Object.values(startFields)]), ...(sizeField ? [sizeField] : [])];
     const n = { orderField: raw.orderField, categories, levels: raw.levels, keepDone: true, me: ctx.me, people: true, targetFields, startFields, timeZone: d.timeZone, sizeField, paths: true };
-    const found = (await readByIds(ctx, project, ids, fields, n)).filter((i) => portfolioTypes.has(i.type) && !DONE_CATEGORIES.has(i.stateCategory));
+    const found = (await readByIds(ctx, project, ids, fields, n)).filter((i) => portfolioTypes.has(i.type) && !isClosed(i.stateCategory));
     // Q49: follow parent links up to the top portfolio level, so the epics above my features are read too.
     const above = new Set<number>();
     for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
       const have = new Set(found.map((i) => i.id));
       const up = [...new Set(found.map((i) => i.parentId).filter((id): id is number => id !== null && !have.has(id)))].slice(0, MAX_PARENTS);
       if (!up.length) break;
-      const got = (await readByIds(ctx, project, up, fields, n)).filter((i) => portfolioTypes.has(i.type) && !DONE_CATEGORIES.has(i.stateCategory) && !have.has(i.id));
+      const got = (await readByIds(ctx, project, up, fields, n)).filter((i) => portfolioTypes.has(i.type) && !isClosed(i.stateCategory) && !have.has(i.id));
       if (!got.length) break;
       for (const i of got) above.add(i.id);
       found.push(...got);
@@ -345,7 +427,8 @@ export function createDevOpsSource(d: DevOpsDeps) {
       why: [...(assigned.has(i.id) ? ["assigned" as const] : []), ...(parents.has(i.id) ? ["parent" as const] : []), ...(above.has(i.id) && !assigned.has(i.id) && !parents.has(i.id) ? ["above" as const] : [])],
       areaPath: i.areaPath ?? null,
       iterationPath: i.iterationPath ?? null,
-      children: kids.filter((k) => k.parentId === i.id).map((k) => ({ id: k.id, title: k.title, type: k.type, state: k.state, stateCategory: k.stateCategory, open: !DONE_CATEGORIES.has(k.stateCategory), level: k.level, order: k.order, url: k.url, assignedTo: k.assignedTo ?? null, assignedToEmail: k.assignedToEmail ?? null, mine: !!k.assignedToMe, changedAt: k.changedAt, size: k.size ?? null, blocked: !!k.blocked, ...(targetFields[k.type] ? { targetDate: k.targetDate ?? null } : {}) })),
+      needsBreakdown: typeOf(raw.model, i.type)?.needsBreakdown ?? true,
+      children: kids.filter((k) => k.parentId === i.id).map((k) => ({ id: k.id, title: k.title, type: k.type, state: k.state, stateCategory: k.stateCategory, open: isOpen(k.stateCategory), level: k.level, order: k.order, url: k.url, assignedTo: k.assignedTo ?? null, assignedToEmail: k.assignedToEmail ?? null, mine: !!k.assignedToMe, changedAt: k.changedAt, size: k.size ?? null, blocked: !!k.blocked, ...(targetFields[k.type] ? { targetDate: k.targetDate ?? null } : {}) })),
     }));
     return { items, targetFields, startFields, sizeField, acceptanceField };
   }
@@ -442,7 +525,12 @@ export function createDevOpsSource(d: DevOpsDeps) {
       const feature = raw ? parseFeature(raw, url) : null;
       if (!feature) return { ok: false, message: `#${id} isn't in ${ctx.projectName}, or you can't see it` };
       if (!meta.tiers.feature.has(feature.type)) return { ok: false, message: `#${id} is a ${feature.type}: Draft stories works on features` };
-      if (!meta.storyType) return { ok: false, message: `The process for ${ctx.projectName} has no story level, so there is no story type to create` };
+      // WT-1: the child types this feature's type takes, the most common in this project's history first.
+      const ft = typeOf(meta.model, feature.type);
+      const valid = ft?.validChildren ?? [];
+      const def = valid.length > 1 ? typeOf(metaOf(await loadProcess(ctx, project), await loadHistory(ctx, project, meta.model)).model, feature.type)?.defaultChild : valid[0];
+      const childTypes = def ? [def, ...valid.filter((t) => t !== def)] : valid;
+      if (!childTypes.length) return { ok: false, message: `The process for ${ctx.projectName} has no level under ${feature.type}, so there is no type to create` };
       const [epicRaw, kidIds, commentsBody] = await Promise.all([
         feature.parentId ? batch([feature.parentId], EPIC_FIELDS) : Promise.resolve([]),
         call<{ workItems?: { id?: unknown }[] }>(ctx, "wiql", `${p}/_apis/wit/wiql?$top=200`, { query: childrenWiql(id) }).then((w) => (w.workItems ?? []).map((x) => x.id).filter((n): n is number => typeof n === "number")),
@@ -452,7 +540,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
       const epic = epicRaw.map(parseEpic).find((e) => e && e.id === feature.parentId) ?? null;
       const comments = parseComments(commentsBody);
       log("story_signals", { count: children.length + comments.length });
-      return { ok: true, value: { feature, epic, children, comments, storyType: meta.storyType } };
+      return { ok: true, value: { feature, epic, children, comments, storyType: childTypes[0]!, childTypes } };
     } catch (e) {
       return { ok: false, message: plainFailure(e, "Reading the feature") };
     }
@@ -495,6 +583,37 @@ export function createDevOpsSource(d: DevOpsDeps) {
     }
   }
 
+  /**
+   * WT-1: the process model per client (types, levels, state categories, valid and default children, needs breakdown
+   * with its history), read with the company read PAT at fetch time. Read only. ADM-1 shows these; Draft stories uses
+   * the default child. Cached a day; `refresh` reads again.
+   */
+  async function processModels(clientKeys: string[], opts: { refresh?: boolean } = {}): Promise<ProcessModelResult[]> {
+    let targets: TargetsResult;
+    try {
+      targets = await d.targets(clientKeys);
+    } catch {
+      targets = { ok: false, message: "Dataverse read failed" };
+    }
+    return Promise.all(
+      clientKeys.map(async (clientKey): Promise<ProcessModelResult> => {
+        if (!targets.ok) return { clientKey, ok: false, message: `DevOps settings unavailable (${targets.message})` };
+        const target = targets.targets.find((x) => x.clientKey === clientKey);
+        const ref = { clientKey, clientName: target?.clientName ?? clientKey };
+        const pre = precheck(ref, target);
+        if (pre) return { clientKey, ok: false, message: pre.message };
+        try {
+          const { ctx, project } = contextOf(ref, target!);
+          const raw = await loadProcess(ctx, project, opts.refresh);
+          const history = await loadHistory(ctx, project, metaOf(raw).model, opts.refresh);
+          return { clientKey, ok: true, model: metaOf(raw, history).model };
+        } catch (e) {
+          return { clientKey, ok: false, message: plainFailure(e, "Reading the process") };
+        }
+      }),
+    );
+  }
+
   /** Check the target is usable. Identity is never guessed. */
   function precheck(ref: ClientRef, target: DevOpsTarget | undefined): DevOpsFailure | null {
     if (!target) return new DevOpsFailure("not_set_up", `No Account Worker for ${ref.clientName} in Dataverse`);
@@ -511,7 +630,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const useCache = f.status !== "identity_missing" && f.status !== "not_set_up";
     const snap = useCache ? ((await d.snapshots.read<WorkItem>("devops", cacheKey(ref.clientKey))) as WorkSnapshot | null) : null;
     const message = snap ? `${f.message}. Showing items from ${formatFetchedAt(snap.fetchedAt, d.timeZone, now())}` : useCache ? `${f.message}. No cached items yet` : f.message;
-    return { clientKey: ref.clientKey, clientName: ref.clientName, status: f.status, message, ...(f.rootCause ? { cause: f.rootCause } : {}), fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: (snap?.items ?? []).map(withLevel), children: Array.isArray(snap?.children) ? snap.children.map(withLevel) : [] };
+    return { clientKey: ref.clientKey, clientName: ref.clientName, status: f.status, message, ...(f.rootCause ? { cause: f.rootCause } : {}), fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: (snap?.items ?? []).map(withLevel), children: Array.isArray(snap?.children) ? snap.children.map(withLevel) : [], ...(Array.isArray(snap?.types) ? { types: snap.types } : {}) };
   }
 
   async function loadOne(ref: ClientRef, targets: TargetsResult, watch: readonly number[], features: readonly number[]): Promise<ClientWork> {
@@ -523,12 +642,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
       if (target?.org && ORG.test(target.org)) orgs.set(ref.clientKey, target.org);
       const pre = precheck(ref, target);
       if (pre) throw pre;
-      const { items, children, watched, committed } = await fetchClient(ref, target!, watch, features);
+      const { items, children, watched, committed, model } = await fetchClient(ref, target!, watch, features);
       reportItems(ref.clientKey, [...items, ...children, ...(watched ?? []), ...(committed ?? [])]);
       const fetchedAt = now().toZonedDateTimeISO(d.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
-      const snap: WorkSnapshot = { fetchedAt, items, children };
+      const types = looksOf(model);
+      const snap: WorkSnapshot = { fetchedAt, items, children, types };
       await d.snapshots.write("devops", cacheKey(ref.clientKey), snap).catch(() => log("cache_write", { kind: "failed" }));
-      return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items, children, watched, committed };
+      return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items, children, watched, committed, types };
     } catch (e) {
       if (!(e instanceof DevOpsFailure)) log("load", { kind: "unexpected" });
       return fromCache(ref, e instanceof DevOpsFailure ? e : new DevOpsFailure("error", `DevOps load failed for ${ref.clientName}`));
@@ -590,7 +710,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     portfolioMemory.delete(clientKey);
   }
 
-  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool };
+  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels };
 }
 
 export type DevOpsSource = ReturnType<typeof createDevOpsSource>;

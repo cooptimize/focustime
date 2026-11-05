@@ -29,7 +29,7 @@ function liveCtx(): ActionContext {
     makeDataverse: (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: f.fetch, snapshots: createSnapshotStore(mkdtempSync(join(tmpdir(), "c-"))), log: (r) => logs.push(r) }),
     makeOutlook: () => { throw new Error("not configured"); },
     makeGoogle: () => { throw new Error("not configured"); },
-    makeDevOps: () => ({ load: async () => [], lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null, forget: () => undefined, featureSignals: async () => ({ ok: false as const, message: "n/a" }), exemplarPool: async () => ({ ok: true as const, value: [] }) }),
+    makeDevOps: () => ({ load: async () => [], lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null, forget: () => undefined, featureSignals: async () => ({ ok: false as const, message: "n/a" }), exemplarPool: async () => ({ ok: true as const, value: [] }), processModels: async () => [] }),
     saveSystemUserId: async () => {},
     now: () => "2026-11-03T15:00:00Z",
   } as ActionContext;

@@ -8,6 +8,8 @@
 // + Must and Nice, everything else folded, and the type box (Enter a draft feature as a must, Shift+Enter a nice to
 // have). DevOps health, a feature and a client's budget open in the shared detail panel. DevOps is read-only; the
 // week plan lives only in the local plan store. A past week is a review.
+import { countsFor } from "../plan/process.ts";
+import { ResolvedMark, TypeIcon } from "./TypeIcon.tsx";
 import { ModeArea } from "./ModeSwitch.tsx";
 import { planWeekParts } from "./nav.ts";
 import { mondayOf } from "../week/dates.ts";
@@ -20,7 +22,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSS
 import type { WeekLoadData, WeekPlanState } from "../actions/types.ts";
 import type { DraftStory, WeekFeature } from "../plan/types.ts";
 import { addPaneRows, type AddRowInfo } from "../plan/weekadd.ts";
-import { borrowedForWeek, PINNED_TO_PTO, pinnedToPto, readiness, weekBudget, type ClientBudget, type ReadinessFlag } from "../plan/weekplan.ts";
+import { borrowedForWeek, needsBreakdown, PINNED_TO_PTO, pinnedToPto, readiness, weekBudget, type ClientBudget, type ReadinessFlag } from "../plan/weekplan.ts";
 import { aboutText, DEFAULT_FEATURE_MINUTES, estimate, hoursText, loadText, overLine, progressWords, sourceWords, type Envelope } from "../plan/estimate.ts";
 import { moveWithin, otherStoriesLine, pickDoneFrom, pinLabel, progressLabel, weekList, type DoneBy, type Listed, type Progress, type Tier } from "../plan/weeklist.ts";
 import type { ClientWork, IsoDate, PortfolioItem, Slot, WorkItem } from "../week/types.ts";
@@ -90,13 +92,13 @@ function infoFor(portfolios: WeekPlanState["portfolios"], work: readonly ClientW
   };
 }
 /** U4 (Today's rule): a feature on the list with no open DevOps stories needs stories. */
-const needsStories = (i: Item, info: Info | null) => i.level === "feature" && !!info?.feature && !info.feature.children.some((c) => c.level === "story" && c.open) && !i.done;
+const needsStories = (i: Item, info: Info | null) => i.level === "feature" && !!info?.feature && needsBreakdown(info.feature) && !i.done;
 
 type PanelSel = { kind: "feature"; k: string; itemId: number } | { kind: "client"; k: string } | { kind: "health" } | null;
 
 /** U6: a draft feature on the week list, as a week item for the budget (4h, like a new feature). */
 const draftAsItem = (weekStart: IsoDate, d: DraftStory, tier: Tier): WeekFeature => ({
-  id: -d.id, weekStart, clientKey: d.clientKey, itemId: -d.id, title: d.title, itemType: "Feature", url: null, level: "feature", tier, estimate: null, size: null, parentId: null, slots: [], doneAt: null, position: null, createdAt: d.createdAt, updatedAt: d.createdAt,
+  id: -d.id, weekStart, clientKey: d.clientKey, itemId: -d.id, title: d.title, itemType: null, url: null, level: "feature", tier, estimate: null, size: null, parentId: null, slots: [], doneAt: null, position: null, createdAt: d.createdAt, updatedAt: d.createdAt,
 });
 
 export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, onChanged, onCaptures, openClient = null, onOpenClientSeen }: Props) {
@@ -176,7 +178,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   // Q48: only borrowed time paid back in this week counts against its fit.
   const borrowedMinutes = useMemo(() => borrowedForWeek(data.borrowed, weekStart), [data.borrowed, weekStart]);
   const fits = useMemo(
-    () => (weekReady ? weekBudget(data.week, [...raw, ...weekDrafts.map((w) => draftAsItem(weekStart, w.draft, w.tier))], { borrowedMinutes }) : []),
+    () => (weekReady ? weekBudget(data.week, [...raw, ...weekDrafts.map((w) => draftAsItem(weekStart, w.draft, w.tier))], { borrowedMinutes, counts: countsFor(work) }) : []),
     [weekReady, data.week, raw, weekDrafts, weekStart, borrowedMinutes],
   );
   const intentions = useMemo(
@@ -612,7 +614,7 @@ function FeaturePanel({ k, itemId, info, item, color, name, drafts, listed, clie
   const { weekStart } = useContext(WeekDates);
   void tz;
   return (
-    <PanelShell title={title} sub={`${name} · #${itemId}${info ? ` · ${info.type} · ${info.state}` : ""}`} color={color} label={`Feature: ${title}`} onClose={onClose}>
+    <PanelShell title={title} sub={<>{info && <TypeIcon clientKey={k} type={info.type} />} {name} · #{itemId}{info ? ` · ${info.state}` : ""}</>} color={color} label={`Feature: ${title}`} onClose={onClose}>
       <section className="dp-section" aria-label="Dates">
         <h3>Dates</h3>
         {/* D461: one line; Set (or Change) is an inline link, not a full-width button. */}
@@ -1042,7 +1044,7 @@ function AddRow({ k, row, ops }: { k: string; row: AddRowInfo; ops: Ops }) {
   return (
     <li className="pw-addrow" data-item={id}>
       <span className="pw-title" title={`#${id} ${title}`}>
-        <WorkLink clientKey={k} url={url}>#{id} {title}</WorkLink> <span className="pw-meta pw-type-word">{row.typeWord}</span>
+        <TypeIcon clientKey={k} type={row.type} /> <WorkLink clientKey={k} url={url}>#{id} {title}</WorkLink>
         {row.targetDate && <span className="pw-meta"> · target {dateShortIso(row.targetDate)}</span>}
         {row.flag && <span className="pw-flagword"> · {row.flag}</span>}
       </span>
@@ -1054,7 +1056,7 @@ function AddRow({ k, row, ops }: { k: string; row: AddRowInfo; ops: Ops }) {
         <ul className="pw-add-kids" aria-label={`Stories under #${id}`}>
           {row.nested.map((c) => (
             <li key={c.id} className="pw-add-kid">
-              <WorkLink clientKey={k} url={c.url}>#{c.id} {c.title}</WorkLink> <span className="pw-meta pw-type-word">{c.typeWord}</span>
+              <TypeIcon clientKey={k} type={c.type} /> <WorkLink clientKey={k} url={c.url}>#{c.id} {c.title}</WorkLink>
             </li>
           ))}
         </ul>
@@ -1138,6 +1140,7 @@ function ItemRow({ i, ptoPinned = false, first, last, past, info, drafts, places
       handle={nestedIn || past ? null : i.done ? "✓" : "⋮⋮"}
       handleTitle="Drag to reorder, or onto a block to pin it"
       titleText={`${i.title} · ${stateWord}`}
+      icon={info?.type ?? i.itemType ? <TypeIcon clientKey={k} type={(info?.type ?? i.itemType)!} /> : undefined}
       title={i.level === "feature" ? (
         <button type="button" className="pw-open" onClick={() => ops.feature(k, i.itemId)} title={`${stateWord}. Stories, dates and the Coop brief`}>{i.title}</button>
       ) : (
@@ -1145,7 +1148,7 @@ function ItemRow({ i, ptoPinned = false, first, last, past, info, drafts, places
       )}
       badges={
         <>
-          {i.done && <span className="pw-done" title={DONE_WORD[i.done]}>✓</span>}
+          {i.done === "resolved" ? <ResolvedMark state={info?.state ?? null} /> : i.done && <span className="pw-done" title={DONE_WORD[i.done]}>✓</span>}
           {i.level === "feature" &&
             (needs ? (
               <span className="pw-needs">

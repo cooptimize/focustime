@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { allowPortfolio, backlogLevels, buildAllChildrenWiql, dateOnly, detectTargetField, levelOf, batchFields, buildWiql, categoriesFrom, detectOrderField, normalizeWorkItems, portfolioTiers, type StateCategories } from "./normalize.ts";
+import { buildProcessModel, planningLevels } from "../../plan/process.ts";
+import { buildAllChildrenWiql, dateOnly, detectTargetField, levelOf, batchFields, buildWiql, categoriesFrom, detectOrderField, normalizeWorkItems, portfolioTiers, type StateCategories } from "./normalize.ts";
 import { detectSizeField } from "./normalize.ts";
 
 const fx = (name: string) => JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", `${name}.json`), "utf8"));
@@ -206,21 +207,18 @@ describe("sanitized recorded responses (a real client project, custom inherited 
   });
 });
 
-describe("pickable portfolio allowlist (Q20)", () => {
-  // Cooptimize's real backlog categories (read Oct 31): Epic and Domain, then Feature, Recurring and Ongoing.
-  const coop = backlogLevels({
+describe("the old pickable portfolio allowlist (Q20) is now a needs-breakdown override (WT-1)", () => {
+  // Cooptimize's backlog categories (read Oct 31): Epic and Domain, then Feature, Recurring and Ongoing.
+  const pc = {
     requirementBacklog: { workItemTypes: [{ name: "User Story" }] },
     taskBacklog: { workItemTypes: [{ name: "Task" }] },
     portfolioBacklogs: [{ workItemTypes: [{ name: "Epic" }, { name: "Domain" }] }, { workItemTypes: [{ name: "Feature" }, { name: "Recurring" }, { name: "Ongoing" }] }],
-  });
+  };
   it("Recurring becomes pickable; Domain, Epic, Feature and Ongoing stay portfolio", () => {
-    const l = allowPortfolio(coop, ["recurring"]);
+    const l = planningLevels(buildProcessModel({ org: "o", project: "p", fetchedAt: "", processConfig: pc, types: ["Epic", "Domain", "Feature", "Recurring", "Ongoing", "User Story", "Task"].map((name) => ({ name, states: [] })) }, { noBreakdown: ["recurring"] }));
     expect(levelOf("Recurring", l)).toBe("story");
     expect(["Domain", "Epic", "Feature", "Ongoing"].map((t) => levelOf(t, l))).toEqual(["portfolio", "portfolio", "portfolio", "portfolio"]);
-  });
-  it("an empty list, or a type that isn't portfolio, changes nothing", () => {
-    expect(allowPortfolio(coop, [])).toBe(coop);
-    expect(levelOf("Review", allowPortfolio(coop, ["Review"]))).toBe("other");
+    expect(levelOf("Review", l)).toBe("other");
   });
 });
 

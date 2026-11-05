@@ -90,7 +90,7 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
   if (!plan) return bad("The local plan store is not available", 503);
   const now = Temporal.Instant.from(ctx.now());
   const cfg = await ctx.config();
-  const planning = cfg?.plan ?? { ...DEFAULT_PLAN, pickablePortfolioTypes: [] };
+  const planning = cfg?.plan ?? { ...DEFAULT_PLAN, pickablePortfolioTypes: [], backgroundTypes: [] };
   const tz = userZone(cfg);
   const today = now.toZonedDateTimeISO(tz).toPlainDate().toString();
   const current = async () => (await plan.getState<TimerState>(TIMER_KEY));
