@@ -34,7 +34,7 @@ import { followOptions } from "./follow.ts";
 import { defaultWeekStart, localToday, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
 import { hoursOn, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
-import type { CalEvent, ClientWork, FocusPattern, IsoDate, SourceResult, Week } from "../week/types.ts";
+import type { CalEvent, ClientWork, FocusPattern, IsoDate, SourceResult, Week, WorkItem } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { timeboxAction, timeboxesFor, timeboxView } from "./timebox-actions.ts";
 import { devopsWriteAction, type DevOpsWriteContext, type WritePats, type AheadPort } from "./devops-write-actions.ts";
@@ -885,7 +885,8 @@ async function conversationsPortFor(ctx: ActionContext, port: RequestsPort): Pro
     me,
     view,
     created: async (conv, item) => {
-      if (conv.commitmentId !== null) await view.updateCommitment(conv.commitmentId, { state: "created", itemId: item.id, itemUrl: item.url, itemTitle: item.title });
+      // CV-5: a promise with its item stays open and actionable (due, who, done); the item is linked to it.
+      if (conv.commitmentId !== null) await view.updateCommitment(conv.commitmentId, { itemId: item.id, itemUrl: item.url, itemTitle: item.title });
       await view.updateConversation(conv.conversationId, { item: { id: item.id, url: item.url, title: item.title }, changeNote: `Tracked as #${item.id}` }, { bump: true });
       await refreshStatus(await deps(), conv.conversationId);
     },
@@ -894,7 +895,7 @@ async function conversationsPortFor(ctx: ActionContext, port: RequestsPort): Pro
       if (c?.itemId === itemId) await view.updateConversation(c.id, { item: null, changeNote: `#${itemId} was removed` }, { bump: true });
       if (conv.commitmentId !== null) {
         const k = await view.commitment(conv.commitmentId);
-        if (k?.state === "created" && k.itemId === itemId) await view.updateCommitment(k.id, { state: "open", itemId: null, itemUrl: null, itemTitle: null });
+        if ((k?.state === "created" || k?.state === "open") && k.itemId === itemId) await view.updateCommitment(k.id, { state: "open", itemId: null, itemUrl: null, itemTitle: null });
       }
       await refreshStatus(await deps(), conv.conversationId);
     },
@@ -994,6 +995,30 @@ export async function conversationContext(ctx: ActionContext): Promise<Conversat
       const r = (await ctx.makeDevOps(cfg.dataverse, userZone(cfg)).processModels([clientKey]))[0];
       return r?.ok ? r.model : null;
     },
+    // CV-5: Link to item's pool (the client's open items in scope, from the central store) and a link's live state.
+    searchItems: async (cfg, clientKey, query) => {
+      const src = ctx.makeDevOps(cfg.dataverse, userZone(cfg));
+      if (!src.searchItems) return null;
+      const me = ((await ctx.plan?.devopsIdentities().catch(() => []))?.find((i) => i.clientKey === clientKey)?.email ?? "").toLowerCase();
+      const hits = await src.searchItems({ clientKey, clientName: cfg.clientSettings[clientKey]?.name ?? clientKey }, query, query ? 20 : 500);
+      return hits ? hits.map((i) => aheadAsWork(i, me)) : null;
+    },
+    linkedItems: async (cfg, clientKey, ids) => {
+      const src = ctx.makeDevOps(cfg.dataverse, userZone(cfg));
+      return src.linkedItems ? src.linkedItems({ clientKey, clientName: cfg.clientSettings[clientKey]?.name ?? clientKey }, ids) : null;
+    },
+  };
+}
+
+/** CV-5: an Ahead row as the work item Link to item and "Looks like" rank (never an email shown, only matched). */
+function aheadAsWork(i: import("./types.ts").AheadItem, me: string): WorkItem {
+  const email = i.assignee?.email?.toLowerCase() ?? null;
+  return {
+    id: i.id, title: i.title, type: i.type, state: i.state, stateCategory: i.stateCategory,
+    level: i.level === "top" || i.level === "parent" ? "portfolio" : i.level === null ? "other" : "story",
+    ...(i.level === "parent" ? { tier: "feature" as const } : i.level === "top" ? { tier: "epic" as const } : {}),
+    order: i.order ?? null, parentId: i.parentId, changedAt: i.changedAt, url: i.url,
+    assignedTo: i.assignee?.name ?? null, assignedToEmail: email, assignedToMe: !!me && email === me,
   };
 }
 

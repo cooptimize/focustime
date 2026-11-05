@@ -701,7 +701,8 @@ describe("CV-1: a DevOps item, a comment and a description change from a convers
     expect(body).toContain("Blake Novak");
     expect(body).toContain("https://teams.microsoft.com/");
     expect(bug.fields["System.Parent"]).toBe(437);
-    expect(await s.convs.commitment(k.id)).toMatchObject({ state: "created", itemId: bug.id });
+    // CV-5: the promise stays open (actionable) with its item.
+    expect(await s.convs.commitment(k.id)).toMatchObject({ state: "open", itemId: bug.id });
     expect(await s.convs.conversation(c.id)).toMatchObject({ itemId: bug.id, status: "tracked" });
     expect((await s.plan.devopsWrite(r.entry.id))!.conv).toEqual({ conversationId: c.id, commitmentId: k.id, suggestionId: null });
     expect((await s.run<{ nothing?: string }>("devops.preview", { clientKey: COOP, change })).nothing).toBe(`This conversation is already tracked as #${bug.id}`);
@@ -719,6 +720,61 @@ describe("CV-1: a DevOps item, a comment and a description change from a convers
     expect(p.fields.find((f) => f.label === "Description")!.after).toMatch(/left out: it's an internal chat/);
     const q = await s.preview({ kind: "conversation_create", conversationId: c.id, title: "T", description: "d", level: "story", includeInternal: true });
     expect(q.fields.find((f) => f.label === "Description")!.after).toMatch(/original message/);
+  });
+
+  it("CV-5: the preview shows who will see it and the full text, acceptance criteria where the type has them, unassigned when asked; one create, audit, undo", async () => {
+    const s = setup();
+    await s.enable();
+    const { c } = await world(s);
+    const p = await s.preview({ kind: "conversation_create", conversationId: c.id, title: "Totals gap on the dashboard", description: "What's being asked\nTotals are off.", level: "story", acceptance: "- Totals match the BOM report", assign: "none" });
+    expect(p.notes.join(" ")).toMatch(/Everyone with access to Cooptimize Project in .*'s DevOps will see this item and its full text\./);
+    const desc = p.fields.find((f) => f.label === "Description")!.after!;
+    expect(desc).toContain("Blake Novak · 2026-11-02 08:00: Avery the totals are off by 7.7k lb");
+    expect(desc).toMatch(/Open the chat in Teams: https:\/\/teams\.microsoft\.com\//);
+    expect(p.fields.find((f) => f.label === "Acceptance criteria")!.after).toBe("- Totals match the BOM report");
+    expect(p.fields.find((f) => f.label === "Assigned to")!.after).toBe("Nobody");
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(true);
+    const story = s.dv.items.get(r.itemId!)!;
+    expect(story.fields["System.AssignedTo"] ?? null).toBeNull();
+    expect(String(story.fields["Microsoft.VSTS.Common.AcceptanceCriteria"])).toContain("Totals match the BOM report");
+    expect(s.dv.writes().filter((w) => w.method === "POST" && w.url.includes("workitems/$"))).toHaveLength(1);
+    expect((await s.plan.devopsWrite(r.entry.id))!.after["Assigned to"]).toBe("Nobody");
+    await s.write({ kind: "undo", writeId: r.entry.id });
+    expect(story.fields["System.State"]).toBe("Removed");
+    expect((await s.convs.conversation(c.id))!.itemId).toBeNull();
+  });
+
+  it("CV-5: a type without acceptance criteria leaves them out and says so; never assigned to anyone but me", async () => {
+    const s = setup();
+    await s.enable();
+    const { c } = await world(s);
+    const p = await s.preview({ kind: "conversation_create", conversationId: c.id, title: "Totals gap", description: "d", level: "bug", acceptance: "- Totals match" });
+    expect(p.fields.some((f) => f.label === "Acceptance criteria")).toBe(false);
+    expect(p.notes.join(" ")).toMatch(/Bug has no acceptance criteria field in this project, so they're left out/);
+    expect(p.fields.find((f) => f.label === "Assigned to")!.after).toBe("Sam Tester <avery@cooptimize.example>");
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "conversation_create", conversationId: c.id, title: "T", description: "d", level: "story", assign: "dana@cooptimize.example" } })).error).toBe("assign is me or none");
+  });
+
+  it("CV-5: Also add a comment after Link to item: the comment write with its preview, the link back, confirm once, undo", async () => {
+    const s = setup();
+    await s.enable();
+    const { c, k } = await world(s);
+    const change = { kind: "conversation_comment", conversationId: c.id, itemId: 500 };
+    expect((await s.fail("devops.preview", { clientKey: COOP, change })).error).toBe("Link #500 to the conversation first");
+    await s.convs.updateConversation(c.id, { item: { id: 500, url: null, title: "Import mapping" } });
+    const p = await s.preview(change);
+    expect(p.op).toBe("comment");
+    const text = p.fields.find((f) => f.label === "Comment")!.after!;
+    expect(text).toMatch(/^Linked to the Teams conversation: Totals gap\n\nFrom the Teams conversation: https:\/\/teams\.microsoft\.com\//);
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(true);
+    expect(s.dv.writes().filter((w) => w.method === "POST" && /comments/.test(w.url))).toHaveLength(1);
+    expect((await s.write({ kind: "undo", writeId: r.entry.id })).confirmed).toBe(true);
+    // From my promise, with my own words.
+    await s.convs.updateCommitment(k.id, { itemId: 500, itemUrl: null, itemTitle: "Import mapping" });
+    const q = await s.preview({ kind: "conversation_comment", commitmentId: k.id, itemId: 500, text: "Picking this up from the chat" });
+    expect(q.fields.find((f) => f.label === "Comment")!.after).toMatch(/^Picking this up from the chat\n\nFrom the Teams conversation: /);
   });
 
   it("posts a suggested comment for its owner (internal lines only when included) and settles it", async () => {
@@ -1060,6 +1116,25 @@ describe("the client boundary in the preview", () => {
     const s = setup({ toml: clients, adatumEmail: "avery@cooptimize.example", adatumOrg: "cooptimize" });
     await s.run("devops.set_write_pat", { clientKey: Adatum, pat: WRITE_PAT });
     expect((await s.fail("devops.preview", { clientKey: Adatum, change: { kind: "state", itemId: 500, state: "Closed", comment: "Done, like Northwind" } })).code).toBe("other_client");
+  });
+
+  it("CV-5: a create from a client's conversation naming another client is blocked at preview; Internal's isn't", async () => {
+    const s = setup({ toml: clients, adatumEmail: "avery@cooptimize.example", adatumOrg: "cooptimize" });
+    await s.run("devops.set_write_pat", { clientKey: Adatum, pat: WRITE_PAT });
+    await s.enable();
+    const ME = "00000000-0000-4000-8000-0000000000a1";
+    const HOME = "11111111-1111-4111-8111-111111111111";
+    await s.plan.setAccountState(IDENTITY_KEY, { oid: ME, tid: HOME, name: "Avery", username: "avery@cooptimize.example", email: "avery@cooptimize.example", signedInAt: NOW, systemUserId: null, systemUserEmail: null });
+    const conv = async (clientKey: string, chatId: string) => {
+      await s.teams.addChat({ chatId, clientKey, kind: "customer", displayName: "A chat", webUrl: null, members: [{ userId: ME, displayName: "Avery", email: null, tenantId: HOME }], by: ME });
+      return s.convs.addConversation({ chatId, clientKey, title: "Totals", summary: "s", participants: [], firstAt: NOW, lastAt: NOW, lastWorkAt: NOW });
+    };
+    const a = await conv(Adatum, "19:adatum-cv5@thread.v2");
+    const r = await s.fail("devops.preview", { clientKey: Adatum, change: { kind: "conversation_create", conversationId: a.id, title: "Same fix as Northwind Traders", description: "d", level: "story" } });
+    expect(r).toMatchObject({ status: 409, code: "other_client" });
+    expect(s.dv.writes().filter((w) => w.method === "POST")).toEqual([]);
+    const i = await conv(COOP, "19:coop-cv5@thread.v2");
+    expect((await s.preview({ kind: "conversation_create", conversationId: i.id, title: "Same fix as Northwind Traders", description: "d", level: "story" })).op).toBe("create");
   });
 
   it("Internal: a comment naming two clients is previewed and written", async () => {

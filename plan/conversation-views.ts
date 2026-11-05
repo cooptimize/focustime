@@ -3,10 +3,20 @@
 import type { CommitmentState, ConversationStatus, ItemDraft } from "./conversations.ts";
 
 export type CardPerson = { name: string; external: boolean; me: boolean };
-export type CardItem = { id: number; title: string | null; url: string | null };
+export type CardItem = {
+  id: number;
+  title: string | null;
+  url: string | null;
+  /** CV-5: the linked item as the central store has it now (missing when DevOps can't say): state, assignee, last change. */
+  state?: string;
+  assignee?: string | null;
+  changedAt?: string;
+  /** Completed or Removed in DevOps: "Item closed" with Mark done (never done automatically). */
+  closed?: boolean;
+};
 export type CardCommitment = { id: number; whoName: string; mine: boolean; what: string; dueAt: string | null; dueDate: string | null; state: CommitmentState; impliesItem: boolean; item: CardItem | null };
 export type CardSuggestion = { id: number; kind: "comment" | "description"; itemId: number; body: string; internal: string[]; fromInternalChat: boolean; mine: boolean };
-export type Primary = "create" | "link" | "resolve" | "take_over" | "reopen";
+export type Primary = "create" | "link" | "resolve" | "take_over" | "reopen" | "mark_done";
 
 export type ConversationCard = {
   id: number;
@@ -38,6 +48,7 @@ export type ConversationCard = {
   closed: { kind: "resolved" | "not_request"; by: string; at: string; reason: string | null } | null;
   hidden: boolean;
   primary: Primary | null;
+  /** My DevOps write access for its client. CV-5: Create DevOps item shows either way; without it the form says how to turn writes on. */
   canCreate: boolean;
   link: string;
   /** CV-2: images pasted into its messages ("2 images" on the card). */
@@ -49,6 +60,8 @@ export type ConversationCard = {
 export type FilteredMessage = { chatId: string; messageId: string; author: string; at: string; text: string };
 export type ConversationsData = {
   needsYou: ConversationCard[];
+  /** CV-5: open conversations with a linked item (a plain filter; IB-1 moves it into the rail). */
+  inProgress: ConversationCard[];
   teammates: ConversationCard[];
   closed: ConversationCard[];
   hiddenCount: number;
@@ -62,7 +75,7 @@ export type ConversationsData = {
   pollMinutes?: number;
   writeClients: string[];
   /** CV-2: a deep link's conversation: listed (and in which view), or not here any more (a plain note). */
-  selected?: { id: number; found: boolean; where: "needs" | "teammates" | "closed" | null };
+  selected?: { id: number; found: boolean; where: "needs" | "progress" | "teammates" | "closed" | null };
 };
 
 /**

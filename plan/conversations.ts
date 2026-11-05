@@ -128,6 +128,8 @@ export type ItemDraft = {
   parentId: number | null;
   /** A likely existing item to link instead (one of the client's open ones), when there is one. */
   likelyItem: number | null;
+  /** CV-5: acceptance criteria (sent only where the chosen type has the field); missing on drafts kept before CV-5. */
+  acceptance?: string[];
   byAi: boolean;
 };
 

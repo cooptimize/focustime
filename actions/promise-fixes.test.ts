@@ -39,6 +39,9 @@ describe("DevOps phrases", () => {
     ["I'll track it", true],
     ["I'll take it on, it's #4102 on the backlog", true],
     ["I'll add it to the dev queue", true],
+    // CV-5: an ask or promise that describes work offers an item (the shape that didn't, not its real text).
+    ["Add the report cleanup to the backlog and take it on", true],
+    ["I'll pick it up from the board this sprint", true],
     ["I'll take it on", false],
     ["I'll send it tonight", false],
     ["I'll check the queue length on the server", false],
@@ -75,9 +78,10 @@ describe("Create the DevOps item? for a promise with no conversation", () => {
     expect((await w.convs.commitment(k.id))!.conversationId).toBe(c.id);
     // Asked again: the same one.
     expect((await sam.run<{ conversationId: number }>("my_promises.start_draft", { id: k.id })).conversationId).toBe(c.id);
-    // The usual draft flow runs on it (rules only here: the draft is made from the messages).
-    const d = await sam.run<{ draft: { title: string } }>("conversations.draft", { id: c.id, commitmentId: k.id });
-    expect(d.draft.title).toBeTruthy();
+    // The usual draft flow runs on it. CV-5: without AI the form is empty for me to fill in, and nothing is kept.
+    const d = await sam.run<{ draft: { title: string; byAi: boolean } }>("conversations.draft", { id: c.id, commitmentId: k.id });
+    expect(d.draft).toMatchObject({ title: "", byAi: false });
+    expect((await w.convs.commitment(k.id))!.draft).toBeNull();
   });
 
   it("is only for my own open promise", async () => {

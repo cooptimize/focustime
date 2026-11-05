@@ -350,7 +350,7 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
         const due = dueOf(x.due, x.zone);
         // When it was said (escalation counts from then, not from when it was read).
         const said = x.messageIds.map((mid) => [...before, ...work].find((m) => m.messageId === mid)?.createdAt).filter((t): t is string => !!t).sort()[0];
-        await d.convs.addCommitment({ conversationId: id, chatId: chat.chatId, clientKey: chat.clientKey, whoId: x.whoId, whoName: who?.name ?? "Someone", toId: self ? null : to, toName, what: x.what, ...due, impliesItem: x.impliesItem || impliesItemByRule(x.messageIds.map((mid) => texts.get(mid) ?? "").join("\n")), messageIds: x.messageIds, reason: null, ...(said ? { createdAt: said } : {}) });
+        await d.convs.addCommitment({ conversationId: id, chatId: chat.chatId, clientKey: chat.clientKey, whoId: x.whoId, whoName: who?.name ?? "Someone", toId: self ? null : to, toName, what: x.what, ...due, impliesItem: x.impliesItem || impliesItemByRule([x.what, ...x.messageIds.map((mid) => texts.get(mid) ?? "")].join("\n")), messageIds: x.messageIds, reason: null, ...(said ? { createdAt: said } : {}) });
         // A commitment's messages are kept with it (never expire as chatter).
         for (const mid of x.messageIds) if (!placed.has(mid) && byId.has(mid)) await d.convs.place([{ chatId: chat.chatId, messageId: mid, conversationId: id, role: "work", reason: null, placedBy: "ai", at: byId.get(mid)!.createdAt }]);
         out.commitments++;

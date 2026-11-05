@@ -1164,6 +1164,41 @@ export function createDevOpsSource(d: DevOpsDeps) {
   }
 
   /**
+   * CV-5: items a conversation or promise is linked to, as the store has them now, in any state and any scope (the
+   * link already exists): state, assignee (display name), last change. Null when DevOps can't say for this client now.
+   */
+  async function linkedItems(ref: ClientRef, ids: readonly number[]): Promise<WorkItem[] | null> {
+    const want = [...new Set(ids)].filter((id) => Number.isInteger(id) && id > 0).slice(0, BATCH_MAX);
+    if (!want.length) return [];
+    if (!d.central) return null;
+    const c = await centralCtx(ref, await viewerTargets([ref.clientKey], false));
+    if (!c) return null;
+    try {
+      const meta = { ...c.meta, categories: stateCategories(c.meta.model, d.openStates?.(ref.clientKey) ?? []) };
+      const values = await storeReads(ref.clientKey, c.view.values, meta).byIds(want, [...batchFields(meta.orderField), ASSIGNED_FIELD]);
+      return normalized(await withIdentities(c.ctx), meta, values, { keepDone: true, tiers: false, people: true });
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * CV-5: Link to item's search: one client's open items in Cooptimize's scope (AH-2, my own always), from the central
+   * store, by #id or title words, newest change first, at most `limit`. Null when the store can't say for this client now.
+   */
+  async function searchItems(ref: ClientRef, query: string, limit = 20): Promise<import("../../actions/types.ts").AheadItem[] | null> {
+    const [r] = await aheadItems([ref]);
+    if (!r || !r.project) return null;
+    const q = query.trim().toLowerCase().replace(/^#/, "");
+    const words = q.split(/\s+/).filter(Boolean);
+    return r.items
+      .filter((i) => i.inScope && !isClosed(i.stateCategory))
+      .filter((i) => !q || String(i.id) === q || words.every((w) => i.title.toLowerCase().includes(w)))
+      .sort((a, b) => b.changedAt.localeCompare(a.changedAt))
+      .slice(0, limit);
+  }
+
+  /**
    * PL-1: the items whose state changed since an instant, per the change log; `known` false while the store's change
    * log doesn't cover the whole span yet (the first load came after it, just after DV-1) or DevOps can't say.
    */
@@ -1267,13 +1302,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
     },
   };
 
-  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, aheadItems, internal };
+  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, aheadItems, linkedItems, searchItems, internal };
 }
 
 /** What screens use (the same interface whether it reads DevOps or the central store). */
 type FullSource = ReturnType<typeof createDevOpsSource>;
 /** PL-1's by-id reads are optional: a source without them (a stub, an older adapter) means "DevOps can't say". */
-type PlanReads = "featureTrees" | "itemStates" | "stateChanges" | "aheadItems";
+type PlanReads = "featureTrees" | "itemStates" | "stateChanges" | "aheadItems" | "linkedItems" | "searchItems";
 export type DevOpsSource = Omit<FullSource, "internal" | PlanReads> & Partial<Pick<FullSource, PlanReads>>;
 /** DV-1: what the central poller uses of an app-level source. */
 export type DevOpsInternal = ReturnType<typeof createDevOpsSource>["internal"];

@@ -428,9 +428,50 @@ async function checkBoundary(ctx: DevOpsWriteContext, env: Env, h: HeldIn): Prom
   }
 }
 
+/** CV-5: a time as the preview shows it, in my zone ("2026-11-02 08:00"). */
+const shownAt = (iso: string, zone: string) => Temporal.Instant.from(iso).toZonedDateTimeISO(zone).toPlainDateTime().toString({ smallestUnit: "minute" }).replace("T", " ");
+
+/**
+ * CV-5: "Also add a comment on the item" after Link to item: the same comment write as a suggested one, on the item a
+ * conversation (anyone on its chat) or my promise is linked to now, with my words or a one-line default and the link
+ * back to Teams. Preview, confirm, read back, audit and undo as every comment; GD-1's scan applies.
+ */
+async function linkComment(env: Env, o: Record<string, unknown>): Promise<HeldIn | string> {
+  const cv = env.conversations;
+  const shared = env.requests;
+  if (!cv || !shared) throw new PlanError("No such conversation");
+  const itemId = posId(o.itemId, "itemId");
+  const edited = str(o.text, "text", 4000, true);
+  let link: string;
+  let lines: string[];
+  let conv: { conversationId: number; commitmentId: number | null; suggestionId: null } | null = null;
+  if (o.commitmentId !== undefined && o.commitmentId !== null) {
+    const k = await cv.view.commitment(posId(o.commitmentId, "commitmentId"));
+    if (!k || !(await shared.sees(k.chatId)) || (k.whoId ?? "").toLowerCase() !== cv.me.toLowerCase()) throw new PlanError("No such promise");
+    if (k.clientKey !== env.clientKey) throw new Refused("That promise belongs to another client", 409);
+    if (k.itemId !== itemId) throw new Refused(`Link #${itemId} to the promise first`, 409);
+    link = messageLink(k.chatId, k.messageIds.at(-1) ?? "0");
+    lines = [`Linked to a promise in Teams: ${k.what}`];
+    if (k.conversationId !== null) conv = { conversationId: k.conversationId, commitmentId: k.id, suggestionId: null };
+  } else {
+    const c = await cv.view.conversation(posId(o.conversationId, "conversationId"));
+    if (!c || !(await shared.sees(c.chatId))) throw new PlanError("No such conversation");
+    if (c.clientKey !== env.clientKey) throw new Refused("That conversation belongs to another client", 409);
+    if (c.itemId !== itemId) throw new Refused(`Link #${itemId} to the conversation first`, 409);
+    const last = (await cv.view.placesIn([c.id])).filter((p) => p.role === "work").at(-1);
+    const chat = await shared.teams.chat(c.chatId);
+    link = last ? messageLink(c.chatId, last.messageId) : chat ? teamsLink(chat) : messageLink(c.chatId, "0");
+    lines = [`Linked to the Teams conversation: ${c.title}`];
+    conv = { conversationId: c.id, commitmentId: null, suggestionId: null };
+  }
+  const item = await env.writer.item(env.org, env.pat, env.project, itemId);
+  const text = commentText(edited ? edited.split("\n") : lines, link);
+  return { ...base(env), ...none, op: "comment", itemId: item.id, title: item.title, ops: { text }, rev: null, before: { Comment: null }, after: { Comment: text }, type: item.type, conv };
+}
+
 /** One change → what to hold, or a reason there is nothing to do. Reads the item now (fresh rev). */
 async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Promise<unknown>> = new Map()): Promise<HeldIn | string> {
-  const o = fields(c, ["kind"], ["itemId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images"]);
+  const o = fields(c, ["kind"], ["itemId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images", "assign"]);
   const { writer, org, pat, project, plan } = env;
   switch (o.kind) {
     case "state": {
@@ -701,6 +742,8 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const internal = chat?.kind === "delivery";
       const include = o.includeInternal === true;
       const originals: OriginalMessage[] = [];
+      /** CV-5: the same messages as plain text, so the preview shows the full text that goes into DevOps. */
+      const plain: string[] = [];
       // CV-4: the images of the messages going with it (an internal chat's only with "include internal").
       const offered: AttachOffer[] = [];
       if (!internal || include) {
@@ -711,6 +754,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
           const byAt: { name: string | null }[] = [];
           m.mentions.forEach((x, i) => (byAt[x.at ?? i] = { name: x.name }));
           originals.push({ sender, at: m.createdAt, html: sanitizeMessageHtml(m.html ?? m.text, { contentType: m.html ? "html" : "text", mentions: byAt }) });
+          plain.push(`${sender} · ${shownAt(m.createdAt, tz)}: ${m.text}`);
           for (const i of (await shared.teams.images(m.chatId, [m.messageId])).filter((x) => x.state !== "skipped").sort((a, b) => a.position - b.position)) offered.push({ id: i.id, messageId: m.messageId, sender, at: m.createdAt, description: i.description });
         }
       }
@@ -726,13 +770,28 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const descriptionField = t.level === "bug" && typeHas.has(REPRO_FIELD) ? REPRO_FIELD : "System.Description";
       const area = parent ? String(parent.fields["System.AreaPath"] ?? "") || null : null;
       const iteration = parent ? String(parent.fields["System.IterationPath"] ?? "") || null : null;
-      const ops = createOps({ org, title, description, descriptionIsHtml: true, acField: false, assignedTo: env.me.email, areaPath: area, iterationPath: iteration, parentId: parent?.id ?? null, descriptionField, timeZone: tz });
+      // CV-5: acceptance criteria only where the type has the field; me or nobody (never anyone else, D660 stays the only one).
+      const acceptance = str(o.acceptance, "acceptance", 8000, true) ?? "";
+      const acField = typeHas.has(AC_FIELD);
+      if (o.assign !== undefined && o.assign !== "me" && o.assign !== "none") throw new Invalid("assign is me or none");
+      const assignMe = o.assign !== "none";
+      const ops = createOps({ org, title, description, descriptionIsHtml: true, acceptance, acField, assignedTo: assignMe ? env.me.email : null, areaPath: area, iterationPath: iteration, parentId: parent?.id ?? null, descriptionField, timeZone: tz });
       const pics = ticked.length ? ` Attached: ${ticked.length === 1 ? "1 image" : `${ticked.length} images`} from the chat.` : "";
       const tail = (originals.length ? `Then the ${originals.length === 1 ? "original message" : `${originals.length} original messages`} from ${chatName}, with who and when, and a link to the chat.` : internal ? `The messages from ${chatName} are left out: it's an internal chat. Only a link to it is added.` : "Then a link to the chat.") + pics;
-      const after: Record<string, string | null> = { Type: t.type, Title: title, [descriptionField === REPRO_FIELD ? "Repro steps" : "Description"]: `${path}${path ? "\n\n" : ""}${tail}`, "Assigned to": `${env.me.name} <${env.me.email}>`, Area: area ?? "The project's default", Iteration: iteration ?? "The project's default", ...(parent ? { Parent: `#${parent.id} ${parent.title}` } : {}) };
+      const full = [...(plain.length ? [`From the Teams conversation in ${chatName}`, ...plain] : []), `Open the chat in Teams: ${chat ? teamsLink(chat) : messageLink(c.chatId, "0")}`].join("\n");
+      const after: Record<string, string | null> = {
+        Type: t.type, Title: title, [descriptionField === REPRO_FIELD ? "Repro steps" : "Description"]: `${path}${path ? "\n\n" : ""}${tail}\n\n${full}`,
+        ...(acField && acceptance.trim() ? { "Acceptance criteria": acceptance } : {}),
+        "Assigned to": assignMe ? `${env.me.name} <${env.me.email}>` : "Nobody", Area: area ?? "The project's default", Iteration: iteration ?? "The project's default", ...(parent ? { Parent: `#${parent.id} ${parent.title}` } : {}),
+      };
       let internalImages = false;
       if (internal && !include) for (const p of (await cv.view.placesIn([c.id])).filter((x) => x.role === "work")) if ((await shared.teams.images(p.chatId, [p.messageId])).length) internalImages = true;
-      const notesOut = internalImages ? ["The chat's images are left out with its messages: it's an internal chat. Include the internal messages to offer them."] : [];
+      const notesOut = [
+        // CV-5: who will see it.
+        `Everyone with access to ${env.projectName} in ${env.clientName}'s DevOps will see this item and its full text.`,
+        ...(acceptance.trim() && !acField ? [`${t.type} has no acceptance criteria field in this project, so they're left out.`] : []),
+        ...(internalImages ? ["The chat's images are left out with its messages: it's an internal chat. Include the internal messages to offer them."] : []),
+      ];
       return { ...base(env), ...none, op: "create", itemId: null, parentId: parent?.id ?? null, title, ops, rev: null, before: {}, after, type: t.type, conv: { conversationId: c.id, commitmentId, suggestionId: null }, notes: notesOut, ...(offered.length ? { attach: { offered, ticked } } : {}) };
     }
     case "conversation_comment":
@@ -740,6 +799,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       // CV-1: a comment suggested for a linked item's owner, or a description change for a clear scope change.
       const cv = env.conversations;
       const shared = env.requests;
+      if (o.kind === "conversation_comment" && o.suggestionId === undefined) return linkComment(env, o);
       if (!cv || !shared) throw new PlanError("No such suggestion");
       const sg = await cv.view.suggestion(posId(o.suggestionId, "suggestionId"));
       const kind = o.kind === "conversation_comment" ? "comment" : "description";
@@ -1035,7 +1095,9 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
         (await plan.settleDevopsWrite(entry.id, { status: "pending", itemId: id }));
       }
       const back = await again(() => writer.item(org, pat, project, id!));
-      const ok = back.title === entry.title && (back.parentId ?? null) === entry.parentId && identityEmail(back.fields["System.AssignedTo"]) === env.me.email.toLowerCase();
+      // CV-5: a create may leave it unassigned (no AssignedTo in the patch): then any assignee DevOps' own rules set is fine.
+      const assigned = (entry.ops as PatchOp[]).some((p) => p.path === "/fields/System.AssignedTo");
+      const ok = back.title === entry.title && (back.parentId ?? null) === entry.parentId && (!assigned || identityEmail(back.fields["System.AssignedTo"]) === env.me.email.toLowerCase());
       if (!ok) return settle("unconfirmed", `DevOps didn't show #${id} as asked yet (title, parent or assignee). Retry checks first and won't create another`, { itemId: id });
       // CV-4: every image it was meant to have is linked.
       const linked = new Set(back.relations.filter((r) => r.rel === ATTACHED).map((r) => attachmentId(r.url)));
