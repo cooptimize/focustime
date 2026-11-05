@@ -46,6 +46,11 @@ jobs:
             -p 127.0.0.1:14330:1433 mcr.microsoft.com/mssql/server:2025-latest
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
+      # HK-1: the repo guards (real names, desktop words, type and state names as code), the same command as locally
+      # (`npm run guards`, part of `npm run check`): one file list, tracked plus untracked, so a run here and on a
+      # laptop see the same files. The guard tests in the suite below run the same script.
+      - name: Guards
+        run: npm run guards
       # The 2025 image sometimes dies at start on these runners ("sqlservr: This program has encountered a fatal error",
       # PR #12 and #19): a dead container is started again, up to three starts, with its log tail each time.
       - name: Wait for SQL Server
