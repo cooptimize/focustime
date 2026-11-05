@@ -92,7 +92,6 @@ function fakeGraph() {
     },
   };
 }
-const img = (chat: string, hosted: string, w: number) => `<p><img src="https://graph.microsoft.com/v1.0/chats/${chat}/messages/{msg}/hostedContents/${hosted}/$value" width="${w}" height="300" alt="image" itemtype="http://schema.skype.com/AMSImage"></p>`;
 
 
 /** 1920 and Larger, then the phone: 390 by 844 with a 17px root font, nothing wider than the phone, then back. */
@@ -152,7 +151,8 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
     const conn = sqliteConn(openPlanDb({ path: ":memory:", now: () => clock().toZonedDateTimeISO("UTC") }));
     const teams = createTeamsStore(conn, clock);
     const convs = createConversationStore(conn, clock, teams);
-    const provider = stubProvider({ respond: () => { throw new Error("no AI request may run for a client with AI off"); } });
+    let aiCalls = 0;
+    const provider = stubProvider({ respond: () => (aiCalls++, '{"messages":[],"conversations":[]}') });
     const pipelineAi = createAi({
       provider: async () => provider,
       app: anAiApp({ provider: "openai", appCapUsd: 100 }),
@@ -231,7 +231,7 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       await conv.getByText("Grouped without AI, so there's no summary. Show messages to read it.").waitFor();
       const [c] = (await convs.conversations([ALLIANCE]));
       expect((await convs.placesIn([c!.id])).filter((p) => p.role === "work")).toHaveLength(3);
-      expect(provider.calls ?? []).toHaveLength(0);
+      expect(aiCalls).toBe(0);
       await shotAll(page, "cv3-rules-only-conversation", conv);
 
       // My promises: the loose one (no conversation) suggests likely items with reasons.

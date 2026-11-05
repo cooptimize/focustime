@@ -2,7 +2,7 @@
 // without AI". A reply, an @mention of someone in it, someone @mentioned in it posting within 45 minutes, or the same
 // author within 45 minutes joins an open conversation of the same chat; a Request (AP-1's rules) starts one; anything
 // else waits unsorted. Never across chats or clients; decided before any AI call. The Alliance-shaped example is the
-// CSC-shaped worked example with fictional names.
+// step's worked example, with fictional names.
 import { describe, expect, it } from "vitest";
 import { aClientChat } from "../test/builders/index.ts";
 import { allianceAnswer, BLAKE, CHAT, EVAN, LENA, SAM, world } from "../test/conversations.ts";
