@@ -24,6 +24,17 @@ import { IncomingRow } from "../Team.tsx";
 import type { ChatterRow, Entry } from "./data.ts";
 import { ItemActions, type Act, type FormId } from "./ItemActions.tsx";
 import { KIND_WORD, lateText, dueWords } from "./model.ts";
+import type { SnoozeChoice } from "../../plan/inbox-items.ts";
+
+/** "Mon 9:00 AM", "today 3:30 PM": when a snooze ends, in my zone. */
+export function wakeWords(at: string, tz: string, today: string): string {
+  const z = Temporal.Instant.from(at).toZonedDateTimeISO(tz);
+  const time = z.toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
+  const d = z.toPlainDate();
+  const days = Temporal.PlainDate.from(today).until(d).days;
+  const day = days === 0 ? "today" : days === 1 ? "tomorrow" : days < 7 ? d.toLocaleString("en-US", { weekday: "short" }) : d.toLocaleString("en-US", { month: "short", day: "numeric" });
+  return `${day} ${time}`;
+}
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 
@@ -45,6 +56,8 @@ export type DetailProps = {
   merge?: (id: number, into: ConversationCard) => Promise<void>;
   /** Reads the Inbox again quietly (a draft's AI version still being written). */
   reload?: () => void;
+  /** Slice 3: the Snooze choices to offer now (the list's; Later today only with an hour or more left). */
+  snoozeChoices?: readonly SnoozeChoice[] | undefined;
   phone?: boolean;
 };
 
@@ -82,6 +95,8 @@ export function Detail(p: DetailProps): ReactNode {
       <h2 className="ib-detail-title" tabIndex={-1}>
         {r.title || "(no title)"}
       </h2>
+      {r.reason && <p className="ib-reason">{r.reason}</p>}
+      {r.snoozedUntil && <p className="ib-snoozed muted">Snoozed until {wakeWords(r.snoozedUntil, p.tz, p.today)}. It's out of your counts until then.</p>}
       <Lead {...p} />
       {!p.phone && <ItemActions acts={p.acts} label={r.title} />}
       <FormArea {...p} />
@@ -130,6 +145,7 @@ function FormArea(p: DetailProps): ReactNode {
     return <CloseLoop who={who} compact={false} initialHow={initialHow} onSubmit={submit} onCancel={cancel} />;
   }
   if (form === "due") return <DueForm {...p} />;
+  if (form === "snooze") return <SnoozeForm {...p} />;
   if (form === "who") return <WhoForm {...p} />;
   if (form === "link") {
     if (e.kind === "conversation" && e.card) {
@@ -212,6 +228,32 @@ function DueForm(p: DetailProps): ReactNode {
         </button>
       )}
       <button type="button" className="mini quiet" onClick={() => p.setForm(null)}>Cancel</button>
+      {err && <span className="set-problem" role="alert">{err}</span>}
+    </form>
+  );
+}
+
+const SNOOZE_WORD: Record<SnoozeChoice, string> = { later: "Later today", tomorrow: "Tomorrow", next_week: "Next week" };
+
+/** Snooze: out of every view and count until then. The due day never changes. */
+function SnoozeForm(p: DetailProps): ReactNode {
+  const { entry: e } = p;
+  const [day, setDay] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const min = Temporal.PlainDate.from(p.today).add({ days: 1 }).toString();
+  const save = async (until: string) => setErr(await p.submit("inbox.snooze", { key: e.row.key, until }, "Snoozed. It's back when the time comes"));
+  return (
+    <form className="ib-form ib-snooze" aria-label="Snooze" onSubmit={(ev) => (ev.preventDefault(), day && void save(day))} onKeyDown={(ev) => ev.key === "Escape" && (ev.stopPropagation(), p.setForm(null))}>
+      <span className="ib-form-label">Snooze until</span>
+      {(p.snoozeChoices ?? ["tomorrow", "next_week"]).map((c, i) => (
+        <button key={c} type="button" className="mini" autoFocus={i === 0} onClick={() => void save(c)}>
+          {SNOOZE_WORD[c]}
+        </button>
+      ))}
+      <input type="date" value={day} min={min} onChange={(ev) => setDay(ev.target.value)} aria-label="Snooze until a day" />
+      <button type="submit" className="mini primary" disabled={!day}>Snooze</button>
+      <button type="button" className="mini quiet" onClick={() => p.setForm(null)}>Cancel</button>
+      <span className="muted ib-form-note">{e.row.due ? "The due day stays as it is." : "It comes back at the start of your day."}</span>
       {err && <span className="set-problem" role="alert">{err}</span>}
     </form>
   );
@@ -397,6 +439,7 @@ function Body(p: DetailProps): ReactNode {
     );
   }
   if (e.kind === "send") return <SendBody {...p} />;
+  if (e.kind === "waiting") return <WaitingBody {...p} />;
   if (e.kind === "capture") {
     if (!e.capture) return <p className="muted ib-missing">This capture couldn't be read just now.</p>;
     return (
@@ -501,5 +544,21 @@ export function ChatterDetail({ row, tz, color, onWork }: { row: ChatterRow; tz:
         </ul>
       </section>
     </article>
+  );
+}
+
+/** Slice 3: what I wait on, in plain words. Nothing to answer here; it leaves when they do their part. */
+function WaitingBody({ entry: e, today }: DetailProps): ReactNode {
+  const r = e.row;
+  const who = r.who ?? "Someone";
+  const text =
+    r.kind === "commitment" ? `${who} said they'd do it${r.due ? `, due ${dueWords(r.due, today).replace(/^Due /, "").toLowerCase()}` : ""}${r.late && r.due ? ` (${lateText(r.due, today)})` : ""}.${r.where ? ` In ${r.where}.` : ""}`
+    : r.kind === "sent" ? `You sent it to ${who} for ${r.where ?? "their week"}${r.must ? " as a Must" : ""}. They haven't answered yet.`
+    : `You asked ${who} to look at your week. No reply yet.`;
+  return (
+    <div className="ib-body">
+      <p className="ib-summary">{text}</p>
+      <p className="muted">It leaves Waiting on once they answer or it's done. Snooze it if you don't want to see it for a while.</p>
+    </div>
   );
 }

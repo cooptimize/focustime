@@ -6,10 +6,10 @@ import { useState, type ReactNode } from "react";
 import { PRIMARY_WORD } from "../Conversations.tsx";
 import type { Entry } from "./data.ts";
 
-export type FormId = "close" | "due" | "who" | "link" | "draft" | "not_request" | "sort" | "edit" | "merge";
+export type FormId = "close" | "due" | "who" | "link" | "draft" | "not_request" | "sort" | "edit" | "merge" | "snooze";
 export type ActId =
   | "create" | "close" | "due" | "who" | "week" | "hide" | "not_needed" | "done" | "link" | "unlink" | "resolve" | "take_over" | "reopen"
-  | "teams" | "not_request" | "sort" | "dismiss" | "edit" | "delete" | "merge" | "prepare";
+  | "teams" | "not_request" | "sort" | "dismiss" | "edit" | "delete" | "merge" | "prepare" | "snooze" | "wake" | "cancel";
 
 /** One action: its words, its key (shown on the button, run by the same key), and whether it's the one primary. */
 export type Act = { id: ActId; label: string; key?: string; primary?: boolean; more?: boolean; href?: string; run: () => void };
@@ -44,6 +44,16 @@ const act = (id: ActId, label: string, run: () => void, o: Partial<Act> = {}): A
 
 /** The actions for one item, primary first. Empty while its source is still loading. */
 export function actsFor(e: Entry, env: ActEnv): Act[] {
+  const acts = baseActs(e, env);
+  // Slice 3: every open item snoozes (never its due); a snoozed one wakes. Not a conversation's closed state or Done.
+  if (!acts.length || e.row.done || (e.kind === "conversation" && e.card?.closed)) return acts;
+  acts.push(e.row.snoozedUntil
+    ? act("wake", "Wake it now", () => void env.run("inbox.snooze", { key: e.row.key, until: null }, "Back in your Inbox"), { more: true })
+    : act("snooze", "Snooze…", () => env.form("snooze"), { more: true }));
+  return acts;
+}
+
+function baseActs(e: Entry, env: ActEnv): Act[] {
   const out: Act[] = [];
   const hide = (id: string) => act("hide", "Hide for me", () => void env.run("inbox.hide", { key: id, hidden: true }, "Hidden for you", { action: "inbox.hide", input: { key: id, hidden: false } }), { more: true });
   switch (e.kind) {
@@ -120,6 +130,17 @@ export function actsFor(e: Entry, env: ActEnv): Act[] {
     case "send":
       // Accept, Accept and schedule, Pass to… and Can't this week are the send's own row in the pane (SW-1's).
       return [hide(e.row.key)];
+    case "waiting": {
+      // Slice 3: what I wait on. Nothing pushy: no primary; Take it over (CV-1's, anyone who sees it), Cancel my send while
+      // it waits (SW-1's), my week for an Ask to look; Hide and Snooze for all.
+      const id = Number(e.row.key.slice(1));
+      const k = e.row.kind;
+      if (k === "commitment") out.push(act("take_over", "Take it over", () => void env.run("conversations.take_over", { commitmentId: id }, `It's yours now. ${(e.row.who ?? "They").split(" ")[0]} is told quietly.`)));
+      if (k === "sent") out.push(act("cancel", "Cancel the send", () => void env.run("send.cancel", { id }, "Send cancelled")));
+      if (k === "ask") out.push(act("week", "Open my week", env.planWeek));
+      out.push(hide(e.row.key));
+      return out;
+    }
     case "capture": {
       const c = e.capture;
       if (!c) return [];

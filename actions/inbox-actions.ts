@@ -4,7 +4,7 @@
 // badge; inbox.list gives every item's key, kind, client and views with the per-view counts, so the badge, the rail
 // and every view header read the same number.
 import type { AppConfig } from "../config/schema.ts";
-import { isLate, itemKey, needsYouCount, parseKey, viewCounts, viewsOf, type InboxFacts, type InboxItemView, type InboxListData, type Mark } from "../plan/inbox-items.ts";
+import { isLate, itemKey, needsYouCount, parseKey, reasonOf, snoozeChoices, snoozeUntil, viewCounts, viewsOf, type InboxFacts, type InboxItemView, type InboxListData, type Mark, type SnoozeChoice, type SnoozeDay } from "../plan/inbox-items.ts";
 export type { InboxItemView, InboxListData };
 import type { PlanStore } from "../store/plan-store.ts";
 import { localToday } from "../week/dates.ts";
@@ -12,7 +12,7 @@ import type { IsoDate } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
 import type { ActionResponse } from "./types.ts";
 
-export const INBOX_ACTIONS = ["inbox.list", "inbox.count", "inbox.seen", "inbox.hide"] as const;
+export const INBOX_ACTIONS = ["inbox.list", "inbox.count", "inbox.seen", "inbox.hide", "inbox.snooze"] as const;
 export type InboxAction = (typeof INBOX_ACTIONS)[number];
 
 export type InboxContext = {
@@ -23,6 +23,8 @@ export type InboxContext = {
   conversations: (cfg: AppConfig) => Promise<InboxFacts[]>;
   /** Sends to me (team-actions' sendFacts); [] without the team store. */
   sends: () => Promise<InboxFacts[]>;
+  /** Slice 3: my working hours and PTO days, for Snooze (escalationHours); null when the config can't say. */
+  snoozeDay: () => Promise<SnoozeDay | null>;
 };
 
 
@@ -83,7 +85,7 @@ export function rowOf(i: { facts: InboxFacts; mark?: Mark | undefined }, today: 
   const f = i.facts;
   const asleep = i.mark?.snoozedUntil && Date.parse(i.mark.snoozedUntil) > Date.parse(now) ? i.mark.snoozedUntil : null;
   return {
-    key: f.key, kind: f.kind, clientKey: f.clientKey, at: f.at, views: viewsOf(f, i.mark, today, now),
+    key: f.key, kind: f.kind, clientKey: f.clientKey, at: f.at, views: viewsOf(f, i.mark, today, now), reason: reasonOf(f, i.mark, today, now),
     title: f.title ?? "", who: f.who ?? null, where: f.where ?? null, due: f.due ?? null, dueAt: f.dueAt ?? null, itemId: f.itemId ?? null,
     late: isLate(f, today, now), done: f.done, snoozedUntil: asleep,
     ...(f.sendState ? { sendState: f.sendState } : {}), ...(f.conversationView ? { conversationView: f.conversationView } : {}),
@@ -108,7 +110,8 @@ export async function inboxAction(ctx: InboxContext, action: InboxAction, input:
       if (Object.keys(o).length) return bad("inbox.list takes {}");
       const g = await gather(ctx, cfg);
       const items = g.items.map((i) => rowOf(i, g.today, g.now));
-      const data: InboxListData = { today: g.today, items, counts: viewCounts(g.items, g.today, g.now), needsYou: needsYouCount(g.items, g.today, g.now) };
+      const day = await ctx.snoozeDay().catch(() => null);
+      const data: InboxListData = { today: g.today, items, counts: viewCounts(g.items, g.today, g.now), needsYou: needsYouCount(g.items, g.today, g.now), snoozeChoices: day ? snoozeChoices(g.now, day) : ["tomorrow", "next_week"] };
       return { ok: true, data };
     }
     case "inbox.seen": {
@@ -129,6 +132,32 @@ export async function inboxAction(ctx: InboxContext, action: InboxAction, input:
       if (!g.items.some((i) => i.facts.key === o.key)) return bad("That isn't in your Inbox", 404);
       await ctx.plan.markInbox([o.key as string], { hidden: o.hidden });
       return { ok: true, data: { hidden: o.hidden } };
+    }
+    case "inbox.snooze": {
+      // Snooze: out of every view and count until then; never changes a due date. null wakes it now.
+      const key = typeof o.key === "string" ? parseKey(o.key) : null;
+      const u = o.until;
+      const choice = u === null || u === "later" || u === "tomorrow" || u === "next_week" || (typeof u === "string" && /^\d{4}-\d{2}-\d{2}$/.test(u) && Temporal.PlainDate.from(u, { overflow: "reject" }) !== null) ? (u as SnoozeChoice | IsoDate | null) : undefined;
+      if (!key || choice === undefined || Object.keys(o).length !== 2) return bad("inbox.snooze takes { key, until: \"later\" | \"tomorrow\" | \"next_week\" | a date | null }");
+      const g = await gather(ctx, cfg);
+      const item = g.items.find((i) => i.facts.key === o.key);
+      if (!item) return bad("That isn't in your Inbox", 404);
+      if (item.facts.done) return bad("It's done already", 409);
+      let until: string | null = null;
+      if (choice !== null) {
+        if (choice !== "later" && choice !== "tomorrow" && choice !== "next_week" && (choice <= g.today || choice > Temporal.PlainDate.from(g.today).add({ years: 1 }).toString())) return bad("Pick a day after today, within a year");
+        const day = await ctx.snoozeDay();
+        if (!day) return bad("Set your working hours first", 409);
+        until = snoozeUntil(choice, g.now, day);
+        if (!until) return bad("There's less than an hour left of your day. Snooze it until tomorrow", 409);
+      }
+      // A former follow-up's own date snooze goes too, so the Inbox's mark is the one snooze it has.
+      if (key.source === "followUp") {
+        const fu = (await ctx.plan.openFollowUps()).find((f) => f.id === key.id);
+        if (fu?.snoozedUntil) await ctx.plan.snoozeFollowUp(key.id, null);
+      }
+      await ctx.plan.markInbox([o.key as string], { snoozedUntil: until });
+      return { ok: true, data: { snoozedUntil: until } };
     }
   }
 }

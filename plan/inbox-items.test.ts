@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { itemKey, lifecycleOf, needsYou, needsYouCount, parseKey, viewCounts, viewsOf, type InboxFacts, type Mark } from "./inbox-items.ts";
+import { itemKey, lifecycleOf, needsYou, needsYouCount, parseKey, reasonOf, snoozeChoices, snoozeDayOf, snoozeUntil, viewCounts, viewsOf, type InboxFacts, type Mark } from "./inbox-items.ts";
+import type { TimeModel } from "../week/hours.ts";
 
 const today = "2026-11-05";
 const now = "2026-11-05T15:00:00Z";
@@ -69,5 +70,59 @@ describe("one count", () => {
     expect(counts.promises).toBe(3);
     expect(counts.teammates).toBe(1);
     expect(counts.captures).toBe(1);
+  });
+});
+
+describe("why it needs me (slice 3)", () => {
+  it("one reason per kind, from fields the item already has", () => {
+    expect(reasonOf(conv("needs", { needsWhy: "mention", who: "Joel Park" }), undefined, today, now)).toBe("Joel asked you by name");
+    expect(reasonOf(conv("needs", { needsWhy: "work" }), undefined, today, now)).toBe("Work request, no item yet");
+    expect(reasonOf(conv("needs", { needsWhy: "unclaimed" }), undefined, today, now)).toBe("Nobody has claimed it, and you lead the client");
+    expect(reasonOf(promise({ due: "2026-11-09", fromChat: true }), undefined, today, now)).toBe("You promised it, due Mon");
+    expect(reasonOf(promise({ due: "2026-11-05" }), seen, today, now)).toBe("You promised it, due today");
+    expect(reasonOf(promise({ due: "2026-11-03" }), seen, today, now)).toBe("You promised it, 2 days late");
+    expect(reasonOf(promise({ key: "f1", byMe: true, due: "2026-11-04" }), seen, today, now)).toBe("You added it, 1 day late");
+    expect(reasonOf(promise({ fromChat: true }), undefined, today, now)).toBe("You promised it in a chat, with no due day");
+    const send = (p: Partial<InboxFacts>): InboxFacts => ({ key: "s1", kind: "send", clientKey: "contoso", at: now, done: false, sendState: "waiting", who: "Josh Lee", where: "next week", ...p });
+    expect(reasonOf(send({ must: true }), undefined, today, now)).toBe("Josh sent it as a Must");
+    expect(reasonOf(send({}), undefined, today, now)).toBe("Josh suggested it for next week");
+  });
+  it("nothing outside Needs you: a seen promise due later, a snoozed one, what I wait on", () => {
+    expect(reasonOf(promise({ due: "2026-11-20" }), seen, today, now)).toBeNull();
+    expect(reasonOf(promise(), { ...seen, snoozedUntil: "2026-11-06T15:00:00Z" }, today, now)).toBeNull();
+    const theirs: InboxFacts = { key: "c9", kind: "commitment", clientKey: "contoso", at: now, done: false, waitingOn: true, who: "Lena Hart", due: "2026-11-03" };
+    expect(reasonOf(theirs, undefined, today, now)).toBeNull();
+    expect(viewsOf(theirs, undefined, today, now)).toEqual(["waiting"]);
+  });
+});
+
+describe("snooze (slice 3)", () => {
+  // Thu Nov 5 in Chicago (UTC-6), working 9 to 5 Mon to Fri; Fri Nov 6 is PTO.
+  const zone = "America/Chicago";
+  const nine = [{ start: "09:00", end: "17:00" }];
+  const model: TimeModel = { timeZone: zone, weekdays: { mon: nine, tue: nine, wed: nine, thu: nine, fri: nine, sat: [], sun: [] }, lunch: null, overrides: [] } as TimeModel;
+  const day = snoozeDayOf(model, new Set(["2026-11-06"]));
+  it("Later today is 3 hours, never past my end of day, and gone with under an hour left", () => {
+    expect(snoozeUntil("later", "2026-11-05T15:00:00Z", day)).toBe("2026-11-05T18:00:00.000Z");
+    expect(snoozeUntil("later", "2026-11-05T21:30:00Z", day)).toBe("2026-11-05T23:00:00.000Z");
+    expect(snoozeChoices("2026-11-05T21:30:00Z", day)).toEqual(["later", "tomorrow", "next_week"]);
+    expect(snoozeChoices("2026-11-05T22:30:00Z", day)).toEqual(["tomorrow", "next_week"]);
+    expect(snoozeUntil("later", "2026-11-05T22:30:00Z", day)).toBeNull();
+    expect(snoozeChoices("2026-11-07T15:00:00Z", day)).toEqual(["tomorrow", "next_week"]);
+  });
+  it("Tomorrow is my next workday's start, skipping PTO and the weekend; Next week is Monday's start; a date is its start", () => {
+    expect(snoozeUntil("tomorrow", "2026-11-05T15:00:00Z", day)).toBe("2026-11-09T15:00:00Z");
+    expect(snoozeUntil("tomorrow", "2026-11-03T15:00:00Z", day)).toBe("2026-11-04T15:00:00Z");
+    expect(snoozeUntil("next_week", "2026-11-05T15:00:00Z", day)).toBe("2026-11-09T15:00:00Z");
+    expect(snoozeUntil("2026-11-12", "2026-11-05T15:00:00Z", day)).toBe("2026-11-12T15:00:00Z");
+  });
+  it("a snoozed item is in no view and doesn't count, and its due date stays", () => {
+    const f = promise({ due: "2026-11-04" });
+    const m: Mark = { ...seen, snoozedUntil: "2026-11-09T15:00:00Z" };
+    expect(viewsOf(f, m, today, now)).toEqual([]);
+    expect(needsYouCount([{ facts: f, mark: m }], today, now)).toBe(0);
+    expect(viewCounts([{ facts: f, mark: m }], today, now).promises).toBe(0);
+    expect(f.due).toBe("2026-11-04");
+    expect(needsYouCount([{ facts: f, mark: m }], "2026-11-09", "2026-11-09T15:00:01Z")).toBe(1);
   });
 });

@@ -74,6 +74,7 @@ import { CHECKIN_DONE_MARK } from "./closeout-actions.ts";
 import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
 import { markScheduled, publishWeek, sendFacts, teamAction, type TeamAction, type TeamContext } from "./team-actions.ts";
 import { inboxAction } from "./inbox-actions.ts";
+import { snoozeDayOf } from "../plan/inbox-items.ts";
 import { carryAction, idsByClient, markResolved, planBitsFor, resolvedKeys, type CarryContext } from "./carry-actions.ts";
 import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
 import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
@@ -1613,6 +1614,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "inbox.count":
     case "inbox.seen":
     case "inbox.hide":
+    case "inbox.snooze":
       return inboxAction(
         {
           plan: ctx.plan,
@@ -1620,6 +1622,10 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
           now: ctx.now,
           conversations: async (cfg) => (ctx.requests?.conversations ? inboxFacts(await conversationContext(ctx), cfg) : []),
           sends: () => (ctx.team ? sendFacts(teamCtx(ctx)) : Promise.resolve([])),
+          snoozeDay: async () => {
+            const h = await escalationHours(ctx);
+            return h ? snoozeDayOf(h.hours, h.ptoDays) : null;
+          },
         },
         action,
         req.input,

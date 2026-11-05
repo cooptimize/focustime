@@ -8,7 +8,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSS
 import type { WeekLoadData } from "../../actions/types.ts";
 import type { InboxPrefs } from "../../config/schema.ts";
 import type { InboxItemView, InboxView } from "../../plan/inbox-items.ts";
-import type { ConversationCard } from "../../plan/conversation-views.ts";
+import type { ConversationCard, ConversationsData } from "../../plan/conversation-views.ts";
 import { userZone } from "../../week/zone.ts";
 import { call } from "../api.ts";
 import { CaptureBox, captureClients } from "../Capture.tsx";
@@ -30,7 +30,7 @@ import { flatOrder, GROUPS, groupRows, inView, rowSub, rowTag, summaryLine, view
 /** The letters the Inbox's items answer to (ItemActions' keys). */
 const INBOX_LETTERS = new Set(ITEM_KEYS.map((k) => k.key).filter((k) => k.length === 1 && k !== "J" && k !== "K"));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
-const KIND_ICON: Record<InboxItemView["kind"], string> = { conversation: "💬", promise: "⚑", send: "⇥", capture: "▤", draft: "▤" };
+const KIND_ICON: Record<InboxItemView["kind"], string> = { conversation: "💬", promise: "⚑", send: "⇥", capture: "▤", draft: "▤", commitment: "⏳", sent: "⇤", ask: "⏳" };
 
 /** The item an address asks for, else the view's first. */
 function pickView(nav: Extract<Nav, { tab: "inbox" }>, prefs: InboxPrefs, items: readonly InboxItemView[] | null): InboxView {
@@ -42,7 +42,7 @@ function pickView(nav: Extract<Nav, { tab: "inbox" }>, prefs: InboxPrefs, items:
   return prefs.view;
 }
 
-export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extract<Nav, { tab: "inbox" }>; data: WeekLoadData; version: number; onNav: (n: Nav) => void; onChanged: () => void }): ReactNode {
+export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: { nav: Extract<Nav, { tab: "inbox" }>; data: WeekLoadData; version: number; onNav: (n: Nav) => void; onChanged: () => void; onFeedback?: () => void }): ReactNode {
   const phone = usePhone();
   const tz = userZone(data);
   // A DevOps write (create, link comment, mark done) reads the Inbox again, as Conversations did (its version).
@@ -87,6 +87,9 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
     return q ? all.filter((i) => `${i.title} ${i.who ?? ""} ${i.where ?? ""} ${clientName(i.clientKey)}`.toLowerCase().includes(q)) : all;
   }, [items, view, clients, sticky, filter, clientName]);
   const groups = useMemo(() => groupRows(rows, prefs.group, (k) => clientName(k), today), [rows, prefs.group, clientName, today]);
+  // Slice 3: snoozed items are in no view and no count; one folded group at the foot brings them back to look at.
+  const [showSnoozed, setShowSnoozed] = useState(false);
+  const snoozed = useMemo(() => items.filter((i) => i.snoozedUntil && !i.done && (!clients.length || (i.clientKey !== null && clients.includes(i.clientKey)))), [items, clients]);
   const order = useMemo(() => flatOrder(groups), [groups]);
   const viewCount = (v: InboxView) => (v === "chatter" ? chatterRows(src.convs, clients).length : inView(items, v, clients).length);
   const byClient = useMemo(() => clientCounts(items, view), [items, view]);
@@ -294,16 +297,14 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
       {view === "chatter" ? (
         <ChatterList rows={chatter} tz={tz} open={openChatter?.key ?? null} onOpen={setChatterKey} colors={data.clients} phone={phone} />
       ) : (
-        <ListGroups groups={groups} openKey={openKey} onOpen={open} today={today} tz={tz} colors={data.clients} phone={phone} group={prefs.group} />
+        <ListGroups groups={groups} openKey={openKey} onOpen={open} today={today} tz={tz} colors={data.clients} phone={phone} group={prefs.group} reasons={view === "needs_you"} />
+      )}
+      {view !== "chatter" && showSnoozed && snoozed.length > 0 && (
+        <ListGroups groups={[{ id: "snoozed", label: "Snoozed", clientKey: null, rows: snoozed }]} openKey={openKey} onOpen={open} today={today} tz={tz} colors={data.clients} phone={phone} group="kind" reasons={false} />
       )}
       {src.list && view !== "chatter" && !rows.length && <EmptyView view={view} />}
       {src.convs && src.convs.unsorted.count > 0 && (view === "needs_you" || view === "chatter") && (
-        <p className="conv-unsorted" role="status">
-          {src.convs.unsorted.count} {src.convs.unsorted.count === 1 ? "message waits" : "messages wait"} to be sorted: {src.convs.unsorted.reasons.map((r) => r.text).join("; ")}.{" "}
-          <button type="button" className="mini" onClick={() => void run("conversations.sort_unsorted", {}, "Sorted")}>
-            Sort unsorted ({src.convs.unsorted.count})
-          </button>
-        </p>
+        <Unsorted u={src.convs.unsorted} sort={() => void run("conversations.sort_unsorted", {}, "Sorted again")} {...(onFeedback ? { onFeedback } : {})} />
       )}
     </>
   );
@@ -355,7 +356,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
       )}
       {entry && (
         <ItemSheet onBack={() => onNav(navOf.inboxView(view))} entry={entry} acts={acts} form={form} title={`Inbox · ${viewLabel(view)}`}>
-          <Detail entry={entry} acts={acts} form={form} setForm={setForm} data={data} tz={tz} today={today} clientName={clientName} run={run} submit={submit} reload={() => void reloadAll()} mergeOthers={mergeOthers} merge={merge} phone />
+          <Detail entry={entry} acts={acts} form={form} setForm={setForm} data={data} tz={tz} today={today} clientName={clientName} run={run} submit={submit} reload={() => void reloadAll()} mergeOthers={mergeOthers} merge={merge} snoozeChoices={src.list?.snoozeChoices} phone />
         </ItemSheet>
       )}
       {openChatter && (
@@ -448,13 +449,18 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
               {chatter.length} filtered as chatter
             </button>
           )}
+          {snoozed.length > 0 && view !== "chatter" && (
+            <button type="button" className="linkish" aria-expanded={showSnoozed} onClick={() => setShowSnoozed((v) => !v)}>
+              {showSnoozed ? "Hide snoozed" : `${snoozed.length} snoozed`}
+            </button>
+          )}
           {src.convs?.lastPoll && <span className="muted">Chats last checked {whenText(src.convs.lastPoll, tz)}</span>}
           <RefreshChats run={run} />
         </p>
       </section>
       <section className="ib-pane" aria-label="Item">
         {entry ? (
-          <Detail entry={entry} acts={acts} form={form} setForm={setForm} data={data} tz={tz} today={today} clientName={clientName} run={run} submit={submit} reload={() => void reloadAll()} mergeOthers={mergeOthers} merge={merge} />
+          <Detail entry={entry} acts={acts} form={form} setForm={setForm} data={data} tz={tz} today={today} clientName={clientName} run={run} submit={submit} reload={() => void reloadAll()} mergeOthers={mergeOthers} merge={merge} snoozeChoices={src.list?.snoozeChoices} />
         ) : openChatter ? (
           <ChatterDetail row={openChatter} tz={tz} color={clientColor(openChatter.clientKey, data.clients)} onWork={onWork} />
         ) : (
@@ -463,6 +469,43 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
       </section>
       {keysOpen && <KeyHelp onClose={() => setKeysOpen(false)} />}
     </main>
+  );
+}
+
+/**
+ * Slice 3: messages not sorted yet, one line per reason in plain words. Sort again only when the reason passes on its
+ * own; a switch says who fixes it and where, with no button; a guard hold has no button and no override, only feedback.
+ */
+function Unsorted({ u, sort, onFeedback }: { u: ConversationsData["unsorted"]; sort: () => void; onFeedback?: () => void }): ReactNode {
+  const retry = u.reasons.filter((r) => (r.does ?? "retry") === "retry").reduce((n, r) => n + r.count, 0);
+  const held = u.reasons.some((r) => r.does === "held");
+  const n = (c: number) => (c === 1 ? "1 message" : `${c} messages`);
+  return (
+    <div className="conv-unsorted" role="status" aria-label="Not sorted yet">
+      <p className="ib-unsorted-head">{n(u.count)} not sorted yet</p>
+      <ul className="ib-unsorted">
+        {u.reasons.map((r) => (
+          <li key={r.text} className={`does-${r.does ?? "retry"}`}>
+            <span>{`${n(r.count)}: ${r.text}.`}</span>
+            {r.fix && <span className="muted"> {r.fix}</span>}
+          </li>
+        ))}
+      </ul>
+      {(retry > 0 || (held && onFeedback)) && (
+        <p className="ib-unsorted-acts">
+          {retry > 0 && (
+            <button type="button" className="mini" onClick={sort}>
+              Sort again ({retry})
+            </button>
+          )}
+          {held && onFeedback && (
+            <button type="button" className="mini quiet" onClick={onFeedback}>
+              Send feedback
+            </button>
+          )}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -480,7 +523,7 @@ function RefreshChats({ run }: { run: (a: string, i: Record<string, unknown>, no
   );
 }
 
-function ListGroups({ groups, openKey, onOpen, today, tz, colors, phone, group }: { groups: ReturnType<typeof groupRows>; openKey: string | null; onOpen: (k: string) => void; today: string; tz: string; colors: Record<string, string>; phone: boolean; group: Group }): ReactNode {
+function ListGroups({ groups, openKey, onOpen, today, tz, colors, phone, group, reasons }: { groups: ReturnType<typeof groupRows>; openKey: string | null; onOpen: (k: string) => void; today: string; tz: string; colors: Record<string, string>; phone: boolean; group: Group; reasons: boolean }): ReactNode {
   return (
     <>
       {groups.map((g) => (
@@ -501,7 +544,7 @@ function ListGroups({ groups, openKey, onOpen, today, tz, colors, phone, group }
                       <span className="ib-row-sub">
                         {phone && tag && <span className={`ib-tag tone-${tag.tone}`}>{tag.text}</span>}
                         <span className="muted">
-                          {rowSub(r)}
+                          {reasons && r.reason ? r.reason : rowSub(r)}
                           {r.kind === "conversation" ? ` · ${whenText(r.at, tz).split(", ")[1] ?? ""}` : ""}
                         </span>
                       </span>

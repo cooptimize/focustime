@@ -229,6 +229,7 @@ export const ACTIONS = [
   { name: "inbox.list", title: "Inbox items", group: "Inbox", target: "none", summary: "Everything in the Inbox for you: each item's views and the count per view (read only)" },
   { name: "inbox.count", title: "Inbox count", group: "Inbox", target: "none", summary: "How many items need you: the Inbox badge, the same number as Needs you (read only)" },
   { name: "inbox.hide", title: "Hide an Inbox item for me", group: "Inbox", target: "none", shortcut: "H", summary: "Hides a promise, send, capture or draft from your Inbox only; nothing else changes" },
+  { name: "inbox.snooze", aka: ["snooze", "later"], title: "Snooze an Inbox item", group: "Inbox", target: "none", summary: "Later today, tomorrow, next week or a date: out of your Inbox and its counts until then; the due date doesn't change" },
   { name: "inbox.seen", title: "Mark Inbox items seen", group: "Inbox", target: "none", summary: "A new promise you've looked at stops counting as new" },
   { name: "my_promises.list", aka: ["my promises"], title: "Promises", group: "Conversations", target: "none", summary: "Inbox › Promises: what you said you'd do in your clients' registered chats" },
   { name: "my_promises.today", title: "Add a promise to Today", group: "Conversations", target: "commitment", summary: "Shows the promise on Today until it's done" },
