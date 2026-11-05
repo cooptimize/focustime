@@ -123,7 +123,7 @@ describe("clientAccounts() in Admin", () => {
     expect(hidden.ok && (hidden.data as { warning: string | null }).warning).toMatch(/AI allowed/);
     const st = await t.load<Status>("status");
     const lines = st.warnings.map((w) => w.text);
-    expect(lines.find((l) => l.startsWith("Worked Co"))).toMatch(/3 Account Worker or Focus Time rows/);
+    expect(lines.find((l) => l.startsWith("Worked Co"))).toMatch(/3 Dataverse Account Worker or Focus Time rows/);
     expect(lines.find((l) => l.startsWith("Vendor Co"))).toMatch(/AI allowed/);
     expect(lines.find((l) => l.startsWith("Adatum"))).toMatch(/hidden from FocusTime.*AI allowed/);
     // The settings stay stored, and All accounts says so.

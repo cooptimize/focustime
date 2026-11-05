@@ -187,7 +187,7 @@ export async function clientWarnings(ops: AdminOps): Promise<StatusWarning[]> {
     const row = ca.row(k);
     const c = rules.clients[k];
     const has: string[] = [];
-    if (row && (row.workers > 0 || row.focus > 0)) has.push(`${row.workers + row.focus} Account Worker or Focus Time ${row.workers + row.focus === 1 ? "row" : "rows"}`);
+    if (row && (row.workers > 0 || row.focus > 0)) has.push(`${row.workers + row.focus} Dataverse Account Worker or Focus Time ${row.workers + row.focus === 1 ? "row" : "rows"}`);
     if (chats.includes(k)) has.push("a registered chat");
     if (c && (c.openStates.length || c.noBreakdown.length || c.background.length || c.houseStyle)) has.push("DevOps settings");
     if (c?.allowAi) has.push("AI allowed");
