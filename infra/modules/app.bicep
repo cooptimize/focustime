@@ -32,6 +32,7 @@ param imageTag string
 param imageDigest string = ''
 param inviteDomains string = ''
 param admins string = ''
+param adminGroupId string = ''
 param feedbackOrg string = ''
 param feedbackProject string = ''
 param feedbackParentId string = ''
@@ -99,8 +100,10 @@ var settings = [
   { name: 'FOCUSTIME_DATA_KEY_NAME', value: 'ft-data-key' }
   { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: insights.properties.ConnectionString }
   { name: 'FOCUSTIME_INVITE_DOMAINS', value: inviteDomains }
-  // D522: who registers client chats (Entra object ids; the next step makes it the FocusTime Admins group).
+  // ADM-1: the break-glass admins (Entra object ids); they count as admins with or without the group.
   { name: 'FOCUSTIME_ADMINS', value: admins }
+  // ADM-1: the FocusTime Admins group (its members are admins; FOCUSTIME_ADMINS above is the break-glass list).
+  { name: 'FOCUSTIME_ADMIN_GROUP_ID', value: adminGroupId }
   // F1: Send feedback (docs/azure/runbook.md, "Send feedback").
   { name: 'FOCUSTIME_FEEDBACK_ORG', value: feedbackOrg }
   { name: 'FOCUSTIME_FEEDBACK_PROJECT', value: feedbackProject }

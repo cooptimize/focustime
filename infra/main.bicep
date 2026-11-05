@@ -25,6 +25,8 @@ param sqlRetentionDays int = 7
 param inviteDomains string = ''
 @description('D522: Entra object ids of the people who register client chats (comma list); empty: nobody. From the FT_ADMINS GitHub variable.')
 param admins string = ''
+@description('ADM-1: the "FocusTime Admins" Entra security group\'s object id; its members are admins. From the FT_ADMIN_GROUP_ID GitHub variable (infra/scripts/admin-group.sh prints it).')
+param adminGroupId string = ''
 @description('F1: Send feedback creates stories in this DevOps organization and project, under this feature.')
 param feedbackOrg string = 'cooptimize'
 param feedbackProject string = 'Cooptimize Internal'
@@ -102,6 +104,7 @@ module app 'modules/app.bicep' = {
     imageDigest: imageDigest
     inviteDomains: inviteDomains
     admins: admins
+    adminGroupId: adminGroupId
     feedbackOrg: feedbackOrg
     feedbackProject: feedbackProject
     feedbackParentId: feedbackParentId

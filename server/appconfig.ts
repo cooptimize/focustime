@@ -25,6 +25,11 @@ export type AppSettings = {
    * next step points at the "FocusTime Admins" Entra group instead. Empty: nobody.
    */
   admins: string[];
+  /**
+   * ADM-1: the "FocusTime Admins" Entra security group's object id (FOCUSTIME_ADMIN_GROUP_ID, through Bicep); its
+   * members are admins (actions/admin.ts). `admins` above stays as the break-glass list. Null: no group yet.
+   */
+  adminGroupId: string | null;
   /** F1: where ⋯ › Send feedback creates stories (a child of `parentId`), and whether this FocusTime sends (live) or only previews. Null: not set. */
   feedback: FeedbackSettings | null;
   /**
@@ -71,6 +76,7 @@ export const APP_ENV = {
   demo: "FOCUSTIME_DEMO",
   inviteDomains: "FOCUSTIME_INVITE_DOMAINS",
   admins: "FOCUSTIME_ADMINS",
+  adminGroupId: "FOCUSTIME_ADMIN_GROUP_ID",
   dbDriver: "FOCUSTIME_DB_DRIVER",
   dbServer: "FOCUSTIME_DB_SERVER",
   dbPort: "FOCUSTIME_DB_PORT",
@@ -149,6 +155,9 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
   const adminsRaw = env[APP_ENV.admins] ?? (Array.isArray(raw.admins) ? raw.admins.join(",") : typeof raw.admins === "string" ? raw.admins : "");
   const admins = [...new Set(String(adminsRaw).split(",").map((x) => x.trim().toLowerCase()).filter(Boolean))];
   if (admins.some((x) => !GUID.test(x))) errors.push("admins must be Entra object ids (GUIDs)");
+  // admin_group_id (or FOCUSTIME_ADMIN_GROUP_ID): the "FocusTime Admins" group's object id (ADM-1).
+  const adminGroupId = val(APP_ENV.adminGroupId, raw.admin_group_id).toLowerCase() || null;
+  if (adminGroupId && !GUID.test(adminGroupId)) errors.push("admin_group_id must be the FocusTime Admins group's object id (a GUID)");
 
   // [feedback] (F1): org, project, parent_id and live. No org: not set (the dialog says it isn't set up).
   const f = sec("feedback");
@@ -177,6 +186,7 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
       database,
       inviteDomains,
       admins,
+      adminGroupId,
       feedback,
       ai,
     },
