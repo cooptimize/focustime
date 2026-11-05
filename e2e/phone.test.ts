@@ -90,6 +90,8 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
 
     // Start focus, back to Today: the timer is in the Now card; Done ends it and ticks the pick.
     await now.getByRole("button", { name: "Start focus" }).click();
+    // The timer has started (the focus screen runs) before the reload reads it back.
+    await page.locator("main.focus-screen:not(.idle)").waitFor();
     await open(page, "#/today");
     await now.locator(".pn-count").waitFor();
     await now.getByRole("button", { name: "Done" }).click();
