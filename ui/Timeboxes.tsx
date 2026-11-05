@@ -3,6 +3,7 @@
 // change is previewed in a dialog (target, account, calendar, exact fields, who can see it) and confirmed; the result
 // is read back before it says so. With "don't ask again" (confirm_own off) changes to my own timebox events confirm
 // right after the preview, still logged and undoable.
+import { CloseButton } from "./CloseButton.tsx";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import type { InviteView, TimeboxView, WritePreview, WriteResult, WriteState } from "../actions/types.ts";
 import { minutesOf, SHOW_AS_LABEL, SHOW_AS_VALUES, TIMEBOX_SNAP, type OutlookShowAs } from "../plan/timebox.ts";
@@ -224,6 +225,7 @@ function WriteDialog({ flow, onConfirm, onRetry, onClose }: { flow: Flow; onConf
       >
         <div className="cap-dialog-head">
           <h2>{p.summary}</h2>
+          <CloseButton onClose={onClose} disabled={busy} />
         </div>
         <dl className="wd-where">
           <dt>Where</dt>
@@ -322,6 +324,7 @@ function BatchWriteDialog({ batch, onConfirm, onClose }: { batch: Batch; onConfi
       >
         <div className="cap-dialog-head">
           <h2>{creates ? `Put ${rows.length === 1 ? "1 timebox" : `${rows.length} timeboxes`} on Outlook` : `${rows.length} Outlook changes`}</h2>
+          <CloseButton onClose={onClose} disabled={busy} />
         </div>
         <dl className="wd-where">
           <dt>Where</dt>
@@ -433,6 +436,7 @@ export function TimeboxDialog({ target, defaultMinutes, title, env, onClose }: {
         <div className="cap-dialog-head">
           <h2>Timebox</h2>
           <span className="muted">{title} · {Temporal.PlainDate.from(target.date).toLocaleString("en-US", { weekday: "long", month: "short", day: "numeric" })}</span>
+          <CloseButton onClose={onClose} />
         </div>
         <div className="tb-fields">
           <label>

@@ -1,6 +1,7 @@
 // S1 (D452): ⋯ › About. One line: "FocusTime · dev · #8 · abc1234 · built Nov 3, 12:05 PM" (the time in the person's
 // zone; a local build is "FocusTime · local · abc1234"), with links to the PR and the commit on GitHub, Copy, and the
 // Guide. Nothing else. The facts come from /version (env, PR, sha, build time; no secrets, hostnames or user data).
+import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useEffect, useRef, useState } from "react";
 
 export type Build = { env: string; pr: string; sha: string; builtAt: string | null };
@@ -23,6 +24,7 @@ export function AboutDialog({ zone, onClose, onGuide }: { zone: string; onClose:
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const close = useRef<HTMLButtonElement>(null);
+  useReturnFocus();
   useEffect(() => {
     close.current?.focus();
     fetch("/version", { credentials: "same-origin" })
@@ -48,9 +50,7 @@ export function AboutDialog({ zone, onClose, onGuide }: { zone: string; onClose:
       >
         <div className="command-head">
           <span className="command-step-title">About</span>
-          <button ref={close} type="button" className="mini" onClick={onClose}>
-            Close <kbd>Esc</kbd>
-          </button>
+          <CloseButton buttonRef={close} onClose={onClose} />
         </div>
         <p className="about-line">
           {error ??

@@ -2,6 +2,7 @@
 // sign-out, the person in the top bar, the VM chip (top bar) with Start and its preview, the auto-shutdown time shown
 // read only (D475), Today's morning prompt, Settings > You (sign out, find and confirm my VM) and the Azure write log
 // in Settings > Data.
+import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { Avatar, forgetPhotos, usePhotos, usePresence } from "./Presence.tsx";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AuthStatus, AzureWriteEntry, Person, TeamsStatusEntry, VmPreview, VmPreviewOp, VmStatus } from "../actions/account-types.ts";
@@ -300,6 +301,7 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const first = useRef<HTMLButtonElement>(null);
+  useReturnFocus();
   useEffect(() => first.current?.focus(), []);
   return (
     <div className="cap-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
@@ -307,6 +309,7 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
         <div className="cap-dialog-head">
           <h2>{p.title}</h2>
           <span className="muted">{p.vm}</span>
+          <CloseButton onClose={onClose} disabled={busy} />
         </div>
         {p.warning && <p className="vm-warning" role="alert">{p.warning}</p>}
         <dl className="vm-change">

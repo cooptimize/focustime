@@ -3,6 +3,7 @@
 // and Today's 3840 pick detail. Contents: client and time range with the risk reasons, the block's agenda with free
 // gaps (as Plan the day's), the picks as full rows, the client's features this week with story counts and Needs
 // stories actions, the client's follow-ups, DevOps items assigned to me there and not planned yet, and the ⋯ actions.
+import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { typeNeedsBreakdown } from "../plan/process.ts";
 import { useCallback, useContext, useEffect, useRef, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject } from "react";
@@ -60,6 +61,7 @@ export function interactive(e: ReactMouseEvent): boolean {
 export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onChanged, onNotice, variant }: Props) {
   const weekPanel = variant === "week";
   const ref = useRef<HTMLElement>(null);
+  useReturnFocus();
   const phone = usePhone();
   const plan = useContext(PlanCtx);
   const allWork = useContext(DevOpsWork);
@@ -115,9 +117,7 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
         </div>
         <HalfScope.Provider value={true}>{menu.button(`Actions for ${title}`)}</HalfScope.Provider>
         {!phone && (
-          <button type="button" className="dp-close" onClick={onClose} aria-label="Close details (Esc)" title="Close (Esc)">
-            ×
-          </button>
+          <CloseButton onClose={onClose} />
         )}
       </header>
 
@@ -328,9 +328,7 @@ export function PanelShell({ title, sub, color, menu, label, onClose, children }
         </div>
         {menu}
         {!phone && (
-          <button type="button" className="dp-close" onClick={close} aria-label="Close details (Esc)" title="Close (Esc)">
-            ×
-          </button>
+          <CloseButton onClose={close} />
         )}
       </header>
       <div className="dp-body">{children}</div>

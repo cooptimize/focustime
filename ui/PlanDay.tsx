@@ -5,6 +5,7 @@
 // agenda open only on the selected block; Enter in the type box makes a draft story under the chosen feature and plans
 // it, Shift+Enter a plain intention ("not in DevOps"); features aren't picks, so they offer Draft stories instead.
 // Everything here is local: the actions only write FocusTime's plan store.
+import { CloseButton } from "./CloseButton.tsx";
 import { countsFor } from "../plan/process.ts";
 import { ModeArea } from "./ModeSwitch.tsx";
 import { planDayTitle } from "./nav.ts";
@@ -1022,6 +1023,7 @@ function TimeboxMyDay({ day, picks, weekFeatures, now, tz, onClose, onRan }: { d
         <div className="cap-dialog-head">
           <h2>Timebox my day</h2>
           <span className="muted">{longDate(day.date)} · musts first, then larger picks, each in its own block</span>
+          <CloseButton onClose={onClose} disabled={busy} />
         </div>
         {plan.placed.length === 0 && plan.unplaced.length === 0 && <p className="muted">Every planned pick already has a timebox.</p>}
         {halvesShown.map((h) => (
