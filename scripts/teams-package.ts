@@ -1,5 +1,5 @@
 // TB-1: builds the Teams app package (a zip of manifest.json, color.png and outline.png) for one environment, for
-// Tanner to upload in the Teams admin center (docs/setup/teams-bot.md). Manifest schema 1.30, the bot only, personal
+// the Teams admin to upload in the Teams admin center (docs/setup/teams-bot.md). Manifest schema 1.30, the bot only, personal
 // scope only (1:1 chats), no files, no tabs, no SSO, no permissions beyond the bot. The bot id is the environment's
 // bot identity's client id (the deploy prints it; `az deployment group show ... --query properties.outputs.botAppId`).
 //

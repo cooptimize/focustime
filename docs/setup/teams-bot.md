@@ -1,6 +1,6 @@
 # FocusTime in Teams: setting up the bot (TB-1)
 
-For Tanner. The bot is "FocusTime" in a 1:1 chat in Teams: the same assistant as the in-app panel (AS-1), plus a few
+For the Teams and Azure admin. The bot is "FocusTime" in a 1:1 chat in Teams: the same assistant as the in-app panel (AS-1), plus a few
 quick commands that work without AI (what's next, today, help, open FocusTime). Anything that would change something
 shows a preview card and needs a tap on Confirm. It never messages anyone on its own in TB-1.
 
