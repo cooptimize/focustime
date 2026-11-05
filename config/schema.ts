@@ -6,6 +6,10 @@ import { DEFAULT_ASK_SETTINGS, type AskSettings } from "../plan/asks.ts";
 import { DEFAULT_AI_PERSON, DEFAULT_AI_RULES, type AiPersonSettings, type AiRules } from "../ai/types.ts";
 import type { Guidance, OrgView } from "./org-apply.ts";
 import { DEFAULT_NOTIFY, NOTIFY_KINDS, type NotifyKind, type NotifySettings } from "../plan/notify.ts";
+import { CLOSEOUT_MINUTES, HM, type TeamsRhythm } from "../plan/teams-rhythm.ts";
+
+/** TB-2: the In Teams switches as [notify] keys. */
+const TEAMS_SWITCH: Record<string, keyof Pick<TeamsRhythm, "brief" | "checkin" | "closeout" | "nudges" | "friday">> = { teams_brief: "brief", teams_checkin: "checkin", teams_closeout: "closeout", teams_nudges: "nudges", teams_friday: "friday" };
 import { DEFAULT_FOCUS, MAX_PLAYLISTS, playlistLink, SOUNDS, type FocusSettings, type SoundKind } from "../plan/focussound.ts";
 import { parseSpan, VIEW_RANGES, WEEKDAY_KEYS, type DayOverride, type Span, type TimeModel, type ViewRange, type WeekdayKey } from "../week/hours.ts";
 import { NEUTRAL_ZONE } from "../week/zone.ts";
@@ -577,7 +581,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
   }
 
   // [notify] (optional, step 15.5): one switch per kind, quiet hours (outside working hours, PTO days)
-  const notify: NotifySettings = { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds } };
+  const notify: NotifySettings = { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds }, teams: { ...DEFAULT_NOTIFY.teams } };
   if (raw.notify !== undefined) {
     const t = isTable(raw.notify) ? raw.notify : (err("notify", "Must be a [notify] table"), null);
     if (t) {
@@ -600,6 +604,20 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
         } else if (k === "asks_through_focus") {
           if (typeof t.asks_through_focus !== "boolean") err("notify.asks_through_focus", "Must be true or false");
           else notify.asksThroughFocus = t.asks_through_focus;
+        } else if (TEAMS_SWITCH[k]) {
+          // TB-2: Settings › Notifications › In Teams.
+          if (typeof t[k] !== "boolean") err(`notify.${k}`, "Must be true or false");
+          else notify.teams[TEAMS_SWITCH[k]] = t[k] as boolean;
+        } else if (k === "teams_brief_at") {
+          if (t.teams_brief_at !== "start" && (typeof t.teams_brief_at !== "string" || !HM.test(t.teams_brief_at))) err("notify.teams_brief_at", 'Must be "start" or a time like "09:00"');
+          else notify.teams.briefAt = t.teams_brief_at === "start" ? null : t.teams_brief_at;
+        } else if (k === "teams_checkin_at") {
+          if (typeof t.teams_checkin_at !== "string" || !HM.test(t.teams_checkin_at)) err("notify.teams_checkin_at", 'Must be a time like "12:00"');
+          else notify.teams.checkinAt = t.teams_checkin_at;
+        } else if (k === "teams_closeout_minutes") {
+          const v = t.teams_closeout_minutes;
+          if (typeof v !== "number" || !Number.isInteger(v) || v < CLOSEOUT_MINUTES.min || v > CLOSEOUT_MINUTES.max) err("notify.teams_closeout_minutes", `Must be a whole number from ${CLOSEOUT_MINUTES.min} to ${CLOSEOUT_MINUTES.max}`);
+          else notify.teams.closeoutMinutes = v;
         } else err(`notify.${k}`, "Unknown field");
       }
     }

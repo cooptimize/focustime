@@ -15,7 +15,7 @@ export type BotCard = { proposalId: string; activityId: string | null; title: st
 
 const MAX_ID = 100;
 /** The bot's user tables: Teams addresses, card state and handled activity ids; no content. */
-export const BOT_TABLES = ["teams_bot_chats", "teams_bot_cards", "teams_bot_seen"] as const;
+export const BOT_TABLES = ["teams_bot_chats", "teams_bot_cards", "teams_bot_seen", "teams_rhythm"] as const;
 const short = (v: string, n: number) => {
   if (!v || v.length > n) throw new Error("Not an id");
   return v;

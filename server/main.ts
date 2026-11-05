@@ -78,6 +78,10 @@ import { pollCycle, requestsNextDue, type PollDeps, type PollPerson } from "../a
 import { requestContext, aiFor, escalationHours, dispatch } from "../actions/dispatch.ts";
 import type { WeekLoadData } from "../actions/types.ts";
 import { createTeamsEndpoint } from "./teams/sdk.ts";
+import { BLOCKED_KEY, createRhythm, pacedSender, type Rhythm, type Takeover } from "./teams/rhythm.ts";
+import { createTeamsRhythmStore } from "../store/teams-rhythm-store.ts";
+import { takeoversOf } from "../plan/teams-rhythm.ts";
+import type { ActionName } from "../actions/registry.ts";
 import { createBotCore } from "./teams/bot.ts";
 import { todayFacts } from "./teams/quick.ts";
 import { teamsAssistant } from "./teams/assistant.ts";
@@ -281,6 +285,10 @@ const devopsSources = new Map<string, DevOpsSource>();
 /** DV-1: each client's limits, shared by the poller and everyone's reads on demand. */
 const devopsLimiter = createLimiter(() => Temporal.Now.instant());
 let devopsPoller: DevOpsPoller | null = null;
+/** DV-1's store (the poller writes it); TB-2 reads its change log for the takeover nudge. */
+let devopsStoreRef: ReturnType<typeof createDevOpsStore> | null = null;
+/** TB-2: the bot's rhythm in Teams, once the bot is up (hosted app only). */
+let rhythm: Rhythm | null = null;
 /** DV-1: Admin › Status's rows registry (actions/status-rows.ts). */
 const statusRows = createStatusRegistry();
 /**
@@ -653,8 +661,35 @@ const teamsBot =
           tenantId,
           token: async (scope) => (await credential.getToken(scope)).token,
           log,
-          core: (sender) =>
-            createBotCore({
+          core: (sender) => {
+            // TB-2: the rhythm sends through the same connector client, paced (10 a second, retries with backoff).
+            const paced = pacedSender(sender);
+            const botStoreOf = (userId: string) => createTeamsBotStore({ db, userId, now: instantNow });
+            const configOf = async (userId: string) => {
+              const r = await (await runtimeFor(userId)).loadConfig().catch(() => null);
+              return r?.parsed.ok ? r.parsed.config : null;
+            };
+            rhythm = createRhythm({
+              publicUrl: app.publicUrl,
+              sender: paced,
+              botStore: botStoreOf,
+              store: (userId) => createTeamsRhythmStore({ db, userId, now: instantNow }),
+              plan: async (userId) => (await runtimeFor(userId)).plan,
+              run: async (userId, action, input) => dispatch(await runtimeFor(userId), { action: action as ActionName, input }),
+              config: configOf,
+              assistant: teamsAssistant(assistants, app.publicUrl),
+              takeovers: (userId, since) => takeoversFor(userId, since),
+              blocked: async (userId) => {
+                // 403 MessageWritesBlocked: nothing more goes to that chat until they add the app or message again.
+                const ctx = await runtimeFor(userId);
+                await botStoreOf(userId).chatRemoved();
+                await ctx.plan?.setState(BLOCKED_KEY, instantNow().toString());
+                await dispatch(ctx, { action: "settings.save", input: { section: "notify", values: { teamsMessages: false } } });
+              },
+              log: (r) => log({ source: "server", ...r, op: `teams_${r.op}` }),
+              now: instantNow,
+            });
+            return createBotCore({
               publicUrl: app.publicUrl,
               gate: {
                 tenantId,
@@ -675,13 +710,49 @@ const teamsBot =
               log: (r) => log({ source: "server", ...r, op: `teams_${r.op}` }),
               now: instantNow,
               onUse: () => use.used(),
-            }),
+              rhythm,
+              onChat: async (userId) => {
+                const plan = (await runtimeFor(userId)).plan;
+                if (plan && (await plan.getState(BLOCKED_KEY))) await plan.setState(BLOCKED_KEY, null);
+              },
+            });
+          },
         });
       })().catch(() => {
         log({ source: "server", op: "teams_bot", kind: "not_started" });
         return null;
       })
     : null;
+
+/**
+ * TB-2: items assigned to me that someone else gave to another person, from DV-1's change log, on my clients: my
+ * names are my sign-in name and my DevOps identities' names (the log keeps the assignee's display name only).
+ */
+async function takeoversFor(userId: string, since: string): Promise<Takeover[]> {
+  const store = devopsStoreRef;
+  if (!store) return [];
+  const ctx = await runtimeFor(userId);
+  const loaded = await ctx.loadConfig().catch(() => null);
+  const c = loaded?.parsed.ok ? loaded.parsed.config : null;
+  if (!c || !ctx.plan) return [];
+  const me = await storedIdentity(ctx.plan).catch(() => null);
+  const ids = await ctx.plan.devopsIdentities().catch(() => []);
+  const signed = await ctx.signedInAs?.().catch(() => undefined);
+  const names = [me?.name ?? "", ...ids.map((i) => i.name)];
+  const emails = [me?.email ?? "", me?.username ?? "", signed?.email ?? "", signed?.upn ?? "", ...ids.map((i) => i.email)];
+  const out: Takeover[] = [];
+  for (const clientKey of Object.keys(c.clientSettings)) {
+    const changes = await store.changes(clientKey, since).catch(() => []);
+    const hits = takeoversOf(changes, { names, emails });
+    if (!hits.length) continue;
+    const items = new Map((await store.items(clientKey).catch(() => [])).map((i) => [i.id, i]));
+    for (const h of hits) {
+      const t = items.get(h.itemId)?.fields["System.Title"];
+      out.push({ key: `${clientKey}-${h.key}`.replace(/[^A-Za-z0-9_.:+-]/g, "_").slice(0, 100), itemId: h.itemId, title: typeof t === "string" ? t.slice(0, 200) : null, clientName: c.clientSettings[clientKey]?.name ?? clientKey, byName: h.byName, at: h.at });
+    }
+  }
+  return out;
+}
 
 const server = createApp({
   publicUrl: app.publicUrl,
@@ -838,7 +909,21 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
       remove: async () => deleteData(userId),
     },
   };
-  const ticks = personTicks({ log, now: instantNow, notifications: host.notifications, media: host.media, openRoute: (route) => void openRouteFor(userId, route).catch(() => undefined), push }, plan, liveCtx, who);
+  // TB-2: the rhythm in Teams for this person (only where the bot runs), and Settings › Notifications › In Teams.
+  // Read at call time: a runtime may be built before the bot finishes starting.
+  const botHere = host.kind === "azure" && !!botAppId;
+  const teams = botHere
+    ? { tick: async (f: Parameters<Rhythm["tick"]>[1]) => void (await rhythm?.tick(userId, f)), wake: async (c: Parameters<Rhythm["wake"]>[1]) => (rhythm ? rhythm.wake(userId, c) : null) }
+    : undefined;
+  if (botHere)
+    liveCtx.teams = {
+      status: async () => {
+        const chat = await createTeamsBotStore({ db, userId, now: instantNow }).chat().catch(() => null);
+        return { chat: !!chat && !chat.removedAt, blocked: !!(await plan?.getState(BLOCKED_KEY).catch(() => null)) };
+      },
+      test: async (kind) => (rhythm ? rhythm.test(userId, kind) : { ok: false, message: "FocusTime in Teams isn't running right now. Try again in a minute." }),
+    };
+  const ticks = personTicks({ log, now: instantNow, notifications: host.notifications, media: host.media, openRoute: (route) => void openRouteFor(userId, route).catch(() => undefined), push, ...(teams ? { teams } : {}) }, plan, liveCtx, who);
   runtimes.set(userId, { ctx: liveCtx, who, ticks });
   return liveCtx;
 }
@@ -1002,7 +1087,7 @@ const followerHours = async (clientKey: string) => {
 };
 devopsPoller = devopsApp && directorySource
   ? createDevOpsPoller({
-      store: createDevOpsStore(db, instantNow),
+      store: (devopsStoreRef = createDevOpsStore(db, instantNow)),
       source: () => devopsApp.internal,
       limiter: devopsLimiter,
       accounts: (asked) =>

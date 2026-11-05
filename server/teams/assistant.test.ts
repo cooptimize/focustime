@@ -14,7 +14,7 @@ const proposal: Proposal = {
 
 function fake(confirm: ConfirmResult) {
   const seen: unknown[] = [];
-  const a: Pick<Assistant, "handle" | "confirm" | "cancel"> = {
+  const a: Pick<Assistant, "handle" | "confirm" | "cancel" | "propose"> = {
     handle: async (i) => (seen.push(i), {
       turnId: 3, status: "ok", reply: "Here it is.", proposals: [proposal],
       cards: [{ kind: "item", clientKey: "fabrikam", clientName: "Fabrikam", id: 4417, title: "Export", type: "Feature", state: "Active", owner: null, start: null, target: "2026-12-04", children: [], link: { label: "Open #4417 in Ahead", href: `${URL}/#/ahead/item/4417` }, devopsUrl: null }],
@@ -22,6 +22,7 @@ function fake(confirm: ConfirmResult) {
     } satisfies HandleResult),
     confirm: async (i) => (seen.push(i), confirm),
     cancel: async (i) => (seen.push(i), { ok: true as const }),
+    propose: async (i) => (seen.push(i), { ok: true as const, proposal }),
   };
   return { a, seen };
 }

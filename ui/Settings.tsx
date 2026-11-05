@@ -21,6 +21,7 @@ import { shortDate } from "./labels.ts";
 import { BINAURAL, MAX_PLAYLISTS, playlistLink, SOUND_NAMES, SOUNDS, type Playlist, type SoundKind } from "../plan/focussound.ts";
 import { sound } from "./sound.ts";
 import { KIND_HINT, KIND_LABEL, RITUAL_KINDS, type NotifyKind, type QuietMode } from "../plan/notify.ts";
+import { CLOSEOUT_MINUTES, DEFAULT_TEAMS_RHYTHM, HM, TEAMS_KIND_HINT, TEAMS_KIND_LABEL, TEAMS_KINDS, type TeamsKind, type TeamsRhythm } from "../plan/teams-rhythm.ts";
 import { nextRituals } from "../plan/rituals.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import type { WriteLogView } from "../actions/types.ts";
@@ -942,10 +943,10 @@ function NotifyForm(p: FormProps) {
   const n = p.data.notify;
   const a = useAutoSave({
     section: "notify",
-    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false, teamsMessages: n.teamsMessages ?? false },
+    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false, teamsMessages: n.teamsMessages ?? false, teams: { ...DEFAULT_TEAMS_RHYTHM, ...(n.teams ?? {}) } as TeamsRhythm },
     payload: (v) => v,
     onSaved: p.onSavedData,
-    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent requests during focus" : k === "teamsMessages" ? "Messages in Teams" : "Quiet on PTO days"),
+    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent requests during focus" : k === "teamsMessages" ? "Messages in Teams" : k === "teams" ? "Teams messages" : "Quiet on PTO days"),
   });
   const [test, setTest] = useState<string | null>(null);
   const group = (title: string, list: readonly NotifyKind[]) => (
@@ -1015,12 +1016,92 @@ function NotifyForm(p: FormProps) {
         </label>
       </AutoField>
       <h3>In Teams</h3>
-      <AutoField a={a} k="teamsMessages" label="Messages in Teams" hint="Off: FocusTime only answers when you message it in Teams. FocusTime doesn't send anything on its own yet.">
+      <TeamsStatusLine />
+      <AutoField a={a} k="teamsMessages" label="Messages in Teams" hint="Off: FocusTime only answers when you message it in Teams. On: it may send the kinds you turn on below, only in your own chat with it, never in quiet hours, on PTO days or weekends, and held while you focus.">
         <label className="set-check">
           <input type="checkbox" checked={a.v.teamsMessages} onChange={(e) => a.change("teamsMessages", e.target.checked)} /> Let FocusTime message me in Teams
         </label>
       </AutoField>
+      <TeamsKinds v={a.v.teams} on={a.v.teamsMessages} set={(t) => a.set("teams", t)} commit={(t) => a.commit("teams", t)} change={(t) => a.change("teams", t)} />
+      <SaveMark s={a.status("teams")} retry={() => a.commit("teams")} />
     </div>
+  );
+}
+
+type TeamsStatus = { available: boolean; chat: boolean; blocked: boolean };
+
+/** TB-2: whether FocusTime can reach me in Teams: the hosted app only, after my first message, unless Teams refused it. */
+function TeamsStatusLine() {
+  const [st, setSt] = useState<TeamsStatus | null>(null);
+  useEffect(() => void call<TeamsStatus>("teams.status", {}).then(setSt, () => setSt(null)), []);
+  if (!st) return null;
+  if (!st.available) return <p className="muted">FocusTime in Teams runs in the hosted app. Here it can't send anything.</p>;
+  if (st.blocked) return <p className="set-warn" role="status">FocusTime can't message you in Teams. Add the app again.</p>;
+  if (!st.chat) return <p className="muted">Message FocusTime in Teams once, so it knows where to reach you.</p>;
+  return null;
+}
+
+/** TB-2: the kinds FocusTime may send in Teams, each with its time and Send me a test now. */
+function TeamsKinds(p: { v: TeamsRhythm; on: boolean; set: (t: TeamsRhythm) => void; commit: (t: TeamsRhythm) => void; change: (t: TeamsRhythm) => void }) {
+  const [test, setTest] = useState<{ kind: TeamsKind; text: string } | null>(null);
+  const t = p.v;
+  const send = (kind: TeamsKind) => {
+    setTest({ kind, text: "Sending…" });
+    void call("teams.test", { kind }).then(
+      () => setTest({ kind, text: "Sent. Look in your chat with FocusTime in Teams." }),
+      (e: unknown) => setTest({ kind, text: e instanceof Error ? e.message : "Couldn't send it" }),
+    );
+  };
+  const time = (kind: TeamsKind) => {
+    if (kind === "brief")
+      return (
+        <span className="set-teams-time">
+          <select aria-label="Morning brief time" value={t.briefAt ? "time" : "start"} onChange={(e) => p.change({ ...t, briefAt: e.target.value === "start" ? null : (t.briefAt ?? "09:00") })}>
+            <option value="start">At the start of my day</option>
+            <option value="time">At a set time</option>
+          </select>
+          {t.briefAt !== null && <input type="time" aria-label="Morning brief at" value={t.briefAt} onChange={(e) => HM.test(e.target.value) && p.set({ ...t, briefAt: e.target.value })} onBlur={() => p.commit(t)} />}
+        </span>
+      );
+    if (kind === "checkin")
+      return <input type="time" aria-label="Midday check-in at" value={t.checkinAt} onChange={(e) => HM.test(e.target.value) && p.set({ ...t, checkinAt: e.target.value })} onBlur={() => p.commit(t)} />;
+    if (kind === "closeout")
+      return (
+        <span className="set-teams-time">
+          <input type="number" aria-label="Minutes before my day ends" min={CLOSEOUT_MINUTES.min} max={CLOSEOUT_MINUTES.max} step={5} value={t.closeoutMinutes} onChange={(e) => p.set({ ...t, closeoutMinutes: Math.max(CLOSEOUT_MINUTES.min, Math.min(CLOSEOUT_MINUTES.max, Math.round(Number(e.target.value) || 30))) })} onBlur={() => p.commit(t)} />
+          <span className="set-hint">minutes before my day ends</span>
+        </span>
+      );
+    return null;
+  };
+  return (
+    <fieldset className="set-notify-group set-teams" disabled={!p.on}>
+      <legend>What FocusTime sends</legend>
+      {TEAMS_KINDS.map((k) => (
+        <div key={k} className="set-teams-row">
+          <label className="set-notify-row">
+            <input type="checkbox" checked={t[k]} onChange={(e) => p.change({ ...t, [k]: e.target.checked })} />
+            <span className="set-notify-name">{TEAMS_KIND_LABEL[k]}</span>
+            <span className="set-hint">{TEAMS_KIND_HINT[k]}</span>
+          </label>
+          <div className="set-teams-controls">
+            {time(k)}
+            <button type="button" className="mini" onClick={() => send(k)}>
+              Send me a test now
+            </button>
+            {test?.kind === k && (
+              <span className="set-hint" role="status">
+                {test.text}
+              </span>
+            )}
+          </div>
+        </div>
+      ))}
+      <label className="set-check">
+        <input type="checkbox" checked={t.friday} onChange={(e) => p.change({ ...t, friday: e.target.checked })} /> Also on Fridays (catch-up)
+      </label>
+      <p className="muted">Never on weekends or PTO days. A test comes now, whatever the switches say.</p>
+    </fieldset>
   );
 }
 

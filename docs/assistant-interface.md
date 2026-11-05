@@ -43,6 +43,21 @@ a secret, an outside address), `which_client` (two clients named; nothing sent).
 - `undo` on a confirmed DevOps write is the write log entry (`devops.preview { kind: "undo", writeId }` in the app);
   a plan undo is the reverse action, offered as a new proposal by asking ("move it back").
 
+## Proposals from a button (TB-2)
+
+`propose({ person, tool, args })` makes a proposal without an AI call, for a front end's own button (the Teams
+rhythm's Confirm today, Move…, Move the rest and Close out). Only FocusTime's plan tools (`PROPOSE_TOOLS` in
+`assistant/allowlist.ts`): `move_pick`, `keep_pick`, `drop_pick`, `confirm_day`, `move_picks`, `close_day`; anything
+else returns `{ ok: false, message }`. The args are the tool's own, as the model would give them. The proposal is built,
+stored, expires and is confirmed exactly like a typed request's, with the same checks (the person's own picks, the
+allowlist, a fresh preview). It returns `{ ok: true, proposal }` or `{ ok: false, message }`.
+
+- `move_picks { moves: [{ pickId, date, half }] }` (1 to 12): one row per pick, one Confirm, each through `pick.move`.
+- `close_day { date, donePickIds }` (today or earlier): the chosen picks done (`pick.mark_done`), every other planned
+  pick moved to its client's next block this week (UI-B's `nextBlockFor`) or left on the unfinished list when there's
+  none, then the day closed out (`closeout.commit`). The preview shows every step; a move that fails is skipped and
+  named, and the proposal fails if the close out does.
+
 ## Cards
 
 `item`, `block`, `pick`, `send`, `promise` and `note`, each with a `link`. A front end that can't show a card shows
@@ -62,6 +77,10 @@ sent only by a `handle` call.
 own small types and reaches it through `teamsAssistant()` in `server/teams/assistant.ts`.
 
 ## Changes
+
+- Nov 5 (TB-2): additions only. `propose(tool, args)` (above), and the tools `move_picks` and `close_day`, which the
+  model may also propose from a typed request. `RUNS` adds `pick.mark_done` and `closeout.commit`; `NEVER` adds
+  `teams.` (the assistant can't send Teams messages or tests).
 
 - Nov 5: no change to the shape TB-1 coded against (handle, confirm, cancel, the statuses, 15-minute expiry,
   absolute links in Teams). Additions only:

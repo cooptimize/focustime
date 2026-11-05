@@ -20,8 +20,9 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     await form.waitFor();
     for (const name of ["Plan the day", "Check-in", "Close out", "Plan the week", "Look ahead", "Focus timer", "Meeting warnings", "My VM", "Follow-ups due", "Expiring secrets"])
       await expect(form.locator(".set-notify-row", { hasText: name }).count()).resolves.toBeGreaterThan(0);
-    await form.locator(".set-notify-row", { hasText: "Check-in" }).locator("input").uncheck();
-    await form.locator("select").selectOption("off");
+    // TB-2's In Teams kinds sit in the same form ("Midday check-in", its time select): these are the app's own.
+    await form.getByRole("checkbox", { name: /^Check-in/ }).uncheck();
+    await form.locator("select:not(.set-teams select)").selectOption("off");
     // Fix/settings-autosave: each change saves itself; no Save button.
     await expect(form.getByRole("button", { name: "Save" }).count()).resolves.toBe(0);
     await expect.poll(() => form.textContent(), { timeout: 5000 }).toContain("Saved");

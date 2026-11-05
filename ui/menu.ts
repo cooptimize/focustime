@@ -1321,6 +1321,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     // Step 15.5: Settings > Notifications has the test button; samples are for the live check.
     case "notify.test":
     case "notify.sample":
+    // TB-2: Settings > Notifications > In Teams has the switches and each kind's test.
+    case "teams.status":
+    case "teams.test":
       return { run: () => env.openSettings("notifications") };
     case "vm.log": return { run: () => env.openSettings("data") };
     // F1: Send feedback opens its dialog; the send is from its preview; the setup check is in Settings > Connections.
