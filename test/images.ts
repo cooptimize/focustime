@@ -123,3 +123,33 @@ export function leaks(b: Uint8Array): string[] {
   const s = Buffer.from(b).toString("latin1");
   return [...Object.values(SECRET), "GPS", "Exif", "xmpmeta", "ICC_PROFILE", "Photoshop", "FABRIKAM"].filter((x) => s.includes(x));
 }
+
+/**
+ * A w x h RGB PNG that looks like a pasted chart (light background, four bars, axis lines), with a tEXt chunk carrying
+ * SECRET's place so a test can see the stripper ran. For e2e thumbnails and the viewer; fictional.
+ */
+export function chartPng(w = 480, h = 300, hue: [number, number, number] = [46, 125, 90]): Uint8Array {
+  const row = 1 + w * 3;
+  const raw = new Uint8Array(row * h);
+  const bars = [0.55, 0.8, 0.4, 0.7];
+  for (let y = 0; y < h; y++) {
+    raw[y * row] = 0;
+    for (let x = 0; x < w; x++) {
+      let c: [number, number, number] = [246, 247, 244];
+      const bx = Math.floor(((x - 40) / (w - 60)) * bars.length);
+      const inBar = x > 40 && bx >= 0 && bx < bars.length && (x - 40) % ((w - 60) / bars.length) > 14 && y > h - 30 - bars[bx]! * (h - 60) && y < h - 30;
+      if (inBar) c = bx === 1 ? [214, 140, 40] : hue;
+      if (x === 40 && y > 20 && y < h - 30) c = [90, 90, 90];
+      if (y === h - 30 && x > 40 && x < w - 20) c = [90, 90, 90];
+      raw.set(c, y * row + 1 + x * 3);
+    }
+  }
+  const ihdr = concat(u32be(w), u32be(h), Uint8Array.of(8, 2, 0, 0, 0));
+  return concat(
+    Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10),
+    pngChunk("IHDR", ihdr),
+    pngChunk("tEXt", text(`Location\0${SECRET.place}`)),
+    pngChunk("IDAT", deflateSync(raw)),
+    pngChunk("IEND", new Uint8Array()),
+  );
+}
