@@ -269,7 +269,9 @@ await forEachDriver("the Teams bot (TB-1)", (d) => {
     expect(await t.core.activity(a)).toBeNull();
     expect(Date.now() - started).toBeLessThan(200);
     expect(await t.core.activity(a)).toBeNull();
-    await wait(40);
+    // The turn runs after the 200 (the chat and seen writes, then typing, then On it after ackAfterMs): wait for it,
+    // up to 2 s on a loaded SQL Server, while the assistant still hasn't answered.
+    for (let i = 0; i < 200 && !t.texts().length; i++) await wait(10);
     expect(t.sent[0]!.a.type).toBe("typing");
     expect(t.texts()).toEqual([ON_IT]);
     gate.resolve(handled({ reply: "Moved your dentist block to 3:00." }));
