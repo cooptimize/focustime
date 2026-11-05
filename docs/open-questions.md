@@ -260,8 +260,8 @@ What DS-1 learned, and what is still open:
 ## Conversations fixes (CV-2, Nov 5)
 
 - Q-CV2-1: Chat images live in Azure SQL (`teams_message_images`, D623). Move the bytes to Blob storage (a private container, the app's managed identity, the row keeping the blob name) in an HK step once the monthly size is known. Size per month is about chats x images per chat per working day x 21 x the average stripped size (a pasted screenshot is usually 100 to 400 KB): 20 chats with 3 a day at 250 KB is about 315 MB a month, kept as long as their messages are.
-- Q-CV2-2: With AI off for a client, nothing groups its messages into conversations (the rules path finds Requests and promises only). A rules-only grouping (same chat; a reply or a mention; within 45 minutes) would give those clients conversations too. Worth a step if clients without AI stay common.
-- Q-CV2-3: Capture's Who still uses the older name box (`WhoInput`); moving it to the PersonPicker keeps one way to choose a person, and is Capture's step.
-- Q-CV2-4: Link existing… on a promise with no conversation searches with no conversation's context (no likely item); Create works (D628). Should Link start a conversation the same way?
+- Q-CV2-2: Resolved by CV-3 (D633): rules-only grouping for clients with AI off, behind the client Rule "Group messages without AI".
+- Q-CV2-3: Resolved by CV-3 (D630): Capture's Who is the PersonPicker.
+- Q-CV2-4: Resolved by CV-3 (D631): Link existing… suggests likely items with or without a conversation (rules only); Link doesn't start a conversation (Create still does, D628).
 - Q-CV2-5: A promise that implies an item shows only Create the DevOps item? (Create, Link existing…, Not needed), as in CV-1: Make it a follow-up, Done and ⋯ come once it's linked. Past its due, should Make it a follow-up or Done be offered there too?
-- Q-CV2-6: Week's rail shows a promise past its due as "was due" in its title and label only; the rail's own amber treatment is PL-1's to decide.
+- Q-CV2-6: Resolved by CV-3 (D632): the Board rail shows "was due …" in amber, and carries earlier or untimed overdue promises to now on today's block.
