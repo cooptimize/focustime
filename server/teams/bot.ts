@@ -285,10 +285,11 @@ export function createBotCore(d: BotDeps) {
         else await store.saveChat({ conversationId: to.conversationId, serviceUrl: to.serviceUrl, tenantId: (a.conversation?.tenantId ?? a.channelData?.tenant?.id ?? "").toLowerCase(), botId: a.recipient?.id || "bot" }).catch(() => undefined);
         return d.log({ op: "install", kind: a.action === "remove" ? "removed" : "added" }), null;
       }
-      // TB-1b: the same delivery on another replica (or after this one restarted) is answered once too.
-      if (a.id && !(await store.firstSeen(a.id).catch(() => (d.log({ op: "seen_save", kind: "failed" }), true)))) return d.log({ op: "activity", kind: "duplicate" }), null;
       background(
         inOrder(g.userId, async () => {
+          // TB-1b: the same delivery on another replica (or after this one restarted) is answered once too. Checked
+          // here, after Teams has its 200, so the answer never waits on the database.
+          if (a.id && !(await store.firstSeen(a.id).catch(() => (d.log({ op: "seen_save", kind: "failed" }), true)))) return void d.log({ op: "activity", kind: "duplicate" });
           await store.saveChat({ conversationId: to.conversationId, serviceUrl: to.serviceUrl, tenantId: (a.conversation?.tenantId ?? a.channelData?.tenant?.id ?? "").toLowerCase(), botId: a.recipient?.id || "bot" }).catch(() => d.log({ op: "chat_save", kind: "failed" }));
           await turn(a, to, g.userId).catch(async () => {
             d.log({ op: "turn", kind: "error" });
