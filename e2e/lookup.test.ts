@@ -1,7 +1,7 @@
 // Step 15.2: the shared work item lookup, clicked in a real browser on demo data.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness, openCaptures } from "./harness.ts";
 
 let h: Harness;
 const T = 60_000;
@@ -16,7 +16,7 @@ describe.skipIf(!CHROMIUM)("Work item lookup (browser, demo mode)", () => {
 
   // Step 15.3: the follow-up form for new ones is the capture box's Follow-up kind (the separate button is gone).
   async function followUpBox(page: Page, client: string) {
-    await page.keyboard.press("4");
+    await openCaptures(page);
     await page.locator(".cap-box .cap-client").first().click();
     await page.locator(".cap-choose .chip-btn", { hasText: client }).click();
     await page.locator(".cap-box textarea[aria-label='Quick capture']").fill("I'll send the export spec");

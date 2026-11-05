@@ -3,10 +3,12 @@
 // repo's names rule): the two worked examples from the step keep their shape with other names.
 import { describe, expect, it } from "vitest";
 import type { ProviderCall } from "../ai/types.ts";
-import { aClientChat, aChatMember, aCommitmentAnswer, aConversationUpdate, anUpdateAnswer, aWorkItem, CLIENT_TENANT } from "../test/builders/index.ts";
+import { aClientChat, aClientEntry, aChatMember, aCommitmentAnswer, aConversationUpdate, anUpdateAnswer, aWorkItem, CLIENT_TENANT } from "../test/builders/index.ts";
 import { BLAKE, CHAT, allianceAnswer, EVAN, LENA, SAM, world, ZONE } from "../test/conversations.ts";
 import type { TeamsMessage } from "../plan/requests.ts";
-import { statusLine } from "../plan/conversations.ts";
+import { CLIENT_REFUSED, LEGACY_CLIENT_REFUSED, statusLine, unsortedText } from "../plan/conversations.ts";
+import { legacyRefused } from "./conversations-pipeline.ts";
+import { INTERNAL_CLIENT } from "../week/follow.ts";
 
 
 describe("the Alliance-shaped example", () => {
@@ -240,5 +242,45 @@ describe("the split-topic sequence (CV-2: the split on dev came from the CV-1 ba
     const ks = await w.convs.commitmentsIn([cs[0]!.id]);
     expect(ks.map((k) => k.whoName)).toEqual(["Erin Fox"]);
     expect(statusLine(cs[0]!, "Erin", null)).toBe("Erin committed");
+  });
+});
+
+// GD-1: an Internal chat's work names clients; a client's chat still may not name another.
+describe("Cooptimize Internal and the client rule", () => {
+  const directory = [aClientEntry({ key: "contoso", names: ["Contoso Supply"], projects: [], itemIds: [] }), aClientEntry({ key: "fabrikam", names: ["Fabrikam"], projects: [], itemIds: [] })];
+  const INT = aClientChat({ chatId: "19:internal-delivery@thread.v2", clientKey: INTERNAL_CLIENT, kind: "delivery", displayName: "Delivery Team (Cooptimize)", members: [EVAN, SAM] });
+
+  it("an Internal chat naming two clients is sent and sorted", async () => {
+    const w = world({ directory, allowed: [INTERNAL_CLIENT] });
+    const m = await w.say(INT, EVAN, "2026-11-04T15:00:00Z", "Contoso Supply and Fabrikam both need the export fix this week");
+    const r = await w.run(INT, [m], { items: [] });
+    expect(w.calls).toHaveLength(1);
+    expect(r).toMatchObject({ aiOutcome: "ok", unsorted: 0 });
+  });
+
+  it("a client chat naming another client waits unsorted with the new reason, and isn't retried as an old refusal", async () => {
+    const w = world({ directory });
+    const m = await w.say(CHAT, BLAKE, "2026-11-04T15:00:00Z", "Same issue Fabrikam had last month");
+    const r = await w.run(CHAT, [m]);
+    expect(w.calls).toHaveLength(0);
+    expect(r).toMatchObject({ aiOutcome: CLIENT_REFUSED, unsorted: 1 });
+    expect((await w.convs.placesByRole([CHAT.chatId], "unsorted")).map((p) => p.reason)).toEqual([CLIENT_REFUSED]);
+    expect(unsortedText(CLIENT_REFUSED, "Contoso Supply")).toBe("it mentions another client");
+    expect(await legacyRefused(w.convs, w.teams, CHAT.chatId)).toEqual([]);
+  });
+
+  it("messages refused before GD-1 are tried once more: an Internal chat's are sorted, a real mention stays refused", async () => {
+    const w = world({ directory, allowed: [INTERNAL_CLIENT, "contoso"] });
+    const a = await w.say(INT, EVAN, "2026-11-04T15:00:00Z", "Contoso Supply wants the export by Friday");
+    const b = await w.say(CHAT, BLAKE, "2026-11-04T15:00:00Z", "Same issue Fabrikam had last month");
+    await w.convs.place([a, b].map((m) => ({ chatId: m.chatId, messageId: m.messageId, conversationId: null, role: "unsorted" as const, reason: LEGACY_CLIENT_REFUSED, placedBy: "rule" as const, at: m.createdAt })));
+    const internal = await legacyRefused(w.convs, w.teams, INT.chatId);
+    expect(internal.map((m) => m.messageId)).toEqual([a.messageId]);
+    expect(await w.run(INT, internal, { items: [] })).toMatchObject({ aiOutcome: "ok", unsorted: 0 });
+    expect(await legacyRefused(w.convs, w.teams, INT.chatId)).toEqual([]);
+    const client = await legacyRefused(w.convs, w.teams, CHAT.chatId);
+    expect(await w.run(CHAT, client)).toMatchObject({ aiOutcome: CLIENT_REFUSED, unsorted: 1 });
+    // Refused again: kept under the new reason, never tried again.
+    expect(await legacyRefused(w.convs, w.teams, CHAT.chatId)).toEqual([]);
   });
 });

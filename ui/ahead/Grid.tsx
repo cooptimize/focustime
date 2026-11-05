@@ -184,7 +184,7 @@ function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, mo
         onDoubleClick={() => field && canChange && can(col) && edit(col)}
       >
         {editing === col && col === "dates" ? <DatesEditor r={r} done={() => (edit(null), move(0, 0))} /> : editing === col && field ? <Editor r={r} field={field} done={() => (edit(null), move(0, 0))} /> : body}
-        {pending && editing !== col && <span className="ah-dot" title={conf ? "Changed in DevOps too: see the review" : "Pending: not in DevOps until you commit"} aria-hidden="true" />}
+        {pending && editing !== col && <span className="ah-dot" title={conf ? "Changed in DevOps too: see the review" : "Pending: not in DevOps until you save"} aria-hidden="true" />}
       </td>
     );
   };

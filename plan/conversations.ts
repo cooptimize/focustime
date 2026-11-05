@@ -709,6 +709,14 @@ export function escalateAt(createdAt: string, hours: TimeModel, ptoDays: Readonl
 /** Whole days waited since the escalation time, at least 1. */
 export const daysWaiting = (escalatedAt: string, now: string) => Math.max(1, 1 + Math.floor((Date.parse(now) - Date.parse(escalatedAt)) / 86_400_000));
 
+/**
+ * GD-1: the stored reason for messages the AI guard refused for naming another client. Before GD-1 the reason was
+ * "refused_client" (LEGACY_CLIENT_REFUSED), which also caught every Cooptimize Internal chat; those are tried once
+ * more on the chat's next poll, and any that still name another client are kept under the new reason.
+ */
+export const CLIENT_REFUSED = "other_client";
+export const LEGACY_CLIENT_REFUSED = "refused_client";
+
 /** Why messages wait unsorted, in a few plain words (no ids, nothing from a message). A $0 cap isn't "reached". */
 export type UnsortedReason = AiErrorKind | "chat_cap" | "unknown_ref" | "zero_budget";
 export function unsortedText(k: string | null, clientName: string): string {
@@ -719,7 +727,8 @@ export function unsortedText(k: string | null, clientName: string): string {
     case "zero_budget": return "AI budget is set to $0";
     case "over_budget": return "AI budget reached for this month";
     case "chat_cap": return "This chat reached its AI limit for today";
-    case "refused_client": return "it mentions another client";
+    case "refused_client":
+    case CLIENT_REFUSED: return "it mentions another client";
     case "refused_secret": return "it contains something that looks like a key or secret";
     case "refused_email": return "it contains an email address";
     case "invalid_output":

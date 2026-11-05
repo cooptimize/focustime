@@ -15,6 +15,7 @@ import type { AppConfig } from "../config/schema.ts";
 import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, assigneeEmail, assigneeText, assignOps, completedState, createOps, descriptionOps, textToHtml, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, FIELD_LABEL, fieldRefsOf, fieldsOps, type FieldSpec, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
 import { dateOnly, detectTargetField, detectTypeSizeField, fieldNames, htmlToText, identityEmail, identityName, TYPE_SIZE_FIELDS, workItemUrl } from "../sources/devops/normalize.ts";
 import type { TakesStore } from "../store/devops-takes.ts";
+import { otherClientMatch, type ClientEntry } from "../ai/guard.ts";
 import { breakdownChildTypes, ladderFromProcessConfig, levelsFromProcessConfig } from "../plan/process.ts";
 import { canEdit, rungOf, sameValue, valueText, type ChangeField, type ChangeValue, type EditRight, type StagedChange } from "../plan/ahead-edit.ts";
 import type { NotesStore } from "../store/devops-notes.ts";
@@ -58,6 +59,11 @@ export type DevOpsWriteContext = {
   now: () => string;
   /** CV-1: my view of the shared conversations (only chats I'm in) and what a confirmed write settles there. */
   conversations?: ConversationsPort | undefined;
+  /**
+   * GD-1: the client boundary for text written into a client's DevOps: whether the client is Cooptimize Internal
+   * (clientAccounts()'s why "internal"), and every other client the person has (the AI guard's directory). Absent: no check.
+   */
+  boundary?: ((clientKey: string) => Promise<{ internal: boolean; directory: readonly ClientEntry[] }>) | undefined;
   /** PV-1: Take one's notices to the previous assignee (an app table). Absent: no notice is sent. */
   takes?: TakesStore | undefined;
   /** AH-1: Ahead's change set and who I am to it (D656, D657). Absent: no fields writes, and the target date gate is mine only. */
@@ -300,7 +306,10 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
           throw e;
         }
         if (typeof h === "string") nothing.push(h);
-        else previews.push(hold(h, env));
+        else {
+          await checkBoundary(ctx, env, h);
+          previews.push(hold(h, env));
+        }
       }
       return { ok: true, data: o.changes !== undefined ? { previews, nothing, refused } : previews[0] ? { preview: previews[0] } : { nothing: nothing[0] ?? "Nothing to change" } };
     }
@@ -391,6 +400,33 @@ function hold(h: HeldIn, env: Env): DevOpsPreview {
 
 const base = (env: Env) => ({ clientKey: env.clientKey, org: env.org, project: env.project, projectName: env.projectName, identity: env.me.email });
 const none = { draftId: null, followUpId: null, undoOf: null, commentId: null, pickIds: [] as number[], type: null, field: null, parentId: null, ask: null, proposal: null, conv: null };
+
+/** GD-1: the patch fields that carry text FocusTime writes (titles, descriptions, criteria, repro steps, comments). */
+const TEXT_PATHS = new Set(["/fields/System.Title", "/fields/System.Description", "/fields/System.History", `/fields/${AC_FIELD}`, "/fields/Microsoft.VSTS.TCM.ReproSteps"]);
+
+/** The text a held change would write into DevOps (undos only put back what was there, so they carry none). */
+export function writtenText(h: Pick<HeldIn, "op" | "ops">): string[] {
+  if (h.op.startsWith("undo_") || !h.ops) return [];
+  if (!Array.isArray(h.ops)) return [h.ops.text];
+  return h.ops.filter((p) => p.op !== "test" && p.op !== "remove" && TEXT_PATHS.has(p.path) && typeof p.value === "string").map((p) => htmlToText(p.value as string) || (p.value as string));
+}
+
+/**
+ * GD-1: in a client's DevOps, another client's name, project or item never appears. Text naming one is refused in the
+ * preview, with the other client's name shown only here (never logged, never in the audit log: nothing was written).
+ * Cooptimize Internal may name clients.
+ */
+async function checkBoundary(ctx: DevOpsWriteContext, env: Env, h: HeldIn): Promise<void> {
+  if (!ctx.boundary) return;
+  const texts = writtenText(h);
+  if (!texts.length) return;
+  const b = await ctx.boundary(env.clientKey);
+  if (b.internal) return;
+  for (const t of texts) {
+    const m = otherClientMatch(t, env.clientKey, b.directory);
+    if (m) throw new Refused(`This mentions ${m.name}; remove it before saving to ${env.clientName}'s DevOps`, 409, "other_client");
+  }
+}
 
 /** One change → what to hold, or a reason there is nothing to do. Reads the item now (fresh rev). */
 async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Promise<unknown>> = new Map()): Promise<HeldIn | string> {

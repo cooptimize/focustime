@@ -3,7 +3,7 @@
 // task's own client, and ordinary text, pass. Fake values are built here at run time (nothing secret-shaped in the repo).
 import { describe, expect, it } from "vitest";
 import { aClientEntry } from "../test/builders/index.ts";
-import { guard, type GuardInput } from "./guard.ts";
+import { guard, otherClientMatch, type GuardInput } from "./guard.ts";
 
 const directory = [
   aClientEntry({ key: "fabrikam", names: ["Fabrikam Inc"], projects: ["Fabrikam Portal"], itemIds: [4101, 4102] }),
@@ -20,7 +20,7 @@ describe("one client per request", () => {
     ["another client's work item id", "Story 5150 is late", "work_item"],
     ["another client's work item with #", "see #5150", "work_item"],
   ])("%s refuses", (_why, text, rule) => {
-    expect(guard(text, g("fabrikam"))).toEqual({ kind: "refused_client", rule });
+    expect(guard(text, g("fabrikam"))).toEqual({ kind: "refused_client", rule, entry: "Northwind" });
   });
 
   it.each([
@@ -97,5 +97,47 @@ describe("never sent: tokens, keys, secrets, VM details, outside email addresses
     ["a long plain word list", "acknowledgement documentation internationalization"],
   ])("%s passes", (_why, text) => {
     expect(guard(text, g("fabrikam"))).toBeNull();
+  });
+});
+
+// GD-1: Cooptimize Internal's work is about clients, so an Internal request may name them; nothing else changes.
+describe("Cooptimize Internal (internal: true)", () => {
+  const internal = (o: Partial<GuardInput> = {}) => g("internal-key", { internal: true, ...o });
+  it.each([
+    ["two clients' names", "Compare the Fabrikam Inc and Northwind Traders exports"],
+    ["a client's project", "In NW Ops and Fabrikam Portal the build failed"],
+    ["clients' work items", "see #5150 and 4101"],
+  ])("%s passes", (_why, text) => {
+    expect(guard(text, internal())).toBeNull();
+  });
+
+  it.each([
+    ["a token", `ghp_${rep("a1", 18)}`],
+    ["an Authorization header", "Authorization: Basic abc"],
+  ])("%s still refuses", (_why, text) => {
+    expect(guard(`Fabrikam: ${text}`, internal())?.kind).toBe("refused_secret");
+  });
+
+  it("the VM and outside email addresses still refuse", () => {
+    expect(guard("start vm-sam-dev", internal())).toEqual({ kind: "refused_secret", rule: "vm" });
+    expect(guard("Northwind's dana@fabrikam.example", internal())).toEqual({ kind: "refused_email", rule: "external_email" });
+  });
+
+  it("without the flag the same key is like any client: the others refuse", () => {
+    expect(guard("Fabrikam Inc and Northwind", g("internal-key"))?.kind).toBe("refused_client");
+  });
+});
+
+describe("which client matched (for the log's client ref and the DevOps preview)", () => {
+  it("a hit names the matched entry's key, never the text", () => {
+    expect(guard("the northwind traders invoice", g("fabrikam"))).toEqual({ kind: "refused_client", rule: "client_name", entry: "Northwind" });
+  });
+  it("otherClientMatch gives the other client's first name for the preview", () => {
+    expect(otherClientMatch("see #5150", "fabrikam", directory)).toEqual({ key: "Northwind", name: "Northwind Traders", rule: "work_item" });
+    expect(otherClientMatch("Fabrikam Portal only", "fabrikam", directory)).toBeNull();
+  });
+  it("the task's own client matches its entry whatever the case of its key (no false match on its own name)", () => {
+    expect(guard("Northwind Traders asked about NW Ops #5150", g("northwind"))).toBeNull();
+    expect(guard("Fabrikam Inc asked", g("FABRIKAM"))).toBeNull();
   });
 });

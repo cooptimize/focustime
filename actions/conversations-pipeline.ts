@@ -24,7 +24,7 @@ import { AiError } from "../ai/types.ts";
 import { askTitle, DEFAULT_ASK_SETTINGS, matchAsk, type AskSettings, type IncomingMessage } from "../plan/asks.ts";
 import { isExternal } from "../plan/chats.ts";
 import {
-  BadAnswer, buildUpdate, checkDue, checkImageDescriptions, IMAGE_INSTRUCTIONS, UPDATE_SCHEMA_WITH_IMAGES, checkUpdate, dueFromText, dueOf, hintFor, mergeByGroup, messageGroups, NEAR_MINUTES, oneLine, promisePhrase, promiseWhatWithoutAi, ruleVerdict, statusOf, UPDATE_INSTRUCTIONS, UPDATE_SCHEMA, UPDATE_TASK,
+  BadAnswer, buildUpdate, CLIENT_REFUSED, LEGACY_CLIENT_REFUSED, checkDue, checkImageDescriptions, IMAGE_INSTRUCTIONS, UPDATE_SCHEMA_WITH_IMAGES, checkUpdate, dueFromText, dueOf, hintFor, mergeByGroup, messageGroups, NEAR_MINUTES, oneLine, promisePhrase, promiseWhatWithoutAi, ruleVerdict, statusOf, UPDATE_INSTRUCTIONS, UPDATE_SCHEMA, UPDATE_TASK,
   type BatchMessage, type Commitment, type Conversation, type Hint, type OpenConversation, type Participant, type UpdateAnswer,
 } from "../plan/conversations.ts";
 import type { ClientChat, FocusUser, TeamsMessage } from "../plan/requests.ts";
@@ -90,6 +90,20 @@ export const withParticipants = (ps: readonly Participant[], more: readonly (Par
   return out;
 };
 const firstName = (n: string) => n.split(/\s+/)[0] ?? n;
+
+/**
+ * GD-1: a chat's messages refused before GD-1 for naming another client (every Cooptimize Internal chat's were), to be
+ * tried once more as their own batch. A retry that is refused again stores the new reason, so it is never tried again.
+ */
+export async function legacyRefused(convs: Pick<ConversationStore, "placesByRole">, teams: Pick<TeamsStore, "message">, chatId: string): Promise<TeamsMessage[]> {
+  const places = (await convs.placesByRole([chatId], "unsorted")).filter((p) => p.reason === LEGACY_CLIENT_REFUSED);
+  const out: TeamsMessage[] = [];
+  for (const p of places) {
+    const m = await teams.message(p.chatId, p.messageId);
+    if (m) out.push(m);
+  }
+  return out;
+}
 
 /**
  * Runs one chat's batch through the rules and (when it may) one AI request, and stores the result. Sort unsorted
@@ -227,7 +241,10 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
           { images: sent.map((i) => ({ label: `Image ${i.ref}, in message ${refOf.get(i.messageId)}:`, dataUrl: i.dataUrl })) },
         )
       : await d.ai.run<UpdateAnswer>({ name: UPDATE_TASK, client: chat.clientKey, instructions: UPDATE_INSTRUCTIONS }, built.text, UPDATE_SCHEMA);
-    if (!r.ok) reason = r.error instanceof AiError ? r.error.kind : "provider";
+    if (!r.ok) {
+      reason = r.error instanceof AiError ? r.error.kind : "provider";
+      if (reason === LEGACY_CLIENT_REFUSED) reason = CLIENT_REFUSED;
+    }
     else {
       try {
         answer = checkUpdate(r.value, built.refs, { batch: work.map((m) => m.messageId), itemIds: (d.items ?? []).map((i) => i.id), hints });

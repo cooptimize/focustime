@@ -4,7 +4,7 @@
 // here. While AI is still writing it says so and keeps my text usable; AI off is a plain draft, no error.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { DraftAiView, WeekLoadData } from "../actions/types.ts";
-import { draftRowState, draftRowText } from "../plan/capture-prepare.ts";
+import { draftRowState, draftRowText, prepareAgain } from "../plan/capture-prepare.ts";
 import type { DraftStory } from "../plan/types.ts";
 import { call } from "./api.ts";
 import { captureClients, useClientFeatures } from "./Capture.tsx";
@@ -25,10 +25,11 @@ const mineOf = (d: DraftStory): Fields => ({ title: d.title, description: d.desc
 const aiOf = (d: DraftStory): Fields | null => (d.ai?.title ? { title: d.ai.title, description: d.ai.description ?? "", acceptance: d.ai.acceptance ?? "" } : null);
 
 /** The draft, kept fresh: prepares it once when it never ran, and reads again while AI is writing. */
-export function useDraftView(draftId: number, prepare: boolean): { view: DraftAiView | null; error: string | null; reload: () => void } {
+export function useDraftView(draftId: number, prepare: boolean): { view: DraftAiView | null; error: string | null; reload: () => void; again: () => Promise<void>; running: boolean } {
   const [view, setView] = useState<DraftAiView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [n, setN] = useState(0);
+  const [running, setRunning] = useState(false);
   const asked = useRef(false);
   useEffect(() => {
     let live = true;
@@ -56,11 +57,23 @@ export function useDraftView(draftId: number, prepare: boolean): { view: DraftAi
       if (timer) clearTimeout(timer);
     };
   }, [draftId, prepare, n]);
-  return { view, error, reload: () => setN((x) => x + 1) };
+  // UI-7: Prepare again: the same prepare once more (its caps and rules), then the fresh view.
+  const again = async () => {
+    setRunning(true);
+    setError(null);
+    try {
+      setView(await call<DraftAiView>("draft.prepare", { id: draftId, again: true }));
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setRunning(false);
+    }
+  };
+  return { view, error, reload: () => setN((x) => x + 1), again, running };
 }
 
 export function CreateDraftDialog({ draftId, data, onClose, onChanged }: { draftId: number; data: WeekLoadData; onClose: () => void; onChanged: () => void }): ReactNode {
-  const { view, error: loadError } = useDraftView(draftId, true);
+  const { view, error: loadError, again, running } = useDraftView(draftId, true);
   const w = useDevOpsWrite();
   const clients = useMemo(() => captureClients(data), [data]);
   const draft = view?.draft ?? null;
@@ -86,7 +99,13 @@ export function CreateDraftDialog({ draftId, data, onClose, onChanged }: { draft
   useEffect(() => {
     if (!draft || side) return;
     setFields(chosen === "ai" && ai ? ai : mineOf(draft));
-  }, [draft?.id, draft?.ai?.state, side]);
+  }, [draft?.id, draft?.ai?.state, draft?.ai?.ranAt, side]);
+  const againState = draft && view ? prepareAgain(draft, { canWrite: view.canWrite, aiOn: view.aiOn, now: view.now }) : "hidden";
+  const runAgain = async () => {
+    await again();
+    // A fresh AI version replaces the AI side's fields (my own side stays as I left it).
+    if (chosen === "ai") setSide(null);
+  };
   const aiParent = chosen === "ai" ? (draft?.ai?.parentId ?? null) : null;
   const parentId = parent ? parent.itemId : (draft?.parentItemId ?? aiParent);
   const parentChoice = parentId !== null ? choices?.find((c) => c.id === parentId) : undefined;
@@ -132,9 +151,14 @@ export function CreateDraftDialog({ draftId, data, onClose, onChanged }: { draft
         <header className="cd-side-head">
           <h3>{s === "ai" ? "AI version" : "Yours"}</h3>
           {here ? <span className="cd-using">Using this</span> : words && <button type="button" className="mini" onClick={() => use(s)}>Use this</button>}
+          {s === "ai" && againState !== "hidden" && (
+            <button type="button" className="mini quiet cd-again" disabled={busy || running || againState === "writing"} title={running || againState === "writing" ? "AI is writing" : "Ask the AI for its version again"} onClick={() => void runAgain()}>
+              Prepare again
+            </button>
+          )}
         </header>
         {s === "ai" && !ai ? (
-          <p className="muted cd-ai-note" role="status">{state === "writing" ? "AI still writing…" : draft && state ? draftRowText(state === "no_pat" ? "plain" : state, draft, clientName) : ""}</p>
+          <p className="muted cd-ai-note" role="status">{running || state === "writing" ? "AI still writing…" : draft && state ? draftRowText(state === "no_pat" ? "plain" : state, draft, clientName) : ""}</p>
         ) : here && fields ? (
           <>
             <label className="set-field"><span className="set-label">Title</span><input value={fields.title} maxLength={200} onChange={(e) => set("title")(e.target.value)} /></label>

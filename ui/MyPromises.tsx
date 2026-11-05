@@ -5,6 +5,7 @@
 // Link existing, Not needed) of me only, and waits amber after one of my working days. Nothing is posted in Teams.
 import { TypeIcon } from "./TypeIcon.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { ModeArea } from "./ModeSwitch.tsx";
 import type { WeekLoadData } from "../actions/types.ts";
 import type { MyPromisesData, PromiseCard } from "../plan/conversation-views.ts";
 import { userZone } from "../week/zone.ts";
@@ -31,7 +32,7 @@ export function dueText(p: Pick<PromiseCard, "dueAt" | "dueDate">, today: string
   return null;
 }
 
-export function MyPromises({ data, version, onCount, onChanged, select = null }: { data: WeekLoadData; version: number; onCount: (n: number) => void; onChanged: () => void; openSettings: (section: string) => void; select?: number | null }) {
+export function MyPromises({ data, version, onCount, onChanged, select = null, switcher = null }: { switcher?: ReactNode; data: WeekLoadData; version: number; onCount: (n: number) => void; onChanged: () => void; openSettings: (section: string) => void; select?: number | null }) {
   const [state, setState] = useState<MyPromisesData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<ReactNode>(null);
@@ -80,11 +81,12 @@ export function MyPromises({ data, version, onCount, onChanged, select = null }:
   );
   const today = state?.today ?? "";
   return (
-    <main className="inbox my-promises" aria-label="My promises">
+    <main className="inbox my-promises" aria-label="Promises">
       <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
-          My promises {state && state.open > 0 && <span className="muted">{state.open} open</span>}
+          Promises {state && state.open > 0 && <span className="muted">{state.open} open</span>}
         </h2>
+        {switcher && <ModeArea>{switcher}</ModeArea>}
       </div>
       {error && (
         <p className="set-problem" role="alert">

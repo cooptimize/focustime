@@ -7,23 +7,27 @@ import { stubProvider } from "../ai/stub.ts";
 import type { ProviderCall } from "../ai/types.ts";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
-import type { PrepareAnswer } from "../plan/capture-prepare.ts";
+import { prepareAgain, type PrepareAnswer } from "../plan/capture-prepare.ts";
 import { buildProcessModel } from "../plan/process.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import { aClientProcess, anAiApp, anExemplarCandidate, withTeam } from "../test/builders/index.ts";
 import { draftAiAction, type DraftAiView, type PrepareContext } from "./draft-prepare.ts";
 import type { CaptureFeatures } from "./types.ts";
+import { isInternalKey } from "./client-accounts.ts";
+import { INTERNAL_CLIENT } from "../week/follow.ts";
 
 const NOW = "2026-11-05T15:00:00Z";
 const CLIENT = "contoso";
 const OTHER = "fabrikam";
 
-function setup(o: { allowed?: string[]; on?: boolean; write?: string[]; answer?: (c: ProviderCall) => PrepareAnswer | string; spent?: number; noAi?: boolean } = {}) {
+function setup(o: { client?: string; allowed?: string[]; on?: boolean; write?: string[]; answer?: (c: ProviderCall) => PrepareAnswer | string; spent?: number; noAi?: boolean } = {}) {
   let now = NOW;
+  // GD-1: the draft's client (Contoso by default; Cooptimize Internal for the Internal tests).
+  const K = o.client ?? CLIENT;
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(now).toZonedDateTimeISO("America/New_York") });
   const toml = `${STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"')}\n[clients.contoso]\nname = "Contoso"\n[clients.fabrikam]\nname = "Fabrikam"\n`;
   const cfg = (() => {
-    const p = withTeam(parseConfig(toml), { ai: { on: o.on ?? true, allowed: o.allowed ?? [CLIENT] } });
+    const p = withTeam(parseConfig(toml), { ai: { on: o.on ?? true, allowed: o.allowed ?? [K] } });
     if (!p.ok) throw new Error("config");
     return p.config;
   })();
@@ -31,6 +35,7 @@ function setup(o: { allowed?: string[]; on?: boolean; write?: string[]; answer?:
   const answer = o.answer ?? (() => ({ title: "Export the invoice list as CSV", description: "Finance needs the invoice list in a spreadsheet each month.", acceptance_criteria: "- A CSV button on the invoice list\n- The file has every visible column", type: "User Story", parent_id: 437, parent_reason: "It belongs to the monthly export feature" }));
   const features: Record<string, CaptureFeatures> = {
     [CLIENT]: { clientKey: CLIENT, status: "ok", features: [{ id: 437, title: "Monthly export for finance", state: "Active", type: "Feature" }, { id: 438, title: "Single sign-on", state: "Active", type: "Feature" }] as never, epics: [{ id: 400, title: "Reporting", state: "Active", type: "Epic" }] as never },
+    [INTERNAL_CLIENT]: { clientKey: INTERNAL_CLIENT, status: "ok", features: [{ id: 437, title: "Monthly export for finance", state: "Active", type: "Feature" }] as never, epics: [] },
     [OTHER]: { clientKey: OTHER, status: "ok", features: [{ id: 901, title: "Fabrikam secret roadmap", state: "Active", type: "Feature" }] as never, epics: [] },
   };
   const reads: string[] = [];
@@ -44,15 +49,16 @@ function setup(o: { allowed?: string[]; on?: boolean; write?: string[]; answer?:
             provider: async () => stubProvider({ respond: (x) => (calls.push(x), (() => { const a = answer(x); return typeof a === "string" ? a : JSON.stringify(a); })()) }),
             app: anAiApp(),
             rules: async () => cfg.aiRules,
-            guard: async () => ({ directory: [{ key: CLIENT, names: ["Contoso"], projects: ["Contoso ERP"], itemIds: [437, 438, 400] }, { key: OTHER, names: ["Fabrikam"], projects: ["Fabrikam Web"], itemIds: [901] }], homeDomains: ["example.com"], forbidden: [] }),
+            // GD-1: Internal as dispatch decides it (clientAccounts()'s why "internal").
+            guard: async (client) => ({ directory: [{ key: CLIENT, names: ["Contoso"], projects: ["Contoso ERP"], itemIds: [437, 438, 400] }, { key: OTHER, names: ["Fabrikam"], projects: ["Fabrikam Web"], itemIds: [901] }], homeDomains: ["example.com"], forbidden: [], internal: await isInternalKey(null, client) }),
             log: { add: async () => {}, spentMicros: async () => o.spent ?? 0, recent: async () => [] },
             appSpend: { get: async () => 0, add: async () => {} },
             now: () => now,
           }),
-    writeClients: async () => o.write ?? [CLIENT],
+    writeClients: async () => o.write ?? [K],
     features: async (_c, k) => (reads.push(`features:${k}`), features[k]!),
     model: async (_c, k) => (reads.push(`model:${k}`), buildProcessModel(aClientProcess())),
-    pool: async (_c, k) => (reads.push(`pool:${k}`), k === CLIENT ? [anExemplarCandidate({ id: 301 }), anExemplarCandidate({ id: 302 }), anExemplarCandidate({ id: 303 })] : [anExemplarCandidate({ id: 902, title: "Fabrikam secret plan" })]),
+    pool: async (_c, k) => (reads.push(`pool:${k}`), k === K ? [anExemplarCandidate({ id: 301 }), anExemplarCandidate({ id: 302 }), anExemplarCandidate({ id: 303 })] : [anExemplarCandidate({ id: 902, title: "Fabrikam secret plan" })]),
     now: () => now,
   };
   const run = async (action: "draft.prepare" | "draft.get", input: unknown) => {
@@ -61,8 +67,8 @@ function setup(o: { allowed?: string[]; on?: boolean; write?: string[]; answer?:
     return r.data as DraftAiView;
   };
   const capture = async (text: string, as: "draft" | "draft_feature" = "draft", parentItemId: number | null = null) => {
-    const c = await plan.addCapture({ text, clientKey: CLIENT });
-    const routed = await plan.routeCapture(c.id, as === "draft" ? { as, clientKey: CLIENT, parentItemId, title: text, size: "M" } : { as, clientKey: CLIENT, parentItemId, title: text });
+    const c = await plan.addCapture({ text, clientKey: K });
+    const routed = await plan.routeCapture(c.id, as === "draft" ? { as, clientKey: K, parentItemId, title: text, size: "M" } : { as, clientKey: K, parentItemId, title: text });
     return routed.routedId!;
   };
   return { plan, run, capture, calls, reads, setNow: (t: string) => void (now = t) };
@@ -83,6 +89,29 @@ describe("draft.prepare (CP-1)", () => {
     // Once per draft: asking again without `again` sends nothing.
     await t.run("draft.prepare", { id });
     expect(t.calls).toHaveLength(1);
+  });
+
+  // GD-1: Internal work names clients; a client's draft still may not.
+  it("Internal: a capture draft naming two clients is sent, and an answer naming them is accepted", async () => {
+    const t = setup({ client: INTERNAL_CLIENT, answer: () => ({ title: "Compare the Contoso and Fabrikam exports", description: "Contoso ERP and Fabrikam Web do it differently.", acceptance_criteria: "- Both compared", type: "User Story", parent_id: 437, parent_reason: "Export work" }) });
+    const id = await t.capture("compare how Contoso and Fabrikam export invoices");
+    const v = await t.run("draft.prepare", { id });
+    expect(t.calls).toHaveLength(1);
+    expect(t.calls[0]!.input).toContain("Contoso and Fabrikam");
+    expect(v.draft.ai).toMatchObject({ state: "ready", title: "Compare the Contoso and Fabrikam exports" });
+  });
+
+  it("a client: a capture draft naming another client is not sent; an answer naming one is not kept", async () => {
+    const t = setup();
+    const id = await t.capture("same as the Fabrikam export");
+    const v = await t.run("draft.prepare", { id });
+    expect(t.calls).toHaveLength(0);
+    expect(v.draft.ai?.state).not.toBe("ready");
+    const u = setup({ answer: () => ({ title: "Reuse the Fabrikam export", description: "x", acceptance_criteria: "- y", type: "User Story", parent_id: 437, parent_reason: "z" }) });
+    const v2 = await u.run("draft.prepare", { id: await u.capture("csv export of invoices") });
+    expect(u.calls).toHaveLength(1);
+    expect(v2.draft.ai?.state).not.toBe("ready");
+    expect(v2.draft.ai?.title ?? null).toBeNull();
   });
 
   it("sends only this client's types, parents and examples, and my text", async () => {
@@ -171,5 +200,43 @@ describe("draft.prepare (CP-1)", () => {
     const v = await t.run("draft.get", { id });
     expect(v).toMatchObject({ canWrite: true, now: NOW, draft: { id, title: "csv export" } });
     expect(t.calls).toEqual([]);
+  });
+});
+
+describe("Prepare again (UI-7)", () => {
+  it("re-runs prepare once with again, never while AI is writing, and says whether AI is available", async () => {
+    const t = setup();
+    const id = await t.capture("csv export of invoices for finance");
+    const first = await t.run("draft.prepare", { id });
+    expect(first.aiOn).toBe(true);
+    expect(prepareAgain(first.draft, first)).toBe("ready");
+    // Prepare again: exactly one more request.
+    const again = await t.run("draft.prepare", { id, again: true });
+    expect(t.calls).toHaveLength(2);
+    expect(again.draft.ai?.state).toBe("ready");
+    // While AI is writing: nothing is sent and the control is disabled.
+    await t.plan.setDraftAi(id, { state: "writing", title: null, description: null, acceptance: null, type: null, parentId: null, parentReason: null, note: null, ranAt: NOW });
+    const busy = await t.run("draft.prepare", { id, again: true });
+    expect(t.calls).toHaveLength(2);
+    expect(prepareAgain(busy.draft, busy)).toBe("writing");
+  });
+
+  it("hidden with AI off for the client or without a write PAT; shown once AI is available again", async () => {
+    const off = setup({ allowed: [] });
+    const id = await off.capture("csv export of invoices for finance");
+    const v = await off.run("draft.prepare", { id });
+    expect(v.draft.ai?.state).toBe("off");
+    expect(v.aiOn).toBe(false);
+    expect(prepareAgain(v.draft, v)).toBe("hidden");
+    expect(off.calls).toHaveLength(0);
+    // The same draft once the client's Allow AI is on: Prepare again shows.
+    expect(prepareAgain(v.draft, { ...v, aiOn: true })).toBe("ready");
+    const noPat = setup({ write: [] });
+    const id2 = await noPat.capture("csv export of invoices for finance");
+    const w = await noPat.run("draft.get", { id: id2 });
+    expect(prepareAgain({ ...w.draft, ai: v.draft.ai ?? null }, w)).toBe("hidden");
+    // Never before a first prepare ran (the preview runs that one), and never once in DevOps.
+    expect(prepareAgain({ ...w.draft, ai: null }, { ...w, canWrite: true, aiOn: true })).toBe("hidden");
+    expect(prepareAgain({ ...v.draft, devopsId: 55 }, { ...v, aiOn: true })).toBe("hidden");
   });
 });

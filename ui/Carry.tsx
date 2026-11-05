@@ -147,7 +147,7 @@ function suggestionMenu(c: CarryApi, s: Suggestion): MenuStep {
   return {
     title: s.pick.title,
     items: [
-      { id: "keep", label: `Keep here, ${blockName(s.to)}`, action: "pick.move", ...(c.committed(s.to.date) ? { hint: "Adds to a committed day" } : {}), run: () => c.keep(s) },
+      { id: "keep", label: `Keep here, ${blockName(s.to)}`, action: "pick.move", ...(c.committed(s.to.date) ? { hint: "Adds to a confirmed day" } : {}), run: () => c.keep(s) },
       { id: "move", label: "Move to…", action: "pick.move", next: () => c.moveMenu(s.pick) },
       { id: "drop", label: "Drop", danger: true, action: "pick.remove", run: () => c.drop(s.pick) },
     ],
@@ -172,7 +172,7 @@ function SuggestedCard({ s, c, tabIndex }: { s: Suggestion; c: CarryApi; tabInde
   const { open } = useContext(MenuCtx);
   const drag = useDragSource(pickDragged(s.pick));
   const from = `From ${weekday(s.pick.date)}`;
-  const title = `Suggested from ${blockName(s.pick)}. It doesn't count against this block until you keep it${c.committed(s.to.date) ? ". Adds to a committed day" : ""}`;
+  const title = `Suggested from ${blockName(s.pick)}. It doesn't count against this block until you keep it${c.committed(s.to.date) ? ". Adds to a confirmed day" : ""}`;
   return (
     <li className="suggested-card" {...drag}>
       <button type="button" className="sc-open" tabIndex={tabIndex} title={title} aria-label={`${s.pick.title}, ${from.toLowerCase()}, suggested here. Keep, move or drop`} onClick={(e) => openAt(e, open, suggestionMenu(c, s))}>
@@ -299,7 +299,7 @@ function ReviewRow({ pick, s }: { pick: Pick; s: Suggestion }) {
         <span className="pr-note">
           from {shortDate(pick.date)} · suggested {blockName(s.to)}
         </span>
-        <button type="button" className="link-btn" onClick={() => void c.keep(s)} title={c.committed(s.to.date) ? "Adds to a committed day" : `Keep it in ${blockName(s.to)}`}>
+        <button type="button" className="link-btn" onClick={() => void c.keep(s)} title={c.committed(s.to.date) ? "Adds to a confirmed day" : `Keep it in ${blockName(s.to)}`}>
           Keep
         </button>
         <button type="button" className="link-btn" onClick={(e) => openAt(e, open, c.moveMenu(pick))}>

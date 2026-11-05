@@ -24,32 +24,34 @@ const NOW = "2026-11-04T15:00:00Z";
 const COOP = "Cooptimize";
 const FEATURE = 437;
 
-function setup(o: { allowed?: string[]; teamStyle?: string; signals?: Partial<FeatureSignals>; answer?: (c: ProviderCall) => string; parentType?: string } = {}) {
+function setup(o: { client?: string; allowed?: string[]; teamStyle?: string; signals?: Partial<FeatureSignals>; answer?: (c: ProviderCall) => string; parentType?: string } = {}) {
   clearDevopsPreviews();
+  // GD-1: Cooptimize Internal by default; `client` runs the same Break down for a client.
+  const K = o.client ?? COOP;
   const dv = fakeDevOpsWrite({ now: () => NOW, recurring: true });
   dv.add(FEATURE, { "System.WorkItemType": o.parentType ?? "Feature", "System.Title": "Monthly export for the finance team", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
   dv.add(441, { "System.WorkItemType": "User Story", "System.Title": "Pick the columns for the export", "System.State": "Closed" }, FEATURE);
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });
-  const toml = `${STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-4444-8444-444444444444"').replace('my_email = ""', 'my_email = "me@example.com"')}\n[clients.Northwind]\nname = "Northwind"\n`;
+  const toml = `${STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-4444-8444-444444444444"').replace('my_email = ""', 'my_email = "me@example.com"')}\n[clients.Northwind]\nname = "Northwind"\n${K === COOP ? "" : `[clients.${K}]\nname = "${K}"\n`}`;
   const keyring = new Map<string, string>();
   const calls: ProviderCall[] = [];
   const signals = aFeatureSignals({ feature: { id: FEATURE, ...(o.parentType ? { type: o.parentType } : {}) }, children: [{ id: 441, title: "Pick the columns for the export", type: "User Story", state: "Closed" }], ...o.signals });
   // Each client's own pool; Northwind's must never show up for Cooptimize.
   const pools: Record<string, ExemplarCandidate[]> = {
-    [COOP]: [anExemplarCandidate({ id: 301 }), anExemplarCandidate({ id: 302, title: "Monthly export for HR" }), anExemplarCandidate({ id: 303, areaPath: "Other" })],
+    [K]: [anExemplarCandidate({ id: 301 }), anExemplarCandidate({ id: 302, title: "Monthly export for HR" }), anExemplarCandidate({ id: 303, areaPath: "Other" })],
     Northwind: [anExemplarCandidate({ id: 901, title: "Northwind secret plan" })],
   };
   const answer = o.answer ?? (() => JSON.stringify(aProposalsAnswer({ feature_id: FEATURE, set_aside: [{ title: "Pick the columns", why: "already_covered", existing_item_id: 441, reason: "Done in #441" }] })));
   const target = (clientKey: string, withPat: boolean): DevOpsTarget => ({ accountId: "a", clientKey, clientName: clientKey, org: "cooptimize", project: `${clientKey} Project`, projectName: `${clientKey} Project`, email: "avery@cooptimize.example", pat: withPat ? new Pat(COMPANY_PAT) : null });
   const c: ActionContext = {
-    loadConfig: async () => ({ path: "/x/config.toml", parsed: withTeam(parseConfig(toml), { ai: { allowed: o.allowed ?? [COOP] }, rows: o.teamStyle ? [{ scope: `client:${COOP}`, key: "house_style", value: o.teamStyle }] : [] }) }),
+    loadConfig: async () => ({ path: "/x/config.toml", parsed: withTeam(parseConfig(toml), { ai: { allowed: o.allowed ?? [K] }, rows: o.teamStyle ? [{ scope: `client:${K}`, key: "house_style", value: o.teamStyle }] : [] }) }),
     makeDataverse: () => ({ devopsTargets: async (keys: string[], x: { withPat?: boolean } = {}) => ({ ok: true, targets: keys.map((k) => target(k, x.withPat !== false)) }), myClients: async () => [] }) as never,
     makeOutlook: () => { throw new Error("n/a"); },
     makeGoogle: () => { throw new Error("n/a"); },
     makeDevOps: () => ({
       forget: () => {},
       last: () => null,
-      featureSignals: async (k: string, id: number) => (k === COOP && id === FEATURE ? { ok: true, value: signals } : { ok: false, message: "not here" }),
+      featureSignals: async (k: string, id: number) => (k === K && id === FEATURE ? { ok: true, value: signals } : { ok: false, message: "not here" }),
       exemplarPool: async (k: string) => ({ ok: true, value: pools[k] ?? [] }),
     }) as never,
     saveSystemUserId: async () => {},
@@ -70,10 +72,10 @@ function setup(o: { allowed?: string[]; teamStyle?: string; signals?: Partial<Fe
     if (r.ok) throw new Error("expected failure");
     return r;
   };
-  const enable = () => run("devops.set_write_pat", { clientKey: COOP, pat: WRITE_PAT });
-  const draft = () => run<DraftView>("stories.run", { clientKey: COOP, featureId: FEATURE, note: "split by report" });
+  const enable = () => run("devops.set_write_pat", { clientKey: K, pat: WRITE_PAT });
+  const draft = () => run<DraftView>("stories.run", { clientKey: K, featureId: FEATURE, note: "split by report" });
   const created = () => [...dv.items.values()].filter((i) => i.fields["System.Parent"] === FEATURE && i.id !== 441);
-  return { dv, plan, run, fail, enable, draft, calls, created };
+  return { dv, plan, run, fail, enable, draft, calls, created, client: K };
 }
 
 const cardsInput = (d: DraftView, f: (c: DraftView["cards"][number]) => Partial<DraftView["cards"][number]> = () => ({})) => d.cards.map((c) => { const x = { ...c, ...f(c) }; return { id: x.id, keep: x.keep, title: x.title, description: x.description, acceptance: x.acceptance, size: x.size }; });
@@ -116,13 +118,52 @@ describe("Draft stories", () => {
     expect(s.calls).toHaveLength(0);
   });
 
-  it("refuses a payload with another client's name before anything is sent (the ai/ guard)", async () => {
-    const s = setup({ signals: { comments: [{ at: "2026-11-03T10:00:00Z", text: "Same as we did for Northwind last spring" }] } });
+  // GD-1: Internal work names clients; in a client's Break down, another client's name never goes or comes back.
+  it("Internal: a Break down naming two clients is sent, and an answer naming them is accepted and published", async () => {
+    const answer = () => JSON.stringify(aProposalsAnswer({ feature_id: FEATURE, set_aside: [], proposals: [aCoopProposal({ title: "Compare with the Northwind and Fabrikam exports" })] }));
+    const s = setup({ answer, signals: { comments: [{ at: "2026-11-03T10:00:00Z", text: "Same as we did for Northwind and Fabrikam last spring" }] } });
     await s.enable();
-    const r = await s.fail("stories.run", { clientKey: COOP, featureId: FEATURE });
+    const d = await s.draft();
+    expect(s.calls).toHaveLength(1);
+    expect(s.calls[0]!.input).toContain("Northwind and Fabrikam");
+    expect(d.cards.map((c) => c.title)).toEqual(["Compare with the Northwind and Fabrikam exports"]);
+    const pv = await s.run<{ previews: DevOpsPreview[] }>("stories.publish_preview", { draftId: d.id });
+    expect((await s.run<{ created: number }>("stories.publish", { draftId: d.id, previewIds: pv.previews.map((p) => p.previewId) })).created).toBe(1);
+  });
+
+  it("Internal: a secret in the payload is still refused before anything is sent", async () => {
+    const s = setup({ signals: { comments: [{ at: "2026-11-03T10:00:00Z", text: `the key is sk-${"Ab3".repeat(10)}` }] } });
+    await s.enable();
+    expect((await s.fail("stories.run", { clientKey: COOP, featureId: FEATURE })).error).toBe("Not sent: it contains something that looks like a key, token or secret");
+    expect(s.calls).toHaveLength(0);
+  });
+
+  it("a client: a payload naming another client is refused before anything is sent (the ai/ guard)", async () => {
+    const s = setup({ client: "Fabrikam", signals: { comments: [{ at: "2026-11-03T10:00:00Z", text: "Same as we did for Northwind last spring" }] } });
+    await s.enable();
+    const r = await s.fail("stories.run", { clientKey: s.client, featureId: FEATURE });
     expect(r.error).toBe("Not sent: it mentions another client");
     expect(s.calls).toHaveLength(0);
-    expect(await s.plan.latestStoryDraft(COOP, FEATURE)).toBeNull();
+    expect(await s.plan.latestStoryDraft(s.client, FEATURE)).toBeNull();
+  });
+
+  it("a client: an answer naming another client is refused, and no cards are kept", async () => {
+    const answer = () => JSON.stringify(aProposalsAnswer({ feature_id: FEATURE, set_aside: [], proposals: [aCoopProposal({ title: "Reuse the Northwind export" })] }));
+    const s = setup({ client: "Fabrikam", answer });
+    await s.enable();
+    expect((await s.fail("stories.run", { clientKey: s.client, featureId: FEATURE })).error).toBe("The AI's answer mentions another client, so nothing is shown");
+    expect(s.calls).toHaveLength(1);
+    expect(await s.plan.latestStoryDraft(s.client, FEATURE)).toBeNull();
+  });
+
+  it("a client: a card edited to name another client is blocked in the preview, and nothing is written", async () => {
+    const s = setup({ client: "Fabrikam" });
+    await s.enable();
+    const d = await s.draft();
+    await s.run("stories.save", { draftId: d.id, cards: cardsInput(d, (c) => (c.id === "P2" ? { description: "Like the Northwind Traders one" } : {})) });
+    const r = await s.fail("stories.publish_preview", { draftId: d.id });
+    expect(r).toMatchObject({ status: 409, error: "This mentions Northwind; remove it before saving to Fabrikam's DevOps" });
+    expect(s.created()).toHaveLength(0);
   });
 
   it("shows no cards for a malformed answer or a dependency on an unknown card", async () => {

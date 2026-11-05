@@ -2,7 +2,7 @@
 // auto-shutdown time is shown, never changed), Settings > You and the Inbox's kind chips, clicked in a real browser on
 // demo data (a fictional person and VM, no Azure calls). Screenshots when FOCUSTIME_SHOTS is set.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CHROMIUM, freshPage, startDemo, type Harness, openSettings } from "./harness.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness, openSettings, openCaptures } from "./harness.ts";
 import { shotBoth } from "./shots.ts";
 
 let h: Harness;
@@ -105,7 +105,7 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
 
   it("Inbox sorting uses the capture box's kind chips", async () => {
     const { page, errors } = await freshPage(h);
-    await page.keyboard.press("4");
+    await openCaptures(page);
     await page.locator(".cap-item").first().getByRole("button", { name: "Sort" }).click();
     const sort = page.locator(".cap-sort").first();
     await sort.waitFor();
