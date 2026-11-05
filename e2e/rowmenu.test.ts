@@ -116,14 +116,14 @@ describe.skipIf(!CHROMIUM)("row menu headers (D459)", () => {
     await page.close();
   }, T);
 
-  it("Week's detail panel: DevOps items, A then B", async () => {
+  it("Week's detail panel: my stories, A then B", async () => {
     const { page, errors } = await freshPage(h);
     await page.keyboard.press("2");
     const card = page.locator(".half.card", { hasText: "Northwind" }).first();
     await card.locator(".card-when").click();
     const panel = page.locator(".detail-panel");
     await panel.waitFor();
-    await aThenB(page, panel.locator(".work-list > li"), ".more-btn", ".wi-title");
+    await aThenB(page, panel.locator(".ps-row"), ".ps-more", ".ps-title");
     expect(errors).toEqual([]);
     await page.close();
   }, T);

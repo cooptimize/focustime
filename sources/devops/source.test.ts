@@ -60,19 +60,38 @@ describe("the AI guard's item map (AP-2)", () => {
   });
 });
 
+describe("the Week panel's reads (PV-1)", () => {
+  it("reads my stories' parents by id when no other read has them, and marks my items as mine", async () => {
+    const s = setup({ contoso: "agile" }, [target("Adatum", "contoso")]);
+    const r = await s.src.load([ref("Adatum")]);
+    const batches = s.calls.filter((c) => c.url.includes("workitemsbatch")).map((c) => JSON.parse(c.body!) as { ids: number[] });
+    // 101 is my story under 90, which neither my items nor a committed feature brought in.
+    expect(batches.at(-1)!.ids).toEqual([90]);
+    expect(byKey(r, "Adatum").items.every((i) => i.assignedToMe === true)).toBe(true);
+  });
+  it("reads children with their assignee (to tell mine from teammates'), my items without", async () => {
+    const s = setup({ contoso: "portfolio" }, [target("Adatum", "contoso")]);
+    await s.src.load([ref("Adatum")]);
+    const batches = s.calls.filter((c) => c.url.includes("workitemsbatch")).map((c) => JSON.parse(c.body!) as { fields: string[] });
+    expect(batches[0]!.fields).not.toContain("System.AssignedTo");
+    expect(batches[1]!.fields).toContain("System.AssignedTo");
+  });
+});
+
 describe("items read by id for open follow-ups (step 7)", () => {
   it("reads only watched ids that aren't among my open items, completed ones kept, with the same fields", async () => {
     const s = setup({ contoso: "agile" }, [target("Adatum", "contoso")]);
     const r = await s.src.load([ref("Adatum")], { watch: { Adatum: [104, 101] } });
     const batches = s.calls.filter((c) => c.url.includes("workitemsbatch")).map((c) => JSON.parse(c.body!) as { ids: number[]; fields: string[] });
-    expect(batches.at(-1)).toEqual({ ids: [104], fields: ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "System.ChangedBy", "Microsoft.VSTS.Common.StackRank"], errorPolicy: "omit" });
+    expect(batches.find((b) => b.ids.length === 1 && b.ids[0] === 104)).toEqual({ ids: [104], fields: ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "System.ChangedBy", "Microsoft.VSTS.Common.StackRank"], errorPolicy: "omit" });
     expect(byKey(r, "Adatum").watched?.map((i) => [i.id, i.state, i.stateCategory])).toEqual([[104, "Closed", "Completed"]]);
     expect(ids(byKey(r, "Adatum"))).not.toContain(104);
   });
   it("makes no extra call when nothing is watched", async () => {
     const s = setup({ contoso: "agile" }, [target("Adatum", "contoso")]);
     const r = await s.src.load([ref("Adatum")]);
-    expect(s.calls.filter((c) => c.url.includes("workitemsbatch"))).toHaveLength(1);
+    // My items, then (PV-1) the parent of my story; no read for watched items.
+    expect(s.calls.filter((c) => c.url.includes("workitemsbatch")).map((c) => (JSON.parse(c.body!) as { ids: number[] }).ids.includes(90))).toEqual([false, true]);
     expect(byKey(r, "Adatum").watched).toEqual([]);
   });
 });

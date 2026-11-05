@@ -36,8 +36,8 @@ export function onOrg(url: string, org: string): boolean {
 export const itemApiUrl = (org: string, id: number) => `${orgBase(org)}/_apis/wit/workItems/${id}`;
 
 export type PatchOp = { op: "add" | "replace" | "remove" | "test"; path: string; value?: unknown };
-export type ChangeKind = "state" | "comment" | "create" | "target_date" | "description";
-export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description";
+export type ChangeKind = "state" | "comment" | "create" | "target_date" | "description" | "assign";
+export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description" | "undo_assign";
 
 /** One identity as connectionData reports it. */
 export type DevOpsIdentity = { id: string; name: string; email: string };
@@ -156,7 +156,7 @@ export type DevOpsWriteEntry = {
 /** The undo each write has; null when it has none (an undo, or not confirmed). */
 export function undoKind(e: Pick<DevOpsWriteEntry, "op" | "status" | "undoneBy" | "itemId">): WriteOp | null {
   if (e.status !== "confirmed" || e.undoneBy !== null || e.itemId === null) return null;
-  return e.op === "state" ? "undo_state" : e.op === "comment" ? "undo_comment" : e.op === "create" ? "undo_create" : e.op === "target_date" ? "undo_target_date" : e.op === "description" ? "undo_description" : null;
+  return e.op === "state" ? "undo_state" : e.op === "comment" ? "undo_comment" : e.op === "create" ? "undo_create" : e.op === "target_date" ? "undo_target_date" : e.op === "description" ? "undo_description" : e.op === "assign" ? "undo_assign" : null;
 }
 /** Undo is a stack per item: the newest confirmed write that isn't an undo and isn't undone. `log` newest first. */
 export function undoTops(log: readonly DevOpsWriteEntry[]): Map<string, number> {
@@ -181,6 +181,19 @@ export function parentChoices<T extends { id: number; level: string; tier?: "fea
     .filter((i) => i.level === "portfolio" && (i.tier ?? "feature") === want && isOpenCategory(i.stateCategory))
     .sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || a.id - b.id);
 }
+
+/**
+ * PV-1 (D572): Take one: the assignee set to me (or, on undo, back to who had it; null clears it), behind the rev test.
+ * The value is the DevOps uniqueName (sign-in email), the way the DevOps web UI writes it.
+ */
+export function assignOps(rev: number, uniqueName: string | null, had: boolean): PatchOp[] {
+  if (uniqueName === null) return had ? [test(rev), { op: "remove", path: "/fields/System.AssignedTo" }] : [test(rev)];
+  return [test(rev), { op: "add", path: "/fields/System.AssignedTo", value: uniqueName }];
+}
+/** "Sam Lee <sam@contoso.example>", the way the preview and the audit log show an assignee; null when unassigned. */
+export const assigneeText = (name: string | null, email: string | null): string | null => (email ? `${name ?? email} <${email}>` : name);
+/** The email out of assigneeText's form, lowercased; null when unassigned. */
+export const assigneeEmail = (text: string | null | undefined): string | null => (text ? (text.match(/<([^<>\s]+@[^<>\s]+)>$/)?.[1] ?? (text.includes("@") ? text.trim() : null))?.toLowerCase() ?? null : null);
 
 /** CV-1: a description change (description_update): the whole field replaced, written only at the revision read. */
 export function descriptionOps(rev: number, field: string, html: string): PatchOp[] {

@@ -75,7 +75,7 @@ const HISTORY_DAYS = 365;
 type PortfolioSnapshot = { fetchedAt: string; items: PortfolioItem[]; targetFields: Record<string, string>; startFields?: Record<string, string>; sizeField?: string | null; acceptanceField?: boolean };
 
 /** What the cache file holds per client: normalized items only. */
-type WorkSnapshot = { fetchedAt: string; items: WorkItem[]; children?: WorkItem[]; /** WT-1: each type's icon, color and level. */ types?: TypeLook[] };
+type WorkSnapshot = { fetchedAt: string; items: WorkItem[]; children?: WorkItem[]; /** PV-1: my stories' parents read by id. */ parents?: WorkItem[]; /** WT-1: each type's icon, color and level. */ types?: TypeLook[] };
 
 /** Items cached before step 5 have no level; treat them as story level so nothing becomes unpickable by accident. */
 const withLevel = (i: WorkItem): WorkItem => (i.level ? i : { ...i, level: "story" });
@@ -254,7 +254,9 @@ export function createDevOpsSource(d: DevOpsDeps) {
   }
 
   /** WIQL for ids, then the batch call in chunks of 200, normalized. */
-  async function fetchItems(ctx: Ctx, project: string, meta: Metadata, query: string): Promise<WorkItem[]> {
+const ASSIGNED_FIELD = "System.AssignedTo";
+  /** `people` (PV-1): also the assignee (display name, and the email only to match a Cooptimizer), for children. */
+  async function fetchItems(ctx: Ctx, project: string, meta: Metadata, query: string, people = false): Promise<WorkItem[]> {
     const p = encodeURIComponent(project);
     const wiql = await call<{ workItems?: { id?: unknown }[] }>(ctx, "wiql", `${p}/_apis/wit/wiql?$top=${WIQL_TOP}`, { query });
     const ids = (wiql.workItems ?? []).map((w) => w.id).filter((id): id is number => typeof id === "number" && Number.isInteger(id));
@@ -262,12 +264,12 @@ export function createDevOpsSource(d: DevOpsDeps) {
     for (let i = 0; i < ids.length; i += BATCH_MAX) {
       const page = await call<{ value?: unknown[] }>(ctx, "workitemsbatch", `${p}/_apis/wit/workitemsbatch`, {
         ids: ids.slice(i, i + BATCH_MAX),
-        fields: batchFields(meta.orderField),
+        fields: people ? [...batchFields(meta.orderField), ASSIGNED_FIELD] : batchFields(meta.orderField),
         errorPolicy: "omit",
       });
       values.push(...(page.value ?? []));
     }
-    const { items, skipped } = normalizeWorkItems(values, { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels, tiers: meta.tiers, me: ctx.me });
+    const { items, skipped } = normalizeWorkItems(values, { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels, tiers: meta.tiers, me: ctx.me, ...(people ? { people: true } : {}) });
     if (skipped) log("normalize", { kind: "skipped", count: skipped });
     return items;
   }
@@ -300,13 +302,14 @@ export function createDevOpsSource(d: DevOpsDeps) {
       throw new DevOpsFailure("error", `The process for ${ctx.projectName || project} (${ctx.client}) has no story level in its backlog levels, so FocusTime can't tell stories from features there. Nothing is guessed; check the project's backlog configuration`);
   }
 
-  async function fetchClient(ref: ClientRef, target: DevOpsTarget, watch: readonly number[] = [], features: readonly number[] = []): Promise<{ items: WorkItem[]; children: WorkItem[]; watched: WorkItem[]; committed: WorkItem[]; model: ProcessModel }> {
+  async function fetchClient(ref: ClientRef, target: DevOpsTarget, watch: readonly number[] = [], features: readonly number[] = []): Promise<{ items: WorkItem[]; children: WorkItem[]; watched: WorkItem[]; committed: WorkItem[]; parents: WorkItem[]; model: ProcessModel }> {
     const { ctx, project } = contextOf(ref, target);
     const raw = await loadMetadata(ctx, project);
     needStoryLevel(raw, ctx, project);
     const meta = { ...raw, categories: stateCategories(raw.model, d.openStates?.(ref.clientKey) ?? []) };
     // WT-1 safety net: a bug assigned to me is always at child level, even when the team has bugs off.
-    const items = (await fetchItems(ctx, project, meta, buildWiql(target.email!, meta.categories, meta.orderField))).map((i) => (i.level === "other" && typeOf(meta.model, i.type)?.bug ? { ...i, level: "story" as const } : i));
+    // PV-1: mine by the query (the assignee is me), so the Week panel can tell them from teammates' children.
+    const items = (await fetchItems(ctx, project, meta, buildWiql(target.email!, meta.categories, meta.orderField))).map((i) => ({ ...(i.level === "other" && typeOf(meta.model, i.type)?.bug ? { ...i, level: "story" as const } : i), assignedToMe: true }));
     log("items", { count: items.length });
     // Features committed to a week (step 8) that aren't mine: read by id (open ones), so their stories can be offered.
     const mineIds = new Set(items.map((i) => i.id));
@@ -317,7 +320,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const seen = new Set([...items.map((i) => i.id), ...committed.map((i) => i.id)]);
     let parents = [...items.filter((i) => i.level === "portfolio").map((i) => i.id), ...committed.map((i) => i.id)];
     for (let depth = 0; depth < CHILD_DEPTH && parents.length; depth++) {
-      const found = (await fetchItems(ctx, project, meta, buildChildrenWiql(parents.slice(0, MAX_PARENTS), meta.categories, meta.orderField))).filter((c) => !seen.has(c.id));
+      const found = (await fetchItems(ctx, project, meta, buildChildrenWiql(parents.slice(0, MAX_PARENTS), meta.categories, meta.orderField), true)).filter((c) => !seen.has(c.id));
       for (const c of found) seen.add(c.id);
       children.push(...found);
       parents = found.filter((c) => c.level === "portfolio").map((c) => c.id);
@@ -326,7 +329,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const missing = watch.filter((id) => Number.isInteger(id) && id > 0 && !seen.has(id));
     const watched = await fetchWatched(ctx, project, meta, missing);
     if (watched.length) log("watched", { count: watched.length });
-    return { items, children, watched, committed, model: meta.model };
+    // PV-1 (D570): the parents of my stories that no read above has (a feature that's neither mine nor committed), by
+    // id, so the Week panel can group every story under its feature.
+    const known = new Set([...seen, ...watched.map((w) => w.id)]);
+    const up = [...new Set([...items, ...children].filter((i) => i.assignedToMe && i.level === "story" && i.parentId !== null && !known.has(i.parentId)).map((i) => i.parentId!))].slice(0, BATCH_MAX);
+    const parentItems = up.length ? (await readByIds(ctx, project, up, batchFields(meta.orderField), { orderField: meta.orderField, categories: meta.categories, levels: meta.levels, me: ctx.me })).filter((i) => up.includes(i.id)) : [];
+    if (parentItems.length) log("parents", { count: parentItems.length });
+    return { items, children, watched, committed, parents: parentItems, model: meta.model };
   }
 
   // ---- Plan the week (step 8): features and epics, read-only ----
@@ -631,7 +640,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const useCache = f.status !== "identity_missing" && f.status !== "not_set_up";
     const snap = useCache ? ((await d.snapshots.read<WorkItem>("devops", cacheKey(ref.clientKey))) as WorkSnapshot | null) : null;
     const message = snap ? `${f.message}. Showing items from ${formatFetchedAt(snap.fetchedAt, d.timeZone, now())}` : useCache ? `${f.message}. No cached items yet` : f.message;
-    return { clientKey: ref.clientKey, clientName: ref.clientName, status: f.status, message, ...(f.rootCause ? { cause: f.rootCause } : {}), fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: (snap?.items ?? []).map(withLevel), children: Array.isArray(snap?.children) ? snap.children.map(withLevel) : [], ...(Array.isArray(snap?.types) ? { types: snap.types } : {}) };
+    return { clientKey: ref.clientKey, clientName: ref.clientName, status: f.status, message, ...(f.rootCause ? { cause: f.rootCause } : {}), fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: (snap?.items ?? []).map(withLevel), children: Array.isArray(snap?.children) ? snap.children.map(withLevel) : [], ...(Array.isArray(snap?.parents) ? { parents: snap.parents.map(withLevel) } : {}), ...(Array.isArray(snap?.types) ? { types: snap.types } : {}) };
   }
 
   async function loadOne(ref: ClientRef, targets: TargetsResult, watch: readonly number[], features: readonly number[]): Promise<ClientWork> {
@@ -643,13 +652,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
       if (target?.org && ORG.test(target.org)) orgs.set(ref.clientKey, target.org);
       const pre = precheck(ref, target);
       if (pre) throw pre;
-      const { items, children, watched, committed, model } = await fetchClient(ref, target!, watch, features);
-      reportItems(ref.clientKey, [...items, ...children, ...(watched ?? []), ...(committed ?? [])]);
+      const { items, children, watched, committed, parents, model } = await fetchClient(ref, target!, watch, features);
+      reportItems(ref.clientKey, [...items, ...children, ...(watched ?? []), ...(committed ?? []), ...parents]);
       const fetchedAt = now().toZonedDateTimeISO(d.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
       const types = looksOf(model);
-      const snap: WorkSnapshot = { fetchedAt, items, children, types };
+      const snap: WorkSnapshot = { fetchedAt, items, children, parents, types };
       await d.snapshots.write("devops", cacheKey(ref.clientKey), snap).catch(() => log("cache_write", { kind: "failed" }));
-      return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items, children, watched, committed, types };
+      return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items, children, watched, committed, parents, types };
     } catch (e) {
       if (!(e instanceof DevOpsFailure)) log("load", { kind: "unexpected" });
       return fromCache(ref, e instanceof DevOpsFailure ? e : new DevOpsFailure("error", `DevOps load failed for ${ref.clientName}`));

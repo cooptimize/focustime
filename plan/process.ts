@@ -225,7 +225,7 @@ export const stateIn = (states: readonly { name: string; category: string }[], c
 
 /** A type's look for the UI (icon, color, level, whether it counts against hours, whether it needs breakdown). */
 export type { TypeLook };
-export const looksOf = (m: ProcessModel): TypeLook[] => m.types.map((t) => ({ name: t.name, icon: t.icon, color: t.color, level: t.level, countsHours: t.countsHours, needsBreakdown: t.needsBreakdown }));
+export const looksOf = (m: ProcessModel): TypeLook[] => m.types.map((t) => ({ name: t.name, icon: t.icon, color: t.color, level: t.level, countsHours: t.countsHours, needsBreakdown: t.needsBreakdown, defaultChild: t.defaultChild }));
 
 /** ADM-1 reads this: one line per type, plain. "Recurring: 75% broken down, 12 items". */
 export function breakdownText(t: Pick<ProcessType, "name" | "history">): string | null {

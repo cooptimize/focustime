@@ -365,3 +365,32 @@ export function anInternalProcess(o: Partial<RawProcess> = {}): RawProcess {
     ...o,
   };
 }
+
+/** PV-1: a feature (portfolio, feature tier) assigned to me. */
+export function aFeature(o: Partial<WorkItem> = {}): WorkItem {
+  return aWorkItem({ type: "Feature", level: "portfolio", tier: "feature", title: `Feature ${o.id ?? ""}`.trim(), ...o });
+}
+
+/** PV-1: a work item type as the UI draws it. Story, Bug at child level; Feature at parent; Epic at top; Task. */
+export function aTypeLook(o: Partial<import("../../week/types.ts").TypeLook> & { name: string }): import("../../week/types.ts").TypeLook {
+  const level = o.name === "Epic" ? "top" : o.name === "Feature" ? "parent" : o.name === "Task" ? "task" : "child";
+  return { icon: null, color: null, level, countsHours: true, needsBreakdown: level === "top" || level === "parent", defaultChild: o.name === "Feature" ? "User Story" : null, ...o };
+}
+export const TYPE_LOOKS = ["Epic", "Feature", "User Story", "Bug", "Task"].map((name) => aTypeLook({ name }));
+
+/** PV-1: one client's DevOps read: live, with the usual types. */
+export function aClientWork(o: Partial<import("../../week/types.ts").ClientWork> = {}): import("../../week/types.ts").ClientWork {
+  return { clientKey: "adatum", clientName: "Adatum", status: "ok", fetchedAt: `${WEEK}T09:00:00`, fromCache: false, items: [], children: [], types: TYPE_LOOKS, ...o };
+}
+
+/** PV-1: a planned pick for a DevOps item: Monday AM for Adatum, unsized. */
+export function aPick(o: Partial<import("../../plan/types.ts").Pick> = {}): import("../../plan/types.ts").Pick {
+  const id = o.id ?? next();
+  return { id, date: WEEK, half: "AM", clientKey: "adatum", kind: "item", itemId: null, draftId: null, title: `Pick ${id}`, itemType: "User Story", itemUrl: null, size: null, status: "planned", carriedFrom: null, carriedFromDate: null, notes: null, followUpId: null, position: id, createdAt: `${WEEK}T09:00:00-05:00[${ZONE}]`, updatedAt: `${WEEK}T09:00:00-05:00[${ZONE}]`, ...o } as import("../../plan/types.ts").Pick;
+}
+
+/** PV-1: an item on a client's week list: a feature must for Adatum this week. */
+export function aWeekFeature(o: Partial<import("../../plan/types.ts").WeekFeature> = {}): import("../../plan/types.ts").WeekFeature {
+  const id = o.id ?? next();
+  return { id, weekStart: WEEK, clientKey: "adatum", itemId: 1, title: `Feature ${o.itemId ?? 1}`, itemType: "Feature", url: null, level: "feature", tier: "must", estimate: null, size: null, parentId: null, slots: [], doneAt: null, position: null, createdAt: `${WEEK}T09:00:00-05:00[${ZONE}]`, updatedAt: `${WEEK}T09:00:00-05:00[${ZONE}]`, ...o };
+}

@@ -14,11 +14,12 @@ import { sqliteConn } from "../store/sql/sqlite.ts";
 import { openPlanDb } from "../store/plan-store.ts";
 import type { PushControl } from "./push.ts";
 import { personTicks } from "./ticks.ts";
+import { takesStore } from "../store/devops-takes.ts";
 
 const NY = "America/New_York";
 const MEDIA = { status: async () => ({ players: false, spotify: false }), transition: async () => null, open: async () => {}, endSound: () => {} } as unknown as HostMedia;
 
-function person(o: { toml?: (t: string) => string } = {}) {
+function person(o: { toml?: (t: string) => string; takes?: boolean } = {}) {
   let at = Temporal.Instant.from("2026-11-02T13:40:00Z"); // Mon 8:40 AM in New York; work starts at 9:00.
   const parsed = parseConfig((o.toml ?? ((t) => t))(setValue(starterToml(NY), "dataverse", "my_email", "ana@cooptimize.example")));
   if (!parsed.ok) throw new Error("bad test config");
@@ -27,7 +28,9 @@ function person(o: { toml?: (t: string) => string } = {}) {
   const notifications = { show: async (_n: Notice, h?: (x: string) => void) => (h?.("host-1"), null), close: (h: string) => closed.push(h), line: () => {} } as unknown as HostNotifications;
   const pushed: { n: Notice; details: boolean }[] = [];
   const push = { send: async (n: Notice, details: boolean) => void pushed.push({ n, details }) } as unknown as PushControl;
-  const ctx = { plan, loadConfig: async () => ({ path: "x", parsed }), now: () => at.toString() } as unknown as ActionContext;
+  // PV-1: Take one's app table, on its own database here.
+  const takes = takesStore(sqliteConn(openPlanDb({ path: ":memory:", now: () => at.toZonedDateTimeISO(NY) })), () => at);
+  const ctx = { plan, loadConfig: async () => ({ path: "x", parsed }), now: () => at.toString(), ...(o.takes ? { takes, signedInAs: async () => ({ email: "ana@cooptimize.example", upn: "ana@cooptimize.example" }) } : {}) } as unknown as ActionContext;
   const ticks = personTicks({ log: () => {}, now: () => at, notifications, media: MEDIA, openRoute: () => {}, push }, plan, ctx, { zone: NY });
   const until = async (iso: string) => {
     const end = Temporal.Instant.from(iso);
@@ -41,7 +44,7 @@ function person(o: { toml?: (t: string) => string } = {}) {
   // Monday 9:00 also brings "Plan the week"; these tests follow the day's reminder.
   const day = async () => (await plan.notices()).filter((n) => n.kind === "plan_day");
   const dayPushed = () => pushed.filter((x) => x.n.kind === "plan_day");
-  return { plan, pushed, day, dayPushed, until, config: parsed.config, now: () => at };
+  return { plan, pushed, day, dayPushed, until, config: parsed.config, now: () => at, takes };
 }
 
 describe("the in-app list and push follow the notifier's gate (P1)", () => {
@@ -84,5 +87,20 @@ describe("the in-app list and push follow the notifier's gate (P1)", () => {
     const list = await p.plan.notices();
     expect(list.map((n) => n.kind)).toEqual(["held"]);
     expect(p.pushed.map((x) => x.n.kind)).toEqual(["held"]);
+  });
+});
+
+describe("Take one's quiet note (PV-1)", () => {
+  it("tells the previous assignee once, in the app only (never pushed), without the item's title", async () => {
+    const p = person({ takes: true });
+    await p.takes.add({ clientKey: "adatum", org: "contoso", itemId: 510, fromEmail: "Ana@cooptimize.example", byName: "Sam Tester" });
+    await p.takes.add({ clientKey: "adatum", org: "contoso", itemId: 511, fromEmail: "lee@cooptimize.example", byName: "Sam Tester" });
+    await p.until("2026-11-02T14:10:00Z");
+    const mine = (await p.plan.notices()).filter((n) => n.kind === "story_taken");
+    expect(mine.map((n) => [n.title, n.route])).toEqual([["Sam took #510", "week"]]);
+    expect(mine[0]!.body).not.toContain("510 ");
+    expect(p.pushed.some((x) => x.n.kind === "story_taken")).toBe(false);
+    await p.until("2026-11-02T14:30:00Z");
+    expect((await p.plan.notices()).filter((n) => n.kind === "story_taken")).toHaveLength(1);
   });
 });

@@ -11,6 +11,7 @@ import { createPlanStore, openPlanDb } from "../store/plan-store.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { createConversationStore } from "../store/conversation-store.ts";
+import { takesStore } from "../store/devops-takes.ts";
 import { IDENTITY_KEY } from "./account.ts";
 import { clearDevopsPreviews, type DevOpsPreview, type DevOpsResult } from "./devops-write-actions.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
@@ -34,6 +35,7 @@ function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: 
   const teamsConn = sqliteConn(openPlanDb({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") }));
   const teams = createTeamsStore(teamsConn, () => Temporal.Instant.from(NOW));
   const convs = createConversationStore(teamsConn, () => Temporal.Instant.from(NOW), teams);
+  const takes = takesStore(teamsConn, () => Temporal.Instant.from(NOW));
   const keyring = new Map<string, string>();
   const targetCalls: { keys: string[]; withPat: boolean | undefined }[] = [];
   const target = (clientKey: string, org: string, withPat: boolean): DevOpsTarget => ({ accountId: "a", clientKey, clientName: clientKey, org, project: `${clientKey} Project`, projectName: `${clientKey} Project`, email: clientKey === COOP ? (opts.email === undefined ? "avery@cooptimize.example" : opts.email) : "avery@adatum.example", pat: withPat ? new Pat(COMPANY_PAT) : null });
@@ -57,6 +59,7 @@ function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: 
     plan,
     requests: { teams, refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }), conversations: convs },
     devopsWriter: writer,
+    takes,
     writePats: { get: async (k) => { const v = keyring.get(k); if (!v) throw new Error("not found"); return new Pat(v); }, set: async (k, v) => void keyring.set(k, v), clear: async (k) => void keyring.delete(k) },
   };
   const run = async <T = unknown>(action: string, input: unknown): Promise<T> => {
@@ -73,7 +76,7 @@ function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: 
   const preview = async (change: Record<string, unknown>, clientKey = COOP) => (await run<{ preview: DevOpsPreview }>("devops.preview", { clientKey, change })).preview;
   const confirm = (p: DevOpsPreview) => run<DevOpsResult>("devops.confirm", { previewId: p.previewId });
   const write = async (change: Record<string, unknown>) => confirm(await preview(change));
-  return { dv, plan, teams, convs, run, fail, enable, preview, confirm, write, keyring, logs, targetCalls, forgotten, waits };
+  return { dv, plan, teams, convs, takes, run, fail, enable, preview, confirm, write, keyring, logs, targetCalls, forgotten, waits };
 }
 type S = ReturnType<typeof setup>;
 const patches = (s: S) => s.dv.writes().filter((w) => w.method === "PATCH");
@@ -422,6 +425,58 @@ describe("undo of each kind", () => {
     const r = await s.write({ kind: "state", itemId: 500, state: "Closed", followUpId: f.id });
     expect(r.confirmed).toBe(true);
     expect((await s.plan.getFollowUp(f.id))).toMatchObject({ outcome: "done", closeHow: "devops" });
+  });
+});
+
+describe("Take one (PV-1, D572)", () => {
+  let s: S;
+  const DANA = "dana@cooptimize.example";
+  beforeEach(async () => {
+    s = setup();
+    await s.enable();
+    s.dv.add(510, { "System.WorkItemType": "User Story", "System.Title": "Their story", "System.State": "Active", "System.AssignedTo": { displayName: "Dana Reyes", uniqueName: DANA } }, 437);
+    s.dv.add(511, { "System.WorkItemType": "User Story", "System.Title": "Done story", "System.State": "Closed", "System.AssignedTo": { displayName: "Dana Reyes", uniqueName: DANA } }, 437);
+  });
+  it("preview shows the current assignee and me; confirm tests /rev, assigns me, reads back and tells the teammate", async () => {
+    const p = await s.preview({ kind: "assign", itemId: 510 });
+    expect(p.summary).toBe("Assign a DevOps story to you");
+    expect(p.fields).toContainEqual({ label: "Assigned to", before: `Dana Reyes <${DANA}>`, after: "Sam Tester <avery@cooptimize.example>", changed: true });
+    expect(p.notes.join(" ")).toContain("Dana Reyes gets a quiet note in FocusTime");
+    const r = await s.confirm(p);
+    expect(r).toMatchObject({ confirmed: true, message: "#510 is assigned to you in DevOps" });
+    const [w] = patches(s);
+    expect(w!.body).toEqual([{ op: "test", path: "/rev", value: 3 }, { op: "add", path: "/fields/System.AssignedTo", value: "avery@cooptimize.example" }]);
+    expect(r.entry).toMatchObject({ op: "assign", status: "confirmed", before: { "Assigned to": `Dana Reyes <${DANA}>` } });
+    expect(await s.takes.from([DANA], "2026-11-01T00:00:00Z")).toEqual([expect.objectContaining({ itemId: 510, fromEmail: DANA, byName: "Sam Tester", clientKey: COOP })]);
+    // The audit log lists it with Undo.
+    const log = await s.run<{ entries: { op: string; undoable: boolean }[] }>("devops.log", {});
+    expect(log.entries[0]).toMatchObject({ op: "assign", undoable: true });
+  });
+  it("undo gives the story back to who had it and takes the note back", async () => {
+    const r = await s.write({ kind: "assign", itemId: 510 });
+    const u = await s.write({ kind: "undo", writeId: r.entry.id });
+    expect(u.confirmed).toBe(true);
+    expect(s.dv.items.get(510)!.fields["System.AssignedTo"]).toBe(DANA);
+    expect(await s.takes.from([DANA], "2026-11-01T00:00:00Z")).toEqual([]);
+  });
+  it("undo refuses when someone else has it in DevOps now", async () => {
+    const r = await s.write({ kind: "assign", itemId: 510 });
+    s.dv.touch(510, { "System.AssignedTo": { displayName: "Lee", uniqueName: "lee@cooptimize.example" } });
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "undo", writeId: r.entry.id } })).toMatchObject({ status: 409, code: "changed" });
+  });
+  it("only open stories: a feature or a closed story is refused, mine already says so", async () => {
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "assign", itemId: 437 } })).toMatchObject({ status: 409 });
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "assign", itemId: 511 } })).toMatchObject({ status: 409 });
+    expect(await s.run("devops.preview", { clientKey: COOP, change: { kind: "assign", itemId: 500 } })).toEqual({ nothing: "#500 is already assigned to you" });
+    expect(patches(s)).toHaveLength(0);
+  });
+  it("Add a story for me: a draft story under the feature, created as the parent type's default child", async () => {
+    const d = await s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "Story for me", size: "S" });
+    const p = await s.preview({ kind: "create", draftId: d.id, type: "Bug" });
+    expect(p.item).toBe("New Bug: Story for me");
+    // A type the parent doesn't take falls back to the process's story type.
+    const q = await s.preview({ kind: "create", draftId: d.id, type: "Epic" });
+    expect(q.item).toBe("New User Story: Story for me");
   });
 });
 

@@ -24,7 +24,7 @@ import type { AppConfig } from "../config/schema.ts";
 import type { HostMedia, HostNotifications } from "../host/types.ts";
 import type { Logger } from "../log/logger.ts";
 import { DEFAULT_FOCUS } from "../plan/focussound.ts";
-import { DEFAULT_NOTIFY, dueFollowUps, inWorkingHours, noticeDone, notices, type Notice } from "../plan/notify.ts";
+import { DEFAULT_NOTIFY, dueFollowUps, inWorkingHours, noticeDone, notices, QUIET_KINDS, type Notice } from "../plan/notify.ts";
 import type { TeamsStatusState } from "../plan/presence.ts";
 import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
 import type { TimerState, WarnPoint } from "../plan/timer.ts";
@@ -154,7 +154,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       // The host shows it at once (never waiting on the database); the handle names the list row once it is written.
       show: (n, shown) => {
         const row = store.addNotice({ key: n.key, kind: String(n.kind), title: n.title, body: n.body, route: n.route }).catch(() => null);
-        if (d.push) void configOrNull().then((c) => d.push!.send(n, c?.notify.pushDetails ?? false)).catch(() => log({ source: "server", op: "push_failed" }));
+        if (d.push && !QUIET_KINDS.has(n.kind)) void configOrNull().then((c) => d.push!.send(n, c?.notify.pushDetails ?? false)).catch(() => log({ source: "server", op: "push_failed" }));
         return host.notifications.show(n, (h) => void row.then((r) => shown?.(`${r ?? ""}|${h}`)));
       },
       close: (h) => {
@@ -360,6 +360,17 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       }
     }
   };
+  // PV-1: a quiet note, once each, when a teammate took one of my stories with Take one (the last 3 days only).
+  const takesTick = async () => {
+    const takes = liveCtx.takes;
+    if (!takes || !notifier.allows("story_taken")) return;
+    const me = await liveCtx.signedInAs?.().catch(() => undefined);
+    const emails = [me?.email, me?.upn, ...((await store.devopsIdentities()).map((i) => i.email))].filter((e): e is string => !!e);
+    const at = instantNow();
+    for (const t of await takes.from(emails, at.subtract({ hours: 72 }).toString())) {
+      if (await store.markOnce(`story_taken_notice:${t.id}`, t.takenAt)) await send(notices.storyTaken(t.id, t.byName.split(/\s+/)[0] || "A teammate", t.itemId, at.toString()));
+    }
+  };
   const tick = async () => {
     await notifier.refresh().catch(() => null);
     await dayReminders();
@@ -367,6 +378,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     await vmTick().catch(() => log({ source: "azure", op: "vm_tick", kind: "failed" }));
     await asksTick().catch(() => log({ source: "plan", op: "asks_tick", kind: "failed" }));
     await conversationsTick().catch(() => log({ source: "plan", op: "conversations_tick", kind: "failed" }));
+    await takesTick().catch(() => log({ source: "plan", op: "takes_tick", kind: "failed" }));
   };
 
   // The focus timer (step 6c): ends sessions on time and warns 5 minutes ahead, window open or not.

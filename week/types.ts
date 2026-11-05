@@ -317,9 +317,12 @@ export type ClientWork = {
   /** Items read by id because an open follow-up is about them, completed ones included (step 7). */
   watched?: WorkItem[];
   /** Features committed to a week that aren't assigned to me, read by id (open ones) for Plan the day (step 8). */
-  committed?: WorkItem[];  /** WT-1: each work item type's icon, color and level from the project's process. Missing in older caches. */
+  committed?: WorkItem[];
+  /** PV-1: the parents of my stories that no other read has (features neither mine nor committed), for grouping. */
+  parents?: WorkItem[];
+  /** WT-1: each work item type's icon, color and level from the project's process. Missing in older caches. */
   types?: TypeLook[];
 };
 
 /** WT-1: a work item type as the UI draws it (plan/process.ts builds it from the project's process). */
-export type TypeLook = { name: string; icon: string | null; color: string | null; level: "top" | "parent" | "child" | "task" | null; countsHours: boolean; needsBreakdown: boolean };
+export type TypeLook = { name: string; icon: string | null; color: string | null; level: "top" | "parent" | "child" | "task" | null; countsHours: boolean; needsBreakdown: boolean; /** PV-1: the type a new child gets (the process model's default child); missing in older caches. */ defaultChild?: string | null };

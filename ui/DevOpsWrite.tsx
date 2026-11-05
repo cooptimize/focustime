@@ -20,7 +20,9 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't w
 export type DevOpsChange =
   | { kind: "state"; itemId: number; state: string; comment?: string; followUpId?: number }
   | { kind: "comment"; itemId: number; text: string }
-  | { kind: "create"; draftId: number }
+  | { kind: "create"; draftId: number; /** PV-1: the story's type (the parent type's default child), when the parent takes it. */ type?: string }
+  /** PV-1: Take one: a teammate's open story assigned to me. */
+  | { kind: "assign"; itemId: number }
   | { kind: "target_date"; itemId: number; date: string; /** Step 17: Save dates to DevOps (where the process has Start Date). */ startDate?: string }
   | { kind: "undo"; writeId: number }
   /** AP-1: a bug, story or feature from an ask in a client chat. */
@@ -33,8 +35,11 @@ export type DevOpsChange =
 export type DevOpsWriteEnv = {
   /** Clients with a checked write PAT. */
   can: (clientKey: string) => boolean;
-  /** Preview one change or several (at most 10), then the dialog. */
-  begin: (clientKey: string, changes: DevOpsChange[]) => Promise<void>;
+  /**
+   * Preview one change or several (at most 10), then the dialog. PV-1: `settled` hears how it ended once: confirmed
+   * (every change confirmed), or not, and whether anything was sent to DevOps (a cancel before Confirm sends nothing).
+   */
+  begin: (clientKey: string, changes: DevOpsChange[], settled?: Settled) => Promise<void>;
   /** The state picker for "Mark done in DevOps". */
   markDone: (t: { clientKey: string; itemId: number; title: string; followUpId?: number }) => void;
   /** The create preview, with the draft's saved values (step 15.3: edited in the draft editor). */
@@ -50,7 +55,8 @@ export const DevOpsWriteCtx = createContext<DevOpsWriteEnv | null>(null);
 export const useDevOpsWrite = () => useContext(DevOpsWriteCtx);
 
 type Row = { preview: DevOpsPreview; result: DevOpsResult | { error: string; status: number } | null };
-type Flow = { clientKey: string; changes: DevOpsChange[]; rows: Row[]; busy: boolean; error: string | null };
+export type Settled = (r: { confirmed: boolean; sent: boolean }) => void;
+type Flow = { clientKey: string; changes: DevOpsChange[]; rows: Row[]; busy: boolean; error: string | null; settled?: Settled | undefined };
 type Ask =
   | { kind: "state"; clientKey: string; itemId: number; title: string; followUpId?: number }
   | { kind: "target"; clientKey: string; itemId: number; title: string; current: string | null };
@@ -63,12 +69,13 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
   const { onDone: reload, openSettings } = o;
   const onDone = useCallback(() => (setVersion((v) => v + 1), reload()), [reload]);
   const begin = useCallback(
-    async (clientKey: string, changes: DevOpsChange[]) => {
+    async (clientKey: string, changes: DevOpsChange[], settled?: Settled) => {
       try {
         const r = await call<{ previews: DevOpsPreview[]; nothing: string[] }>("devops.preview", { clientKey, changes });
-        if (!r.previews.length) return void notify(r.nothing[0] ?? "Nothing to change in DevOps");
-        setFlow({ clientKey, changes, rows: r.previews.map((preview) => ({ preview, result: null })), busy: false, error: null });
+        if (!r.previews.length) return void (notify(r.nothing[0] ?? "Nothing to change in DevOps"), settled?.({ confirmed: false, sent: false }));
+        setFlow({ clientKey, changes, rows: r.previews.map((preview) => ({ preview, result: null })), busy: false, error: null, settled });
       } catch (e) {
+        settled?.({ confirmed: false, sent: false });
         if (e instanceof ActionRefusal && e.code === "no_write_pat") return void notify(`${e.message}.`);
         notify(errText(e));
       }
@@ -96,6 +103,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
         const ok = rows.filter((r) => r.result && "confirmed" in r.result && r.result.confirmed);
         if (ok.length === rows.length) {
           setFlow(null);
+          f.settled?.({ confirmed: true, sent: true });
           notify(ok.length === 1 ? (ok[0]!.result as DevOpsResult).message : `${ok.length} changes made in DevOps`);
         } else setFlow({ ...f, rows, busy: false, error: null });
       } catch (e) {
@@ -123,7 +131,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
     },
   };
   const dialog = flow ? (
-    <PreviewDialog flow={flow} onConfirm={() => void confirm(flow)} onReload={() => void begin(flow.clientKey, flow.changes)} onClose={() => setFlow(null)} />
+    <PreviewDialog flow={flow} onConfirm={() => void confirm(flow)} onReload={() => void begin(flow.clientKey, flow.changes, flow.settled)} onClose={() => (setFlow(null), flow.settled?.({ confirmed: false, sent: flow.rows.some((r) => r.result && "entry" in r.result) }))} />
   ) : ask ? (
     <AskDialog ask={ask} onClose={() => setAsk(null)} onPreview={(changes) => (setAsk(null), void begin(ask.clientKey, changes))} />
   ) : null;

@@ -84,7 +84,7 @@ export function checklistFor(week: PlanWeek | null, date: IsoDate, half: Half): 
 export const CARD_ITEMS = 3;
 
 export type CardPlan = {
-  /** The committed picks (empty before commit: the card keeps its step 6 look). */
+  /** The block's planned and done picks, committed or not (PV-1). */
   picks: Pick[];
   /** How the picks still to do fit the block's free time; null with none left to do. */
   fit: Fit | null;
@@ -95,13 +95,14 @@ export type CardPlan = {
 };
 
 /**
- * A card's plan (step 6.1). Once the day is committed: its picks, their fit against the block's whole free time
- * (step 15, D266: the same number Plan the day uses), the DevOps list without items picked here, and
- * that list collapsed. Before commit: no picks, every item, not collapsed (unchanged).
+ * A card's plan (step 6.1): its picks, their fit against the block's whole free time (step 15, D266: the same number
+ * Plan the day uses), the DevOps list without items picked here, and that list collapsed. PV-1 (D574): committed or
+ * not, since stories are dragged onto blocks on Week before the day is planned. With no picks: every item, collapsed
+ * only on a committed day.
  */
 export function cardPlan(week: PlanWeek | null, slot: Slot, clientKey: string | null, items: readonly WorkItem[], now: string, sizes: Readonly<Record<Size, number>> = SIZE_MINUTES, timeboxes: readonly TimeboxLike[] = []): CardPlan {
-  const picks = checklistFor(week, slot.date, slot.half);
-  if (!week?.[slot.date]?.committedAt) return { picks: [], fit: null, items: [...items], collapsed: false };
+  const picks = (week?.[slot.date]?.picks ?? []).filter((p) => p.half === slot.half && (p.status === "planned" || p.status === "done"));
+  if (!picks.length) return { picks: [], fit: null, items: [...items], collapsed: !!week?.[slot.date]?.committedAt };
   const picked = new Set(picks.filter((p) => p.kind === "item" && p.clientKey === clientKey && p.itemId !== null).map((p) => p.itemId));
   return {
     picks,

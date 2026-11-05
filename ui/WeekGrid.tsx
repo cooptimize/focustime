@@ -1,4 +1,4 @@
-import { createContext, useContext, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { createContext, Fragment, useContext, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
 import { worstSeverity } from "../week/risks.ts";
@@ -25,6 +25,9 @@ import { HalfScope } from "./scope.ts";
 import { interactive } from "./DetailPanel.tsx";
 import { userZone } from "../week/zone.ts";
 import type { DayPromise } from "../plan/conversation-views.ts";
+import { cardGroups } from "../plan/blockstories.ts";
+import { TypeIcon } from "./TypeIcon.tsx";
+import { pickDragged, useDragSource, useDropTarget } from "./WeekStories.tsx";
 
 export type Selection = { dayIndex: number; half: Half };
 /** U3: where the detail panel opens: the features list, one follow-up or one pick. */
@@ -329,10 +332,13 @@ function WholeDay({ day, kind, tz, selected, refAm, refPm, onOpen, dayLabel }: {
   const lines = events.filter(({ e }) => !seen.has(e.id) && !!seen.add(e.id));
   const picks = kind === "catchup" ? [...catchUp(plan.week, day.am), ...catchUp(plan.week, day.pm)] : [];
   const label = kind === "pto" ? "PTO" : "Catch-up";
+  // PV-1: the whole day is one drop target (PTO refuses it; catch-up takes it with no fit).
+  const drop = useDropTarget({ date: day.date, half: "AM" });
   return (
     <div
       ref={(el) => (refAm(el), refPm(el))}
-      className={`half whole ${kind}${selected ? " selected" : ""}`}
+      {...drop.props}
+      className={`half whole ${kind}${selected ? " selected" : ""}${drop.cls}`}
       tabIndex={selected ? 0 : -1}
       role="button"
       aria-label={`${dayLabel}, ${kind === "pto" ? ptoLabel(day.pto!) : "catch-up, no working hours"}`}
@@ -342,13 +348,8 @@ function WholeDay({ day, kind, tz, selected, refAm, refPm, onOpen, dayLabel }: {
       <div className="whole-label" title={kind === "pto" && day.pto ? ptoLabel(day.pto) : undefined}>
         {label}
       </div>
-      {picks.length > 0 && (
-        <ul className="checklist" aria-label={`Catch-up work for ${dayLabel}`}>
-          {picks.map((p) => (
-            <PickRow key={p.id} pick={p} toggle={plan.toggle} density="week" tabIndex={selected ? 0 : -1} />
-          ))}
-        </ul>
-      )}
+      {drop.tip}
+      {picks.length > 0 && <CardPicks picks={picks} label={`Catch-up work for ${dayLabel}`} tabIndex={selected ? 0 : -1} />}
       {lines.length > 0 && (
         <ul className="whole-lines">
           {lines.map(({ e }) => (
@@ -417,6 +418,8 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   const menu = useMenu((env) => slotMenu(env, slot.date, slot.half, primary?.clientKey ?? null, primary?.clientName ?? null));
   const status = blockStatus(cp.fit, slot.risks);
   const pill = status.kind === "at_risk" ? `At risk${status.short ? ` · ${status.short}` : ""}` : status.label;
+  // PV-1: a drop target for stories dragged from the panel or another block (not the evening).
+  const drop = useDropTarget(eve ? null : { date: slot.date, half: slot.half });
 
   // U3: one line for the client's features this week: "3 features · 1 needs stories", opening the panel there.
   const feats = !eve && (slot.half === "AM" || slot.half === "PM") ? clientFeatures(plan.weekFeatures ?? [], mondayOf(slot.date), primary?.clientKey ?? null) : [];
@@ -443,6 +446,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
         <span className="card-when">{shortRange(slot, tz)}</span>
         <span className="card-more">{menu.button(`Actions for ${dayLabel} ${slot.half}`)}</span>
       </div>
+      {drop.tip}
       {status.kind !== "none" && (
         <div className="card-status">
           <span className={`status-pill ${status.kind}`} id={reasonsId} title={status.detail ?? undefined}>
@@ -476,13 +480,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
           ))}
         </ul>
       )}
-      {shown.length > 0 && (
-        <ul className="checklist" aria-label={`Plan for ${dayLabel} ${slot.half}`}>
-          {shown.map((p) => (
-            <PickRow key={p.id} pick={p} toggle={plan.toggle} density="week" tabIndex={selected ? 0 : -1} />
-          ))}
-        </ul>
-      )}
+      {shown.length > 0 && <CardPicks picks={shown} label={`Plan for ${dayLabel} ${slot.half}`} tabIndex={selected ? 0 : -1} />}
       {doneHidden.length > 0 && <div className="card-done">{doneHidden.length} done</div>}
       {addWork && !phone && (
         <button
@@ -511,7 +509,8 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   return (
     <div
       ref={refFn}
-      className={`half ${state}${ptoHalf ? " pto-half" : ""} ${span ? "span-all" : ""} ${sev ?? ""} ${selected ? "selected" : ""} ${compact ? "card" : ""}${ruler ? " has-ruler" : ""}`}
+      {...drop.props}
+      className={`half ${state}${ptoHalf ? " pto-half" : ""} ${span ? "span-all" : ""} ${sev ?? ""} ${selected ? "selected" : ""} ${compact ? "card" : ""}${ruler ? " has-ruler" : ""}${drop.cls}`}
       style={style}
       tabIndex={selected ? 0 : -1}
       role="button"
@@ -543,6 +542,40 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
       </HalfScope.Provider>
     </div>
   );
+}
+
+/**
+ * PV-1: a card's picks under small feature headers (type icon, short title), the story's type icon on each line;
+ * picks with no feature under "No feature". Headers show only when some pick has a feature. Planned DevOps stories drag
+ * to another block.
+ */
+function CardPicks({ picks, label, tabIndex }: { picks: readonly Pick[]; label: string; tabIndex: number }) {
+  const allWork = useContext(DevOpsWork);
+  const groups = cardGroups(picks, allWork.get(picks[0]!.clientKey));
+  const headed = groups.some((g) => g.feature);
+  return (
+    <ul className="checklist" aria-label={label}>
+      {groups.map((g) => (
+        <Fragment key={g.feature?.id ?? "none"}>
+          {headed && (
+            <li className="card-feat" title={g.feature ? `${g.feature.type} #${g.feature.id} ${g.feature.title}` : "Not under a feature"}>
+              {g.feature ? <TypeIcon clientKey={picks[0]!.clientKey} type={g.feature.type} decorative /> : null}
+              <span className="cf-title">{g.feature?.title ?? "No feature"}</span>
+            </li>
+          )}
+          {g.picks.map((p) => (
+            <CardPick key={p.id} pick={p} tabIndex={tabIndex} />
+          ))}
+        </Fragment>
+      ))}
+    </ul>
+  );
+}
+
+function CardPick({ pick, tabIndex }: { pick: Pick; tabIndex: number }) {
+  const plan = useContext(PlanCtx);
+  const drag = useDragSource(pickDragged(pick));
+  return <PickRow pick={pick} toggle={plan.toggle} density="week" tabIndex={tabIndex} typeIcon dragProps={drag} />;
 }
 
 /** Picks moved to the overflow day (step 13.6, D238): planned and done ones, committed or not. */
