@@ -4473,3 +4473,7 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 /* CV-3: SW-1's sends line in the urgent strip: neutral, not a risk. */
 .us-sends .us-line { border-left-color: var(--accent); }
 .us-sends .us-tag { color: var(--accent); }
+@media (max-width: 599.98px) {
+  /* SW-1's line wrapped whole on a phone; in the strip it still does. */
+  .us-sends .us-what { white-space: normal; flex-basis: 100%; }
+}
