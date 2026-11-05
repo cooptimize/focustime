@@ -7,7 +7,7 @@
 // guidance (emphasis, defaults), never permissions to see or do someone else's work.
 // ADM-2: clientAccounts(), the one answer to "which accounts are clients" (plan/client-accounts.ts), held like the rules.
 import { applyOrg } from "../config/org-apply.ts";
-import { clientScope, resolveRules, suggestColor, teamColors, type OrgBootstrap, type OrgRules } from "../config/org.ts";
+import { clientScope, positionLevelFrom, resolveRules, suggestColor, teamColors, type OrgBootstrap, type OrgRules } from "../config/org.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { levels, type ClientLead, type Levels, type PersonLevel } from "../plan/levels.ts";
 import { FOCUSTIME, type AdminStore } from "../store/admin-store.ts";
@@ -60,7 +60,7 @@ export function createOrgRuntime(o: {
   function people(): Promise<Levels> {
     if (!fresh(levelsHeld)) {
       const value = Promise.all([o.store.directory(), o.store.leads(), o.store.overrides(), o.store.peopleClients(), rules(), accounts(), o.signedIn ? o.signedIn().catch(() => []) : Promise.resolve([])]).then(([directory, leads, overrides, clients, r, ca, signedIn]) =>
-        levels({ directory, leads, overrides, clients, signedIn, automation: r.automation, domains: r.organization.inviteDomains, isClient: (k) => ca.isClient(k) }),
+        levels({ directory, leads, overrides, clients, signedIn, automation: r.automation, domains: r.organization.inviteDomains, isClient: (k) => ca.isClient(k), positionLevel: positionLevelFrom(r.organization.positionLevels) }),
       );
       levelsHeld = { at: now(), value };
       value.catch(() => (levelsHeld = null));

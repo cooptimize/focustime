@@ -13,13 +13,14 @@ import { adminAction, type AdminContext } from "./admin-actions.ts";
 import { createOrgRuntime } from "./org.ts";
 import { onlyClients } from "./client-accounts.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
+import { guidanceFor } from "../config/org.ts";
 
 const NOW = "2026-11-06T15:00:00Z";
 const ADMIN = "00000000-0000-4000-8000-0000000000a1";
 const PAT = "00000000-0000-4000-8000-0000000000b2";
 
 type Row = { id: string; name: string; dataverseMatch: boolean; dataverseText: string; levelName: string | null; leads: { clientKey: string }[]; clients: string[]; notCooptimizerText: string | null };
-type People = { people: Row[]; others: Row[]; noDomains: boolean };
+type People = { people: Row[]; others: Row[]; noDomains: boolean; positions: { name: string; people: number; mapped: boolean; level: string | null }[]; unmappedPositions: number };
 
 async function setup(domains = ["contoso.example"]) {
   const db = sqliteDb().conn;
@@ -31,8 +32,9 @@ async function setup(domains = ["contoso.example"]) {
   // Pat: in Dataverse without an Entra id, a Lead Consultant who owns the customer and a prospect.
   const pat = aDirectoryPerson({ personId: "dv:d3300000-0000-4000-8000-0000000000b2", name: "Pat Lead", email: "pat@contoso.example", level: "lead", positionName: "Lead Consultant" });
   const gus = aDirectoryPerson({ name: "Gus Guest", email: "gus@partner.example", level: null, positionName: null, guest: true });
+  const pia = aDirectoryPerson({ name: "Pia Principal", email: "pia@contoso.example", level: null, positionName: "Principal Architect" });
   await store.replaceDirectory(
-    [pat, gus],
+    [pat, gus, pia],
     [
       { clientKey: "Adatum", personId: pat.personId, source: "owner" },
       { clientKey: "Prospect Co", personId: pat.personId, source: "owner" },
@@ -72,7 +74,7 @@ async function setup(domains = ["contoso.example"]) {
     if (!r.ok) throw new Error(r.error);
     return r.data as People;
   };
-  return { org, admin, people, pat, gus };
+  return { org, admin, people, pat, gus, pia, store };
 }
 
 describe("one person match in Admin › People", () => {
@@ -118,5 +120,33 @@ describe("one person match in Admin › People", () => {
     const p = await t.people();
     expect(p.noDomains).toBe(true);
     expect(p.others.map((x) => x.name)).toEqual(["Gus Guest"]);
+  });
+});
+
+describe("positions to levels (D583)", () => {
+  it("a new position is Not mapped, counted; its people have no level and use the Consultant defaults", async () => {
+    const t = await setup();
+    const p = await t.people();
+    expect(p.unmappedPositions).toBe(1);
+    expect(p.positions[0]).toEqual({ name: "Principal Architect", people: 1, mapped: false, level: null });
+    expect(p.positions.find((x) => x.name === "Lead Consultant")).toMatchObject({ mapped: true, level: "lead", people: 1 });
+    expect(p.people.find((x) => x.name === "Pia Principal")?.levelName).toBeNull();
+    const rules = await t.org.rules();
+    expect(guidanceFor(rules, null, {})).toEqual(guidanceFor(rules, "consultant", {}));
+  });
+
+  it("mapping it gives the level at once, with that level's defaults, and is audited", async () => {
+    const t = await setup();
+    const before = (await t.people()).positions.filter((x) => x.mapped);
+    const map = { ...Object.fromEntries(before.map((x) => [x.name, x.level])), "Principal Architect": "lead" };
+    expect((await adminAction(t.admin, "admin.set", { scope: "org", key: "org.position_levels", value: map })).ok).toBe(true);
+    const p = await t.people();
+    expect(p.unmappedPositions).toBe(0);
+    expect(p.people.find((x) => x.name === "Pia Principal")?.levelName).toBe("Lead consultant");
+    expect((await t.org.levelOf(t.pia.personId)).level).toBe("lead");
+    const audit = await t.store.auditList({ area: "people" });
+    expect(audit.map((a) => a.setting)).toContain("org/org.position_levels");
+    // Not a level: refused.
+    expect((await adminAction(t.admin, "admin.set", { scope: "org", key: "org.position_levels", value: { X: "boss" } })).ok).toBe(false);
   });
 });

@@ -279,9 +279,26 @@ async function peopleSection(ops: AdminOps, meId: string) {
     ...seen.filter((s) => !ops.breakGlass.some((b) => b.toLowerCase() === s.personId)).map((s) => ({ id: s.personId, name: nameOf(s.personId), via: s.via, checkedAt: s.checkedAt })),
     ...ops.breakGlass.map((b) => ({ id: b.toLowerCase(), name: nameOf(b), via: "break_glass" as const, checkedAt: null })),
   ];
+  // ADM-2 (D583): every position a Cooptimizer holds, and every one mapped, with its level and how many hold it.
+  const map = rules.organization.positionLevels;
+  const mapKey = new Map(Object.keys(map).map((k) => [k.trim().toLowerCase(), k]));
+  const held = new Map<string, { name: string; people: number }>();
+  for (const r of rows) {
+    if (!r.cooptimizer || !r.positionName) continue;
+    const k = r.positionName.trim().toLowerCase();
+    const h = held.get(k) ?? { name: mapKey.get(k) ?? r.positionName.trim(), people: 0 };
+    h.people++;
+    held.set(k, h);
+  }
+  for (const [k, name] of mapKey) if (!held.has(k)) held.set(k, { name, people: 0 });
+  const positions = [...held.entries()]
+    .map(([k, h]) => ({ name: h.name, people: h.people, mapped: mapKey.has(k), level: mapKey.has(k) ? (map[mapKey.get(k)!] ?? null) : null }))
+    .sort((x, y) => Number(x.mapped) - Number(y.mapped) || x.name.localeCompare(y.name));
   return {
     people: rows.filter((r) => r.cooptimizer),
     others: rows.filter((r) => !r.cooptimizer),
+    positions,
+    unmappedPositions: positions.filter((x) => !x.mapped && x.people > 0).length,
     noDomains: lv.people.noDomains,
     admins,
     groupLink: groupLink(ops.groupId),

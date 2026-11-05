@@ -587,7 +587,8 @@ type Person = {
   clients: string[];
   sources: { microsoft: boolean; google: boolean; devopsWrites: number } | null;
 };
-type PeopleData = { people: Person[]; others: Person[]; noDomains: boolean; leadsShown: number; admins: { id: string; name: string | null; via: string | null; checkedAt: string | null }[]; groupLink: string | null; groupSet: boolean; refreshedAt: string | null; levels: { id: string; name: string }[] };
+type Position = { name: string; people: number; mapped: boolean; level: string | null };
+type PeopleData = { people: Person[]; others: Person[]; positions: Position[]; unmappedPositions: number; noDomains: boolean; leadsShown: number; admins: { id: string; name: string | null; via: string | null; checkedAt: string | null }[]; groupLink: string | null; groupSet: boolean; refreshedAt: string | null; levels: { id: string; name: string }[] };
 
 const SETUP_WORDS = { done: "Done", skipped: "Skipped", started: "Started", not_started: "Not started" } as const;
 
@@ -674,8 +675,53 @@ function AdminPeople() {
           )}
         </div>
       )}
+      <PositionMap positions={data.positions} unmapped={data.unmappedPositions} levels={data.levels} saver={saver} />
       {removing && <RemovePerson p={removing} onClose={() => setRemoving(null)} onDone={async (m) => (setRemoving(null), setMsg(m), await load())} />}
     </div>
+  );
+}
+
+/** ADM-2 (D583): Dataverse position names to levels. Applies at once (the next read of levels), audited as one Rule. */
+function PositionMap({ positions, unmapped, levels, saver }: { positions: Position[]; unmapped: number; levels: PeopleData["levels"]; saver: Saver }) {
+  const map = Object.fromEntries(positions.filter((p) => p.mapped).map((p) => [p.name, p.level]));
+  const shown = saver.shown("org", "org.position_levels", map) as Record<string, string | null>;
+  const set = (name: string, level: string | null) => void saver.save("org", "org.position_levels", { ...shown, [name]: level }, `${name} mapped`);
+  return (
+    <section className="adm-positions" aria-label="Positions to levels">
+      <h3>Positions to levels {unmapped > 0 && <span className="adm-kind">{unmapped} not mapped</span>}</h3>
+      <p className="muted">Each Cooptimizer's level comes from their Dataverse position. A position that isn't mapped gives no level: those people show Level not set and use the Consultant defaults.</p>
+      <SaveMark s={saver.status("org", "org.position_levels")} retry={() => void saver.save("org", "org.position_levels", shown, "Positions")} />
+      <table className="adm-table">
+        <thead>
+          <tr>
+            <th scope="col">Position in Dataverse</th>
+            <th scope="col">Level</th>
+            <th scope="col">People</th>
+          </tr>
+        </thead>
+        <tbody>
+          {positions.map((p) => {
+            const v = p.name in shown ? shown[p.name] : null;
+            return (
+              <tr key={p.name}>
+                <th scope="row">{p.name}</th>
+                <td>
+                  <select aria-label={`Level for ${p.name}`} value={v ?? ""} onChange={(e) => set(p.name, e.target.value || null)}>
+                    {levels.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                      </option>
+                    ))}
+                    <option value="">Not mapped</option>
+                  </select>
+                </td>
+                <td>{p.people}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
   );
 }
 

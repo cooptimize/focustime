@@ -25,6 +25,28 @@ export function levelFromPosition(name: unknown): Level | null {
   return n === "consultant" ? "consultant" : n === "senior consultant" ? "senior" : n === "lead consultant" ? "lead" : null;
 }
 
+/** ADM-2 (D583): the mapping an admin edits in Admin › People, prefilled with Dataverse's three position names. */
+export type PositionLevels = Record<string, Level | null>;
+export const BUILTIN_POSITION_LEVELS: PositionLevels = { Consultant: "consultant", "Senior Consultant": "senior", "Lead Consultant": "lead" };
+/** A position's level through the mapping (any case, trimmed); a position not in it, or mapped to nothing, has none. */
+export function positionLevelFrom(map: PositionLevels): (name: string | null | undefined) => Level | null {
+  const m = new Map(Object.entries(map).map(([k, v]) => [k.trim().toLowerCase(), v]));
+  return (name) => (name ? (m.get(name.trim().toLowerCase()) ?? null) : null);
+}
+const positionLevels = (v: unknown): PositionLevels => {
+  if (!v || typeof v !== "object" || Array.isArray(v)) throw new OrgInputError("A list of positions and their levels");
+  const e = Object.entries(v as Record<string, unknown>);
+  if (e.length > 200) throw new OrgInputError("At most 200 positions");
+  const out: PositionLevels = {};
+  for (const [k, l] of e) {
+    const name = k.trim();
+    if (!name || name.length > 100) throw new OrgInputError("A position name of 1 to 100 characters");
+    if (l !== null && !(LEVELS as readonly unknown[]).includes(l)) throw new OrgInputError("Consultant, Senior, Lead or Not mapped");
+    out[name] = l as Level | null;
+  }
+  return out;
+};
+
 export type AdminArea = "clients" | "ai" | "conversations" | "organization" | "levels" | "people";
 
 export class OrgInputError extends Error {}
@@ -207,6 +229,7 @@ export const ORG_SPECS = {
   "org.never_suggest": { kind: "rule", area: "organization", label: "Never suggested as helpers or Who", builtin: ["Kat 🤖"], parse: list(100, 100) },
   "org.feedback": { kind: "rule", area: "organization", label: "Send feedback goes to", builtin: null as FeedbackRule | null, parse: orNull(feedback) },
   "org.retention_years": { kind: "rule", area: "organization", label: "Keep people's data (years)", builtin: 2, parse: intIn(1, 10, "years") },
+  "org.position_levels": { kind: "rule", area: "people", label: "Positions to levels", builtin: BUILTIN_POSITION_LEVELS, parse: positionLevels },
   "org.new_person": { kind: "default", area: "organization", label: "Working week for new people", builtin: BUILTIN_NEW_PERSON, parse: newPerson },
 } satisfies Record<string, Spec>;
 export type OrgKey = keyof typeof ORG_SPECS;
@@ -278,7 +301,7 @@ export type OrgBootstrap = { model: string; appCapUsd: number; inviteDomains: re
 export type OrgRules = {
   ai: { on: boolean; model: string; personCapUsd: number; appCapUsd: number; allowedClients: string[] };
   conversations: { pollMinutes: number; retentionDays: number; closedShownDays: number; chatAiDailyCap: number; requestPhrases: string[]; ackPhrases: string[]; promisePhrases: string[] };
-  organization: { inviteDomains: string[]; neverSuggest: string[]; feedback: FeedbackRule | null; retentionYears: number; newPerson: NewPersonDefaults };
+  organization: { inviteDomains: string[]; neverSuggest: string[]; feedback: FeedbackRule | null; retentionYears: number; newPerson: NewPersonDefaults; positionLevels: PositionLevels };
   clients: Record<string, ClientRules>;
   levels: Record<Level, Guidance>;
   /** ADM-2: ids an admin flagged as automation accounts. */
@@ -355,6 +378,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
       feedback: m.has("org\u0000org.feedback") ? (o("org.feedback") ?? boot.feedback) : boot.feedback,
       retentionYears: o("org.retention_years"),
       newPerson: o("org.new_person"),
+      positionLevels: o("org.position_levels"),
     },
     clients,
     levels,
@@ -375,7 +399,8 @@ export function resolve<T>(o: { personal?: T | null | undefined; level?: T | nul
 
 /** A person's guidance: their own choices over their level's defaults (no level: the built-in ones). */
 export function guidanceFor(r: OrgRules, level: Level | null, personal: Partial<Guidance>): Guidance {
-  const lv = level ? r.levels[level] : null;
+  // ADM-2 (D583): no level (an unmapped position, or none) uses the Consultant defaults.
+  const lv = r.levels[level ?? "consultant"];
   const builtin: Guidance = { draftStories: LEVEL_SPECS.draft_stories.builtin, readinessNudges: LEVEL_SPECS.readiness_nudges.builtin, planShare: LEVEL_SPECS.plan_share.builtin };
   return {
     draftStories: resolve({ personal: personal.draftStories, level: lv?.draftStories, builtin: builtin.draftStories }).value,
