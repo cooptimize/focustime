@@ -35,6 +35,7 @@ import { clientColor } from "./labels.ts";
 import { MenuCtx } from "./Menus.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 import { BreakDown, PanelShell } from "./DetailPanel.tsx";
+import { BreakDownButton } from "./BreakDownPanel.tsx";
 import { isTypingTarget, topOverlay } from "./keys.ts";
 import { PlanFrame } from "./plan/PlanFrame.tsx";
 import { PlanHeader } from "./plan/PlanHeader.tsx";
@@ -771,6 +772,8 @@ function ReadyRow({ f, clientName, tz, drafts, onBrief, onMark, onAsk, onDraft, 
       <span className="pw-acts">
         {f.kind === "needs_breakdown" && (
           <>
+            {/* UI-8: Break down, the same panel as Ahead's Fix next (its AI switches and GD-1 guard), beside the Coop brief. */}
+            {f.itemId !== null && <BreakDownButton clientKey={f.clientKey} item={{ id: f.itemId, title: f.title }} />}
             <button type="button" className="mini" onClick={onBrief}>Coop brief</button>
             {f.markedAt ? (
               <span className="muted">Being broken down since {stamp(f.markedAt, tz)} <button type="button" className="mini" onClick={() => onMark(false)}>Unmark</button></span>
