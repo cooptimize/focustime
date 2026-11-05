@@ -346,3 +346,39 @@ One job reads each registered client chat for everyone; Asks are now Requests. D
 - **Identities.** `plan/identities.ts` (pure: `stripLogin`, `nameKey`, `identityIndex`, `clientIdentities`, the Admin view types). `store/admin-store.ts` `identities`, `linkIdentity`, `unlinkIdentity` and `replaceDirectory`'s Dataverse identities over the app table `client_logins` (`store/migrations/20261108T0900_client_logins.ts`). `sources/dataverse/directory.ts` reads each Account Worker's `coop_devopsemail`. `actions/org.ts` `identities()` (held like the levels). `actions/identities.ts`: `aheadIdentities` (mine, personOf, writeAs), `myLinkedLogins` (notes), `identitiesView`, `identityRef`, `emailOfRef`, `assigneesOf`. Applied in `actions/ahead-actions.ts` (`withIdentities`, `rightsOf` with every address of mine, stage writes the login), `plan/ahead-edit.ts` `canEdit` (`emails`), `sources/devops/source.ts` (`identities` dep: my items read for each login, `nameOf`), `sources/devops/normalize.ts` (`alsoMe`, `nameOf`), `actions/scope-deps.ts`, `server/ticks.ts` (notes and takes). Admin › People: `admin.identity` and the `ClientIdentities` section in `ui/settings/Admin.tsx`; `AdminOps.assignees` from the poller's store (`server/main.ts`) or the demo (`sources/demo/data.ts` `demoAssignees`, Harbor's `DEMO_LOGINS`).
 - **Tests.** `ui/ahead/layout.test.ts`, `plan/fixnext.test.ts`, `plan/identities.test.ts`, `actions/identities.test.ts`, the AH-3 parts of `actions/devops-poll.test.ts` and `ui/ahead/model.test.ts`; e2e `e2e/ahead.test.ts` (layouts at 1920 to 390, Fix next) and `e2e/identities.test.ts`; screenshots `e2e/ah3-shots.test.ts`.
 
+
+## TB-1: the FocusTime bot in Teams (Nov 5)
+
+One brain, two front ends: the bot is a Teams front end on the same assistant service as the in-app panel (AS-1), which
+calls the same allowlisted actions as the buttons. The bot never calls an action or an AI provider itself.
+
+- **Endpoint.** `server/teams/sdk.ts`: the Teams SDK (`@microsoft/teams.apps`, `.api`, `.cards` 2.1.1, pinned; only
+  here) mounted on our HTTP server through its adapter seam (`FocusTimeAdapter.registerRoute`; `app.initialize()`,
+  never `app.start()`, no second port). The SDK verifies Bot Framework's JWT (issuer, audience = the bot's app id,
+  RS256 signature from the published keys, expiry with 5 minutes' skew, the `serviceurl` claim) and answers 401
+  otherwise. `quietLogger` drops every argument the SDK logs. Replies go through the SDK's connector client with the
+  bot's managed identity token (`BOT_SCOPE` only). `server/guard.ts` allows `POST /teams/messages` with no Origin on
+  the public host; `server/app.ts` hands it over before any session code. `server/main.ts` wires it in the hosted app
+  when `FOCUSTIME_BOT_APP_ID` is set (`ManagedIdentityCredential` for that client id).
+- **Gate.** `server/teams/gate.ts`: Teams only, Cooptimize's tenant pinned (after the SDK's check), 1:1 chats only, and
+  the sender's Entra object id → a `users` row (not deleted, not a guest UPN) that `cooptimizers()` counts
+  (`org.levels().people.isCooptimizer`). Refusals are one line each.
+- **Core.** `server/teams/bot.ts` `createBotCore`: a message is answered at once (200) and its turn runs after (typing,
+  then the reply, "On it…" when the assistant takes more than 2.5 s); an activity id is handled once (10 minutes in
+  memory; one replica). Quick commands (`server/teams/quick.ts`: what's next, today from `week.load` and
+  `plan/now.ts`, help, open FocusTime) need no AI. Everything else goes to `assistant.handle` (`server/teams/assistant.ts`
+  holds AS-1's proposed interface until AS-1 merges; `assistant: null` until then). A tap (`adaptiveCard/action`) is
+  claimed once in `teams_bot_cards`, runs `assistant.confirm` or `cancel` once, and the card becomes its outcome;
+  a confirm over 8 s answers "Working on it…" and updates the card after.
+- **Cards.** `server/teams/cards.ts`: Adaptive Cards 1.5, `Action.Execute` with an `Action.Submit` fallback; links
+  only to FocusTime's own origin. Previews: `scripts/teams-card-previews.ts`, `docs/teams/screens/`.
+- **Store.** `store/teams-bot-store.ts` over the user tables `teams_bot_chats` (where the 1:1 chat is, for later
+  proactive steps; nothing sends from it in TB-1) and `teams_bot_cards` (`store/migrations/20261109T1000_teams_bot.ts`),
+  both left out of the export.
+- **Settings.** `[notify] teams_messages` (`plan/notify.ts` `teamsMessages`, off), Settings › Notifications › In Teams.
+- **Infra and package.** `infra/modules/bot.bicep` (the Azure Bot and its Teams channel) and the identity in
+  `infra/main.bicep`; `infra/scripts/bootstrap.sh` registers `Microsoft.BotService`. `scripts/teams-package.ts` (the
+  zip), `scripts/teams-icons.ts` (`assets/teams/`). Setup: `docs/setup/teams-bot.md`.
+- **Tests.** `server/teams/sdk.test.ts` (real token checks against a local key server; the connector gets the bot's
+  token), `server/teams/bot.test.ts` (both drivers), `server/teams/quick.test.ts` (demo week),
+  `scripts/teams-package.test.ts`, the guard's, `config/notify.test.ts`; e2e `e2e/teams-bot.test.ts`.

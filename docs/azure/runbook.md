@@ -671,6 +671,38 @@ Prepare shows the estimate before Run, and Review shows what the draft cost so f
 
 Per client: Allow AI off in Settings › Clients (the button then says "Draft stories (AI is off for <client>)" and the Coop brief stays). Per person: Use AI off. Stories already created stay in DevOps; Undo is in Settings › Data › Audit log.
 
+## The Teams bot (TB-1)
+
+The bot's setup, the Teams app upload (dev for testers, prod for everyone, updates) and how it is secured are in
+`docs/setup/teams-bot.md`. In short: per environment a managed identity `ft-<env>-bot-id` and an Azure Bot
+`ft-<env>-bot` (F0, single tenant, Teams channel only) from Bicep, pointing at `<public URL>/teams/messages`; the app
+gets `FOCUSTIME_BOT_APP_ID`. Before the first deploy with the bot, `infra/scripts/bootstrap.sh` (dry run first)
+registers the `Microsoft.BotService` provider in the subscription.
+
+### Credentials and rotation
+
+None to rotate: the bot has no client secret and nothing in Key Vault. Incoming messages carry Teams' signed token
+(checked by the Teams SDK on every request); replies use a token Azure issues to `ft-<env>-bot-id` on demand, held in
+memory only. Replacing the identity (delete it and deploy) gives the bot a new Microsoft App ID: build and upload the
+Teams package again with the new `--bot-id`.
+
+### Logs
+
+Every bot record is `source=server` with `op` starting `teams_` and only a kind: `teams_turn` (help, open, next,
+today, not_ready, assistant_<status>, error), `teams_tap` (done, changed, failed, expired, cancelled, repeat,
+in_progress, slow, confirm_error), `teams_refused` (tenant, not_personal, not_signed_in, not_cooptimizer, deleted,
+no_person), `teams_install`, `teams_activity duplicate`, `teams_sdk warn|error`, and `auth teams_token rejected`
+(a 401). Never a message's text, a person, a conversation id, a token or a header.
+
+```
+az containerapp logs show -g FocusTime-dev -n ft-dev-app --tail 200 | grep teams_
+```
+
+### Dev sleeps
+
+Dev scales to zero and takes about 30 seconds to wake (measured Nov 5); the Bot Service waits 10 to 15. The first
+message after dev sleeps may be late or lost: send it again. Prod runs one replica and doesn't sleep.
+
 ## Admins (ADM-1)
 
 ### Create the group (once, both environments share it)
