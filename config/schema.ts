@@ -3,7 +3,8 @@ import { parse, TomlError } from "smol-toml";
 import type { MainHalf, StandingBlock, WeekConfig, WorkWeekday } from "../week/types.ts";
 import { DEFAULT_THRESHOLDS, type RoadmapThresholds } from "../plan/roadmap.ts";
 import { DEFAULT_ASK_SETTINGS, type AskSettings } from "../plan/asks.ts";
-import { DEFAULT_AI_PERSON, type AiPersonSettings } from "../ai/types.ts";
+import { DEFAULT_AI_PERSON, DEFAULT_AI_RULES, type AiPersonSettings, type AiRules } from "../ai/types.ts";
+import type { Guidance, OrgView } from "./org-apply.ts";
 import { DEFAULT_NOTIFY, NOTIFY_KINDS, type NotifyKind, type NotifySettings } from "../plan/notify.ts";
 import { DEFAULT_FOCUS, MAX_PLAYLISTS, playlistLink, SOUNDS, type FocusSettings, type SoundKind } from "../plan/focussound.ts";
 import { parseSpan, VIEW_RANGES, WEEKDAY_KEYS, type DayOverride, type Span, type TimeModel, type ViewRange, type WeekdayKey } from "../week/hours.ts";
@@ -52,8 +53,16 @@ export type AppConfig = {
   roadmap: RoadmapThresholds;
   /** AP-1: Asks: how often delivery chats are read in working hours, and the phrase lists the rules use. */
   asks: AskSettings;
-  /** AI-0: Use AI (off by default), the monthly cap in US dollars (10 by default), the clients with Allow AI on (none). */
+  /** AI-0: the person's [ai] values. Since ADM-1 only draft_months is theirs; the rest is read for the one-time migration. */
   ai: AiPersonSettings;
+  /** ADM-1: the admins' AI rules, filled in when the org settings are applied (off until then). */
+  aiRules: AiRules;
+  /** ADM-1: the person's own choices over their level's defaults ([guidance]); unset keys follow the level. */
+  guidance: Partial<Guidance>;
+  /** ADM-1: what the person's own rows say, before built-in defaults fill in: their phrases and excludes (null: none set). */
+  mine: { requestPhrases: string[] | null; ackPhrases: string[] | null; promisePhrases: string[] | null; exclude: string[] | null };
+  /** ADM-1: the team's settings as they apply to this person (null until applied, config/org-apply.ts). */
+  org: OrgView | null;
 };
 /** `ownerValue` empty means the signed-in person's UPN (A2), then their display name. `startWithoutAsking` (step 15.5, Q87): the morning box's Start runs at once. */
 export type AzureSettings = { ownerTag: string; ownerValue: string; startWithoutAsking: boolean };
@@ -196,7 +205,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
 
   // Section and key names are unchanged by the rename (R1), so existing config files keep working.
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap", "asks", "ai"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap", "asks", "ai", "guidance"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -503,6 +512,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
   }
 
   // [collab] (optional, step 13): meeting_minutes (15, 30, 45, 60 or 90), teams, days_ahead (1 to 10), domains
+  const mine: AppConfig["mine"] = { requestPhrases: null, ackPhrases: null, promisePhrases: null, exclude: null };
   const collab: CollabSettings = { ...DEFAULT_COLLAB, domains: [], exclude: [...DEFAULT_EXCLUDE] };
   if (raw.collab !== undefined) {
     const t = isTable(raw.collab) ? raw.collab : (err("collab", "Must be a [collab] table"), null);
@@ -526,7 +536,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
       }
       if (t.exclude !== undefined) {
         if (!Array.isArray(t.exclude) || t.exclude.length > 50 || t.exclude.some((d) => typeof d !== "string" || !d.trim() || d.length > 200)) err("collab.exclude", "Must be a list of up to 50 names or addresses");
-        else collab.exclude = (t.exclude as string[]).map((d) => d.trim());
+        else mine.exclude = collab.exclude = (t.exclude as string[]).map((d) => d.trim());
       }
     }
   }
@@ -612,7 +622,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
         const v = t[k];
         if (v === undefined) continue;
         if (!Array.isArray(v) || v.length > 50 || v.some((x) => typeof x !== "string" || x.length > 60)) err(`asks.${k}`, "Must be a list of up to 50 phrases, each at most 60 characters");
-        else asks[key] = (v as string[]).map((x) => x.trim().toLowerCase()).filter(Boolean);
+        else mine[key] = asks[key] = (v as string[]).map((x) => x.trim().toLowerCase()).filter(Boolean);
       }
     }
   }
@@ -642,6 +652,26 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
         const v = t.allowed_clients;
         if (!Array.isArray(v) || v.length > 200 || v.some((x) => typeof x !== "string" || !x.trim() || x.length > 100)) err("ai.allowed_clients", "Must be a list of client names");
         else ai.allowedClients = [...new Set((v as string[]).map((x) => x.trim()))];
+      }
+    }
+  }
+
+  // [guidance] (optional, ADM-1): draft_stories and readiness_nudges (true or false), plan_share (50 to 100, percent).
+  // Each is the person's own override of their level's default; left out, the level's default applies.
+  const guidance: Partial<Guidance> = {};
+  if (raw.guidance !== undefined) {
+    const t = isTable(raw.guidance) ? raw.guidance : (err("guidance", "Must be a [guidance] table"), null);
+    if (t) {
+      for (const k of Object.keys(t)) if (!["draft_stories", "readiness_nudges", "plan_share"].includes(k)) err(`guidance.${k}`, "Unknown field");
+      for (const [k, key] of [["draft_stories", "draftStories"], ["readiness_nudges", "readinessNudges"]] as const) {
+        if (t[k] === undefined) continue;
+        if (typeof t[k] !== "boolean") err(`guidance.${k}`, "Must be true or false");
+        else guidance[key] = t[k] as boolean;
+      }
+      if (t.plan_share !== undefined) {
+        const v = t.plan_share;
+        if (typeof v !== "number" || !Number.isInteger(v) || v < 50 || v > 100) err("guidance.plan_share", "Must be a whole number of percent from 50 to 100");
+        else guidance.planShare = v;
       }
     }
   }
@@ -698,6 +728,10 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
       roadmap,
       asks,
       ai,
+      aiRules: { ...DEFAULT_AI_RULES, allowedClients: [] },
+      guidance,
+      mine,
+      org: null,
     },
   };
 }

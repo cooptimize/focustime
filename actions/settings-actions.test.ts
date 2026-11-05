@@ -56,10 +56,11 @@ describe("Settings (step 6b)", () => {
     expect(text).toContain("# my own note at the top");
     expect(text).toContain("# T&W keeps its old color form");
     expect(text).toContain('"T&W" = "#1f9e8f"');
-    expect(text).toContain('Adatum = { color = "ochre", name = "Adatum Steel", open_states = ["Resolved"] }');
+    // ADM-1: states treated as open are an admin's Rule now, so a person's save doesn't write them.
+    expect(text).toContain('Adatum = { color = "ochre", name = "Adatum Steel" }');
     expect(text).not.toContain("[chromium]");
     const cfg = parseConfig(text);
-    expect(cfg.ok && cfg.config.clientSettings.Adatum).toEqual({ color: "ochre", name: "Adatum Steel", openStates: ["Resolved"], follow: false });
+    expect(cfg.ok && cfg.config.clientSettings.Adatum).toEqual({ color: "ochre", name: "Adatum Steel", openStates: [], follow: false });
     expect(cfg.ok && cfg.config.clients.Adatum).toBe("var(--client-ochre)");
     // Round trip: saving the same values again changes nothing but the backup.
     await t.run("settings.save", { section: "client", values: { key: "Adatum", name: "Adatum Steel", color: "ochre", openStates: ["Resolved"] } });
