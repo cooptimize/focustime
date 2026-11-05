@@ -1097,6 +1097,11 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .command-head input { flex: 1; border: 0; background: transparent; font-size: var(--fs-4); padding: 4px 2px; outline: none; }
 .command-step-title { flex: 1; font-weight: 600; }
 .command-menu .menu-list { overflow: auto; padding: 4px; flex: 1; }
+/* UI-8: the dialog itself never scrolls (focus on a button at its foot used to scroll an overflow: hidden box and take
+   the header, with its ×, out of view). The header and footer stay; whatever is between them scrolls. */
+.command-menu { overflow: clip; }
+.command-menu > .command-head, .command-menu > .command-foot { flex: none; }
+.command-menu > :not(.command-head):not(.command-foot) { min-height: 0; overflow-y: auto; }
 .command-menu .menu-prompt { padding: 14px; }
 .command-foot { padding: 7px 14px; border-top: 1px solid var(--border); font-size: var(--fs-2); }
 
@@ -3342,10 +3347,13 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .guide-wrap { max-width: 1080px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .guide-body { padding-bottom: 72px; }
 .guide-top { position: sticky; top: 0; z-index: 5; background: color-mix(in oklab, var(--bg) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
-.guide-top .guide-wrap { display: flex; align-items: center; gap: 18px; padding-block: 10px; flex-wrap: wrap; }
+/* UI-8: the row never wraps; the chapters wrap inside their own box, so the × stays at the top right at any text size. */
+.guide-top .guide-wrap { display: flex; align-items: flex-start; gap: 18px; padding-block: 10px; flex-wrap: nowrap; }
+.guide-top .guide-brand, .guide-top .x-close, .guide-top .guide-close { flex: none; align-self: flex-start; }
+.guide-top .guide-brand { min-height: 44px; }
 .guide-brand { display: flex; align-items: center; gap: 9px; font-weight: 600; letter-spacing: -0.02em; }
 .guide-brand .muted { font-weight: 400; }
-.guide-chapters { display: flex; gap: 2px; flex-wrap: wrap; margin-left: auto; }
+.guide-chapters { display: flex; gap: 2px; flex-wrap: wrap; margin-left: auto; flex: 1 1 0; min-width: 0; justify-content: flex-end; align-self: center; }
 .guide-chapters button { border: 1px solid transparent; background: none; color: var(--text-muted); font-size: var(--fs-3); padding: 6px 10px; border-radius: 7px; }
 .guide-chapters button:hover { color: var(--text); background: var(--surface); }
 .guide-chapters button.on { color: var(--text); background: var(--surface); border-color: var(--border); }

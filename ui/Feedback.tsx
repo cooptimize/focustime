@@ -3,6 +3,8 @@
 // Preview: the exact title and description, and where it goes; Send or Back. Then "Sent. Thanks." with a link to the
 // new item, or a plain error with Copy text, so nothing typed is lost and nothing is retried on its own.
 // Keys: Enter in the text box goes to the preview (Shift+Enter is a new line); Ctrl+Enter sends from the preview.
+// UI-8: UI-3's header on every screen: ‹ Back at the top left on the preview and the error (back to the text), the ×
+// at the top right always, Esc closes. The header never scrolls away; only the body scrolls.
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useEffect, useRef, useState } from "react";
 import { aboutLine, type Build } from "./About.tsx";
@@ -92,8 +94,7 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
           e.stopPropagation();
           if (e.key === "Escape" && !busy) {
             e.preventDefault();
-            if (step.kind === "preview" || step.kind === "error") setStep({ kind: "write" });
-            else onClose();
+            onClose();
           }
           if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && step.kind === "preview") {
             e.preventDefault();
@@ -102,6 +103,11 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
         }}
       >
         <div className="command-head">
+          {(step.kind === "preview" || step.kind === "error") && (
+            <button ref={step.kind === "error" ? primary : undefined} type="button" className="menu-back" onClick={() => setStep({ kind: "write" })} disabled={busy} aria-label="Back" title="Back to your text">
+              ‹
+            </button>
+          )}
           <span className="command-step-title">{step.kind === "preview" ? "Send feedback: preview" : "Send feedback"}</span>
           <CloseButton onClose={onClose} disabled={busy} />
         </div>
@@ -181,7 +187,6 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
               ) : (
                 copyButton
               )}
-              <button type="button" className="mini quiet" onClick={() => setStep({ kind: "write" })} disabled={busy}>Back</button>
             </div>
           </div>
         )}
@@ -211,7 +216,6 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
             <p className="set-problem" role="alert">{step.message}</p>
             <div className="feedback-actions">
               {copyButton}
-              <button ref={primary} type="button" className="mini quiet" onClick={() => setStep({ kind: "write" })}>Back</button>
             </div>
           </div>
         )}
