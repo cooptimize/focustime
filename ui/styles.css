@@ -3622,11 +3622,13 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .app.phone .brand { flex: 1; min-width: 0; align-items: center; }
   .app.phone .top-actions { order: 0; display: flex; align-items: center; gap: 4px; }
   .app.phone .demo-tag { font-size: var(--fs-1); padding: 2px 8px; white-space: nowrap; }
-  /* NV-1: Capture (+) and ⋯ sit in the phone top bar now; the brand gives way first (the name hides, the mark stays). */
-  .app.phone .brand .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .app.phone .brand-home { min-width: 0; }
+  /* NV-1: Capture (+) and ⋯ sit in the phone top bar. CV-3: the FocusTime name never gives way (the person chip moved
+     into ⋯ and the demo tag reads "Demo"); the demo tag shrinks first when even that doesn't fit. */
+  .app.phone .brand { gap: 6px; overflow: hidden; }
+  .app.phone .brand .name { white-space: nowrap; flex: none; }
+  .app.phone .brand-home { flex: none; }
   .app.phone .top-actions .top-btn.phone-capture, .app.phone .top-actions .top-btn.top-more { min-width: var(--tap); width: var(--tap); padding: 0; border: 0; background: none; position: relative; }
-  .app.phone .demo-tag { flex: none; }
+  .app.phone .demo-tag { flex: 0 1 auto; min-width: 0; margin-left: 0; overflow: hidden; text-overflow: ellipsis; }
   /* Ahead on the phone (read-only): nothing wider than the screen. */
   .app.phone .phone-ro { overflow-x: hidden; max-width: 100vw; }
   .app.phone .roadmap { padding: 8px 16px 24px; min-width: 0; }
