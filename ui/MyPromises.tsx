@@ -1,0 +1,297 @@
+// CV-1: Inbox › My promises. What I said I'd do in my clients' registered chats, one per group of my consecutive
+// messages: what, to whom (the person I answered or mentioned, never me), the due (overdue in amber, never red), the
+// client and chat. One primary action: Add to Today (no due yet) or Make it a follow-up; Link, Done and Not needed
+// under ⋯; Why behind the info icon. A promise that implies a DevOps item asks "Create the DevOps item?" (Create,
+// Link existing, Not needed) of me only, and waits amber after one of my working days. Nothing is posted in Teams.
+import { TypeIcon } from "./TypeIcon.tsx";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import type { WeekLoadData } from "../actions/types.ts";
+import type { MyPromisesData, PromiseCard } from "../plan/conversation-views.ts";
+import { userZone } from "../week/zone.ts";
+import { call } from "./api.ts";
+import { DraftItem } from "./Conversations.tsx";
+import { useDevOpsWrite } from "./DevOpsWrite.tsx";
+import { Fading } from "./FollowUps.tsx";
+import { clientColor, whenText } from "./labels.ts";
+
+const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
+
+/** "Today 7:30 PM", "Thu, Nov 5" or "Thu, Nov 5 9:00 AM", in my zone. */
+export function dueText(p: Pick<PromiseCard, "dueAt" | "dueDate">, today: string, tz: string): string | null {
+  if (p.dueAt) {
+    const z = Temporal.Instant.from(p.dueAt).toZonedDateTimeISO(tz);
+    const time = z.toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
+    const day = z.toPlainDate().toString();
+    return `${day === today ? "Today" : z.toPlainDate().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })} ${time}`;
+  }
+  if (p.dueDate) return p.dueDate === today ? "Today" : Temporal.PlainDate.from(p.dueDate).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  return null;
+}
+
+export function MyPromises({ data, version, onCount, onChanged }: { data: WeekLoadData; version: number; onCount: (n: number) => void; onChanged: () => void; openSettings: (section: string) => void }) {
+  const [state, setState] = useState<MyPromisesData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<ReactNode>(null);
+  const [form, setForm] = useState<{ id: number; kind: "followup" | "link" | "draft" } | null>(null);
+  const head = useRef<HTMLHeadingElement>(null);
+  const writes = useDevOpsWrite();
+  const tz = userZone(data);
+  const clearNotice = useCallback(() => setNotice(null), []);
+  const show = useCallback((d: MyPromisesData) => (setState(d), onCount(d.open)), [onCount]);
+  const load = useCallback(async () => {
+    try {
+      show(await call<MyPromisesData>("my_promises.list", {}));
+      setError(null);
+    } catch (e) {
+      setError(errText(e));
+    }
+  }, [show]);
+  useEffect(() => void load(), [load, version, writes?.version]);
+  useEffect(() => head.current?.focus(), []);
+  const run = async (action: string, input: Record<string, unknown>, done: ReactNode) => {
+    try {
+      show(await call<MyPromisesData>(action, input));
+      setError(null);
+      setForm(null);
+      setNotice(done);
+      onChanged();
+    } catch (e) {
+      setError(errText(e));
+    }
+  };
+  const undo = (p: PromiseCard) => (
+    <button type="button" className="mini quiet" onClick={() => void run("my_promises.reopen", { id: p.id }, "Open again")}>
+      Undo
+    </button>
+  );
+  const today = state?.today ?? "";
+  return (
+    <main className="inbox my-promises" aria-label="My promises">
+      <div className="follow-ups-head">
+        <h2 ref={head} tabIndex={-1}>
+          My promises {state && state.open > 0 && <span className="muted">{state.open} open</span>}
+        </h2>
+      </div>
+      {error && (
+        <p className="set-problem" role="alert">
+          {error}
+        </p>
+      )}
+      <Fading text={notice} onGone={clearNotice} ms={8000} />
+      {state && state.promises.length === 0 && (
+        <div className="asks-empty">
+          <p>No promises</p>
+          <p className="muted">When you say you'll do something in a client's registered chat ("I'll send it tonight"), it shows here.</p>
+        </div>
+      )}
+      <ul className="conv-list">
+        {state?.promises.map((p) => (
+          <Promise
+            key={p.id}
+            p={p}
+            tz={tz}
+            today={today}
+            color={clientColor(p.clientKey, data.clients)}
+            form={form?.id === p.id ? form.kind : null}
+            onForm={(kind) => setForm(kind ? { id: p.id, kind } : null)}
+            canCreate={!!writes && !!state?.writeClients.includes(p.clientKey)}
+            onRun={run}
+            undo={undo(p)}
+            onCreate={(change) => (setForm(null), void writes?.begin(p.clientKey, [change]))}
+            onSuggestion={(s, inc) => void writes?.begin(p.clientKey, [s.kind === "comment" ? { kind: "conversation_comment", suggestionId: s.id, ...(inc ? { includeInternal: true } : {}) } : { kind: "description_update", suggestionId: s.id }])}
+          />
+        ))}
+      </ul>
+    </main>
+  );
+}
+
+function Promise(x: {
+  p: PromiseCard; tz: string; today: string; color: string; form: "followup" | "link" | "draft" | null; onForm: (k: "followup" | "link" | "draft" | null) => void;
+  canCreate: boolean; onRun: (action: string, input: Record<string, unknown>, done: ReactNode) => Promise<void>; undo: ReactNode;
+  onCreate: (change: import("./DevOpsWrite.tsx").DevOpsChange) => void; onSuggestion: (s: PromiseCard["suggestions"][number], includeInternal: boolean) => void;
+}) {
+  const { p } = x;
+  const [menu, setMenu] = useState(false);
+  const [why, setWhy] = useState(false);
+  const open = p.state === "open";
+  const due = dueText(p, x.today, x.tz);
+  const onToday = !!p.onToday && p.onToday === x.today;
+  const primary = !p.dueDate && !onToday ? { label: "Add to Today", run: () => void x.onRun("my_promises.today", { id: p.id, on: true }, "On Today") } : { label: "Make it a follow-up", run: () => x.onForm(x.form === "followup" ? null : "followup") };
+  return (
+    <li className={`conv-card promise${open ? "" : " resolved"}`} style={{ "--c": x.color } as CSSProperties} aria-label={`Promise: ${p.what}`}>
+      <div className="conv-head">
+        <span className="swatch" aria-hidden="true" />
+        <strong className="conv-title">{p.what}</strong>
+        {due && <span className={`conv-due${p.overdue ? " overdue" : ""}`}>{p.overdue ? `Overdue · ${due}` : `Due ${due}`}</span>}
+        {p.waitingDays && <span className="conv-status waiting">Waiting on you · {p.waitingDays} {p.waitingDays === 1 ? "day" : "days"}</span>}
+        <button type="button" className="mini quiet conv-why" aria-label="Why this is a promise" aria-expanded={why} onClick={() => setWhy((v) => !v)}>
+          ⓘ
+        </button>
+      </div>
+      <p className="conv-sub muted">
+        {p.toName ? <>To {p.toName} · </> : null}
+        {p.clientName} · {p.chatName}
+        {p.conversationTitle ? <> · {p.conversationTitle}</> : null}
+      </p>
+      {why && (
+        <div className="conv-why-box muted">
+          {p.reason && <p>Why: {p.reason}</p>}
+          {p.messages.map((m, i) => (
+            <p key={i}>
+              You, {whenText(m.at, x.tz)}: {m.text}
+            </p>
+          ))}
+          <a href={p.link} target="_blank" rel="noopener noreferrer">
+            Open in Teams
+          </a>
+        </div>
+      )}
+      {p.needsItem && open && (
+        <div className="conv-suggest">
+          <p className="conv-suggest-head">Create the DevOps item?</p>
+          {p.likely && (
+            <p className="ask-likely">
+              Looks like{" "}
+              <a href={p.likely.url ?? undefined} target="_blank" rel="noopener noreferrer">
+                #{p.likely.id} {p.likely.title ?? ""}
+              </a>{" "}
+              <button type="button" className="mini" onClick={() => void x.onRun("my_promises.link", { id: p.id, itemId: p.likely!.id }, `Linked to #${p.likely!.id}`)}>
+                Link it
+              </button>
+            </p>
+          )}
+          <div className="ask-actions">
+            <button type="button" className="mini primary" disabled={!x.canCreate || p.conversationId === null} title={x.canCreate ? undefined : `Add DevOps write access for ${p.clientName} in Settings`} onClick={() => x.onForm("draft")}>
+              Create
+            </button>
+            <button type="button" className="mini" onClick={() => x.onForm(x.form === "link" ? null : "link")}>
+              Link existing…
+            </button>
+            <button type="button" className="mini quiet" onClick={() => void x.onRun("my_promises.not_needed", { id: p.id }, <>Not needed. {x.undo}</>)}>
+              Not needed
+            </button>
+          </div>
+        </div>
+      )}
+      {p.suggestions.map((s) => (
+        <div key={s.id} className="conv-suggest">
+          <p className="conv-suggest-head">{s.kind === "comment" ? `Suggested update for #${s.itemId}` : `Description change for #${s.itemId}`}</p>
+          <p>{s.body || "Discussed in an internal chat."}</p>
+          <div className="ask-actions">
+            <button type="button" className="mini primary" onClick={() => x.onSuggestion(s, false)}>
+              {s.kind === "comment" ? "Post comment" : "Review the change"}
+            </button>
+            <button type="button" className="mini quiet" onClick={() => void x.onRun("suggestions.skip", { id: s.id }, "Skipped")}>
+              Skip
+            </button>
+          </div>
+        </div>
+      ))}
+      {open && !p.needsItem && (
+        <div className="ask-actions">
+          <button type="button" className="mini primary" onClick={primary.run}>
+            {primary.label}
+          </button>
+          <span className="fu-more">
+            <button type="button" className="mini quiet" aria-haspopup="menu" aria-expanded={menu} aria-label={`More for: ${p.what}`} onClick={() => setMenu((v) => !v)}>
+              ⋯
+            </button>
+            {menu && (
+              <span className="fu-menu" role="menu" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setMenu(false))}>
+                {primary.label === "Add to Today" && (
+                  <button type="button" role="menuitem" autoFocus onClick={() => (setMenu(false), x.onForm("followup"))}>
+                    Make it a follow-up
+                  </button>
+                )}
+                {onToday && (
+                  <button type="button" role="menuitem" onClick={() => (setMenu(false), void x.onRun("my_promises.today", { id: p.id, on: false }, "Off Today"))}>
+                    Take off Today
+                  </button>
+                )}
+                <button type="button" role="menuitem" onClick={() => (setMenu(false), x.onForm("link"))}>
+                  Link to an item…
+                </button>
+                <button type="button" role="menuitem" onClick={() => (setMenu(false), void x.onRun("my_promises.done", { id: p.id }, <>Done. {x.undo}</>))}>
+                  Done
+                </button>
+                <button type="button" role="menuitem" onClick={() => (setMenu(false), void x.onRun("my_promises.not_needed", { id: p.id }, <>Not needed. {x.undo}</>))}>
+                  Not needed
+                </button>
+              </span>
+            )}
+          </span>
+        </div>
+      )}
+      {!open && (
+        <p className="ask-done">
+          {p.state === "followup" ? "A follow-up now. It closes when the follow-up is done" : p.state === "linked" || p.state === "created" ? <>Kept by <a href={p.item?.url ?? undefined} target="_blank" rel="noopener noreferrer">#{p.item?.id} {p.item?.title ?? ""}</a></> : p.state === "done" ? "Done" : "Not needed"}{" "}
+          {(p.state === "done" || p.state === "not_needed" || p.state === "linked") && x.undo}
+        </p>
+      )}
+      {x.form === "followup" && <FollowUpForm p={p} onSave={(v) => void x.onRun("my_promises.followup", { id: p.id, ...v }, "Follow-up added. The promise closes when it's done")} onCancel={() => x.onForm(null)} />}
+      {x.form === "link" && <PromiseLink p={p} onPick={(id) => void x.onRun("my_promises.link", { id: p.id, itemId: id }, `Linked to #${id}`)} onCancel={() => x.onForm(null)} />}
+      {x.form === "draft" && p.conversationId !== null && <DraftItem c={{ id: p.conversationId, clientName: p.clientName, clientKey: p.clientKey }} commitmentId={p.id} onCreate={x.onCreate} onCancel={() => x.onForm(null)} />}
+    </li>
+  );
+}
+
+function FollowUpForm({ p, onSave, onCancel }: { p: PromiseCard; onSave: (v: { who: string; what: string; due: string }) => void; onCancel: () => void }) {
+  const [who, setWho] = useState(p.toName ?? "");
+  const [what, setWhat] = useState(p.what);
+  const [due, setDue] = useState(p.dueDate ?? p.onToday ?? "");
+  return (
+    <form className="ask-form" onSubmit={(e) => (e.preventDefault(), onSave({ who: who.trim(), what: what.trim(), due }))} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())}>
+      <label>
+        Who
+        <input value={who} maxLength={200} onChange={(e) => setWho(e.target.value)} />
+      </label>
+      <label>
+        What
+        <input autoFocus value={what} maxLength={200} onChange={(e) => setWhat(e.target.value)} />
+      </label>
+      <label>
+        Due
+        <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+      </label>
+      <button type="submit" className="mini primary">Add follow-up</button>
+      <button type="button" className="mini quiet" onClick={onCancel}>Cancel</button>
+    </form>
+  );
+}
+
+type Hit = { id: number; title: string; type: string; state: string; url: string };
+function PromiseLink({ p, onPick, onCancel }: { p: PromiseCard; onPick: (id: number) => void; onCancel: () => void }) {
+  const [q, setQ] = useState(p.likely ? `#${p.likely.id}` : "");
+  const [hits, setHits] = useState<Hit[] | null>(null);
+  useEffect(() => {
+    if (p.conversationId === null) return setHits([]);
+    let live = true;
+    const t = setTimeout(() => void call<{ items: Hit[] }>("conversations.search", { id: p.conversationId, query: q }).then((r) => live && setHits(r.items), () => live && setHits([])), 150);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [q, p.conversationId]);
+  return (
+    <div className="ask-form ask-link" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())}>
+      <label>
+        Link to one of {p.clientName}'s open items
+        <input autoFocus value={q} maxLength={200} onChange={(e) => setQ(e.target.value)} placeholder="Search by title or #id" onKeyDown={(e) => e.key === "Enter" && hits?.[0] && (e.preventDefault(), onPick(hits[0].id))} />
+      </label>
+      {hits && (
+        <ul className="ask-hits" aria-label="Open items">
+          {hits.length === 0 && <li className="muted">No open items match</li>}
+          {hits.map((h) => (
+            <li key={h.id}>
+              <button type="button" className="mini quiet" onClick={() => onPick(h.id)}>
+                <TypeIcon clientKey={p.clientKey} type={h.type} /> #{h.id} {h.title} <span className="muted">· {h.state}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button type="button" className="mini quiet" onClick={onCancel}>Cancel</button>
+    </div>
+  );
+}

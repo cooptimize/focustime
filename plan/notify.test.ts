@@ -173,10 +173,10 @@ describe("urgent asks (AP-2)", () => {
     expect(gate("asks", { ...base, inHours: false, settings: { ...DEFAULT_NOTIFY, asksThroughFocus: true } })).toBe("quiet");
     expect(gate("asks", { ...base, settings: { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds, asks: false } } })).toBe("off");
   });
-  it("once per ask, opening Asks", () => {
+  it("once per ask, opening Conversations (CV-1)", () => {
     const n = notices.urgentAsk("1700000000001", "Fabrikam", "Portal down", "2026-11-04T15:00:00Z");
-    expect(n).toMatchObject({ kind: "asks", key: "ask:1700000000001", title: "Urgent request from Fabrikam", route: "requests" });
-    expect(parseRoute(n.route)).toEqual({ view: "requests" });
+    expect(n).toMatchObject({ kind: "asks", key: "ask:1700000000001", title: "Urgent request from Fabrikam", route: "conversations" });
+    expect(parseRoute(n.route)).toEqual({ view: "conversations" });
     expect(parseRoute("asks")).toEqual({ view: "asks" });
   });
 });

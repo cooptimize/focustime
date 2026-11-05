@@ -3949,3 +3949,75 @@ button.ask-label { cursor: pointer; }
 .ds-child-type { display: inline-flex; align-items: center; gap: 4px; }
 .guide-icons { list-style: none; padding: 0; margin: 8px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px 16px; }
 .guide-icons li { display: flex; align-items: center; gap: 6px; }
+
+/* ---- CV-1: Conversations and My promises (Inbox), promises on Today and Week's rail. Overdue is amber, never red. ---- */
+.conversations, .promises { max-width: 1100px; }
+.conv-section { margin: 18px 0 0; }
+.conv-section > h3, .conv-fold > summary { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; font-size: var(--fs-4); font-weight: 600; cursor: default; }
+.conv-fold > summary { cursor: pointer; list-style: none; }
+.conv-fold > summary .muted, .conv-section > h3 .muted { font-size: var(--fs-3); font-weight: 400; }
+.conv-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.conv-card { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-left: 4px solid var(--c, var(--border-strong)); border-radius: 8px; background: var(--raised); min-width: 0; }
+.conv-card.selected { box-shadow: 0 0 0 1px var(--accent); }
+.conv-card:focus { outline: none; }
+.conv-card:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.conv-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding: 4px 8px; font-size: var(--fs-3); border-radius: 6px; }
+.conv-line:hover { background: var(--raised); }
+.conv-line-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conv-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; font-size: var(--fs-3); }
+.conv-title { font-weight: 600; overflow-wrap: anywhere; }
+.conv-status { font-size: var(--fs-2); font-weight: 600; padding: 0 8px; border-radius: 99px; color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); white-space: nowrap; }
+.conv-status.waiting, .conv-status.unclaimed { color: var(--watch); background: color-mix(in oklab, var(--watch) 14%, var(--surface)); border-color: color-mix(in oklab, var(--watch) 45%, var(--border)); }
+.conv-updated { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); }
+.conv-sub { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: var(--fs-2); color: var(--text-muted); }
+.conv-people { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.conv-avatar { min-inline-size: 22px; block-size: 22px; padding: 0 3px; border-radius: 99px; display: inline-grid; place-items: center; font-size: var(--fs-1); font-weight: 600; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); }
+.conv-avatar.external { border-color: var(--watch); }
+.conv-summary { margin: 0; font-size: var(--fs-3); overflow-wrap: anywhere; display: grid; gap: 1px; }
+.conv-item, .conv-wind { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--fs-2); }
+.conv-wind { color: var(--text-muted); }
+.conv-suggest { display: grid; gap: 6px; padding: 8px 10px; border: 1px dashed var(--border-strong); border-radius: 8px; background: var(--surface); }
+.conv-suggest-head { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.conv-suggest-lines { margin: 0; padding-inline-start: 18px; font-size: var(--fs-2); display: grid; gap: 2px; }
+.conv-internal { margin: 0; font-size: var(--fs-2); color: var(--watch); }
+.conv-internal-toggle { display: flex !important; flex-direction: row; align-items: center; gap: 6px; flex-basis: 100% !important; }
+.conv-draft > .conv-suggest-head, .conv-draft > p { flex-basis: 100%; }
+.conv-draft { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.conv-draft textarea { inline-size: 100%; font: inherit; font-size: var(--fs-3); }
+.conv-types { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; border: 0; flex-basis: 100%; }
+.conv-types legend { font-size: var(--fs-2); padding: 0; margin-block-end: 4px; }
+.conv-type { display: inline-flex !important; flex: none !important; align-items: center; gap: 6px; padding: 2px 10px; border: 1px solid var(--border); border-radius: 99px; font-size: var(--fs-3) !important; cursor: pointer; }
+.conv-type.on { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 10%, var(--surface)); }
+.conv-type input { position: absolute; opacity: 0; pointer-events: none; }
+.conv-type:has(input:focus-visible) { box-shadow: 0 0 0 2px var(--accent); }
+.conv-messages { display: grid; gap: 4px; }
+.conv-msgs { list-style: none; margin: 0; padding: 0 0 0 10px; border-left: 2px solid var(--border); display: grid; gap: 8px; overflow: hidden; }
+.conv-msg { display: grid; gap: 2px; font-size: var(--fs-2); }
+.conv-msg-body { font-size: var(--fs-3); overflow-wrap: anywhere; }
+.conv-msg-body p { margin: 0 0 4px; }
+.conv-msg-body .mention { font-weight: 600; color: var(--accent); }
+.conv-msg-body .attached { color: var(--text-muted); font-style: italic; }
+.conv-msg-body table { border-collapse: collapse; margin: 4px 0; font-size: var(--fs-2); display: block; max-inline-size: 100%; overflow-x: auto; }
+.conv-msg-body td, .conv-msg-body th { border: 1px solid var(--border); padding: 2px 6px; text-align: start; vertical-align: top; }
+.conv-unsorted, .conv-hidden { margin: 8px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; font-size: var(--fs-2); color: var(--text-muted); }
+.conv-chatter { margin: 12px 0 0; font-size: var(--fs-2); }
+.conv-chatter ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.conv-due { font-size: var(--fs-2); font-weight: 600; white-space: nowrap; color: var(--text-muted); }
+.conv-due.overdue { color: var(--watch); }
+.conv-why { border: 0; background: none; padding: 0 2px; color: var(--text-muted); cursor: pointer; font: inherit; }
+.conv-why-box { margin: 0; padding: 6px 10px; border-left: 2px solid var(--border); font-size: var(--fs-2); display: grid; gap: 4px; }
+
+/* Promises on Today (Now, the agenda, Before and After your blocks, the follow-ups row) and Week's rail. */
+.promise-row .promise-open { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; inline-size: 100%; padding: 2px 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.promise-tag { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); }
+.promise-row.overdue .promise-tag, .promise-row.overdue .ev-time { color: var(--watch); }
+.att-chip.promise .att-tag { color: var(--accent); background: color-mix(in oklab, var(--accent) 12%, var(--surface)); }
+.att-chip.promise.overdue .att-tag, .due-badge.overdue-amber { --due: var(--watch); color: var(--watch); background: color-mix(in oklab, var(--watch) 14%, var(--surface)); }
+.att-chip.promise { cursor: pointer; }
+.r-promise { position: absolute; inset-inline: 0; block-size: 0; border: 0; border-top: 2px dashed var(--accent); background: none; padding: 0; cursor: pointer; z-index: 3; }
+.r-promise span { position: absolute; inset-inline-end: 2px; inset-block-start: -1.1em; max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-1); color: var(--accent); background: var(--raised); padding: 0 2px; border-radius: 3px; }
+.r-promise.overdue { border-top-color: var(--watch); }
+.r-promise.overdue span { color: var(--watch); }
+.ev-list .promise-row .ev-title, .today-rows > li.promise-row .ev-title { flex: 0 1 auto; }
+.promise-row .promise-open .muted { white-space: nowrap; }
+.conv-summary > span { display: block; }

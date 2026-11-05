@@ -9,6 +9,7 @@ import type { ActionContext } from "../actions/dispatch.ts";
 import { presenceContext, vmContext, expiringFor } from "../actions/dispatch.ts";
 import { syncTeamsStatus, TEAMS_STATUS_KEY } from "../actions/presence-actions.ts";
 import { requestContext } from "../actions/dispatch.ts";
+import { visibleChats } from "../actions/request-actions.ts";
 import { urgentRequests } from "../actions/request-actions.ts";
 import { UNMATCHED_DAYS } from "../plan/asks.ts";
 
@@ -328,12 +329,44 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       log({ source: "plan", op: "asks_cleanup", count: n });
     }
   };
+  // CV-1: my own notices from Conversations: one reminder when a promise of mine that needs a DevOps item has waited
+  // a working day (the shared job marks it), and a quiet note when a teammate took one of mine over. Each goes once.
+  const conversationsTick = async () => {
+    const c = await configOrNull();
+    const port = liveCtx.requests;
+    const store2 = port?.conversations;
+    if (!c || !port || !store2) return;
+    const rc = await requestContext(liveCtx);
+    const me = await rc.me();
+    if (!me) return;
+    const chats = await visibleChats(port.teams.viewer(me), await rc.followed().catch(() => null));
+    const ids = chats.map((x) => x.chatId);
+    const name = (k: string) => c.clientSettings[k]?.name ?? k;
+    const at = instantNow().toString();
+    if (notifier.allows("commitment_item")) {
+      for (const k of await store2.viewer(me).commitmentsBy(ids)) {
+        if (k.state !== "open" || !k.impliesItem || !k.escalatedAt || k.remindedAt) continue;
+        await store2.updateCommitment(k.id, { remindedAt: at });
+        await send(notices.commitmentItem(k.id, name(k.clientKey), k.what, at));
+      }
+    }
+    if (notifier.allows("taken_over")) {
+      for (const chatId of ids) {
+        for (const k of await store2.commitmentsInChat(chatId)) {
+          if (!k.takenFrom || k.takenFrom.toLowerCase() !== me.toLowerCase() || !k.takenAt) continue;
+          if (Date.parse(at) - Date.parse(k.takenAt) > 3 * 86_400_000) continue;
+          if (await store.markOnce(`taken_over_notice:${k.id}`, k.takenAt)) await send(notices.takenOver(k.id, k.whoName.split(/\s+/)[0] || "A teammate", k.what, at));
+        }
+      }
+    }
+  };
   const tick = async () => {
     await notifier.refresh().catch(() => null);
     await dayReminders();
     await workdayNotices().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
     await vmTick().catch(() => log({ source: "azure", op: "vm_tick", kind: "failed" }));
     await asksTick().catch(() => log({ source: "plan", op: "asks_tick", kind: "failed" }));
+    await conversationsTick().catch(() => log({ source: "plan", op: "conversations_tick", kind: "failed" }));
   };
 
   // The focus timer (step 6c): ends sessions on time and warns 5 minutes ahead, window open or not.

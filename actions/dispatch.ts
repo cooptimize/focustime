@@ -4,6 +4,10 @@ import { isClosed, isCompleted } from "../plan/process.ts";
 import { clearPhotos, photoAction } from "./photo-actions.ts";
 import { chatAction, type ChatContext } from "./chat-actions.ts";
 import { storyAction, type StoryContext } from "./story-actions.ts";
+import { conversationAction, dayPromises, type ConversationContext } from "./conversation-actions.ts";
+import { refreshStatus } from "./conversations-pipeline.ts";
+import type { ConversationsPort } from "./devops-write-actions.ts";
+import { isClientLead } from "./client-lead.ts";
 import { requestAction, urgentRequests, visibleChats, type RequestContext, type RequestsPort } from "./request-actions.ts";
 import { aiAction, type AiActionName, type AiRuntime } from "./ai-actions.ts";
 import { createAi, type AiService } from "../ai/service.ts";
@@ -500,6 +504,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     // Step 14.5 (D256): write PATs and app secrets that expire within 14 days, for Today.
     expiring: (await expiringFor(ctx.plan, cfg, serverToday, (k) => names.get(k))),
     requests: await urgentFor(ctx, now, tz, (k) => names.get(k) ?? cfg?.clientSettings[k]?.name ?? k).catch(() => ({ urgent: [], pastUrgency: 0 })),
+    promises: cfg && ctx.requests?.conversations ? await conversationContext(ctx).then((c) => dayPromises(c, cfg)).catch(() => []) : [],
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
     demo: !!ctx.demo?.on,
@@ -623,11 +628,15 @@ async function aiDirectory(ctx: ActionContext, cfg: AppConfig): Promise<ClientEn
 }
 
 /** AI-0: the AI service for this person and request, or null where AI isn't available (demo, no plan store). */
-export async function aiFor(ctx: ActionContext): Promise<AiService | null> {
+export async function aiFor(ctx: ActionContext, o: { cap?: "person" | "app" } = {}): Promise<AiService | null> {
   const rt = ctx.ai;
   const plan = ctx.plan;
   if (!rt || !plan) return null;
+  // CV-1: the shared pipeline counts against the app's cap and logs in the app's AI log (D-CV), not the person's.
+  const appLog = o.cap === "app" ? ctx.requests?.conversations?.appAiLog : undefined;
+  if (o.cap === "app" && !appLog) return null;
   return createAi({
+    ...(o.cap === "app" ? { cap: "app" as const } : {}),
     provider: rt.provider,
     app: rt.app,
     person: async () => (await configured(ctx))?.ai ?? { use: false, monthlyCapUsd: 10, allowedClients: [] },
@@ -638,7 +647,7 @@ export async function aiFor(ctx: ActionContext): Promise<AiService | null> {
       const vm = me ? await plan.accountState<ChosenVm>(vmKey(me.oid)).catch(() => null) : null;
       return { directory: await aiDirectory(ctx, cfg), homeDomains: inviteDomains(cfg), forbidden: vm ? [vm.name, vm.id] : [] };
     },
-    log: { add: (e) => plan.addAiRequest(e), spentMicros: (a, b) => plan.aiSpentMicros(a, b), recent: (n) => plan.aiRequests(n) },
+    log: appLog ?? { add: (e) => plan.addAiRequest(e), spentMicros: (a, b) => plan.aiSpentMicros(a, b), recent: (n) => plan.aiRequests(n) },
     appSpend: rt.appSpend,
     now: ctx.now,
     ...(rt.logger ? { logger: rt.logger } : ctx.log ? { logger: ctx.log } : {}),
@@ -650,6 +659,7 @@ async function devopsWriteContext(ctx: ActionContext): Promise<DevOpsWriteContex
   return {
     plan: ctx.plan,
     ...(ctx.requests ? { requests: await sharedFor(ctx, ctx.requests) } : {}),
+    ...(ctx.requests?.conversations ? { conversations: await conversationsPortFor(ctx, ctx.requests) } : {}),
     config: () => configured(ctx),
     // Never the company read PAT: this read doesn't select it.
     targets: (cfg, keys) => ctx.makeDataverse(cfg.dataverse, userZone(cfg)).devopsTargets(keys, { withPat: false }),
@@ -672,6 +682,37 @@ export function storyContext(ctx: ActionContext): StoryContext {
     writeClients: async () => (ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : []),
     devopsWrite: async (action, input) => devopsWriteAction(await devopsWriteContext(ctx), action, input),
     now: ctx.now,
+  };
+}
+
+/** CV-1: what a confirmed DevOps write settles in Conversations (my view only; status from facts, D-CV). */
+async function conversationsPortFor(ctx: ActionContext, port: RequestsPort): Promise<ConversationsPort | undefined> {
+  const store = port.conversations;
+  const me = await (await chatContext(ctx)).me();
+  if (!store || !me) return undefined;
+  const view = store.viewer(me);
+  const deps = async () => ({ convs: store, teams: port.teams, homeTenant: (await (await chatContext(ctx)).homeTenant()) ?? null });
+  return {
+    me,
+    view,
+    created: async (conv, item) => {
+      if (conv.commitmentId !== null) await view.updateCommitment(conv.commitmentId, { state: "created", itemId: item.id, itemUrl: item.url, itemTitle: item.title });
+      await view.updateConversation(conv.conversationId, { item: { id: item.id, url: item.url, title: item.title }, changeNote: `Tracked as #${item.id}` }, { bump: true });
+      await refreshStatus(await deps(), conv.conversationId);
+    },
+    uncreated: async (conv, itemId) => {
+      const c = await view.conversation(conv.conversationId);
+      if (c?.itemId === itemId) await view.updateConversation(c.id, { item: null, changeNote: `#${itemId} was removed` }, { bump: true });
+      if (conv.commitmentId !== null) {
+        const k = await view.commitment(conv.commitmentId);
+        if (k?.state === "created" && k.itemId === itemId) await view.updateCommitment(k.id, { state: "open", itemId: null, itemUrl: null, itemTitle: null });
+      }
+      await refreshStatus(await deps(), conv.conversationId);
+    },
+    posted: async (suggestionId, writeId) => {
+      const sg = await view.suggestion(suggestionId);
+      if (sg?.state === "open") await view.settleSuggestion(suggestionId, "posted", writeId);
+    },
   };
 }
 
@@ -713,6 +754,35 @@ export async function requestContext(ctx: ActionContext): Promise<RequestContext
       return hit ? isCompleted(hit.stateCategory) : null;
     },
   };
+}
+
+/** CV-1: Conversations and My promises: the Requests pieces, the conversation store, client leads, the pipeline's AI. */
+export async function conversationContext(ctx: ActionContext): Promise<ConversationContext> {
+  const rc = await requestContext(ctx);
+  const port = ctx.requests;
+  return {
+    ...rc,
+    ...(port?.conversations ? { conversations: port.conversations } : {}),
+    isLead: async (clientKey) => isClientLead(await rc.me(), clientKey, ctx.admins),
+    users: async () => (port?.users ? port.users() : []),
+    pipelineAi: () => aiFor(ctx, { cap: "app" }),
+    devopsEmail: async (clientKey) => (await ctx.plan?.devopsIdentities().catch(() => []))?.find((i) => i.clientKey === clientKey)?.email ?? null,
+    processModel: async (cfg, clientKey) => {
+      const r = (await ctx.makeDevOps(cfg.dataverse, userZone(cfg)).processModels([clientKey]))[0];
+      return r?.ok ? r.model : null;
+    },
+  };
+}
+
+/** CV-1: a person's hours and PTO days for the next 3 weeks (escalation waits one of their working days). */
+export async function escalationHours(ctx: ActionContext): Promise<{ hours: TimeModel; ptoDays: ReadonlySet<string> } | null> {
+  const cfg = await configured(ctx);
+  if (!cfg) return null;
+  const zone = userZone(cfg);
+  const today = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(zone).toPlainDate();
+  const monday = today.subtract({ days: today.dayOfWeek - 1 }).toString();
+  const pto = await ptoAheadOf(ctx, cfg, monday).catch(() => new Set<string>());
+  return { hours: { ...cfg.week.hours, timeZone: zone }, ptoDays: pto };
 }
 
 /** The pieces the account and VM actions need. */
@@ -1086,6 +1156,30 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "promises.followup":
     case "promises.link":
       return requestAction(await requestContext(ctx), action, req.input);
+    case "conversations.list":
+    case "conversations.refresh":
+    case "conversations.messages":
+    case "conversations.seen":
+    case "conversations.resolve":
+    case "conversations.not_request":
+    case "conversations.reopen":
+    case "conversations.hide":
+    case "conversations.move":
+    case "conversations.this_is_work":
+    case "conversations.link":
+    case "conversations.take_over":
+    case "conversations.sort_unsorted":
+    case "conversations.search":
+    case "conversations.draft":
+    case "my_promises.list":
+    case "my_promises.today":
+    case "my_promises.followup":
+    case "my_promises.link":
+    case "my_promises.done":
+    case "my_promises.not_needed":
+    case "my_promises.reopen":
+    case "suggestions.skip":
+      return conversationAction(await conversationContext(ctx), action, req.input);
     case "ai.status":
     case "ai.test":
       return aiAction(await aiFor(ctx), action as AiActionName);

@@ -234,6 +234,55 @@ export function aProposalsAnswer(o: Partial<import("../../plan/stories.ts").Coop
   };
 }
 
+// ---- CV-1: conversations ----
+
+/** A Teams message as the shared store keeps it: from a client person by default, HTML body, nothing attached. */
+export function aTeamsMessage(o: Partial<import("../../plan/requests.ts").TeamsMessage> = {}): import("../../plan/requests.ts").TeamsMessage {
+  const n = next();
+  const text = o.text ?? "The weekly report shows last month's totals";
+  return {
+    chatId: "19:fabrikam@thread.v2",
+    messageId: String(1_700_000_000_000 + n),
+    clientKey: "fabrikam",
+    senderId: `00000000-0000-4000-9000-${String(n).padStart(12, "0")}`,
+    senderName: `Person ${n}`,
+    senderTenant: CLIENT_TENANT,
+    createdAt: "2026-11-04T15:00:00Z",
+    modifiedAt: o.createdAt ?? "2026-11-04T15:00:00Z",
+    html: `<p>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>`,
+    text,
+    hasImage: false,
+    hasFile: false,
+    replyToId: null,
+    mentions: [],
+    fetchedAt: o.createdAt ?? "2026-11-04T15:00:00Z",
+    ...o,
+  };
+}
+
+/** A registered client chat (shared polling) with its members read. */
+export function aClientChat(o: Partial<import("../../plan/requests.ts").ClientChat> = {}): import("../../plan/requests.ts").ClientChat {
+  return {
+    chatId: "19:fabrikam@thread.v2", clientKey: "fabrikam", kind: "customer", displayName: "Fabrikam Customer Collaboration", webUrl: null, position: 0, members: [aChatMember(), aChatMember({ external: true })],
+    membersFetchedAt: "2026-11-04T14:00:00Z", registeredBy: "00000000-0000-4000-8000-000000000001", registeredAt: "2026-11-04T14:00:00Z", readOn: true, readSince: "2026-11-04T14:00:00Z",
+    seenAt: null, polledAt: null, fetchedAt: null, retryAt: null, failures: 0, pollState: null, pollNote: null, tokenUser: null, ...o,
+  };
+}
+
+type UpdateAnswer = import("../../plan/conversations.ts").UpdateAnswer;
+/** One conversation in a "conversations.update" answer (a new one, n1, by default). */
+export function aConversationUpdate(o: Partial<UpdateAnswer["conversations"][number]> = {}): UpdateAnswer["conversations"][number] {
+  return { ref: "n1", title: "Weekly report totals", summary: "The client asks about the weekly report.", owner: null, wrapped_up: false, change: "New question", item_change: null, scope_changed: false, likely_item: null, commitments: [], ...o };
+}
+/** A commitment in a "conversations.update" answer. */
+export function aCommitmentAnswer(o: Partial<UpdateAnswer["conversations"][number]["commitments"][number]> = {}): UpdateAnswer["conversations"][number]["commitments"][number] {
+  return { who: "p1", what: "Look into the totals", due: null, to: null, implies_item: false, messages: ["m1"], status_only: false, ...o };
+}
+/** A whole "conversations.update" answer. */
+export function anUpdateAnswer(o: Partial<UpdateAnswer> = {}): UpdateAnswer {
+  return { messages: [{ ref: "m1", kind: "work", conversation: "n1", confident_new_topic: false }], conversations: [aConversationUpdate()], ...o };
+}
+
 // ---- WT-1: DevOps process responses (fictional projects; shapes as the REST API returns them) ----
 type RawProcess = import("../../plan/process.ts").RawProcess;
 const st = (spec: string) => spec.split("|").map((s) => {

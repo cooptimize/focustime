@@ -5,9 +5,14 @@
 // again, and Undo. Writes use the client's personal write PAT from the keyring, checked against my DevOps identity
 // for that client, and go only to that client's org. The company read PAT from Dataverse is never read here: targets
 // come from devopsTargets(keys, { withPat: false }). Nothing is ever deleted except a comment FocusTime added (undo).
+import { typeInfo, type ItemLevel } from "./work-item-types.ts";
+import { commentText, descriptionAfter, descriptionHtml, type OriginalMessage } from "../plan/conversation-draft.ts";
+import { sanitizeMessageHtml } from "../plan/sanitize.ts";
+import { teamsLink } from "../plan/chats.ts";
+import type { ConversationView } from "../store/conversation-store.ts";
 import { readBack, type Sleep } from "./readback.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, completedState, createOps, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
+import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, completedState, createOps, descriptionOps, textToHtml, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
 import { dateOnly, detectTargetField, htmlToText, identityEmail, workItemUrl } from "../sources/devops/normalize.ts";
 import { levelsFromProcessConfig } from "../plan/process.ts";
 /** WT-1: the portfolio tiers from the process model (process configuration on the write path), never type names. */
@@ -45,6 +50,21 @@ export type DevOpsWriteContext = {
   pats: WritePats | null;
   devops: ((cfg: AppConfig) => DevOpsSource) | null;
   now: () => string;
+  /** CV-1: my view of the shared conversations (only chats I'm in) and what a confirmed write settles there. */
+  conversations?: ConversationsPort | undefined;
+};
+
+/** CV-1: what the write framework needs from Conversations. */
+export type ConversationsPort = {
+  /** My Entra object id (suggestions are for one person). */
+  me: string;
+  view: ConversationView;
+  /** A create from a conversation landed: its commitment Created, the conversation Tracked, for everyone. */
+  created: (conv: NonNullable<DevOpsWriteEntry["conv"]>, item: { id: number; url: string; title: string }) => Promise<void>;
+  /** Its undo landed: open again. */
+  uncreated: (conv: NonNullable<DevOpsWriteEntry["conv"]>, itemId: number) => Promise<void>;
+  /** A suggested comment or description change was written. */
+  posted: (suggestionId: number, writeId: number) => Promise<void>;
 };
 
 export const PREVIEW_MS = 5 * 60_000;
@@ -56,6 +76,8 @@ type Held = {
   ask: { chatId: string; messageId: string } | null;
   /** DS-1: the Draft stories card a create comes from, tied to its write before it is sent. */
   proposal?: { draftId: string; proposalId: string } | null;
+  /** CV-1: the conversation, commitment and suggestion it comes from. */
+  conv?: DevOpsWriteEntry["conv"];
 };
 const held = new Map<string, Held>();
 export const clearDevopsPreviews = () => held.clear();
@@ -93,6 +115,7 @@ const NO_PAT = (client: string) => `DevOps writes aren't enabled for ${client}. 
 const SUMMARY: Record<WriteOp, string> = {
   state: "Change the state of a DevOps item", comment: "Add a comment to a DevOps item", create: "Create a DevOps item", target_date: "Set a target date in DevOps",
   undo_state: "Undo: put the state back", undo_comment: "Undo: delete the comment FocusTime added", undo_create: "Undo: set the created item to Removed", undo_target_date: "Undo: put the target date back",
+  description: "Change a DevOps item's description", undo_description: "Undo: put the description back",
 };
 
 export async function devopsWriteAction(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
@@ -116,7 +139,7 @@ class Refused extends Error {
   }
 }
 
-type Env = { cfg: AppConfig; clientKey: string; org: string; project: string; projectName: string; pat: Pat; me: DevOpsIdentityRow; writer: DevOpsWriter; plan: PlanStore; requests: DevOpsWriteContext["requests"] };
+type Env = { cfg: AppConfig; clientKey: string; org: string; project: string; projectName: string; pat: Pat; me: DevOpsIdentityRow; writer: DevOpsWriter; plan: PlanStore; requests: DevOpsWriteContext["requests"]; conversations: DevOpsWriteContext["conversations"] };
 
 async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
   const plan = ctx.plan;
@@ -144,7 +167,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
     } catch {
       throw new Refused(NO_PAT(clientName(clientKey)), 409, "no_write_pat");
     }
-    return { cfg, clientKey, org: target.org, project: target.project, projectName: target.projectName ?? target.project, pat, me, writer: ctx.writer, plan, requests: ctx.requests };
+    return { cfg, clientKey, org: target.org, project: target.project, projectName: target.projectName ?? target.project, pat, me, writer: ctx.writer, plan, requests: ctx.requests, conversations: ctx.conversations };
   };
 
   switch (action) {
@@ -246,7 +269,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
             results.push({ error: `"${h.title}" was already sent. Retry it; it checks first and won't make a second one`, status: 409 });
             continue;
           }
-          const entry = (await plan.logDevopsWrite({ clientKey: h.clientKey, org: h.org, project: h.project, op: h.op, itemId: h.itemId, parentId: h.parentId, title: h.title, identity: env.me.email, before: h.before, after: h.after, ops: h.ops, revBefore: h.rev, revAfter: null, commentId: h.commentId, draftId: h.draftId, pickIds: h.pickIds, followUpId: h.followUpId, undoOf: h.undoOf, ask: h.op === "create" ? h.ask : null }));
+          const entry = (await plan.logDevopsWrite({ clientKey: h.clientKey, org: h.org, project: h.project, op: h.op, itemId: h.itemId, parentId: h.parentId, title: h.title, identity: env.me.email, before: h.before, after: h.after, ops: h.ops, revBefore: h.rev, revAfter: null, commentId: h.commentId, draftId: h.draftId, pickIds: h.pickIds, followUpId: h.followUpId, undoOf: h.undoOf, ask: h.op === "create" ? h.ask : null, conv: h.conv ?? null }));
           if (h.proposal) await plan.linkStoryDraftWrite(h.proposal.draftId, h.proposal.proposalId, entry.id);
           results.push(await attempt(ctx, env, entry, false, tz));
         } catch (e) {
@@ -281,13 +304,18 @@ function hold(h: HeldIn, env: Env): DevOpsPreview {
   for (const [k, v] of held) if (v.expiresAt < Date.now()) held.delete(k);
   held.set(id, { ...h, id, expiresAt });
   const labels = Object.keys({ ...h.before, ...h.after });
-  const fieldsRows = labels.map((l) => row(l, h.op === "create" ? null : h.before[l] ?? null, h.after[l] ?? null));
+  const isDesc = h.op === "description" || h.op === "undo_description";
+  const shown = (v: string | null | undefined) => (isDesc && v ? htmlToText(v) : v ?? null);
+  const fieldsRows = labels.map((l) => row(l, h.op === "create" ? null : shown(h.before[l]), shown(h.after[l])));
   const links = h.op === "create" && h.parentId ? [`Adds a parent link to #${h.parentId}, which shows the new item as its child`] : h.op === "undo_create" && h.parentId ? ["The parent link stays; the item shows as Removed under it"] : [];
   const notes: string[] = [];
   if (h.op === "undo_create" && h.draftId) notes.push("The draft comes back in FocusTime, with its picks.");
   if (h.op === "undo_state" && h.commentId) notes.push("The comment added with that change is deleted too.");
   if (h.followUpId) notes.push("Closes the follow-up once DevOps shows the change.");
   if (h.ask) notes.push(h.op === "undo_create" ? "The request opens again in Inbox › Requests, for everyone on the chat." : "Resolves the request for everyone on the chat once DevOps shows the new item. Nothing is posted in Teams.");
+  if (h.conv && h.op === "create") notes.push("Tracks the conversation as the new item for everyone on the chat once DevOps shows it. Nothing is posted in Teams.");
+  if (h.op === "undo_create" && h.conv) notes.push("The conversation opens again in Inbox › Conversations.");
+  if (h.op === "description") notes.push("Replaces the whole description with the text above. The old text is kept in the audit log, and Undo puts it back.");
   if (h.rev !== null) notes.push(`Written only if the item is still at revision ${h.rev}; if anyone changed it since, nothing is written.`);
   return {
     previewId: id, expiresAt: new Date(expiresAt).toISOString(), op: h.op, summary: SUMMARY[h.op], system: "DevOps", org: h.org, project: h.projectName,
@@ -297,11 +325,11 @@ function hold(h: HeldIn, env: Env): DevOpsPreview {
 }
 
 const base = (env: Env) => ({ clientKey: env.clientKey, org: env.org, project: env.project, projectName: env.projectName, identity: env.me.email });
-const none = { draftId: null, followUpId: null, undoOf: null, commentId: null, pickIds: [] as number[], type: null, field: null, parentId: null, ask: null, proposal: null };
+const none = { draftId: null, followUpId: null, undoOf: null, commentId: null, pickIds: [] as number[], type: null, field: null, parentId: null, ask: null, proposal: null, conv: null };
 
 /** One change → what to hold, or a reason there is nothing to do. Reads the item now (fresh rev). */
 async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Promise<unknown>> = new Map()): Promise<HeldIn | string> {
-  const o = fields(c, ["kind"], ["itemId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId"]);
+  const o = fields(c, ["kind"], ["itemId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type"]);
   const { writer, org, pat, project, plan } = env;
   switch (o.kind) {
     case "state": {
@@ -458,6 +486,103 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const after: Record<string, string | null> = { Type: type, Title: title, [descriptionField === REPRO_FIELD ? "Repro steps" : "Description"]: description, "Assigned to": `${env.me.name} <${env.me.email}>`, Area: "The project's default", Iteration: "The project's default" };
       return { ...base(env), ...none, op: "create", itemId: null, parentId: null, title, ops, rev: null, before: {}, after, type, ask: { chatId, messageId } };
     }
+    case "conversation_create": {
+      // CV-1: a bug, story or feature from a whole conversation: the edited title and path of action, then the original
+      // messages (sender, time, sanitized HTML) and the Teams link, appended by code. Under a parent feature (its area
+      // and iteration) when one is chosen, else the project's defaults; assigned to me.
+      const cv = env.conversations;
+      const shared = env.requests;
+      if (!cv || !shared) throw new PlanError("No such conversation");
+      const c = await cv.view.conversation(posId(o.conversationId, "conversationId"));
+      if (!c || !(await shared.sees(c.chatId))) throw new PlanError("No such conversation");
+      if (c.clientKey !== env.clientKey) throw new Refused("That conversation belongs to another client", 409);
+      if (c.itemId) return `This conversation is already tracked as #${c.itemId}`;
+      const commitmentId = o.commitmentId === undefined || o.commitmentId === null ? null : posId(o.commitmentId, "commitmentId");
+      if (commitmentId !== null) {
+        const k = await cv.view.commitment(commitmentId);
+        if (!k || k.conversationId !== c.id) throw new PlanError("No such commitment");
+        if (k.state !== "open") return "That promise is already handled";
+      }
+      const open = (await plan.devopsWriteLog(1000)).find((e) => e.op === "create" && e.conv?.conversationId === c.id && (e.status === "pending" || e.status === "unconfirmed" || (e.status === "confirmed" && e.undoneBy === null)));
+      if (open) throw new Refused(open.status === "confirmed" ? `This conversation is already in DevOps as #${open.itemId}` : "A create from this conversation may already be in DevOps. Retry it in Settings > Data > Audit log: it checks first and won't make a second one", 409, "pending_write");
+      const level = o.level as ItemLevel;
+      if (level !== "bug" && level !== "story" && level !== "feature") throw new Invalid("level must be bug, story or feature");
+      const title = str(o.title, "title", 255)!;
+      const path = str(o.description, "description", 8000, true) ?? "";
+      const pc = await writer.processConfig(org, pat, project);
+      const chosen = str(o.type, "type", 128, true) ?? null;
+      let parent: ItemSnapshot | null = null;
+      if (o.parentId !== undefined && o.parentId !== null) {
+        parent = await writer.item(org, pat, project, posId(o.parentId, "parentId"));
+        const tiers = portfolioTiers(pc);
+        if (!tiers.feature.has(parent.type) && !tiers.epic.has(parent.type)) throw new Refused(`#${parent.id} is a ${parent.type}: items go under a feature or an epic`, 409);
+        // An unknown state counts as open (plan/process.ts).
+        if (!isOpenCategory((await writer.states(org, pat, project, parent.type)).find((x) => x.name === parent!.state)?.category)) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime adds items only under open parents`, 409);
+      }
+      // WT-1: the type goes where the process says (under the parent: one of its valid child types).
+      const t = typeInfo(pc, level, { type: chosen, parentType: parent?.type ?? null });
+      if (!t) throw new Refused(parent ? `${chosen ?? `A ${level}`} isn't a type that goes under #${parent.id} in this project` : level === "bug" ? "This project's process doesn't track bugs on a backlog. Create a story instead" : `This project's process has no ${level} level`, 409);
+      const chat = await shared.teams.chat(c.chatId);
+      const internal = chat?.kind === "delivery";
+      const include = o.includeInternal === true;
+      const originals: OriginalMessage[] = [];
+      if (!internal || include) {
+        for (const p of (await cv.view.placesIn([c.id])).filter((x) => x.role === "work")) {
+          const m = await shared.teams.message(p.chatId, p.messageId);
+          if (!m) continue;
+          const sender = m.senderName ?? chat?.members?.find((x: ChatMember) => x.userId && m.senderId && x.userId.toLowerCase() === m.senderId.toLowerCase())?.displayName ?? "Someone";
+          const byAt: { name: string | null }[] = [];
+          m.mentions.forEach((x, i) => (byAt[x.at ?? i] = { name: x.name }));
+          originals.push({ sender, at: m.createdAt, html: sanitizeMessageHtml(m.html ?? m.text, { contentType: m.html ? "html" : "text", mentions: byAt }) });
+        }
+      }
+      const chatName = chat?.displayName ?? "a client chat";
+      const description = descriptionHtml(path, originals, { zone: tz, chatName, chatLink: chat ? teamsLink(chat) : messageLink(c.chatId, "0") });
+      const typeHas = await writer.typeFields(org, pat, project, t.type);
+      const descriptionField = t.level === "bug" && typeHas.has(REPRO_FIELD) ? REPRO_FIELD : "System.Description";
+      const area = parent ? String(parent.fields["System.AreaPath"] ?? "") || null : null;
+      const iteration = parent ? String(parent.fields["System.IterationPath"] ?? "") || null : null;
+      const ops = createOps({ org, title, description, descriptionIsHtml: true, acField: false, assignedTo: env.me.email, areaPath: area, iterationPath: iteration, parentId: parent?.id ?? null, descriptionField, timeZone: tz });
+      const tail = originals.length ? `Then the ${originals.length === 1 ? "original message" : `${originals.length} original messages`} from ${chatName}, with who and when, and a link to the chat.` : internal ? `The messages from ${chatName} are left out: it's an internal chat. Only a link to it is added.` : "Then a link to the chat.";
+      const after: Record<string, string | null> = { Type: t.type, Title: title, [descriptionField === REPRO_FIELD ? "Repro steps" : "Description"]: `${path}${path ? "\n\n" : ""}${tail}`, "Assigned to": `${env.me.name} <${env.me.email}>`, Area: area ?? "The project's default", Iteration: iteration ?? "The project's default", ...(parent ? { Parent: `#${parent.id} ${parent.title}` } : {}) };
+      return { ...base(env), ...none, op: "create", itemId: null, parentId: parent?.id ?? null, title, ops, rev: null, before: {}, after, type: t.type, conv: { conversationId: c.id, commitmentId, suggestionId: null } };
+    }
+    case "conversation_comment":
+    case "description_update": {
+      // CV-1: a comment suggested for a linked item's owner, or a description change for a clear scope change.
+      const cv = env.conversations;
+      const shared = env.requests;
+      if (!cv || !shared) throw new PlanError("No such suggestion");
+      const sg = await cv.view.suggestion(posId(o.suggestionId, "suggestionId"));
+      const kind = o.kind === "conversation_comment" ? "comment" : "description";
+      if (!sg || sg.kind !== kind || (sg.forUser ?? "").toLowerCase() !== cv.me.toLowerCase()) throw new PlanError("No such suggestion");
+      if (sg.state !== "open") return "This suggestion is already handled";
+      const c = await cv.view.conversation(sg.conversationId);
+      if (!c || !(await shared.sees(c.chatId))) throw new PlanError("No such suggestion");
+      if (c.clientKey !== env.clientKey) throw new Refused("That suggestion belongs to another client", 409);
+      const item = await writer.item(org, pat, project, sg.itemId);
+      const conv = { conversationId: c.id, commitmentId: null, suggestionId: sg.id };
+      if (kind === "comment") {
+        const include = o.includeInternal === true;
+        const edited = str(o.text, "text", 4000, true);
+        const chat = await shared.teams.chat(c.chatId);
+        const last = (await cv.view.placesIn([c.id])).filter((p) => p.role === "work").at(-1);
+        const link = last ? messageLink(c.chatId, last.messageId) : chat ? teamsLink(chat) : messageLink(c.chatId, "0");
+        const lines = edited ? edited.split("\n") : [...sg.body.split("\n"), ...(include ? sg.internal : [])];
+        const text = commentText(lines, link);
+        return { ...base(env), ...none, op: "comment", itemId: item.id, title: item.title, ops: { text }, rev: null, before: { Comment: null }, after: { Comment: text }, type: item.type, conv };
+      }
+      const field = "System.Description";
+      const curHtml = String(item.fields[field] ?? "");
+      const curText = htmlToText(curHtml);
+      if (sg.before !== null && sg.before.trim() !== curText.trim()) throw new Refused(`#${item.id}'s description changed in DevOps since this was suggested. Skip it, or change it in DevOps`, 409, "changed");
+      // The proposed text: the current description kept, the scope change added below (the person may edit it).
+      const afterText = str(o.after, "after", 8000, true) ?? sg.after ?? descriptionAfter(curText, sg.body, sg.day);
+      const added = afterText.trim().startsWith(curText.trim()) ? afterText.trim().slice(curText.trim().length).trim() : null;
+      const html = added !== null ? `${curHtml}${curHtml && added ? "<div><br></div>" : ""}${added ? textToHtml(added) : ""}` : textToHtml(afterText);
+      if (htmlToText(html).trim() === curText.trim()) return `#${item.id} already has that description`;
+      return { ...base(env), ...none, op: "description", itemId: item.id, title: item.title, ops: descriptionOps(item.rev, field, html), rev: item.rev, before: { Description: curHtml }, after: { Description: html }, type: item.type, field, conv };
+    }
     case "undo": {
       const entry = (await plan.devopsWrite(posId(o.writeId, "writeId")));
       if (!entry) throw new PlanError("No such write");
@@ -488,6 +613,12 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
         }
         return { ...u, op: "undo_target_date", ops: targetDateOps(item.rev, field, prior, tz, true), rev: item.rev, before: { "Target date": cur }, after: { "Target date": prior }, field };
       }
+      if (entry.op === "description") {
+        const field = fieldOf(entry.ops) ?? "System.Description";
+        const curHtml = String(item.fields[field] ?? "");
+        if (htmlToText(curHtml).trim() !== htmlToText(entry.after.Description ?? "").trim()) throw new Refused(`DevOps shows another description on #${item.id} now. Undo would overwrite it`, 409, "changed");
+        return { ...u, op: "undo_description", ops: descriptionOps(item.rev, field, entry.before.Description ?? ""), rev: item.rev, before: { Description: curHtml }, after: { Description: entry.before.Description ?? null }, field };
+      }
       if (entry.op === "comment") {
         if (entry.commentId === null) throw new Refused("The comment's id wasn't recorded, so it can't be deleted from here", 409);
         const cm = await writer.getComment(org, pat, project, item.id, entry.commentId);
@@ -499,29 +630,19 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const removed = removedState(states);
       if (!removed) throw new Refused(`${item.type} has no Removed state in this process. FocusTime never deletes items: close or remove #${item.id} in DevOps`, 409);
       if (item.state === removed) return `#${item.id} is already ${removed}`;
-      return { ...u, op: "undo_create", ops: removeOps(item.rev, removed), rev: item.rev, before: { State: item.state, Comment: null }, after: { State: removed, Comment: REMOVED_COMMENT }, draftId: entry.draftId, pickIds: entry.pickIds, ask: entry.ask ?? null };
+      return { ...u, op: "undo_create", ops: removeOps(item.rev, removed), rev: item.rev, before: { State: item.state, Comment: null }, after: { State: removed, Comment: REMOVED_COMMENT }, draftId: entry.draftId, pickIds: entry.pickIds, ask: entry.ask ?? null, conv: entry.conv ?? null };
     }
     default:
-      throw new Invalid("kind must be state, comment, create, request_create, proposal_create, target_date or undo");
+      throw new Invalid("kind must be state, comment, create, request_create, proposal_create, conversation_create, conversation_comment, description_update, target_date or undo");
   }
 }
 
 const REPRO_FIELD = "Microsoft.VSTS.TCM.ReproSteps";
-/** The default bug type, when the process tracks bugs on a backlog (bugWorkItems). */
-function bugType(pc: unknown): string | null {
-  const b = (pc as { bugWorkItems?: { defaultWorkItemType?: { name?: unknown }; workItemTypes?: { name?: unknown }[] } } | null)?.bugWorkItems;
-  const n = b?.defaultWorkItemType?.name ?? b?.workItemTypes?.[0]?.name;
-  return typeof n === "string" ? n : null;
-}
+/** The default bug type (typeInfo, actions/work-item-types.ts). */
+const bugType = (pc: unknown) => typeInfo(pc, "bug")?.type ?? null;
 const fieldOf = (ops: DevOpsWriteEntry["ops"]) => (Array.isArray(ops) ? ops.find((p) => p.op !== "test")?.path.replace(/^\/fields\//, "") ?? null : null);
-/** The default work item type of the story level (requirement backlog) or the feature tier (lowest portfolio backlog). */
-function defaultType(pc: unknown, level: "story" | "feature"): string | null {
-  type Cat = { defaultWorkItemType?: { name?: unknown }; workItemTypes?: { name?: unknown }[] };
-  const c = pc as { requirementBacklog?: Cat; portfolioBacklogs?: Cat[] } | null;
-  const cat = level === "story" ? c?.requirementBacklog : (Array.isArray(c?.portfolioBacklogs) ? c.portfolioBacklogs : []).filter((b) => (b.workItemTypes ?? []).length > 0).at(-1);
-  const n = cat?.defaultWorkItemType?.name ?? cat?.workItemTypes?.[0]?.name;
-  return typeof n === "string" ? n : null;
-}
+/** The default work item type of the story level or the feature tier (typeInfo). */
+const defaultType = (pc: unknown, level: "story" | "feature") => typeInfo(pc, level)?.type ?? null;
 
 /** What DevOps shows now for the fields a write is about, keyed like the entry. */
 function current(e: DevOpsWriteEntry, item: ItemSnapshot, tz: string): Record<string, string | null> {
@@ -530,9 +651,13 @@ function current(e: DevOpsWriteEntry, item: ItemSnapshot, tz: string): Record<st
     const f = fieldOf(e.ops);
     return { ...("Start date" in e.after ? { "Start date": dateOnly(item.fields[START_FIELD], tz) } : {}), "Target date": f ? dateOnly(item.fields[f], tz) : null };
   }
+  // CV-1: a description is compared as text (DevOps may tidy the HTML it stores).
+  if (e.op === "description" || e.op === "undo_description") return { Description: htmlToText(String(item.fields[fieldOf(e.ops) ?? "System.Description"] ?? "")).trim() };
   return {};
 }
-const applied = (e: DevOpsWriteEntry, now: Record<string, string | null>) => Object.keys(now).every((k) => (now[k] ?? null) === (e.after[k] ?? null));
+/** A logged value as current() reports it. */
+const asCurrent = (e: DevOpsWriteEntry, k: string, v: string | null | undefined) => ((e.op === "description" || e.op === "undo_description") && k === "Description" ? htmlToText(v ?? "").trim() : v ?? null);
+const applied = (e: DevOpsWriteEntry, now: Record<string, string | null>) => Object.keys(now).every((k) => (now[k] ?? null) === asCurrent(e, k, e.after[k]));
 
 /**
  * One attempt at a logged write, safe to repeat: a retry first checks whether the change is already there (an update
@@ -559,6 +684,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       const back = await again(() => writer.getComment(org, pat, project, entry.itemId!, made.id));
       if (back.isDeleted || !sameText(back.text, text)) return settle("unconfirmed", "DevOps didn't show the comment yet. Retry checks first and won't post it twice", { commentId: made.id });
       forget();
+      if (entry.conv?.suggestionId && ctx.conversations) await ctx.conversations.posted(entry.conv.suggestionId, entry.id).catch(() => {});
       return settle("confirmed", posted ? "Already in DevOps (found on retry)" : "Comment added in DevOps", { commentId: made.id });
     }
     if (entry.op === "undo_comment") {
@@ -598,6 +724,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
         const a = await shared.teams.request(entry.ask.chatId, entry.ask.messageId);
         if (a?.status === "open") await shared.teams.resolveRequest(entry.ask.chatId, entry.ask.messageId, { status: "created", itemId: id, itemUrl: url, itemTitle: back.title, writeId: entry.id });
       }
+      if (entry.conv && ctx.conversations) await ctx.conversations.created(entry.conv, { id, url, title: back.title });
       forget();
       return settle("confirmed", `Created #${id} in DevOps`, { itemId: id, revAfter: back.rev, pickIds }, { itemId: id, url });
     }
@@ -637,12 +764,17 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       const a = made?.ask ? await ctx.requests.teams.request(made.ask.chatId, made.ask.messageId) : null;
       if (made?.ask && a?.status === "created" && a.itemId === itemId) await ctx.requests.teams.resolveRequest(made.ask.chatId, made.ask.messageId, { status: "open" });
     }
+    if (entry.op === "undo_create" && entry.undoOf !== null && ctx.conversations) {
+      const made = await plan.devopsWrite(entry.undoOf);
+      if (made?.conv) await ctx.conversations.uncreated(made.conv, itemId);
+    }
+    if (entry.op === "description" && entry.conv?.suggestionId && ctx.conversations) await ctx.conversations.posted(entry.conv.suggestionId, entry.id).catch(() => {});
     if (entry.op === "state" && entry.followUpId !== null) {
       const f = (await plan.getFollowUp(entry.followUpId));
       if (f && !f.closedAt) (await plan.closeFollowUp(entry.followUpId, `Marked ${entry.after.State} in DevOps`, "me", { how: "devops", outcome: "done" }));
     }
     forget();
-    const msg = entry.op.startsWith("undo_") ? "Undone in DevOps" : entry.op === "state" ? `#${itemId} is ${entry.after.State} in DevOps` : "Target date set in DevOps";
+    const msg = entry.op.startsWith("undo_") ? "Undone in DevOps" : entry.op === "state" ? `#${itemId} is ${entry.after.State} in DevOps` : entry.op === "description" ? "Description changed in DevOps" : "Target date set in DevOps";
     return settle("confirmed", msg, { revAfter: back.rev, ...(wrote.commentId !== null ? { commentId: wrote.commentId } : {}) });
   } catch (e) {
     if (e instanceof WriteFailure) {
@@ -656,7 +788,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
   }
 
   function conflict(e: DevOpsWriteEntry, now: ItemSnapshot): Promise<DevOpsResult> {
-    const changed = Object.entries(current(e, now, tz)).filter(([k, v]) => (e.before[k] ?? null) !== v).map(([k, v]) => ({ field: k, was: e.before[k] ?? null, now: v }));
+    const changed = Object.entries(current(e, now, tz)).filter(([k, v]) => asCurrent(e, k, e.before[k]) !== v).map(([k, v]) => ({ field: k, was: asCurrent(e, k, e.before[k]), now: v }));
     const what = changed.length ? changed.map((c) => `${c.field} is ${c.now ?? "empty"} (was ${c.was ?? "empty"})`).join("; ") : `it is at revision ${now.rev} now (was ${e.revBefore})`;
     return settle("refused", `Changed in DevOps since you loaded it: ${what}. Nothing was written. Reload to review it again`, {}, { changed });
   }

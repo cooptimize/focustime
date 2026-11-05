@@ -31,6 +31,9 @@ param feedbackProject string = 'Cooptimize Internal'
 param feedbackParentId string = '496'
 @description('F1: true sends feedback (prod); false shows the preview only (dev, unless switched on for a test).')
 param feedbackLive bool = false
+@description('CV-1: shared polling of client chats in the background.')
+@allowed(['on', 'off'])
+param requestsPoll string = 'on'
 @description('dev 0 (scale to zero); prod 1 so the scheduler keeps running.')
 param minReplicas int
 param entraClientId string
@@ -106,6 +109,7 @@ module app 'modules/app.bicep' = {
     feedbackProject: feedbackProject
     feedbackParentId: feedbackParentId
     feedbackLive: feedbackLive
+    requestsPoll: requestsPoll
     minReplicas: minReplicas
     tenantId: tenantId
     entraClientId: entraClientId

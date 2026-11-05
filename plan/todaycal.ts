@@ -67,3 +67,23 @@ export function splitByBlocks(timed: readonly DayEvent[], blocks: readonly Block
   }
   return out;
 }
+
+/** CV-1: my promises on Today: timed ones by the blocks (before, in one, after), the rest (a due date only) apart. */
+export type PromiseSpots<P> = { before: P[]; within: Map<string, P[]>; after: P[]; untimed: P[] };
+export function placePromises<P extends { dueAt: string | null; dueDate: string }>(ps: readonly P[], blocks: readonly BlockSpan[], date: string): PromiseSpots<P> {
+  const out: PromiseSpots<P> = { before: [], within: new Map(blocks.map((b) => [b.key, []])), after: [], untimed: [] };
+  const first = blocks.length ? Math.min(...blocks.map((b) => ms(b.start))) : Infinity;
+  for (const p of ps) {
+    // An overdue one from an earlier day, or one due today with no time: the follow-ups row.
+    if (!p.dueAt || p.dueDate !== date) {
+      if (p.dueDate <= date) out.untimed.push(p);
+      continue;
+    }
+    const t = ms(p.dueAt);
+    const home = blocks.find((b) => t >= ms(b.start) && t < ms(b.end));
+    if (home) out.within.get(home.key)!.push(p);
+    else if (t < first) out.before.push(p);
+    else out.after.push(p);
+  }
+  return out;
+}

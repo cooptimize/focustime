@@ -44,6 +44,7 @@ export type AiErrorKind =
   | "refused_secret" // a token, key, secret or VM detail in the payload
   | "refused_email" // an email address outside Cooptimize in the payload
   | "over_budget" // this month's cap (the person's or the app's) is reached
+  | "zero_budget" // CV-1: the cap that applies is set to $0 (not "reached")
   | "invalid_output" // the answer didn't fit the schema (or was a refusal or cut short)
   | "rate_limited" // the provider asked to slow down, and the one retry didn't help
   | "quota" // the provider's billing or spend limit
@@ -69,6 +70,7 @@ export const AI_MESSAGES: Record<AiErrorKind, string> = {
   refused_secret: "Not sent: it contains something that looks like a key, token or secret",
   refused_email: "Not sent: it contains an email address from outside Cooptimize",
   over_budget: "AI budget reached for this month",
+  zero_budget: "AI budget is set to $0",
   invalid_output: "The AI's answer wasn't usable",
   rate_limited: "The AI service is busy. Try again in a minute.",
   quota: "The AI service's account is out of credit or over its limit",
@@ -114,6 +116,8 @@ export type AiLogEntry = {
   outcome: AiOutcome;
   /** The error kind when not ok (refused_client, timeout, ...). */
   detail: string | null;
+  /** CV-1: whose cap the request counted against: the person's own, or the app's (the shared conversations pipeline). */
+  cap?: "person" | "app";
 };
 
 /** What Settings › AI reads: setup, the switch, the month's spend against the cap, the last 20 requests. */
