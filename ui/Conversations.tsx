@@ -16,7 +16,7 @@ import { ImageViewer } from "./ImageViewer.tsx";
 import { MessageThread } from "./MessageThread.tsx";
 import { usePhotos } from "./Presence.tsx";
 import type { ItemDraft } from "../plan/conversations.ts";
-import { pathOfAction } from "../plan/conversation-draft.ts";
+import { acceptanceText, pathOfAction } from "../plan/conversation-draft.ts";
 import { userZone } from "../week/zone.ts";
 import { call } from "./api.ts";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
@@ -27,7 +27,7 @@ import { clientColor, whenText } from "./labels.ts";
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "?";
 type CardForm = "link" | "not_request" | "draft" | "merge";
-const PRIMARY_WORD = { create: "Create item", link: "Link", resolve: "Resolve", take_over: "Take it over", reopen: "Open again" } as const;
+const PRIMARY_WORD = { create: "Create DevOps item", link: "Link", resolve: "Resolve", take_over: "Take it over", reopen: "Open again", mark_done: "Mark done" } as const;
 
 export function Conversations({ data, version, onCount, onPromiseCount, onChanged, openSettings, select = null, switcher = null }: { switcher?: ReactNode; data: WeekLoadData; version: number; onCount: (n: number) => void; onPromiseCount?: (n: number) => void; onChanged?: () => void; openSettings: (section: string) => void; select?: number | null }) {
   const [state, setState] = useState<ConversationsData | null>(null);
@@ -127,9 +127,9 @@ export function Conversations({ data, version, onCount, onPromiseCount, onChange
       setError(errText(e));
     }
   };
-  const order = useMemo(() => [...(state?.needsYou ?? []), ...(teammatesOpen ? (state?.teammates ?? []) : []), ...(closedOpen ? (state?.closed ?? []) : [])], [state, teammatesOpen, closedOpen]);
+  const order = useMemo(() => [...(state?.needsYou ?? []), ...(state?.inProgress ?? []), ...(teammatesOpen ? (state?.teammates ?? []) : []), ...(closedOpen ? (state?.closed ?? []) : [])], [state, teammatesOpen, closedOpen]);
   const current = order.find((c) => c.id === sel) ?? state?.needsYou[0] ?? null;
-  const all = useMemo(() => [...(state?.needsYou ?? []), ...(state?.teammates ?? []), ...(state?.closed ?? [])], [state]);
+  const all = useMemo(() => [...(state?.needsYou ?? []), ...(state?.inProgress ?? []), ...(state?.teammates ?? []), ...(state?.closed ?? [])], [state]);
   const pickedCards = all.filter((c) => picked?.has(c.id));
   const oneChat = pickedCards.length > 1 && pickedCards.every((c) => c.chatId === pickedCards[0]!.chatId);
 
@@ -143,17 +143,43 @@ export function Conversations({ data, version, onCount, onPromiseCount, onChange
       </>
     ));
   const primary = (c: ConversationCard) => {
-    if (c.primary === "resolve") return resolve(c);
+    if (c.primary === "resolve" || c.primary === "mark_done") return resolve(c);
     if (c.primary === "reopen") return void run("conversations.reopen", { id: c.id }, "Open again");
     if (c.primary === "link") return setForm({ id: c.id, kind: "link" });
     if (c.primary === "take_over") {
       const k = c.commitments.find((x) => x.state === "open" && x.impliesItem && !x.mine);
       return k ? void run("conversations.take_over", { commitmentId: k.id }, `It's yours now. ${k.whoName.split(" ")[0]} is told quietly.`) : undefined;
     }
-    if (c.primary === "create") {
-      if (!c.canCreate || !writes) return setNotice(`Add DevOps write access for ${c.clientName} in Settings`);
-      const mine = c.commitments.find((x) => x.mine && x.state === "open" && x.impliesItem);
-      setForm({ id: c.id, kind: "draft", ...(mine ? { commitmentId: mine.id } : {}) });
+    // CV-5: the form opens with or without write access; without it, it says how to turn writes on and sends nothing.
+    if (c.primary === "create") return openDraft(c);
+  };
+  const openDraft = (c: ConversationCard) => {
+    const mine = c.commitments.find((x) => x.mine && x.state === "open" && x.impliesItem && !x.item);
+    setForm({ id: c.id, kind: "draft", ...(mine ? { commitmentId: mine.id } : {}) });
+  };
+  /** CV-5: Link to item (FocusTime only, with Unlink as its undo), then the optional comment through the comment write. */
+  const link = async (c: ConversationCard, itemId: number, comment: boolean) => {
+    await run("conversations.link", { id: c.id, itemId }, (
+      <>
+        Linked to #{itemId} for everyone on the chat.{" "}
+        <button type="button" className="mini quiet" onClick={() => void run("conversations.unlink", { id: c.id }, "Unlinked")}>
+          Undo
+        </button>
+      </>
+    ));
+    if (comment && writes) void writes.begin(c.clientKey, [{ kind: "conversation_comment", conversationId: c.id, itemId }]);
+  };
+  /** CV-5: chatter's ⋯ › Create DevOps item: This is work first, then the draft on the conversation it made. */
+  const createFromChatter = async (m: ConversationsData["chatter"][number]["messages"][number]) => {
+    try {
+      const r = await call<ConversationsData & { conversationId: number }>("conversations.this_is_work", { chatId: m.chatId, messageId: m.messageId });
+      show(r);
+      setError(null);
+      setSel(r.conversationId);
+      setForm({ id: r.conversationId, kind: "draft" });
+      onChanged?.();
+    } catch (e) {
+      setError(errText(e));
     }
   };
   const toggle = (c: ConversationCard) =>
@@ -206,6 +232,8 @@ export function Conversations({ data, version, onCount, onPromiseCount, onChange
       onSelect={() => setSel(c.id)}
       onToggle={() => toggle(c)}
       onPrimary={() => primary(c)}
+      onDraft={() => openDraft(c)}
+      onLink={(id, comment) => void link(c, id, comment)}
       onRun={run}
       form={form?.id === c.id ? form : null}
       onForm={(f) => setForm(f ? { id: c.id, ...f } : null)}
@@ -299,7 +327,7 @@ export function Conversations({ data, version, onCount, onPromiseCount, onChange
       {state && state.needsYou.length === 0 && (
         <div className="asks-empty">
           <p>Nothing needs you</p>
-          {state.needsYou.length + state.teammates.length + state.closed.length === 0 && (
+          {state.needsYou.length + state.inProgress.length + state.teammates.length + state.closed.length === 0 && (
             <p className="muted">
               Conversations from your clients' registered Teams chats show here for everyone on the chat. A FocusTime admin adds a chat in{" "}
               <button type="button" className="linkish" onClick={() => openSettings("clients")}>
@@ -314,6 +342,12 @@ export function Conversations({ data, version, onCount, onPromiseCount, onChange
         <section aria-label="Needs you">
           <h3 className="conv-section">Needs you</h3>
           <ul className="conv-list">{state.needsYou.map((c) => card(c))}</ul>
+        </section>
+      )}
+      {state && state.inProgress.length > 0 && (
+        <section aria-label="In progress">
+          <h3 className="conv-section">In progress</h3>
+          <ul className="conv-list">{state.inProgress.map((c) => card(c))}</ul>
         </section>
       )}
       {state && state.teammates.length > 0 && (
@@ -333,7 +367,7 @@ export function Conversations({ data, version, onCount, onPromiseCount, onChange
         </section>
       )}
       {state && state.hiddenCount > 0 && <p className="muted conv-hidden">{state.hiddenCount} hidden for you. Open one from its ⋯ in the chat's other cards, or ask a teammate.</p>}
-      {state?.chatter.map((g) => <Chatter key={g.clientKey} g={g} tz={tz} color={clientColor(g.clientKey, data.clients)} onWork={(m) => void run("conversations.this_is_work", { chatId: m.chatId, messageId: m.messageId }, "Moved into its own conversation")} />)}
+      {state?.chatter.map((g) => <Chatter key={g.clientKey} g={g} tz={tz} color={clientColor(g.clientKey, data.clients)} onWork={(m) => void run("conversations.this_is_work", { chatId: m.chatId, messageId: m.messageId }, "Moved into its own conversation")} onCreate={(m) => void createFromChatter(m)} />)}
       {state?.lastPoll && <p className="requests-poll muted" role="status">Last checked {whenText(state.lastPoll, tz)} · every {state.pollMinutes ?? 5} {state.pollMinutes === 1 ? "minute" : "minutes"} in working hours</p>}
     </main>
   );
@@ -342,7 +376,7 @@ export function Conversations({ data, version, onCount, onPromiseCount, onChange
 type Suggest = ConversationCard["suggestions"][number];
 function ConvCard(p: {
   c: ConversationCard; tz: string; color: string; compact: boolean; selected: boolean; expanded: boolean;
-  onSelect: () => void; onToggle: () => void; onPrimary: () => void; onRun: (action: string, input: Record<string, unknown>, done?: ReactNode) => Promise<void>;
+  onSelect: () => void; onToggle: () => void; onPrimary: () => void; onDraft: () => void; onLink: (itemId: number, comment: boolean) => void; onRun: (action: string, input: Record<string, unknown>, done?: ReactNode) => Promise<void>;
   form: { kind: CardForm; commitmentId?: number } | null; onForm: (f: { kind: CardForm; commitmentId?: number } | null) => void;
   /** CV-2: the same chat's other conversations (Merge into…), and the Select checkbox when picking several. */
   others: ConversationCard[]; onMerge: (into: ConversationCard) => void; picked: boolean | null; onPicked: (on: boolean) => void;
@@ -369,8 +403,9 @@ function ConvCard(p: {
   const more: { label: string; run: () => void; danger?: boolean }[] = [
     ...(c.primary !== "resolve" && !c.closed ? [{ label: "Resolve", run: () => void p.onRun("conversations.resolve", { id: c.id }, "Resolved") }] : []),
     ...(!c.closed ? [{ label: "Not a request…", run: () => p.onForm({ kind: "not_request" }) }] : []),
-    ...(c.primary !== "link" && !c.item ? [{ label: "Link to an item…", run: () => p.onForm({ kind: "link" }) }] : []),
-    ...(c.primary !== "create" && !c.item && c.canCreate ? [{ label: "Create item…", run: () => p.onForm({ kind: "draft" }) }] : []),
+    ...(c.primary !== "link" && !c.item ? [{ label: "Link to item…", run: () => p.onForm({ kind: "link" }) }] : []),
+    ...(c.primary !== "create" && !c.item ? [{ label: "Create DevOps item…", run: p.onDraft }] : []),
+    ...(c.item ? [{ label: `Unlink #${c.item.id}`, run: () => void p.onRun("conversations.unlink", { id: c.id }, "Unlinked") }] : []),
     ...(p.others.length ? [{ label: "Merge into…", run: () => p.onForm({ kind: "merge" }) }] : []),
     { label: c.hidden ? "Show for me" : "Hide for me", run: () => void p.onRun("conversations.hide", { id: c.id, hidden: !c.hidden }, c.hidden ? "Shown again" : "Hidden for you. Nobody else's view changes") },
     ...(c.closed && c.primary !== "reopen" ? [{ label: "Open again", run: () => void p.onRun("conversations.reopen", { id: c.id }, "Open again") }] : []),
@@ -407,14 +442,7 @@ function ConvCard(p: {
         // CV-3: grouped by rules (AI off for this client): no summary; Show messages has them all.
         <p className="conv-summary muted">Grouped without AI, so there's no summary. Show messages to read it.</p>
       )}
-      {c.item && (
-        <p className="conv-item">
-          Tracked as{" "}
-          <a href={c.item.url ?? undefined} target="_blank" rel="noopener noreferrer">
-            #{c.item.id} {c.item.title ?? ""}
-          </a>
-        </p>
-      )}
+      {c.item && <LinkedItem item={c.item} tz={p.tz} lead="Tracked as" />}
       {c.likely && !c.item && (
         <p className="ask-likely">
           Looks like{" "}
@@ -469,7 +497,7 @@ function ConvCard(p: {
       </div>
       {p.form?.kind === "not_request" && <NotRequest onSave={(reason) => void p.onRun("conversations.not_request", { id: c.id, ...(reason ? { reason } : {}) }, "Moved to Closed for everyone on the chat")} onCancel={() => p.onForm(null)} />}
       {p.form?.kind === "merge" && <MergeInto c={c} others={p.others} tz={p.tz} onPick={p.onMerge} onCancel={() => p.onForm(null)} />}
-      {p.form?.kind === "link" && <ConvLink c={c} onPick={(id) => void p.onRun("conversations.link", { id: c.id, itemId: id }, `Linked to #${id}`)} onCancel={() => p.onForm(null)} />}
+      {p.form?.kind === "link" && <ConvLink c={c} onPick={p.onLink} onCancel={() => p.onForm(null)} />}
       {p.form?.kind === "draft" && <DraftItem c={c} commitmentId={p.form.commitmentId ?? null} onCreate={p.onCreate} onCancel={() => p.onForm(null)} />}
       {p.expanded && <Messages c={c} tz={p.tz} />}
     </li>
@@ -545,14 +573,49 @@ function NotRequest({ onSave, onCancel }: { onSave: (reason: string) => void; on
 }
 
 type Hit = { id: number; title: string; type: string; state: string; url: string };
-function ConvLink({ c, onPick, onCancel }: { c: ConversationCard; onPick: (id: number) => void; onCancel: () => void }) {
+
+/**
+ * CV-5: a linked item with its live state from the central store: "#id title · Active · Dana · changed Tue"; when it
+ * closed in DevOps, "Item closed" (Mark done is the card's primary, never done automatically).
+ */
+export function LinkedItem({ item, tz, lead }: { item: NonNullable<ConversationCard["item"]>; tz: string; lead: string }) {
+  return (
+    <p className={`conv-item${item.closed ? " closed" : ""}`}>
+      {item.closed ? <strong className="conv-item-closed">Item closed</strong> : lead}{" "}
+      <a href={item.url ?? undefined} target="_blank" rel="noopener noreferrer">
+        #{item.id} {item.title ?? ""}
+      </a>
+      {item.state && (
+        <span className="muted">
+          {" "}
+          · {item.state} · {item.assignee ?? "Unassigned"}
+          {item.changedAt ? <> · changed {whenText(item.changedAt, tz)}</> : null}
+        </span>
+      )}
+    </p>
+  );
+}
+
+/** CV-5: "Also add a comment on the item", off by default; the comment goes through its own preview and confirm. */
+export function AlsoComment({ on, set, disabled }: { on: boolean; set: (v: boolean) => void; disabled: boolean }) {
+  return (
+    <label className="conv-internal-toggle">
+      <input type="checkbox" checked={on} disabled={disabled} onChange={(e) => set(e.target.checked)} /> Also add a comment on the item, with a link back to Teams
+      {disabled && <span className="muted"> (needs DevOps writes)</span>}
+    </label>
+  );
+}
+
+function ConvLink({ c, onPick, onCancel }: { c: ConversationCard; onPick: (id: number, comment: boolean) => void; onCancel: () => void }) {
   const [q, setQ] = useState(c.likely ? `#${c.likely.id}` : "");
   const [hits, setHits] = useState<Hit[] | null>(null);
   const [available, setAvailable] = useState(true);
+  const [comment, setComment] = useState(false);
+  const pick = (id: number) => onPick(id, comment && c.canCreate);
   useEffect(() => {
     let live = true;
     const t = setTimeout(() => {
-      void call<{ available: boolean; items: Hit[] }>("conversations.search", { id: c.id, query: q }).then(
+      void call<{ available: boolean; items: Hit[] }>("conversations.search_items", { id: c.id, query: q }).then(
         (r) => live && (setAvailable(r.available), setHits(r.items)),
         () => live && (setAvailable(false), setHits([])),
       );
@@ -566,7 +629,7 @@ function ConvLink({ c, onPick, onCancel }: { c: ConversationCard; onPick: (id: n
     <div className="ask-form ask-link" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())}>
       <label>
         Link to one of {c.clientName}'s open items
-        <input autoFocus value={q} maxLength={200} onChange={(e) => setQ(e.target.value)} placeholder="Search by title or #id" onKeyDown={(e) => e.key === "Enter" && hits?.[0] && (e.preventDefault(), onPick(hits[0].id))} />
+        <input autoFocus value={q} maxLength={200} onChange={(e) => setQ(e.target.value)} placeholder="Search by title or #id" onKeyDown={(e) => e.key === "Enter" && hits?.[0] && (e.preventDefault(), pick(hits[0].id))} />
       </label>
       {!available && <p className="set-problem">DevOps couldn't be read for {c.clientName}. Try again in a moment.</p>}
       {hits && available && (
@@ -574,13 +637,14 @@ function ConvLink({ c, onPick, onCancel }: { c: ConversationCard; onPick: (id: n
           {hits.length === 0 && <li className="muted">No open items match</li>}
           {hits.map((h) => (
             <li key={h.id}>
-              <button type="button" className="mini quiet" onClick={() => onPick(h.id)}>
+              <button type="button" className="mini quiet" onClick={() => pick(h.id)}>
                 <TypeIcon clientKey={c.clientKey} type={h.type} /> #{h.id} {h.title} <span className="muted">· {h.state}</span>
               </button>
             </li>
           ))}
         </ul>
       )}
+      <AlsoComment on={comment} set={setComment} disabled={!c.canCreate} />
       <button type="button" className="mini quiet" onClick={onCancel}>Cancel</button>
     </div>
   );
@@ -588,8 +652,13 @@ function ConvLink({ c, onPick, onCancel }: { c: ConversationCard; onPick: (id: n
 
 type TypeChoices = { choices: { type: string; bug: boolean }[]; type: string | null };
 type DraftData = { draft: ItemDraft; notSorted: string | null; features: { id: number; title: string; type: string }[]; types?: Record<string, TypeChoices>; internalChat: boolean; canCreate: boolean };
-/** "Create the DevOps item?": the draft from the whole conversation (title, type, parent feature, path of action). */
+/**
+ * Create DevOps item (CV-1, CV-5): one form for any conversation or promise. The AI's draft from that conversation only
+ * (title, path of action, acceptance criteria, type, parent) when AI may run for the client; otherwise empty for me to
+ * fill in. Me or nobody as the assignee. Without my write access it says how to turn writes on, and sends nothing.
+ */
 export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<ConversationCard, "id" | "clientName" | "clientKey">; commitmentId: number | null; onCreate: (change: import("./DevOpsWrite.tsx").DevOpsChange) => void; onCancel: () => void }) {
+  const writes = useDevOpsWrite();
   const [d, setD] = useState<DraftData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -597,6 +666,8 @@ export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<Con
   const [type, setType] = useState<string>("");
   const [parent, setParent] = useState<string>("");
   const [path, setPath] = useState("");
+  const [acceptance, setAcceptance] = useState("");
+  const [assignMe, setAssignMe] = useState(true);
   const [include, setInclude] = useState(false);
   const [busy, setBusy] = useState(false);
   const fill = useCallback(async (regenerate: boolean) => {
@@ -610,6 +681,7 @@ export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<Con
       setParent(p);
       setType(r.types?.[p || "none"]?.type ?? "");
       setPath(pathOfAction(r.draft));
+      setAcceptance(acceptanceText(r.draft));
       setError(null);
     } catch (e) {
       setError(errText(e));
@@ -626,41 +698,53 @@ export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<Con
     const next = d?.types?.[p || "none"];
     if (next && !next.choices.some((x) => x.type === type)) setType(next.type ?? "");
   };
+  const canSend = !!d?.canCreate && !!writes;
   return (
     <form
       className="ask-form conv-draft"
-      aria-label="Create the DevOps item"
+      aria-label="Create DevOps item"
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())}
       onSubmit={(e) => {
         e.preventDefault();
-        if (!title.trim()) return;
-        onCreate({ kind: "conversation_create", conversationId: c.id, ...(commitmentId ? { commitmentId } : {}), title: title.trim(), description: path, level: chosen?.bug ? "bug" : level === "bug" ? "story" : level, ...(type ? { type } : {}), ...(parent ? { parentId: Number(parent) } : {}), ...(include ? { includeInternal: true } : {}) });
+        if (!title.trim() || !canSend) return;
+        onCreate({
+          kind: "conversation_create", conversationId: c.id, ...(commitmentId ? { commitmentId } : {}), title: title.trim(), description: path, level: chosen?.bug ? "bug" : level === "bug" ? "story" : level,
+          ...(type ? { type } : {}), ...(parent ? { parentId: Number(parent) } : {}), ...(include ? { includeInternal: true } : {}), ...(acceptance.trim() ? { acceptance: acceptance.trim() } : {}), ...(assignMe ? {} : { assign: "none" }),
+        });
       }}
     >
-      <p className="conv-suggest-head">Create the DevOps item?</p>
+      <p className="conv-suggest-head">Create DevOps item</p>
       {error && <p className="set-problem">{error}</p>}
-      {!d && !error && <p className="muted">Drafting from the conversation…</p>}
+      {!d && !error && <p className="muted">Getting the form ready…</p>}
       {d && (
         <>
-          {d.notSorted && <p className="muted">Drafted without AI: {d.notSorted}.</p>}
+          {d.notSorted && <p className="muted">{d.draft.byAi ? null : <>Not drafted by AI ({d.notSorted}). Fill it in below.</>}</p>}
+          {!canSend && (
+            <p className="conv-turn-on" role="status">
+              Turn on DevOps writes for {c.clientName} to create it. Nothing is sent until you do.{" "}
+              {writes && (
+                <button type="button" className="linkish" onClick={() => writes.enable(c.clientKey)}>
+                  Settings › Clients
+                </button>
+              )}
+            </p>
+          )}
           <label>
             Title
             <input autoFocus maxLength={255} value={title} onChange={(e) => setTitle(e.target.value)} />
           </label>
-          {level !== "feature" && (
-            <label>
-              Under feature
-              <select value={parent} onChange={(e) => pickParent(e.target.value)}>
-                <option value="">None (the project's default area and iteration)</option>
-                {d.features.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    #{f.id} {f.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <label>
+            Parent
+            <select value={parent} onChange={(e) => pickParent(e.target.value)}>
+              <option value="">None (the project's default area and iteration)</option>
+              {d.features.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.type} #{f.id} {f.title}
+                </option>
+              ))}
+            </select>
+          </label>
           {options && options.choices.length > 0 ? (
             <fieldset className="conv-types">
               <legend>Type</legend>
@@ -682,8 +766,15 @@ export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<Con
             </label>
           )}
           <label>
-            Path of action <span className="muted">(the conversation's messages, who and when, and the Teams link are added below it)</span>
+            Description <span className="muted">(the conversation's messages, who and when, and the Teams link are added below it)</span>
             <textarea rows={8} maxLength={8000} value={path} onChange={(e) => setPath(e.target.value)} />
+          </label>
+          <label>
+            Acceptance criteria <span className="muted">(one per line; only where the type has them)</span>
+            <textarea rows={4} maxLength={8000} value={acceptance} onChange={(e) => setAcceptance(e.target.value)} />
+          </label>
+          <label className="conv-internal-toggle">
+            <input type="checkbox" checked={assignMe} onChange={(e) => setAssignMe(e.target.checked)} /> Assign it to me (otherwise unassigned)
           </label>
           {d.internalChat && (
             <label className="conv-internal-toggle">
@@ -691,7 +782,7 @@ export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<Con
             </label>
           )}
           <div className="ask-actions">
-            <button type="submit" className="mini primary" disabled={!d.canCreate || !title.trim()}>
+            <button type="submit" className="mini primary" disabled={!canSend || !title.trim()}>
               Preview in DevOps
             </button>
             <button type="button" className="mini quiet" disabled={busy} onClick={() => void fill(true)}>
@@ -701,7 +792,6 @@ export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<Con
               Cancel
             </button>
           </div>
-          {!d.canCreate && <p className="muted">Add DevOps write access for {c.clientName} in Settings to create it.</p>}
         </>
       )}
     </form>
@@ -746,8 +836,10 @@ function Messages({ c, tz }: { c: ConversationCard; tz: string }) {
   );
 }
 
-function Chatter({ g, tz, color, onWork }: { g: ConversationsData["chatter"][number]; tz: string; color: string; onWork: (m: ConversationsData["chatter"][number]["messages"][number]) => void }) {
+type ChatterMessage = ConversationsData["chatter"][number]["messages"][number];
+function Chatter({ g, tz, color, onWork, onCreate }: { g: ConversationsData["chatter"][number]; tz: string; color: string; onWork: (m: ChatterMessage) => void; onCreate: (m: ChatterMessage) => void }) {
   const [open, setOpen] = useState(false);
+  const [menu, setMenu] = useState<string | null>(null);
   return (
     <section className="conv-fold conv-chatter" aria-label={`Filtered as chatter, ${g.clientName}`} style={{ "--c": color } as CSSProperties}>
       <button type="button" className="link-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
@@ -764,6 +856,19 @@ function Chatter({ g, tz, color, onWork }: { g: ConversationsData["chatter"][num
               <button type="button" className="mini" onClick={() => onWork(m)}>
                 This is work
               </button>
+              {/* CV-5: Create DevOps item only under ⋯ for chatter: This is work first, then the draft. */}
+              <span className="fu-more">
+                <button type="button" className="mini quiet" aria-haspopup="menu" aria-expanded={menu === m.messageId} aria-label={`More for the message from ${m.author}`} onClick={() => setMenu((x) => (x === m.messageId ? null : m.messageId))}>
+                  ⋯
+                </button>
+                {menu === m.messageId && (
+                  <span className="fu-menu" role="menu" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setMenu(null))}>
+                    <button type="button" role="menuitem" autoFocus onClick={() => (setMenu(null), onCreate(m))}>
+                      Create DevOps item…
+                    </button>
+                  </span>
+                )}
+              </span>
             </li>
           ))}
         </ul>
