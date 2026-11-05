@@ -143,7 +143,7 @@ async function seen(ctx: RequestContext): Promise<Seen | null> {
 async function list(ctx: RequestContext, plan: PlanStore | undefined, cfg: AppConfig): Promise<RequestsData> {
   const name = (k: string) => cfg.clientSettings[k]?.name ?? k;
   const v = await seen(ctx);
-  const empty: RequestsData = { open: 0, requests: [], hidden: [], chats: [], writeClients: [], pollMinutes: POLL_MINUTES, promisesOpen: 0, lastPoll: null, lastFetch: null };
+  const empty: RequestsData = { open: 0, requests: [], hidden: [], chats: [], writeClients: [], pollMinutes: cfg.org?.rules.pollMinutes ?? POLL_MINUTES, promisesOpen: 0, lastPoll: null, lastFetch: null };
   if (!v) return empty;
   const home = await ctx.homeTenant();
   const now = Date.parse(ctx.now());
@@ -188,7 +188,7 @@ async function list(ctx: RequestContext, plan: PlanStore | undefined, cfg: AppCo
     // Only chats that are read (D523): a chat with reading off has no poll to show.
     chats: v.chats.filter((c) => c.readOn).map((c) => chatStatus(c, name(c.clientKey))),
     writeClients: await ctx.writeClients().catch(() => []),
-    pollMinutes: POLL_MINUTES,
+    pollMinutes: cfg.org?.rules.pollMinutes ?? POLL_MINUTES,
     lastPoll: newest(v.chats.map((c) => c.polledAt)),
     lastFetch: newest(v.chats.map((c) => c.fetchedAt)),
   };

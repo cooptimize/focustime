@@ -1,5 +1,7 @@
 // Settings actions (step 6b): load everything Settings shows, save one section, store an app secret in the keyring,
 // export the plan store. Secrets are never returned: only whether they are set and an expiry date I entered.
+import { clientsOf } from "./client-accounts.ts";
+import type { OrgRuntime } from "./org.ts";
 import { DEFAULT_AI_PERSON, DEFAULT_AI_RULES } from "../ai/types.ts";
 import { mapSeq } from "./seq.ts";
 import { DEFAULT_THRESHOLDS } from "../plan/roadmap.ts";
@@ -35,6 +37,8 @@ export type SettingsContext = {
   /** The server clock (ISO instant), for which clients are followed today. */
   now?: () => string;
   plan?: PlanStore;
+  /** ADM-2: the team runtime, for clientAccounts() (clients only). */
+  org?: OrgRuntime;
   /** Secret presence and app secret writes (the host's secret store). Absent: shown as unavailable, can't be set. */
   secrets?: { state: (a: AppSecret) => Promise<SecretPresence>; set: (a: AppSecret, value: string) => Promise<void> };
   /** Where data.export writes (0600), and how. */
@@ -88,7 +92,9 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
   // (my own choices).
   // A color or name in settings alone never makes a client: that is how fixture names once showed up here.
   const kept = Object.entries(cfg.clientSettings).filter(([, v]) => v.follow).map(([k]) => k);
-  const keys = [...new Set([INTERNAL_CLIENT, ...mine.map((c) => c.clientKey), ...kept, ...cfg.week.standingBlocks.map((b) => b.clientKey)])].sort((a, b) => a.localeCompare(b));
+  // ADM-2: clients only (a kept or standing-block key that isn't a client stays in the settings, just not listed).
+  const ca = await clientsOf(ctx.org);
+  const keys = [...new Set([INTERNAL_CLIENT, ...mine.map((c) => c.clientKey), ...kept, ...cfg.week.standingBlocks.map((b) => b.clientKey)])].filter((k) => !ca || ca.isClient(k)).sort((a, b) => a.localeCompare(b));
   const clients = await mapSeq(keys, async (key): Promise<SettingsClient> => {
     const m = mine.find((c) => c.clientKey === key);
     const setting = cfg.clientSettings[key] ?? { color: null, name: null, openStates: [], follow: false };

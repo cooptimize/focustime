@@ -35,7 +35,7 @@ export type SignInHooks = {
   /** A session ended (signed out): forget anything held for it (a demo's data). */
   ended?: (s: Session) => void;
 };
-export type SignInRefusal = "deleted" | "refused";
+export type SignInRefusal = "deleted" | "refused" | "guest";
 
 export type AppOptions = {
   /** Where people reach FocusTime: the Host and Origin checks and every redirect. */

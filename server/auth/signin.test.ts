@@ -87,7 +87,7 @@ describe("Microsoft sign-in", () => {
     const set = (res.headers["set-cookie"] as string[]).join("\n");
     expect(set).toMatch(new RegExp(`${SESSION_COOKIE}=[^;]+; Path=/; Secure; HttpOnly; SameSite=Lax`));
     expect(set).toMatch(new RegExp(`${CSRF_COOKIE}=[^;]+; Path=/; Secure; SameSite=Strict`));
-    expect(t.signedIn).toEqual([{ oid: FAKE_OID, tid: FAKE_TENANT, upn: "ana@cooptimize.example", name: "Ana Example", email: "ana@cooptimize.example", groups: { kind: "none" } }]);
+    expect(t.signedIn).toEqual([{ oid: FAKE_OID, tid: FAKE_TENANT, upn: "ana@cooptimize.example", name: "Ana Example", email: "ana@cooptimize.example", groups: { kind: "none" }, guest: null }]);
     const s = (await t.app.accounts.sessions.resolve(b.jar.get(SESSION_COOKIE)));
     expect(s).toMatchObject({ userId: FAKE_OID, demo: false });
     // The code was redeemed with the verifier and the client secret.

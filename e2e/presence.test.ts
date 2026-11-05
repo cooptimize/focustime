@@ -49,7 +49,7 @@ describe.skipIf(!CHROMIUM)("Teams presence and status (browser, demo mode)", () 
     await page.locator(".focus-screen").getByRole("button", { name: "Stop", exact: true }).click();
     await page.locator(".today-view").waitFor();
     await openSettings(page);
-    await page.locator(".set-nav").getByRole("button", { name: "Data", exact: true }).click();
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Data", exact: true }).click();
     const log = page.locator('[aria-label="Teams status log"]');
     await expect.poll(() => log.textContent(), { timeout: 15_000 }).toMatch(/Cleared \(back to automatic\)/);
     await expect(log.textContent()).resolves.toMatch(/Set Do not disturb/);
@@ -60,7 +60,7 @@ describe.skipIf(!CHROMIUM)("Teams presence and status (browser, demo mode)", () 
   it("Settings > Focus: Teams status on by default, plain focus sets Busy", async () => {
     const { page } = await freshPage(h);
     await openSettings(page);
-    await page.locator(".set-nav").getByRole("button", { name: "Focus", exact: true }).click();
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Focus", exact: true }).click();
     await expect(page.getByLabel("Set my status while I focus").isChecked()).resolves.toBe(true);
     await expect(page.locator("select", { has: page.locator("option", { hasText: "Leave my status alone" }) }).inputValue()).resolves.toBe("busy");
     await expect.poll(() => page.locator(".set-teams-access").textContent(), { timeout: 10_000 }).toContain("Teams is connected");

@@ -25,7 +25,29 @@ export function levelFromPosition(name: unknown): Level | null {
   return n === "consultant" ? "consultant" : n === "senior consultant" ? "senior" : n === "lead consultant" ? "lead" : null;
 }
 
-export type AdminArea = "clients" | "ai" | "conversations" | "organization" | "levels";
+/** ADM-2 (D605): the mapping an admin edits in Admin › People, prefilled with Dataverse's three position names. */
+export type PositionLevels = Record<string, Level | null>;
+export const BUILTIN_POSITION_LEVELS: PositionLevels = { Consultant: "consultant", "Senior Consultant": "senior", "Lead Consultant": "lead" };
+/** A position's level through the mapping (any case, trimmed); a position not in it, or mapped to nothing, has none. */
+export function positionLevelFrom(map: PositionLevels): (name: string | null | undefined) => Level | null {
+  const m = new Map(Object.entries(map).map(([k, v]) => [k.trim().toLowerCase(), v]));
+  return (name) => (name ? (m.get(name.trim().toLowerCase()) ?? null) : null);
+}
+const positionLevels = (v: unknown): PositionLevels => {
+  if (!v || typeof v !== "object" || Array.isArray(v)) throw new OrgInputError("A list of positions and their levels");
+  const e = Object.entries(v as Record<string, unknown>);
+  if (e.length > 200) throw new OrgInputError("At most 200 positions");
+  const out: PositionLevels = {};
+  for (const [k, l] of e) {
+    const name = k.trim();
+    if (!name || name.length > 100) throw new OrgInputError("A position name of 1 to 100 characters");
+    if (l !== null && !(LEVELS as readonly unknown[]).includes(l)) throw new OrgInputError("Consultant, Senior, Lead or Not mapped");
+    out[name] = l as Level | null;
+  }
+  return out;
+};
+
+export type AdminArea = "clients" | "ai" | "conversations" | "organization" | "levels" | "people";
 
 export class OrgInputError extends Error {}
 
@@ -197,13 +219,17 @@ export const ORG_SPECS = {
   "conv.request_phrases": { kind: "default", area: "conversations", label: "Request phrases", builtin: [...DEFAULT_REQUEST_PHRASES], parse: list(50, 60, true) },
   "conv.ack_phrases": { kind: "default", area: "conversations", label: "Thanks and short replies", builtin: [...DEFAULT_ACK_PHRASES], parse: list(50, 60, true) },
   "conv.promise_phrases": { kind: "default", area: "conversations", label: "Commitment phrases", builtin: [...DEFAULT_PROMISE_PHRASES], parse: list(50, 60, true) },
-  "conv.poll_minutes": { kind: "rule", area: "conversations", label: "Read client chats every (minutes)", builtin: 5, parse: intIn(1, 60, "minutes") },
+  // ADM-2 (D604): read live by the poller each tick; 1 to 30 (a stored value outside it falls back to 5 with a Status line).
+  "conv.poll_minutes": { kind: "rule", area: "conversations", label: "Read client chats every (minutes)", builtin: 5, parse: intIn(1, 30, "minutes") },
   "conv.retention_days": { kind: "rule", area: "conversations", label: "Keep messages that aren't requests (days)", builtin: 14, parse: intIn(1, 90, "days") },
+  "conv.closed_shown_days": { kind: "rule", area: "conversations", label: "Closed conversations stay shown (days)", builtin: 14, parse: intIn(1, 90, "days") },
   "conv.chat_ai_daily_cap": { kind: "rule", area: "conversations", label: "AI requests per chat per day", builtin: 200, parse: intIn(0, 5000, "requests") },
-  "org.invite_domains": { kind: "rule", area: "organization", label: "Help invites go only to", builtin: [] as string[], parse: domains },
+  // ADM-2 (D600): also who is a Cooptimizer (sign-in and People); help invites go only to these too.
+  "org.invite_domains": { kind: "rule", area: "organization", label: "Cooptimize email domains (sign-in and people)", builtin: [] as string[], parse: domains },
   "org.never_suggest": { kind: "rule", area: "organization", label: "Never suggested as helpers or Who", builtin: ["Kat 🤖"], parse: list(100, 100) },
   "org.feedback": { kind: "rule", area: "organization", label: "Send feedback goes to", builtin: null as FeedbackRule | null, parse: orNull(feedback) },
   "org.retention_years": { kind: "rule", area: "organization", label: "Keep people's data (years)", builtin: 2, parse: intIn(1, 10, "years") },
+  "org.position_levels": { kind: "rule", area: "people", label: "Positions to levels", builtin: BUILTIN_POSITION_LEVELS, parse: positionLevels },
   // DV-1: how often the central poller checks each client's DevOps in working hours (10 minutes outside them).
   "devops.poll_minutes": { kind: "rule", area: "organization", label: "DevOps check interval (minutes)", builtin: 1, parse: intIn(1, 30, "minutes") },
   "org.new_person": { kind: "default", area: "organization", label: "Working week for new people", builtin: BUILTIN_NEW_PERSON, parse: newPerson },
@@ -228,14 +254,17 @@ export const CLIENT_SPECS = {
   // WT-1's process overrides, one switch per type in Admin › Clients (type names; matched without case).
   no_breakdown: { kind: "rule", area: "clients", label: "Types that don't need breakdown", builtin: [] as string[], parse: list(40, 100) },
   background: { kind: "rule", area: "clients", label: "Background types", builtin: [] as string[], parse: list(40, 100) },
-  house_style: { kind: "rule", area: "clients", label: "House style for Draft stories", builtin: null as string | null, parse: orNull(text(1200)) },
+  house_style: { kind: "rule", area: "clients", label: "House style for Break down", builtin: null as string | null, parse: orNull(text(1200)) },
+  // ADM-2 (D597): an admin's two per-account overrides of the customer rule (plan/client-accounts.ts).
+  treat_as_client: { kind: "rule", area: "clients", label: "Treat as a client", builtin: false, parse: bool },
+  hidden: { kind: "rule", area: "clients", label: "Hide from FocusTime", builtin: false, parse: bool },
 } satisfies Record<string, Spec>;
 export type ClientKeyName = keyof typeof CLIENT_SPECS;
 
 /** Guidance by level (scope "level:<level>"). Each person may override any of these for themselves. */
 export type Guidance = { draftStories: boolean; readinessNudges: boolean; planShare: number };
 export const LEVEL_SPECS = {
-  draft_stories: { kind: "level", area: "levels", label: "Draft stories offered", builtin: true, parse: bool },
+  draft_stories: { kind: "level", area: "levels", label: "Break down offered", builtin: true, parse: bool },
   readiness_nudges: { kind: "level", area: "levels", label: "Readiness nudges in Plan ahead", builtin: true, parse: bool },
   // "plan_share": the share of a client's free time Plan the week plans up to before the amber over line. Named so a
   // later per-client "Keep open" share can join it (planned up to = free × plan share × (1 − keep open)).
@@ -246,14 +275,21 @@ export type LevelKeyName = keyof typeof LEVEL_SPECS;
 export const LEVEL_STARTERS: Record<Level, Partial<Record<LevelKeyName, unknown>>> = { consultant: { plan_share: 80 }, senior: {}, lead: {} };
 const GUIDANCE_KEY: Record<LevelKeyName, keyof Guidance> = { draft_stories: "draftStories", readiness_nudges: "readinessNudges", plan_share: "planShare" };
 
-export type Scope = "org" | `client:${string}` | `level:${Level}`;
+/** ADM-2: per-person keys (scope "person:<id>"), set by an admin. */
+export const PERSON_SPECS = {
+  automation: { kind: "rule", area: "people", label: "Automation account", builtin: false, parse: bool },
+} satisfies Record<string, Spec>;
+
+export type Scope = "org" | `client:${string}` | `level:${Level}` | `person:${string}`;
 export const clientScope = (k: string): Scope => `client:${k}`;
+export const personScope = (id: string): Scope => `person:${id.toLowerCase()}`;
 
 /** The spec for a scope and key, or null (refused). */
 export function specFor(scope: string, key: string): Spec | null {
   if (scope === "org") return (ORG_SPECS as Record<string, Spec>)[key] ?? null;
   if (scope.startsWith("client:") && scope.length > 7 && scope.length <= 107) return (CLIENT_SPECS as Record<string, Spec>)[key] ?? null;
   if (scope.startsWith("level:") && (LEVELS as readonly string[]).includes(scope.slice(6))) return (LEVEL_SPECS as Record<string, Spec>)[key] ?? null;
+  if (/^person:(dv:)?[0-9a-f-]{36}$/.test(scope)) return (PERSON_SPECS as Record<string, Spec>)[key] ?? null;
   return null;
 }
 
@@ -266,15 +302,19 @@ export type OrgBootstrap = { model: string; appCapUsd: number; inviteDomains: re
 /** Every org value resolved: stored, else bootstrap, else built-in. */
 export type OrgRules = {
   ai: { on: boolean; model: string; personCapUsd: number; appCapUsd: number; allowedClients: string[] };
-  conversations: { pollMinutes: number; retentionDays: number; chatAiDailyCap: number; requestPhrases: string[]; ackPhrases: string[]; promisePhrases: string[] };
-  organization: { inviteDomains: string[]; neverSuggest: string[]; feedback: FeedbackRule | null; retentionYears: number; newPerson: NewPersonDefaults };
+  conversations: { pollMinutes: number; retentionDays: number; closedShownDays: number; chatAiDailyCap: number; requestPhrases: string[]; ackPhrases: string[]; promisePhrases: string[] };
+  organization: { inviteDomains: string[]; neverSuggest: string[]; feedback: FeedbackRule | null; retentionYears: number; newPerson: NewPersonDefaults; positionLevels: PositionLevels };
   /** DV-1: the central DevOps poller's Rule. */
   devops: { pollMinutes: number };
   clients: Record<string, ClientRules>;
   levels: Record<Level, Guidance>;
+  /** ADM-2: ids an admin flagged as automation accounts. */
+  automation: string[];
+  /** ADM-2 (D604): team values stored that no longer validate, each read as its built-in value (Status shows them). */
+  problems: { key: string; label: string; fallback: unknown }[];
 };
-export type ClientRules = { color: string | null; allowAi: boolean; attachmentsAi: boolean; openStates: string[]; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null };
-export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, attachmentsAi: false, openStates: [], noBreakdown: [], background: [], houseStyle: null };
+export type ClientRules = { color: string | null; allowAi: boolean; attachmentsAi: boolean; openStates: string[]; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean };
+export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, attachmentsAi: false, openStates: [], noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false };
 
 const parsed = (r: OrgRow): unknown => {
   try {
@@ -296,13 +336,25 @@ function valueOf<T>(rows: Map<string, OrgRow>, scope: string, key: string, spec:
 
 export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRules {
   const m = new Map(rows.map((r) => [`${r.scope}\u0000${r.key}`, r]));
-  const o = <K extends OrgKey>(k: K, fallback?: (typeof ORG_SPECS)[K]["builtin"]) => valueOf(m, "org", k, ORG_SPECS[k] as Spec, fallback ?? ORG_SPECS[k].builtin) as (typeof ORG_SPECS)[K]["builtin"];
+  const problems: OrgRules["problems"] = [];
+  const o = <K extends OrgKey>(k: K, fallback?: (typeof ORG_SPECS)[K]["builtin"]) => {
+    const fb = fallback ?? ORG_SPECS[k].builtin;
+    const r = m.get(`org\u0000${k}`);
+    if (r && !problems.some((p) => p.key === k)) {
+      try {
+        (ORG_SPECS[k] as Spec).parse(parsed(r));
+      } catch {
+        problems.push({ key: k, label: ORG_SPECS[k].label, fallback: fb });
+      }
+    }
+    return valueOf(m, "org", k, ORG_SPECS[k] as Spec, fb) as (typeof ORG_SPECS)[K]["builtin"];
+  };
   const clientKeys = [...new Set(rows.filter((r) => r.scope.startsWith("client:")).map((r) => r.scope.slice(7)))];
   const clients: Record<string, ClientRules> = {};
   for (const k of clientKeys) {
     const s = `client:${k}`;
     const c = <K extends ClientKeyName>(key: K) => valueOf(m, s, key, CLIENT_SPECS[key] as Spec, CLIENT_SPECS[key].builtin) as (typeof CLIENT_SPECS)[K]["builtin"];
-    clients[k] = { color: c("color"), allowAi: c("allow_ai"), attachmentsAi: false, openStates: c("open_states"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style") };
+    clients[k] = { color: c("color"), allowAi: c("allow_ai"), attachmentsAi: false, openStates: c("open_states"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden") };
   }
   const levels = Object.fromEntries(
     LEVELS.map((l) => {
@@ -322,7 +374,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
       appCapUsd: o("ai.app_cap_usd", boot.appCapUsd),
       allowedClients: Object.entries(clients).filter(([, c]) => c.allowAi).map(([k]) => k).sort(),
     },
-    conversations: { pollMinutes: o("conv.poll_minutes"), retentionDays: o("conv.retention_days"), chatAiDailyCap: o("conv.chat_ai_daily_cap"), requestPhrases: o("conv.request_phrases"), ackPhrases: o("conv.ack_phrases"), promisePhrases: o("conv.promise_phrases") },
+    conversations: { pollMinutes: o("conv.poll_minutes"), retentionDays: o("conv.retention_days"), closedShownDays: o("conv.closed_shown_days"), chatAiDailyCap: o("conv.chat_ai_daily_cap"), requestPhrases: o("conv.request_phrases"), ackPhrases: o("conv.ack_phrases"), promisePhrases: o("conv.promise_phrases") },
     organization: {
       // Kept as the bootstrap when nothing is stored (the env values, D512).
       inviteDomains: m.has("org\u0000org.invite_domains") ? o("org.invite_domains") : [...boot.inviteDomains],
@@ -330,10 +382,13 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
       feedback: m.has("org\u0000org.feedback") ? (o("org.feedback") ?? boot.feedback) : boot.feedback,
       retentionYears: o("org.retention_years"),
       newPerson: o("org.new_person"),
+      positionLevels: o("org.position_levels"),
     },
     devops: { pollMinutes: o("devops.poll_minutes") },
     clients,
     levels,
+    automation: rows.filter((r) => r.scope.startsWith("person:") && r.key === "automation" && parsed(r) === true).map((r) => r.scope.slice(7)).sort(),
+    problems,
   };
 }
 
@@ -349,7 +404,8 @@ export function resolve<T>(o: { personal?: T | null | undefined; level?: T | nul
 
 /** A person's guidance: their own choices over their level's defaults (no level: the built-in ones). */
 export function guidanceFor(r: OrgRules, level: Level | null, personal: Partial<Guidance>): Guidance {
-  const lv = level ? r.levels[level] : null;
+  // ADM-2 (D605): no level (an unmapped position, or none) uses the Consultant defaults.
+  const lv = r.levels[level ?? "consultant"];
   const builtin: Guidance = { draftStories: LEVEL_SPECS.draft_stories.builtin, readinessNudges: LEVEL_SPECS.readiness_nudges.builtin, planShare: LEVEL_SPECS.plan_share.builtin };
   return {
     draftStories: resolve({ personal: personal.draftStories, level: lv?.draftStories, builtin: builtin.draftStories }).value,

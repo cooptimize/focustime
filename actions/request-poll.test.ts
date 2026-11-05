@@ -234,3 +234,37 @@ describe("one poll cycle", () => {
     expect(text).not.toContain("region");
   });
 });
+
+describe("the Rules, read live (ADM-2, D604)", () => {
+  it("a new interval applies on the next tick, both to what is due and to when the job wakes", async () => {
+    const s = await setup({ now: "2026-11-04T14:00:00Z" });
+    await s.register(FAB, "fabrikam");
+    s.setNow(IN_HOURS);
+    let minutes = 10;
+    s.deps.rules = async () => ({ pollMinutes: minutes, retentionDays: 14 });
+    expect(await pollCycle(s.deps)).toMatchObject({ polled: 1 });
+    s.later(6);
+    expect(await pollCycle(s.deps)).toMatchObject({ polled: 0 });
+    expect(await requestsNextDue(s.deps)).toBe(Temporal.Instant.from(IN_HOURS).add({ minutes: 10 }).toString());
+    minutes = 5;
+    // Already past 5 minutes: due now.
+    expect(await requestsNextDue(s.deps)).toBe(Temporal.Instant.from(IN_HOURS).add({ minutes: 6 }).toString());
+    expect(await pollCycle(s.deps)).toMatchObject({ polled: 1 });
+  });
+
+  it("messages that aren't requests are deleted after the Rule's days", async () => {
+    const s = await setup({ now: "2026-11-04T14:00:00Z" });
+    await s.register(FAB, "fabrikam");
+    s.setNow(IN_HOURS);
+    s.graph.say(FAB, { text: "thanks!" });
+    s.deps.rules = async () => ({ pollMinutes: 5, retentionDays: 3 });
+    await pollCycle(s.deps);
+    expect(await s.teams.messagesBefore(FAB, "2026-12-01T00:00:00Z", 10)).toHaveLength(1);
+    s.setNow("2026-11-06T15:10:00Z"); // two days later: kept
+    await pollCycle(s.deps);
+    expect(await s.teams.messagesBefore(FAB, "2026-12-01T00:00:00Z", 10)).toHaveLength(1);
+    s.setNow("2026-11-09T15:10:00Z"); // past three days: gone
+    await pollCycle(s.deps);
+    expect(await s.teams.messagesBefore(FAB, "2026-12-01T00:00:00Z", 10)).toHaveLength(0);
+  });
+});

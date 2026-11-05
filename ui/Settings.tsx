@@ -36,6 +36,7 @@ import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import type { FeedbackStatus } from "../actions/feedback-types.ts";
 import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, useAdmin } from "./settings/Admin.tsx";
+import { SideMenu, useNarrow } from "./settings/SideMenu.tsx";
 
 export const SETTINGS_SECTIONS = [
   ["you", "You"],
@@ -153,8 +154,9 @@ export function Settings(props: Props) {
     void reload();
   }, [reload, props.section]);
   useEffect(() => {
-    // One scroll for the whole page: a new section starts at its top.
-    headRef.current?.closest(".settings")?.scrollTo({ top: 0 });
+    // A new section starts at its top (the body scrolls on its own beside the menu; on a phone, the page).
+    headRef.current?.closest(".set-body")?.scrollTo?.({ top: 0 });
+    headRef.current?.closest(".settings")?.scrollTo?.({ top: 0 });
     headRef.current?.focus({ preventScroll: true });
   }, [props.section]);
   const saved = useCallback(
@@ -168,34 +170,20 @@ export function Settings(props: Props) {
   const inAdmin = isAdminSection(props.section);
   const title = `${inAdmin ? "Admin › " : ""}${SETTINGS_SECTIONS.find(([id]) => id === props.section)![1]}`;
   const phone = usePhone();
+  const narrow = useNarrow() || phone;
   const admin = useAdmin();
   return (
     <AutoSaveProvider onNotice={props.onNotice}>
       {(leave) => (
-    <main className="settings" aria-label="Settings">
-      <div className="set-side">
-      <nav className="set-nav" aria-label="Settings sections">
-        {SETTINGS_SECTIONS.filter(([id]) => !isAdminSection(id)).map(([id, label]) => (
-          <button key={id} type="button" className="set-tab" aria-current={props.section === id ? "page" : undefined} onClick={() => leave(() => props.onSection(id))}>
-            {label}
-          </button>
-        ))}
-
-        <button type="button" className="set-tab close" onClick={() => leave(props.onClose)} title="Back (Esc)">
-          Back
-        </button>
-      </nav>
-      {admin && (
-        <nav className="set-admin-nav" aria-label="Admin sections">
-          <span className="set-nav-group">Admin</span>
-          {ADMIN_UI_SECTIONS.map(([id, label]) => (
-            <button key={id} type="button" className="set-tab" aria-current={props.section === id ? "page" : undefined} onClick={() => leave(() => props.onSection(id))}>
-              {label}
-            </button>
-          ))}
-        </nav>
-      )}
-      </div>
+    <main className={`settings${narrow ? " narrow" : ""}`} aria-label="Settings">
+      <SideMenu
+        settings={SETTINGS_SECTIONS.filter(([id]) => !isAdminSection(id))}
+        admin={admin ? ADMIN_UI_SECTIONS : null}
+        current={props.section}
+        narrow={narrow}
+        onPick={(id) => leave(() => props.onSection(id as SettingsSectionId))}
+        onBack={() => leave(props.onClose)}
+      />
       <section className="set-body">
         <h2 ref={headRef} tabIndex={-1}>
           {title}
@@ -588,7 +576,7 @@ function GuidanceForm(p: FormProps) {
     initial: { draftStories: mine.draftStories ?? null, readinessNudges: mine.readinessNudges ?? null, planShare: mine.planShare ?? null },
     payload: (v) => v,
     onSaved: p.onSavedData,
-    label: (k) => (k === "draftStories" ? "Draft stories offered" : k === "readinessNudges" ? "Readiness nudges" : "Plan up to"),
+    label: (k) => (k === "draftStories" ? "Break down offered" : k === "readinessNudges" ? "Readiness nudges" : "Plan up to"),
   });
   if (!org) return null;
   const team = org.levelGuidance;
@@ -608,9 +596,9 @@ function GuidanceForm(p: FormProps) {
         <AutoField a={a} k="planShare" label="Plan up to (% of free time)" hint={<>Moves Plan the week's amber over line; it never blocks. Team default for your level: {team.planShare}%. {reset("planShare")}</>}>
           <input type="number" min={50} max={100} step={5} value={a.v.planShare ?? team.planShare} onChange={(e) => a.set("planShare", Number(e.target.value))} {...a.text("planShare")} />
         </AutoField>
-        <AutoField a={a} k="draftStories" label="Draft stories" hint={<>Team default: {onOff(team.draftStories)}. {reset("draftStories")}</>}>
+        <AutoField a={a} k="draftStories" label="Break down" hint={<>Team default: {onOff(team.draftStories)}. {reset("draftStories")}</>}>
           <label className="set-check">
-            <input type="checkbox" checked={a.v.draftStories ?? team.draftStories} onChange={(e) => a.change("draftStories", e.target.checked)} /> Offer Draft stories on features that need stories
+            <input type="checkbox" checked={a.v.draftStories ?? team.draftStories} onChange={(e) => a.change("draftStories", e.target.checked)} /> Offer Break down on features that need stories
           </label>
         </AutoField>
         <AutoField a={a} k="readinessNudges" label="Readiness nudges" hint={<>The ⚑ flags in Plan ahead. Team default: {onOff(team.readinessNudges)}. {reset("readinessNudges")}</>}>
@@ -1176,7 +1164,7 @@ function AllowAi({ c, d }: { c: SettingsClient; d: SettingsData }) {
 
 type HouseStyleData = { clientKey: string; text: string; computed: string | null; computedAt: string | null; learned: boolean; edited: string | null; team?: string | null; read?: boolean | null };
 
-/** DS-1, ADM-1: the client's house style for Draft stories. The team's (a Rule, Admin › Clients) when set, else learned. */
+/** DS-1, ADM-1: the client's house style for Break down. The team's (a Rule, Admin › Clients) when set, else learned. */
 function HouseStyleField({ clientKey, name }: { clientKey: string; name: string }) {
   const [h, setH] = useState<HouseStyleData | null>(null);
   useEffect(() => void call<HouseStyleData>("stories.house_style", { clientKey }).then(setH, () => setH(null)), [clientKey]);
@@ -1184,7 +1172,7 @@ function HouseStyleField({ clientKey, name }: { clientKey: string; name: string 
   const where = h.team ? ADMIN : h.learned ? `Learned from ${name}'s own features each week. A FocusTime admin can set the team's in Admin › Clients.` : "The default: too few features with stories to learn from yet.";
   return (
     <div className="set-form set-house-style">
-      <ReadOnly label="House style for Draft stories" value={<span className="set-pre">{h.text}</span>} where={where} />
+      <ReadOnly label="House style for Break down" value={<span className="set-pre">{h.text}</span>} where={where} />
     </div>
   );
 }
@@ -1199,7 +1187,7 @@ function AiForm(p: FormProps) {
     initial: { draftMonths: s.draftMonths ?? 12 },
     payload: (v) => v,
     onSaved: p.onSavedData,
-    label: () => "Draft stories looks back",
+    label: () => "Break down looks back",
   });
   const [st, setSt] = useState<AiView | null>(null);
   const [testing, setTesting] = useState(false);
@@ -1244,7 +1232,7 @@ function AiForm(p: FormProps) {
         </strong>
         {st?.zeroBudget ? <span className="field-problem">AI budget is set to $0</span> : st?.appReached && <span className="field-problem">FocusTime's AI budget for everyone is used up until next month.</span>}
       </div>
-      <AutoField a={a} k="draftMonths" label="Draft stories looks back (months)" hint="Examples come from the same client's features changed in this many months, 1 to 36.">
+      <AutoField a={a} k="draftMonths" label="Break down looks back (months)" hint="Examples come from the same client's features changed in this many months, 1 to 36.">
         <input type="number" min={1} max={36} step={1} value={a.v.draftMonths} onChange={(e) => a.set("draftMonths", Number(e.target.value))} {...a.text("draftMonths")} />
       </AutoField>
       <div className="set-ai-test">
@@ -1292,7 +1280,7 @@ function AiForm(p: FormProps) {
 }
 
 /** Names for the task names the log keeps. */
-const AI_TASK_NAMES: Record<string, string> = { test_ai: "Test AI", "asks.classify": "Sort an ask", "promises.extract": "Read a promise", "stories.draft": "Draft stories" };
+const AI_TASK_NAMES: Record<string, string> = { test_ai: "Test AI", "asks.classify": "Sort an ask", "promises.extract": "Read a promise", "stories.draft": "Break down" };
 const fmtAiTime = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
 
 function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; data: SettingsData; onSavedData: (d: SettingsData) => void }) {

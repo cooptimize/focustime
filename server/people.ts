@@ -3,6 +3,7 @@
 // time: the config file read once more for the owner, else the starter in the time zone their Outlook mailbox names
 // (else the host clock's).
 import type { Logger } from "../log/logger.ts";
+import { inDomains, isGuestUpn } from "../plan/person-match.ts";
 import { starterToml } from "../config/starter.ts";
 import type { NewPersonDefaults } from "../config/org.ts";
 import type { ParseResult } from "../config/schema.ts";
@@ -25,6 +26,10 @@ export type PeopleDeps = {
   hostZone: () => string;
   /** ADM-1: the team's working week, day shape and risk thresholds for new people (Admin › Organization), if any. */
   newPerson?: () => Promise<NewPersonDefaults | undefined>;
+  /** ADM-2: the Cooptimize email domains (the Rule, in FocusTime's own store; never Dataverse). Empty: no domain check. */
+  cooptimizeDomains?: () => Promise<readonly string[]>;
+  /** ADM-2: a guest was refused: audit it and end any sessions they still have. */
+  refusedGuest?: (u: SignedIn, why: string) => Promise<void>;
   log: Logger;
 };
 
@@ -49,6 +54,15 @@ export function createPeople(d: PeopleDeps) {
   /** A validated Microsoft sign-in: the user id to start a session for, or why not. */
   /** `owner`: this sign-in made them the store's owner (claimed its rows, or seeded from the config file), once. */
   async function signedIn(u: SignedIn, tokens: SignInTokens): Promise<{ userId: string; owner: boolean } | { refused: SignInRefusal }> {
+    // ADM-2 (D602): FocusTime is for Cooptimize accounts. A guest token, or (when the Rule is set) an address outside
+    // the Cooptimize domains, is refused before anything is kept; break-glass admins too. Dataverse plays no part.
+    const domains = (await d.cooptimizeDomains?.().catch(() => [])) ?? [];
+    const why = u.guest ?? (isGuestUpn(u.upn) ? "upn" : domains.length && !inDomains(u.email ?? u.upn, domains) ? "domain" : null);
+    if (why) {
+      d.log({ source: "auth", op: "sign_in", kind: "guest_refused" });
+      await d.refusedGuest?.(u, why).catch(() => undefined);
+      return { refused: "guest" };
+    }
     if ((await d.accounts.users.get(u.oid))?.deletedAt) {
       d.log({ source: "auth", op: "sign_in", kind: "deleted" });
       return { refused: "deleted" };

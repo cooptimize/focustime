@@ -700,8 +700,8 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
       const since = now().toZonedDateTimeISO(deps.timeZone).toPlainDate().subtract({ days: 14 });
       const [positions, people, accounts, workers, focus] = await Promise.all([
         getAll<DvPosition>("dir_positions", "positions?$select=positionid,name"),
-        getAll<DvUser>("dir_users", `systemusers?$select=systemuserid,fullname,internalemailaddress,azureactivedirectoryobjectid,_positionid_value&$filter=${encodeURIComponent(users)}`),
-        getAll<DvAccount>("dir_accounts", `accounts?$select=accountid,name,coop_reportingnickname,_ownerid_value&$filter=${encodeURIComponent("statecode eq 0")}`),
+        getAll<DvUser>("dir_users", `systemusers?$select=systemuserid,fullname,internalemailaddress,domainname,azureactivedirectoryobjectid,_positionid_value&$filter=${encodeURIComponent(users)}`),
+        getAll<DvAccount>("dir_accounts", `accounts?$select=accountid,name,coop_reportingnickname,_ownerid_value,customertypecode&$filter=${encodeURIComponent("statecode eq 0")}`),
         getAll<DvWorker>("dir_workers", `coop_accountworkers?$select=_coop_user_value,_coop_account_value&$filter=${encodeURIComponent("statecode eq 0")}`),
         getAll<DvFocus>("dir_focus", `coop_focustimes?$select=_coop_systemuser_value,_coop_account_value&$filter=${encodeURIComponent(`statecode eq 0 and (coop_enddate eq null or coop_enddate ge ${since})`)}&$expand=coop_AccountWorker($select=_coop_user_value,_coop_account_value)`),
       ]);

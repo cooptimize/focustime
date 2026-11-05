@@ -46,6 +46,8 @@ export function createScheduler(o: SchedulerOptions) {
   /** When to wake while idle (in memory; the stored copy is what a restart reads). null: work it out next. */
   let wakeAt: Temporal.Instant | null = null;
   let lastMaintenance: Temporal.Instant | null = null;
+  /** ADM-2: when each job last ran (in memory; Admin › Status shows it). */
+  const lastRun = new Map<string, string>();
   let waking = false;
 
   /** One pass of a kind for everyone; how many people it ran for (0 when one of its kind is still running). */
@@ -53,13 +55,18 @@ export function createScheduler(o: SchedulerOptions) {
     if (running[kind]) return 0;
     running[kind] = true;
     try {
-      if (kind === "slow") for (const j of o.jobs ?? []) await j.run().catch(() => o.log({ source: "plan", op: "scheduler", kind: `${j.name}_failed` }));
+      if (kind === "slow")
+        for (const j of o.jobs ?? []) {
+          await j.run().catch(() => o.log({ source: "plan", op: "scheduler", kind: `${j.name}_failed` }));
+          lastRun.set(j.name, now().toString());
+        }
       const people = [...(await o.people())];
       const r = await Promise.allSettled(people.map((t) => t[kind]()));
       const failed = r.filter((x) => x.status === "rejected").length;
       if (failed) o.log({ source: "plan", op: "scheduler", kind: `${kind}_failed`, count: failed });
       if (kind === "slow" && o.maintenance && (!lastMaintenance || now().since(lastMaintenance).total("milliseconds") >= o.maintenance.everyMs)) {
         lastMaintenance = now();
+        lastRun.set("maintenance", lastMaintenance.toString());
         await o.maintenance.run().catch(() => o.log({ source: "plan", op: "scheduler", kind: "maintenance_failed" }));
       }
       return people.length;
@@ -135,5 +142,5 @@ export function createScheduler(o: SchedulerOptions) {
     return () => timers.forEach(clearInterval);
   }
 
-  return { pass, start, first, beat, wakeAt: () => wakeAt };
+  return { pass, start, first, beat, wakeAt: () => wakeAt, lastRuns: (): Record<string, string> => Object.fromEntries(lastRun) };
 }
