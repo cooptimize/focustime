@@ -205,7 +205,7 @@ describe("Prepare again (UI-7)", () => {
     const noPat = setup({ write: [] });
     const id2 = await noPat.capture("csv export of invoices for finance");
     const w = await noPat.run("draft.get", { id: id2 });
-    expect(prepareAgain({ ...w.draft, ai: v.draft.ai }, w)).toBe("hidden");
+    expect(prepareAgain({ ...w.draft, ai: v.draft.ai ?? null }, w)).toBe("hidden");
     // Never before a first prepare ran (the preview runs that one), and never once in DevOps.
     expect(prepareAgain({ ...w.draft, ai: null }, { ...w, canWrite: true, aiOn: true })).toBe("hidden");
     expect(prepareAgain({ ...v.draft, devopsId: 55 }, { ...v, aiOn: true })).toBe("hidden");
