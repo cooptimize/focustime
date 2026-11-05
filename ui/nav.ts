@@ -170,6 +170,7 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
     case "requests":
     case "conversations": return plain(navOf.conversations());
     case "my_promises": return plain(navOf.myPromises());
+    case "week": return plain(navOf.week());
     case "ahead": return plain(navOf.roadmap("ahead"));
     case "planweek": return plain(navOf.week("planweek", r.weekStart));
     case "followup": return plain(navOf.inbox(r.id));

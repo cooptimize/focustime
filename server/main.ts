@@ -16,6 +16,7 @@ import { stubProvider } from "../ai/stub.ts";
 import type { AiProvider } from "../ai/types.ts";
 import type { AiRuntime } from "../actions/ai-actions.ts";
 import { appSpendStore } from "../store/ai-spend.ts";
+import { takesStore } from "../store/devops-takes.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { WritePats } from "../actions/devops-write-actions.ts";
 import { createLocalHost } from "../host/local/index.ts";
@@ -309,6 +310,8 @@ const pollDeps: PollDeps = {
 };
 // CV-1: conversations, commitments and suggestions, shared like the chats (D521's viewer gates every read).
 const conversations = createConversationStore(db, instantNow, teams);
+// PV-1: Take one's notices to the previous assignee (an app table).
+const takes = takesStore(db, instantNow);
 pollDeps.conversations = conversations;
 // CV-1 migration (add-only, D468): AP-1's requests become conversations once; idempotent, so every start may run it.
 await backfillRequests(teams, conversations, app.entra?.tenantId ?? null).then(
@@ -624,6 +627,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     // Step 14: personal DevOps write PATs (the host's secret store) and the writer (dev.azure.com of one client per call).
     writePats: writePatsOf(who),
     devopsWriter: createDevOpsWriter({ fetch, log }),
+    takes,
     account: accountFor(who),
     photoCache: host.photos,
     push,

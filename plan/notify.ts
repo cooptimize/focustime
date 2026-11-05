@@ -5,7 +5,7 @@ import { hoursOn, type TimeModel } from "../week/hours.ts";
 import { userZone } from "../week/zone.ts";
 
 /** Every kind of notification FocusTime sends. Each has its own switch in Settings > Notifications, except the test. */
-export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "commitment_item", "taken_over"] as const;
+export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "commitment_item", "taken_over", "story_taken"] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 export type AnyKind = NotifyKind | "test" | "held";
 
@@ -25,6 +25,7 @@ export const KIND_LABEL: Record<NotifyKind, string> = {
   asks: "Urgent requests",
   commitment_item: "DevOps item not created yet",
   taken_over: "Someone took over your promise",
+  story_taken: "Someone took your story",
 };
 export const KIND_HINT: Record<NotifyKind, string> = {
   plan_day: "At the start of a workday when the day isn't planned yet.",
@@ -42,7 +43,10 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   asks: "When AI sorts a request from a client chat you are in as needing someone now.",
   commitment_item: "Once, when a promise in a client chat needs a DevOps item and a working day has passed without one.",
   taken_over: "When a teammate takes over something you said you'd do in a client chat.",
+  story_taken: "When a teammate takes a DevOps story assigned to you with Take one in FocusTime.",
 };
+/** PV-1: quiet kinds go to the in-app list only, never to push. */
+export const QUIET_KINDS: ReadonlySet<AnyKind> = new Set<AnyKind>(["story_taken"]);
 /** The ritual reminders, shown as one group in Settings. */
 export const RITUAL_KINDS: readonly NotifyKind[] = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction"];
 
@@ -62,13 +66,13 @@ export const DEFAULT_NOTIFY: NotifySettings = {
 
 /** Where clicking a notification opens FocusTime. */
 export type Route =
-  | { view: "today" | "planday" | "checkin" | "closeout" | "focus" | "vm" | "inbox" | "ahead" | "asks" | "requests" | "conversations" | "my_promises" }
+  | { view: "today" | "planday" | "checkin" | "closeout" | "focus" | "vm" | "inbox" | "ahead" | "asks" | "requests" | "conversations" | "my_promises" | "week" }
   | { view: "planweek"; weekStart: string }
   | { view: "followup"; id: number }
   | { view: "settings"; section: string };
 
 // "asks": notifications sent before the rename to Requests still open the tab.
-const SIMPLE = new Set(["today", "planday", "checkin", "closeout", "focus", "vm", "inbox", "ahead", "asks", "requests", "conversations", "my_promises"]);
+const SIMPLE = new Set(["today", "planday", "checkin", "closeout", "focus", "vm", "inbox", "ahead", "asks", "requests", "conversations", "my_promises", "week"]);
 const SECTION = /^[a-z]{2,20}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -236,6 +240,8 @@ export const notices = {
   /** CV-1: one reminder to the committer, a working day after a promise that needs a DevOps item. */
   commitmentItem: (id: number, clientName: string, what: string, at: string): Notice => ({ kind: "commitment_item", key: `commitment_item:${id}`, title: `DevOps item not created yet · ${clientName}`, body: `${what}\nClick to open My promises.`, buttons: [open("Open My promises")], route: "my_promises", at }),
   /** CV-1: told quietly, once, that a teammate took a promise over. */
+  /** PV-1: told quietly, once, that a teammate took one of my stories (Take one). Never the item's title. */
+  storyTaken: (id: number, byName: string, itemId: number, at: string): Notice => ({ kind: "story_taken", key: `story_taken:${id}`, title: `${byName} took #${itemId}`, body: "It's assigned to them in DevOps now. Nothing more for you to do.", buttons: [open("Open Week")], route: "week", at }),
   takenOver: (id: number, byName: string, what: string, at: string): Notice => ({ kind: "taken_over", key: `taken_over:${id}`, title: `${byName} took it over`, body: `${what}\nNothing more for you to do.`, buttons: [open("Open Conversations")], route: "conversations", at }),
   expiry: (date: string, lines: { text: string; section: string }[], at: string): Notice | null =>
     lines.length

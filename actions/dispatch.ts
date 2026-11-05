@@ -128,6 +128,8 @@ export type ActionContext = {
   /** Step 14: personal DevOps write PATs in the keyring, and the DevOps writer. Absent: DevOps stays read-only. */
   writePats?: WritePats;
   devopsWriter?: DevOpsWriter;
+  /** PV-1: Take one's notices (an app table shared by everyone); absent in the demo and tests that don't need it. */
+  takes?: import("../store/devops-takes.ts").TakesStore;
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
   media?: MediaControl;
   /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
@@ -668,6 +670,7 @@ async function devopsWriteContext(ctx: ActionContext): Promise<DevOpsWriteContex
     devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
     now: ctx.now,
     ...(ctx.sleep ? { sleep: ctx.sleep } : {}),
+    ...(ctx.takes ? { takes: ctx.takes } : {}),
   };
 }
 

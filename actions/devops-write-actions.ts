@@ -12,8 +12,9 @@ import { teamsLink } from "../plan/chats.ts";
 import type { ConversationView } from "../store/conversation-store.ts";
 import { readBack, type Sleep } from "./readback.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, completedState, createOps, descriptionOps, textToHtml, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
-import { dateOnly, detectTargetField, htmlToText, identityEmail, workItemUrl } from "../sources/devops/normalize.ts";
+import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, assigneeEmail, assigneeText, assignOps, completedState, createOps, descriptionOps, textToHtml, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
+import { dateOnly, detectTargetField, htmlToText, identityEmail, identityName, workItemUrl } from "../sources/devops/normalize.ts";
+import type { TakesStore } from "../store/devops-takes.ts";
 import { levelsFromProcessConfig } from "../plan/process.ts";
 /** WT-1: the portfolio tiers from the process model (process configuration on the write path), never type names. */
 const portfolioTiers = (pc: unknown) => levelsFromProcessConfig(pc).tiers;
@@ -52,6 +53,8 @@ export type DevOpsWriteContext = {
   now: () => string;
   /** CV-1: my view of the shared conversations (only chats I'm in) and what a confirmed write settles there. */
   conversations?: ConversationsPort | undefined;
+  /** PV-1: Take one's notices to the previous assignee (an app table). Absent: no notice is sent. */
+  takes?: TakesStore | undefined;
 };
 
 /** CV-1: what the write framework needs from Conversations. */
@@ -116,6 +119,7 @@ const SUMMARY: Record<WriteOp, string> = {
   state: "Change the state of a DevOps item", comment: "Add a comment to a DevOps item", create: "Create a DevOps item", target_date: "Set a target date in DevOps",
   undo_state: "Undo: put the state back", undo_comment: "Undo: delete the comment FocusTime added", undo_create: "Undo: set the created item to Removed", undo_target_date: "Undo: put the target date back",
   description: "Change a DevOps item's description", undo_description: "Undo: put the description back",
+  assign: "Assign a DevOps story to you", undo_assign: "Undo: give the story back to who had it",
 };
 
 export async function devopsWriteAction(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
@@ -315,6 +319,7 @@ function hold(h: HeldIn, env: Env): DevOpsPreview {
   if (h.ask) notes.push(h.op === "undo_create" ? "The request opens again in Inbox › Requests, for everyone on the chat." : "Resolves the request for everyone on the chat once DevOps shows the new item. Nothing is posted in Teams.");
   if (h.conv && h.op === "create") notes.push("Tracks the conversation as the new item for everyone on the chat once DevOps shows it. Nothing is posted in Teams.");
   if (h.op === "undo_create" && h.conv) notes.push("The conversation opens again in Inbox › Conversations.");
+  if (h.op === "assign" && assigneeEmail(h.before["Assigned to"])) notes.push(`${(h.before["Assigned to"] ?? "").replace(/\s*<[^>]*>$/, "")} gets a quiet note in FocusTime, if they use it. Undo gives it back.`);
   if (h.op === "description") notes.push("Replaces the whole description with the text above. The old text is kept in the audit log, and Undo puts it back.");
   if (h.rev !== null) notes.push(`Written only if the item is still at revision ${h.rev}; if anyone changed it since, nothing is written.`);
   return {
@@ -372,6 +377,18 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       if (cur === date) return `#${item.id} already has that target date`;
       return { ...base(env), ...none, op: "target_date", itemId: item.id, title: item.title, ops: targetDateOps(item.rev, field, date, tz, had(field)), rev: item.rev, before: { "Target date": cur }, after: { "Target date": date }, type: item.type, field };
     }
+    case "assign": {
+      // PV-1 (D567): Take one: a teammate's open story (child level in the project's process) assigned to me.
+      const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));
+      const pc = await writer.processConfig(org, pat, project);
+      if (!levelsFromProcessConfig(pc).levels.child.includes(item.type)) throw new Refused(`#${item.id} is a ${item.type}: Take one is for stories`, 409);
+      const states = await writer.states(org, pat, project, item.type);
+      if (!isOpenCategory(states.find((x) => x.name === item.state)?.category)) throw new Refused(`#${item.id} is ${item.state}; FocusTime takes only open stories`, 409);
+      const was = item.fields["System.AssignedTo"];
+      const wasEmail = identityEmail(was);
+      if (wasEmail === env.me.email.toLowerCase()) return `#${item.id} is already assigned to you`;
+      return { ...base(env), ...none, op: "assign", itemId: item.id, title: item.title, ops: assignOps(item.rev, env.me.email, true), rev: item.rev, before: { "Assigned to": assigneeText(identityName(was), wasEmail) }, after: { "Assigned to": `${env.me.name} <${env.me.email}>` }, type: item.type };
+    }
     case "create": {
       const draft = (await plan.getDraft(posId(o.draftId, "draftId")));
       if (!draft) throw new PlanError("No such draft");
@@ -381,7 +398,9 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const parent = await writer.item(org, pat, project, draft.parentItemId);
       const pc = await writer.processConfig(org, pat, project);
       const tiers = portfolioTiers(pc);
-      const type = draft.level === "feature" ? defaultType(pc, "feature") : defaultType(pc, "story");
+      // PV-1: a story may name its type (the parent type's default child in the process model) when the parent takes it.
+      const childType = draft.level === "story" && typeof o.type === "string" && levelsFromProcessConfig(pc).childrenOf(parent.type).includes(o.type) ? o.type : null;
+      const type = childType ?? (draft.level === "feature" ? defaultType(pc, "feature") : defaultType(pc, "story"));
       if (!type) throw new Refused(`This project's process has no ${draft.level === "feature" ? "feature" : "story"} level`, 409);
       const wantParent = draft.level === "feature" ? tiers.epic : tiers.feature;
       if (!wantParent.has(parent.type)) throw new Refused(`#${parent.id} is a ${parent.type}: a ${draft.level === "feature" ? "feature goes under an epic" : "story goes under a feature"}`, 409);
@@ -613,6 +632,13 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
         }
         return { ...u, op: "undo_target_date", ops: targetDateOps(item.rev, field, prior, tz, true), rev: item.rev, before: { "Target date": cur }, after: { "Target date": prior }, field };
       }
+      if (entry.op === "assign") {
+        // PV-1: back to who had it, only while it is still mine.
+        const cur = identityEmail(item.fields["System.AssignedTo"]);
+        if (cur !== assigneeEmail(entry.after["Assigned to"])) throw new Refused(`DevOps shows #${item.id} assigned to ${identityName(item.fields["System.AssignedTo"]) ?? "nobody"} now. Undo would overwrite that`, 409, "changed");
+        const prior = entry.before["Assigned to"] ?? null;
+        return { ...u, op: "undo_assign", ops: assignOps(item.rev, assigneeEmail(prior), cur !== null), rev: item.rev, before: { "Assigned to": entry.after["Assigned to"] ?? null }, after: { "Assigned to": prior } };
+      }
       if (entry.op === "description") {
         const field = fieldOf(entry.ops) ?? "System.Description";
         const curHtml = String(item.fields[field] ?? "");
@@ -633,7 +659,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       return { ...u, op: "undo_create", ops: removeOps(item.rev, removed), rev: item.rev, before: { State: item.state, Comment: null }, after: { State: removed, Comment: REMOVED_COMMENT }, draftId: entry.draftId, pickIds: entry.pickIds, ask: entry.ask ?? null, conv: entry.conv ?? null };
     }
     default:
-      throw new Invalid("kind must be state, comment, create, request_create, proposal_create, conversation_create, conversation_comment, description_update, target_date or undo");
+      throw new Invalid("kind must be state, comment, create, request_create, proposal_create, conversation_create, conversation_comment, description_update, target_date, assign or undo");
   }
 }
 
@@ -651,12 +677,14 @@ function current(e: DevOpsWriteEntry, item: ItemSnapshot, tz: string): Record<st
     const f = fieldOf(e.ops);
     return { ...("Start date" in e.after ? { "Start date": dateOnly(item.fields[START_FIELD], tz) } : {}), "Target date": f ? dateOnly(item.fields[f], tz) : null };
   }
+  // PV-1: an assignee is compared by email.
+  if (e.op === "assign" || e.op === "undo_assign") return { "Assigned to": identityEmail(item.fields["System.AssignedTo"]) };
   // CV-1: a description is compared as text (DevOps may tidy the HTML it stores).
   if (e.op === "description" || e.op === "undo_description") return { Description: htmlToText(String(item.fields[fieldOf(e.ops) ?? "System.Description"] ?? "")).trim() };
   return {};
 }
 /** A logged value as current() reports it. */
-const asCurrent = (e: DevOpsWriteEntry, k: string, v: string | null | undefined) => ((e.op === "description" || e.op === "undo_description") && k === "Description" ? htmlToText(v ?? "").trim() : v ?? null);
+const asCurrent = (e: DevOpsWriteEntry, k: string, v: string | null | undefined) => ((e.op === "description" || e.op === "undo_description") && k === "Description" ? htmlToText(v ?? "").trim() : (e.op === "assign" || e.op === "undo_assign") && k === "Assigned to" ? assigneeEmail(v) : v ?? null);
 const applied = (e: DevOpsWriteEntry, now: Record<string, string | null>) => Object.keys(now).every((k) => (now[k] ?? null) === asCurrent(e, k, e.after[k]));
 
 /**
@@ -769,12 +797,18 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       if (made?.conv) await ctx.conversations.uncreated(made.conv, itemId);
     }
     if (entry.op === "description" && entry.conv?.suggestionId && ctx.conversations) await ctx.conversations.posted(entry.conv.suggestionId, entry.id).catch(() => {});
+    // PV-1: Take one tells the previous assignee (their own scheduler pass sends the notice); its undo takes that back.
+    const takenFrom = entry.op === "assign" ? assigneeEmail(entry.before["Assigned to"]) : entry.op === "undo_assign" ? assigneeEmail(entry.after["Assigned to"]) : null;
+    if (takenFrom && ctx.takes) {
+      const t = { clientKey: env.clientKey, org: env.org, itemId, fromEmail: takenFrom };
+      await (entry.op === "assign" ? ctx.takes.add({ ...t, byName: env.me.name }) : ctx.takes.remove(t)).catch(() => {});
+    }
     if (entry.op === "state" && entry.followUpId !== null) {
       const f = (await plan.getFollowUp(entry.followUpId));
       if (f && !f.closedAt) (await plan.closeFollowUp(entry.followUpId, `Marked ${entry.after.State} in DevOps`, "me", { how: "devops", outcome: "done" }));
     }
     forget();
-    const msg = entry.op.startsWith("undo_") ? "Undone in DevOps" : entry.op === "state" ? `#${itemId} is ${entry.after.State} in DevOps` : entry.op === "description" ? "Description changed in DevOps" : "Target date set in DevOps";
+    const msg = entry.op.startsWith("undo_") ? "Undone in DevOps" : entry.op === "state" ? `#${itemId} is ${entry.after.State} in DevOps` : entry.op === "description" ? "Description changed in DevOps" : entry.op === "assign" ? `#${itemId} is assigned to you in DevOps` : "Target date set in DevOps";
     return settle("confirmed", msg, { revAfter: back.rev, ...(wrote.commentId !== null ? { commentId: wrote.commentId } : {}) });
   } catch (e) {
     if (e instanceof WriteFailure) {
