@@ -12,16 +12,15 @@ import type { Day, IsoDate, Slot } from "../week/types.ts";
 import type { Pick } from "../plan/types.ts";
 import { mondayOf } from "../week/dates.ts";
 import { captureClients } from "./Capture.tsx";
-import { FollowUpRow, copy } from "./FollowUps.tsx";
+import { FollowUpRow } from "./FollowUps.tsx";
 import { clientColor, longDate, slotRange } from "./labels.ts";
-import { itemMenu, slotMenu } from "./menu.ts";
+import { itemMenu, openCoopBrief, slotMenu } from "./menu.ts";
 import { BreakDownButton } from "./BreakDownPanel.tsx";
 import { MenuRow, useMenu } from "./Menus.tsx";
 import { Agenda } from "./PlanDay.tsx";
 import { PickRow } from "./PickRow.tsx";
 import { checklistFor, clientFeatures, clientNames, PlanCtx, storiesUnder } from "./planview.ts";
 import { HalfScope } from "./scope.ts";
-import { call } from "./api.ts";
 import { DevOpsWork, workStatusLabel } from "./work.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { topOverlay } from "./keys.ts";
@@ -98,16 +97,8 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
     el?.classList.add("dp-focused");
   }, [focusSel, slot.date, slot.half]);
 
-  const brief = async (itemId: number) => {
-    if (!client) return;
-    try {
-      const r = await call<{ markdown: string }>("feature.brief", { weekStart, clientKey: client, itemId });
-      const ok = await copy(r.markdown, area.current);
-      onNotice?.(ok ? `Coop brief for #${itemId} copied` : "Copy didn't work. Open Plan the week to copy it");
-    } catch (e) {
-      onNotice?.(e instanceof Error ? e.message : "Could not build the brief");
-    }
-  };
+  // NV-1: the Coop brief opens Break down's side panel (it copies there).
+  const brief = (itemId: number, title: string, type?: string) => client && openCoopBrief(client, { id: itemId, title, ...(type ? { type } : {}) }, weekStart);
 
   return (
     <aside ref={ref} className="detail-panel" aria-label={`Details: ${title}, ${longDate(slot.date)}`} style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties}>
@@ -220,7 +211,7 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
                       <span className="dp-needs">
                         <span className="tw-needs">Needs stories</span>
                         {item && <BreakDown clientKey={f.clientKey} item={item} />}
-                        <button type="button" className="link-btn" onClick={() => void brief(f.itemId)}>
+                        <button type="button" className="link-btn" onClick={() => brief(f.itemId, f.title, item?.type)}>
                           Coop brief
                         </button>
                       </span>
