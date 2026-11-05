@@ -12,6 +12,7 @@ import { sqliteConn } from "../store/sql/sqlite.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { aChatMember, aClientChat, aCommitmentAnswer, aConversationUpdate, anAiApp, anAiRules, anUpdateAnswer, aTeamsMessage, aWorkItem, HOME_TENANT } from "./builders/index.ts";
 import { runPipeline, type PipelineDeps } from "../actions/conversations-pipeline.ts";
+import { isInternalKey } from "../actions/client-accounts.ts";
 
 export const NOW = "2026-11-04T21:00:00Z";
 export const ZONE = "America/Chicago";
@@ -21,7 +22,7 @@ export const SAM = aChatMember({ displayName: "Sam Tester" });
 export const BLAKE = aChatMember({ displayName: "Blake Novak", external: true });
 export const CHAT = aClientChat({ chatId: "19:contoso-alliance@thread.v2", clientKey: "contoso", displayName: "Contoso Analytics Alliance", members: [EVAN, LENA, SAM, BLAKE] });
 
-export function world(o: { respond?: (c: ProviderCall) => string | { ok: false; kind: "provider"; status: number }; appCapUsd?: number; allowed?: string[]; use?: boolean } = {}) {
+export function world(o: { /** GD-1: the clients the guard knows (none by default). */ directory?: import("../ai/guard.ts").ClientEntry[]; respond?: (c: ProviderCall) => string | { ok: false; kind: "provider"; status: number }; appCapUsd?: number; allowed?: string[]; use?: boolean } = {}) {
   let now = NOW;
   const clock = () => Temporal.Instant.from(now);
   const conn = sqliteConn(openPlanDb({ path: ":memory:", now: () => clock().toZonedDateTimeISO("UTC") }));
@@ -33,7 +34,8 @@ export function world(o: { respond?: (c: ProviderCall) => string | { ok: false; 
     provider: async () => provider,
     app: anAiApp({ provider: "openai", appCapUsd: o.appCapUsd ?? 100 }),
     rules: async () => anAiRules({ on: o.use ?? true, allowedClients: o.allowed ?? ["contoso", "fabrikam"] }),
-    guard: async () => ({ directory: [], homeDomains: ["contoso.example"], forbidden: [] }),
+    // GD-1: Internal as dispatch decides it (clientAccounts()'s why "internal").
+    guard: async (client) => ({ directory: o.directory ?? [], homeDomains: ["contoso.example"], forbidden: [], internal: await isInternalKey(null, client) }),
     log: convs.appAiLog,
     appSpend: { get: async () => 0, add: async () => {} },
     now: () => now,

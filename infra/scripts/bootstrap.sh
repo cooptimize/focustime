@@ -3,6 +3,7 @@
 # someone who can create Entra groups and assign roles; idempotent, so running it again changes nothing.
 #
 #   1. The resource providers the template uses (a subscription setting; registering one creates no resource).
+#      TB-1 adds Microsoft.BotService (the Azure Bot): run this again (dry run first) before the first deploy with the bot.
 #   2. The resource group FocusTime-<env> (prod: FocusTime) in Central US.
 #   3. The Entra security group "FocusTime DB Admins" (shared by dev and prod): the SQL servers' Entra admin and
 #      Key Vault Secrets Officer. Members are added, never removed.
@@ -46,7 +47,7 @@ command -v az >/dev/null || { echo "Azure CLI not found" >&2; exit 1; }
 TENANT=$(az account show --query tenantId -o tsv)
 
 # 1. Providers.
-for p in Microsoft.App Microsoft.ContainerRegistry Microsoft.OperationalInsights Microsoft.Insights Microsoft.Sql Microsoft.KeyVault Microsoft.ManagedIdentity; do
+for p in Microsoft.App Microsoft.ContainerRegistry Microsoft.OperationalInsights Microsoft.Insights Microsoft.Sql Microsoft.KeyVault Microsoft.ManagedIdentity Microsoft.BotService; do
   if [[ $(az provider show -n "$p" --query registrationState -o tsv) != Registered ]]; then
     echo "Registering $p"; run provider register -n "$p" --wait -o none
   fi

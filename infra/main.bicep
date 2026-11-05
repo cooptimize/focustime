@@ -93,6 +93,13 @@ module sql 'modules/sql.bicep' = {
   }
 }
 
+// TB-1: the bot's identity (its Microsoft App ID is this identity's client id); the app holds it to send replies.
+resource botIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: '${prefix}-bot-id'
+  location: location
+  tags: tags
+}
+
 module app 'modules/app.bicep' = {
   name: 'app'
   params: {
@@ -105,6 +112,8 @@ module app 'modules/app.bicep' = {
     registryName: registryName
     registryLoginServer: '${registryName}.azurecr.io'
     pullIdentityId: empty(pullIdentityName) ? '' : resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', pullIdentityName)
+    botIdentityId: botIdentity.id
+    botAppId: botIdentity.properties.clientId
     vaultName: keyvault.outputs.name
     vaultUri: keyvault.outputs.uri
     appReady: appReady
@@ -127,6 +136,19 @@ module app 'modules/app.bicep' = {
     dataverseClientId: dataverseClientId
     sqlServerFqdn: sql.outputs.fqdn
     sqlDatabaseName: sql.outputs.databaseName
+  }
+}
+
+module bot 'modules/bot.bicep' = {
+  name: 'bot'
+  params: {
+    prefix: prefix
+    tags: tags
+    displayName: env == 'prod' ? 'FocusTime' : 'FocusTime (dev)'
+    endpoint: '${app.outputs.publicUrl}/teams/messages'
+    tenantId: tenantId
+    identityId: botIdentity.id
+    identityClientId: botIdentity.properties.clientId
   }
 }
 
@@ -153,3 +175,4 @@ output vaultUri string = keyvault.outputs.uri
 output sqlServerName string = sql.outputs.serverName
 output sqlServerFqdn string = sql.outputs.fqdn
 output sqlDatabaseName string = sql.outputs.databaseName
+output botAppId string = botIdentity.properties.clientId

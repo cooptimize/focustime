@@ -1,0 +1,111 @@
+// TB-1: the assistant as the bot sees it (one brain, two front ends: the in-app panel and this bot). AS-1's service
+// (assistant/types.ts) is adapted to this shape by teamsAssistant() below, so the bot and its tests keep their own
+// small types. Nothing in server/teams calls an AI provider or an action itself: reads are answered by the assistant
+// (or a quick command), and every write is a proposal the person confirms.
+import type { Assistant, Card as AsCard, Link as AsLink, Proposal as AsProposal } from "../../assistant/types.ts";
+
+export type AssistantPerson = { userId: string };
+
+/** What the bot knows about where the message came from. Never the message's text (that is `text`). */
+export type TeamsContext = { surface: "teams"; conversation: "personal"; locale: string | null; timeZone: string | null };
+
+export type AssistantLink = { label: string; url: string };
+
+/** A result to show: a title, a few lines, and links into the app (absolute public URLs). */
+export type AssistantCard = { title: string; lines?: readonly string[]; links?: readonly AssistantLink[] };
+
+/** One field a write changes, as the preview shows it. */
+export type ProposalChange = { field: string; before: string | null; after: string | null };
+
+/** A write the assistant would make, waiting for Confirm: the usual preview (who sees it, before and after). */
+export type Proposal = {
+  id: string;
+  title: string;
+  /** Who will see the change ("You only", "Everyone on Northwind's DevOps project"). */
+  whoSees: string;
+  changes: readonly ProposalChange[];
+  /** One line under the changes, when the preview needs it. */
+  note?: string | null;
+  /** Proposals expire 15 minutes after they are made. */
+  expiresAt: string;
+};
+
+export type HandleStatus = "ok" | "off" | "client_off" | "refused" | "which_client" | (string & {});
+
+export type HandleResult = {
+  turnId: string;
+  status: HandleStatus;
+  reply: string;
+  cards: readonly AssistantCard[];
+  proposals: readonly Proposal[];
+  links: readonly AssistantLink[];
+};
+
+export type ConfirmResult =
+  | { status: "ok"; message: string; undo?: { label: string; url?: string } | null; links?: readonly AssistantLink[] }
+  | { status: "changed"; message: string; proposal: Proposal }
+  | { status: "not_allowed" | "expired" | "gone"; message: string };
+
+export type AssistantService = {
+  handle(i: { person: AssistantPerson; channel: "teams"; text: string; context: TeamsContext }): Promise<HandleResult>;
+  confirm(i: { person: AssistantPerson; proposalId: string; edits?: Record<string, unknown> }): Promise<ConfirmResult>;
+  cancel(i: { person: AssistantPerson; proposalId: string }): Promise<void>;
+};
+
+/** Proposals expire after this long (AS-1); a card past it shows Expired. */
+export const PROPOSAL_MINUTES = 15;
+
+/** AS-1: a card's title, a few lines and its link, for Teams (the service already writes absolute links for "teams"). */
+function cardOf(c: AsCard): AssistantCard {
+  const links = (l: AsLink | undefined) => (l ? [{ label: l.label, url: l.href }] : []);
+  switch (c.kind) {
+    case "note":
+      return { title: c.text, links: links(c.link) };
+    case "item": {
+      const dates = c.start || c.target ? [`${c.start ?? "No start"} to ${c.target ?? "no target"}`] : [];
+      const kids = c.children.slice(0, 5).map((k) => `#${k.id} ${k.title} · ${k.state}${k.owner ? ` · ${k.owner}` : ""}`);
+      return { title: `#${c.id} ${c.title}`, lines: [`${c.clientName} · ${c.type} · ${c.state} · ${c.owner ?? "Unassigned"}`, ...dates, ...kids], links: [...links(c.link), ...(c.devopsUrl ? [{ label: "Open in DevOps", url: c.devopsUrl }] : [])] };
+    }
+    case "block":
+      return { title: `${c.clientName} · ${c.date} ${c.half}`, lines: [`${c.time} · ${c.status}`, ...c.picks.map((p) => `${p.done ? "Done: " : ""}${p.title} (${p.size})`)], links: links(c.link) };
+    case "pick":
+      return { title: `${c.done ? "Done: " : ""}${c.title}`, lines: [`${c.clientName} · ${c.date} ${c.half}${c.time ? ` · ${c.time}` : ""}`], links: links(c.link) };
+    case "send":
+      return { title: c.title, lines: [`${c.clientName} · ${c.from} to ${c.to} · ${c.tier === "must" ? "Must" : "Suggested"} · week of ${c.weekStart} · ${c.state}`], links: links(c.link) };
+    case "promise":
+      return { title: c.what, lines: [`${c.clientName} · ${c.who}${c.toWhom ? ` to ${c.toWhom}` : ""}${c.due ? ` · due ${c.due}` : ""}`], links: links(c.link) };
+  }
+}
+
+function proposalOf(p: AsProposal): Proposal {
+  const note = p.preview.notes.join(" ");
+  return { id: String(p.id), title: p.clientName ? `${p.title} (${p.clientName})` : p.title, whoSees: p.whoSees, changes: p.preview.rows.map((r) => ({ field: r.label, before: r.before, after: r.after })), note: note || null, expiresAt: p.expiresAt };
+}
+
+/**
+ * AS-1: the bot's AssistantService on the real assistant (server/assistant.ts's hub, channel "teams"). Ids are numbers
+ * in the service and strings here; a DevOps write's undo is in FocusTime's audit log (Settings › Data).
+ */
+export function teamsAssistant(a: Pick<Assistant, "handle" | "confirm" | "cancel">, publicUrl: string): AssistantService {
+  const base = publicUrl.replace(/\/$/, "");
+  const idOf = (s: string) => (/^\d{1,10}$/.test(s) ? Number(s) : 0);
+  return {
+    async handle(i) {
+      const r = await a.handle({ person: i.person, channel: "teams", text: i.text, context: { screen: "teams" } });
+      return { turnId: String(r.turnId), status: r.status, reply: r.reply, cards: r.cards.map(cardOf), proposals: r.proposals.map(proposalOf), links: r.links.map((l) => ({ label: l.label, url: l.href })) };
+    },
+    async confirm(i) {
+      const edits = Object.fromEntries(Object.entries(i.edits ?? {}).filter(([, v]) => typeof v === "string")) as Record<string, string>;
+      const r = await a.confirm({ person: i.person, proposalId: idOf(i.proposalId), ...(Object.keys(edits).length ? { edits } : {}) });
+      if (r.ok) {
+        const shown = cardOf(r.result);
+        return { status: "ok", message: r.message, undo: r.undo?.kind === "devops" ? { label: "Undo in FocusTime", url: `${base}/#/settings/data` } : null, links: shown.links ?? [] };
+      }
+      if (r.reason === "changed" && r.proposal) return { status: "changed", message: r.message, proposal: proposalOf(r.proposal) };
+      return { status: r.reason === "changed" ? "gone" : r.reason, message: r.message };
+    },
+    async cancel(i) {
+      await a.cancel({ person: i.person, proposalId: idOf(i.proposalId) });
+    },
+  };
+}

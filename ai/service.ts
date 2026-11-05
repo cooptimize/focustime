@@ -6,7 +6,7 @@
 export { DEFAULT_AI_PERSON, DEFAULT_AI_RULES, type AiPersonSettings, type AiRules } from "./types.ts";
 import type { Logger } from "../log/logger.ts";
 import { costMicros, micros, monthBounds, monthOf, type Prices } from "./cost.ts";
-import { guard, type GuardInput } from "./guard.ts";
+import { guard, otherClientMatch, type GuardHit, type GuardInput } from "./guard.ts";
 import { strictProblems, validate } from "./schema.ts";
 import { AI_MESSAGES, AiError, NO_CLIENT, type ProviderCall, type ToolRound, type ToolSpec, type AiImageInput, type AiFail, type AiRules, type AiStatus, type AiErrorKind, type AiLogEntry, type AiOutcome, type AiProvider, type AiResult, type JsonSchema, type ProviderReply, type Usage } from "./types.ts";
 
@@ -41,8 +41,11 @@ export type AiDeps = {
   app: AiAppSettings;
   /** ADM-1: the admins' AI rules (global on, the clients allowed, the caps, the model). No per-person switch. */
   rules: () => Promise<AiRules>;
-  /** What the guard needs besides the task's client: every client's names, projects and items, home domains, the VM. */
-  guard: () => Promise<Omit<GuardInput, "client">>;
+  /**
+   * What the guard needs besides the task's client: every client's names, projects and items, home domains, the VM,
+   * and (GD-1) whether the task's client is Cooptimize Internal. Given the task's client.
+   */
+  guard: (client: string) => Promise<Omit<GuardInput, "client">>;
   log: AiLogStore;
   appSpend: AppSpendStore;
   now: () => string;
@@ -69,6 +72,8 @@ export const MAX_RETRY_WAIT_MS = 20_000;
 export const BASE_BACKOFF_MS = 1_000;
 
 const fail = (kind: AiErrorKind): { ok: false; error: AiError } => ({ ok: false, error: new AiError(kind, AI_MESSAGES[kind]) });
+/** GD-1: an answer naming another client was sent and paid for, but is never shown. */
+const OUTPUT_REFUSED = "The AI's answer mentions another client, so nothing is shown";
 const ZERO: Usage = { inputTokens: 0, cachedTokens: 0, outputTokens: 0 };
 
 export function createAi(d: AiDeps) {
@@ -85,6 +90,11 @@ export function createAi(d: AiDeps) {
     // App Insights: counts and outcomes only, and whose cap it counted against.
     logger({ source: "ai", op: "request", kind: scope === "app" ? `${task.name}:${outcome}:app` : `${task.name}:${outcome}`, ...(detail ? { status: detail } : {}), durationMs: latencyMs, count: usage.inputTokens + usage.outputTokens });
     return cost;
+  }
+
+  /** GD-1: which rule refused, and for a client rule the matched entry as its one-way ref (never the text). */
+  function refusedLine(task: AiTaskSpec, hit: GuardHit, side: "input" | "output") {
+    logger({ source: "ai", op: "guard", kind: `${task.name}:${side}:${hit.rule}`, status: hit.kind, ...(hit.entry ? { client: hit.entry } : {}) });
   }
 
   /**
@@ -111,9 +121,10 @@ export function createAi(d: AiDeps) {
     const provider = d.app.provider === "off" ? null : await d.provider();
     if (!provider) return fail("not_set_up");
 
-    const g = await d.guard();
-    const hit = guard(`${task.instructions}\n${input}${(o.images ?? []).map((i) => `\n${i.label}`).join("")}`, { ...g, client: task.client });
+    const g = { ...(await d.guard(task.client)), client: task.client };
+    const hit = guard(`${task.instructions}\n${input}${(o.images ?? []).map((i) => `\n${i.label}`).join("")}`, g);
     if (hit) {
+      refusedLine(task, hit, "input");
       await record(task, "refused", hit.kind, ZERO, 0, model);
       return fail(hit.kind);
     }
@@ -172,6 +183,14 @@ export function createAi(d: AiDeps) {
       await record(task, "invalid", "invalid_output", spent, latency, reply.model);
       return fail("invalid_output");
     }
+    // GD-1: the answer may not name another client either (Internal may). Only the client rule: an email address or a
+    // secret shape in an answer can only come from an image, and CV-4 scrubs those from what it keeps.
+    const named = g.internal ? null : otherClientMatch(reply.text, g.client, g.directory);
+    if (named) {
+      refusedLine(task, { kind: "refused_client", rule: named.rule, entry: named.key }, "output");
+      await record(task, "refused", "refused_client", spent, latency, reply.model);
+      return { ok: false, error: new AiError("refused_client", OUTPUT_REFUSED) };
+    }
     const cost = await record(task, "ok", null, spent, latency, reply.model);
     return { ok: true, value: value as T, usage: spent, costUsd: cost / 1_000_000, latencyMs: latency, model: reply.model };
   }
@@ -203,7 +222,7 @@ export function createAi(d: AiDeps) {
     let latency = 0;
     for (let round = 0; round < max; round++) {
       const sent = `${task.instructions}\n${input}${rounds.flatMap((r) => r.outputs.map((x) => `\n${x.output}`)).join("")}`;
-      const g = await d.guard();
+      const g = await d.guard(task.client);
       const hit = guard(sent, { ...g, client: task.client });
       if (hit) {
         await record(task, "refused", hit.kind, ZERO, 0, model);

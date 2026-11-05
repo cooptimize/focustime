@@ -28,7 +28,7 @@ import { keyVaultDataKey } from "../host/azure/datakey.ts";
 import { envSecrets } from "../host/azure/secrets.ts";
 import { appKeyStore } from "../store/app-keys.ts";
 import { appInsights } from "../log/appinsights.ts";
-import { DefaultAzureCredential } from "@azure/identity";
+import { DefaultAzureCredential, ManagedIdentityCredential } from "@azure/identity";
 import { noSettingsFile, photoCache, snapshotCache } from "../host/azure/memory.ts";
 import { randomBytes } from "node:crypto";
 import { readAppSettings, redirectUris } from "./appconfig.ts";
@@ -77,7 +77,13 @@ import type { ActionContext } from "../actions/dispatch.ts";
 import { userZone } from "../week/zone.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { pollCycle, requestsNextDue, type PollDeps, type PollPerson } from "../actions/request-poll.ts";
-import { requestContext, aiFor, escalationHours } from "../actions/dispatch.ts";
+import { requestContext, aiFor, escalationHours, dispatch } from "../actions/dispatch.ts";
+import type { WeekLoadData } from "../actions/types.ts";
+import { createTeamsEndpoint } from "./teams/sdk.ts";
+import { createBotCore } from "./teams/bot.ts";
+import { todayFacts } from "./teams/quick.ts";
+import { teamsAssistant } from "./teams/assistant.ts";
+import { createTeamsBotStore } from "../store/teams-bot-store.ts";
 import { createConversationStore } from "../store/conversation-store.ts";
 import { whoRepair, type WhoRepairPerson } from "./who-repair.ts";
 import { upkeep as upkeepConversations } from "../actions/conversation-upkeep.ts";
@@ -636,6 +642,54 @@ const feedbackService: FeedbackService = {
 };
 void feedbackService.check().catch(() => undefined);
 
+/** AS-1: the assistant by person (Entra object id), for TB-1's Teams bot: their own context, absolute links. */
+export const assistants = createAssistantHub({ ctxFor: (userId) => runtimeFor(userId), publicUrl: app.publicUrl });
+
+// TB-1: the FocusTime bot in Teams, in the hosted app only (the Azure Bot reaches the public URL; its identity's token
+// exists only there). FOCUSTIME_BOT_APP_ID is the bot's Microsoft App ID, its user-assigned identity's client id
+// (infra/modules/bot.bicep); replies use that identity's token for the Bot Framework scope, held in memory by the
+// credential. The assistant (AS-1) answers through the hub below, for the person the gate let in.
+const botAppId = (process.env.FOCUSTIME_BOT_APP_ID ?? "").trim();
+const teamsBot =
+  host.kind === "azure" && botAppId && app.entra
+    ? await (async () => {
+        const credential = new ManagedIdentityCredential({ clientId: botAppId });
+        const tenantId = app.entra!.tenantId;
+        return createTeamsEndpoint({
+          appId: botAppId,
+          tenantId,
+          token: async (scope) => (await credential.getToken(scope)).token,
+          log,
+          core: (sender) =>
+            createBotCore({
+              publicUrl: app.publicUrl,
+              gate: {
+                tenantId,
+                user: async (oid) => {
+                  const u = await accounts.users.get(oid);
+                  return u ? { id: u.id, upn: u.upn, email: u.email, deletedAt: u.deletedAt } : null;
+                },
+                isCooptimizer: async (oid) => (await org.levels()).people.isCooptimizer(oid),
+              },
+              assistant: teamsAssistant(assistants, app.publicUrl),
+              today: async (userId) => {
+                const r = await dispatch(await runtimeFor(userId), { action: "week.load", input: {} });
+                if (!r.ok) throw new Error("week.load failed");
+                return todayFacts(r.data as WeekLoadData, instantNow());
+              },
+              store: (userId) => createTeamsBotStore({ db, userId, now: instantNow }),
+              sender,
+              log: (r) => log({ source: "server", ...r, op: `teams_${r.op}` }),
+              now: instantNow,
+              onUse: () => use.used(),
+            }),
+        });
+      })().catch(() => {
+        log({ source: "server", op: "teams_bot", kind: "not_started" });
+        return null;
+      })
+    : null;
+
 const server = createApp({
   publicUrl: app.publicUrl,
   build,
@@ -684,6 +738,7 @@ const server = createApp({
   dbStatus: () => opened.status?.() ?? "ok",
   ...(telemetry ? { onRequest: telemetry.request, onError: telemetry.exception } : {}),
   ctx: (s) => (s.demo ? demoFor(s.userId) : runtimeFor(s.userId)),
+  teams: teamsBot,
   // HK-3: only real use keeps the server awake; the Rule's minutes go back to the page. A demo session never counts.
   onUse: (s) => {
     if (s.demo) return null;
@@ -700,8 +755,6 @@ const server = createApp({
  * ends on time after a restart without anyone signing in).
  */
 const runtimes = new Map<string, { ctx: ActionContext; who: Person; ticks: PersonTicks }>();
-/** AS-1: the assistant by person (Entra object id), for TB-1's Teams bot: their own context, absolute links. */
-export const assistants = createAssistantHub({ ctxFor: (userId) => runtimeFor(userId), publicUrl: app.publicUrl });
 /** Runtimes being built (the store is async, so two requests at once must not build two). */
 const starting = new Map<string, Promise<ActionContext>>();
 function runtimeFor(userId: string): Promise<ActionContext> {

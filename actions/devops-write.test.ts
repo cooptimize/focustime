@@ -23,7 +23,7 @@ const base = STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-
 const COOP = "Cooptimize";
 const Adatum = "Adatum";
 
-function setup(opts: { /** CV-4: my Chat.Read reader, for a conversation's images. */ chat?: import("../sources/graph/chats.ts").ChatMessagesClient; email?: string | null; acceptance?: boolean; startDate?: boolean; sizeField?: "Microsoft.VSTS.Scheduling.StoryPoints" | "Microsoft.VSTS.Scheduling.Effort" | null } = {}) {
+function setup(opts: { /** GD-1: extra config (clients) and Adatum's DevOps identity. */ toml?: string; adatumEmail?: string; adatumOrg?: string; /** CV-4: my Chat.Read reader, for a conversation's images. */ chat?: import("../sources/graph/chats.ts").ChatMessagesClient; email?: string | null; acceptance?: boolean; startDate?: boolean; sizeField?: "Microsoft.VSTS.Scheduling.StoryPoints" | "Microsoft.VSTS.Scheduling.Effort" | null } = {}) {
   clearDevopsPreviews();
   const dv = fakeDevOpsWrite({ now: () => NOW, ...(opts.acceptance === false ? { acceptance: false } : {}), ...(opts.startDate === false ? { startDate: false } : {}), ...(opts.sizeField !== undefined ? { sizeField: opts.sizeField } : {}) });
   dv.add(437, { "System.WorkItemType": "Feature", "System.Title": "Need Features Here", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
@@ -42,21 +42,21 @@ function setup(opts: { /** CV-4: my Chat.Read reader, for a conversation's image
   const stored: { clientKey: string; id: number; fields: Record<string, unknown> }[] = [];
   const keyring = new Map<string, string>();
   const targetCalls: { keys: string[]; withPat: boolean | undefined }[] = [];
-  const target = (clientKey: string, org: string, withPat: boolean): DevOpsTarget => ({ accountId: "a", clientKey, clientName: clientKey, org, project: `${clientKey} Project`, projectName: `${clientKey} Project`, email: clientKey === COOP ? (opts.email === undefined ? "avery@cooptimize.example" : opts.email) : "avery@adatum.example", pat: withPat ? new Pat(COMPANY_PAT) : null });
+  const target = (clientKey: string, org: string, withPat: boolean): DevOpsTarget => ({ accountId: "a", clientKey, clientName: clientKey, org, project: `${clientKey} Project`, projectName: `${clientKey} Project`, email: clientKey === COOP ? (opts.email === undefined ? "avery@cooptimize.example" : opts.email) : (opts.adatumEmail ?? "avery@adatum.example"), pat: withPat ? new Pat(COMPANY_PAT) : null });
   const forgotten: string[] = [];
   const waits: number[] = [];
   const c: ActionContext = {
-    loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(base) }),
+    loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(`${base}${opts.toml ?? ""}`) }),
     makeDataverse: () => ({
       devopsTargets: async (keys: string[], o: { withPat?: boolean } = {}) => {
         targetCalls.push({ keys, withPat: o.withPat });
         const withPat = o.withPat !== false;
-        return { ok: true, targets: keys.map((k) => target(k, k === COOP ? "cooptimize" : "adatumorg", withPat)) };
+        return { ok: true, targets: keys.map((k) => target(k, k === COOP ? "cooptimize" : (opts.adatumOrg ?? "adatumorg"), withPat)) };
       },
     }) as never,
     makeOutlook: () => { throw new Error("n/a"); },
     makeGoogle: () => { throw new Error("n/a"); },
-    makeDevOps: () => ({ forget: (k: string) => void forgotten.push(k) }) as never,
+    makeDevOps: () => ({ forget: (k: string) => void forgotten.push(k), last: () => null }) as never,
     saveSystemUserId: async () => {},
     now: () => NOW,
     sleep: async (ms) => void waits.push(ms),
@@ -1083,5 +1083,36 @@ describe("AS-1: description_edit (a dictated description, which may rewrite it)"
   it("an empty text or the same text: nothing to write", async () => {
     expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "description_edit", itemId: 437, after: "  " } })).toMatchObject({ status: 400 });
     expect(await s.run("devops.preview", { clientKey: COOP, change: { kind: "description_edit", itemId: 437, after: "Old scope: import only." } })).toMatchObject({ nothing: "#437 already has that description" });
+  });
+});
+
+// GD-1: in a client's DevOps, another client's name never appears; Cooptimize Internal's may name clients.
+describe("the client boundary in the preview", () => {
+  const clients = `\n[clients.Northwind]\nname = "Northwind Traders"\n`;
+  beforeEach(() => clearDevopsPreviews());
+
+  it("a client: a comment naming another client is blocked in the preview, named only there, and nothing is written", async () => {
+    const s = setup({ toml: clients, adatumEmail: "avery@cooptimize.example", adatumOrg: "cooptimize" });
+    await s.run("devops.set_write_pat", { clientKey: Adatum, pat: WRITE_PAT });
+    const r = await s.fail("devops.preview", { clientKey: Adatum, change: { kind: "comment", itemId: 500, text: "Same fix as for Northwind Traders" } });
+    expect(r).toMatchObject({ status: 409, code: "other_client", error: "This mentions Northwind Traders; remove it before saving to Adatum's DevOps" });
+    expect(patches(s)).toHaveLength(0);
+    expect(JSON.stringify(s.logs)).not.toContain("Northwind");
+    expect(await s.run<{ entries: unknown[] }>("devops.log", {})).toMatchObject({ entries: [] });
+    // Its own name, and plain text, still go.
+    expect((await s.preview({ kind: "comment", itemId: 500, text: "Adatum asked for this" }, Adatum)).op).toBe("comment");
+  });
+
+  it("a client: a state change's comment naming another client is blocked too", async () => {
+    const s = setup({ toml: clients, adatumEmail: "avery@cooptimize.example", adatumOrg: "cooptimize" });
+    await s.run("devops.set_write_pat", { clientKey: Adatum, pat: WRITE_PAT });
+    expect((await s.fail("devops.preview", { clientKey: Adatum, change: { kind: "state", itemId: 500, state: "Closed", comment: "Done, like Northwind" } })).code).toBe("other_client");
+  });
+
+  it("Internal: a comment naming two clients is previewed and written", async () => {
+    const s = setup({ toml: clients });
+    await s.enable();
+    await s.write({ kind: "comment", itemId: 500, text: "Adatum and Northwind Traders both need this" });
+    expect(s.dv.writes().some((w) => w.method === "POST" && /comments/.test(w.url))).toBe(true);
   });
 });

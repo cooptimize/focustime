@@ -56,7 +56,9 @@ function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnTyp
     now: () => now,
   });
   const dir = [aClientEntry({ key: FAB, names: ["Fabrikam"], projects: ["Portal"], itemIds: [4417, 4418, 4500] }), aClientEntry({ key: NW, names: ["Northwind Traders"], projects: ["Ledger"], itemIds: [5150] })];
-  const mine = new Set(o.mine ?? [FAB, NW]);
+  // An Internal account under its own key (clientAccounts()'s why "internal"): in the assistant's directory, not the guard's.
+  const internal = aClientEntry({ key: "Cooptimize", names: ["Cooptimize"], projects: ["Internal"], itemIds: [] });
+  const mine = new Set(o.mine ?? [FAB, NW, "Cooptimize"]);
   const ahead = o.ahead ?? anAheadLoad([
     anAheadClient({
       clientKey: FAB, clientName: "Fabrikam",
@@ -106,8 +108,10 @@ function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnTyp
     },
     plan,
     ai,
-    directory: dir,
+    directory: [...dir, internal],
     isMine: (k) => mine.has(k),
+    // GD-1: Internal is known by clientAccounts()'s why "internal", never by its name.
+    isInternal: (k) => k === "Cooptimize",
     clientName: (k) => (k === FAB ? "Fabrikam" : k === NW ? "Northwind Traders" : k),
     now: () => now,
     zone: ZONE,
@@ -194,6 +198,14 @@ describe("one client per request", () => {
     expect(r.status).toBe("which_client");
     expect(s.calls).toEqual([]);
     expect(r.links).toEqual([{ label: "Open the command menu", href: "#/commands" }]);
+  });
+  it("GD-1's rule: naming Internal and one client is that client's request, not Which client?", async () => {
+    const s = setup();
+    s.script([], say("OK"));
+    const r = await s.a.handle("Cooptimize standup notes for Fabrikam");
+    expect(r.status).toBe("ok");
+    expect(s.calls[0]).toMatchObject({ instructions: expect.any(String) });
+    expect(s.calls[0]!.input).toContain("Fabrikam");
   });
   it("in a Fabrikam request a read stays on Fabrikam: another client's item isn't found", async () => {
     const s = setup();

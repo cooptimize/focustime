@@ -31,6 +31,8 @@ export type AssistantEnv = {
   /** The guard's directory: every client of mine but Internal, with names, projects and known item ids. */
   directory: readonly ClientEntry[];
   isMine: (clientKey: string) => boolean;
+  /** GD-1's rule: Cooptimize Internal (clientAccounts()'s why "internal"), which never counts as a named client. */
+  isInternal?: (clientKey: string) => boolean;
   clientName: (clientKey: string) => string;
   now: () => string;
   zone: string;
@@ -89,7 +91,7 @@ export function createAssistant(env: AssistantEnv) {
 
   /** The request's one client: named in my words (the guard's rule), else the screen's; null: none. */
   function clientOf(text: string, context: AssistantContext): { client: string | null; two: boolean; fromScreen: boolean } {
-    const named = clientsNamed(text, env.directory).filter(env.isMine);
+    const named = clientsNamed(text, env.directory, env.isInternal).filter(env.isMine);
     if (named.length > 1) return { client: null, two: true, fromScreen: false };
     if (named.length === 1) return { client: named[0]!, two: false, fromScreen: false };
     const screen = context.clientKey && env.isMine(context.clientKey) ? context.clientKey : context.itemId ? (env.directory.find((c) => c.itemIds.includes(context.itemId!))?.key ?? null) : null;
