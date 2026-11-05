@@ -7,7 +7,7 @@ import type { FollowUp, PlanStore } from "../store/plan-store.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
 import { hoursOn } from "../week/hours.ts";
 import type { IsoDate } from "../week/types.ts";
-import { dueState } from "../plan/due.ts";
+import { dueState, promiseDueState } from "../plan/due.ts";
 import type { FollowUpView } from "./types.ts";
 
 /** How far around today the rules look at picks. */
@@ -114,7 +114,8 @@ export async function followUpView(plan: PlanStore, l: FollowUp, today: IsoDate,
     origin: l.origin ?? originFromDetail(l),
     byHand: l.byHand,
     clientName: l.clientKey ? clientName(l.clientKey) : null,
-    dueState: l.closedAt ? null : dueState(l.due, today),
+    // CV-2: a follow-up made from a promise is amber past due ("Was due Wed, Nov 4"), never red.
+    dueState: l.closedAt ? null : l.sourceKind === "promise" ? promiseDueState(l.due, today) : dueState(l.due, today),
     hasWho: !!l.who || !!l.clientKey,
   };
 }

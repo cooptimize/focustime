@@ -23,6 +23,7 @@ import { urgentFollowUps } from "../plan/today.ts";
 import type { Pick } from "../plan/types.ts";
 import type { Day, FreeGap, Half, IsoDate, Slot } from "../week/types.ts";
 import { clientColor, halfName, longDate, slotRange } from "./labels.ts";
+import { wasDueText } from "../plan/due.ts";
 import { countdown, timerLeft } from "./NowStrip.tsx";
 import { clientNames, featuresOn, PlanCtx, useFocused } from "./planview.ts";
 import { causeLines } from "./status.ts";
@@ -449,7 +450,7 @@ function Attention({ noDue = false, promises = [], soon = [], onPromises, data, 
         )}
         {soon.map((p) => (
           <button key={`promise-${p.id}`} type="button" className={`att-chip promise${p.overdue ? " overdue" : ""}`} onClick={onPromises} title="Open it in Inbox › My promises">
-            <span className="att-tag">{p.overdue ? "Overdue promise" : "Promise"}</span>
+            <span className="att-tag">{p.overdue ? `Promise · ${wasDueText(p, date, userZone(data)).replace(/^Was/, "was")}` : "Promise"}</span>
             <span className="att-names">{Temporal.Instant.from(p.dueAt!).toZonedDateTimeISO(userZone(data)).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
             <span>{p.what}</span>
           </button>
@@ -491,7 +492,7 @@ function Attention({ noDue = false, promises = [], soon = [], onPromises, data, 
           {promises.map((p) => (
             <li key={`promise-${p.id}`}>
               <button type="button" className="att-row" onClick={onPromises ?? onInbox}>
-                <span className={`due-badge${p.overdue ? " overdue-amber" : ""}`}>{p.overdue ? "Promise · overdue" : "Promise"}</span>
+                <span className={`due-badge${p.overdue ? " overdue-amber" : ""}`}>{p.overdue ? `Promise · ${wasDueText(p, date, userZone(data)).replace(/^Was/, "was")}` : "Promise"}</span>
                 <span className="att-who">{p.toName ?? p.clientName}</span>
                 <span className="what">{p.what}</span>
               </button>
@@ -517,7 +518,7 @@ export function UrgentStrip({ urgent, promises, today, tz, onAsks, onPromises, o
         {lines.map((l) => (
           <li key={l.key} className={`us-item us-${l.kind}${l.kind === "promise" && l.overdue ? " overdue" : ""}`}>
             <button type="button" className="us-line" onClick={() => (l.kind === "conversation" ? onAsks(l.ask.conversationId ?? undefined) : onPromises(l.promise.id))} title={l.kind === "conversation" ? "Open it in Inbox › Conversations" : "Open it in Inbox › My promises"}>
-              <span className="us-tag">{l.kind === "conversation" ? "Needs you now" : l.overdue ? "Promise overdue" : l.dueAt ? `Promise · ${clock(l.dueAt, tz)}` : "Promise due today"}</span>
+              <span className="us-tag">{l.kind === "conversation" ? "Needs you now" : l.overdue ? `Promise · ${wasDueText(l.promise, today, tz).replace(/^Was/, "was")}` : l.dueAt ? `Promise · ${clock(l.dueAt, tz)}` : "Promise due today"}</span>
               <span className="us-who">{l.who}</span>
               <span className="us-what">{l.what}</span>
               <span className="us-go" aria-hidden="true">›</span>

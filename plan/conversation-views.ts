@@ -94,6 +94,8 @@ export type ConversationMessages = { messages: ConversationMessage[]; chatLink: 
 export type PromiseCard = {
   id: number;
   conversationId: number | null;
+  /** CV-2: the one it was made to, for the PersonPicker (null: nobody known). */
+  toRef: import("./person-ref.ts").PersonRef | null;
   conversationTitle: string | null;
   clientKey: string;
   clientName: string;

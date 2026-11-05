@@ -1792,6 +1792,9 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .due-badge.tomorrow { --due: var(--watch); }
 .due-badge.today { --due: color-mix(in oklab, var(--risk) 50%, var(--watch)); }
 .due-badge.overdue { --due: var(--risk); }
+/* CV-2: a promise's follow-up past due: amber, never red. */
+.due-badge.was_due { --due: var(--watch); }
+.follow-up.due-was_due { border-left: 3px solid var(--watch); }
 .follow-up.due-overdue { border-left: 3px solid var(--risk); }
 .follow-up.due-today { border-left: 3px solid color-mix(in oklab, var(--risk) 50%, var(--watch)); }
 .follow-up-origin { flex-basis: 100%; font-size: var(--fs-2); color: var(--text-muted); }

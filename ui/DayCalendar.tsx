@@ -3,6 +3,7 @@
 // blocks in a slim line before or after them. Each row opens the same event menu as on Week. Never "no meetings":
 // with nothing to show it renders nothing, and a source that failed is reported by the status line, not here.
 import type { DayPromise } from "../plan/conversation-views.ts";
+import { wasDueNow } from "../plan/due.ts";
 import type { CalEvent } from "../week/types.ts";
 import type { DayEvent } from "../plan/todaycal.ts";
 import { showAsLabel } from "./labels.ts";
@@ -76,7 +77,7 @@ export function PromiseRow({ p, tz, onOpen }: { p: DayPromise; tz: string; onOpe
     <li className={`ev-row promise-row${p.overdue ? " overdue" : ""}`}>
       <button type="button" className="promise-open" onClick={(e) => (e.stopPropagation(), onOpen?.())} title="Open it in Inbox › My promises">
         {time && <span className="ev-time">{time}</span>}
-        <span className="promise-tag">{p.overdue ? "Overdue promise" : "Promise"}</span>
+        <span className="promise-tag">{p.overdue ? `Promise · ${wasDueNow(p, tz).replace(/^Was/, "was")}` : "Promise"}</span>
         <span className="ev-title">{p.what}</span>
         {p.toName && <span className="muted"> · to {p.toName}</span>}
         <span className="muted"> · {p.clientName}</span>

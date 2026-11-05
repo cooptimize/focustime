@@ -70,8 +70,8 @@ export function batchOf(m: TeamsMessage, chat: Pick<ClientChat, "members">, home
   };
 }
 
-const participantOf = (m: BatchMessage): Participant | null => (m.senderId ? { id: m.senderId, name: m.senderName ?? (m.external ? "Someone outside Cooptimize" : "Someone at Cooptimize"), external: m.external } : null);
-const withParticipants = (ps: readonly Participant[], more: readonly (Participant | null)[]) => {
+export const participantOf = (m: BatchMessage): Participant | null => (m.senderId ? { id: m.senderId, name: m.senderName ?? (m.external ? "Someone outside Cooptimize" : "Someone at Cooptimize"), external: m.external } : null);
+export const withParticipants = (ps: readonly Participant[], more: readonly (Participant | null)[]) => {
   const out = [...ps];
   for (const p of more) if (p && !out.some((x) => same(x.id, p.id))) out.push(p);
   return out;
@@ -269,12 +269,13 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
       for (const x of mergeByGroup(raw, groups, texts)) {
         if (await sameCommitment(d, chat.chatId, x.whoId, x.messageIds)) continue;
         const who = participants.find((p) => same(p.id, x.whoId)) ?? null;
-        const to = x.toId && !same(x.toId, x.whoId) ? x.toId : answeredBy(x.messageIds, [...before, ...work], x.whoId);
-        const toName = to ? (participants.find((p) => same(p.id, to))?.name ?? [...before, ...work].find((m) => same(m.senderId, to))?.senderName ?? null) : null;
+        const answered = x.toId && !same(x.toId, x.whoId) ? { id: x.toId, name: null } : await whomAnswered(d, chat, x.messageIds, [...before, ...work], x.whoId);
+        const to = answered?.id ?? null;
+        const toName = to ? (participants.find((p) => same(p.id, to))?.name ?? answered?.name ?? nameIn(chat, [...before, ...work], to)) : null;
         const due = dueOf(x.due, x.zone);
         // When it was said (escalation counts from then, not from when it was read).
         const said = x.messageIds.map((mid) => [...before, ...work].find((m) => m.messageId === mid)?.createdAt).filter((t): t is string => !!t).sort()[0];
-        await d.convs.addCommitment({ conversationId: id, chatId: chat.chatId, clientKey: chat.clientKey, whoId: x.whoId, whoName: who?.name ?? "Someone", toId: to, toName, what: x.what, ...due, impliesItem: x.impliesItem, messageIds: x.messageIds, reason: null, ...(said ? { createdAt: said } : {}) });
+        await d.convs.addCommitment({ conversationId: id, chatId: chat.chatId, clientKey: chat.clientKey, whoId: x.whoId, whoName: who?.name ?? "Someone", toId: to, toName, what: x.what, ...due, impliesItem: x.impliesItem || impliesItemByRule(x.messageIds.map((mid) => texts.get(mid) ?? "").join("\n")), messageIds: x.messageIds, reason: null, ...(said ? { createdAt: said } : {}) });
         // A commitment's messages are kept with it (never expire as chatter).
         for (const mid of x.messageIds) if (!placed.has(mid) && byId.has(mid)) await d.convs.place([{ chatId: chat.chatId, messageId: mid, conversationId: id, role: "work", reason: null, placedBy: "ai", at: byId.get(mid)!.createdAt }]);
         out.commitments++;
@@ -310,16 +311,57 @@ async function promisesByRule(d: PipelineDeps, chat: ClientChat, work: readonly 
     const groupMs = context.filter((x) => groups.get(x.messageId) === g && same(x.senderId, user.id));
     if (await sameCommitment(d, chat.chatId, user.id, groupMs.map((x) => x.messageId))) continue;
     const due = dueOf(dueFromText(groupMs.map((x) => x.text).join("\n"), m.createdAt, settings.zone), settings.zone);
-    const to = answeredBy(groupMs.map((x) => x.messageId), context, user.id);
+    const to = await whomAnswered(d, chat, groupMs.map((x) => x.messageId), context, user.id);
     await d.convs.addCommitment({
-      conversationId: placed.get(m.messageId) ?? null, chatId: chat.chatId, clientKey: chat.clientKey, whoId: user.id, whoName: m.senderName ?? user.name, toId: to,
-      toName: to ? (context.find((x) => same(x.senderId, to))?.senderName ?? null) : null, what: promiseWhatWithoutAi(m.text, phrase), ...due, impliesItem: /\b(dev queue|backlog|ticket|bug|story|work item)\b/i.test(m.text),
+      conversationId: placed.get(m.messageId) ?? null, chatId: chat.chatId, clientKey: chat.clientKey, whoId: user.id, whoName: m.senderName ?? user.name, toId: to?.id ?? null,
+      toName: to ? (to.name ?? nameIn(chat, context, to.id)) : null, what: promiseWhatWithoutAi(m.text, phrase), ...due, impliesItem: impliesItemByRule(groupMs.map((x) => x.text).join("\n")),
       messageIds: groupMs.map((x) => x.messageId), reason: `Says "${phrase}"`, createdAt: groupMs[0]?.createdAt ?? m.createdAt,
     });
     for (const x of groupMs) if (!placed.has(x.messageId) && work.some((w) => w.messageId === x.messageId)) await d.convs.place([{ chatId: chat.chatId, messageId: x.messageId, conversationId: null, role: "work", reason: null, placedBy: "rule", at: x.createdAt }]);
     n++;
   }
   return n;
+}
+
+/** A person's name from the chat's cached member list, else as they signed a message in view. */
+function nameIn(chat: ClientChat, context: readonly BatchMessage[], id: string): string | null {
+  return chat.members?.find((m) => same(m.userId, id))?.displayName ?? context.find((x) => same(x.senderId, id))?.senderName ?? null;
+}
+
+/**
+ * CV-2: whom a commitment answers, with their name when known: the author of the message replied to (looked up in
+ * the store whatever its age when it isn't in view), else someone mentioned (named from the mention or the chat's
+ * cached members), else the last other author in the hour before.
+ */
+export async function whomAnswered(d: Pick<PipelineDeps, "teams">, chat: ClientChat, messageIds: readonly string[], context: readonly BatchMessage[], whoId: string): Promise<{ id: string; name: string | null } | null> {
+  const ms = context.filter((m) => messageIds.includes(m.messageId));
+  for (const m of ms) {
+    if (!m.replyToId) continue;
+    const inView = context.find((x) => x.messageId === m.replyToId);
+    const replied = inView ?? (await d.teams.message(chat.chatId, m.replyToId).catch(() => null));
+    if (replied?.senderId && !same(replied.senderId, whoId)) return { id: replied.senderId, name: replied.senderName ?? nameIn(chat, context, replied.senderId) };
+  }
+  for (const m of ms) {
+    const other = m.mentions.find((x) => !same(x.id, whoId));
+    if (other) return { id: other.id, name: other.name ?? nameIn(chat, context, other.id) };
+  }
+  const id = answeredBy(messageIds, context, whoId);
+  return id ? { id, name: nameIn(chat, context, id) } : null;
+}
+
+/**
+ * CV-2: my own words that put work in DevOps, for a promise found by the rules ("put it in the queue", "log a
+ * ticket", "add a story", "track it", "I'll take it on" with a backlog reference); the AI says so itself otherwise.
+ */
+export function impliesItemByRule(text: string): boolean {
+  const t = text.toLowerCase();
+  if (/\b(dev queue|backlog|ticket|bug|story|work item|devops)\b/.test(t)) return true;
+  if (/\b(put|add|get|drop) (it|this|that|them) (in|into|on|onto) the (queue|board|sprint|list)\b/.test(t)) return true;
+  if (/\b(log|open|file|raise|create) (a|an|the) (ticket|bug|item|story|card|issue)\b/.test(t)) return true;
+  if (/\badd (a|an|the) (story|item|task|card)\b/.test(t)) return true;
+  if (/\btrack (it|this|that|them)\b/.test(t)) return true;
+  if (/\b(take|pick) (it|this|that) (on|up)\b/.test(t) && /#\d{2,}|\b(backlog|board|sprint|queue|feature)\b/.test(t)) return true;
+  return false;
 }
 
 /** Whom a commitment answers: the author of the message replied to, someone mentioned, or the last other author in the hour before. */

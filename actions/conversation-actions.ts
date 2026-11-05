@@ -27,10 +27,11 @@ import type { TeamsView } from "../store/teams-store.ts";
 import { localToday } from "../week/dates.ts";
 import type { WorkItem } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
-import { batchOf, CHAT_DAILY_AI_CALLS, refreshStatus, runPipeline } from "./conversations-pipeline.ts";
+import { batchOf, CHAT_DAILY_AI_CALLS, participantOf, refreshStatus, runPipeline, withParticipants } from "./conversations-pipeline.ts";
 import { backfillPromises } from "./conversation-backfill.ts";
 import { visibleChats, type RequestContext } from "./request-actions.ts";
 import type { ConversationPerson } from "./people-picker.ts";
+import { personRef, type PersonRef } from "../plan/person-ref.ts";
 import { mapSeq } from "./seq.ts";
 import type { ActionResponse } from "./types.ts";
 
@@ -40,7 +41,7 @@ export const CONVERSATION_ACTIONS = [
   "conversations.list", "conversations.count", "conversations.refresh", "conversations.messages", "conversations.seen", "conversations.resolve", "conversations.not_request", "conversations.reopen",
   "conversations.hide", "conversations.move", "conversations.this_is_work", "conversations.link", "conversations.take_over", "conversations.sort_unsorted", "conversations.search",
   "conversations.draft", "my_promises.list", "my_promises.today", "my_promises.followup", "my_promises.link", "my_promises.done", "my_promises.not_needed", "my_promises.reopen",
-  "suggestions.skip", "conversations.merge", "conversations.unmerge",
+  "suggestions.skip", "conversations.merge", "conversations.unmerge", "my_promises.start_draft",
 ] as const;
 export type ConversationAction = (typeof CONVERSATION_ACTIONS)[number];
 
@@ -270,8 +271,17 @@ async function counts(ctx: ConversationContext, cfg: AppConfig): Promise<{ needs
 
 // ---- My promises ----
 
+/** CV-2: whom a promise was made to, as the PersonPicker refers to them (a Cooptimizer by Entra id, else a chat member). */
+function toRefOf(k: Commitment, chat: ClientChat | undefined, home: string | null): PersonRef | null {
+  if (!k.toId || !k.toName) return null;
+  const m = chat?.members?.find((x) => same(x.userId, k.toId));
+  const external = m ? (home ? isExternal(m, home) : false) : false;
+  return external ? { kind: "external", memberId: k.toId.toLowerCase(), name: k.toName } : { kind: "cooptimizer", id: k.toId.toLowerCase(), name: k.toName };
+}
+
 async function promiseCards(ctx: ConversationContext, v: Seen, cfg: AppConfig): Promise<PromiseCard[]> {
   const now = ctx.now();
+  const home = await ctx.homeTenant();
   const zone = userZone(cfg);
   const today = localToday(now, zone);
   const mine = (await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))).filter((k) => !["done", "not_needed"].includes(k.state) || (k.updatedAt && Date.parse(now) - Date.parse(k.updatedAt) < DONE_SHOWN_MS));
@@ -296,8 +306,9 @@ async function promiseCards(ctx: ConversationContext, v: Seen, cfg: AppConfig): 
       if (hit) likely = { id: hit.id, title: hit.title, url: hit.url };
     }
     const due = k.dueDate ?? k.onToday;
+    const toRef = toRefOf(k, chat, home);
     return {
-      id: k.id, conversationId: k.conversationId, conversationTitle: c?.title ?? null, clientKey: k.clientKey, clientName: cfg.clientSettings[k.clientKey]?.name ?? k.clientKey, chatName: chat?.displayName ?? "A chat no longer registered",
+      id: k.id, conversationId: k.conversationId, toRef, conversationTitle: c?.title ?? null, clientKey: k.clientKey, clientName: cfg.clientSettings[k.clientKey]?.name ?? k.clientKey, chatName: chat?.displayName ?? "A chat no longer registered",
       what: k.what, toName: k.toName, dueAt: k.dueAt, dueDate: k.dueDate, overdue: k.state === "open" && (k.dueAt ? Date.parse(k.dueAt) < Date.parse(now) : !!due && due < today), state: k.state, onToday: k.onToday, followUpId: k.followUpId,
       item: k.itemId ? { id: k.itemId, title: k.itemTitle, url: k.itemUrl } : null, needsItem, draft: k.draft, likely,
       suggestions: suggestions.filter((s) => s.conversationId === k.conversationId).map((s) => ({ id: s.id, kind: s.kind, itemId: s.itemId, body: s.body, internal: s.internal, fromInternalChat: chat?.kind === "delivery", mine: true })),
@@ -707,10 +718,46 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         await v.convs.updateCommitment(k.id, { onToday: o.on ? localToday(stamp, userZone(cfg)) : null });
         return promisesNow();
       }
-      case "my_promises.followup": {
-        const o = only(input, ["id"], ["who", "what", "due"]);
+      case "my_promises.start_draft": {
+        // CV-2: "Create the DevOps item?" for a promise the rules found with no conversation: one is made from the
+        // promise's own messages and the ones just before it in that chat (45 minutes, not in another conversation),
+        // so the draft has the context, then the usual draft flow runs on it.
+        const o = only(input, ["id"]);
         const k = o && (await mine(o.id));
-        if (!o || !k) return bad("my_promises.followup takes { id, who?, what?, due? }");
+        if (!o || !k) return bad("my_promises.start_draft takes { id }");
+        if (k.state !== "open") return bad("This promise is already handled", 409);
+        if (k.conversationId) return { ok: true, data: { conversationId: k.conversationId } };
+        const chat = v.byId.get(k.chatId)!;
+        const home = await ctx.homeTenant();
+        const own = (await mapSeq(k.messageIds, (id) => v.teams.message(k.chatId, id))).filter((m): m is NonNullable<typeof m> => !!m).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        if (!own.length) return bad("This promise's messages are no longer stored, so there's nothing to draft from. Link an item instead", 410);
+        const firstAt = own[0]!.createdAt;
+        const near = [];
+        for (const m of await v.teams.messagesBefore(k.chatId, firstAt, 12)) {
+          if ((Date.parse(firstAt) - Date.parse(m.createdAt)) / 60_000 > 45) continue;
+          const place = await v.convs.placeOf(k.chatId, m.messageId);
+          if (place?.conversationId || place?.role === "chatter" || place?.role === "ack") continue;
+          near.push(m);
+        }
+        const ms = [...near, ...own];
+        const batch = ms.map((m) => batchOf(m, chat, home));
+        const lastAt = ms.at(-1)!.createdAt;
+        const c = await v.store.addConversation({
+          chatId: k.chatId, clientKey: k.clientKey, title: oneLine(k.what, 80) || "A promise", summary: oneLine(`You said you'd ${k.what.replace(/^./, (x) => x.toLowerCase())}${k.toName ? ` (to ${first(k.toName)})` : ""}.`, 200),
+          participants: withParticipants([], batch.map(participantOf)), firstAt: ms[0]!.createdAt, lastAt, lastWorkAt: lastAt,
+        });
+        await v.store.place(ms.map((m) => ({ chatId: k.chatId, messageId: m.messageId, conversationId: c.id, role: "work" as const, reason: null, placedBy: "person" as const, at: m.createdAt })));
+        await v.store.updateCommitment(k.id, { conversationId: c.id });
+        await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: home }, c.id);
+        ctx.log({ source: "plan", op: "promise_draft_started", count: ms.length });
+        return { ok: true, data: { conversationId: c.id } };
+      }
+      case "my_promises.followup": {
+        const o = only(input, ["id"], ["who", "whoRef", "what", "due"]);
+        const k = o && (await mine(o.id));
+        if (!o || !k) return bad("my_promises.followup takes { id, who?, whoRef?, what?, due? }");
+        const whoRef = o.whoRef === undefined || o.whoRef === null ? null : personRef(o.whoRef);
+        if (o.whoRef !== undefined && o.whoRef !== null && !whoRef) return bad("whoRef is a person from the picker, or null");
         if (!ctx.plan) return bad("The plan store isn't available", 503);
         if (k.state !== "open") return bad("This promise is already handled", 409);
         const text = (x: unknown, n: string, max: number) => (x === undefined || x === null ? undefined : typeof x === "string" && x.trim().length <= max ? x.trim() : (() => { throw new PlanError(`${n} is text of at most ${max} characters`); })());
@@ -719,7 +766,9 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const who = text(o.who, "who", 200) ?? k.toName;
         const due = o.due === undefined ? (k.dueDate ?? k.onToday) : o.due === null || o.due === "" ? null : typeof o.due === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.due) ? o.due : null;
         if (o.due !== undefined && o.due !== null && o.due !== "" && !due) return bad("due is a date like 2026-11-06");
-        const f = await ctx.plan.addFollowUp({ who: who || null, what, due, clientKey: k.clientKey, channel: "teams" });
+        // CV-2: the person from the picker; given no Who, the one the promise was made to. It names its promise (amber past due).
+        const ref = o.who === undefined ? (whoRef ?? toRefOf(k, v.byId.get(k.chatId), await ctx.homeTenant())) : whoRef;
+        const f = await ctx.plan.addFollowUp({ who: who || null, whoRef: who ? ref : null, what, due, clientKey: k.clientKey, channel: "teams", source: { kind: "promise", id: k.id } });
         await v.convs.updateCommitment(k.id, { state: "followup", followUpId: f.id });
         ctx.log({ source: "plan", op: "promise_resolved", kind: "followup" });
         return { ok: true, data: { ...(await myPromises(ctx, cfg)), followUpId: f.id } };

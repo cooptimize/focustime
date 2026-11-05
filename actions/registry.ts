@@ -188,6 +188,7 @@ export const ACTIONS = [
   { name: "conversations.take_over", title: "Take it over", group: "Conversations", target: "commitment", summary: "Makes a waiting commitment yours; whoever had it is told quietly" },
   { name: "conversations.sort_unsorted", title: "Sort unsorted messages", group: "Conversations", target: "none", summary: "Sorts the messages that waited for AI (budget, AI off or a failure), when AI is available again" },
   { name: "conversations.search", title: "Find an item for a conversation", group: "Conversations", target: "conversation", summary: "Search the client's open DevOps items to link a conversation to" },
+  { name: "my_promises.start_draft", title: "Create the DevOps item (a promise)", group: "Conversations", target: "conversation", summary: "For a promise with no conversation: one from its messages and the ones just before, then the usual draft. Nothing is written to DevOps until Create" },
   { name: "conversations.merge", title: "Merge into…", group: "Conversations", target: "conversation", summary: "Moves one or more conversations of the same chat into another: messages, commitments and suggestions; the summary is written again. Undo puts them back" },
   { name: "conversations.unmerge", title: "Undo a merge", group: "Conversations", target: "conversation", summary: "Puts merged conversations back as they were" },
   { name: "conversations.draft", title: "Draft the DevOps item", group: "Conversations", target: "conversation", summary: "A draft bug, story or feature from the whole conversation, to check and create" },

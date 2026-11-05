@@ -1296,6 +1296,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "suggestions.skip":
     case "conversations.merge":
     case "conversations.unmerge":
+    case "my_promises.start_draft":
       return conversationAction(await conversationContext(ctx), action, req.input);
     case "people.picker":
       return pickerAction(ctx, req.input);
