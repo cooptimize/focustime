@@ -12,10 +12,12 @@ import { teamsLink } from "../plan/chats.ts";
 import type { ConversationView } from "../store/conversation-store.ts";
 import { readBack, type Sleep } from "./readback.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, assigneeEmail, assigneeText, assignOps, completedState, createOps, descriptionOps, textToHtml, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
-import { dateOnly, detectTargetField, htmlToText, identityEmail, identityName, workItemUrl } from "../sources/devops/normalize.ts";
+import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, assigneeEmail, assigneeText, assignOps, completedState, createOps, descriptionOps, textToHtml, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, FIELD_LABEL, fieldRefsOf, fieldsOps, type FieldSpec, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
+import { dateOnly, detectTargetField, detectTypeSizeField, fieldNames, htmlToText, identityEmail, identityName, TYPE_SIZE_FIELDS, workItemUrl } from "../sources/devops/normalize.ts";
 import type { TakesStore } from "../store/devops-takes.ts";
-import { breakdownChildTypes, levelsFromProcessConfig } from "../plan/process.ts";
+import { breakdownChildTypes, ladderFromProcessConfig, levelsFromProcessConfig } from "../plan/process.ts";
+import { canEdit, rungOf, sameValue, valueText, type ChangeField, type ChangeValue, type EditRight, type StagedChange } from "../plan/ahead-edit.ts";
+import type { NotesStore } from "../store/devops-notes.ts";
 /** WT-1: the portfolio tiers from the process model (process configuration on the write path), never type names. */
 const portfolioTiers = (pc: unknown) => levelsFromProcessConfig(pc).tiers;
 import { Pat } from "../sources/devops/pat.ts";
@@ -55,6 +57,25 @@ export type DevOpsWriteContext = {
   conversations?: ConversationsPort | undefined;
   /** PV-1: Take one's notices to the previous assignee (an app table). Absent: no notice is sent. */
   takes?: TakesStore | undefined;
+  /** AH-1: Ahead's change set and who I am to it (D633, D634). Absent: no fields writes, and the target date gate is mine only. */
+  ahead?: AheadPort | undefined;
+  /** AH-1 (D641): notices to a new assignee and to owners whose dates moved (an app table). */
+  notes?: NotesStore | undefined;
+};
+
+/** AH-1: what the write framework needs from Ahead. */
+export type AheadPort = {
+  /** My pending changes for one item. */
+  staged: (clientKey: string, itemId: number) => Promise<StagedChange[]>;
+  /** DevOps changed a field since I started editing it. */
+  conflict: (clientKey: string, itemId: number, field: ChangeField, theirs: ChangeValue) => Promise<void>;
+  /** A change landed: it leaves the change set, and a date's half stays in FocusTime. */
+  landed: (clientKey: string, itemId: number, field: ChangeField) => Promise<void>;
+  setHalf: (clientKey: string, itemId: number, field: "start" | "target", day: string | null, half: "AM" | "PM" | null) => Promise<void>;
+  isLead: (clientKey: string) => Promise<boolean>;
+  automation: () => Promise<boolean>;
+  /** The read-back goes straight into the central store and its change log. */
+  stored?: (clientKey: string, value: { id: number; fields: Record<string, unknown> }) => Promise<void>;
 };
 
 /** CV-1: what the write framework needs from Conversations. */
@@ -81,6 +102,8 @@ type Held = {
   proposal?: { draftId: string; proposalId: string } | null;
   /** CV-1: the conversation, commitment and suggestion it comes from. */
   conv?: DevOpsWriteEntry["conv"];
+  /** AH-1: extra lines for the preview (a kept half-day, who gets a notice). */
+  notes?: string[];
 };
 const held = new Map<string, Held>();
 export const clearDevopsPreviews = () => held.clear();
@@ -120,6 +143,7 @@ const SUMMARY: Record<WriteOp, string> = {
   undo_state: "Undo: put the state back", undo_comment: "Undo: delete the comment FocusTime added", undo_create: "Undo: set the created item to Removed", undo_target_date: "Undo: put the target date back",
   description: "Change a DevOps item's description", undo_description: "Undo: put the description back",
   assign: "Assign a DevOps story to you", undo_assign: "Undo: give the story back to who had it",
+  fields: "Change dates, size or owner in DevOps", undo_fields: "Undo: put the dates, size and owner back",
 };
 
 export async function devopsWriteAction(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
@@ -143,7 +167,7 @@ class Refused extends Error {
   }
 }
 
-type Env = { cfg: AppConfig; clientKey: string; org: string; project: string; projectName: string; pat: Pat; me: DevOpsIdentityRow; writer: DevOpsWriter; plan: PlanStore; requests: DevOpsWriteContext["requests"]; conversations: DevOpsWriteContext["conversations"] };
+type Env = { cfg: AppConfig; clientKey: string; org: string; project: string; projectName: string; pat: Pat; me: DevOpsIdentityRow; writer: DevOpsWriter; plan: PlanStore; requests: DevOpsWriteContext["requests"]; conversations: DevOpsWriteContext["conversations"]; ahead: AheadPort | undefined; clientName: string };
 
 async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
   const plan = ctx.plan;
@@ -171,7 +195,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
     } catch {
       throw new Refused(NO_PAT(clientName(clientKey)), 409, "no_write_pat");
     }
-    return { cfg, clientKey, org: target.org, project: target.project, projectName: target.projectName ?? target.project, pat, me, writer: ctx.writer, plan, requests: ctx.requests, conversations: ctx.conversations };
+    return { cfg, clientKey, org: target.org, project: target.project, projectName: target.projectName ?? target.project, pat, me, writer: ctx.writer, plan, requests: ctx.requests, conversations: ctx.conversations, ahead: ctx.ahead, clientName: clientName(clientKey) };
   };
 
   switch (action) {
@@ -245,12 +269,23 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       const nothing: string[] = [];
       // DS-1: a batch reads the same parent and process once.
       const memo = new Map<string, Promise<unknown>>();
+      // AH-1: a change set's items are previewed one by one; one that's refused (a conflict, no right) doesn't stop the rest.
+      const refused: { itemId: number | null; error: string; code: string | null }[] = [];
       for (const c of list) {
-        const h = await previewOne(env, c, tz, memo);
+        let h: HeldIn | string;
+        try {
+          h = await previewOne(env, c, tz, memo);
+        } catch (e) {
+          if (o.changes !== undefined && e instanceof Refused && (c as { kind?: unknown })?.kind === "fields") {
+            refused.push({ itemId: typeof (c as { itemId?: unknown }).itemId === "number" ? ((c as { itemId: number }).itemId) : null, error: e.message, code: e.code ?? null });
+            continue;
+          }
+          throw e;
+        }
         if (typeof h === "string") nothing.push(h);
         else previews.push(hold(h, env));
       }
-      return { ok: true, data: o.changes !== undefined ? { previews, nothing } : previews[0] ? { preview: previews[0] } : { nothing: nothing[0] ?? "Nothing to change" } };
+      return { ok: true, data: o.changes !== undefined ? { previews, nothing, refused } : previews[0] ? { preview: previews[0] } : { nothing: nothing[0] ?? "Nothing to change" } };
     }
     case "devops.confirm": {
       const o = fields(input, [], ["previewId", "previewIds"]);
@@ -321,6 +356,7 @@ function hold(h: HeldIn, env: Env): DevOpsPreview {
   if (h.op === "undo_create" && h.conv) notes.push("The conversation opens again in Inbox › Conversations.");
   if (h.op === "assign" && assigneeEmail(h.before["Assigned to"])) notes.push(`${(h.before["Assigned to"] ?? "").replace(/\s*<[^>]*>$/, "")} gets a quiet note in FocusTime, if they use it. Undo gives it back.`);
   if (h.op === "description") notes.push("Replaces the whole description with the text above. The old text is kept in the audit log, and Undo puts it back.");
+  notes.push(...(h.notes ?? []));
   if (h.rev !== null) notes.push(`Written only if the item is still at revision ${h.rev}; if anyone changed it since, nothing is written.`);
   return {
     previewId: id, expiresAt: new Date(expiresAt).toISOString(), op: h.op, summary: SUMMARY[h.op], system: "DevOps", org: h.org, project: h.projectName,
@@ -355,7 +391,9 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
     }
     case "target_date": {
       const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));
-      if (identityEmail(item.fields["System.AssignedTo"]) !== env.me.email.toLowerCase()) throw new Refused(`#${item.id} isn't assigned to you, so FocusTime won't set its target date`, 409);
+      // AH-1 (D633): the shared rule (a lead, the owner, or the owner one level up), not "assigned to me" alone.
+      const right = await rightsOn(env, item, memo);
+      if (!right.ok) throw new Refused(right.note, 409);
       const tiers = portfolioTiers(await writer.processConfig(org, pat, project));
       if (!tiers.feature.has(item.type) && !tiers.epic.has(item.type)) throw new Refused(`#${item.id} is a ${item.type}: target dates are set on features and epics`, 409);
       const typeHas = await writer.typeFields(org, pat, project, item.type);
@@ -376,6 +414,59 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       }
       if (cur === date) return `#${item.id} already has that target date`;
       return { ...base(env), ...none, op: "target_date", itemId: item.id, title: item.title, ops: targetDateOps(item.rev, field, date, tz, had(field)), rev: item.rev, before: { "Target date": cur }, after: { "Target date": date }, type: item.type, field };
+    }
+    case "fields": {
+      // AH-1 (D637): my pending changes for one item, one patch behind a test on the rev it has now. A field DevOps
+      // changed since I started editing it is a conflict (nothing is written for the item); other changes to the item
+      // don't count, so my values go on the new rev quietly (D635).
+      const port = env.ahead;
+      if (!port) throw new Refused("Ahead's change set isn't available here", 503);
+      const itemId = posId(o.itemId, "itemId");
+      const staged = await port.staged(env.clientKey, itemId);
+      if (!staged.length) return `Nothing is pending for #${itemId}`;
+      const item = await writer.item(org, pat, project, itemId);
+      const right = await rightsOn(env, item, memo);
+      if (!right.ok) throw new Refused(right.note, 403, "read_only");
+      const typeHas = await writer.typeFields(org, pat, project, item.type);
+      const all = await writer.fields(org, pat, project);
+      const refs: Record<ChangeField, string | null> = { start: typeHas.has(START_FIELD) ? START_FIELD : null, target: detectTargetField(all, typeHas), size: detectTypeSizeField(typeHas), assignee: "System.AssignedTo" };
+      const sizeLabel = refs.size ? (fieldNames(all, [refs.size])[refs.size] ?? "Size") : "Size";
+      const label = (f: ChangeField) => (f === "size" ? sizeLabel : FIELD_LABEL[f]);
+      const now = (f: ChangeField): ChangeValue => valueNow(item, f, refs[f], tz);
+      const conflicts = staged.filter((x) => !sameValue(x.field, x.baseValue, now(x.field)));
+      for (const x of conflicts) await port.conflict(env.clientKey, itemId, x.field, now(x.field));
+      if (conflicts.length) throw new Refused(`#${itemId} changed in DevOps since you started editing it: ${conflicts.map((x) => `${label(x.field)} is ${valueText(x.field, now(x.field))} now`).join("; ")}. Keep mine or take theirs in the review`, 409, "conflict");
+      const specs: FieldSpec[] = [];
+      const before: Record<string, string | null> = {};
+      const after: Record<string, string | null> = {};
+      const notes: string[] = [];
+      for (const x of staged) {
+        const ref = refs[x.field];
+        if (!ref) throw new Refused(`${label(x.field)} isn't in ${env.projectName}'s process for ${item.type}. Remove that change in the review`, 409, "no_field");
+        if (sameValue(x.field, x.value, now(x.field))) continue;
+        const had = item.fields[ref] !== undefined && item.fields[ref] !== null && item.fields[ref] !== "";
+        if (x.field === "start" || x.field === "target") {
+          specs.push({ kind: "date", field: ref, value: typeof x.value === "string" ? x.value : null, had });
+          before[label(x.field)] = (now(x.field) as string | null) ?? null;
+          after[label(x.field)] = typeof x.value === "string" ? x.value : null;
+          if (typeof x.value === "string" && x.half) notes.push(`${label(x.field)}: ${valueText(x.field, x.value, x.half)} in FocusTime; DevOps stores the day.`);
+        } else if (x.field === "size") {
+          specs.push({ kind: "number", field: ref, value: typeof x.value === "number" ? x.value : null, had });
+          before[label("size")] = typeof now("size") === "number" ? String(now("size")) : null;
+          after[label("size")] = typeof x.value === "number" ? String(x.value) : null;
+        } else {
+          const v = x.value && typeof x.value === "object" ? x.value : null;
+          specs.push({ kind: "identity", field: ref, value: v?.email ?? null, had });
+          before[label("assignee")] = assigneeText(identityName(item.fields[ref]), identityEmail(item.fields[ref]));
+          after[label("assignee")] = v ? assigneeText(v.name, v.email) : null;
+          if (v && v.email.toLowerCase() !== env.me.email.toLowerCase()) notes.push(`${v.name} gets a notice in FocusTime with a link to it.`);
+        }
+      }
+      if (!specs.length) {
+        for (const x of staged) await port.landed(env.clientKey, itemId, x.field);
+        return `#${itemId} already has those values`;
+      }
+      return { ...base(env), ...none, op: "fields", itemId: item.id, title: item.title, ops: fieldsOps(item.rev, specs, tz), rev: item.rev, before, after, type: item.type, notes };
     }
     case "assign": {
       // PV-1 (D572): Take one: a teammate's open story (child level in the project's process) assigned to me.
@@ -639,6 +730,23 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
         const prior = entry.before["Assigned to"] ?? null;
         return { ...u, op: "undo_assign", ops: assignOps(item.rev, assigneeEmail(prior), cur !== null), rev: item.rev, before: { "Assigned to": entry.after["Assigned to"] ?? null }, after: { "Assigned to": prior } };
       }
+      if (entry.op === "fields") {
+        // AH-1: every field the patch changed goes back, only while DevOps still shows FocusTime's values.
+        const cur = current(entry, item, tz);
+        const moved = Object.keys(entry.after).filter((k) => (cur[k] ?? null) !== asCurrent(entry, k, entry.after[k]));
+        if (moved.length) throw new Refused(`DevOps shows another ${moved.join(" and ").toLowerCase()} on #${item.id} now. Undo would overwrite it`, 409, "changed");
+        const specs: FieldSpec[] = [];
+        for (const [k, ref] of Object.entries(labelRefs(entry))) {
+          const prior = entry.before[k] ?? null;
+          const had = item.fields[ref] !== undefined && item.fields[ref] !== null && item.fields[ref] !== "";
+          if (ref === "System.AssignedTo") specs.push({ kind: "identity", field: ref, value: assigneeEmail(prior), had });
+          else if (k === FIELD_LABEL.start || k === FIELD_LABEL.target) specs.push({ kind: "date", field: ref, value: prior, had });
+          else specs.push({ kind: "number", field: ref, value: prior === null ? null : Number(prior), had });
+        }
+        const back: Record<string, string | null> = Object.fromEntries(Object.keys(entry.after).map((k) => [k, entry.before[k] ?? null]));
+        const nowShown: Record<string, string | null> = Object.fromEntries(Object.keys(entry.after).map((k) => [k, entry.after[k] ?? null]));
+        return { ...u, op: "undo_fields", ops: fieldsOps(item.rev, specs, tz), rev: item.rev, before: nowShown, after: back };
+      }
       if (entry.op === "description") {
         const field = fieldOf(entry.ops) ?? "System.Description";
         const curHtml = String(item.fields[field] ?? "");
@@ -659,7 +767,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       return { ...u, op: "undo_create", ops: removeOps(item.rev, removed), rev: item.rev, before: { State: item.state, Comment: null }, after: { State: removed, Comment: REMOVED_COMMENT }, draftId: entry.draftId, pickIds: entry.pickIds, ask: entry.ask ?? null, conv: entry.conv ?? null };
     }
     default:
-      throw new Invalid("kind must be state, comment, create, request_create, proposal_create, conversation_create, conversation_comment, description_update, target_date, assign or undo");
+      throw new Invalid("kind must be state, comment, create, request_create, proposal_create, conversation_create, conversation_comment, description_update, target_date, assign, fields or undo");
   }
 }
 
@@ -679,12 +787,63 @@ function current(e: DevOpsWriteEntry, item: ItemSnapshot, tz: string): Record<st
   }
   // PV-1: an assignee is compared by email.
   if (e.op === "assign" || e.op === "undo_assign") return { "Assigned to": identityEmail(item.fields["System.AssignedTo"]) };
+  // AH-1: each field by its label: dates by day, sizes as numbers, the assignee by email.
+  if (e.op === "fields" || e.op === "undo_fields") {
+    const out: Record<string, string | null> = {};
+    for (const [k, ref] of Object.entries(labelRefs(e))) {
+      const v = item.fields[ref];
+      out[k] = ref === "System.AssignedTo" ? identityEmail(v) : k === FIELD_LABEL.start || k === FIELD_LABEL.target ? dateOnly(v, tz) : typeof v === "number" && Number.isFinite(v) ? String(v) : null;
+    }
+    return out;
+  }
   // CV-1: a description is compared as text (DevOps may tidy the HTML it stores).
   if (e.op === "description" || e.op === "undo_description") return { Description: htmlToText(String(item.fields[fieldOf(e.ops) ?? "System.Description"] ?? "")).trim() };
   return {};
 }
 /** A logged value as current() reports it. */
-const asCurrent = (e: DevOpsWriteEntry, k: string, v: string | null | undefined) => ((e.op === "description" || e.op === "undo_description") && k === "Description" ? htmlToText(v ?? "").trim() : (e.op === "assign" || e.op === "undo_assign") && k === "Assigned to" ? assigneeEmail(v) : v ?? null);
+const asCurrent = (e: DevOpsWriteEntry, k: string, v: string | null | undefined) => ((e.op === "description" || e.op === "undo_description") && k === "Description" ? htmlToText(v ?? "").trim() : (e.op === "assign" || e.op === "undo_assign" || e.op === "fields" || e.op === "undo_fields") && k === "Assigned to" ? assigneeEmail(v) : v ?? null);
+
+/**
+ * AH-1: a fields write's labels and the fields behind them, from its ops: Start Date, System.AssignedTo, one of the
+ * size fields (its label is the field's own name), and the target date field (whatever the process calls it).
+ */
+function labelRefs(e: Pick<DevOpsWriteEntry, "ops" | "after">): Record<string, string> {
+  const out: Record<string, string> = {};
+  const sizeLabel = Object.keys(e.after).find((k) => k !== FIELD_LABEL.start && k !== FIELD_LABEL.target && k !== FIELD_LABEL.assignee);
+  for (const ref of fieldRefsOf(e.ops)) {
+    if (ref === START_FIELD) out[FIELD_LABEL.start] = ref;
+    else if (ref === "System.AssignedTo") out[FIELD_LABEL.assignee] = ref;
+    else if ((TYPE_SIZE_FIELDS as readonly string[]).includes(ref) && sizeLabel) out[sizeLabel] = ref;
+    else out[FIELD_LABEL.target] = ref;
+  }
+  return out;
+}
+
+/** What DevOps has now for a change set field of an item (the type's own field; null when it has none). */
+function valueNow(item: ItemSnapshot, f: ChangeField, ref: string | null, tz: string): ChangeValue {
+  if (!ref) return null;
+  const v = item.fields[ref];
+  if (f === "start" || f === "target") return dateOnly(v, tz);
+  if (f === "size") return typeof v === "number" && Number.isFinite(v) ? v : null;
+  const email = identityEmail(v);
+  return email ? { email, name: identityName(v) ?? email } : null;
+}
+
+/**
+ * AH-1 (D633): may I change this item? A lead of the client, its owner, or the owner one level up (its parent, read
+ * here), with the levels from process configuration. Without Ahead's port (older callers), only my own items.
+ */
+async function rightsOn(env: Env, item: ItemSnapshot, memo: Map<string, Promise<unknown>>): Promise<EditRight> {
+  const port = env.ahead;
+  const mine = identityEmail(item.fields["System.AssignedTo"]) === env.me.email.toLowerCase();
+  if (!port) return mine ? { ok: true, why: "owner" } : { ok: false, note: `#${item.id} isn't assigned to you, so FocusTime won't change it` };
+  const once = <T,>(k: string, f: () => Promise<T>) => (memo.get(k) ?? memo.set(k, f()).get(k)!) as Promise<T>;
+  const [lead, automation] = await Promise.all([port.isLead(env.clientKey).catch(() => false), port.automation().catch(() => false)]);
+  const ladder = await once("ladder", async () => ladderFromProcessConfig(await env.writer.processConfig(env.org, env.pat, env.project)));
+  const parent = !lead && !mine && item.parentId !== null ? await once(`item:${item.parentId}`, () => env.writer.item(env.org, env.pat, env.project, item.parentId!)).catch(() => null) : null;
+  const at = (i: ItemSnapshot) => ({ assigneeEmail: identityEmail(i.fields["System.AssignedTo"]), rung: rungOf(ladder, i.type) });
+  return canEdit({ email: env.me.email, lead, automation }, at(item), parent ? at(parent) : null, env.clientName);
+}
 const applied = (e: DevOpsWriteEntry, now: Record<string, string | null>) => Object.keys(now).every((k) => (now[k] ?? null) === asCurrent(e, k, e.after[k]));
 
 /**
@@ -779,6 +938,9 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
     }
     const back = await again(() => writer.item(org, pat, project, itemId));
     if (!applied(entry, current(entry, back, tz))) return settle("unconfirmed", "DevOps didn't show the change yet. Retry checks first and won't write twice", { revAfter: back.rev });
+    // AH-1 (D637): the read-back goes straight into the central store and its change log, so every screen shows it.
+    await ctx.ahead?.stored?.(env.clientKey, { id: back.id, fields: { ...back.fields, "System.Rev": back.rev } }).catch(() => {});
+    if (entry.op === "fields" || entry.op === "undo_fields") await aheadLanded(ctx, env, entry, back, tz).catch(() => {});
     if (entry.op === "undo_state" && entry.commentId !== null) {
       // The comment that came with the original change goes too.
       const cm = await writer.getComment(org, pat, project, itemId, entry.commentId).catch(() => null);
@@ -808,7 +970,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       if (f && !f.closedAt) (await plan.closeFollowUp(entry.followUpId, `Marked ${entry.after.State} in DevOps`, "me", { how: "devops", outcome: "done" }));
     }
     forget();
-    const msg = entry.op.startsWith("undo_") ? "Undone in DevOps" : entry.op === "state" ? `#${itemId} is ${entry.after.State} in DevOps` : entry.op === "description" ? "Description changed in DevOps" : entry.op === "assign" ? `#${itemId} is assigned to you in DevOps` : "Target date set in DevOps";
+    const msg = entry.op.startsWith("undo_") ? "Undone in DevOps" : entry.op === "fields" ? `#${itemId} changed in DevOps` : entry.op === "state" ? `#${itemId} is ${entry.after.State} in DevOps` : entry.op === "description" ? "Description changed in DevOps" : entry.op === "assign" ? `#${itemId} is assigned to you in DevOps` : "Target date set in DevOps";
     return settle("confirmed", msg, { revAfter: back.rev, ...(wrote.commentId !== null ? { commentId: wrote.commentId } : {}) });
   } catch (e) {
     if (e instanceof WriteFailure) {
@@ -826,6 +988,41 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
     const what = changed.length ? changed.map((c) => `${c.field} is ${c.now ?? "empty"} (was ${c.was ?? "empty"})`).join("; ") : `it is at revision ${now.rev} now (was ${e.revBefore})`;
     return settle("refused", `Changed in DevOps since you loaded it: ${what}. Nothing was written. Reload to review it again`, {}, { changed });
   }
+}
+
+/**
+ * AH-1: a fields write landed (or its undo). Its changes leave my change set and a date's half stays in FocusTime
+ * (D636). A new assignee who isn't me gets one notice; the owner of an item whose dates moved gets one per commit,
+ * grouped when sent (D641). An undo of an assignment takes its notice back.
+ */
+async function aheadLanded(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntry, back: ItemSnapshot, tz: string): Promise<void> {
+  const port = ctx.ahead;
+  const itemId = back.id;
+  const refs = labelRefs(entry);
+  const fieldOfLabel = (k: string): ChangeField => (k === FIELD_LABEL.start ? "start" : k === FIELD_LABEL.target ? "target" : k === FIELD_LABEL.assignee ? "assignee" : "size");
+  if (port && entry.op === "fields") {
+    const staged = await port.staged(env.clientKey, itemId);
+    for (const k of Object.keys(refs)) {
+      const f = fieldOfLabel(k);
+      const x = staged.find((s) => s.field === f);
+      if (!x) continue;
+      if ((f === "start" || f === "target") && typeof x.value === "string") await port.setHalf(env.clientKey, itemId, f, x.value, x.half);
+      await port.landed(env.clientKey, itemId, f);
+    }
+  }
+  const notes = ctx.notes;
+  if (!notes) return;
+  const me = env.me.email.toLowerCase();
+  const was = assigneeEmail(entry.before[FIELD_LABEL.assignee]);
+  const now = assigneeEmail(entry.after[FIELD_LABEL.assignee]);
+  if (FIELD_LABEL.assignee in entry.after) {
+    if (entry.op === "fields" && now && now !== me) await notes.add({ kind: "assigned", clientKey: env.clientKey, org: env.org, itemIds: [itemId], toEmail: now, byName: env.me.name });
+    if (entry.op === "undo_fields" && was && was !== me) await notes.remove({ kind: "assigned", org: env.org, toEmail: was, itemId });
+  }
+  const owner = identityEmail(back.fields["System.AssignedTo"]);
+  const datesMoved = (FIELD_LABEL.start in entry.after || FIELD_LABEL.target in entry.after) && entry.op === "fields";
+  if (datesMoved && owner && owner !== me && owner !== now) await notes.add({ kind: "dates", clientKey: env.clientKey, org: env.org, itemIds: [itemId], toEmail: owner, byName: env.me.name });
+  void tz;
 }
 
 const sameText = (html: string, text: string) => html.trim() === text.trim() || htmlToText(html).trim() === text.trim();

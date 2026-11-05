@@ -23,6 +23,8 @@ export type DevOpsChange =
   | { kind: "create"; draftId: number; /** PV-1: the story's type (the parent type's default child), when the parent takes it. */ type?: string }
   /** PV-1: Take one: a teammate's open story assigned to me. */
   | { kind: "assign"; itemId: number }
+  /** AH-1: my pending changes in Ahead for one item (dates, size, assignee), one patch. */
+  | { kind: "fields"; itemId: number }
   | { kind: "target_date"; itemId: number; date: string; /** Step 17: Save dates to DevOps (where the process has Start Date). */ startDate?: string }
   | { kind: "undo"; writeId: number }
   /** AP-1: a bug, story or feature from an ask in a client chat. */
@@ -71,8 +73,10 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
   const begin = useCallback(
     async (clientKey: string, changes: DevOpsChange[], settled?: Settled) => {
       try {
-        const r = await call<{ previews: DevOpsPreview[]; nothing: string[] }>("devops.preview", { clientKey, changes });
-        if (!r.previews.length) return void (notify(r.nothing[0] ?? "Nothing to change in DevOps"), settled?.({ confirmed: false, sent: false }));
+        const r = await call<{ previews: DevOpsPreview[]; nothing: string[]; refused?: { itemId: number | null; error: string }[] }>("devops.preview", { clientKey, changes });
+        // AH-1: items of a change set that were refused (a conflict, no right) are said once; the rest go on.
+        if (r.refused?.length) notify(r.refused.length === 1 ? r.refused[0]!.error : `${r.refused.length} items weren't previewed: ${r.refused.map((x) => (x.itemId ? `#${x.itemId}` : "one")).join(", ")}. See the review.`);
+        if (!r.previews.length) return void (r.refused?.length ? null : notify(r.nothing[0] ?? "Nothing to change in DevOps"), settled?.({ confirmed: false, sent: false }));
         setFlow({ clientKey, changes, rows: r.previews.map((preview) => ({ preview, result: null })), busy: false, error: null, settled });
       } catch (e) {
         settled?.({ confirmed: false, sent: false });
@@ -449,7 +453,7 @@ export function DraftsToAdd({ drafts, clientName, onChanged }: { drafts: DraftSt
   );
 }
 
-const OP_WORD: Record<string, string> = { state: "State changed", comment: "Comment added", create: "Created", target_date: "Target date set", undo_state: "Undo: state put back", undo_comment: "Undo: comment deleted", undo_create: "Undo: set to Removed", undo_target_date: "Undo: target date put back", description: "Description changed", undo_description: "Undo: description put back" };
+const OP_WORD: Record<string, string> = { state: "State changed", comment: "Comment added", create: "Created", target_date: "Target date set", undo_state: "Undo: state put back", undo_comment: "Undo: comment deleted", undo_create: "Undo: set to Removed", undo_target_date: "Undo: target date put back", description: "Description changed", undo_description: "Undo: description put back", fields: "Dates, size or owner changed", undo_fields: "Undo: dates, size and owner put back" };
 const DW_STATUS: Record<string, string> = { pending: "Not finished", confirmed: "Confirmed", unconfirmed: "Not confirmed", failed: "Failed", refused: "Refused" };
 const fmt = (v: Record<string, string | null>) => Object.entries(v).map(([k, x]) => `${k}: ${x ?? "(empty)"}`).join(", ");
 

@@ -12,6 +12,7 @@ import { sqliteConn } from "../store/sql/sqlite.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { createConversationStore } from "../store/conversation-store.ts";
 import { takesStore } from "../store/devops-takes.ts";
+import { notesStore } from "../store/devops-notes.ts";
 import { IDENTITY_KEY } from "./account.ts";
 import { clearDevopsPreviews, type DevOpsPreview, type DevOpsResult } from "./devops-write-actions.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
@@ -21,9 +22,9 @@ const base = STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-
 const COOP = "Cooptimize";
 const Adatum = "Adatum";
 
-function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: boolean } = {}) {
+function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: boolean; sizeField?: "Microsoft.VSTS.Scheduling.StoryPoints" | "Microsoft.VSTS.Scheduling.Effort" | null } = {}) {
   clearDevopsPreviews();
-  const dv = fakeDevOpsWrite({ now: () => NOW, ...(opts.acceptance === false ? { acceptance: false } : {}), ...(opts.startDate === false ? { startDate: false } : {}) });
+  const dv = fakeDevOpsWrite({ now: () => NOW, ...(opts.acceptance === false ? { acceptance: false } : {}), ...(opts.startDate === false ? { startDate: false } : {}), ...(opts.sizeField !== undefined ? { sizeField: opts.sizeField } : {}) });
   dv.add(437, { "System.WorkItemType": "Feature", "System.Title": "Need Features Here", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
   dv.add(500, { "System.WorkItemType": "User Story", "System.Title": "Import mapping", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } }, 437);
   dv.add(600, { "System.WorkItemType": "Epic", "System.Title": "Platform", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
@@ -36,6 +37,8 @@ function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: 
   const teams = createTeamsStore(teamsConn, () => Temporal.Instant.from(NOW));
   const convs = createConversationStore(teamsConn, () => Temporal.Instant.from(NOW), teams);
   const takes = takesStore(teamsConn, () => Temporal.Instant.from(NOW));
+  const notes = notesStore(teamsConn, () => Temporal.Instant.from(NOW));
+  const stored: { clientKey: string; id: number; fields: Record<string, unknown> }[] = [];
   const keyring = new Map<string, string>();
   const targetCalls: { keys: string[]; withPat: boolean | undefined }[] = [];
   const target = (clientKey: string, org: string, withPat: boolean): DevOpsTarget => ({ accountId: "a", clientKey, clientName: clientKey, org, project: `${clientKey} Project`, projectName: `${clientKey} Project`, email: clientKey === COOP ? (opts.email === undefined ? "avery@cooptimize.example" : opts.email) : "avery@adatum.example", pat: withPat ? new Pat(COMPANY_PAT) : null });
@@ -60,6 +63,8 @@ function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: 
     requests: { teams, refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }), conversations: convs },
     devopsWriter: writer,
     takes,
+    devopsNotes: notes,
+    devopsStored: async (clientKey, v) => void stored.push({ clientKey, ...v }),
     writePats: { get: async (k) => { const v = keyring.get(k); if (!v) throw new Error("not found"); return new Pat(v); }, set: async (k, v) => void keyring.set(k, v), clear: async (k) => void keyring.delete(k) },
   };
   const run = async <T = unknown>(action: string, input: unknown): Promise<T> => {
@@ -76,7 +81,7 @@ function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: 
   const preview = async (change: Record<string, unknown>, clientKey = COOP) => (await run<{ preview: DevOpsPreview }>("devops.preview", { clientKey, change })).preview;
   const confirm = (p: DevOpsPreview) => run<DevOpsResult>("devops.confirm", { previewId: p.previewId });
   const write = async (change: Record<string, unknown>) => confirm(await preview(change));
-  return { dv, plan, teams, convs, takes, run, fail, enable, preview, confirm, write, keyring, logs, targetCalls, forgotten, waits };
+  return { dv, plan, teams, convs, takes, notes, stored, run, fail, enable, preview, confirm, write, keyring, logs, targetCalls, forgotten, waits };
 }
 type S = ReturnType<typeof setup>;
 const patches = (s: S) => s.dv.writes().filter((w) => w.method === "PATCH");
@@ -210,7 +215,10 @@ describe("each write", () => {
     const r = await s.write({ kind: "target_date", itemId: 437, date: "2026-11-20" });
     expect(r.confirmed).toBe(true);
     expect(s.dv.items.get(437)!.fields["Microsoft.VSTS.Scheduling.TargetDate"]).toBe("2026-11-20T05:00:00Z");
-    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "target_date", itemId: 601, date: "2026-11-20" } })).toMatchObject({ status: 409 });
+    // AH-1 (D633): the shared rule: Dana's feature sits under my epic, so I may set it; one under nobody's of mine I may not.
+    expect((await s.preview({ kind: "target_date", itemId: 601, date: "2026-11-20" })).op).toBe("target_date");
+    s.dv.add(602, { "System.WorkItemType": "Feature", "System.Title": "Lee's feature", "System.State": "Active", "System.AssignedTo": { uniqueName: "lee@cooptimize.example" } });
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "target_date", itemId: 602, date: "2026-11-20" } })).toMatchObject({ status: 409 });
     expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "target_date", itemId: 500, date: "2026-11-20" } })).toMatchObject({ status: 409 });
   });
   it("create a story from a draft: type from the requirement backlog, parent link, me, area and iteration from the parent", async () => {
@@ -403,11 +411,12 @@ describe("undo of each kind", () => {
     expect(s.dv.items.get(437)!.fields["Microsoft.VSTS.Scheduling.StartDate"]).toBeUndefined();
     expect(s.dv.items.get(437)!.fields["Microsoft.VSTS.Scheduling.TargetDate"]).toBeUndefined();
   });
-  it("step 17, Save dates: refused where the process has no Start Date, on items not assigned to me, or a start after the target", async () => {
+  it("step 17, Save dates: refused where the process has no Start Date, on items I may not change (D633), or a start after the target", async () => {
     const t = setup({ startDate: false });
     await t.enable();
     expect(await t.fail("devops.preview", { clientKey: COOP, change: { kind: "target_date", itemId: 437, date: "2026-12-11", startDate: "2026-11-16" } })).toMatchObject({ status: 409 });
-    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "target_date", itemId: 601, date: "2026-12-11", startDate: "2026-11-16" } })).toMatchObject({ status: 409 });
+    s.dv.add(602, { "System.WorkItemType": "Feature", "System.Title": "Lee's feature", "System.State": "Active", "System.AssignedTo": { uniqueName: "lee@cooptimize.example" } });
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "target_date", itemId: 602, date: "2026-12-11", startDate: "2026-11-16" } })).toMatchObject({ status: 409 });
     expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "target_date", itemId: 437, date: "2026-11-11", startDate: "2026-11-16" } })).toMatchObject({ status: 400 });
   });
   it("step 17: undo of Save dates refuses when either date changed in DevOps since", async () => {
@@ -746,5 +755,108 @@ describe("CV-1: a DevOps item, a comment and a description change from a convers
     expect(patches(s).at(-1)!.body).toEqual(expect.arrayContaining([{ op: "test", path: "/rev", value: expect.any(Number) }]));
     await s.write({ kind: "undo", writeId: r.entry.id });
     expect(s.dv.items.get(500)!.fields["System.Description"]).toBe("<div>Map the import columns.</div>");
+  });
+});
+
+describe("AH-1: Ahead's change set as one fields write per item (D634 to D637)", () => {
+  let s: S;
+  const DANA = "dana@cooptimize.example";
+  const stage = (itemId: number, field: "start" | "target" | "size" | "assignee", value: unknown, baseValue: unknown = null, half: "AM" | "PM" | null = null, baseRev = 3) =>
+    s.plan.stageAheadChange({ clientKey: COOP, itemId, field, value: value as never, half, baseRev, baseValue: baseValue as never });
+  beforeEach(async () => {
+    s = setup();
+    await s.enable();
+  });
+  it("one patch per item behind a test on its rev; the rows leave the change set, the half stays, the read-back goes to the store", async () => {
+    await stage(437, "start", "2026-11-16", null, "PM");
+    await stage(437, "target", "2026-12-11", null, "AM");
+    const p = await s.preview({ kind: "fields", itemId: 437 });
+    expect(p.summary).toBe("Change dates, size or owner in DevOps");
+    expect(p.fields).toEqual(expect.arrayContaining([{ label: "Start date", before: null, after: "2026-11-16", changed: true }, { label: "Target date", before: null, after: "2026-12-11", changed: true }]));
+    expect(p.notes.join(" ")).toContain("Mon, Nov 16 PM in FocusTime");
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(true);
+    const [w] = patches(s);
+    expect(w!.body).toEqual([{ op: "test", path: "/rev", value: 3 }, { op: "add", path: "/fields/Microsoft.VSTS.Scheduling.StartDate", value: "2026-11-16T05:00:00Z" }, { op: "add", path: "/fields/Microsoft.VSTS.Scheduling.TargetDate", value: "2026-12-11T05:00:00Z" }]);
+    expect(await s.plan.aheadChanges()).toEqual([]);
+    expect(await s.plan.aheadHalves()).toEqual(expect.arrayContaining([expect.objectContaining({ itemId: 437, field: "start", day: "2026-11-16", half: "PM" }), expect.objectContaining({ itemId: 437, field: "target", day: "2026-12-11", half: "AM" })]));
+    expect(s.stored).toEqual([expect.objectContaining({ clientKey: COOP, id: 437 })]);
+    expect(s.stored[0]!.fields["System.Rev"]).toBe(4);
+    expect(r.entry).toMatchObject({ op: "fields", status: "confirmed" });
+  });
+  it("the size in the type's own field, labelled with its name; Effort in another process", async () => {
+    await stage(500, "size", 5);
+    const p = await s.preview({ kind: "fields", itemId: 500 });
+    expect(p.fields).toContainEqual({ label: "Story Points", before: null, after: "5", changed: true });
+    await s.confirm(p);
+    expect(s.dv.items.get(500)!.fields["Microsoft.VSTS.Scheduling.StoryPoints"]).toBe(5);
+    const t = setup({ sizeField: "Microsoft.VSTS.Scheduling.Effort" });
+    await t.enable();
+    await t.plan.stageAheadChange({ clientKey: COOP, itemId: 500, field: "size", value: 8, half: null, baseRev: 3, baseValue: null });
+    const q = (await t.run<{ preview: DevOpsPreview }>("devops.preview", { clientKey: COOP, change: { kind: "fields", itemId: 500 } })).preview;
+    expect(q.fields).toContainEqual({ label: "Effort", before: null, after: "8", changed: true });
+    await t.run("devops.confirm", { previewId: q.previewId });
+    expect(t.dv.items.get(500)!.fields["Microsoft.VSTS.Scheduling.Effort"]).toBe(8);
+    // No size field at all: the change can't go, and says so.
+    const u = setup({ sizeField: null });
+    await u.enable();
+    await u.plan.stageAheadChange({ clientKey: COOP, itemId: 500, field: "size", value: 3, half: null, baseRev: 3, baseValue: null });
+    expect(await u.fail("devops.preview", { clientKey: COOP, change: { kind: "fields", itemId: 500 } })).toMatchObject({ status: 409, code: "no_field" });
+  });
+  it("assigning a teammate notifies them once; Nobody is add with an empty value; undo puts every field back and takes the notice back", async () => {
+    await stage(500, "assignee", { email: DANA, name: "Dana Reyes" }, { email: "avery@cooptimize.example", name: "Sam Tester" });
+    await stage(500, "size", 3);
+    const p = await s.preview({ kind: "fields", itemId: 500 });
+    expect(p.notes.join(" ")).toContain("Dana Reyes gets a notice in FocusTime");
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(true);
+    expect(await s.notes.to([DANA], "2026-11-01T00:00:00Z")).toEqual([expect.objectContaining({ kind: "assigned", itemIds: [500], byName: "Sam Tester" })]);
+    const u = await s.write({ kind: "undo", writeId: r.entry.id });
+    expect(u.confirmed).toBe(true);
+    expect(s.dv.items.get(500)!.fields["System.AssignedTo"]).toBe("avery@cooptimize.example");
+    expect(s.dv.items.get(500)!.fields["Microsoft.VSTS.Scheduling.StoryPoints"]).toBeUndefined();
+    expect(await s.notes.to([DANA], "2026-11-01T00:00:00Z")).toEqual([]);
+    // Nobody.
+    await s.plan.stageAheadChange({ clientKey: COOP, itemId: 500, field: "assignee", value: null, half: null, baseRev: s.dv.items.get(500)!.rev, baseValue: { email: "avery@cooptimize.example", name: "Sam Tester" } });
+    await s.write({ kind: "fields", itemId: 500 });
+    expect(patches(s).at(-1)!.body).toContainEqual({ op: "add", path: "/fields/System.AssignedTo", value: "" });
+    expect(s.dv.items.get(500)!.fields["System.AssignedTo"]).toBeUndefined();
+  });
+  it("a conflict only when a field I'm changing changed in DevOps; anything else and mine go on the new rev quietly", async () => {
+    await stage(437, "target", "2026-12-11");
+    s.dv.touch(437, { "System.Title": "Renamed" });
+    const r = await s.write({ kind: "fields", itemId: 437 });
+    expect(r.confirmed).toBe(true);
+    expect(patches(s)[0]!.body).toContainEqual({ op: "test", path: "/rev", value: 4 });
+    await stage(437, "target", "2026-12-18", "2026-12-11", null, 5);
+    s.dv.touch(437, { "Microsoft.VSTS.Scheduling.TargetDate": "2027-01-08T05:00:00Z" });
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "fields", itemId: 437 } })).toMatchObject({ status: 409, code: "conflict" });
+    expect((await s.plan.aheadChanges())[0]).toMatchObject({ field: "target", value: "2026-12-18", theirs: "2027-01-08" });
+    expect(patches(s)).toHaveLength(1);
+  });
+  it("who may change it: the owner one level up, never two; a refused item in a batch doesn't stop the rest", async () => {
+    // Dana's feature under my epic: mine to change (one level down).
+    s.dv.add(610, { "System.WorkItemType": "User Story", "System.Title": "Dana's story", "System.State": "Active", "System.AssignedTo": { uniqueName: DANA } }, 601);
+    await stage(601, "target", "2026-12-04");
+    await stage(610, "size", 2);
+    const r = await s.run<{ previews: DevOpsPreview[]; refused: { itemId: number; code: string }[] }>("devops.preview", { clientKey: COOP, changes: [{ kind: "fields", itemId: 601 }, { kind: "fields", itemId: 610 }] });
+    expect(r.previews.map((p) => p.op)).toEqual(["fields"]);
+    expect(r.refused).toEqual([expect.objectContaining({ itemId: 610, code: "read_only" })]);
+  });
+  it("a write that fails is retried through the log, and lands once", async () => {
+    await stage(437, "target", "2026-12-11");
+    s.dv.fail("PATCH", /workitems\/437$/i, "network");
+    const r = await s.write({ kind: "fields", itemId: 437 });
+    expect(r.confirmed).toBe(false);
+    expect(await s.plan.aheadChanges()).toHaveLength(1);
+    const again = await s.run<DevOpsResult>("devops.retry", { id: r.entry.id });
+    expect(again.confirmed).toBe(true);
+    expect(patches(s).filter((w) => w.url.includes("/437"))).toHaveLength(2);
+    expect(await s.plan.aheadChanges()).toEqual([]);
+  });
+  it("dates moved on a teammate's item: the owner gets a note", async () => {
+    await stage(601, "start", "2026-11-23");
+    await s.write({ kind: "fields", itemId: 601 });
+    expect(await s.notes.to([DANA], "2026-11-01T00:00:00Z")).toEqual([expect.objectContaining({ kind: "dates", itemIds: [601] })]);
   });
 });

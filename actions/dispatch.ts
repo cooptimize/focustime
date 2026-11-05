@@ -37,7 +37,7 @@ import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
 import type { CalEvent, ClientWork, FocusPattern, IsoDate, SourceResult, Week } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { timeboxAction, timeboxesFor, timeboxView } from "./timebox-actions.ts";
-import { devopsWriteAction, type DevOpsWriteContext, type WritePats } from "./devops-write-actions.ts";
+import { devopsWriteAction, type DevOpsWriteContext, type WritePats, type AheadPort } from "./devops-write-actions.ts";
 import type { DevOpsWriter } from "../sources/devops/write.ts";
 import { ownEventIds, withoutOwn } from "../plan/timebox.ts";
 import type { OutlookWrite, PeopleReader, ScheduleReader } from "../sources/graph/source.ts";
@@ -62,6 +62,7 @@ import { isActionName, type ActionName } from "./registry.ts";
 import { captureAction } from "./capture-actions.ts";
 import { followUpAction } from "./followup-actions.ts";
 import { roadmapAction } from "./roadmap-actions.ts";
+import { aheadAction, type AheadAction, type AheadContext } from "./ahead-actions.ts";
 import { CHECKIN_DONE_MARK } from "./closeout-actions.ts";
 import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
 import { carryAction, idsByClient, markResolved, planBitsFor, resolvedKeys, type CarryContext } from "./carry-actions.ts";
@@ -143,6 +144,10 @@ export type ActionContext = {
   devopsWriter?: DevOpsWriter;
   /** PV-1: Take one's notices (an app table shared by everyone); absent in the demo and tests that don't need it. */
   takes?: import("../store/devops-takes.ts").TakesStore;
+  /** AH-1 (D641): notices to a new assignee and to owners whose dates moved (an app table). Absent: none sent. */
+  devopsNotes?: import("../store/devops-notes.ts").NotesStore;
+  /** AH-1 (D637): a write's read-back into the central DevOps store and its change log. Absent: the next check has it. */
+  devopsStored?: (clientKey: string, value: { id: number; fields: Record<string, unknown> }) => Promise<void>;
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
   media?: MediaControl;
   /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
@@ -729,6 +734,59 @@ async function devopsWriteContext(ctx: ActionContext): Promise<DevOpsWriteContex
     now: ctx.now,
     ...(ctx.sleep ? { sleep: ctx.sleep } : {}),
     ...(ctx.takes ? { takes: ctx.takes } : {}),
+    ...(ctx.devopsNotes ? { notes: ctx.devopsNotes } : {}),
+    ...(ctx.plan ? { ahead: aheadPort(ctx, ctx.plan) } : {}),
+  };
+}
+
+/** AH-1: the write framework's view of Ahead's change set (my rows only, through the plan store's scope). */
+function aheadPort(ctx: ActionContext, plan: PlanStore): AheadPort {
+  const cc = conversationContext(ctx);
+  return {
+    staged: async (clientKey, itemId) => (await plan.aheadChanges()).filter((c) => c.clientKey === clientKey && c.itemId === itemId),
+    conflict: (clientKey, itemId, field, theirs) => plan.markAheadConflict(clientKey, itemId, field, theirs),
+    landed: async (clientKey, itemId, field) => void (await plan.removeAheadChanges(clientKey, itemId, field)),
+    setHalf: (clientKey, itemId, field, day, half) => plan.setAheadHalf(clientKey, itemId, field, day, half),
+    isLead: async (clientKey) => (await cc).isLead(clientKey),
+    automation: async () => (await aheadContext(ctx)).automation(),
+    ...(ctx.devopsStored ? { stored: ctx.devopsStored } : {}),
+  };
+}
+
+/** The followed clients with DevOps this week, as Roadmap and Ahead read them. */
+async function aheadClients(ctx: ActionContext, cfg: AppConfig, weekStart: string, refresh: boolean) {
+  const today = localToday(ctx.now(), userZone(cfg));
+  const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).load(weekStart, refresh ? { refresh } : {}).catch(() => null) : null;
+  return (await devopsClients(ctx, cfg, weekStart, today, refresh ? { refresh } : {}, dv?.items ?? [])).fetch;
+}
+
+/** AH-1: who I am to the org runtime: lead per client, an automation account, whom I may assign. */
+async function aheadContext(ctx: ActionContext): Promise<AheadContext> {
+  const cc = await conversationContext(ctx);
+  const people = async () => {
+    if (!ctx.org) return null;
+    const [lv, directory, peopleClients, users] = await Promise.all([ctx.org.levels(), ctx.org.store.directory(), ctx.org.store.peopleClients(), cc.users().catch(() => [])]);
+    return { lv, picker: pickerPeopleOf({ levels: lv, directory, peopleClients, users }) };
+  };
+  return {
+    plan: ctx.plan,
+    config: () => configured(ctx),
+    clients: (cfg, weekStart, refresh) => aheadClients(ctx, cfg, weekStart, refresh),
+    devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
+    isLead: cc.isLead,
+    automation: async () => {
+      const id = await cc.me();
+      const p = id ? await people().catch(() => null) : null;
+      return !!p && p.lv.people.entry(id)?.notCooptimizer === "automation";
+    },
+    canWrite: async (clientKey) => !!ctx.devopsWriter && !!ctx.writePats && !!(await ctx.plan?.devopsIdentity(clientKey).catch(() => null)),
+    assignable: async (clientKey, email) => {
+      const mine = (await ctx.plan?.devopsIdentities().catch(() => []))?.find((i) => i.clientKey === clientKey)?.email ?? null;
+      if (mine && mine.toLowerCase() === email.toLowerCase()) return true;
+      const p = await people().catch(() => null);
+      return !!p && p.picker.workers(clientKey).some((w) => w.email?.toLowerCase() === email.toLowerCase());
+    },
+    now: ctx.now,
   };
 }
 
@@ -1381,6 +1439,14 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         action,
         req.input,
       );
+    case "ahead.load":
+    case "ahead.stage":
+    case "ahead.unstage":
+    case "ahead.discard":
+    case "ahead.resolve":
+    case "ahead.filters":
+    case "ahead.set_filters":
+      return aheadAction(await aheadContext(ctx), req.action as AheadAction, req.input);
     case "roadmap.load":
     case "roadmap.ahead":
     case "roadmap.set_dates":
