@@ -22,7 +22,7 @@ import { chatImageSrc, type CardCommitment, type CardItem, type CardSuggestion, 
 import { daysWaiting, oneLine, statusLine, unsortedText, type Commitment, type Conversation, type ItemDraft } from "../plan/conversations.ts";
 import type { ClientChat, FocusUser } from "../plan/requests.ts";
 import { hostedImageIds, sanitizeMessageHtml } from "../plan/sanitize.ts";
-import { IMAGE_ATTEMPTS, type MessageImage } from "../store/teams-store.ts";
+import type { MessageImage } from "../store/teams-store.ts";
 import { joinedSummary, MERGE_INSTRUCTIONS, MERGE_SCHEMA, MERGE_TASK, mergeFrom, mergeInput, type MergeAnswer } from "../plan/conversation-merge.ts";
 import type { ConversationStore, ConversationView } from "../store/conversation-store.ts";
 import { PlanError } from "../store/plan-store.ts";
@@ -158,11 +158,16 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
     // Mentions of me in its work messages.
     let mentionsMe = false;
     let images = 0;
+    const withImages: string[] = [];
     for (const p of places.filter((x) => x.conversationId === c.id && x.role === "work")) {
       const m = await v.teams.message(p.chatId, p.messageId);
       if (m?.mentions.some((x) => same(x.id, v.me))) mentionsMe = true;
-      images += hostedImageIds(m?.html ?? null).length;
+      const n = hostedImageIds(m?.html ?? null).length;
+      images += n;
+      if (n) withImages.push(p.messageId);
     }
+    // CV-4: the first described image's words, for the card (the AI's, seen only by members of the chat).
+    const described = withImages.length ? (await v.teams.images(c.chatId, withImages)).find((i) => i.description)?.description ?? null : null;
     const wait = waitingOf(cs);
     const waiting = wait ? { name: first(wait.whoName), days: daysWaiting(wait.escalatedAt!, now) } : null;
     const openMine = cs.find((k) => k.state === "open" && same(k.whoId, v.me));
@@ -194,6 +199,7 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
       suggestions: suggestions.filter((s) => s.conversationId === c.id && s.state === "open").map((s): CardSuggestion => ({ id: s.id, kind: s.kind, itemId: s.itemId, body: s.body, internal: s.internal, fromInternalChat: fromInternal, mine: same(s.forUser, v.me) })),
       closed, hidden: !!view?.hidden, primary, canCreate, link: chat ? teamsLink(chat) : messageLink(c.chatId, places.find((p) => p.conversationId === c.id)?.messageId ?? "0"),
       ...(images ? { images } : {}),
+      ...(described ? { imageNote: described } : {}),
     };
   });
 }
@@ -402,10 +408,11 @@ export const MESSAGE_PAGE = 20;
  * line, from the store by replyToId whatever its age, else "Quoted an earlier message"), and the reactions as counts.
  */
 /** CV-2: an image as the page gets it: our own address while it is (or may still be) there, else a plain why. */
-function imageView(i: MessageImage): MessageImageView {
-  if (i.state === "skipped") return { id: i.id, src: null, note: i.reason === "too big" ? "Image not shown: over 10 MB" : "Image not shown: not a PNG, JPEG or GIF" };
-  if (i.state === "failed" && i.attempts >= IMAGE_ATTEMPTS) return { id: i.id, src: null, note: "Image couldn't be loaded from Teams" };
-  return { id: i.id, src: chatImageSrc(i.id), note: null };
+/** CV-4: read from Teams when shown (never kept); a skipped one says why; each has its message's Teams link. */
+function imageView(i: MessageImage, link: string): MessageImageView {
+  const more = { link, ...(i.description ? { description: i.description } : {}) };
+  if (i.state === "skipped") return { id: i.id, src: null, note: i.reason === "too big" ? "Image not shown: over 10 MB" : "Image not shown: not a PNG, JPEG or GIF", ...more };
+  return { id: i.id, src: chatImageSrc(i.id), note: null, ...more };
 }
 
 async function messageView(m: import("../plan/requests.ts").TeamsMessage, x: { chat: ClientChat; home: string | null; me: string; teams: TeamsView; aliases: Map<string, string>; images?: readonly MessageImage[] }): Promise<ConversationMessage> {
@@ -429,7 +436,7 @@ async function messageView(m: import("../plan/requests.ts").TeamsMessage, x: { c
     messageId: m.messageId, author: mine ? "You" : (b.senderName ?? (b.external ? "Someone outside Cooptimize" : "Someone at Cooptimize")), authorKey: x.aliases.get(key)!, name: b.senderName ?? "Someone",
     email: !b.external && member?.email ? member.email.toLowerCase() : null, external: x.home ? b.external : false, mine, at: m.createdAt,
     html: sanitizeMessageHtml(m.html ?? m.text, { contentType: m.html ? "html" : "text", mentions: byAt, ...(images.length ? { hostedImages: "drop" as const } : {}) }), text: m.text, quote, reactions: m.reactions ?? [],
-    ...(images.length ? { images: images.map(imageView) } : {}),
+    ...(images.length ? { images: images.map((i) => imageView(i, messageLink(m.chatId, m.messageId))) } : {}),
   };
 }
 

@@ -233,15 +233,16 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       graph.say(DELIVERY, EVAN, "<p>The filter bug needs to be tracked somewhere.</p>", 12);
       const ticket = graph.say(DELIVERY, ME, "<p>I'll log a ticket for the filter.</p>", 13);
 
-      // Inbox › Conversations: Refresh reads the chats (and the poll fetches the images with the reader's token).
+      // Inbox › Conversations: Refresh reads the chats.
       await page.keyboard.press("4");
       await page.getByRole("tab", { name: /^Conversations/ }).click();
       const main = page.getByRole("main", { name: "Conversations" });
       await main.getByRole("button", { name: "Refresh conversations" }).click();
       const totals = main.getByRole("region", { name: "Needs you" }).getByRole("listitem", { name: "October totals on the Movement Dashboard" });
       await totals.waitFor();
-      await totals.getByText(/· 2 images/).waitFor();
-      expect([...graph.hostedCalls].sort()).toEqual([HOSTED.a, HOSTED.b].sort());
+      await totals.getByText(/· 2\simages/).waitFor();
+      // CV-4: the poll no longer reads images; they are read from Teams when shown, with the viewer's token.
+      expect(graph.hostedCalls).toEqual([]);
 
       // Show messages: grouped like Teams, the quote, the reactions, and the two thumbnails from FocusTime's own address.
       await totals.getByRole("button", { name: /^Show messages/ }).click();
@@ -250,6 +251,7 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       await thread.getByLabel("👍 2, 👀 1").waitFor();
       const thumbs = thread.getByRole("list", { name: "2 images" }).locator("img");
       await expect.poll(() => thumbs.evaluateAll((xs) => xs.map((x) => (x as HTMLImageElement).naturalWidth))).toEqual([480, 420]);
+      expect([...new Set(graph.hostedCalls)].sort()).toEqual([HOSTED.a, HOSTED.b].sort());
       const srcs = await thumbs.evaluateAll((xs) => xs.map((x) => (x as HTMLImageElement).getAttribute("src")));
       for (const s of srcs) expect(s).toMatch(/^\/media\/chat-images\/\d+$/);
       expect(await page.content()).not.toMatch(/graph\.microsoft\.com|hostedContents/);
