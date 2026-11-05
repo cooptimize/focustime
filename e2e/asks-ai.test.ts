@@ -1,6 +1,6 @@
 // AP-2: AI sorts Requests (called asks until shared polling, D520), and Promises, the main path, in a real (not demo) session on fake sources, a fake Graph (Teams),
-// a fake DevOps and the stub AI provider (it answers like OpenAI would, from the request's own context). With Use AI and
-// Allow AI on for Adatum, an external message is sorted as a bug with a draft and "Looks like" an open item; another
+// a fake DevOps and the stub AI provider (it answers like OpenAI would, from the request's own context). With AI on (an
+// admin's) and allowed for Adatum, an external message is sorted as a bug with a draft and "Looks like" an open item; another
 // isn't sorted (the provider failed) and offers Sort again; a thanks-like message the AI calls none is hidden and can be
 // shown. Create bug opens the preview with the AI's title and is confirmed. My own reply "I'll ..." becomes a promise
 // that answers the Request; Make it a follow-up is prefilled and the follow-up shows in the Inbox. Edge cases are unit tests
@@ -20,7 +20,7 @@ import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { createChatsClient } from "../sources/graph/chats.ts";
 import { aClassifyAnswer, anAiApp, aPromiseAnswer } from "../test/builders/index.ts";
 import { CHROMIUM } from "./harness.ts";
-import { liveBrowser, liveContext, ME, T, type LiveBrowser } from "./live.ts";
+import { liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "./live.ts";
 import { shotBoth } from "./shots.ts";
 
 const HOME = "11111111-1111-4111-8111-111111111111";
@@ -93,7 +93,12 @@ describe.skipIf(!CHROMIUM)("AI sorts Requests, and Promises", () => {
         return JSON.stringify(aClassifyAnswer({ kind: "request", urgency: "now", item_type: "story", title: "Add the region field to the summary view", description: "The client wants the region field in the summary view.", reason: "It asks for a change today." }));
       },
     });
+    // ADM-1: AI on for FocusTime and allowed for Adatum, by an admin.
+    const team = liveTeam();
+    await team.set("org", "ai.on", true);
+    await team.set("client:Adatum", "allow_ai", true);
     const ctx = await liveContext({
+      team,
       extra: {
         account: () =>
           ({
@@ -112,7 +117,6 @@ describe.skipIf(!CHROMIUM)("AI sorts Requests, and Promises", () => {
         ai: { app: anAiApp({ provider: "openai", model: "gpt-6-luna" }), provider: async () => provider, appSpend: { get: async () => 0, add: async () => {} } },
       },
     });
-    await ctx.writeConfig!((t) => `${t}\n[ai]\nuse = true\nallowed_clients = ["Adatum"]\n`);
     await ctx.plan!.setAccountState(IDENTITY_KEY, { oid: ME, tid: HOME, name: "Sam Tester", username: "me@contoso.example", email: "me@contoso.example", signedInAt: "2026-11-02T14:00:00Z", systemUserId: null, systemUserEmail: null });
     await ctx.plan!.setDevopsIdentity({ clientKey: "Adatum", org: "contoso", id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "me@contoso.example", expires: null });
     // The shared store with the chat registered for Adatum by me, and the poll job (Refresh polls through it).

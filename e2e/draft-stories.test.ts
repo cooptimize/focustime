@@ -19,7 +19,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CHROMIUM } from "./harness.ts";
-import { liveBrowser, liveContext, ME, T, type LiveBrowser } from "./live.ts";
+import { liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "./live.ts";
 import { shotBoth } from "./shots.ts";
 
 const FEATURE = 240;
@@ -102,7 +102,9 @@ describe.skipIf(!CHROMIUM)("Draft stories", () => {
         aCoopProposal({ id: "P3", title: "Review the export with finance", description: "A short call.", acceptance_criteria: [], depends_on: [], size: null, open_questions: ["Who signs off?"] }),
       ],
     });
+    const team = liveTeam();
     const base = await liveContext({
+      team,
       extra: {
         devopsWriter: createDevOpsWriter({ fetch: dv.fetch, log: () => {} }),
         writePats: { get: async (k) => new Pat(pats.get(k) ?? ""), set: async (k, v) => void pats.set(k, v), clear: async (k) => void pats.delete(k) },
@@ -138,8 +140,9 @@ describe.skipIf(!CHROMIUM)("Draft stories", () => {
       await page.locator("[data-moment]").waitFor({ state: "detached", timeout: 10_000 }).catch(() => {});
       await shotBoth(page, "draft-stories-ai-off", row());
 
-      // Use AI and Allow AI for Adatum.
-      await base.writeConfig!((t) => `${t}\n[ai]\nuse = true\nallowed_clients = ["Adatum"]\n`);
+      // ADM-1: an admin turns AI on for FocusTime and allows it for Adatum.
+      await team.set("org", "ai.on", true);
+      await team.set("client:Adatum", "allow_ai", true);
       await page.reload();
       await page.locator(".topbar").waitFor();
       await openAdatum();

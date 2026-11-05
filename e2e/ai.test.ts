@@ -1,14 +1,15 @@
-// AI-0: Settings › AI and Allow AI, the main path, in a real (not demo) session on fake sources. Settings › AI starts
-// with Use AI off; switched on with no key it says AI isn't set up and Test AI says so; once a key is there (here the
-// stub provider), Test AI shows OK with the time and cost, and the request shows in the last 20 with no text. Settings ›
-// Clients has Allow AI per client, off by default. Edge cases are unit tests (ai/*.test.ts, store/ai.test.ts).
-// Screenshots at 1920 and Text size Larger when FOCUSTIME_SHOTS is set.
+// AI-0, ADM-1: Settings › AI, the main path, in a real (not demo) session on fake sources. AI is an admin's decision:
+// Settings › AI shows it read-only ("Set by your FocusTime admin"), off at first. With no key, Test AI says AI isn't set
+// up; once a key is there (here the stub provider), Test AI shows OK with the time and cost, and the request shows in
+// the last 20 with no text. When an admin turns AI on and allows a client, Settings shows it; Settings › Clients shows
+// the client's AI line read-only. A $0 cap says "AI budget is set to $0". Edge cases are unit tests (ai/*.test.ts,
+// store/ai.test.ts). Screenshots at 1920 and Text size Larger when FOCUSTIME_SHOTS is set.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { stubProvider } from "../ai/stub.ts";
 import type { AiProvider } from "../ai/types.ts";
 import { anAiApp } from "../test/builders/index.ts";
 import { CHROMIUM, openSettings } from "./harness.ts";
-import { liveBrowser, liveContext, T, type LiveBrowser } from "./live.ts";
+import { liveBrowser, liveContext, liveTeam, T, type LiveBrowser } from "./live.ts";
 import { shotBoth } from "./shots.ts";
 
 describe.skipIf(!CHROMIUM)("AI settings", () => {
@@ -20,10 +21,12 @@ describe.skipIf(!CHROMIUM)("AI settings", () => {
     await lb?.close();
   }, T);
 
-  it("Use AI off, on with no key, Test AI ok with a key; Allow AI per client", async () => {
+  it("read-only AI rules; Test AI with AI off, with no key, then OK with a key; an admin's changes show; a $0 cap says so", async () => {
     let provider: AiProvider | null = null;
     const spend = new Map<string, number>();
+    const team = liveTeam();
     const ctx = await liveContext({
+      team,
       extra: {
         ai: {
           app: anAiApp({ provider: "openai", model: "gpt-6-luna", prices: { inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5 } }),
@@ -41,22 +44,26 @@ describe.skipIf(!CHROMIUM)("AI settings", () => {
       await page.goto(app.url);
       await page.locator(".topbar").waitFor();
 
-      // Settings › AI: off by default; no key yet.
+      // Settings › AI: no switch of my own; AI for FocusTime is off, set by an admin; no key yet.
       await openSettings(page);
       await page.locator(".set-nav").getByRole("button", { name: "AI", exact: true }).click();
-      const use = page.getByRole("switch", { name: "Use AI" });
-      await use.waitFor();
-      expect(await use.isChecked()).toBe(false);
+      const ai = page.locator(".set-ai");
+      await ai.getByText("AI for FocusTime").waitFor();
+      expect(await page.getByRole("switch", { name: "Use AI" }).count()).toBe(0);
+      await ai.locator(".set-field", { hasText: "AI for FocusTime" }).getByText("Off", { exact: true }).waitFor();
+      await ai.getByText("Set by your FocusTime admin").first().waitFor();
       await page.getByText("AI isn't set up for this FocusTime yet").waitFor();
       await page.getByText("No AI requests yet.").waitFor();
-      await shotBoth(page, "ai-off", page.locator(".set-ai"));
+      await shotBoth(page, "ai-read-only", ai);
 
-      // On, still no key: Test AI says why, in plain words.
-      await use.click();
-      await expect.poll(() => use.isChecked()).toBe(true);
+      // AI off for FocusTime: Test AI sends nothing and says who turns it on.
+      await page.getByRole("button", { name: "Test AI" }).click();
+      await page.locator(".set-ai-test").getByText("AI is off for FocusTime. A FocusTime admin turns it on in Admin › AI.").waitFor();
+
+      // An admin turns AI on; no key yet: Test AI says why, in plain words.
+      await team.set("org", "ai.on", true);
       await page.getByRole("button", { name: "Test AI" }).click();
       await page.locator(".set-ai-test").getByText("AI isn't set up").waitFor();
-      await shotBoth(page, "ai-no-key", page.locator(".set-ai"));
 
       // A key arrives (the stub stands in for OpenAI): Test AI is OK with its time and cost, and it's in the log.
       provider = stubProvider();
@@ -64,22 +71,26 @@ describe.skipIf(!CHROMIUM)("AI settings", () => {
       await page.locator(".set-ai-ok").getByText(/^OK · \d+\.\d s · /).waitFor();
       const row = page.locator(".set-ai-log tbody tr").first();
       await row.getByText("Test AI").waitFor();
-      await row.getByText("None").waitFor();
       await row.getByText("OK", { exact: true }).waitFor();
-      await expect(page.locator(".set-ai-month strong").textContent()).resolves.toMatch(/^(under \$0\.0001|\$0\.\d+) of \$10$/);
-      expect(await page.locator(".set-ai").textContent()).not.toContain("Reply with ok");
-      await shotBoth(page, "ai-test-ok", page.locator(".set-ai"));
+      expect(await ai.textContent()).not.toContain("Reply with ok");
 
-      // Settings › Clients: Allow AI per client, off by default; it saves.
+      // The admin allows Adatum: Settings › AI and Settings › Clients show it, read-only.
+      await team.set("client:Adatum", "allow_ai", true);
       await page.locator(".set-nav").getByRole("button", { name: "Clients" }).click();
       const adatum = page.locator(".set-client-wrap").filter({ has: page.getByRole("heading", { name: "Adatum" }) });
-      const allow = adatum.getByRole("switch", { name: "Allow AI" });
-      await allow.waitFor();
-      expect(await allow.isChecked()).toBe(false);
-      await allow.click();
-      await expect.poll(() => allow.isChecked()).toBe(true);
-      await expect.poll(async () => ((await ctx.loadConfig()).parsed.ok ? (await ctx.loadConfig()).parsed : null)).toMatchObject({ config: { ai: { use: true, allowedClients: ["Adatum"] } } });
-      await shotBoth(page, "ai-allow-client", allow);
+      await adatum.getByText("Allowed for Adatum").waitFor();
+      expect(await adatum.getByRole("switch", { name: /Allow AI/ }).count()).toBe(0);
+      await page.locator(".set-nav").getByRole("button", { name: "AI", exact: true }).click();
+      await ai.locator(".set-field", { hasText: "AI for FocusTime" }).getByText("On", { exact: true }).waitFor();
+      await ai.getByText("Adatum").first().waitFor();
+
+      // A $0 cap: "AI budget is set to $0", never "reached".
+      await team.set("org", "ai.person_cap_usd", 0);
+      await page.locator(".set-nav").getByRole("button", { name: "Clients" }).click();
+      await page.locator(".set-nav").getByRole("button", { name: "AI", exact: true }).click();
+      await ai.getByText("AI budget is set to $0").first().waitFor();
+      expect(await ai.textContent()).not.toMatch(/reached/i);
+      await shotBoth(page, "ai-budget-zero", ai);
       expect(errors).toEqual([]);
     } finally {
       await app.close();
