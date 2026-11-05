@@ -8,6 +8,7 @@ import { PTO_DETAIL_COLUMNS, PTO_DETAIL_FILTER_COLUMNS, PTO_TRACKER_COLUMNS, PTO
 import type { FailureCause, FocusPattern, SourceResult } from "../../week/types.ts";
 import { Pat } from "../devops/pat.ts";
 import type { DevOpsTarget, TargetsResult } from "../devops/types.ts";
+import { buildDirectory, type DirectoryRead, type DvAccount, type DvFocus, type DvPosition, type DvUser, type DvWorker } from "./directory.ts";
 import { clientKeyOf, normalizeFocusTimes, type AccountRow, type FocusTimeRow } from "./normalize.ts";
 
 export type DataverseSourceDeps = {
@@ -638,7 +639,30 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     }
   }
 
-  return { load, following, resolveUserId, devopsTargets, myClients, pto, teammates, clientTeam, teamPto };
+  /**
+   * ADM-1: everyone's level and each client's leads (sources/dataverse/directory.ts), read once a day by the app's job
+   * with the shared reader. Names, emails, Entra ids and client keys only.
+   */
+  async function directory(): Promise<{ ok: true; read: DirectoryRead } | TeamFailure> {
+    try {
+      const users = `isdisabled eq false and islicensed eq true and applicationid eq null and internalemailaddress ne null`;
+      const since = now().toZonedDateTimeISO(deps.timeZone).toPlainDate().subtract({ days: 14 });
+      const [positions, people, accounts, workers, focus] = await Promise.all([
+        getAll<DvPosition>("dir_positions", "positions?$select=positionid,name"),
+        getAll<DvUser>("dir_users", `systemusers?$select=systemuserid,fullname,internalemailaddress,azureactivedirectoryobjectid,_positionid_value&$filter=${encodeURIComponent(users)}`),
+        getAll<DvAccount>("dir_accounts", `accounts?$select=accountid,name,coop_reportingnickname,_ownerid_value&$filter=${encodeURIComponent("statecode eq 0")}`),
+        getAll<DvWorker>("dir_workers", `coop_accountworkers?$select=_coop_user_value,_coop_account_value&$filter=${encodeURIComponent("statecode eq 0")}`),
+        getAll<DvFocus>("dir_focus", `coop_focustimes?$select=_coop_systemuser_value,_coop_account_value&$filter=${encodeURIComponent(`statecode eq 0 and (coop_enddate eq null or coop_enddate ge ${since})`)}&$expand=coop_AccountWorker($select=_coop_user_value,_coop_account_value)`),
+      ]);
+      const read = buildDirectory({ positions, users: people, accounts, workers, focus });
+      log({ source: "dataverse", op: "directory", count: read.people.length });
+      return { ok: true as const, read };
+    } catch (e) {
+      return fail(e, "directory");
+    }
+  }
+
+  return { load, following, resolveUserId, devopsTargets, myClients, pto, teammates, clientTeam, teamPto, directory };
 }
 
 export type TeamFailure = { ok: false; message: string };

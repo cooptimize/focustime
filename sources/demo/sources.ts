@@ -5,6 +5,7 @@ import type { DataverseSource } from "../dataverse/source.ts";
 import type { DevOpsSource } from "../devops/source.ts";
 import type { CalEvent, ClientWork, SourceId, SourceResult } from "../../week/types.ts";
 import type { GraphWriter } from "../graph/write.ts";
+import { demoDirectory } from "./directory.ts";
 import { DEMO_CLIENTS, DEMO_ME, DEMO_PEOPLE, demoGoogle, demoOrganizer, demoOutlook, demoPatterns, demoPortfolio, demoPto, demoWork, isDemoClient } from "./data.ts";
 
 const NO = "Demo data: nothing leaves FocusTime";
@@ -21,6 +22,8 @@ export function createDemoSources(now: () => string) {
     teammates: async () => ({ ok: true, people: DEMO_PEOPLE }),
     clientTeam: async () => ({ ok: true, accountId: null, patterns: [], workers: [] }),
     teamPto: async () => ({ ok: true, away: [] }),
+    // ADM-1: fictional levels and client leads (Admin › People in the demo).
+    directory: async () => ({ ok: true, read: demoDirectory() }),
   };
   const calendar = (id: "outlook" | "google", events: (monday: string) => CalEvent[]): CalendarSource => ({
     id,
