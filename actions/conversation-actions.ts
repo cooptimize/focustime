@@ -7,6 +7,7 @@
 // after thanks only suggests "Looks wrapped up. Resolve?". The DevOps draft for a commitment is made when its
 // committer opens it (their own cap); creating and commenting go through the write framework. Chat text goes only to
 // that client's cards, never a log or an error (ids and counts only, and not even ids in logs).
+import { groupingRules } from "./conversations-pipeline.ts";
 import { likelyItems } from "../plan/promise-items.ts";
 import { typeChoices } from "./work-item-types.ts";
 import type { ProcessModel } from "../plan/process.ts";
@@ -661,7 +662,7 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
           if (!waiting.length) continue;
           const ms = (await mapSeq(waiting, (p) => v.teams.message(p.chatId, p.messageId))).filter((m): m is NonNullable<typeof m> => !!m);
           const r = await runPipeline({
-            teams: ctx.requests.teams, convs: v.store, users, homeTenant: await ctx.homeTenant(), now: stamp, clientName: cfg.clientSettings[chat.clientKey]?.name ?? chat.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, chatCap: cfg.org?.rules.chatAiDailyCap ?? CHAT_DAILY_AI_CALLS,
+            teams: ctx.requests.teams, convs: v.store, users, homeTenant: await ctx.homeTenant(), now: stamp, clientName: cfg.clientSettings[chat.clientKey]?.name ?? chat.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, chatCap: cfg.org?.rules.chatAiDailyCap ?? CHAT_DAILY_AI_CALLS, ...groupingRules(cfg, chat.clientKey),
             items: await ctx.openItems(cfg, chat.clientKey).catch(() => null), author: async (uid) => (same(uid, v.me) ? { zone: userZone(cfg), promisePhrases: cfg.asks.promisePhrases } : null),
           }, chat, ms);
           sorted += r.work + r.chatter;

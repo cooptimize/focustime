@@ -113,6 +113,16 @@ describe("admin actions", () => {
     expect((await s.store.auditList({ area: "ai", text: "cap" })).map((e) => e.setting)).toEqual(["org/ai.person_cap_usd"]);
   });
 
+  it("CV-3: Group messages without AI is a client Rule, on by default, saved and audited like Allow AI", async () => {
+    const s = await setup();
+    const ai = async () => ((await s.run(s.admin, "admin.load", { section: "ai" })) as { data: { clients: { key: string; groupWithoutAi: boolean }[] } }).data.clients;
+    expect((await ai()).find((c) => c.key === "fabrikam")?.groupWithoutAi).toBe(true);
+    expect(await s.run(s.admin, "admin.set", { scope: "client:fabrikam", key: "group_without_ai", value: false })).toMatchObject({ ok: true, data: { old: null, value: false } });
+    expect(await s.run(s.admin, "admin.set", { scope: "client:fabrikam", key: "group_without_ai", value: "no" })).toMatchObject({ ok: false, status: 422 });
+    expect((await ai()).find((c) => c.key === "fabrikam")?.groupWithoutAi).toBe(false);
+    expect((await s.store.auditList({})).map((e) => [e.actorName, e.setting, e.oldValue, e.newValue])[0]).toEqual(["Ada Admin", "client:fabrikam/group_without_ai", null, "false"]);
+  });
+
   it("level and lead overrides: marked, logged, and read by levelOf and clientLeads", async () => {
     const s = await setup();
     expect(await s.org.levelOf(BEN)).toMatchObject({ level: "consultant", source: "dataverse" });
