@@ -133,7 +133,7 @@ module app 'modules/app.bicep' = {
 // FocusTime costs (the workbook in Monitor › Workbooks): dev and prod's actual cost, read live from Cost Management.
 module costs 'modules/costs.bicep' = {
   name: 'costs'
-  params: { env: env, location: location, tags: tags }
+  params: { env: env, location: location, tags: tags, workspaceId: monitoring.outputs.workspaceId }
 }
 
 // HK-2: the monthly budget and its alerts (50%, 80%, 100% actual, 100% forecast), only once FT_BUDGET_EMAIL is set.
