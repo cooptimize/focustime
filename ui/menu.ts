@@ -1059,6 +1059,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "conversations.search":
     case "conversations.draft":
     case "suggestions.skip":
+    case "conversations.merge":
+    case "conversations.unmerge":
       return { run: () => env.setView("conversations") };
     case "conversations.refresh": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.refresh", {})) };
     case "conversations.sort_unsorted": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.sort_unsorted", {})) };

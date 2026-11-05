@@ -57,6 +57,8 @@ export type ConversationsData = {
   /** ADM-2 (D604): the Rule, for "every N minutes in working hours". */
   pollMinutes?: number;
   writeClients: string[];
+  /** CV-2: a deep link's conversation: listed (and in which view), or not here any more (a plain note). */
+  selected?: { id: number; found: boolean; where: "needs" | "teammates" | "closed" | null };
 };
 
 export type ConversationMessage = { messageId: string; author: string; external: boolean; mine: boolean; at: string; html: string; text: string };

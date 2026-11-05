@@ -28,7 +28,7 @@ export function dueText(p: Pick<PromiseCard, "dueAt" | "dueDate">, today: string
   return null;
 }
 
-export function MyPromises({ data, version, onCount, onChanged }: { data: WeekLoadData; version: number; onCount: (n: number) => void; onChanged: () => void; openSettings: (section: string) => void }) {
+export function MyPromises({ data, version, onCount, onChanged, select = null }: { data: WeekLoadData; version: number; onCount: (n: number) => void; onChanged: () => void; openSettings: (section: string) => void; select?: number | null }) {
   const [state, setState] = useState<MyPromisesData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<ReactNode>(null);
@@ -48,6 +48,17 @@ export function MyPromises({ data, version, onCount, onChanged }: { data: WeekLo
   }, [show]);
   useEffect(() => void load(), [load, version, writes?.version]);
   useEffect(() => head.current?.focus(), []);
+  // CV-2: a deep link (#/inbox/promise/<id>, the urgent strip): that promise outlined and scrolled to, or a plain note.
+  const scrolledTo = useRef<number | null>(null);
+  const missing = select !== null && !!state && !state.promises.some((p) => p.id === select);
+  useEffect(() => {
+    if (select === null || !state || scrolledTo.current === select) return;
+    const el = document.querySelector<HTMLElement>(`.my-promises [data-promise="${select}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: "center" });
+    el.focus({ preventScroll: true });
+    scrolledTo.current = select;
+  }, [select, state]);
   const run = async (action: string, input: Record<string, unknown>, done: ReactNode) => {
     try {
       show(await call<MyPromisesData>(action, input));
@@ -78,6 +89,7 @@ export function MyPromises({ data, version, onCount, onChanged }: { data: WeekLo
         </p>
       )}
       <Fading text={notice} onGone={clearNotice} ms={8000} />
+      {missing && <p className="conv-link-note" role="status">That promise isn't here any more: it was done or closed more than a day ago, or its chat is no longer registered.</p>}
       {state && state.promises.length === 0 && (
         <div className="asks-empty">
           <p>No promises</p>
@@ -89,6 +101,7 @@ export function MyPromises({ data, version, onCount, onChanged }: { data: WeekLo
           <Promise
             key={p.id}
             p={p}
+            selected={p.id === select}
             tz={tz}
             today={today}
             color={clientColor(p.clientKey, data.clients)}
@@ -107,7 +120,7 @@ export function MyPromises({ data, version, onCount, onChanged }: { data: WeekLo
 }
 
 function Promise(x: {
-  p: PromiseCard; tz: string; today: string; color: string; form: "followup" | "link" | "draft" | null; onForm: (k: "followup" | "link" | "draft" | null) => void;
+  p: PromiseCard; selected?: boolean; tz: string; today: string; color: string; form: "followup" | "link" | "draft" | null; onForm: (k: "followup" | "link" | "draft" | null) => void;
   canCreate: boolean; onRun: (action: string, input: Record<string, unknown>, done: ReactNode) => Promise<void>; undo: ReactNode;
   onCreate: (change: import("./DevOpsWrite.tsx").DevOpsChange) => void; onSuggestion: (s: PromiseCard["suggestions"][number], includeInternal: boolean) => void;
 }) {
@@ -119,7 +132,7 @@ function Promise(x: {
   const onToday = !!p.onToday && p.onToday === x.today;
   const primary = !p.dueDate && !onToday ? { label: "Add to Today", run: () => void x.onRun("my_promises.today", { id: p.id, on: true }, "On Today") } : { label: "Make it a follow-up", run: () => x.onForm(x.form === "followup" ? null : "followup") };
   return (
-    <li className={`conv-card promise${open ? "" : " resolved"}`} style={{ "--c": x.color } as CSSProperties} aria-label={`Promise: ${p.what}`}>
+    <li className={`conv-card promise${open ? "" : " resolved"}${x.selected ? " selected" : ""}`} style={{ "--c": x.color } as CSSProperties} aria-label={`Promise: ${p.what}`} data-promise={p.id} tabIndex={x.selected ? 0 : -1}>
       <div className="conv-head">
         <span className="swatch" aria-hidden="true" />
         <strong className="conv-title">{p.what}</strong>

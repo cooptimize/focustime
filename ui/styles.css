@@ -4169,6 +4169,13 @@ button.ask-label { cursor: pointer; }
 .conv-msg-body .attached { color: var(--text-muted); font-style: italic; }
 .conv-msg-body table { border-collapse: collapse; margin: 4px 0; font-size: var(--fs-2); display: block; max-inline-size: 100%; overflow-x: auto; }
 .conv-msg-body td, .conv-msg-body th { border: 1px solid var(--border); padding: 2px 6px; text-align: start; vertical-align: top; }
+/* CV-2: Merge into…, Select, and a deep link's note. */
+.conv-pick { margin: 0; inline-size: 16px; block-size: 16px; flex: none; }
+.conv-merge-bar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); font-size: var(--fs-2); }
+.conv-merge-bar .mini { max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conv-merge-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.conv-merge-list .mini { inline-size: 100%; text-align: start; white-space: normal; }
+.conv-link-note { margin: 8px 0 0; padding: 6px 10px; border-radius: 6px; background: var(--surface); font-size: var(--fs-2); color: var(--text-muted); }
 .conv-unsorted, .conv-hidden { margin: 8px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; font-size: var(--fs-2); color: var(--text-muted); }
 .conv-chatter { margin: 12px 0 0; font-size: var(--fs-2); }
 .conv-chatter ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }

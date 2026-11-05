@@ -56,9 +56,26 @@ export type Conversation = {
   itemChange: { kind: ItemChange; note: string; at: string; scope: boolean } | null;
   /** A likely existing item the AI matched (one of the offered ids), for Link. */
   likelyItem: number | null;
+  /** CV-2: merged by hand into this conversation (kept for Undo; left out of every list). */
+  mergedInto: number | null;
   createdAt: string;
   updatedAt: string;
 };
+
+/** CV-2: one Merge into…, as kept for Undo: what moved, and both conversations as they were. Ids only, no message text. */
+export type ConversationMerge = {
+  id: number;
+  intoId: number;
+  fromId: number;
+  byUser: string;
+  at: string;
+  moved: { messageIds: string[]; commitmentIds: number[]; suggestionIds: number[] };
+  before: { into: MergeState; from: Pick<Conversation, "status" | "closedAt" | "closedBy" | "closeReason"> };
+  /** The summary the merge wrote (Undo puts the old one back only while it is still this). */
+  afterSummary: string | null;
+  undoneAt: string | null;
+};
+export type MergeState = Pick<Conversation, "title" | "summary" | "participants" | "firstAt" | "lastAt" | "lastWorkAt" | "ownerId" | "itemId" | "itemUrl" | "itemTitle" | "likelyItem">;
 
 /** A message's place in conversations (conversation_messages). */
 export type MessagePlace = { chatId: string; messageId: string; conversationId: number | null; role: MessageRole; reason: string | null; placedBy: "ai" | "rule" | "person"; at: string };

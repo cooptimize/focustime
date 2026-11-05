@@ -19,6 +19,7 @@ import type { CardCommitment, CardItem, CardSuggestion, ConversationCard, Conver
 import { daysWaiting, oneLine, statusLine, unsortedText, type Commitment, type Conversation, type ItemDraft } from "../plan/conversations.ts";
 import type { ClientChat, FocusUser } from "../plan/requests.ts";
 import { sanitizeMessageHtml } from "../plan/sanitize.ts";
+import { joinedSummary, MERGE_INSTRUCTIONS, MERGE_SCHEMA, MERGE_TASK, mergeFrom, mergeInput, type MergeAnswer } from "../plan/conversation-merge.ts";
 import type { ConversationStore, ConversationView } from "../store/conversation-store.ts";
 import { PlanError } from "../store/plan-store.ts";
 import type { TeamsView } from "../store/teams-store.ts";
@@ -37,7 +38,7 @@ export const CONVERSATION_ACTIONS = [
   "conversations.list", "conversations.count", "conversations.refresh", "conversations.messages", "conversations.seen", "conversations.resolve", "conversations.not_request", "conversations.reopen",
   "conversations.hide", "conversations.move", "conversations.this_is_work", "conversations.link", "conversations.take_over", "conversations.sort_unsorted", "conversations.search",
   "conversations.draft", "my_promises.list", "my_promises.today", "my_promises.followup", "my_promises.link", "my_promises.done", "my_promises.not_needed", "my_promises.reopen",
-  "suggestions.skip",
+  "suggestions.skip", "conversations.merge", "conversations.unmerge",
 ] as const;
 export type ConversationAction = (typeof CONVERSATION_ACTIONS)[number];
 
@@ -161,7 +162,7 @@ async function viewOf(ctx: ConversationContext, me: string, card: ConversationCa
   return "teammates";
 }
 
-async function list(ctx: ConversationContext, cfg: AppConfig): Promise<ConversationsData> {
+async function list(ctx: ConversationContext, cfg: AppConfig, select: number | null = null): Promise<ConversationsData> {
   const empty: ConversationsData = { needsYou: [], teammates: [], closed: [], hiddenCount: 0, unsorted: { count: 0, reasons: [] }, chatter: [], myPromisesOpen: 0, lastPoll: null, writeClients: [] };
   const v = await seen(ctx);
   if (!v) return empty;
@@ -202,6 +203,13 @@ async function list(ctx: ConversationContext, cfg: AppConfig): Promise<Conversat
   out.chatter = [...byClient.values()];
   out.myPromisesOpen = (await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))).filter((k) => k.state === "open").length;
   out.pollMinutes = cfg.org?.rules.pollMinutes ?? 5;
+  // CV-2: a deep link (#/inbox/conversation/<id>): the one to select, following a merge to where it went now.
+  if (select !== null) {
+    let c = await v.convs.conversation(select);
+    for (let hops = 0; c?.mergedInto && hops < 5; hops++) c = await v.convs.conversation(c.mergedInto);
+    const listed = c && v.byId.has(c.chatId) ? [...out.needsYou, ...out.teammates, ...out.closed].find((x) => x.id === c!.id) : undefined;
+    out.selected = listed ? { id: listed.id, found: true, where: out.needsYou.includes(listed) ? "needs" : out.teammates.includes(listed) ? "teammates" : "closed" } : { id: select, found: false, where: null };
+  }
   out.lastPoll = v.chats.map((c) => c.polledAt).filter((x): x is string => !!x).sort().at(-1) ?? null;
   return out;
 }
@@ -331,6 +339,22 @@ async function draftFor(ctx: ConversationContext, v: Seen, cfg: AppConfig, c: Co
   return { draft: final, notSorted };
 }
 
+/** CV-2: the merged conversation's title and summary: AI (my own cap, that client only), else the two joined. */
+async function mergeSummary(ctx: ConversationContext, v: Seen, cfg: AppConfig, into: Conversation, from: Conversation): Promise<{ title: string; summary: string }> {
+  const ai = ctx.ai ? await ctx.ai().catch(() => null) : null;
+  if (!ai) return joinedSummary(into, from);
+  const side = async (c: Conversation) => {
+    const messages = [];
+    for (const p of (await v.convs.placesIn([c.id])).filter((x) => x.role === "work")) {
+      const m = await v.teams.message(p.chatId, p.messageId);
+      if (m) messages.push({ from: first(m.senderName), at: m.createdAt, text: m.text });
+    }
+    return { title: c.title, summary: c.summary, messages };
+  };
+  const r = await ai.run<MergeAnswer>({ name: MERGE_TASK, client: into.clientKey, instructions: MERGE_INSTRUCTIONS }, mergeInput({ clientName: cfg.clientSettings[into.clientKey]?.name ?? into.clientKey, into: await side(into), from: await side(from) }), MERGE_SCHEMA);
+  return (r.ok ? mergeFrom(r.value) : null) ?? joinedSummary(into, from);
+}
+
 // ---- actions ----
 
 export async function conversationAction(ctx: ConversationContext, action: ConversationAction, input: unknown): Promise<ActionResponse> {
@@ -360,9 +384,51 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
   }
   try {
     switch (action) {
-      case "conversations.list":
-        if (!only(input, [])) return bad("conversations.list takes {}");
+      case "conversations.list": {
+        const o = only(input, [], ["select"]);
+        if (!o || (o.select !== undefined && !posInt(o.select))) return bad("conversations.list takes { select? }");
+        return { ok: true as const, data: await list(ctx, cfg, posInt(o.select)) };
+      }
+      case "conversations.merge": {
+        // CV-2: Merge into… (one, or several picked in a client's list): everything moves into the target, one undo each.
+        const o = only(input, ["ids", "into"]);
+        const ids = o && Array.isArray(o.ids) && o.ids.length >= 1 && o.ids.length <= 20 ? o.ids.map(posInt) : null;
+        if (!o || !v || !ids || ids.some((x) => x === null)) return bad("conversations.merge takes { ids: [id, ...], into: id }");
+        const into = await conv(o.into);
+        if (!into) return bad("No such conversation", 404);
+        const froms = [];
+        for (const id of new Set(ids as number[])) {
+          const c = await conv(id);
+          if (!c) return bad("No such conversation", 404);
+          if (c.id === into.id) return bad("Pick another conversation to merge into", 409);
+          if (c.chatId !== into.chatId) return bad("Merge only conversations of the same chat", 409);
+          froms.push(c);
+        }
+        const merges: number[] = [];
+        let target = into;
+        for (const from of froms) {
+          const summary = await mergeSummary(ctx, v, cfg, target, from);
+          merges.push((await v.convs.merge(from.id, target.id, summary)).id);
+          target = (await v.convs.conversation(target.id))!;
+        }
+        await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, into.id);
+        ctx.log({ source: "plan", op: "conversation_merged", count: merges.length });
+        return { ok: true as const, data: { ...(await list(ctx, cfg, into.id)), merges } };
+      }
+      case "conversations.unmerge": {
+        const o = only(input, ["merges"]);
+        const ids = o && Array.isArray(o.merges) && o.merges.length >= 1 && o.merges.length <= 20 ? o.merges.map(posInt) : null;
+        if (!o || !v || !ids || ids.some((x) => x === null)) return bad("conversations.unmerge takes { merges: [id, ...] }");
+        const deps = { convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() };
+        // The latest first, so a chain of merges comes apart in the order it was made.
+        for (const id of [...(ids as number[])].sort((a, b) => b - a)) {
+          const m = await v.convs.unmerge(id);
+          await refreshStatus(deps, m.fromId);
+          await refreshStatus(deps, m.intoId);
+        }
+        ctx.log({ source: "plan", op: "conversation_unmerged", count: ids.length });
         return respond();
+      }
       case "conversations.count":
         if (!only(input, [])) return bad("conversations.count takes {}");
         return { ok: true as const, data: await counts(ctx, cfg) };

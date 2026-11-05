@@ -554,8 +554,15 @@ async function urgentFor(ctx: ActionContext, now: string, zone: string, name: (k
   const c = await chatContext(ctx);
   const me = await c.me();
   const open = await urgentRequests(me ? teams.viewer(me) : null, await c.clientKeys().catch(() => null));
+  // CV-2: each line opens its conversation (#/inbox/conversation/<id>) when its message is in one I see.
+  const convs = me && ctx.requests?.conversations ? ctx.requests.conversations.viewer(me) : null;
+  const urgent = [];
+  for (const a of open.filter((x) => x.sort!.urgency === "now")) {
+    const place = convs ? await convs.placeOf(a.chatId, a.messageId).catch(() => null) : null;
+    urgent.push({ chatId: a.chatId, messageId: a.messageId, clientKey: a.clientKey, clientName: name(a.clientKey), title: a.sort!.title, at: a.createdAt, conversationId: place?.conversationId ?? null });
+  }
   return {
-    urgent: open.filter((a) => a.sort!.urgency === "now").map((a) => ({ chatId: a.chatId, messageId: a.messageId, clientKey: a.clientKey, clientName: name(a.clientKey), title: a.sort!.title, at: a.createdAt })),
+    urgent,
     pastUrgency: open.filter((a) => pastUrgency(a.sort!.urgency, a.createdAt, now, zone)).length,
   };
 }
@@ -1251,6 +1258,8 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "my_promises.not_needed":
     case "my_promises.reopen":
     case "suggestions.skip":
+    case "conversations.merge":
+    case "conversations.unmerge":
       return conversationAction(await conversationContext(ctx), action, req.input);
     case "ai.status":
     case "ai.test":

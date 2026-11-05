@@ -4,68 +4,17 @@
 // the committer's working days, Unclaimed for leads, Take it over; follow-through suggestions; and My promises with the
 // Wingtip promise on Today. Fictional names (the repo's names rule).
 import { describe, expect, it } from "vitest";
-import { parseConfig } from "../config/schema.ts";
 import { weekConfig } from "../config/defaults.ts";
-import { STARTER_TOML } from "../fixtures/starter.ts";
-import type { ConversationsData, MyPromisesData } from "../plan/conversation-views.ts";
+import type { MyPromisesData } from "../plan/conversation-views.ts";
 import type { ClientChat } from "../plan/requests.ts";
-import { planStoreOn } from "../store/plan-store.ts";
-import { aChatMember, aClientChat, aCommitmentAnswer, aConversationUpdate, anUpdateAnswer, aWorkItem, HOME_TENANT } from "../test/builders/index.ts";
+import { aClientChat, aCommitmentAnswer, aConversationUpdate, anUpdateAnswer, aWorkItem } from "../test/builders/index.ts";
 import { BLAKE, CHAT, allianceAnswer, EVAN, LENA, SAM, world, ZONE } from "../test/conversations.ts";
-import { addUsers } from "../test/db.ts";
 import type { WorkItem } from "../week/types.ts";
-import { conversationAction, dayPromises, type ConversationAction, type ConversationContext } from "./conversation-actions.ts";
+import { conversationAction, dayPromises } from "./conversation-actions.ts";
+import { cfg, OUTSIDER, people, type W } from "../test/conversation-people.ts";
 import { upkeep } from "./conversation-upkeep.ts";
 import { applyOrg } from "../config/org-apply.ts";
 import { resolveRules } from "../config/org.ts";
-import type { CycleResult } from "./request-poll.ts";
-
-const OUTSIDER = aChatMember({ displayName: "Kim Outside" });
-const cfgText = `${STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-4444-8444-444444444444"').replace('my_email = ""', 'my_email = "sam@contoso.example"')}\n[clients.contoso]\nname = "Contoso Supply"\n\n[clients.wingtip]\nname = "Wingtip"\n`;
-const parsed = parseConfig(cfgText, { defaultZone: ZONE });
-if (!parsed.ok) throw new Error("config");
-const cfg = parsed.config;
-
-type W = ReturnType<typeof world>;
-const added = new WeakSet<object>();
-async function people(w: W, o: { leads?: string[]; followed?: string[]; items?: WorkItem[]; config?: typeof cfg } = {}) {
-  if (!added.has(w.conn)) await addUsers(w.conn, SAM.userId!, EVAN.userId!, LENA.userId!, OUTSIDER.userId!);
-  added.add(w.conn);
-  const items = o.items ?? [aWorkItem({ id: 4101, title: "Movement dashboard refresh" }), aWorkItem({ id: 4102, title: "BOM bridging", tier: "feature", level: "portfolio" })];
-  const ctxOf = (who: typeof SAM): ConversationContext => ({
-    plan: planStoreOn(w.conn, { now: () => Temporal.Instant.from(w.now()).toZonedDateTimeISO(ZONE), userId: who.userId! }),
-    requests: { teams: w.teams, refresh: async () => ({}) as CycleResult, conversations: w.convs, users: async () => w.users },
-    conversations: w.convs,
-    me: async () => who.userId!,
-    followed: async () => new Set(o.followed ?? ["contoso", "wingtip"]),
-    config: async () => o.config ?? cfg,
-    homeTenant: async () => HOME_TENANT,
-    openItems: async () => items,
-    writeClients: async () => ["contoso"],
-    now: w.now,
-    log: () => {},
-    ai: async () => null,
-    itemDone: () => null,
-    isLead: async () => (o.leads ?? []).includes(who.userId!),
-    users: async () => w.users,
-    pipelineAi: async () => w.ai,
-  });
-  const as = (who: typeof SAM) => {
-    const ctx = ctxOf(who);
-    const run = async <T = ConversationsData>(action: ConversationAction, input: unknown = {}): Promise<T> => {
-      const r = await conversationAction(ctx, action, input);
-      if (!r.ok) throw new Error(`${r.status} ${r.error}`);
-      return r.data as T;
-    };
-    const fail = async (action: ConversationAction, input: unknown) => {
-      const r = await conversationAction(ctx, action, input);
-      if (r.ok) throw new Error("expected a refusal");
-      return r;
-    };
-    return { ctx, run, fail };
-  };
-  return { as };
-}
 
 async function alliance(w: W) {
   const first = [

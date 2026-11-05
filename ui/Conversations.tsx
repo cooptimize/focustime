@@ -22,6 +22,7 @@ import { clientColor, whenText } from "./labels.ts";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "?";
+type CardForm = "link" | "not_request" | "draft" | "merge";
 const PRIMARY_WORD = { create: "Create item", link: "Link", resolve: "Resolve", take_over: "Take it over", reopen: "Open again" } as const;
 
 export type InboxTab = "inbox" | "conversations" | "my_promises";
@@ -43,14 +44,17 @@ export function InboxTabs({ tab, count, promiseCount = null, inboxCount = null, 
   );
 }
 
-export function Conversations({ data, version, onCount, onPromiseCount, onChanged, openSettings }: { data: WeekLoadData; version: number; onCount: (n: number) => void; onPromiseCount?: (n: number) => void; onChanged?: () => void; openSettings: (section: string) => void }) {
+export function Conversations({ data, version, onCount, onPromiseCount, onChanged, openSettings, select = null }: { data: WeekLoadData; version: number; onCount: (n: number) => void; onPromiseCount?: (n: number) => void; onChanged?: () => void; openSettings: (section: string) => void; select?: number | null }) {
   const [state, setState] = useState<ConversationsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<ReactNode>(null);
   const [busy, setBusy] = useState<"refresh" | "sort" | null>(null);
   const [sel, setSel] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
-  const [form, setForm] = useState<{ id: number; kind: "link" | "not_request" | "draft"; commitmentId?: number } | null>(null);
+  const [form, setForm] = useState<{ id: number; kind: CardForm; commitmentId?: number } | null>(null);
+  /** CV-2: conversations picked for a merge (Select), and the deep link's note when its one isn't here. */
+  const [picked, setPicked] = useState<Set<number> | null>(null);
+  const [linkNote, setLinkNote] = useState<string | null>(null);
   const [teammatesOpen, setTeammatesOpen] = useState(false);
   const [closedOpen, setClosedOpen] = useState(false);
   const head = useRef<HTMLHeadingElement>(null);
@@ -74,6 +78,35 @@ export function Conversations({ data, version, onCount, onPromiseCount, onChange
     }
   }, [show]);
   useEffect(() => void load(), [load, version, writes?.version]);
+  // CV-2: a deep link (#/inbox/conversation/<id>, the urgent strip's lines): that one selected, its fold open, scrolled to.
+  const scrolledTo = useRef<number | null>(null);
+  useEffect(() => {
+    if (select === null) return;
+    let live = true;
+    void call<ConversationsData>("conversations.list", { select }).then((d) => {
+      if (!live) return;
+      show(d);
+      const s = d.selected;
+      if (!s?.found) {
+        setLinkNote("That conversation isn't here any more, or it's in a chat you aren't in. Here are the others.");
+        return;
+      }
+      setLinkNote(null);
+      if (s.where === "teammates") setTeammatesOpen(true);
+      if (s.where === "closed") setClosedOpen(true);
+      setSel(s.id);
+      scrolledTo.current = null;
+      window.requestAnimationFrame(() => {
+        const el = document.querySelector<HTMLElement>(`.conv-card[data-conv="${s.id}"], .conv-line[data-conv="${s.id}"]`);
+        if (el && scrolledTo.current !== s.id) {
+          el.scrollIntoView({ block: "center" });
+          el.focus({ preventScroll: true });
+          scrolledTo.current = s.id;
+        }
+      });
+    }, (e) => live && setError(errText(e)));
+    return () => void (live = false);
+  }, [select, show]);
   useEffect(() => head.current?.focus(), []);
 
   const run = async (action: string, input: Record<string, unknown>, done?: ReactNode) => {
@@ -87,8 +120,33 @@ export function Conversations({ data, version, onCount, onPromiseCount, onChange
       setError(errText(e));
     }
   };
+  /** CV-2: Merge into… (one from its ⋯, or the ones picked), with Undo for all of them at once. */
+  const merge = async (ids: number[], into: ConversationCard) => {
+    try {
+      const r = await call<ConversationsData & { merges: number[] }>("conversations.merge", { ids, into: into.id });
+      show(r);
+      setError(null);
+      setForm(null);
+      setPicked(null);
+      setSel(into.id);
+      onChanged?.();
+      setNotice(
+        <>
+          {ids.length === 1 ? "Merged" : `${ids.length} merged`} into "{into.title}" for everyone on the chat.{" "}
+          <button type="button" className="mini quiet" onClick={() => void run("conversations.unmerge", { merges: r.merges }, "Merge undone")}>
+            Undo
+          </button>
+        </>,
+      );
+    } catch (e) {
+      setError(errText(e));
+    }
+  };
   const order = useMemo(() => [...(state?.needsYou ?? []), ...(teammatesOpen ? (state?.teammates ?? []) : []), ...(closedOpen ? (state?.closed ?? []) : [])], [state, teammatesOpen, closedOpen]);
   const current = order.find((c) => c.id === sel) ?? state?.needsYou[0] ?? null;
+  const all = useMemo(() => [...(state?.needsYou ?? []), ...(state?.teammates ?? []), ...(state?.closed ?? [])], [state]);
+  const pickedCards = all.filter((c) => picked?.has(c.id));
+  const oneChat = pickedCards.length > 1 && pickedCards.every((c) => c.chatId === pickedCards[0]!.chatId);
 
   const resolve = (c: ConversationCard) =>
     void run("conversations.resolve", { id: c.id }, (
@@ -166,6 +224,15 @@ export function Conversations({ data, version, onCount, onPromiseCount, onChange
       onRun={run}
       form={form?.id === c.id ? form : null}
       onForm={(f) => setForm(f ? { id: c.id, ...f } : null)}
+      others={all.filter((x) => x.chatId === c.chatId && x.id !== c.id)}
+      onMerge={(into) => void merge([c.id], into)}
+      picked={picked ? picked.has(c.id) : null}
+      onPicked={(on) => setPicked((s) => {
+        const n = new Set(s ?? []);
+        if (on) n.add(c.id);
+        else n.delete(c.id);
+        return n;
+      })}
       onEnable={() => openSettings("clients")}
       onSuggestion={(s, include) => {
         if (!writes) return setNotice(`Add DevOps write access for ${c.clientName} in Settings`);
@@ -185,6 +252,9 @@ export function Conversations({ data, version, onCount, onPromiseCount, onChange
         <h2 ref={head} tabIndex={-1}>
           Conversations {state && state.needsYou.length > 0 && <span className="muted">{state.needsYou.length} need you</span>}
         </h2>
+        <button type="button" className="mini quiet" aria-pressed={picked !== null} title="Pick conversations of one chat to merge" onClick={() => setPicked((p) => (p ? null : new Set()))}>
+          {picked ? "Done selecting" : "Select"}
+        </button>
         <button type="button" className="mini" aria-label="Refresh conversations" title="Read your clients' registered chats now (only new messages)" disabled={!!busy} onClick={async () => {
           setBusy("refresh");
           await run("conversations.refresh", {});
@@ -199,6 +269,35 @@ export function Conversations({ data, version, onCount, onPromiseCount, onChange
         </p>
       )}
       <Fading text={notice} onGone={clearNotice} ms={8000} />
+      {linkNote && (
+        <p className="conv-link-note" role="status">
+          {linkNote}{" "}
+          <button type="button" className="mini quiet" onClick={() => setLinkNote(null)}>
+            OK
+          </button>
+        </p>
+      )}
+      {picked && (
+        <div className="conv-merge-bar" role="region" aria-label="Merge the picked conversations">
+          {pickedCards.length < 2 ? (
+            <span className="muted">Pick two or more conversations of one chat, then choose the one to keep.</span>
+          ) : !oneChat ? (
+            <span className="muted">These are in different chats. Merge only conversations of one chat.</span>
+          ) : (
+            <>
+              <span>Merge {pickedCards.length} into:</span>
+              {pickedCards.map((t) => (
+                <button key={t.id} type="button" className="mini" onClick={() => void merge(pickedCards.filter((x) => x.id !== t.id).map((x) => x.id), t)}>
+                  {t.title}
+                </button>
+              ))}
+            </>
+          )}
+          <button type="button" className="mini quiet" onClick={() => setPicked(null)}>
+            Cancel
+          </button>
+        </div>
+      )}
       {state && state.unsorted.count > 0 && (
         <p className="conv-unsorted" role="status">
           {state.unsorted.count} {state.unsorted.count === 1 ? "message waits" : "messages wait"} to be sorted: {state.unsorted.reasons.map((r) => r.text).join("; ")}.{" "}
@@ -258,16 +357,22 @@ type Suggest = ConversationCard["suggestions"][number];
 function ConvCard(p: {
   c: ConversationCard; tz: string; color: string; compact: boolean; selected: boolean; expanded: boolean;
   onSelect: () => void; onToggle: () => void; onPrimary: () => void; onRun: (action: string, input: Record<string, unknown>, done?: ReactNode) => Promise<void>;
-  form: { kind: "link" | "not_request" | "draft"; commitmentId?: number } | null; onForm: (f: { kind: "link" | "not_request" | "draft"; commitmentId?: number } | null) => void;
+  form: { kind: CardForm; commitmentId?: number } | null; onForm: (f: { kind: CardForm; commitmentId?: number } | null) => void;
+  /** CV-2: the same chat's other conversations (Merge into…), and the Select checkbox when picking several. */
+  others: ConversationCard[]; onMerge: (into: ConversationCard) => void; picked: boolean | null; onPicked: (on: boolean) => void;
   onEnable: () => void; onSuggestion: (s: Suggest, includeInternal: boolean) => void; onCreate: (change: import("./DevOpsWrite.tsx").DevOpsChange) => void;
 }) {
   const { c } = p;
   const [menu, setMenu] = useState(false);
   const waiting = !!c.waiting;
   const style = { "--c": p.color } as CSSProperties;
+  const pick = p.picked !== null && (
+    <input type="checkbox" className="conv-pick" aria-label={`Pick ${c.title} to merge`} checked={p.picked} onClick={(e) => e.stopPropagation()} onChange={(e) => p.onPicked(e.target.checked)} />
+  );
   if (p.compact && !p.selected && !p.expanded) {
     return (
       <li className="conv-line" style={style} data-conv={c.id} tabIndex={-1} onFocus={p.onSelect} onClick={p.onSelect}>
+        {pick}
         <span className="swatch" aria-hidden="true" />
         <span className="conv-line-title">{c.title}</span>
         <span className={`conv-status${waiting ? " waiting" : ""}`}>{c.statusLine}</span>
@@ -280,12 +385,14 @@ function ConvCard(p: {
     ...(!c.closed ? [{ label: "Not a request…", run: () => p.onForm({ kind: "not_request" }) }] : []),
     ...(c.primary !== "link" && !c.item ? [{ label: "Link to an item…", run: () => p.onForm({ kind: "link" }) }] : []),
     ...(c.primary !== "create" && !c.item && c.canCreate ? [{ label: "Create item…", run: () => p.onForm({ kind: "draft" }) }] : []),
+    ...(p.others.length ? [{ label: "Merge into…", run: () => p.onForm({ kind: "merge" }) }] : []),
     { label: c.hidden ? "Show for me" : "Hide for me", run: () => void p.onRun("conversations.hide", { id: c.id, hidden: !c.hidden }, c.hidden ? "Shown again" : "Hidden for you. Nobody else's view changes") },
     ...(c.closed && c.primary !== "reopen" ? [{ label: "Open again", run: () => void p.onRun("conversations.reopen", { id: c.id }, "Open again") }] : []),
   ];
   return (
     <li className={`conv-card${p.selected ? " selected" : ""}${c.closed ? " resolved" : ""}`} style={style} data-conv={c.id} tabIndex={p.selected ? 0 : -1} aria-label={c.title} onFocus={p.onSelect} onClick={p.onSelect}>
       <div className="conv-head">
+        {pick}
         <span className="swatch" aria-hidden="true" />
         <strong className="conv-title">{c.title}</strong>
         {c.updated && <span className="conv-updated" title={c.updated}>Updated</span>}
@@ -369,10 +476,33 @@ function ConvCard(p: {
         </span>
       </div>
       {p.form?.kind === "not_request" && <NotRequest onSave={(reason) => void p.onRun("conversations.not_request", { id: c.id, ...(reason ? { reason } : {}) }, "Moved to Closed for everyone on the chat")} onCancel={() => p.onForm(null)} />}
+      {p.form?.kind === "merge" && <MergeInto c={c} others={p.others} tz={p.tz} onPick={p.onMerge} onCancel={() => p.onForm(null)} />}
       {p.form?.kind === "link" && <ConvLink c={c} onPick={(id) => void p.onRun("conversations.link", { id: c.id, itemId: id }, `Linked to #${id}`)} onCancel={() => p.onForm(null)} />}
       {p.form?.kind === "draft" && <DraftItem c={c} commitmentId={p.form.commitmentId ?? null} onCreate={p.onCreate} onCancel={() => p.onForm(null)} />}
       {p.expanded && <Messages c={c} tz={p.tz} />}
     </li>
+  );
+}
+
+/** CV-2: Merge into…: the same chat's other conversations; the one picked keeps its place, this one moves into it. */
+function MergeInto({ c, others, tz, onPick, onCancel }: { c: ConversationCard; others: ConversationCard[]; tz: string; onPick: (into: ConversationCard) => void; onCancel: () => void }) {
+  return (
+    <div className="ask-form conv-merge" role="group" aria-label={`Merge ${c.title} into another conversation`} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())}>
+      <p className="conv-suggest-head">Merge into…</p>
+      <p className="muted">Its messages, commitments and suggestions move into the one you pick, for everyone on the chat. The summary is written again. You can undo it.</p>
+      <ul className="conv-merge-list">
+        {others.map((o, i) => (
+          <li key={o.id}>
+            <button type="button" className="mini quiet" autoFocus={i === 0} onClick={() => onPick(o)}>
+              <strong>{o.title}</strong> <span className="muted">· {o.statusLine} · {whenText(o.lastAt, tz)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button type="button" className="mini quiet" onClick={onCancel}>
+        Cancel
+      </button>
+    </div>
   );
 }
 
