@@ -527,19 +527,19 @@ function PlanningForm(p: FormProps) {
         {num("minM", "Shortest useful time, M (minutes)", "The same for M.")}
         {num("minL", "Shortest useful time, L (minutes)", "The same for L.")}
         {num("carryDays", "Carry-over (days back)", "Unfinished picks offered again. 0 turns it off.", 1, 30)}
-        {num("reminderOffsetMinutes", "Reminder (minutes after the day starts)", "Only when today isn't committed.", 5, 240)}
+        {num("reminderOffsetMinutes", "Reminder (minutes after the day starts)", "Only when today isn't confirmed.", 5, 240)}
       </div>
       <h3>Check-in and Close out</h3>
       <div className="set-grid">
-        {num("checkinReminderMinutes", "Check-in reminder (minutes after lunch)", "On a committed day. 0 is the end of lunch.", 5, 120)}
+        {num("checkinReminderMinutes", "Check-in reminder (minutes after lunch)", "On a confirmed day. 0 is the end of lunch.", 5, 120)}
         {num("closeoutReminderMinutes", "Close out reminder (minutes before the day ends)", "Only if Close out isn't done.", 5, 120)}
       </div>
       <h3>Plan the week</h3>
       <div className="set-grid">
         {([
           ["weekNudgeThu", "Thursday nudge", "For next week. Empty turns it off."],
-          ["weekNudgeFri", "Friday nudge", "For next week, if still not committed."],
-          ["weekNudgeMon", "Monday nudge", "For this week, if still not committed."],
+          ["weekNudgeFri", "Friday nudge", "For next week, if still not confirmed."],
+          ["weekNudgeMon", "Monday nudge", "For this week, if still not confirmed."],
         ] as const).map(([k, label, hint]) => (
           <AutoField key={k} a={a} k={k} label={label} hint={hint}>
             <input type="time" value={a.v[k]} onChange={(e) => a.set(k, e.target.value)} {...a.text(k)} />

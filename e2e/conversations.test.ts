@@ -202,7 +202,7 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
 
       // Inbox › Conversations: Refresh reads the chats now.
       await page.keyboard.press("4");
-      await page.getByRole("tab", { name: /^Conversations/ }).click();
+      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Conversations/ }).click();
       const main = page.getByRole("main", { name: "Conversations" });
       await main.getByRole("button", { name: "Refresh conversations" }).click();
       const needs = main.getByRole("region", { name: "Needs you" });
@@ -248,8 +248,8 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       await shotBoth(page, "conversations-comment-suggestion", tracked);
 
       // My promises: the Wingtip promise, one, to Evan, due today 7:30 PM.
-      await page.getByRole("tab", { name: /^My promises/ }).click();
-      const mine = page.getByRole("main", { name: "My promises" });
+      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Promises/ }).click();
+      const mine = page.getByRole("main", { name: "Promises" });
       const promise = mine.getByRole("listitem", { name: "Promise: Rerun the Salesforce data from CRM_Silver" });
       await promise.waitFor();
       await promise.getByText(/7:30 PM/).first().waitFor();
@@ -265,12 +265,12 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
 
       // CV-3b: made a follow-up, its Who is the person it was promised to (Evan), never me.
       await page.keyboard.press("4");
-      await page.getByRole("tab", { name: /^My promises/ }).click();
-      const card = page.getByRole("main", { name: "My promises" }).getByRole("listitem", { name: "Promise: Rerun the Salesforce data from CRM_Silver" });
+      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Promises/ }).click();
+      const card = page.getByRole("main", { name: "Promises" }).getByRole("listitem", { name: "Promise: Rerun the Salesforce data from CRM_Silver" });
       await card.getByRole("button", { name: "Make it a follow-up" }).click();
       await card.getByRole("button", { name: "Add follow-up" }).click();
       await card.getByText("A follow-up now", { exact: false }).waitFor();
-      await page.getByRole("tab", { name: /^Inbox/ }).click();
+      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Captures/ }).click();
       const row = page.locator("li.follow-up").filter({ hasText: "Rerun the Salesforce data from CRM_Silver" }).first();
       await row.waitFor();
       expect(await row.locator(".follow-up-who").textContent()).toMatch(/^Evan/);

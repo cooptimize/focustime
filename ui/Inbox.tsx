@@ -1,7 +1,8 @@
 // The Inbox (step 10, step 13.5): open follow-ups and unsorted captures in one list, overdue first, then due soon, then
 // the rest newest first, with the capture box on top. Snoozed and closed follow-ups are behind "Show closed".
 import { DraftsToAdd } from "./DevOpsWrite.tsx";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ModeArea } from "./ModeSwitch.tsx";
 import type { CaptureState, FollowUpView, ReviewData, WeekLoadData } from "../actions/types.ts";
 import { dueOrder } from "../plan/due.ts";
 import type { Capture } from "../plan/types.ts";
@@ -24,7 +25,7 @@ export function inboxOrder(followUps: readonly FollowUpView[], captures: readonl
   return dueOrder(all, today, (e) => (e.kind === "follow_up" ? e.followUp.due : null), (e) => e.at);
 }
 
-export function Inbox({ data, version, onChanged, defaultClient = null, highlight = null }: { data: WeekLoadData; version: number; onChanged: () => void; defaultClient?: string | null; highlight?: number | null }) {
+export function Inbox({ data, version, onChanged, defaultClient = null, highlight = null, switcher = null }: { switcher?: ReactNode; data: WeekLoadData; version: number; onChanged: () => void; defaultClient?: string | null; highlight?: number | null }) {
   const clients = useMemo(() => captureClients(data), [data]);
   const [followUps, setFollowUps] = useState<FollowUpView[] | null>(null);
   const [caps, setCaps] = useState<CaptureState | null>(null);
@@ -81,11 +82,12 @@ export function Inbox({ data, version, onChanged, defaultClient = null, highligh
   const name = (k: string | null) => (k ? (clients.find((c) => c.clientKey === k)?.clientName ?? k) : null);
 
   return (
-    <main className="inbox" aria-label="Inbox">
+    <main className="inbox" aria-label="Captures">
       <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
-          Inbox <span className="muted">{followUps && caps ? (entries.length ? `${entries.length} open` : "All clear") : ""}</span>
+          Captures <span className="muted">{followUps && caps ? (entries.length ? `${entries.length} open` : "All clear") : ""}</span>
         </h2>
+        {switcher && <ModeArea>{switcher}</ModeArea>}
       </div>
       <section className="co-section inbox-capture" aria-label="Capture">
         <CaptureBox data={data} onChanged={changed} defaultClient={defaultClient} large />

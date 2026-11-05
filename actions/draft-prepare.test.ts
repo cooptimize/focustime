@@ -7,7 +7,7 @@ import { stubProvider } from "../ai/stub.ts";
 import type { ProviderCall } from "../ai/types.ts";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
-import type { PrepareAnswer } from "../plan/capture-prepare.ts";
+import { prepareAgain, type PrepareAnswer } from "../plan/capture-prepare.ts";
 import { buildProcessModel } from "../plan/process.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import { aClientProcess, anAiApp, anExemplarCandidate, withTeam } from "../test/builders/index.ts";
@@ -200,5 +200,43 @@ describe("draft.prepare (CP-1)", () => {
     const v = await t.run("draft.get", { id });
     expect(v).toMatchObject({ canWrite: true, now: NOW, draft: { id, title: "csv export" } });
     expect(t.calls).toEqual([]);
+  });
+});
+
+describe("Prepare again (UI-7)", () => {
+  it("re-runs prepare once with again, never while AI is writing, and says whether AI is available", async () => {
+    const t = setup();
+    const id = await t.capture("csv export of invoices for finance");
+    const first = await t.run("draft.prepare", { id });
+    expect(first.aiOn).toBe(true);
+    expect(prepareAgain(first.draft, first)).toBe("ready");
+    // Prepare again: exactly one more request.
+    const again = await t.run("draft.prepare", { id, again: true });
+    expect(t.calls).toHaveLength(2);
+    expect(again.draft.ai?.state).toBe("ready");
+    // While AI is writing: nothing is sent and the control is disabled.
+    await t.plan.setDraftAi(id, { state: "writing", title: null, description: null, acceptance: null, type: null, parentId: null, parentReason: null, note: null, ranAt: NOW });
+    const busy = await t.run("draft.prepare", { id, again: true });
+    expect(t.calls).toHaveLength(2);
+    expect(prepareAgain(busy.draft, busy)).toBe("writing");
+  });
+
+  it("hidden with AI off for the client or without a write PAT; shown once AI is available again", async () => {
+    const off = setup({ allowed: [] });
+    const id = await off.capture("csv export of invoices for finance");
+    const v = await off.run("draft.prepare", { id });
+    expect(v.draft.ai?.state).toBe("off");
+    expect(v.aiOn).toBe(false);
+    expect(prepareAgain(v.draft, v)).toBe("hidden");
+    expect(off.calls).toHaveLength(0);
+    // The same draft once the client's Allow AI is on: Prepare again shows.
+    expect(prepareAgain(v.draft, { ...v, aiOn: true })).toBe("ready");
+    const noPat = setup({ write: [] });
+    const id2 = await noPat.capture("csv export of invoices for finance");
+    const w = await noPat.run("draft.get", { id: id2 });
+    expect(prepareAgain({ ...w.draft, ai: v.draft.ai ?? null }, w)).toBe("hidden");
+    // Never before a first prepare ran (the preview runs that one), and never once in DevOps.
+    expect(prepareAgain({ ...w.draft, ai: null }, { ...w, canWrite: true, aiOn: true })).toBe("hidden");
+    expect(prepareAgain({ ...v.draft, devopsId: 55 }, { ...v, aiOn: true })).toBe("hidden");
   });
 });

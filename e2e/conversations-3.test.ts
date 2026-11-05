@@ -223,7 +223,7 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       graph.say(DELIVERY, ME, "<p>I'll log a ticket for the unassigned feature.</p>", 13);
 
       await page.keyboard.press("4");
-      await page.getByRole("tab", { name: /^Conversations/ }).click();
+      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Conversations/ }).click();
       const main = page.getByRole("main", { name: "Conversations" });
       await main.getByRole("button", { name: "Refresh conversations" }).click();
       const conv = main.getByRole("listitem", { name: /^Evan Ford the October totals on the Movement Dashboard look 4% low/ });
@@ -235,8 +235,8 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       await shotAll(page, "cv3-rules-only-conversation", conv);
 
       // My promises: the loose one (no conversation) suggests likely items with reasons.
-      await page.getByRole("tab", { name: /^My promises/ }).click();
-      const myp = page.getByRole("main", { name: "My promises" });
+      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Promises/ }).click();
+      const myp = page.getByRole("main", { name: "Promises" });
       const loose = myp.getByRole("listitem", { name: /^Promise: .*unassigned feature/i });
       await loose.waitFor();
       await loose.getByRole("button", { name: "Link existing…" }).click();

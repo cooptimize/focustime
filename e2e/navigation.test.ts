@@ -63,7 +63,7 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await expect.poll(() => hash(page)).toBe("#/week/day/2026-11-02");
     await expect.poll(() => tab(page).textContent()).toMatch(/^Week/);
     const modes = page.getByRole("navigation", { name: "Week modes" });
-    expect(await modes.getByRole("button").allTextContents()).toEqual(["Board", "Commit", "Team"]);
+    expect(await modes.getByRole("button").allTextContents()).toEqual(["Board", "Plan", "Team"]);
     expect(await page.locator(".pd2-title").textContent()).toContain("Plan today");
     // Each piece of Plan the day, reachable here:
     // 1. the day's blocks with their fit, and the day's free time;
@@ -83,7 +83,7 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await expect.poll(() => page.locator(".pd2-picks > li").count()).toBeGreaterThan(0);
     await page.locator(".pd2-picks > li").first().getByRole("button", { name: /^More for / }).waitFor();
     // 7. Commit today (C), then Timebox my day while picks have no time.
-    const commit = page.getByRole("button", { name: "Commit today" });
+    const commit = page.getByRole("button", { name: "Confirm today" });
     await commit.waitFor();
     await shotAll(page, "nv1-week-plan-today");
     await commit.click();
@@ -96,7 +96,7 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await page.waitForSelector(".pd2-left");
     await page.getByRole("button", { name: "Next day (→)" }).click();
     await expect.poll(() => hash(page)).toBe("#/week/day/2026-11-03");
-    await page.getByRole("button", { name: /Commit Tuesday|Back to the week/ }).waitFor();
+    await page.getByRole("button", { name: /Confirm Tuesday|Back to the week/ }).waitFor();
     await page.keyboard.press("Escape");
     await expect.poll(() => hash(page)).toBe("#/week/2026-11-02");
 
@@ -105,7 +105,7 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await expect.poll(() => hash(page)).toBe("#/week");
     await page.locator(".week-head").waitFor();
     await shotAll(page, "nv1-week-board");
-    await modes.getByRole("button", { name: "Commit" }).click();
+    await modes.getByRole("button", { name: "Plan" }).click();
     await expect.poll(() => hash(page)).toBe("#/week/commit");
     await page.locator(".pw-head, .pd2-head").first().waitFor();
     expect(await page.getByRole("heading", { name: /Plan the week of/ }).count()).toBeGreaterThan(0);
@@ -121,7 +121,7 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
 
     // The Inbox, as it was.
     await page.keyboard.press("4");
-    await page.getByRole("tablist", { name: "Inbox" }).waitFor();
+    await page.getByRole("navigation", { name: "Inbox modes" }).waitFor();
     await shotAll(page, "nv1-inbox");
 
     // Every older address lands on its new home with its date, block or week.

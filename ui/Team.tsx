@@ -81,7 +81,7 @@ export function SendDialog({ target, thisWeek, onClose, onSent }: { target: Send
     setBusy(true);
     try {
       await call("send.create", { clientKey: target.clientKey, itemId: target.itemId, level: target.level, title: target.title, itemType: target.itemType, url: target.url, ...(target.parentId ? { parentId: target.parentId } : {}), weekStart: week, kind, ...(note.trim() ? { note: note.trim() } : {}), askTake, toId });
-      setDone(`Sent to ${byId.get(toId)?.name ?? who.who} for ${weekWords(week, thisWeek)}. You'll see their answer in Commit.`);
+      setDone(`Sent to ${byId.get(toId)?.name ?? who.who} for ${weekWords(week, thisWeek)}. You'll see their answer in Plan.`);
       onSent();
     } catch (e) {
       setError(errText(e));
@@ -93,7 +93,7 @@ export function SendDialog({ target, thisWeek, onClose, onSent }: { target: Send
     setBusy(true);
     try {
       await call("priority.flag", { clientKey: target.clientKey, itemId: target.itemId, title: target.title, itemType: target.itemType, url: target.url, ...(priority?.note.trim() ? { note: priority.note.trim() } : {}) });
-      setDone(`${target.title} is a ${client} priority. Everyone on ${client} sees it at the top of Commit.`);
+      setDone(`${target.title} is a ${client} priority. Everyone on ${client} sees it at the top of Plan.`);
       onSent();
     } catch (e) {
       setError(errText(e));
@@ -170,7 +170,7 @@ export function SendDialog({ target, thisWeek, onClose, onSent }: { target: Send
             {error && <p className="error-line" role="alert">{error}</p>}
             <div className="wd-actions send-acts">
               {people.canMust && !priority && (
-                <button type="button" className="link-btn send-priority" onClick={() => setPriority({ note: "" })} title="No person named; everyone on the client sees it at the top of Commit">
+                <button type="button" className="link-btn send-priority" onClick={() => setPriority({ note: "" })} title="No person named; everyone on the client sees it at the top of Plan">
                   Make it a {client} priority instead
                 </button>
               )}
@@ -379,7 +379,7 @@ function AskToLook({ c, weekStart, act, label }: { c: CommitClient; weekStart: I
         </p>
       ))}
       {c.leads.length > 0 && !open && (
-        <button type="button" className="link-btn look-ask" onClick={() => setOpen(true)} title={`Sends a link to your committed ${c.clientName} features in Week › Team`}>
+        <button type="button" className="link-btn look-ask" onClick={() => setOpen(true)} title={`Sends a link to your planned ${c.clientName} features in Week › Team`}>
           {label ? `${label} (${c.leads.map((l) => first(l.name)).join(", ")})` : `Ask ${c.leads.length === 1 ? first(lead0!.name) : "a lead"} to look`}
         </button>
       )}
@@ -500,7 +500,7 @@ export function useSentToday(version: unknown, on: boolean): SentToday | null {
   return d;
 }
 
-const STATE_WORDS: Record<TeamPerson["state"], string> = { committed: "", draft: "Not committed yet", not_on_focustime: "Not on FocusTime yet" };
+const STATE_WORDS: Record<TeamPerson["state"], string> = { committed: "", draft: "Not confirmed yet", not_on_focustime: "Not on FocusTime yet" };
 
 /** Week › Team: per client I'm on, everyone's committed features, the sends, the priorities, the watched features. */
 export function TeamView({ switcher, weekStart, thisWeek, colors, readOnly, onWeek, version, onChanged }: { switcher?: React.ReactNode; weekStart: IsoDate; thisWeek: IsoDate; colors: Record<string, string>; readOnly: boolean; onWeek: (w: IsoDate) => void; version: unknown; onChanged: () => void }) {
@@ -541,7 +541,7 @@ export function TeamView({ switcher, weekStart, thisWeek, colors, readOnly, onWe
         </span>
         <ModeArea>{switcher}</ModeArea>
       </header>
-      <p className="muted team-intro">What each person committed for the clients you're on. Day plans, focus and notes stay with each person.</p>
+      <p className="muted team-intro">What each person planned for the clients you're on. Day plans, focus and notes stay with each person.</p>
       {error && <p className="error-line" role="alert">{error}</p>}
       {!data ? (
         <p className="muted">Reading the team's week…</p>
@@ -572,7 +572,7 @@ export function TeamView({ switcher, weekStart, thisWeek, colors, readOnly, onWe
                   {p.state !== "committed" ? (
                     <span className="muted team-state">{STATE_WORDS[p.state]}</span>
                   ) : !p.features.length && !p.watching.length ? (
-                    <span className="muted team-state">Nothing committed for {c.clientName}</span>
+                    <span className="muted team-state">Nothing planned for {c.clientName}</span>
                   ) : (
                     <ul className="team-features">
                       {p.features.map((f) => (

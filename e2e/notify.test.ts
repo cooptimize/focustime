@@ -65,7 +65,7 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     await expectView("planday", ".pd2-left");
     await expectView("planweek:2026-11-09", 'main[aria-label="Plan the week"]');
     await expectView("focus", ".focus-screen");
-    await expectView("inbox", 'main[aria-label="Inbox"]');
+    await expectView("inbox", 'main[aria-label="Captures"]');
     await expectView("settings:notifications", ".set-notify");
     await expectView("today", ".today-view");
     // A follow-up opens the Inbox with that follow-up outlined.

@@ -466,7 +466,7 @@ function Attention({ noDue = false, promises = [], soon = [], onPromises, data, 
           </button>
         )}
         {soon.map((p) => (
-          <button key={`promise-${p.id}`} type="button" className={`att-chip promise${p.overdue ? " overdue" : ""}`} onClick={onPromises} title="Open it in Inbox › My promises">
+          <button key={`promise-${p.id}`} type="button" className={`att-chip promise${p.overdue ? " overdue" : ""}`} onClick={onPromises} title="Open it in Inbox › Promises">
             <span className="att-tag">{p.overdue ? `Promise · ${wasDueText(p, date, userZone(data)).replace(/^Was/, "was")}` : "Promise"}</span>
             <span className="att-names">{Temporal.Instant.from(p.dueAt!).toZonedDateTimeISO(userZone(data)).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
             <span>{p.what}</span>
@@ -538,7 +538,7 @@ export function UrgentStrip({ sources, now, today, tz, onAsks, onPromises, onAsk
           const late = l.kind !== "conversation" && !!l.overdue;
           return (
             <li key={l.key} className={`us-item us-${l.kind === "other" ? l.source : l.kind}${l.kind === "other" && l.source === "sends" ? " sent-line" : ""}${late ? " overdue" : ""}`}>
-              <button type="button" className="us-line" onClick={open} title={l.kind === "conversation" ? "Open it in Inbox › Conversations" : l.kind === "promise" ? "Open it in Inbox › My promises" : undefined}>
+              <button type="button" className="us-line" onClick={open} title={l.kind === "conversation" ? "Open it in Inbox › Conversations" : l.kind === "promise" ? "Open it in Inbox › Promises" : undefined}>
                 <span className="us-tag">{tag}</span>
                 {l.who && <span className="us-who">{l.who}</span>}
                 <span className="us-what">{l.what}</span>

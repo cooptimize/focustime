@@ -202,7 +202,7 @@ describe.skipIf(!CHROMIUM)("Chat images, CV-4", () => {
 
       // Refresh: one AI request with the two readable images after their message's label.
       await page.keyboard.press("4");
-      await page.getByRole("tab", { name: /^Conversations/ }).click();
+      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Conversations/ }).click();
       const main = page.getByRole("main", { name: "Conversations" });
       await main.getByRole("button", { name: "Refresh conversations" }).click();
       const card = main.getByRole("region", { name: "Needs you" }).getByRole("listitem", { name: "Dashboard refresh fails overnight" });

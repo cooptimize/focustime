@@ -362,7 +362,7 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const name = nameOf(cfg, (k) => clients.find((c) => c.clientKey === k)?.clientName)(key);
         const followUp = (await plan.openRuleFollowUp({ kind: "slip", ruleKey: headsUpKey(weekStart, key, itemId), clientKey: key, who: name, what: `Heads-up to ${name}: #${itemId} moves out of the week`, itemId, draft: weekHeadsUpDraft(name, weekStart, { itemId, title: o.title.trim() }),
           // Step 13.5: where it came from, shown on the follow-up.
-          origin: { trigger: o.trigger === "demoted" ? "A committed must was made a nice to have" : "A committed must was taken off the week", items: [{ itemId, title: o.title.trim() }], at: ctx.now() } }));
+          origin: { trigger: o.trigger === "demoted" ? "A confirmed must was made a nice to have" : "A confirmed must was taken off the week", items: [{ itemId, title: o.title.trim() }], at: ctx.now() } }));
         const existing = followUp ?? (await plan.allFollowUps()).find((l) => l.ruleKey === headsUpKey(weekStart, key, itemId)) ?? null;
         return { ok: true, data: { followUp: existing ? await followUpView(plan, existing, today, () => name) : null, created: !!followUp } };
       }
