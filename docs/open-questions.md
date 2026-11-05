@@ -226,7 +226,7 @@ What DS-1 learned, and what is still open:
 ## Navigation (NV-1, Nov 5)
 
 - Q-NV1-1: "Intention" is still the word for a pick that is neither a DevOps item nor a draft. A person reads it in the block menu's "Add an intention" and its dialog "Intention for <day> <half>" (`ui/menu.ts`), a pick's disabled "Open in browser" ("An intention has no link", `ui/menu.ts`), Check-in's walk-on choice "Typed intention" (`ui/Today.tsx`) and the key legend for A (`ui/keys.ts`). Plan today's type box calls the same thing "a plain note, not in DevOps". NV-1 kept the wording. Should there be one word everywhere, and which one?
-- Q-NV1-2: The urgent strip's lines open Inbox › Conversations or My promises, not the one item. Selecting the item needs a small change inside Conversations; worth doing in CV-2.
+- Q-NV1-2: Resolved by CV-2 (D607): each urgent strip line opens its own conversation or promise (`#/inbox/conversation/<id>`, `#/inbox/promise/<id>`).
 - Q-NV1-3: Ahead keeps "Roadmap" as its first mode's name. Is that the right name inside Ahead, or should it read "Features"?
 
 ## DevOps polling (DV-1, Nov 5)
@@ -240,4 +240,13 @@ What DS-1 learned, and what is still open:
 - Q-ADM2-1: `org.retention_years` is shown in Status as "Not enforced yet". Nothing deletes old data; a delete job (which tables, per person, oldest first, a notice first or not) is a later step.
 - Q-ADM2-2: Guests are told apart from the ID token's `idp` and the UPN today. The `acct` optional claim (0 member, 1 guest) is the documented signal but must be added to the app registration's optional claims (`infra/scripts/`, an Azure change). Worth adding in the next infra step.
 - Q-ADM2-3: The automation flag isn't prefilled for the known automation account (no migration can read Dataverse, and naming a person in code is ruled out). An admin sets it once in Admin › People after the merge.
-- Q-ADM2-4: Admin deep links (`#/settings/admin-audit`) land on Today: `ui/nav.ts`'s section pattern takes letters only. One character for NV-1, which owns the routes.
+- Q-ADM2-4: Resolved by CV-2 (D607): `ui/nav.ts` takes hyphenated section names; a test opens all 7 Admin sections by address.
+
+## Conversations fixes (CV-2, Nov 5)
+
+- Q-CV2-1: Chat images live in Azure SQL (`teams_message_images`, D610). Move the bytes to Blob storage (a private container, the app's managed identity, the row keeping the blob name) in an HK step once the monthly size is known. Size per month is about chats x images per chat per working day x 21 x the average stripped size (a pasted screenshot is usually 100 to 400 KB): 20 chats with 3 a day at 250 KB is about 315 MB a month, kept as long as their messages are.
+- Q-CV2-2: With AI off for a client, nothing groups its messages into conversations (the rules path finds Requests and promises only). A rules-only grouping (same chat; a reply or a mention; within 45 minutes) would give those clients conversations too. Worth a step if clients without AI stay common.
+- Q-CV2-3: Capture's Who still uses the older name box (`WhoInput`); moving it to the PersonPicker keeps one way to choose a person, and is Capture's step.
+- Q-CV2-4: Link existing… on a promise with no conversation searches with no conversation's context (no likely item); Create works (D615). Should Link start a conversation the same way?
+- Q-CV2-5: A promise that implies an item shows only Create the DevOps item? (Create, Link existing…, Not needed), as in CV-1: Make it a follow-up, Done and ⋯ come once it's linked. Past its due, should Make it a follow-up or Done be offered there too?
+- Q-CV2-6: Week's rail shows a promise past its due as "was due" in its title and label only; the rail's own amber treatment is PL-1's to decide.
