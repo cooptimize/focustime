@@ -454,3 +454,74 @@ describe("history", () => {
     expect(await s.a.history()).toEqual([]);
   });
 });
+
+describe("propose from a button (TB-2): no AI call, the same preview and confirm", () => {
+  const slot = (clientKey: string | null, end: string) => ({ pto: false, off: false, end, focus: clientKey ? [{ clientKey }] : [] });
+  const day = (date: string, am: string | null, pm: string | null) => ({ date, kind: "work", am: slot(am, `${date}T17:00:00Z`), pm: slot(pm, `${date}T22:00:00Z`) });
+  const weekLoad = () => async () => ({ ok: true as const, data: { week: { days: [day("2026-11-05", FAB, NW), day("2026-11-06", null, FAB)] }, plan: {}, followUps: [], promises: [] } as never });
+  const doneFake = (plan: ReturnType<typeof setup>["plan"]) => async (i: unknown) => {
+    const x = i as { id: number; done: boolean };
+    return { ok: true as const, data: { pick: await plan.setDone(x.id, x.done) } };
+  };
+
+  it("close_day: done, moved on to the client's next block or the unfinished list, and closed out, all in one preview", async () => {
+    const holder: { plan?: ReturnType<typeof setup>["plan"] } = {};
+    const closed: string[] = [];
+    const s = setup({ handlers: { "week.load": () => weekLoad()(), "pick.mark_done": (i) => doneFake(holder.plan!)(i), "closeout.commit": (i) => (closed.push((i as { date: string }).date), { ok: true, data: {} }) } });
+    holder.plan = s.plan;
+    const a = await s.plan.addPick({ date: TODAY, half: "AM", clientKey: FAB, kind: "intention", title: "Export spec", size: "M" });
+    const b = await s.plan.addPick({ date: TODAY, half: "AM", clientKey: FAB, kind: "intention", title: "Invoice totals", size: "S" });
+    const c = await s.plan.addPick({ date: TODAY, half: "PM", clientKey: NW, kind: "intention", title: "Ledger check", size: "S" });
+    const r = await s.a.propose("close_day", { date: TODAY, donePickIds: [a.id] });
+    expect(r.ok).toBe(true);
+    const p = (r as { proposal: { id: number; preview: { rows: { label: string; before: string | null; after: string | null }[]; notes: string[] }; action: string } }).proposal;
+    expect(p.action).toBe("closeout.commit");
+    expect(p.preview.rows.map((x) => [x.label, x.after])).toEqual([["Export spec", "Done"], ["Invoice totals", "Moves to Fri, Nov 6 afternoon"], ["Ledger check", "Unfinished list"], ["The day", "Closed out"]]);
+    expect(p.preview.notes[0]).toContain("One pick has no block left");
+    expect(s.calls).toEqual([]);
+    expect(s.writes()).toEqual([]);
+    const done = await s.a.confirm(p.id);
+    expect(done.ok).toBe(true);
+    expect(s.writes().map((w) => w.action)).toEqual(["pick.mark_done", "pick.move", "closeout.commit"]);
+    expect((await s.plan.getPick(a.id))!.status).toBe("done");
+    // A move to another day marks the pick moved and plans it again there (the app's own pick.move).
+    expect((await s.plan.getPick(b.id))!.status).toBe("moved");
+    expect((await s.plan.picksFor("2026-11-06")).map((x) => [x.title, x.half])).toEqual([["Invoice totals", "PM"]]);
+    expect((await s.plan.getPick(c.id))!.date).toBe(TODAY);
+    expect(closed).toEqual([TODAY]);
+    expect(await s.a.confirm(p.id)).toMatchObject({ ok: false, reason: "gone" });
+  });
+
+  it("close_day refuses a later day and a pick from another day; a pick that changed since is changed, nothing written", async () => {
+    const s = setup({ handlers: { "week.load": () => ({ ok: true, data: { week: { days: [] } } as never }) } });
+    const a = await s.plan.addPick({ date: TODAY, half: "AM", clientKey: FAB, kind: "intention", title: "Export spec", size: "M" });
+    const other = await s.plan.addPick({ date: "2026-11-04", half: "AM", clientKey: FAB, kind: "intention", title: "Old", size: "M" });
+    expect(await s.a.propose("close_day", { date: "2026-11-06", donePickIds: [] })).toMatchObject({ ok: false, message: "Close out is for today or an earlier day" });
+    expect(await s.a.propose("close_day", { date: TODAY, donePickIds: [other.id] })).toMatchObject({ ok: false });
+    const r = (await s.a.propose("close_day", { date: TODAY, donePickIds: [a.id] })) as { proposal: { id: number } };
+    await s.plan.setDone(a.id, true);
+    const c = await s.a.confirm(r.proposal.id);
+    expect(c).toMatchObject({ ok: false, reason: "changed" });
+    expect(s.writes()).toEqual([]);
+  });
+
+  it("move_picks: one row per pick, one Confirm moves them all through pick.move", async () => {
+    const s = setup();
+    const a = await s.plan.addPick({ date: TODAY, half: "AM", clientKey: FAB, kind: "intention", title: "Export spec", size: "M" });
+    const b = await s.plan.addPick({ date: TODAY, half: "AM", clientKey: FAB, kind: "intention", title: "Invoice totals", size: "S" });
+    const r = (await s.a.propose("move_picks", { moves: [{ pickId: a.id, date: TODAY, half: "PM" }, { pickId: b.id, date: "2026-11-06", half: "AM" }] })) as { ok: true; proposal: { id: number; title: string; preview: { rows: { after: string | null }[] } } };
+    expect(r.proposal.title).toBe("Move 2 picks");
+    expect(r.proposal.preview.rows.map((x) => x.after)).toEqual(["Thu, Nov 5 afternoon", "Fri, Nov 6 morning"]);
+    expect(s.writes()).toEqual([]);
+    expect((await s.a.confirm(r.proposal.id)).ok).toBe(true);
+    expect(s.writes()).toEqual([{ action: "pick.move", input: { id: a.id, date: TODAY, half: "PM" } }, { action: "pick.move", input: { id: b.id, date: "2026-11-06", half: "AM" } }]);
+  });
+
+  it("only the plan's own tools can be proposed from a button; never another client's or someone else's pick", async () => {
+    const s = setup({ mine: [FAB] });
+    const nw = await s.plan.addPick({ date: TODAY, half: "AM", clientKey: NW, kind: "intention", title: "Ledger", size: "M" });
+    for (const t of ["comment", "description", "send", "ahead_change", "capture", "nope"]) expect(await s.a.propose(t, { itemId: 4417, text: "x" })).toMatchObject({ ok: false, message: "That can't be proposed from a button" });
+    expect(await s.a.propose("move_picks", { moves: [{ pickId: nw.id, date: TODAY, half: "PM" }] })).toMatchObject({ ok: false, message: "That pick isn't one of yours here" });
+    expect(s.calls).toEqual([]);
+  });
+});

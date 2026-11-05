@@ -3,6 +3,7 @@
 // notification and says which button was clicked (desktop today, browser notifications in a hosted version).
 import { hoursOn, type TimeModel } from "../week/hours.ts";
 import { userZone } from "../week/zone.ts";
+import { DEFAULT_TEAMS_RHYTHM, type TeamsRhythm } from "./teams-rhythm.ts";
 
 /** Every kind of notification FocusTime sends. Each has its own switch in Settings > Notifications, except the test. */
 export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "commitment_item", "taken_over", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "look_ask", "look_reply", "assigned", "dates_moved"] as const;
@@ -68,10 +69,11 @@ export type QuietMode = "outside_hours" | "off";
 /**
  * pushDetails (P1): push messages say what the notice says (client names, work item titles); off by default.
  * asksThroughFocus (AP-2): an urgent ask is sent during focus instead of held; off by default.
- * teamsMessages (TB-1): FocusTime may message me in Teams on its own (later steps, through this gate); off by default.
- * In TB-1 the bot only answers; nothing reads this switch to send.
+ * teamsMessages (TB-1): FocusTime may message me in Teams on its own; off by default. TB-2: `teams` holds the kinds
+ * it may send (brief, check-in, close out, nudges, each off by default) and their times; nothing is sent unless both
+ * this switch and the kind's are on.
  */
-export type NotifySettings = { kinds: Record<NotifyKind, boolean>; quiet: QuietMode; quietPto: boolean; pushDetails: boolean; asksThroughFocus: boolean; teamsMessages: boolean };
+export type NotifySettings = { kinds: Record<NotifyKind, boolean>; quiet: QuietMode; quietPto: boolean; pushDetails: boolean; asksThroughFocus: boolean; teamsMessages: boolean; teams: TeamsRhythm };
 export const DEFAULT_NOTIFY: NotifySettings = {
   kinds: Object.fromEntries(NOTIFY_KINDS.map((k) => [k, true])) as Record<NotifyKind, boolean>,
   quiet: "outside_hours",
@@ -79,6 +81,7 @@ export const DEFAULT_NOTIFY: NotifySettings = {
   pushDetails: false,
   asksThroughFocus: false,
   teamsMessages: false,
+  teams: DEFAULT_TEAMS_RHYTHM,
 };
 
 /** Where clicking a notification opens FocusTime. */

@@ -22,6 +22,7 @@ export const CHAPTERS = [
   { id: "phone", name: "On your phone" },
   { id: "asks", name: "Conversations and promises" },
   { id: "team", name: "Working with your team" },
+  { id: "teams", name: "FocusTime in Teams" },
   { id: "questions", name: "Questions" },
 ] as const;
 export type ChapterId = (typeof CHAPTERS)[number]["id"];
@@ -342,8 +343,26 @@ export const TEAM = {
 
 // ---------- Chapter 9 ----------
 
-export const QUESTIONS = {
+/** TB-1 and TB-2: the FocusTime bot in a 1:1 Teams chat, and the short daily rhythm it can send. */
+export const TEAMS_BOT = {
   eyebrow: "Chapter 9",
+  title: "FocusTime in Teams",
+  sub: "Ask FocusTime things in a chat with it in Teams, and, if you want, get a short morning brief, a midday check-in and a close out there.",
+  items: [
+    { q: "How do I start?", a: "Add FocusTime from Apps in Teams and send it any message, like \"what's next\". It answers only you, only in that 1:1 chat. Help lists what it understands; what's next and today work even without AI." },
+    { q: "Can FocusTime message me first?", a: "Only if you ask it to. Settings › Notifications › In Teams: turn on Let FocusTime message me in Teams, then tick what you want: Morning brief, Midday check-in, Close out, Nudges. All are off until you turn them on. They come only in your own chat with FocusTime, never on weekends or PTO days, never in quiet hours, and wait while focus runs. Friday only with Also on Fridays. Send me a test now sends one at once so you can see it." },
+    { q: "What's in each one?", a: "The morning brief (at the start of your day, or a time you set): today's blocks, meetings, picks, promises due and work sent to you, with Confirm today and Move…. The midday check-in (12:00 unless you change it): this morning's picks with Done and Not yet, and Move the rest. Close out (30 minutes before your day ends unless you change it): today's picks; tick what got done or just tell it. Nudges: a promise due tonight that's still open, work sent to you waiting over half a day, or someone taking over an item assigned to you, together in one message, at most one an hour." },
+    { q: "Does tapping a button change things right away?", a: "Done and Not yet on a pick change only your own plan, at once, exactly like the buttons in the app, with Undo on the card. Anything bigger (moving picks, confirming today, closing out the day) shows the change first, with Confirm and Cancel, and nothing happens until you Confirm. Nothing in DevOps, Outlook or anywhere outside FocusTime changes without a Confirm." },
+    { q: "Can I just tell it what I got done?", a: "Yes. While today's Close out is waiting, reply in your own words: \"all but the export\", \"1 and 3\", \"fixed the login timeout\". The card above fills in what it understood: the picks done, where the rest move (each to its client's next block, or the unfinished list when there's none this week) and the day closed out. One Confirm does all of it. FocusTime matches your words to the picks itself; no AI reads them." },
+    { q: "How do I capture something from Teams?", a: "Start the message with capture: (or c:), for example \"capture: call Dana about the export\". It goes to Inbox › Captures exactly as typed, to sort later, with Undo on the reply. Anything else you write goes to the assistant." },
+    { q: "It says FocusTime can't message me in Teams.", a: "Teams told FocusTime the chat is blocked or the app was removed, so Let FocusTime message me in Teams turned itself off. Add FocusTime again in Teams, send it a message, then turn the switch back on." },
+  ],
+};
+
+// ---------- Chapter 10 ----------
+
+export const QUESTIONS = {
+  eyebrow: "Chapter 10",
   title: "Questions people ask first",
   items: [
     { q: "What are Ahead's Grid, Gantt and Fix next?", a: "Three views of the same features and epics (and your stories, in Grid). Grid is a table: state, dates, who it's assigned to, size and what's missing, edited in place; on a narrower window Start and Target share one Dates column, Readiness becomes dots (hover for the words), and below about 900 pixels each item is a two-line card. Gantt is the timeline: drag a bar by half-days to move its dates, with your free hours per week below. Fix next is its own mode, with its count in the switch (Fix next · 7). Mine, Contributing and All choose whose items show; FocusTime remembers your choice." },

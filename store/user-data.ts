@@ -14,7 +14,7 @@ import type { Conn } from "./sql/conn.ts";
  * (a proposal id, its title and the outcome card) and hashes of handled activity ids. No content of the person's;
  * meaningless outside this tenant's bot, and rebuilt by their next message. Delete my data removes them at once.
  */
-export const NOT_EXPORTED: readonly string[] = ["user_secrets", "push_devices", "teams_bot_chats", "teams_bot_cards", "teams_bot_seen"];
+export const NOT_EXPORTED: readonly string[] = ["user_secrets", "push_devices", "teams_bot_chats", "teams_bot_cards", "teams_bot_seen", "teams_rhythm"];
 
 /** How long a soft delete waits before everything is removed. */
 export const HARD_DELETE_AFTER_DAYS = 30;

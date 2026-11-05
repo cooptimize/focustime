@@ -39,6 +39,7 @@ import { hoursOn } from "../week/hours.ts";
 import { userZone } from "../week/zone.ts";
 import { checkDayReminder, checkinReminderDue, checkReminder, checkWeekNudges, closeoutReminderDue } from "./notify.ts";
 import { calendarRefreshDue, checkTimer, TIMER_BUTTONS } from "./timer.ts";
+import type { PassFacts } from "./teams/rhythm.ts";
 
 export type TickDeps = {
   log: Logger;
@@ -49,6 +50,8 @@ export type TickDeps = {
   openRoute: (route: string) => void;
   /** P1: this person's Web Push (their devices); absent where there is none (tests). */
   push?: PushControl;
+  /** TB-2: this person's rhythm in Teams (the brief, check-in, close out and nudges); absent without the bot. */
+  teams?: { tick: (f: PassFacts) => Promise<void>; wake: (c: AppConfig | null) => Promise<Temporal.Instant | null> };
 };
 
 /** One person's passes; the scheduler runs them for everyone, never two of the same kind at once. */
@@ -438,8 +441,16 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       else await send(notices.lookReply(n.look.id, first(n.look.to.name), name(n.look.clientKey), n.look.weekStart, now));
     }
   };
+  // TB-2: the rhythm in Teams, through the same gate facts (quiet hours, PTO, focus) as every notification.
+  const teamsTick = async (f: Awaited<ReturnType<typeof notifier.refresh>> | null) => {
+    if (!d.teams || !f) return;
+    const c = await configOrNull();
+    if (!c?.notify.teamsMessages) return;
+    await d.teams.tick({ config: c, inHours: f.inHours, pto: f.pto, focusRunning: f.focusRunning });
+  };
   const tick = async () => {
-    await notifier.refresh().catch(() => null);
+    const facts = await notifier.refresh().catch(() => null);
+    await teamsTick(facts).catch(() => log({ source: "server", op: "teams_rhythm", kind: "failed" }));
     await dayReminders();
     await workdayNotices().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
     await vmTick().catch(() => log({ source: "azure", op: "vm_tick", kind: "failed" }));
@@ -510,7 +521,8 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const pending = (!timer && !!(await store.accountState<TeamsStatusState>(TEAMS_STATUS_KEY))?.set) || (!running && (await notifier.held()).length > 0);
     const p = c?.plan;
     // Shared polling: the chats' next read is the app job's wake (server/scheduler.ts), not anyone's.
-    return nextWake({
+    const teamsAt = d.teams ? await d.teams.wake(c).catch(() => null) : null;
+    const base = nextWake({
       now: instantNow(),
       zone: c ? userZone(c) : who.zone,
       hours: c?.week.hours ?? null,
@@ -519,6 +531,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       warnPoints: points,
       pending,
     });
+    return teamsAt && Temporal.Instant.compare(teamsAt, base) < 0 ? teamsAt : base;
   };
   return { fast, slow: tick, wake, settled };
 }
