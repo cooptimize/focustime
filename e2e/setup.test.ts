@@ -46,10 +46,16 @@ describe.skipIf(!CHROMIUM)("first-run setup", () => {
 
       // 1. Your day: focus on the first field; Enter continues.
       const dialog = page.getByRole("dialog", { name: /^Setup/ });
+      // HK-1: a key reaches a screen only once focus is in it. Between screens (and while the next one loads) focus sits
+      // on the dialog box, where Enter does nothing; under load the heading shows before the screen takes focus, and a
+      // key sent then was lost (the flow stayed on Calendars). Wait for the screen named `title` to hold focus.
+      const focusIn = (title: string) =>
+        page.waitForFunction((t) => document.activeElement?.closest(".setup-screen")?.querySelector("h2")?.textContent === t, title);
       await dialog.getByRole("heading", { name: "Your day" }).waitFor({ timeout: 60_000 });
       await expect.poll(() => page.evaluate(() => (document.activeElement as HTMLSelectElement | null)?.value)).toBe("America/New_York");
       await dialog.getByText(/Outlook didn't share your working hours/).waitFor();
       await shot("setup-1-day");
+      await focusIn("Your day");
       await page.keyboard.press("Enter");
       await dialog.getByRole("heading", { name: "Your clients" }).waitFor();
 
@@ -80,11 +86,13 @@ describe.skipIf(!CHROMIUM)("first-run setup", () => {
       // 3. Standing blocks: optional; Esc skips.
       await dialog.getByRole("heading", { name: "Standing blocks" }).waitFor();
       await shot("setup-3-blocks");
+      await focusIn("Standing blocks");
       await page.keyboard.press("Escape");
 
       // 4. Calendars: Skip is the default (Enter).
       await dialog.getByRole("heading", { name: "Calendars" }).waitFor();
       await shot("setup-4-calendars");
+      await focusIn("Calendars");
       await page.keyboard.press("Enter");
 
       // Done: Plan your week, and the Guide.

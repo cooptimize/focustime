@@ -1,7 +1,7 @@
 // A3: the export JSON as the migration format: a SQLite store's export loads into either store (SQL Server's
 // baseline reads what SQLite's 26 migrations wrote), ids kept, links within a table kept, idempotent, with a dry run;
 // and refused when it isn't one, is another version, holds secrets or would take someone else's ids.
-import { expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import { addUsers, forEachDriver, sqliteDb } from "../test/db.ts";
 import { fill, FILL_NOW } from "../test/fill.ts";
 import { createAccountStore } from "./accounts.ts";
@@ -52,9 +52,9 @@ it("PARENTS_FIRST lists every exported user table once, after every table it ref
   void NOT_EXPORTED;
 });
 
+// A few hundred rows, two statements each, in one transaction: slower on SQL Server under the full suite (about 3 s
+// alone, up to 31 s with the whole suite on one machine), so each test gets 60 s on both drivers.
 await forEachDriver("import an export", ({ driver, open }) => {
-  // A few hundred rows, two statements each, in one transaction: slower on SQL Server under the full suite.
-  vi.setConfig({ testTimeout: 60_000 });
   it("loads a SQLite store's export: every row, the same ids and links, under the given id", async () => {
     const { src, json } = await source();
     const db = (await open()).conn;
@@ -157,4 +157,4 @@ await forEachDriver("import an export", ({ driver, open }) => {
     expect(await db.get("SELECT id FROM users WHERE id = 'oid-ben'")).toBeUndefined();
     expect(Object.values(await countRows(db, "oid-ben")).every((n) => n === 0)).toBe(true);
   });
-});
+}, { timeout: 60_000 });

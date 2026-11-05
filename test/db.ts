@@ -131,13 +131,15 @@ export type DriverCase = { driver: Dialect; open: () => Promise<TestDb> };
 
 /**
  * Runs a describe block once per driver: SQLite, and SQL Server when one answers (else a skipped block whose name
- * says why, and a line on stderr). FOCUSTIME_TEST_SQL=required turns the skip into a failure (CI).
+ * says why, and a line on stderr). FOCUSTIME_TEST_SQL=required turns the skip into a failure (CI). `o.timeout` is each
+ * test's limit on both drivers (SQL Server's is at least SQL_TIMEOUT_MS). HK-1: a `vi.setConfig` inside the body never
+ * reached SQL Server's tests, whose describe option (30 s) wins over it.
  */
-export async function forEachDriver(name: string, body: (d: DriverCase) => void): Promise<void> {
-  describe(`${name} [sqlite]`, () => body({ driver: "sqlite", open: async () => sqliteDb() }));
+export async function forEachDriver(name: string, body: (d: DriverCase) => void, o: { timeout?: number } = {}): Promise<void> {
+  describe(`${name} [sqlite]`, o.timeout ? { timeout: o.timeout } : {}, () => body({ driver: "sqlite", open: async () => sqliteDb() }));
   const a = await available();
   if (a.ok) {
-    describe(`${name} [sqlserver]`, { timeout: SQL_TIMEOUT_MS }, () => body({ driver: "sqlserver", open: sqlServerDb }));
+    describe(`${name} [sqlserver]`, { timeout: Math.max(SQL_TIMEOUT_MS, o.timeout ?? 0) }, () => body({ driver: "sqlserver", open: sqlServerDb }));
     return;
   }
   if (env.FOCUSTIME_TEST_SQL === "required") throw new Error(`SQL Server is required for the store tests: ${a.why}`);
