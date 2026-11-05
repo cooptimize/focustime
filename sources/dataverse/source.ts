@@ -410,6 +410,57 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
    * Never selects the PAT. Kept in memory for 5 minutes.
    */
   let myClientsMemo: { at: number; clients: MyClient[] } | null = null;
+
+  /**
+   * DV-1: the DevOps settings of the given client accounts for the central poller, read with the app's own Dataverse
+   * access (no person: `email` is null). The other query that selects coop_devopstoken; the token is wrapped in Pat at
+   * once and kept by the poller in memory only (10 minutes). `withPat: false` (which accounts have DevOps) never selects it.
+   */
+  async function accountTargets(clientKeys: string[], opts: { withPat?: boolean } = {}): Promise<TargetsResult> {
+    const withPat = opts.withPat !== false;
+    try {
+      if (clientKeys.length === 0) return { ok: true, targets: [] };
+      const q = (v: string) => `'${v.replace(/'/g, "''")}'`;
+      const targets: DevOpsTarget[] = [];
+      // A filter per 40 keys keeps the URL short.
+      for (let i = 0; i < clientKeys.length; i += 40) {
+        const keys = clientKeys.slice(i, i + 40);
+        const keyFilter = keys.flatMap((k) => [`coop_reportingnickname eq ${q(k)}`, `name eq ${q(k)}`]).join(" or ");
+        const rows = await getAll<AccountRow & { coop_devopsorg: string | null; coop_devopsprojectid: string | null; coop_devopsprojectname: string | null; coop_devopstoken?: string | null }>(
+          "devops_accounts_app",
+          `accounts?$select=accountid,name,coop_reportingnickname,coop_devopsorg,coop_devopsprojectid,coop_devopsprojectname${withPat ? ",coop_devopstoken" : ""}&$filter=${encodeURIComponent(`statecode eq 0 and (${keyFilter})`)}`,
+        );
+        for (const row of rows) {
+          const token = row.coop_devopstoken?.trim() || null;
+          delete row.coop_devopstoken;
+          const key = clientKeyOf(row);
+          if (!key || !keys.includes(key)) continue;
+          targets.push({
+            accountId: row.accountid.toLowerCase(),
+            clientKey: key,
+            clientName: key,
+            org: row.coop_devopsorg?.trim() || null,
+            project: row.coop_devopsprojectname?.trim() || row.coop_devopsprojectid?.trim() || null,
+            projectName: row.coop_devopsprojectname?.trim() || null,
+            email: null,
+            pat: token ? new Pat(token) : null,
+          });
+        }
+      }
+      for (const t of targets) {
+        if (targets.filter((o) => o.clientKey === t.clientKey).length > 1) {
+          t.pat = null;
+          t.problem = `More than one account is named ${t.clientKey} in Dataverse`;
+        }
+      }
+      return { ok: true, targets };
+    } catch (e) {
+      if (!(e instanceof SourceFailure)) log({ source: "dataverse", op: "devops_accounts_app", kind: "unexpected" });
+      const f = e instanceof SourceFailure ? e : null;
+      return { ok: false, message: f?.rootCause === "keyring" ? "keyring locked" : f?.status === "unreachable" ? "Dataverse unreachable" : f?.status === "auth_required" ? "Dataverse access denied" : "Dataverse read failed", ...(f?.rootCause ? { cause: f.rootCause } : {}) };
+    }
+  }
+
   async function myClients(): Promise<MyClient[] | null> {
     const t = Date.now();
     if (myClientsMemo && t - myClientsMemo.at < 5 * 60_000) return myClientsMemo.clients;
@@ -662,7 +713,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     }
   }
 
-  return { load, following, resolveUserId, devopsTargets, myClients, pto, teammates, clientTeam, teamPto, directory };
+  return { load, following, resolveUserId, devopsTargets, accountTargets, myClients, pto, teammates, clientTeam, teamPto, directory };
 }
 
 export type TeamFailure = { ok: false; message: string };

@@ -305,7 +305,7 @@ describe("my promises (the Wingtip-shaped example)", () => {
   });
 });
 
-describe("the Rules (ADM-2, D592)", () => {
+describe("the Rules (ADM-2, D604)", () => {
   it("Closed conversations stay shown for the Rule's days; the poll line reads the interval Rule", async () => {
     const w = world({ respond: allianceAnswer });
     const c = await alliance(w);

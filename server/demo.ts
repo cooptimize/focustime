@@ -18,6 +18,8 @@ import { notices } from "../plan/notify.ts";
 import { createAdminStore, FOCUSTIME } from "../store/admin-store.ts";
 import { clientScope } from "../config/org.ts";
 import { settingsEdit } from "../config/settings.ts";
+import { createStatusRegistry } from "../actions/status-rows.ts";
+import { devopsStatusSource } from "../actions/devops-poll.ts";
 import { createOrgRuntime } from "../actions/org.ts";
 import { demoAdminCheck } from "../actions/admin.ts";
 import type { AdminOps } from "../actions/admin-actions.ts";
@@ -47,7 +49,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   // ADM-1: the demo's own team settings, people and audit, on the same in-memory database (never the real ones). The
   // demo's person is an admin inside their own demo and nowhere else.
   const adminStore = createAdminStore(shared, instant);
-  // The demo's person is signed in, so the one person match (D587) finds them the way it does in the hosted app.
+  // The demo's person is signed in, so the one person match (D599) finds them the way it does in the hosted app.
   const org = createOrgRuntime({ store: adminStore, bootstrap: { model: "stub", appCapUsd: 100, inviteDomains: ["example.com"], feedback: null }, now: () => Date.parse(opts.now()), signedIn: async () => [{ id: DEMO_PERSON.oid, email: DEMO_PERSON.email, upn: DEMO_PERSON.username }] });
   rulesOf = async (k) => {
     const c = (await org.rules()).clients[k];
@@ -59,7 +61,20 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients, dir.accounts);
     for (const c of DEMO_CLIENTS) await adminStore.setOrg({ scope: clientScope(c.key), key: "color", value: c.color, actor: FOCUSTIME, area: "clients", target: c.key, note: "demo" });
   })();
+  // DV-1: Admin › Status's DevOps rows, pretend (the demo reads no DevOps): one fine, one with a bad token, one slowed.
+  const checked = new Map<string, string>();
+  const demoPoll = {
+    status: async () =>
+      DEMO_CLIENTS.map((c, i) => {
+        const at = checked.get(c.key) ?? Temporal.Instant.from(opts.now()).subtract({ seconds: 20 + i * 15 }).toString();
+        return { clientKey: c.key, checkedAt: at, okAt: c.key === "Harbor" ? Temporal.Instant.from(at).subtract({ hours: 3 }).toString() : at, changedToday: [2, 7, 0, 4][i]!, callsToday: [214, 236, 9, 131][i]!, minutes: c.key === "Harbor" ? 30 : c.key === "Atlas" ? 4 : 1, slowed: c.key === "Atlas" ? "Close to the DevOps usage limit" : null, error: c.key === "Harbor" ? "Token not valid" : null, rate: c.key === "Atlas" ? { limit: 200, remaining: 31, cost: 0.42, at } : null };
+      }),
+    checkNow: async (k: string) => void checked.set(k, opts.now()),
+  };
+  const statusRows = createStatusRegistry();
+  statusRows.register(devopsStatusSource(demoPoll));
   const adminOps: AdminOps = {
+    statusRows,
     check: demoAdminCheck(DEMO_PERSON.oid),
     org,
     groupId: null,

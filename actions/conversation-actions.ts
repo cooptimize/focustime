@@ -55,7 +55,7 @@ export type ConversationContext = RequestContext & {
   processModel?: (cfg: AppConfig, clientKey: string) => Promise<ProcessModel | null>;
 };
 
-/** Closed ones stay visible this long by default; the live value is the Rule conv.closed_shown_days (D592). */
+/** Closed ones stay visible this long by default; the live value is the Rule conv.closed_shown_days (D604). */
 const CLOSED_SHOWN_DAYS = 14;
 /** How long ago a conversation may have closed and still be listed (and counted). */
 const closedShownMs = (cfg: AppConfig) => (cfg.org?.rules.closedShownDays ?? CLOSED_SHOWN_DAYS) * 24 * 3600_000;

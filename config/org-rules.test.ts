@@ -1,4 +1,4 @@
-// ADM-2 (D592): the chat Rules' bounds. A stored value the Rule no longer allows (a poll interval over 30 minutes, from
+// ADM-2 (D604): the chat Rules' bounds. A stored value the Rule no longer allows (a poll interval over 30 minutes, from
 // before the bound) reads as the built-in value and is listed as a problem for Status, never thrown.
 import { describe, expect, it } from "vitest";
 import { ORG_SPECS, resolveRules, type OrgRow } from "./org.ts";

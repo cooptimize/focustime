@@ -6,7 +6,7 @@
 //   clientLeads(client)          the account's owner (the primary lead), Lead Consultants on its Account Workers, and
 //                                anyone an admin added; minus anyone an admin removed. Several per client.
 //   isClientLead(person, client)
-// ADM-2 (D587 to D589): every person is one entry from cooptimizers() (plan/person-match.ts), matched once, so the
+// ADM-2 (D599 to D601): every person is one entry from cooptimizers() (plan/person-match.ts), matched once, so the
 // signed-in person's id and their Dataverse row are the same person here. Only Cooptimizers have a level or lead
 // anything; only clients (clientAccounts()) have leads. A lead override on a non-client stays stored, unused.
 import { LEVEL_NAMES, LEVELS, type Level } from "../config/org.ts";
@@ -106,7 +106,7 @@ export function levels(i: PeopleInput): Levels {
   return {
     levelOf(personId) {
       if (!personId) return { level: null, source: null, dataverse: null };
-      // Not a Cooptimizer: no level and no level defaults (D588).
+      // Not a Cooptimizer: no level and no level defaults (D600).
       if (!isCoop(personId)) return { level: null, source: null, dataverse: null };
       const id = canonical(personId);
       const dv = dirLevel(personId);

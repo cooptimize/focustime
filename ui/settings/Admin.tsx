@@ -11,6 +11,8 @@ import { shortDate } from "../labels.ts";
 import { TypeIcon } from "../TypeIcon.tsx";
 import { STATUS_WORD, type ConversationStatus } from "../../plan/conversations.ts";
 import type { ClientProcess } from "../../actions/types.ts";
+import type { StatusGroup } from "../../actions/status-rows.ts";
+import { StatusRows } from "./StatusRows.tsx";
 
 export const ADMIN_UI_SECTIONS = [
   ["admin-clients", "Clients"],
@@ -681,7 +683,7 @@ function AdminPeople() {
   );
 }
 
-/** ADM-2 (D593): Dataverse position names to levels. Applies at once (the next read of levels), audited as one Rule. */
+/** ADM-2 (D605): Dataverse position names to levels. Applies at once (the next read of levels), audited as one Rule. */
 function PositionMap({ positions, unmapped, levels, saver }: { positions: Position[]; unmapped: number; levels: PeopleData["levels"]; saver: Saver }) {
   const map = Object.fromEntries(positions.filter((p) => p.mapped).map((p) => [p.name, p.level]));
   const shown = saver.shown("org", "org.position_levels", map) as Record<string, string | null>;
@@ -1060,6 +1062,7 @@ type StatusData = {
   conversations: { conversationsByStatus: Record<string, number>; messagesByRole: Record<string, number>; commitmentsByState: Record<string, number>; aiCallsToday: { chatName: string; clientKey: string; calls: number }[] } | null;
   warnings?: { area: string; text: string }[];
   jobs?: { name: string; every: string; lastRun: string | null; note: string | null }[];
+  groups?: StatusGroup[];
 };
 const ROLE_WORDS: Record<string, string> = { work: "work", chatter: "chatter", ack: "short replies", unsorted: "unsorted" };
 const COMMIT_WORDS: Record<string, string> = { open: "open", followup: "follow-ups", linked: "linked", created: "item created", done: "done", not_needed: "not needed" };
@@ -1137,6 +1140,7 @@ function AdminStatus() {
           </table>
         </>
       )}
+      {data.groups?.length ? <StatusRows groups={data.groups} /> : null}
       <h3>Client chats</h3>
       <p className="muted">Last poll: {when(data.lastPoll)}.</p>
       {data.chats.length === 0 ? (

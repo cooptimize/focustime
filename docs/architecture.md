@@ -242,6 +242,15 @@ One job reads each registered client chat for everyone; Asks are now Requests. D
 - **Phone**: `ui/Phone.tsx` BottomBar with the four tabs and the Inbox count; Capture is the top bar's +.
 - **e2e**: `e2e/navigation.test.ts`.
 
+## DV-1: DevOps read centrally (Nov 5)
+
+- **Data flow.** The scheduler's slow pass ticks `devops_poll` (`actions/devops-poll.ts`). For each polled client (`pollAccounts`) that's due (`plan/devops-pace.ts`), the poller reads the client's company PAT from Dataverse (`accountTargets`, kept in memory 10 minutes), runs one changed-since WIQL for the client's projects and a batch read of the changed ids through the app's DevOps source (`createDevOpsSource(...).internal`), diffs them against the store (`sources/devops/changes.ts`) and writes items, change log rows and its state in one transaction (`store/devops-store.ts`). Screens load through the same `DevOpsSource` interface in central mode: `storeReads` builds the week from `devops_items`, and `central.view` waits for a check only on Refresh, after a write or before the first load.
+- **Limits.** `createLimiter` (one per client org) reads every response's rate-limit headers and holds requests while a Retry-After is pending; `nextPace` doubles and halves the interval.
+- **Status.** `actions/status-rows.ts` is the registry; `devopsStatusSource` registers DevOps's rows; `admin.status_action` runs Check now; `ui/settings/StatusRows.tsx` renders the groups in Admin › Status.
+- **Tests.** `actions/devops-poll.test.ts` on `sources/devops/poll-fakes.ts` (a fake dev.azure.com with headers and refusals); `store/devops-store.test.ts` on both drivers; `plan/devops-pace.test.ts`; `e2e/admin.test.ts` checks the Status rows and Check now.
+- **Docs checked Nov 5, 2026.** Rate and usage limits (ms.date 2025-09-15), WIQL syntax (2026-02-28), Wiql - Query By Wiql 7.1 (`timePrecision`, `$top`, `asOf`), Work Items - Get Work Items Batch 7.1 (200 ids, `errorPolicy`).
+
+
 ## ADM-2: Admin fixes (Nov 5)
 
 - **Which accounts are clients.** `plan/client-accounts.ts` `clientAccounts()` (pure): Customer accounts, Cooptimize Internal, the admins' Treat as a client and Hide from FocusTime (client Rules). The org runtime holds it (`OrgRuntime.clientAccounts()`); `actions/client-accounts.ts` `onlyClients` wraps the action context once in `dispatch`, so `myClients()` and `teammates()` give clients and Cooptimizers only. `sources/dataverse/directory.ts` reads accounts (type, Account Worker and Focus Time counts) into the app table `directory_accounts` (`store/migrations/20261105T1400_client_accounts.ts`, which also adds `people_directory.guest`, `.entra` and `people_clients.worker`).

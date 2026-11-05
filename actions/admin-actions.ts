@@ -4,6 +4,7 @@
 // picks, follow-ups, captures, focus sessions, write PATs, AI request content or chat messages: a person's health is
 // names, dates and yes or no (AdminOps.people), and the store has no read for anything else. Every change is audited
 // (store/admin-store.ts) with who, when, what, old and new value; secrets are never settings.
+import type { StatusGroup, StatusRegistry } from "./status-rows.ts";
 import { clientScope, CLIENT_SPECS, KIND_NAMES, LEVEL_NAMES, LEVEL_SPECS, LEVELS, ORG_SPECS, OrgInputError, specFor, SUGGESTED_SLOTS, type AdminArea, type Guidance, type Level, type OrgRules } from "../config/org.ts";
 import { CLIENT_SLOTS } from "../config/schema.ts";
 import { LEAD_WHY_NAMES, type LeadWhy } from "../plan/levels.ts";
@@ -18,7 +19,7 @@ import type { ProcessModelResult } from "../sources/devops/source.ts";
 import type { ConversationCounts } from "../store/conversation-store.ts";
 import type { ActionResponse, ClientProcess } from "./types.ts";
 
-export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit"] as const;
+export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit", "admin.status_action"] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 export const ADMIN_SECTIONS = ["clients", "ai", "conversations", "people", "organization", "status", "audit"] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
@@ -50,20 +51,22 @@ export type AdminStatus = {
   warnings?: StatusWarning[];
   /** ADM-2: when the scheduler last ran each job, by name ("requests_poll", "people_refresh", "maintenance"). */
   lastRuns?: Record<string, string>;
-  /** ADM-2 (D592): the background jobs with their interval or period and last run. */
+  /** ADM-2 (D604): the background jobs with their interval or period and last run. */
   jobs?: StatusJob[];
+  /** DV-1: the status rows registry's groups (DevOps polling, and whatever registers later). */
+  groups?: StatusGroup[];
 };
 
 export type StatusJob = { name: string; every: string; lastRun: string | null; note: string | null };
 
-/** ADM-2 (D592): Rules stored out of range (read as their built-in value) and the empty domains Rule. */
+/** ADM-2 (D604): Rules stored out of range (read as their built-in value) and the empty domains Rule. */
 export function ruleWarnings(rules: OrgRules): StatusWarning[] {
   const out: StatusWarning[] = rules.problems.map((p) => ({ area: "rules" as const, text: `${p.label}: the stored value isn't allowed any more, so FocusTime uses ${JSON.stringify(p.fallback)}. Set it again in Admin.` }));
   if (!rules.organization.inviteDomains.length) out.push({ area: "people", text: "Set Cooptimize email domains in Admin › Organization. Until then only guest accounts are left out of People and sign-in." });
   return out;
 }
 
-/** The jobs Status lists, from the Rules they read (D592). */
+/** The jobs Status lists, from the Rules they read (D604). */
 export function statusJobs(rules: OrgRules, st: Pick<AdminStatus, "lastPoll" | "dataverse" | "lastRuns">): StatusJob[] {
   const c = rules.conversations;
   const runs = st.lastRuns ?? {};
@@ -94,6 +97,8 @@ export type AdminOps = {
   appSpentMicros(): Promise<number>;
   /** `day`: the admin's today, for the per-chat AI calls. */
   status(day: string): Promise<AdminStatus>;
+  /** DV-1: the status rows registry (Admin › Status renders its groups; a row's action runs through admin.status_action). */
+  statusRows?: StatusRegistry;
   refreshPeople(): Promise<{ ok: boolean; message: string | null; people: number }>;
   /** Deletes a person's FocusTime data and personal secrets now, and ends their sessions. */
   removePerson(id: string): Promise<void>;
@@ -141,7 +146,7 @@ const json = (v: string | null): unknown => {
 export const groupLink = (groupId: string | null) => (groupId ? `https://entra.microsoft.com/#view/Microsoft_AAD_IAM/GroupDetailsMenuBlade/~/Members/groupId/${groupId}` : null);
 
 /**
- * Admin › Clients (and AI): the clients by clientAccounts() (ADM-2, D585), or with `all` every account FocusTime knows
+ * Admin › Clients (and AI): the clients by clientAccounts() (ADM-2, D597), or with `all` every account FocusTime knows
  * of: the active Dataverse accounts, keys with team settings and registered chats. Leads never add a client here.
  */
 async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminContext["process"], refresh: boolean, all = false) {
@@ -202,7 +207,7 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
 export type StatusWarning = { area: "clients" | "people" | "rules" | "jobs"; text: string };
 
 /**
- * ADM-2: what a filtered-out account still has (D586): focus blocks (Account Workers or Focus Time in Dataverse), a
+ * ADM-2: what a filtered-out account still has (D598): focus blocks (Account Workers or Focus Time in Dataverse), a
  * registered chat, DevOps settings, AI allowed or a lead override. An account with AI allowed always gets a line.
  */
 export async function clientWarnings(ops: AdminOps): Promise<StatusWarning[]> {
@@ -242,7 +247,7 @@ async function peopleSection(ops: AdminOps, meId: string) {
       const level = lv.levelOf(id);
       const ids = new Set([id, ...(e.dir ? [e.dir.personId] : [])]);
       const removed = overrides.filter((o) => ids.has(o.personId) && o.kind === "lead_remove" && ca.isClient(o.clientKey)).map((o) => o.clientKey);
-      // ADM-2 (D587): the Dataverse column reads the same match as the level and leads beside it.
+      // ADM-2 (D599): the Dataverse column reads the same match as the level and leads beside it.
       const dataverse = e.match
         ? { matched: true, text: matchText(e.match) }
         : e.dir
@@ -279,7 +284,7 @@ async function peopleSection(ops: AdminOps, meId: string) {
     ...seen.filter((s) => !ops.breakGlass.some((b) => b.toLowerCase() === s.personId)).map((s) => ({ id: s.personId, name: nameOf(s.personId), via: s.via, checkedAt: s.checkedAt })),
     ...ops.breakGlass.map((b) => ({ id: b.toLowerCase(), name: nameOf(b), via: "break_glass" as const, checkedAt: null })),
   ];
-  // ADM-2 (D593): every position a Cooptimizer holds, and every one mapped, with its level and how many hold it.
+  // ADM-2 (D605): every position a Cooptimizer holds, and every one mapped, with its level and how many hold it.
   const map = rules.organization.positionLevels;
   const mapKey = new Map(Object.keys(map).map((k) => [k.trim().toLowerCase(), k]));
   const held = new Map<string, { name: string; people: number }>();
@@ -338,8 +343,8 @@ async function section(ops: AdminOps, s: AdminSection, meId: string, input: Reco
     case "people":
       return peopleSection(ops, meId);
     case "status": {
-      const [st, warnings, rules] = await Promise.all([ops.status(today ? await today() : new Date().toISOString().slice(0, 10)), clientWarnings(ops), ops.org.rules()]);
-      return { ...st, warnings: [...(st.warnings ?? []), ...ruleWarnings(rules), ...warnings], jobs: statusJobs(rules, st) };
+      const [st, warnings, rules, groups] = await Promise.all([ops.status(today ? await today() : new Date().toISOString().slice(0, 10)), clientWarnings(ops), ops.org.rules(), ops.statusRows ? ops.statusRows.groups() : Promise.resolve([])]);
+      return { ...st, warnings: [...(st.warnings ?? []), ...ruleWarnings(rules), ...warnings], jobs: statusJobs(rules, st), groups };
     }
     case "audit": {
       const area = typeof input.area === "string" && input.area ? input.area : null;
@@ -439,6 +444,14 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
       await ops.org.store.setOverride({ personId: id, personName: name, kind, ...(kind !== "level" ? { clientKey: (i.clientKey as string).trim() } : {}), value: kind === "level" ? (i.value as string) : null, clear, actor });
       ops.org.invalidate();
       return { ok: true, data: { personId: id, kind, clear } };
+    }
+    case "admin.status_action": {
+      // DV-1: a status row's action (Check now). It changes nothing anyone set, so it isn't in the audit log.
+      const extra = only(i, ["source", "row", "action"]);
+      if (extra) return bad(`unknown input field ${extra}`);
+      if (typeof i.source !== "string" || typeof i.row !== "string" || typeof i.action !== "string") return bad("admin.status_action takes { source, row, action }");
+      const done = ops.statusRows ? await ops.statusRows.act(i.source, i.row, i.action) : false;
+      return done ? { ok: true, data: { groups: await ops.statusRows!.groups() } } : bad("No such status action", 404);
     }
     case "admin.refresh_people": {
       if (Object.keys(i).length) return bad("admin.refresh_people takes {}");

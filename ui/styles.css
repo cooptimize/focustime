@@ -4289,3 +4289,11 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .set-picker label { flex: 1; min-width: 0; }
 .set-picker select { width: 100%; font: inherit; font-size: var(--fs-3); padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--text); }
 .adm-block { display: block; }
+
+/* DV-1: the status rows registry's states in Admin › Status. */
+.adm-status-group + .adm-status-group { margin-top: 12px; }
+.adm-state { font-weight: 500; }
+.adm-state-ok { color: var(--ok); }
+.adm-state-warn { color: var(--watch); }
+.adm-state-error { color: var(--risk); }
+.adm-state-idle { color: var(--text-faint); }

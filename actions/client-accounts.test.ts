@@ -1,4 +1,4 @@
-// ADM-2 (D585, D586): one rule for which accounts are clients, used by Admin › Clients and AI (Customers by default,
+// ADM-2 (D597, D598): one rule for which accounts are clients, used by Admin › Clients and AI (Customers by default,
 // All accounts on request), by every personal list (Settings › Clients, the week's clients and pickers, through
 // onlyClients on the action context), with Status warnings for a filtered-out account that still has things, and
 // nothing deleted.
@@ -134,7 +134,7 @@ describe("clientAccounts() in Admin", () => {
   });
 });
 
-describe("Status: Rules and jobs (D592)", () => {
+describe("Status: Rules and jobs (D604)", () => {
   it("a poll interval stored over 30 reads as 5 with a warning; the jobs list each interval, and data retention isn't enforced yet", async () => {
     const t = await team();
     // A value from before the bound (ADM-1 allowed 60).

@@ -1,8 +1,8 @@
-// ADM-2 (D585): every personal screen and picker lists clients only. One wrapper on the action context: the Dataverse
+// ADM-2 (D597): every personal screen and picker lists clients only. One wrapper on the action context: the Dataverse
 // source's myClients() (Settings › Clients, the week's clients, Capture, follow-ups, Plan the week, Roadmap, the help
 // finder) keeps only the accounts clientAccounts() says are clients, and isClient() answers for the lists built from
 // other keys (standing blocks, Keep following). Without the team runtime (no org) everything counts, as before.
-// ADM-2 (D588): the same wrapper keeps teammates() (the help finder, Who suggestions, follow-up pickers) to
+// ADM-2 (D600): the same wrapper keeps teammates() (the help finder, Who suggestions, follow-up pickers) to
 // Cooptimizers: guests, people outside the Cooptimize domains and automation accounts never show in a picker.
 import type { ClientAccounts } from "../plan/client-accounts.ts";
 import type { OrgRuntime } from "./org.ts";

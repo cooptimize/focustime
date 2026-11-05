@@ -161,7 +161,7 @@ async function send<T>(action: string, input: unknown): Promise<T> {
   return readResponse<T>(res);
 }
 
-export const weekLoad = (input: { weekStart?: string; now?: string; refresh?: boolean; viewRange?: string }) => call<WeekLoadData>("week.load", input);
+export const weekLoad = (input: { weekStart?: string; now?: string; refresh?: boolean; quiet?: boolean; viewRange?: string }) => call<WeekLoadData>("week.load", input);
 
 export type ConnectResult = { status: "connected" | "cancelled" | "failed" | "redirect"; message?: string; url?: string };
 /** Connecting a calendar is a visit to Microsoft or Google and back (A2): the server says where, the page goes there. */

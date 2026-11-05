@@ -1,4 +1,4 @@
-// ADM-2 (D587, D588, D590): one person match, one Cooptimizer rule, and a guest told from the ID token alone.
+// ADM-2 (D599, D600, D602): one person match, one Cooptimizer rule, and a guest told from the ID token alone.
 import { describe, expect, it } from "vitest";
 import { aDirectoryPerson } from "../test/builders/index.ts";
 import { cooptimizers, guestToken, matchPerson, matchText, notCooptimizer } from "./person-match.ts";

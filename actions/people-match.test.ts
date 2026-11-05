@@ -1,4 +1,4 @@
-// ADM-2 (D587, D588): Admin › People reads the one person match: a signed-in person found by email (Dataverse has no
+// ADM-2 (D599, D600): Admin › People reads the one person match: a signed-in person found by email (Dataverse has no
 // Entra id for them) shows Matched with the key, beside the level and leads from the same row; an external Dataverse
 // user is under Not Cooptimizers, never in People, a lead picker or a teammate picker.
 import { describe, expect, it } from "vitest";
@@ -123,7 +123,7 @@ describe("one person match in Admin › People", () => {
   });
 });
 
-describe("positions to levels (D593)", () => {
+describe("positions to levels (D605)", () => {
   it("a new position is Not mapped, counted; its people have no level and use the Consultant defaults", async () => {
     const t = await setup();
     const p = await t.people();

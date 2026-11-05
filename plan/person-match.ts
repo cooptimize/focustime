@@ -1,4 +1,4 @@
-// ADM-2 (D587, D588): who a person is in Dataverse, and who is a Cooptimizer. Pure. One match and one rule, used by
+// ADM-2 (D599, D600): who a person is in Dataverse, and who is a Cooptimizer. Pure. One match and one rule, used by
 // levels and client leads (plan/levels.ts), Admin › People's Dataverse column, the person pickers and sign-in, so a
 // column can never disagree with the data beside it.
 //

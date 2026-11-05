@@ -235,7 +235,7 @@ describe("one poll cycle", () => {
   });
 });
 
-describe("the Rules, read live (ADM-2, D592)", () => {
+describe("the Rules, read live (ADM-2, D604)", () => {
   it("a new interval applies on the next tick, both to what is due and to when the job wakes", async () => {
     const s = await setup({ now: "2026-11-04T14:00:00Z" });
     await s.register(FAB, "fabrikam");

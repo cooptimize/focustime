@@ -1,4 +1,4 @@
-// ADM-2 (D591): the Settings and Admin side menu. Pinned, it fills the height between the top bar and the status bar
+// ADM-2 (D603): the Settings and Admin side menu. Pinned, it fills the height between the top bar and the status bar
 // and scrolls on its own (wheel, trackpad, touch, keyboard), and the selected item scrolls into view on open, deep
 // links included. Two groups, Settings and Admin (admins only), each foldable; the fold is remembered in this browser
 // (try/catch: private windows and blocked storage just start unfolded). An Admin page always opens with Admin unfolded.

@@ -27,10 +27,10 @@ import { CHAT_DAILY_AI_CALLS, runPipeline } from "./conversations-pipeline.ts";
 import type { ConversationStore } from "../store/conversation-store.ts";
 import { userZone } from "../week/zone.ts";
 
-/** Unmatched messages are kept this long by default; the live value is the Rule conv.retention_days (D592). */
+/** Unmatched messages are kept this long by default; the live value is the Rule conv.retention_days (D604). */
 export const EXPIRE_DAYS = 14;
 
-/** The Rules the job reads at the start of each cycle (ADM-2, D592), so a change applies on the next tick. */
+/** The Rules the job reads at the start of each cycle (ADM-2, D604), so a change applies on the next tick. */
 export type PollRules = { pollMinutes: number; retentionDays: number };
 const BUILTIN_RULES: PollRules = { pollMinutes: POLL_MINUTES, retentionDays: EXPIRE_DAYS };
 const rulesOf = async (deps: Pick<PollDeps, "rules">): Promise<PollRules> => (deps.rules ? await deps.rules().catch(() => BUILTIN_RULES) : BUILTIN_RULES);
