@@ -260,11 +260,11 @@ What DS-1 learned, and what is still open:
 ## Conversations fixes (CV-2, Nov 5)
 
 - Q-CV2-1: Chat images live in Azure SQL (`teams_message_images`, D623). Move the bytes to Blob storage (a private container, the app's managed identity, the row keeping the blob name) in an HK step once the monthly size is known. Size per month is about chats x images per chat per working day x 21 x the average stripped size (a pasted screenshot is usually 100 to 400 KB): 20 chats with 3 a day at 250 KB is about 315 MB a month, kept as long as their messages are.
-- Q-CV2-2: Resolved by CV-3 (D633): rules-only grouping for clients with AI off, behind the client Rule "Group messages without AI".
-- Q-CV2-3: Resolved by CV-3 (D630): Capture's Who is the PersonPicker.
-- Q-CV2-4: Resolved by CV-3 (D631): Link existing… suggests likely items with or without a conversation (rules only); Link doesn't start a conversation (Create still does, D628).
+- Q-CV2-2: Resolved by CV-3 (D648): rules-only grouping for clients with AI off, behind the client Rule "Group messages without AI".
+- Q-CV2-3: Resolved by CV-3 (D645): Capture's Who is the PersonPicker.
+- Q-CV2-4: Resolved by CV-3 (D646): Link existing… suggests likely items with or without a conversation (rules only); Link doesn't start a conversation (Create still does, D628).
 - Q-CV2-5: A promise that implies an item shows only Create the DevOps item? (Create, Link existing…, Not needed), as in CV-1: Make it a follow-up, Done and ⋯ come once it's linked. Past its due, should Make it a follow-up or Done be offered there too?
-- Q-CV2-6: Week's rail shows a promise past its due as "was due" in its title and label only; the rail's own amber treatment is PL-1's to decide.
+- Q-CV2-6: Resolved by CV-3 (D647): the Board rail shows "was due …" in amber, and carries earlier or untimed overdue promises to now on today's block.
 
 ## Sending work (SW-1, Nov 5)
 
@@ -274,4 +274,9 @@ What DS-1 learned, and what is still open:
 - Q-SW1-4: Team shows features committed and watched only. Should a person's stories under a committed feature show as a count (never hours), or is the feature enough?
 - Q-SW1-5: Ask to look goes to one lead. On a client with several leads, should it go to all of them, first to answer wins?
 
-- Q-CV2-6: Resolved by CV-3 (D643): the Board rail shows "was due …" in amber, and carries earlier or untimed overdue promises to now on today's block.
+## Costs (HK-2, Nov 5)
+
+- Q-HK2-1: One open tab kept prod "in use" all night on Nov 4 to 5 (about 150 `/api/action` calls an hour), so the idle rule never let the scheduler sleep: the pollers and the container stayed busy, and before HK-2 the database stayed awake. Count someone as active only while a tab is visible and there has been input in the last N minutes? Not HK-2's step (app code).
+- Q-HK2-2: The workbook's views (merges, group-by sums, the Yesterday column) are built from gallery-proven settings but couldn't be rendered from the CLI; check dev's copy after the merge against the PR's expected figures before deploying prod. If a view doesn't sum, the fallback is a second query for that view only.
+- Q-HK2-3: The budget alerts go to one person's address (FT_BUDGET_EMAIL) and the resource group Owners. A mail-enabled FocusTime Admins group, or an action group, would reach every admin; worth it once there's more than one?
+- Q-HK2-4: The Container Apps free grant is per subscription and shared with every other app in "Production Services and Apps", so prod's container cost depends on what else runs there. Track it in the workbook after Nov 7.

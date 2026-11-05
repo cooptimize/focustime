@@ -119,7 +119,10 @@ jobs:
           FT_FEEDBACK_LIVE: ${{ inputs.feedback_live && 'true' || 'false' }}
           FT_ADMINS: ${{ vars.FT_ADMINS }}
           FT_ADMIN_GROUP_ID: ${{ vars.FT_ADMIN_GROUP_ID }}
+          FT_BUDGET_EMAIL: ${{ vars.FT_BUDGET_EMAIL }}
         run: |
+          # HK-2: the budget alert address stays out of the log (the what-if prints it).
+          [[ -z "$FT_BUDGET_EMAIL" ]] || echo "::add-mask::$FT_BUDGET_EMAIL"
           az deployment group what-if -g "$RG" -n ft-dev --parameters infra/dev.bicepparam --exclude-change-types NoChange Ignore
           az deployment group create -g "$RG" -n ft-dev --parameters infra/dev.bicepparam --query properties.outputs.publicUrl.value -o tsv > url.txt
           echo "APP_URL=$(cat url.txt)" >> "$GITHUB_ENV"

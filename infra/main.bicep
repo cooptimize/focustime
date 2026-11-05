@@ -18,8 +18,9 @@ param imageDigest string = ''
 param sharedRegistry object = {}
 @description('A5: the user-assigned identity (in this resource group) that pulls from the shared registry; made by bootstrap.sh.')
 param pullIdentityName string = ''
-@description('A5: the SQL database\'s vCores (serverless max) and days of point-in-time restore.')
-param sqlMaxVCores int = 1
+@description('HK-2: the SQL database\'s DTU Standard tier (dev S0, prod S1) and A5\'s days of point-in-time restore.')
+@allowed([ 'S0', 'S1', 'S2', 'S3' ])
+param sqlSku string = 'S0'
 param sqlRetentionDays int = 7
 @description('A5: the only domains help invites may go to, for everyone (comma list); empty: each person\'s work email.')
 param inviteDomains string = ''
@@ -36,6 +37,10 @@ param feedbackLive bool = false
 @description('CV-1: shared polling of client chats in the background.')
 @allowed(['on', 'off'])
 param requestsPoll string = 'on'
+@description('HK-2: the monthly budget in USD for this resource group (dev 30, prod 60).')
+param budgetAmount int
+@description('HK-2: who gets the budget alerts, from the FT_BUDGET_EMAIL GitHub variable (never in the repo); empty: no budget.')
+param budgetEmail string = ''
 @description('dev 0 (scale to zero); prod 1 so the scheduler keeps running.')
 param minReplicas int
 param entraClientId string
@@ -83,7 +88,7 @@ module sql 'modules/sql.bicep' = {
     adminGroupName: adminGroupName
     adminGroupObjectId: adminGroupObjectId
     workspaceId: monitoring.outputs.workspaceId
-    maxVCores: sqlMaxVCores
+    sku: sqlSku
     retentionDays: sqlRetentionDays
   }
 }
@@ -128,7 +133,13 @@ module app 'modules/app.bicep' = {
 // FocusTime costs (the workbook in Monitor › Workbooks): dev and prod's actual cost, read live from Cost Management.
 module costs 'modules/costs.bicep' = {
   name: 'costs'
-  params: { env: env, location: location, tags: tags }
+  params: { env: env, location: location, tags: tags, workspaceId: monitoring.outputs.workspaceId }
+}
+
+// HK-2: the monthly budget and its alerts (50%, 80%, 100% actual, 100% forecast), only once FT_BUDGET_EMAIL is set.
+module budget 'modules/budget.bicep' = if (!empty(budgetEmail)) {
+  name: 'budget'
+  params: { name: '${prefix}-budget', amount: budgetAmount, email: budgetEmail }
 }
 
 output appName string = app.outputs.name
