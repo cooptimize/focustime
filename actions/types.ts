@@ -500,7 +500,11 @@ export type AheadItem = {
   size: number | null;
   url: string;
   changedAt: string;
+  /** AH-2: in Cooptimize's scope for this client (my items always are). Out of it: shown only with "Show the whole project", never in Fix next. */
+  inScope: boolean;
 };
+/** AH-2: a client's scope as Ahead shows it. Counts are open items. */
+export type AheadScope = { kind: import("../plan/devops-scope.ts").ScopeKind; automatic: boolean; all: boolean; inScope: number; total: number; problem: string | null; whole: boolean };
 /** One client's items and the fields its process gives each type ("Not in <project>'s process" when absent). */
 export type AheadClient = {
   clientKey: string;
@@ -519,6 +523,8 @@ export type AheadClient = {
   fieldNames: Record<string, string>;
   types: import("../week/types.ts").TypeLook[];
   items: AheadItem[];
+  /** AH-2: absent before AH-2 and on a failed read. */
+  scope?: AheadScope;
 };
 /** ahead.load: every client's items, my rights on each, my change set and my kept half-days. */
 export type AheadLoad = {

@@ -143,4 +143,4 @@ export function valueText(field: ChangeField, v: ChangeValue | undefined, half: 
 
 // ---- Filters (D654): shared by Grid and Gantt, remembered per person ----
 export type AheadOwner = "mine" | "contributing" | "all";
-export type AheadFilters = { owner: Record<string, AheadOwner>; clients: string[]; epic: string | null; gaps: boolean; from: string | null; to: string | null; q: string; states: string[] };
+export type AheadFilters = { owner: Record<string, AheadOwner>; clients: string[]; epic: string | null; gaps: boolean; from: string | null; to: string | null; q: string; states: string[]; /** AH-2: "Show the whole project" (items outside Cooptimize's scope too). */ whole?: boolean };

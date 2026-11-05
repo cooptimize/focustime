@@ -85,6 +85,8 @@ import { weekConfig } from "../config/defaults.ts";
 import type { RequestsPort } from "../actions/request-actions.ts";
 import { createAdminCheck } from "../actions/admin.ts";
 import { createOrgRuntime } from "../actions/org.ts";
+import { scopeDepsOf } from "../actions/scope-deps.ts";
+import type { ClientScopeFacts } from "../actions/admin-actions.ts";
 import { createAdminOps } from "./admin-ops.ts";
 import { createDevOpsPoller, createLimiter, devopsStatusSource, NO_SNAPSHOTS, pollAccounts, type DevOpsPoller } from "../actions/devops-poll.ts";
 import { clientAccountsStatusSource } from "../actions/client-accounts-status.ts";
@@ -291,6 +293,8 @@ const itemMapOf = (who: Person) => (clientKey: string, ids: number[]) => {
     log({ source: "plan", op: "item_map", kind: "failed" });
   });
 };
+/** AH-2: each client's DevOps scope and who is a Cooptimizer (read when a screen reads the store). */
+const devopsScope = (clientKey: string) => scopeDepsOf(org)(clientKey);
 const devopsFor = (who: Person) => (cfg: DataverseConfig, timeZone: string) => {
   const key = JSON.stringify([who.userId, cfg, timeZone]);
   let s = devopsSources.get(key);
@@ -299,7 +303,7 @@ const devopsFor = (who: Person) => (cfg: DataverseConfig, timeZone: string) => {
     // DV-1: with the central poller, screens read its store: Dataverse here says only which clients this person may
     // see (active Account Worker) and their DevOps identity, never the PAT. Without it (no app Dataverse), as before.
     s = devopsPoller
-      ? createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys, { withPat: false }), processOverrides: (k) => who.process[k] ?? {}, openStates: (k) => who.openStates[k] ?? [], onItems: itemMapOf(who), central: devopsPoller.reads, limiter: devopsLimiter })
+      ? createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys, { withPat: false }), processOverrides: (k) => who.process[k] ?? {}, openStates: (k) => who.openStates[k] ?? [], onItems: itemMapOf(who), central: devopsPoller.reads, limiter: devopsLimiter, scope: devopsScope })
       : createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys), processOverrides: (k) => who.process[k] ?? {}, openStates: (k) => who.openStates[k] ?? [], onItems: itemMapOf(who) });
     devopsSources.set(key, s);
   }
@@ -880,6 +884,19 @@ const adminOps = createAdminOps({
   },
   // The scheduler starts below; Status asks only once a person opens it.
   lastRuns: () => scheduler.lastRuns(),
+  // AH-2: counts per area path and team from the central store (the poller and its app source are set up below).
+  scope: async (keys) => {
+    if (!devopsPoller || !devopsApp) return {};
+    const deps = scopeDepsOf(org);
+    const rows = await Promise.all(
+      keys.map(async (k) => {
+        const [view, d0] = await Promise.all([devopsPoller!.reads.view(k, { force: false }), deps(k)]);
+        const facts: ClientScopeFacts = { counts: d0 ? devopsApp!.internal.scopeCounts(view, k, d0.isCooptimizer) : null, areasProblem: view.areas?.areasProblem ?? null, teamsProblem: view.areas ? view.areas.teamsProblem : null, readAt: view.areas?.readAt ?? null };
+        return [k, facts] as const;
+      }),
+    );
+    return Object.fromEntries(rows);
+  },
   log,
 });
 const refreshPeople = () => adminOps.refreshPeople();

@@ -450,7 +450,7 @@ export function aPickerPerson(o: { name?: string; external?: boolean; id?: strin
 /** One DevOps item as Ahead reads it (a feature by default, assigned to nobody, no dates). */
 export function anAheadItem(o: Partial<AheadItem> = {}): AheadItem {
   const id = o.id ?? 1000 + next();
-  return { id, rev: 3, title: `Item ${id}`, type: "Feature", state: "Active", stateCategory: "InProgress", level: "parent", rung: 1, parentId: null, assignee: null, start: null, target: null, size: null, url: `https://dev.azure.com/contoso/Portal/_workitems/edit/${id}`, changedAt: "2026-11-01T12:00:00Z", ...o };
+  return { id, rev: 3, title: `Item ${id}`, type: "Feature", state: "Active", stateCategory: "InProgress", level: "parent", rung: 1, parentId: null, assignee: null, start: null, target: null, size: null, url: `https://dev.azure.com/contoso/Portal/_workitems/edit/${id}`, changedAt: "2026-11-01T12:00:00Z", inScope: true, ...o };
 }
 /** Someone as an assignee. */
 export const anAssignee = (name: string, email = `${name.split(" ")[0]!.toLowerCase()}@cooptimize.example`) => ({ name, email });

@@ -81,6 +81,13 @@ export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { dat
     setFiltersRaw(f);
     void call("ahead.set_filters", { filters: f }).catch(() => null);
   };
+  // AH-2: "Show the whole project" changes what the server reads, so it's saved first, then Ahead reads again.
+  const setWhole = async (whole: boolean) => {
+    const next = { ...(filters ?? DEFAULT_FILTERS), whole };
+    setFiltersRaw(next);
+    await call("ahead.set_filters", { filters: next }).catch(() => null);
+    await reload();
+  };
 
   const stage: AheadEnv["stage"] = async (r, field, value, half = null) => {
     try {
@@ -108,7 +115,8 @@ export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { dat
   // Fix next: every gap on items I may change, whatever the filters (the pane follows the client filter only).
   const queue: (QueueEntry & { row: Row })[] = useMemo(() => {
     if (!load) return [];
-    const all = load.clients.filter((c) => c.status === "ok" && (!f.clients.length || f.clients.includes(c.clientKey))).flatMap((c) => buildRows(load, c));
+    // AH-2: never an item outside Cooptimize's scope, even with "Show the whole project".
+    const all = load.clients.filter((c) => c.status === "ok" && (!f.clients.length || f.clients.includes(c.clientKey))).flatMap((c) => buildRows(load, c)).filter((r) => r.item.inScope !== false);
     const byKey = new Map(all.map((r) => [r.key, r]));
     return fixQueue(all.map((r) => ({ clientKey: r.clientKey, id: r.item.id, open: isOpen(r.item), needsBreakdown: r.tier !== "story", openChildren: r.openChildren, startField: r.has.start ? "s" : null, targetField: r.has.target ? "t" : null, sizeField: r.has.size ? "z" : null, child: r.tier === "story", start: r.item.start, target: r.item.target, size: r.item.size, assigneeEmail: r.item.assignee?.email ?? null, canEdit: r.editable && !readOnly })), load.changes, skipped, (i) => dueOfRow(all, byKey.get(`${i.clientKey}:${i.id}`)!)).map((e) => ({ ...e, row: byKey.get(`${e.clientKey}:${e.itemId}`)! }));
   }, [load, f.clients, skipped, readOnly]);
@@ -141,7 +149,8 @@ export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { dat
         </div>
       )}
       {readOnly && load && <p className="muted ah-ro-note">Read only on a phone. Open FocusTime on a computer to change dates, sizes or owners.</p>}
-      {load && filters && mode !== "fix" && <Filters load={load} f={f} set={setFilters} color={color} anyFilter={!!anyFilter} />}
+      {load && filters && mode !== "fix" && <Filters load={load} f={f} set={setFilters} setWhole={(w) => void setWhole(w)} color={color} anyFilter={!!anyFilter} />}
+      {load && <ScopeNote load={load} whole={!!f.whole} />}
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
       {!load && !error && <p className="muted">Reading DevOps…</p>}
@@ -164,7 +173,34 @@ export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { dat
   );
 }
 
-function Filters({ load, f, set, color, anyFilter }: { load: AheadLoad; f: AheadFilters; set: (f: AheadFilters) => void; color: (k: string) => string; anyFilter: boolean }) {
+/**
+ * AH-2: one quiet line for the clients whose scope is automatic and narrows what's shown (a project with only its root
+ * area shows everything, so it gets none), and a problem with a set scope (teams not readable) in plain words.
+ */
+function ScopeNote({ load, whole }: { load: AheadLoad; whole: boolean }) {
+  const auto = load.clients.filter((c) => c.scope?.automatic && !c.scope.all);
+  const problems = load.clients.filter((c) => c.scope?.problem);
+  if (!auto.length && !problems.length) return null;
+  const names = (cs: typeof auto) => (cs.length === 1 ? cs[0]!.clientName : `${cs.slice(0, -1).map((c) => c.clientName).join(", ")} and ${cs[cs.length - 1]!.clientName}`);
+  return (
+    <div className="ah-scope-note">
+      {auto.length > 0 && (
+        <p className="muted">
+          {whole ? "Showing the whole project" : "Showing Cooptimize's work (automatic)"} for {names(auto)}. Set the scope in Admin › Clients.
+        </p>
+      )}
+      {problems.map((c) => (
+        <p key={c.clientKey} className="muted">
+          {c.clientName}: {c.scope!.problem}.
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function Filters({ load, f, set, setWhole, color, anyFilter }: { load: AheadLoad; f: AheadFilters; set: (f: AheadFilters) => void; setWhole: (whole: boolean) => void; color: (k: string) => string; anyFilter: boolean }) {
+  const scoped = load.clients.filter((c) => c.scope && !c.scope.all);
+  const scopeTitle = scoped.map((c) => `${c.clientName}: ${c.scope!.inScope} of ${c.scope!.total} open items are Cooptimize's work`).join("\n");
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
   const shownClients = load.clients.filter((c) => !f.clients.length || f.clients.includes(c.clientKey));
   const owners = new Set(shownClients.map((c) => ownerOf(f, c)));
@@ -213,8 +249,13 @@ function Filters({ load, f, set, color, anyFilter }: { load: AheadLoad; f: Ahead
         <input type="date" value={f.to ?? ""} onChange={(e) => set({ ...f, to: e.target.value || null })} />
       </label>
       <input className="rm-search" type="search" placeholder="Search titles or #id" aria-label="Search Ahead" value={f.q} onChange={(e) => set({ ...f, q: e.target.value })} />
+      {(scoped.length > 0 || f.whole) && (
+        <button type="button" className="rm-chip ah-whole" aria-pressed={!!f.whole} onClick={() => setWhole(!f.whole)} title={scopeTitle || "Every item in the project, not only Cooptimize's work"}>
+          Show the whole project
+        </button>
+      )}
       {anyFilter && (
-        <button type="button" className="mini quiet" onClick={() => set({ ...DEFAULT_FILTERS, owner: f.owner })}>
+        <button type="button" className="mini quiet" onClick={() => set({ ...DEFAULT_FILTERS, owner: f.owner, ...(f.whole ? { whole: true } : {}) })}>
           Clear filters
         </button>
       )}

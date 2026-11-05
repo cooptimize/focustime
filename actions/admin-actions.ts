@@ -18,6 +18,8 @@ import { breakdownText, looksOf } from "../plan/process.ts";
 import type { ProcessModelResult } from "../sources/devops/source.ts";
 import type { ConversationCounts } from "../store/conversation-store.ts";
 import type { ActionResponse, ClientProcess } from "./types.ts";
+import { scopeWords, type ClientScopeFacts } from "../plan/devops-scope.ts";
+export type { ClientScopeFacts };
 
 export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit", "admin.status_action"] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
@@ -102,6 +104,8 @@ export type AdminOps = {
   refreshPeople(): Promise<{ ok: boolean; message: string | null; people: number }>;
   /** Deletes a person's FocusTime data and personal secrets now, and ends their sessions. */
   removePerson(id: string): Promise<void>;
+  /** AH-2: each client's project areas and teams with counts from the central store (absent: DevOps isn't polled here). */
+  scope?(clientKeys: string[]): Promise<Record<string, ClientScopeFacts>>;
 };
 
 export type AdminContext = {
@@ -168,6 +172,7 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
     return r ? processView(r) : { ok: false, message: models ? "Not read" : "DevOps can't be read from here" };
   };
   const nameOf = (id: string) => users.find((u) => u.id === id)?.name ?? dir.find((d) => d.personId === id)?.name ?? "Someone not in FocusTime";
+  const facts = ops.scope && processKeys.length ? await ops.scope(processKeys).catch(() => null) : null;
   return {
     palette: CLIENT_SLOTS,
     suggested: SUGGESTED_SLOTS,
@@ -198,6 +203,7 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
         background: c?.background ?? [],
         houseStyle: c?.houseStyle ?? null,
         process: isClient ? processOf(k) : { ok: false, message: "Not a client" },
+        scope: isClient ? { rule: c?.devopsScope ?? null, words: scopeWords(c?.devopsScope ?? null), facts: facts?.[k] ?? null, polled: !!ops.scope } : null,
         leads: isClient ? lv.clientLeads(k).map((l) => ({ personId: l.personId, name: nameOf(l.personId), primary: l.primary, why: l.why.map((w) => LEAD_WHY_NAMES[w]) })) : [],
       };
     }),

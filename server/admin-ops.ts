@@ -40,6 +40,8 @@ export type AdminOpsDeps = {
   removePerson: (userId: string) => Promise<void>;
   /** ADM-2: when the scheduler last ran each job (by name), for Admin › Status; absent: unknown. */
   lastRuns?: () => Record<string, string>;
+  /** AH-2: Admin › Clients' scope facts per client (the poller's store). */
+  scope?: AdminOps["scope"];
   log: Logger;
 };
 
@@ -57,6 +59,7 @@ export function createAdminOps(d: AdminOpsDeps): AdminOps {
   let lastDirectory: { ok: boolean; message: string | null } = { ok: true, message: null };
   const ops: AdminOps = {
     ...(d.statusRows ? { statusRows: d.statusRows } : {}),
+    ...(d.scope ? { scope: d.scope } : {}),
     check: d.check,
     org: d.org,
     groupId: d.groupId,

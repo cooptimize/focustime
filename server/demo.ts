@@ -24,8 +24,12 @@ import { createOrgRuntime } from "../actions/org.ts";
 import { teamStore } from "../store/team-store.ts";
 import { DEMO_PEOPLE } from "../sources/demo/data.ts";
 import { demoAdminCheck } from "../actions/admin.ts";
-import type { AdminOps } from "../actions/admin-actions.ts";
+import type { AdminOps, ClientScopeFacts } from "../actions/admin-actions.ts";
 import { demoDirectory } from "../sources/demo/directory.ts";
+import { scopeDepsOf } from "../actions/scope-deps.ts";
+import { scopeCounts } from "../plan/devops-scope.ts";
+import { demoAreas, demoScopeItems, isDemoClient } from "../sources/demo/data.ts";
+import type { ScopeDeps } from "../sources/devops/source.ts";
 
 /** The demo's settings with its clients' colors left to the team (they are the demo's team colors). */
 function followTeamColors(t: string): string {
@@ -41,7 +45,9 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   let text = followTeamColors(DEMO_CONFIG);
   // The demo team's process Rules (Admin › Clients in the demo) apply to the demo's process models.
   let rulesOf: (k: string) => Promise<ProcessOverrides> = async () => ({});
-  const sources = createDemoSources(opts.now, (k) => rulesOf(k));
+  // AH-2: the demo team's DevOps scope per client, through the same helper as the hosted app's.
+  let scopeOf: (k: string) => Promise<ScopeDeps | null> = async () => null;
+  const sources = createDemoSources(opts.now, (k) => rulesOf(k), (k) => scopeOf(k));
   const plan = opts.plan ?? createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(opts.now()).toZonedDateTimeISO(DEMO_TZ) });
   // Shared polling: the demo's own client chats and Requests, in memory beside its plan (never the real shared store).
   // The demo reads no messages, so Refresh has nothing to do.
@@ -53,6 +59,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   const adminStore = createAdminStore(shared, instant);
   // The demo's person is signed in, so the one person match (D599) finds them the way it does in the hosted app.
   const org = createOrgRuntime({ store: adminStore, bootstrap: { model: "stub", appCapUsd: 100, inviteDomains: ["example.com"], feedback: null }, now: () => Date.parse(opts.now()), signedIn: async () => [{ id: DEMO_PERSON.oid, email: DEMO_PERSON.email, upn: DEMO_PERSON.username }] });
+  scopeOf = scopeDepsOf(org);
   rulesOf = async (k) => {
     const c = (await org.rules()).clients[k];
     return c ? { noBreakdown: c.noBreakdown, background: c.background } : {};
@@ -110,6 +117,15 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     },
     removePerson: async () => {
       throw new Error("The demo's people are pretend, so there is nobody to remove");
+    },
+    // AH-2: the demo projects' areas and teams with counts, from the demo's own items (the same rules).
+    scope: async (keys) => {
+      const out: Record<string, ClientScopeFacts> = {};
+      for (const k of keys.filter(isDemoClient)) {
+        const deps = await scopeOf(k);
+        out[k] = { counts: deps ? scopeCounts(demoScopeItems(k), { areas: demoAreas(k), isCooptimizer: deps.isCooptimizer }) : null, areasProblem: null, teamsProblem: null, readAt: demoAreas(k).readAt };
+      }
+      return out;
     },
   };
   const applied = async (t: string) => {

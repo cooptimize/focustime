@@ -13,7 +13,7 @@ const FIELDS = [
   { referenceName: "Microsoft.VSTS.Scheduling.StoryPoints", name: "Story Points", type: "double" },
 ];
 
-export type FakeItem = { id: number; type: string; state: string; title: string; parent?: number | null; assignee?: { name: string; email: string } | null; target?: string | null; comments?: number; rev: number; changedAt: string; createdAt: string; changedBy?: { name: string; email: string }; project?: string };
+export type FakeItem = { id: number; type: string; state: string; title: string; parent?: number | null; assignee?: { name: string; email: string } | null; target?: string | null; comments?: number; rev: number; changedAt: string; createdAt: string; changedBy?: { name: string; email: string }; project?: string; /** AH-2: its area path (the project root by default). */ area?: string };
 
 export type OrgSetup = {
   project: string;
@@ -22,6 +22,10 @@ export type OrgSetup = {
   headers?: Record<string, string>;
   /** Answer every request with this status (401: a bad token; 429: a refusal with `headers`). */
   status?: number;
+  /** AH-2: area paths below the root ("Contoso Project\\BI"); the tree is the root alone without them. */
+  areas?: string[];
+  /** AH-2: teams and their team field values (System.AreaPath unless `field`); none: the teams call answers 401 (a token without Project read). */
+  teams?: { name: string; areas: { path: string; sub: boolean }[]; field?: string }[];
 };
 
 export type LiveCall = { org: string; op: "wiql" | "batch" | "meta"; query?: string; ids?: number[]; at: string };
@@ -45,6 +49,7 @@ export function fakeLiveDevOps(orgs: Record<string, OrgSetup>, clock: () => Temp
     "System.TeamProject": i.project ?? project,
     "Microsoft.VSTS.Common.StackRank": i.id,
     ...(i.parent ? { "System.Parent": i.parent } : {}),
+    "System.AreaPath": i.area ?? project,
     ...(i.assignee ? { "System.AssignedTo": { displayName: i.assignee.name, uniqueName: i.assignee.email } } : {}),
     ...(i.target ? { "Microsoft.VSTS.Scheduling.TargetDate": i.target } : {}),
     ...(i.changedBy ? { "System.ChangedBy": { displayName: i.changedBy.name, uniqueName: i.changedBy.email } } : {}),
@@ -92,6 +97,31 @@ export function fakeLiveDevOps(orgs: Record<string, OrgSetup>, clock: () => Temp
         .filter((i): i is FakeItem => !!i && !deleted.has(`${org}#${i.id}`))
         .map((i) => ({ id: i.id, rev: i.rev, fields: Object.fromEntries(Object.entries(fieldsOf(i, o.project)).filter(([k]) => b.fields.includes(k))) }));
       return json(o, { count: value.length, value });
+    }
+    // AH-2: the area tree, the teams and each team's field values.
+    if (path === "_apis/wit/classificationnodes/Areas") {
+      calls.push({ org: org!, op: "meta", at });
+      type Node = { name: string; children?: Node[] };
+      const root: Node = { name: o.project };
+      for (const full of o.areas ?? []) {
+        let at2 = root;
+        for (const part of full.split("\\").slice(1)) {
+          at2.children ??= [];
+          at2 = at2.children.find((c) => c.name === part) ?? (at2.children.push({ name: part }), at2.children[at2.children.length - 1]!);
+        }
+      }
+      return json(o, root);
+    }
+    if (path === `projects/${o.project}/teams`) {
+      calls.push({ org: org!, op: "meta", at });
+      return o.teams ? json(o, { count: o.teams.length, value: o.teams.map((t) => ({ name: t.name })) }) : new Response("<html>sign in</html>", { status: 401 });
+    }
+    const tf = path.match(/^(.+)\/_apis\/work\/teamsettings\/teamfieldvalues$/);
+    if (tf) {
+      calls.push({ org: org!, op: "meta", at });
+      const t = o.teams?.find((x) => x.name === tf[1]);
+      if (!t) return new Response("", { status: 404 });
+      return json(o, { field: { referenceName: t.field ?? "System.AreaPath" }, defaultValue: t.areas[0]?.path ?? o.project, values: t.areas.map((a) => ({ value: a.path, includeChildren: a.sub })) });
     }
     // The project and the default team: not there (the process configuration decides), as some orgs answer.
     return new Response("", { status: 404, headers: { "content-type": "application/json" } });

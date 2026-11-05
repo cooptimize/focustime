@@ -8,7 +8,8 @@ import { aWeekConfig, ZONE } from "../test/builders/index.ts";
 import { legacyHours } from "../config/schema.ts";
 import { sqliteDb } from "../test/db.ts";
 import { memorySnapshots } from "../host/fakes.ts";
-import { createDevOpsSource } from "../sources/devops/source.ts";
+import { createDevOpsSource, type ScopeDeps } from "../sources/devops/source.ts";
+import type { DevOpsScope } from "../plan/devops-scope.ts";
 import { aFakeItem, fakeLiveDevOps, type OrgSetup } from "../sources/devops/poll-fakes.ts";
 import { target } from "../sources/devops/test-fakes.ts";
 import { createDevOpsStore } from "../store/devops-store.ts";
@@ -34,7 +35,7 @@ function harness(orgs: Record<string, OrgSetup>, o: { inHours?: boolean; allDay?
   const hours = o.inHours === false ? [] : o.allDay ? [legacyHours({ start: "00:00", split: "12:00", end: "23:59", timeZone: ZONE })] : [aWeekConfig().hours];
   const poller = createDevOpsPoller({ store, source: () => app.internal, limiter, accounts: async () => keys, targets: appTargets, hours: async () => hours, ruleMinutes: async () => o.rule ?? 1, active: () => active, now: clock, log: () => {} });
   /** One person's screens, on the store: no DevOps call of their own. */
-  const reader = (email = ME.email) =>
+  const reader = (email = ME.email, scope?: (k: string) => Promise<ScopeDeps | null>) =>
     createDevOpsSource({
       fetch: (async () => {
         throw new Error("a reader called DevOps");
@@ -46,6 +47,7 @@ function harness(orgs: Record<string, OrgSetup>, o: { inHours?: boolean; allDay?
       central: poller.reads,
       limiter,
       now: clock,
+      ...(scope ? { scope } : {}),
     });
   const tick = async () => {
     const started = await poller.tick();
@@ -401,5 +403,107 @@ describe("guards", () => {
       expect(code, f).not.toMatch(/clientKey\s*===?\s*["'`]/);
       expect(code, f).not.toMatch(/["'`](Agile|Scrum|CMMI|Basic)["'`]/);
     }
+  });
+});
+
+describe("AH-2: Cooptimize's scope", () => {
+  // A client's project: its own work at the root and in Finance, ours in BI and BI\Reports.
+  const P = "Contoso Project";
+  const KIM = { name: "Kim Lo", email: "kim@cooptimize.example" };
+  const PAT = { name: "Pat Client", email: "pat@contoso.example" };
+  const coopEmails = new Set([ME.email, KIM.email]);
+  const setup = (teams?: OrgSetup["teams"]) =>
+    harness({
+      contoso: project(
+        [
+          aFakeItem({ id: 1, type: "Epic", assignee: PAT }),
+          aFakeItem({ id: 2, type: "Feature", assignee: PAT, parent: 1 }),
+          aFakeItem({ id: 3, assignee: PAT, parent: 2 }),
+          aFakeItem({ id: 10, type: "Feature", assignee: ME, area: `${P}\\BI` }),
+          aFakeItem({ id: 11, assignee: KIM, parent: 10, area: `${P}\\BI` }),
+          aFakeItem({ id: 12, assignee: PAT, parent: 10, area: `${P}\\Finance` }),
+          aFakeItem({ id: 13, assignee: PAT, area: `${P}\\BI\\Reports` }),
+          aFakeItem({ id: 20, assignee: PAT, area: `${P}\\Finance` }),
+          aFakeItem({ id: 21, assignee: ME, area: `${P}\\Finance` }),
+        ],
+        { areas: [`${P}\\BI`, `${P}\\BI\\Reports`, `${P}\\Finance`], ...(teams ? { teams } : {}) },
+      ),
+    });
+  const TEAMS: OrgSetup["teams"] = [
+    { name: "BI", areas: [{ path: `${P}\\BI`, sub: true }] },
+    { name: "Finance", areas: [{ path: `${P}\\Finance`, sub: false }] },
+  ];
+  const scope = (rule: DevOpsScope | null) => async () => ({ rule, isCooptimizer: (e: string) => coopEmails.has(e) });
+  const ahead = async (h: ReturnType<typeof setup>, rule: DevOpsScope | null, o: { whole?: boolean; email?: string } = {}) => {
+    const [c] = await h.reader(o.email ?? ME.email, scope(rule)).aheadItems!([ref("contoso")], o.whole ? { whole: true } : {});
+    return c!;
+  };
+  const shown = (c: Awaited<ReturnType<typeof ahead>>) => c.items.map((i) => i.id).sort((a, b) => a - b);
+  const inScope = (c: Awaited<ReturnType<typeof ahead>>) => c.items.filter((i) => i.inScope).map((i) => i.id).sort((a, b) => a - b);
+
+  it("reads the project's area tree and its teams once a day, and a token without Project read leaves teams out softly", async () => {
+    const h = setup(TEAMS);
+    await h.tick();
+    const v = await h.poller.reads.view("contoso", { force: false });
+    expect(v.areas?.paths).toEqual([P, `${P}\\BI`, `${P}\\BI\\Reports`, `${P}\\Finance`]);
+    expect(v.areas?.teams).toEqual([
+      { name: "BI", otherField: false, areas: [{ path: `${P}\\BI`, sub: true }] },
+      { name: "Finance", otherField: false, areas: [{ path: `${P}\\Finance`, sub: false }] },
+    ]);
+    // The next check doesn't read them again (a day).
+    h.fake.reset();
+    h.advance(61_000);
+    await h.tick();
+    expect(h.fake.calls.filter((c) => c.op === "meta")).toEqual([]);
+    const bare = setup();
+    await bare.tick();
+    const b = await bare.poller.reads.view("contoso", { force: false });
+    expect(b.failure).toBeNull();
+    expect(b.areas?.teams).toBeNull();
+    expect(b.areas?.teamsProblem).toMatch(/Project read/);
+    expect(b.areas?.paths).toHaveLength(4);
+  });
+
+  it("automatic: Cooptimizers' items, what's under a feature one owns and the exact areas with our items, never the root; parents shown for context", async () => {
+    const h = setup(TEAMS);
+    await h.tick();
+    const c = await ahead(h, null);
+    // 10 (mine), 11 and 12 (under my feature), 21 (mine) so 20 (Finance, where 21 is). Not 1, 2, 3 (the root's own) or 13.
+    expect(inScope(c)).toEqual([10, 11, 12, 20, 21]);
+    expect(shown(c)).toEqual([10, 11, 12, 20, 21]);
+    expect(c.scope).toMatchObject({ kind: "automatic", automatic: true, all: false, inScope: 5, total: 9 });
+  });
+
+  it("by team (with sub-areas, as the team says), by area path with and without sub-areas, and the whole project; my items always show", async () => {
+    const h = setup(TEAMS);
+    await h.tick();
+    expect(inScope(await ahead(h, { kind: "teams", teams: ["BI"] }))).toEqual([10, 11, 13, 21]);
+    expect(inScope(await ahead(h, { kind: "areas", areas: [{ path: `${P}\\BI`, sub: false }] }))).toEqual([10, 11, 21]);
+    expect(inScope(await ahead(h, { kind: "areas", areas: [{ path: `${P}\\BI`, sub: true }] }))).toEqual([10, 11, 13, 21]);
+    const whole = await ahead(h, { kind: "whole" });
+    expect(inScope(whole)).toEqual([1, 2, 3, 10, 11, 12, 13, 20, 21]);
+    expect(whole.scope).toMatchObject({ kind: "whole", all: true });
+    // Someone else's view of the same scope doesn't get my Finance item.
+    expect(inScope(await ahead(h, { kind: "teams", teams: ["BI"] }, { email: KIM.email }))).toEqual([10, 11, 13]);
+  });
+
+  it("Show the whole project: every open item, the ones outside the scope marked (Fix next leaves them out)", async () => {
+    const h = setup(TEAMS);
+    await h.tick();
+    const c = await ahead(h, { kind: "teams", teams: ["BI"] }, { whole: true });
+    expect(shown(c)).toEqual([1, 2, 3, 10, 11, 12, 13, 20, 21]);
+    expect(c.items.filter((i) => !i.inScope).map((i) => i.id).sort((a, b) => a - b)).toEqual([1, 2, 3, 12, 20]);
+    expect(c.scope?.whole).toBe(true);
+  });
+
+  it("Week's lists read the same scope: a feature's children outside it drop out; my own items never do", async () => {
+    const h = setup(TEAMS);
+    await h.tick();
+    const [all] = await h.reader(ME.email).load([ref("contoso")]);
+    expect(all!.children.map((i) => i.id).sort((a, b) => a - b)).toEqual([11, 12]);
+    const me = h.reader(ME.email, scope({ kind: "areas", areas: [{ path: `${P}\\BI`, sub: true }] }));
+    const [w] = await me.load([ref("contoso")]);
+    expect(w!.children.map((i) => i.id)).toEqual([11]);
+    expect(w!.items.map((i) => i.id).sort((a, b) => a - b)).toEqual([10, 21]);
   });
 });

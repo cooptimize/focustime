@@ -1,6 +1,8 @@
 // Demo data (step 15, D272): a realistic, fictional week for showing FocusTime without real client data. Every date is
 // generated from the week asked for, so the demo always looks current. No real people, clients, meetings or items.
 import type { PtoEntry } from "../../week/pto.ts";
+import { scopeOf, type ProjectAreas, type ScopeItem } from "../../plan/devops-scope.ts";
+import type { ScopeDeps } from "../devops/source.ts";
 import { buildProcessModel, looksOf, type ProcessModel, type ProcessOverrides } from "../../plan/process.ts";
 import type { CalEvent, ClientPortfolio, ClientWork, FocusPattern, IsoDate, PortfolioChild, PortfolioItem, WorkItem } from "../../week/types.ts";
 
@@ -228,7 +230,7 @@ function item(k: DemoClientKey, r: Raw, order: number): WorkItem {
     order, parentId: parent, changedAt: "2026-10-30T15:00:00Z", url: urlOf(k, id), tags: [], blocked: false, changedByMe: false,
     assignedTo: who === ME ? "You" : who, assignedToMe: who === ME, targetDate: target ?? null,
     // Step 16.4: the fictional assignee's email (DevOps uniqueName), matched to the demo team by email.
-    assignedToEmail: who === ME ? "you@example.com" : who ? (DEMO_PEOPLE.find((p) => p.name === who)?.email ?? null) : null,
+    assignedToEmail: who === ME ? "you@example.com" : who ? (CLIENT_STAFF[who] ?? DEMO_PEOPLE.find((p) => p.name === who)?.email ?? null) : null,
   };
 }
 
@@ -276,12 +278,53 @@ export function demoPortfolio(k: DemoClientKey, fetchedAt: string): ClientPortfo
 export const isDemoClient = (k: string): k is DemoClientKey => DEMO_CLIENTS.some((c) => c.key === k);
 
 /**
+ * AH-2: the client's own work beside ours in Northwind's project (fictional): an area of their finance program, by
+ * their own staff (not Cooptimizers). Only Ahead reads it (the store has the whole project; Week starts from my items).
+ */
+const CLIENT_STAFF: Record<string, string> = { "Dana Fields": "dana.fields@northwind.example", "Omar Reyes": "omar.reyes@northwind.example" };
+const PROJECT_ONLY: Partial<Record<DemoClientKey, Raw[]>> = {
+  Northwind: [
+    [1700, "Epic", "Active", null, "Finance close automation", "Dana Fields"],
+    [1710, "Feature", "Active", 1700, "Month-end journal import", "Dana Fields", "2026-12-04"],
+    [1711, "User Story", "New", 1710, "Map ledger accounts", "Omar Reyes"],
+    [1712, "User Story", "New", 1710, "Journal approval step", null],
+    [1720, "Feature", "New", 1700, "Vendor payment run", "Omar Reyes"],
+  ],
+};
+/** AH-2: the demo projects' areas and teams: Northwind's has two areas below its root; the others only the root. */
+export function demoAreas(k: DemoClientKey): ProjectAreas {
+  const root = client(k).project;
+  if (k !== "Northwind") return { root, paths: [root], areasProblem: null, teams: [{ name: `${root} Team`, otherField: false, areas: [{ path: root, sub: true }] }], teamsProblem: null, readAt: "2026-10-30T15:00:00Z" };
+  return {
+    root, paths: [root, `${root}\\Web`, `${root}\\Finance`], areasProblem: null, teamsProblem: null, readAt: "2026-10-30T15:00:00Z",
+    teams: [
+      { name: `${root} Team`, otherField: false, areas: [{ path: root, sub: true }] },
+      { name: "Web", otherField: false, areas: [{ path: `${root}\\Web`, sub: true }] },
+      { name: "Finance", otherField: false, areas: [{ path: `${root}\\Finance`, sub: true }] },
+    ],
+  };
+}
+const areaOf = (k: DemoClientKey, id: number) => (k !== "Northwind" ? client(k).project : PROJECT_ONLY.Northwind!.some((r) => r[0] === id) ? `${client(k).project}\\Finance` : `${client(k).project}\\Web`);
+
+/** AH-2: the demo's items as the scope rules read them (every level, the project-only ones too). */
+export function demoScopeItems(k: DemoClientKey): ScopeItem[] {
+  return [...ITEMS[k], ...(PROJECT_ONLY[k] ?? [])].filter((r) => r[2] !== "Closed").map((r) => ({ id: r[0], parentId: r[3], area: areaOf(k, r[0]), assigneeEmail: r[5] === ME ? "you@example.com" : r[5] ? (CLIENT_STAFF[r[5]] ?? DEMO_PEOPLE.find((p) => p.name === r[5])?.email ?? null) : null, portfolio: isPortfolio(r[1]) }));
+}
+
+/**
  * AH-1: one client's items for Ahead, every level, as the central store would give them (fictional). Revisions are
  * fixed per item. Harbor's process sizes stories in Effort; the others in Story Points (two processes, D657).
+ * AH-2: through the client's scope (the same rules as the hosted app's); outside it only with `whole`.
  */
-export function demoAheadClient(k: DemoClientKey, fetchedAt: string): import("../../actions/types.ts").AheadClient {
+export function demoAheadClient(k: DemoClientKey, fetchedAt: string, sc: { deps: ScopeDeps | null; whole: boolean } = { deps: null, whole: false }): import("../../actions/types.ts").AheadClient {
   const model = demoProcess(k);
-  const all = ITEMS[k].map((r, n) => item(k, r, n + 1)).filter((i) => i.stateCategory !== "Completed" || ITEMS[k].some((r) => r[3] === i.id));
+  const rows = [...ITEMS[k], ...(PROJECT_ONLY[k] ?? [])];
+  const all = rows.map((r, n) => item(k, r, n + 1)).filter((i) => i.stateCategory !== "Completed" || rows.some((r) => r[3] === i.id));
+  const result = sc.deps ? scopeOf(demoScopeItems(k), sc.deps.rule, { areas: demoAreas(k), isCooptimizer: sc.deps.isCooptimizer, me: "you@example.com" }) : null;
+  const inScope = (id: number) => !result || result.all || result.ids.has(id);
+  const open = all.filter((i) => i.stateCategory !== "Completed");
+  const keep = new Set(open.filter((i) => sc.whole || inScope(i.id)).map((i) => i.id));
+  for (const id of [...keep]) for (let p = all.find((i) => i.id === id)?.parentId ?? null; p !== null; p = all.find((i) => i.id === p)?.parentId ?? null) keep.add(p);
   const sizeRef = k === "Harbor" ? "Microsoft.VSTS.Scheduling.Effort" : "Microsoft.VSTS.Scheduling.StoryPoints";
   const portfolioTypes = [...model.levels.top, ...model.levels.parent];
   const storyTypes = model.levels.child;
@@ -293,14 +336,15 @@ export function demoAheadClient(k: DemoClientKey, fetchedAt: string): import("..
     sizeFields: map(storyTypes, sizeRef),
     fieldNames: { "Microsoft.VSTS.Scheduling.StartDate": "Start Date", "Microsoft.VSTS.Scheduling.TargetDate": "Target Date", [sizeRef]: k === "Harbor" ? "Effort" : "Story Points" },
     types: looksOf(model),
-    items: all.map((i) => ({
+    scope: { kind: result?.kind ?? "whole", automatic: result?.kind === "automatic", all: result ? result.all : true, inScope: open.filter((i) => inScope(i.id)).length, total: open.length, problem: result?.problem ?? null, whole: sc.whole },
+    items: all.filter((i) => keep.has(i.id)).map((i) => ({
       id: i.id, rev: 3 + (i.id % 7), title: i.title, type: i.type, state: i.state, stateCategory: i.stateCategory,
       level: model.types.find((t) => t.name === i.type)?.level ?? null, rung: model.ladder.findIndex((r) => r.includes(i.type)),
       parentId: i.parentId,
       assignee: i.assignedToMe ? { name: "Alex Rivera", email: "you@example.com" } : i.assignedTo ? { name: i.assignedTo, email: i.assignedToEmail ?? null } : null,
       start: START[i.id] ?? null, target: i.targetDate ?? null,
       size: i.level === "portfolio" || UNSIZED.has(i.id) || i.stateCategory === "Completed" ? null : 3,
-      url: i.url, changedAt: QUIET.has(i.id) ? "2026-10-09T15:00:00Z" : i.changedAt,
+      url: i.url, changedAt: QUIET.has(i.id) ? "2026-10-09T15:00:00Z" : i.changedAt, inScope: inScope(i.id),
     })),
   };
 }
