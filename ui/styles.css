@@ -2838,6 +2838,12 @@ button.att-chip { cursor: pointer; }
   .half.card.has-ruler .card-body { margin-right: var(--ruler-w); }
   .ruler .r-ev span, .ruler .tbox-label, .ruler .r-free span { font-size: var(--fs-1); }
 }
+/* UI-8: too narrow for the rail (Week with its panel open at 1366, Plan the day beside the week): no rail and no blank
+   strip where it was. The 300 px rule above used to put the margin back after the earlier 230 px one removed it. */
+@container (max-width: 230px) {
+  .ruler { display: none; }
+  .half.card.has-ruler .card-body { margin-right: 0; }
+}
 
 /* Whole-day cells: PTO hatched, Friday's catch-up dashed. Span the AM and PM rows. */
 .half.whole { flex-direction: column; gap: 6px; padding: 10px 12px; flex: 1 1 0; cursor: default; box-shadow: none; }
@@ -2858,12 +2864,20 @@ button.att-chip { cursor: pointer; }
 
 /* ---------- U3: the shared detail panel (Week and Today) ---------- */
 .detail-panel {
-  position: fixed; top: 57px; right: 0; bottom: 32px; width: 440px; z-index: 20;
+  position: fixed; top: 57px; right: 0; bottom: 32px; width: var(--dp-w); z-index: 20;
   display: flex; flex-direction: column; box-sizing: border-box;
   background: var(--surface); border-left: 1px solid var(--border-strong); box-shadow: var(--shadow-panel);
   font-size: var(--fs-3);
 }
-@media (min-width: 3000px) { .detail-panel { width: 560px; } }
+/* UI-8: the panel's width, and the Week grid keeps clear of it while it is open, so Friday (the last column) is never
+   under the panel and stays a drop target. */
+:root { --dp-w: 440px; }
+@media (min-width: 3000px) { :root { --dp-w: 560px; } }
+.grid.with-panel:not(.narrow) { padding-right: calc(var(--dp-w) + 12px); }
+/* Narrower columns while it is open (1366): each day's header stays in its column; the date and the Today pill give
+   way (the panel names the day; today's weekday keeps its color). */
+.grid.with-panel .day-head { min-width: 0; overflow: hidden; }
+@media (max-width: 1599px) { .grid.with-panel.medium .day-head .date, .grid.with-panel.medium .day-head .today-pill { display: none; } }
 .dp-head { display: flex; align-items: flex-start; gap: 8px; padding: 14px 16px 10px 18px; border-bottom: 1px solid var(--border); }
 .dp-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .dp-title h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-4); font-weight: 600; }
