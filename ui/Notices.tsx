@@ -1,6 +1,7 @@
 // P1: in-app notifications. What the notifier delivered (after its gate) is listed under ⋯ › Notifications, newest
 // first, with an unread dot on ⋯; while the app is open a new one also shows as a toast for a few seconds. Opening the
 // list marks everything read; a notice opens its view. Nothing here makes a notice.
+import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { InAppNotice, NoticeList } from "../plan/push.ts";
 import { call } from "./api.ts";
@@ -77,6 +78,7 @@ function when(at: string, now: number): string {
 /** ⋯ › Notifications: a sheet with the list; full screen on the phone. */
 export function NoticesPanel({ items, onOpen, onClose }: { items: InAppNotice[]; onOpen: (route: string) => void; onClose: () => void }) {
   const close = useRef<HTMLButtonElement>(null);
+  useReturnFocus();
   useEffect(() => close.current?.focus(), []);
   const now = Date.now();
   return (
@@ -93,9 +95,7 @@ export function NoticesPanel({ items, onOpen, onClose }: { items: InAppNotice[];
       >
         <div className="command-head">
           <span className="command-step-title">Notifications</span>
-          <button ref={close} type="button" className="mini" onClick={onClose}>
-            Close
-          </button>
+          <CloseButton buttonRef={close} onClose={onClose} />
         </div>
         {items.length ? (
           <ul className="notice-list">

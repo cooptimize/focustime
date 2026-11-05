@@ -3,6 +3,7 @@ import { whenText } from "./labels.ts";
 // and after, link changes, the identity it writes as and who can see it. Confirm writes (with the rev test), reads
 // back, and only then says so; a refusal because the item changed offers Reload (a fresh preview), anything not
 // confirmed offers Retry. Clients without a write PAT get "Enable DevOps writes" (Settings > Clients) instead.
+import { CloseButton } from "./CloseButton.tsx";
 import { categoryWord } from "../plan/process.ts";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { DevOpsLogView, DevOpsPreview, DevOpsResult } from "../actions/types.ts";
@@ -187,6 +188,7 @@ function PreviewDialog({ flow, onConfirm, onReload, onClose }: { flow: Flow; onC
     <Modal label={label} busy={busy} onClose={onClose} wide={rows.length > 1}>
       <div className="cap-dialog-head">
         <h2>{label}</h2>
+        <CloseButton onClose={onClose} disabled={busy} />
       </div>
       <dl className="wd-where">
         <dt>Where</dt>
@@ -298,6 +300,7 @@ function AskDialog({ ask, onClose, onPreview }: { ask: Ask; onClose: () => void;
       >
         <div className="cap-dialog-head">
           <h2>{title}</h2>
+          <CloseButton onClose={onClose} />
         </div>
         <p className="muted">{ask.title}</p>
         {ask.kind === "state" &&

@@ -3,6 +3,7 @@
 // (the shared lookup over the client's open features or epics), size for stories, start and target dates for features,
 // and the area and iteration it will inherit from the parent (read-only). Edits save locally (draft.update); Create in
 // DevOps writes these values after its preview. Plan it adds it to a block (the 15.2 target order); Delete is local.
+import { CloseButton } from "./CloseButton.tsx";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import type { DraftStory, Size } from "../plan/types.ts";
@@ -123,6 +124,7 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
           <div className="cap-dialog-head">
             <h2>{kind}</h2>
             <span className="muted">Saved on this computer until you create it in DevOps.</span>
+            <CloseButton onClose={onClose} disabled={busy} />
           </div>
           <label className="set-field">
             <span className="set-label">Title</span>

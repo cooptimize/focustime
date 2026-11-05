@@ -69,7 +69,8 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
     await dlg.getByRole("radio", { name: "Must" }).click();
     await dlg.getByRole("button", { name: "Send", exact: true }).click();
     await expect(dlg.locator(".send-done").textContent()).resolves.toContain("Sent to Sam Ortiz for this week");
-    await dlg.getByRole("button", { name: "Close" }).click();
+    // The footer Close after sending (UI-3: the header × is the other "Close").
+    await dlg.getByRole("button", { name: "Close" }).last().click();
     const mine = group.locator(".sent-row", { hasText: "Supplier onboarding" }).filter({ hasText: "Sam" });
     await expect.poll(() => mine.count()).toBe(1);
     await expect(mine.textContent()).resolves.toContain("Waiting");

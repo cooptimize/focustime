@@ -1,9 +1,11 @@
 // The keyboard legend (? or the command menu): every key from ui/keys.ts, so it can't drift from what works.
+import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { Fragment, useEffect, useRef } from "react";
 import { KEYS } from "./keys.ts";
 
 export function KeyLegend({ onClose }: { onClose: () => void }) {
   const close = useRef<HTMLButtonElement>(null);
+  useReturnFocus();
   useEffect(() => {
     close.current?.focus();
   }, []);
@@ -24,9 +26,7 @@ export function KeyLegend({ onClose }: { onClose: () => void }) {
       >
         <div className="command-head">
           <span className="command-step-title">Keyboard shortcuts</span>
-          <button ref={close} type="button" className="mini" onClick={onClose}>
-            Close <kbd>Esc</kbd>
-          </button>
+          <CloseButton buttonRef={close} onClose={onClose} />
         </div>
         <dl className="key-list">
           {KEYS.map((k) => (

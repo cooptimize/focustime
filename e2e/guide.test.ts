@@ -107,7 +107,7 @@ describe.skipIf(!CHROMIUM)("the Guide (G1)", () => {
     await page.locator(".top-more").click();
     await page.getByRole("menuitem", { name: /^Guide/ }).click();
     await page.locator("main.guide").waitFor();
-    await page.locator(".guide-close").click();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
     await page.locator("main.guide").waitFor({ state: "detached" });
 
     await page.keyboard.press("Control+k");
