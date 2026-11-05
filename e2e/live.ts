@@ -131,6 +131,16 @@ export async function liveContext(o: LiveOptions = {}): Promise<ActionContext> {
   };
 }
 
+/**
+ * HK-1: the app is up and the opening has finished. The opening plays over the app on a slow load and takes every key
+ * to skip itself, so a key sent while it plays never reaches the app (break-down's Esc under load). Wait for this, not
+ * just the top bar, before sending keys.
+ */
+export async function appReady(page: Page): Promise<void> {
+  await page.locator(".topbar").waitFor();
+  await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
+}
+
 export type Live = { url: string; close: () => Promise<void>; page: () => Promise<Page> };
 export type LiveBrowser = { browser: Browser; vite: ViteDevServer | null; start: (ctx: ActionContext) => Promise<Live>; close: () => Promise<void> };
 

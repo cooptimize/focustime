@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { CHROMIUM } from "./harness.ts";
-import { liveBrowser, liveContext, ME, T, type LiveBrowser } from "./live.ts";
+import { appReady, liveBrowser, liveContext, ME, T, type LiveBrowser } from "./live.ts";
 import { shotBoth } from "./shots.ts";
 import type { Locator, Page } from "playwright-core";
 
@@ -100,12 +100,12 @@ describe.skipIf(!CHROMIUM)("Week block panel (PV-1)", () => {
       const errors: string[] = [];
       page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
       await page.goto(app.url);
-      await page.locator(".topbar").waitFor();
+      await appReady(page);
       const added = await dispatch(ctx, { action: "weekplan.add", input: { weekStart: WEEK, clientKey: "Adatum", itemId: FEATURE, tier: "must" } });
       expect(added.ok, JSON.stringify(added)).toBe(true);
       await page.goto(`${app.url}#/week`);
       await page.reload();
-      await page.locator(".topbar").waitFor();
+      await appReady(page);
       await page.locator("[data-moment]").waitFor({ state: "detached", timeout: 10_000 }).catch(() => {});
       const blocks = page.locator(".half.focus", { has: page.locator(".card-client", { hasText: "Adatum" }) });
       await blocks.first().waitFor();

@@ -12,7 +12,7 @@ import { openPlanDb } from "../store/plan-store.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { CHROMIUM, openSettings } from "./harness.ts";
-import { liveAdminOps, liveBrowser, liveContext, liveTeam, ME, NOW, T, type LiveBrowser } from "./live.ts";
+import { appReady, liveAdminOps, liveBrowser, liveContext, liveTeam, ME, NOW, T, type LiveBrowser } from "./live.ts";
 import { shotBoth } from "./shots.ts";
 import { createDevOpsPoller, createLimiter, devopsStatusSource, NO_SNAPSHOTS } from "../actions/devops-poll.ts";
 import { createStatusRegistry } from "../actions/status-rows.ts";
@@ -127,7 +127,7 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       const errors: string[] = [];
       page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
       await page.goto(sam.url);
-      await page.locator(".topbar").waitFor();
+      await appReady(page);
 
       // ⋯ shows Admin for an admin.
       await page.getByRole("button", { name: /^More/ }).first().click();
@@ -224,7 +224,7 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       const errors: string[] = [];
       page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
       await page.goto(kimApp.url);
-      await page.locator(".topbar").waitFor();
+      await appReady(page);
       await openSettings(page);
       await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Clients" }).click();
       expect(await page.getByRole("navigation", { name: "Admin sections" }).count()).toBe(0);

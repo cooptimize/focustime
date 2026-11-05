@@ -160,17 +160,20 @@ describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => 
 
   it("keyboard: arrows move between weeks and rows, + and − step the focused week's hours", async () => {
     const { page } = await ahead();
+    // HK-1: each + and − is a save on the server; expect.poll's default 1 s is shorter than that round trip under the
+    // full suite's load. Wait for the saved state as long as a locator would (10 s).
+    const saved = { timeout: 10_000 };
     await cell(page, "Loyalty points", "Nov 9").focus();
     await page.keyboard.press("ArrowRight");
     await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("aria-label") ?? "")).toMatch(/^Loyalty points, week of Nov 16:/);
     await page.keyboard.press("+");
-    await expect.poll(() => cell(page, "Loyalty points", "Nov 16").getAttribute("aria-label")).toContain(": about 4h.");
+    await expect.poll(() => cell(page, "Loyalty points", "Nov 16").getAttribute("aria-label"), saved).toContain(": about 4h.");
     await page.keyboard.press("+");
-    await expect.poll(() => cell(page, "Loyalty points", "Nov 16").getAttribute("aria-label")).toContain(": about 5h.");
+    await expect.poll(() => cell(page, "Loyalty points", "Nov 16").getAttribute("aria-label"), saved).toContain(": about 5h.");
     await page.keyboard.press("-");
-    await expect.poll(() => cell(page, "Loyalty points", "Nov 16").getAttribute("aria-label")).toContain(": about 4h.");
+    await expect.poll(() => cell(page, "Loyalty points", "Nov 16").getAttribute("aria-label"), saved).toContain(": about 4h.");
     await page.keyboard.press("Delete");
-    await expect.poll(() => cell(page, "Loyalty points", "Nov 16").getAttribute("aria-label")).toContain(": nothing.");
+    await expect.poll(() => cell(page, "Loyalty points", "Nov 16").getAttribute("aria-label"), saved).toContain(": nothing.");
     await page.keyboard.press("ArrowDown");
     await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("aria-label") ?? "")).toMatch(/^Store locator, week of Nov 16:/);
     // Enter on an epic's row hides its features, and again shows them.
