@@ -46,7 +46,7 @@ describe("change values", () => {
     const c = (itemId: number, field: StagedChange["field"], createdAt: string): StagedChange => ({ clientKey: "k", itemId, field, value: null, half: null, baseRev: 1, baseValue: null, createdAt, updatedAt: createdAt });
     const g = byItem([c(2, "size", "b"), c(1, "assignee", "c"), c(2, "start", "d")]);
     expect(g.map((x) => [x.itemId, x.changes.map((y) => y.field)])).toEqual([[2, ["start", "size"]], [1, ["assignee"]]]);
-    expect(pendingText(7)).toBe("7 changes pending");
+    expect(pendingText(7)).toBe("7 changes to save");
     expect(pendingText(0)).toBeNull();
     expect(valueText("target", "2026-11-20", "PM")).toBe("Fri, Nov 20 PM");
     expect(valueText("assignee", null)).toBe("Nobody");

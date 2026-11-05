@@ -104,6 +104,13 @@ const draftAsItem = (weekStart: IsoDate, d: DraftStory, tier: Tier): WeekFeature
   id: -d.id, weekStart, clientKey: d.clientKey, itemId: -d.id, title: d.title, itemType: null, url: null, level: "feature", tier, estimate: null, size: null, parentId: null, slots: [], doneAt: null, position: null, createdAt: d.createdAt, updatedAt: d.createdAt,
 });
 
+/** UI-7: the week's state beside Done: Draft until confirmed, then Confirmed, or changed since you confirmed. */
+export const weekState = (p: { committedAt?: string | null; changed?: boolean }, past: boolean): string | null =>
+  past ? null : !p.committedAt ? "Draft" : p.changed ? "changed since you confirmed" : "Confirmed";
+/** UI-7: Confirm week while there is something to confirm; otherwise Done. */
+export const finishLabel = (p: { committedAt?: string | null; changed?: boolean }, past: boolean): string =>
+  past || (p.committedAt && !p.changed) ? "Done" : "Confirm week";
+
 export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, onChanged, onCaptures, openClient = null, onOpenClientSeen, onOpenDay }: Props) {
   const [st, setSt] = useState<WeekPlanState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -290,7 +297,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
 
   // Step 16.2: Done commits (or commits the changes again), then goes back to Week.
   const finish = async () => {
-    if (!past && (!st.plan.committedAt || st.plan.changed) && (await act("weekplan.commit", { weekStart }, "Week committed")) === null) return;
+    if (!past && (!st.plan.committedAt || st.plan.changed) && (await act("weekplan.commit", { weekStart }, "Week confirmed")) === null) return;
     onClose();
   };
   // U6: J and K (or ↓ ↑ with nothing focused) move between clients; / goes to Search.
@@ -336,7 +343,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
       }
       more={{ label: "More for Plan the week", onClick: moreMenu }}
       mode={
-        <ModeArea done={{ title: past || (st.plan.committedAt && !st.plan.changed) ? "Back to the week (Esc)" : "Commit this week's lists, then back to the week", onClick: () => void finish() }}>
+        <ModeArea note={weekState(st.plan, past)} done={{ label: finishLabel(st.plan, past), title: past || (st.plan.committedAt && !st.plan.changed) ? "Back to the week (Esc)" : "Confirm this week's lists, then back to the week", onClick: () => void finish() }}>
           {switcher}
         </ModeArea>
       }
@@ -952,8 +959,8 @@ function ClientCard(p: CardProps) {
             Next client: <span className="pw-next-name">{p.nextName}</span> ›
           </button>
         ) : (
-          <button type="button" className="pw-next done-btn" onClick={p.onFinish} title={p.past ? "Back to the week" : "Commit this week's lists, then back to the week"}>
-            Done
+          <button type="button" className="pw-next done-btn" onClick={p.onFinish} title={p.past ? "Back to the week" : "Confirm this week's lists, then back to the week"}>
+            {finishLabel(p.st.plan, p.past)}
           </button>
         )}
       </div>

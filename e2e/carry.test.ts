@@ -45,7 +45,7 @@ describe.skipIf(!CHROMIUM)("From last week and Watching (PL-1)", () => {
     await expect(watching.getByRole("button", { name: "Add a check-in" }).count()).resolves.toBe(1);
 
     // Commit (next week) proposes from this week's list.
-    await page.getByRole("button", { name: "Commit", exact: true }).click();
+    await page.getByRole("button", { name: "Plan", exact: true }).click();
     const next = page.locator("section.carry", { hasText: "From last week" }).first();
     await next.waitFor({ timeout: 30_000 });
     // Review stays open (remembered).

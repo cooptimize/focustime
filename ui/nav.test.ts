@@ -147,7 +147,7 @@ describe("entry points", () => {
     expect(viewName(loc(navOf.today("checkin")))).toBe("Today › Midday check-in");
     expect(viewName(loc(navOf.planDay()))).toBe("Week › Plan today");
     expect(viewName(loc(navOf.planDay("2026-11-03")))).toBe("Week › Plan 2026-11-03");
-    expect(viewName(loc(navOf.week("commit")))).toBe("Week › Commit");
+    expect(viewName(loc(navOf.week("commit")))).toBe("Week › Plan");
     expect(viewName(loc(navOf.ahead()))).toBe("Ahead › Grid");
     expect(viewName(loc(navOf.ahead("gantt")))).toBe("Ahead › Gantt");
     expect(viewName(loc(navOf.ahead("fix")))).toBe("Ahead › Fix next");

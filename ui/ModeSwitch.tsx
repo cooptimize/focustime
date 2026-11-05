@@ -24,10 +24,11 @@ export function ModeSwitch({ tab, current, status = {}, onMode }: { tab: Tab; cu
   );
 }
 
-/** The right side of a page header: a planning mode's green Done, then the switch. */
-export function ModeArea({ children, done }: { children: React.ReactNode; done?: { label?: string; title?: string; disabled?: boolean; onClick: () => void } | null }) {
+/** The right side of a page header: a planning mode's state (UI-7: Draft, Confirmed, changed since you confirmed), its green Done, then the switch. */
+export function ModeArea({ children, done, note = null }: { children: React.ReactNode; done?: { label?: string; title?: string; disabled?: boolean; onClick: () => void } | null; note?: string | null }) {
   return (
     <div className="mode-area">
+      {note && <span className="ma-note" role="status">{note}</span>}
       {done && (
         <button type="button" className="done-btn" disabled={done.disabled} onClick={done.onClick} title={done.title ?? "Save and go back"}>
           {done.label ?? "Done"}

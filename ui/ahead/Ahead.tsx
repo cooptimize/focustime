@@ -143,7 +143,7 @@ export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { dat
       {load && n > 0 && (
         <div className="ah-pending" role="status">
           <strong>{pendingText(n)}</strong>
-          <span className="muted">{load.changes.some((c) => c.theirs !== undefined) ? "Some changed in DevOps since you started. " : ""}Nothing is in DevOps until you commit.</span>
+          <span className="muted">{load.changes.some((c) => c.theirs !== undefined) ? "Some changed in DevOps since you started. " : ""}Nothing is written until you save.</span>
           <button type="button" className="primary" onClick={() => setReview(true)} disabled={readOnly}>
             Review
           </button>
@@ -423,8 +423,8 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
             </div>
           )}
           {landed.length > 0 && (
-            <section className="ah-landed" aria-label="Committed">
-              <h3>Committed</h3>
+            <section className="ah-landed" aria-label="Saved">
+              <h3>Saved</h3>
               <ul>
                 {landed.map((e) => (
                   <li key={e.id} className={`wl-${e.status}`}>
@@ -448,7 +448,7 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
         <footer className="bd-foot ah-review-foot">
           <div className="ah-review-buttons">
             <button type="button" className="primary" disabled={busy || ready <= 0} onClick={() => void commit()}>
-              {busy ? "Committing…" : ready > 0 ? `Commit ${plural(ready, "item", "items")} to DevOps` : "Commit to DevOps"}
+              {busy ? "Saving…" : ready > 0 ? `Save ${plural(ready, "item", "items")} to DevOps` : "Save to DevOps"}
             </button>
             {confirmDiscard ? (
               <span className="ah-discard" role="alert">
@@ -469,7 +469,7 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
             )}
           </div>
           <p className="muted ah-review-note">
-            Nothing is written until you commit.{conflicts > 0 ? ` ${plural(conflicts, "item waits", "items wait")} for Keep mine or Take theirs.` : ""}
+            Nothing is written until you save.{conflicts > 0 ? ` ${plural(conflicts, "item waits", "items wait")} for Keep mine or Take theirs.` : ""}
           </p>
         </footer>
       </aside>

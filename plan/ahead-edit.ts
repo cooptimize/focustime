@@ -129,8 +129,8 @@ export function byItem(changes: readonly StagedChange[]): { clientKey: string; i
   return [...out.values()].sort((a, b) => a.first.localeCompare(b.first) || a.itemId - b.itemId).map(({ first: _f, ...g }) => ({ ...g, changes: g.changes.sort((a, b) => order[a.field] - order[b.field]) }));
 }
 
-/** "7 changes pending" (null at none). */
-export const pendingText = (n: number) => (n <= 0 ? null : `${n} ${n === 1 ? "change" : "changes"} pending`);
+/** "7 changes to save" (null at none; UI-7). */
+export const pendingText = (n: number) => (n <= 0 ? null : `${n} ${n === 1 ? "change" : "changes"} to save`);
 
 /** A value in words, for the review's "before → after". */
 export function valueText(field: ChangeField, v: ChangeValue | undefined, half: DayHalf | null = null): string {

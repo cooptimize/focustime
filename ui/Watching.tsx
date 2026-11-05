@@ -104,7 +104,7 @@ function Row({ row, act, onRefresh }: { row: CarryRow; act: (action: string, inp
         {row.kind === "part_done" && <button type="button" className="mini" onClick={() => decide("watch")} title="Watch it this week, with a 30-minute check-in">Keep watching</button>}
         {row.kind === "needs_stories" && (
           <>
-            <button type="button" className="mini primary" onClick={() => decide("keep")} title="Keep it as a must; break it down in Commit">Keep</button>
+            <button type="button" className="mini primary" onClick={() => decide("keep")} title="Keep it as a must; break it down in Plan">Keep</button>
             <BreakDown clientKey={row.clientKey} item={{ id: row.itemId, title: row.title, ...(row.itemType ? { type: row.itemType } : {}) }} />
           </>
         )}

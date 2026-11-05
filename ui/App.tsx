@@ -114,7 +114,7 @@ function storedLoc(): Loc | null {
 
 const TAB_TITLES: Record<Tab, string> = {
   today: "Today: what's next, what's urgent and the day's blocks",
-  week: "The week: the Board (Plan today) and Commit (each client's features)",
+  week: "The week: the Board (Plan today) and Plan (each client's features)",
   ahead: "Features, epics and stories ahead: Grid, Gantt and Fix next",
   inbox: "Conversations, promises, follow-ups and captures",
 };
@@ -1223,7 +1223,7 @@ export function App() {
       commitWeek: () => {
         if (planWeekAt)
           void call("weekplan.commit", { weekStart: planWeekAt }).then(
-            () => { setNotice("Week committed"); setPlanWeekVersion((n) => n + 1); reloadQuiet(); },
+            () => { setNotice("Week confirmed"); setPlanWeekVersion((n) => n + 1); reloadQuiet(); },
             (e: unknown) => setNotice(e instanceof Error ? e.message : "Couldn't save the week plan"),
           );
       },
@@ -1788,7 +1788,7 @@ export function App() {
             </div>
             <ModeArea>
               {data.weekStart === data.today.weekStart && data.planDay.workday && (
-                <button type="button" className="mini plan-today-btn" onClick={() => openPlanDay(target.isToday ? target.date : undefined)} title="The Board focused on today: put stories into today's blocks, then Commit today">
+                <button type="button" className="mini plan-today-btn" onClick={() => openPlanDay(target.isToday ? target.date : undefined)} title="The Board focused on today: put stories into today's blocks, then Confirm today">
                   {target.isToday ? "Plan today" : "Plan the next workday"}
                 </button>
               )}

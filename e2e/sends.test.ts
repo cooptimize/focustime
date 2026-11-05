@@ -81,7 +81,7 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
     await team(page);
     const nw = page.locator(".team-client", { hasText: "Northwind" }).first();
     await expect(nw.locator(".team-person", { hasText: "Priya Shah" }).textContent()).resolves.toContain("Order history export");
-    await expect(nw.locator(".team-person", { hasText: "Sam Ortiz" }).textContent()).resolves.toContain("Not committed yet");
+    await expect(nw.locator(".team-person", { hasText: "Sam Ortiz" }).textContent()).resolves.toContain("Not confirmed yet");
     await expect(page.locator(".team-client", { hasText: "Harbor" }).locator(".team-person", { hasText: "Alex Kim" }).textContent()).resolves.toContain("Not on FocusTime yet");
     expect(errors).toEqual([]);
     await page.close();

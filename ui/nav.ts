@@ -17,7 +17,7 @@ export type WeekMode = "board" | "commit" | "team";
 /** AH-1 (D653): Ahead is one model in three modes: Grid (was Roadmap), Gantt (was Plan ahead) and Fix next. */
 export type AheadMode = "grid" | "gantt" | "fix";
 
-export const MODE_NAMES = { board: "Board", commit: "Commit", team: "Team", grid: "Grid", gantt: "Gantt", fix: "Fix next" } as const;
+export const MODE_NAMES = { board: "Board", commit: "Plan", team: "Team", grid: "Grid", gantt: "Gantt", fix: "Fix next" } as const;
 export type ModeName = keyof typeof MODE_NAMES;
 /** Each tab's modes, in switch order (Today and the Inbox have none, so no switch). */
 export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: ["board", "commit", "team"], ahead: ["grid", "gantt", "fix"], inbox: [] };
@@ -307,7 +307,7 @@ export function viewName(loc: Loc): string {
   const n = loc.nav;
   const place =
     n.tab === "today" ? (n.flow ? `${TAB_NAMES.today} › ${FLOW_NAMES[n.flow]}` : TAB_NAMES.today)
-    : n.tab === "week" ? (n.mode === "commit" ? `${TAB_NAMES.week} › Commit` : n.mode === "team" ? `${TAB_NAMES.week} › Team` : n.focus ? `${TAB_NAMES.week} › Plan ${n.focus.date ?? "today"}` : TAB_NAMES.week)
+    : n.tab === "week" ? (n.mode === "commit" ? `${TAB_NAMES.week} › ${MODE_NAMES.commit}` : n.mode === "team" ? `${TAB_NAMES.week} › Team` : n.focus ? `${TAB_NAMES.week} › Plan ${n.focus.date ?? "today"}` : TAB_NAMES.week)
     : n.tab === "ahead" ? `${TAB_NAMES.ahead} › ${MODE_NAMES[n.mode]}`
     : n.conversations ? `${TAB_NAMES.inbox} › Conversations` : n.myPromises ? `${TAB_NAMES.inbox} › My promises` : TAB_NAMES.inbox;
   const o = loc.overlay;

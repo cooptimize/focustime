@@ -4732,3 +4732,6 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .adm-scope .set-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 /* AH-2: in Ahead the pace's ghost past a target is the one muted amber, not red. */
 .ahead .pa-ghost { border: 1.5px dashed var(--ah-attention); border-left: 0; background: none; }
+
+/* ---- UI-7: a planning mode's state beside its Done ---- */
+.mode-area .ma-note { font-size: var(--fs-2); color: var(--text-muted); white-space: nowrap; }
