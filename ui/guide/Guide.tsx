@@ -450,7 +450,7 @@ function Devops() {
           ))}
         </ul>
       </div>
-      {DEVOPS.draft.map((x) => (
+      {DEVOPS.breakdown.map((x) => (
         <details key={x.q} className="guide-q">
           <summary>{x.q}</summary>
           <p>

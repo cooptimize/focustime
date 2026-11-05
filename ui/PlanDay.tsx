@@ -33,7 +33,7 @@ import { formatDuration } from "../week/format.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { call } from "./api.ts";
 import { copy, DueBadge } from "./FollowUps.tsx";
-import { DraftStories } from "./DetailPanel.tsx";
+import { BreakDown } from "./DetailPanel.tsx";
 import { dueOrder } from "../plan/due.ts";
 import { isTypingTarget, topOverlay } from "./keys.ts";
 import { halfLabel, itemMenu, pickMenu, possessive, spanText, weekTargets } from "./menu.ts";
@@ -788,7 +788,7 @@ function NeedsStories({ clientKey, date, feature }: { clientKey: string; date: s
   return (
     <span className="pd2-needs">
       <span className="pd2-needs-word">Needs stories</span>
-      <DraftStories clientKey={clientKey} item={{ id: feature.itemId, title: feature.title }} />
+      <BreakDown clientKey={clientKey} item={{ id: feature.itemId, title: feature.title }} />
       <button type="button" className="link-btn" onClick={() => void brief()}>
         Coop brief
       </button>

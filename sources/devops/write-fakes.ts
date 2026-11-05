@@ -20,6 +20,7 @@ const STATES: Record<string, { name: string; category: string }[]> = {
   Epic: [{ name: "New", category: "Proposed" }, { name: "Active", category: "InProgress" }, { name: "Closed", category: "Completed" }, { name: "Removed", category: "Removed" }],
   Bug: [{ name: "New", category: "Proposed" }, { name: "Active", category: "InProgress" }, { name: "Resolved", category: "Resolved" }, { name: "Closed", category: "Completed" }, { name: "Removed", category: "Removed" }],
   Issue: [{ name: "To Do", category: "Proposed" }, { name: "Done", category: "Completed" }],
+  Recurring: [{ name: "New", category: "Proposed" }, { name: "Recurring", category: "InProgress" }, { name: "Closed", category: "Completed" }],
 };
 const PC = {
   requirementBacklog: { name: "Stories", defaultWorkItemType: { name: "User Story" }, workItemTypes: [{ name: "User Story" }] },
@@ -36,7 +37,7 @@ const FIELDS = [
   { referenceName: "Microsoft.VSTS.Common.AcceptanceCriteria", name: "Acceptance Criteria", type: "html" },
 ];
 
-export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string, { id: string; name: string; email: string }>; acceptance?: boolean; startDate?: boolean; now?: () => string } = {}) {
+export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string, { id: string; name: string; email: string }>; acceptance?: boolean; startDate?: boolean; now?: () => string; /** BD-1: Recurring sits beside Feature at parent level (Cooptimize's internal process). */ recurring?: boolean } = {}) {
   const clock = opts.now ?? (() => new Date().toISOString());
   const org = opts.org ?? "cooptimize";
   const identities = opts.identities ?? { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "avery@cooptimize.example" }, [basic(OTHER_PAT)]: { id: "22222222-2222-4222-8222-222222222222", name: "Dana Ruiz", email: "dana@cooptimize.example" } };
@@ -82,7 +83,7 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
     };
     if (path === `/${org}/_apis/connectionData`) return json({ authenticatedUser: { id: who.id, providerDisplayName: who.name, properties: { Account: { $type: "System.String", $value: who.email } } } });
     const rest = path.split("/").slice(3).map(decodeURIComponent).join("/");
-    if (rest === "_apis/work/processconfiguration") return json(PC);
+    if (rest === "_apis/work/processconfiguration") return json(opts.recurring ? { ...PC, portfolioBacklogs: [PC.portfolioBacklogs[0], { ...PC.portfolioBacklogs[1]!, workItemTypes: [{ name: "Feature" }, { name: "Recurring" }] }] } : PC);
     if (rest === "_apis/wit/fields") return json({ value: FIELDS });
     let m = rest.match(/^_apis\/wit\/workitemtypes\/(.+)\/states$/);
     if (m) return json({ value: STATES[m[1]!] ?? [] });

@@ -16,6 +16,7 @@ import { DEFAULT_MIN_SIZES, openGaps } from "../plan/agenda.ts";
 import { REMOVED_IN_OUTLOOK } from "../plan/outlooksync.ts";
 import { formatDuration } from "../week/format.ts";
 import { isPickable } from "../plan/rules.ts";
+import { typeNeedsBreakdown } from "../plan/process.ts";
 import { SIZES, type Pick, type PlanDayState, type PlanWeek } from "../plan/types.ts";
 import type { ClientWork, Half, IsoDate, Week, WorkItem } from "../week/types.ts";
 import type { PlanningSettings, TimerView, BorrowedView, TimeboxView, InviteView } from "../actions/types.ts";
@@ -31,6 +32,8 @@ export type MenuItem = {
   label: string;
   /** Shown on the right: a key, or a short note. */
   hint?: string;
+  /** Older names the search still finds (BD-1). */
+  aka?: readonly string[];
   /** WT-1: a work item's type, drawn as its icon before the label (the type name is its tooltip). */
   typeIcon?: { clientKey: string; type: string };
   /** Plain reason when the item can't be used now; the item shows but does nothing. */
@@ -895,8 +898,8 @@ function itemsInScope(env: MenuEnv): { clientKey: string; item: WorkItem }[] {
   return clients.flatMap((c) => c.items.map((item) => ({ clientKey: c.clientKey, item })));
 }
 
-function chooseItem(env: MenuEnv, title: string, filter: (i: WorkItem) => boolean, then: (clientKey: string, i: WorkItem) => MenuItem["run"] | MenuStep): MenuStep {
-  const all = itemsInScope(env).filter((x) => filter(x.item));
+function chooseItem(env: MenuEnv, title: string, filter: (i: WorkItem, clientKey: string) => boolean, then: (clientKey: string, i: WorkItem) => MenuItem["run"] | MenuStep): MenuStep {
+  const all = itemsInScope(env).filter((x) => filter(x.item, x.clientKey));
   if (!all.length) return { title, items: [{ id: "none", label: "No matching work items loaded", disabled: "Select a block with DevOps items" }] };
   return {
     title,
@@ -1085,8 +1088,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "admin.refresh_people":
     case "admin.remove_person": return env.admin ? { run: () => env.openSettings("admin-people") } : { disabled: "Only for FocusTime admins" };
     case "admin.audit": return env.admin ? { run: () => env.openSettings("admin-audit") } : { disabled: "Only for FocusTime admins" };
-    // DS-1: Draft stories opens its sheet on a feature with no stories; the rest happens in the sheet.
-    case "stories.prepare": return { next: () => chooseItem(env, "Draft stories for which feature?", (i) => i.level === "portfolio", (k, i) => () => void openDraftStories(k, { id: i.id, title: i.title })) };
+    // BD-1: Break down opens its panel on any item whose type needs breaking down (the process model); the rest
+    // happens in the panel.
+    case "stories.prepare": return { next: () => chooseItem(env, "Break down which item?", (i, k) => i.level === "portfolio" && typeNeedsBreakdown(env.work.get(k)?.types, i.type), (k, i) => () => void openBreakDown(k, { id: i.id, title: i.title, type: i.type })) };
     case "stories.status":
     case "stories.run":
     case "stories.regenerate":
@@ -1094,7 +1098,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "stories.publish_preview":
     case "stories.publish":
     case "stories.retry":
-      return { disabled: "In the Draft stories sheet, from a Needs stories row" };
+      return { disabled: "In the Break down panel, from a Needs stories row" };
     case "stories.house_style":
     case "stories.house_style_save":
       return { run: () => env.openSettings("clients") };
@@ -1250,9 +1254,14 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
 /** The Requests tab's keys as commands; the tab listens for ASK_KEY_EVENT. */
 export const ASK_KEY_EVENT = "focustime:ask-key";
 
-/** DS-1: opens the Draft stories sheet (ui/DraftStoriesSheet.tsx listens) for one client's feature. */
+/** BD-1: opens the Break down panel (ui/BreakDownPanel.tsx listens) for one client's item. */
+export const BREAK_DOWN_EVENT = "focustime:break-down";
+/** PV-1's event (the Week block panel): { clientKey, itemId }; opens Break down for that item. */
+export const PV_BREAKDOWN_EVENT = "focustime:breakdown";
+/** DS-1's event name, still heard so anything that sends it opens Break down. */
 export const DRAFT_STORIES_EVENT = "focustime:draft-stories";
-export const openDraftStories = (clientKey: string, item: { id: number; title: string }) => window.dispatchEvent(new CustomEvent(DRAFT_STORIES_EVENT, { detail: { clientKey, item } }));
+export type BreakDownTarget = { id: number; title: string; type?: string };
+export const openBreakDown = (clientKey: string, item: BreakDownTarget) => window.dispatchEvent(new CustomEvent(BREAK_DOWN_EVENT, { detail: { clientKey, item } }));
 export const ASK_KEYS = [
   { id: "ask.next", label: "Next request", hint: "J" },
   { id: "ask.prev", label: "Previous request", hint: "K" },
@@ -1305,7 +1314,7 @@ function uiCommands(env: MenuEnv): MenuItem[] {
 
 /** Every command: window commands, then one per registered action (built from the registry). */
 export function commandList(env: MenuEnv): MenuItem[] {
-  const fromRegistry = (ACTIONS as readonly ActionSpec[]).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
+  const fromRegistry = (ACTIONS as readonly ActionSpec[]).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
   return [...uiCommands(env), ...fromRegistry];
 }
 
@@ -1314,7 +1323,7 @@ export function filterCommands(items: MenuItem[], query: string): MenuItem[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) return items;
   const found = items.filter((i) => {
-    const text = `${i.label} ${i.group ?? ""} ${i.hint ?? ""} ${i.action ?? ""}`.toLowerCase();
+    const text = `${i.label} ${i.group ?? ""} ${i.hint ?? ""} ${i.action ?? ""} ${i.aka?.join(" ") ?? ""}`.toLowerCase();
     return words.every((w) => text.includes(w));
   });
   // A label that starts with what was typed comes first ("plan a day" finds "Plan a day…" before "Plan the day").

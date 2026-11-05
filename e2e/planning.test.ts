@@ -103,7 +103,7 @@ describe.skipIf(!CHROMIUM)("Plan the week and Plan the day (U4)", () => {
     await expect(northwind.locator(".pw-over").textContent()).resolves.toBe("About 2h more than Northwind's free time this week. Make one a nice to have, or borrow Friday.");
     // A feature with no stories says so on its row, with the two ways forward.
     const supplier = northwind.locator(".pw-row", { hasText: "Supplier onboarding" });
-    await expect(supplier.locator(".pw-needs").textContent()).resolves.toMatch(/Needs stories.*Draft stories.*Coop brief/);
+    await expect(supplier.locator(".pw-needs").textContent()).resolves.toMatch(/Needs stories.*Break down.*Coop brief/);
     await expect((await weekClient(page, "Cooptimize")).locator(".pw-over").count()).resolves.toBe(0);
     // E2: the budget is real free time; nothing is "not counted".
     await expect(page.getByText("Not counted:").count()).resolves.toBe(0);

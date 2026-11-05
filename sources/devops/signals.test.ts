@@ -45,10 +45,11 @@ describe("Draft stories reads", () => {
     expect(new Set(calls.map((c) => c.authorization)).size).toBe(1);
   });
 
-  it("refuses an item that isn't a feature", async () => {
+  it("refuses an item whose type isn't broken down (a story)", async () => {
     const { src } = setup();
     const r = await src.featureSignals("contoso", 201);
-    expect(r).toEqual({ ok: false, message: "#201 is a User Story: Draft stories works on features" });
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.message).toMatch(/^#201 is a User Story, which isn't broken down in /);
   });
 
   it("reads the example pool from the client's own project, with the stories under each feature", async () => {
