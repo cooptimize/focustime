@@ -59,6 +59,9 @@ export async function fill(db: Conn, userId: string): Promise<PlanStore> {
   // AH-1: a pending change and a kept half-day.
   await plan.stageAheadChange({ clientKey: "cooptimize", itemId: 7001, field: "target", value: "2026-11-27", half: "PM", baseRev: 3, baseValue: null });
   await plan.setAheadHalf("cooptimize", 7001, "start", "2026-11-02", "PM");
+  // AS-1: a turn of the assistant's history and a proposal from it.
+  const turn = await plan.addAssistantTurn({ channel: "panel", role: "me", text: `${tag} what's next?`, cards: [] });
+  await plan.addAssistantProposal({ turnId: turn, action: "pick.move", input: { tool: "move_pick" }, clientKey: "cooptimize", view: { title: tag }, snapshot: null, expiresAt: "2026-11-02T16:00:00Z" });
   // PL-1: a carry decision, a Watching row with its check-in, and a pick with its own minutes.
   await plan.decideCarry(MON, "cooptimize", 7001, "carry", "kept");
   await plan.addWatch({ weekStart: MON, clientKey: "cooptimize", itemId: 7002, title: tag, itemType: "Feature", url: null, why: "owner", checkin: { date: MON, half: "AM", minutes: 30 } });

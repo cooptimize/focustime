@@ -5,7 +5,7 @@
 import type { AiErrorKind } from "./types.ts";
 
 /** One client as the guard knows it: its key, the names people call it, its DevOps projects and work item ids. */
-export type ClientEntry = { key: string; names: string[]; projects: string[]; itemIds: number[] };
+export type ClientEntry = { key: string; names: string[]; projects: string[]; itemIds: number[]; /** GD-1: Cooptimize Internal (clientAccounts() why: "internal"): its own name never counts as another client. */ internal?: boolean };
 
 export type GuardInput = {
   /** The task's client key, or "none". */
@@ -72,4 +72,20 @@ export function guard(text: string, g: GuardInput): GuardHit | null {
     for (const id of c.itemIds) if (!ownIds.has(id) && numbers.has(id)) return { kind: "refused_client", rule: "work_item" };
   }
   return null;
+}
+
+/**
+ * AS-1: the clients a text names, by the guard's own rule (a whole name, nickname or DevOps project of 3 letters or
+ * more, or one of its known work item ids; Internal never counts). The assistant uses it to pick a request's one
+ * client; two or more means "Which client?" and nothing is sent.
+ */
+export function clientsNamed(text: string, directory: readonly ClientEntry[]): string[] {
+  const numbers = new Set([...text.matchAll(/(?<![\w.,$€£/:-])#?(\d{3,})(?![\w%]|[.,/:-]\d)/g)].map((m) => Number(m[1])));
+  const out: string[] = [];
+  for (const c of directory) {
+    if (c.internal) continue;
+    const words = [c.key, ...c.names, ...c.projects].filter((w) => w.trim().length >= 3);
+    if (words.some((w) => phrase(w).test(text)) || c.itemIds.some((id) => numbers.has(id))) out.push(c.key);
+  }
+  return out;
 }

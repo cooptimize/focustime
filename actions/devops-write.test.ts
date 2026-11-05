@@ -1054,7 +1054,7 @@ describe("AS-1: description_edit (a dictated description, which may rewrite it)"
     const r = await s.confirm(p);
     expect(r.confirmed).toBe(true);
     const [w] = patches(s);
-    expect(w!.body[0]).toMatchObject({ op: "test", path: "/rev" });
+    expect((w!.body as unknown[])[0]).toMatchObject({ op: "test", path: "/rev" });
     expect(String(s.dv.items.get(437)!.fields["System.Description"])).toContain("New scope: import and export.");
     expect(String(s.dv.items.get(437)!.fields["System.Description"])).not.toContain("Old scope");
     expect(r.entry).toMatchObject({ op: "description", status: "confirmed", before: { Description: "<div>Old scope: import only.</div>" } });

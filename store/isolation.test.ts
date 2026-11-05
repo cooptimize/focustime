@@ -54,6 +54,7 @@ async function view(p: PlanStore): Promise<unknown> {
     watches: await p.weekWatches(MON),
     ahead: await p.aheadChanges(),
     halves: await p.aheadHalves(),
+    assistant: await p.assistantTurns(50),
   };
 }
 

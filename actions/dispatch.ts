@@ -15,6 +15,11 @@ import { clientsOf, onlyClients } from "./client-accounts.ts";
 import { requestAction, urgentRequests, visibleChats, type RequestContext, type RequestsPort } from "./request-actions.ts";
 import { aiAction, type AiActionName, type AiRuntime } from "./ai-actions.ts";
 import { createAi, type AiService } from "../ai/service.ts";
+import { assistantAction } from "../assistant/actions.ts";
+import { RUNS as ASSISTANT_RUNS } from "../assistant/allowlist.ts";
+import type { ReadDeps } from "../assistant/reads.ts";
+import { createAssistant, type AssistantService } from "../assistant/service.ts";
+import type { Channel } from "../assistant/types.ts";
 import type { ClientEntry } from "../ai/guard.ts";
 import { inviteDomains } from "../config/schema.ts";
 import type { ChosenVm } from "./account-types.ts";
@@ -725,6 +730,28 @@ export async function aiFor(ctx: ActionContext, o: { cap?: "person" | "app" } = 
     now: ctx.now,
     ...(rt.logger ? { logger: rt.logger } : ctx.log ? { logger: ctx.log } : {}),
   });
+}
+
+/**
+ * AS-1: the assistant for this person (the panel's, or TB-1's Teams bot's): their own dispatch, limited to the actions
+ * the allowlist names (assistant/allowlist.ts RUNS), their AI service, the guard's directory and their clients only.
+ */
+export async function assistantFor(ctx: ActionContext, channel: Channel, publicUrl: string | null = null): Promise<{ service: AssistantService; reads: ReadDeps } | null> {
+  const plan = ctx.plan;
+  if (!plan) return null;
+  const cfg = await configured(ctx);
+  if (!cfg) return null;
+  const zone = userZone(cfg);
+  const directory = await aiDirectory(ctx, cfg);
+  const ca = await clientsOf(ctx.org);
+  const keys = new Set(directory.map((c) => c.key));
+  const isMine = (k: string) => k === INTERNAL_CLIENT || (keys.has(k) && (ca ? ca.isClient(k) : true));
+  const clientName = (k: string) => (k === INTERNAL_CLIENT ? "Internal" : directory.find((c) => c.key === k)?.names[0] ?? cfg.clientSettings[k]?.name ?? k);
+  const run = (action: ActionName, input: unknown): Promise<ActionResponse> => (ASSISTANT_RUNS.has(action) ? dispatch(ctx, { action, input }) : Promise.resolve({ ok: false, status: 403, error: "The assistant can't do that" }));
+  const service = createAssistant({ run, plan, ai: await aiFor(ctx), directory, isMine, clientName, now: ctx.now, zone, channel, publicUrl });
+  const today = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(zone).toPlainDate().toString();
+  const link = (href: string, label: string) => ({ label, href: channel === "teams" && publicUrl ? `${publicUrl.replace(/\/$/, "")}/${href}` : href });
+  return { service, reads: { run, today, now: ctx.now(), zone, isMine, clientName, link } };
 }
 
 /** The write framework's pieces (step 14): the person's write PAT, never the company read PAT. */
@@ -1569,6 +1596,15 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "weekplan.watch_checkin":
     case "weekplan.watch_remove":
       return carryAction(carryCtx(ctx), action, req.input);
+    case "assistant.ask":
+    case "assistant.confirm":
+    case "assistant.cancel":
+    case "assistant.history":
+    case "assistant.clear":
+    case "assistant.today":
+    case "lookup.day":
+    case "items.get":
+      return assistantAction(async () => (await assistantFor(ctx, "panel"))?.service ?? null, async () => (await assistantFor(ctx, "panel"))?.reads ?? null, action, req.input);
     case "send.people":
     case "send.create":
     case "send.cancel":

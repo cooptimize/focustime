@@ -11,6 +11,6 @@ export default defineConfig({
     environment: "node",
     setupFiles: ["test/no-promise-expect.ts"],
     globalSetup: ["test/tmp-dir.ts", "test/e2e-build.ts"],
-    include: ["week/**/*.test.ts", "plan/**/*.test.ts", "store/**/*.test.ts", "ui/**/*.test.ts", "sources/**/*.test.ts", "fixtures/**/*.test.ts", "config/**/*.test.ts", "host/**/*.test.ts", "server/**/*.test.ts", "actions/**/*.test.ts", "links/**/*.test.ts", "log/**/*.test.ts", "ai/**/*.test.ts", "e2e/**/*.test.ts", "test/**/*.test.ts", "scripts/**/*.test.ts"],
+    include: ["week/**/*.test.ts", "plan/**/*.test.ts", "store/**/*.test.ts", "ui/**/*.test.ts", "sources/**/*.test.ts", "fixtures/**/*.test.ts", "config/**/*.test.ts", "host/**/*.test.ts", "server/**/*.test.ts", "actions/**/*.test.ts", "links/**/*.test.ts", "log/**/*.test.ts", "ai/**/*.test.ts", "assistant/**/*.test.ts", "e2e/**/*.test.ts", "test/**/*.test.ts", "scripts/**/*.test.ts"],
   },
 });

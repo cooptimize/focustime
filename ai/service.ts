@@ -8,7 +8,7 @@ import type { Logger } from "../log/logger.ts";
 import { costMicros, micros, monthBounds, monthOf, type Prices } from "./cost.ts";
 import { guard, type GuardInput } from "./guard.ts";
 import { strictProblems, validate } from "./schema.ts";
-import { AI_MESSAGES, AiError, NO_CLIENT, type AiImageInput, type AiRules, type AiStatus, type AiErrorKind, type AiLogEntry, type AiOutcome, type AiProvider, type AiResult, type JsonSchema, type ProviderReply, type Usage } from "./types.ts";
+import { AI_MESSAGES, AiError, NO_CLIENT, type ProviderCall, type ToolRound, type ToolSpec, type AiImageInput, type AiFail, type AiRules, type AiStatus, type AiErrorKind, type AiLogEntry, type AiOutcome, type AiProvider, type AiResult, type JsonSchema, type ProviderReply, type Usage } from "./types.ts";
 
 /** App-level settings (server/appconfig.ts [ai], FOCUSTIME_AI_*): the same for everyone, never per person. */
 export type AiAppSettings = {
@@ -23,7 +23,12 @@ export type AiAppSettings = {
   prices: Prices;
   /** The whole app's monthly spend cap, in US dollars. */
   appCapUsd: number;
+  /** AS-1: speech to text: the model and its price per minute of audio (gpt-transcribe, $0.0045, Nov 5). */
+  transcribe?: { model: string; perMinuteUsd: number };
 };
+
+/** AS-1: speech-to-text defaults (developers.openai.com/api/docs/pricing, Nov 5). */
+export const DEFAULT_TRANSCRIBE = { model: "gpt-transcribe", perMinuteUsd: 0.0045 };
 
 
 /** The person's request log (a user table) and the app's monthly total (an app table). */
@@ -53,6 +58,8 @@ export type AiDeps = {
 };
 
 export type AiTaskSpec = { name: string; client: string; instructions: string };
+/** AS-1: runTools' result: what run() gives, plus the calls that ran and the names refused (not allowed). */
+export type ToolsResult<T> = (AiResult<T>) & { refused: string[]; calls: { name: string; args: unknown }[] };
 
 /** CV-4: images in one request at most (conversations.update sends 10). */
 export const MAX_IMAGES = 10;
@@ -169,6 +176,150 @@ export function createAi(d: AiDeps) {
     return { ok: true, value: value as T, usage: spent, costUsd: cost / 1_000_000, latencyMs: latency, model: reply.model };
   }
 
+  /**
+   * AS-1: a request that may call tools. Each round goes through the same checks as run(): the switches once, then per
+   * round the guard over everything that would be sent (the instructions, the input and every tool output so far), the
+   * caps, one provider call (one retry on a transient error) and a log row. The model may call only `allowed` (also
+   * enforced here: any other name is refused without running and reported in `refused`); arguments must fit the tool's
+   * schema. `execute` runs a call and returns its output, which goes back as data. The final answer must fit `schema`.
+   */
+  async function runTools<T>(task: AiTaskSpec, input: string, schema: JsonSchema, o: { tools: ToolSpec[]; allowed: readonly string[]; execute: (name: string, args: unknown) => Promise<string>; maxRounds?: number }): Promise<ToolsResult<T>> {
+    const max = Math.max(1, Math.min(o.maxRounds ?? 4, 6));
+    if (!task.name || !/^[a-z][a-z0-9_]{0,30}(\.[a-z][a-z0-9_]{0,30})?$/.test(task.name) || !task.client || !task.instructions.trim() || !input.trim() || strictProblems(schema).length || o.tools.some((t) => strictProblems(t.parameters).length)) return { ...fail("bad_task"), refused: [], calls: [] };
+    const me = await d.rules();
+    if (!me.on) return { ...fail("off"), refused: [], calls: [] };
+    if (task.client !== NO_CLIENT && !me.allowedClients.includes(task.client)) return { ...fail("client_off"), refused: [], calls: [] };
+    const model = me.model || d.app.model;
+    const appCap = me.appCapUsd ?? d.app.appCapUsd;
+    const provider = d.app.provider === "off" ? null : await d.provider();
+    if (!provider) return { ...fail("not_set_up"), refused: [], calls: [] };
+    const allowed = new Set(o.allowed);
+    const byName = new Map(o.tools.map((t) => [t.name, t]));
+    const rounds: ToolRound[] = [];
+    const refused: string[] = [];
+    const ran: { name: string; args: unknown }[] = [];
+    let spent: Usage = ZERO;
+    let cost = 0;
+    let latency = 0;
+    for (let round = 0; round < max; round++) {
+      const sent = `${task.instructions}\n${input}${rounds.flatMap((r) => r.outputs.map((x) => `\n${x.output}`)).join("")}`;
+      const g = await d.guard();
+      const hit = guard(sent, { ...g, client: task.client });
+      if (hit) {
+        await record(task, "refused", hit.kind, ZERO, 0, model);
+        return { ...fail(hit.kind), refused, calls: ran };
+      }
+      const { from, to } = monthBounds(monthOf(d.now()));
+      const personCap = scope === "app" ? null : micros(me.personCapUsd);
+      const appMicros = micros(appCap);
+      if (appMicros <= 0 || personCap === 0) {
+        await record(task, "over_budget", "zero_budget", ZERO, 0, model);
+        return { ...fail("zero_budget"), refused, calls: ran };
+      }
+      const [mine, app] = await Promise.all([personCap === null ? 0 : d.log.spentMicros(from, to), d.appSpend.get(monthOf(d.now()))]);
+      if ((personCap !== null && mine >= personCap) || app >= appMicros) {
+        await record(task, "over_budget", "over_budget", ZERO, 0, model);
+        return { ...fail("over_budget"), refused, calls: ran };
+      }
+      const last = round === max - 1;
+      const call: ProviderCall = {
+        model, instructions: task.instructions, input, schemaName: task.name.replace(/\./g, "_"), schema,
+        maxOutputTokens: d.app.maxOutputTokens[task.name.replace(/\./g, "_")] ?? d.app.maxOutputTokens.default, timeoutMs: d.app.timeoutMs, reasoningEffort: d.app.reasoningEffort,
+        tools: o.tools, allowedTools: last ? [] : [...allowed], rounds: [...rounds],
+      };
+      const started = Date.now();
+      let reply: ProviderReply = await provider.call(call);
+      let used: Usage = reply.usage ?? ZERO;
+      if (!reply.ok && (reply.kind === "rate_limited" || reply.kind === "unavailable")) {
+        const wait = reply.retryAfterMs ?? Math.round(BASE_BACKOFF_MS * (1 + random() * 0.5));
+        if (wait <= MAX_RETRY_WAIT_MS) {
+          await sleep(wait);
+          reply = await provider.call(call);
+          if (reply.usage) used = add(used, reply.usage);
+        }
+      }
+      const ms = Date.now() - started;
+      latency += ms;
+      spent = add(spent, used);
+      if (!reply.ok) {
+        const kind: AiErrorKind = reply.kind === "unavailable" ? "provider" : reply.kind === "refusal" || reply.kind === "incomplete" ? "invalid_output" : reply.kind;
+        cost += await record(task, kind === "invalid_output" ? "invalid" : "provider_error", kind, used, ms, model);
+        return { ...fail(kind), refused, calls: ran };
+      }
+      if (reply.calls?.length) {
+        cost += await record(task, "ok", null, used, ms, reply.model);
+        const outputs: { callId: string; output: string }[] = [];
+        for (const c of reply.calls.slice(0, 8)) {
+          const spec = byName.get(c.name);
+          if (!spec || !allowed.has(c.name)) {
+            refused.push(c.name);
+            outputs.push({ callId: c.callId, output: JSON.stringify({ refused: "That tool isn't allowed for this request. Only what the person asked for runs." }) });
+            continue;
+          }
+          let args: unknown;
+          try {
+            args = JSON.parse(c.arguments);
+          } catch {
+            args = undefined;
+          }
+          if (args === undefined || validate(args, spec.parameters).length) {
+            outputs.push({ callId: c.callId, output: JSON.stringify({ error: "The arguments don't fit the tool" }) });
+            continue;
+          }
+          ran.push({ name: c.name, args });
+          outputs.push({ callId: c.callId, output: await o.execute(c.name, args) });
+        }
+        rounds.push({ items: reply.items ?? [], outputs });
+        continue;
+      }
+      let value: unknown;
+      try {
+        value = JSON.parse(reply.text);
+      } catch {
+        value = undefined;
+      }
+      if (value === undefined || validate(value, schema).length) {
+        cost += await record(task, "invalid", "invalid_output", used, ms, reply.model);
+        return { ...fail("invalid_output"), refused, calls: ran };
+      }
+      cost += await record(task, "ok", null, used, ms, reply.model);
+      return { ok: true, value: value as T, usage: spent, costUsd: cost / 1_000_000, latencyMs: latency, model: reply.model, refused, calls: ran };
+    }
+    return { ...fail("invalid_output"), refused, calls: ran };
+  }
+
+  /**
+   * AS-1: one recording to text. The switches (AI for FocusTime; and the client in focus, when there is one, must have
+   * Allow AI), a provider that transcribes, the caps; then one call, logged without its text, at the minute price.
+   * The audio isn't guarded (it can't be read): the transcript only goes back to the person, who edits and sends it.
+   */
+  async function transcribe(audio: Uint8Array, mime: string, seconds: number, client: string): Promise<{ ok: true; text: string; costUsd: number } | AiFail> {
+    const task: AiTaskSpec = { name: "assistant_transcribe", client, instructions: "transcribe" };
+    const me = await d.rules();
+    if (!me.on) return fail("off");
+    if (client !== NO_CLIENT && !me.allowedClients.includes(client)) return fail("client_off");
+    const t = d.app.transcribe ?? DEFAULT_TRANSCRIBE;
+    const provider = d.app.provider === "off" ? null : await d.provider();
+    if (!provider?.transcribe) return fail("not_set_up");
+    const { from, to } = monthBounds(monthOf(d.now()));
+    const personCap = scope === "app" ? null : micros(me.personCapUsd);
+    const appMicros = micros(me.appCapUsd ?? d.app.appCapUsd);
+    if (appMicros <= 0 || personCap === 0) return fail("zero_budget");
+    const [mine, app] = await Promise.all([personCap === null ? 0 : d.log.spentMicros(from, to), d.appSpend.get(monthOf(d.now()))]);
+    if ((personCap !== null && mine >= personCap) || app >= appMicros) return fail("over_budget");
+    const started = Date.now();
+    const r = await provider.transcribe({ model: t.model, audio, mime, language: "en", timeoutMs: d.app.timeoutMs });
+    const ms = Date.now() - started;
+    // Billed by the second of audio (rounded up), at the minute price.
+    const cost = r.ok ? Math.round((Math.ceil(Math.max(1, seconds)) / 60) * t.perMinuteUsd * 1_000_000) : 0;
+    const at = d.now();
+    await d.log.add({ at, task: task.name, clientKey: client === NO_CLIENT ? null : client, model: t.model, inputTokens: 0, outputTokens: 0, costMicros: cost, latencyMs: ms, outcome: r.ok ? "ok" : "provider_error", detail: r.ok ? null : r.kind, cap: scope });
+    if (cost > 0) await d.appSpend.add(monthOf(at), cost);
+    logger({ source: "ai", op: "request", kind: `${task.name}:${r.ok ? "ok" : "provider_error"}`, durationMs: ms });
+    if (!r.ok) return fail(r.kind === "unavailable" || r.kind === "format" ? "provider" : r.kind);
+    return { ok: true, text: r.text.trim(), costUsd: cost / 1_000_000 };
+  }
+
   /** Test AI: a fixed harmless request, client "none". */
   function test(): Promise<AiResult<{ reply: string }>> {
     return run<{ reply: string }>(TEST_TASK, "Reply with ok.", TEST_SCHEMA);
@@ -184,7 +335,7 @@ export function createAi(d: AiDeps) {
     return { setUp: !!provider, provider: d.app.provider, model: me.model || d.app.model, on: me.on, allowedClients: [...me.allowedClients], capMicros: micros(me.personCapUsd), appCapMicros: micros(appCap), spentMicros: spent, appReached: micros(appCap) > 0 && app >= micros(appCap), recent };
   }
 
-  return { run, test, status, availability };
+  return { run, runTools, transcribe, test, status, availability };
 }
 export type AiService = ReturnType<typeof createAi>;
 

@@ -36,7 +36,7 @@ export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Team" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests" | "Conversations" | "Admin";
+  readonly group: "Week" | "Team" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests" | "Conversations" | "Admin" | "Assistant";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -294,6 +294,16 @@ export const ACTIONS = [
   { name: "devops.retry", title: "Retry a DevOps change", group: "DevOps", target: "write", summary: "Check and try again; never writes twice" },
   { name: "devops.log", title: "Show the DevOps write log", group: "DevOps", target: "none", summary: "Every DevOps write: what, where, when, the result, the prior values, and Undo" },
   { name: "link.open", title: "Open in browser", group: "Work items", target: "item", summary: "Open a work item in your browser" },
+  // AS-1: the assistant. Its reads (assistant.today, lookup.day, items.get) are also on its allowlist; ask, confirm,
+  // cancel, history and clear are the panel's own and never reachable from the assistant itself.
+  { name: "assistant.ask", title: "Ask the assistant", group: "Assistant", target: "none", shortcut: "Ctrl+J", summary: "Look something up, move things around, dictate a DevOps update or capture; every change is shown first and runs only when you confirm" },
+  { name: "assistant.confirm", title: "Confirm the assistant's change", group: "Assistant", target: "none", summary: "Checks again (your rights, the client, nothing changed since) and runs the change shown" },
+  { name: "assistant.cancel", title: "Cancel the assistant's change", group: "Assistant", target: "none", summary: "Nothing is written" },
+  { name: "assistant.history", title: "Assistant history", group: "Assistant", target: "none", summary: "Your last 30 days with the assistant (only you see it)" },
+  { name: "assistant.clear", title: "Clear assistant history", group: "Settings", target: "none", summary: "Removes everything you asked the assistant and its answers" },
+  { name: "assistant.today", title: "What's next", group: "Assistant", target: "none", summary: "What's next now, due today or due tonight (read only)" },
+  { name: "lookup.day", title: "What I did on a day", group: "Assistant", target: "day", summary: "Your picks, done marks, focus minutes and resume note for one day (read only)" },
+  { name: "items.get", title: "Look up a work item", group: "Assistant", target: "item", summary: "One DevOps item of your clients: state, owner, dates and children (read only)" },
 ] as const satisfies readonly ActionSpec[];
 
 export type ActionName = (typeof ACTIONS)[number]["name"];

@@ -2917,7 +2917,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async assistantTurns(limit: number): Promise<AssistantTurnRow[]> {
       const n = Math.max(1, Math.min(Math.floor(limit), 200));
       const rows = (await db.all("SELECT id, at, channel, role, text, cards_json FROM assistant_turns ORDER BY id DESC LIMIT ?", n)) as Row[];
-      return rows.reverse().map((r) => ({ id: Number(r.id), at: instantText(r.at), channel: r.channel as "panel" | "teams", role: r.role as "me" | "assistant", text: String(r.text), cards: JSON.parse(String(r.cards_json)) as unknown[] }));
+      return rows.reverse().map((r) => ({ id: Number(r.id), at: asInstant(r.at), channel: r.channel as "panel" | "teams", role: r.role as "me" | "assistant", text: String(r.text), cards: JSON.parse(String(r.cards_json)) as unknown[] }));
     },
     /** AS-1: a write the assistant proposed (open until confirmed, cancelled or past its expiry); returns its id. */
     async addAssistantProposal(p: { turnId: number | null; action: string; input: unknown; clientKey: string | null; view: unknown; snapshot: unknown; expiresAt: string }): Promise<number> {
@@ -3370,10 +3370,10 @@ export type PlanStore = ReturnType<typeof planStoreOn>;
 /** AS-1: one turn as stored (the service types its cards). */
 export type AssistantTurnRow = { id: number; at: string; channel: "panel" | "teams"; role: "me" | "assistant"; text: string; cards: unknown[] };
 export type AssistantProposalRow = { id: number; turnId: number | null; action: string; input: unknown; clientKey: string | null; view: unknown; snapshot: unknown; state: "open" | "confirmed" | "cancelled" | "expired" | "failed"; createdAt: string; expiresAt: string };
-const instantText = (v: unknown): string => (v instanceof Date ? v.toISOString() : Temporal.Instant.from(String(v).replace(/\[.*\]$/, "")).toString());
+const asInstant = (v: unknown): string => (v instanceof Date ? v.toISOString() : Temporal.Instant.from(String(v).replace(/\[.*\]$/, "")).toString());
 const toProposalRow = (r: Row): AssistantProposalRow => ({
   id: Number(r.id), turnId: r.turn_id == null ? null : Number(r.turn_id), action: String(r.action), input: JSON.parse(String(r.input_json)), clientKey: (r.client_key as string | null) ?? null,
-  view: JSON.parse(String(r.view_json)), snapshot: JSON.parse(String(r.snapshot_json)), state: r.state as AssistantProposalRow["state"], createdAt: instantText(r.created_at), expiresAt: instantText(r.expires_at),
+  view: JSON.parse(String(r.view_json)), snapshot: JSON.parse(String(r.snapshot_json)), state: r.state as AssistantProposalRow["state"], createdAt: asInstant(r.created_at), expiresAt: asInstant(r.expires_at),
 });
 
 /** The schema version of a store: SQLite's migrations table, or SQL Server's schema_version (store/sql/migrate.ts). */
