@@ -1035,13 +1035,38 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "requests.search":
     case "requests.sort_again":
     case "requests.show":
-      return { run: () => env.setView("requests") };
+      return { run: () => env.setView("conversations") };
+    case "conversations.list":
+    case "conversations.messages":
+    case "conversations.seen":
+    case "conversations.resolve":
+    case "conversations.not_request":
+    case "conversations.reopen":
+    case "conversations.hide":
+    case "conversations.move":
+    case "conversations.this_is_work":
+    case "conversations.link":
+    case "conversations.take_over":
+    case "conversations.search":
+    case "conversations.draft":
+    case "suggestions.skip":
+      return { run: () => env.setView("conversations") };
+    case "conversations.refresh": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.refresh", {})) };
+    case "conversations.sort_unsorted": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.sort_unsorted", {})) };
+    case "my_promises.list":
+    case "my_promises.today":
+    case "my_promises.followup":
+    case "my_promises.link":
+    case "my_promises.done":
+    case "my_promises.not_needed":
+    case "my_promises.reopen":
+      return { run: () => env.setView("my_promises") };
     case "promises.list":
     case "promises.resolve":
     case "promises.reopen":
     case "promises.followup":
     case "promises.link":
-      return { run: () => env.setView("promises") };
+      return { run: () => env.setView("my_promises") };
     case "requests.refresh": return { run: () => (env.setView("requests"), void env.runPlan("requests.refresh", {})) };
     case "requests.purge":
       return { run: () => env.openSettings("clients") };
