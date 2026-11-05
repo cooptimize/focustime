@@ -406,7 +406,18 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         if (!found) return bad(`#${itemId} isn't one of your features for ${key}`, 422);
         // The description is read now, for this brief only; it is never cached or logged.
         const description = await ctx.devops(cfg).description(key, itemId).catch(() => null);
-        return { ok: true, data: { markdown: briefMarkdown({ clientName: found.portfolio.clientName, item: found.item, description }), descriptionRead: description !== null } };
+        // NV-1: the item's facts for the Coop brief panel's left side (the same fields the brief holds), and what the brief contains.
+        const it = found.item;
+        const parent = it.parentId ? (found.portfolio.items.find((p) => p.id === it.parentId) ?? null) : null;
+        return {
+          ok: true,
+          data: {
+            markdown: briefMarkdown({ clientName: found.portfolio.clientName, item: it, description }),
+            descriptionRead: description !== null,
+            item: { id: it.id, title: it.title, type: it.type, state: it.state, url: it.url, targetDate: it.targetDate, description: description ?? "", parent: parent ? { id: parent.id, title: parent.title, type: parent.type, url: parent.url } : null, children: it.children.map((c) => ({ id: c.id, title: c.title, type: c.type, state: c.state })) },
+            contains: ["The client's name", `The ${it.type.toLowerCase()}'s title, type, state, target date and link`, description !== null ? "Its description from DevOps" : "No description (it couldn't be read)", it.children.length ? `Its ${it.children.length} child items: title, type and state` : "No child items yet", "A request to propose user stories, sized S, M or L"],
+          },
+        };
       }
       case "feature.mark_breakdown": {
         const o = fields(input, ["clientKey", "itemId", "on"]);

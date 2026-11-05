@@ -10,7 +10,7 @@ import type { ChatKind, ChatMember } from "./chats.ts";
 import { hoursOn, type TimeModel } from "../week/hours.ts";
 
 /** The interval inside working hours. */
-/** The built-in interval; the live one is the Rule conv.poll_minutes (D582). */
+/** The built-in interval; the live one is the Rule conv.poll_minutes (D592). */
 export const POLL_MINUTES = 5;
 /** Members are read again after a day (they decide who sees a chat and whose token can be used). */
 export const MEMBERS_STALE_MS = 24 * 3600_000;
@@ -89,7 +89,7 @@ export function inUnion(now: Temporal.Instant, hours: readonly TimeModel[]): boo
   return hours.some((h) => inWorkingHours(h, now.toZonedDateTimeISO(h.timeZone)));
 }
 
-/** The interval now: every `minutes` (the Rule, D582) inside the union of working hours, null (no polling) outside it (D514). */
+/** The interval now: every `minutes` (the Rule, D592) inside the union of working hours, null (no polling) outside it (D514). */
 export function pollEvery(now: Temporal.Instant, hours: readonly TimeModel[], minutes = POLL_MINUTES): number | null {
   return inUnion(now, hours) ? minutes : null;
 }

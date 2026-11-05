@@ -222,7 +222,13 @@ What DS-1 learned, and what is still open:
 - Q-ADM1-4: In the demo, Admin › Clients' process switches change the demo's process view but not the demo week's picks; worth wiring if the demo is used to show them.
 - Q-PV1-1: Take one's quiet note (`story_taken`, D573) is a notifier kind, on by default, but Settings > Notifications lists its kinds by hand and PV-1 didn't edit Settings. Adding it to the Other group is one line for the step that owns Settings.
 - Q-PV1-2: Plan the day doesn't match Week's panel yet: it still offers this week's musts with their stories and Everything else, without grouping my stories under features, Planned elsewhere marks, No stories for you yet or Take one. Matching it means the Add pane using `blockStories` for the block's client, and its rows taking drags onto its blocks with `dropCheck`.
+
+## Navigation (NV-1, Nov 5)
+
+- Q-NV1-1: "Intention" is still the word for a pick that is neither a DevOps item nor a draft. A person reads it in the block menu's "Add an intention" and its dialog "Intention for <day> <half>" (`ui/menu.ts`), a pick's disabled "Open in browser" ("An intention has no link", `ui/menu.ts`), Check-in's walk-on choice "Typed intention" (`ui/Today.tsx`) and the key legend for A (`ui/keys.ts`). Plan today's type box calls the same thing "a plain note, not in DevOps". NV-1 kept the wording. Should there be one word everywhere, and which one?
+- Q-NV1-2: The urgent strip's lines open Inbox › Conversations or My promises, not the one item. Selecting the item needs a small change inside Conversations; worth doing in CV-2.
+- Q-NV1-3: Ahead keeps "Roadmap" as its first mode's name. Is that the right name inside Ahead, or should it read "Features"?
 - Q-ADM2-1: `org.retention_years` is shown in Status as "Not enforced yet". Nothing deletes old data; a delete job (which tables, per person, oldest first, a notice first or not) is a later step.
 - Q-ADM2-2: Guests are told apart from the ID token's `idp` and the UPN today. The `acct` optional claim (0 member, 1 guest) is the documented signal but must be added to the app registration's optional claims (`infra/scripts/`, an Azure change). Worth adding in the next infra step.
-- Q-ADM2-3: The automation flag isn't prefilled for Kat (no migration can read Dataverse, and naming a person in code is ruled out). An admin sets it once in Admin › People after the merge.
+- Q-ADM2-3: The automation flag isn't prefilled for the known automation account (no migration can read Dataverse, and naming a person in code is ruled out). An admin sets it once in Admin › People after the merge.
 - Q-ADM2-4: Admin deep links (`#/settings/admin-audit`) land on Today: `ui/nav.ts`'s section pattern takes letters only. One character for NV-1, which owns the routes.

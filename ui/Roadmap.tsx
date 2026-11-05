@@ -10,9 +10,8 @@ import { DEFAULT_FILTER, filterRows, stateCounts, STATE_MEANING, STATE_ORDER, ST
 import { call } from "./api.ts";
 import { overbooked } from "../plan/ahead.ts";
 import { DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
-import { copy } from "./FollowUps.tsx";
 import { clientColor } from "./labels.ts";
-import { roadmapRowMenu, type MenuStep } from "./menu.ts";
+import { openCoopBrief, roadmapRowMenu, type MenuStep } from "./menu.ts";
 import { MenuCtx } from "./Menus.tsx";
 import { openWorkItem, WorkLink } from "./WorkLink.tsx";
 import { createContext } from "react";
@@ -70,13 +69,11 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [brief, setBrief] = useState<{ id: number; text: string } | null>(null);
   const [filter, setFilterRaw] = useState<RoadmapFilter>(loadFilter);
   const setFilter = (f: RoadmapFilter) => {
     setFilterRaw(f);
     saveFilter(f);
   };
-  const briefArea = useRef<HTMLTextAreaElement>(null);
   const head = useRef<HTMLHeadingElement>(null);
   const dw = useDevOpsWrite();
 
@@ -97,17 +94,8 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
   useEffect(() => head.current?.focus(), []);
 
   const ops: Ops = {
-    brief: async (k: string, id: number) => {
-      try {
-        const r = await call<{ markdown: string; descriptionRead: boolean }>("feature.brief", { clientKey: k, itemId: id });
-        setBrief({ id, text: r.markdown });
-        await new Promise((res) => setTimeout(res, 0));
-        const ok = await copy(r.markdown, briefArea.current);
-        setNotice(ok ? `Coop brief for #${id} copied${r.descriptionRead ? "" : " (the description couldn't be read)"}` : "Copy didn't work: the brief is selected below, press Ctrl+C");
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not build the brief");
-      }
-    },
+    // NV-1: the Coop brief opens Break down's side panel (it copies there).
+    brief: async (k: string, id: number, title = "") => void openCoopBrief(k, { id, title }),
     addToWeek: async (k: string, row: RoadmapRow) => {
       if (!state) return;
       try {
@@ -198,7 +186,6 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
       )}
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
-      {brief && <textarea ref={briefArea} className="brief-text" readOnly value={brief.text} aria-label={`Coop brief for #${brief.id}`} rows={6} />}
       {!state && !error && <p className="muted">Reading DevOps…</p>}
       {state && !clients.length && <p className="muted">No followed clients with DevOps this week.</p>}
       {state && total > 0 && visible === 0 && <p className="muted">Nothing matches these filters.</p>}
@@ -208,7 +195,7 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
   );
 }
 
-type Ops = { brief: (k: string, id: number) => Promise<void>; addToWeek: (k: string, row: RoadmapRow) => Promise<void> };
+type Ops = { brief: (k: string, id: number, title?: string) => Promise<void>; addToWeek: (k: string, row: RoadmapRow) => Promise<void> };
 
 function ClientSection({ c, rows, colors, ops }: { c: RoadmapClient; rows: RoadmapRow[]; colors: WeekLoadData["clients"]; ops: Ops }) {
   const failed = c.status !== "ok";
@@ -245,7 +232,7 @@ function Row({ k, name, r, ops }: { k: string; name: string; r: RoadmapRow; ops:
       { id: r.id, clientName: name, title: r.title, tier: r.tier, targetDate: r.targetDate, open: r.open, onWeek: r.onWeek, canWrite: !!dw?.can(k), hasLink: !!r.url, owned },
       {
         open: () => void openWorkItem(k, r.url),
-        brief: () => void ops.brief(k, r.id),
+        brief: () => void ops.brief(k, r.id, r.title),
         help: () => env?.openHelp({ clientKey: k, title: `#${r.id} ${r.title}`, url: r.url, itemId: r.id, pinned: null }),
         addToWeek: () => void ops.addToWeek(k, r),
         targetDate: target,

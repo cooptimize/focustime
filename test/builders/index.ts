@@ -407,3 +407,17 @@ export function aDirectoryPerson(o: Partial<import("../../sources/dataverse/dire
   const n = next();
   return { personId: `a4d00000-0000-4000-8000-${String(n).padStart(12, "0")}`, systemUserId: `d3300000-0000-4000-8000-${String(n).padStart(12, "0")}`, name: `Person ${n}`, email: `person${n}@contoso.example`, level: "consultant", positionName: "Consultant", guest: false, ...o };
 }
+
+/** NV-1: an open follow-up as the week load shows it (due null: no due date). */
+export function aFollowUpView(o: Partial<import("../../actions/types.ts").FollowUpView> = {}): import("../../actions/types.ts").FollowUpView {
+  return {
+    id: 1, kind: "manual", clientKey: "contoso", who: "Dana", what: "Send the summary", channel: null, due: null, itemId: null, itemUrl: null, draft: null,
+    openedAt: "2026-11-02T14:00:00Z", isNew: false, closedAt: null, closeNote: null, closedBy: null, session: null, outcome: null, closeHow: null, snoozedUntil: null,
+    origin: null, byHand: true, clientName: "Contoso", dueState: null, hasWho: true, ...o,
+  };
+}
+
+/** NV-1: one of my promises for the day (Today, the urgent strip, the Inbox badge). */
+export function aDayPromise(o: Partial<import("../../plan/conversation-views.ts").DayPromise> = {}): import("../../plan/conversation-views.ts").DayPromise {
+  return { id: 1, what: "Send the export", toName: "Dana", clientKey: "contoso", clientName: "Contoso", dueAt: null, dueDate: "2026-11-05", overdue: false, ...o };
+}

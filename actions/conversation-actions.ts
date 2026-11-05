@@ -34,7 +34,7 @@ import type { ActionResponse } from "./types.ts";
 export type { ConversationCard, ConversationMessage, ConversationsData, DayPromise, MyPromisesData, PromiseCard } from "../plan/conversation-views.ts";
 
 export const CONVERSATION_ACTIONS = [
-  "conversations.list", "conversations.refresh", "conversations.messages", "conversations.seen", "conversations.resolve", "conversations.not_request", "conversations.reopen",
+  "conversations.list", "conversations.count", "conversations.refresh", "conversations.messages", "conversations.seen", "conversations.resolve", "conversations.not_request", "conversations.reopen",
   "conversations.hide", "conversations.move", "conversations.this_is_work", "conversations.link", "conversations.take_over", "conversations.sort_unsorted", "conversations.search",
   "conversations.draft", "my_promises.list", "my_promises.today", "my_promises.followup", "my_promises.link", "my_promises.done", "my_promises.not_needed", "my_promises.reopen",
   "suggestions.skip",
@@ -55,8 +55,10 @@ export type ConversationContext = RequestContext & {
   processModel?: (cfg: AppConfig, clientKey: string) => Promise<ProcessModel | null>;
 };
 
-/** Closed ones stay visible this long by default; the live value is the Rule conv.closed_shown_days (D582). */
+/** Closed ones stay visible this long by default; the live value is the Rule conv.closed_shown_days (D592). */
 const CLOSED_SHOWN_DAYS = 14;
+/** How long ago a conversation may have closed and still be listed (and counted). */
+const closedShownMs = (cfg: AppConfig) => (cfg.org?.rules.closedShownDays ?? CLOSED_SHOWN_DAYS) * 24 * 3600_000;
 const DONE_SHOWN_MS = 24 * 3600_000;
 
 const bad = (error: string, status = 400, code?: string): ActionResponse => ({ ok: false, status, error, ...(code ? { code } : {}) });
@@ -164,7 +166,7 @@ async function list(ctx: ConversationContext, cfg: AppConfig): Promise<Conversat
   const v = await seen(ctx);
   if (!v) return empty;
   const now = Date.parse(ctx.now());
-  const shownMs = (cfg.org?.rules.closedShownDays ?? CLOSED_SHOWN_DAYS) * 24 * 3600_000;
+  const shownMs = closedShownMs(cfg);
   const all = (await v.convs.conversations(v.chats.map((c) => c.chatId))).filter((c) => !c.closedAt || now - Date.parse(c.closedAt) < shownMs);
   const built = await cards(ctx, v, cfg, all);
   const out: ConversationsData = { ...empty, writeClients: await ctx.writeClients().catch((): string[] => []) };
@@ -202,6 +204,21 @@ async function list(ctx: ConversationContext, cfg: AppConfig): Promise<Conversat
   out.pollMinutes = cfg.org?.rules.pollMinutes ?? 5;
   out.lastPoll = v.chats.map((c) => c.polledAt).filter((x): x is string => !!x).sort().at(-1) ?? null;
   return out;
+}
+
+/**
+ * NV-1: the Inbox badge's count only: how many conversations need me (the same rule as Needs you) and my open
+ * promises. Reads what list reads for the cards; no unsorted, chatter or write-access lookups, no card text returned.
+ */
+async function counts(ctx: ConversationContext, cfg: AppConfig): Promise<{ needsYou: number; myPromisesOpen: number }> {
+  const v = await seen(ctx);
+  if (!v) return { needsYou: 0, myPromisesOpen: 0 };
+  const now = Date.parse(ctx.now());
+  const all = (await v.convs.conversations(v.chats.map((c) => c.chatId))).filter((c) => !c.closedAt || now - Date.parse(c.closedAt) < closedShownMs(cfg));
+  let needsYou = 0;
+  for (const card of await cards(ctx, v, cfg, all)) if (!card.hidden && (await viewOf(ctx, v.me, card, all.find((c) => c.id === card.id)!)) === "needs") needsYou++;
+  const myPromisesOpen = (await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))).filter((k) => k.state === "open").length;
+  return { needsYou, myPromisesOpen };
 }
 
 // ---- My promises ----
@@ -346,6 +363,9 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
       case "conversations.list":
         if (!only(input, [])) return bad("conversations.list takes {}");
         return respond();
+      case "conversations.count":
+        if (!only(input, [])) return bad("conversations.count takes {}");
+        return { ok: true as const, data: await counts(ctx, cfg) };
       case "conversations.refresh":
         if (!only(input, [])) return bad("conversations.refresh takes {}");
         if (v?.chats.length && ctx.requests) await ctx.requests.refresh(v.chats.map((c) => c.chatId));

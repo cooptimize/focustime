@@ -54,7 +54,7 @@ export function createPeople(d: PeopleDeps) {
   /** A validated Microsoft sign-in: the user id to start a session for, or why not. */
   /** `owner`: this sign-in made them the store's owner (claimed its rows, or seeded from the config file), once. */
   async function signedIn(u: SignedIn, tokens: SignInTokens): Promise<{ userId: string; owner: boolean } | { refused: SignInRefusal }> {
-    // ADM-2 (D580): FocusTime is for Cooptimize accounts. A guest token, or (when the Rule is set) an address outside
+    // ADM-2 (D590): FocusTime is for Cooptimize accounts. A guest token, or (when the Rule is set) an address outside
     // the Cooptimize domains, is refused before anything is kept; break-glass admins too. Dataverse plays no part.
     const domains = (await d.cooptimizeDomains?.().catch(() => [])) ?? [];
     const why = u.guest ?? (isGuestUpn(u.upn) ? "upn" : domains.length && !inDomains(u.email ?? u.upn, domains) ? "domain" : null);

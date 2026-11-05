@@ -316,7 +316,7 @@ const pollDeps: PollDeps = {
   homeTenant: async () => app.entra?.tenantId ?? null,
   now: () => instantNow().toString(),
   log,
-  // ADM-2 (D582): the team's Rules, read each cycle (the org runtime holds them 30 seconds).
+  // ADM-2 (D592): the team's Rules, read each cycle (the org runtime holds them 30 seconds).
   rules: async () => {
     const r = (await org.rules()).conversations;
     return { pollMinutes: r.pollMinutes, retentionDays: r.retentionDays };
@@ -450,7 +450,7 @@ const pushFor = (userId: string) => createPush({ devices: createPushDevices({ db
 
 // ADM-1: the team's settings, people's levels and client leads, and admin audit (app tables), and who is an admin.
 const adminStore = createAdminStore(db, instantNow);
-// ADM-2 (D577): who signed in, for the one person match: their Entra id, email and UPN, and the Dataverse user their
+// ADM-2 (D587): who signed in, for the one person match: their Entra id, email and UPN, and the Dataverse user their
 // sign-in was matched to (what matchMe keeps in ms_identity; else a my_systemuserid set in their settings).
 async function signedInPeople(): Promise<SignedInPerson[]> {
   const out: SignedInPerson[] = [];
@@ -484,7 +484,7 @@ const people = createPeople({
   configFile: { load: () => host.config.load(), raw: () => host.config.raw() },
   mailboxZone: (accessToken) => mailboxZone({ fetch, accessToken, log }),
   hostZone: () => host.clock.zone(),
-  // ADM-2 (D580): guests are refused at sign-in, from the token and the domains Rule (never Dataverse).
+  // ADM-2 (D590): guests are refused at sign-in, from the token and the domains Rule (never Dataverse).
   cooptimizeDomains: async () => (await org.rules()).organization.inviteDomains,
   refusedGuest: async (u, why) => {
     const ended = await accounts.sessions.endAllFor(u.oid);
@@ -494,7 +494,7 @@ const people = createPeople({
 });
 
 /**
- * ADM-2 (D580): ends the sessions of anyone signed in who turns out to be a guest or outside the Cooptimize domains
+ * ADM-2 (D590): ends the sessions of anyone signed in who turns out to be a guest or outside the Cooptimize domains
  * (Dataverse's guest mark, or the Rule changed), with an audit line. At start and after each people refresh.
  */
 async function endGuestSessions(): Promise<number> {

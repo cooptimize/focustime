@@ -20,14 +20,14 @@ describe("the Guide's shortcuts are ui/keys.ts's", () => {
       expect(keysFor(card.keys, card.all), card.label).toEqual(rows.flatMap((r) => ("all" in card && card.all ? r!.keys : [r!.keys[0]!])));
     }
   });
-  it("the cards say what the keys do (the tabs are 1 2 3 4, capture N or C, check-in M, close out E, plan the week W)", () => {
+  it("the cards say what the keys do (the tabs are 1 2 3 4, capture N or C, midday check-in M, close out E, commit the week W)", () => {
     const shown = Object.fromEntries(C.SHORTCUTS.cards.map((c) => [c.label, keysFor(c.keys, c.all)]));
-    expect(shown["Today, Week, Roadmap, Inbox"]).toEqual(["1", "2", "3", "4"]);
-    expect(shown["Plan this view"]).toEqual(["P"]);
+    expect(shown["Today, Week, Ahead, Inbox"]).toEqual(["1", "2", "3", "4"]);
+    expect(shown["Week: Board or Commit"]).toEqual(["P"]);
     expect(shown["Capture a thought"]).toEqual(["N", "C"]);
-    expect(shown["Check-in"]).toEqual(["M"]);
+    expect(shown["Midday check-in"]).toEqual(["M"]);
     expect(shown["Close out"]).toEqual(["E"]);
-    expect(shown["Plan the week"]).toEqual(["W"]);
+    expect(shown["Commit the week"]).toEqual(["W"]);
     expect(shown["Every action"]).toEqual(["Ctrl K"]);
     expect(shown["Next or previous client"]).toEqual(["J", "K"]);
     expect(shown["Text size"]).toEqual(KEYS.find((k) => k.command === "ui.set_text_size")!.keys);
@@ -101,7 +101,7 @@ describe("estimates in the Guide are hours (E2)", () => {
 
 describe("the Guide's address", () => {
   it("#/guide and #/guide/<chapter> open it over Today, and write back the same", () => {
-    expect(parseHash("#/guide")).toEqual({ nav: { tab: "today", mode: "now", date: null, half: null }, overlay: { kind: "guide", chapter: null } });
+    expect(parseHash("#/guide")).toEqual({ nav: { tab: "today", flow: null, date: null }, overlay: { kind: "guide", chapter: null } });
     for (const ch of C.CHAPTERS) {
       const l = parseHash(`#/guide/${ch.id}`)!;
       expect(l.overlay).toEqual({ kind: "guide", chapter: ch.id });

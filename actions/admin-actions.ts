@@ -50,20 +50,20 @@ export type AdminStatus = {
   warnings?: StatusWarning[];
   /** ADM-2: when the scheduler last ran each job, by name ("requests_poll", "people_refresh", "maintenance"). */
   lastRuns?: Record<string, string>;
-  /** ADM-2 (D582): the background jobs with their interval or period and last run. */
+  /** ADM-2 (D592): the background jobs with their interval or period and last run. */
   jobs?: StatusJob[];
 };
 
 export type StatusJob = { name: string; every: string; lastRun: string | null; note: string | null };
 
-/** ADM-2 (D582): Rules stored out of range (read as their built-in value) and the empty domains Rule. */
+/** ADM-2 (D592): Rules stored out of range (read as their built-in value) and the empty domains Rule. */
 export function ruleWarnings(rules: OrgRules): StatusWarning[] {
   const out: StatusWarning[] = rules.problems.map((p) => ({ area: "rules" as const, text: `${p.label}: the stored value isn't allowed any more, so FocusTime uses ${JSON.stringify(p.fallback)}. Set it again in Admin.` }));
   if (!rules.organization.inviteDomains.length) out.push({ area: "people", text: "Set Cooptimize email domains in Admin › Organization. Until then only guest accounts are left out of People and sign-in." });
   return out;
 }
 
-/** The jobs Status lists, from the Rules they read (D582). */
+/** The jobs Status lists, from the Rules they read (D592). */
 export function statusJobs(rules: OrgRules, st: Pick<AdminStatus, "lastPoll" | "dataverse" | "lastRuns">): StatusJob[] {
   const c = rules.conversations;
   const runs = st.lastRuns ?? {};
@@ -141,7 +141,7 @@ const json = (v: string | null): unknown => {
 export const groupLink = (groupId: string | null) => (groupId ? `https://entra.microsoft.com/#view/Microsoft_AAD_IAM/GroupDetailsMenuBlade/~/Members/groupId/${groupId}` : null);
 
 /**
- * Admin › Clients (and AI): the clients by clientAccounts() (ADM-2, D575), or with `all` every account FocusTime knows
+ * Admin › Clients (and AI): the clients by clientAccounts() (ADM-2, D585), or with `all` every account FocusTime knows
  * of: the active Dataverse accounts, keys with team settings and registered chats. Leads never add a client here.
  */
 async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminContext["process"], refresh: boolean, all = false) {
@@ -202,7 +202,7 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
 export type StatusWarning = { area: "clients" | "people" | "rules" | "jobs"; text: string };
 
 /**
- * ADM-2: what a filtered-out account still has (D576): focus blocks (Account Workers or Focus Time in Dataverse), a
+ * ADM-2: what a filtered-out account still has (D586): focus blocks (Account Workers or Focus Time in Dataverse), a
  * registered chat, DevOps settings, AI allowed or a lead override. An account with AI allowed always gets a line.
  */
 export async function clientWarnings(ops: AdminOps): Promise<StatusWarning[]> {
@@ -242,7 +242,7 @@ async function peopleSection(ops: AdminOps, meId: string) {
       const level = lv.levelOf(id);
       const ids = new Set([id, ...(e.dir ? [e.dir.personId] : [])]);
       const removed = overrides.filter((o) => ids.has(o.personId) && o.kind === "lead_remove" && ca.isClient(o.clientKey)).map((o) => o.clientKey);
-      // ADM-2 (D577): the Dataverse column reads the same match as the level and leads beside it.
+      // ADM-2 (D587): the Dataverse column reads the same match as the level and leads beside it.
       const dataverse = e.match
         ? { matched: true, text: matchText(e.match) }
         : e.dir
@@ -279,7 +279,7 @@ async function peopleSection(ops: AdminOps, meId: string) {
     ...seen.filter((s) => !ops.breakGlass.some((b) => b.toLowerCase() === s.personId)).map((s) => ({ id: s.personId, name: nameOf(s.personId), via: s.via, checkedAt: s.checkedAt })),
     ...ops.breakGlass.map((b) => ({ id: b.toLowerCase(), name: nameOf(b), via: "break_glass" as const, checkedAt: null })),
   ];
-  // ADM-2 (D583): every position a Cooptimizer holds, and every one mapped, with its level and how many hold it.
+  // ADM-2 (D593): every position a Cooptimizer holds, and every one mapped, with its level and how many hold it.
   const map = rules.organization.positionLevels;
   const mapKey = new Map(Object.keys(map).map((k) => [k.trim().toLowerCase(), k]));
   const held = new Map<string, { name: string; people: number }>();

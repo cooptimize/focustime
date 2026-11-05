@@ -54,7 +54,7 @@ export type ConversationsData = {
   chatter: { clientKey: string; clientName: string; messages: FilteredMessage[] }[];
   myPromisesOpen: number;
   lastPoll: string | null;
-  /** ADM-2 (D582): the Rule, for "every N minutes in working hours". */
+  /** ADM-2 (D592): the Rule, for "every N minutes in working hours". */
   pollMinutes?: number;
   writeClients: string[];
 };

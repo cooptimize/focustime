@@ -34,7 +34,7 @@ describe.skipIf(!CHROMIUM)("Send feedback (F1)", () => {
     const desc = (await dialog.locator(".feedback-desc").textContent()) ?? "";
     expect(desc).toContain("It would help me plan.");
     expect(desc).toContain("From Alex Rivera (you@example.com)");
-    expect(desc).toMatch(/View: Today › Now/);
+    expect(desc).toMatch(/View: Today$/m);
     expect(desc).toMatch(/Version: FocusTime · (demo|local) · /);
     expect(desc).toMatch(/Browser: Chrome \d+ on Linux/);
     expect(desc).toMatch(/Screen: \d+×\d+, window 1920×1080/);

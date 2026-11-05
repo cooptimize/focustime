@@ -93,7 +93,7 @@ describe.skipIf(!CHROMIUM)("Settings side menu", () => {
   it("a phone gets the Settings picker instead of the column", async () => {
     const { page } = await freshPage(h, { width: 390, height: 844 });
     // The phone opens Admin from More.
-    await page.getByRole("navigation", { name: "Tabs" }).getByRole("button", { name: /More/ }).click();
+    await page.getByRole("button", { name: /^More: notifications/ }).click();
     await page.getByRole("menuitem", { name: "Admin" }).click();
     const pick = page.getByRole("combobox", { name: "Settings section" });
     await pick.waitFor();

@@ -1,4 +1,4 @@
-// ADM-2 (D580): FocusTime is for Cooptimize accounts. A guest is told from the ID token alone (acct, idp, a #EXT# UPN)
+// ADM-2 (D590): FocusTime is for Cooptimize accounts. A guest is told from the ID token alone (acct, idp, a #EXT# UPN)
 // and refused before anything is kept, audited, with any sessions they still had ended; an address outside the
 // Cooptimize email domains (when the Rule is set) too. Break-glass admins get the same check. Dataverse plays no part:
 // a member signs in while it is down.

@@ -1,4 +1,4 @@
-// ADM-2 (D575): which accounts are clients. Active accounts of type Customer, Cooptimize Internal always, an admin's
+// ADM-2 (D585): which accounts are clients. Active accounts of type Customer, Cooptimize Internal always, an admin's
 // Treat as a client; never an account an admin hid. Before the first account read, every key counts.
 import { describe, expect, it } from "vitest";
 import { anAccount } from "../test/builders/index.ts";

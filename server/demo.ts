@@ -47,7 +47,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   // ADM-1: the demo's own team settings, people and audit, on the same in-memory database (never the real ones). The
   // demo's person is an admin inside their own demo and nowhere else.
   const adminStore = createAdminStore(shared, instant);
-  // The demo's person is signed in, so the one person match (D577) finds them the way it does in the hosted app.
+  // The demo's person is signed in, so the one person match (D587) finds them the way it does in the hosted app.
   const org = createOrgRuntime({ store: adminStore, bootstrap: { model: "stub", appCapUsd: 100, inviteDomains: ["example.com"], feedback: null }, now: () => Date.parse(opts.now()), signedIn: async () => [{ id: DEMO_PERSON.oid, email: DEMO_PERSON.email, upn: DEMO_PERSON.username }] });
   rulesOf = async (k) => {
     const c = (await org.rules()).clients[k];

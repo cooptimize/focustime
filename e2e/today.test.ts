@@ -64,11 +64,13 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("Now: one Start focus, on the next pick only; risk says why; at most 80 UI words on the demo day", async () => {
+  it("Now: one Start focus, at the top on the next pick; risk says why; at most 80 UI words on the demo day", async () => {
     const { page, errors } = await freshPage(h);
     await seed(page);
-    await expect(page.locator(".start-focus").count()).resolves.toBe(1);
-    await expect(page.locator(".pick-row.next .start-focus").count()).resolves.toBe(1);
+    // NV-1: the one Start focus is at the top, beside what's next; the card highlights the next pick.
+    await expect(page.getByRole("button", { name: "Start focus" }).count()).resolves.toBe(1);
+    await expect(page.locator(".phone-now").getByRole("button", { name: "Start focus" }).count()).resolves.toBe(1);
+    await expect(page.locator(".phone-now .pn-pick").textContent()).resolves.toContain("Utilization chart");
     await expect(page.locator(".pick-row.next .pr-title").textContent()).resolves.toContain("Utilization chart");
     // No size chips on Today's rows.
     await expect(page.locator(".today-block .size-chip").count()).resolves.toBe(0);

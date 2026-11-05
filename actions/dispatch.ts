@@ -1214,6 +1214,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         req.input,
       );
     case "conversations.list":
+    case "conversations.count":
     case "conversations.refresh":
     case "conversations.messages":
     case "conversations.seen":
@@ -1367,6 +1368,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         req.input,
       );
     case "planday.start":
+    case "planday.carry":
     case "planday.commit":
     case "pick.add":
     case "pick.remove":

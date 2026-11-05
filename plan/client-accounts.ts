@@ -1,6 +1,6 @@
 // ADM-2: which accounts are FocusTime clients. Pure: the last Dataverse read of the active accounts and the admins'
 // two per-account overrides in, one answer out, used by every screen and job that lists or works out clients (Admin ›
-// Clients and AI, Settings › Clients, the week's clients and pickers, client leads). The rule (D575):
+// Clients and AI, Settings › Clients, the week's clients and pickers, client leads). The rule (D585):
 //   a client  = an active account whose relationship type is Customer, plus Cooptimize Internal always,
 //               plus any account an admin marked "Treat as a client";
 //   never     = an account an admin marked "Hide from FocusTime" (Internal can't be hidden).

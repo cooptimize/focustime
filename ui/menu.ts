@@ -993,6 +993,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       return { next: () => ({ title: "Disconnect which calendar?", items: on.map((c) => ({ id: c, label: c === "outlook" ? "Outlook" : "Google", danger: true, run: () => env.disconnect(c) })) }) };
     }
     case "planday.start": return { next: () => planDayStep(env) };
+    case "planday.carry": return { run: () => env.setView("week") };
     case "planday.commit": return env.planState ? { run: env.commitPlan } : { disabled: "Open Plan the day first" };
     case "pick.add": return { next: () => chooseItem(env, "Add which work item?", isPickable, (k, i) => addStep(env, k, i)) };
     case "pick.set_size": return { next: () => choosePick(env, "Set the size of which pick?", (p) => sizeStep(env, p)) };
@@ -1044,6 +1045,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "requests.show":
       return { run: () => env.setView("conversations") };
     case "conversations.list":
+    case "conversations.count":
     case "conversations.messages":
     case "conversations.seen":
     case "conversations.resolve":
@@ -1262,6 +1264,9 @@ export const PV_BREAKDOWN_EVENT = "focustime:breakdown";
 export const DRAFT_STORIES_EVENT = "focustime:draft-stories";
 export type BreakDownTarget = { id: number; title: string; type?: string };
 export const openBreakDown = (clientKey: string, item: BreakDownTarget) => window.dispatchEvent(new CustomEvent(BREAK_DOWN_EVENT, { detail: { clientKey, item } }));
+/** NV-1: the Coop brief opens Break down's side panel, from every entry point; it copies at once. `weekStart` is the week whose plan the feature is on (default next week, as before). */
+export const COOP_BRIEF_EVENT = "focustime:coop-brief";
+export const openCoopBrief = (clientKey: string, item: BreakDownTarget, weekStart?: string | null) => window.dispatchEvent(new CustomEvent(COOP_BRIEF_EVENT, { detail: { clientKey, item, weekStart: weekStart ?? null } }));
 export const ASK_KEYS = [
   { id: "ask.next", label: "Next request", hint: "J" },
   { id: "ask.prev", label: "Previous request", hint: "K" },
@@ -1277,19 +1282,19 @@ const askKey = (id: AskKeyId): void => void window.dispatchEvent(new CustomEvent
 function uiCommands(env: MenuEnv): MenuItem[] {
   const soon = "Coming soon";
   return [
-    { id: "view.today", action: "view.today", group: "Views", label: "Today › Now", hint: "1", run: () => env.setView("today") },
-    { id: "view.week", action: "view.week", group: "Views", label: "Week", hint: "2", run: () => env.setView("week") },
-    { id: "view.roadmap", action: "view.roadmap", group: "Views", label: "Roadmap", hint: "3", run: () => env.setView("roadmap") },
-    { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: follow-ups and captures", hint: "4", run: () => env.setView("inbox") },
-    { id: "view.requests", action: "view.requests", group: "Views", label: "Inbox › Requests: questions and requests from client chats", run: () => env.setView("requests") },
-    ...ASK_KEYS.map((k): MenuItem => ({ id: k.id, action: k.id, group: "Requests", label: k.label, hint: k.hint, ...(env.asksOpen ? { run: () => askKey(k.id) } : { disabled: "Open Inbox › Requests first" }) })),
-    { id: "view.plan", action: "view.plan", group: "Views", label: "Plan mode for this tab, or back", hint: "P", run: env.openRitual },
-    { id: "view.planday", action: "view.planday", group: "Views", label: "Today › Plan (plan the day)", run: () => env.openPlanDay() },
+    { id: "view.today", action: "view.today", group: "Views", label: "Today", hint: "1", run: () => env.setView("today") },
+    { id: "view.week", action: "view.week", group: "Views", label: "Week › Board", hint: "2", run: () => env.setView("week") },
+    { id: "view.roadmap", action: "view.roadmap", group: "Views", label: "Ahead: features and epics ahead (Roadmap)", hint: "3", run: () => env.setView("roadmap") },
+    { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: conversations, promises, follow-ups and captures", hint: "4", run: () => env.setView("inbox") },
+    { id: "view.requests", action: "view.requests", group: "Views", label: "Inbox › Conversations: what your clients' chats need from you", run: () => env.setView("requests") },
+    ...ASK_KEYS.map((k): MenuItem => ({ id: k.id, action: k.id, group: "Requests", label: k.label, hint: k.hint, ...(env.asksOpen ? { run: () => askKey(k.id) } : { disabled: "Open Inbox › Conversations first" }) })),
+    { id: "view.plan", action: "view.plan", group: "Views", label: "Week: Board or Commit; Ahead: Roadmap or Plan ahead; Today: Plan today", hint: "P", run: env.openRitual },
+    { id: "view.planday", action: "view.planday", group: "Views", label: "Week › Plan today (the Board on today)", run: () => env.openPlanDay() },
     { id: "view.planday_date", action: "view.planday_date", group: "Views", label: "Plan a day…", next: () => planDateStep(env) },
-    { id: "view.planweek", action: "view.planweek", group: "Views", label: "Week › Plan the week", hint: "W", run: () => env.openPlanWeek() },
-    { id: "view.ahead", action: "view.ahead", group: "Views", label: "Roadmap › Plan ahead", run: () => env.setView("ahead") },
+    { id: "view.planweek", action: "view.planweek", group: "Views", label: "Week › Commit: plan the week (each client's features)", hint: "W", run: () => env.openPlanWeek() },
+    { id: "view.ahead", action: "view.ahead", group: "Views", label: "Ahead › Plan ahead", run: () => env.setView("ahead") },
     { id: "view.capture", action: "view.capture", group: "Views", label: "Captures to sort (Inbox)", run: env.openCaptures },
-    { id: "view.checkin", action: "view.checkin", group: "Views", label: "Today › Check-in", hint: "M", run: env.openCheckIn },
+    { id: "view.checkin", action: "view.checkin", group: "Views", label: "Today › Midday check-in", hint: "M", run: env.openCheckIn },
     { id: "view.closeout", action: "view.closeout", group: "Views", label: "Today › Close out", hint: "E", run: () => env.openCloseOut() },
     { id: "week.prev", action: "week.prev", group: "Week", label: "Previous week", hint: "[", run: () => env.changeWeek(-1) },
     { id: "week.next", action: "week.next", group: "Week", label: "Next week", hint: "]", run: () => env.changeWeek(1) },

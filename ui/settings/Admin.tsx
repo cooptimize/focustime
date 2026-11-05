@@ -681,7 +681,7 @@ function AdminPeople() {
   );
 }
 
-/** ADM-2 (D583): Dataverse position names to levels. Applies at once (the next read of levels), audited as one Rule. */
+/** ADM-2 (D593): Dataverse position names to levels. Applies at once (the next read of levels), audited as one Rule. */
 function PositionMap({ positions, unmapped, levels, saver }: { positions: Position[]; unmapped: number; levels: PeopleData["levels"]; saver: Saver }) {
   const map = Object.fromEntries(positions.filter((p) => p.mapped).map((p) => [p.name, p.level]));
   const shown = saver.shown("org", "org.position_levels", map) as Record<string, string | null>;

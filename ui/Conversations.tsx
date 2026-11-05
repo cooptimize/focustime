@@ -26,7 +26,8 @@ const PRIMARY_WORD = { create: "Create item", link: "Link", resolve: "Resolve", 
 
 export type InboxTab = "inbox" | "conversations" | "my_promises";
 /** The Inbox's tabs: Inbox, Conversations and My promises, each with its count (hidden at none). */
-export function InboxTabs({ tab, count, promiseCount = null, onPick }: { tab: InboxTab; count: number | null; promiseCount?: number | null; onPick: (tab: InboxTab) => void }) {
+/** The Inbox's three tabs with their counts (NV-1: the Inbox tab shows its open follow-ups and captures; the top bar badge counts only what is due). */
+export function InboxTabs({ tab, count, promiseCount = null, inboxCount = null, onPick }: { tab: InboxTab; count: number | null; promiseCount?: number | null; inboxCount?: number | null; onPick: (tab: InboxTab) => void }) {
   const one = (id: InboxTab, label: string, n: number | null) => (
     <button type="button" role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => onPick(id)}>
       {label}
@@ -35,24 +36,11 @@ export function InboxTabs({ tab, count, promiseCount = null, onPick }: { tab: In
   );
   return (
     <div className="inbox-tabs" role="tablist" aria-label="Inbox">
-      {one("inbox", "Inbox", null)}
+      {one("inbox", "Inbox", inboxCount)}
       {one("conversations", "Conversations", count)}
       {one("my_promises", "My promises", promiseCount)}
     </div>
   );
-}
-
-/** Needs you and my open promises, for the tabs: read when the Inbox opens and after changes. */
-export function useConversationCount(version: number, enabled: boolean): [number | null, (n: number) => void, number | null, (n: number) => void] {
-  const [count, setCount] = useState<number | null>(null);
-  const [promises, setPromises] = useState<number | null>(null);
-  useEffect(() => {
-    if (!enabled) return;
-    let live = true;
-    void call<ConversationsData>("conversations.list", {}).then((d) => live && (setCount(d.needsYou.length), setPromises(d.myPromisesOpen)), () => undefined);
-    return () => void (live = false);
-  }, [version, enabled]);
-  return [count, setCount, promises, setPromises];
 }
 
 export function Conversations({ data, version, onCount, onPromiseCount, onChanged, openSettings }: { data: WeekLoadData; version: number; onCount: (n: number) => void; onPromiseCount?: (n: number) => void; onChanged?: () => void; openSettings: (section: string) => void }) {

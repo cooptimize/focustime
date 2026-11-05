@@ -88,7 +88,7 @@ describe.skipIf(!CHROMIUM || !SHOTS)("ADM-2 screenshots", () => {
     await page.waitForSelector(".demo-tag", { timeout: 30_000 });
     await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
     await page.addStyleTag({ content: "html { font-size: 17px; }" });
-    await page.getByRole("navigation", { name: "Tabs" }).getByRole("button", { name: /More/ }).click();
+    await page.getByRole("button", { name: /^More: notifications/ }).click();
     await page.getByRole("menuitem", { name: "Admin" }).click();
     const pick = page.getByRole("combobox", { name: "Settings section" });
     await pick.waitFor();

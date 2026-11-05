@@ -25,7 +25,7 @@ export function levelFromPosition(name: unknown): Level | null {
   return n === "consultant" ? "consultant" : n === "senior consultant" ? "senior" : n === "lead consultant" ? "lead" : null;
 }
 
-/** ADM-2 (D583): the mapping an admin edits in Admin › People, prefilled with Dataverse's three position names. */
+/** ADM-2 (D593): the mapping an admin edits in Admin › People, prefilled with Dataverse's three position names. */
 export type PositionLevels = Record<string, Level | null>;
 export const BUILTIN_POSITION_LEVELS: PositionLevels = { Consultant: "consultant", "Senior Consultant": "senior", "Lead Consultant": "lead" };
 /** A position's level through the mapping (any case, trimmed); a position not in it, or mapped to nothing, has none. */
@@ -219,12 +219,12 @@ export const ORG_SPECS = {
   "conv.request_phrases": { kind: "default", area: "conversations", label: "Request phrases", builtin: [...DEFAULT_REQUEST_PHRASES], parse: list(50, 60, true) },
   "conv.ack_phrases": { kind: "default", area: "conversations", label: "Thanks and short replies", builtin: [...DEFAULT_ACK_PHRASES], parse: list(50, 60, true) },
   "conv.promise_phrases": { kind: "default", area: "conversations", label: "Commitment phrases", builtin: [...DEFAULT_PROMISE_PHRASES], parse: list(50, 60, true) },
-  // ADM-2 (D582): read live by the poller each tick; 1 to 30 (a stored value outside it falls back to 5 with a Status line).
+  // ADM-2 (D592): read live by the poller each tick; 1 to 30 (a stored value outside it falls back to 5 with a Status line).
   "conv.poll_minutes": { kind: "rule", area: "conversations", label: "Read client chats every (minutes)", builtin: 5, parse: intIn(1, 30, "minutes") },
   "conv.retention_days": { kind: "rule", area: "conversations", label: "Keep messages that aren't requests (days)", builtin: 14, parse: intIn(1, 90, "days") },
   "conv.closed_shown_days": { kind: "rule", area: "conversations", label: "Closed conversations stay shown (days)", builtin: 14, parse: intIn(1, 90, "days") },
   "conv.chat_ai_daily_cap": { kind: "rule", area: "conversations", label: "AI requests per chat per day", builtin: 200, parse: intIn(0, 5000, "requests") },
-  // ADM-2 (D578): also who is a Cooptimizer (sign-in and People); help invites go only to these too.
+  // ADM-2 (D588): also who is a Cooptimizer (sign-in and People); help invites go only to these too.
   "org.invite_domains": { kind: "rule", area: "organization", label: "Cooptimize email domains (sign-in and people)", builtin: [] as string[], parse: domains },
   "org.never_suggest": { kind: "rule", area: "organization", label: "Never suggested as helpers or Who", builtin: ["Kat 🤖"], parse: list(100, 100) },
   "org.feedback": { kind: "rule", area: "organization", label: "Send feedback goes to", builtin: null as FeedbackRule | null, parse: orNull(feedback) },
@@ -253,7 +253,7 @@ export const CLIENT_SPECS = {
   no_breakdown: { kind: "rule", area: "clients", label: "Types that don't need breakdown", builtin: [] as string[], parse: list(40, 100) },
   background: { kind: "rule", area: "clients", label: "Background types", builtin: [] as string[], parse: list(40, 100) },
   house_style: { kind: "rule", area: "clients", label: "House style for Break down", builtin: null as string | null, parse: orNull(text(1200)) },
-  // ADM-2 (D575): an admin's two per-account overrides of the customer rule (plan/client-accounts.ts).
+  // ADM-2 (D585): an admin's two per-account overrides of the customer rule (plan/client-accounts.ts).
   treat_as_client: { kind: "rule", area: "clients", label: "Treat as a client", builtin: false, parse: bool },
   hidden: { kind: "rule", area: "clients", label: "Hide from FocusTime", builtin: false, parse: bool },
 } satisfies Record<string, Spec>;
@@ -306,7 +306,7 @@ export type OrgRules = {
   levels: Record<Level, Guidance>;
   /** ADM-2: ids an admin flagged as automation accounts. */
   automation: string[];
-  /** ADM-2 (D582): team values stored that no longer validate, each read as its built-in value (Status shows them). */
+  /** ADM-2 (D592): team values stored that no longer validate, each read as its built-in value (Status shows them). */
   problems: { key: string; label: string; fallback: unknown }[];
 };
 export type ClientRules = { color: string | null; allowAi: boolean; attachmentsAi: boolean; openStates: string[]; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean };
@@ -399,7 +399,7 @@ export function resolve<T>(o: { personal?: T | null | undefined; level?: T | nul
 
 /** A person's guidance: their own choices over their level's defaults (no level: the built-in ones). */
 export function guidanceFor(r: OrgRules, level: Level | null, personal: Partial<Guidance>): Guidance {
-  // ADM-2 (D583): no level (an unmapped position, or none) uses the Consultant defaults.
+  // ADM-2 (D593): no level (an unmapped position, or none) uses the Consultant defaults.
   const lv = r.levels[level ?? "consultant"];
   const builtin: Guidance = { draftStories: LEVEL_SPECS.draft_stories.builtin, readinessNudges: LEVEL_SPECS.readiness_nudges.builtin, planShare: LEVEL_SPECS.plan_share.builtin };
   return {

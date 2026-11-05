@@ -227,6 +227,21 @@ One job reads each registered client chat for everyone; Asks are now Requests. D
 - **UI.** `ui/WeekStories.tsx`: `WeekDndProvider` (mounted in `ui/App.tsx`: the dragged story, the fit on the target, place and Undo, Add to… and Move to… menus, long press, the undo toast; Break down sends `focustime:breakdown` to BD-1's panel), `useDropTarget` and `useDragSource`, `YourStories` and its rows, No stories for you yet, Add a story for me. `ui/DetailPanel.tsx` `variant="week"`. `ui/WeekGrid.tsx`: drop targets on half-days and whole days, `CardPicks` grouped by feature. `ui/PickRow.tsx` `typeIcon` and `dragProps`. `ui/DevOpsWrite.tsx` `begin(…, settled)` tells the caller whether the write was confirmed.
 - **Tests.** `plan/blockstories.test.ts`, `plan/weekdrop.test.ts`, the PV-1 parts of `sources/devops/source.test.ts`, `actions/devops-write.test.ts` and `server/notices.test.ts`, `ui/planview.test.ts`; e2e `e2e/week-panel.test.ts` on the live harness. Builders: `aFeature`, `aTypeLook`, `aClientWork`, `aPick`, `aWeekFeature`.
 
+## NV-1: navigation (Nov 5)
+
+- **Tabs and routes** (`ui/nav.ts`, tested in `ui/nav.test.ts`). Today · Week · Ahead · Inbox, keys 1 to 4.
+  - Today: `#/today`; flows `#/today/checkin` and `#/today/closeout[/date]`. No modes.
+  - Week: `#/week[/monday]` (the Board), `#/week/day[/date[/half]]` (Plan today: the Board focused on a day, `focusOf`), `#/week/commit[/monday]` (Commit, Plan the week).
+  - Ahead: `#/ahead` (Roadmap), `#/ahead/plan` (Plan ahead).
+  - Inbox: `#/inbox`, `#/inbox/conversations`, `#/inbox/my-promises`.
+  - Redirects (D581): `#/today/plan…`, `#/week/plan…`, `#/roadmap`, `#/roadmap/ahead`, `#/conversations`, `#/requests`, `#/asks`, `#/my-promises`, `#/promises`. `ui/App.tsx` replaces the history entry when the parsed address differs from the one typed.
+- **Today** (`ui/Today.tsx`): `UrgentStrip` (`plan/urgent.ts`), `MomentCard` (`momentCard` in `plan/modes.ts`), the blocks, After your blocks, This week chips.
+- **Week**: the Board (WeekGrid with `ui/FromLastWeek.tsx` over it for this week, action `planday.carry`), Plan today (`ui/PlanDay.tsx` under Week's header and switch), Commit (`ui/PlanWeek.tsx`).
+- **Coop brief**: `openCoopBrief` (`ui/menu.ts`, a window event) and `CoopBriefHost` / `CoopBriefPanel` (`ui/BreakDownPanel.tsx`), mounted once in App.
+- **Inbox badge**: `ui/inboxcount.ts` (`inboxBadge`, `useConversationCount` over `conversations.count`).
+- **Phone**: `ui/Phone.tsx` BottomBar with the four tabs and the Inbox count; Capture is the top bar's +.
+- **e2e**: `e2e/navigation.test.ts`.
+
 ## ADM-2: Admin fixes (Nov 5)
 
 - **Which accounts are clients.** `plan/client-accounts.ts` `clientAccounts()` (pure): Customer accounts, Cooptimize Internal, the admins' Treat as a client and Hide from FocusTime (client Rules). The org runtime holds it (`OrgRuntime.clientAccounts()`); `actions/client-accounts.ts` `onlyClients` wraps the action context once in `dispatch`, so `myClients()` and `teammates()` give clients and Cooptimizers only. `sources/dataverse/directory.ts` reads accounts (type, Account Worker and Focus Time counts) into the app table `directory_accounts` (`store/migrations/20261105T1400_client_accounts.ts`, which also adds `people_directory.guest`, `.entra` and `people_clients.worker`).
