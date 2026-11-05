@@ -134,7 +134,8 @@ function baseHeaders(res: ServerResponse, csp: boolean, https: boolean) {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+  // AS-1: the microphone for the assistant's push-to-talk, on FocusTime's own pages only (no frame or other origin).
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=(), payment=(), usb=()");
   if (https) res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   if (csp) res.setHeader("Content-Security-Policy", CSP);
 }

@@ -3,7 +3,7 @@
 // change needs the session's X-CSRF. The gate (actions/dispatch.ts assistantTranscribe): AI for FocusTime, and the
 // client in focus must have Allow AI ("Voice is off while <client> is in focus"); 60 seconds at most.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { assistantTranscribe, type ActionContext } from "../actions/dispatch.ts";
+import { assistantGate, assistantTranscribe, type ActionContext } from "../actions/dispatch.ts";
 import { stubProvider } from "../ai/stub.ts";
 import type { TranscribeCall } from "../ai/types.ts";
 import { parseConfig } from "../config/schema.ts";
@@ -111,5 +111,11 @@ describe("the gate and limits", () => {
     expect(await assistantTranscribe(c, { audio: new Uint8Array(), mime: "audio/webm", seconds: 3 })).toMatchObject({ ok: false, reason: "format" });
     expect(await assistantTranscribe(c, { audio, mime: "video/mp4", seconds: 3 })).toMatchObject({ ok: false, reason: "format" });
     expect(heard).toEqual([]);
+  });
+  it("the panel's gate says the same before anything is recorded", async () => {
+    expect(await assistantGate(ctx(), { clientKey: "fabrikam" })).toEqual({ assistant: "ok", voice: { on: true, message: null } });
+    expect(await assistantGate(ctx({ allowed: [] }), { clientKey: "fabrikam" })).toEqual({ assistant: "ok", voice: { on: false, message: "Voice is off while Fabrikam is in focus" } });
+    expect(await assistantGate(ctx({ allowed: [] }), {})).toEqual({ assistant: "ok", voice: { on: true, message: null } });
+    expect(await assistantGate(ctx({ on: false }), {})).toMatchObject({ assistant: "off", voice: { on: false } });
   });
 });
