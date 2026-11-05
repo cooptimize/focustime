@@ -12,6 +12,7 @@ import { createPushDevices } from "../store/push-devices.ts";
 import { createPush, type VapidSource } from "./push.ts";
 import { keyVaultSecret } from "../host/azure/vapid.ts";
 import { openAiProvider } from "../ai/openai.ts";
+import { createAssistantHub } from "./assistant.ts";
 import { stubProvider } from "../ai/stub.ts";
 import type { AiProvider } from "../ai/types.ts";
 import type { AiRuntime } from "../actions/ai-actions.ts";
@@ -699,6 +700,8 @@ const server = createApp({
  * ends on time after a restart without anyone signing in).
  */
 const runtimes = new Map<string, { ctx: ActionContext; who: Person; ticks: PersonTicks }>();
+/** AS-1: the assistant by person (Entra object id), for TB-1's Teams bot: their own context, absolute links. */
+export const assistants = createAssistantHub({ ctxFor: (userId) => runtimeFor(userId), publicUrl: app.publicUrl });
 /** Runtimes being built (the store is async, so two requests at once must not build two). */
 const starting = new Map<string, Promise<ActionContext>>();
 function runtimeFor(userId: string): Promise<ActionContext> {

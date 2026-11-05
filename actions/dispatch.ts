@@ -19,7 +19,7 @@ import { assistantAction } from "../assistant/actions.ts";
 import { RUNS as ASSISTANT_RUNS } from "../assistant/allowlist.ts";
 import type { ReadDeps } from "../assistant/reads.ts";
 import { createAssistant, type AssistantService } from "../assistant/service.ts";
-import type { Channel } from "../assistant/types.ts";
+import { VOICE_MAX_BYTES, VOICE_MAX_SECONDS, type AssistantContext, type Channel, type TranscribeResult } from "../assistant/types.ts";
 import type { ClientEntry } from "../ai/guard.ts";
 import { inviteDomains } from "../config/schema.ts";
 import type { ChosenVm } from "./account-types.ts";
@@ -752,6 +752,33 @@ export async function assistantFor(ctx: ActionContext, channel: Channel, publicU
   const today = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(zone).toPlainDate().toString();
   const link = (href: string, label: string) => ({ label, href: channel === "teams" && publicUrl ? `${publicUrl.replace(/\/$/, "")}/${href}` : href });
   return { service, reads: { run, today, now: ctx.now(), zone, isMine, clientName, link } };
+}
+
+/**
+ * AS-1: one push-to-talk recording to text, for the panel. Never stored or logged: the bytes are only in this call.
+ * The gate: AI for FocusTime on and, when a client is in focus (the screen's client or the selected item's), that
+ * client's Allow AI ("Voice is off while <client> is in focus"); with none in focus, AI for FocusTime is enough.
+ */
+export async function assistantTranscribe(ctx: ActionContext, t: { audio: Uint8Array; mime: string; seconds: number; context?: AssistantContext }): Promise<TranscribeResult> {
+  if (!/^audio\/(webm|mp4)(;.*)?$/i.test(t.mime)) return { ok: false, reason: "format", message: "That recording's format isn't one FocusTime takes (WebM or MP4 audio)" };
+  if (!t.audio.length) return { ok: false, reason: "format", message: "Nothing was recorded" };
+  if (t.audio.length > VOICE_MAX_BYTES) return { ok: false, reason: "too_large", message: "That recording is too large" };
+  if (!Number.isFinite(t.seconds) || t.seconds <= 0 || t.seconds > VOICE_MAX_SECONDS + 1) return { ok: false, reason: "too_long", message: `Recordings stop at ${VOICE_MAX_SECONDS} seconds` };
+  const cfg = await configured(ctx);
+  const ai = cfg ? await aiFor(ctx) : null;
+  if (!cfg || !ai) return { ok: false, reason: "not_set_up", message: "Voice isn't set up here" };
+  const directory = await aiDirectory(ctx, cfg);
+  const c = t.context ?? {};
+  const focus = c.clientKey && directory.some((d) => d.key === c.clientKey) ? c.clientKey : c.itemId ? (directory.find((d) => d.itemIds.includes(c.itemId!))?.key ?? null) : null;
+  const name = focus ? (directory.find((d) => d.key === focus)?.names[0] ?? focus) : null;
+  const r = await ai.transcribe(t.audio, t.mime, Math.min(t.seconds, VOICE_MAX_SECONDS), focus ?? "none");
+  if (r.ok) return { ok: true, text: r.text };
+  const k = r.error.kind;
+  if (k === "off") return { ok: false, reason: "off", message: "Voice is off: AI is off for FocusTime" };
+  if (k === "client_off") return { ok: false, reason: "client_off", message: `Voice is off while ${name ?? "this client"} is in focus` };
+  if (k === "not_set_up") return { ok: false, reason: "not_set_up", message: "Voice isn't set up here" };
+  if (k === "over_budget" || k === "zero_budget") return { ok: false, reason: "over_budget", message: r.error.message };
+  return { ok: false, reason: "provider", message: "The recording couldn't be turned into text. Try again, or type it" };
 }
 
 /** The write framework's pieces (step 14): the person's write PAT, never the company read PAT. */
