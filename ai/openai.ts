@@ -2,7 +2,8 @@
 // output (text.format json_schema, strict: true), store: false so OpenAI keeps no application state (abuse monitoring
 // logs are still kept up to 30 days, docs/decisions.md D495). One call per request; retries are the service's.
 // Verified Nov 4 against developers.openai.com/api/docs (guides/migrate-to-responses, structured-outputs, rate-limits,
-// error-codes, your-data, reasoning, pricing). The key is read per call from the host's secret path and only ever
+// error-codes, your-data, reasoning, pricing). CV-4, Nov 5: images-vision (input_image with a base64 data URL, detail
+// high; PNG, JPEG, WEBP and still GIF; image tokens counted in usage.input_tokens). The key is read per call from the host's secret path and only ever
 // goes into the Authorization header; no header, body or answer text is logged.
 import type { AiProvider, ProviderCall, ProviderReply, Usage } from "./types.ts";
 
@@ -55,7 +56,10 @@ export function openAiProvider(o: OpenAiOptions): AiProvider {
       const body = {
         model: c.model,
         instructions: c.instructions,
-        input: c.input,
+        // CV-4: with images, one user message: the input text, then each image after its label, at high detail.
+        input: c.images?.length
+          ? [{ role: "user", content: [{ type: "input_text", text: c.input }, ...c.images.flatMap((i) => [{ type: "input_text", text: i.label }, { type: "input_image", image_url: i.dataUrl, detail: "high" }])] }]
+          : c.input,
         store: false,
         max_output_tokens: c.maxOutputTokens,
         ...(c.reasoningEffort ? { reasoning: { effort: c.reasoningEffort } } : {}),

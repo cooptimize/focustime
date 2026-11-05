@@ -5,7 +5,7 @@
 import type { AheadItem, AheadLoad } from "../../actions/types.ts";
 import type { AheadFilters, AheadOwner } from "../../plan/ahead-edit.ts";
 import type { Assignee, ChangeField, DayHalf, StagedChange } from "../../plan/ahead-edit.ts";
-import { gapsOf, type GapItem, type GapKind } from "../../plan/fixnext.ts";
+import { fixClient, gapsOf, GAP_KINDS, type FixClient, type FixGroup, type GapItem, type GapKind } from "../../plan/fixnext.ts";
 import { isOpen as isOpenCategory } from "../../plan/process.ts";
 
 export type LoadClient = AheadLoad["clients"][number];
@@ -71,7 +71,8 @@ export function buildRows(load: AheadLoad, c: LoadClient): Row[] {
     (kids.get(p) ?? kids.set(p, []).get(p)!).push(i);
   }
   const editable = new Set(c.editable);
-  const me = lc(c.me);
+  // AH-3: every address that is me on this client (my own, my DevOps emails, linked client logins).
+  const me = new Set([lc(c.me), ...(c.mine ?? []).map(lc)].filter(Boolean));
   const changes = load.changes.filter((x) => x.clientKey === c.clientKey);
   const halves = load.halves.filter((h) => h.clientKey === c.clientKey);
   const out: Row[] = [];
@@ -100,8 +101,8 @@ export function buildRows(load: AheadLoad, c: LoadClient): Row[] {
       has,
       sizeLabel: sizeRef ? (c.fieldNames[sizeRef] ?? sizeRef.split(".").at(-1) ?? null) : null,
       hint: c.hints[i.id]?.text ?? null,
-      gaps: gapsOf(gi, changes),
-      mine: !!me && lc(eff.assignee?.email) === me,
+      gaps: gapsOf(gi, changes, c.fixGaps ?? GAP_KINDS),
+      mine: me.has(lc(eff.assignee?.email)),
       context: false,
       openChildren: open,
     });
@@ -166,4 +167,28 @@ export function dueOfRow(rows: readonly Row[], r: Row): string | null {
   if (r.eff.target) return r.eff.target;
   const p = r.item.parentId !== null ? rows.find((x) => x.item.id === r.item.parentId) : undefined;
   return p ? dueOfRow(rows, p) : null;
+}
+
+/**
+ * AH-3: Fix next for every client with DevOps (whatever Grid's filters say: Fix next has none), from the rows Ahead
+ * shows: what I see (my pending change first), what I may change, never outside Cooptimize's scope.
+ */
+export function fixGroups(load: AheadLoad, o: { readOnly: boolean; skipped?: ReadonlySet<string> }): { client: LoadClient; group: FixGroup; rows: Row[] }[] {
+  return load.clients
+    .filter((c) => c.status === "ok")
+    .map((c) => {
+      const rows = buildRows(load, c);
+      const input: FixClient = {
+        clientKey: c.clientKey,
+        orderField: c.orderField ?? null,
+        gaps: c.fixGaps ?? GAP_KINDS,
+        items: rows.map((r) => ({
+          clientKey: c.clientKey, id: r.item.id, open: isOpen(r.item), needsBreakdown: r.tier !== "story", openChildren: r.openChildren,
+          startField: r.has.start ? "s" : null, targetField: r.has.target ? "t" : null, sizeField: r.has.size ? "z" : null, child: r.tier === "story",
+          start: r.eff.start, target: r.eff.target, size: r.eff.size, assigneeEmail: r.eff.assignee?.email ?? null, canEdit: r.editable && !o.readOnly,
+          tier: r.tier, parentId: r.item.parentId, order: r.item.order ?? null, inScope: r.item.inScope !== false, mine: r.mine,
+        })),
+      };
+      return { client: c, group: fixClient(input, { today: load.today, topN: load.fixTopN, ...(o.skipped ? { skipped: o.skipped } : {}) }), rows };
+    });
 }

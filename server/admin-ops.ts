@@ -42,6 +42,8 @@ export type AdminOpsDeps = {
   lastRuns?: () => Record<string, string>;
   /** AH-2: Admin › Clients' scope facts per client (the poller's store). */
   scope?: AdminOps["scope"];
+  /** AH-3: each client's DevOps assignees from the poller's store (emails stay on the server). */
+  assignees?: AdminOps["assignees"];
   log: Logger;
 };
 
@@ -60,6 +62,7 @@ export function createAdminOps(d: AdminOpsDeps): AdminOps {
   const ops: AdminOps = {
     ...(d.statusRows ? { statusRows: d.statusRows } : {}),
     ...(d.scope ? { scope: d.scope } : {}),
+    ...(d.assignees ? { assignees: d.assignees } : {}),
     check: d.check,
     org: d.org,
     groupId: d.groupId,
@@ -115,7 +118,7 @@ export function createAdminOps(d: AdminOpsDeps): AdminOps {
         lastDirectory = { ok: false, message: "Dataverse couldn't be read. FocusTime keeps the last levels and leads it read." };
         return { ...lastDirectory, people: 0 };
       }
-      await d.org.store.replaceDirectory(r.read.people, r.read.leads, r.read.clients, r.read.accounts);
+      await d.org.store.replaceDirectory(r.read.people, r.read.leads, r.read.clients, r.read.accounts, r.read.identities);
       d.org.invalidate();
       lastDirectory = { ok: true, message: null };
       return { ok: true, message: null, people: r.read.people.length };

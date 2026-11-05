@@ -57,7 +57,14 @@ export type DevOpsDeps = {
    * Cooptimizer (by email). Absent or null: no scope (every item, as before AH-2).
    */
   scope?: (clientKey: string) => Promise<ScopeDeps | null>;
+  /**
+   * AH-3: this person's other DevOps addresses on a client (linked client logins), and a Cooptimizer's FocusTime name
+   * for a DevOps email there. Emails only to match, never kept or shown. Absent: only the Dataverse identity is me.
+   */
+  identities?: (clientKey: string) => Promise<SourceIdentities | null>;
 };
+
+export type SourceIdentities = { mine: readonly string[]; nameOf(email: string): string | null };
 
 /** AH-2: what the scope needs from the org runtime. */
 export type ScopeDeps = { rule: DevOpsScope | null; isCooptimizer: (email: string) => boolean };
@@ -184,7 +191,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     }
   };
 
-  type Ctx = { client: string; /** The client key (process overrides are per client). */ clientKey: string; org: string; base: string; projectName: string; pat: Pat; /** My identity here (not secret), for changedByMe. */ me: string | null };
+  type Ctx = { client: string; /** The client key (process overrides are per client). */ clientKey: string; org: string; base: string; projectName: string; pat: Pat; /** My identity here (not secret), for changedByMe. */ me: string | null; /** AH-3: my other addresses here. */ alsoMe?: readonly string[]; nameOf?: (email: string) => string | null };
 
   /** One request. Errors are mapped to plain messages; response bodies of failures are never read. */
   async function call<T>(c: Ctx, op: string, path: string, body?: unknown): Promise<T> {
@@ -460,11 +467,19 @@ export function createDevOpsSource(d: DevOpsDeps) {
 
   /** Normalized. `people` (PV-1): also the assignee (display name, and the email only to match a Cooptimizer), for children. */
   function normalized(ctx: Ctx, meta: Metadata, values: unknown[], o: { people?: boolean; keepDone?: boolean; tiers?: boolean } = {}): WorkItem[] {
-    const { items, skipped } = normalizeWorkItems(values, { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels, ...(o.tiers === false ? {} : { tiers: meta.tiers }), me: ctx.me, ...(o.people ? { people: true } : {}), ...(o.keepDone ? { keepDone: true } : {}) });
+    const { items, skipped } = normalizeWorkItems(values, { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels, ...(o.tiers === false ? {} : { tiers: meta.tiers }), me: ctx.me, ...idOpts(ctx), ...(o.people ? { people: true } : {}), ...(o.keepDone ? { keepDone: true } : {}) });
     if (skipped) log("normalize", { kind: "skipped", count: skipped });
     return items;
   }
 
+  const idOpts = (ctx: Ctx) => ({ ...(ctx.alsoMe?.length ? { alsoMe: ctx.alsoMe } : {}), ...(ctx.nameOf ? { nameOf: ctx.nameOf } : {}) });
+  /** AH-3: the context with my linked logins and the FocusTime names for this client. */
+  async function withIdentities(ctx: Ctx): Promise<Ctx> {
+    const ids = d.identities ? await d.identities(ctx.clientKey).catch(() => null) : null;
+    if (!ids) return ctx;
+    const me = ctx.me?.toLowerCase() ?? null;
+    return { ...ctx, alsoMe: ids.mine.map((e) => e.toLowerCase()).filter((e) => e !== me), nameOf: ids.nameOf };
+  }
   function contextOf(ref: ClientRef, target: DevOpsTarget): { ctx: Ctx; project: string } {
     const org = target.org!;
     return { ctx: { client: ref.clientName, clientKey: ref.clientKey, org, base: `https://dev.azure.com/${encodeURIComponent(org)}`, projectName: target.projectName ?? target.project!, pat: target.pat ?? NO_PAT, me: target.email }, project: target.project! };
@@ -479,14 +494,21 @@ export function createDevOpsSource(d: DevOpsDeps) {
   type ClientRead = { items: WorkItem[]; children: WorkItem[]; watched: WorkItem[]; committed: WorkItem[]; parents: WorkItem[]; model: ProcessModel };
 
   /** One client's views of my work, from the given reads (DevOps or the store). */
-  async function readClient(ctx: Ctx, raw: Metadata, r: (meta: Metadata) => Reads, watch: readonly number[] = [], features: readonly number[] = []): Promise<ClientRead> {
+  async function readClient(ctx0: Ctx, raw: Metadata, r: (meta: Metadata) => Reads, watch: readonly number[] = [], features: readonly number[] = []): Promise<ClientRead> {
+    const ctx = await withIdentities(ctx0);
     needStoryLevel(raw, ctx, ctx.projectName);
     const meta = { ...raw, categories: stateCategories(raw.model, d.openStates?.(ctx.clientKey) ?? []) };
     const reads = r(meta);
     const base = batchFields(meta.orderField);
     // WT-1 safety net: a bug assigned to me is always at child level, even when the team has bugs off.
     // PV-1: mine by the query (the assignee is me), so the Week panel can tell them from teammates' children.
-    const items = normalized(ctx, meta, await reads.mine(ctx.me!, base)).map((i) => ({ ...(i.level === "other" && typeOf(meta.model, i.type)?.bug ? { ...i, level: "story" as const } : i), assignedToMe: true }));
+    const myItems = await reads.mine(ctx.me!, base);
+    // AH-3: and what's assigned to my linked client logins here.
+    for (const e of ctx.alsoMe ?? []) {
+      const seen = new Set(myItems.map((v) => (v as { id?: unknown }).id));
+      for (const v of await reads.mine(e, base)) if (!seen.has((v as { id?: unknown }).id)) myItems.push(v);
+    }
+    const items = normalized(ctx, meta, myItems).map((i) => ({ ...(i.level === "other" && typeOf(meta.model, i.type)?.bug ? { ...i, level: "story" as const } : i), assignedToMe: true }));
     log("items", { count: items.length });
     // Features committed to a week (step 8) that aren't mine: read by id (open ones), so their stories can be offered.
     const mineIds = new Set(items.map((i) => i.id));
@@ -585,7 +607,8 @@ export function createDevOpsSource(d: DevOpsDeps) {
 
   /** Features and epics for my items (step 8), from the given reads and fields (DevOps or the store). */
   /** `only` (PL-1): exactly these features and epics by id, in any state (closed ones too), without the ones above. */
-  async function readPortfolio(ctx: Ctx, raw: Metadata, mine: readonly WorkItem[], r: (meta: Metadata) => Reads, fieldsOf: () => Promise<FieldSet>, only?: readonly number[]): Promise<PortfolioRead> {
+  async function readPortfolio(ctx0: Ctx, raw: Metadata, mine: readonly WorkItem[], r: (meta: Metadata) => Reads, fieldsOf: () => Promise<FieldSet>, only?: readonly number[]): Promise<PortfolioRead> {
+    const ctx = await withIdentities(ctx0);
     const project = ctx.projectName;
     needStoryLevel(raw, ctx, project);
     const categories = stateCategories(raw.model, d.openStates?.(ctx.clientKey) ?? []);
@@ -599,7 +622,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const reads = r({ ...raw, categories });
     const readByIds = async (ids: readonly number[], f: string[], n: Omit<NormalizeContext, "org" | "projectName">) => normalizeWorkItems(await reads.byIds(ids, f), { org: ctx.org, projectName: ctx.projectName, ...n }).items;
     const fields = [...batchFields(raw.orderField), "System.AssignedTo", "System.AreaPath", "System.IterationPath", ...new Set([...Object.values(targetFields), ...Object.values(startFields)]), ...(sizeField ? [sizeField] : [])];
-    const n = { orderField: raw.orderField, categories, levels: raw.levels, keepDone: true, me: ctx.me, people: true, targetFields, startFields, timeZone: d.timeZone, sizeField, paths: true };
+    const n = { orderField: raw.orderField, categories, levels: raw.levels, keepDone: true, me: ctx.me, ...idOpts(ctx), people: true, targetFields, startFields, timeZone: d.timeZone, sizeField, paths: true };
     const found = (await readByIds(ids, fields, n)).filter((i) => portfolioTypes.has(i.type) && (!!only || !isClosed(i.stateCategory)));
     // Q49: follow parent links up to the top portfolio level, so the epics above my features are read too.
     const above = new Set<number>();
@@ -1080,6 +1103,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
           const sz = sizeField ? v.fields[sizeField] : null;
           const who = v.fields["System.AssignedTo"];
           const rung = meta.model.ladder.findIndex((r) => r.includes(type));
+          const ord = meta.orderField ? v.fields[meta.orderField] : null;
           return {
             id: v.id, rev: typeof v.fields["System.Rev"] === "number" ? (v.fields["System.Rev"] as number) : 0,
             title: str(v.fields["System.Title"]).trim() || "(No title)", type, state, stateCategory: category,
@@ -1090,6 +1114,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
             target: f.fields[type] ? dateOnly(v.fields[f.fields[type]!], tz) : null,
             size: typeof sz === "number" && Number.isFinite(sz) ? sz : null,
             url: workItemUrl(ctx.org, ctx.projectName, v.id), changedAt: str(v.fields["System.ChangedDate"]),
+            order: typeof ord === "number" && Number.isFinite(ord) ? ord : null,
           };
         });
         const known = all.filter((i) => i.level !== null && cats.has(i.type));
@@ -1110,7 +1135,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
           clientKey: ref.clientKey, clientName: ref.clientName, status: view.failure ? view.failure.status : "ok", ...(view.failure ? { message: view.failure.message } : {}),
           fetchedAt, project: ctx.projectName, me: target?.email ?? null,
           startFields: pick(f.starts), targetFields: pick(f.fields), sizeFields: pick(f.sizes ?? {}), fieldNames: f.names ?? {},
-          types: looksOf(meta.model), items, scope,
+          types: looksOf(meta.model), items, scope, orderField: meta.orderField,
         };
       }),
     );

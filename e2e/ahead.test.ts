@@ -30,12 +30,15 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     const { page, errors } = await open("#/ahead");
     await expect(page.locator(".ah-pending").textContent()).resolves.toContain("3 changes to save");
     await expect(page.locator(".ah-client-head").allTextContents()).resolves.toEqual(expect.arrayContaining([expect.stringContaining("Northwind Foods"), expect.stringContaining("Harbor Health")]));
-    // Pending values show in place: Store locator starts Mon, Nov 16 PM.
-    await expect(row(page, "Store locator").locator(".ah-col-start").textContent()).resolves.toContain("Mon, Nov 16 PM");
+    // Pending values show in place: Store locator starts Nov 16 PM (AH-3: the weekday in the tooltip).
+    await expect(row(page, "Store locator").locator(".ah-col-start").textContent()).resolves.toContain("Nov 16 PM");
+    await expect(row(page, "Store locator").locator(".ah-col-start [title]").first().getAttribute("title")).resolves.toContain("Monday, November 16");
     await expect(row(page, "Store locator").locator(".ah-col-start").getAttribute("class")).resolves.toContain("ah-pend");
     await expect(row(page, "Loyalty points").locator(".ah-col-target").getAttribute("class")).resolves.toContain("ah-conf");
-    // A story's size in its process's own field, FocusTime's size beside it; a feature has none in this process.
-    await expect(row(page, "Export orders to CSV").locator(".ah-col-size").textContent()).resolves.toMatch(/3\s*Story Points\s*FocusTime: L, about 4h/);
+    // A story's size in its process's own field on one line (AH-3: "3 SP"), the field's name and FocusTime's size in
+    // its tooltip; a feature has none in this process.
+    await expect(row(page, "Export orders to CSV").locator(".ah-col-size").textContent()).resolves.toMatch(/^3\s*SP$/);
+    await expect(row(page, "Export orders to CSV").locator(".ah-col-size .ah-size").getAttribute("title")).resolves.toMatch(/3 Story Points\s+FocusTime: L, about 4h/);
     // AH-2: a field the type doesn't have, and a missing value, are a muted dash; the tooltip says which.
     await expect(row(page, "Order history export").locator(".ah-col-size .ah-none").getAttribute("title")).resolves.toBe("Not in Portal's process");
     await expect(row(page, "Supplier onboarding").locator(".ah-col-start .ah-none").getAttribute("title")).resolves.toBe("No start date");
@@ -43,7 +46,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     const ready = row(page, "Supplier onboarding").locator(".ah-col-ready");
     await expect(ready.locator(".ah-chip:not(.ah-more)").allTextContents()).resolves.toEqual(["Not scoped", "Needs stories"]);
     await expect(ready.locator(".ah-more").textContent()).resolves.toBe("+1");
-    await expect(ready.locator(".ah-more").getAttribute("title")).resolves.toBe("No dates");
+    await expect(ready.locator(".ah-more").getAttribute("title")).resolves.toBe("No target date");
     const fills = await page.locator(".ah-cell:not(.ah-pend)").evaluateAll((els) => [...new Set(els.map((e) => getComputedStyle(e).backgroundColor))]);
     expect(fills).toEqual(["rgba(0, 0, 0, 0)"]);
     // No orange text: every cell's text is the normal or a muted color, never the amber.
@@ -170,7 +173,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await expect(row(page, "Month-end journal import").locator(".ah-ro").allTextContents()).resolves.toContain("Outside scope");
     // Fix next never offers the client's own work (Journal approval step is unassigned and unsized).
     const fix = await call(page, "#/ahead/fix");
-    await expect(fix.locator(".ah-fix").count()).resolves.toBeGreaterThan(0);
+    await expect(fix.locator(".ah-fx-row:not(.ctx)").count()).resolves.toBeGreaterThan(0);
     await expect(fix.getByText("Journal approval step").count()).resolves.toBe(0);
     // Remembered: still on after a reload.
     await page.evaluate(() => (location.hash = "#/ahead"));
@@ -282,22 +285,95 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("Fix next: one gap at a time on items I can change, soonest target first; Skip moves on; Assign goes into the change set", async () => {
+  it("AH-3: Fix next ranked by each client's backlog, grouped client › epic › feature, one row per item with its gaps and one action; Size goes into the change set; a project with no backlog order says so; an admin turns a gap off", async () => {
     const { page, errors } = await open("#/ahead/fix");
-    const card = page.locator(".ah-fix-mode > .ah-fix");
-    await card.waitFor();
-    const first = await card.textContent();
-    await shotBoth(page, "ahead-fix-next", card);
-    await card.getByRole("button", { name: "Skip" }).click();
-    await expect.poll(() => card.textContent()).not.toBe(first);
-    // Walk to an Assign and give it to me.
-    for (let i = 0; i < 20 && !(await card.getByRole("button", { name: "Assign" }).count()); i++) await card.getByRole("button", { name: "Skip" }).click();
-    await card.getByRole("button", { name: "Assign" }).click();
-    await page.getByRole("option", { name: /^Me$|\(me\)$/ }).first().click();
+    const sections = page.locator(".ah-fx-client");
+    await sections.first().waitFor();
+    // The count is in the mode switch and the header, the same number.
+    const head = await page.locator(".follow-ups-head h2").textContent();
+    const n = Number(/(\d+) things? to fix/.exec(head ?? "")?.[1]);
+    expect(n).toBeGreaterThan(0);
+    await expect(page.getByRole("navigation", { name: "Ahead modes" }).getByRole("button", { name: /Fix next/ }).textContent()).resolves.toBe(`Fix next · ${n}`);
+    // One row per item (AH-1 listed an item once per gap).
+    const ids = await page.locator(".ah-fx-row:not(.ctx) .ah-id").allTextContents();
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.length).toBe(n);
+    // Grouped: a story sits under its feature, shown as a header when the feature itself has nothing to fix.
+    const nw = sections.filter({ has: page.getByRole("heading", { name: /Northwind Foods/ }) });
+    const depths = await nw.locator(".ah-fx-row").evaluateAll((els) => els.map((e) => Number((e as HTMLElement).style.getPropertyValue("--ah-depth"))));
+    expect(depths[0]).toBe(0);
+    expect(Math.max(...depths)).toBeGreaterThan(0);
+    // Harbor Health's demo project has no backlog order field.
+    const harbor = sections.filter({ has: page.getByRole("heading", { name: /Harbor Health/ }) });
+    await expect(harbor.locator(".ah-fx-note").textContent()).resolves.toContain("has no backlog order, so these are ranked by target date.");
+    await expect(nw.locator(".ah-fx-note").count()).resolves.toBe(0);
+    await shotBoth(page, "ahead-fix-next", sections.first());
+    // Size one: it goes into the change set and leaves the list.
+    const title = await nw.locator(".ah-fx-row", { has: page.getByRole("button", { name: "Size", exact: true }) }).first().locator(".ah-title a").textContent();
+    const sizeRow = nw.locator(".ah-fx-row", { has: page.getByRole("link", { name: title ?? "", exact: true }) });
+    await sizeRow.getByRole("button", { name: "Size", exact: true }).click();
+    await sizeRow.getByRole("spinbutton").fill("2");
+    await sizeRow.getByRole("button", { name: "Keep" }).click();
     await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes to save");
+    await expect.poll(() => page.locator(".ah-fx-row:not(.ctx)", { hasText: title ?? "" }).count()).toBe(0);
+    // Skip puts one aside for the session.
+    const before = await page.locator(".ah-fx-row:not(.ctx)").count();
+    await page.locator(".ah-fx-row:not(.ctx)").first().getByRole("button", { name: /^Skip/ }).click();
+    await expect.poll(() => page.locator(".ah-fx-row:not(.ctx)").count()).toBe(before - 1);
+    // An admin turns Needs stories off for Northwind: its rows lose it; Atlas's keep it.
+    const unsized = () => nw.locator(".ah-chip", { hasText: "Needs stories" }).count();
+    expect(await unsized()).toBeGreaterThan(0);
+    await page.evaluate(() => (location.hash = "#/settings/admin-clients"));
+    const card = page.locator(".adm-client", { has: page.getByRole("heading", { name: "Northwind" }) });
+    const sw = card.getByRole("switch", { name: "Northwind: count Needs stories" });
+    await sw.waitFor({ timeout: 30_000 });
+    await sw.uncheck();
+    await expect.poll(() => card.locator(".adm-fixgaps").textContent()).toMatch(/Saved/);
+    await page.evaluate(() => (location.hash = "#/ahead/fix"));
+    await nw.waitFor({ timeout: 30_000 });
+    await expect.poll(unsized).toBe(0);
+    await expect(sections.filter({ has: page.getByRole("heading", { name: /Atlas Freight/ }) }).locator(".ah-chip", { hasText: "Needs stories" }).count()).resolves.toBeGreaterThan(0);
+    // Back on, for the tests after this one.
+    await page.evaluate(() => (location.hash = "#/settings/admin-clients"));
+    await sw.waitFor({ timeout: 30_000 });
+    await sw.check();
+    await expect.poll(() => card.locator(".adm-fixgaps").textContent()).toMatch(/Saved/);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
+
+  it("AH-3: the Grid at every window size: Item never under its minimum, no page scroll; Dates under 1400, dots under 1200, cards under 900 and on the phone", async () => {
+    const sizes = [[1920, "wide"], [1600, "wide"], [1366, "dates"], [1200, "dates"], [1199, "dots"], [900, "dots"], [899, "cards"], [390, "cards"]] as const;
+    for (const [w, lay] of sizes) {
+      const { page, errors } = await open("#/ahead", { width: w, height: w < 500 ? 844 : 900 });
+      // As on an iPhone: a 17px root font (the app's own sizes don't follow it, but the page must still fit).
+      if (w < 500) await page.evaluate(() => (document.documentElement.style.fontSize = "17px"));
+      await page.locator(".ah-row").first().waitFor();
+      for (const size of ["default", "larger"] as const) {
+        if (size === "larger") await page.evaluate(() => document.documentElement.setAttribute("data-text-size", "larger"));
+        await page.waitForTimeout(150);
+        const m = await page.evaluate(() => ({
+          lay: document.querySelector(".ah-grid-box")?.className ?? "",
+          item: Math.min(...[...document.querySelectorAll(".ah-cell.ah-col-item")].map((e) => e.getBoundingClientRect().width)),
+          scroll: document.documentElement.scrollWidth - window.innerWidth,
+          heads: [...(document.querySelector(".ah-grid")?.querySelectorAll("thead th") ?? [])].filter((e) => e.getBoundingClientRect().width > 0).map((e) => e.textContent),
+        }));
+        expect(m.scroll, `${w} ${size}: no page scroll`).toBeLessThanOrEqual(1);
+        if (size === "default") {
+          expect(m.lay, `${w}`).toContain(`lay-${lay}`);
+          expect(m.item, `${w}: the Item column`).toBeGreaterThanOrEqual(lay === "cards" ? 300 : 320);
+        } else expect(m.item, `${w} larger: the Item column`).toBeGreaterThanOrEqual(lay === "cards" || m.lay.includes("cards") ? 300 : 320);
+        if (size === "default" && lay === "wide") expect(m.heads).toEqual(["Item", "State", "Start", "Target", "Assigned to", "Size", "Readiness"]);
+        if (size === "default" && (lay === "dates" || lay === "dots")) expect(m.heads).toEqual(["Item", "State", "Dates", "Assigned to", "Size", "Readiness"]);
+        if (size === "default" && lay === "cards") expect(m.heads).toEqual([]);
+      }
+      // The merged Dates column reads "Oct 19 → Nov 13"; dots carry their words for screen readers.
+      if (lay === "dates") await expect(row(page, "Order history export").locator(".ah-col-dates").textContent()).resolves.toMatch(/Oct 19\s*→\s*Nov 13/);
+      if (lay === "dots") await expect(row(page, "Supplier onboarding").locator(".ah-col-ready .sr-only").textContent()).resolves.toContain("Needs stories");
+      expect(errors).toEqual([]);
+      await page.close();
+    }
+  }, 240_000);
 
   it("a notice's link opens the item in the Grid, focused", async () => {
     const { page } = await open("#/ahead/item/1113");

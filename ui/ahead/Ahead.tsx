@@ -9,7 +9,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { AheadFilters, AheadOwner } from "../../plan/ahead-edit.ts";
 import type { AheadLoad, DevOpsLogView, RoadmapRow, RoadmapState, WeekLoadData } from "../../actions/types.ts";
 import { byItem, pendingText, valueText, type ChangeField, type ChangeValue, type DayHalf, type StagedChange } from "../../plan/ahead-edit.ts";
-import { fixQueue, type QueueEntry } from "../../plan/fixnext.ts";
+import { fixCount } from "../../plan/fixnext.ts";
 import { call } from "../api.ts";
 import { useDevOpsWrite } from "../DevOpsWrite.tsx";
 import { TypeIcon } from "../TypeIcon.tsx";
@@ -18,10 +18,12 @@ import { openSend } from "../send-event.ts";
 import { clientColor } from "../labels.ts";
 import { ModeArea } from "../ModeSwitch.tsx";
 import type { AheadMode } from "../nav.ts";
-import { buildRows, DEFAULT_FILTERS, dueOfRow, epicsOf, groups, isOpen, ownerOf, type Group, type Row } from "./model.ts";
+import { buildRows, DEFAULT_FILTERS, epicsOf, fixGroups, groups, ownerOf, type Group, type Row } from "./model.ts";
 import { Grid } from "./Grid.tsx";
 import { Gantt } from "./Gantt.tsx";
-import { FixNext, FixPane } from "./FixNext.tsx";
+import { FixNext } from "./FixNext.tsx";
+import { gridLayout, useWindowScale } from "./layout.ts";
+import type { ModeName } from "../nav.ts";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const BATCH = 10;
@@ -44,12 +46,13 @@ export type AheadEnv = {
 export const AheadCtx = createContext<AheadEnv | null>(null);
 export const useAhead = () => useContext(AheadCtx)!;
 
-export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { data: WeekLoadData; mode: AheadMode; item: number | null; switcher?: React.ReactNode; onChanged: () => void; readOnly: boolean }) {
+export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, readOnly }: { data: WeekLoadData; mode: AheadMode; item: number | null; switcher?: React.ReactNode; renderSwitch?: (counts: Partial<Record<ModeName, number>>) => React.ReactNode; onChanged: () => void; readOnly: boolean }) {
+  const win = useWindowScale();
+  const layout = gridLayout(win.width, win.scale);
   const [load, setLoad] = useState<AheadLoad | null>(null);
   const [filters, setFiltersRaw] = useState<AheadFilters | null>(null);
   const [roadmap, setRoadmap] = useState<Map<string, RoadmapRow>>(new Map());
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState(false);
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
@@ -113,14 +116,9 @@ export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { dat
 
   const f = filters ?? DEFAULT_FILTERS;
   const shown: Group[] = useMemo(() => (load ? groups(load, f, { stories: mode !== "gantt" }) : []), [load, f, mode]);
-  // Fix next: every gap on items I may change, whatever the filters (the pane follows the client filter only).
-  const queue: (QueueEntry & { row: Row })[] = useMemo(() => {
-    if (!load) return [];
-    // AH-2: never an item outside Cooptimize's scope, even with "Show the whole project".
-    const all = load.clients.filter((c) => c.status === "ok" && (!f.clients.length || f.clients.includes(c.clientKey))).flatMap((c) => buildRows(load, c)).filter((r) => r.item.inScope !== false);
-    const byKey = new Map(all.map((r) => [r.key, r]));
-    return fixQueue(all.map((r) => ({ clientKey: r.clientKey, id: r.item.id, open: isOpen(r.item), needsBreakdown: r.tier !== "story", openChildren: r.openChildren, startField: r.has.start ? "s" : null, targetField: r.has.target ? "t" : null, sizeField: r.has.size ? "z" : null, child: r.tier === "story", start: r.item.start, target: r.item.target, size: r.item.size, assigneeEmail: r.item.assignee?.email ?? null, canEdit: r.editable && !readOnly })), load.changes, skipped, (i) => dueOfRow(all, byKey.get(`${i.clientKey}:${i.id}`)!)).map((e) => ({ ...e, row: byKey.get(`${e.clientKey}:${e.itemId}`)! }));
-  }, [load, f.clients, skipped, readOnly]);
+  // AH-3: Fix next for every client, whatever the filters (it has none): ranked by each client's backlog.
+  const fix = useMemo(() => (load ? fixGroups(load, { readOnly, skipped }) : []), [load, skipped, readOnly]);
+  const fixN = fixCount(fix.map((x) => x.group));
 
   const n = load?.changes.length ?? 0;
   const color = (k: string) => clientColor(k, data.clients);
@@ -133,12 +131,12 @@ export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { dat
     <main className={`roadmap ahead ahead-${mode}`} aria-label={`Ahead: ${title}`}>
       <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
-          Ahead <span className="muted">{load ? (mode === "fix" ? plural(queue.length, "thing to fix", "things to fix") : plural(visible, "item", "items")) : ""}</span>
+          Ahead <span className="muted">{load ? (mode === "fix" ? plural(fixN, "thing to fix", "things to fix") : plural(visible, "item", "items")) : ""}</span>
         </h2>
         <button type="button" className="top-btn" disabled={busy} onClick={() => void reload(true)} title="Read DevOps again">
           {busy ? "Reading…" : "Refresh"}
         </button>
-        <ModeArea>{switcher}</ModeArea>
+        <ModeArea>{renderSwitch && load && !readOnly ? renderSwitch({ fix: fixN }) : switcher}</ModeArea>
       </div>
       {load && n > 0 && (
         <div className="ah-pending" role="status">
@@ -153,19 +151,17 @@ export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { dat
       {load && filters && mode !== "fix" && <Filters load={load} f={f} set={setFilters} setWhole={(w) => void setWhole(w)} color={color} anyFilter={!!anyFilter} />}
       {load && <ScopeNote load={load} whole={!!f.whole} />}
       {error && <p className="error" role="alert">{error}</p>}
-      {notice && <p className="notice" role="status">{notice}</p>}
       {!load && !error && <p className="muted">Reading DevOps…</p>}
       {env && (
         <AheadCtx.Provider value={env}>
-          <div className={`ah-body${mode !== "fix" && !readOnly ? " with-pane" : ""}`}>
+          <div className={`ah-body lay-${layout}`}>
             <div className="ah-main">
               {load && !load.clients.length && <p className="muted">No followed clients with DevOps this week.</p>}
               {load && load.clients.length > 0 && mode !== "fix" && visible === 0 && <p className="muted">{anyFilter ? "Nothing matches these filters." : "Nothing here for you yet. Try Owner: All."}</p>}
-              {mode === "grid" && <Grid groups={shown} />}
+              {mode === "grid" && <Grid groups={shown} layout={layout} />}
               {mode === "gantt" && <Gantt data={data} groups={shown} onChanged={onChanged} />}
-              {mode === "fix" && <FixNext queue={queue} skip={(k) => setSkipped((s) => new Set(s).add(k))} onNotice={setNotice} />}
+              {mode === "fix" && <FixNext groups={fix} skip={(k) => setSkipped((s) => new Set(s).add(k))} dots={layout === "cards" || layout === "dots"} />}
             </div>
-            {mode !== "fix" && !readOnly && <FixPane queue={queue} />}
           </div>
           {review && <Review onClose={() => setReview(false)} onDone={() => void reload()} />}
         </AheadCtx.Provider>

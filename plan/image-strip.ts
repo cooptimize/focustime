@@ -20,13 +20,20 @@ export function sniff(b: Uint8Array): ImageType | null {
   return null;
 }
 
-/** The image without its metadata, with its type from the bytes; null when it isn't one of the three or doesn't parse. */
-export function stripMetadata(b: Uint8Array): { type: ImageType; bytes: Uint8Array } | null {
+/**
+ * The image without its metadata, with its type from the bytes; null when it isn't one of the three or doesn't parse.
+ * CV-4: `animated` is true for a GIF with more than one frame (the AI takes only still GIFs).
+ */
+export function stripMetadata(b: Uint8Array): { type: ImageType; bytes: Uint8Array; animated: boolean } | null {
   if (b.length > MAX_IMAGE_BYTES) return null;
   const type = sniff(b);
   try {
-    const bytes = type === "image/png" ? png(b) : type === "image/jpeg" ? jpeg(b) : type === "image/gif" ? gif(b) : null;
-    return type && bytes ? { type, bytes } : null;
+    if (type === "image/gif") {
+      const g = gif(b);
+      return g ? { type, bytes: g.bytes, animated: g.frames > 1 } : null;
+    }
+    const bytes = type === "image/png" ? png(b) : type === "image/jpeg" ? jpeg(b) : null;
+    return type && bytes ? { type, bytes, animated: false } : null;
   } catch {
     return null;
   }
@@ -145,7 +152,7 @@ function jpeg(b: Uint8Array): Uint8Array | null {
 
 // ---- GIF: blocks; image data and graphic control kept, comments, plain text and application data go (but looping) ----
 
-function gif(b: Uint8Array): Uint8Array | null {
+function gif(b: Uint8Array): { bytes: Uint8Array; frames: number } | null {
   const out = new Parts();
   need(b, 13);
   const packed = b[10]!;
@@ -191,5 +198,5 @@ function gif(b: Uint8Array): Uint8Array | null {
     }
     return null;
   }
-  return images ? out.join() : null;
+  return images ? { bytes: out.join(), frames: images } : null;
 }

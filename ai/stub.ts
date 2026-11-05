@@ -9,6 +9,11 @@ export type StubOptions = {
   respond?: (c: ProviderCall) => string | ProviderReply | Promise<string | ProviderReply>;
 };
 
+/**
+ * CV-4: an image's input tokens in the stub: a 1024 x 1024 screenshot at high detail on a patch-counted model
+ * (1024 patches x 1.2, OpenAI's images-vision guide, Nov 5).
+ */
+export const STUB_IMAGE_TOKENS = 1229;
 /** About four characters a token, like OpenAI's rule of thumb. */
 const tokens = (s: string) => Math.ceil(s.length / 4);
 
@@ -18,7 +23,7 @@ export function stubProvider(o: StubOptions = {}): AiProvider {
     async call(c) {
       const r = o.respond ? await o.respond(c) : JSON.stringify(sampleOf(c.schema));
       if (typeof r !== "string") return r;
-      return { ok: true, text: r, model: `${c.model} (stub)`, usage: { inputTokens: tokens(c.instructions) + tokens(c.input), cachedTokens: 0, outputTokens: tokens(r) } };
+      return { ok: true, text: r, model: `${c.model} (stub)`, usage: { inputTokens: tokens(c.instructions) + tokens(c.input) + (c.images?.length ?? 0) * STUB_IMAGE_TOKENS, cachedTokens: 0, outputTokens: tokens(r) } };
     },
   };
 }

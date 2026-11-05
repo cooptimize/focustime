@@ -1420,11 +1420,13 @@ export function App() {
       <ModeSwitch
         tab="inbox"
         current={inboxMode ?? "conversations"}
-        counts={{ conversations: askCount, promises: promiseCount, captures: data.openFollowUps + data.captures }}
+        badges={{ conversations: askCount, promises: promiseCount, captures: data.openFollowUps + data.captures }}
         onMode={(m: ModeName) => goNav(inboxNav(m as InboxMode))}
       />
     ),
   };
+  // AH-3: Ahead's switch with Fix next's count, given by Ahead once it knows it.
+  const aheadSwitch = (counts: Partial<Record<ModeName, number>>) => <ModeSwitch tab="ahead" current={nav.tab === "ahead" ? nav.mode : "grid"} status={{ gantt: data.aheadDue.length ? "due" : null }} counts={counts} onMode={(m: ModeName) => goNav(modeNav("ahead", m))} />;
   const leavePlanning = () => goNav(afterDone(nav));
   const tbEnv: TimeboxEnv = {
     timeboxes: data.timeboxes,
@@ -1688,7 +1690,7 @@ export function App() {
         </div>
       ) : roadmapOpen ? (
         nav.tab === "ahead" ? (
-          <PhoneGate phone={phone}><Ahead data={data} mode={nav.mode} item={nav.item ?? null} switcher={switches.ahead} onChanged={reloadQuiet} readOnly={phone} /></PhoneGate>
+          <PhoneGate phone={phone}><Ahead data={data} mode={nav.mode} item={nav.item ?? null} switcher={switches.ahead} renderSwitch={aheadSwitch} onChanged={reloadQuiet} readOnly={phone} /></PhoneGate>
         ) : null
       ) : planDayFocus ? (
         pd && week.days.some((d) => d.date === pd.date) ? (

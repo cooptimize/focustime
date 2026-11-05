@@ -13,7 +13,27 @@ export const gapChip = (k: GapKind, onClick?: () => void): Chip => ({ key: `gap:
 
 export const MAX_CHIPS = 2;
 
-export function ReadyChips({ chips, max = MAX_CHIPS }: { chips: readonly Chip[]; max?: number }) {
+/**
+ * AH-3: `dots` (narrow windows): one small dot per chip, the words in the tooltip and for screen readers; the one
+ * Break down click stays a button.
+ */
+export function ReadyChips({ chips, max = MAX_CHIPS, dots = false }: { chips: readonly Chip[]; max?: number; dots?: boolean }) {
+  if (dots) {
+    if (!chips.length) return null;
+    const words = chips.map((c) => c.title).join("\n");
+    return (
+      <span className="ah-ready ah-dots" title={words}>
+        {chips.map((c) =>
+          c.onClick ? (
+            <button key={c.key} type="button" tabIndex={-1} className={`ah-gapdot${c.action ? " action" : ""}`} onClick={c.onClick} title={c.title} aria-label={c.title} />
+          ) : (
+            <span key={c.key} className={`ah-gapdot${c.action ? " action" : ""}`} aria-hidden="true" />
+          ),
+        )}
+        <span className="sr-only">{chips.map((c) => c.text).join(", ")}</span>
+      </span>
+    );
+  }
   const shown = chips.slice(0, max);
   const rest = chips.slice(max);
   return (

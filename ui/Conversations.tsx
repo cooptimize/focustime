@@ -386,7 +386,7 @@ function ConvCard(p: {
       </div>
       <p className="conv-sub muted">
         {c.clientName} · {c.chatName} · <time dateTime={c.lastAt}>{whenText(c.lastAt, p.tz)}</time>
-        {c.images ? <span className="conv-images"> · {c.images === 1 ? "1 image" : `${c.images} images`}</span> : null}
+        {c.images ? <span className="conv-images"> · {c.images === 1 ? "1\u00a0image" : `${c.images}\u00a0images`}{c.imageNote ? `: ${c.imageNote}` : ""}</span> : null}
         {c.internalChat && <span className="conv-internal">Internal chat</span>}
       </p>
       <p className="conv-people" aria-label="People in it">

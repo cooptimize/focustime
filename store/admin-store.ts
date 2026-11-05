@@ -5,6 +5,7 @@
 import type { Conn, Row } from "./sql/conn.ts";
 import type { Level, OrgRow } from "../config/org.ts";
 import type { AdminVia } from "../actions/admin.ts";
+import type { IdentityRow } from "../plan/identities.ts";
 
 /** Who made a change: a person (their Entra object id and name), or FocusTime itself (id null). */
 export type Actor = { id: string | null; name: string };
@@ -23,6 +24,8 @@ export type DirectoryLead = { clientKey: string; personId: string; source: LeadS
 export type PersonClient = { personId: string; clientKey: string; worker?: boolean };
 export type OverrideKind = "level" | "lead_add" | "lead_remove";
 export type PersonOverride = { personId: string; kind: OverrideKind; clientKey: string; value: string | null; byId: string | null; byName: string; at: string };
+/** AH-3: a person's DevOps email on one client, from their Account Worker (Dataverse). */
+export type DirectoryIdentity = { personId: string; clientKey: string; email: string };
 export type SeenAdmin = { personId: string; isAdmin: boolean; via: AdminVia | null; checkedAt: string };
 
 const iso = (v: unknown): string => (v instanceof Date ? v.toISOString() : typeof v === "string" ? Temporal.Instant.from(v).toString() : "");
@@ -111,9 +114,21 @@ export function createAdminStore(db: Conn, now: () => Temporal.Instant) {
 
     // ---- people and client leads (Dataverse, daily) ----
     /** Replaces the whole directory with a fresh read (a read that failed never gets here, so the old one stays). */
-    async replaceDirectory(people: readonly (Omit<DirectoryPerson, "refreshedAt" | "guest" | "entra"> & { guest?: boolean })[], leads: readonly DirectoryLead[], clients: readonly PersonClient[], accounts?: readonly DirectoryAccount[]): Promise<void> {
+    async replaceDirectory(people: readonly (Omit<DirectoryPerson, "refreshedAt" | "guest" | "entra"> & { guest?: boolean })[], leads: readonly DirectoryLead[], clients: readonly PersonClient[], accounts?: readonly DirectoryAccount[], identities?: readonly DirectoryIdentity[]): Promise<void> {
       const at = stamp();
       await db.tx(async () => {
+        // AH-3: the Dataverse identities are replaced only when the read brought them (links and removals stay).
+        if (identities) {
+          await db.run("DELETE FROM client_logins WHERE source = ?", ["dataverse"]);
+          const seen = new Set<string>();
+          for (const i of identities) {
+            const email = i.email.trim().toLowerCase().slice(0, 320);
+            const k = `${i.clientKey}\u0000${email}`;
+            if (!email.includes("@") || seen.has(k)) continue;
+            seen.add(k);
+            await db.run("INSERT INTO client_logins (client_key, devops_email, source, person_id, devops_name, by_id, by_name, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [i.clientKey.slice(0, 100), email, "dataverse", i.personId.toLowerCase(), null, null, null, at]);
+          }
+        }
         await db.run("DELETE FROM people_directory");
         await db.run("DELETE FROM client_leads");
         await db.run("DELETE FROM people_clients");
@@ -161,6 +176,36 @@ export function createAdminStore(db: Conn, now: () => Temporal.Instant) {
     /** ADM-2: the active Dataverse accounts from the last read (none until a read with this build). */
     async accounts(): Promise<DirectoryAccount[]> {
       return ((await db.all("SELECT account_id, client_key, name, account_type, workers, focus FROM directory_accounts ORDER BY client_key, name")) as Row[]).map((r) => ({ accountId: r.account_id as string, clientKey: r.client_key as string, name: r.name as string, type: (r.account_type as string | null) ?? null, workers: Number(r.workers ?? 0), focus: Number(r.focus ?? 0) }));
+    },
+
+    // ---- AH-3: client DevOps identities ----
+    async identities(): Promise<IdentityRow[]> {
+      return ((await db.all("SELECT client_key, devops_email, source, person_id, devops_name, by_name, at FROM client_logins ORDER BY client_key, devops_email, source")) as Row[]).map((r) => ({ clientKey: r.client_key as string, email: r.devops_email as string, source: r.source as IdentityRow["source"], personId: r.person_id as string, name: (r.devops_name as string | null) ?? null, byName: (r.by_name as string | null) ?? null, at: r.at ? iso(r.at) : null }));
+    },
+    /**
+     * Links a client's DevOps identity to a person (confirmed by them or an admin), clearing a removal of it, with its
+     * audit row in one transaction. The audit names the person, the client and the DevOps display name, never the email.
+     */
+    async linkIdentity(o: { clientKey: string; email: string; devopsName: string | null; personId: string; personName: string; actor: Actor; note: string }): Promise<void> {
+      const email = o.email.trim().toLowerCase();
+      const id = o.personId.toLowerCase();
+      await db.tx(async () => {
+        const cur = (await db.get("SELECT person_id FROM client_logins WHERE client_key = ? AND devops_email = ? AND source = ?", [o.clientKey, email, "link"])) as Row | undefined;
+        await db.run("DELETE FROM client_logins WHERE client_key = ? AND devops_email = ? AND source IN (?, ?)", [o.clientKey, email, "link", "unlink"]);
+        await db.run("INSERT INTO client_logins (client_key, devops_email, source, person_id, devops_name, by_id, by_name, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [o.clientKey.slice(0, 100), email.slice(0, 320), "link", id, o.devopsName?.slice(0, 200) ?? null, o.actor.id, o.actor.name.slice(0, 200), stamp()]);
+        await audit(o.actor, { area: "people", target: `${o.personName} · ${o.clientKey}`, setting: "devops_identity", oldValue: cur ? JSON.stringify("linked") : null, newValue: JSON.stringify(o.devopsName ?? "a DevOps identity"), note: o.note });
+      });
+    },
+    /** Removes a person's identity on a client: a link goes, a Dataverse one is hidden (Dataverse is read-only). Audited. */
+    async unlinkIdentity(o: { clientKey: string; email: string; devopsName: string | null; personId: string; personName: string; actor: Actor }): Promise<void> {
+      const email = o.email.trim().toLowerCase();
+      const id = o.personId.toLowerCase();
+      await db.tx(async () => {
+        await db.run("DELETE FROM client_logins WHERE client_key = ? AND devops_email = ? AND source = ? AND person_id = ?", [o.clientKey, email, "link", id]);
+        await db.run("DELETE FROM client_logins WHERE client_key = ? AND devops_email = ? AND source = ?", [o.clientKey, email, "unlink"]);
+        await db.run("INSERT INTO client_logins (client_key, devops_email, source, person_id, devops_name, by_id, by_name, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [o.clientKey.slice(0, 100), email.slice(0, 320), "unlink", id, o.devopsName?.slice(0, 200) ?? null, o.actor.id, o.actor.name.slice(0, 200), stamp()]);
+        await audit(o.actor, { area: "people", target: `${o.personName} · ${o.clientKey}`, setting: "devops_identity", oldValue: JSON.stringify(o.devopsName ?? "a DevOps identity"), newValue: null, note: "removed" });
+      });
     },
 
     // ---- admin overrides ----

@@ -90,7 +90,13 @@ export type ProviderReply =
   | { ok: true; text: string; usage: Usage; model: string }
   | { ok: false; kind: "rate_limited" | "quota" | "timeout" | "provider" | "unavailable" | "refusal" | "incomplete"; status?: number; retryAfterMs?: number; usage?: Usage };
 
-export type ProviderCall = { model: string; instructions: string; input: string; schemaName: string; schema: JsonSchema; maxOutputTokens: number; timeoutMs: number; reasoningEffort: string | null };
+/**
+ * CV-4: an image sent with a request, after the input text: a fixed label written by code ("Image i1, in message m3:")
+ * and the stripped bytes as a data URL. The guards read text only: they can't inspect an image, so the client's
+ * "Send attachments to AI" switch is the consent.
+ */
+export type AiImageInput = { label: string; dataUrl: string };
+export type ProviderCall = { model: string; instructions: string; input: string; schemaName: string; schema: JsonSchema; maxOutputTokens: number; timeoutMs: number; reasoningEffort: string | null; images?: AiImageInput[] };
 
 /** One provider (OpenAI, or the stub). */
 export type AiProvider = { name: "openai" | "stub"; call(c: ProviderCall): Promise<ProviderReply> };

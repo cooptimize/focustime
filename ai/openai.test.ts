@@ -33,6 +33,24 @@ function fake(...responses: (Response | ((init: RequestInit) => Promise<Response
 }
 
 describe("the request", () => {
+  it("CV-4: with images, one user message: the input text, then each image after its label, as a data URL at high detail; store false", async () => {
+    const { f, seen } = fake(json(anOpenAiResponse({ reply: "ok" })));
+    const dataUrl = "data:image/png;base64,iVBORw0KGgo=";
+    await openAiProvider({ key: async () => KEY, fetch: f }).call({ ...CALL, images: [{ label: "Image i1, in message m2:", dataUrl }] });
+    const body = JSON.parse(String(seen[0]!.init.body));
+    expect(body.input).toEqual([{ role: "user", content: [{ type: "input_text", text: "Say ok." }, { type: "input_text", text: "Image i1, in message m2:" }, { type: "input_image", image_url: dataUrl, detail: "high" }] }]);
+    expect(body.store).toBe(false);
+  });
+
+  it("CV-4: the service refuses images that aren't a PNG, JPEG or GIF data URL, or too many, before anything is sent", async () => {
+    const { f, seen } = fake();
+    const ai = createAi({ provider: async () => openAiProvider({ key: async () => KEY, fetch: f }), app: anAiApp({ provider: "openai" }), rules: async () => ({ on: true, allowedClients: [], personCapUsd: 10, appCapUsd: 10 }), guard: async () => ({ directory: [], homeDomains: [], forbidden: [] }), log: { add: async () => {}, spentMicros: async () => 0, recent: async () => [] }, appSpend: { get: async () => 0, add: async () => {} }, now: () => "2026-11-05T10:00:00Z" });
+    const task = { name: "test_ai", client: "none", instructions: "x" };
+    expect(await ai.run(task, "y", CALL.schema, { images: [{ label: "Image i1", dataUrl: "https://example.com/a.png" }] })).toMatchObject({ ok: false, error: { kind: "bad_task" } });
+    expect(await ai.run(task, "y", CALL.schema, { images: Array.from({ length: 11 }, () => ({ label: "Image", dataUrl: "data:image/png;base64,AA==" })) })).toMatchObject({ ok: false, error: { kind: "bad_task" } });
+    expect(seen).toEqual([]);
+  });
+
   it("Responses API, strict JSON schema, store false, max output tokens, reasoning effort; the key only in Authorization", async () => {
     const { f, seen } = fake(json(anOpenAiResponse({ reply: "ok" })));
     const r = await openAiProvider({ key: async () => KEY, fetch: f }).call(CALL);

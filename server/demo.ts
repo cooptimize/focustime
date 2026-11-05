@@ -28,7 +28,7 @@ import type { AdminOps, ClientScopeFacts } from "../actions/admin-actions.ts";
 import { demoDirectory } from "../sources/demo/directory.ts";
 import { scopeDepsOf } from "../actions/scope-deps.ts";
 import { scopeCounts } from "../plan/devops-scope.ts";
-import { demoAreas, demoScopeItems, isDemoClient } from "../sources/demo/data.ts";
+import { demoAreas, demoAssignees, demoScopeItems, isDemoClient } from "../sources/demo/data.ts";
 import type { ScopeDeps } from "../sources/devops/source.ts";
 
 /** The demo's settings with its clients' colors left to the team (they are the demo's team colors). */
@@ -71,7 +71,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   const notYet = DEMO_PEOPLE[3]!.aadId.toLowerCase();
   // The demo's clients start on team colors (the ones the demo always had), so a person's own color shows as theirs.
   const ready = (async () => {
-    await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients, dir.accounts);
+    await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients, dir.accounts, dir.identities);
     for (const c of DEMO_CLIENTS) await adminStore.setOrg({ scope: clientScope(c.key), key: "color", value: c.color, actor: FOCUSTIME, area: "clients", target: c.key, note: "demo" });
     // AH-1: an admin took Alex off Harbor's leads, so Ahead shows a teammate's feature there that only Harbor's leads
     // and its owner can change (the read-only note).
@@ -111,7 +111,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
       conversations: null,
     }),
     refreshPeople: async () => {
-      await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients, dir.accounts);
+      await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients, dir.accounts, dir.identities);
       org.invalidate();
       return { ok: true, message: null, people: dir.people.length };
     },
@@ -127,6 +127,8 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
       }
       return out;
     },
+    // AH-3: the demo projects' assignees (Harbor has two client logins: Priya's linked, Sam's suggested).
+    assignees: async (keys) => Object.fromEntries(keys.filter(isDemoClient).map((k) => [k, demoAssignees(k)])),
   };
   const applied = async (t: string) => {
     const parsed = parseConfig(t);

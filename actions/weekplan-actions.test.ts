@@ -261,7 +261,7 @@ describe("week plan by client (step 11)", () => {
     expect(l.created).toBe(true);
     expect(l.followUp).toMatchObject({ kind: "slip", clientKey: "Adatum" });
     // Step 13.5: it says where it came from.
-    expect(l.followUp.origin).toEqual({ trigger: "A committed must was made a nice to have", items: [{ itemId: 210, title: "Dana's feature" }], at: "2026-11-05T19:45:00Z" });
+    expect(l.followUp.origin).toEqual({ trigger: "A confirmed must was made a nice to have", items: [{ itemId: 210, title: "Dana's feature" }], at: "2026-11-05T19:45:00Z" });
     expect(l.followUp.draft).toContain("#210 Dana's feature won't be finished the week of Mon, Nov 9");
     expect((await t.run<{ created: boolean }>("weekplan.headsup", d.headsUp!)).created).toBe(false);
     // A nice to have dropped: nothing offered.

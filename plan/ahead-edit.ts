@@ -12,6 +12,8 @@ export type EditRight = { ok: true; why: EditWhy } | { ok: false; note: string }
 export type EditPerson = {
   /** My DevOps identity (email) for this client; null when FocusTime doesn't know it. */
   email: string | null;
+  /** AH-3: every address that is me on this client (my own, my Dataverse DevOps email, linked client logins). */
+  emails?: readonly string[];
   /** isClientLead for this client. */
   lead: boolean;
   /** An admin flagged me as an automation account (ADM-2). */
@@ -34,9 +36,10 @@ export const readOnlyNote = (clientName: string) => `Only ${clientName}'s leads 
 export function canEdit(me: EditPerson, item: EditItem, parent: EditItem | null, clientName: string): EditRight {
   if (me.automation) return { ok: false, note: "Automation accounts don't change DevOps from FocusTime." };
   if (me.lead) return { ok: true, why: "lead" };
-  if (same(item.assigneeEmail, me.email)) return { ok: true, why: "owner" };
+  const isMe = (e: string | null) => same(e, me.email) || (me.emails ?? []).some((x) => same(e, x));
+  if (isMe(item.assigneeEmail)) return { ok: true, why: "owner" };
   // One level up only: a feature's owner over its stories, an epic's owner over its features.
-  if (parent && same(parent.assigneeEmail, me.email) && item.rung !== null && parent.rung !== null && item.rung === parent.rung + 1) return { ok: true, why: "parent_owner" };
+  if (parent && isMe(parent.assigneeEmail) && item.rung !== null && parent.rung !== null && item.rung === parent.rung + 1) return { ok: true, why: "parent_owner" };
   return { ok: false, note: readOnlyNote(clientName) };
 }
 

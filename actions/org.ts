@@ -14,6 +14,7 @@ import { FOCUSTIME, type AdminStore } from "../store/admin-store.ts";
 import { clientAccounts, type ClientAccounts } from "../plan/client-accounts.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
 import type { SignedInPerson } from "../plan/person-match.ts";
+import { identityIndex, type IdentityIndex, type IdentityPerson } from "../plan/identities.ts";
 
 export type OrgRuntime = {
   store: AdminStore;
@@ -25,6 +26,11 @@ export type OrgRuntime = {
   levelOf(userId: string | null): Promise<PersonLevel>;
   clientLeads(clientKey: string): Promise<ClientLead[]>;
   isClientLead(userId: string | null, clientKey: string): Promise<boolean>;
+  /**
+   * AH-3: client DevOps identities: which Cooptimizer a DevOps email is on a client (their own address anywhere, or a
+   * Dataverse or confirmed client login there). Held like the levels. Emails are for matching only.
+   */
+  identities(): Promise<IdentityIndex>;
   /** A person's settings with the team's applied (Rules, Defaults, Defaults by level). */
   apply(cfg: AppConfig, userId: string | null): Promise<AppConfig>;
   /** Gives each of these clients a team color when it has none (distinct, never the brand's, readable in both themes). */
@@ -47,6 +53,7 @@ export function createOrgRuntime(o: {
   let rulesHeld: { at: number; value: Promise<OrgRules> } | null = null;
   let levelsHeld: { at: number; value: Promise<Levels> } | null = null;
   let accountsHeld: { at: number; value: Promise<ClientAccounts> } | null = null;
+  let identitiesHeld: { at: number; value: Promise<IdentityIndex> } | null = null;
   const fresh = (h: { at: number } | null) => !!h && now() - h.at < hold;
 
   function rules(): Promise<OrgRules> {
@@ -78,7 +85,24 @@ export function createOrgRuntime(o: {
     }
     return accountsHeld!.value;
   }
+  function identities(): Promise<IdentityIndex> {
+    if (!fresh(identitiesHeld)) {
+      const value = Promise.all([o.store.identities(), people(), o.store.directory()]).then(([rows, lv, dir]) => {
+        const names = new Map(dir.map((d) => [d.personId.toLowerCase(), d.name]));
+        const ps: IdentityPerson[] = lv.people.cooptimizers.map((e) => ({
+          id: e.id,
+          name: (e.dir ? names.get(e.dir.personId.toLowerCase()) : undefined) ?? names.get(e.id) ?? e.dir?.email ?? e.signedIn?.email ?? e.id,
+          emails: [e.dir?.email, e.signedIn?.email, e.signedIn?.upn].filter((x): x is string => !!x),
+        }));
+        return identityIndex(rows, ps);
+      });
+      identitiesHeld = { at: now(), value };
+      value.catch(() => (identitiesHeld = null));
+    }
+    return identitiesHeld!.value;
+  }
   const invalidate = () => {
+    identitiesHeld = null;
     rulesHeld = null;
     levelsHeld = null;
     accountsHeld = null;
@@ -110,6 +134,7 @@ export function createOrgRuntime(o: {
     rules,
     levels: people,
     clientAccounts: accounts,
+    identities,
     levelOf: async (id) => (await people()).levelOf(id),
     clientLeads: async (k) => (await people()).clientLeads(k),
     isClientLead: async (id, k) => (await people()).isClientLead(id, k),

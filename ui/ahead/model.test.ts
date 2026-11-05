@@ -41,7 +41,8 @@ describe("Ahead's model", () => {
   it("gaps on items I may change; a pending change fills one; date and text filters", () => {
     const load = anAheadLoad([{ ...client, editable: [110, 111] }], { changes: [{ clientKey: "Northwind", itemId: 111, field: "size", value: 3, half: null, baseRev: 3, baseValue: null, createdAt: "x", updatedAt: "x" }] });
     const rows = buildRows(load, load.clients[0]!);
-    expect(rows.find((r) => r.item.id === 110)!.gaps).toEqual(["no_dates"]);
+    // AH-3: it has a target, so a missing start alone isn't a gap.
+    expect(rows.find((r) => r.item.id === 110)!.gaps).toEqual([]);
     expect(rows.find((r) => r.item.id === 111)!.gaps).toEqual([]);
     expect(rows.find((r) => r.item.id === 300)!.gaps).toEqual([]);
     const g = groups(load, { ...DEFAULT_FILTERS, owner: { Northwind: "all" }, from: "2026-12-01", to: "2026-12-31" }, { stories: true })[0]!;
