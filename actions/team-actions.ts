@@ -523,3 +523,27 @@ export async function teamNotices(ctx: Pick<TeamContext, "team" | "org" | "me">,
   }
   return out;
 }
+
+/**
+ * IB-1: sends to me this week and next, as Inbox facts, by send.today's rule (waiting for my answer: Needs you) plus
+ * the ones I accepted or scheduled (In progress) and answered ones from the last day (Done). Empty without the team
+ * store or before sign-in.
+ */
+export async function sendFacts(ctx: TeamContext): Promise<import("../plan/inbox-items.ts").InboxFacts[]> {
+  const { team } = ctx;
+  const cfg = await ctx.config().catch(() => null);
+  if (!team || !cfg) return [];
+  const today = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(userZone(cfg)).toPlainDate().toString();
+  const r = await rosterOf(ctx);
+  const me = r.me;
+  if (!me) return [];
+  const now = Date.parse(ctx.now());
+  const out: import("../plan/inbox-items.ts").InboxFacts[] = [];
+  for (const s of await team.sendsOf(me, sendWeeks(mondayOf(today)))) {
+    if (s.to.id !== me || !r.isClient(s.clientKey)) continue;
+    const sendState = s.state === "waiting" ? "waiting" : s.state === "accepted" || s.state === "scheduled" ? "accepted" : "done";
+    if (sendState === "done" && now - Date.parse(s.updatedAt) >= 24 * 3600_000) continue;
+    out.push({ key: `s${s.id}`, kind: "send", clientKey: s.clientKey, at: s.updatedAt, done: sendState === "done", sendState });
+  }
+  return out;
+}

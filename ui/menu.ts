@@ -1072,6 +1072,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "requests.sort_again":
     case "requests.show":
       return { run: () => env.setView("conversations") };
+    case "inbox.list":
+    case "inbox.count":
+    case "inbox.seen":
     case "conversations.list":
     case "conversations.count":
     case "conversations.messages":

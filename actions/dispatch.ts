@@ -7,7 +7,7 @@ import { chatAction, type ChatContext } from "./chat-actions.ts";
 import { DEFAULT_DRAFT_MONTHS, storyAction, type StoryContext } from "./story-actions.ts";
 import { serveChatImage, type ServedImage } from "./chat-images.ts";
 import { peoplePicker, pickerPeopleOf } from "./people-picker.ts";
-import { conversationPeople, conversationAction, dayPromises, type ConversationContext } from "./conversation-actions.ts";
+import { conversationPeople, conversationAction, dayPromises, inboxFacts, type ConversationContext } from "./conversation-actions.ts";
 import { refreshStatus } from "./conversations-pipeline.ts";
 import type { ConversationsPort } from "./devops-write-actions.ts";
 import { isClientLead } from "./client-lead.ts";
@@ -72,7 +72,8 @@ import { roadmapAction } from "./roadmap-actions.ts";
 import { aheadAction, type AheadAction, type AheadContext } from "./ahead-actions.ts";
 import { CHECKIN_DONE_MARK } from "./closeout-actions.ts";
 import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
-import { markScheduled, publishWeek, teamAction, type TeamAction, type TeamContext } from "./team-actions.ts";
+import { markScheduled, publishWeek, sendFacts, teamAction, type TeamAction, type TeamContext } from "./team-actions.ts";
+import { inboxAction } from "./inbox-actions.ts";
 import { carryAction, idsByClient, markResolved, planBitsFor, resolvedKeys, type CarryContext } from "./carry-actions.ts";
 import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
 import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
@@ -1569,6 +1570,20 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "conversations.unmerge":
     case "my_promises.start_draft":
       return conversationAction(await conversationContext(ctx), action, req.input);
+    case "inbox.list":
+    case "inbox.count":
+    case "inbox.seen":
+      return inboxAction(
+        {
+          plan: ctx.plan,
+          config: () => configured(ctx),
+          now: ctx.now,
+          conversations: async (cfg) => (ctx.requests?.conversations ? inboxFacts(await conversationContext(ctx), cfg) : []),
+          sends: () => (ctx.team ? sendFacts(teamCtx(ctx)) : Promise.resolve([])),
+        },
+        action,
+        req.input,
+      );
     case "people.picker":
       return pickerAction(ctx, req.input);
     case "ai.status":

@@ -1,3 +1,4 @@
+import { USER_SCHEMA_VERSION } from "./user-data.ts";
 import { localStoreFiles } from "../host/local/files.ts";
 import { mkdirSync, mkdtempSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -210,7 +211,7 @@ describe("plan store", () => {
     (await store.addDraft({ clientKey: "Adatum", parentItemId: 130, title: "Split the feature", size: "S" }));
     (await store.commit("2026-11-02"));
     const out = JSON.parse(JSON.stringify((await store.exportJson())));
-    expect(out.schemaVersion).toBe(MIGRATIONS.length);
+    expect(out.schemaVersion).toBe(USER_SCHEMA_VERSION);
     expect(out.dayPlans).toHaveLength(1);
     expect(out.picks[0]).toMatchObject({ itemId: 101, size: "M", status: "planned" });
     expect(out.draftStories[0]).toMatchObject({ parentItemId: 130, title: "Split the feature" });

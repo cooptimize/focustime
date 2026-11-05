@@ -27,6 +27,7 @@ import type { MessageImage } from "../store/teams-store.ts";
 import { joinedSummary, MERGE_INSTRUCTIONS, MERGE_SCHEMA, MERGE_TASK, mergeFrom, mergeInput, type MergeAnswer } from "../plan/conversation-merge.ts";
 import type { ConversationStore, ConversationView } from "../store/conversation-store.ts";
 import { PlanError } from "../store/plan-store.ts";
+import { itemKey, type InboxFacts } from "../plan/inbox-items.ts";
 import type { TeamsView } from "../store/teams-store.ts";
 import { localToday } from "../week/dates.ts";
 import type { WorkItem } from "../week/types.ts";
@@ -363,6 +364,34 @@ async function counts(ctx: ConversationContext, cfg: AppConfig): Promise<{ needs
   for (const card of await cards(ctx, v, cfg, all)) if (!card.hidden && (await viewOf(ctx, v.me, card, all.find((c) => c.id === card.id)!)) === "needs") needsYou++;
   const myPromisesOpen = (await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))).filter((k) => k.state === "open").length;
   return { needsYou, myPromisesOpen };
+}
+
+/**
+ * IB-1: the Inbox's facts from conversations and my chat promises, by the same rules as Needs you and My promises
+ * (viewOf, the open states). Conversations I hid stay out (Hide for me lives in conversation_views). No card text.
+ */
+export async function inboxFacts(ctx: ConversationContext, cfg: AppConfig): Promise<InboxFacts[]> {
+  const v = await seen(ctx);
+  if (!v) return [];
+  const now = Date.parse(ctx.now());
+  const all = (await v.convs.conversations(v.chats.map((c) => c.chatId))).filter((c) => !c.closedAt || now - Date.parse(c.closedAt) < closedShownMs(cfg));
+  const out: InboxFacts[] = [];
+  for (const card of await cards(ctx, v, cfg, all)) {
+    if (card.hidden) continue;
+    const view = await viewOf(ctx, v.me, card, all.find((c) => c.id === card.id)!);
+    out.push({ key: itemKey("conversation", card.id), kind: "conversation", clientKey: card.clientKey, at: card.lastAt, done: view === "closed", conversationView: view });
+  }
+  for (const k of await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))) {
+    // A promise made into a follow-up before IB-1 shows once, as that follow-up (f<id>).
+    if (k.state === "followup" && k.followUpId !== null) continue;
+    const done = k.state === "done" || k.state === "not_needed";
+    if (done && (!k.updatedAt || now - Date.parse(k.updatedAt) >= DONE_SHOWN_MS)) continue;
+    out.push({
+      key: itemKey("chatPromise", k.id), kind: "promise", clientKey: k.clientKey, at: k.updatedAt ?? k.createdAt, done,
+      due: k.dueDate, linked: k.itemId !== null, onWeek: !!k.onToday,
+    });
+  }
+  return out;
 }
 
 // ---- My promises ----

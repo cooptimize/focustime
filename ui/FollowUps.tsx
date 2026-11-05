@@ -15,6 +15,8 @@ import { CLOSE_HOW, type CloseHow } from "../plan/types.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
 import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
+import { CloseLoop, HOW_LABEL } from "./CloseLoop.tsx";
+export { HOW_LABEL };
 
 const zoned = (iso: string, tz: string) => (iso.includes("[") ? Temporal.ZonedDateTime.from(iso) : Temporal.Instant.from(iso).toZonedDateTimeISO(tz)).withTimeZone(tz);
 const dayOf = (z: Temporal.ZonedDateTime) => z.toPlainDate().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -32,7 +34,6 @@ const span = (s: { start: string; end: string }, tz: string) => {
 };
 
 const KIND_LABEL: Record<string, string> = { devops_update: "DevOps update", slip: "Heads-up", blocked: "Blocker", flex_update: "Flex session", manual: "Added by me", capture: "Captured", priorities: "Priorities" };
-export const HOW_LABEL: Record<CloseHow, string> = { teams: "Teams", email: "Email", devops: "DevOps", call: "Call" };
 
 /** Copies text; falls back to selecting it when the clipboard isn't available. */
 export async function copy(text: string, el: HTMLTextAreaElement | null): Promise<boolean> {
@@ -73,7 +74,6 @@ const nextMondayOf = (today: IsoDate) => {
 export function FollowUpRow({ l, timeZone, today, clients, onChanged, compact = false }: { l: FollowUpView; timeZone: string; today: IsoDate; clients: readonly CaptureClient[]; onChanged: (msg?: string) => void; compact?: boolean }) {
   const [mode, setMode] = useState<"none" | "close" | "snooze" | "edit">("none");
   const [menu, setMenu] = useState(false);
-  const [note, setNote] = useState("");
   const [how, setHow] = useState<CloseHow | null>((CLOSE_HOW as readonly string[]).includes(l.channel ?? "") ? (l.channel as CloseHow) : null);
   const [until, setUntil] = useState(tomorrowOf(today));
   const [showDraft, setShowDraft] = useState(false);
@@ -100,7 +100,7 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged, compact = 
   const devopsFirst = !l.closedAt && l.kind === "devops_update" && l.itemId !== null && !!l.clientKey;
   const state = [l.snoozedUntil && !l.closedAt ? `snoozed until ${plainDay(l.snoozedUntil)}` : null, closedText].filter(Boolean).join(" · ");
   return (
-    <li title={meta} data-follow-up={l.id} className={`follow-up${l.closedAt ? " closed" : ""}${l.isNew && !l.closedAt ? " new" : ""}${l.dueState ? ` due-${l.dueState.level}` : ""}`}>
+    <li title={meta} data-follow-up={l.id} className={`follow-up${mode === "close" || mode === "snooze" ? " has-form" : ""}${l.closedAt ? " closed" : ""}${l.isNew && !l.closedAt ? " new" : ""}${l.dueState ? ` due-${l.dueState.level}` : ""}`}>
       <div className="follow-up-main">
         <DueBadge l={l} />
         <span className="follow-up-who">{l.hasWho ? l.who : "No one named"}</span>
@@ -128,7 +128,7 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged, compact = 
         {!l.closedAt && mode === "none" && (
           <>
             {!devopsFirst && (
-              <button type="button" className="mini primary" onClick={() => { setMode("close"); setNote(""); }}>
+              <button type="button" className="mini primary" onClick={() => setMode("close")}>
                 Close the loop
               </button>
             )}
@@ -138,7 +138,7 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged, compact = 
               </button>
               {menu && (
                 <span className="fu-menu" role="menu" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setMenu(false))}>
-                  {devopsFirst && <button type="button" role="menuitem" autoFocus onClick={() => { setMode("close"); setNote(""); setMenu(false); }}>Close the loop…</button>}
+                  {devopsFirst && <button type="button" role="menuitem" autoFocus onClick={() => { setMode("close"); setMenu(false); }}>Close the loop…</button>}
                   {l.draft && <button type="button" role="menuitem" onClick={() => { setShowDraft((v) => !v); setMenu(false); }}>{showDraft ? "Hide the heads-up draft" : "Show the heads-up draft"}</button>}
                   {l.draft && (
                     <button type="button" role="menuitem" onClick={async () => { setShowDraft(true); setMenu(false); setCopied((await copy(l.draft!, area.current)) ? "Copied" : "Selected, press Ctrl C"); }}>
@@ -154,35 +154,39 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged, compact = 
             </span>
           </>
         )}
-        {mode === "close" && (
-          <form
-            className="follow-up-close"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void run("followup.close", { note: note.trim() || null, ...(how ? { how } : {}) }, "Loop closed");
+        {error && <span className="set-problem" role="alert">{error}</span>}
+      </div>
+      {mode === "close" && (
+        // IB-1: the shared Close the loop on its own full-width row (never beside the text, so nothing scrolls sideways).
+        <div className="follow-up-form-row">
+          <CloseLoop
+            who={l.hasWho ? l.who : null}
+            initialHow={how}
+            compact={compact}
+            onSubmit={async (v) => {
+              const e = await act("followup.close", { id: l.id, note: v.note, ...(v.how ? { how: v.how } : {}) });
+              if (!e) {
+                setHow(v.how);
+                setMode("none");
+                onChanged("Loop closed");
+              }
+              return e;
             }}
-          >
-            <span className="cap-size" role="group" aria-label="How (optional)">
-              {CLOSE_HOW.map((h) => (
-                <button key={h} type="button" className="mini" aria-pressed={how === h} onClick={() => setHow(how === h ? null : h)}>{HOW_LABEL[h]}</button>
-              ))}
-            </span>
-            <input autoFocus value={note} maxLength={500} placeholder="Note (optional)" onChange={(e) => setNote(e.target.value)} aria-label="Note" />
-            <button type="submit" className="mini primary">Close the loop</button>
-            <button type="button" className="mini" onClick={() => setMode("none")}>Cancel</button>
-          </form>
-        )}
-        {mode === "snooze" && (
-          <form className="follow-up-close" onSubmit={(e) => { e.preventDefault(); void run("followup.snooze", { until }, `Snoozed until ${plainDay(until)}`); }}>
+            onCancel={() => setMode("none")}
+          />
+        </div>
+      )}
+      {mode === "snooze" && (
+        <div className="follow-up-form-row">
+          <form className="follow-up-snooze" onSubmit={(e) => { e.preventDefault(); void run("followup.snooze", { until }, `Snoozed until ${plainDay(until)}`); }}>
             <button type="button" className="mini" onClick={() => setUntil(tomorrowOf(today))} aria-pressed={until === tomorrowOf(today)}>Tomorrow</button>
             <button type="button" className="mini" onClick={() => setUntil(nextMondayOf(today))} aria-pressed={until === nextMondayOf(today)}>Next Monday</button>
             <input type="date" value={until} min={tomorrowOf(today)} onChange={(e) => setUntil(e.target.value)} aria-label="Snooze until" />
             <button type="submit" className="mini primary">Snooze</button>
             <button type="button" className="mini" onClick={() => setMode("none")}>Cancel</button>
           </form>
-        )}
-        {error && <span className="set-problem" role="alert">{error}</span>}
-      </div>
+        </div>
+      )}
       {mode === "edit" && (
         <FollowUpForm clients={clients} initial={l} onCancel={() => setMode("none")} onSaved={() => { setMode("none"); onChanged("Saved"); }} />
       )}

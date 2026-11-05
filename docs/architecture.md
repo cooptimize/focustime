@@ -242,7 +242,9 @@ One job reads each registered client chat for everyone; Asks are now Requests. D
 - **Today** (`ui/Today.tsx`): `UrgentStrip` (`plan/urgent.ts`), `MomentCard` (`momentCard` in `plan/modes.ts`), the blocks, After your blocks, This week chips.
 - **Week**: the Board (WeekGrid with `ui/FromLastWeek.tsx` over it for this week, action `planday.carry`), Plan today (`ui/PlanDay.tsx` under Week's header and switch), Commit (`ui/PlanWeek.tsx`).
 - **Coop brief**: `openCoopBrief` (`ui/menu.ts`, a window event) and `CoopBriefHost` / `CoopBriefPanel` (`ui/BreakDownPanel.tsx`), mounted once in App.
-- **Inbox badge**: `ui/inboxcount.ts` (`inboxBadge`, `useConversationCount` over `conversations.count`).
+- **Inbox badge**: `ui/inboxcount.ts` (IB-1: `useInboxCount` over `inbox.count`, read on load, after each week reload and every 5 minutes; `markSeen` over `inbox.seen`; `useConversationCount` over `conversations.count` for the mode switch's own counts until slice 2).
+- **IB-1 Inbox read model.** `plan/inbox-items.ts` (pure: item keys `v`/`c`/`f`/`s`/`k`/`d` + id, `lifecycleOf`, `viewsOf`, `needsYou`, `viewCounts`, `needsYouCount`); `actions/inbox-actions.ts` (`inbox.list`, `inbox.count`, `inbox.seen`) over `inboxFacts` in `actions/conversation-actions.ts` (conversations by `viewOf`, my chat promises), `sendFacts` in `actions/team-actions.ts` (sends to me), the plan store's open and recently closed follow-ups (Promises `f<id>`), captures and drafts, and `inbox_marks` (`inboxMarks`, `markInbox` in `store/plan-store.ts`; migration `20261110T0900_inbox_marks`).
+- **Close the loop.** `ui/CloseLoop.tsx`, the one form (how, note, `onSubmit` as LP-1's seam), used by `FollowUpRow` in `ui/FollowUps.tsx` on its own full-width row (`.follow-up-form-row`), so in Captures, the block panel (`DetailPanel.tsx`), Close out (`Today.tsx`) and Today on the phone (`Phone.tsx`).
 - **Phone**: `ui/Phone.tsx` BottomBar with the four tabs and the Inbox count; Capture is the top bar's +.
 - **e2e**: `e2e/navigation.test.ts`.
 
