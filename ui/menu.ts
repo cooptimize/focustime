@@ -139,6 +139,8 @@ export type MenuEnv = {
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
   /** Opens Settings, at a section when given (step 6b). */
   openSettings: (section?: string) => void;
+  /** ADM-1: the signed-in person is a FocusTime admin (Admin shows in ⋯ and the Settings sidebar). */
+  admin?: boolean;
   /** P1: ⋯ › Notifications, the in-app list. */
   openNotifications?: () => void;
   /** Step 15.4: the VM chip's menu (Start; D475: nothing else changes the VM). */
@@ -1048,6 +1050,14 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ai.status":
     case "ai.test":
       return { run: () => env.openSettings("ai") };
+    // ADM-1: the admin console is a part of Settings, only for admins (the server checks every action again).
+    case "admin.status": return { run: () => env.openSettings(env.admin ? "admin-people" : "you") };
+    case "admin.load":
+    case "admin.set": return env.admin ? { run: () => env.openSettings("admin-clients") } : { disabled: "Only for FocusTime admins" };
+    case "admin.override":
+    case "admin.refresh_people":
+    case "admin.remove_person": return env.admin ? { run: () => env.openSettings("admin-people") } : { disabled: "Only for FocusTime admins" };
+    case "admin.audit": return env.admin ? { run: () => env.openSettings("admin-audit") } : { disabled: "Only for FocusTime admins" };
     // DS-1: Draft stories opens its sheet on a feature with no stories; the rest happens in the sheet.
     case "stories.prepare": return { next: () => chooseItem(env, "Draft stories for which feature?", (i) => i.level === "portfolio", (k, i) => () => void openDraftStories(k, { id: i.id, title: i.title })) };
     case "stories.status":

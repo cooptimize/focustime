@@ -67,14 +67,17 @@ export async function recordSoftDelete(db: Conn, userId: string, at: Temporal.In
 export async function hardDeleteDue(db: Conn, now: Temporal.Instant): Promise<number> {
   const cutoff = now.subtract({ hours: 24 * HARD_DELETE_AFTER_DAYS }).toString();
   const due = (await db.all("SELECT id FROM users WHERE deleted_at IS NOT NULL AND deleted_at <= ?", [cutoff])) as { id: string }[];
-  for (const { id } of due) {
-    await db.tx(async () => {
-      for (const t of [...PARENTS_FIRST].reverse()) await db.run(`DELETE FROM ${t} WHERE user_id = ?`, [id]);
-      await db.run("DELETE FROM sessions WHERE user_id = ?", [id]);
-      await db.run("DELETE FROM auth_requests WHERE user_id = ?", [id]);
-      await db.run("DELETE FROM users WHERE id = ?", [id]);
-      await db.run("UPDATE deletions SET hard_deleted_at = ? WHERE user_hash = ? AND hard_deleted_at IS NULL", [now.toString(), hashOf(id)]);
-    });
-  }
+  for (const { id } of due) await hardDeleteUser(db, id, now);
   return due.length;
+}
+
+/** Every row of one person, now: their plan, settings, secrets, sessions and account row (ADM-1: an admin removed them). */
+export async function hardDeleteUser(db: Conn, id: string, now: Temporal.Instant): Promise<void> {
+  await db.tx(async () => {
+    for (const t of [...PARENTS_FIRST].reverse()) await db.run(`DELETE FROM ${t} WHERE user_id = ?`, [id]);
+    await db.run("DELETE FROM sessions WHERE user_id = ?", [id]);
+    await db.run("DELETE FROM auth_requests WHERE user_id = ?", [id]);
+    await db.run("DELETE FROM users WHERE id = ?", [id]);
+    await db.run("UPDATE deletions SET hard_deleted_at = ? WHERE user_hash = ? AND hard_deleted_at IS NULL", [now.toString(), hashOf(id)]);
+  });
 }

@@ -5,7 +5,7 @@ import { parseConfig } from "../config/schema.ts";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { dispatch } from "../actions/dispatch.ts";
 import { createDemoSources } from "../sources/demo/sources.ts";
-import { DEMO_CONFIG, DEMO_TZ } from "../sources/demo/data.ts";
+import { DEMO_CLIENTS, DEMO_CONFIG, DEMO_TZ } from "../sources/demo/data.ts";
 import { createPlanStore, openPlanDb, type PlanStore } from "../store/plan-store.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
@@ -14,29 +14,91 @@ import { createDemoAzure, DEMO_PERSON, DEMO_VM_ID } from "../sources/demo/azure.
 import { createDemoFeedbackDevOps, type DemoFeedbackParent } from "../sources/demo/feedback.ts";
 import { createFeedbackService } from "../actions/feedback-actions.ts";
 import { notices } from "../plan/notify.ts";
+import { createAdminStore, FOCUSTIME } from "../store/admin-store.ts";
+import { clientScope } from "../config/org.ts";
+import { settingsEdit } from "../config/settings.ts";
+import { createOrgRuntime } from "../actions/org.ts";
+import { demoAdminCheck } from "../actions/admin.ts";
+import type { AdminOps } from "../actions/admin-actions.ts";
+import { demoDirectory } from "../sources/demo/directory.ts";
+
+/** The demo's settings with its clients' colors left to the team (they are the demo's team colors). */
+function followTeamColors(t: string): string {
+  const parsed = parseConfig(t);
+  if (!parsed.ok) return t;
+  for (const [key, v] of Object.entries(parsed.config.clientSettings)) if (v.color && DEMO_CLIENTS.some((c) => c.key === key)) t = settingsEdit("client", { key, color: "", name: v.name, follow: v.follow })(t);
+  return t;
+}
 
 export type DemoControl = { on: boolean; set: (on: boolean) => Promise<void> };
 
 export function createDemoContext(opts: { now: () => string; demo: DemoControl; /** A2 tests: a store on a shared database. */ plan?: PlanStore; /** F1 checks: the pretend feature's state. */ feedbackParent?: DemoFeedbackParent }): ActionContext {
-  let text = DEMO_CONFIG;
+  let text = followTeamColors(DEMO_CONFIG);
   const sources = createDemoSources(opts.now);
   const plan = opts.plan ?? createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(opts.now()).toZonedDateTimeISO(DEMO_TZ) });
   // Shared polling: the demo's own client chats and Requests, in memory beside its plan (never the real shared store).
   // The demo reads no messages, so Refresh has nothing to do.
-  const teams = createTeamsStore(sqliteConn(openPlanDb({ path: ":memory:", now: () => Temporal.Instant.from(opts.now()).toZonedDateTimeISO(DEMO_TZ) })), () => Temporal.Instant.from(opts.now()));
+  const instant = () => Temporal.Instant.from(opts.now());
+  const shared = sqliteConn(openPlanDb({ path: ":memory:", now: () => instant().toZonedDateTimeISO(DEMO_TZ) }));
+  const teams = createTeamsStore(shared, instant);
+  // ADM-1: the demo's own team settings, people and audit, on the same in-memory database (never the real ones). The
+  // demo's person is an admin inside their own demo and nowhere else.
+  const adminStore = createAdminStore(shared, instant);
+  const org = createOrgRuntime({ store: adminStore, bootstrap: { model: "stub", appCapUsd: 100, inviteDomains: ["example.com"], feedback: null }, now: () => Date.parse(opts.now()) });
+  const dir = demoDirectory();
+  // The demo's clients start on team colors (the ones the demo always had), so a person's own color shows as theirs.
+  const ready = (async () => {
+    await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients);
+    for (const c of DEMO_CLIENTS) await adminStore.setOrg({ scope: clientScope(c.key), key: "color", value: c.color, actor: FOCUSTIME, area: "clients", target: c.key, note: "demo" });
+  })();
+  const adminOps: AdminOps = {
+    check: demoAdminCheck(DEMO_PERSON.oid),
+    org,
+    groupId: null,
+    breakGlass: [],
+    tenantId: null,
+    people: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, email: DEMO_PERSON.email, lastSignInAt: opts.now(), setup: "done", dataverseMatch: true, sources: { microsoft: true, google: true, devopsWrites: 1 } }],
+    chatClients: async () => [...new Set([...(await teams.chats()).map((c) => c.clientKey), ...dir.clients.map((c) => c.clientKey)])].sort(),
+    aiSetUp: async () => ({ provider: "stub", keyConfigured: true }),
+    appSpentMicros: async () => 0,
+    status: async () => ({
+      environment: "demo",
+      version: { env: "demo", sha: "demo", pr: "", builtAt: null },
+      ai: { provider: "stub", keyConfigured: true },
+      feedback: { ok: true, message: "A pretend backlog in the demo" },
+      dataverse: { refreshedAt: await adminStore.directoryRefreshedAt(), ok: true, message: null },
+      chats: (await teams.chats()).map((c) => ({ chatId: c.chatId, clientKey: c.clientKey, name: c.displayName, reading: c.readOn, polledAt: c.polledAt, state: c.pollState, note: c.pollNote, via: null })),
+      lastPoll: null,
+    }),
+    refreshPeople: async () => {
+      await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients);
+      org.invalidate();
+      return { ok: true, message: null, people: dir.people.length };
+    },
+    removePerson: async () => {
+      throw new Error("The demo's people are pretend, so there is nobody to remove");
+    },
+  };
+  const applied = async (t: string) => {
+    const parsed = parseConfig(t);
+    if (!parsed.ok) return parsed;
+    await ready;
+    return { ...parsed, config: await org.apply(parsed.config, DEMO_PERSON.oid) };
+  };
   // Step 15.4: a fictional signed-in person and VM, simulated (no Azure calls).
   const demoAzure = createDemoAzure();
   // F1: Send feedback against a pretend backlog in memory (nothing leaves FocusTime).
   const feedback = createFeedbackService({ devops: createDemoFeedbackDevOps({ parent: opts.feedbackParent ?? "ok" }), mode: "live", env: "demo", local: false, demo: true, now: () => Date.parse(opts.now()), log: () => {}, sleep: async () => {} });
   return {
-    loadConfig: async () => ({ path: "Demo data (in memory, not your config file)", parsed: parseConfig(text) }),
+    loadConfig: async () => ({ path: "Demo data (in memory, not your config file)", parsed: await applied(text) }),
     // Theme or view changes in demo mode stay in memory: the real config file is never touched.
     writeConfig: async (edit) => {
       const next = edit(text);
       const parsed = parseConfig(next);
       if (!parsed.ok) return { ok: false, parsed };
       text = next;
-      return { ok: true, parsed, backup: "" };
+      const withTeam = await applied(next);
+      return { ok: true, parsed: withTeam.ok ? withTeam : parsed, backup: "" };
     },
     makeDataverse: () => sources.dataverse,
     makeOutlook: () => sources.outlook,
@@ -46,8 +108,9 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     now: opts.now,
     plan,
     requests: { teams, refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }) },
-    // D522: the demo's person is an admin, so the demo shows adding client chats.
-    admins: [DEMO_PERSON.oid],
+    // D522, ADM-1: the demo's person is an admin of the demo only (its own store), so the demo shows the admin console.
+    org,
+    adminOps,
     demo: opts.demo,
     account: () => demoAzure.account,
     azure: demoAzure.azure,

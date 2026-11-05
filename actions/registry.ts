@@ -33,7 +33,7 @@ export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests";
+  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests" | "Admin";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -168,7 +168,14 @@ export const ACTIONS = [
   { name: "stories.retry", title: "Retry the stories that didn't publish", group: "DevOps", target: "devops", summary: "Retries each story whose create didn't confirm (it checks first and never makes a second one)" },
   { name: "stories.house_style", title: "A client's house style", group: "Settings", target: "none", summary: "How this client writes stories, learned from its own features each week; used by Draft stories" },
   { name: "stories.house_style_save", title: "Edit a client's house style", group: "Settings", target: "none", summary: "Your own words for a client's house style, or back to the learned one" },
-  { name: "ai.status", title: "AI", group: "Settings", target: "none", summary: "Settings › AI: Use AI, this month's spend against your cap, and your last 20 AI requests (never their text)" },
+  { name: "ai.status", title: "AI", group: "Settings", target: "none", summary: "Settings › AI: whether AI is on for FocusTime (an admin's switch), this month's spend against your cap, and your last 20 AI requests (never their text)" },
+  { name: "admin.status", title: "Am I an admin", group: "Admin", target: "none", summary: "Whether you are a FocusTime admin (the FocusTime Admins group in Entra, or the break-glass list)" },
+  { name: "admin.load", title: "Open Admin", group: "Admin", target: "none", summary: "Admins: one section of the admin console (Clients, AI, Conversations, People, Organization, Status, Audit)" },
+  { name: "admin.set", title: "Change a team setting", group: "Admin", target: "none", summary: "Admins: set or clear a Rule, a Default or a Default by level for everyone; logged in Admin › Audit" },
+  { name: "admin.override", title: "Override a level or a client lead", group: "Admin", target: "none", summary: "Admins: set a person's level, or add or remove a client lead, while Dataverse is behind; marked as an override and logged" },
+  { name: "admin.refresh_people", title: "Read levels and leads again", group: "Admin", target: "none", summary: "Admins: read people's levels and client leads from Dataverse now (it happens daily anyway)" },
+  { name: "admin.remove_person", title: "Remove a person who has left", group: "Admin", target: "none", summary: "Admins: delete a person's FocusTime data and personal secrets after typing their name; logged; never yourself" },
+  { name: "admin.audit", title: "Admin audit", group: "Admin", target: "none", summary: "Admins: the last 200 admin changes, filtered by area or text" },
   { name: "ai.test", title: "Test AI", group: "Settings", target: "none", summary: "Sends one fixed harmless request (no client) and says whether it worked, how long it took and what it cost" },
   { name: "permissions.status", title: "Microsoft permissions", group: "Settings", target: "none", summary: "Every permission FocusTime asks Microsoft for, and whether it's allowed (Settings > Connections)" },
   { name: "people.photos", title: "Profile photos", group: "Focus", target: "none", summary: "Photos of me and the Cooptimizers on screen, from Microsoft; cached 7 days, initials when there is none" },

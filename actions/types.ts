@@ -110,8 +110,10 @@ export type SettingsClient = {
   devopsEmail: string | null;
   devops: boolean;
   setting: ClientSetting;
-  /** The color as CSS (hex or palette token). */
+  /** The color as CSS (hex or palette token): mine when I picked one, else the team's. */
   css: string | null;
+  /** ADM-1: the team color an admin set (or FocusTime suggested), a slot or a hex; null: none yet. */
+  teamColor: string | null;
   /** Whether FocusTime follows it (DevOps, Open half-days) and why (step 6d); null when it couldn't be worked out. */
   follow: FollowState | null;
   /** Step 14: the checked DevOps write PAT's owner (never the PAT), or null: this client stays read-only. */
@@ -153,8 +155,14 @@ export type SettingsData = {
   roadmap: AppConfig["roadmap"];
   /** AP-1: how often chats are read for asks, and the phrase lists the rules use. */
   asks: AppConfig["asks"];
-  /** AI-0: Use AI, the monthly cap and the clients with Allow AI on. */
+  /** AI-0: the person's [ai] (only draftMonths is theirs since ADM-1). */
   ai: AppConfig["ai"];
+  /** ADM-1: the admins' AI rules (on for FocusTime, the clients allowed, the cap per person). */
+  aiRules: AppConfig["aiRules"];
+  /** ADM-1: the team's settings as they apply to me (level, guidance, team colors and phrases, Rules); null: none here. */
+  org: AppConfig["org"];
+  /** ADM-1: my own choices over my level's defaults. */
+  guidance: AppConfig["guidance"];
 };
 
 /** [plan] values the UI uses (step 6c). */
