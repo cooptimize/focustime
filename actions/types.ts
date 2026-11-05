@@ -315,6 +315,9 @@ export type FeatureChoice = { id: number; title: string; state: string; /** Step
 /** A client's open features for "under a feature"; "unavailable" when DevOps can't say (a draft then saves without one). */
 export type CaptureFeatures = { clientKey: string; status: "ok" | "unavailable"; message?: string; features: FeatureChoice[]; /** Step 13.5: open epics, for a draft feature. */ epics: FeatureChoice[]; /** Step 15.3: the story type has acceptance criteria (the draft editor shows the field only then). */ acceptanceField?: boolean };
 
+/** CP-1: what draft.prepare and draft.get answer: the draft (with its AI version), whether I can write to its client, the server's now. */
+export type DraftAiView = { draft: import("../plan/types.ts").DraftStory; canWrite: boolean; now: string };
+
 // ---- Step 12: timeboxes and the write framework ----
 /** One field of a write preview: before and after (null where there is none), and whether it changes. */
 export type PreviewField = { label: string; before: string | null; after: string | null; changed: boolean };

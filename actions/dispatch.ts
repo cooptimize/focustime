@@ -4,7 +4,7 @@ import { checkinGhosts } from "../plan/carry.ts";
 import { isClosed, isCompleted } from "../plan/process.ts";
 import { clearPhotos, photoAction } from "./photo-actions.ts";
 import { chatAction, type ChatContext } from "./chat-actions.ts";
-import { storyAction, type StoryContext } from "./story-actions.ts";
+import { DEFAULT_DRAFT_MONTHS, storyAction, type StoryContext } from "./story-actions.ts";
 import { serveChatImage, type ServedImage } from "./chat-images.ts";
 import { peoplePicker, pickerPeopleOf } from "./people-picker.ts";
 import { conversationPeople, conversationAction, dayPromises, type ConversationContext } from "./conversation-actions.ts";
@@ -59,7 +59,8 @@ import { applyFollowUpRules, followUpView, internalClients, nameOf, workdayOf } 
 import { watchedIds } from "../plan/followups.ts";
 import { pastUrgency } from "../plan/asks-ai.ts";
 import { isActionName, type ActionName } from "./registry.ts";
-import { captureAction } from "./capture-actions.ts";
+import { captureAction, featuresOf, type CaptureContext } from "./capture-actions.ts";
+import { draftAiAction, type PrepareContext } from "./draft-prepare.ts";
 import { followUpAction } from "./followup-actions.ts";
 import { roadmapAction } from "./roadmap-actions.ts";
 import { aheadAction, type AheadAction, type AheadContext } from "./ahead-actions.ts";
@@ -795,6 +796,45 @@ async function aheadContext(ctx: ActionContext): Promise<AheadContext> {
   };
 }
 
+/** Quick capture: the plan store, and a client's open features and epics (read-only DevOps). */
+function captureContext(ctx: ActionContext): CaptureContext {
+  return {
+    plan: ctx.plan,
+    config: async () => {
+      const loaded = await ctx.loadConfig().catch(() => null);
+      return loaded?.parsed.ok ? loaded.parsed.config : null;
+    },
+    devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
+    clients: async (cfg, weekStart) => {
+      const today = localToday(ctx.now(), userZone(cfg));
+      const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).load(weekStart, {}).catch(() => null) : null;
+      return (await devopsClients(ctx, cfg, weekStart, today, {}, dv?.items ?? [])).fetch;
+    },
+    now: ctx.now,
+  };
+}
+
+/** CP-1: a captured draft's AI version: reads with the company read PAT, AI through ai/ on my own cap. */
+function prepareContext(ctx: ActionContext): PrepareContext {
+  const cap = captureContext(ctx);
+  return {
+    plan: ctx.plan,
+    config: () => configured(ctx),
+    ai: () => aiFor(ctx),
+    writeClients: async () => (ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : []),
+    features: (cfg, key) => featuresOf(cap, cfg, key),
+    model: async (cfg, key) => {
+      const r = (await ctx.makeDevOps(cfg.dataverse, userZone(cfg)).processModels([key]))[0];
+      return r?.ok ? r.model : null;
+    },
+    pool: async (cfg, key) => {
+      const r = await ctx.makeDevOps(cfg.dataverse, userZone(cfg)).exemplarPool(key, { months: cfg.ai.draftMonths ?? DEFAULT_DRAFT_MONTHS });
+      return r.ok ? r.value : null;
+    },
+    now: ctx.now,
+  };
+}
+
 /** DS-1: Draft stories: reads through the DevOps source (read PAT), AI through ai/, writes through the write framework. */
 export function storyContext(ctx: ActionContext): StoryContext {
   return {
@@ -1431,25 +1471,12 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "capture.load":
     case "capture.route":
     case "capture.features":
+    case "capture.undo":
     case "draft.add_feature":
-      return captureAction(
-        {
-          plan: ctx.plan,
-          config: async () => {
-            const loaded = await ctx.loadConfig().catch(() => null);
-            return loaded?.parsed.ok ? loaded.parsed.config : null;
-          },
-          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
-          clients: async (cfg, weekStart) => {
-            const today = localToday(ctx.now(), userZone(cfg));
-            const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).load(weekStart, {}).catch(() => null) : null;
-            return (await devopsClients(ctx, cfg, weekStart, today, {}, dv?.items ?? [])).fetch;
-          },
-          now: ctx.now,
-        },
-        action,
-        req.input,
-      );
+      return captureAction(captureContext(ctx), action, req.input);
+    case "draft.prepare":
+    case "draft.get":
+      return draftAiAction(prepareContext(ctx), action, req.input);
     case "ahead.load":
     case "ahead.stage":
     case "ahead.unstage":
@@ -1560,6 +1587,11 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
           ptoAhead: (cfg, monday) => ptoAheadOf(ctx, cfg, monday),
           now: ctx.now,
           resolved: (cfg, items) => resolvedKeys(ctx.makeDevOps(cfg.dataverse, userZone(cfg)), [...new Set(items.map((i) => i.clientKey))].map((clientKey) => ({ clientKey, clientName: clientKey })), idsByClient(items)),
+          openParents: async (clientKey, tier) => {
+            const cap = captureContext(ctx);
+            const f = await featuresOf(cap, await cap.config(), clientKey);
+            return f.status === "ok" ? (tier === "epic" ? f.epics : f.features).map((x) => x.id) : null;
+          },
         },
         action,
         req.input,

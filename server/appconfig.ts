@@ -45,7 +45,7 @@ export const DEFAULT_AI: AppSettings["ai"] = {
   model: "gpt-6-luna",
   reasoningEffort: "low",
   timeoutMs: 30_000,
-  maxOutputTokens: { default: 4000, test_ai: 1000, asks_classify: 2000, promises_extract: 1200 },
+  maxOutputTokens: { default: 4000, test_ai: 1000, asks_classify: 2000, promises_extract: 1200, capture_prepare: 1200 },
   prices: { inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5 },
   appCapUsd: 100,
 };

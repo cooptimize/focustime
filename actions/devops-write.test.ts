@@ -861,3 +861,65 @@ describe("AH-1: Ahead's change set as one fields write per item (D657 to D660)",
     expect(await s.notes.to([DANA], "2026-11-01T00:00:00Z")).toEqual([expect.objectContaining({ kind: "dates", itemIds: [601] })]);
   });
 });
+
+describe("CP-1: create from a captured draft's preview", () => {
+  let s: ReturnType<typeof setup>;
+  beforeEach(async () => {
+    s = setup();
+    await s.enable();
+  });
+  const captured = async (title: string, level: "story" | "feature" = "story") => {
+    const c = await s.plan.addCapture({ text: title, clientKey: COOP });
+    const r = await s.plan.routeCapture(c.id, level === "story" ? { as: "draft", clientKey: COOP, parentItemId: null, title, size: "M" } : { as: "draft_feature", clientKey: COOP, parentItemId: null, title });
+    const id = r.routedId!;
+    await s.plan.setDraftAi(id, { state: "ready", title: "Import the mapping file", description: "Read the mapping from a file.", acceptance: level === "story" ? "- Upload a file\n- See the mapping" : null, type: level === "story" ? "User Story" : "Feature", parentId: level === "story" ? 437 : 600, parentReason: "It fits", note: null, ranAt: NOW });
+    return id;
+  };
+
+  it("accept the AI version: its words and parent are written, after the preview and confirm only, with read back and undo", async () => {
+    const id = await captured("mapping import thing");
+    // The dialog saves the accepted side to the draft, then previews.
+    await s.run("draft.update", { id, title: "Import the mapping file", description: "Read the mapping from a file.", acceptance: "- Upload a file\n- See the mapping" });
+    await s.plan.setDraftParent(id, 437);
+    const p = await s.preview({ kind: "create", draftId: id, type: "User Story" });
+    expect(p.item).toBe("New User Story: Import the mapping file");
+    // Nothing is written by the preview.
+    expect(s.dv.writes().filter((w) => w.method === "POST")).toEqual([]);
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(true);
+    const ops = s.dv.writes().find((w) => w.method === "POST")!.body as { path: string; value: unknown }[];
+    expect(ops).toContainEqual({ op: "add", path: "/fields/System.Title", value: "Import the mapping file" });
+    expect((await s.plan.getDraft(id))!.devopsId).toBeGreaterThan(0);
+    // The write is logged, and Undo sets it to Removed and brings the draft back.
+    const u = await s.write({ kind: "undo", writeId: r.entry.id });
+    expect(u.confirmed).toBe(true);
+    expect((await s.plan.getDraft(id))!.devopsId).toBeUndefined();
+  });
+
+  it("keep mine: my own title, the process default type", async () => {
+    const id = await captured("mapping import thing");
+    await s.plan.setDraftParent(id, 437);
+    const p = await s.preview({ kind: "create", draftId: id });
+    expect(p.item).toBe("New User Story: mapping import thing");
+  });
+
+  it("edit, then create: the edited words", async () => {
+    const id = await captured("mapping import thing");
+    await s.run("draft.update", { id, title: "Import the mapping file (CSV only)" });
+    await s.plan.setDraftParent(id, 437);
+    expect((await s.preview({ kind: "create", draftId: id })).item).toBe("New User Story: Import the mapping file (CSV only)");
+  });
+
+  it("a parent is required: without one nothing is previewed", async () => {
+    const id = await captured("mapping import thing");
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "create", draftId: id } })).toMatchObject({ status: 409 });
+  });
+
+  it("a feature takes the accepted type only when its epic takes it at the feature tier", async () => {
+    const id = await captured("reporting", "feature");
+    await s.plan.setDraftParent(id, 600);
+    expect((await s.preview({ kind: "create", draftId: id, type: "Feature" })).item).toBe("New Feature: reporting");
+    // A type the epic doesn't take is ignored: the process default, as before.
+    expect((await s.preview({ kind: "create", draftId: id, type: "User Story" })).item).toBe("New Feature: reporting");
+  });
+});

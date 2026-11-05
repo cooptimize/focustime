@@ -12,7 +12,7 @@ import type { ActionResponse, CaptureFeatures, CaptureState } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 export type { CaptureFeatures, CaptureState } from "./types.ts";
 
-export const CAPTURE_ACTIONS = ["capture.add", "capture.load", "capture.route", "capture.features", "draft.add_feature"] as const;
+export const CAPTURE_ACTIONS = ["capture.add", "capture.load", "capture.route", "capture.features", "capture.undo", "draft.add_feature"] as const;
 export type CaptureAction = (typeof CAPTURE_ACTIONS)[number];
 
 export type CaptureContext = {
@@ -73,7 +73,7 @@ async function todayOf(ctx: CaptureContext, cfg: AppConfig | null): Promise<IsoD
 }
 
 /** A client's open features (feature tier), from the Plan the week read. Never blocks: DevOps down means none to pick. */
-async function featuresOf(ctx: CaptureContext, cfg: AppConfig | null, key: string): Promise<CaptureFeatures> {
+export async function featuresOf(ctx: CaptureContext, cfg: AppConfig | null, key: string): Promise<CaptureFeatures> {
   if (!cfg) return { clientKey: key, status: "unavailable", message: "Fix the config to see features", features: [], epics: [] };
   try {
     const refs = await ctx.clients(cfg, mondayOf(await todayOf(ctx, cfg)));
@@ -174,6 +174,12 @@ export async function captureAction(ctx: CaptureContext, action: CaptureAction, 
         }
         const capture = (await plan.routeCapture(capId, route));
         return { ok: true, data: { capture, inboxCount: (await plan.inboxCount()) } };
+      }
+      case "capture.undo": {
+        // CP-1: the toast's Undo, right after a save: the capture and what it made, if nothing else happened to it.
+        const o = fields(input, ["id"]);
+        const r = await plan.undoCapture(id(o.id, "id"));
+        return { ok: true, data: { ...r, inboxCount: await plan.inboxCount() } };
       }
       case "draft.add_feature": {
         // Plan the week's "Epic with no features: Draft a feature". Local only, until it is added in DevOps.

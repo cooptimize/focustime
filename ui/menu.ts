@@ -1312,6 +1312,11 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "capture.route":
     case "capture.features":
       return { run: env.openCaptures };
+    // CP-1: Undo is the toast's, right after a save; a draft's AI version is prepared and shown from the Inbox.
+    case "capture.undo": return { disabled: "Undo from the Saved toast, right after a capture" };
+    case "draft.prepare":
+    case "draft.get":
+      return { run: env.openCaptures };
   }
 }
 
