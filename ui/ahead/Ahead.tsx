@@ -21,7 +21,9 @@ import type { AheadMode } from "../nav.ts";
 import { buildRows, DEFAULT_FILTERS, dueOfRow, epicsOf, groups, isOpen, ownerOf, type Group, type Row } from "./model.ts";
 import { Grid } from "./Grid.tsx";
 import { Gantt } from "./Gantt.tsx";
-import { FixNext, FixPane } from "./FixNext.tsx";
+import { FixNext } from "./FixNext.tsx";
+import { gridLayout, useWindowScale } from "./layout.ts";
+import type { ModeName } from "../nav.ts";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const BATCH = 10;
@@ -44,7 +46,9 @@ export type AheadEnv = {
 export const AheadCtx = createContext<AheadEnv | null>(null);
 export const useAhead = () => useContext(AheadCtx)!;
 
-export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { data: WeekLoadData; mode: AheadMode; item: number | null; switcher?: React.ReactNode; onChanged: () => void; readOnly: boolean }) {
+export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, readOnly }: { data: WeekLoadData; mode: AheadMode; item: number | null; switcher?: React.ReactNode; renderSwitch?: (counts: Partial<Record<ModeName, number>>) => React.ReactNode; onChanged: () => void; readOnly: boolean }) {
+  const win = useWindowScale();
+  const layout = gridLayout(win.width, win.scale);
   const [load, setLoad] = useState<AheadLoad | null>(null);
   const [filters, setFiltersRaw] = useState<AheadFilters | null>(null);
   const [roadmap, setRoadmap] = useState<Map<string, RoadmapRow>>(new Map());
@@ -138,7 +142,7 @@ export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { dat
         <button type="button" className="top-btn" disabled={busy} onClick={() => void reload(true)} title="Read DevOps again">
           {busy ? "Reading…" : "Refresh"}
         </button>
-        <ModeArea>{switcher}</ModeArea>
+        <ModeArea>{renderSwitch && load && !readOnly ? renderSwitch({ fix: queue.length }) : switcher}</ModeArea>
       </div>
       {load && n > 0 && (
         <div className="ah-pending" role="status">
@@ -157,15 +161,14 @@ export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { dat
       {!load && !error && <p className="muted">Reading DevOps…</p>}
       {env && (
         <AheadCtx.Provider value={env}>
-          <div className={`ah-body${mode !== "fix" && !readOnly ? " with-pane" : ""}`}>
+          <div className={`ah-body lay-${layout}`}>
             <div className="ah-main">
               {load && !load.clients.length && <p className="muted">No followed clients with DevOps this week.</p>}
               {load && load.clients.length > 0 && mode !== "fix" && visible === 0 && <p className="muted">{anyFilter ? "Nothing matches these filters." : "Nothing here for you yet. Try Owner: All."}</p>}
-              {mode === "grid" && <Grid groups={shown} />}
+              {mode === "grid" && <Grid groups={shown} layout={layout} />}
               {mode === "gantt" && <Gantt data={data} groups={shown} onChanged={onChanged} />}
               {mode === "fix" && <FixNext queue={queue} skip={(k) => setSkipped((s) => new Set(s).add(k))} onNotice={setNotice} />}
             </div>
-            {mode !== "fix" && !readOnly && <FixPane queue={queue} />}
           </div>
           {review && <Review onClose={() => setReview(false)} onDone={() => void reload()} />}
         </AheadCtx.Provider>

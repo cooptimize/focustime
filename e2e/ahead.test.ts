@@ -30,12 +30,15 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     const { page, errors } = await open("#/ahead");
     await expect(page.locator(".ah-pending").textContent()).resolves.toContain("3 changes pending");
     await expect(page.locator(".ah-client-head").allTextContents()).resolves.toEqual(expect.arrayContaining([expect.stringContaining("Northwind Foods"), expect.stringContaining("Harbor Health")]));
-    // Pending values show in place: Store locator starts Mon, Nov 16 PM.
-    await expect(row(page, "Store locator").locator(".ah-col-start").textContent()).resolves.toContain("Mon, Nov 16 PM");
+    // Pending values show in place: Store locator starts Nov 16 PM (AH-3: the weekday in the tooltip).
+    await expect(row(page, "Store locator").locator(".ah-col-start").textContent()).resolves.toContain("Nov 16 PM");
+    await expect(row(page, "Store locator").locator(".ah-col-start [title]").first().getAttribute("title")).resolves.toContain("Monday, November 16");
     await expect(row(page, "Store locator").locator(".ah-col-start").getAttribute("class")).resolves.toContain("ah-pend");
     await expect(row(page, "Loyalty points").locator(".ah-col-target").getAttribute("class")).resolves.toContain("ah-conf");
-    // A story's size in its process's own field, FocusTime's size beside it; a feature has none in this process.
-    await expect(row(page, "Export orders to CSV").locator(".ah-col-size").textContent()).resolves.toMatch(/3\s*Story Points\s*FocusTime: L, about 4h/);
+    // A story's size in its process's own field on one line (AH-3: "3 SP"), the field's name and FocusTime's size in
+    // its tooltip; a feature has none in this process.
+    await expect(row(page, "Export orders to CSV").locator(".ah-col-size").textContent()).resolves.toMatch(/^3\s*SP$/);
+    await expect(row(page, "Export orders to CSV").locator(".ah-col-size .ah-size").getAttribute("title")).resolves.toMatch(/3 Story Points\s+FocusTime: L, about 4h/);
     // AH-2: a field the type doesn't have, and a missing value, are a muted dash; the tooltip says which.
     await expect(row(page, "Order history export").locator(".ah-col-size .ah-none").getAttribute("title")).resolves.toBe("Not in Portal's process");
     await expect(row(page, "Supplier onboarding").locator(".ah-col-start .ah-none").getAttribute("title")).resolves.toBe("No start date");
@@ -298,6 +301,39 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     expect(errors).toEqual([]);
     await page.close();
   }, T);
+
+  it("AH-3: the Grid at every window size: Item never under its minimum, no page scroll; Dates under 1400, dots under 1200, cards under 900 and on the phone", async () => {
+    const sizes = [[1920, "wide"], [1600, "wide"], [1366, "dates"], [1200, "dates"], [1199, "dots"], [900, "dots"], [899, "cards"], [390, "cards"]] as const;
+    for (const [w, lay] of sizes) {
+      const { page, errors } = await open("#/ahead", { width: w, height: w < 500 ? 844 : 900 });
+      // As on an iPhone: a 17px root font (the app's own sizes don't follow it, but the page must still fit).
+      if (w < 500) await page.evaluate(() => (document.documentElement.style.fontSize = "17px"));
+      await page.locator(".ah-row").first().waitFor();
+      for (const size of ["default", "larger"] as const) {
+        if (size === "larger") await page.evaluate(() => document.documentElement.setAttribute("data-text-size", "larger"));
+        await page.waitForTimeout(150);
+        const m = await page.evaluate(() => ({
+          lay: document.querySelector(".ah-grid-box")?.className ?? "",
+          item: Math.min(...[...document.querySelectorAll(".ah-cell.ah-col-item")].map((e) => e.getBoundingClientRect().width)),
+          scroll: document.documentElement.scrollWidth - window.innerWidth,
+          heads: [...(document.querySelector(".ah-grid")?.querySelectorAll("thead th") ?? [])].filter((e) => e.getBoundingClientRect().width > 0).map((e) => e.textContent),
+        }));
+        expect(m.scroll, `${w} ${size}: no page scroll`).toBeLessThanOrEqual(1);
+        if (size === "default") {
+          expect(m.lay, `${w}`).toContain(`lay-${lay}`);
+          expect(m.item, `${w}: the Item column`).toBeGreaterThanOrEqual(lay === "cards" ? 300 : 320);
+        } else expect(m.item, `${w} larger: the Item column`).toBeGreaterThanOrEqual(lay === "cards" || m.lay.includes("cards") ? 300 : 320);
+        if (size === "default" && lay === "wide") expect(m.heads).toEqual(["Item", "State", "Start", "Target", "Assigned to", "Size", "Readiness"]);
+        if (size === "default" && (lay === "dates" || lay === "dots")) expect(m.heads).toEqual(["Item", "State", "Dates", "Assigned to", "Size", "Readiness"]);
+        if (size === "default" && lay === "cards") expect(m.heads).toEqual([]);
+      }
+      // The merged Dates column reads "Oct 19 → Nov 13"; dots carry their words for screen readers.
+      if (lay === "dates") await expect(row(page, "Order history export").locator(".ah-col-dates").textContent()).resolves.toMatch(/Oct 19\s*→\s*Nov 13/);
+      if (lay === "dots") await expect(row(page, "Supplier onboarding").locator(".ah-col-ready .sr-only").textContent()).resolves.toContain("Needs stories");
+      expect(errors).toEqual([]);
+      await page.close();
+    }
+  }, 240_000);
 
   it("a notice's link opens the item in the Grid, focused", async () => {
     const { page } = await open("#/ahead/item/1113");

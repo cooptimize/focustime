@@ -5,7 +5,8 @@ import { MODE_NAMES, MODES, TAB_NAMES, type ModeName, type Tab } from "./nav.ts"
 
 const STATUS_WORDS = { done: "done", due: "due now" } as const;
 
-export function ModeSwitch({ tab, current, status = {}, onMode }: { tab: Tab; current: ModeName; status?: Partial<Record<ModeName, ModeStatus>>; onMode: (m: ModeName) => void }) {
+/** AH-3: `counts` adds " · N" to a mode ("Fix next · 12"). */
+export function ModeSwitch({ tab, current, status = {}, counts = {}, onMode }: { tab: Tab; current: ModeName; status?: Partial<Record<ModeName, ModeStatus>>; counts?: Partial<Record<ModeName, number>>; onMode: (m: ModeName) => void }) {
   const modes = MODES[tab];
   if (modes.length < 2) return null;
   return (
@@ -15,6 +16,7 @@ export function ModeSwitch({ tab, current, status = {}, onMode }: { tab: Tab; cu
         return (
           <button key={m} type="button" className="ms-btn" aria-current={current === m ? "page" : undefined} onClick={() => current !== m && onMode(m)} title={s ? `${MODE_NAMES[m]}: ${STATUS_WORDS[s]}` : MODE_NAMES[m]}>
             {MODE_NAMES[m]}
+            {counts[m] !== undefined && <span className="ms-count"> · {counts[m]}</span>}
             {s === "done" && <span className="ms-done" aria-label="done">✓</span>}
             {s === "due" && <span className="ms-due" role="img" aria-label="due now" />}
           </button>
