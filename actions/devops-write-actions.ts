@@ -433,7 +433,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const pc = await once("pc", () => writer.processConfig(org, pat, project));
       // BD-1: any parent type that needs breaking down (the process model, the person's overrides), and only a child
       // type that type takes (the next level down): the draft's own, else the first.
-      const valid = breakdownChildTypes(pc, parent.type, { noBreakdown: env.cfg.plan.pickablePortfolioTypes });
+      const valid = breakdownChildTypes(pc, parent.type, { noBreakdown: env.cfg.org?.clients[env.clientKey]?.noBreakdown ?? [] });
       if (!valid.length) throw new Refused(`#${parent.id} is a ${parent.type}, which isn't broken down in this project`, 409);
       const type = draft.storyType && valid.includes(draft.storyType) ? draft.storyType : valid[0]!;
       const parentStates = await once(`states:${parent.type}`, () => writer.states(org, pat, project, parent.type));

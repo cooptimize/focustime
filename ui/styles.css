@@ -4026,6 +4026,38 @@ button.ask-label { cursor: pointer; }
 /* DS-1: Settings › Clients, the house style. */
 .set-house-style textarea { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 5px 8px; resize: vertical; }
 .set-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+/* ADM-1: the Admin part of Settings (ui/settings/Admin.tsx): its own nav under the Settings nav, one sticky sidebar. */
+.set-side { position: sticky; top: 0; max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; }
+.set-side > .set-nav { position: static; max-height: none; overflow: visible; }
+.set-admin-nav { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--border); }
+.set-nav-group { margin: 14px 12px 2px; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+.adm-kind { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; font-size: var(--fs-1); font-weight: 500; color: var(--text-faint); vertical-align: 1px; }
+.adm-mark { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--raised); font-size: var(--fs-1); font-weight: 500; color: var(--text-muted); }
+.adm-ok { color: var(--ok); font-weight: 500; }
+.adm-table { border-collapse: collapse; font-size: var(--fs-2); width: 100%; }
+.adm-table th, .adm-table td { text-align: left; vertical-align: top; padding: 6px 14px 6px 0; border-bottom: 1px solid var(--border); }
+.adm-table thead th { font-weight: 500; color: var(--text-faint); white-space: nowrap; }
+.adm-table tbody th { font-weight: 500; }
+.adm-table input[type="number"] { width: 6em; }
+.adm-scroll { overflow-x: auto; max-width: 100%; }
+.adm-email { display: block; font-weight: 400; }
+.adm-leads { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.adm-val { max-width: 22em; overflow-wrap: anywhere; }
+.adm-confirm { margin: 10px 0; padding: 12px 14px; border: 1px solid var(--risk); border-radius: 8px; background: var(--surface); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.adm-confirm p { flex-basis: 100%; margin: 0; }
+.adm-confirm .set-field { flex-basis: 100%; }
+.adm-filter { margin-bottom: 10px; }
+.adm-process h4, .adm-client h4 { margin: 8px 0 4px; font-size: var(--fs-3); font-weight: 600; }
+.adm-admins li { padding: 6px 10px; }
+.set-pre { white-space: pre-wrap; }
+.set-team-color { flex-basis: 100%; }
+@media (max-width: 900px) {
+  .set-side { overflow: visible; z-index: 2; background: var(--bg); }
+  .set-admin-nav { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .set-admin-nav .set-nav-group { margin: 0 8px 0 12px; }
+}
+.app.phone .set-admin-nav { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px; padding: 6px 16px; }
 .guide-icons { list-style: none; padding: 0; margin: 8px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px 16px; }
 .guide-icons li { display: flex; align-items: center; gap: 6px; }
 
@@ -4100,3 +4132,17 @@ button.ask-label { cursor: pointer; }
 .ev-list .promise-row .ev-title, .today-rows > li.promise-row .ev-title { flex: 0 1 auto; }
 .promise-row .promise-open .muted { white-space: nowrap; }
 .conv-summary > span { display: block; }
+/* ADM-1, WT-1: a client's process in Admin › Clients, one row per type. */
+.adm-types .type-icon { margin-right: 4px; vertical-align: -2px; }
+.adm-switch { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.adm-process h4 .mini { margin-left: 8px; }
+/* ADM-1: every part of an Admin › Clients card sits inside the card's colored edge, the last one rounding it off. */
+.adm-client > .adm-process, .adm-client > .set-house-style { margin: 0; padding: 10px 16px 12px; border: 1px solid var(--border); border-top: 1px dashed var(--border); border-left: 4px solid var(--c); border-radius: 0; background: var(--surface); }
+.adm-client > :not(:last-child):not(:first-child) { border-radius: 0; border-bottom: 0; }
+.adm-client > :last-child:not(:first-child) { border-radius: 0 0 10px 10px; }
+.adm-client > .set-client:not(:last-child) { border-bottom: 0; border-radius: 10px 10px 0 0; }
+.adm-table select, .adm-table input, .adm-table button { font: inherit; }
+/* ADM-1: the read-only house style inside a person's client card too; whatever comes last rounds the card off. */
+.set-client-wrap > .set-house-style { margin: 0; padding: 10px 16px 12px; border: 1px solid var(--border); border-top: 1px dashed var(--border); border-left: 4px solid var(--c); background: var(--surface); }
+.set-client-wrap > :not(:first-child):not(:last-child) { border-radius: 0; border-bottom: 0; }
+.set-client-wrap > :last-child:not(:first-child) { border-radius: 0 0 10px 10px; }

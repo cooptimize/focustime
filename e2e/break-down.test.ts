@@ -21,7 +21,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CHROMIUM } from "./harness.ts";
-import { liveBrowser, liveContext, ME, T, type LiveBrowser } from "./live.ts";
+import { liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "./live.ts";
 import { shotBoth, SHOTS } from "./shots.ts";
 import type { Page } from "playwright-core";
 
@@ -111,6 +111,7 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
     dv.add(FEATURE, { "System.WorkItemType": "Feature", "System.Title": "My feature with no stories", "System.State": "Active", "System.AreaPath": "Project Ada", "System.IterationPath": "Project Ada\\Sprint 4" });
     const created = () => [...dv.items.values()].filter((i) => i.fields["System.Parent"] === FEATURE);
     const pats = new Map([["Adatum", WRITE_PAT]]);
+    const team = liveTeam();
     const answer = aProposalsAnswer({
       feature_id: FEATURE,
       rationale: "The feature has no stories yet: the filter first, then delivery, then a check with finance.",
@@ -122,6 +123,7 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
       ],
     });
     const base = await liveContext({
+      team,
       extra: {
         devopsWriter: createDevOpsWriter({ fetch: dv.fetch, log: () => {} }),
         writePats: { get: async (k) => new Pat(pats.get(k) ?? ""), set: async (k, v) => void pats.set(k, v), clear: async (k) => void pats.delete(k) },
@@ -166,8 +168,9 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
       await panel.waitFor({ state: "detached" });
       await expect.poll(() => page.evaluate(() => document.activeElement?.textContent ?? "")).toBe("Break down Feature");
 
-      // Use AI and Allow AI for Adatum.
-      await base.writeConfig!((t) => `${t}\n[ai]\nuse = true\nallowed_clients = ["Adatum"]\n`);
+      // ADM-1: an admin turns AI on for FocusTime and allows it for Adatum.
+      await team.set("org", "ai.on", true);
+      await team.set("client:Adatum", "allow_ai", true);
       await page.reload();
       await page.locator(".topbar").waitFor();
       await openAdatum();

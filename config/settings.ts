@@ -7,7 +7,7 @@ import { NOTIFY_KINDS } from "../plan/notify.ts";
 import { parse as parseToml } from "smol-toml";
 
 /** A list value already in the settings text ([] when absent or unreadable), for edits that add or remove one entry. */
-function currentList(text: string, section: string, key: string): string[] {
+export function currentList(text: string, section: string, key: string): string[] {
   try {
     const sec = (parseToml(text) as Record<string, unknown>)[section] as Record<string, unknown> | undefined;
     const v = sec?.[key];
@@ -17,7 +17,7 @@ function currentList(text: string, section: string, key: string): string[] {
   }
 }
 
-export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap", "asks", "ai"] as const;
+export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap", "asks", "ai", "guidance"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export class SettingsInputError extends Error {
@@ -99,11 +99,11 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       return (text) => setValue(setValue(setValue(text, "risk", "meeting_watch_minutes", watch), "risk", "meeting_at_risk_minutes", atRisk), "risk", "min_focus_window_minutes", window);
     }
     case "planning": {
-      const keys = ["pickablePortfolioTypes", "minSizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound", "followGraceDays", "closeoutReminderMinutes", "checkinReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"];
+      // WT-1, ADM-1: which types need breakdown or count hours are Rules per client in Admin › Clients now.
+      const keys = ["minSizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound", "followGraceDays", "closeoutReminderMinutes", "checkinReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"];
       only(v, keys, "plan");
-      const types = strList(v.pickablePortfolioTypes ?? [], "plan.pickable_portfolio_types").filter(Boolean);
       // Each value is written as given; parseConfig checks ranges per field (plan.min_m etc.). Sizes are fixed (E2).
-      const values: [string, TomlValue][] = [["pickable_portfolio_types", types]];
+      const values: [string, TomlValue][] = [];
       if (v.minSizes !== undefined) {
         const mz = obj(v.minSizes, "plan.min_sizes");
         only(mz, ["S", "M", "L"], "plan.min_sizes");
@@ -213,46 +213,43 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       return (text) => values.reduce((t, [k, val], i) => setValue(t, "roadmap", k, val, i === 0 ? "Roadmap states (step 17): Stalled after this many days without a story change; Watch when the forecast lands within this many weeks of the target date." : undefined), text);
     }
     case "asks": {
-      // AP-1: Settings > Clients > Asks. Written as given; parseConfig checks the ranges and lengths.
-      only(v, ["pollMinutes", "requestPhrases", "ackPhrases", "promisePhrases"], "asks");
+      // AP-1: Settings > Clients > Asks. ADM-1: these are the person's own phrases, added on top of the team's (they
+      // can't remove a team phrase); how often chats are read is the admins' (the old poll_minutes goes on any save).
+      only(v, ["requestPhrases", "ackPhrases", "promisePhrases"], "asks");
       const values: [string, number | string[]][] = [];
-      if (v.pollMinutes !== undefined) values.push(["poll_minutes", int(v.pollMinutes, "asks.poll_minutes")]);
       if (v.requestPhrases !== undefined) values.push(["request_phrases", strList(v.requestPhrases, "asks.request_phrases").map((x) => x.trim()).filter(Boolean)]);
       if (v.ackPhrases !== undefined) values.push(["ack_phrases", strList(v.ackPhrases, "asks.ack_phrases").map((x) => x.trim()).filter(Boolean)]);
       if (v.promisePhrases !== undefined) values.push(["promise_phrases", strList(v.promisePhrases, "asks.promise_phrases").map((x) => x.trim()).filter(Boolean)]);
-      return (text) => values.reduce((t, [k, val], i) => setValue(t, "asks", k, val, i === 0 ? "Asks (AP-1): delivery chats with Read for asks on are read this often in working hours; a message from outside Cooptimize with a request phrase is an ask, one that is only an acknowledgement isn't." : undefined), text);
+      return (text) => values.reduce((t, [k, val], i) => setValue(t, "asks", k, val, i === 0 ? "Requests (AP-1, ADM-1): my own phrases, on top of the team's." : undefined), removeValue(text, "asks", "poll_minutes"));
     }
     case "ai": {
-      // AI-0: Settings › AI (Use AI, the monthly cap) and Settings › Clients (Allow AI: one client on or off, so two
-      // quick switches never undo each other). Both switches are off by default.
-      only(v, ["use", "monthlyCapUsd", "allow", "draftMonths"], "ai");
+      // ADM-1: AI is an admin decision (Admin › AI): only how far back Draft stories looks is a person's own.
+      only(v, ["draftMonths"], "ai");
       const values: [string, boolean | number | string[]][] = [];
-      if (v.use !== undefined) {
-        if (typeof v.use !== "boolean") throw new SettingsInputError("ai.use", "Must be true or false");
-        values.push(["use", v.use]);
-      }
-      if (v.monthlyCapUsd !== undefined) {
-        const c = v.monthlyCapUsd;
-        if (typeof c !== "number" || !Number.isFinite(c) || c < 0 || c > 1000) throw new SettingsInputError("ai.monthly_cap_usd", "Must be a number of dollars from 0 to 1000");
-        values.push(["monthly_cap_usd", Math.round(c * 100) / 100]);
-      }
       if (v.draftMonths !== undefined) {
         const m = v.draftMonths;
         if (typeof m !== "number" || !Number.isInteger(m) || m < 1 || m > 36) throw new SettingsInputError("ai.draft_months", "Must be a whole number of months from 1 to 36");
         values.push(["draft_months", m]);
       }
-      const allow = v.allow as { client?: unknown; on?: unknown } | undefined;
-      if (allow !== undefined && (typeof allow !== "object" || allow === null || typeof allow.client !== "string" || !allow.client.trim() || allow.client.length > 100 || typeof allow.on !== "boolean")) throw new SettingsInputError("ai.allowed_clients", "Must name a client and on or off");
-      return (text) => {
-        let out = values.reduce((t, [k, val], i) => setValue(t, "ai", k, val, i === 0 ? "AI (AI-0): Use AI and Allow AI per client are off by default; requests stop at the monthly cap." : undefined), text);
-        if (allow) {
-          const cur = currentList(out, "ai", "allowed_clients");
-          const key = (allow.client as string).trim();
-          const next = allow.on ? [...new Set([...cur, key])] : cur.filter((c) => c !== key);
-          out = setValue(out, "ai", "allowed_clients", next, values.length ? undefined : "AI (AI-0): Use AI and Allow AI per client are off by default; requests stop at the monthly cap.");
+      return (text) => values.reduce((t, [k, val]) => setValue(t, "ai", k, val), text);
+    }
+    case "guidance": {
+      // ADM-1: the person's own choices over their level's defaults; null goes back to the team default.
+      only(v, ["draftStories", "readinessNudges", "planShare"], "guidance");
+      const edits: [string, boolean | number | null][] = [];
+      for (const [k, key] of [["draftStories", "draft_stories"], ["readinessNudges", "readiness_nudges"]] as const) {
+        if (v[k] === undefined) continue;
+        if (v[k] !== null && typeof v[k] !== "boolean") throw new SettingsInputError(`guidance.${key}`, "Must be true, false or null");
+        edits.push([key, v[k] as boolean | null]);
+      }
+      if (v.planShare !== undefined) {
+        if (v.planShare !== null) {
+          const n = int(v.planShare, "guidance.plan_share");
+          if (n < 50 || n > 100) throw new SettingsInputError("guidance.plan_share", "Must be from 50 to 100 percent");
         }
-        return out;
-      };
+        edits.push(["plan_share", v.planShare as number | null]);
+      }
+      return (text) => edits.reduce((t, [k, val]) => (val === null ? removeValue(t, "guidance", k) : setValue(t, "guidance", k, val, "Guidance (ADM-1): my own choices over my level's defaults.")), text);
     }
     case "vm": {
       // Step 15.5 (Q87): Settings > You > "Start my VM without asking".
@@ -281,8 +278,8 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       if (color) table.color = color;
       const name = v.name == null ? "" : str(v.name, `${f}.name`, 60);
       if (name) table.name = name;
-      const open = v.openStates == null ? [] : strList(v.openStates, `${f}.open_states`).filter(Boolean);
-      if (open.length) table.open_states = open;
+      // ADM-1: states treated as open are a Rule per client (Admin › Clients); a person's own are no longer kept.
+      if (v.openStates != null) strList(v.openStates, `${f}.open_states`);
       if (v.follow !== undefined && v.follow !== null && v.follow !== false) {
         if (v.follow !== true) throw new SettingsInputError(`${f}.follow`, "Must be true or false");
         table.follow = true;

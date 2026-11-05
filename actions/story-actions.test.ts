@@ -15,7 +15,7 @@ import type { DevOpsTarget } from "../sources/devops/types.ts";
 import { COMPANY_PAT, fakeDevOpsWrite, WRITE_PAT } from "../sources/devops/write-fakes.ts";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { createPlanStore } from "../store/plan-store.ts";
-import { aCoopProposal, aFeatureSignals, anAiApp, anExemplarCandidate, aProposalsAnswer } from "../test/builders/index.ts";
+import { aCoopProposal, aFeatureSignals, anAiApp, anExemplarCandidate, aProposalsAnswer, withTeam } from "../test/builders/index.ts";
 import { clearDevopsPreviews, type DevOpsPreview } from "./devops-write-actions.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
 import type { DraftView } from "./story-actions.ts";
@@ -24,13 +24,13 @@ const NOW = "2026-11-04T15:00:00Z";
 const COOP = "Cooptimize";
 const FEATURE = 437;
 
-function setup(o: { allowed?: string[]; signals?: Partial<FeatureSignals>; answer?: (c: ProviderCall) => string; parentType?: string } = {}) {
+function setup(o: { allowed?: string[]; teamStyle?: string; signals?: Partial<FeatureSignals>; answer?: (c: ProviderCall) => string; parentType?: string } = {}) {
   clearDevopsPreviews();
   const dv = fakeDevOpsWrite({ now: () => NOW, recurring: true });
   dv.add(FEATURE, { "System.WorkItemType": o.parentType ?? "Feature", "System.Title": "Monthly export for the finance team", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
   dv.add(441, { "System.WorkItemType": "User Story", "System.Title": "Pick the columns for the export", "System.State": "Closed" }, FEATURE);
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });
-  const toml = `${STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-4444-8444-444444444444"').replace('my_email = ""', 'my_email = "me@example.com"')}\n[clients.Northwind]\nname = "Northwind"\n\n[ai]\nuse = true\nallowed_clients = ${JSON.stringify(o.allowed ?? [COOP])}\n`;
+  const toml = `${STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-4444-8444-444444444444"').replace('my_email = ""', 'my_email = "me@example.com"')}\n[clients.Northwind]\nname = "Northwind"\n`;
   const keyring = new Map<string, string>();
   const calls: ProviderCall[] = [];
   const signals = aFeatureSignals({ feature: { id: FEATURE, ...(o.parentType ? { type: o.parentType } : {}) }, children: [{ id: 441, title: "Pick the columns for the export", type: "User Story", state: "Closed" }], ...o.signals });
@@ -42,7 +42,7 @@ function setup(o: { allowed?: string[]; signals?: Partial<FeatureSignals>; answe
   const answer = o.answer ?? (() => JSON.stringify(aProposalsAnswer({ feature_id: FEATURE, set_aside: [{ title: "Pick the columns", why: "already_covered", existing_item_id: 441, reason: "Done in #441" }] })));
   const target = (clientKey: string, withPat: boolean): DevOpsTarget => ({ accountId: "a", clientKey, clientName: clientKey, org: "cooptimize", project: `${clientKey} Project`, projectName: `${clientKey} Project`, email: "avery@cooptimize.example", pat: withPat ? new Pat(COMPANY_PAT) : null });
   const c: ActionContext = {
-    loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(toml) }),
+    loadConfig: async () => ({ path: "/x/config.toml", parsed: withTeam(parseConfig(toml), { ai: { allowed: o.allowed ?? [COOP] }, rows: o.teamStyle ? [{ scope: `client:${COOP}`, key: "house_style", value: o.teamStyle }] : [] }) }),
     makeDataverse: () => ({ devopsTargets: async (keys: string[], x: { withPat?: boolean } = {}) => ({ ok: true, targets: keys.map((k) => target(k, x.withPat !== false)) }), myClients: async () => [] }) as never,
     makeOutlook: () => { throw new Error("n/a"); },
     makeGoogle: () => { throw new Error("n/a"); },
@@ -237,15 +237,18 @@ describe("Draft stories", () => {
     expect(one.cost).not.toBe(d.cost);
   });
 
-  it("keeps a client's house style, edited by the person until reset", async () => {
+  it("ADM-1: the team's house style (an admin's Rule) wins; a person can't change it", async () => {
+    const s = setup({ teamStyle: "Titles as As a <role>. Always acceptance criteria." });
+    await s.run("stories.prepare", { clientKey: COOP, featureId: FEATURE });
+    const style = await s.run<{ text: string; team: string | null; edited: null }>("stories.house_style", { clientKey: COOP });
+    expect(style.text).toBe("Titles as As a <role>. Always acceptance criteria.");
+    expect(style.team).toBe("Titles as As a <role>. Always acceptance criteria.");
+    expect(await s.fail("stories.house_style_save", { clientKey: COOP, text: "Mine" })).toMatchObject({ status: 403, code: "admin_setting" });
+  });
+  it("without a team style, the learned one", async () => {
     const s = setup();
     await s.run("stories.prepare", { clientKey: COOP, featureId: FEATURE });
-    const learned = await s.run<{ text: string; learned: boolean }>("stories.house_style", { clientKey: COOP });
-    expect(learned.learned).toBe(true);
-    const mine = await s.run<{ text: string; edited: string }>("stories.house_style_save", { clientKey: COOP, text: "Titles as As a <role>. Always acceptance criteria." });
-    expect(mine.text).toBe("Titles as As a <role>. Always acceptance criteria.");
-    const back = await s.run<{ text: string; edited: string | null }>("stories.house_style_save", { clientKey: COOP, text: null });
-    expect(back.edited).toBeNull();
-    expect(back.text).toBe(learned.text);
+    const style = await s.run<{ text: string; learned: boolean; team: string | null }>("stories.house_style", { clientKey: COOP });
+    expect([style.learned, style.team]).toEqual([true, null]);
   });
 });

@@ -10,7 +10,7 @@ import { createConversationStore } from "../store/conversation-store.ts";
 import { openPlanDb } from "../store/plan-store.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
-import { aChatMember, aClientChat, aCommitmentAnswer, aConversationUpdate, anAiApp, anAiPerson, anUpdateAnswer, aTeamsMessage, aWorkItem, HOME_TENANT } from "./builders/index.ts";
+import { aChatMember, aClientChat, aCommitmentAnswer, aConversationUpdate, anAiApp, anAiRules, anUpdateAnswer, aTeamsMessage, aWorkItem, HOME_TENANT } from "./builders/index.ts";
 import { runPipeline, type PipelineDeps } from "../actions/conversations-pipeline.ts";
 
 export const NOW = "2026-11-04T21:00:00Z";
@@ -32,7 +32,7 @@ export function world(o: { respond?: (c: ProviderCall) => string | { ok: false; 
   const ai = createAi({
     provider: async () => provider,
     app: anAiApp({ provider: "openai", appCapUsd: o.appCapUsd ?? 100 }),
-    person: async () => anAiPerson({ use: o.use ?? true, allowedClients: o.allowed ?? ["contoso", "fabrikam"] }),
+    rules: async () => anAiRules({ on: o.use ?? true, allowedClients: o.allowed ?? ["contoso", "fabrikam"] }),
     guard: async () => ({ directory: [], homeDomains: ["contoso.example"], forbidden: [] }),
     log: convs.appAiLog,
     appSpend: { get: async () => 0, add: async () => {} },

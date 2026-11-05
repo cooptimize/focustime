@@ -39,9 +39,28 @@ function useItemType(clientKey: string, item: BreakDownTarget): string | null {
   return all.find((i) => i.id === item.id)?.type ?? null;
 }
 
-/** "Break down Feature" on a Needs stories row, with the type's icon. Always opens the panel, which says when AI is off. */
+type StoryStatus = { offered: boolean };
+let statusCache: { at: number; p: Promise<StoryStatus | null> } | null = null;
+/** Whether Break down is offered to this person (ADM-1: their level's default or their own), asked once per 30 seconds for all rows. */
+function useOffered(): boolean {
+  const [offered, setOffered] = useState(true);
+  useEffect(() => {
+    if (!statusCache || Date.now() - statusCache.at > 30_000) statusCache = { at: Date.now(), p: call<StoryStatus>("stories.status", {}).catch(() => null) };
+    let live = true;
+    void statusCache.p.then((v) => live && v && setOffered(v.offered !== false));
+    return () => void (live = false);
+  }, []);
+  return offered;
+}
+
+/**
+ * "Break down Feature" on a Needs stories row, with the type's icon. Opens the panel, which says when AI is off; hidden
+ * when the person has the offer turned off (ADM-1). The Coop brief beside it stays either way.
+ */
 export function BreakDownButton({ clientKey, item }: { clientKey: string; item: BreakDownTarget }) {
   const type = useItemType(clientKey, item);
+  const offered = useOffered();
+  if (!offered) return null;
   return (
     <button type="button" className="link-btn tw-draft bd-trigger" data-breakdown={`${clientKey}:${item.id}`} onClick={() => openBreakDown(clientKey, { ...item, ...(type ? { type } : {}) })}>
       {type && <TypeIcon clientKey={clientKey} type={type} decorative />}
@@ -84,6 +103,7 @@ export function BreakDownHost({ onDone }: { onDone: () => void }) {
       item={open.item}
       onClose={(changed) => {
         setOpen(null);
+        statusCache = null;
         if (changed) onDone();
         // Focus goes back to the row that opened it: the same button, or the row's new one after a refresh.
         const el = back.current;

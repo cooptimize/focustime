@@ -69,9 +69,9 @@ export type ProcessModel = {
   defaultOpenStates: { type: string; state: string }[];
 };
 
-/** Overrides read from settings until ADM-1 hosts them. Type names match without case. */
+/** A client's overrides: its Rules in Admin › Clients (ADM-1). Type names match without case. */
 export type ProcessOverrides = {
-  /** Parent or top level types that don't need breakdown (and so can be picked). The old pickable_portfolio_types. */
+  /** Parent or top level types that don't need breakdown (and so can be picked). */
   noBreakdown?: readonly string[];
   /** Types that don't count against hours ("background" types). */
   background?: readonly string[];

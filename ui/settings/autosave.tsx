@@ -110,6 +110,9 @@ export function AutoSaveProvider({ children, onNotice }: { children: (leave: (go
   );
 }
 
+/** ADM-1: the Undo toast and save tracking, for forms that save through their own action (Admin). */
+export const useSaveContext = () => useContext(AutoSaveCtx);
+
 type Options<V> = {
   /** The settings.save section. */
   section: string;

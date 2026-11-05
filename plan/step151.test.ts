@@ -54,7 +54,7 @@ describe("shortest useful time (D273)", () => {
   });
   it("reads min_s, min_m and min_l from config, each at most its size", () => {
     const base = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"');
-    const plan = (lines: string) => base.replace("[plan]\n", `[plan]\n${lines}\n`);
+    const plan = (lines: string) => `${base}\n[plan]\n${lines}\n`;
     const ok = parseConfig(plan("min_s = 20\nmin_m = 45\nmin_l = 120"));
     expect(ok.ok && ok.config.plan.minSizes).toEqual({ S: 20, M: 45, L: 120 });
     // E2: sizes are fixed (S 1h); a size_s set before is read and ignored, never an error.

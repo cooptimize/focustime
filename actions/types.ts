@@ -4,7 +4,7 @@ import type { AppConfig, ClientSetting, FieldError, UiConfig } from "../config/s
 import type { FocusSettings } from "../plan/focussound.ts";
 import type { TodayTarget } from "../week/dates.ts";
 import type { PlanWeek } from "../plan/types.ts";
-import type { ClientPortfolio, ClientWork, IsoDate, RiskThresholds, SourceResult, StandingBlock, Week } from "../week/types.ts";
+import type { ClientPortfolio, ClientWork, IsoDate, RiskThresholds, SourceResult, StandingBlock, TypeLook, Week } from "../week/types.ts";
 import type { Capture, DraftStory, WeekFeature } from "../plan/types.ts";
 import type { TimeModel } from "../week/hours.ts";
 
@@ -18,6 +18,8 @@ export type WeekLoadData = {
   /** Assigned DevOps work per client with a block this week; null when Dataverse is not usable. */
   devops: ClientWork[] | null;
   clients: Record<string, string>;
+  /** ADM-1: the person's guidance (their choice, else their level's team default): emphasis only, never a block. */
+  guidance?: import("../config/org.ts").Guidance | null;
   /** Day plans and picks for the days of this week (local plan store); null when the store is unavailable. */
   plan: PlanWeek | null;
   /** Clients an Open half-day can take (this week's, standing blocks, and every client I'm an Account Worker on). */
@@ -112,8 +114,10 @@ export type SettingsClient = {
   devopsEmail: string | null;
   devops: boolean;
   setting: ClientSetting;
-  /** The color as CSS (hex or palette token). */
+  /** The color as CSS (hex or palette token): mine when I picked one, else the team's. */
   css: string | null;
+  /** ADM-1: the team color an admin set (or FocusTime suggested), a slot or a hex; null: none yet. */
+  teamColor: string | null;
   /** Whether FocusTime follows it (DevOps, Open half-days) and why (step 6d); null when it couldn't be worked out. */
   follow: FollowState | null;
   /** Step 14: the checked DevOps write PAT's owner (never the PAT), or null: this client stays read-only. */
@@ -155,8 +159,14 @@ export type SettingsData = {
   roadmap: AppConfig["roadmap"];
   /** AP-1: how often chats are read for asks, and the phrase lists the rules use. */
   asks: AppConfig["asks"];
-  /** AI-0: Use AI, the monthly cap and the clients with Allow AI on. */
+  /** AI-0: the person's [ai] (only draftMonths is theirs since ADM-1). */
   ai: AppConfig["ai"];
+  /** ADM-1: the admins' AI rules (on for FocusTime, the clients allowed, the cap per person). */
+  aiRules: AppConfig["aiRules"];
+  /** ADM-1: the team's settings as they apply to me (level, guidance, team colors and phrases, Rules); null: none here. */
+  org: AppConfig["org"];
+  /** ADM-1: my own choices over my level's defaults. */
+  guidance: AppConfig["guidance"];
 };
 
 /** [plan] values the UI uses (step 6c). */
@@ -458,3 +468,7 @@ export type PresencePeopleData = { available: boolean; reason: TeamsAccess | nul
 export type PhotoAccess = "consent" | "signed_out" | "unavailable";
 /** Step 16.4: photos as data URLs (null: initials) for me and the Cooptimizers asked for, by email. */
 export type PhotosData = { available: boolean; reason: PhotoAccess | null; me: string | null; people: { email: string; photo: string | null }[] };
+
+/** ADM-1, WT-1: one type of a client's process for Admin › Clients: its look, level, the two Rules, its history in words. */
+export type ProcessTypeRow = TypeLook & { breakdownSource: "default" | "override" | "level"; history: string | null; bug: boolean };
+export type ClientProcess = { ok: true; process: string | null; project: string; bugs: string | null; types: ProcessTypeRow[] } | { ok: false; message: string };

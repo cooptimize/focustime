@@ -19,6 +19,13 @@ import { createDevOpsSource } from "../sources/devops/source.ts";
 import { fakeDevOps } from "../sources/devops/test-fakes.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import { CHROMIUM } from "./harness.ts";
+import { createOrgRuntime, type OrgRuntime } from "../actions/org.ts";
+import { createAdminStore, FOCUSTIME, type AdminStore } from "../store/admin-store.ts";
+import { sqliteDb } from "../test/db.ts";
+import { createAdminCheck } from "../actions/admin.ts";
+import type { AdminOps } from "../actions/admin-actions.ts";
+import { createAdminOps } from "../server/admin-ops.ts";
+import type { ClientChat } from "../plan/requests.ts";
 
 export const T = 120_000;
 export const NOW = "2026-11-02T09:30:00-05:00";
@@ -35,7 +42,53 @@ export type LiveOptions = {
   setupDone?: boolean;
   /** Anything else the context needs (Outlook, the DevOps writer, write PATs). */
   extra?: Partial<ActionContext>;
+  /** ADM-1: the team's settings, applied to this person's as the server does (shared between contexts in a test). */
+  team?: LiveTeam;
+  /** Whose settings these are, for their level (default ME). */
+  userId?: string;
 };
+
+/** ADM-1: a team's settings and people in memory, as an admin would have set them. */
+export type LiveTeam = { org: OrgRuntime; store: AdminStore; set: (scope: string, key: string, value: unknown) => Promise<void> };
+/**
+ * ADM-1: an admin console over a team, for e2e: `admins` is the break-glass list (change it to make someone an admin
+ * or not; the next check reads it), `clients` the clients Admin › Clients lists, `chats` the registered client chats.
+ */
+export async function liveAdminOps(team: LiveTeam, o: { admins: string[]; clients?: string[]; chats?: () => Promise<ClientChat[]> }): Promise<AdminOps> {
+  if (o.clients?.length) await team.store.replaceDirectory([], [], o.clients.map((clientKey) => ({ personId: ME, clientKey })));
+  return createAdminOps({
+    check: createAdminCheck({ groupId: null, breakGlass: o.admins, graph: async () => null, now: Date.now }),
+    org: team.org,
+    groupId: null,
+    breakGlass: o.admins,
+    tenantId: null,
+    users: async () => [],
+    personStore: () => ({ setupState: async () => ({}), devopsIdentities: async () => [] }),
+    hasSecret: async () => false,
+    dataverseMatched: async () => true,
+    chats: o.chats ?? (async () => []),
+    ai: async () => ({ provider: "stub", keyConfigured: true }),
+    appSpentMicros: async () => 0,
+    feedback: async () => ({ state: "local" }),
+    build: { env: "dev", sha: "e2e", pr: "", builtAt: null },
+    directory: null,
+    removePerson: async () => {},
+    log: () => {},
+  });
+}
+
+export function liveTeam(): LiveTeam {
+  const store = createAdminStore(sqliteDb().conn, () => Temporal.Instant.from(NOW));
+  const org = createOrgRuntime({ store, bootstrap: { model: "gpt-6-luna", appCapUsd: 100, inviteDomains: ["contoso.example"], feedback: null }, holdMs: 0 });
+  return {
+    org,
+    store,
+    set: async (scope, key, value) => {
+      await store.setOrg({ scope, key, value, actor: FOCUSTIME, area: "test", target: scope });
+      org.invalidate();
+    },
+  };
+}
 
 /** A live-style context: the real dispatch over sources that read from the fakes, a fresh plan store, settings in memory. */
 export async function liveContext(o: LiveOptions = {}): Promise<ActionContext> {
@@ -47,15 +100,21 @@ export async function liveContext(o: LiveOptions = {}): Promise<ActionContext> {
   let text = TEXT;
   const plan = createPlanStore({ path: join(dir, "plan.db"), now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });
   if (o.setupDone !== false) for (const s of SETUP_STEPS) await plan.setSetupStep(s, "done");
+  const withTeam = async (t: string) => {
+    const parsed = parseConfig(t);
+    return parsed.ok && o.team ? { ...parsed, config: await o.team.org.apply(parsed.config, o.userId ?? ME) } : parsed;
+  };
   return {
-    loadConfig: async () => ({ path: "/e2e/config.toml", parsed: parseConfig(text) }),
+    loadConfig: async () => ({ path: "/e2e/config.toml", parsed: await withTeam(text) }),
     writeConfig: async (edit) => {
       const next = edit(text);
       const parsed = parseConfig(next);
       if (!parsed.ok) return { ok: false, parsed };
       text = next;
-      return { ok: true, parsed, backup: "/e2e/config.toml.bak" };
+      const applied = await withTeam(next);
+      return { ok: true, parsed: applied.ok ? applied : parsed, backup: "/e2e/config.toml.bak" };
     },
+    ...(o.team ? { org: o.team.org } : {}),
     makeDataverse,
     makeOutlook: () => {
       throw new Error("Outlook isn't set up here");

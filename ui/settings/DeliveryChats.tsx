@@ -121,7 +121,8 @@ const timeOf = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-U
 const dayOf = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null);
 
 /** A client's Delivery chats: every Teams chat registered for it, each labelled with its kind, and Add a chat. */
-export function DeliveryChatField({ clientKey, clientName }: { clientKey: string; clientName: string }) {
+/** ADM-1: `readOnly` in Settings › Clients (registering and relabelling are in Admin › Clients). */
+export function DeliveryChatField({ clientKey, clientName, readOnly = false }: { clientKey: string; clientName: string; readOnly?: boolean }) {
   const ctx = useContext(Ctx);
   const [saved, setSaved] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
@@ -130,7 +131,7 @@ export function DeliveryChatField({ clientKey, clientName }: { clientKey: string
   const mine = (ctx.data?.chats ?? []).filter((c) => c.clientKey === clientKey);
   // D522: adding, relabelling and removing are an admin's; everyone else sees the chats read-only. Until the list
   // arrives (it reads Teams and can take seconds) Add stays offered; the server refuses a non-admin either way.
-  const admin = ctx.data?.admin ?? true;
+  const admin = readOnly ? false : (ctx.data?.admin ?? true);
   const focusAdd = () => requestAnimationFrame(() => addRef.current?.focus());
   const act = async (action: string, input: unknown, done: string) => {
     setSaved(null);
@@ -150,7 +151,7 @@ export function DeliveryChatField({ clientKey, clientName }: { clientKey: string
         )}
         <span className="set-mark" role="status" aria-live="polite">{saved}</span>
       </div>
-      {mine.length === 0 && !picking && <p className="muted dchat-none">{admin ? "No chats yet." : "No chats yet. A FocusTime admin adds them."}</p>}
+      {mine.length === 0 && !picking && <p className="muted dchat-none">{admin ? "No chats yet." : "No chats yet. A FocusTime admin adds them in Admin › Clients."}</p>}
       {mine.map((c) => (
         <ChatCard
           key={c.chatId}

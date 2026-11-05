@@ -178,8 +178,8 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   // Q48: only borrowed time paid back in this week counts against its fit.
   const borrowedMinutes = useMemo(() => borrowedForWeek(data.borrowed, weekStart), [data.borrowed, weekStart]);
   const fits = useMemo(
-    () => (weekReady ? weekBudget(data.week, [...raw, ...weekDrafts.map((w) => draftAsItem(weekStart, w.draft, w.tier))], { borrowedMinutes, counts: countsFor(work) }) : []),
-    [weekReady, data.week, raw, weekDrafts, weekStart, borrowedMinutes],
+    () => (weekReady ? weekBudget(data.week, [...raw, ...weekDrafts.map((w) => draftAsItem(weekStart, w.draft, w.tier))], { borrowedMinutes, counts: countsFor(work), planShare: data.guidance?.planShare ?? 100 }) : []),
+    [weekReady, data.week, raw, weekDrafts, weekStart, borrowedMinutes, data.guidance?.planShare],
   );
   const intentions = useMemo(
     () => Object.entries(data.plan ?? {}).flatMap(([date, d]) => d.picks.filter((p) => p.kind === "intention").map((p) => ({ id: p.id, clientKey: p.clientKey, title: p.title, date, size: p.size ?? "M", status: p.status }))),

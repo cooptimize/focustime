@@ -107,7 +107,7 @@ export function withCurrentTitles<T extends { clientKey: string; itemId: number;
  * shown or hidden, unavailable time; none on a day off), less unpaid borrowed time. Planned: minutes of its musts,
  * features as envelopes (plan/estimate.ts).
  */
-export function weekBudget(week: Week, all: readonly FeatureLike[], o: { borrowedMinutes: Readonly<Record<string, number>>; /** WT-1: false for a background type (no hours). */ counts?: (clientKey: string, itemType: string | null | undefined) => boolean }): ClientBudget[] {
+export function weekBudget(week: Week, all: readonly FeatureLike[], o: { borrowedMinutes: Readonly<Record<string, number>>; /** WT-1: false for a background type (no hours). */ counts?: (clientKey: string, itemType: string | null | undefined) => boolean; /** ADM-1: plan up to this % of free time (100: all of it). */ planShare?: number }): ClientBudget[] {
   const items = o.counts ? all.filter((i) => o.counts!(i.clientKey, i.itemType)) : all;
   const names = new Map<string, string>();
   for (const d of week.days) for (const s of [d.am, d.pm]) if (s.focus[0] && !names.has(s.focus[0].clientKey)) names.set(s.focus[0].clientKey, s.focus[0].clientName);
@@ -133,7 +133,7 @@ export function weekBudget(week: Week, all: readonly FeatureLike[], o: { borrowe
     const borrowed = o.borrowedMinutes[clientKey] ?? 0;
     const freeMinutes = Math.max(0, inBlocks - borrowed);
     const plannedMinutes = plannedMinutesOf(est, clientKey, "must");
-    const w0 = budgetWords(freeMinutes, plannedMinutes);
+    const w0 = budgetWords(freeMinutes, plannedMinutes, o.planShare ?? 100);
     const w = onlyPto ? { ...w0, free: NO_TIME, text: [NO_TIME, w0.planned].filter(Boolean).join(" · ") } : w0;
     return { clientKey, clientName, blocks, ptoBlocks: all.filter((b) => b.pto).map((b) => ({ date: b.date, half: b.half })), freeMinutes, borrowedMinutes: Math.min(borrowed, inBlocks), plannedMinutes, nicePlannedMinutes: plannedMinutesOf(est, clientKey, "nice"), status: w.kind, text: w.text, free: w.free, planned: w.planned, over: w.over };
   });

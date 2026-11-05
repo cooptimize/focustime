@@ -409,7 +409,7 @@ export function sentSummary(r: SentSummaryInput): string[] {
     total === 0 ? "No comments (there are none)" : `${c.kept.length} of ${total} ${total === 1 ? "comment" : "comments"}, newest first${c.coopBlocks ? `, Coop blocks as one line each` : ""}`,
     kids === 0 ? "No existing children (there are none)" : `${kids} existing ${kids === 1 ? "child" : "children"}: titles and states, so they aren't proposed again`,
     r.examples === 0 ? `No examples: too few of ${r.clientName}'s own items with children to learn from` : `${r.examples} ${r.examples === 1 ? "example" : "examples"} from ${r.clientName}'s own items, with their children`,
-    s?.edited ? `House style: written for ${r.clientName}` : s?.learned ? `House style: learned from ${r.clientName}'s own items` : "House style: the default",
+    s?.edited ? `House style: set for ${r.clientName} by a FocusTime admin` : s?.learned ? `House style: learned from ${r.clientName}'s own items` : "House style: the default",
     "Your note, if you write one",
     "Text only. Email addresses are left out, and everything goes as data, never as instructions",
   ];
