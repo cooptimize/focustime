@@ -1092,6 +1092,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "my_promises.followup":
     case "my_promises.start_draft":
     case "my_promises.link":
+    case "my_promises.search":
     case "my_promises.done":
     case "my_promises.not_needed":
     case "my_promises.reopen":

@@ -9,6 +9,7 @@
 // one under the token owner's switches and caps; a FocusTime user's own message with promise phrasing becomes their
 // promise under their own settings. Tokens live only inside each person's account (memory, then gone); this file never
 // sees one. Each cycle logs counts and the token owners by name: never a chat id, topic, member or message text.
+import { groupingRules } from "./conversations-pipeline.ts";
 import type { AiService } from "../ai/service.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
@@ -199,7 +200,7 @@ async function conversationsStep(
   const ai = x.p.pipelineAi ? await x.p.pipelineAi().catch(() => null) : null;
   const r = await runPipeline(
     {
-      teams: deps.teams, convs, users: x.users, homeTenant: x.home, now: x.now, clientName: cfg.clientSettings[c.clientKey]?.name ?? c.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, chatCap: cfg.org?.rules.chatAiDailyCap ?? CHAT_DAILY_AI_CALLS, items,
+      teams: deps.teams, convs, users: x.users, homeTenant: x.home, now: x.now, clientName: cfg.clientSettings[c.clientKey]?.name ?? c.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, chatCap: cfg.org?.rules.chatAiDailyCap ?? CHAT_DAILY_AI_CALLS, ...groupingRules(cfg, c.clientKey), items,
       author: async (uid) => {
         const a = await x.person(uid);
         return a?.config ? { zone: userZone(a.config), promisePhrases: a.config.asks.promisePhrases } : null;

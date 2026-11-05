@@ -4,6 +4,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { SHOTS } from "./shots.ts";
 
 let h: Harness;
 const T = 120_000;
@@ -128,5 +129,30 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
     await page.locator(".topbar .top-more").click();
     expect(await page.getByRole("menuitem", { name: /Notifications/ }).textContent()).not.toContain("new");
     expect(errors).toEqual([]);
+  }, T);
+
+  it("CV-3: the FocusTime name stays whole at the phone's 17px root font (and 21px), with no sideways overflow; the person chip is ⋯'s first row", async () => {
+    // iPhone Safari's text is 17px and up (-apple-system-body); Chromium needs it set by hand (through the CSSOM, which the CSP allows).
+    const { page } = await freshPage(h, { width: 390, height: 844 });
+    for (const px of [17, 21]) {
+      await page.evaluate((n) => document.documentElement.style.setProperty("font-size", `${n}px`, "important"), px);
+      await page.waitForFunction((n) => getComputedStyle(document.documentElement).fontSize === `${n}px` && !!document.querySelector(".topbar .brand .name"), px);
+      // Measured once layout settles (a busy machine can be a frame behind).
+      await expect.poll(() => page.evaluate(() => { const n = document.querySelector<HTMLElement>(".topbar .brand .name")!; return Math.round(n.getBoundingClientRect().width) >= n.scrollWidth; })).toBe(true);
+      const m = await page.evaluate(() => {
+        const r = (s: string) => document.querySelector(s)?.getBoundingClientRect() ?? null;
+        const name = document.querySelector<HTMLElement>(".topbar .brand .name")!;
+        return { nameW: name.getBoundingClientRect().width, nameSW: name.scrollWidth, name: r(".topbar .brand .name")!, actions: r(".topbar .top-actions")!, doc: document.documentElement.scrollWidth, chip: !!document.querySelector(".topbar .person-chip") };
+      });
+      expect(Math.round(m.nameW)).toBeGreaterThanOrEqual(m.nameSW);
+      expect(m.name.right).toBeLessThanOrEqual(m.actions.left);
+      expect(m.doc).toBeLessThanOrEqual(390);
+      expect(m.chip).toBe(false);
+      if (SHOTS) await page.screenshot({ path: `${SHOTS}/cv3-phone-topbar-${px}px.png`, clip: { x: 0, y: 0, width: 390, height: 120 } });
+    }
+    await page.locator(".topbar .top-more").click();
+    const first = page.getByRole("menu").getByRole("menuitem").first();
+    await expect.poll(() => first.textContent()).toMatch(/^Alex Rivera/);
+    await page.close();
   }, T);
 });

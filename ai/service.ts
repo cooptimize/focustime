@@ -78,6 +78,18 @@ export function createAi(d: AiDeps) {
     return cost;
   }
 
+  /**
+   * CV-3: whether a request for this client could run at all, without one: "off" (AI for FocusTime), "client_off"
+   * (Allow AI) or "not_set_up" (no provider key). Caps and provider trouble aren't known until a request is tried.
+   */
+  async function availability(client: string): Promise<"ok" | "off" | "client_off" | "not_set_up"> {
+    const me = await d.rules();
+    if (!me.on) return "off";
+    if (client !== NO_CLIENT && !me.allowedClients.includes(client)) return "client_off";
+    const provider = d.app.provider === "off" ? null : await d.provider();
+    return provider ? "ok" : "not_set_up";
+  }
+
   async function run<T>(task: AiTaskSpec, input: string, schema: JsonSchema): Promise<AiResult<T>> {
     if (!task.name || !/^[a-z][a-z0-9_]{0,30}(\.[a-z][a-z0-9_]{0,30})?$/.test(task.name) || !task.client || !task.instructions.trim() || !input.trim() || strictProblems(schema).length) return fail("bad_task");
     const me = await d.rules();
@@ -167,7 +179,7 @@ export function createAi(d: AiDeps) {
     return { setUp: !!provider, provider: d.app.provider, model: me.model || d.app.model, on: me.on, allowedClients: [...me.allowedClients], capMicros: micros(me.personCapUsd), appCapMicros: micros(appCap), spentMicros: spent, appReached: micros(appCap) > 0 && app >= micros(appCap), recent };
   }
 
-  return { run, test, status };
+  return { run, test, status, availability };
 }
 export type AiService = ReturnType<typeof createAi>;
 

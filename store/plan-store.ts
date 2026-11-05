@@ -1570,7 +1570,7 @@ const toCapture = (r: Row): Capture => ({
 
 /** How a capture is sorted (step 9). */
 export type CaptureRoute =
-  | { as: "follow_up"; clientKey: string | null; who: string; what: string; due: IsoDate | null; channel?: string | null; itemId?: number | null }
+  | { as: "follow_up"; clientKey: string | null; who: string; /** CV-3: the person from the PersonPicker, or none (a plain name). */ whoRef?: PersonRef | null; what: string; due: IsoDate | null; channel?: string | null; itemId?: number | null }
   | { as: "draft"; clientKey: string; parentItemId: number | null; title: string; size: Size }
   | { as: "draft_feature"; clientKey: string; parentItemId: number | null; title: string; targetDate?: IsoDate | null }
   | { as: "dismissed" };
@@ -2097,7 +2097,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         let routedId: number | null = null;
         if (r.as === "follow_up") {
           if (!r.what.trim()) throw new PlanError("A follow-up needs what you owe");
-          routedId = Number((await db.run("INSERT INTO follow_ups (kind, client_key, who, what, due, channel, item_id, opened_at) VALUES ('capture', ?, ?, ?, ?, ?, ?, ?)", r.clientKey, r.who.trim() || null, r.what.trim(), r.due, r.channel ?? null, r.clientKey ? (r.itemId ?? null) : null, at)).lastId);
+          routedId = Number((await db.run("INSERT INTO follow_ups (kind, client_key, who, who_ref, what, due, channel, item_id, opened_at) VALUES ('capture', ?, ?, ?, ?, ?, ?, ?, ?)", r.clientKey, r.who.trim() || null, refJson(r.who.trim() ? (r.whoRef ?? null) : null), r.what.trim(), r.due, r.channel ?? null, r.clientKey ? (r.itemId ?? null) : null, at)).lastId);
         } else if (r.as === "draft") {
           if (!r.title.trim()) throw new PlanError("A draft story needs a title");
           routedId = Number((await db.run("INSERT INTO draft_stories (client_key, parent_item_id, title, size, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", r.clientKey, r.parentItemId, r.title.trim(), r.size, at, at)).lastId);

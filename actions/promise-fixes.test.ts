@@ -11,6 +11,8 @@ import { BLAKE, CHAT, EVAN, LENA, SAM, world } from "../test/conversations.ts";
 import { OUTSIDER, people } from "../test/conversation-people.ts";
 import { impliesItemByRule } from "./conversations-pipeline.ts";
 import { followUpView } from "./followup-rules.ts";
+import { aWorkItem } from "../test/builders/index.ts";
+import type { WorkItem } from "../week/types.ts";
 
 describe("to whom", () => {
   it("an @mention of someone who hasn't posted is named from the chat's members", async () => {
@@ -114,5 +116,38 @@ describe("Make it a follow-up", () => {
     expect(wasDueText({ dueAt: "2026-11-05T15:00:00Z", dueDate: "2026-11-05" }, "2026-11-05", "America/Chicago")).toBe("Was due 9:00 AM");
     expect(wasDueText({ dueAt: "2026-11-03T15:00:00Z", dueDate: "2026-11-03" }, "2026-11-05", "America/Chicago")).toBe("Was due Tue, Nov 3");
     expect(wasDueText({ dueAt: null, dueDate: "2026-11-02" }, "2026-11-05", "America/Chicago")).toBe("Was due Mon, Nov 2");
+  });
+});
+
+describe("CV-3: Link existing… suggests likely items (Q-CV2-4)", () => {
+  it("for a promise with no conversation: from its words and the messages before it, mine first, with reasons, one client only", async () => {
+    const w = world({ allowed: [] });
+    const ask = await w.say(CHAT, BLAKE, "2026-11-04T20:45:00Z", "The October filter drops the last day of the month");
+    const mine = await w.say(CHAT, SAM, "2026-11-04T21:00:00Z", "I'll log a ticket for the filter", { replyToId: ask.messageId });
+    await w.run(CHAT, [ask, mine]);
+    const k = (await w.convs.commitmentsInChat(CHAT.chatId))[0]!;
+    expect(k.conversationId).toBeNull();
+    const asked: string[] = [];
+    const byClient: Record<string, WorkItem[]> = {
+      contoso: [
+        aWorkItem({ id: 4201, title: "Month end filter", assignedTo: null, assignedToMe: false }),
+        aWorkItem({ id: 4202, title: "October filter last day", assignedTo: null, assignedToMe: false }),
+        aWorkItem({ id: 4203, title: "Filter panel styling", assignedToMe: true }),
+        aWorkItem({ id: 4204, title: "Vendor login", assignedTo: null, assignedToMe: false }),
+      ],
+      wingtip: [aWorkItem({ id: 9901, title: "October filter last day of the month" })],
+    };
+    const sam = (await people(w, { more: { openItems: async (_cfg, key) => (asked.push(key), byClient[key] ?? []) } })).as(SAM);
+    const r = await sam.run<{ available: boolean; items: { id: number; reason: string }[] }>("my_promises.search", { id: k.id });
+    expect(asked).toEqual(["contoso"]);
+    expect(r.items.map((x) => [x.id, x.reason])).toEqual([
+      [4203, "Assigned to you · matches filter"],
+      [4202, "Matches filter, october, last"],
+      [4201, "Matches filter, month"],
+    ]);
+    // Typing still searches, with no conversation (it used to show nothing).
+    expect((await sam.run<{ items: { id: number }[] }>("my_promises.search", { id: k.id, query: "vendor" })).items.map((x) => x.id)).toEqual([4204]);
+    // Only my own promise.
+    expect((await (await people(w)).as(EVAN).fail("my_promises.search", { id: k.id })).status).toBe(400);
   });
 });

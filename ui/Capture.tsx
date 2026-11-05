@@ -8,7 +8,8 @@ import { boxKind, parseTag, suggest, tagCompletions, takeTag, type BoxKind, type
 import { CLOSE_HOW, type Capture, type Size } from "../plan/types.ts";
 import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
-import { Fading, formClients, HOW_LABEL, WhoInput } from "./FollowUps.tsx";
+import { Fading, formClients, HOW_LABEL } from "./FollowUps.tsx";
+import { PersonPicker, type PersonValue } from "./PersonPicker.tsx";
 import { ItemLookup, NO_ITEM, parentPool, type ItemValue } from "./ItemLookup.tsx";
 import { clientColor } from "./labels.ts";
 
@@ -54,7 +55,8 @@ export function SortCapture({ capture, clients, today, onDone, onCancel }: { cap
   const [chosen, setChosen] = useState<BoxKind | null>(null);
   const kind = chosen ?? suggested;
   const [client, setClient] = useState<string | null>(capture.clientKey);
-  const [who, setWho] = useState(s.who);
+  // CV-3: Who through the PersonPicker; the rules' name starts it as plain text (it offers to link an exact match).
+  const [who, setWho] = useState<PersonValue>({ who: s.who, whoRef: null });
   const [what, setWhat] = useState(s.what);
   const [due, setDue] = useState(s.due ?? "");
   const [title, setTitle] = useState(s.title);
@@ -68,19 +70,18 @@ export function SortCapture({ capture, clients, today, onDone, onCancel }: { cap
   const features = useClientFeatures(client, kind === "draft" || kind === "draft_feature");
   const pool = useMemo(() => parentPool(kind === "draft_feature" ? features?.epics : features?.features, kind === "draft_feature" ? "epic" : "feature"), [features, kind]);
   useEffect(() => setParent(NO_ITEM), [client, kind]);
-  const whoId = useRef(`cap-who-${capture.id}`);
 
   const save = async (as: CaptureKind | "dismissed") => {
     setBusy(true);
     setError(null);
     try {
       const input =
-        as === "follow_up" ? { who, what, ...(due ? { due } : {}), clientKey: client, ...(channel ? { channel } : {}), ...(client && item.itemId ? { itemId: item.itemId } : {}) } :
+        as === "follow_up" ? { who: who.who, ...(who.whoRef && who.who.trim() ? { whoRef: who.whoRef } : {}), what, ...(due ? { due } : {}), clientKey: client, ...(channel ? { channel } : {}), ...(client && item.itemId ? { itemId: item.itemId } : {}) } :
         as === "draft" ? { clientKey: client, title, size, ...(parent.itemId ? { parentItemId: parent.itemId } : {}) } :
         as === "draft_feature" ? { clientKey: client, title, ...(parent.itemId ? { parentItemId: parent.itemId } : {}), ...(target ? { targetDate: target } : {}) } : {};
       await call("capture.route", { id: capture.id, as, ...input });
       const cname = clients.find((c) => c.clientKey === client)?.clientName ?? client;
-      onDone(as === "dismissed" ? "Dismissed" : as === "follow_up" ? `Follow-up saved${who ? `: owed to ${who}` : ""}${due ? `, due ${plainDay(due)}` : ""}` : as === "draft" ? `Draft story saved for ${cname}` : `Draft feature saved for ${cname}`);
+      onDone(as === "dismissed" ? "Dismissed" : as === "follow_up" ? `Follow-up saved${who.who.trim() ? `: owed to ${who.who.trim()}` : ""}${due ? `, due ${plainDay(due)}` : ""}` : as === "draft" ? `Draft story saved for ${cname}` : `Draft feature saved for ${cname}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save");
     } finally {
@@ -106,7 +107,7 @@ export function SortCapture({ capture, clients, today, onDone, onCancel }: { cap
           {kind === "follow_up" ? (
             <>
               <label className="wide">What <input value={what} onChange={(e) => setWhat(e.target.value)} maxLength={200} /></label>
-              <label>Who <WhoInput value={who} onChange={setWho} clientKey={client} id={whoId.current} /></label>
+              <label>Who <PersonPicker value={who} onChange={setWho} clientKey={client} /></label>
               <label>
                 Channel{" "}
                 <select aria-label="Channel" value={channel} onChange={(e) => setChannel(e.target.value)}>
@@ -200,7 +201,8 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
   const [choosing, setChoosing] = useState(false);
   const [tip, setTip] = useState(() => !tipSeen());
   const [chosen, setChosen] = useState<BoxKind | null>(initialKind);
-  const [who, setWho] = useState<string | null>(null);
+  // CV-3: the PersonPicker's value once touched; until then the rules' name from the text (plain, offered to link).
+  const [who, setWho] = useState<PersonValue | null>(null);
   const [due, setDue] = useState<string | null>(null);
   const [channel, setChannel] = useState("");
   const [item, setItem] = useState<ItemValue>(NO_ITEM);
@@ -220,7 +222,6 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
   const s = useMemo(() => suggest(text, client, today, clients), [text, client, today, clients]);
   const features = useClientFeatures(client, kind === "draft" || kind === "draft_feature");
   const pool = useMemo(() => parentPool(kind === "draft_feature" ? features?.epics : features?.features, kind === "draft_feature" ? "epic" : "feature"), [features, kind]);
-  const whoId = useRef(`cap-box-who-${Math.random().toString(36).slice(2)}`);
   useEffect(() => {
     if (autoFocus) input.current?.focus();
   }, [autoFocus]);
@@ -261,7 +262,8 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
     setSize("M");
     setTarget("");
   };
-  const whoNow = who ?? s.who;
+  const whoNow: PersonValue = who ?? { who: s.who, whoRef: null };
+  const whoName = whoNow.who.trim();
   const dueNow = due ?? s.due ?? "";
   const blocked = (kind === "draft" || kind === "draft_feature") && !client ? `A ${BOX_NAME[kind].toLowerCase()} needs a client: choose one with the client chip or type @` : null;
 
@@ -279,13 +281,13 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
       if (kind !== "later") {
         const sg = suggest(body, key, today, clients);
         const input =
-          kind === "follow_up" ? { clientKey: key, who: whoNow, what: sg.what || body, ...(dueNow ? { due: dueNow } : {}), ...(channel ? { channel } : {}), ...(key && item.itemId ? { itemId: item.itemId } : {}) } :
+          kind === "follow_up" ? { clientKey: key, who: whoNow.who, ...(whoNow.whoRef && whoName ? { whoRef: whoNow.whoRef } : {}), what: sg.what || body, ...(dueNow ? { due: dueNow } : {}), ...(channel ? { channel } : {}), ...(key && item.itemId ? { itemId: item.itemId } : {}) } :
           kind === "draft" ? { clientKey: key, title: sg.title || body, size, ...(parent.itemId ? { parentItemId: parent.itemId } : {}) } :
           { clientKey: key, title: sg.title || body, ...(parent.itemId ? { parentItemId: parent.itemId } : {}), ...(target ? { targetDate: target } : {}) };
         try {
           await call("capture.route", { id: r.capture.id, as: kind, ...input });
           const cn = key ? clientName(key) : "";
-          msg = kind === "follow_up" ? `Follow-up saved${whoNow ? `: owed to ${whoNow}` : ""}${dueNow ? `, due ${plainDay(dueNow)}` : ""}` : `${BOX_NAME[kind]} saved for ${cn}`;
+          msg = kind === "follow_up" ? `Follow-up saved${whoName ? `: owed to ${whoName}` : ""}${dueNow ? `, due ${plainDay(dueNow)}` : ""}` : `${BOX_NAME[kind]} saved for ${cn}`;
         } catch (e) {
           // The capture itself is saved; it waits in the Inbox to sort.
           msg = `Saved to the inbox; not sorted: ${e instanceof Error ? e.message : "that didn't work"}`;
@@ -406,7 +408,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
         <div className="cap-fields cap-box-fields" ref={fieldsRef} onKeyDown={onFieldKey} aria-label={`${BOX_NAME[kind]} details`} role="group">
           {kind === "follow_up" && (
             <>
-              <label>Who <WhoInput value={whoNow} onChange={setWho} clientKey={client} id={whoId.current} /></label>
+              <label>Who <PersonPicker value={whoNow} onChange={setWho} clientKey={client} /></label>
               <label>
                 Channel{" "}
                 <select aria-label="Channel" value={channel} onChange={(e) => setChannel(e.target.value)}>

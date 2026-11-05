@@ -296,19 +296,27 @@ function FollowUpForm({ p, onSave, onCancel }: { p: PromiseCard; onSave: (v: { w
   );
 }
 
-type Hit = { id: number; title: string; type: string; state: string; url: string };
+type Hit = { id: number; title: string; type: string; state: string; url: string; reason: string };
+/** CV-3: Link existing… with or without a conversation: likely items first (with why), then whatever is typed. */
 function PromiseLink({ p, onPick, onCancel }: { p: PromiseCard; onPick: (id: number) => void; onCancel: () => void }) {
-  const [q, setQ] = useState(p.likely ? `#${p.likely.id}` : "");
+  const [q, setQ] = useState("");
   const [hits, setHits] = useState<Hit[] | null>(null);
+  const [available, setAvailable] = useState(true);
   useEffect(() => {
-    if (p.conversationId === null) return setHits([]);
     let live = true;
-    const t = setTimeout(() => void call<{ items: Hit[] }>("conversations.search", { id: p.conversationId, query: q }).then((r) => live && setHits(r.items), () => live && setHits([])), 150);
+    const t = setTimeout(
+      () =>
+        void call<{ available: boolean; items: Hit[] }>("my_promises.search", { id: p.id, query: q }).then(
+          (r) => live && (setHits(r.items), setAvailable(r.available)),
+          () => live && setHits([]),
+        ),
+      q ? 150 : 0,
+    );
     return () => {
       live = false;
       clearTimeout(t);
     };
-  }, [q, p.conversationId]);
+  }, [q, p.id]);
   return (
     <div className="ask-form ask-link" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())}>
       <label>
@@ -316,13 +324,15 @@ function PromiseLink({ p, onPick, onCancel }: { p: PromiseCard; onPick: (id: num
         <input autoFocus value={q} maxLength={200} onChange={(e) => setQ(e.target.value)} placeholder="Search by title or #id" onKeyDown={(e) => e.key === "Enter" && hits?.[0] && (e.preventDefault(), onPick(hits[0].id))} />
       </label>
       {hits && (
-        <ul className="ask-hits" aria-label="Open items">
-          {hits.length === 0 && <li className="muted">No open items match</li>}
+        <ul className="ask-hits" aria-label={q ? "Open items" : "Likely items"}>
+          {!available && <li className="muted">DevOps couldn't be read for {p.clientName} just now</li>}
+          {available && hits.length === 0 && <li className="muted">{q ? "No open items match" : "No likely items. Search by title or #id"}</li>}
           {hits.map((h) => (
             <li key={h.id}>
               <button type="button" className="mini quiet" onClick={() => onPick(h.id)}>
                 <TypeIcon clientKey={p.clientKey} type={h.type} /> #{h.id} {h.title} <span className="muted">· {h.state}</span>
               </button>
+              <span className="ask-hit-why muted">{h.reason}</span>
             </li>
           ))}
         </ul>

@@ -191,6 +191,7 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
         color: c?.color ?? null,
         colorFrom: by.get(k) === null ? "suggested" : "admin",
         allowAi: c?.allowAi ?? false,
+        groupWithoutAi: c?.groupWithoutAi ?? true,
         attachmentsAi: false,
         openStates: c?.openStates ?? [],
         noBreakdown: c?.noBreakdown ?? [],
@@ -323,7 +324,7 @@ async function section(ops: AdminOps, s: AdminSection, meId: string, input: Reco
       return clientsSection(ops, rules, process, input.refresh === true, input.filter === "all");
     case "ai": {
       const [setup, spent, clients] = await Promise.all([ops.aiSetUp(), ops.appSpentMicros(), clientsSection(ops, rules, undefined, false, input.filter === "all")]);
-      return { ...rules.ai, ...setup, appSpentMicros: spent, zero: { person: rules.ai.personCapUsd === 0, app: rules.ai.appCapUsd === 0 }, filter: clients.filter, counts: clients.counts, clients: clients.clients.map((c) => ({ key: c.key, isClient: c.isClient, whyText: c.whyText, allowAi: c.allowAi, attachmentsAi: c.attachmentsAi })), keys: specList({ "ai.on": ORG_SPECS["ai.on"], "ai.model": ORG_SPECS["ai.model"], "ai.person_cap_usd": ORG_SPECS["ai.person_cap_usd"], "ai.app_cap_usd": ORG_SPECS["ai.app_cap_usd"] }) };
+      return { ...rules.ai, ...setup, appSpentMicros: spent, zero: { person: rules.ai.personCapUsd === 0, app: rules.ai.appCapUsd === 0 }, filter: clients.filter, counts: clients.counts, clients: clients.clients.map((c) => ({ key: c.key, isClient: c.isClient, whyText: c.whyText, allowAi: c.allowAi, groupWithoutAi: c.groupWithoutAi, attachmentsAi: c.attachmentsAi })), keys: specList({ "ai.on": ORG_SPECS["ai.on"], "ai.model": ORG_SPECS["ai.model"], "ai.person_cap_usd": ORG_SPECS["ai.person_cap_usd"], "ai.app_cap_usd": ORG_SPECS["ai.app_cap_usd"] }) };
     }
     case "conversations":
       // CV-1 lists the settings it needs; they are hosted here as they appear (read through the settings reader).

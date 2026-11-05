@@ -159,14 +159,30 @@ export function SignInScreen({ message: first }: { message: string | null }) {
  * Step 16.2: my initials at the right of the top bar, with a menu: Settings and Sign out (or Sign in). Without a
  * sign-in configured it still opens Settings, so Settings is always one click away.
  */
-export function PersonChip({ onOpen, onSettings }: { onOpen: (at: { x: number; y: number }, step: MenuStep) => void; onSettings: () => void }) {
+/** The account menu (Settings, Sign out or Sign in) and its title: the person chip's, and the phone's ⋯ first row (CV-3). */
+export function useAccountMenu(onSettings: () => void): { title: string; step: () => MenuStep } {
   const { status, signIn, signOut } = useContext(AuthCtx);
   const p: Person | null = status?.person ?? null;
   const signedIn = status?.state === "signed_in" || status?.state === "unavailable";
+  const step = (): MenuStep => {
+    const items: MenuItem[] = [{ id: "settings", label: "Settings", hint: ",", run: onSettings }];
+    if (status?.configured && signedIn) items.push({ id: "signout", label: "Sign out", action: "auth.sign_out", run: () => void signOut() });
+    else if (status?.configured) items.push({ id: "signin", label: "Sign in", run: () => void signIn() });
+    return { title: p ? p.name : "You", items };
+  };
+  return { title: p ? p.name : "You", step };
+}
+
+/** CV-3: menuOnly (the phone): only the Sign in button when it's needed; the chip itself is ⋯'s first row there. */
+export function PersonChip({ onOpen, onSettings, menuOnly = false }: { onOpen: (at: { x: number; y: number }, step: MenuStep) => void; onSettings: () => void; menuOnly?: boolean }) {
+  const { status, signIn } = useContext(AuthCtx);
+  const p: Person | null = status?.person ?? null;
+  const signedIn = status?.state === "signed_in" || status?.state === "unavailable";
   const label = !status?.configured ? "Settings" : p ? `Signed in as ${p.name}${status.state === "unavailable" ? " (offline)" : ""}` : "Not signed in";
+  const account = useAccountMenu(onSettings);
   // Step 16.4: my Entra photo with my presence on its corner; initials when there's no photo or no permission.
-  const photos = usePhotos({ me: !!p && signedIn });
-  const presence = usePresence({ me: !!p && signedIn });
+  const photos = usePhotos({ me: !!p && signedIn && !menuOnly });
+  const presence = usePresence({ me: !!p && signedIn && !menuOnly });
   // A2: the top bar always offers the way back in: a Sign in button while Microsoft can't say who this is.
   const needsSignIn = !!status?.configured && !signedIn;
   return (
@@ -176,6 +192,7 @@ export function PersonChip({ onOpen, onSettings }: { onOpen: (at: { x: number; y
         Sign in
       </button>
     )}
+    {!menuOnly && (
     <button
       type="button"
       className={`person-chip${p ? " with-avatar" : ""}`}
@@ -184,14 +201,12 @@ export function PersonChip({ onOpen, onSettings }: { onOpen: (at: { x: number; y
       aria-label={`${label}. Menu: Settings${status?.configured ? (signedIn ? ", Sign out" : ", Sign in") : ""}`}
       onClick={(e) => {
         const r = e.currentTarget.getBoundingClientRect();
-        const items: MenuItem[] = [{ id: "settings", label: "Settings", hint: ",", run: onSettings }];
-        if (status?.configured && signedIn) items.push({ id: "signout", label: "Sign out", action: "auth.sign_out", run: () => void signOut() });
-        else if (status?.configured) items.push({ id: "signin", label: "Sign in", run: () => void signIn() });
-        onOpen({ x: r.right, y: r.bottom + 4 }, { title: p ? p.name : "You", items });
+        onOpen({ x: r.right, y: r.bottom + 4 }, account.step());
       }}
     >
       {p ? <Avatar name={p.name} initials={p.initials} photo={photos.me} word={presence.me} size={28} /> : status?.configured ? "?" : "Me"}
     </button>
+    )}
     </>
   );
 }

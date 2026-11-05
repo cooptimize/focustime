@@ -16,11 +16,13 @@
 // until Sort unsorted. A FocusTime user's own message with a promise phrase still becomes their promise.
 // Nothing here logs text: counts and kinds only.
 import type { AiService } from "../ai/service.ts";
+import type { AppConfig } from "../config/schema.ts";
+import { NO_CLIENT_RULES } from "../config/org.ts";
 import { AiError } from "../ai/types.ts";
-import { askTitle } from "../plan/asks.ts";
+import { askTitle, DEFAULT_ASK_SETTINGS, matchAsk, type AskSettings, type IncomingMessage } from "../plan/asks.ts";
 import { isExternal } from "../plan/chats.ts";
 import {
-  BadAnswer, buildUpdate, checkDue, checkUpdate, dueFromText, dueOf, hintFor, mergeByGroup, messageGroups, NEAR_MINUTES, promisePhrase, promiseWhatWithoutAi, ruleVerdict, statusOf, UPDATE_INSTRUCTIONS, UPDATE_SCHEMA, UPDATE_TASK,
+  BadAnswer, buildUpdate, checkDue, checkUpdate, dueFromText, dueOf, hintFor, mergeByGroup, messageGroups, NEAR_MINUTES, oneLine, promisePhrase, promiseWhatWithoutAi, ruleVerdict, statusOf, UPDATE_INSTRUCTIONS, UPDATE_SCHEMA, UPDATE_TASK,
   type BatchMessage, type Commitment, type Conversation, type Hint, type OpenConversation, type Participant, type UpdateAnswer,
 } from "../plan/conversations.ts";
 import type { ClientChat, FocusUser, TeamsMessage } from "../plan/requests.ts";
@@ -54,6 +56,10 @@ export type PipelineDeps = {
   /** A FocusTime author's own zone and promise phrases (their settings), or null. */
   author: (userId: string) => Promise<AuthorSettings | null>;
   chatCap?: number;
+  /** CV-3: the client's Rule "Group messages without AI": while AI is off (or not set up), group by rules only. */
+  groupWithoutAi?: boolean;
+  /** The team's request phrases (AP-1's rules), for a rules-only conversation's first message. */
+  requestPhrases?: readonly string[];
 };
 
 export type PipelineResult = { work: number; chatter: number; acks: number; unsorted: number; conversations: number; commitments: number; aiCalls: number; aiOutcome: string | null };
@@ -150,6 +156,28 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
     if (h) hints.set(m.messageId, h);
   }
 
+  // The rules-only ending: promises, late thanks, wind-down and status.
+  const finishByRules = async () => {
+    out.commitments += await promisesByRule(d, chat, work, groups, placed, [...before, ...work]);
+    await settleLateAcks();
+    for (const [id, at] of acked) {
+      const c = await d.convs.conversation(id);
+      if (c && !c.closedAt && !c.windDown && Date.parse(at) > Date.parse(c.lastWorkAt)) await d.convs.updateConversation(id, { windDown: true, lastAt: Date.parse(at) > Date.parse(c.lastAt) ? at : c.lastAt });
+    }
+    for (const id of touched) await refreshStatus(d, id);
+    return out;
+  };
+
+  // 2a. CV-3: AI off for this client (AI for FocusTime, Allow AI, or no provider key) with the Rule on: conversations
+  // by rules only, decided before any AI call (none is counted). Caps and provider errors aren't "off": they wait.
+  if (d.groupWithoutAi) {
+    const why = d.ai ? await d.ai.availability(chat.clientKey) : "not_set_up";
+    if (why !== "ok") {
+      await groupByRules(d, chat, work, { all, placed, touched, out, reason: why });
+      return finishByRules();
+    }
+  }
+
   // 2. AI, when it may.
   let answer: ReturnType<typeof checkUpdate> | null = null;
   let reason: string | null = null;
@@ -198,14 +226,7 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
         out.unsorted++;
       }
     }
-    out.commitments += await promisesByRule(d, chat, work, groups, placed, [...before, ...work]);
-    await settleLateAcks();
-    for (const [id, at] of acked) {
-      const c = await d.convs.conversation(id);
-      if (c && !c.closedAt && !c.windDown && Date.parse(at) > Date.parse(c.lastWorkAt)) await d.convs.updateConversation(id, { windDown: true, lastAt: Date.parse(at) > Date.parse(c.lastAt) ? at : c.lastAt });
-    }
-    for (const id of touched) await refreshStatus(d, id);
-    return out;
+    return finishByRules();
   }
 
   // 3b. The AI's answer.
@@ -284,6 +305,105 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
     await refreshStatus(d, id);
   }
   return out;
+}
+
+/** CV-3: the client's grouping Rule (on by default) and the team's request phrases, for the shared pipeline. */
+export function groupingRules(cfg: AppConfig, clientKey: string): Pick<PipelineDeps, "groupWithoutAi" | "requestPhrases"> {
+  return { groupWithoutAi: cfg.org?.clients[clientKey]?.groupWithoutAi ?? NO_CLIENT_RULES.groupWithoutAi, requestPhrases: cfg.org?.phrases.team.request ?? cfg.asks.requestPhrases };
+}
+
+/** A rules-only conversation's working view: who is in it, who was @mentioned, each author's last message. */
+type RuleConv = { id: number; lastAt: string; participants: Set<string>; mentioned: Set<string>; lastBy: Map<string, string> };
+const key = (id: string | null | undefined) => (id ?? "").toLowerCase();
+
+/**
+ * CV-3: rules-only grouping (AI off for the client, the Rule on), one chat, in time order. A message joins an open
+ * conversation of this chat when it (1) replies to a message in it, (2) @mentions someone in it (the latest such),
+ * (2b) comes from someone @mentioned in it within 45 minutes of its last message, or (3) comes from an author within
+ * 45 minutes of their own last message in it. Otherwise (4) a message AP-1's Request rules pick out starts one, with
+ * its author's still-unsorted messages from the 45 minutes before; its title is its first message, shortened, with no
+ * summary. Anything else (5) waits as unsorted with the reason, as before. Never across chats, so never across clients.
+ */
+async function groupByRules(d: PipelineDeps, chat: ClientChat, work: readonly BatchMessage[], x: { all: readonly Conversation[]; placed: Map<string, number>; touched: Set<number>; out: PipelineResult; reason: string }) {
+  const convs: RuleConv[] = [];
+  for (const c of x.all.filter((c) => !c.closedAt && c.chatId === chat.chatId)) {
+    const rc: RuleConv = { id: c.id, lastAt: c.lastAt, participants: new Set(c.participants.map((p) => key(p.id))), mentioned: new Set(), lastBy: new Map() };
+    const places = (await d.convs.placesIn([c.id])).filter((p) => p.role === "work").slice(-20);
+    for (const p of places) {
+      const m = await d.teams.message(p.chatId, p.messageId);
+      if (!m) continue;
+      for (const who of m.mentions) rc.mentioned.add(key(who.id));
+      if (m.senderId && (rc.lastBy.get(key(m.senderId)) ?? "") < m.createdAt) rc.lastBy.set(key(m.senderId), m.createdAt);
+    }
+    convs.push(rc);
+  }
+  const note = (rc: RuleConv, m: BatchMessage) => {
+    if (m.createdAt > rc.lastAt) rc.lastAt = m.createdAt;
+    if (m.senderId) {
+      rc.participants.add(key(m.senderId));
+      if ((rc.lastBy.get(key(m.senderId)) ?? "") < m.createdAt) rc.lastBy.set(key(m.senderId), m.createdAt);
+    }
+    for (const who of m.mentions) rc.mentioned.add(key(who.id));
+  };
+  const latest = (cs: readonly RuleConv[]) => [...cs].sort((a, b) => Date.parse(b.lastAt) - Date.parse(a.lastAt))[0];
+  const within = (from: string, to: string) => (Date.parse(to) - Date.parse(from)) / 60_000 <= NEAR_MINUTES && Date.parse(to) >= Date.parse(from);
+  const targetOf = (m: BatchMessage): RuleConv | undefined => {
+    const replied = m.replyToId ? x.placed.get(m.replyToId) : undefined;
+    const byReply = replied !== undefined ? convs.find((c) => c.id === replied) : undefined;
+    if (byReply) return byReply;
+    const byMention = latest(convs.filter((c) => m.mentions.some((who) => c.participants.has(key(who.id)))));
+    if (byMention) return byMention;
+    const s = key(m.senderId);
+    if (!s) return undefined;
+    const mentionedPoster = latest(convs.filter((c) => c.mentioned.has(s) && within(c.lastAt, m.createdAt)));
+    if (mentionedPoster) return mentionedPoster;
+    return latest(convs.filter((c) => c.lastBy.has(s) && within(c.lastBy.get(s)!, m.createdAt)));
+  };
+  const settings: AskSettings = { ...DEFAULT_ASK_SETTINGS, requestPhrases: [...(d.requestPhrases ?? DEFAULT_ASK_SETTINGS.requestPhrases)], ackPhrases: [...d.ackPhrases] };
+  const isRequest = (m: BatchMessage) =>
+    m.external && !!d.homeTenant && !!matchAsk({ chatId: chat.chatId, messageId: m.messageId, clientKey: chat.clientKey, authorId: m.senderId, authorTenant: null, createdAt: m.createdAt, text: m.text, hasImage: m.hasImage, hasFile: m.hasFile, mentionedUserIds: m.mentions.map((w) => w.id) } as IncomingMessage, { homeTenant: d.homeTenant, me: null, members: chat.members ?? [], settings });
+  /** This batch's messages left unsorted so far, for a new conversation to take its author's earlier ones. */
+  const unsorted: BatchMessage[] = [];
+
+  for (const m of work) {
+    const t = targetOf(m);
+    if (t) {
+      await joinByRule(d, chat, m, t.id, x.all);
+      note(t, m);
+      x.placed.set(m.messageId, t.id);
+      x.touched.add(t.id);
+      x.out.work++;
+      continue;
+    }
+    if (isRequest(m)) {
+      // The author's still-unsorted messages from the 45 minutes before (this batch's, then stored ones) come along.
+      const earlier: BatchMessage[] = unsorted.filter((u) => same(u.senderId, m.senderId) && within(u.createdAt, m.createdAt));
+      for (const s of await d.teams.messagesBefore(chat.chatId, earlier[0]?.createdAt ?? m.createdAt, 12)) {
+        if (!same(s.senderId, m.senderId) || !within(s.createdAt, m.createdAt) || earlier.some((e) => e.messageId === s.messageId)) continue;
+        if ((await d.convs.placeOf(chat.chatId, s.messageId))?.role === "unsorted") earlier.push(batchOf(s, chat, d.homeTenant));
+      }
+      const ms = [...earlier, m].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      const titled = ms.find((y) => y.text.trim());
+      const c = await d.convs.addConversation({
+        chatId: chat.chatId, clientKey: chat.clientKey, title: titled ? oneLine(titled.text, 80) : `${m.hasImage ? "An image" : "A file"} from ${firstName(m.senderName ?? "someone")}`, summary: "",
+        participants: withParticipants([], ms.map(participantOf)), firstAt: ms[0]!.createdAt, lastAt: m.createdAt, lastWorkAt: m.createdAt,
+      });
+      await d.convs.place(ms.map((y) => ({ chatId: chat.chatId, messageId: y.messageId, conversationId: c.id, role: "work" as const, reason: null, placedBy: "rule" as const, at: y.createdAt })));
+      const rc: RuleConv = { id: c.id, lastAt: m.createdAt, participants: new Set(), mentioned: new Set(), lastBy: new Map() };
+      for (const y of ms) note(rc, y), x.placed.set(y.messageId, c.id);
+      convs.push(rc);
+      x.touched.add(c.id);
+      const fromBatch = earlier.filter((e) => unsorted.includes(e));
+      for (const e of fromBatch) unsorted.splice(unsorted.indexOf(e), 1);
+      x.out.unsorted -= fromBatch.length;
+      x.out.work += 1 + fromBatch.length;
+      x.out.conversations++;
+      continue;
+    }
+    await d.convs.place([{ chatId: chat.chatId, messageId: m.messageId, conversationId: null, role: "unsorted", reason: x.reason, placedBy: "rule", at: m.createdAt }]);
+    unsorted.push(m);
+    x.out.unsorted++;
+  }
 }
 
 /** Joins a message to a conversation by rule (a reply or a mention while AI is unavailable): a new message, reopening it. */
