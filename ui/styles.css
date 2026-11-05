@@ -4035,7 +4035,8 @@ button.ask-label { cursor: pointer; }
 .adm-table thead th { font-weight: 500; color: var(--text-faint); white-space: nowrap; }
 .adm-table tbody th { font-weight: 500; }
 .adm-table input[type="number"] { width: 6em; }
-.adm-scroll { overflow-x: auto; max-width: 100%; }
+/* position: a screen-reader label inside (absolute) stays in the scroll box instead of widening the page. */
+.adm-scroll { overflow-x: auto; max-width: 100%; position: relative; }
 .adm-email { display: block; font-weight: 400; }
 .adm-leads { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .adm-val { max-width: 22em; overflow-wrap: anywhere; }
@@ -4218,3 +4219,4 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .set-picker { display: flex; gap: 8px; align-items: center; position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 8px 0; }
 .set-picker label { flex: 1; min-width: 0; }
 .set-picker select { width: 100%; font: inherit; font-size: var(--fs-3); padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--text); }
+.adm-block { display: block; }

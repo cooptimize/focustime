@@ -691,7 +691,8 @@ function PositionMap({ positions, unmapped, levels, saver }: { positions: Positi
       <h3>Positions to levels {unmapped > 0 && <span className="adm-kind">{unmapped} not mapped</span>}</h3>
       <p className="muted">Each Cooptimizer's level comes from their Dataverse position. A position that isn't mapped gives no level: those people show Level not set and use the Consultant defaults.</p>
       <SaveMark s={saver.status("org", "org.position_levels")} retry={() => void saver.save("org", "org.position_levels", shown, "Positions")} />
-      <table className="adm-table">
+      <div className="adm-scroll">
+        <table className="adm-table">
         <thead>
           <tr>
             <th scope="col">Position in Dataverse</th>
@@ -720,7 +721,8 @@ function PositionMap({ positions, unmapped, levels, saver }: { positions: Positi
             );
           })}
         </tbody>
-      </table>
+        </table>
+      </div>
     </section>
   );
 }
@@ -770,7 +772,15 @@ function PersonRow({ p, levels, leadsShown, saver, onOverride, onRemove, others 
       <SaveMark s={saver.status(scope, "automation")} retry={() => void saver.save(scope, "automation", p.automation ? true : undefined, `${p.name}: automation account`)} />
     </td>
   );
-  const dataverse = <td title={p.dataverseText}>{p.dataverseMatch ? <span>Matched<span className="set-hint">{p.dataverseText}</span></span> : <span className="field-problem">Not matched<span className="set-hint">{p.dataverseText}</span></span>}</td>;
+  // The word, then the how on its own line (matched by which key, or why there's no sign-in to match yet).
+  const dvWord = !p.dataverseMatch ? "Not matched" : p.signedIn ? "Matched" : "In Dataverse";
+  const dvHint = p.dataverseText.replace(/^In Dataverse, |^Matched /, "").replace(/^./, (c) => c.toUpperCase());
+  const dataverse = (
+    <td title={p.dataverseText}>
+      <span className={p.dataverseMatch ? undefined : "field-problem"}>{dvWord}</span>
+      <span className="set-hint adm-block">{dvHint}</span>
+    </td>
+  );
   const name = (
     <th scope="row">
       {p.name}
@@ -823,7 +833,7 @@ function PersonRow({ p, levels, leadsShown, saver, onOverride, onRemove, others 
           ))}
         </select>
         {p.levelSource === "override" && <span className="adm-mark">Override</span>}
-        {!p.level && <span className="set-hint">Uses Consultant defaults{p.positionName ? ` (position ${p.positionName} isn't mapped)` : ""}</span>}
+        {!p.level && <span className="set-hint adm-block">Uses Consultant defaults{p.positionName ? ` (position ${p.positionName} isn't mapped)` : ""}</span>}
       </td>
       <td>
         <ul className="adm-leads">
