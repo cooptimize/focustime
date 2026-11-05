@@ -87,7 +87,7 @@ describe.skipIf(!CHROMIUM)("Plan the day's right pane (fix/planday-pane)", () =>
 
     // "plan the week": Plan the week of that week, on that client.
     await page.locator(".pd2-right .pd2-none").getByRole("button", { name: "plan the week" }).click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/week/plan/2026-11-09");
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/week/commit/2026-11-09");
     await expect.poll(() => page.locator(".pw-open-card .pl-unit-name").first().textContent(), { timeout: 15_000 }).toContain("Northwind");
     expect(errors).toEqual([]);
     await page.close();

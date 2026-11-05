@@ -20,7 +20,6 @@ import { addSections, defaultBlock, doneAction, type PriorityRow } from "../plan
 import { blockFitWords, dayHeadline, fitWords, planFit, planMinutes, trimCandidates } from "../plan/fit.ts";
 import { freeMinutes } from "../week/free.ts";
 import { weekList } from "../plan/weeklist.ts";
-import { dayLabel } from "../plan/days.ts";
 import type { PlanDayState, Pick } from "../plan/types.ts";
 import type { Day, Half, Slot, WorkItem } from "../week/types.ts";
 import { clientColor, halfName, halfTag, longDate, shortDate, shortRange } from "./labels.ts";
@@ -32,11 +31,11 @@ import { focusLabel } from "../plan/focus.ts";
 import { formatDuration } from "../week/format.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { call } from "./api.ts";
-import { copy, DueBadge } from "./FollowUps.tsx";
+import { DueBadge } from "./FollowUps.tsx";
 import { BreakDown } from "./DetailPanel.tsx";
 import { dueOrder } from "../plan/due.ts";
 import { isTypingTarget, topOverlay } from "./keys.ts";
-import { halfLabel, itemMenu, pickMenu, possessive, spanText, weekTargets } from "./menu.ts";
+import { halfLabel, itemMenu, openCoopBrief, pickMenu, possessive, spanText, weekTargets } from "./menu.ts";
 import { MenuCtx, MenuRow, useMenu } from "./Menus.tsx";
 import { TimeboxDetails, useTimeboxes } from "./Timeboxes.tsx";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
@@ -210,7 +209,8 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
           </button>
         ) : null
       }
-      mode={<ModeArea done={{ onClick: done, title: past ? "Back to Now (Esc)" : committed ? "Back to Now (C)" : "Save this plan for the day (C)" }}>{switcher}</ModeArea>}
+      // NV-1: on Week's Board; Commit today (C) saves the plan, then back to the whole week.
+      mode={<ModeArea done={{ onClick: done, label: past || committed ? "Back to the week" : `Commit ${day.date === today ? "today" : weekdayOf(day.date)}`, title: past ? "Back to the week (Esc)" : committed ? "Back to the week (C)" : "Save this plan for the day, then back to the week (C)" }}>{switcher}</ModeArea>}
     />
   );
   const notices = (
@@ -281,7 +281,6 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
       )}
       <OutsideLine label="Before your blocks" events={split.before} tz={tz} />
       {state.carryOver.length > 0 && selBlock && <CarryOver picks={state.carryOver} date={day.date} to={selBlock.half} act={act} />}
-      {state.carryTarget && state.carryTarget < day.date && <p className="muted pd-note">Unfinished work from earlier days shows on {dayLabel(state.carryTarget)}.</p>}
       {blocks.map((b) => (
         <DayBlock key={b.half} b={b} selected={b.half === sel} onSelect={() => setSel(b.half)} overflow={day.kind !== "work" && b.half !== "EVE"} tz={tz} now={now} colors={colors} name={name} act={act} hintPick={hintPick} weekFeatures={state.weekFeatures} whens={whens} />
       ))}
@@ -750,11 +749,12 @@ function Priority({ p, clientKey, date, add, chosen, onChoose }: { p: PriorityRo
   return (
     <li className={`pd2-feature${p.breakDown ? " needs" : ""}${chosen ? " chosen" : ""}`} data-feature={p.ref.itemId}>
       <div className="pd2-feat-head">
+        {p.item && <TypeIcon clientKey={clientKey} type={p.item.type} />}
         <button type="button" className="pd2-feat-name" aria-pressed={chosen} onClick={onChoose} title={chosen ? "Chosen: a story typed below goes under it. Click to unchoose" : "Choose it: a story typed below goes under it"}>
           {p.ref.title}
         </button>
         {nice}
-        {p.breakDown ? <NeedsStories clientKey={clientKey} date={date} feature={{ itemId: p.ref.itemId, title: p.ref.title }} /> : <span className="pd2-count">{p.planned} of {p.total} {p.total === 1 ? "story" : "stories"} planned</span>}
+        {p.breakDown ? <NeedsStories clientKey={clientKey} date={date} feature={{ itemId: p.ref.itemId, title: p.ref.title, ...(p.item ? { type: p.item.type } : {}) }} /> : <span className="pd2-count">{p.planned} of {p.total} {p.total === 1 ? "story" : "stories"} planned</span>}
       </div>
       {(p.stories.length > 0 || p.drafts.length > 0) && (
         <ul>
@@ -773,26 +773,16 @@ function Priority({ p, clientKey, date, add, chosen, onChoose }: { p: PriorityRo
 }
 
 /** "Needs stories · Draft stories · Coop brief" on a feature with no stories (U4). */
-function NeedsStories({ clientKey, date, feature }: { clientKey: string; date: string; feature: { itemId: number; title: string } }) {
-  const area = useRef<HTMLTextAreaElement>(null);
-  const brief = async () => {
-    let msg: string;
-    try {
-      const r = await call<{ markdown: string }>("feature.brief", { weekStart: date, clientKey, itemId: feature.itemId });
-      msg = (await copy(r.markdown, area.current)) ? `Coop brief for #${feature.itemId} copied` : "Copy didn't work. Open Plan the week to copy it";
-    } catch (e) {
-      msg = e instanceof Error ? e.message : "Couldn't build the brief";
-    }
-    window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: msg }));
-  };
+function NeedsStories({ clientKey, date, feature }: { clientKey: string; date: string; feature: { itemId: number; title: string; type?: string } }) {
+  // NV-1: the Coop brief opens Break down's side panel (it copies there).
+  const brief = () => openCoopBrief(clientKey, { id: feature.itemId, title: feature.title, ...(feature.type ? { type: feature.type } : {}) }, date);
   return (
     <span className="pd2-needs">
       <span className="pd2-needs-word">Needs stories</span>
       <BreakDown clientKey={clientKey} item={{ id: feature.itemId, title: feature.title }} />
-      <button type="button" className="link-btn" onClick={() => void brief()}>
+      <button type="button" className="link-btn" onClick={brief}>
         Coop brief
       </button>
-      <textarea ref={area} className="sr-only" aria-hidden="true" tabIndex={-1} readOnly />
     </span>
   );
 }
@@ -842,8 +832,8 @@ function StoryBox({ clientKey, clientName, half, date, parent, parentTitle, act 
 /** Unfinished from earlier days: one "+" brings a pick into the selected block; ⋯ has the rest. */
 function CarryOver({ picks, date, to, act }: { picks: Pick[]; date: string; to: Half; act: PlanDayAct }) {
   return (
-    <section className="pd2-carry" aria-label="Unfinished from earlier">
-      <PlanLabel>Unfinished from earlier</PlanLabel>
+    <section className="pd2-carry" aria-label="From last week">
+      <PlanLabel>From last week</PlanLabel>
       <ul className="pd2-list">
         {picks.map((p) => (
           <MenuRow key={p.id} build={(env) => pickMenu(env, p)} label={`More for ${p.title}`} item={{ clientKey: p.clientKey, url: p.itemUrl }} className="pd2-add">

@@ -12,9 +12,10 @@ import { clientColor, slotRange } from "./labels.ts";
 import { countdown, timerLeft } from "./NowStrip.tsx";
 import { userZone } from "../week/zone.ts";
 
-export type BottomTab = "today" | "week" | "capture" | "more";
+/** NV-1: the same four tabs as the top bar. Capture is the + in the phone top bar. */
+export type BottomTab = "today" | "week" | "ahead" | "inbox";
 
-/** The bottom bar's icons, drawn in the tab's text color: a day, the week's half-days, a plus, three dots. */
+/** The bottom bar's icons, drawn in the tab's text color: a day, the week's half-days, bars ahead, a tray. */
 const BB_ICONS: Record<BottomTab, ReactNode> = {
   today: (
     <>
@@ -33,25 +34,24 @@ const BB_ICONS: Record<BottomTab, ReactNode> = {
       <rect x="17" y="13" width="4" height="6" rx="1" />
     </>
   ),
-  capture: (
+  ahead: (
     <>
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M12 8v8M8 12h8" />
+      <path d="M4 6h9M4 12h13M4 18h7" />
+      <path d="M17 4.5l2.5 1.5L17 7.5" />
     </>
   ),
-  more: (
+  inbox: (
     <>
-      <circle cx="6" cy="12" r="1.4" fill="currentColor" />
-      <circle cx="12" cy="12" r="1.4" fill="currentColor" />
-      <circle cx="18" cy="12" r="1.4" fill="currentColor" />
+      <path d="M4 13l2.5-7.5h11L20 13v5.5H4z" />
+      <path d="M4 13h4.5l1.5 2.5h4l1.5-2.5H20" />
     </>
   ),
 };
 
-/** Today, Week, Capture and More at the foot of the screen; the top bar keeps the logo, the VM dot and the avatar. */
-export function BottomBar({ current, inboxCount, dot, onTab }: { current: BottomTab | null; inboxCount: number; dot: boolean; onTab: (t: BottomTab, e: React.MouseEvent<HTMLButtonElement>) => void }) {
+/** NV-1: Today, Week, Ahead and Inbox at the foot of the screen; the top bar keeps the logo, the VM dot, Capture (+), ⋯ and the avatar. */
+export function BottomBar({ current, inboxCount, onTab }: { current: BottomTab | null; inboxCount: number; onTab: (t: BottomTab, e: React.MouseEvent<HTMLButtonElement>) => void }) {
   const tab = (t: BottomTab, label: string, extra?: ReactNode) => (
-    <button key={t} type="button" className="bb-tab" aria-current={current === t ? "page" : undefined} onClick={(e) => onTab(t, e)} aria-haspopup={t === "more" ? "menu" : undefined}>
+    <button key={t} type="button" className="bb-tab" aria-current={current === t ? "page" : undefined} onClick={(e) => onTab(t, e)}>
       <svg className="bb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         {BB_ICONS[t]}
       </svg>
@@ -63,8 +63,8 @@ export function BottomBar({ current, inboxCount, dot, onTab }: { current: Bottom
     <nav className="bottom-bar" aria-label="Tabs">
       {tab("today", "Today")}
       {tab("week", "Week")}
-      {tab("capture", "Capture")}
-      {tab("more", "More", (inboxCount > 0 || dot) && <span className="bb-dot" aria-label={inboxCount > 0 ? `${inboxCount} in the Inbox` : "Something new"} />)}
+      {tab("ahead", "Ahead")}
+      {tab("inbox", "Inbox", inboxCount > 0 && <span className="bb-count" aria-label={`${inboxCount} need you`}>{inboxCount}</span>)}
     </nav>
   );
 }

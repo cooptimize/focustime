@@ -64,3 +64,34 @@ describe("Plan the week", () => {
     expect(weekModeStatus(false, null, "2026-11-09")).toBeNull();
   });
 });
+
+// NV-1: Today's card for the moment of the day.
+import { momentCard } from "./modes.ts";
+describe("Today's moment card", () => {
+  const m = (time: string, over: Partial<DayFacts> = {}) => momentCard({ ...base, time, ...over });
+  it("Plan today in the morning while today isn't committed, gone once committed or at the afternoon's start", () => {
+    expect(m("08:00")).toEqual({ kind: "plan", done: false });
+    expect(m("12:59")).toEqual({ kind: "plan", done: false });
+    expect(m("10:00", { committed: true })).toBeNull();
+    expect(m("13:05", { checkinOffsetMinutes: 15 })).toBeNull();
+    expect(m("13:00")).toEqual({ kind: "checkin", done: false });
+  });
+  it("Midday check-in from the afternoon's start plus the offset until Close out is due; done is a small line", () => {
+    expect(m("13:10", { committed: true, checkinOffsetMinutes: 15 })).toBeNull();
+    expect(m("13:15", { committed: true, checkinOffsetMinutes: 15 })).toEqual({ kind: "checkin", done: false });
+    expect(m("15:59", { committed: true })).toEqual({ kind: "checkin", done: false });
+    expect(m("14:00", { committed: true, checkedIn: true })).toEqual({ kind: "checkin", done: true });
+  });
+  it("Close out from the end of the day minus its window (an hour, or the reminder when earlier); closed out shows done, even early", () => {
+    expect(m("16:00")).toEqual({ kind: "closeout", done: false });
+    expect(m("18:30")).toEqual({ kind: "closeout", done: false });
+    expect(m("15:00", { closeoutLeadMinutes: 120 })).toEqual({ kind: "closeout", done: false });
+    expect(m("14:00", { closedOut: true })).toEqual({ kind: "closeout", done: true });
+  });
+  it("nothing on another day, a day off or a day without hours", () => {
+    expect(m("09:00", { date: "2026-11-03" })).toBeNull();
+    expect(m("09:00", { workday: false })).toBeNull();
+    expect(m("09:00", { pmStart: null, end: null, committed: true })).toBeNull();
+    expect(m("09:00", { pmStart: null, end: null })).toEqual({ kind: "plan", done: false });
+  });
+});

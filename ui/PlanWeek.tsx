@@ -16,7 +16,7 @@ import { mondayOf } from "../week/dates.ts";
 import type React from "react";
 import { DraftEditorCtx, DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps, DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
-import { weekItemMenu, type MenuStep, type WeekItemFacts, type WeekItemOps } from "./menu.ts";
+import { openCoopBrief, weekItemMenu, type MenuStep, type WeekItemFacts, type WeekItemOps } from "./menu.ts";
 import { HoursStepper, SizeChip } from "./plan/Estimate.tsx";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from "react";
 import type { WeekLoadData, WeekPlanState } from "../actions/types.ts";
@@ -28,7 +28,6 @@ import { moveWithin, otherStoriesLine, pickDoneFrom, pinLabel, progressLabel, we
 import type { ClientWork, IsoDate, PortfolioItem, Slot, WorkItem } from "../week/types.ts";
 import { call } from "./api.ts";
 import { clientColor } from "./labels.ts";
-import { copy } from "./FollowUps.tsx";
 import { MenuCtx } from "./Menus.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 import { BreakDown, PanelShell } from "./DetailPanel.tsx";
@@ -106,7 +105,6 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [offer, setOffer] = useState<HeadsUp | null>(null);
-  const [brief, setBrief] = useState<{ id: number; text: string } | null>(null);
   const [folds, setFolds] = useState<Set<string>>(new Set());
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [dragging, setDragging] = useState<Drag | null>(null);
@@ -115,7 +113,6 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   const [query, setQuery] = useState("");
   const head = useRef<HTMLHeadingElement>(null);
   const search = useRef<HTMLInputElement>(null);
-  const briefArea = useRef<HTMLTextAreaElement>(null);
   const { open: openMenu } = useContext(MenuCtx);
   const openDraft = useContext(DraftEditorCtx);
   const tz = userZone(data);
@@ -140,7 +137,6 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
     void load();
   }, [load, version]);
   useEffect(() => {
-    setBrief(null);
     setPanel(null);
     setOffer(null);
     setOpenK(null);
@@ -276,19 +272,8 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
     typed: (k, title, tier) => act("weekplan.add_draft", { weekStart, clientKey: k, title, tier }, `Draft feature saved as ${tier === "must" ? "a must" : "a nice to have"}: ${title}. Add it in DevOps when you can`).then((r) => r !== null),
     quiet: (k, on) => void act("weekplan.nothing", { weekStart, clientKey: k, on }),
   };
-  const copyBrief = async (k: string, id: number) => {
-    try {
-      const r = await call<{ markdown: string; descriptionRead: boolean }>("feature.brief", { weekStart, clientKey: k, itemId: id });
-      setBrief({ id, text: r.markdown });
-      // The text box renders first so the fallback can select it.
-      await new Promise((res) => setTimeout(res, 0));
-      const ok = await copy(r.markdown, briefArea.current);
-      setNotice(ok ? `Coop brief for #${id} copied${r.descriptionRead ? "" : " (the description couldn't be read)"}` : "Copy didn't work: the brief is selected below, press Ctrl+C");
-      if (ok) setBrief(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not build the brief");
-    }
-  };
+  // NV-1: the Coop brief opens Break down's side panel (it copies there).
+  const copyBrief = (k: string, id: number) => openCoopBrief(k, { id, title: "" }, weekStart);
   const toggleFold = (key: string) => setFolds((s) => { const n = new Set(s); if (n.has(key)) n.delete(key); else n.add(key); return n; });
 
   // Step 16.2: Done commits (or commits the changes again), then goes back to Week.
@@ -358,12 +343,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
       ) : (
         notice && <p className="co-notice" role="status">{notice}</p>
       )}
-      {brief && (
-        <section className="co-section pw-brief" aria-label="Coop brief">
-          <h3>Coop brief <span className="muted">#{brief.id}</span> <button type="button" className="mini" onClick={() => setBrief(null)}>Hide</button></h3>
-          <textarea ref={briefArea} readOnly value={brief.text} rows={10} />
-        </section>
-      )}
+
       <WeekCells days={days} fits={fits} items={items} open={openK} past={past} colors={data.clients} dragging={dragging} dragOver={dragOver} setDragOver={setDragOver}
         onOpen={setOpenK}
         onPin={(d, date, half) => {
@@ -728,7 +708,7 @@ function ReadyRow({ f, clientName, tz, drafts, onBrief, onMark, onAsk, onDraft, 
       <span className="pw-acts">
         {f.kind === "needs_breakdown" && (
           <>
-            <button type="button" className="mini" onClick={onBrief}>Copy Coop brief</button>
+            <button type="button" className="mini" onClick={onBrief}>Coop brief</button>
             {f.markedAt ? (
               <span className="muted">Being broken down since {stamp(f.markedAt, tz)} <button type="button" className="mini" onClick={() => onMark(false)}>Unmark</button></span>
             ) : (

@@ -1,5 +1,5 @@
-// Step 16.2: four tabs (1–4), one mode switch per tab, planning as a mode with Done, addresses (back and reload), P,
-// entry points from the Week and notification routes. Demo mode (fictional data), clock pinned to Mon Nov 2, 9:30 AM.
+// Step 16.2, NV-1: four tabs (1–4: Today · Week · Ahead · Inbox), Week's Board · Commit and Ahead's Roadmap · Plan ahead,
+// Plan today as the Board focused on a day, addresses (back and reload), P, entry points from the Week and notification routes. Demo mode (fictional data), clock pinned to Mon Nov 2, 9:30 AM.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
@@ -19,9 +19,9 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
 
   it("four tabs in order, no Plan tab, no ritual chips, no context line; 1–4 switch them", async () => {
     const { page, errors } = await freshPage(h);
-    await expect(page.locator(".views .view-tab").allTextContents()).resolves.toEqual(["Today", "Week", "Roadmap", expect.stringMatching(/^Inbox/)]);
+    await expect(page.locator(".views .view-tab").allTextContents()).resolves.toEqual(["Today", "Week", "Ahead", expect.stringMatching(/^Inbox/)]);
     await expect(page.locator(".ritual-bar, .context-line, .weeknav").count()).resolves.toBe(0);
-    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Roadmap", "#/roadmap"], ["4", "Inbox", "#/inbox"], ["1", "Today", "#/today"]] as const) {
+    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Ahead", "#/ahead"], ["4", "Inbox", "#/inbox"], ["1", "Today", "#/today"]] as const) {
       await page.keyboard.press(k);
       await expect.poll(() => tab(page)).toMatch(new RegExp(`^${name}`));
       expect(await hash(page)).toBe(h2);
@@ -30,47 +30,44 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.close();
   }, T);
 
-  it("Today's switch: Now · Plan · Check-in · Close out with a due dot on Plan in the morning; P toggles; Done commits and returns", async () => {
+  it("Today has no switch; P opens Plan today on Week's Board; Back returns; Commit today commits and the card goes", async () => {
     const { page } = await freshPage(h);
-    await expect(page.locator(".mode-switch .ms-btn").allTextContents()).resolves.toEqual(["Now", expect.stringMatching(/^Plan/), "Check-in", "Close out"]);
-    // Demo Monday 9:30 AM, not planned yet: Plan is due.
-    await expect(page.locator(".mode-switch .ms-btn", { hasText: "Plan" }).locator(".ms-due").count()).resolves.toBe(1);
+    expect(await page.locator(".today-view .mode-switch").count()).toBe(0);
+    // Demo Monday 9:30 AM, not planned yet: the Plan today card shows and Week's Board has the due dot.
+    await page.getByRole("region", { name: "Plan today" }).waitFor();
     await page.keyboard.press("p");
     await page.waitForSelector(".pd2-left");
-    expect(await hash(page)).toBe("#/today/plan");
+    expect(await hash(page)).toBe("#/week/day");
     await expect(page.locator(".pd2-title h2").textContent()).resolves.toContain("Plan today");
-    await expect.poll(() => mode(page)).toMatch(/^Plan/);
-    await page.keyboard.press("p");
-    await expect.poll(() => mode(page)).toBe("Now");
-    // Back in the browser returns to Plan; forward to Now.
+    await expect.poll(() => tab(page)).toBe("Week");
+    expect(await page.locator(".mode-switch .ms-btn", { hasText: "Board" }).locator(".ms-due").count()).toBe(1);
+    // Back in the browser returns to Today; forward to Plan today.
     await page.goBack();
-    await page.waitForSelector(".pd2-left");
-    await page.goForward();
     await expect.poll(() => hash(page)).toBe("#/today");
-    // Plan, add one pick, Done: committed (✓ on Plan) and back to Now.
-    await page.keyboard.press("p");
+    await page.goForward();
     await page.waitForSelector(".pd2-left");
+    // Add one pick, Commit today: committed and back to the Board; Today's card is gone.
     await page.locator(".pd2-right li.pd2-add:not(.planned) button.pd2-plus").first().click();
     await page.locator(".pd2-right li.pd2-add.planned").first().waitFor();
     await page.locator(".pd2-head .done-btn").click();
-    // The first Done may offer Timebox my day; Not now, then Done again goes back.
-    await expect.poll(async () => (await hash(page)) === "#/today" || (await page.locator(".pd-committed").count()) > 0).toBe(true);
+    await expect.poll(async () => /^#\/week(\/2026-11-02)?$/.test(await hash(page)) || (await page.locator(".pd-committed").count()) > 0).toBe(true);
     if (await page.locator(".pd-committed").count()) {
       await page.locator(".pd-committed").getByRole("button", { name: "Not now" }).click();
       await page.locator(".pd2-head .done-btn").click();
     }
-    await expect.poll(() => hash(page)).toBe("#/today");
-    await expect.poll(() => page.locator(".mode-switch .ms-btn", { hasText: "Plan" }).locator(".ms-done").count()).toBe(1);
+    await expect.poll(() => hash(page)).toMatch(/^#\/week(\/2026-11-02)?$/);
+    await page.keyboard.press("1");
+    await page.locator(".today-view .card, .today-view .tc-card").first().waitFor().catch(() => undefined);
+    await expect.poll(() => page.getByRole("region", { name: "Plan today" }).count()).toBe(0);
     await page.close();
   }, T);
 
-  it("Check-in Done shows ✓ and returns to Now; Close out has its own day in the address", async () => {
+  it("Midday check-in Done returns to Today; Close out has its own day in the address", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("m");
     await expect.poll(() => hash(page)).toBe("#/today/checkin");
     await page.locator(".mode-checkin .done-btn").click();
     await expect.poll(() => hash(page)).toBe("#/today");
-    await expect.poll(() => page.locator(".mode-switch .ms-btn", { hasText: "Check-in" }).locator(".ms-done").count()).toBe(1);
     await page.keyboard.press("e");
     await expect.poll(() => hash(page)).toBe("#/today/closeout");
     await page.locator(".closeout-panel .co-step button[aria-label='Previous day']").click();
@@ -78,29 +75,29 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.close();
   }, T);
 
-  it("Week: header with the week and musts, Plan the week defaults to next week with ‹ ›; W and P toggle", async () => {
+  it("Week: header with the week and musts, Board · Commit; Commit defaults to next week with ‹ ›; W and P toggle", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("2");
     await expect(page.locator(".week-head h2").textContent()).resolves.toMatch(/^Week of Nov 2/);
-    await expect(page.locator(".mode-switch .ms-btn").allTextContents()).resolves.toEqual(["Week", expect.stringMatching(/^Plan the week/)]);
+    await expect(page.locator(".mode-switch .ms-btn").allTextContents()).resolves.toEqual([expect.stringMatching(/^Board/), "Commit"]);
     await page.keyboard.press("p");
-    await expect.poll(() => hash(page)).toBe("#/week/plan");
+    await expect.poll(() => hash(page)).toBe("#/week/commit");
     await expect.poll(() => page.locator(".planweek h2").first().textContent()).toBe("Plan the week of Nov 9");
     await page.locator(".planweek .co-step button[aria-label='Previous week']").click();
-    await expect.poll(() => hash(page)).toBe("#/week/plan/2026-11-02");
+    await expect.poll(() => hash(page)).toBe("#/week/commit/2026-11-02");
     await expect.poll(() => page.locator(".planweek h2").first().textContent()).toBe("Plan the week of Nov 2");
     await page.keyboard.press("w");
-    await expect.poll(() => mode(page)).toBe("Week");
+    await expect.poll(() => mode(page)).toMatch(/^Board/);
     await page.close();
   }, T);
 
-  it("a Week day header's Plan chip opens Today › Plan on that day; the address survives a reload", async () => {
+  it("a Week day header's Plan chip opens Plan today's Board on that day; the address survives a reload", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("2");
     const tue = page.locator(".day-plan").nth(1);
     await tue.click();
-    await expect.poll(() => hash(page)).toBe("#/today/plan/2026-11-03");
-    await expect.poll(() => tab(page)).toBe("Today");
+    await expect.poll(() => hash(page)).toBe("#/week/day/2026-11-03");
+    await expect.poll(() => tab(page)).toBe("Week");
     await expect.poll(() => page.locator(".pd2-title h2").textContent()).toContain("Plan Tuesday, Nov 3");
     await page.reload();
     await page.waitForSelector(".pd2-left");
@@ -108,26 +105,26 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.close();
   }, T);
 
-  it("+ Add work on a Week card: Today › Plan on that day and block", async () => {
+  it("+ Add work on a Week card: the Board focused on that day and block", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("2");
     const card = page.locator(".half", { hasText: "Northwind" }).first();
     await card.click({ position: { x: 12, y: 12 } });
     await card.getByRole("button", { name: "+ Add work" }).click();
     await page.locator(".pd2-right .pd2-pane-title", { hasText: "Northwind" }).waitFor();
-    expect(await hash(page)).toMatch(/^#\/today\/plan\/2026-11-0\d\/(AM|PM)$/);
+    expect(await hash(page)).toMatch(/^#\/week\/day\/2026-11-0\d\/(AM|PM)$/);
     await page.close();
   }, T);
 
-  it("Roadmap · Plan ahead; the ⋯ menu has Commands, the Guide, the keys, Send feedback and About; the initials menu has Settings", async () => {
+  it("Ahead: Roadmap · Plan ahead; the ⋯ menu has Commands, the Guide, the keys, Send feedback and About; the initials menu has Settings", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("3");
     await expect(page.locator(".mode-switch .ms-btn").allTextContents()).resolves.toEqual(["Roadmap", "Plan ahead"]);
     await page.keyboard.press("p");
-    await expect.poll(() => hash(page)).toBe("#/roadmap/ahead");
+    await expect.poll(() => hash(page)).toBe("#/ahead/plan");
     await page.locator(".plan-ahead .pa-grid").waitFor();
     await page.locator(".roadmap .done-btn").click();
-    await expect.poll(() => hash(page)).toBe("#/roadmap");
+    await expect.poll(() => hash(page)).toBe("#/ahead");
     await page.locator(".top-more").click();
     await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringMatching(/^Notifications/), expect.stringMatching(/^Commands/), expect.stringMatching(/^Guide/), expect.stringMatching(/^Keyboard shortcuts/), "Send feedback", "Admin", "About"]);
     await page.keyboard.press("Escape");
@@ -135,7 +132,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.getByRole("menuitem", { name: /^Settings/ }).click();
     await expect.poll(() => hash(page)).toBe("#/settings/you");
     await page.keyboard.press("Escape");
-    await expect.poll(() => hash(page)).toBe("#/roadmap");
+    await expect.poll(() => hash(page)).toBe("#/ahead");
     await page.close();
   }, T);
 
@@ -144,8 +141,9 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     for (const [r, want] of [
       ["checkin", "#/today/checkin"],
       ["closeout", "#/today/closeout"],
-      ["planday", "#/today/plan"],
-      ["planweek:2026-11-09", "#/week/plan/2026-11-09"],
+      ["planday", "#/week/day"],
+      ["ahead", "#/ahead/plan"],
+      ["planweek:2026-11-09", "#/week/commit/2026-11-09"],
       ["inbox", "#/inbox"],
       ["followup:1", "#/inbox/1"],
       ["settings:notifications", "#/settings/notifications"],
