@@ -25,7 +25,7 @@ export function levelFromPosition(name: unknown): Level | null {
   return n === "consultant" ? "consultant" : n === "senior consultant" ? "senior" : n === "lead consultant" ? "lead" : null;
 }
 
-export type AdminArea = "clients" | "ai" | "conversations" | "organization" | "levels";
+export type AdminArea = "clients" | "ai" | "conversations" | "organization" | "levels" | "people";
 
 export class OrgInputError extends Error {}
 
@@ -200,7 +200,8 @@ export const ORG_SPECS = {
   "conv.poll_minutes": { kind: "rule", area: "conversations", label: "Read client chats every (minutes)", builtin: 5, parse: intIn(1, 60, "minutes") },
   "conv.retention_days": { kind: "rule", area: "conversations", label: "Keep messages that aren't requests (days)", builtin: 14, parse: intIn(1, 90, "days") },
   "conv.chat_ai_daily_cap": { kind: "rule", area: "conversations", label: "AI requests per chat per day", builtin: 200, parse: intIn(0, 5000, "requests") },
-  "org.invite_domains": { kind: "rule", area: "organization", label: "Help invites go only to", builtin: [] as string[], parse: domains },
+  // ADM-2 (D578): also who is a Cooptimizer (sign-in and People); help invites go only to these too.
+  "org.invite_domains": { kind: "rule", area: "organization", label: "Cooptimize email domains (sign-in and people)", builtin: [] as string[], parse: domains },
   "org.never_suggest": { kind: "rule", area: "organization", label: "Never suggested as helpers or Who", builtin: ["Kat 🤖"], parse: list(100, 100) },
   "org.feedback": { kind: "rule", area: "organization", label: "Send feedback goes to", builtin: null as FeedbackRule | null, parse: orNull(feedback) },
   "org.retention_years": { kind: "rule", area: "organization", label: "Keep people's data (years)", builtin: 2, parse: intIn(1, 10, "years") },
@@ -247,14 +248,21 @@ export type LevelKeyName = keyof typeof LEVEL_SPECS;
 export const LEVEL_STARTERS: Record<Level, Partial<Record<LevelKeyName, unknown>>> = { consultant: { plan_share: 80 }, senior: {}, lead: {} };
 const GUIDANCE_KEY: Record<LevelKeyName, keyof Guidance> = { draft_stories: "draftStories", readiness_nudges: "readinessNudges", plan_share: "planShare" };
 
-export type Scope = "org" | `client:${string}` | `level:${Level}`;
+/** ADM-2: per-person keys (scope "person:<id>"), set by an admin. */
+export const PERSON_SPECS = {
+  automation: { kind: "rule", area: "people", label: "Automation account", builtin: false, parse: bool },
+} satisfies Record<string, Spec>;
+
+export type Scope = "org" | `client:${string}` | `level:${Level}` | `person:${string}`;
 export const clientScope = (k: string): Scope => `client:${k}`;
+export const personScope = (id: string): Scope => `person:${id.toLowerCase()}`;
 
 /** The spec for a scope and key, or null (refused). */
 export function specFor(scope: string, key: string): Spec | null {
   if (scope === "org") return (ORG_SPECS as Record<string, Spec>)[key] ?? null;
   if (scope.startsWith("client:") && scope.length > 7 && scope.length <= 107) return (CLIENT_SPECS as Record<string, Spec>)[key] ?? null;
   if (scope.startsWith("level:") && (LEVELS as readonly string[]).includes(scope.slice(6))) return (LEVEL_SPECS as Record<string, Spec>)[key] ?? null;
+  if (/^person:(dv:)?[0-9a-f-]{36}$/.test(scope)) return (PERSON_SPECS as Record<string, Spec>)[key] ?? null;
   return null;
 }
 
@@ -271,6 +279,8 @@ export type OrgRules = {
   organization: { inviteDomains: string[]; neverSuggest: string[]; feedback: FeedbackRule | null; retentionYears: number; newPerson: NewPersonDefaults };
   clients: Record<string, ClientRules>;
   levels: Record<Level, Guidance>;
+  /** ADM-2: ids an admin flagged as automation accounts. */
+  automation: string[];
 };
 export type ClientRules = { color: string | null; allowAi: boolean; attachmentsAi: boolean; openStates: string[]; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean };
 export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, attachmentsAi: false, openStates: [], noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false };
@@ -332,6 +342,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
     },
     clients,
     levels,
+    automation: rows.filter((r) => r.scope.startsWith("person:") && r.key === "automation" && parsed(r) === true).map((r) => r.scope.slice(7)).sort(),
   };
 }
 

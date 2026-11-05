@@ -38,6 +38,8 @@ export type IdpKnobs = {
   foreignKey?: boolean;
   /** The token endpoint refuses the code. */
   refuse?: boolean;
+  /** ADM-2: more claims in the ID token (acct, idp, upn for a guest). */
+  claims?: Record<string, unknown>;
 };
 
 export function createFakeIdp(knobs: IdpKnobs = {}) {
@@ -88,6 +90,7 @@ export function createFakeIdp(knobs: IdpKnobs = {}) {
         name: k.name ?? "Ana Example",
         email: k.email ?? "ana@cooptimize.example",
         ver: "2.0",
+        ...(k.claims ?? {}),
       };
       const signer = k.foreignKey ? other : key;
       return json(200, {

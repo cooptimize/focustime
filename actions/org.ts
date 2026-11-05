@@ -13,6 +13,7 @@ import { levels, type ClientLead, type Levels, type PersonLevel } from "../plan/
 import { FOCUSTIME, type AdminStore } from "../store/admin-store.ts";
 import { clientAccounts, type ClientAccounts } from "../plan/client-accounts.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
+import type { SignedInPerson } from "../plan/person-match.ts";
 
 export type OrgRuntime = {
   store: AdminStore;
@@ -33,7 +34,14 @@ export type OrgRuntime = {
 
 export const ORG_HOLD_MS = 30_000;
 
-export function createOrgRuntime(o: { store: AdminStore; bootstrap: OrgBootstrap; now?: () => number; holdMs?: number }): OrgRuntime {
+export function createOrgRuntime(o: {
+  store: AdminStore;
+  bootstrap: OrgBootstrap;
+  now?: () => number;
+  holdMs?: number;
+  /** ADM-2: the people who signed in (Entra id, email, UPN, the Dataverse user their sign-in matched), for the one person match. */
+  signedIn?: () => Promise<SignedInPerson[]>;
+}): OrgRuntime {
   const now = o.now ?? Date.now;
   const hold = o.holdMs ?? ORG_HOLD_MS;
   let rulesHeld: { at: number; value: Promise<OrgRules> } | null = null;
@@ -51,7 +59,9 @@ export function createOrgRuntime(o: { store: AdminStore; bootstrap: OrgBootstrap
   }
   function people(): Promise<Levels> {
     if (!fresh(levelsHeld)) {
-      const value = Promise.all([o.store.directory(), o.store.leads(), o.store.overrides()]).then(([directory, leads, overrides]) => levels({ directory, leads, overrides }));
+      const value = Promise.all([o.store.directory(), o.store.leads(), o.store.overrides(), o.store.peopleClients(), rules(), accounts(), o.signedIn ? o.signedIn().catch(() => []) : Promise.resolve([])]).then(([directory, leads, overrides, clients, r, ca, signedIn]) =>
+        levels({ directory, leads, overrides, clients, signedIn, automation: r.automation, domains: r.organization.inviteDomains, isClient: (k) => ca.isClient(k) }),
+      );
       levelsHeld = { at: now(), value };
       value.catch(() => (levelsHeld = null));
     }

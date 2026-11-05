@@ -577,10 +577,16 @@ type Person = {
   lastSignInAt: string | null;
   setup: "done" | "skipped" | "started" | "not_started" | null;
   dataverseMatch: boolean;
+  /** ADM-2: which key matched ("Matched by email"), or why not. */
+  dataverseText: string;
+  cooptimizer: boolean;
+  notCooptimizerText: string | null;
+  automation: boolean;
+  positionName: string | null;
   clients: string[];
   sources: { microsoft: boolean; google: boolean; devopsWrites: number } | null;
 };
-type PeopleData = { people: Person[]; admins: { id: string; name: string | null; via: string | null; checkedAt: string | null }[]; groupLink: string | null; groupSet: boolean; refreshedAt: string | null; levels: { id: string; name: string }[] };
+type PeopleData = { people: Person[]; others: Person[]; noDomains: boolean; leadsShown: number; admins: { id: string; name: string | null; via: string | null; checkedAt: string | null }[]; groupLink: string | null; groupSet: boolean; refreshedAt: string | null; levels: { id: string; name: string }[] };
 
 const SETUP_WORDS = { done: "Done", skipped: "Skipped", started: "Started", not_started: "Not started" } as const;
 
@@ -590,6 +596,8 @@ function AdminPeople() {
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<Person | null>(null);
   const ctx = useSaveContext();
+  const saver = useAdminSave(load);
+  const [othersOpen, setOthersOpen] = useState(false);
   const override = async (input: Record<string, unknown>, what: string, undo?: Record<string, unknown>) => {
     setMsg(null);
     try {
@@ -649,45 +657,106 @@ function AdminPeople() {
         <span className="set-hint">{data.refreshedAt ? `Levels and leads read ${shortDate(data.refreshedAt.slice(0, 10))}; again each day.` : "Not read from Dataverse yet."}</span>
         {msg && <span className="set-hint" role="status">{msg}</span>}
       </div>
-      <p className="muted">Levels change suggestions and emphasis only, never what anyone can see or do.</p>
-      <div className="adm-scroll">
-        <table className="adm-table adm-people-table">
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Level</th>
-              <th scope="col">Client lead</th>
-              <th scope="col">Last sign-in</th>
-              <th scope="col">Setup</th>
-              <th scope="col">Dataverse</th>
-              <th scope="col">Clients</th>
-              <th scope="col">Sources</th>
-              <th scope="col"><span className="sr-only">Remove</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.people.map((p) => (
-              <PersonRow key={p.id} p={p} levels={data.levels} onOverride={override} onRemove={() => setRemoving(p)} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <p className="muted">Cooptimizers only. Levels change suggestions and emphasis only, never what anyone can see or do.</p>
+      {data.noDomains && <p className="set-problem">Set Cooptimize email domains in Admin › Organization. Until then only guest accounts are left out of People.</p>}
+      <PeopleTable people={data.people} levels={data.levels} leadsShown={data.leadsShown} saver={saver} onOverride={override} onRemove={setRemoving} label="People" />
+      {data.others.length > 0 && (
+        <div className="adm-fold">
+          <button type="button" className="fold-line" aria-expanded={othersOpen} onClick={() => setOthersOpen((o) => !o)}>
+            {othersOpen ? "▾" : "▸"} Not Cooptimizers ({data.others.length})
+          </button>
+          {othersOpen && (
+            <>
+              <p className="muted">Guests, people outside the Cooptimize email domains and automation accounts. They have no level, lead no client and never show in pickers. Nothing about them is deleted.</p>
+              <PeopleTable people={data.others} levels={data.levels} leadsShown={data.leadsShown} saver={saver} onOverride={override} onRemove={setRemoving} label="Not Cooptimizers" others />
+            </>
+          )}
+        </div>
+      )}
       {removing && <RemovePerson p={removing} onClose={() => setRemoving(null)} onDone={async (m) => (setRemoving(null), setMsg(m), await load())} />}
     </div>
   );
 }
 
-function PersonRow({ p, levels, onOverride, onRemove }: { p: Person; levels: PeopleData["levels"]; onOverride: (input: Record<string, unknown>, what: string, undo?: Record<string, unknown>) => Promise<void>; onRemove: () => void }) {
+type OnOverride = (input: Record<string, unknown>, what: string, undo?: Record<string, unknown>) => Promise<void>;
+
+function PeopleTable({ people, levels, leadsShown, saver, onOverride, onRemove, label, others = false }: { people: Person[]; levels: PeopleData["levels"]; leadsShown: number; saver: Saver; onOverride: OnOverride; onRemove: (p: Person) => void; label: string; others?: boolean }) {
+  return (
+    <div className="adm-scroll">
+      <table className="adm-table adm-people-table" aria-label={label}>
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">{others ? "Why not" : "Level"}</th>
+            {!others && <th scope="col">Client lead</th>}
+            <th scope="col">Last sign-in</th>
+            <th scope="col">Setup</th>
+            <th scope="col">Dataverse</th>
+            {!others && <th scope="col">Clients</th>}
+            <th scope="col">Sources</th>
+            <th scope="col">Automation <Kind kind="Rule" /></th>
+            <th scope="col"><span className="sr-only">Remove</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {people.map((p) => (
+            <PersonRow key={p.id} p={p} levels={levels} leadsShown={leadsShown} saver={saver} onOverride={onOverride} onRemove={() => onRemove(p)} others={others} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PersonRow({ p, levels, leadsShown, saver, onOverride, onRemove, others }: { p: Person; levels: PeopleData["levels"]; leadsShown: number; saver: Saver; onOverride: OnOverride; onRemove: () => void; others: boolean }) {
   const [adding, setAdding] = useState("");
+  const [allLeads, setAllLeads] = useState(false);
   const leadClients = p.leads.map((l) => l.clientKey);
   const addable = p.clients.filter((k) => !leadClients.includes(k));
+  const shownLeads = allLeads ? p.leads : p.leads.slice(0, leadsShown);
+  const scope = `person:${p.id}`;
+  const automation = (
+    <td>
+      <label className="adm-switch">
+        <input type="checkbox" role="switch" checked={saver.shown(scope, "automation", p.automation)} aria-label={`${p.name}: automation account`} onChange={(e) => void saver.save(scope, "automation", e.target.checked ? true : undefined, `${p.name}: automation account`)} /> {p.automation ? "Yes" : "No"}
+      </label>
+      <SaveMark s={saver.status(scope, "automation")} retry={() => void saver.save(scope, "automation", p.automation ? true : undefined, `${p.name}: automation account`)} />
+    </td>
+  );
+  const dataverse = <td title={p.dataverseText}>{p.dataverseMatch ? <span>Matched<span className="set-hint">{p.dataverseText}</span></span> : <span className="field-problem">Not matched<span className="set-hint">{p.dataverseText}</span></span>}</td>;
+  const name = (
+    <th scope="row">
+      {p.name}
+      {p.me && <span className="muted"> (you)</span>}
+      {p.email && <span className="muted adm-email">{p.email}</span>}
+    </th>
+  );
+  const sources = <td>{p.sources ? [p.sources.microsoft ? "Microsoft" : null, p.sources.google ? "Google" : null, p.sources.devopsWrites ? `DevOps writes for ${p.sources.devopsWrites}` : null].filter(Boolean).join(", ") || <span className="muted">None</span> : <span className="muted">Not signed in</span>}</td>;
+  const remove = (
+    <td>
+      {p.signedIn && !p.me && (
+        <button type="button" className="mini quiet danger" onClick={onRemove}>
+          Remove
+        </button>
+      )}
+    </td>
+  );
+  if (others)
+    return (
+      <tr>
+        {name}
+        <td>{p.notCooptimizerText}</td>
+        <td>{p.lastSignInAt ? shortDate(p.lastSignInAt.slice(0, 10)) : <span className="muted">Never</span>}</td>
+        <td>{p.setup ? SETUP_WORDS[p.setup] : <span className="muted">n/a</span>}</td>
+        {dataverse}
+        {sources}
+        {automation}
+        {remove}
+      </tr>
+    );
   return (
     <tr>
-      <th scope="row">
-        {p.name}
-        {p.me && <span className="muted"> (you)</span>}
-        {p.email && <span className="muted adm-email">{p.email}</span>}
-      </th>
+      {name}
       <td>
         <select
           aria-label={`${p.name}: level`}
@@ -699,7 +768,7 @@ function PersonRow({ p, levels, onOverride, onRemove }: { p: Person; levels: Peo
               : onOverride({ personId: p.id, kind: "level", clear: true }, `${p.name}'s level back to Dataverse's`, p.level ? { personId: p.id, kind: "level", value: p.level } : undefined));
           }}
         >
-          <option value="">{p.dataverseLevel ? `${p.dataverseLevel} (Dataverse)` : "No level (Dataverse)"}</option>
+          <option value="">{p.dataverseLevel ? `${p.dataverseLevel} (Dataverse)` : "Level not set"}</option>
           {levels.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name} (override)
@@ -707,10 +776,11 @@ function PersonRow({ p, levels, onOverride, onRemove }: { p: Person; levels: Peo
           ))}
         </select>
         {p.levelSource === "override" && <span className="adm-mark">Override</span>}
+        {!p.level && <span className="set-hint">Uses Consultant defaults{p.positionName ? ` (position ${p.positionName} isn't mapped)` : ""}</span>}
       </td>
       <td>
         <ul className="adm-leads">
-          {p.leads.map((l) => (
+          {shownLeads.map((l) => (
             <li key={l.clientKey}>
               <span>{l.clientKey}</span> <span className="muted">{l.whyText.join(", ")}{l.primary ? " · primary" : ""}</span>{" "}
               {l.why.includes("override") && <span className="adm-mark">Override</span>}
@@ -719,6 +789,13 @@ function PersonRow({ p, levels, onOverride, onRemove }: { p: Person; levels: Peo
               </button>
             </li>
           ))}
+          {p.leads.length > leadsShown && (
+            <li>
+              <button type="button" className="mini quiet" onClick={() => setAllLeads((a) => !a)}>
+                {allLeads ? "Show fewer" : `and ${p.leads.length - leadsShown} more`}
+              </button>
+            </li>
+          )}
           {p.removedLeads.map((k) => (
             <li key={`removed-${k}`} className="muted">
               {k}: removed by an admin <span className="adm-mark">Override</span>{" "}
@@ -746,16 +823,11 @@ function PersonRow({ p, levels, onOverride, onRemove }: { p: Person; levels: Peo
       </td>
       <td>{p.lastSignInAt ? shortDate(p.lastSignInAt.slice(0, 10)) : <span className="muted">Never</span>}</td>
       <td>{p.setup ? SETUP_WORDS[p.setup] : <span className="muted">n/a</span>}</td>
-      <td>{p.dataverseMatch ? "Matched" : <span className="field-problem">Not matched</span>}</td>
+      {dataverse}
       <td>{p.clients.length ? p.clients.join(", ") : <span className="muted">None</span>}</td>
-      <td>{p.sources ? [p.sources.microsoft ? "Microsoft" : null, p.sources.google ? "Google" : null, p.sources.devopsWrites ? `DevOps writes for ${p.sources.devopsWrites}` : null].filter(Boolean).join(", ") || <span className="muted">None</span> : <span className="muted">Not signed in</span>}</td>
-      <td>
-        {p.signedIn && !p.me && (
-          <button type="button" className="mini quiet danger" onClick={onRemove}>
-            Remove
-          </button>
-        )}
-      </td>
+      {sources}
+      {automation}
+      {remove}
     </tr>
   );
 }

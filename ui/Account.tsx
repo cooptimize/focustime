@@ -33,6 +33,7 @@ export const SIGN_IN_MESSAGES: Record<string, string> = {
   misconfigured: "Microsoft sign-in isn't set up for this FocusTime yet. Ask the admin.",
   deleted: "Your FocusTime data was deleted, so this account can't sign in for now. Ask the admin.",
   refused: "FocusTime couldn't sign you in. Try again.",
+  guest: "FocusTime is for Cooptimize accounts. Sign in with your cooptimize.org account.",
 };
 
 /** The ?signin= reason the server sent back with, taken once (removed from the address bar). */

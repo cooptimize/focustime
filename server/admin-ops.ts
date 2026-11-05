@@ -25,8 +25,6 @@ export type AdminOpsDeps = {
   personStore: (userId: string, zone: string | null) => { setupState(): Promise<SetupState>; devopsIdentities(): Promise<{ clientKey: string }[]> };
   /** Whether a secret is there (never its value). */
   hasSecret: (userId: string, account: UserSecretAccount) => Promise<boolean>;
-  /** Whether the person's settings are matched to a Dataverse user. */
-  dataverseMatched: (userId: string) => Promise<boolean>;
   chats: () => Promise<ClientChat[]>;
   /** CV-1's counts for a day (never text or ids); null where there is no conversation store. */
   conversationCounts?: ((day: string) => Promise<ConversationCounts>) | null;
@@ -63,16 +61,15 @@ export function createAdminOps(d: AdminOpsDeps): AdminOps {
       for (const u of await d.users()) {
         if (u.deletedAt) continue;
         const store = d.personStore(u.id, u.timeZone);
-        const [st, ids, ms, gs, matched] = await Promise.all([
+        const [st, ids, ms, gs] = await Promise.all([
           store.setupState().catch((): SetupState => ({})),
           store.devopsIdentities().catch(() => []),
           d.hasSecret(u.id, "outlook-refresh-token").catch(() => false),
           d.hasSecret(u.id, "google-refresh-token").catch(() => false),
-          d.dataverseMatched(u.id).catch(() => false),
         ]);
         let writes = 0;
         for (const i of ids) if (await d.hasSecret(u.id, writePat(i.clientKey)).catch(() => false)) writes++;
-        out.push({ id: u.id, name: u.displayName || u.upn, email: u.email ?? u.upn, lastSignInAt: u.lastSignInAt, setup: setupWord(st), dataverseMatch: matched, sources: { microsoft: ms, google: gs, devopsWrites: writes } });
+        out.push({ id: u.id, name: u.displayName || u.upn, email: u.email ?? u.upn, lastSignInAt: u.lastSignInAt, setup: setupWord(st), sources: { microsoft: ms, google: gs, devopsWrites: writes } });
       }
       return out;
     },

@@ -64,7 +64,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     groupId: null,
     breakGlass: [],
     tenantId: null,
-    people: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, email: DEMO_PERSON.email, lastSignInAt: opts.now(), setup: "done", dataverseMatch: true, sources: { microsoft: true, google: true, devopsWrites: 1 } }],
+    people: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, email: DEMO_PERSON.email, lastSignInAt: opts.now(), setup: "done", sources: { microsoft: true, google: true, devopsWrites: 1 } }],
     chatClients: async () => [...new Set([...(await teams.chats()).map((c) => c.clientKey), ...dir.clients.map((c) => c.clientKey)])].sort(),
     aiSetUp: async () => ({ provider: "stub", keyConfigured: true }),
     appSpentMicros: async () => 0,

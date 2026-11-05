@@ -56,7 +56,6 @@ async function setup() {
     users: () => accounts.users.all(),
     personStore: (id) => planStoreOn(db, { userId: id, now: () => now().toZonedDateTimeISO("UTC") }),
     hasSecret: async (id, account) => secrets.has(`${id}|${account}`),
-    dataverseMatched: async () => true,
     chats: () => teams.chats(),
     conversationCounts: (day) => createConversationStore(db, now, teams).counts(day),
     ai: async () => ({ provider: "stub", keyConfigured: true }),

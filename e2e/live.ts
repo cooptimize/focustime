@@ -65,7 +65,6 @@ export async function liveAdminOps(team: LiveTeam, o: { admins: string[]; client
     users: async () => [],
     personStore: () => ({ setupState: async () => ({}), devopsIdentities: async () => [] }),
     hasSecret: async () => false,
-    dataverseMatched: async () => true,
     chats: o.chats ?? (async () => []),
     ai: async () => ({ provider: "stub", keyConfigured: true }),
     appSpentMicros: async () => 0,

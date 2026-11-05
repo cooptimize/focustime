@@ -59,7 +59,6 @@ async function team() {
     users: () => accounts.users.all(),
     personStore: () => ({ setupState: async () => ({}), devopsIdentities: async () => [] }),
     hasSecret: async () => false,
-    dataverseMatched: async () => true,
     chats: () => teams.chats(),
     ai: async () => ({ provider: "stub", keyConfigured: true }),
     appSpentMicros: async () => 0,

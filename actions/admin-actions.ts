@@ -8,6 +8,7 @@ import { clientScope, CLIENT_SPECS, KIND_NAMES, LEVEL_NAMES, LEVEL_SPECS, LEVELS
 import { CLIENT_SLOTS } from "../config/schema.ts";
 import { LEAD_WHY_NAMES, type LeadWhy } from "../plan/levels.ts";
 import { CLIENT_WHY_TEXT } from "../plan/client-accounts.ts";
+import { matchText, NOT_COOPTIMIZER_TEXT } from "../plan/person-match.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
 import type { Actor, AuditEntry, OverrideKind } from "../store/admin-store.ts";
 import type { AdminCheck, AdminVia } from "./admin.ts";
@@ -30,7 +31,6 @@ export type PersonHealth = {
   lastSignInAt: string | null;
   /** done: every Setup step done; skipped: closed or skipped with steps left; started; not_started. */
   setup: "done" | "skipped" | "started" | "not_started";
-  dataverseMatch: boolean;
   /** Connected or not (never the token), and how many clients have write access (never the PAT). */
   sources: { microsoft: boolean; google: boolean; devopsWrites: number };
 };
@@ -200,41 +200,68 @@ export async function clientWarnings(ops: AdminOps): Promise<StatusWarning[]> {
   return out;
 }
 
+/** The most clients shown per person in Client lead before "and N more" (the screen shows the rest on request). */
+export const LEADS_SHOWN = 5;
+
 async function peopleSection(ops: AdminOps, meId: string) {
-  const [users, dir, clients, lv, overrides, seen, refreshedAt] = await Promise.all([ops.people(), ops.org.store.directory(), ops.org.store.peopleClients(), ops.org.levels(), ops.org.store.overrides(), ops.org.store.seenAdmins(), ops.org.store.directoryRefreshedAt()]);
-  const ids = [...new Set([...users.map((u) => u.id.toLowerCase()), ...dir.map((d) => d.personId)])];
-  const people = ids
-    .map((id) => {
+  const [users, clients, lv, overrides, seen, refreshedAt, ca, rules] = await Promise.all([ops.people(), ops.org.store.peopleClients(), ops.org.levels(), ops.org.store.overrides(), ops.org.store.seenAdmins(), ops.org.store.directoryRefreshedAt(), ops.org.clientAccounts(), ops.org.rules()]);
+  const dirName = new Map((await ops.org.store.directory()).map((d) => [d.personId, d]));
+  const rows = lv.people.all
+    .map((e) => {
+      const id = e.id;
       const u = users.find((x) => x.id.toLowerCase() === id) ?? null;
-      const d = dir.find((x) => x.personId === id) ?? null;
+      const d = e.dir ? (dirName.get(e.dir.personId) ?? null) : null;
       const level = lv.levelOf(id);
-      const removed = overrides.filter((o) => o.personId === id && o.kind === "lead_remove").map((o) => o.clientKey);
+      const ids = new Set([id, ...(e.dir ? [e.dir.personId] : [])]);
+      const removed = overrides.filter((o) => ids.has(o.personId) && o.kind === "lead_remove" && ca.isClient(o.clientKey)).map((o) => o.clientKey);
+      // ADM-2 (D577): the Dataverse column reads the same match as the level and leads beside it.
+      const dataverse = e.match
+        ? { matched: true, text: matchText(e.match) }
+        : e.dir
+          ? { matched: true, text: e.dir.entra ? "In Dataverse, not signed in yet" : "In Dataverse, Entra id missing" }
+          : { matched: false, text: "No Dataverse user has their Entra id, email or UPN" };
       return {
         id,
         name: u?.name ?? d?.name ?? id,
-        email: u?.email ?? d?.email ?? null,
+        email: u?.email ?? e.dir?.email ?? null,
         me: id === meId.toLowerCase(),
         signedIn: !!u,
+        cooptimizer: !e.notCooptimizer,
+        notCooptimizer: e.notCooptimizer,
+        notCooptimizerText: e.notCooptimizer ? NOT_COOPTIMIZER_TEXT[e.notCooptimizer] : null,
+        automation: rules.automation.includes(id) || (!!e.dir && rules.automation.includes(e.dir.personId)),
         level: level.level,
         levelName: level.level ? LEVEL_NAMES[level.level] : null,
         levelSource: level.source,
         dataverseLevel: level.dataverse ? LEVEL_NAMES[level.dataverse] : null,
+        positionName: e.dir?.positionName ?? null,
         leads: lv.leadsOf(id).map((l) => ({ clientKey: l.clientKey, primary: l.primary, why: l.why, whyText: l.why.map((w: LeadWhy) => LEAD_WHY_NAMES[w]) })),
         removedLeads: removed,
         lastSignInAt: u?.lastSignInAt ?? null,
         setup: u?.setup ?? null,
-        dataverseMatch: u ? u.dataverseMatch : !!d,
-        clients: clients.filter((c) => c.personId === id).map((c) => c.clientKey),
+        dataverseMatch: dataverse.matched,
+        dataverseText: dataverse.text,
+        clients: [...new Set(clients.filter((c) => ids.has(c.personId) && ca.isClient(c.clientKey)).map((c) => c.clientKey))].sort(),
         sources: u?.sources ?? null,
       };
     })
     .sort((a, b) => Number(b.signedIn) - Number(a.signedIn) || a.name.localeCompare(b.name));
-  const nameOf = (id: string) => people.find((p) => p.id === id.toLowerCase())?.name ?? null;
+  const nameOf = (id: string) => rows.find((p) => p.id === lv.canonical(id))?.name ?? null;
   const admins: { id: string; name: string | null; via: AdminVia | null; checkedAt: string | null }[] = [
     ...seen.filter((s) => !ops.breakGlass.some((b) => b.toLowerCase() === s.personId)).map((s) => ({ id: s.personId, name: nameOf(s.personId), via: s.via, checkedAt: s.checkedAt })),
     ...ops.breakGlass.map((b) => ({ id: b.toLowerCase(), name: nameOf(b), via: "break_glass" as const, checkedAt: null })),
   ];
-  return { people, admins, groupLink: groupLink(ops.groupId), groupSet: !!ops.groupId, refreshedAt, levels: LEVELS.map((l) => ({ id: l, name: LEVEL_NAMES[l] })) };
+  return {
+    people: rows.filter((r) => r.cooptimizer),
+    others: rows.filter((r) => !r.cooptimizer),
+    noDomains: lv.people.noDomains,
+    admins,
+    groupLink: groupLink(ops.groupId),
+    groupSet: !!ops.groupId,
+    refreshedAt,
+    leadsShown: LEADS_SHOWN,
+    levels: LEVELS.map((l) => ({ id: l, name: LEVEL_NAMES[l] })),
+  };
 }
 
 const specList = (specs: Record<string, { kind: keyof typeof KIND_NAMES; label: string; area: AdminArea }>) => Object.entries(specs).map(([key, s]) => ({ key, label: s.label, kind: s.kind, kindName: KIND_NAMES[s.kind], area: s.area }));
@@ -325,7 +352,14 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
       }
       if (i.key === "hidden" && value === true && i.scope.toLowerCase() === clientScope(INTERNAL_CLIENT).toLowerCase()) return bad("Cooptimize Internal is always a client", 422, "invalid");
       const before = i.scope.startsWith("client:") ? (await ops.org.rules()).clients[i.scope.slice(7)] : undefined;
-      const r = await ops.org.store.setOrg({ scope: i.scope, key: i.key, value, actor, area: spec.area, target: targetOf(i.scope) });
+      let target = targetOf(i.scope);
+      if (i.scope.startsWith("person:")) {
+        const e = (await ops.org.levels()).people.entry(i.scope.slice(7));
+        if (!e) return bad("No such person in FocusTime or Dataverse", 404);
+        const u = (await ops.people()).find((x) => x.id.toLowerCase() === e.id);
+        target = u?.name ?? (await ops.org.store.directory()).find((d) => d.personId === e.dir?.personId)?.name ?? target;
+      }
+      const r = await ops.org.store.setOrg({ scope: i.scope, key: i.key, value, actor, area: spec.area, target });
       ops.org.invalidate();
       const next = await ops.org.rules();
       const warning =
@@ -341,16 +375,22 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
     case "admin.override": {
       const extra = only(i, ["personId", "kind", "clientKey", "value", "clear"]);
       if (extra) return bad(`unknown input field ${extra}`);
-      if (typeof i.personId !== "string" || !/^[0-9a-f-]{36}$/i.test(i.personId)) return bad("personId must be an Entra object id");
+      if (typeof i.personId !== "string" || !/^(dv:)?[0-9a-f-]{36}$/i.test(i.personId)) return bad("personId must be an Entra object id (or a Dataverse user's dv: id)");
       if (i.kind !== "level" && i.kind !== "lead_add" && i.kind !== "lead_remove") return bad("kind must be level, lead_add or lead_remove");
       const kind = i.kind as OverrideKind;
       const clear = i.clear === true;
       if (kind === "level" && !clear && !(LEVELS as readonly unknown[]).includes(i.value)) return bad(`value must be one of ${LEVELS.join(", ")}`, 422);
       if (kind !== "level" && (typeof i.clientKey !== "string" || !i.clientKey.trim() || i.clientKey.length > 100)) return bad("clientKey names the client", 422);
-      const [users, dir] = await Promise.all([ops.people(), ops.org.store.directory()]);
-      const id = i.personId.toLowerCase();
-      const name = users.find((u) => u.id.toLowerCase() === id)?.name ?? dir.find((d) => d.personId === id)?.name;
+      const [users, dir, lv] = await Promise.all([ops.people(), ops.org.store.directory(), ops.org.levels()]);
+      const entry = lv.people.entry(i.personId);
+      const id = entry?.id ?? i.personId.toLowerCase();
+      const name = users.find((u) => u.id.toLowerCase() === id)?.name ?? dir.find((d) => d.personId === (entry?.dir?.personId ?? id))?.name;
       if (!name) return bad("No such person in FocusTime or Dataverse", 404);
+      // ADM-2: a lead only of a client, and only for a Cooptimizer.
+      if (kind === "lead_add" && !clear) {
+        if (entry?.notCooptimizer) return bad(`${name} isn't a Cooptimizer, so they can't lead a client`, 422, "invalid");
+        if (!(await ops.org.clientAccounts()).isClient((i.clientKey as string).trim())) return bad("That account isn't a client", 422, "invalid");
+      }
       await ops.org.store.setOverride({ personId: id, personName: name, kind, ...(kind !== "level" ? { clientKey: (i.clientKey as string).trim() } : {}), value: kind === "level" ? (i.value as string) : null, clear, actor });
       ops.org.invalidate();
       return { ok: true, data: { personId: id, kind, clear } };

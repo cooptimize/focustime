@@ -111,8 +111,9 @@ export function createAccountStore(db: Conn, now: () => Temporal.Instant) {
     async end(cookie: string | undefined): Promise<void> {
       if (cookie) (await db.run("DELETE FROM sessions WHERE id = ?", [sha256(cookie)]));
     },
-    async endAllFor(userId: string): Promise<void> {
-      (await db.run("DELETE FROM sessions WHERE user_id = ?", [userId]));
+    /** Ends every session of a person; returns how many there were. */
+    async endAllFor(userId: string): Promise<number> {
+      return (await db.run("DELETE FROM sessions WHERE user_id = ?", [userId])).changes;
     },
     /** Removes ended sessions; returns how many. */
     async sweep(): Promise<number> {
