@@ -86,7 +86,8 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
   const oneClient = async (clientKey: string): Promise<AheadClient | null> => {
     const ref = (await ctx.clients(cfg, mondayOf(today), false)).find((c) => c.clientKey === clientKey);
     if (!ref) return null;
-    const [c] = await ctx.devops(cfg).aheadItems!([ref]);
+    // AH-2: any item of the project (an item shown with "Show the whole project" can be changed too; rights still decide).
+    const [c] = await ctx.devops(cfg).aheadItems!([ref], { whole: true });
     return c ?? null;
   };
 
@@ -95,7 +96,9 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     if (!o || (o.refresh !== undefined && typeof o.refresh !== "boolean")) return bad("ahead.load takes { refresh? }");
     const refs = await ctx.clients(cfg, mondayOf(today), o.refresh === true);
     const read = ctx.devops(cfg).aheadItems;
-    const clients = read && refs.length ? await read(refs, o.refresh === true ? { refresh: true } : {}) : [];
+    // AH-2: "Show the whole project" is remembered with my filters; without it, only Cooptimize's scope (and my items).
+    const whole = (await plan.getState<AheadFilters>(FILTERS_KEY))?.whole === true;
+    const clients = read && refs.length ? await read(refs, { ...(o.refresh === true ? { refresh: true } : {}), ...(whole ? { whole: true } : {}) }) : [];
     const hints = await hintsOf(plan, today);
     const out: AheadLoad["clients"] = [];
     for (const c of clients) {
@@ -244,7 +247,7 @@ export type { AheadFilters, AheadOwner };
 export function checkFilters(v: unknown): AheadFilters | null {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
   const o = v as Obj;
-  if (Object.keys(o).some((k) => !["owner", "clients", "epic", "gaps", "from", "to", "q", "states"].includes(k))) return null;
+  if (Object.keys(o).some((k) => !["owner", "clients", "epic", "gaps", "from", "to", "q", "states", "whole"].includes(k))) return null;
   const date = (x: unknown) => (x === null || x === undefined ? null : typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x) ? x : undefined);
   const owner: Record<string, AheadOwner> = {};
   if (o.owner !== undefined) {
@@ -260,8 +263,9 @@ export function checkFilters(v: unknown): AheadFilters | null {
   if (!clients || !states || from === undefined || to === undefined) return null;
   if (o.epic !== undefined && o.epic !== null && (typeof o.epic !== "string" || o.epic.length > 120)) return null;
   if (o.gaps !== undefined && typeof o.gaps !== "boolean") return null;
+  if (o.whole !== undefined && typeof o.whole !== "boolean") return null;
   if (o.q !== undefined && (typeof o.q !== "string" || o.q.length > 200)) return null;
-  return { owner, clients, epic: (o.epic as string | null | undefined) ?? null, gaps: o.gaps === true, from, to, q: (o.q as string | undefined) ?? "", states };
+  return { owner, clients, epic: (o.epic as string | null | undefined) ?? null, gaps: o.gaps === true, from, to, q: (o.q as string | undefined) ?? "", states, ...(o.whole === true ? { whole: true } : {}) };
 }
 
 export { byItem };

@@ -3,7 +3,7 @@ import type { ProcessOverrides } from "../../plan/process.ts";
 // sources/demo/data.ts. They are given no fetch, keyring or cache directory, so they can't reach anything outside.
 import type { CalendarSource } from "../calendar/source.ts";
 import type { DataverseSource } from "../dataverse/source.ts";
-import type { DevOpsSource } from "../devops/source.ts";
+import type { DevOpsSource, ScopeDeps } from "../devops/source.ts";
 import type { CalEvent, ClientWork, SourceId, SourceResult } from "../../week/types.ts";
 import type { GraphWriter } from "../graph/write.ts";
 import { demoDirectory } from "./directory.ts";
@@ -12,7 +12,8 @@ import { DEMO_CLIENTS, DEMO_ME, DEMO_PEOPLE, demoGoogle, demoOrganizer, demoOutl
 const NO = "Demo data: nothing leaves FocusTime";
 
 /** `processOverrides`: the demo team's process Rules (ADM-1), applied to the demo's process models. */
-export function createDemoSources(now: () => string, processOverrides: (clientKey: string) => Promise<ProcessOverrides> = async () => ({})) {
+/** `scope` (AH-2): the demo team's scope per client (Admin › Clients in the demo) and its Cooptimizers. */
+export function createDemoSources(now: () => string, processOverrides: (clientKey: string) => Promise<ProcessOverrides> = async () => ({}), scope: (clientKey: string) => Promise<ScopeDeps | null> = async () => null) {
   const ok = <T>(source: SourceId, items: T[]): SourceResult<T> => ({ source, status: "ok", fetchedAt: now(), fromCache: false, items });
   const dataverse: DataverseSource = {
     load: async () => ok("dataverse", demoPatterns()),
@@ -98,7 +99,7 @@ export function createDemoSources(now: () => string, processOverrides: (clientKe
       }),
     stateChanges: async (clientKey) => ({ known: true, itemIds: clientKey === "Atlas" || !isDemoClient(clientKey) ? [] : demoPortfolio(clientKey, now()).items.flatMap((i) => i.children.filter((x) => x.open).map((x) => x.id)) }),
     // AH-1: Ahead's items, every level, as the store would give them.
-    aheadItems: async (clients) => clients.filter((c) => isDemoClient(c.clientKey)).map((c) => demoAheadClient(c.clientKey as never, now())),
+    aheadItems: async (clients, o = {}) => Promise.all(clients.filter((c) => isDemoClient(c.clientKey)).map(async (c) => demoAheadClient(c.clientKey as never, now(), { deps: await scope(c.clientKey).catch(() => null), whole: !!o.whole }))),
     processModels: async (keys) => Promise.all(keys.map(async (clientKey) => (isDemoClient(clientKey) ? { clientKey, ok: true as const, model: demoProcess(clientKey, await processOverrides(clientKey)) } : { clientKey, ok: false as const, message: "Not a demo client" }))),
   };
   return { dataverse, outlook, google, devops };

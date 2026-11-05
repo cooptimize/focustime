@@ -21,6 +21,7 @@ function setup(o: { lead?: boolean; automation?: boolean } = {}) {
   const lone = anAheadItem({ id: 120, assignee: DANA });
   const story = anAheadItem({ id: 111, type: "User Story", level: "child", rung: 2, parentId: 110, assignee: DANA });
   let client: AheadClient = anAheadClient({ me: ME, items: [epic, mine, lone, story] });
+  const reads: { refresh?: boolean; whole?: boolean }[] = [];
   const ctx: AheadContext = {
     plan,
     config: async () => {
@@ -28,7 +29,7 @@ function setup(o: { lead?: boolean; automation?: boolean } = {}) {
       return r.ok ? r.config : null;
     },
     clients: async () => [{ clientKey: "Northwind", clientName: "Northwind Foods" } as never],
-    devops: () => ({ aheadItems: async () => [client] }),
+    devops: () => ({ aheadItems: async (_refs, opts) => (reads.push(opts ?? {}), [client]) }),
     isLead: async () => o.lead ?? false,
     automation: async () => o.automation ?? false,
     canWrite: async () => true,
@@ -47,7 +48,7 @@ function setup(o: { lead?: boolean; automation?: boolean } = {}) {
   };
   const edit = (f: (c: AheadClient) => AheadClient) => void (client = f(client));
   const setItem = (id: number, patch: Partial<AheadClient["items"][number]>) => edit((c) => ({ ...c, items: c.items.map((i) => (i.id === id ? { ...i, ...patch } : i)) }));
-  return { plan, run, fail, setItem };
+  return { plan, run, fail, setItem, reads };
 }
 type S = ReturnType<typeof setup>;
 const load = (s: S) => s.run<AheadLoad>("ahead.load");
@@ -136,5 +137,20 @@ describe("the change set (D657, D658)", () => {
     await s.run("ahead.set_filters", { filters: { owner: { Northwind: "all" }, gaps: true } });
     expect(await s.run("ahead.filters")).toEqual({ filters: expect.objectContaining({ owner: { Northwind: "all" }, gaps: true }) });
     expect(await s.fail("ahead.set_filters", { filters: { owner: { Northwind: "everyone" } } })).toMatchObject({ status: 400 });
+  });
+});
+
+describe("AH-2: Show the whole project", () => {
+  it("is remembered with my filters and asks the read for the whole project; staging can reach any item of the project", async () => {
+    const s = setup({ lead: true });
+    await load(s);
+    expect(s.reads.at(-1)?.whole).toBeUndefined();
+    await s.run("ahead.set_filters", { filters: { whole: true } });
+    await expect(s.run<{ filters: { whole?: boolean } }>("ahead.filters")).resolves.toMatchObject({ filters: { whole: true } });
+    await load(s);
+    expect(s.reads.at(-1)?.whole).toBe(true);
+    await s.run("ahead.stage", { clientKey: "Northwind", itemId: 120, field: "target", value: "2026-12-11" });
+    expect(s.reads.at(-1)?.whole).toBe(true);
+    await expect(s.fail("ahead.set_filters", { filters: { whole: "yes" } })).resolves.toMatchObject({ status: 400 });
   });
 });

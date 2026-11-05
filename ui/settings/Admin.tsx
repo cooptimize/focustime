@@ -13,6 +13,7 @@ import { STATUS_WORD, type ConversationStatus } from "../../plan/conversations.t
 import type { ClientProcess } from "../../actions/types.ts";
 import type { StatusGroup } from "../../actions/status-rows.ts";
 import { StatusRows } from "./StatusRows.tsx";
+import { ScopeField, type ClientScopeRow } from "./AdminScope.tsx";
 
 export const ADMIN_UI_SECTIONS = [
   ["admin-clients", "Clients"],
@@ -176,7 +177,7 @@ const colorVar = (c: string | null) => (c ? (c.startsWith("#") ? c : `var(--clie
 
 // ---------- Clients ----------
 
-type ClientRow = { key: string; isClient: boolean; whyText: string; names: string[]; types: string[]; treatAsClient: boolean; hidden: boolean; hasSettings: boolean; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; houseStyle: string | null; process: ClientProcess; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
+type ClientRow = { key: string; isClient: boolean; whyText: string; names: string[]; types: string[]; treatAsClient: boolean; hidden: boolean; hasSettings: boolean; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; houseStyle: string | null; process: ClientProcess; scope: ClientScopeRow | null; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
 type ClientFilterValue = "customers" | "all";
 type ClientCounts = { customers: number; all: number };
 type ClientsData = { palette: string[]; suggested: string[]; filter: ClientFilterValue; accountsRead: boolean; counts: ClientCounts; clients: ClientRow[] };
@@ -328,6 +329,7 @@ function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: Clie
       </div>
       <DeliveryChatField clientKey={c.key} clientName={c.key} />
       <ProcessView c={c} saver={saver} onRefresh={onRefresh} refreshing={refreshing} />
+      {c.scope && <ScopeField clientKey={c.key} project={c.process.ok ? c.process.project : null} s={c.scope} save={(v) => saver.save(scope, "devops_scope", v, `${c.key}: Cooptimize's work`)} status={saver.status(scope, "devops_scope")} retry={() => void saver.save(scope, "devops_scope", c.scope?.rule ?? undefined, `${c.key}: Cooptimize's work`)} />}
       <div className="set-form set-house-style">
         <AField label="House style for Break down" kind="Rule" s={saver.status(scope, "house_style")} retry={() => void saver.save(scope, "house_style", c.houseStyle, `${c.key}: house style`)} hint="Sent with every Break down request for this client. Empty goes back to the style learned from its own features.">
           <textarea

@@ -26,6 +26,7 @@ import { plainJob, type Job, type JobRunner } from "../log/operation.ts";
 import type { Logger } from "../log/logger.ts";
 import type { SnapshotStore } from "../host/types.ts";
 import type { StatusRow, StatusSource } from "./status-rows.ts";
+import type { ProjectAreas } from "../plan/devops-scope.ts";
 import { emptyPoll, type DevOpsStore, type PollRow, type StoredItem } from "../store/devops-store.ts";
 
 /** A target read from Dataverse is kept this long (in memory only). */
@@ -151,6 +152,8 @@ type Client = {
   items: Map<number, StoredItem>;
   process: ProcessRaw | null;
   fields: FieldSet | null;
+  /** AH-2: the project's area tree and teams, as last read. */
+  areas: ProjectAreas | null;
   inflight: Promise<void> | null;
   forcedAt: number | null;
   writePending: boolean;
@@ -199,7 +202,7 @@ export function createDevOpsPoller(d: PollerDeps) {
     const again = clients.get(key);
     if (again) return again;
     const r = row ?? emptyPoll(key);
-    const c: Client = { key, row: r, pace: { ...NORMAL, slow: r.slow, reason: r.slowReason, retryAt: r.retryAt }, items: new Map(items.map((i) => [i.id, i])), process: null, fields: null, inflight: null, forcedAt: null, writePending: false, target: null, persistedAt: nowMs(), rate: null };
+    const c: Client = { key, row: r, pace: { ...NORMAL, slow: r.slow, reason: r.slowReason, retryAt: r.retryAt }, items: new Map(items.map((i) => [i.id, i])), process: null, fields: null, areas: null, inflight: null, forcedAt: null, writePending: false, target: null, persistedAt: nowMs(), rate: null };
     if (r.retryAt) d.limiter.hold(key, r.retryAt);
     clients.set(key, c);
     return c;
@@ -255,6 +258,11 @@ export function createDevOpsPoller(d: PollerDeps) {
     const m = await src.meta(target);
     c.process = m.process;
     c.fields = m.fields;
+    // AH-2: the area tree and teams (a day in the source's memory). Never fails the check: the last known stays.
+    c.areas = await src.areas(target).catch((e: unknown) => {
+      if (e instanceof DevOpsFailure && e.status === "auth_failed") throw e;
+      return c.areas;
+    });
     const fields = fieldsOf(m.process, m.fields);
     const projects = [target.project!];
     const typeFields = (v: RawValue) => {
@@ -457,7 +465,7 @@ export function createDevOpsPoller(d: PollerDeps) {
       if (!c.process && !c.inflight) void check(key);
       if (c.inflight && (o.force || c.writePending || !c.process || !c.row.loadedAt)) await within(c.inflight, WAIT_MS);
       const failure = c.row.errorKind ? { status: c.row.errorKind as ClientWorkStatus, message: c.row.error ?? "DevOps couldn't be read" } : null;
-      return { values: [...c.items.values()].map((i) => ({ id: i.id, fields: i.fields })), process: c.process, fields: c.fields, okAt: c.row.okAt, failure, loaded: !!c.row.loadedAt };
+      return { values: [...c.items.values()].map((i) => ({ id: i.id, fields: i.fields })), process: c.process, fields: c.fields, okAt: c.row.okAt, failure, loaded: !!c.row.loadedAt, areas: c.areas };
     },
     async byIds(key, ids) {
       const c = await stateOf(key);

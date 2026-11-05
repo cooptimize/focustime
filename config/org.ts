@@ -10,6 +10,7 @@
 import { DEFAULT_ACK_PHRASES, DEFAULT_PROMISE_PHRASES, DEFAULT_REQUEST_PHRASES } from "../plan/asks.ts";
 import { WEEKDAY_KEYS, parseSpan, type WeekdayKey } from "../week/hours.ts";
 import { CLIENT_SLOTS } from "./schema.ts";
+import { parseScope, ScopeInputError, type DevOpsScope } from "../plan/devops-scope.ts";
 
 export type SettingKind = "rule" | "default" | "level" | "personal";
 export const KIND_NAMES: Record<SettingKind, string> = { rule: "Rule", default: "Default", level: "Default by level", personal: "Personal" };
@@ -260,6 +261,15 @@ export const CLIENT_SPECS = {
   // ADM-2 (D597): an admin's two per-account overrides of the customer rule (plan/client-accounts.ts).
   treat_as_client: { kind: "rule", area: "clients", label: "Treat as a client", builtin: false, parse: bool },
   hidden: { kind: "rule", area: "clients", label: "Hide from FocusTime", builtin: false, parse: bool },
+  // AH-2: Cooptimize's work in this client's DevOps project (plan/devops-scope.ts). Null: automatic.
+  devops_scope: { kind: "rule", area: "clients", label: "Cooptimize's work in this project", builtin: null as DevOpsScope | null, parse: orNull((v) => {
+    try {
+      return parseScope(v);
+    } catch (e) {
+      if (e instanceof ScopeInputError) throw new OrgInputError(e.message);
+      throw e;
+    }
+  }) },
 } satisfies Record<string, Spec>;
 export type ClientKeyName = keyof typeof CLIENT_SPECS;
 
@@ -319,8 +329,8 @@ export type OrgRules = {
   /** ADM-2 (D604): team values stored that no longer validate, each read as its built-in value (Status shows them). */
   problems: { key: string; label: string; fallback: unknown }[];
 };
-export type ClientRules = { color: string | null; allowAi: boolean; /** CV-3: rules-only grouping while AI is off (on by default). */ groupWithoutAi: boolean; attachmentsAi: boolean; openStates: string[]; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean };
-export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, groupWithoutAi: true, attachmentsAi: false, openStates: [], noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false };
+export type ClientRules = { color: string | null; allowAi: boolean; /** CV-3: rules-only grouping while AI is off (on by default). */ groupWithoutAi: boolean; attachmentsAi: boolean; openStates: string[]; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean; /** AH-2: null is automatic. */ devopsScope: DevOpsScope | null };
+export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, groupWithoutAi: true, attachmentsAi: false, openStates: [], noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false, devopsScope: null };
 
 const parsed = (r: OrgRow): unknown => {
   try {
@@ -360,7 +370,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
   for (const k of clientKeys) {
     const s = `client:${k}`;
     const c = <K extends ClientKeyName>(key: K) => valueOf(m, s, key, CLIENT_SPECS[key] as Spec, CLIENT_SPECS[key].builtin) as (typeof CLIENT_SPECS)[K]["builtin"];
-    clients[k] = { color: c("color"), allowAi: c("allow_ai"), groupWithoutAi: c("group_without_ai"), attachmentsAi: false, openStates: c("open_states"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden") };
+    clients[k] = { color: c("color"), allowAi: c("allow_ai"), groupWithoutAi: c("group_without_ai"), attachmentsAi: false, openStates: c("open_states"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden"), devopsScope: c("devops_scope") };
   }
   const levels = Object.fromEntries(
     LEVELS.map((l) => {

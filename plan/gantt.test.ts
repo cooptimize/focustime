@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dragHalves, fromHalfIndex, ganttBar, halfAt, halfIndex, halfX, halvesMoved, receive, release, shownOrder } from "./gantt.ts";
+import { dragHalves, edgeLabel, fromHalfIndex, ganttBar, halfAt, halfIndex, halfX, halvesMoved, receive, release, shownOrder } from "./gantt.ts";
 import { aheadColumns, aheadWeeks, timelineScale } from "./ahead.ts";
 
 const scale = timelineScale(aheadColumns(aheadWeeks("2026-11-02")), { week: 140, month: 200 });
@@ -55,5 +55,18 @@ describe("the drag bug (D655): order frozen during a drag, one reflow on drop", 
     h = release(h);
     expect(h).toEqual({ shown: 3, pending: null });
     expect(receive(h, 4, false)).toEqual({ shown: 4, pending: null });
+  });
+});
+
+describe("AH-2: edgeLabel", () => {
+  const today = "2026-11-05";
+  it("an end before the timeline: ended, the year only when it isn't this year, est. when estimated", () => {
+    expect(edgeLabel("before", "2026-10-02", { estimated: false, today })).toBe("← ended Oct 2");
+    expect(edgeLabel("before", "2025-12-19", { estimated: false, today })).toBe("← ended Dec 19, 2025");
+    expect(edgeLabel("before", "2026-10-02", { estimated: true, today })).toBe("← ended est. Oct 2");
+  });
+  it("an end after the timeline: ends <date> →", () => {
+    expect(edgeLabel("after", "2026-12-30", { estimated: false, today })).toBe("ends Dec 30 →");
+    expect(edgeLabel("after", "2027-03-03", { estimated: true, today })).toBe("ends est. Mar 3, 2027 →");
   });
 });

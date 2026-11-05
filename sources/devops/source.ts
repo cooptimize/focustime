@@ -10,6 +10,7 @@ import { formatFetchedAt } from "../when.ts";
 import { batchFields, buildAllChildrenWiql, buildChildrenWiql, buildWiql, detectOrderField, identityEmail, detectSizeField, detectTargetField, detectTypeSizeField, fieldNames, identityName, dateOnly, workItemUrl, START_DATE_FIELD, ACCEPTANCE_FIELD, htmlToText, normalizeWorkItems, type BacklogLevels, type FieldInfo, type NormalizeContext, type StateCategories } from "./normalize.ts";
 import { buildProcessModel, isClosed, isOpen, looksOf, type TypeLook, planningLevels, stateCategories, typeOf, type ProcessModel, type ProcessOverrides, type RawProcess } from "../../plan/process.ts";
 import { Pat } from "./pat.ts";
+import { scopeCounts, scopeOf, type DevOpsScope, type ProjectAreas, type ScopeCounts, type ScopeItem, type ScopeResult } from "../../plan/devops-scope.ts";
 import type { DevOpsTarget, TargetsResult } from "./types.ts";
 import type { ExemplarCandidate, FeatureSignals } from "../../plan/stories.ts";
 import { CHILD_FIELDS, childrenWiql, COMMENTS_API, COMMENTS_TOP, EPIC_FIELDS, FEATURE_FIELDS, parseChild, parseComments, parseEpic, parseFeature, POOL_FEATURE_FIELDS, POOL_FEATURES, poolCandidates, poolStoriesWiql, poolStoryFields, poolWiql } from "./signals.ts";
@@ -51,7 +52,15 @@ export type DevOpsDeps = {
   limiter?: Limiter;
   /** DV-1: screens read the central store (the poller's) instead of DevOps; `targets` then gives visibility and identity only. */
   central?: CentralReads;
+  /**
+   * AH-2: a client's scope (Admin › Clients' "Cooptimize's work in this project", null for automatic) and who is a
+   * Cooptimizer (by email). Absent or null: no scope (every item, as before AH-2).
+   */
+  scope?: (clientKey: string) => Promise<ScopeDeps | null>;
 };
+
+/** AH-2: what the scope needs from the org runtime. */
+export type ScopeDeps = { rule: DevOpsScope | null; isCooptimizer: (email: string) => boolean };
 
 /** DV-1: one client's limits. `before` throws a DevOpsFailure while DevOps asked to wait; `after` reads the headers. */
 export type Limiter = { before(clientKey: string): void; after(clientKey: string, status: number, headers: Headers): void };
@@ -70,6 +79,8 @@ export type CentralView = {
   okAt: string | null;
   failure: { status: ClientWorkStatus; message: string } | null;
   loaded: boolean;
+  /** AH-2: the project's area tree and teams (read once a day; null until read). */
+  areas?: ProjectAreas | null;
 };
 
 export type CentralReads = {
@@ -157,6 +168,8 @@ export function createDevOpsSource(d: DevOpsDeps) {
   const memory = new Map<string, { at: number; result: ClientWork; /** The committed features it was read with, sorted ids. */ features: string }>();
   const metadata = new Map<string, { at: number; raw: ProcessRaw }>();
   const histories = new Map<string, { at: number; history: NonNullable<RawProcess["history"]> }>();
+  /** AH-2: each project's area tree and teams, a day in memory (never a PAT). */
+  const areaMemo = new Map<string, { at: number; areas: ProjectAreas }>();
   /** Each client's DevOps organization name (not secret), from its last Dataverse settings. */
   const orgs = new Map<string, string>();
   const log = (op: string, extra: { status?: number; durationMs?: number; count?: number; kind?: string } = {}) => d.log({ source: "devops", op, ...extra });
@@ -210,6 +223,57 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const type = res.headers.get("content-type") ?? "";
     if (!type.includes("application/json")) throw new DevOpsFailure("auth_failed", `DevOps PAT expired or invalid for ${c.client}`);
     return (await res.json()) as T;
+  }
+
+  /**
+   * AH-2: the project's area tree (classification nodes, 14 levels) and its teams with their team field values (area
+   * paths and "include sub areas"). Each part fails on its own with a plain reason: reading teams needs the Project
+   * read scope, which a read token may not have. A day in memory; never throws but for a refused token.
+   */
+  async function loadAreas(c: Ctx, project: string, refresh = false): Promise<ProjectAreas> {
+    const key = `${c.org.toLowerCase()}/${project.toLowerCase()}`;
+    const hit = areaMemo.get(key);
+    const t = now().epochMilliseconds;
+    if (!refresh && hit && t - hit.at < processTtl) return hit.areas;
+    const p = encodeURIComponent(project);
+    type Node = { name?: unknown; children?: Node[] | null };
+    let root: string | null = null;
+    const paths: string[] = [];
+    let areasProblem: string | null = null;
+    try {
+      const tree = await call<Node>(c, "areas", `${p}/_apis/wit/classificationnodes/Areas?$depth=14`);
+      const walk = (n: Node, at: string | null) => {
+        if (typeof n.name !== "string" || paths.length >= 2000) return;
+        const path = at === null ? n.name : `${at}\\${n.name}`;
+        paths.push(path);
+        for (const k of n.children ?? []) walk(k, path);
+      };
+      walk(tree, null);
+      root = paths[0] ?? null;
+    } catch (e) {
+      if (e instanceof DevOpsFailure && e.status === "auth_failed") throw e;
+      areasProblem = "The project's area paths couldn't be read";
+    }
+    let teams: ProjectAreas["teams"] = null;
+    let teamsProblem: string | null = null;
+    try {
+      const list = await call<{ value?: { name?: unknown }[] }>(c, "teams", `_apis/projects/${p}/teams?$top=200`);
+      const names = (list.value ?? []).map((x) => x.name).filter((n): n is string => typeof n === "string").slice(0, 200);
+      teams = [];
+      for (const name of names) {
+        const v = await call<{ field?: { referenceName?: unknown } | null; values?: { value?: unknown; includeChildren?: unknown }[] }>(c, "teamfieldvalues", `${p}/${encodeURIComponent(name)}/_apis/work/teamsettings/teamfieldvalues`).catch(() => null);
+        if (!v) continue;
+        const otherField = typeof v.field?.referenceName === "string" && v.field.referenceName !== "System.AreaPath";
+        teams.push({ name, otherField, areas: otherField ? [] : (v.values ?? []).filter((x) => typeof x.value === "string").map((x) => ({ path: x.value as string, sub: x.includeChildren === true })) });
+      }
+      teams.sort((a, b) => a.name.localeCompare(b.name));
+    } catch {
+      // A token without the Project read scope is refused here (401 or a sign-in page), and only here.
+      teamsProblem = "The project's teams couldn't be read with the company's DevOps token (it needs Project read). Area paths still work";
+    }
+    const areas: ProjectAreas = { root, paths, areasProblem, teams, teamsProblem, readAt: now().toString() };
+    areaMemo.set(key, { at: t, areas });
+    return areas;
   }
 
   /** WT-1: the process model's raw responses for a project: memory, then the snapshot (both a day), else DevOps. */
@@ -348,7 +412,30 @@ export function createDevOpsSource(d: DevOpsDeps) {
   }
 
   /** DV-1: the same reads over a client's stored items. Items read by id that the store lacks are read once and kept. */
-  function storeReads(clientKey: string, values: readonly RawValue[], meta: Metadata): Reads {
+  /** AH-2: what the scope rules need of stored items (the level from the process model, never a type name). */
+  function scopeItems(values: readonly RawValue[], model: ProcessModel): ScopeItem[] {
+    return values.map((v) => {
+      const f = v.fields;
+      const level = typeof f["System.WorkItemType"] === "string" ? (typeOf(model, f["System.WorkItemType"] as string)?.level ?? null) : null;
+      return { id: v.id, parentId: typeof f["System.Parent"] === "number" ? (f["System.Parent"] as number) : null, area: typeof f["System.AreaPath"] === "string" ? (f["System.AreaPath"] as string) : null, assigneeEmail: identityEmail(f[ASSIGNED_FIELD]), portfolio: level === "top" || level === "parent" };
+    });
+  }
+
+  /**
+   * AH-2: the one scope function. Which of a client's stored items are Cooptimize's work in its project, by the
+   * client's scope (plan/devops-scope.ts), my items always in. Null: no scope here (every item). Ahead, Fix next,
+   * Week's lists and Admin's counts all read it.
+   */
+  async function scopeFor(clientKey: string, view: Pick<CentralView, "values" | "areas">, model: ProcessModel, me: string | null): Promise<ScopeResult | null> {
+    if (!d.scope) return null;
+    const deps = await d.scope(clientKey).catch(() => null);
+    if (!deps) return null;
+    return scopeOf(scopeItems(view.values, model), deps.rule, { areas: view.areas ?? null, isCooptimizer: deps.isCooptimizer, me });
+  }
+  const keepOf = (sc: ScopeResult | null) => (sc && !sc.all ? (v: RawValue) => sc.ids.has(v.id) : () => true);
+
+  /** `keep` (AH-2): the scope; my items and items read by id aren't filtered by it. */
+  function storeReads(clientKey: string, values: readonly RawValue[], meta: Metadata, keep: (v: RawValue) => boolean = () => true): Reads {
     const byId = new Map(values.map((v) => [v.id, v]));
     const open = (v: RawValue) => {
       const type = typeof v.fields["System.WorkItemType"] === "string" ? (v.fields["System.WorkItemType"] as string) : "";
@@ -360,8 +447,8 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const parentIn = (ids: ReadonlySet<number>) => (v: RawValue) => typeof v.fields["System.Parent"] === "number" && ids.has(v.fields["System.Parent"] as number);
     return {
       mine: async (email) => values.filter((v) => open(v) && identityEmail(v.fields[ASSIGNED_FIELD]) === email.toLowerCase()),
-      openChildren: async (parents) => values.filter((v) => open(v) && parentIn(new Set(parents))(v)),
-      allChildren: async (parents) => values.filter(parentIn(new Set(parents))),
+      openChildren: async (parents) => values.filter((v) => open(v) && keep(v) && parentIn(new Set(parents))(v)),
+      allChildren: async (parents) => values.filter((v) => keep(v) && parentIn(new Set(parents))(v)),
       byIds: async (ids) => {
         const missing = ids.filter((id) => !byId.has(id));
         const got = missing.length && d.central ? await d.central.byIds(clientKey, missing) : [];
@@ -914,7 +1001,8 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const { ctx } = contextOf(ref, { ...target!, pat: null });
     const meta = metaOf(view.process, ref.clientKey);
     try {
-      const r = await readClient(ctx, meta, (m) => storeReads(ref.clientKey, view.values, m), o.watch, o.features);
+      const keep = keepOf(await scopeFor(ref.clientKey, view, meta.model, target!.email));
+      const r = await readClient(ctx, meta, (m) => storeReads(ref.clientKey, view.values, m, keep), o.watch, o.features);
       reportItems(ref.clientKey, [...r.items, ...r.children, ...r.watched, ...r.committed, ...r.parents]);
       const types = looksOf(r.model);
       const f = view.failure;
@@ -965,7 +1053,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
    * AH-1 (D653): every item of each client the store has that isn't closed, at any level, with its revision, assignee
    * and the fields its type has (start, target, size), plus the parents of those items. For Ahead's grid and Gantt.
    */
-  async function aheadItems(clients: ClientRef[], o: { refresh?: boolean } = {}): Promise<import("../../actions/types.ts").AheadClient[]> {
+  async function aheadItems(clients: ClientRef[], o: { refresh?: boolean; /** AH-2: "Show the whole project": items outside the scope too (marked). */ whole?: boolean } = {}): Promise<import("../../actions/types.ts").AheadClient[]> {
     const fail = (ref: ClientRef, status: ClientWorkStatus, message: string): import("../../actions/types.ts").AheadClient => ({ clientKey: ref.clientKey, clientName: ref.clientName, status, message, fetchedAt: null, project: null, me: null, startFields: {}, targetFields: {}, sizeFields: {}, fieldNames: {}, types: [], items: [] });
     if (!d.central) return clients.map((c) => fail(c, "error", "Ahead reads the shared DevOps store, which isn't running here"));
     const targets = await viewerTargets(clients.map((c) => c.clientKey), !!o.refresh);
@@ -1005,10 +1093,15 @@ export function createDevOpsSource(d: DevOpsDeps) {
           };
         });
         const known = all.filter((i) => i.level !== null && cats.has(i.type));
-        const keep = new Set(known.filter((i) => !isClosed(i.stateCategory)).map((i) => i.id));
+        // AH-2: the scope. Out of it, an item shows only with "Show the whole project" (or as a parent, for context).
+        const sc = await scopeFor(ref.clientKey, view, meta.model, target?.email ?? null);
+        const inScope = (id: number) => !sc || sc.all || sc.ids.has(id);
+        const open = known.filter((i) => !isClosed(i.stateCategory));
+        const keep = new Set(open.filter((i) => o.whole || inScope(i.id)).map((i) => i.id));
         const byId = new Map(known.map((i) => [i.id, i]));
         for (const id of [...keep]) for (let p = byId.get(id)?.parentId ?? null, n = 0; p !== null && n < 10; p = byId.get(p)?.parentId ?? null, n++) if (byId.has(p)) keep.add(p);
-        const items = known.filter((i) => keep.has(i.id));
+        const items = known.filter((i) => keep.has(i.id)).map((i) => ({ ...i, inScope: inScope(i.id) }));
+        const scope = { kind: sc?.kind ?? "whole", automatic: sc?.kind === "automatic", all: sc ? sc.all : true, inScope: open.filter((i) => inScope(i.id)).length, total: open.length, problem: sc?.problem ?? null, whole: !!o.whole } as const;
         const typesOf = new Set(meta.model.types.map((t) => t.name));
         const pick = (m: Record<string, string>) => Object.fromEntries(Object.entries(m).filter(([t]) => typesOf.has(t)));
         const fetchedAt = view.okAt ? Temporal.Instant.from(view.okAt).toZonedDateTimeISO(tz).toString({ timeZoneName: "never", smallestUnit: "second" }) : null;
@@ -1017,7 +1110,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
           clientKey: ref.clientKey, clientName: ref.clientName, status: view.failure ? view.failure.status : "ok", ...(view.failure ? { message: view.failure.message } : {}),
           fetchedAt, project: ctx.projectName, me: target?.email ?? null,
           startFields: pick(f.starts), targetFields: pick(f.fields), sizeFields: pick(f.sizes ?? {}), fieldNames: f.names ?? {},
-          types: looksOf(meta.model), items,
+          types: looksOf(meta.model), items, scope,
         };
       }),
     );
@@ -1074,7 +1167,8 @@ export function createDevOpsSource(d: DevOpsDeps) {
         const none = { items: [], targetFields: {}, startFields: {}, sizeField: null, acceptanceField: false };
         if (!ctx || !meta || !view) return { ...base, ...none };
         try {
-          const p = await readPortfolio(ctx, meta, w.items, (m) => storeReads(w.clientKey, view.values, m), async () => view.fields ?? { fields: {}, starts: {}, size: null, ac: false });
+          const keep = keepOf(await scopeFor(w.clientKey, view, meta.model, ctx.me));
+          const p = await readPortfolio(ctx, meta, w.items, (m) => storeReads(w.clientKey, view.values, m, keep), async () => view.fields ?? { fields: {}, starts: {}, size: null, ac: false });
           reportItems(w.clientKey, [...p.items, ...p.items.flatMap((i) => i.children)]);
           const out: ClientPortfolio = { ...base, ...p };
           portfolioMemory.set(w.clientKey, { at: now().epochMilliseconds, result: out });
@@ -1114,6 +1208,26 @@ export function createDevOpsSource(d: DevOpsDeps) {
       const meta = metaOf(process, target.clientKey);
       const fields = await targetFieldsFor(ctx, project, [...meta.tiers.feature, ...meta.tiers.epic], [...meta.levels.story]);
       return { process, meta: { ...meta, categories: stateCategories(meta.model, d.openStates?.(target.clientKey) ?? []) }, fields };
+    },
+    /** AH-2: the project's area tree and teams (a day). */
+    async areas(target: DevOpsTarget, o: { refresh?: boolean } = {}): Promise<ProjectAreas> {
+      const { ctx, project } = contextOf({ clientKey: target.clientKey, clientName: target.clientName }, target);
+      return loadAreas(ctx, project, o.refresh);
+    },
+    /**
+     * AH-2: Admin › Clients' counts for a client's store: open items per area path and team, how many are Cooptimize's,
+     * and how many the automatic scope takes. Null until the poller has read the client.
+     */
+    scopeCounts(view: CentralView, clientKey: string, isCooptimizer: (email: string) => boolean): ScopeCounts | null {
+      if (!view.process || !view.loaded) return null;
+      const meta = metaOf(view.process, clientKey);
+      const cats = stateCategories(meta.model, d.openStates?.(clientKey) ?? []);
+      const open = view.values.filter((v) => {
+        const type = typeof v.fields["System.WorkItemType"] === "string" ? (v.fields["System.WorkItemType"] as string) : "";
+        const state = typeof v.fields["System.State"] === "string" ? (v.fields["System.State"] as string).toLowerCase() : "";
+        return typeOf(meta.model, type)?.level != null && cats.has(type) && !isClosed(cats.get(type)?.get(state) ?? "Unknown");
+      });
+      return scopeCounts(scopeItems(open, meta.model), { areas: view.areas ?? null, isCooptimizer });
     },
     /** A WIQL query in the client's project with time precision: the ids, and the server's "as of" time. */
     async ids(target: DevOpsTarget, query: string, top: number): Promise<{ ids: number[]; asOf: string | null }> {

@@ -5,6 +5,7 @@
 import { useState, type CSSProperties } from "react";
 import { GAP_ACTION, GAP_WORDS, type QueueEntry } from "../../plan/fixnext.ts";
 import { useAhead } from "./Ahead.tsx";
+import { gapChip, OneChip } from "./Chips.tsx";
 import { AssigneePicker } from "./Assignee.tsx";
 import { Editor } from "./Grid.tsx";
 import type { Row } from "./model.ts";
@@ -27,7 +28,7 @@ function FixCard({ e, skip, compact }: { e: Entry; skip?: (k: string) => void; c
   return (
     <article className={`ah-fix${compact ? " compact" : ""}`} style={{ "--c": a.color(r.clientKey) } as CSSProperties} aria-label={`${GAP_WORDS[e.gap]}: ${r.item.title}`}>
       <p className="ah-fix-what">
-        <span className="ah-gap">{GAP_WORDS[e.gap]}</span>
+        <OneChip c={gapChip(e.gap)} />
         <span className="muted">
           {c.clientName} · {r.item.type} #{r.item.id}
           {due ? ` · target ${monthDay(due)}` : ""}
@@ -71,7 +72,7 @@ export function FixNext({ queue, skip, onNotice }: { queue: Entry[]; skip: (k: s
           <ol>
             {rest.slice(0, 12).map((e) => (
               <li key={e.key}>
-                <span className="ah-gap">{GAP_WORDS[e.gap]}</span> {e.row.item.title} <span className="muted">#{e.row.item.id}</span>
+                <OneChip c={gapChip(e.gap)} /> {e.row.item.title} <span className="muted">#{e.row.item.id}</span>
               </li>
             ))}
           </ol>

@@ -26,7 +26,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
   const row = (page: Page, title: string) => page.locator(".ah-row", { has: page.getByRole("link", { name: title, exact: true }) });
   const bar = (page: Page, title: string) => page.locator(".pa-item", { has: page.getByRole("link", { name: title, exact: true }) });
 
-  it("Grid: every level grouped by client, gaps highlighted, missing fields named, my changes pending; items I can't change say who can", async () => {
+  it("Grid: every level grouped by client, gaps only as quiet chips, missing fields a dash that says what's missing, my changes pending; items I can't change say who can", async () => {
     const { page, errors } = await open("#/ahead");
     await expect(page.locator(".ah-pending").textContent()).resolves.toContain("3 changes pending");
     await expect(page.locator(".ah-client-head").allTextContents()).resolves.toEqual(expect.arrayContaining([expect.stringContaining("Northwind Foods"), expect.stringContaining("Harbor Health")]));
@@ -36,10 +36,28 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await expect(row(page, "Loyalty points").locator(".ah-col-target").getAttribute("class")).resolves.toContain("ah-conf");
     // A story's size in its process's own field, FocusTime's size beside it; a feature has none in this process.
     await expect(row(page, "Export orders to CSV").locator(".ah-col-size").textContent()).resolves.toMatch(/3\s*Story Points\s*FocusTime: L, about 4h/);
-    await expect(row(page, "Order history export").locator(".ah-col-size").textContent()).resolves.toBe("Not in Portal's process");
-    // Gaps: a feature with no stories, an unsized story.
-    await expect(row(page, "Supplier onboarding").locator(".ah-col-ready").textContent()).resolves.toContain("Needs stories");
-    await expect(row(page, "Supplier onboarding").locator(".ah-col-start").getAttribute("class")).resolves.toContain("ah-gapcell");
+    // AH-2: a field the type doesn't have, and a missing value, are a muted dash; the tooltip says which.
+    await expect(row(page, "Order history export").locator(".ah-col-size .ah-none").getAttribute("title")).resolves.toBe("Not in Portal's process");
+    await expect(row(page, "Supplier onboarding").locator(".ah-col-start .ah-none").getAttribute("title")).resolves.toBe("No start date");
+    // Gaps only in Readiness, as chips: two, then +N with the rest in its tooltip. No cell is filled for a gap.
+    const ready = row(page, "Supplier onboarding").locator(".ah-col-ready");
+    await expect(ready.locator(".ah-chip:not(.ah-more)").allTextContents()).resolves.toEqual(["Not scoped", "Needs stories"]);
+    await expect(ready.locator(".ah-more").textContent()).resolves.toBe("+1");
+    await expect(ready.locator(".ah-more").getAttribute("title")).resolves.toBe("No dates");
+    const fills = await page.locator(".ah-cell:not(.ah-pend)").evaluateAll((els) => [...new Set(els.map((e) => getComputedStyle(e).backgroundColor))]);
+    expect(fills).toEqual(["rgba(0, 0, 0, 0)"]);
+    // No orange text: every cell's text is the normal or a muted color, never the amber.
+    const amber = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--watch").trim());
+    const colors = await page.locator(".ah-cell, .ah-cell *").evaluateAll((els) => [...new Set(els.map((e) => getComputedStyle(e).color))]);
+    const probe = await page.evaluate((c) => {
+      const d = document.createElement("span");
+      d.style.color = c;
+      document.body.append(d);
+      const v = getComputedStyle(d).color;
+      d.remove();
+      return v;
+    }, amber);
+    expect(colors).not.toContain(probe);
     // Harbor: I'm not a lead there; All shows a teammate's story, read only with the note.
     await page.getByRole("button", { name: "Harbor Health", exact: true }).click();
     await page.getByRole("group", { name: "Owner" }).getByRole("button", { name: "All" }).click();
@@ -94,17 +112,37 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
 
   it("the review: grouped by item, before → after, a conflict with Keep mine or Take theirs, Remove, Discard all with a confirm; Commit needs writes on", async () => {
     const { page, errors } = await sameSessionFresh();
+    // A second change on one item (its size, beside the conflicting target), so a card holds two rows.
+    const loyal = row(page, "Loyalty points").locator(".ah-col-start");
+    await loyal.waitFor({ timeout: 30_000 });
+    await loyal.focus();
+    await page.keyboard.press("Enter");
+    await page.locator(".ah-editor").getByLabel("Start date").fill("2026-11-30");
+    await page.keyboard.press("Enter");
+    await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes pending");
     await page.getByRole("button", { name: "Review" }).click();
     const panel = page.getByRole("dialog", { name: "Review changes" });
     await panel.waitFor();
     await expect(panel.locator(".ah-review-item").count()).resolves.toBe(3);
     const conflict = panel.locator(".ah-review-item.conflict");
     await expect(conflict.textContent()).resolves.toMatch(/Loyalty points.*Target.*Fri, Dec 4.*Wed, Dec 23 PM.*DevOps has Fri, Dec 11 now/);
+    // AH-2: one summary, the conflict at the top of its card, and one grid across the cards: every arrow at the same x.
+    await expect(panel.locator(".ah-review-sum").textContent()).resolves.toMatch(/^4 changes on 3 items\. Each item is written to DevOps as one change, only if nobody changed those fields since you started editing\.$/);
+    await expect(conflict.locator(":scope > *").nth(1).getAttribute("class")).resolves.toContain("ah-rv-conflict");
+    const arrows = await panel.locator(".ah-rv-arrow").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
+    expect(arrows.length).toBe(4);
+    expect(new Set(arrows).size).toBe(1);
+    const afters = await panel.locator(".ah-rv-after").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
+    expect(new Set(afters).size).toBe(1);
+    await expect(panel.getByRole("button", { name: /^Commit (3 items )?to DevOps$/ }).count()).resolves.toBe(1);
+    await expect(panel.getByText("Nothing is written until you commit.").count()).resolves.toBe(1);
     await expect(panel.getByText("Northwind Foods: DevOps writes aren't on for you.").count()).resolves.toBe(1);
     await expect(panel.getByRole("button", { name: "Enable DevOps writes" }).count()).resolves.toBe(1);
     await shotBoth(page, "ahead-review-conflict", panel);
     // Take theirs drops my conflicting change.
     await conflict.getByRole("button", { name: "Take theirs" }).click();
+    await expect.poll(() => panel.locator(".ah-review-item.conflict").count()).toBe(0);
+    await panel.getByRole("button", { name: /Remove the start change on #1140/ }).click();
     await expect.poll(() => panel.locator(".ah-review-item").count()).toBe(2);
     await panel.getByRole("button", { name: /Remove the start change on #1150/ }).click();
     await expect.poll(() => panel.locator(".ah-review-item").count()).toBe(1);
@@ -117,6 +155,55 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     expect(errors).toEqual([]);
     await page.close();
   }, T);
+
+  it("AH-2: Cooptimize's scope: the client's own area left out with a note, Show the whole project brings it back marked, Fix next never has it, and an admin's scope applies", async () => {
+    const { page, errors } = await open("#/ahead");
+    await page.getByRole("button", { name: "Northwind Foods", exact: true }).click();
+    await page.getByRole("group", { name: "Owner" }).getByRole("button", { name: "All" }).click();
+    await expect(page.locator(".ah-scope-note").textContent()).resolves.toContain("Showing Cooptimize's work (automatic) for Northwind Foods. Set the scope in Admin › Clients.");
+    await expect(row(page, "Finance close automation").count()).resolves.toBe(0);
+    await expect(row(page, "Order history export").count()).resolves.toBe(1);
+    const whole = page.getByRole("button", { name: "Show the whole project" });
+    await expect(whole.getAttribute("title")).resolves.toBe("Northwind Foods: 13 of 18 open items are Cooptimize's work");
+    await whole.click();
+    await row(page, "Finance close automation").waitFor();
+    await expect(row(page, "Month-end journal import").locator(".ah-ro").allTextContents()).resolves.toContain("Outside scope");
+    // Fix next never offers the client's own work (Journal approval step is unassigned and unsized).
+    const fix = await call(page, "#/ahead/fix");
+    await expect(fix.locator(".ah-fix").count()).resolves.toBeGreaterThan(0);
+    await expect(fix.getByText("Journal approval step").count()).resolves.toBe(0);
+    // Remembered: still on after a reload.
+    await page.evaluate(() => (location.hash = "#/ahead"));
+    await page.reload();
+    await row(page, "Finance close automation").waitFor({ timeout: 30_000 });
+    await whole.click();
+    await expect.poll(() => row(page, "Finance close automation").count()).toBe(0);
+    // An admin sets By area path to Finance only: Northwind shows only that (and my own items).
+    await page.evaluate(() => (location.hash = "#/settings/admin-clients"));
+    const card = page.locator(".adm-client", { has: page.getByRole("heading", { name: "Northwind" }) });
+    const scope = card.locator(".adm-scope");
+    await scope.waitFor({ timeout: 30_000 });
+    await expect(scope.textContent()).resolves.toContain("Automatic: 13 of 18 open items.");
+    await scope.getByRole("radio", { name: /By area path/ }).check();
+    await scope.getByRole("row", { name: /Finance/ }).getByRole("checkbox").first().check();
+    await expect(scope.textContent()).resolves.toContain("Shows 5 of 18 open items");
+    await shotBoth(page, "admin-scope", scope);
+    await scope.getByRole("button", { name: "Save scope" }).click();
+    await expect.poll(() => scope.textContent()).toContain("Now: Area Portal\\Finance and sub-areas.");
+    await page.evaluate(() => (location.hash = "#/ahead"));
+    await row(page, "Finance close automation").waitFor({ timeout: 30_000 });
+    // Priya's story under my feature is in Web, so out; my own items stay wherever they are.
+    await expect(row(page, "Export button on the order page").count()).resolves.toBe(0);
+    await expect(row(page, "Supplier onboarding").count()).resolves.toBe(1);
+    await expect(page.locator(".ah-scope-note").count()).resolves.toBe(0);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+  const call = async (page: Page, hash: string) => {
+    await page.evaluate((x) => (location.hash = x), hash);
+    await page.locator(".ah-fix-mode, .ah-fix-empty").first().waitFor({ timeout: 30_000 });
+    return page.locator(".ah-fix-mode, .ah-fix-empty").first();
+  };
 
   /** A new person each time (the demo seeds three pending changes per session). */
   const sameSessionFresh = () => open("#/ahead");

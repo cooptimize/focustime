@@ -89,3 +89,15 @@ export function receive<T>(h: Held<T>, value: T, dragging: boolean): Held<T> {
 }
 /** The drag ended: whatever arrived meanwhile shows now, once. */
 export const release = <T,>(h: Held<T>): Held<T> => (h.pending === null ? h : { shown: h.pending, pending: null });
+
+/**
+ * AH-2: the words at a bar's edge when its end is off the timeline: "← ended Oct 2" for an end before it, "ends Mar 3 →"
+ * after it; the year when it isn't today's year, and "est." when the end is estimated (no target date in DevOps).
+ */
+export function edgeLabel(side: "before" | "after", end: IsoDate, o: { estimated: boolean; today: IsoDate }): string {
+  const d = Temporal.PlainDate.from(end);
+  const sameYear = d.year === Temporal.PlainDate.from(o.today).year;
+  const date = d.toLocaleString("en-US", sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+  const when = `${o.estimated ? "est. " : ""}${date}`;
+  return side === "before" ? `← ended ${when}` : `ends ${when} →`;
+}

@@ -321,3 +321,12 @@ One job reads each registered client chat for everyone; Asks are now Requests. D
 - **Store.** `draft_stories` ai_* columns (`store/migrations/20261107T1347_draft_ai.ts`, in Export); `setDraftAi`, `undoCapture` and `captureOfDraft` in `store/plan-store.ts`.
 - **UI.** `ui/CreateDraft.tsx` (`CreateDraftDialog`: Yours and the AI version side by side, the parent, Preview in DevOps into the write framework; `useDraftView` reads until the AI version lands), `ui/createdraft-ctx.ts` (`CreateDraftCtx`, provided by `ui/App.tsx`); `ui/DevOpsWrite.tsx` `DraftsToAdd` row states and the preview's client line ("Creating in <client>'s DevOps", the client in Where); `ui/DraftEditor.tsx` Create in DevOps opens the dialog for a captured draft with an AI version.
 - **Tests.** `actions/draft-prepare.test.ts`, `store/capture-undo.test.ts`, the CP-1 part of `actions/devops-write.test.ts`, `plan/capture-prepare.test.ts`, `ui/capturebox.test.ts`; e2e `e2e/capture-devops.test.ts` (a real session on fakes, with the screenshots).
+
+## AH-2: Cooptimize's scope, calmer Ahead, the Review panel (Nov 5)
+
+- **Pure.** `plan/devops-scope.ts`: `scopeOf` (automatic, whole, teams, areas; mine always; the root safeguard), `scopeCounts` (Admin's per-path and per-team counts), `parseScope`, `scopeWords`. `plan/gantt.ts` `edgeLabel`.
+- **Config.** `devops_scope` in CLIENT_SPECS (`config/org.ts`), a client Rule; `actions/scope-deps.ts` `scopeDepsOf(org)` gives the rule and who is a Cooptimizer.
+- **Sources.** `actions/devops-poll.ts` reads each project's areas and teams once a day (soft); `sources/devops/source.ts` applies the scope on read (`scopeFor`, `keepOf`) for Ahead (`aheadItems`, marking `inScope` and returning `AheadClient.scope`) and Week's lists; `internal.scopeCounts` for Admin. The demo mirrors it (`sources/demo/data.ts`: Northwind's Portal\Finance area of the client's own work).
+- **UI.** `ui/settings/AdminScope.tsx` (the picker in Admin › Clients), `ui/ahead/Chips.tsx` (Readiness chips), the "—" and state dots in Grid.tsx, the scope note and Show the whole project in Ahead.tsx, Review on the shared panel shell.
+- **Tests.** `plan/devops-scope.test.ts`, the AH-2 parts of `actions/devops-poll.test.ts`, `actions/ahead-actions.test.ts` and `plan/gantt.test.ts`; e2e `e2e/ahead.test.ts` (scope, chips, Review alignment).
+

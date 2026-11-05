@@ -12,6 +12,7 @@ import { byItem, pendingText, valueText, type ChangeField, type ChangeValue, typ
 import { fixQueue, type QueueEntry } from "../../plan/fixnext.ts";
 import { call } from "../api.ts";
 import { useDevOpsWrite } from "../DevOpsWrite.tsx";
+import { TypeIcon } from "../TypeIcon.tsx";
 import { openBreakDown, type PanelAction } from "../menu.ts";
 import { openSend } from "../send-event.ts";
 import { clientColor } from "../labels.ts";
@@ -81,6 +82,13 @@ export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { dat
     setFiltersRaw(f);
     void call("ahead.set_filters", { filters: f }).catch(() => null);
   };
+  // AH-2: "Show the whole project" changes what the server reads, so it's saved first, then Ahead reads again.
+  const setWhole = async (whole: boolean) => {
+    const next = { ...(filters ?? DEFAULT_FILTERS), whole };
+    setFiltersRaw(next);
+    await call("ahead.set_filters", { filters: next }).catch(() => null);
+    await reload();
+  };
 
   const stage: AheadEnv["stage"] = async (r, field, value, half = null) => {
     try {
@@ -108,7 +116,8 @@ export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { dat
   // Fix next: every gap on items I may change, whatever the filters (the pane follows the client filter only).
   const queue: (QueueEntry & { row: Row })[] = useMemo(() => {
     if (!load) return [];
-    const all = load.clients.filter((c) => c.status === "ok" && (!f.clients.length || f.clients.includes(c.clientKey))).flatMap((c) => buildRows(load, c));
+    // AH-2: never an item outside Cooptimize's scope, even with "Show the whole project".
+    const all = load.clients.filter((c) => c.status === "ok" && (!f.clients.length || f.clients.includes(c.clientKey))).flatMap((c) => buildRows(load, c)).filter((r) => r.item.inScope !== false);
     const byKey = new Map(all.map((r) => [r.key, r]));
     return fixQueue(all.map((r) => ({ clientKey: r.clientKey, id: r.item.id, open: isOpen(r.item), needsBreakdown: r.tier !== "story", openChildren: r.openChildren, startField: r.has.start ? "s" : null, targetField: r.has.target ? "t" : null, sizeField: r.has.size ? "z" : null, child: r.tier === "story", start: r.item.start, target: r.item.target, size: r.item.size, assigneeEmail: r.item.assignee?.email ?? null, canEdit: r.editable && !readOnly })), load.changes, skipped, (i) => dueOfRow(all, byKey.get(`${i.clientKey}:${i.id}`)!)).map((e) => ({ ...e, row: byKey.get(`${e.clientKey}:${e.itemId}`)! }));
   }, [load, f.clients, skipped, readOnly]);
@@ -141,7 +150,8 @@ export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { dat
         </div>
       )}
       {readOnly && load && <p className="muted ah-ro-note">Read only on a phone. Open FocusTime on a computer to change dates, sizes or owners.</p>}
-      {load && filters && mode !== "fix" && <Filters load={load} f={f} set={setFilters} color={color} anyFilter={!!anyFilter} />}
+      {load && filters && mode !== "fix" && <Filters load={load} f={f} set={setFilters} setWhole={(w) => void setWhole(w)} color={color} anyFilter={!!anyFilter} />}
+      {load && <ScopeNote load={load} whole={!!f.whole} />}
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
       {!load && !error && <p className="muted">Reading DevOps…</p>}
@@ -164,7 +174,34 @@ export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { dat
   );
 }
 
-function Filters({ load, f, set, color, anyFilter }: { load: AheadLoad; f: AheadFilters; set: (f: AheadFilters) => void; color: (k: string) => string; anyFilter: boolean }) {
+/**
+ * AH-2: one quiet line for the clients whose scope is automatic and narrows what's shown (a project with only its root
+ * area shows everything, so it gets none), and a problem with a set scope (teams not readable) in plain words.
+ */
+function ScopeNote({ load, whole }: { load: AheadLoad; whole: boolean }) {
+  const auto = load.clients.filter((c) => c.scope?.automatic && !c.scope.all);
+  const problems = load.clients.filter((c) => c.scope?.problem);
+  if (!auto.length && !problems.length) return null;
+  const names = (cs: typeof auto) => (cs.length === 1 ? cs[0]!.clientName : `${cs.slice(0, -1).map((c) => c.clientName).join(", ")} and ${cs[cs.length - 1]!.clientName}`);
+  return (
+    <div className="ah-scope-note">
+      {auto.length > 0 && (
+        <p className="muted">
+          {whole ? "Showing the whole project" : "Showing Cooptimize's work (automatic)"} for {names(auto)}. Set the scope in Admin › Clients.
+        </p>
+      )}
+      {problems.map((c) => (
+        <p key={c.clientKey} className="muted">
+          {c.clientName}: {c.scope!.problem}.
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function Filters({ load, f, set, setWhole, color, anyFilter }: { load: AheadLoad; f: AheadFilters; set: (f: AheadFilters) => void; setWhole: (whole: boolean) => void; color: (k: string) => string; anyFilter: boolean }) {
+  const scoped = load.clients.filter((c) => c.scope && !c.scope.all);
+  const scopeTitle = scoped.map((c) => `${c.clientName}: ${c.scope!.inScope} of ${c.scope!.total} open items are Cooptimize's work`).join("\n");
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
   const shownClients = load.clients.filter((c) => !f.clients.length || f.clients.includes(c.clientKey));
   const owners = new Set(shownClients.map((c) => ownerOf(f, c)));
@@ -213,8 +250,13 @@ function Filters({ load, f, set, color, anyFilter }: { load: AheadLoad; f: Ahead
         <input type="date" value={f.to ?? ""} onChange={(e) => set({ ...f, to: e.target.value || null })} />
       </label>
       <input className="rm-search" type="search" placeholder="Search titles or #id" aria-label="Search Ahead" value={f.q} onChange={(e) => set({ ...f, q: e.target.value })} />
+      {(scoped.length > 0 || f.whole) && (
+        <button type="button" className="rm-chip ah-whole" aria-pressed={!!f.whole} onClick={() => setWhole(!f.whole)} title={scopeTitle || "Every item in the project, not only Cooptimize's work"}>
+          Show the whole project
+        </button>
+      )}
       {anyFilter && (
-        <button type="button" className="mini quiet" onClick={() => set({ ...DEFAULT_FILTERS, owner: f.owner })}>
+        <button type="button" className="mini quiet" onClick={() => set({ ...DEFAULT_FILTERS, owner: f.owner, ...(f.whole ? { whole: true } : {}) })}>
           Clear filters
         </button>
       )}
@@ -282,6 +324,9 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
   const conflicts = items.filter((g) => g.changes.some((c) => c.theirs !== undefined)).length;
   const ready = items.length - conflicts - items.filter((g) => blocked.includes(g.clientKey)).length;
 
+  const changeCount = a.load.changes.length;
+  const lookOf = (clientKey: string, type: string | undefined) => (type ? (a.load.clients.find((c) => c.clientKey === clientKey)?.types.find((t) => t.name === type) ?? null) : null);
+
   return (
     <div className="bd-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <aside
@@ -296,110 +341,136 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
           if (e.key === "Escape" && !busy) (e.stopPropagation(), e.preventDefault(), onClose());
         }}
       >
-        <header className="ah-review-head">
+        <header className="bd-head">
           <h2>Review changes</h2>
           <CloseButton onClose={onClose} disabled={busy} />
         </header>
-        <p className="muted">
-          {pendingText(a.load.changes.length) ?? "Nothing pending."} {items.length ? `On ${plural(items.length, "item", "items")}; each item is one change in DevOps, written only if nobody changed those fields since you started.` : ""}
-        </p>
-        {blocked.map((k) => (
-          <p key={k} className="set-problem">
-            {clientName(k)}: DevOps writes aren't on for you.{" "}
-            <button type="button" className="mini" onClick={() => dw?.enable(k)}>
-              Enable DevOps writes
-            </button>
+        <div className="bd-body ah-review-body">
+          <p className="muted ah-review-sum">
+            {items.length
+              ? `${plural(changeCount, "change", "changes")} on ${plural(items.length, "item", "items")}. Each item is written to DevOps as one change, only if nobody changed those fields since you started editing.`
+              : "Nothing pending."}
           </p>
-        ))}
-        <ul className="ah-review-list">
-          {items.map((g) => {
-            const r = rowsByKey.get(`${g.clientKey}:${g.itemId}`);
-            const conflict = g.changes.some((c) => c.theirs !== undefined);
-            return (
-              <li key={`${g.clientKey}:${g.itemId}`} className={`ah-review-item${conflict ? " conflict" : ""}`}>
-                <h3>
-                  <span className="dl-swatch" style={{ "--c": a.color(g.clientKey) } as CSSProperties} aria-hidden="true" />#{g.itemId} {r?.item.title ?? ""}
-                  <span className="muted"> · {clientName(g.clientKey)}</span>
-                </h3>
-                <table className="wd-fields">
-                  <tbody>
-                    {g.changes.map((c) => (
-                      <tr key={c.field} className={c.theirs !== undefined ? "conflict" : ""}>
-                        <th scope="row">{c.field === "size" ? (r?.sizeLabel ?? "Size") : FIELD_WORD[c.field]}</th>
-                        <td>{changeText({ field: c.field, value: c.baseValue, half: null }, null)}</td>
-                        <td aria-hidden="true">→</td>
-                        <td>
-                          <strong>{changeText(c, null)}</strong>
-                          {c.theirs !== undefined && <span className="ah-theirs"> DevOps has {changeText({ field: c.field, value: c.theirs, half: null }, null)} now</span>}
-                        </td>
-                        <td>
-                          <button type="button" className="mini quiet" disabled={busy} onClick={() => r && void a.unstage(r, c.field)} aria-label={`Remove the ${FIELD_WORD[c.field].toLowerCase()} change on #${g.itemId}`}>
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {conflict && (
-                  <p className="ah-conflict" role="alert">
-                    Changed in DevOps since you started editing.{" "}
-                    <button type="button" className="mini" onClick={() => void resolve(g.clientKey, g.itemId, "mine")}>
-                      Keep mine
-                    </button>{" "}
-                    <button type="button" className="mini quiet" onClick={() => void resolve(g.clientKey, g.itemId, "theirs")}>
-                      Take theirs
-                    </button>
-                  </p>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-        {landed.length > 0 && (
-          <section className="ah-landed" aria-label="Committed">
-            <h3>Committed</h3>
-            <ul>
-              {landed.map((e) => (
-                <li key={e.id} className={`wl-${e.status}`}>
-                  {e.op === "undo_fields" ? "Undone: " : ""}#{e.itemId} {e.title} <span className="muted">{e.status === "confirmed" ? "in DevOps" : e.status === "refused" ? "not written" : "not confirmed yet"}</span>
-                  {e.undoable && (
-                    <button type="button" className="mini" onClick={() => void dw?.begin(e.clientKey, [{ kind: "undo", writeId: e.id }])}>
-                      Undo
-                    </button>
-                  )}
-                  {e.retryable && (
-                    <button type="button" className="mini" onClick={() => void dw?.retry(e.id)}>
-                      Retry
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-        <footer className="ah-review-foot">
-          <button type="button" className="primary" disabled={busy || ready <= 0} onClick={() => void commit()}>
-            {busy ? "Committing…" : ready > 0 ? `Commit ${plural(ready, "item", "items")}` : "Commit"}
-          </button>
-          {conflicts > 0 && <span className="muted">{plural(conflicts, "item waits", "items wait")} for Keep mine or Take theirs.</span>}
-          {confirmDiscard ? (
-            <span className="ah-discard" role="alert">
-              Discard all {plural(a.load.changes.length, "change", "changes")}?{" "}
-              <button type="button" className="mini danger" onClick={() => void call("ahead.discard", { confirm: true }).then(() => (setConfirmDiscard(false), onDone()))}>
-                Discard all
-              </button>{" "}
-              <button type="button" className="mini quiet" onClick={() => setConfirmDiscard(false)}>
-                Keep them
+          {blocked.map((k) => (
+            <p key={k} className="set-problem">
+              {clientName(k)}: DevOps writes aren't on for you.{" "}
+              <button type="button" className="mini" onClick={() => dw?.enable(k)}>
+                Enable DevOps writes
               </button>
-            </span>
-          ) : (
-            a.load.changes.length > 0 && (
-              <button type="button" className="mini quiet" disabled={busy} onClick={() => setConfirmDiscard(true)}>
-                Discard all
-              </button>
-            )
+            </p>
+          ))}
+          {items.length > 0 && (
+            // AH-2: one grid for every card (Field | Before | → | After | Remove), so arrows and values line up.
+            <div className="ah-rv-grid" role="list">
+              <div className="ah-rv-cols" aria-hidden="true">
+                <span>Field</span>
+                <span>Before</span>
+                <span />
+                <span>After</span>
+                <span />
+              </div>
+              {items.map((g) => {
+                const r = rowsByKey.get(`${g.clientKey}:${g.itemId}`);
+                const conflict = g.changes.some((c) => c.theirs !== undefined);
+                const look = lookOf(g.clientKey, r?.item.type);
+                return (
+                  <section key={`${g.clientKey}:${g.itemId}`} role="listitem" className={`ah-review-item ah-rv-card${conflict ? " conflict" : ""}`} aria-label={`#${g.itemId} ${r?.item.title ?? ""}`}>
+                    <h3 className="ah-rv-title">
+                      <span className="dl-swatch" style={{ "--c": a.color(g.clientKey) } as CSSProperties} aria-hidden="true" />
+                      {r && <TypeIcon type={r.item.type} look={look} />}
+                      <span className="ah-rv-name">
+                        #{g.itemId} {r?.item.title ?? ""}
+                      </span>
+                      <span className="muted ah-rv-client">{clientName(g.clientKey)}</span>
+                    </h3>
+                    {conflict && (
+                      <p className="ah-conflict ah-rv-conflict" role="alert">
+                        <span>Changed in DevOps since you started editing.</span>
+                        <button type="button" className="mini" onClick={() => void resolve(g.clientKey, g.itemId, "mine")}>
+                          Keep mine
+                        </button>
+                        <button type="button" className="mini quiet" onClick={() => void resolve(g.clientKey, g.itemId, "theirs")}>
+                          Take theirs
+                        </button>
+                      </p>
+                    )}
+                    {g.changes.map((c) => {
+                      const field = c.field === "size" ? (r?.sizeLabel ?? "Size") : FIELD_WORD[c.field];
+                      const before = changeText({ field: c.field, value: c.baseValue, half: null }, null);
+                      const after = changeText(c, null);
+                      return (
+                        <div key={c.field} className={`ah-rv-row${c.theirs !== undefined ? " conflict" : ""}`} role="group" aria-label={`${field}: ${before} to ${after}`}>
+                          <span className="ah-rv-field">{field}</span>
+                          <span className="ah-rv-before">{before}</span>
+                          <span className="ah-rv-arrow" aria-hidden="true">
+                            →
+                          </span>
+                          <span className="ah-rv-after">
+                            <strong>{after}</strong>
+                            {c.theirs !== undefined && <span className="ah-theirs">DevOps has {changeText({ field: c.field, value: c.theirs, half: null }, null)} now</span>}
+                          </span>
+                          <span className="ah-rv-remove">
+                            <button type="button" className="mini quiet" disabled={busy} onClick={() => r && void a.unstage(r, c.field)} aria-label={`Remove the ${FIELD_WORD[c.field].toLowerCase()} change on #${g.itemId}`}>
+                              Remove
+                            </button>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </section>
+                );
+              })}
+            </div>
           )}
+          {landed.length > 0 && (
+            <section className="ah-landed" aria-label="Committed">
+              <h3>Committed</h3>
+              <ul>
+                {landed.map((e) => (
+                  <li key={e.id} className={`wl-${e.status}`}>
+                    {e.op === "undo_fields" ? "Undone: " : ""}#{e.itemId} {e.title} <span className="muted">{e.status === "confirmed" ? "in DevOps" : e.status === "refused" ? "not written" : "not confirmed yet"}</span>
+                    {e.undoable && (
+                      <button type="button" className="mini" onClick={() => void dw?.begin(e.clientKey, [{ kind: "undo", writeId: e.id }])}>
+                        Undo
+                      </button>
+                    )}
+                    {e.retryable && (
+                      <button type="button" className="mini" onClick={() => void dw?.retry(e.id)}>
+                        Retry
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+        <footer className="bd-foot ah-review-foot">
+          <div className="ah-review-buttons">
+            <button type="button" className="primary" disabled={busy || ready <= 0} onClick={() => void commit()}>
+              {busy ? "Committing…" : ready > 0 ? `Commit ${plural(ready, "item", "items")} to DevOps` : "Commit to DevOps"}
+            </button>
+            {confirmDiscard ? (
+              <span className="ah-discard" role="alert">
+                Discard all {plural(changeCount, "change", "changes")}?{" "}
+                <button type="button" className="mini danger" onClick={() => void call("ahead.discard", { confirm: true }).then(() => (setConfirmDiscard(false), onDone()))}>
+                  Discard all
+                </button>{" "}
+                <button type="button" className="mini quiet" onClick={() => setConfirmDiscard(false)}>
+                  Keep them
+                </button>
+              </span>
+            ) : (
+              changeCount > 0 && (
+                <button type="button" className="mini quiet" disabled={busy} onClick={() => setConfirmDiscard(true)}>
+                  Discard all
+                </button>
+              )
+            )}
+          </div>
+          <p className="muted ah-review-note">
+            Nothing is written until you commit.{conflicts > 0 ? ` ${plural(conflicts, "item waits", "items wait")} for Keep mine or Take theirs.` : ""}
+          </p>
         </footer>
       </aside>
     </div>
