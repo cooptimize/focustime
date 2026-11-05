@@ -1,5 +1,5 @@
 // NV-1: Today's urgent strip, mine only. CV-3: built from pluggable sources ({ kind, lines(now, zone) }) in order:
-// urgent requests from client chats (AI urgency "now"), then my promises, then whatever else registers (SW-1's sends).
+// urgent requests from client chats (AI urgency "now"), then my promises, then SW-1's sends (and whatever else registers).
 // A promise is urgent only when overdue or due within the next 2 hours; one due today with no time joins in the last 2
 // working hours of the day. Otherwise it shows only at its time in the agenda (or, with no time, in the attention
 // line's follow-ups row). Pure.
@@ -56,3 +56,16 @@ export const promiseSource = (promises: readonly DayPromise[], o: { today: IsoDa
 export function untimedDue(promises: readonly DayPromise[], o: { now: string; today: IsoDate; dayEnd: string | null }): DayPromise[] {
   return promises.filter((p) => !p.dueAt && p.dueDate === o.today && !promiseUrgent(p, { now: o.now, today: o.today, dayEnd: o.dayEnd }));
 }
+
+/** SW-1's Today line ("Lee sent you Order export (Must)", or a count) as the strip's last source. */
+export type SentToday = { line: string | null; count: number; weekStart: IsoDate };
+
+/**
+ * SW-1's sends: one line while anything sent to me waits for my answer, exactly as SW-1 words and opens it (send.today,
+ * unchanged). A send has a week and no due time, so the strip's time rules have nothing to hold back: it shows while
+ * something waits, after conversations and promises, and the strip hides when nothing is left.
+ */
+export const sendSource = (d: SentToday | null, open: (weekStart: IsoDate) => void): UrgentSource => ({
+  kind: "sends",
+  lines: () => (d?.line ? [{ kind: "other", source: "sends", key: `s:${d.weekStart}`, who: "", what: d.line, tag: "Sent to you", open: () => open(d.weekStart) }] : []),
+});

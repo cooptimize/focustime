@@ -21,6 +21,7 @@ export const CHAPTERS = [
   { id: "keys", name: "Shortcuts" },
   { id: "phone", name: "On your phone" },
   { id: "asks", name: "Conversations and my promises" },
+  { id: "team", name: "Working with your team" },
   { id: "questions", name: "Questions" },
 ] as const;
 export type ChapterId = (typeof CHAPTERS)[number]["id"];
@@ -310,8 +311,29 @@ export const ASKS = {
 
 // ---------- Chapter 8 ----------
 
-export const QUESTIONS = {
+/** SW-1: sending work to someone's week, client priorities, Ask to look, and Week › Team. */
+export const TEAM = {
   eyebrow: "Chapter 8",
+  title: "Working with your team",
+  sub: "Send a feature or story to someone's week, see what everyone on a client committed to, and ask a lead to look at your plan.",
+  items: [
+    { q: "How do I send work to someone?", a: "On any feature or story (a row in Week › Commit, a story in Your stories, an item Break down just created), ⋯ then Send to…. Pick who (people on that client who use FocusTime; anyone not on it yet shows as Not on FocusTime yet and can't be picked), this week or next, Suggested or Must, and an optional note. Tick Ask them to take it in DevOps if it should be theirs there too." },
+    { q: "Who can send a Must?", a: "Only that client's leads. Anyone on the client can send a Suggested. Levels are guidance everywhere else in FocusTime; the Must label is the one exception, because it asks for the week to change." },
+    { q: "What do I do with something sent to me?", a: "It shows in From your team at the top of Week › Commit, as one line on Today, and as a notification. Accept puts it on your week as a must; Accept and schedule also opens the Board on the client's first block. Pass to… hands it to someone else on the client (who sent it stays the sender). Can't this week asks for a reason, which the sender sees. Nothing counts against your hours until you accept." },
+    { q: "What if I can't take a Must?", a: "Say why. The sender sees Can't: <your reason>, and the client's other leads get a quiet note with it. The Must stays as a conflict, marked in amber for both of you, until the sender passes it on or withdraws it, or you accept it after all." },
+    { q: "Does Accept change DevOps?", a: "Only if you leave Also assign to me in DevOps ticked. It's ticked when the sender asked you to take it, and unticked otherwise. Then the usual DevOps write runs: a preview, the item assigned to you, read back, in the audit log with Undo, and a quiet note to whoever had it." },
+    { q: "How do I see what I sent?", a: "You sent, under From your team: Waiting (Cancel while it waits), Accepted, Scheduled, Passed to <name>, Can't: <reason>, Done once DevOps resolves the item, or Not answered when its week ended with no answer." },
+    { q: "What is a client priority?", a: "A feature a client's lead flags as the client's top ask, with an optional note. Everyone on the client sees it at the top of Commit with Add to my week. A lead can unflag it any time, and it drops off once DevOps resolves it." },
+    { q: "What does Week › Team show?", a: "For each client you're on: what each person committed to this week (their features, must or nice to have, and the ones they're watching with whether they moved), the client's priorities and what was sent. Someone who hasn't committed yet shows Not committed yet. It never shows hours, estimates, day plans, picks, pins, notes or focus: those stay with each person. Account Workers and the client's leads see it; on a phone it is read-only." },
+    { q: "How do I ask a lead to look at my week?", a: "In Week › Commit, Ask <lead> to look on the client, with an optional note. The lead gets a notification and sees it at the foot of their Team view, where they can reply. The reply shows on your Commit under the client." },
+    { q: "Where did Needs help from… go?", a: "It's now Ask to collaborate, in the same places. It still finds teammates who are free and sends a help invite after a preview. Typing needs help in the command menu still finds it." },
+  ],
+};
+
+// ---------- Chapter 9 ----------
+
+export const QUESTIONS = {
+  eyebrow: "Chapter 9",
   title: "Questions people ask first",
   items: [
     { q: "How fresh is what I see from DevOps?", a: "FocusTime reads each client's DevOps once for everyone, about every minute in working hours and every 10 minutes outside them while someone is using it, and only what changed. If a read fails, you keep seeing the last good one with \"Showing items from\" and its time. Press {key:week.load} or Refresh for a check now; within 30 seconds of someone else's, you see that one. A change you make from FocusTime shows at once." },

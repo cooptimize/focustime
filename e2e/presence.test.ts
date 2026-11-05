@@ -12,7 +12,7 @@ describe.skipIf(!CHROMIUM)("Teams presence and status (browser, demo mode)", () 
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("Needs help from…: a mark and a word for each Cooptimizer, Available now first", async () => {
+  it("Ask to collaborate: a mark and a word for each Cooptimizer, Available now first", async () => {
     const { page, errors } = await freshPage(h);
     await page.keyboard.press("2");
     await page.keyboard.press("p");
@@ -20,8 +20,8 @@ describe.skipIf(!CHROMIUM)("Teams presence and status (browser, demo mode)", () 
     await page.locator(".planweek .co-step button[aria-label='Previous week']").click();
     await page.locator(".pw-row").first().hover();
     await page.locator(".pw-row button.more").first().click();
-    await page.getByRole("menuitem", { name: /Needs help from/ }).click();
-    const dlg = page.getByRole("dialog", { name: /Needs help from/ });
+    await page.getByRole("menuitem", { name: /Ask to collaborate/ }).click();
+    const dlg = page.getByRole("dialog", { name: /Ask to collaborate/ });
     await dlg.waitFor();
     const marks = dlg.locator(".help-people .pres");
     await expect.poll(() => marks.count(), { timeout: 10_000 }).toBe(4);

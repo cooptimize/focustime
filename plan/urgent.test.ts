@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { aDayPromise } from "../test/builders/index.ts";
 import type { UrgentAsk } from "../actions/types.ts";
-import { conversationSource, promiseSource, promiseUrgent, untimedDue, urgentLines, type UrgentSource } from "./urgent.ts";
+import { conversationSource, promiseSource, sendSource, promiseUrgent, untimedDue, urgentLines, type UrgentSource } from "./urgent.ts";
 
 const TODAY = "2026-11-05";
 const ZONE = "America/New_York";
@@ -44,6 +44,18 @@ describe("the urgent strip", () => {
     const sends: UrgentSource = { kind: "sends", lines: (now) => [{ kind: "other", source: "sends", key: "s:1", who: "Avery", what: `Musts for Friday (${now.slice(11, 16)})`, tag: "Sent to you" }] };
     const lines = strip([conversationSource([anUrgentAsk()]), promiseSource([], { today: TODAY, dayEnd: DAY_END }), sends]);
     expect(lines.map((l) => [l.kind, l.what])).toEqual([["conversation", "Login is down for the client"], ["other", "Musts for Friday (15:00)"]]);
+  });
+
+  it("SW-1's sends line is the third source: its own text and target, shown while anything waits, after promises", () => {
+    const opened: string[] = [];
+    const sends = sendSource({ line: "2 items sent to your week · 1 Must", count: 2, weekStart: "2026-11-02" }, (w) => opened.push(w));
+    const lines = strip([conversationSource([anUrgentAsk()]), promiseSource([aDayPromise({ id: 3, dueDate: "2026-11-03", overdue: true })], { today: TODAY, dayEnd: DAY_END }), sends]);
+    expect(lines.map((l) => l.kind)).toEqual(["conversation", "promise", "other"]);
+    const s = lines[2]!;
+    expect(s).toMatchObject({ source: "sends", what: "2 items sent to your week · 1 Must", tag: "Sent to you" });
+    if (s.kind === "other") s.open?.();
+    expect(opened).toEqual(["2026-11-02"]);
+    expect(strip([sendSource({ line: null, count: 0, weekStart: "2026-11-02" }, () => {}), sendSource(null, () => {})])).toEqual([]);
   });
 
   it("is empty (the strip hides) with nothing urgent", () => {

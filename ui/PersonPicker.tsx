@@ -14,12 +14,13 @@ export type PersonValue = { who: string; whoRef: PersonRef | null };
 /** Rows shown from "Everyone at Cooptimize" before anything is typed (typing searches all of them). */
 const EVERYONE_UNTYPED = 30;
 
-export function usePickerPeople(q: { clientKey: string | null; conversationId?: number | null; commitmentId?: number | null }): PeoplePickerData | null {
+export function usePickerPeople(q: { clientKey: string | null; conversationId?: number | null; commitmentId?: number | null; skip?: boolean }): PeoplePickerData | null {
   const [d, setD] = useState<PeoplePickerData | null>(null);
-  const key = `${q.clientKey ?? ""}|${q.conversationId ?? ""}|${q.commitmentId ?? ""}`;
+  const key = `${q.clientKey ?? ""}|${q.conversationId ?? ""}|${q.commitmentId ?? ""}|${q.skip ? "skip" : ""}`;
   useEffect(() => {
     let live = true;
     setD(null);
+    if (q.skip) return;
     call<PeoplePickerData>("people.picker", { ...(q.clientKey ? { clientKey: q.clientKey } : {}), ...(q.conversationId ? { conversationId: q.conversationId } : {}), ...(q.commitmentId ? { commitmentId: q.commitmentId } : {}) }).then(
       (r) => live && setD(r),
       () => live && setD({ groups: [], problems: ["People couldn't be read just now; type a name instead"] }),
@@ -54,7 +55,7 @@ export function exactMatch(d: PeoplePickerData | null, text: string): PickerPers
   return seen.size === 1 ? [...seen.values()][0]! : null;
 }
 
-export function PersonPicker({ value, onChange, clientKey, conversationId = null, commitmentId = null, label = "Who", placeholder = "Name (optional)" }: {
+export function PersonPicker({ value, onChange, clientKey, conversationId = null, commitmentId = null, label = "Who", placeholder = "Name (optional)", people, disabledWhy, strict = false }: {
   value: PersonValue;
   onChange: (v: PersonValue) => void;
   clientKey: string | null;
@@ -62,8 +63,16 @@ export function PersonPicker({ value, onChange, clientKey, conversationId = null
   commitmentId?: number | null;
   label?: string;
   placeholder?: string;
+  /** SW-1: these people only (e.g. the Cooptimizers on a client), instead of people.picker's groups. */
+  people?: PeoplePickerData | null;
+  /** SW-1: why a person can't be chosen ("Not on FocusTime yet"), shown on their row; null: they can. */
+  disabledWhy?: (p: PickerPerson) => string | null;
+  /** SW-1: a person must be chosen from the list; typed text is only a search, never kept as a plain name. */
+  strict?: boolean;
 }) {
-  const data = usePickerPeople({ clientKey, conversationId, commitmentId });
+  const fetched = usePickerPeople({ clientKey, conversationId, commitmentId, skip: people !== undefined });
+  const data = people !== undefined ? people : fetched;
+  const why = (p: PickerPerson) => disabledWhy?.(p) ?? null;
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const listId = useId();
@@ -77,6 +86,7 @@ export function PersonPicker({ value, onChange, clientKey, conversationId = null
   useEffect(() => setActive(0), [value.who, open]);
 
   const pick = (p: PickerPerson) => {
+    if (why(p)) return;
     onChange({ who: p.name, whoRef: p.ref });
     setOpen(false);
   };
@@ -103,13 +113,13 @@ export function PersonPicker({ value, onChange, clientKey, conversationId = null
         onKeyDown={(e) => {
           if (e.key === "ArrowDown") (e.preventDefault(), setOpen(true), setActive((a) => Math.min(a + 1, Math.max(flat.length - 1, 0))));
           else if (e.key === "ArrowUp") (e.preventDefault(), setActive((a) => Math.max(a - 1, 0)));
-          else if (e.key === "Enter" && open && value.who.trim() && flat[active] && !value.whoRef) (e.preventDefault(), pick(flat[active]!));
+          else if (e.key === "Enter" && open && (value.who.trim() || strict) && flat[active] && !value.whoRef) (e.preventDefault(), pick(flat[active]!));
           else if (e.key === "Escape" && open) (e.preventDefault(), e.stopPropagation(), setOpen(false));
         }}
       />
-      {value.who.trim() && !value.whoRef && !open && <span className="person-picker-note muted">Not linked to a person</span>}
+      {value.who.trim() && !value.whoRef && !open && <span className="person-picker-note muted">{strict ? "Choose someone from the list" : "Not linked to a person"}</span>}
       {value.whoRef?.kind === "external" && <span className="ask-ext">External</span>}
-      {linkable && (
+      {linkable && !strict && (
         <button type="button" className="mini quiet" onClick={() => pick(linkable)}>
           Link to {linkable.name}
         </button>
@@ -125,10 +135,11 @@ export function PersonPicker({ value, onChange, clientKey, conversationId = null
                     i++;
                     const n = i;
                     return (
-                      <li key={`${g.key}:${p.ref.kind === "cooptimizer" ? p.ref.id : p.ref.memberId}`} id={optionId(n)} role="option" aria-selected={n === active} className={`person-picker-option${n === active ? " active" : ""}`} onMouseEnter={() => setActive(n)} onClick={() => pick(p)}>
+                      <li key={`${g.key}:${p.ref.kind === "cooptimizer" ? p.ref.id : p.ref.memberId}`} id={optionId(n)} role="option" aria-selected={n === active} aria-disabled={why(p) ? true : undefined} className={`person-picker-option${n === active ? " active" : ""}${why(p) ? " disabled" : ""}`} onMouseEnter={() => setActive(n)} onClick={() => pick(p)}>
                         <Avatar name={p.name} photo={p.external ? null : photos.photoFor(p.email)} size={22} />
                         <span className="person-picker-name">{p.name}</span>
                         {p.external && <span className="ask-ext">External</span>}
+                        {why(p) && <span className="person-picker-why muted">{why(p)}</span>}
                       </li>
                     );
                   })}
@@ -136,7 +147,7 @@ export function PersonPicker({ value, onChange, clientKey, conversationId = null
               </li>
             ))}
           </ul>
-          {value.who.trim() && <p className="person-picker-free muted">Enter keeps the highlighted person; Tab keeps “{value.who.trim()}” as a plain name.</p>}
+          {value.who.trim() && !strict && <p className="person-picker-free muted">Enter keeps the highlighted person; Tab keeps “{value.who.trim()}” as a plain name.</p>}
           {!value.who.trim() && data?.groups.some((g) => g.key === "everyone" && g.people.length > EVERYONE_UNTYPED) && <p className="person-picker-free muted">Type to find anyone at Cooptimize.</p>}
           {data?.problems.map((p) => (
             <p key={p} className="person-picker-free muted">

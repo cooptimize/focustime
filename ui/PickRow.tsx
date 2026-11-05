@@ -1,5 +1,5 @@
 // One pick, one row (step 15, D269): checkbox, title, size chip, time, ⋯. The same row on week cards, Today and Plan
-// the day. Every other action (move, drop, timebox, open, Needs help from…) is in ⋯ and on right-click.
+// the day. Every other action (move, drop, timebox, open, Ask to collaborate) is in ⋯ and on right-click.
 // U2: density "today" is the same row on Today's Now, Check-in and Close out: no size chip, the title a link to
 // DevOps with its #id as the cue, "+ time" and ⋯ on hover only (always on the next pick), a badge and actions on the right.
 // U4: density "plan" is Plan the day's row: a drag handle, no checkbox (ticking is Today's job; a done pick shows a ✓

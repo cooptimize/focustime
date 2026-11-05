@@ -5,6 +5,7 @@
 //   created in DevOps through the write framework in one go), Break down, and Take one on a teammate's story.
 // - Drag and drop onto the Week's blocks (native drag, a long press on touch, "Add to…" and "Move to…" from the
 //   keyboard), with the fit shown on the target and Undo after each drop (plan/weekdrop.ts).
+import { openSend } from "./send-event.ts";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type HTMLAttributes, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import { blockLabel, blockStories, groupLine, type StoryGroup, type StoryRow } from "../plan/blockstories.ts";
@@ -357,6 +358,8 @@ function StoryRowView({ r, work, slot, clientName }: { r: StoryRow; work: Client
       ...(menuEnv ? [{ id: "open", label: "Open in DevOps", action: "link.open", run: () => menuEnv.openLink(work.clientKey, item.url) } as MenuItem] : []),
       ...(dnd ? [{ id: "add", label: "Add to…", action: "pick.add", next: () => dnd.menuFor(d, `#${item.id}`) } as MenuItem] : []),
       ...(dnd && moving ? [{ id: "move", label: `Move from ${blockLabel(moving)} to…`, action: "pick.move", next: () => dnd.menuFor({ ...d, pickId: moving.pickId }, `#${item.id}`) } as MenuItem] : []),
+      // SW-1: hand it to a teammate's week.
+      { id: "send", label: "Send to…", hint: "a teammate's week", action: "send.create", run: () => openSend({ clientKey: work.clientKey, clientName, itemId: item.id, level: "story", title: item.title, itemType: item.type, url: item.url, parentId: item.parentId }) } as MenuItem,
     ];
     openAt(e, open, { title: `#${item.id}: ${item.title}`, items, head: rowHead({ id: item.id, title: item.title, client: clientName }) });
   };

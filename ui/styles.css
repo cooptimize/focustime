@@ -1752,7 +1752,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .wd-actions .commit { background: var(--action); border-color: var(--action); color: var(--on-action); font-weight: 600; }
 .wd-actions .commit:disabled { opacity: 0.7; }
 
-/* ---------- Calendar editing tiers and Needs help from… (step 13) ---------- */
+/* ---------- Calendar editing tiers and Ask to collaborate (step 13) ---------- */
 .tbox { cursor: grab; touch-action: none; }
 .tbox.dragging { cursor: grabbing; z-index: 3; box-shadow: var(--shadow-dialog); }
 .tbox.conflict { border-style: solid; border-color: var(--risk); }
@@ -2181,7 +2181,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .dl-trend { width: auto; }
 }
 
-/* Step 15.2: the shared work item lookup (flex session, follow-up, Needs help from…). */
+/* Step 15.2: the shared work item lookup (flex session, follow-up, Ask to collaborate). */
 .item-lookup { position: relative; display: inline-flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 260px; }
 .item-lookup > input:not([type="hidden"]) { width: 100%; min-width: 0; }
 .item-lookup.linked { padding: 3px 4px 3px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--raised); font-size: var(--fs-3); }
@@ -4406,3 +4406,70 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
   .carry-acts { justify-content: flex-start; }
   .carry-head .carry-all { margin-left: 0; }
 }
+
+/* SW-1: Send to…, From your team, the Sent list, client priorities, Ask <lead> to look, Week › Team, Today's line. */
+.person-picker-option.disabled { cursor: default; opacity: 0.6; }
+.person-picker-why { margin-left: auto; font-size: var(--fs-2); }
+.send-dialog { width: min(600px, 100%); }
+.send-subject { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-3); }
+.send-done { margin: 0; }
+.send-hint { font-size: var(--fs-2); }
+.send-note { width: 100%; min-width: 0; font: inherit; font-size: var(--fs-3); resize: vertical; }
+.send-check { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: var(--fs-3); }
+.send-check .muted { font-size: var(--fs-2); }
+.send-priority { margin-right: auto; font-size: var(--fs-2); }
+.send-priority-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.send-priority-form input { flex: 1; min-width: 12rem; font: inherit; font-size: var(--fs-3); }
+.send-kind { flex: none; padding: 0 6px; border-radius: 999px; font-size: var(--fs-1); font-weight: 600; line-height: calc(18px * var(--text-scale)); background: var(--raised); color: var(--text-muted); }
+.send-kind.kind-must { background: color-mix(in oklab, var(--accent) 16%, var(--surface)); color: var(--text); }
+.send-note-text { color: var(--text-muted); }
+.send-row, .sent-row { grid-template-columns: minmax(0, 26rem) minmax(0, 1fr) auto; }
+.send-row { grid-template-columns: minmax(0, 22rem) minmax(0, 1fr); }
+.send-row > .carry-acts { grid-column: 1 / -1; justify-content: flex-start; }
+.send-row.conflict, .sent-row.conflict { box-shadow: inset 3px 0 0 var(--watch); }
+.send-conflict { color: var(--watch); font-weight: 500; }
+.send-assign { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: var(--fs-2); }
+.send-form { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0 2px; }
+.send-form input[type="text"] { flex: 1; min-width: 12rem; font: inherit; font-size: var(--fs-3); }
+.send-form .muted { font-size: var(--fs-2); }
+.sent-state { color: var(--text-muted); }
+.sent-state.state-accepted, .sent-state.state-scheduled, .sent-state.state-done { color: var(--st-done); }
+.sent-state.state-cant { color: var(--watch); font-weight: 500; }
+.sent-row.state-cancelled .carry-title, .sent-row.state-withdrawn .carry-title, .sent-row.state-not_answered .carry-title { color: var(--text-muted); }
+.priority-mark { color: var(--accent); flex: none; font-size: var(--fs-2); }
+.team-group { margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; display: grid; gap: 8px; }
+.team-sub { margin: 4px 0 0; color: var(--text-muted); font-size: var(--fs-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.look { display: grid; gap: 2px; padding: 2px 8px; }
+.look-line { margin: 0; font-size: var(--fs-3); }
+.look-who { font-weight: 600; }
+.look-ask { justify-self: start; font-size: var(--fs-2); }
+.look-for-me { border-left: 3px solid var(--accent); padding-left: 8px; }
+.sent-line { margin: 0 0 8px; }
+.sent-line .link-btn { font-size: var(--fs-3); }
+.team-view { flex: 1; overflow: auto; padding: 8px 24px 32px; display: grid; align-content: start; gap: 12px; }
+.team-weeks { display: inline-flex; gap: 4px; }
+.team-intro { margin: 0; font-size: var(--fs-2); }
+.team-client { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.team-people { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.team-person { display: grid; grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr); align-items: start; gap: 4px 12px; padding: 6px 8px; border-radius: 6px; }
+.team-person:hover { background: var(--sunken); }
+.team-who { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.team-name { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-lead { flex: none; padding: 0 6px; border: 1px solid var(--border-strong); border-radius: 999px; font-size: var(--fs-1); color: var(--text-muted); }
+.team-state { font-size: var(--fs-3); padding-top: 2px; }
+.team-features { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.team-feature { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-3); }
+.team-feature .muted, .team-feature .team-quiet { font-size: var(--fs-2); white-space: nowrap; }
+.team-quiet { color: var(--watch); }
+@media (max-width: 700px) {
+  .send-row, .sent-row { grid-template-columns: minmax(0, 1fr); }
+  .team-view { padding: 8px 16px 24px; }
+  .team-person { grid-template-columns: minmax(0, 1fr); }
+  .send-form input[type="text"], .send-priority-form input { min-width: 0; width: 100%; }
+}
+.send-acts { align-items: center; }
+.look-others { display: flex; align-items: baseline; gap: 4px 12px; flex-wrap: wrap; padding: 2px 8px; font-size: var(--fs-2); }
+.look-others .look { padding: 0; }
+/* CV-3: SW-1's sends line in the urgent strip: neutral, not a risk. */
+.us-sends .us-line { border-left-color: var(--accent); }
+.us-sends .us-tag { color: var(--accent); }

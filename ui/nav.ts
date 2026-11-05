@@ -13,14 +13,14 @@ export const TODAY_FLOWS = ["checkin", "closeout"] as const;
 export type TodayFlow = (typeof TODAY_FLOWS)[number];
 export const FLOW_NAMES: Record<TodayFlow, string> = { checkin: "Midday check-in", closeout: "Close out" };
 /** NV-1: Week's Board (stories onto blocks; a day focused is Plan the day) and Commit (Plan the week). */
-export type WeekMode = "board" | "commit";
+export type WeekMode = "board" | "commit" | "team";
 /** NV-1: Ahead (was Roadmap) keeps Roadmap's two views. */
 export type AheadMode = "roadmap" | "ahead";
 
-export const MODE_NAMES = { board: "Board", commit: "Commit", roadmap: "Roadmap", ahead: "Plan ahead" } as const;
+export const MODE_NAMES = { board: "Board", commit: "Commit", team: "Team", roadmap: "Roadmap", ahead: "Plan ahead" } as const;
 export type ModeName = keyof typeof MODE_NAMES;
 /** Each tab's modes, in switch order (Today and the Inbox have none, so no switch). */
-export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: ["board", "commit"], ahead: ["roadmap", "ahead"], inbox: [] };
+export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: ["board", "commit", "team"], ahead: ["roadmap", "ahead"], inbox: [] };
 
 /** NV-1: the Board focused on one day (Plan the day): `date` null is the default day (today or the next workday); `half` is the block "+ Add work" asked for. */
 export type DayFocus = { date: IsoDate | null; half: Half | null };
@@ -133,6 +133,8 @@ export function hashOf(l: Loc): string {
   if (n.tab === "today") return ["#/today", n.flow, n.flow === "closeout" ? n.date : null].filter(Boolean).join("/");
   if (n.tab === "week") {
     if (n.mode === "commit") return ["#/week/commit", n.week].filter(Boolean).join("/");
+    // SW-1: the client team view.
+    if (n.mode === "team") return ["#/week/team", n.week].filter(Boolean).join("/");
     if (n.focus) return ["#/week/day", n.focus.date, n.focus.date ? n.focus.half : null].filter(Boolean).join("/");
     return ["#/week", n.week].filter(Boolean).join("/");
   }
@@ -184,6 +186,7 @@ export function parseHash(hash: string): Loc | null {
       if (a === undefined) return plain(navOf.week());
       if (a === "day") return day(b, c);
       if (a === "commit" || a === "plan") return week("commit", b, c);
+      if (a === "team") return week("team", b, c);
       return b === undefined && validDate(a) ? plain(navOf.week("board", a)) : null;
     }
     case "ahead":
@@ -232,6 +235,7 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
     case "conversations": return plain(navOf.conversations());
     case "my_promises": return plain(navOf.myPromises());
     case "week": return plain(navOf.week());
+    case "team": return plain(navOf.week("team"));
     case "ahead": return plain(navOf.ahead("ahead"));
     case "planweek": return plain(navOf.week("commit", r.weekStart));
     case "followup": return plain(navOf.inbox(r.id));
@@ -240,7 +244,7 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
 }
 
 /** The command menu's views (and older names kept for commands and tests) as places. */
-export type ViewName = "today" | "week" | "inbox" | "conversations" | "my_promises" | "requests" | "asks" | "promises" | "roadmap" | "ahead" | "focus" | "capture" | "planday" | "planweek" | "commit" | "settings" | "follow_ups" | "checkin" | "closeout";
+export type ViewName = "today" | "week" | "inbox" | "conversations" | "my_promises" | "requests" | "asks" | "promises" | "roadmap" | "ahead" | "focus" | "capture" | "planday" | "planweek" | "commit" | "team" | "settings" | "follow_ups" | "checkin" | "closeout";
 export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
   switch (v) {
     case "today": return { nav: navOf.today(), overlay: null };
@@ -258,6 +262,7 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
     case "planday": return { nav: navOf.planDay(), overlay: null };
     case "planweek":
     case "commit": return { nav: navOf.week("commit"), overlay: null };
+    case "team": return { nav: navOf.week("team"), overlay: null };
     case "checkin": return { nav: navOf.today("checkin"), overlay: null };
     case "closeout": return { nav: navOf.today("closeout"), overlay: null };
     case "focus": return { nav: null, overlay: { kind: "focus" } };
@@ -297,7 +302,7 @@ export function viewName(loc: Loc): string {
   const n = loc.nav;
   const place =
     n.tab === "today" ? (n.flow ? `${TAB_NAMES.today} › ${FLOW_NAMES[n.flow]}` : TAB_NAMES.today)
-    : n.tab === "week" ? (n.mode === "commit" ? `${TAB_NAMES.week} › Commit` : n.focus ? `${TAB_NAMES.week} › Plan ${n.focus.date ?? "today"}` : TAB_NAMES.week)
+    : n.tab === "week" ? (n.mode === "commit" ? `${TAB_NAMES.week} › Commit` : n.mode === "team" ? `${TAB_NAMES.week} › Team` : n.focus ? `${TAB_NAMES.week} › Plan ${n.focus.date ?? "today"}` : TAB_NAMES.week)
     : n.tab === "ahead" ? (n.mode === "ahead" ? `${TAB_NAMES.ahead} › Plan ahead` : TAB_NAMES.ahead)
     : n.conversations ? `${TAB_NAMES.inbox} › Conversations` : n.myPromises ? `${TAB_NAMES.inbox} › My promises` : TAB_NAMES.inbox;
   const o = loc.overlay;

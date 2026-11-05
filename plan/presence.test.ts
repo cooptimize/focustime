@@ -29,7 +29,7 @@ describe("words for teammates (never color alone; unknown shows nothing)", () =>
   it("unknown, missing or odd values give null (show nothing rather than a guess)", () => {
     for (const a of ["PresenceUnknown", "", null, undefined, 3, "Something"]) expect(presenceWord(a, "x")).toBeNull();
   });
-  it("Needs help from… puts Available now first within a tier, keeping the rest in order", () => {
+  it("Ask to collaborate puts Available now first within a tier, keeping the rest in order", () => {
     const words: Record<string, ReturnType<typeof presenceWord>> = { a: "Busy", b: "Available", c: null, d: "Available", e: "Away" };
     expect(availableFirst(["a", "b", "c", "d", "e"], (x) => words[x] ?? null)).toEqual(["b", "d", "a", "c", "e"]);
   });

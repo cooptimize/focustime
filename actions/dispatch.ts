@@ -64,6 +64,7 @@ import { followUpAction } from "./followup-actions.ts";
 import { roadmapAction } from "./roadmap-actions.ts";
 import { CHECKIN_DONE_MARK } from "./closeout-actions.ts";
 import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
+import { markScheduled, publishWeek, teamAction, type TeamAction, type TeamContext } from "./team-actions.ts";
 import { carryAction, idsByClient, markResolved, planBitsFor, resolvedKeys, type CarryContext } from "./carry-actions.ts";
 import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
 import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
@@ -143,6 +144,10 @@ export type ActionContext = {
   devopsWriter?: DevOpsWriter;
   /** PV-1: Take one's notices (an app table shared by everyone); absent in the demo and tests that don't need it. */
   takes?: import("../store/devops-takes.ts").TakesStore;
+  /** SW-1: sends, week commitments, client priorities and Ask to look (app tables). Absent: none of it here. */
+  team?: import("../store/team-store.ts").TeamStore;
+  /** SW-1: whether a person has signed in to FocusTime (can receive sends). Absent: their entry has a sign-in. */
+  onFocusTime?: (personId: string) => boolean;
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
   media?: MediaControl;
   /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
@@ -900,6 +905,11 @@ export async function vmContext(ctx: ActionContext): Promise<VmContext> {
 }
 
 export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<ActionResponse> {
+  const r = await dispatchAction(ctx, req);
+  return req.action === "weekplan.commit" || req.action === "weekplan.place" || req.action === "pick.add" ? afterPlanChange(ctx, req.action, req.input, r) : r;
+}
+
+async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<ActionResponse> {
   // Only registered actions (actions/registry.ts). The switch below is exhaustive over them: an action added
   // to the registry without a case, or a case for a name not in the registry, fails the type check.
   if (!isActionName(req.action)) return bad("unknown action");
@@ -1447,6 +1457,22 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "weekplan.watch_checkin":
     case "weekplan.watch_remove":
       return carryAction(carryCtx(ctx), action, req.input);
+    case "send.people":
+    case "send.create":
+    case "send.cancel":
+    case "send.accept":
+    case "send.pass":
+    case "send.cant":
+    case "send.withdraw":
+    case "send.today":
+    case "team.commit":
+    case "team.view":
+    case "priority.flag":
+    case "priority.unflag":
+    case "priority.add_to_week":
+    case "look.ask":
+    case "look.reply":
+      return teamAction(teamCtx(ctx), action satisfies TeamAction, req.input);
     case "planday.start":
     case "planday.carry":
     case "planday.commit":
@@ -1477,6 +1503,36 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       return bad(`unknown action ${String(unhandled)}`);
     }
   }
+}
+
+/** SW-1: sends, priorities, the Team view and Ask to look. */
+export function teamCtx(ctx: ActionContext): TeamContext {
+  return {
+    plan: ctx.plan,
+    team: ctx.team,
+    config: () => configured(ctx),
+    org: ctx.org,
+    me: async () => (await storedIdentity(ctx.plan))?.oid ?? null,
+    devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
+    blocks: (cfg, weekStart) => patternWeek(ctx, cfg, weekStart),
+    ...(ctx.onFocusTime ? { onFocusTime: ctx.onFocusTime } : {}),
+    now: ctx.now,
+  };
+}
+
+/** SW-1: after a week plan change, the Team view's snapshot (on commit) and a sender's "Scheduled" (on a pin or a pick). */
+async function afterPlanChange(ctx: ActionContext, action: string, input: unknown, r: ActionResponse): Promise<ActionResponse> {
+  if (!r.ok || !ctx.team) return r;
+  const o = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
+  try {
+    if (action === "weekplan.commit" && typeof o.weekStart === "string") await publishWeek(teamCtx(ctx), o.weekStart);
+    if ((action === "weekplan.place" && o.on !== false) || action === "pick.add") {
+      if (typeof o.clientKey === "string" && typeof o.itemId === "number") await markScheduled(teamCtx(ctx), o.clientKey, o.itemId);
+    }
+  } catch {
+    // The plan change stands; the team's view catches up on the next commit.
+  }
+  return r;
 }
 
 /** PL-1: the "From last week" proposal and Watching rows' context. */

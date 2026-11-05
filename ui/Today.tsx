@@ -8,6 +8,7 @@
 //   Close out: a side panel over the dimmed cards (numbers, where you left off, DevOps updates owed, follow-ups due).
 // At 3840 wide a day timeline sits on the left (drop a pick onto a free gap to timebox it) and a detail panel under
 // the cards. Lumen never appears here.
+import { useSentToday } from "./Team.tsx";
 import type { SetupStep } from "../plan/setup.ts";
 import { useTextScale } from "./textsize.ts";
 import { ModeArea } from "./ModeSwitch.tsx";
@@ -57,7 +58,7 @@ import { DetailPanel, BreakDown, interactive } from "./DetailPanel.tsx";
 import type { PanelFocus } from "./WeekGrid.tsx";
 import { userZone } from "../week/zone.ts";
 import type { Moment } from "../plan/modes.ts";
-import { conversationSource, promiseSource, untimedDue, urgentLines, type UrgentSource } from "../plan/urgent.ts";
+import { conversationSource, promiseSource, sendSource, untimedDue, urgentLines, type UrgentSource } from "../plan/urgent.ts";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { openCoopBrief } from "./menu.ts";
 
@@ -88,6 +89,10 @@ type Props = {
   onTimer: (action: "timer.done" | "timer.extend") => void;
   onPlan: (date?: string) => void;
   onPlanWeek: () => void;
+  /** SW-1: Today's line for work sent to me opens Commit on its week. */
+  onSent?: (weekStart: string) => void;
+  /** SW-1: reloads Today's sent line when the plan changes. */
+  sentVersion?: unknown;
   onInbox: () => void;
   /** AP-2: Inbox › Requests (an urgent request's chip, Check-in's "Walked in, not resolved"). */
   onAsks?: (conversationId?: number) => void;
@@ -153,7 +158,8 @@ export function Today(props: Props) {
   const todayPromises = target.isToday ? (data.promises ?? []) : [];
   const dayEnd = blocks.length ? blocks.map((s) => s.end).sort().at(-1)! : null;
   const clockNow = new Date(nowMs).toISOString();
-  const urgentSources: UrgentSource[] = [conversationSource(data.requests?.urgent ?? []), promiseSource(todayPromises, { today: date, dayEnd }), ...(props.urgentSources ?? [])];
+  const sent = useSentToday(props.sentVersion, !!props.onSent);
+  const urgentSources: UrgentSource[] = [conversationSource(data.requests?.urgent ?? []), promiseSource(todayPromises, { today: date, dayEnd }), ...(props.onSent ? [sendSource(sent, props.onSent)] : []), ...(props.urgentSources ?? [])];
   const untimed = untimedDue(todayPromises, { now: clockNow, today: date, dayEnd });
   const focused = useFocused();
   const [error, setError] = useState<string | null>(null);
@@ -529,10 +535,10 @@ export function UrgentStrip({ sources, now, today, tz, onAsks, onPromises, onAsk
           const tag = l.kind === "conversation" ? "Needs you now" : l.kind === "other" ? l.tag : l.overdue ? `Promise · ${wasDueText(l.promise, today, tz).replace(/^Was/, "was")}` : l.dueAt ? `Promise · ${clock(l.dueAt, tz)}` : "Promise due today";
           const late = l.kind !== "conversation" && !!l.overdue;
           return (
-            <li key={l.key} className={`us-item us-${l.kind === "other" ? l.source : l.kind}${late ? " overdue" : ""}`}>
+            <li key={l.key} className={`us-item us-${l.kind === "other" ? l.source : l.kind}${l.kind === "other" && l.source === "sends" ? " sent-line" : ""}${late ? " overdue" : ""}`}>
               <button type="button" className="us-line" onClick={open} title={l.kind === "conversation" ? "Open it in Inbox › Conversations" : l.kind === "promise" ? "Open it in Inbox › My promises" : undefined}>
                 <span className="us-tag">{tag}</span>
-                <span className="us-who">{l.who}</span>
+                {l.who && <span className="us-who">{l.who}</span>}
                 <span className="us-what">{l.what}</span>
                 <span className="us-go" aria-hidden="true">›</span>
               </button>

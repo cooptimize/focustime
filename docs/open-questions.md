@@ -264,4 +264,14 @@ What DS-1 learned, and what is still open:
 - Q-CV2-3: Resolved by CV-3 (D630): Capture's Who is the PersonPicker.
 - Q-CV2-4: Resolved by CV-3 (D631): Link existing… suggests likely items with or without a conversation (rules only); Link doesn't start a conversation (Create still does, D628).
 - Q-CV2-5: A promise that implies an item shows only Create the DevOps item? (Create, Link existing…, Not needed), as in CV-1: Make it a follow-up, Done and ⋯ come once it's linked. Past its due, should Make it a follow-up or Done be offered there too?
-- Q-CV2-6: Resolved by CV-3 (D632): the Board rail shows "was due …" in amber, and carries earlier or untimed overdue promises to now on today's block.
+- Q-CV2-6: Week's rail shows a promise past its due as "was due" in its title and label only; the rail's own amber treatment is PL-1's to decide.
+
+## Sending work (SW-1, Nov 5)
+
+- Q-SW1-1: Ahead's side panel has no Send to… yet: the shared panel's row menu there (`roadmapRowMenu`) has no client key, and the Ahead tab is AH-1's. Add it once AH-1 merges.
+- Q-SW1-2: A sender-side assign ("assign it to them now") could reuse AH-1's assign to someone else once it merges; SW-1 only offers the recipient's Also assign to me in DevOps (D635).
+- Q-SW1-3: A send waiting when its week ends becomes Not answered and stays on the lists. Should it offer "Send for next week" to the sender, or drop off after a week?
+- Q-SW1-4: Team shows features committed and watched only. Should a person's stories under a committed feature show as a count (never hours), or is the feature enough?
+- Q-SW1-5: Ask to look goes to one lead. On a client with several leads, should it go to all of them, first to answer wins?
+
+- Q-CV2-6: Resolved by CV-3 (D643): the Board rail shows "was due …" in amber, and carries earlier or untimed overdue promises to now on today's block.
