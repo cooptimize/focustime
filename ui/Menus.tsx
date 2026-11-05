@@ -1,5 +1,6 @@
 // The command menu (Ctrl+K) and the "⋯" / right-click popup menus (step 6). Both render menu steps from
 // ui/menu.ts: arrow keys move, Enter chooses, Backspace on an empty search or Left goes back, Esc closes.
+import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { filterCommands, type FormField, type MenuEnv, type MenuHead, type MenuItem, type MenuStep } from "./menu.ts";
@@ -259,6 +260,7 @@ export function PopupMenu({ at, step: first, onClose }: { at: { x: number; y: nu
       className="popup-menu"
       aria-label={head?.full ?? step.title}
       data-overlay="modal"
+      data-menu
       popover="manual"
       style={{ left: pos.x, top: pos.y }}
       onKeyDown={(e) => {
@@ -293,6 +295,7 @@ export function CommandMenu({ commands, onClose }: { commands: MenuItem[]; onClo
   const { step, push, back, canBack } = useSteps(first);
   const [query, setQuery] = useState("");
   const input = useRef<HTMLInputElement>(null);
+  useReturnFocus();
   useEffect(() => {
     setQuery("");
     if ("items" in step) input.current?.focus();
@@ -303,6 +306,7 @@ export function CommandMenu({ commands, onClose }: { commands: MenuItem[]; onClo
       <div
         className="command-menu"
         data-overlay="modal"
+        data-menu
         role="dialog"
         aria-label="Command menu"
         onKeyDown={(e) => {
@@ -341,7 +345,7 @@ export function CommandMenu({ commands, onClose }: { commands: MenuItem[]; onClo
           ) : (
             <span className="command-step-title">{step.title}</span>
           )}
-          <kbd className="command-esc">Esc</kbd>
+          <CloseButton onClose={onClose} />
         </div>
         <StepView step={step} query={query} onDone={onClose} push={push} back={back} canBack={canBack} autoFocusList={false} />
         <div className="command-foot muted">↑↓ move · Enter choose · Esc {canBack ? "back" : "close"}</div>

@@ -2,6 +2,7 @@
 // Skip, Esc skips, Enter continues, closing skips the rest, and each screen saves on its own (signing out halfway
 // resumes there). Every save goes through the ordinary actions (settings.save, devops.set_write_pat, Google's
 // connect); setup.mark keeps only which steps are done, skipped or closed.
+import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { nextStep, SETUP_STEPS, SETUP_TITLES, type SetupClient, type SetupPrefill, type SetupStep, type SetupView } from "../plan/setup.ts";
 import { WEEKDAY_KEYS } from "../week/hours.ts";
@@ -31,6 +32,7 @@ const ZONES: readonly string[] = (() => {
 const errText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong");
 
 export function SetupFlow(p: Props) {
+  useReturnFocus();
   const [step, setStep] = useState<SetupStep | "done">(p.start);
   const [view, setView] = useState<SetupView | null>(null);
   const changed = useRef(false);
@@ -86,9 +88,7 @@ export function SetupFlow(p: Props) {
               </li>
             ))}
           </ol>
-          <button type="button" className="mini quiet" onClick={() => void close()} title="Close setup. Today keeps a line to finish it later">
-            Close
-          </button>
+          <CloseButton onClose={() => void close()} title="Close setup. Today keeps a line to finish it later" />
         </div>
         <div ref={body} className="setup-body">
           {step === "day" && <DayStep onSaved={() => mark("day", "done").then(() => go("day"))} onSkip={() => void skip("day")} />}

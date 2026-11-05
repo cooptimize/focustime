@@ -1,6 +1,7 @@
 // P1 (phone): under 600 px FocusTime is for checking and doing, not planning. The bottom bar, the read-only frame for
 // planning screens, Today's Now card, its due follow-ups and the iPhone install how-to. Planning stays on a bigger
 // screen (D476).
+import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import type { IsoDate, Slot } from "../week/types.ts";
@@ -189,6 +190,7 @@ export function PhoneFollowUps({ data, date, onChanged }: { data: WeekLoadData; 
  */
 export function InstallHowTo({ onClose }: { onClose: () => void }) {
   const close = useRef<HTMLButtonElement>(null);
+  useReturnFocus();
   useEffect(() => close.current?.focus(), []);
   return (
     <div className="command-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -204,9 +206,7 @@ export function InstallHowTo({ onClose }: { onClose: () => void }) {
       >
         <div className="command-head">
           <span className="command-step-title">Install FocusTime</span>
-          <button ref={close} type="button" className="mini" onClick={onClose}>
-            Close
-          </button>
+          <CloseButton buttonRef={close} onClose={onClose} />
         </div>
         <ol className="howto-steps">
           <li>

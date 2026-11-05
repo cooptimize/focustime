@@ -1096,7 +1096,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .command-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
 .command-head input { flex: 1; border: 0; background: transparent; font-size: var(--fs-4); padding: 4px 2px; outline: none; }
 .command-step-title { flex: 1; font-weight: 600; }
-.command-esc { flex: none; }
 .command-menu .menu-list { overflow: auto; padding: 4px; flex: 1; }
 .command-menu .menu-prompt { padding: 14px; }
 .command-foot { padding: 7px 14px; border-top: 1px solid var(--border); font-size: var(--fs-2); }
@@ -2865,8 +2864,13 @@ button.att-chip { cursor: pointer; }
 .dp-title h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-4); font-weight: 600; }
 .dp-title h2 .swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
 .dp-when { font-size: var(--fs-2); color: var(--text-muted); }
-.dp-close { border: 0; background: none; color: var(--text-muted); font-size: var(--fs-4); line-height: 1; padding: 2px 6px; border-radius: 6px; cursor: pointer; }
-.dp-close:hover { background: var(--raised); color: var(--text); }
+/* UI-3: the one close control for dialogs and panels: a quiet × with a 44 px tap target. Negative margins keep the
+   header's height; the icon follows the text size. */
+.x-close { flex: none; align-self: center; display: inline-grid; place-items: center; width: 44px; height: 44px; margin: -10px -10px -10px auto; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--text-muted); cursor: pointer; }
+.x-close svg { width: calc(var(--fs-4) + 1px); height: calc(var(--fs-4) + 1px); }
+.x-close:hover:not(:disabled) { background: var(--raised); color: var(--text); }
+.x-close:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; }
+.x-close:disabled { opacity: 0.45; cursor: default; }
 .dp-body { flex: 1; overflow: auto; padding: 10px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
 .dp-section { display: flex; flex-direction: column; gap: 6px; }
 .dp-section h3 { margin: 0; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
@@ -3996,8 +4000,6 @@ button.ask-label { cursor: pointer; }
 .bd-steps li.on { color: var(--text); font-weight: 600; }
 .bd-steps li.on .bd-step-n { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .bd-steps li.done { color: var(--text-muted); }
-.bd-x { flex: none; border: 0; background: none; color: var(--text-muted); font: inherit; font-size: var(--fs-4); line-height: 1; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
-.bd-x:hover { color: var(--text); background: var(--raised); }
 
 .bd-item { grid-row: 2; overflow: auto; padding: 14px 18px 18px 20px; border-right: 1px solid var(--border); display: grid; gap: 12px; align-content: start; background: var(--bg); }
 .bd-item-link { margin: 0; display: flex; align-items: baseline; gap: 6px; font-weight: 600; overflow-wrap: anywhere; }
@@ -4090,7 +4092,6 @@ button.ask-label { cursor: pointer; }
   .bd-head { flex-wrap: wrap; gap: 6px 10px; padding: calc(8px + env(safe-area-inset-top)) 12px 8px 16px; }
   .bd-head h2 { flex: 1 1 auto; min-width: 0; white-space: normal; }
   .bd-steps { order: 3; flex-basis: 100%; margin: 0; }
-  .bd-x { min-width: var(--tap); min-height: var(--tap); }
   .bd-item { padding: 10px 16px; max-height: none; }
   .bd-desc-text.clamped { -webkit-line-clamp: 2; line-clamp: 2; }
   .bd-body { padding: 12px 16px; }

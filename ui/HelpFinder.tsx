@@ -2,6 +2,7 @@
 // on this client, anyone else; PTO only as "away"), choose people or let FocusTime choose the top tier, get up to five
 // times when everyone is free inside their own working hours, then preview the invite. Nothing is sent here: the
 // preview (every attendee named, "they will receive an invite") goes to the write flow, which sends on confirm.
+import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useEffect, useRef, useState } from "react";
 import type { CandidatesData, CandidateView, SlotView, SuggestData, WritePreview } from "../actions/types.ts";
 import { COLLAB_LENGTHS, type CollabSettings } from "../config/schema.ts";
@@ -25,6 +26,7 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
   const back = useRef<HTMLElement | null>(document.activeElement as HTMLElement | null);
   useEffect(() => () => back.current?.focus?.(), []);
   const [minutes, setMinutes] = useState(settings.meetingMinutes);
+  useReturnFocus();
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   const [cands, setCands] = useState<CandidatesData | null>(null);
   const [chosen, setChosen] = useState<string[]>([]);
@@ -121,6 +123,7 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
           <span className="muted">
             {clientName}: {subject.title}
           </span>
+          <CloseButton onClose={onClose} />
         </div>
 
         <div className="help-row">
