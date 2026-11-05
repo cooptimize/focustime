@@ -735,6 +735,21 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       if (htmlToText(html).trim() === curText.trim()) return `#${item.id} already has that description`;
       return { ...base(env), ...none, op: "description", itemId: item.id, title: item.title, ops: descriptionOps(item.rev, field, html), rev: item.rev, before: { Description: curHtml }, after: { Description: html }, type: item.type, field, conv };
     }
+    case "description_edit": {
+      // AS-1: a description I dictated, which may rewrite it (unlike CV-1's description_update, which only appends):
+      // only on items the shared canEdit allows, always the full text before and after, written only at the revision
+      // read (test /rev); the old text is kept in the audit log for Undo, refused once the description changed since.
+      const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));
+      const right = await rightsOn(env, item, memo);
+      if (!right.ok) throw new Refused(right.note, 409);
+      const field = "System.Description";
+      const curHtml = String(item.fields[field] ?? "");
+      const afterText = str(o.after, "after", 8000, true) ?? "";
+      if (!afterText.trim()) throw new Invalid("Say what the description should be");
+      if (afterText.trim() === htmlToText(curHtml).trim()) return `#${item.id} already has that description`;
+      const html = textToHtml(afterText.trim());
+      return { ...base(env), ...none, op: "description", itemId: item.id, title: item.title, ops: descriptionOps(item.rev, field, html), rev: item.rev, before: { Description: curHtml }, after: { Description: html }, type: item.type, field };
+    }
     case "undo": {
       const entry = (await plan.devopsWrite(posId(o.writeId, "writeId")));
       if (!entry) throw new PlanError("No such write");
@@ -819,7 +834,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       };
     }
     default:
-      throw new Invalid("kind must be state, comment, create, request_create, proposal_create, conversation_create, conversation_comment, description_update, target_date, assign, fields or undo");
+      throw new Invalid("kind must be state, comment, create, request_create, proposal_create, conversation_create, conversation_comment, description_update, description_edit, target_date, assign, fields or undo");
   }
 }
 

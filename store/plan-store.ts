@@ -2905,6 +2905,60 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return (await db.run("DELETE FROM ahead_changes WHERE client_key = ? AND item_id = ? AND field = ?", clientKey, itemId, field)).changes;
       });
     },
+    /** AS-1: one turn of the assistant's history (what I asked, or what it answered); returns its id. */
+    async addAssistantTurn(t: { channel: "panel" | "teams"; role: "me" | "assistant"; text: string; cards: unknown[] }): Promise<number> {
+      return tx(async () => {
+        const at = opts.now().toInstant().toString();
+        const r = await db.run("INSERT INTO assistant_turns (at, channel, role, text, cards_json) VALUES (?, ?, ?, ?, ?)", at, t.channel, t.role, t.text.slice(0, 8000), JSON.stringify(t.cards));
+        return Number(r.lastId);
+      });
+    },
+    /** AS-1: the newest turns, oldest first (at most `limit`). */
+    async assistantTurns(limit: number): Promise<AssistantTurnRow[]> {
+      const n = Math.max(1, Math.min(Math.floor(limit), 200));
+      const rows = (await db.all("SELECT id, at, channel, role, text, cards_json FROM assistant_turns ORDER BY id DESC LIMIT ?", n)) as Row[];
+      return rows.reverse().map((r) => ({ id: Number(r.id), at: instantText(r.at), channel: r.channel as "panel" | "teams", role: r.role as "me" | "assistant", text: String(r.text), cards: JSON.parse(String(r.cards_json)) as unknown[] }));
+    },
+    /** AS-1: a write the assistant proposed (open until confirmed, cancelled or past its expiry); returns its id. */
+    async addAssistantProposal(p: { turnId: number | null; action: string; input: unknown; clientKey: string | null; view: unknown; snapshot: unknown; expiresAt: string }): Promise<number> {
+      return tx(async () => {
+        const at = opts.now().toInstant().toString();
+        const r = await db.run("INSERT INTO assistant_proposals (turn_id, action, input_json, client_key, view_json, snapshot_json, state, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?)", p.turnId, p.action, JSON.stringify(p.input), p.clientKey, JSON.stringify(p.view), JSON.stringify(p.snapshot), at, Temporal.Instant.from(p.expiresAt).toString());
+        return Number(r.lastId);
+      });
+    },
+    async assistantProposal(id: number): Promise<AssistantProposalRow | null> {
+      const r = (await db.get("SELECT * FROM assistant_proposals WHERE id = ?", id)) as Row | undefined;
+      return r ? toProposalRow(r) : null;
+    },
+    async assistantProposalsOf(turnIds: number[]): Promise<AssistantProposalRow[]> {
+      if (!turnIds.length) return [];
+      const ids = turnIds.slice(0, 200).map((n) => Math.floor(n));
+      return ((await db.all(`SELECT * FROM assistant_proposals WHERE turn_id IN (${ids.map(() => "?").join(", ")}) ORDER BY id`, ...ids)) as Row[]).map(toProposalRow);
+    },
+    /** AS-1: a proposal's new state (and, after a fresh preview, its new view, snapshot, input and expiry). */
+    async setAssistantProposal(id: number, c: { state: AssistantProposalRow["state"]; view?: unknown; snapshot?: unknown; input?: unknown; expiresAt?: string }): Promise<void> {
+      return tx(async () => {
+        const at = opts.now().toInstant().toString();
+        const done = c.state === "open" ? null : at;
+        if (c.view !== undefined) await db.run("UPDATE assistant_proposals SET view_json = ?, snapshot_json = ?, input_json = ?, expires_at = ? WHERE id = ?", JSON.stringify(c.view), JSON.stringify(c.snapshot ?? null), JSON.stringify(c.input ?? null), Temporal.Instant.from(c.expiresAt!).toString(), id);
+        await db.run("UPDATE assistant_proposals SET state = ?, done_at = ? WHERE id = ?", c.state, done, id);
+      });
+    },
+    /** AS-1: Clear in Settings › Data: every turn and proposal of mine. */
+    async clearAssistant(): Promise<number> {
+      return tx(async () => (await db.run("DELETE FROM assistant_proposals")).changes + (await db.run("DELETE FROM assistant_turns")).changes);
+    },
+    /** AS-1: turns older than `days` go; a proposal goes once it is past its expiry or settled for a day. */
+    async pruneAssistant(days: number): Promise<number> {
+      return tx(async () => {
+        const now = opts.now().toInstant();
+        const cutoff = now.subtract({ hours: 24 * days }).toString();
+        const day = now.subtract({ hours: 24 }).toString();
+        const a = (await db.run("DELETE FROM assistant_proposals WHERE created_at < ? OR (state = 'open' AND expires_at < ?) OR (state <> 'open' AND done_at < ?)", cutoff, day, day)).changes;
+        return a + (await db.run("DELETE FROM assistant_turns WHERE at < ?", cutoff)).changes;
+      });
+    },
     /** AH-1 (D659): the half-day I chose for a date that landed in DevOps (DevOps keeps the day). */
     async aheadHalves(): Promise<{ clientKey: string; itemId: number; field: "start" | "target"; day: IsoDate; half: DayHalf }[]> {
       return ((await db.all("SELECT client_key, item_id, field, day, half FROM ahead_halves")) as Row[]).map((r) => ({ clientKey: r.client_key as string, itemId: r.item_id as number, field: r.field as "start" | "target", day: String(r.day).slice(0, 10), half: r.half as DayHalf }));
@@ -3312,6 +3366,15 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
 }
 
 export type PlanStore = ReturnType<typeof planStoreOn>;
+
+/** AS-1: one turn as stored (the service types its cards). */
+export type AssistantTurnRow = { id: number; at: string; channel: "panel" | "teams"; role: "me" | "assistant"; text: string; cards: unknown[] };
+export type AssistantProposalRow = { id: number; turnId: number | null; action: string; input: unknown; clientKey: string | null; view: unknown; snapshot: unknown; state: "open" | "confirmed" | "cancelled" | "expired" | "failed"; createdAt: string; expiresAt: string };
+const instantText = (v: unknown): string => (v instanceof Date ? v.toISOString() : Temporal.Instant.from(String(v).replace(/\[.*\]$/, "")).toString());
+const toProposalRow = (r: Row): AssistantProposalRow => ({
+  id: Number(r.id), turnId: r.turn_id == null ? null : Number(r.turn_id), action: String(r.action), input: JSON.parse(String(r.input_json)), clientKey: (r.client_key as string | null) ?? null,
+  view: JSON.parse(String(r.view_json)), snapshot: JSON.parse(String(r.snapshot_json)), state: r.state as AssistantProposalRow["state"], createdAt: instantText(r.created_at), expiresAt: instantText(r.expires_at),
+});
 
 /** The schema version of a store: SQLite's migrations table, or SQL Server's schema_version (store/sql/migrate.ts). */
 export async function schemaVersion(conn: Conn): Promise<number> {
