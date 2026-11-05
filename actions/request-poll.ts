@@ -23,6 +23,9 @@ import type { TeamsStore } from "../store/teams-store.ts";
 import type { WorkItem } from "../week/types.ts";
 import { classifyAsk, extractPromise, type AskAiDeps } from "./ask-ai.ts";
 import { mapSeq } from "./seq.ts";
+import { runPipeline } from "./conversations-pipeline.ts";
+import type { ConversationStore } from "../store/conversation-store.ts";
+import { userZone } from "../week/zone.ts";
 
 /** Unmatched messages are kept this long. */
 export const EXPIRE_DAYS = 14;
@@ -36,12 +39,18 @@ export type PollPerson = {
   /** Their Chat.ReadBasic reader, for refreshing a chat's members. */
   chats?: Pick<ChatsClient, "members"> | undefined;
   ai: (() => Promise<AiService | null>) | null;
+  /** CV-1: the same person's switches with the app's cap (the shared pipeline never counts against a person). */
+  pipelineAi?: (() => Promise<AiService | null>) | null;
   plan: PlanStore | null;
   openItems: (cfg: AppConfig, clientKey: string) => Promise<WorkItem[] | null>;
 };
 
 export type PollDeps = {
   teams: TeamsStore;
+  /** CV-1: the shared conversations (absent: the AP-1 rules, for older callers and tests). */
+  conversations?: ConversationStore;
+  /** CV-1: escalation, reminders and follow-through, after the chats are read (actions/conversation-upkeep.ts). */
+  upkeep?: (now: string) => Promise<void>;
   users: () => Promise<FocusUser[]>;
   person: (userId: string) => Promise<PollPerson | null>;
   homeTenant: () => Promise<string | null>;
@@ -49,7 +58,7 @@ export type PollDeps = {
   log: (r: LogRecord) => void;
 };
 
-export type CycleResult = { polled: number; messages: number; updated: number; candidates: number; promises: number; failures: number };
+export type CycleResult = { polled: number; messages: number; updated: number; candidates: number; promises: number; failures: number; conversations?: number; unsorted?: number; aiCalls?: number };
 
 const later = (a: string, b: string) => Date.parse(a) > Date.parse(b);
 const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
@@ -126,7 +135,9 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
         const saved = await deps.teams.saveMessages(fresh.map((m) => toShared(m, now)));
         out.messages += saved.added.length;
         out.updated += saved.updated;
-        await rules(deps, c, fresh.filter((m) => saved.added.some((a) => a.messageId === m.messageId)), { p, uid, home, users, person, out });
+        const added = fresh.filter((m) => saved.added.some((a) => a.messageId === m.messageId));
+        if (deps.conversations) await conversationsStep(deps, deps.conversations, c, saved.added, { p, home, users, person, out, now });
+        else await rules(deps, c, added, { p, uid, home, users, person, out });
         const seenAt = read.newest && (!c.seenAt || later(read.newest, c.seenAt)) ? read.newest : undefined;
         await deps.teams.recordPoll(c.chatId, { polledAt: now, fetchedAt: now, ...(seenAt ? { seenAt } : {}), retryAt: null, failures: 0, state: same(uid, c.registeredBy) ? "ok" : "via", note: null, tokenUser: uid });
         tokenUsers.set(p.name, (tokenUsers.get(p.name) ?? 0) + 1);
@@ -143,12 +154,47 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
   });
 
   if (out.polled) await deps.teams.expire(instant.subtract({ hours: EXPIRE_DAYS * 24 }).toString()).catch(() => 0);
+  if (deps.upkeep) await deps.upkeep(now).catch(() => deps.log({ source: "plan", op: "conversations_upkeep", kind: "failed" }));
   deps.log({ source: "plan", op: "requests_poll", kind: o.force ? "refresh" : "cycle", count: out.polled });
   deps.log({ source: "plan", op: "requests_poll_messages", count: out.messages });
   deps.log({ source: "plan", op: "requests_poll_candidates", count: out.candidates });
   for (const [name, count] of tokenUsers) deps.log({ source: "plan", op: "requests_poll_token", kind: name, count });
   if (out.failures) deps.log({ source: "plan", op: "requests_poll_failures", count: out.failures });
+  if (deps.conversations) {
+    deps.log({ source: "plan", op: "conversations_new", count: out.conversations ?? 0 });
+    deps.log({ source: "plan", op: "conversations_unsorted", count: out.unsorted ?? 0 });
+    deps.log({ source: "plan", op: "conversations_ai_calls", count: out.aiCalls ?? 0 });
+  }
   return out;
+}
+
+/** CV-1: one chat's new messages through the conversations pipeline, under the token owner's switches and the app's cap. */
+async function conversationsStep(
+  deps: PollDeps,
+  convs: ConversationStore,
+  c: ClientChat,
+  added: readonly TeamsMessage[],
+  x: { p: PollPerson; home: string | null; users: readonly FocusUser[]; person: (uid: string) => Promise<PollPerson | null>; out: CycleResult; now: string },
+) {
+  const cfg = x.p.config;
+  if (!cfg || !added.length) return;
+  const items = await x.p.openItems(cfg, c.clientKey).catch(() => null);
+  const ai = x.p.pipelineAi ? await x.p.pipelineAi().catch(() => null) : null;
+  const r = await runPipeline(
+    {
+      teams: deps.teams, convs, users: x.users, homeTenant: x.home, now: x.now, clientName: cfg.clientSettings[c.clientKey]?.name ?? c.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, items,
+      author: async (uid) => {
+        const a = await x.person(uid);
+        return a?.config ? { zone: userZone(a.config), promisePhrases: a.config.asks.promisePhrases } : null;
+      },
+    },
+    c,
+    added,
+  );
+  x.out.conversations = (x.out.conversations ?? 0) + r.conversations;
+  x.out.unsorted = (x.out.unsorted ?? 0) + r.unsorted;
+  x.out.aiCalls = (x.out.aiCalls ?? 0) + r.aiCalls;
+  x.out.promises += r.commitments;
 }
 
 /** The candidate rules on a chat's new messages: Requests (sorted by the token owner's AI) and their authors' promises. */
