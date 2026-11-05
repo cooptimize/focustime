@@ -4587,3 +4587,21 @@ button.ah-gap { cursor: pointer; }
 .flw-row .link-btn.danger { color: var(--text-muted); }
 @media (max-width: 700px) { .carry-summary { margin: 0 16px 10px; } }
 
+/* UI-B: the now line on today (Board rails, PTO and catch-up cells, the day's edges, agendas). */
+.now-line { --nl: var(--accent); pointer-events: none; z-index: 4; }
+.timeline > .now-line, .ruler > .now-line, .half.whole > .now-line { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid var(--nl); transition: top 0.6s ease; }
+.half.whole { position: relative; }
+.half.whole > .now-line.thin, .now-line.thin { border-top-width: 1px; }
+.now-line .nl-dot { position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--nl); }
+.now-line.thin .nl-dot { width: 6px; height: 6px; left: -3px; top: -3.5px; }
+.now-line .nl-time { position: absolute; left: 6px; top: 0; transform: translateY(-50%); pointer-events: auto; border: 0; padding: 0 4px; border-radius: 4px; background: var(--nl); color: var(--surface); font: inherit; font-size: var(--fs-1); font-weight: 600; line-height: 1.4; cursor: pointer; font-variant-numeric: tabular-nums; }
+.now-past { position: absolute; top: 0; left: 0; right: 0; background: color-mix(in oklab, var(--surface) 38%, transparent); pointer-events: none; z-index: 3; transition: height 0.6s ease; }
+.now-edge, .now-row { position: relative; display: flex; align-items: center; gap: 6px; margin: 4px 0; min-height: 14px; }
+.now-edge::after, .now-row::after { content: ""; flex: 1; border-top: 2px solid var(--nl); }
+.now-edge.thin::after { border-top-width: 1px; }
+.now-edge .nl-dot, .now-row .nl-dot { position: static; flex: none; }
+.now-edge .nl-time, .now-row .nl-time { position: static; transform: none; }
+.now-row { list-style: none; color: var(--surface); }
+.now-row .nl-time { padding: 0 4px; border-radius: 4px; background: var(--nl); font-size: var(--fs-1); font-weight: 600; line-height: 1.4; font-variant-numeric: tabular-nums; }
+:root[data-reduce-motion] .now-line, :root[data-reduce-motion] .now-past { transition: none; }
+@media (prefers-reduced-motion: reduce) { .now-line, .now-past { transition: none; } }
