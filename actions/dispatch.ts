@@ -481,6 +481,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     sources: [dataverse, ...(ptoResult ? [ptoResult] : []), outlook, google].map(summarize),
     devops,
     clients: clientColors,
+    guidance: cfg?.org?.guidance ?? null,
     hours: model,
     thresholds: weekConfig.thresholds,
     planning: planningOf(cfg),

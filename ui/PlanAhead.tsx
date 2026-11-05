@@ -154,7 +154,7 @@ export function PlanAhead({ data, switcher, onDone, onChanged }: { data: WeekLoa
             <HeaderRow cols={cols} scale={scale} today={ahead.today} />
             {clients.length === 0 && <p className="muted">Nothing of yours in DevOps for the followed clients.</p>}
             {clients.map((c) => (
-              <ClientGroup key={c.clientKey} c={c} ahead={ahead} scale={scale} cols={cols} pastN={pastN} wide={labelW >= 440} color={clientColor(c.clientKey, data.clients)} closed={closed} toggle={(id) => setClosed((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; })} setHours={setHours} setDates={setDates} save={save} canWrite={!!dw?.can(c.clientKey)} onNotice={setNotice} onError={setError} onChanged={onChanged} />
+              <ClientGroup key={c.clientKey} c={c} ahead={ahead} scale={scale} cols={cols} pastN={pastN} wide={labelW >= 440} nudges={data.guidance?.readinessNudges !== false} color={clientColor(c.clientKey, data.clients)} closed={closed} toggle={(id) => setClosed((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; })} setHours={setHours} setDates={setDates} save={save} canWrite={!!dw?.can(c.clientKey)} onNotice={setNotice} onError={setError} onChanged={onChanged} />
             ))}
           </div>
         )}
@@ -184,6 +184,8 @@ const pastCount = (cols: readonly AheadColumn[]) => cols.filter((c) => c.kind ==
 
 type GroupProps = {
   pastN: number;
+  /** ADM-1: the readiness nudges (⚑) are on for this person (their choice, else their level's team default). */
+  nudges: boolean;
   /** A wide label column (3840): a single flag shows its words. */
   wide: boolean;
   onError: (s: string) => void;
@@ -290,7 +292,7 @@ function BarRow({ l, g, crowded, first, focus, setFocus, move, cellRefs, drag, d
   const epicBlocks = (w: string) => ahead.cells.filter((x) => x.clientKey === c.clientKey && kids.includes(x.itemId) && x.weekStart === w).reduce((n, x) => n + x.minutes, 0);
   const owned = r.relation === "owned";
   const openDraft = useContext(DraftEditorCtx);
-  const flags = readiness({
+  const flags = !g.nudges ? [] : readiness({
     tier: r.tier, state: r.status.state, owned, stories: r.done + r.open, start: b.start, target: r.targetDate, today: ahead.today, weeks: ahead.weeks,
     plannedWeeks: isFeature ? ahead.cells.filter((x) => x.clientKey === c.clientKey && x.itemId === r.id && x.minutes > 0).map((x) => x.weekStart) : [],
     crowdedMonths: crowded, cols: g.cols, needsStories: isFeature && ahead.cells.some((x) => x.clientKey === c.clientKey && x.itemId === r.id && x.minutes > 0 && !x.derived),

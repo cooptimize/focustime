@@ -139,3 +139,16 @@ describe("converting stored blocks (E1 half blocks, step 16.4 whole blocks)", ()
     expect(blocksToMinutes(30)).toBe(80 * H);
   });
 });
+
+describe("plan share (ADM-1): plan up to N% of free time moves only the amber over line", () => {
+  it("80% of 10h free: 8h planned fits, 10h is about 2h over; nothing is ever blocked", () => {
+    expect(budgetWords(600, 480, 80)).toMatchObject({ kind: "all", over: null, text: "10h free · plan up to 8h · 8h planned" });
+    expect(budgetWords(600, 600, 80)).toMatchObject({ kind: "over", over: "about 2h over" });
+    expect(budgetWords(600, 600)).toMatchObject({ kind: "all", over: null, text: "10h free · 10h planned" });
+  });
+  it("stays between 50% and 100%", () => {
+    expect(budgetWords(600, 300, 10).kind).toBe("all");
+    expect(budgetWords(600, 360, 10).kind).toBe("over");
+    expect(budgetWords(600, 600, 150).kind).toBe("all");
+  });
+});

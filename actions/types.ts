@@ -18,6 +18,8 @@ export type WeekLoadData = {
   /** Assigned DevOps work per client with a block this week; null when Dataverse is not usable. */
   devops: ClientWork[] | null;
   clients: Record<string, string>;
+  /** ADM-1: the person's guidance (their choice, else their level's team default): emphasis only, never a block. */
+  guidance?: import("../config/org.ts").Guidance | null;
   /** Day plans and picks for the days of this week (local plan store); null when the store is unavailable. */
   plan: PlanWeek | null;
   /** Clients an Open half-day can take (this week's, standing blocks, and every client I'm an Account Worker on). */
