@@ -1,13 +1,16 @@
 // AH-1: Ahead › Grid (was Roadmap, D653): every level grouped client › epic › feature › story, collapsible, with
-// State, Start, Target, Assigned to, Size and Readiness. Gaps are highlighted; a field the type doesn't have reads
-// "Not in <project>'s process". Edits are inline and go into my change set (nothing is written until Commit): Enter
+// State, Start, Target, Assigned to, Size and Readiness. AH-2: no cell is filled for a gap; a missing value is a muted
+// "—" saying what's missing in its tooltip ("No target date"), a field the type doesn't have is a "—" saying "Not in
+// <project>'s process", and gaps show only in Readiness as quiet chips (two, then +N). Closed items are dimmed with no
+// gap marks; a state is a small dot and its word in the neutral color. Edits are inline and go into my change set (nothing is written until Commit): Enter
 // edits, Enter keeps, Esc cancels; arrows move between cells. Items I may not change say who can.
 import type React from "react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { ChangeField, DayHalf } from "../../plan/ahead-edit.ts";
-import { GAP_ACTION, GAP_WORDS } from "../../plan/fixnext.ts";
+import { GAP_WORDS } from "../../plan/fixnext.ts";
 import { STATE_WORDS } from "../../plan/roadmap.ts";
-import { StateBadge } from "../Roadmap.tsx";
+import { gapChip, ReadyChips, stateChip } from "./Chips.tsx";
+import { isOpen } from "./model.ts";
 import { WorkLink } from "../WorkLink.tsx";
 import { useAhead } from "./Ahead.tsx";
 import { AssigneePicker } from "./Assignee.tsx";
@@ -156,7 +159,7 @@ function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, mo
     e.preventDefault();
     e.stopPropagation();
   };
-  const cell = (col: Col, body: React.ReactNode, o: { gap?: boolean; label: string } ) => {
+  const cell = (col: Col, body: React.ReactNode, o: { label: string }) => {
     const field = EDIT[col];
     const pending = field ? r.pending[field] : undefined;
     return (
@@ -165,7 +168,7 @@ function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, mo
         role="gridcell"
         tabIndex={tab(col)}
         aria-label={o.label}
-        className={`ah-cell ah-col-${col}${o.gap ? " ah-gapcell" : ""}${pending ? " ah-pend" : ""}${pending?.theirs !== undefined ? " ah-conf" : ""}${field && !r.has[field] ? " ah-abs" : ""}`}
+        className={`ah-cell ah-col-${col}${pending ? " ah-pend" : ""}${pending?.theirs !== undefined ? " ah-conf" : ""}${field && !r.has[field] ? " ah-abs" : ""}`}
         onFocus={() => setFocus({ key: r.key, col })}
         onKeyDown={keys(col)}
         onDoubleClick={() => field && canChange && r.has[field] && edit(col)}
@@ -176,14 +179,15 @@ function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, mo
     );
   };
   const date = (f: "start" | "target") => {
-    if (!r.has[f]) return <span className="muted ah-absent">{notIn}</span>;
+    if (!r.has[f]) return <None title={notIn} />;
     const v = r.eff[f];
     const half = f === "start" ? r.startHalf : r.targetHalf;
-    return v ? `${monthDay(v)}${half ? ` ${half}` : ""}` : <span className="ah-missing">No date</span>;
+    return v ? `${monthDay(v)}${half ? ` ${half}` : ""}` : <None title={f === "start" ? "No start date" : "No target date"} />;
   };
-  const gapDates = r.gaps.includes("no_dates");
+  const closedItem = !isOpen(r.item);
+  const chips = closedItem ? [] : [...(rm ? [stateChip(rm.status.state, rm.status.reason)] : []), ...r.gaps.map((k) => gapChip(k, k === "needs_stories" && !a.readOnly ? () => a.breakDown(r) : undefined))];
   return (
-    <tr className={`ah-row tier-${r.tier} depth-${r.depth}${r.context ? " context" : ""}${highlighted ? " highlighted" : ""}${r.editable ? "" : " ro"}`} title={r.editable ? undefined : c.note}>
+    <tr className={`ah-row tier-${r.tier} depth-${r.depth}${r.context ? " context" : ""}${closedItem ? " closed" : ""}${r.item.inScope === false ? " out-scope" : ""}${highlighted ? " highlighted" : ""}${r.editable ? "" : " ro"}`} title={r.editable ? undefined : c.note}>
       {cell(
         "item",
         <span className="ah-item" style={{ paddingInlineStart: `calc(${r.depth} * var(--ah-indent, 18px))` }}>
@@ -200,46 +204,49 @@ function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, mo
           </WorkLink>
           <span className="muted ah-id">#{r.item.id}</span>
           {!r.editable && !r.context && <span className="ah-ro" title={c.note}>Read only</span>}
+          {r.item.inScope === false && !r.context && <span className="ah-ro" title="Outside Cooptimize's work in this project (shown with Show the whole project)">Outside scope</span>}
         </span>,
         { label: `${r.item.type} #${r.item.id} ${r.item.title}${r.editable ? "" : `. ${c.note}`}${hasKids ? `. Enter to ${open ? "hide" : "show"} what's under it.` : ""}` },
       )}
-      {cell("state", r.item.state, { label: `State: ${r.item.state}` })}
-      {cell("start", date("start"), { gap: gapDates && r.has.start && !r.eff.start, label: `Start: ${r.eff.start ?? (r.has.start ? "no date" : notIn)}` })}
-      {cell("target", date("target"), { gap: gapDates && r.has.target && !r.eff.target, label: `Target: ${r.eff.target ?? (r.has.target ? "no date" : notIn)}` })}
-      {cell("assignee", r.eff.assignee ? r.eff.assignee.name : <span className="ah-missing">Nobody</span>, { gap: r.gaps.includes("unassigned"), label: `Assigned to: ${r.eff.assignee?.name ?? "nobody"}` })}
+      {cell(
+        "state",
+        <span className="ah-state">
+          <span className={`ah-state-dot cat-${r.item.stateCategory.toLowerCase()}`} aria-hidden="true" />
+          {r.item.state}
+        </span>,
+        { label: `State: ${r.item.state}` },
+      )}
+      {cell("start", date("start"), { label: `Start: ${r.eff.start ?? (r.has.start ? "no start date" : notIn)}` })}
+      {cell("target", date("target"), { label: `Target: ${r.eff.target ?? (r.has.target ? "no target date" : notIn)}` })}
+      {cell("assignee", r.eff.assignee ? r.eff.assignee.name : <None title="Nobody assigned" />, { label: `Assigned to: ${r.eff.assignee?.name ?? "nobody"}` })}
       {cell(
         "size",
         !r.has.size ? (
-          <span className="muted ah-absent">{notIn}</span>
+          <None title={notIn} />
         ) : (
           <span className="ah-size">
-            {r.eff.size !== null ? <>{r.eff.size} <span className="muted">{r.sizeLabel}</span></> : <span className="ah-missing">No {r.sizeLabel ?? "size"}</span>}
+            {r.eff.size !== null ? <>{r.eff.size} <span className="muted">{r.sizeLabel}</span></> : <None title={`No ${r.sizeLabel ?? "size"}`} />}
             {r.hint && <span className="ah-hint muted">{r.hint}</span>}
           </span>
         ),
-        { gap: r.gaps.includes("unsized"), label: `${r.sizeLabel ?? "Size"}: ${r.has.size ? (r.eff.size ?? "none") : notIn}${r.hint ? `. ${r.hint}` : ""}` },
+        { label: `${r.sizeLabel ?? "Size"}: ${r.has.size ? (r.eff.size ?? "none") : notIn}${r.hint ? `. ${r.hint}` : ""}` },
       )}
       {cell(
         "ready",
-        <span className="ah-ready">
-          {rm && (
-            <span title={`${STATE_WORDS[rm.status.state]}: ${rm.status.reason}`}>
-              <StateBadge state={rm.status.state} small />
-            </span>
-          )}
-          {r.gaps.map((k) =>
-            k === "needs_stories" && !a.readOnly ? (
-              <button key={k} type="button" tabIndex={-1} className="ah-gap mini" onClick={() => a.breakDown(r)} title={`${GAP_WORDS[k]}: ${GAP_ACTION[k]}`}>
-                {GAP_WORDS[k]}
-              </button>
-            ) : (
-              <span key={k} className="ah-gap">{GAP_WORDS[k]}</span>
-            ),
-          )}
-        </span>,
-        { label: `Readiness: ${[rm ? STATE_WORDS[rm.status.state] : null, ...r.gaps.map((k) => GAP_WORDS[k])].filter(Boolean).join(", ") || "nothing missing"}` },
+        <ReadyChips chips={chips} />,
+        { label: `Readiness: ${closedItem ? "closed" : [rm ? STATE_WORDS[rm.status.state] : null, ...r.gaps.map((k) => GAP_WORDS[k])].filter(Boolean).join(", ") || "nothing missing"}` },
       )}
     </tr>
+  );
+}
+
+/** A value that isn't there: a muted dash, with what's missing in words for the tooltip and screen readers. */
+function None({ title }: { title: string }) {
+  return (
+    <span className="ah-none" title={title}>
+      <span aria-hidden="true">—</span>
+      <span className="sr-only">{title}</span>
+    </span>
   );
 }
 

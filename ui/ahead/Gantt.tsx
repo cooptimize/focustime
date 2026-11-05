@@ -14,16 +14,15 @@ import { dayOf, dragHalves, ganttBar, halfRight, halfX, halvesMoved, receive, re
 import { GAP_WORDS } from "../../plan/fixnext.ts";
 import { reach, type Reach } from "../../plan/reach.ts";
 import type { DraftStory } from "../../plan/types.ts";
-import { STATE_WORDS } from "../../plan/roadmap.ts";
 import { call } from "../api.ts";
 import { DraftEditorCtx } from "../DraftEditor.tsx";
 import { MenuCtx } from "../Menus.tsx";
 import { HoursStepper } from "../plan/Estimate.tsx";
-import { StateBadge } from "../Roadmap.tsx";
 import { WorkLink } from "../WorkLink.tsx";
 import { useAhead } from "./Ahead.tsx";
 import { Editor } from "./Grid.tsx";
-import type { Group, Row } from "./model.ts";
+import { OneChip, stateChip } from "./Chips.tsx";
+import { isOpen, type Group, type Row } from "./model.ts";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const monthDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric" });
@@ -399,9 +398,9 @@ function BarRow({ l, gp, rows, crowded, first, freeze, lane }: { l: Line; gp: Gr
         ) : (
           <span className="rm-expand-space" aria-hidden="true" />
         )}
-        {rm && (
-          <span className="pa-badge" title={`${STATE_WORDS[rm.status.state]}: ${rm.status.reason}`}>
-            <StateBadge state={rm.status.state} small />
+        {rm && isOpen(r.item) && (
+          <span className="pa-badge">
+            <OneChip c={stateChip(rm.status.state, rm.status.reason)} />
           </span>
         )}
         <span className="pa-title" title={`${r.item.title} (#${r.item.id})${rm ? `: ${rm.status.reason}` : ""}`}>
