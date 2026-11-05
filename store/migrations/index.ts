@@ -15,10 +15,11 @@ import { conversations } from "./20261105T1200_conversations.ts";
 import { devopsTakes } from "./20261105T1300_devops_takes.ts";
 import { clientAccounts } from "./20261105T1400_client_accounts.ts";
 import { devopsPoll } from "./20261105T2000_devops_poll.ts";
-import { conversationMerges } from "./20261105T2100_conversation_merges.ts";
-import { messageReactions } from "./20261105T2110_message_reactions.ts";
-import { messageImages } from "./20261105T2120_message_images.ts";
-import { followUpWhoRef } from "./20261105T2130_followup_who_ref.ts";
+import { weekCarry } from "./20261106T0900_week_carry.ts";
+import { conversationMerges } from "./20261106T1000_conversation_merges.ts";
+import { messageReactions } from "./20261106T1010_message_reactions.ts";
+import { messageImages } from "./20261106T1020_message_images.ts";
+import { followUpWhoRef } from "./20261106T1030_followup_who_ref.ts";
 import type { NamedMigration } from "./named.ts";
 
-export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll, clientAccounts, conversationMerges, messageReactions, messageImages, followUpWhoRef];
+export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll, clientAccounts, weekCarry, conversationMerges, messageReactions, messageImages, followUpWhoRef];

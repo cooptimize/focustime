@@ -6,6 +6,7 @@
 # secret goes from `az ad app credential reset` straight into Key Vault through a pipe.
 #
 #   - single tenant (AzureADMyOrg), platform web, implicit flow off (no access or ID tokens from /authorize)
+#   - the acct optional claim in the ID token (HK-1), keeping any other optional claims
 #   - redirect URIs for dev, prod and local development
 #   - delegated Microsoft Graph and Azure Service Management scopes (resolved to their ids from the tenant)
 #   - a service principal, then admin consent for the whole tenant
@@ -20,6 +21,13 @@
 #
 # The redirect list is replaced with exactly the URLs given (plus local), so A5 passes --dev-url and --prod-url both.
 #   infra/scripts/app-registration.sh --local [--port 5317] [--rotate-secret] [--dry-run]
+#   infra/scripts/app-registration.sh --claims-only [--dry-run]
+#
+# --claims-only (HK-1): only the optional claims (step 2b), nothing else: no redirect URIs, permissions, grants or
+# secrets. Use it to add a claim to the existing registration. A full run re-grants consent with `az ad app permission
+# grant`, which deletes every grant the app has for that API (people's own consents too, azure-cli issue 20974) and
+# makes one tenant-wide grant of GRAPH_SCOPES; a scope consented later (Chat.Read, AP-1) is lost. See
+# docs/open-questions.md (Q-HK1-1) before a full run.
 #
 # --local (A2, before any vault exists): the developer loop only. The redirect URI is http://localhost:<port> alone,
 # and the client secret goes through a pipe into the local host's secret store (Secret Service, service "focustime",
@@ -42,10 +50,11 @@ ARM_API="797f4846-ba00-4fd7-ba43-dac1f8f63013"
 GRAPH_SCOPES=(openid profile email offline_access User.Read Calendars.ReadWrite MailboxSettings.Read Presence.ReadWrite Presence.Read.All ProfilePhoto.Read.All Chat.ReadBasic)
 ARM_SCOPES=(user_impersonation)
 
-DEV_URL="" PROD_URL="" VAULT="" ROTATE=0 DRY=0 LOCAL=0 PORT=5317
+DEV_URL="" PROD_URL="" VAULT="" ROTATE=0 DRY=0 LOCAL=0 PORT=5317 CLAIMS_ONLY=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --local) LOCAL=1; shift ;;
+    --claims-only) CLAIMS_ONLY=1; shift ;;
     --port) PORT=$2; shift 2 ;;
     --dev-url) DEV_URL=${2%/}; shift 2 ;;
     --prod-url) PROD_URL=${2%/}; shift 2 ;;
@@ -55,7 +64,9 @@ while [[ $# -gt 0 ]]; do
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
-if ((LOCAL)); then
+if ((CLAIMS_ONLY)); then
+  [[ -z $DEV_URL && -z $PROD_URL && -z $VAULT && $LOCAL -eq 0 && $ROTATE -eq 0 ]] || { echo "--claims-only takes only --dry-run" >&2; exit 2; }
+elif ((LOCAL)); then
   [[ -z $DEV_URL && -z $PROD_URL && -z $VAULT ]] || { echo "--local takes no --dev-url, --prod-url or --vault" >&2; exit 2; }
   [[ $PORT =~ ^[0-9]+$ ]] && ((PORT >= 1024 && PORT <= 65535)) || { echo "--port must be 1024-65535" >&2; exit 2; }
   command -v secret-tool >/dev/null || { echo "secret-tool not found (the local host's secret store)" >&2; exit 1; }
@@ -75,6 +86,7 @@ if ((LOCAL)); then REDIRECTS=("$LOCAL_URL$CALLBACK"); else REDIRECTS=("$DEV_URL$
 ids=$(az ad app list --display-name "$NAME" --query "[?displayName=='$NAME'].appId" -o tsv)
 count=$(grep -c . <<<"$ids" || true)
 if ((count > 1)); then echo "More than one registration is named $NAME; fix that by hand first" >&2; exit 1; fi
+if ((count == 0 && CLAIMS_ONLY)); then echo "No registration named $NAME; run the full script first" >&2; exit 1; fi
 if ((count == 0)); then
   echo "Creating $NAME"
   if ((DRY)); then APP_ID="00000000-0000-0000-0000-000000000000"; else
@@ -86,9 +98,29 @@ else
 fi
 
 # 2. Platform web, the redirect URIs, implicit flow off. (Replaces the web redirect list with exactly these.)
-run ad app update --id "$APP_ID" --sign-in-audience AzureADMyOrg \
+((CLAIMS_ONLY)) || run ad app update --id "$APP_ID" --sign-in-audience AzureADMyOrg \
   --web-redirect-uris "${REDIRECTS[@]}" \
   --enable-access-token-issuance false --enable-id-token-issuance false -o none
+
+# 2b. HK-1 (Q-ADM2-2): the acct optional claim in the ID token (0 member, 1 guest; Microsoft Learn, optional claims
+# reference, checked Nov 5 2026), so sign-in tells a guest from the token first (ADM-2's guestToken: acct, then idp, then
+# a #EXT# UPN). The optionalClaims object is replaced on update, so every claim already there is kept and acct is added
+# to the idToken list only when it is missing: a rerun changes nothing.
+command -v jq >/dev/null || { echo "jq not found (needed to keep the registration's other optional claims)" >&2; exit 1; }
+claims=$(az ad app show --id "$APP_ID" --query optionalClaims -o json 2>/dev/null || true)
+[[ -n $claims && $claims != null ]] || claims='{}'
+if jq -e '(.idToken // []) | any(.name == "acct")' <<<"$claims" >/dev/null; then
+  echo "The ID token already has the acct optional claim"
+else
+  merged=$(jq -c '{idToken: ((.idToken // []) + [{name: "acct", source: null, essential: false, additionalProperties: []}]), accessToken: (.accessToken // []), saml2Token: (.saml2Token // [])}' <<<"$claims")
+  run ad app update --id "$APP_ID" --optional-claims "$merged" -o none
+  ((DRY)) || echo "Added the acct optional claim to the ID token"
+fi
+if ((CLAIMS_ONLY)); then
+  echo "== $NAME: ID token optional claims"
+  az ad app show --id "$APP_ID" --query "optionalClaims.idToken[].name" -o tsv
+  exit 0
+fi
 
 # 3. Delegated permissions, by id from each API's service principal in this tenant.
 scope_ids() { # api, names... -> "id=Scope" pairs
@@ -153,7 +185,7 @@ fi
 if ((DRY)) && [[ $APP_ID == 00000000-0000-0000-0000-000000000000 ]]; then echo "dry-run: nothing to show yet"; exit 0; fi
 echo
 echo "== $NAME"
-az ad app show --id "$APP_ID" --query "{appId:appId, audience:signInAudience, redirectUris:web.redirectUris, implicitAccessTokens:web.implicitGrantSettings.enableAccessTokenIssuance, implicitIdTokens:web.implicitGrantSettings.enableIdTokenIssuance, secrets:passwordCredentials[].{name:displayName, ends:endDateTime}}" -o yaml
+az ad app show --id "$APP_ID" --query "{appId:appId, audience:signInAudience, redirectUris:web.redirectUris, implicitAccessTokens:web.implicitGrantSettings.enableAccessTokenIssuance, implicitIdTokens:web.implicitGrantSettings.enableIdTokenIssuance, idTokenClaims:optionalClaims.idToken[].name, secrets:passwordCredentials[].{name:displayName, ends:endDateTime}}" -o yaml
 echo "== Delegated permissions"
 az ad app permission list --id "$APP_ID" --query "[].{api:resourceAppId, ids:resourceAccess[].id}" -o yaml
 echo "== Granted (admin consent)"

@@ -22,6 +22,7 @@ import { CALM, DEFAULT_MINUTES, NORMAL, intervalMinutes, isDue, nextDue, nextPac
 import { inUnion, nextUnionStart } from "../plan/requests.ts";
 import type { TimeModel } from "../week/hours.ts";
 import type { ClientWorkStatus } from "../week/types.ts";
+import { plainJob, type Job, type JobRunner } from "../log/operation.ts";
 import type { Logger } from "../log/logger.ts";
 import type { SnapshotStore } from "../host/types.ts";
 import type { StatusRow, StatusSource } from "./status-rows.ts";
@@ -60,6 +61,8 @@ export type PollerDeps = {
   active: () => boolean;
   now: () => Temporal.Instant;
   log: Logger;
+  /** HK-1: each check as a job operation for telemetry (devops_check, or devops_reconcile for the day's first). */
+  job?: JobRunner;
 };
 
 /** The app-level source keeps nothing on disk: its process cache lives in memory (read again after a restart). */
@@ -337,7 +340,7 @@ export function createDevOpsPoller(d: PollerDeps) {
   function check(key: string): Promise<void> {
     return stateOf(key).then((c) => {
       if (c.inflight) return c.inflight;
-      c.inflight = run(c).catch(() => log("check", { kind: "unexpected" })).finally(() => {
+      c.inflight = (d.job ?? plainJob)("devops_check", { client: key }, (job) => run(c, job)).catch(() => log("check", { kind: "unexpected" })).finally(() => {
         c.inflight = null;
         c.writePending = false;
       });
@@ -345,9 +348,9 @@ export function createDevOpsPoller(d: PollerDeps) {
     });
   }
 
-  async function run(c: Client): Promise<void> {
+  async function run(c: Client, job: Job = { set: () => {} }): Promise<void> {
     // DevOps asked to wait: no check at all (not even a Refresh or a write's), and nothing changes.
-    if (d.limiter.waiting(c.key)) return;
+    if (d.limiter.waiting(c.key)) return job.set({ outcome: "skipped", flags: { reason: "retry_after" } });
     const t = d.now();
     const before = { ...c.row };
     // The next state is kept aside until the store has it, so a failed write never moves the watermark.
@@ -393,6 +396,14 @@ export function createDevOpsPoller(d: PollerDeps) {
     for (const u of write?.upsert ?? []) c.items.set(u.id, u);
     for (const id of write?.remove ?? []) c.items.delete(id);
     log("check", { count: (write?.upsert.length ?? 0) + (write?.remove.length ?? 0), ...(failure ? { kind: failure.status } : c.pace.reason ? { kind: "slowed" } : {}) });
+    // HK-1: what the check did, for its job operation (counts and short words only).
+    const reconciled = !!before.loadedAt && row.reconciledOn !== before.reconciledOn;
+    job.set({
+      ...(reconciled ? { name: "devops_reconcile" } : {}),
+      outcome: failure ? "failed" : "ok",
+      counts: { changed: write?.upsert.length ?? 0, removed: write?.remove.length ?? 0, changes: write?.changes.length ?? 0, calls: taken.calls },
+      flags: { slowed: c.pace.slow > 1 || c.pace.retryAt ? "yes" : "no", load: !before.loadedAt ? "full" : "changed", ...(failure ? { error: failure.status } : {}) },
+    });
   }
 
   async function minutesFor(c: Client, inHours: boolean): Promise<number> {
@@ -469,6 +480,14 @@ export function createDevOpsPoller(d: PollerDeps) {
       } catch {
         return null;
       }
+    },
+    async stateChanges(key, since) {
+      const c = await stateOf(key);
+      // The log covers the span only when the first full load came before it (nothing before that is news).
+      const known = !!c.row.loadedAt && Temporal.Instant.compare(Temporal.Instant.from(c.row.loadedAt), Temporal.Instant.from(since)) <= 0;
+      if (!known) return { known: false, itemIds: [] };
+      const ids = new Set((await d.store.changes(key, since)).filter((x) => x.kind === "state").map((x) => x.itemId));
+      return { known: true, itemIds: [...ids].sort((a, b) => a - b) };
     },
     afterWrite(key) {
       void stateOf(key).then((c) => {

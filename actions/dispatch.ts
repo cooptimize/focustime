@@ -1,5 +1,6 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
+import { checkinGhosts } from "../plan/carry.ts";
 import { isClosed, isCompleted } from "../plan/process.ts";
 import { clearPhotos, photoAction } from "./photo-actions.ts";
 import { chatAction, type ChatContext } from "./chat-actions.ts";
@@ -63,6 +64,7 @@ import { followUpAction } from "./followup-actions.ts";
 import { roadmapAction } from "./roadmap-actions.ts";
 import { CHECKIN_DONE_MARK } from "./closeout-actions.ts";
 import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
+import { carryAction, idsByClient, markResolved, planBitsFor, resolvedKeys, type CarryContext } from "./carry-actions.ts";
 import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
 import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
 
@@ -489,7 +491,14 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   // A3: what the view reads from the store, read before it is put together (the store is async).
   const plan = ctx.plan;
   const open = plan ? await plan.openFollowUps() : [];
-  const weekPlans = plan ? await plan.week(week.days.map((d) => d.date)) : null;
+  const weekPlans0 = plan ? await plan.week(week.days.map((d) => d.date)) : null;
+  // PL-1: what DevOps resolved, the check-ins and Keep open: one set of budget inputs for Commit and the Board; and
+  // a pick of a resolved item counts zero and shows as done.
+  const listed = plan ? (await plan.weekPlan(weekStart)).features : [];
+  const carry = cfg && plan
+    ? await (async () => planBitsFor({ cfg, plan, devops: ctx.makeDevOps(cfg.dataverse, tz), refs: (devops ?? []).map((w) => ({ clientKey: w.clientKey, clientName: w.clientName })), weekStart, items: [...listed, ...Object.values(weekPlans0 ?? {}).flatMap((d) => d.picks)] }))().catch(() => null)
+    : null;
+  const weekPlans = weekPlans0 && carry?.resolved.size ? Object.fromEntries(Object.entries(weekPlans0).map(([d, v]) => [d, { ...v, picks: markResolved(v.picks, carry.resolved) }])) : weekPlans0;
   const committedWeeks = plan ? await plan.committedWeeks() : new Set<IsoDate>();
   const aheadSeen = plan ? await plan.markedDates(AHEAD_SEEN_MARK) : new Set<IsoDate>();
   const clientName = nameOf(cfg, (k) => names.get(k));
@@ -506,6 +515,8 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     devops,
     clients: clientColors,
     guidance: cfg?.org?.guidance ?? null,
+    planBits: carry?.bits ?? null,
+    checkins: plan ? checkinGhosts(await plan.weekWatches(weekStart)) : [],
     hours: model,
     thresholds: weekConfig.thresholds,
     planning: planningOf(cfg),
@@ -1429,6 +1440,12 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         action,
         req.input,
       );
+    case "weekplan.proposal":
+    case "weekplan.carry_decide":
+    case "weekplan.carry_accept_all":
+    case "weekplan.watch_checkin":
+    case "weekplan.watch_remove":
+      return carryAction(carryCtx(ctx), action, req.input);
     case "planday.start":
     case "planday.carry":
     case "planday.commit":
@@ -1449,6 +1466,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
           pto: (cfg, date) => ptoOn(ctx, cfg, date),
           ptoAhead: (cfg, monday) => ptoAheadOf(ctx, cfg, monday),
           now: ctx.now,
+          resolved: (cfg, items) => resolvedKeys(ctx.makeDevOps(cfg.dataverse, userZone(cfg)), [...new Set(items.map((i) => i.clientKey))].map((clientKey) => ({ clientKey, clientName: clientKey })), idsByClient(items)),
         },
         action,
         req.input,
@@ -1458,6 +1476,24 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       return bad(`unknown action ${String(unhandled)}`);
     }
   }
+}
+
+/** PL-1: the "From last week" proposal and Watching rows' context. */
+function carryCtx(ctx: ActionContext): CarryContext {
+  return {
+    plan: ctx.plan,
+    config: () => configured(ctx),
+    devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
+    clients: async (cfg, weekStart) => {
+      const today = localToday(ctx.now(), userZone(cfg));
+      const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).load(weekStart, {}).catch(() => null) : null;
+      return (await devopsClients(ctx, cfg, weekStart, today, {}, dv?.items ?? [])).fetch;
+    },
+    blocks: (cfg, weekStart) => patternWeek(ctx, cfg, weekStart),
+    org: ctx.org,
+    me: async () => (await storedIdentity(ctx.plan))?.oid ?? null,
+    now: ctx.now,
+  };
 }
 
 /** Step 14.5 (D256): write PATs and app secrets that expire within 14 days (Today, and step 15.5's notification). */

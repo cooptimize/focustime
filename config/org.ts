@@ -262,18 +262,22 @@ export const CLIENT_SPECS = {
 export type ClientKeyName = keyof typeof CLIENT_SPECS;
 
 /** Guidance by level (scope "level:<level>"). Each person may override any of these for themselves. */
-export type Guidance = { draftStories: boolean; readinessNudges: boolean; planShare: number };
+export type Guidance = { draftStories: boolean; readinessNudges: boolean; planShare: number; /** PL-1: % of a client's block hours left unplanned for walk-ins (the level's default; a person sets it per client). */ keepOpen: number };
 export const LEVEL_SPECS = {
   draft_stories: { kind: "level", area: "levels", label: "Break down offered", builtin: true, parse: bool },
   readiness_nudges: { kind: "level", area: "levels", label: "Readiness nudges in Plan ahead", builtin: true, parse: bool },
   // "plan_share": the share of a client's free time Plan the week plans up to before the amber over line. Named so a
   // later per-client "Keep open" share can join it (planned up to = free × plan share × (1 − keep open)).
   plan_share: { kind: "level", area: "levels", label: "Plan up to (% of free time)", builtin: 100, parse: intIn(50, 100, "percent") },
+  // PL-1: "Keep open": the share of a client's block hours left unplanned for walk-ins (a volatile client, say 30%).
+  // A Default by level here; each person sets their own per client ([keep_open] in their settings, Commit mode's
+  // client card). Planned up to = free × plan share × (1 − keep open).
+  keep_open: { kind: "level", area: "levels", label: "Keep open for walk-ins (% of block hours)", builtin: 0, parse: intIn(0, 80, "percent") },
 } satisfies Record<string, Spec>;
 export type LevelKeyName = keyof typeof LEVEL_SPECS;
 /** The starting level defaults (ADM-1): Consultants plan up to 80% of their free time; everything else as before. */
 export const LEVEL_STARTERS: Record<Level, Partial<Record<LevelKeyName, unknown>>> = { consultant: { plan_share: 80 }, senior: {}, lead: {} };
-const GUIDANCE_KEY: Record<LevelKeyName, keyof Guidance> = { draft_stories: "draftStories", readiness_nudges: "readinessNudges", plan_share: "planShare" };
+const GUIDANCE_KEY: Record<LevelKeyName, keyof Guidance> = { draft_stories: "draftStories", readiness_nudges: "readinessNudges", plan_share: "planShare", keep_open: "keepOpen" };
 
 /** ADM-2: per-person keys (scope "person:<id>"), set by an admin. */
 export const PERSON_SPECS = {
@@ -406,11 +410,13 @@ export function resolve<T>(o: { personal?: T | null | undefined; level?: T | nul
 export function guidanceFor(r: OrgRules, level: Level | null, personal: Partial<Guidance>): Guidance {
   // ADM-2 (D605): no level (an unmapped position, or none) uses the Consultant defaults.
   const lv = r.levels[level ?? "consultant"];
-  const builtin: Guidance = { draftStories: LEVEL_SPECS.draft_stories.builtin, readinessNudges: LEVEL_SPECS.readiness_nudges.builtin, planShare: LEVEL_SPECS.plan_share.builtin };
+  const builtin: Guidance = { draftStories: LEVEL_SPECS.draft_stories.builtin, readinessNudges: LEVEL_SPECS.readiness_nudges.builtin, planShare: LEVEL_SPECS.plan_share.builtin, keepOpen: LEVEL_SPECS.keep_open.builtin };
   return {
     draftStories: resolve({ personal: personal.draftStories, level: lv?.draftStories, builtin: builtin.draftStories }).value,
     readinessNudges: resolve({ personal: personal.readinessNudges, level: lv?.readinessNudges, builtin: builtin.readinessNudges }).value,
     planShare: resolve({ personal: personal.planShare, level: lv?.planShare, builtin: builtin.planShare }).value,
+    // Personal values are per client (plan/carry.ts keepOpenOf), not here: this is the level's default.
+    keepOpen: resolve({ personal: undefined, level: lv?.keepOpen, builtin: builtin.keepOpen }).value,
   };
 }
 

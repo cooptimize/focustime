@@ -85,7 +85,7 @@ describe("features as envelopes", () => {
 
 describe("a client's week in words", () => {
   it("7h free · 9h planned, with the amber about 2h over", () => {
-    expect(budgetWords(7 * H, 9 * H)).toEqual({ kind: "over", free: "7h free", planned: "9h planned", over: "about 2h over", text: "7h free · 9h planned" });
+    expect(budgetWords(7 * H, 9 * H)).toEqual({ kind: "over", free: "7h free", planned: "9h planned", over: "about 2h over", text: "7h free · 9h planned", line: 7 * H });
     expect(budgetWords(7 * H, 4 * H)).toMatchObject({ kind: "free", over: null, text: "7h free · 4h planned" });
     expect(budgetWords(7 * H, 7 * H)).toMatchObject({ kind: "all", over: null });
     expect(budgetWords(7 * H, 0)).toMatchObject({ kind: "none", text: "7h free" });

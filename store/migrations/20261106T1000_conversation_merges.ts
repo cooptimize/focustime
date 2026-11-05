@@ -5,7 +5,7 @@
 import type { NamedMigration } from "./named.ts";
 
 export const conversationMerges: NamedMigration = {
-  name: "20261105T2100_conversation_merges",
+  name: "20261106T1000_conversation_merges",
   sqlite: `ALTER TABLE conversations ADD COLUMN merged_into INTEGER;
    CREATE TABLE conversation_merges (
      id INTEGER PRIMARY KEY AUTOINCREMENT,

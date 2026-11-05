@@ -131,28 +131,45 @@ export async function liveContext(o: LiveOptions = {}): Promise<ActionContext> {
   };
 }
 
-export type Live = { url: string; close: () => Promise<void>; page: () => Promise<Page> };
-export type LiveBrowser = { browser: Browser; vite: ViteDevServer; start: (ctx: ActionContext) => Promise<Live>; close: () => Promise<void> };
+/**
+ * HK-1: the app is up and the opening has finished. The opening plays over the app on a slow load and takes every key
+ * to skip itself, so a key sent while it plays never reaches the app (break-down's Esc under load). Wait for this, not
+ * just the top bar, before sending keys.
+ */
+export async function appReady(page: Page): Promise<void> {
+  await page.locator(".topbar").waitFor();
+  await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
+}
 
-/** Vite (no HMR) and Chromium for a test file; `start` serves one context to a signed-in browser context. */
+export type Live = { url: string; close: () => Promise<void>; page: () => Promise<Page> };
+export type LiveBrowser = { browser: Browser; vite: ViteDevServer | null; start: (ctx: ActionContext) => Promise<Live>; close: () => Promise<void> };
+
+/**
+ * Chromium for a test file and the UI it serves; `start` serves one context to a signed-in browser context. The UI is
+ * the run's build (test/e2e-build.ts, FOCUSTIME_E2E_DIST) like the demo harness's, or Vite (no HMR) with
+ * FOCUSTIME_E2E_DIST=dev. HK-1: these real-session tests (setup, admin, AI and the rest) still compiled the whole UI
+ * through Vite on their first page; on CI's two cores that ate most of a step's 60 s and summed past the admin test's
+ * 240 s. Service workers are blocked, as in the harness, so a built run never depends on a cached shell.
+ */
 export async function liveBrowser(): Promise<LiveBrowser> {
-  const vite = await createServer({ root: ROOT, configFile: join(ROOT, "vite.config.ts"), server: { middlewareMode: true, hmr: false }, appType: "spa", logLevel: "silent" });
+  const dist = process.env.FOCUSTIME_E2E_DIST && process.env.FOCUSTIME_E2E_DIST !== "dev" ? process.env.FOCUSTIME_E2E_DIST : null;
+  const vite = dist ? null : await createServer({ root: ROOT, configFile: join(ROOT, "vite.config.ts"), server: { middlewareMode: true, hmr: false }, appType: "spa", logLevel: "silent" });
   const browser = await chromium.launch({ executablePath: CHROMIUM!, args: ["--disable-gpu"] });
   return {
     browser,
     vite,
     close: async () => {
       await browser.close().catch(() => {});
-      await vite.close();
+      await vite?.close();
     },
     start: async (ctx) => {
-      const app = await startTestApp({ ctx, now: () => Temporal.Instant.from(NOW), extra: { devMiddleware: vite.middlewares } });
+      const app = await startTestApp({ ctx, now: () => Temporal.Instant.from(NOW), ...(dist ? { distDir: dist } : {}), extra: vite ? { devMiddleware: vite.middlewares } : {} });
       const s = await app.browser().signIn(ME);
       return {
         url: `${app.publicUrl}/?now=${encodeURIComponent(NOW)}`,
         close: app.close,
         page: async () => {
-          const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+          const context = await browser.newContext({ viewport: { width: 1920, height: 1080 }, serviceWorkers: "block" });
           await context.addCookies([
             { name: SESSION_COOKIE, value: s.cookie, url: app.publicUrl.replace("http:", "https:"), secure: true, httpOnly: true, sameSite: "Lax" },
             { name: CSRF_COOKIE, value: s.csrf, url: app.publicUrl.replace("http:", "https:"), secure: true, sameSite: "Strict" },

@@ -68,8 +68,8 @@ async function machine(d: DriverCase) {
       await scheduler.pass("fast");
       await scheduler.pass("slow");
       await scheduler.pass("fast");
-      // Let the notifier's deliveries settle.
-      await new Promise((r) => setTimeout(r, 20));
+      // HK-1: wait for the notifier's deliveries themselves (a 20 ms sleep was too short on SQL Server under load).
+      await ticks.settled!();
     };
     /** One beat of the clock every 5 seconds (and a slow one every 30) from now until `until`. */
     const tickUntil = async (until: string) => {
@@ -79,9 +79,9 @@ async function machine(d: DriverCase) {
         await scheduler.beat("fast");
         if (n % 6 === 5) await scheduler.beat("slow");
       }
-      await new Promise((r) => setTimeout(r, 20));
+      await ticks.settled!();
     };
-    return { db, close, plan, passes, ctx, scheduler, tickUntil };
+    return { db, close, plan, passes, ctx, scheduler, tickUntil, settled: () => ticks.settled!() };
   }
   return { boot, shown, config: config.config, setTime: (iso: string) => void (at = Temporal.Instant.from(iso)), now: () => at };
 }
@@ -167,7 +167,7 @@ await forEachDriver("background work across a restart (A2)", (d) => {
       expect(b.db.statements - s0).toBe(1);
       expect(b.scheduler.wakeAt()?.toString()).toBe(next.toString());
     }
-    await new Promise((r) => setTimeout(r, 20));
+    await b.settled();
     expect(count(m.shown, "plan_day")).toBe(1);
     b.close();
   });

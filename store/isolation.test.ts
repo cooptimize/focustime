@@ -50,6 +50,8 @@ async function view(p: PlanStore): Promise<unknown> {
     snapshots: await p.snapshotsFrom(MON),
     own: await p.ownEvents(),
     invites: await p.invitesFrom(MON),
+    carry: await p.carryDecisions(MON),
+    watches: await p.weekWatches(MON),
   };
 }
 

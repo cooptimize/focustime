@@ -226,7 +226,7 @@ What DS-1 learned, and what is still open:
 ## Navigation (NV-1, Nov 5)
 
 - Q-NV1-1: "Intention" is still the word for a pick that is neither a DevOps item nor a draft. A person reads it in the block menu's "Add an intention" and its dialog "Intention for <day> <half>" (`ui/menu.ts`), a pick's disabled "Open in browser" ("An intention has no link", `ui/menu.ts`), Check-in's walk-on choice "Typed intention" (`ui/Today.tsx`) and the key legend for A (`ui/keys.ts`). Plan today's type box calls the same thing "a plain note, not in DevOps". NV-1 kept the wording. Should there be one word everywhere, and which one?
-- Q-NV1-2: Resolved by CV-2 (D607): each urgent strip line opens its own conversation or promise (`#/inbox/conversation/<id>`, `#/inbox/promise/<id>`).
+- Q-NV1-2: Resolved by CV-2 (D620): each urgent strip line opens its own conversation or promise (`#/inbox/conversation/<id>`, `#/inbox/promise/<id>`).
 - Q-NV1-3: Ahead keeps "Roadmap" as its first mode's name. Is that the right name inside Ahead, or should it read "Features"?
 
 ## DevOps polling (DV-1, Nov 5)
@@ -238,15 +238,30 @@ What DS-1 learned, and what is still open:
 - Q-DV1-5: An item read once by id (a parent outside the scope, an item on demand) stays in the store until the reconcile drops it. Should on-demand reads get their own expiry?
 
 - Q-ADM2-1: `org.retention_years` is shown in Status as "Not enforced yet". Nothing deletes old data; a delete job (which tables, per person, oldest first, a notice first or not) is a later step.
-- Q-ADM2-2: Guests are told apart from the ID token's `idp` and the UPN today. The `acct` optional claim (0 member, 1 guest) is the documented signal but must be added to the app registration's optional claims (`infra/scripts/`, an Azure change). Worth adding in the next infra step.
+- Q-ADM2-2: Guests are told apart from the ID token's `idp` and the UPN today. The `acct` optional claim (0 member, 1 guest) is the documented signal but must be added to the app registration's optional claims (`infra/scripts/`, an Azure change). Worth adding in the next infra step. Answered (HK-1, D612): `infra/scripts/app-registration.sh --claims-only` adds acct to the ID token; `guestToken` already reads it first.
 - Q-ADM2-3: The automation flag isn't prefilled for the known automation account (no migration can read Dataverse, and naming a person in code is ruled out). An admin sets it once in Admin › People after the merge.
-- Q-ADM2-4: Resolved by CV-2 (D607): `ui/nav.ts` takes hyphenated section names; a test opens all 7 Admin sections by address.
+- Q-ADM2-4: Resolved by CV-2 (D620): `ui/nav.ts` takes hyphenated section names; a test opens all 7 Admin sections by address.
+
+## Housekeeping (HK-1, Nov 5)
+
+- Q-HK1-1: `infra/scripts/app-registration.sh`'s consent step uses `az ad app permission grant`, which deletes every grant the app has for that API (people's own incremental consents included; azure-cli issue 20974) and recreates one tenant-wide grant of GRAPH_SCOPES, which lacks Chat.Read (granted later for AP-1). A full run today would drop everyone's Chat.Read until they consent again. Until the step merges scopes into the AllPrincipals grant only (through Graph's oauth2PermissionGrants), use `--claims-only` for claim changes. Who owns the fix, and should Chat.Read join GRAPH_SCOPES?
+- Q-HK1-2: The names guard's history exceptions (`docs/decisions.md`, `docs/azure/`) mean a real name can still land there. Should the guard cover them too, with an allowlist for the old entries?
+- Q-HK1-3: Exception messages are redacted by pattern; an unquoted person's name or a client name FocusTime hasn't seen yet in this process could pass. Should errors that carry values move to typed errors with a fixed message?
+- Q-HK1-4: The DevOps checks dominate ingest (about 0.35 GB a month in prod at 1-minute checks). If prod's ingest passes 2 GB a month, sample the `devops_check` job items that changed nothing first.
+## Rolling into a new week (PL-1, Nov 5)
+
+- Q-PL1-1 (for PL-2): When does a planning moment happen? The proposal shows whenever there are rows; should Monday morning prompt for it (a moment card on Today, a notification), and should Commit's Done wait for it?
+- Q-PL1-2 (for PL-2): Churn: a feature carried over week after week. Should the row say "3rd week", and should a feature carried more than N times suggest Watching or a talk with the lead?
+- Q-PL1-3: The amber rule starts on Wednesday. Is that right, or should it depend on the person's working days?
+- Q-PL1-4: A removed feature gives no row. Should it say "Removed in DevOps" once, so a must doesn't vanish silently?
+- Q-PL1-5: A check-in with nowhere to go this week (the client's blocks have ended, the rest is PTO or catch-up) waits for Add a check-in. Should it offer next week instead?
+- Q-PL1-6: Commit's Add pane shows a target date that runs wider than a phone (`.pw-meta`); not PL-1's, seen in its screenshots.
 
 ## Conversations fixes (CV-2, Nov 5)
 
-- Q-CV2-1: Chat images live in Azure SQL (`teams_message_images`, D610). Move the bytes to Blob storage (a private container, the app's managed identity, the row keeping the blob name) in an HK step once the monthly size is known. Size per month is about chats x images per chat per working day x 21 x the average stripped size (a pasted screenshot is usually 100 to 400 KB): 20 chats with 3 a day at 250 KB is about 315 MB a month, kept as long as their messages are.
+- Q-CV2-1: Chat images live in Azure SQL (`teams_message_images`, D623). Move the bytes to Blob storage (a private container, the app's managed identity, the row keeping the blob name) in an HK step once the monthly size is known. Size per month is about chats x images per chat per working day x 21 x the average stripped size (a pasted screenshot is usually 100 to 400 KB): 20 chats with 3 a day at 250 KB is about 315 MB a month, kept as long as their messages are.
 - Q-CV2-2: With AI off for a client, nothing groups its messages into conversations (the rules path finds Requests and promises only). A rules-only grouping (same chat; a reply or a mention; within 45 minutes) would give those clients conversations too. Worth a step if clients without AI stay common.
 - Q-CV2-3: Capture's Who still uses the older name box (`WhoInput`); moving it to the PersonPicker keeps one way to choose a person, and is Capture's step.
-- Q-CV2-4: Link existing… on a promise with no conversation searches with no conversation's context (no likely item); Create works (D615). Should Link start a conversation the same way?
+- Q-CV2-4: Link existing… on a promise with no conversation searches with no conversation's context (no likely item); Create works (D628). Should Link start a conversation the same way?
 - Q-CV2-5: A promise that implies an item shows only Create the DevOps item? (Create, Link existing…, Not needed), as in CV-1: Make it a follow-up, Done and ⋯ come once it's linked. Past its due, should Make it a follow-up or Done be offered there too?
 - Q-CV2-6: Week's rail shows a promise past its due as "was due" in its title and label only; the rail's own amber treatment is PL-1's to decide.

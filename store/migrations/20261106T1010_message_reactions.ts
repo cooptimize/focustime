@@ -4,7 +4,7 @@
 import type { NamedMigration } from "./named.ts";
 
 export const messageReactions: NamedMigration = {
-  name: "20261105T2110_message_reactions",
+  name: "20261106T1010_message_reactions",
   sqlite: `ALTER TABLE teams_messages ADD COLUMN reactions_json TEXT;`,
   sqlserver: `ALTER TABLE teams_messages ADD reactions_json nvarchar(1000) NULL;`,
 };

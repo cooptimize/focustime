@@ -14,7 +14,7 @@ export const USER_TABLES: readonly string[] = [
   "delivery_chats", "delivery_snapshots", "devops_identities", "devops_item_clients", "devops_write_log", "draft_stories", "flex_sessions", "focus_log",
   "follow_ups", "house_styles", "invites", "kv", "markers", "notices", "outlook_events", "picks", "promises", "push_devices", "resume_notes", "roadmap_dates", "setup_state", "story_draft_writes", "story_drafts",
   "teams_status_log", "timeboxes", "unavailable", "user_secrets", "user_settings", "week_drafts", "week_feature_slots", "week_features",
-  "week_plans", "week_quiet", "write_log",
+  "week_carry", "week_plans", "week_quiet", "week_watch", "write_log",
 ];
 const USER = new Set(USER_TABLES);
 

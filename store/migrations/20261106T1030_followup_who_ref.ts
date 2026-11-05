@@ -5,7 +5,7 @@
 import type { NamedMigration } from "./named.ts";
 
 export const followUpWhoRef: NamedMigration = {
-  name: "20261105T2130_followup_who_ref",
+  name: "20261106T1030_followup_who_ref",
   sqlite: `ALTER TABLE follow_ups ADD COLUMN who_ref TEXT;`,
   sqlserver: `ALTER TABLE follow_ups ADD who_ref nvarchar(400) NULL;`,
 };

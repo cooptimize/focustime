@@ -30,11 +30,11 @@ describe("resolve: personal, then level, then org, then built-in", () => {
 describe("Defaults by level", () => {
   const rules = resolveRules([], BOOT);
   it("Consultants plan up to 80% with Draft stories and readiness nudges on; Senior and Lead as before", () => {
-    expect(guidanceFor(rules, "consultant", {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 80 });
-    expect(guidanceFor(rules, "senior", {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 100 });
-    expect(guidanceFor(rules, "lead", {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 100 });
+    expect(guidanceFor(rules, "consultant", {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 80, keepOpen: 0 });
+    expect(guidanceFor(rules, "senior", {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 100, keepOpen: 0 });
+    expect(guidanceFor(rules, "lead", {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 100, keepOpen: 0 });
     // ADM-2 (D605): no level (an unmapped position, or none read) uses the Consultant defaults.
-    expect(guidanceFor(rules, null, {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 80 });
+    expect(guidanceFor(rules, null, {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 80, keepOpen: 0 });
   });
   it("an admin's level default, then the person's own choice over it", () => {
     const r = resolveRules([row("level:senior", "plan_share", 90)], BOOT);
@@ -124,5 +124,19 @@ describe("client colors: a team Default, a person's own color over it", () => {
     expect(colorProblem("#42783c")).toMatch(/navy or green/);
     expect(colorProblem("#fafafa")).toMatch(/light or the dark/);
     expect(colorProblem("#c0392b")).toBeNull();
+  });
+});
+
+describe("Keep open (PL-1): a Default by level with a per-client personal value", () => {
+  it("defaults to 0%, takes the level's default, and a client's own share over it; Reset goes back", () => {
+    expect(guidanceFor(resolveRules([], BOOT), null, {}).keepOpen).toBe(0);
+    expect(specFor("level:lead", "keep_open")!.parse(30)).toBe(30);
+    expect(() => specFor("level:lead", "keep_open")!.parse(90)).toThrow();
+    let t = settingsEdit("keep_open", { key: "Fabrikam", percent: 30 })(starter());
+    expect(cfgOf(t).keepOpen).toEqual({ Fabrikam: 30 });
+    t = settingsEdit("keep_open", { key: "Fabrikam", percent: null })(t);
+    expect(cfgOf(t).keepOpen).toEqual({});
+    expect(() => settingsEdit("keep_open", { key: "Fabrikam", percent: 81 })).toThrow("Must be from 0 to 80 percent");
+    expect(() => settingsEdit("keep_open", { key: "Fabrikam", percent: 20, extra: 1 })).toThrow();
   });
 });

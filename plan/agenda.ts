@@ -113,7 +113,7 @@ export function planMyDay(picks: readonly Pick[], blocks: Partial<Record<Half, S
   for (const p of todo) {
     const list = gaps.get(p.half)!;
     // E2: an unsized pick takes 2h, like M (never left out for having no size).
-    const want = sizes[p.size ?? "M"];
+    const want = p.minutes ?? sizes[p.size ?? "M"];
     const min = Math.min(minSizes[p.size ?? "M"], want);
     let i = list.findIndex((g) => placeInGap(g, want, min)?.trimmed === false);
     if (i < 0) i = list.reduce((best, g, k) => (placeInGap(g, want, min) && (best < 0 || g.minutes > list[best]!.minutes) ? k : best), -1);

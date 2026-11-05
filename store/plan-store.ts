@@ -1332,7 +1332,7 @@ export type NewRuleFollowUp = { kind: string; ruleKey: string; clientKey: string
 export type ResumeNote = { id: number; clientKey: string; date: IsoDate; note: string; updatedAt: string };
 /** Borrowed time (step 7): planned focus that slipped, to be made up on a payback day. */
 export type { WeekFeature, WeekPlanRecord } from "../plan/types.ts";
-import type { WeekFeature, WeekPlanRecord } from "../plan/types.ts";
+import type { CarryDecisionRow, WeekFeature, WeekPlanRecord, WeekWatch } from "../plan/types.ts";
 
 export type NewWeekFeature = { weekStart: IsoDate; clientKey: string; itemId: number; title: string; itemType: string | null; url: string | null; /** Minutes (whole hours); 0 takes it off. */ estimate: number };
 export type NewWeekItem = Omit<NewWeekFeature, "estimate"> & { level: ItemLevel; tier?: Tier; /** Features: an estimate in minutes (whole hours), or null for 4h. */ estimate?: number | null; size?: StorySize | null; parentId?: number | null };
@@ -1374,6 +1374,8 @@ export type NewPick = {
   size: Size | null;
   /** Step 13.5: a follow-up picked into a block (an intention pick tied to it). */
   followUpId?: number | null;
+  /** PL-1: the pick's own minutes instead of its size (a Watching check-in's 30). */
+  minutes?: number | null;
 };
 
 type Row = Record<string, string | number | null>;
@@ -1419,9 +1421,21 @@ const toPick = (r: Row): Pick => ({
   carriedFromDate: (r.carried_from_date as string | null) ?? null,
   notes: (r.notes as string | null) ?? null,
   followUpId: (r.follow_up_id as number | null) ?? null,
+  ...(r.minutes != null ? { minutes: r.minutes as number } : {}),
   position: r.position as number,
   createdAt: r.created_at as string,
   updatedAt: r.updated_at as string,
+});
+const toWatch = (r: Row): WeekWatch => ({
+  weekStart: String(r.week_start).slice(0, 10),
+  clientKey: r.client_key as string,
+  itemId: r.item_id as number,
+  title: r.title as string,
+  itemType: (r.item_type as string | null) ?? null,
+  url: (r.url as string | null) ?? null,
+  why: r.why as WeekWatch["why"],
+  checkin: r.checkin_date != null && r.checkin_half != null && r.checkin_minutes != null ? { date: String(r.checkin_date).slice(0, 10), half: r.checkin_half as "AM" | "PM", minutes: r.checkin_minutes as number } : null,
+  checkinPickId: (r.checkin_pick_id as number | null) ?? null,
 });
 const toPlan = (r: Row): DayPlan => ({ date: r.date as string, committedAt: (r.committed_at as string | null) ?? null, closedOutAt: (r.closed_out_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string });
 const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: r.size as Size, level: ((r.level as string | null) ?? "story") as DraftStory["level"], createdAt: r.created_at as string, description: (r.description as string | null) ?? null, acceptance: (r.acceptance as string | null) ?? null, startDate: (r.start_date as string | null) ?? null, targetDate: (r.target_date as string | null) ?? null, ...(r.devops_id != null ? { devopsId: r.devops_id as number, devopsUrl: (r.devops_url as string | null) ?? null } : {}) });
@@ -1710,8 +1724,8 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
   async function insertPick(p: NewPick, carriedFrom: number | null = null): Promise<Pick> {
     (await ensurePlan(p.date));
     const at = stamp();
-    const r = (await db.run(`INSERT INTO picks (date, half, client_key, kind, item_id, draft_id, title, item_type, item_url, size, status, carried_from, notes, position, created_at, updated_at, follow_up_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, NULL, ?, ?, ?, ?)`, p.date, p.half, p.clientKey, p.kind, p.itemId ?? null, p.draftId ?? null, p.title, p.itemType ?? null, p.itemUrl ?? null, p.size, carriedFrom, (await nextPosition(p.date, p.half)), at, at, p.followUpId ?? null));
+    const r = (await db.run(`INSERT INTO picks (date, half, client_key, kind, item_id, draft_id, title, item_type, item_url, size, status, carried_from, notes, position, created_at, updated_at, follow_up_id, minutes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, NULL, ?, ?, ?, ?, ?)`, p.date, p.half, p.clientKey, p.kind, p.itemId ?? null, p.draftId ?? null, p.title, p.itemType ?? null, p.itemUrl ?? null, p.size, carriedFrom, (await nextPosition(p.date, p.half)), at, at, p.followUpId ?? null, p.minutes ?? null));
     return (await getPick(r.lastId!))!;
   }
 
@@ -1783,6 +1797,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         if (p.itemId !== null) base.itemId = p.itemId;
         if (p.draftId !== null) base.draftId = p.draftId;
         if (p.followUpId !== null) base.followUpId = p.followUpId;
+        if (p.minutes != null) base.minutes = p.minutes;
         return (await insertPick(base, p.id));
       });
     },
@@ -2153,6 +2168,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
           if (p.itemId !== null) base.itemId = p.itemId;
           if (p.draftId !== null) base.draftId = p.draftId;
           if (p.followUpId !== null) base.followUpId = p.followUpId;
+          if (p.minutes != null) base.minutes = p.minutes;
           moved = (await insertPick(base, p.id));
         }
         const r = (await db.run("INSERT INTO borrowed (pick_id, from_pick_id, client_key, title, date, minutes, payback, payback_date, payback_half, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", moved.id, p.id, p.clientKey, p.title, p.date, b.minutes, b.payback, to.date, to.half, stamp()));
@@ -2485,6 +2501,42 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         if (d.level !== "feature") throw new PlanError("Only a draft feature goes on the week list");
         (await db.run("INSERT INTO week_drafts (week_start, draft_id, tier, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(week_start, draft_id) DO UPDATE SET tier = excluded.tier", weekStart, draftId, tier, stamp()));
       });
+    },
+    // ---- PL-1: the "From last week" decisions and Watching rows ----
+    carryDecisions: async (weekStart: IsoDate): Promise<CarryDecisionRow[]> =>
+      ((await db.all("SELECT client_key, item_id, kind, decision, decided_at FROM week_carry WHERE week_start = ? ORDER BY client_key, item_id", weekStart)) as Row[]).map((r) => ({ clientKey: r.client_key as string, itemId: r.item_id as number, kind: r.kind as string, decision: r.decision as CarryDecisionRow["decision"], decidedAt: r.decided_at as string })),
+    /** One decision per row and week; the latest wins (Keep watching after Drop, say). */
+    async decideCarry(weekStart: IsoDate, clientKey: string, itemId: number, kind: string, decision: CarryDecisionRow["decision"]): Promise<void> {
+      return tx(async () => void (await db.run("INSERT INTO week_carry (week_start, client_key, item_id, kind, decision, decided_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (week_start, client_key, item_id) DO UPDATE SET kind = excluded.kind, decision = excluded.decision, decided_at = excluded.decided_at", weekStart, clientKey, itemId, kind, decision, stamp())));
+    },
+    weekWatches: async (weekStart: IsoDate): Promise<WeekWatch[]> => ((await db.all("SELECT * FROM week_watch WHERE week_start = ? ORDER BY client_key, created_at, item_id", weekStart)) as Row[]).map(toWatch),
+    /** All Watching rows with a check-in on a date (to turn into picks when that day is planned or opened). */
+    watchesOn: async (date: IsoDate): Promise<WeekWatch[]> => ((await db.all("SELECT * FROM week_watch WHERE checkin_date = ? AND checkin_minutes IS NOT NULL ORDER BY client_key, created_at, item_id", date)) as Row[]).map(toWatch),
+    async addWatch(w: Omit<WeekWatch, "checkinPickId">): Promise<WeekWatch> {
+      return tx(async () => {
+        const at = stamp();
+        (await db.run(
+          "INSERT INTO week_watch (week_start, client_key, item_id, title, item_type, url, why, checkin_date, checkin_half, checkin_minutes, checkin_pick_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?) ON CONFLICT (week_start, client_key, item_id) DO NOTHING",
+          w.weekStart, w.clientKey, w.itemId, w.title, w.itemType, w.url, w.why, w.checkin?.date ?? null, w.checkin?.half ?? null, w.checkin?.minutes ?? null, at, at,
+        ));
+        return toWatch((await db.get("SELECT * FROM week_watch WHERE week_start = ? AND client_key = ? AND item_id = ?", w.weekStart, w.clientKey, w.itemId)) as Row);
+      });
+    },
+    async removeWatch(weekStart: IsoDate, clientKey: string, itemId: number): Promise<void> {
+      return tx(async () => void (await db.run("DELETE FROM week_watch WHERE week_start = ? AND client_key = ? AND item_id = ?", weekStart, clientKey, itemId)));
+    },
+    /** Moves the check-in reservation (a new half-day) or removes it (null); the Watching row stays. */
+    async setCheckin(weekStart: IsoDate, clientKey: string, itemId: number, to: { date: IsoDate; half: "AM" | "PM"; minutes: number } | null): Promise<WeekWatch> {
+      return tx(async () => {
+        const r = (await db.get("SELECT * FROM week_watch WHERE week_start = ? AND client_key = ? AND item_id = ?", weekStart, clientKey, itemId)) as Row | undefined;
+        if (!r) throw new PlanError("That feature isn't watched this week");
+        (await db.run("UPDATE week_watch SET checkin_date = ?, checkin_half = ?, checkin_minutes = ?, checkin_pick_id = NULL, updated_at = ? WHERE week_start = ? AND client_key = ? AND item_id = ?", to?.date ?? null, to?.half ?? null, to?.minutes ?? null, stamp(), weekStart, clientKey, itemId));
+        return toWatch((await db.get("SELECT * FROM week_watch WHERE week_start = ? AND client_key = ? AND item_id = ?", weekStart, clientKey, itemId)) as Row);
+      });
+    },
+    /** The check-in became a pick on its day. */
+    async setCheckinPick(weekStart: IsoDate, clientKey: string, itemId: number, pickId: number | null): Promise<void> {
+      return tx(async () => void (await db.run("UPDATE week_watch SET checkin_pick_id = ?, updated_at = ? WHERE week_start = ? AND client_key = ? AND item_id = ?", pickId, stamp(), weekStart, clientKey, itemId)));
     },
     /** U6: clients marked "Nothing this week" for a week. */
     weekQuiet: async (weekStart: IsoDate): Promise<string[]> => ((await db.all("SELECT client_key FROM week_quiet WHERE week_start = ? ORDER BY client_key", weekStart)) as Row[]).map((r) => r.client_key as string),

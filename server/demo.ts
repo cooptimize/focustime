@@ -220,7 +220,7 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
   if (plan) {
     const past: [number, [string, number, string, number][], [string, number, string, number, number][]][] = [
       [-14, [["Northwind", 1110, "Order history export", 1]], [["Northwind", 1114, "Order export API endpoint", 1, 220]]],
-      [-7, [["Northwind", 1110, "Order history export", 2], ["Harbor", 2210, "Patient intake form", 1], ["Cooptimize", 4410, "Internal reporting refresh", 1]], [["Northwind", 1111, "Export orders to CSV", 1, 200], ["Harbor", 2211, "Insurance card upload", 3, 60]]],
+      [-7, [["Northwind", 1110, "Order history export", 2], ["Harbor", 2210, "Patient intake form", 1], ["Cooptimize", 4410, "Internal reporting refresh", 1], ["Atlas", 3310, "Shipment tracking dashboard", 1], ["Atlas", 3350, "Carrier rate alerts", 1], ["Atlas", 3360, "Carrier contact list", 1]], [["Northwind", 1111, "Export orders to CSV", 1, 200], ["Harbor", 2211, "Insurance card upload", 3, 60]]],
     ];
     for (const [n, features, picks] of past) {
       const ws = Temporal.PlainDate.from(weekStart).add({ days: n }).toString();

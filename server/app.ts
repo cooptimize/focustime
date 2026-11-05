@@ -7,6 +7,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
 import { timingSafeEqual } from "node:crypto";
+import { currentOperation, newOperation, noteCurrent, runInOperation, type Operation } from "../log/operation.ts";
+import { isActionName } from "../actions/registry.ts";
 import { chatImage, dispatch, type ActionContext } from "../actions/dispatch.ts";
 import type { ServedImage } from "../actions/chat-images.ts";
 import type { Logger } from "../log/logger.ts";
@@ -61,6 +63,8 @@ export type AppOptions = {
   dbStatus?: () => "ok" | "waking" | "unavailable";
   /** A4: every finished request, as a fixed route name, status and duration (App Insights in the hosted app). */
   onRequest?: (r: RequestRecord) => void;
+  /** HK-1: an error behind a 500, or one an action threw (telemetry's exceptions; never shown to anyone). */
+  onError?: (e: unknown, where: string) => void;
   /** CV-2: one chat image for this person (the member and client checks); by default actions/dispatch.ts's. */
   chatImage?: (ctx: ActionContext, id: number) => Promise<ServedImage>;
 };
@@ -71,8 +75,11 @@ export const READY_PATH = "/readyz";
 /** S1 (D452): the running build; public like the health check (it holds no secret, hostname or user data). */
 export const VERSION_PATH = "/version";
 
-/** A finished request, for telemetry: never a path with ids, a query, a header or a body. */
-export type RequestRecord = { method: string; route: string; status: number; durationMs: number };
+/**
+ * A finished request, for telemetry: never a path with ids, a query, a header or a body. HK-1: with its operation
+ * (log/operation.ts): the W3C ids, and the registered action and client key it named.
+ */
+export type RequestRecord = { method: string; route: string; status: number; durationMs: number; op?: Operation | undefined };
 
 /** A request's route as a fixed name (telemetry never sees the path itself). */
 export function routeClass(path: string): string {
@@ -179,7 +186,9 @@ export function createApp(opts: AppOptions) {
     }
     if (opts.onRequest) {
       const started = performance.now();
-      res.on("finish", () => opts.onRequest!({ method, route: routeClass(url.pathname), status: res.statusCode, durationMs: performance.now() - started }));
+      const op = currentOperation();
+      if (op) op.name = `${method} ${routeClass(url.pathname)}`;
+      res.on("finish", () => opts.onRequest!({ method, route: routeClass(url.pathname), status: res.statusCode, durationMs: performance.now() - started, op }));
     }
 
     const g = checkRequest({ method, path: url.pathname, search: url.search, host: header("host"), origin: header("origin"), secFetchSite: header("sec-fetch-site"), secFetchMode: header("sec-fetch-mode") }, { publicUrl: opts.publicUrl });
@@ -318,8 +327,14 @@ export function createApp(opts: AppOptions) {
         let out: Awaited<ReturnType<typeof dispatch>>;
         try {
           const body = JSON.parse(await readBody(req)) as { action?: unknown; input?: unknown };
+          // HK-1: the operation names the action (only a registered one) and the client key it names (sent as a ref).
+          if (isActionName(body.action)) {
+            const k = body.input && typeof body.input === "object" ? (body.input as { clientKey?: unknown }).clientKey : undefined;
+            noteCurrent({ name: `POST /api/action ${body.action}`, ...(typeof k === "string" && k.length <= 200 ? { client: k } : {}) });
+          }
           out = await dispatch(await opts.ctx(s), { action: body.action, input: body.input });
-        } catch {
+        } catch (e) {
+          if (!(e instanceof SyntaxError)) opts.onError?.(e, "action");
           out = { ok: false, status: 400, error: "bad request" };
         }
         const status = out.ok ? 200 : out.status;
@@ -348,7 +363,7 @@ export function createApp(opts: AppOptions) {
         res.writeHead(401, { "cache-control": "no-store" });
         return res.end();
       }
-      const r: ServedImage = await (opts.chatImage ?? chatImage)(await opts.ctx(s), Number(m[1])).catch(() => ({ status: 404 as const }));
+      const r: ServedImage = await (opts.chatImage ?? chatImage)(await opts.ctx(s), Number(m[1])).catch((e: unknown) => (opts.onError?.(e, "chat_image"), { status: 404 as const }));
       opts.log({ source: "server", op: "chat_image", status: r.status });
       res.setHeader("Content-Security-Policy", IMAGE_CSP);
       if (r.status !== 200) {
@@ -375,7 +390,12 @@ export function createApp(opts: AppOptions) {
   };
 
   return createServer((req, res) => {
-    handler(req, res).catch(() => {
+    // HK-1: each request is an operation (its own W3C span; the caller's trace when it sent a valid traceparent), so
+    // everything logged while it runs sits under it in Application Insights.
+    const tp = req.headers.traceparent;
+    const op = newOperation("request", req.method ?? "GET", { traceparent: (Array.isArray(tp) ? tp[0] : tp) ?? null });
+    runInOperation(op, () => handler(req, res)).catch((e: unknown) => {
+      runInOperation(op, () => opts.onError?.(e, "request"));
       opts.log({ source: "server", op: "error", status: 500 });
       if (!res.headersSent) res.writeHead(500);
       res.end();

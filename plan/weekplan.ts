@@ -3,6 +3,8 @@
 // nudges. No I/O; the server and UI hand in the week, DevOps results and the plan.
 import { freeMinutes } from "../week/free.ts";
 import { budgetWords, estimate, plannedMinutesOf, type StorySize } from "./estimate.ts";
+import { keepOpenOf, resolvedOf, type PlanBits } from "./carry.ts";
+import { countsFor } from "./process.ts";
 import type { ClientPortfolio, IsoDate, PortfolioItem, Slot, Week, WorkItem } from "../week/types.ts";
 
 /** The week plan's items as these rules need them (the store's WeekFeature fits). */
@@ -76,7 +78,26 @@ export type ClientBudget = {
   planned: string | null;
   /** The amber "about 2h over", or null. */
   over: string | null;
+  /** PL-1: the share of its block hours kept open for walk-ins (0: none), and its Watching check-ins' minutes. */
+  keepOpen?: number;
+  checkinMinutes?: number;
+  /** PL-1: the minutes it plans up to: free × plan share × (1 − keep open); the over line and fit use this. */
+  planUpTo?: number;
 };
+
+/**
+ * PL-1: the one budget Commit, the Board and Today's This week line show: weekBudget with the same inputs everywhere
+ * (WT-1's background types, the plan share, Keep open, what DevOps resolved, the Watching check-ins).
+ */
+export function planBudget(week: Week, items: readonly FeatureLike[], o: { borrowed: Parameters<typeof borrowedForWeek>[0]; weekStart: IsoDate; work: Parameters<typeof countsFor>[0]; bits: PlanBits | null | undefined; planShare?: number | undefined }): ClientBudget[] {
+  const bits = o.bits;
+  return weekBudget(week, items, {
+    borrowedMinutes: borrowedForWeek(o.borrowed, o.weekStart),
+    counts: countsFor(o.work),
+    planShare: bits?.planShare ?? o.planShare ?? 100,
+    ...(bits ? { keepOpen: keepOpenOf(bits), resolved: resolvedOf(bits), checkins: bits.checkins } : {}),
+  });
+}
 
 /**
  * Q48: the unpaid borrowed minutes per client that count against a week's fit: those whose payback date falls in
@@ -107,7 +128,21 @@ export function withCurrentTitles<T extends { clientKey: string; itemId: number;
  * shown or hidden, unavailable time; none on a day off), less unpaid borrowed time. Planned: minutes of its musts,
  * features as envelopes (plan/estimate.ts).
  */
-export function weekBudget(week: Week, all: readonly FeatureLike[], o: { borrowedMinutes: Readonly<Record<string, number>>; /** WT-1: false for a background type (no hours). */ counts?: (clientKey: string, itemType: string | null | undefined) => boolean; /** ADM-1: plan up to this % of free time (100: all of it). */ planShare?: number }): ClientBudget[] {
+export type BudgetOptions = {
+  borrowedMinutes: Readonly<Record<string, number>>;
+  /** WT-1: false for a background type (no hours). */
+  counts?: (clientKey: string, itemType: string | null | undefined) => boolean;
+  /** ADM-1: plan up to this % of free time (100: all of it). */
+  planShare?: number;
+  /** PL-1: the client's Keep open share (0 to 80). */
+  keepOpen?: (clientKey: string) => number;
+  /** PL-1: resolved, closed or removed in DevOps: counts zero hours. */
+  resolved?: (clientKey: string, itemId: number) => boolean;
+  /** PL-1: Watching check-in reservations: minutes per client, counted in its planned time. */
+  checkins?: Readonly<Record<string, number>>;
+};
+
+export function weekBudget(week: Week, all: readonly FeatureLike[], o: BudgetOptions): ClientBudget[] {
   const items = o.counts ? all.filter((i) => o.counts!(i.clientKey, i.itemType)) : all;
   const names = new Map<string, string>();
   for (const d of week.days) for (const s of [d.am, d.pm]) if (s.focus[0] && !names.has(s.focus[0].clientKey)) names.set(s.focus[0].clientKey, s.focus[0].clientName);
@@ -116,7 +151,8 @@ export function weekBudget(week: Week, all: readonly FeatureLike[], o: { borrowe
     const d = week.days.find((x) => x.date === date);
     return d ? (half === "AM" ? d.am : d.pm) : null;
   };
-  const est = estimate(items.map((i) => ({ ...i, level: i.level ?? "feature", tier: i.tier ?? "must" })));
+  const est = estimate(items.map((i) => ({ ...i, level: i.level ?? "feature", tier: i.tier ?? "must", done: !!o.resolved?.(i.clientKey, i.itemId) })));
+  for (const k of Object.keys(o.checkins ?? {})) if (!names.has(k)) names.set(k, k);
   return [...names].map(([clientKey, clientName]) => {
     const mine = items.filter((f) => f.clientKey === clientKey);
     const placedOpen = new Map<string, Block>();
@@ -132,10 +168,12 @@ export function weekBudget(week: Week, all: readonly FeatureLike[], o: { borrowe
     const inBlocks = blocks.reduce((n, b) => n + b.freeMinutes, 0);
     const borrowed = o.borrowedMinutes[clientKey] ?? 0;
     const freeMinutes = Math.max(0, inBlocks - borrowed);
-    const plannedMinutes = plannedMinutesOf(est, clientKey, "must");
-    const w0 = budgetWords(freeMinutes, plannedMinutes, o.planShare ?? 100);
+    const checkinMinutes = o.checkins?.[clientKey] ?? 0;
+    const plannedMinutes = plannedMinutesOf(est, clientKey, "must") + checkinMinutes;
+    const keepOpen = o.keepOpen?.(clientKey) ?? 0;
+    const w0 = budgetWords(freeMinutes, plannedMinutes, o.planShare ?? 100, keepOpen);
     const w = onlyPto ? { ...w0, free: NO_TIME, text: [NO_TIME, w0.planned].filter(Boolean).join(" · ") } : w0;
-    return { clientKey, clientName, blocks, ptoBlocks: all.filter((b) => b.pto).map((b) => ({ date: b.date, half: b.half })), freeMinutes, borrowedMinutes: Math.min(borrowed, inBlocks), plannedMinutes, nicePlannedMinutes: plannedMinutesOf(est, clientKey, "nice"), status: w.kind, text: w.text, free: w.free, planned: w.planned, over: w.over };
+    return { clientKey, clientName, blocks, ptoBlocks: all.filter((b) => b.pto).map((b) => ({ date: b.date, half: b.half })), freeMinutes, borrowedMinutes: Math.min(borrowed, inBlocks), plannedMinutes, nicePlannedMinutes: plannedMinutesOf(est, clientKey, "nice"), status: w.kind, text: w.text, free: w.free, planned: w.planned, over: w.over, keepOpen, checkinMinutes, planUpTo: onlyPto ? 0 : w0.line };
   });
 }
 

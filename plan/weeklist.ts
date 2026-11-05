@@ -97,11 +97,13 @@ export function devopsStateFrom(work: readonly ClientWork[] | null): (clientKey:
 
 export type DoneBy = "local" | "devops" | "resolved" | "pick";
 /** Done: a local mark, DevOps Completed or Resolved (Q65), or (a story) a pick of it ticked done this week. */
-export function itemDone(i: Pick<ListItem, "clientKey" | "itemId" | "level" | "doneAt">, devops: (clientKey: string, itemId: number) => DevOpsState, pickDone: (clientKey: string, itemId: number) => boolean): DoneBy | null {
+export function itemDone(i: Pick<ListItem, "clientKey" | "itemId" | "level" | "doneAt">, devops: (clientKey: string, itemId: number) => DevOpsState, pickDone: (clientKey: string, itemId: number) => boolean, resolved: (clientKey: string, itemId: number) => boolean = () => false): DoneBy | null {
   if (i.doneAt) return "local";
   const d = devops(i.clientKey, i.itemId);
   if (d === "done") return "devops";
   if (d === "resolved") return "resolved";
+  // PL-1: the DevOps store says it's resolved, closed or removed (features read by id too, not only my work items).
+  if (resolved(i.clientKey, i.itemId)) return "resolved";
   if (i.level === "story" && pickDone(i.clientKey, i.itemId)) return "pick";
   return null;
 }
@@ -214,9 +216,10 @@ export function weekList<F extends ListLike>(
   work: readonly ClientWork[] | null,
   portfolios: readonly { clientKey: string; items: readonly { id: number; order: number | null }[] }[] = [],
   pickDone: (clientKey: string, itemId: number) => boolean = () => false,
+  resolved: (clientKey: string, itemId: number) => boolean = () => false,
 ): { items: Listed<F>[]; progress: Progress[] } {
   const devops = devopsStateFrom(work);
-  const items = orderList(features, stackRank(work, portfolios)).map((f) => ({ ...f, done: itemDone(f, devops, pickDone) }));
+  const items = orderList(features, stackRank(work, portfolios)).map((f) => ({ ...f, done: itemDone(f, devops, pickDone, resolved) }));
   return { items, progress: progress(items, (i) => !!i.done) };
 }
 

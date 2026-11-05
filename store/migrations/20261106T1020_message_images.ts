@@ -7,7 +7,7 @@
 import type { NamedMigration } from "./named.ts";
 
 export const messageImages: NamedMigration = {
-  name: "20261105T2120_message_images",
+  name: "20261106T1020_message_images",
   sqlite: `CREATE TABLE teams_message_images (
      id INTEGER PRIMARY KEY AUTOINCREMENT,
      chat_id TEXT NOT NULL,

@@ -421,3 +421,15 @@ export function aFollowUpView(o: Partial<import("../../actions/types.ts").Follow
 export function aDayPromise(o: Partial<import("../../plan/conversation-views.ts").DayPromise> = {}): import("../../plan/conversation-views.ts").DayPromise {
   return { id: 1, what: "Send the export", toName: "Dana", clientKey: "contoso", clientName: "Contoso", dueAt: null, dueDate: "2026-11-05", overdue: false, ...o };
 }
+
+/** PL-1: one child of a feature as the DevOps store has it: an open User Story, unassigned. */
+export function aPortfolioChild(o: Partial<import("../../week/types.ts").PortfolioChild> = {}): import("../../week/types.ts").PortfolioChild {
+  const id = o.id ?? next();
+  return { id, title: `Story ${id}`, type: "User Story", state: "Active", stateCategory: "InProgress", open: true, level: "story", order: id, url: `https://dev.azure.com/contoso/p/_workitems/edit/${id}`, assignedTo: null, assignedToEmail: null, mine: false, ...o };
+}
+
+/** PL-1: a feature as the DevOps source's by-id read returns it: open, not mine, no children. */
+export function aPortfolioItem(o: Partial<import("../../week/types.ts").PortfolioItem> = {}): import("../../week/types.ts").PortfolioItem {
+  const id = o.id ?? next();
+  return { id, title: `Feature ${id}`, type: "Feature", state: "Active", stateCategory: "InProgress", tier: "feature", order: id, parentId: null, url: `https://dev.azure.com/contoso/p/_workitems/edit/${id}`, targetDate: null, assignedTo: null, mine: false, why: [], children: [], ...o };
+}

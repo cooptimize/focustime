@@ -49,7 +49,13 @@ export type TickDeps = {
 };
 
 /** One person's passes; the scheduler runs them for everyone, never two of the same kind at once. */
-export type PersonTicks = { fast: () => Promise<void>; slow: () => Promise<void>; wake?: () => Promise<Temporal.Instant> };
+export type PersonTicks = {
+  fast: () => Promise<void>;
+  slow: () => Promise<void>;
+  wake?: () => Promise<Temporal.Instant>;
+  /** HK-1: resolves once every notice a pass handed to the notifier (which doesn't wait for them) has been offered. */
+  settled?: () => Promise<void>;
+};
 
 export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContext, who: { zone: string }): PersonTicks {
   const log = d.log;
@@ -219,7 +225,17 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     },
   };
 
-  const send = (n: Notice | null) => (n ? notifier.offer(n).catch(() => log({ source: "plan", op: "notify", kind: "failed" })) : undefined);
+  // HK-1: offers in flight, so settled() can wait for them instead of a test sleeping and hoping.
+  const inflight = new Set<Promise<unknown>>();
+  const track = <T,>(p: Promise<T>): Promise<T> => {
+    inflight.add(p);
+    void p.finally(() => inflight.delete(p)).catch(() => undefined);
+    return p;
+  };
+  const settled = async () => {
+    while (inflight.size) await Promise.allSettled([...inflight]);
+  };
+  const send = (n: Notice | null) => (n ? track(notifier.offer(n).catch(() => log({ source: "plan", op: "notify", kind: "failed" }))) : undefined);
   const dayReminders = async () => {
     const c = await configOrNull();
     if (!c) return;
@@ -391,7 +407,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       // Through the notifier (its switch); the buttons come back here, where the session is checked.
       notify: (n) =>
         new Promise((resolve) => {
-          void notifier.offer(n, (key) => resolve(key || null)).then((g) => g !== "send" && resolve(null), () => resolve(null));
+          void track(notifier.offer(n, (key) => resolve(key || null))).then((g) => g !== "send" && resolve(null), () => resolve(null));
         }),
       sound: () => host.media.endSound(),
       act: (action) => timerAction(timerCtx(), action, {}),
@@ -451,5 +467,5 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       pending,
     });
   };
-  return { fast, slow: tick, wake };
+  return { fast, slow: tick, wake, settled };
 }

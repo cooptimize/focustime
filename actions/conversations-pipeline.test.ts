@@ -205,14 +205,14 @@ describe("one client per request", () => {
   });
 });
 
-describe("the CSC-shaped sequence (CV-2: the split on dev came from the CV-1 backfill of old requests)", () => {
+describe("the split-topic sequence (CV-2: the split on dev came from the CV-1 backfill of old requests)", () => {
   // Nov 4, Central time: a client question 3:13 PM, an image 3:14, a Cooptimizer 4:13 (59 minutes later), a commitment
   // 4:35. Read live, one batch per 5-minute poll, with a provider that does what the instructions say (join the hinted
   // or open conversation): one conversation, "<Name> committed". No history is regrouped.
   const ASKER = aChatMember({ displayName: "Brett Nolan", external: true });
   const LOOKER = aChatMember({ displayName: "Leo Hale" });
   const DOER = aChatMember({ displayName: "Erin Fox" });
-  const CSC = aClientChat({ chatId: "19:contoso-csc@thread.v2", clientKey: "contoso", displayName: "Contoso Analytics Alliance", members: [ASKER, LOOKER, DOER] });
+  const SPLIT = aClientChat({ chatId: "19:contoso-split@thread.v2", clientKey: "contoso", displayName: "Contoso Analytics Alliance", members: [ASKER, LOOKER, DOER] });
   const follows = (c: ProviderCall) => {
     const i = JSON.parse(c.input) as { open_conversations: { ref: string }[]; messages: { ref: string; text: string; from: string; hint: { conversation: string } | null }[] };
     const conv = i.open_conversations[0]?.ref ?? "n1";
@@ -226,15 +226,15 @@ describe("the CSC-shaped sequence (CV-2: the split on dev came from the CV-1 bac
     const w = world({ respond: follows });
     const img = `<p></p><img src="https://graph.microsoft.com/v1.0/chats/x/messages/2/hostedContents/a/$value">`;
     const polls: [string, TeamsMessage[]][] = [
-      ["2026-11-04T21:15:00Z", [await w.say(CSC, ASKER, "2026-11-04T21:13:00Z", "The totals on the shipments report don't match the dashboard for October."), await w.say(CSC, ASKER, "2026-11-04T21:14:00Z", "", { html: img, hasImage: true })]],
-      ["2026-11-04T22:15:00Z", [await w.say(CSC, LOOKER, "2026-11-04T22:13:00Z", "Looking at it now, the October filter looks off.")]],
-      ["2026-11-04T22:40:00Z", [await w.say(CSC, DOER, "2026-11-04T22:35:00Z", "I will add this to the backlog and get it fixed this week.")]],
+      ["2026-11-04T21:15:00Z", [await w.say(SPLIT, ASKER, "2026-11-04T21:13:00Z", "The totals on the shipments report don't match the dashboard for October."), await w.say(SPLIT, ASKER, "2026-11-04T21:14:00Z", "", { html: img, hasImage: true })]],
+      ["2026-11-04T22:15:00Z", [await w.say(SPLIT, LOOKER, "2026-11-04T22:13:00Z", "Looking at it now, the October filter looks off.")]],
+      ["2026-11-04T22:40:00Z", [await w.say(SPLIT, DOER, "2026-11-04T22:35:00Z", "I will add this to the backlog and get it fixed this week.")]],
     ];
     for (const [at, batch] of polls) {
       w.setNow(at);
-      await w.run(CSC, batch);
+      await w.run(SPLIT, batch);
     }
-    const cs = await w.convs.conversations([CSC.chatId]);
+    const cs = await w.convs.conversations([SPLIT.chatId]);
     expect(cs).toHaveLength(1);
     expect((await w.convs.placesIn([cs[0]!.id])).filter((p) => p.role === "work")).toHaveLength(4);
     const ks = await w.convs.commitmentsIn([cs[0]!.id]);
