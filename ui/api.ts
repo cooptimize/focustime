@@ -2,6 +2,7 @@
 // session's CSRF token in X-CSRF on every call; A2).
 import type { ActionResponse, FieldProblem, WeekLoadData } from "../actions/types.ts";
 import type { DraftStory, PlanDayState, Pick } from "../plan/types.ts";
+import { pageActivity, USE_HEADER } from "./activity.ts";
 
 /**
  * No live session (signed out, or it ended after 12 idle hours or 7 days): only the server says this, with code
@@ -44,6 +45,18 @@ export function csrfToken(): string {
   return "";
 }
 const postHeaders = () => ({ "content-type": "application/json", "x-csrf": csrfToken() });
+
+/** HK-3: reports real use (input while visible) at most once a minute; the answer carries the Rule's minutes. */
+async function pingUse(): Promise<number | null> {
+  const r = await fetch("/api/activity", { method: "POST", credentials: "same-origin", headers: { ...postHeaders(), [USE_HEADER]: "active" }, body: "{}" });
+  if (!r.ok) return null;
+  const m = ((await r.json().catch(() => null)) as { idleMinutes?: unknown } | null)?.idleMinutes;
+  return typeof m === "number" ? m : null;
+}
+let activity: ReturnType<typeof pageActivity> | null = null;
+const activityNow = () => (activity ??= pageActivity(pingUse));
+/** HK-3: a call a timer makes (polls, the quiet refresh) says so and never counts as someone using FocusTime. */
+export type CallOptions = { background?: boolean };
 
 /** What a response from /api/action means: data, an action's refusal, or an out-of-date window. */
 export async function readResponse<T>(res: Response): Promise<T> {
@@ -91,9 +104,9 @@ export type NoHoursChoice = "add" | "anyway" | "cancel";
 let askNoHours: ((question: string, date: string) => Promise<NoHoursChoice>) | null = null;
 export const setNoHoursPrompt = (f: typeof askNoHours) => void (askNoHours = f);
 
-export async function call<T>(action: string, input: unknown): Promise<T> {
+export async function call<T>(action: string, input: unknown, opts: CallOptions = {}): Promise<T> {
   try {
-    return await send<T>(action, input);
+    return await send<T>(action, input, opts);
   } catch (e) {
     // Any Move (menus, Plan the day, Check-in, Close out) asks the same question: Add hours, or Move anyway.
     if (e instanceof ActionRefusal && e.code === "no_hours" && action === "pick.move" && askNoHours && typeof input === "object" && input) {
@@ -140,14 +153,14 @@ function watchSlowCall(): () => void {
   };
 }
 
-async function send<T>(action: string, input: unknown): Promise<T> {
+async function send<T>(action: string, input: unknown, opts: CallOptions = {}): Promise<T> {
   const done = watchSlowCall();
   let res: Response;
   try {
     res = await fetch("/api/action", {
       method: "POST",
       credentials: "same-origin",
-      headers: postHeaders(),
+      headers: { ...postHeaders(), [USE_HEADER]: activityNow().use(!!opts.background) },
       body: JSON.stringify({ action, input }),
     });
     noteReached(true);
@@ -161,7 +174,7 @@ async function send<T>(action: string, input: unknown): Promise<T> {
   return readResponse<T>(res);
 }
 
-export const weekLoad = (input: { weekStart?: string; now?: string; refresh?: boolean; quiet?: boolean; viewRange?: string }) => call<WeekLoadData>("week.load", input);
+export const weekLoad = (input: { weekStart?: string; now?: string; refresh?: boolean; quiet?: boolean; viewRange?: string }, opts: CallOptions = {}) => call<WeekLoadData>("week.load", input, opts);
 
 export type ConnectResult = { status: "connected" | "cancelled" | "failed" | "redirect"; message?: string; url?: string };
 /** Connecting a calendar is a visit to Microsoft or Google and back (A2): the server says where, the page goes there. */

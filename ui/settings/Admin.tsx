@@ -946,6 +946,7 @@ type OrgData = {
   neverSuggest: string[];
   feedback: { org: string; project: string; parentId: number; live: boolean } | null;
   retentionYears: number;
+  idleMinutes: number;
   newPerson: NewPerson;
   inviteFromBootstrap: boolean;
   feedbackFromBootstrap: boolean;
@@ -978,6 +979,9 @@ function AdminOrganization() {
         </AField>
         <AField label="Keep people's data (years)" kind="Rule" s={saver.status(o, "org.retention_years")} retry={() => void saver.save(o, "org.retention_years", data.retentionYears, "Data retention")} hint="Shown to everyone. Deleting older data automatically comes in a later step.">
           <NumInput label="Keep people's data (years)" value={data.retentionYears} min={1} max={10} onSave={(v) => void saver.save(o, "org.retention_years", v, "Data retention")} />
+        </AField>
+        <AField label="Counts as in use (minutes)" kind="Rule" s={saver.status(o, "org.idle_minutes")} retry={() => void saver.save(o, "org.idle_minutes", data.idleMinutes, "In use")} hint="5 to 60. An open page counts as someone using FocusTime only this long after their last key, click or scroll. Background work waits otherwise.">
+          <NumInput label="Counts as in use (minutes)" value={data.idleMinutes} min={5} max={60} onSave={(v) => void saver.save(o, "org.idle_minutes", v, "In use")} />
         </AField>
       </div>
       <h3>Send feedback</h3>
