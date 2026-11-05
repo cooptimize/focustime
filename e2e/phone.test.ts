@@ -107,7 +107,7 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
     const sheet = page.locator(".cap-dialog");
     await sheet.waitFor();
     expect(await sheet.evaluate((e) => Math.round(e.getBoundingClientRect().width))).toBe(PHONE.width);
-    await sheet.locator("input").first().fill("Ask Jordan about the invoice");
+    await sheet.locator("textarea").first().fill("Ask Jordan about the invoice");
     await page.keyboard.press("Enter");
     await expect.poll(async () => JSON.stringify((await call(page, "capture.load", {})).data)).toContain("Ask Jordan about the invoice");
     // Esc closes it.

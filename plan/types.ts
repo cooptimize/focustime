@@ -50,7 +50,10 @@ export type Pick = {
 
 /** A local draft story for a client, under a feature or (step 9, from a capture) under none yet. */
 /** A local draft story (under a feature), or since step 13.5 a draft feature (level "feature", under an epic). */
-export type DraftStory = { id: number; clientKey: string; parentItemId: number | null; title: string; size: Size; level: "story" | "feature"; createdAt: ZonedStamp; /** Step 15.3: written by Create in DevOps. Acceptance criteria for stories, dates for features. */ description?: string | null; acceptance?: string | null; startDate?: string | null; targetDate?: string | null; /** Step 14: set once created in DevOps (the draft then leaves draft lists). */ devopsId?: number; devopsUrl?: string | null };
+export type DraftStory = { id: number; clientKey: string; parentItemId: number | null; title: string; size: Size; level: "story" | "feature"; createdAt: ZonedStamp; /** Step 15.3: written by Create in DevOps. Acceptance criteria for stories, dates for features. */ description?: string | null; acceptance?: string | null; startDate?: string | null; targetDate?: string | null; /** Step 14: set once created in DevOps (the draft then leaves draft lists). */ devopsId?: number; devopsUrl?: string | null; /** CP-1: the AI-prepared version (never my own text), or null when prepare hasn't run. */ ai?: DraftAi | null };
+/** CP-1: what AI prepared for a captured draft. My own title stays the draft's until I accept this. */
+export type DraftAiState = "writing" | "ready" | "needs_parent" | "off" | "failed";
+export type DraftAi = { state: DraftAiState; title: string | null; description: string | null; acceptance: string | null; type: string | null; parentId: number | null; parentReason: string | null; /** Why it is a plain draft, in plain words. */ note: string | null; ranAt: string | null };
 
 /** A quick capture (step 9): in the inbox until routed to a follow-up, a draft story or a note (or dismissed). */
 export type Capture = { id: number; text: string; clientKey: string | null; createdAt: ZonedStamp; routedAt: ZonedStamp | null; routedAs: "follow_up" | "draft" | "draft_feature" | "left_off" | "dismissed" | null; routedId: number | null };

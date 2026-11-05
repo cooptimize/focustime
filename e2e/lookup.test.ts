@@ -19,7 +19,7 @@ describe.skipIf(!CHROMIUM)("Work item lookup (browser, demo mode)", () => {
     await page.keyboard.press("4");
     await page.locator(".cap-box .cap-client").first().click();
     await page.locator(".cap-choose .chip-btn", { hasText: client }).click();
-    await page.locator(".cap-box input[aria-label='Quick capture']").fill("I'll send the export spec");
+    await page.locator(".cap-box textarea[aria-label='Quick capture']").fill("I'll send the export spec");
     await page.locator(".cap-box .cap-box-kinds [role=radio]", { hasText: "Follow-up" }).click();
     return page.locator(".cap-box .cap-box-fields");
   }
@@ -46,8 +46,8 @@ describe.skipIf(!CHROMIUM)("Work item lookup (browser, demo mode)", () => {
     await box.fill("export");
     await box.press("ArrowDown");
     await box.press("Enter");
-    await page.locator(".cap-box input[aria-label='Quick capture']").fill("I'll send the export spec");
-    await page.locator(".cap-box input[aria-label='Quick capture']").press("Enter");
+    await page.locator(".cap-box textarea[aria-label='Quick capture']").fill("I'll send the export spec");
+    await page.locator(".cap-box textarea[aria-label='Quick capture']").press("Enter");
     await expect.poll(() => page.locator(".follow-up", { hasText: "Send the export spec" }).locator(".follow-up-item a").count()).toBe(1);
     expect(errors).toEqual([]);
     await page.close();

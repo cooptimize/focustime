@@ -5,7 +5,9 @@ import { whenText } from "./labels.ts";
 // confirmed offers Retry. Clients without a write PAT get "Enable DevOps writes" (Settings > Clients) instead.
 import { CloseButton } from "./CloseButton.tsx";
 import { categoryWord } from "../plan/process.ts";
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { draftRowState, draftRowText } from "../plan/capture-prepare.ts";
+import { CreateDraftCtx, WRITING_POLL_MS } from "./createdraft-ctx.ts";
 import type { DevOpsLogView, DevOpsPreview, DevOpsResult } from "../actions/types.ts";
 import type { StateInfo } from "../plan/devopswrite.ts";
 import type { DraftStory } from "../plan/types.ts";
@@ -60,12 +62,14 @@ export const useDevOpsWrite = () => useContext(DevOpsWriteCtx);
 type Row = { preview: DevOpsPreview; result: DevOpsResult | { error: string; status: number } | null };
 export type Settled = (r: { confirmed: boolean; sent: boolean }) => void;
 type Flow = { clientKey: string; changes: DevOpsChange[]; rows: Row[]; busy: boolean; error: string | null; settled?: Settled | undefined };
+/** CP-1: how the preview names and colors a client. */
+type ClientLook = { name: (clientKey: string) => string; color: (clientKey: string) => string | undefined };
 type Ask =
   | { kind: "state"; clientKey: string; itemId: number; title: string; followUpId?: number }
   | { kind: "target"; clientKey: string; itemId: number; title: string; current: string | null };
 
 /** The DevOps write flow, owned by App. `onDone` reloads the week (a draft became an item, a follow-up closed). */
-export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () => void; openSettings: () => void }) {
+export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () => void; openSettings: () => void; client?: ClientLook }) {
   const [flow, setFlow] = useState<Flow | null>(null);
   const [ask, setAsk] = useState<Ask | null>(null);
   const [version, setVersion] = useState(0);
@@ -136,7 +140,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
     },
   };
   const dialog = flow ? (
-    <PreviewDialog flow={flow} onConfirm={() => void confirm(flow)} onReload={() => void begin(flow.clientKey, flow.changes, flow.settled)} onClose={() => (setFlow(null), flow.settled?.({ confirmed: false, sent: flow.rows.some((r) => r.result && "entry" in r.result) }))} />
+    <PreviewDialog flow={flow} client={o.client} onConfirm={() => void confirm(flow)} onReload={() => void begin(flow.clientKey, flow.changes, flow.settled)} onClose={() => (setFlow(null), flow.settled?.({ confirmed: false, sent: flow.rows.some((r) => r.result && "entry" in r.result) }))} />
   ) : ask ? (
     <AskDialog ask={ask} onClose={() => setAsk(null)} onPreview={(changes) => (setAsk(null), void begin(ask.clientKey, changes))} />
   ) : null;
@@ -175,7 +179,7 @@ function Modal({ label, busy, onClose, children, wide }: { label: string; busy?:
   );
 }
 
-function PreviewDialog({ flow, onConfirm, onReload, onClose }: { flow: Flow; onConfirm: () => void; onReload: () => void; onClose: () => void }) {
+function PreviewDialog({ flow, client, onConfirm, onReload, onClose }: { flow: Flow; client?: ClientLook | undefined; onConfirm: () => void; onReload: () => void; onClose: () => void }) {
   const first = useModalFocus<HTMLButtonElement>();
   const { rows, busy, error } = flow;
   const p0 = rows[0]!.preview;
@@ -184,16 +188,23 @@ function PreviewDialog({ flow, onConfirm, onReload, onClose }: { flow: Flow; onC
   const changed = rows.some((r) => r.result && "entry" in r.result && r.result.entry.status === "refused" && r.result.changed);
   const retryable = rows.some((r) => r.result && ("error" in r.result ? r.result.status !== 410 && r.result.status !== 409 : !r.result.confirmed && r.result.entry.status !== "refused"));
   const label = rows.length === 1 ? p0.summary : `${rows.length} DevOps changes`;
+  const clientWord = client?.name(flow.clientKey) ?? flow.clientKey;
   return (
     <Modal label={label} busy={busy} onClose={onClose} wide={rows.length > 1}>
       <div className="cap-dialog-head">
         <h2>{label}</h2>
         <CloseButton onClose={onClose} disabled={busy} />
       </div>
+      {p0.op === "create" && (
+        <p className="cd-client dw-client" style={{ "--c": client?.color(flow.clientKey) } as CSSProperties}>
+          <span className="swatch" aria-hidden="true" />
+          Creating in {clientWord}'s DevOps
+        </p>
+      )}
       <dl className="wd-where">
         <dt>Where</dt>
         <dd>
-          DevOps · {p0.org} · {p0.project}
+          DevOps · {clientWord} · {p0.org} · {p0.project}
         </dd>
         <dt>Writes as</dt>
         <dd>{p0.identity}</dd>
@@ -412,8 +423,22 @@ export function CreateInDevOps({ drafts, label }: { drafts: DraftStory[]; label?
   );
 }
 
-/** Drafts not yet in DevOps, per client, each with Create in DevOps (the Inbox). */
+/**
+ * Drafts not yet in DevOps, per client, each with Create in DevOps (the Inbox). CP-1: each row says what it needs
+ * (Ready to create, Needs a parent, AI off: plain draft, AI still writing…, or Add a write PAT for <client>) and keeps
+ * my own title; Create in DevOps opens the side by side preview. The list looks again while AI is writing.
+ */
 export function DraftsToAdd({ drafts, clientName, onChanged }: { drafts: DraftStory[]; clientName: (k: string) => string; onChanged: () => void }): ReactNode {
+  const env = useDevOpsWrite();
+  const openCreate = useContext(CreateDraftCtx);
+  const now = new Date().toISOString();
+  const states = drafts.map((d) => draftRowState(d, { canWrite: !!env?.can(d.clientKey), now }));
+  const writing = states.includes("writing");
+  useEffect(() => {
+    if (!writing) return;
+    const t = setTimeout(onChanged, WRITING_POLL_MS * 2);
+    return () => clearTimeout(t);
+  }, [writing, onChanged, drafts]);
   if (!drafts.length) return null;
   return (
     <section className="co-section dw-drafts-section" aria-label="Drafts to add in DevOps">
@@ -421,7 +446,7 @@ export function DraftsToAdd({ drafts, clientName, onChanged }: { drafts: DraftSt
         Drafts to add in DevOps <span className="muted">{drafts.length}</span>
       </h3>
       <ul className="inbox-list">
-        {drafts.map((d) => (
+        {drafts.map((d, i) => (
           <li key={d.id} className="cap-item">
             <p className="cap-text">
               <span className="cap-tag">{d.level === "feature" ? "Draft feature" : "Draft story"}</span>
@@ -431,8 +456,17 @@ export function DraftsToAdd({ drafts, clientName, onChanged }: { drafts: DraftSt
                 · {clientName(d.clientKey)}
                 {d.parentItemId !== null ? ` · under #${d.parentItemId}` : ""}
               </span>
+              <span className={`dw-draft-state ${states[i]}`} data-state={states[i]} title={d.ai?.note ?? undefined}>
+                {draftRowText(states[i]!, d, clientName(d.clientKey))}
+              </span>
             </p>
-            <CreateInDevOps drafts={[d]} />
+            {!env ? null : states[i] === "no_pat" ? (
+              <button type="button" className="mini quiet dw-enable" onClick={() => env.enable(d.clientKey)}>Add a write PAT for {clientName(d.clientKey)}</button>
+            ) : openCreate ? (
+              <button type="button" className="mini" onClick={() => openCreate(d.id)}>Create in DevOps</button>
+            ) : (
+              <CreateInDevOps drafts={[d]} />
+            )}
             <button
               type="button"
               className="mini quiet"

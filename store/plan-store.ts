@@ -15,7 +15,7 @@ import { sqliteConn } from "./sql/sqlite.ts";
 import { carryOver } from "../plan/rules.ts";
 import { type ItemLevel, type Tier } from "../plan/weeklist.ts";
 import { MAX_ESTIMATE_HOURS, validEstimateMinutes, validStorySize, type StorySize } from "../plan/estimate.ts";
-import type { Capture, DayPlan, DraftStory, Pick, PickKind, PlanWeek, Size, ZonedStamp } from "../plan/types.ts";
+import type { Capture, DayPlan, DraftAi, DraftAiState, DraftStory, Pick, PickKind, PlanWeek, Size, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
 import type { Attendee, Fields, LocalState, OwnEvent, SyncOp, Timebox, WriteEntry, WriteKind, WriteStatus } from "../plan/timebox.ts";
 import type { DevOpsWriteEntry } from "../plan/devopswrite.ts";
@@ -1440,7 +1440,9 @@ const toWatch = (r: Row): WeekWatch => ({
   checkinPickId: (r.checkin_pick_id as number | null) ?? null,
 });
 const toPlan = (r: Row): DayPlan => ({ date: r.date as string, committedAt: (r.committed_at as string | null) ?? null, closedOutAt: (r.closed_out_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string });
-const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: r.size as Size, level: ((r.level as string | null) ?? "story") as DraftStory["level"], createdAt: r.created_at as string, description: (r.description as string | null) ?? null, acceptance: (r.acceptance as string | null) ?? null, startDate: (r.start_date as string | null) ?? null, targetDate: (r.target_date as string | null) ?? null, ...(r.devops_id != null ? { devopsId: r.devops_id as number, devopsUrl: (r.devops_url as string | null) ?? null } : {}) });
+const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: r.size as Size, level: ((r.level as string | null) ?? "story") as DraftStory["level"], createdAt: r.created_at as string, description: (r.description as string | null) ?? null, acceptance: (r.acceptance as string | null) ?? null, startDate: (r.start_date as string | null) ?? null, targetDate: (r.target_date as string | null) ?? null, ...(r.devops_id != null ? { devopsId: r.devops_id as number, devopsUrl: (r.devops_url as string | null) ?? null } : {}), ai: toDraftAi(r) });
+const toDraftAi = (r: Row): DraftAi | null =>
+  r.ai_state == null ? null : { state: r.ai_state as DraftAiState, title: (r.ai_title as string | null) ?? null, description: (r.ai_description as string | null) ?? null, acceptance: (r.ai_acceptance as string | null) ?? null, type: (r.ai_type as string | null) ?? null, parentId: (r.ai_parent_id as number | null) ?? null, parentReason: (r.ai_parent_reason as string | null) ?? null, note: (r.ai_note as string | null) ?? null, ranAt: (r.ai_ran_at as string | null) ?? null };
 export type DevOpsIdentityRow = { clientKey: string; org: string; id: string; name: string; email: string; validatedAt: string; expires: string | null };
 const toIdentity = (r: Row): DevOpsIdentityRow => ({ clientKey: r.client_key as string, org: r.org as string, id: r.identity_id as string, name: r.name as string, email: r.email as string, validatedAt: r.validated_at as string, expires: (r.expires as string | null) ?? null });
 const toDevopsWrite = (r: Row): DevOpsWriteEntry => ({
@@ -1888,6 +1890,20 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return toDraft((await db.get("SELECT * FROM draft_stories WHERE id = ?", id)) as Row);
       });
     },
+    /**
+     * CP-1: the AI version of a draft (or its state while writing). Never touches my own title, description or
+     * acceptance, and leaves updated_at alone, so "nothing else happened to it" (capture undo) still holds.
+     */
+    async setDraftAi(id: number, ai: DraftAi | null): Promise<DraftStory> {
+      return tx(async () => {
+        const r = await db.run(
+          "UPDATE draft_stories SET ai_state = ?, ai_title = ?, ai_description = ?, ai_acceptance = ?, ai_type = ?, ai_parent_id = ?, ai_parent_reason = ?, ai_note = ?, ai_ran_at = ? WHERE id = ? AND devops_id IS NULL",
+          ai?.state ?? null, ai?.title ?? null, ai?.description ?? null, ai?.acceptance ?? null, ai?.type ?? null, ai?.parentId ?? null, ai?.parentReason ?? null, ai?.note ?? null, ai?.ranAt ?? null, id,
+        );
+        if (!r.changes) throw new PlanError("No such draft, or it is already in DevOps");
+        return toDraft((await db.get("SELECT * FROM draft_stories WHERE id = ?", id)) as Row);
+      });
+    },
     /** Step 14.5: delete a local draft no pick uses (local only; DevOps is never touched). */
     async removeDraft(id: number): Promise<void> {
       await tx(async () => {
@@ -2136,6 +2152,44 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         const r = (await db.run("INSERT INTO captures (text, client_key, created_at) VALUES (?, ?, ?)", text, c.clientKey, stamp()));
         return toCapture((await db.get("SELECT * FROM captures WHERE id = ?", r.lastId!)) as Row);
       });
+    },
+    /**
+     * CP-1: Undo right after a save. Removes the capture and what it made (a follow-up or a draft), only while nothing
+     * else has happened to it: the follow-up still open, never snoozed, edited or picked; the draft never edited, picked,
+     * on a week list or sent to DevOps. Otherwise nothing changes and it says why.
+     */
+    async undoCapture(id: number): Promise<{ removed: "capture" | "follow_up" | "draft" | "draft_feature" }> {
+      return tx(async () => {
+        const c = (await db.get("SELECT * FROM captures WHERE id = ?", id)) as Row | undefined;
+        if (!c) throw new PlanError("That capture is already gone");
+        const as = (c.routed_as as string | null) ?? null;
+        const routedId = (c.routed_id as number | null) ?? null;
+        if (as === "follow_up" && routedId !== null) {
+          const f = (await db.get("SELECT * FROM follow_ups WHERE id = ?", routedId)) as Row | undefined;
+          if (f) {
+            const picked = ((await db.get("SELECT COUNT(*) AS n FROM picks WHERE follow_up_id = ?", routedId)) as { n: number }).n > 0;
+            if (f.closed_at != null || f.snoozed_until != null || picked) throw new PlanError("That follow-up has changed since, so Undo leaves it. Delete it from the Inbox if you don't want it");
+            await db.run("DELETE FROM follow_ups WHERE id = ?", routedId);
+          }
+        } else if ((as === "draft" || as === "draft_feature") && routedId !== null) {
+          const d = (await db.get("SELECT * FROM draft_stories WHERE id = ?", routedId)) as Row | undefined;
+          if (d) {
+            const used = ((await db.get("SELECT COUNT(*) AS n FROM picks WHERE draft_id = ?", routedId)) as { n: number }).n > 0;
+            const listed = ((await db.get("SELECT COUNT(*) AS n FROM week_drafts WHERE draft_id = ?", routedId)) as { n: number }).n > 0;
+            const written = ((await db.get("SELECT COUNT(*) AS n FROM devops_write_log WHERE draft_id = ?", routedId)) as { n: number }).n > 0;
+            const edited = String(d.updated_at) !== String(d.created_at);
+            if (d.devops_id != null || used || listed || written || edited) throw new PlanError("That draft has changed since, so Undo leaves it. Delete it from the Inbox if you don't want it");
+            await db.run("DELETE FROM draft_stories WHERE id = ?", routedId);
+          }
+        } else if (as !== null && as !== "dismissed") throw new PlanError("That capture is already sorted another way, so Undo leaves it");
+        await db.run("DELETE FROM captures WHERE id = ?", id);
+        return { removed: as === "follow_up" || as === "draft" || as === "draft_feature" ? as : "capture" };
+      });
+    },
+    /** CP-1: the capture a draft came from (its text is what I typed), or null for a draft made elsewhere. */
+    async captureOfDraft(draftId: number): Promise<Capture | null> {
+      const r = (await db.get("SELECT * FROM captures WHERE routed_as IN ('draft', 'draft_feature') AND routed_id = ? ORDER BY id DESC", draftId)) as Row | undefined;
+      return r ? toCapture(r) : null;
     },
     async getCapture(id: number): Promise<Capture | null> {
       const r = (await db.get("SELECT * FROM captures WHERE id = ?", id)) as Row | undefined;
