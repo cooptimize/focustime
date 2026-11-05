@@ -118,7 +118,9 @@ export async function migrateSqlServer(conn: SqlServerConn, o: { log?: Logger; m
       await conn.tx(async () => {
         const done = await conn.get(`SELECT name FROM ${NAMES_TABLE} WITH (UPDLOCK, HOLDLOCK) WHERE name = ?`, [m.name]);
         if (done) return;
+        const n = m.count ? Number((await conn.get(m.count.sql))?.n ?? 0) : null;
         await conn.batch(m.sqlserver);
+        if (m.count && n !== null) o.log?.({ source: "database", op: m.count.op, count: n });
         await conn.run(`INSERT INTO ${NAMES_TABLE} (name, applied_at) VALUES (?, SYSUTCDATETIME())`, [m.name]);
         applied.push(m.name);
       });

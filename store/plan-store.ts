@@ -18,7 +18,7 @@ import { MAX_ESTIMATE_HOURS, validEstimateMinutes, validStorySize, type StorySiz
 import type { Capture, DayPlan, DraftAi, DraftAiState, DraftStory, Pick, PickKind, PlanWeek, Size, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
 import type { Attendee, Fields, LocalState, OwnEvent, SyncOp, Timebox, WriteEntry, WriteKind, WriteStatus } from "../plan/timebox.ts";
-import type { DevOpsWriteEntry } from "../plan/devopswrite.ts";
+import type { DevOpsWriteEntry, PatchOp } from "../plan/devopswrite.ts";
 import { NAMED_MIGRATIONS } from "./migrations/index.ts";
 import type { AiLogEntry, AiOutcome } from "../ai/types.ts";
 import { validSetupStatus, validSetupStep, type SetupState, type SetupStatus, type SetupStep } from "../plan/setup.ts";
@@ -1985,6 +1985,16 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return (await this.devopsWrite(id))!;
       });
     },
+    /** CV-4: a pending create's patch and shown values once its attachments are uploaded (ids, names, sizes and URLs; never bytes). */
+    async setDevopsWriteOps(id: number, ops: PatchOp[], after: Record<string, string | null>): Promise<DevOpsWriteEntry> {
+      return tx(async () => {
+        const w = (await this.devopsWrite(id));
+        if (!w) throw new PlanError("No such write");
+        if (w.status !== "pending" || w.itemId !== null) throw new PlanError("That write has already been sent");
+        (await db.run("UPDATE devops_write_log SET ops = ?, after = ?, updated_at = ? WHERE id = ?", JSON.stringify(ops), JSON.stringify(after), stamp(), id));
+        return (await this.devopsWrite(id))!;
+      });
+    },
     async markDevopsUndone(id: number, by: number): Promise<void> {
       (await db.run("UPDATE devops_write_log SET undone_by = ?, updated_at = ? WHERE id = ?", by, stamp(), id));
     },
@@ -3351,7 +3361,9 @@ function migrate(db: DatabaseSync, now: () => Temporal.ZonedDateTime, path = ":m
   for (const m of todo) {
     db.exec("BEGIN IMMEDIATE");
     try {
+      const n = m.count ? Number((db.prepare(m.count.sql).get() as { n: number } | undefined)?.n ?? 0) : null;
       db.exec(m.sqlite);
+      if (m.count && n !== null) log?.({ source: "database", op: m.count.op, count: n });
       db.prepare(`INSERT INTO ${NAMES_TABLE} (name, applied_at) VALUES (?, ?)`).run(m.name, now().toString({ smallestUnit: "second" }));
       db.exec("COMMIT");
     } catch (e) {

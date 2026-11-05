@@ -10,6 +10,8 @@ export type NamedMigration = {
   name: string;
   sqlite: string;
   sqlserver: string;
+  /** A count (SELECT ... AS n, the same in both dialects) taken in its transaction before it runs, logged as `op` (never the values). */
+  count?: { op: string; sql: string };
 };
 
 export const NAME = /^(\d{8}T\d{4})_[a-z0-9]+(?:_[a-z0-9]+)*$/;

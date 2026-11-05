@@ -683,7 +683,8 @@ describe("week plan duplicates (U3, D388)", () => {
       [6, 211, 0],
     ]);
     // Then E2's migration 28 converts the two features left with an estimate in blocks.
-    expect(logged).toEqual([{ source: "database", op: "convert_estimates", count: 2 }, { source: "plan", op: "dedupe_week_items", count: 1 }]);
+    // CV-4's named migration logs how many image rows it cleared (none here).
+    expect(logged).toEqual([{ source: "database", op: "convert_estimates", count: 2 }, { source: "database", op: "images_bytes_cleared", count: 0 }, { source: "plan", op: "dedupe_week_items", count: 1 }]);
     const db = new DatabaseSync(path);
     expect(db.prepare("SELECT removed_id, kept_id, item_id FROM dedupe_log").all().map((r) => ({ ...r }))).toEqual([{ removed_id: 5, kept_id: 3, item_id: 210 }]);
     db.close();

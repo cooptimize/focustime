@@ -23,6 +23,7 @@ import { followUpWhoRef } from "./20261106T1030_followup_who_ref.ts";
 import { teamSends } from "./20261106T1100_team_sends.ts";
 import { aheadChanges } from "./20261107T0900_ahead_changes.ts";
 import { draftAi } from "./20261107T1347_draft_ai.ts";
+import { imagesNoBytes } from "./20261107T1400_images_no_bytes.ts";
 import type { NamedMigration } from "./named.ts";
 
-export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll, clientAccounts, weekCarry, conversationMerges, messageReactions, messageImages, followUpWhoRef, teamSends, aheadChanges, draftAi];
+export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll, clientAccounts, weekCarry, conversationMerges, messageReactions, messageImages, followUpWhoRef, teamSends, aheadChanges, draftAi, imagesNoBytes];
