@@ -227,6 +227,21 @@ One job reads each registered client chat for everyone; Asks are now Requests. D
 - **UI.** `ui/WeekStories.tsx`: `WeekDndProvider` (mounted in `ui/App.tsx`: the dragged story, the fit on the target, place and Undo, Add to… and Move to… menus, long press, the undo toast; Break down sends `focustime:breakdown` to BD-1's panel), `useDropTarget` and `useDragSource`, `YourStories` and its rows, No stories for you yet, Add a story for me. `ui/DetailPanel.tsx` `variant="week"`. `ui/WeekGrid.tsx`: drop targets on half-days and whole days, `CardPicks` grouped by feature. `ui/PickRow.tsx` `typeIcon` and `dragProps`. `ui/DevOpsWrite.tsx` `begin(…, settled)` tells the caller whether the write was confirmed.
 - **Tests.** `plan/blockstories.test.ts`, `plan/weekdrop.test.ts`, the PV-1 parts of `sources/devops/source.test.ts`, `actions/devops-write.test.ts` and `server/notices.test.ts`, `ui/planview.test.ts`; e2e `e2e/week-panel.test.ts` on the live harness. Builders: `aFeature`, `aTypeLook`, `aClientWork`, `aPick`, `aWeekFeature`.
 
+## NV-1: navigation (Nov 5)
+
+- **Tabs and routes** (`ui/nav.ts`, tested in `ui/nav.test.ts`). Today · Week · Ahead · Inbox, keys 1 to 4.
+  - Today: `#/today`; flows `#/today/checkin` and `#/today/closeout[/date]`. No modes.
+  - Week: `#/week[/monday]` (the Board), `#/week/day[/date[/half]]` (Plan today: the Board focused on a day, `focusOf`), `#/week/commit[/monday]` (Commit, Plan the week).
+  - Ahead: `#/ahead` (Roadmap), `#/ahead/plan` (Plan ahead).
+  - Inbox: `#/inbox`, `#/inbox/conversations`, `#/inbox/my-promises`.
+  - Redirects (D581): `#/today/plan…`, `#/week/plan…`, `#/roadmap`, `#/roadmap/ahead`, `#/conversations`, `#/requests`, `#/asks`, `#/my-promises`, `#/promises`. `ui/App.tsx` replaces the history entry when the parsed address differs from the one typed.
+- **Today** (`ui/Today.tsx`): `UrgentStrip` (`plan/urgent.ts`), `MomentCard` (`momentCard` in `plan/modes.ts`), the blocks, After your blocks, This week chips.
+- **Week**: the Board (WeekGrid with `ui/FromLastWeek.tsx` over it for this week, action `planday.carry`), Plan today (`ui/PlanDay.tsx` under Week's header and switch), Commit (`ui/PlanWeek.tsx`).
+- **Coop brief**: `openCoopBrief` (`ui/menu.ts`, a window event) and `CoopBriefHost` / `CoopBriefPanel` (`ui/BreakDownPanel.tsx`), mounted once in App.
+- **Inbox badge**: `ui/inboxcount.ts` (`inboxBadge`, `useConversationCount` over `conversations.count`).
+- **Phone**: `ui/Phone.tsx` BottomBar with the four tabs and the Inbox count; Capture is the top bar's +.
+- **e2e**: `e2e/navigation.test.ts`.
+
 ## DV-1: DevOps read centrally (Nov 5)
 
 - **Data flow.** The scheduler's slow pass ticks `devops_poll` (`actions/devops-poll.ts`). For each polled client (`pollAccounts`) that's due (`plan/devops-pace.ts`), the poller reads the client's company PAT from Dataverse (`accountTargets`, kept in memory 10 minutes), runs one changed-since WIQL for the client's projects and a batch read of the changed ids through the app's DevOps source (`createDevOpsSource(...).internal`), diffs them against the store (`sources/devops/changes.ts`) and writes items, change log rows and its state in one transaction (`store/devops-store.ts`). Screens load through the same `DevOpsSource` interface in central mode: `storeReads` builds the week from `devops_items`, and `central.view` waits for a check only on Refresh, after a write or before the first load.

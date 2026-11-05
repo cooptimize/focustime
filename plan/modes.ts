@@ -55,3 +55,26 @@ export function dayModeStatus(f: DayFacts): { plan: ModeStatus; checkin: ModeSta
 export function weekModeStatus(committed: boolean, nudgeWeek: string | null, weekStart: string): ModeStatus {
   return committed ? "done" : nudgeWeek === weekStart ? "due" : null;
 }
+
+/**
+ * NV-1: Today's card for the moment of the day, or none. Only on today, a workday:
+ * - Close out: from the time Close out is due (the end of the day minus its window); once closed out (even early) a
+ *   small "Closed out ✓" line instead, reopenable.
+ * - Midday check-in: from the afternoon's start plus the Check-in offset until Close out is due; once done, a small
+ *   "Checked in ✓" line instead.
+ * - Plan today: while today isn't committed, until the afternoon starts (until the end of the day when there is no
+ *   afternoon). It opens Week's Board focused on today and goes once the day is committed.
+ */
+export type Moment = { kind: "plan" | "checkin" | "closeout"; done: boolean };
+export function momentCard(f: DayFacts): Moment | null {
+  if (f.date !== f.today || !f.workday) return null;
+  if (f.closedOut) return { kind: "closeout", done: true };
+  const now = toMin(f.time);
+  const close = closeoutFrom(f);
+  if (close !== null && now >= close) return { kind: "closeout", done: false };
+  const checkFrom = f.pmStart ? toMin(f.pmStart) + f.checkinOffsetMinutes : null;
+  if (checkFrom !== null && now >= checkFrom) return { kind: "checkin", done: f.checkedIn };
+  const planUntil = f.pmStart ? toMin(f.pmStart) : f.end ? toMin(f.end) : null;
+  if (!f.committed && (planUntil === null || now < planUntil)) return { kind: "plan", done: false };
+  return null;
+}

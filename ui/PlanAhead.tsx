@@ -12,7 +12,7 @@ import { HoursStepper } from "./plan/Estimate.tsx";
 import { barDates, CROWDED_MINUTES_PER_FEATURE, dragBar, monthLoad, NEXT_WORDS, pastWords, readiness, timelineScale, type AheadColumn, type BarDates, type DragMode, type MonthLoad, type NextStep, type ReadinessFlag, type Scale } from "../plan/ahead.ts";
 import type { DraftStory } from "../plan/types.ts";
 import { DraftEditorCtx } from "./DraftEditor.tsx";
-import { copy } from "./FollowUps.tsx";
+import { openCoopBrief } from "./menu.ts";
 import { STATE_WORDS } from "../plan/roadmap.ts";
 import { call } from "./api.ts";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
@@ -300,8 +300,8 @@ function BarRow({ l, g, crowded, first, focus, setFocus, move, cellRefs, drag, d
   const runNext = async (f: ReadinessFlag, n: NextStep) => {
     try {
       if (n === "brief") {
-        const res = await call<{ markdown: string }>("feature.brief", { clientKey: c.clientKey, itemId: r.id });
-        g.onNotice((await copy(res.markdown, null)) ? `Coop brief for #${r.id} copied` : "Copy didn't work: open the Roadmap row's ⋯ to copy the brief");
+        // NV-1: the Coop brief opens Break down's side panel (it copies there).
+        openCoopBrief(c.clientKey, { id: r.id, title: r.title });
       } else if (n === "breakdown") {
         const res = await call<{ draft: DraftStory }>("draft.add_story", { clientKey: c.clientKey, parentItemId: r.id, title: `First story for ${r.title}` });
         g.onChanged();

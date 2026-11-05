@@ -15,7 +15,7 @@ import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
-export const PLAN_ACTIONS = ["planday.start", "planday.commit", "pick.add", "pick.remove", "pick.set_size", "pick.move", "pick.mark_done", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
+export const PLAN_ACTIONS = ["planday.start", "planday.carry", "planday.commit", "pick.add", "pick.remove", "pick.set_size", "pick.move", "pick.mark_done", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
 export type PlanAction = (typeof PLAN_ACTIONS)[number];
 export const isPlanAction = (a: unknown): a is PlanAction => typeof a === "string" && (PLAN_ACTIONS as readonly string[]).includes(a);
 
@@ -200,6 +200,14 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         // An automatic open happens once per day, and never for a day already committed.
         const opened = !auto || (!(await plan.day(d))?.committedAt && (await plan.markOnce("plan_day_auto", d)));
         return { ok: true, data: await state(ctx, plan, d, opened) };
+      }
+      case "planday.carry": {
+        // NV-1: Week's "From last week": the carry-over day and its unfinished picks, read only (no day is opened).
+        fields(input, [], []);
+        const { cfg } = await clock(ctx);
+        const carry = await carryDay(ctx, plan);
+        const picks = carry.target ? await plan.carryOverFor(carry.upcoming, cfg?.plan.carryDays, await pendingSession(ctx, plan, cfg, carry.upcoming)) : [];
+        return { ok: true, data: { target: carry.target, picks } };
       }
       case "planday.commit": {
         const d = date(fields(input, ["date"]).date);

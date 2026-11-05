@@ -2626,6 +2626,46 @@ button.att-chip { cursor: pointer; }
 .att-who { flex: none; font-weight: 600; }
 .att-row .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* NV-1: Today from the top: what's next (the one Start focus), the urgent strip, the moment card. */
+.today-view .phone-now {
+  max-width: 760px; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border);
+  border-left: 4px solid var(--c, var(--accent)); background: var(--surface); display: grid; gap: 8px;
+}
+.today-view .phone-now header { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.today-view .phone-now h2 { margin: 0; font-size: var(--fs-4); font-weight: 600; }
+.today-view .pn-tag { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+.today-view .pn-when { color: var(--text-muted); font-size: var(--fs-2); }
+.today-view .pn-pick { margin: 0; font-size: var(--fs-3); font-weight: 500; }
+.today-view .pn-acts, .today-view .pn-timer { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.today-view .pn-count { font: 600 var(--fs-4)/1 var(--font-mono); border: 0; background: none; color: var(--text); padding: 0 8px 0 0; cursor: pointer; }
+.urgent-strip ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-width: 760px; }
+.us-item { display: flex; align-items: center; gap: 8px; }
+.us-line { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; padding: 6px 10px; border: 1px solid var(--border); border-left: 3px solid var(--risk); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-3); text-align: left; cursor: pointer; }
+.us-promise .us-line { border-left-color: var(--watch); }
+.us-tag { flex: none; font-size: var(--fs-2); font-weight: 600; color: var(--risk); }
+.us-promise .us-tag { color: var(--watch); }
+.us-who { flex: none; font-weight: 600; }
+.us-what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.us-go { flex: none; color: var(--text-faint); }
+.moment-card { max-width: 760px; display: flex; align-items: center; gap: 16px; padding: 12px 16px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); }
+.moment-card .mc-text { flex: 1; min-width: 0; }
+.moment-card h2 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.moment-card p { margin: 2px 0 0; color: var(--text-muted); font-size: var(--fs-3); }
+.moment-done { margin: 0; color: var(--text-muted); font-size: var(--fs-3); }
+.moment-done [aria-hidden] { color: var(--ok); }
+/* NV-1: Week's From last week, above the Board. */
+.from-last-week { margin: 0 24px 10px; padding: 8px 12px; border: 1px dashed var(--border-strong); border-radius: 10px; display: grid; gap: 6px; }
+.flw-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.flw-head h2 { margin: 0; }
+.flw-head .muted { font-size: var(--fs-2); }
+.flw-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.flw-row { display: flex; align-items: center; }
+.flw-row[draggable="true"] { cursor: grab; }
+.flw-row-inner { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-3); }
+.flw-row .swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--c); flex: none; }
+.flw-row .pr-note { color: var(--text-muted); font-size: var(--fs-2); }
+.plan-today-btn { margin-right: 4px; }
+
 /* This week: one chip per feature, at the bottom. */
 .this-week { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .tw-label { font-size: var(--fs-2); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
@@ -3570,6 +3610,24 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .app.phone .brand { flex: 1; min-width: 0; align-items: center; }
   .app.phone .top-actions { order: 0; display: flex; align-items: center; gap: 4px; }
   .app.phone .demo-tag { font-size: var(--fs-1); padding: 2px 8px; white-space: nowrap; }
+  /* NV-1: Capture (+) and ⋯ sit in the phone top bar now; the brand gives way first (the name hides, the mark stays). */
+  .app.phone .brand .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .app.phone .brand-home { min-width: 0; }
+  .app.phone .top-actions .top-btn.phone-capture, .app.phone .top-actions .top-btn.top-more { min-width: var(--tap); width: var(--tap); padding: 0; border: 0; background: none; position: relative; }
+  .app.phone .demo-tag { flex: none; }
+  /* Ahead on the phone (read-only): nothing wider than the screen. */
+  .app.phone .phone-ro { overflow-x: hidden; max-width: 100vw; }
+  .app.phone .roadmap { padding: 8px 16px 24px; min-width: 0; }
+  .app.phone .rm-top { flex-wrap: wrap; }
+  .app.phone .rm-top .dl-main { flex: 1 1 200px; min-width: 0; }
+  .app.phone .rm-top .dl-trend { display: none; }
+  .app.phone .rm-row, .app.phone .rm-top > * { min-width: 0; max-width: 100%; }
+  .app.phone .rm-top .dl-title, .app.phone .rm-top .rm-reason, .app.phone .rm-top .dl-meta { white-space: normal; overflow-wrap: anywhere; }
+  .app.phone .rm-top .dl-main > * { max-width: 100%; }
+  .app.phone .rm-top .dl-people { display: flex; flex-wrap: wrap; column-gap: 8px; }
+  .app.phone .roadmap .follow-ups-head { flex-wrap: wrap; }
+  .app.phone .roadmap .follow-ups-head .mode-area { flex-basis: 100%; }
+  .app.phone .roadmap .mode-switch { max-width: 100%; }
   .app.phone > .statusbar { padding: 0 16px; }
   .app.phone > .statusbar .status-row { min-height: 32px; }
 
@@ -3764,6 +3822,12 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .bb-tab[aria-current="page"]::before { background: var(--accent); }
   .bb-icon { width: 24px; height: 24px; flex: none; }
   .bb-dot { top: 8px; right: calc(50% - 16px); }
+  /* NV-1: the Inbox count on its tab, and Capture (+) in the phone top bar. */
+  .bb-count {
+    position: absolute; top: 5px; left: calc(50% + 6px); min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box;
+    border-radius: 9px; background: var(--sunken); color: var(--text); font: 600 var(--fs-1)/18px var(--font-ui); text-align: center;
+  }
+  .app.phone .phone-capture { min-width: var(--tap); padding: 0; font: 500 var(--fs-4)/1 var(--font-ui); }
 
   /* Capture, Close out and the detail panel end at the bottom bar, so the tabs are always there. */
   .cap-backdrop { bottom: var(--bb-h); }
@@ -3941,6 +4005,11 @@ button.ask-label { cursor: pointer; }
 .bd-body { overflow: auto; padding: 14px 20px; display: grid; gap: 12px; align-content: start; }
 .bd-foot { padding: 10px 20px 12px; border-top: 1px solid var(--border); display: grid; gap: 8px; }
 .bd-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+/* NV-1: the Coop brief on the same panel: the brief text fills the right column. */
+.brief-panel .bd-body { grid-template-rows: auto minmax(0, 1fr); height: 100%; box-sizing: border-box; }
+.brief-panel .brief-text { width: 100%; min-height: 240px; height: 100%; box-sizing: border-box; resize: none; font: var(--fs-2)/1.45 ui-monospace, monospace; background: var(--sunken); color: var(--text); border: 1px solid var(--border); border-radius: 7px; padding: 10px; }
+.brief-status { margin: 0; font-size: var(--fs-3); color: var(--ok); }
+.brief-status.warn { color: var(--watch); font-weight: 600; }
 .bd-note { display: grid; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); }
 .bd-note textarea, .bd-field textarea, .bd-title, .bd-ac input, .bd-regen input { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 5px 8px; min-width: 0; }
 .bd-note textarea, .bd-field textarea { resize: vertical; }

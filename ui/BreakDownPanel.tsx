@@ -10,7 +10,7 @@
 import { useCallback, useContext, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { breakdownLabel, moveCard, reviewTotal } from "../plan/breakdown.ts";
 import { call } from "./api.ts";
-import { BREAK_DOWN_EVENT, DRAFT_STORIES_EVENT, openBreakDown, PV_BREAKDOWN_EVENT, type BreakDownTarget } from "./menu.ts";
+import { BREAK_DOWN_EVENT, COOP_BRIEF_EVENT, DRAFT_STORIES_EVENT, openBreakDown, PV_BREAKDOWN_EVENT, type BreakDownTarget } from "./menu.ts";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { DevOpsWork } from "./work.ts";
 import { WorkLink } from "./WorkLink.tsx";
@@ -803,5 +803,190 @@ function PublishStep({ clientKey, draft, previews, failed, parentUrl }: { client
       )}
       {failed.length > 0 && !p0 && notYet.length === 0 && failed.map((f) => <p key={f} className="muted">{f}</p>)}
     </>
+  );
+}
+
+// ---------- NV-1: the Coop brief, on the same side panel ----------
+
+type Brief = {
+  markdown: string;
+  descriptionRead: boolean;
+  item: { id: number; title: string; type: string; state: string; url: string; targetDate: string | null; description: string; parent: { id: number; title: string; type: string; url: string } | null; children: { id: number; title: string; type: string; state: string }[] };
+  contains: string[];
+};
+
+/** Mounted once (App): opens the Coop brief panel when any entry point asks (Today, Week, Plan the week, Ahead, the detail panel). */
+export function CoopBriefHost() {
+  const [open, setOpen] = useState<{ clientKey: string; item: BreakDownTarget; weekStart: string | null; n: number } | null>(null);
+  const back = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    let n = 0;
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ clientKey?: unknown; item?: BreakDownTarget; weekStart?: string | null }>).detail;
+      if (typeof d?.clientKey !== "string" || !d.item || !Number.isSafeInteger(d.item.id) || d.item.id <= 0) return;
+      back.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setOpen({ clientKey: d.clientKey, item: d.item, weekStart: d.weekStart ?? null, n: ++n });
+    };
+    window.addEventListener(COOP_BRIEF_EVENT, on);
+    return () => window.removeEventListener(COOP_BRIEF_EVENT, on);
+  }, []);
+  if (!open) return null;
+  return (
+    <CoopBriefPanel
+      key={open.n}
+      clientKey={open.clientKey}
+      item={open.item}
+      weekStart={open.weekStart}
+      onClose={() => {
+        setOpen(null);
+        const el = back.current;
+        requestAnimationFrame(() => el?.isConnected && el.focus());
+      }}
+    />
+  );
+}
+
+/**
+ * The Coop brief on Break down's side panel: the item on the left (TypeIcon, link, chips, description, children, and
+ * "What's in the brief" folded), the brief on the right. It copies as soon as it is built and says Copied; Copy again
+ * and Close at the foot. When the browser refuses to copy, the text is selected with "Press Ctrl+C to copy". Nothing is
+ * sent to an AI: the brief is DevOps fields only, for you to paste to Coop.
+ */
+export function CoopBriefPanel({ clientKey, item, weekStart, onClose }: { clientKey: string; item: BreakDownTarget; weekStart: string | null; onClose: () => void }) {
+  const [brief, setBrief] = useState<Brief | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<"yes" | "no" | null>(null);
+  const area = useRef<HTMLTextAreaElement>(null);
+  const first = useRef<HTMLHeadingElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const copyNow = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied("yes");
+    } catch {
+      setCopied("no");
+      area.current?.focus();
+      area.current?.select();
+    }
+  }, []);
+  useEffect(() => {
+    first.current?.focus();
+    let live = true;
+    call<Brief>("feature.brief", { clientKey, itemId: item.id, ...(weekStart ? { weekStart } : {}) }).then(
+      (b) => {
+        if (!live) return;
+        setBrief(b);
+        // The text box renders first, so a refused copy can select it.
+        setTimeout(() => void copyNow(b.markdown), 0);
+      },
+      (e) => live && setError(errText(e)),
+    );
+    return () => void (live = false);
+  }, [clientKey, item.id, weekStart, copyNow]);
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      closeRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const type = brief?.item.type ?? item.type ?? null;
+  const title = brief?.item.title || item.title;
+  return (
+    <div className="bd-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="bd-panel brief-panel" data-overlay="modal" role="dialog" aria-modal="true" aria-label={`Coop brief: ${title || `#${item.id}`}`}>
+        <header className="bd-head">
+          <h2 ref={first} tabIndex={-1}>
+            {type && <TypeIcon clientKey={clientKey} type={type} decorative />}
+            Coop brief
+          </h2>
+          <button type="button" className="bd-x" aria-label="Close" onClick={onClose}>
+            ✕
+          </button>
+        </header>
+
+        <aside className="bd-item" aria-label="The item">
+          <p className="bd-item-link">
+            {type && <TypeIcon clientKey={clientKey} type={type} />}
+            <WorkLink clientKey={clientKey} url={brief?.item.url}>
+              #{item.id} {title}
+            </WorkLink>
+          </p>
+          {brief && (
+            <ul className="bd-chips" aria-label="About the item">
+              {brief.item.state && <li className="bd-chip">{brief.item.state}</li>}
+              <li className="bd-chip">{brief.item.targetDate ? `Target ${brief.item.targetDate}` : "No target date"}</li>
+              {brief.item.parent && (
+                <li className="bd-chip">
+                  <TypeIcon clientKey={clientKey} type={brief.item.parent.type} />
+                  <WorkLink clientKey={clientKey} url={brief.item.parent.url} title={brief.item.parent.title}>
+                    #{brief.item.parent.id}
+                  </WorkLink>
+                </li>
+              )}
+            </ul>
+          )}
+          {brief && (
+            <div className="bd-desc">
+              <p className={`bd-desc-text clamped${brief.item.description.trim() ? "" : " muted"}`}>{brief.item.description.trim() || (brief.descriptionRead ? "No description" : "The description couldn't be read")}</p>
+            </div>
+          )}
+          {brief && brief.item.children.length > 0 && (
+            <section className="bd-children" aria-label="Existing children">
+              <h3>Existing children ({brief.item.children.length})</h3>
+              <ul>
+                {brief.item.children.map((k) => (
+                  <li key={k.id}>
+                    <TypeIcon clientKey={clientKey} type={k.type} />
+                    <span className="bd-child-title">{k.title}</span>
+                    <span className="muted">{k.state}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {brief && (
+            <details className="bd-sent">
+              <summary>What's in the brief</summary>
+              <ul>
+                {brief.contains.map((s) => (
+                  <li key={s}>{s}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </aside>
+
+        <section className="bd-main" aria-label="The brief">
+          <div className="bd-body">
+            {!brief && !error && <p className="bd-busy" role="status">Building the brief from DevOps…</p>}
+            {error && <p className="set-problem" role="alert">Couldn't build the brief: {error}</p>}
+            {brief && (
+              <>
+                <p className={`brief-status${copied === "no" ? " warn" : ""}`} role="status">
+                  {copied === "yes" ? "Copied. Paste it to Coop." : copied === "no" ? "Press Ctrl+C to copy" : "Copying…"}
+                </p>
+                <textarea ref={area} className="brief-text" readOnly value={brief.markdown} aria-label={`Coop brief for #${item.id}`} />
+              </>
+            )}
+          </div>
+          <footer className="bd-foot">
+            <div className="bd-buttons">
+              {brief && (
+                <button type="button" className="commit" onClick={() => void copyNow(brief.markdown)}>
+                  Copy again
+                </button>
+              )}
+              <button type="button" onClick={onClose}>
+                Close
+              </button>
+            </div>
+          </footer>
+        </section>
+      </div>
+    </div>
   );
 }
