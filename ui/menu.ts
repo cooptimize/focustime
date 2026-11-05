@@ -1068,6 +1068,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "chats.remove":
     case "chats.kind":
     case "chats.reading":
+    case "chats.social":
     case "chats.refresh": return { run: () => env.openSettings("clients") };
     // Requests are worked in Inbox › Requests; registering chats and deleting stored messages in Settings > Clients.
     case "requests.list":

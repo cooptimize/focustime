@@ -946,6 +946,7 @@ function prepareContext(ctx: ActionContext): PrepareContext {
     ai: () => aiFor(ctx),
     writeClients: async () => (ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : []),
     features: (cfg, key) => featuresOf(cap, cfg, key),
+    isInternal: (key) => isInternalKey(ctx.org, key),
     model: async (cfg, key) => {
       const r = (await ctx.makeDevOps(cfg.dataverse, userZone(cfg)).processModels([key]))[0];
       return r?.ok ? r.model : null;
@@ -1086,6 +1087,7 @@ export async function conversationContext(ctx: ActionContext): Promise<Conversat
     ...rc,
     ...(port?.conversations ? { conversations: port.conversations } : {}),
     isLead: async (clientKey) => isClientLead(ctx.org, await rc.me(), clientKey),
+    isAdmin: () => amAdmin(ctx),
     users: async () => (port?.users ? port.users() : []),
     pipelineAi: () => aiFor(ctx, { cap: "app" }),
     devopsEmail: async (clientKey) => (await ctx.plan?.devopsIdentities().catch(() => []))?.find((i) => i.clientKey === clientKey)?.email ?? null,
@@ -1547,6 +1549,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "chats.remove":
     case "chats.kind":
     case "chats.reading":
+    case "chats.social":
     case "chats.refresh":
     case "permissions.status":
       return chatAction(await chatContext(ctx), action, req.input);

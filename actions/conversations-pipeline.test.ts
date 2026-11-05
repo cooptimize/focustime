@@ -294,4 +294,29 @@ describe("Cooptimize Internal and the client rule", () => {
     expect(await ids({ available: true, withNew: false })).toEqual([ms[0]!.messageId, ms[1]!.messageId]);
     expect(await ids({ available: true, withNew: true })).toEqual([ms[0]!.messageId, ms[1]!.messageId, ms[2]!.messageId]);
   });
+
+  it("IB-1: the unsorted line in plain words; Sort again only for what passes on its own; holds have no button", async () => {
+    const { unsortedLine } = await import("../plan/conversations.ts");
+    for (const k of ["rate_limited", "timeout", "quota", "invalid_output", "unknown_ref", "chat_cap"]) expect(unsortedLine(k, "Contoso").does, k).toBe("retry");
+    for (const k of ["off", "client_off", "not_set_up", "zero_budget", "over_budget"]) {
+      const l = unsortedLine(k, "Contoso");
+      expect(l.does, k).toBe("switch");
+      expect(l.fix, k).toMatch(/FocusTime admin/);
+    }
+    expect(unsortedLine("client_off", "Contoso")).toMatchObject({ text: "AI isn't allowed for Contoso", fix: expect.stringContaining("Admin › AI") });
+    expect(unsortedLine(CLIENT_REFUSED, "Contoso")).toEqual({ text: "held back: it mentions another client", does: "held", fix: null });
+    expect(unsortedLine("refused_secret", "Contoso")).toMatchObject({ does: "held", text: expect.stringMatching(/^held back: it contains something that looks like a key/) });
+    expect(unsortedLine("refused_email", "Contoso")).toMatchObject({ does: "held", text: "held back: it contains an email address" });
+    for (const k of ["off", CLIENT_REFUSED, "rate_limited"]) expect(unsortedLine(k, "Contoso").text, k).not.toMatch(/\u2014/);
+  });
+
+  it("IB-1: a Social chat skips the AI pass entirely: its messages are chatter, nothing is sent", async () => {
+    const w = world({ directory });
+    const social = { ...CHAT, social: true };
+    const m = await w.say(CHAT, BLAKE, "2026-11-04T15:00:00Z", "Can someone look at the export totals before Friday?");
+    const r = await w.run(social, [m]);
+    expect(w.calls).toHaveLength(0);
+    expect(r).toMatchObject({ chatter: 1, conversations: 0 });
+    expect((await w.convs.placesByRole([CHAT.chatId], "chatter")).map((p) => p.reason)).toEqual(["social"]);
+  });
 });

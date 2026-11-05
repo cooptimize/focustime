@@ -51,6 +51,46 @@ describe.skipIf(!CHROMIUM)("the Inbox (IB-1)", () => {
     await page.close();
   }, T);
 
+  it("slice 3: each Needs you row says why; Snooze takes it out of the counts until then, and it can be woken", async () => {
+    const { page, errors } = await freshPage(h);
+    await page.keyboard.press("4");
+    const main = await openInboxView(page, "needs-you");
+    await main.locator(".ib-row").first().waitFor();
+    const rail = main.getByRole("navigation", { name: "Inbox views and clients" });
+    const needs = async () => Number((await rail.getByRole("button", { name: /^Needs you/ }).locator(".count").textContent()) ?? "-1");
+    const rows = (await call<{ items: (Row & { reason: string | null })[] }>(page, "inbox.list", {})).data.items.filter((r) => r.views.includes("needs_you"));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(r.reason, r.key).toBeTruthy();
+    const pick = rows.find((r) => r.kind === "promise")!;
+    const row = main.locator(`.ib-row[data-key="${pick.key}"]`);
+    await expect.poll(() => row.locator(".ib-row-sub").textContent()).toContain(pick.reason!);
+    await row.click();
+    const pane = page.locator(".ib-pane");
+    await expect.poll(() => pane.locator(".ib-reason").textContent()).toBe(pick.reason);
+    const before = await needs();
+    await pane.getByRole("button", { name: /^More for / }).click();
+    await pane.getByRole("menuitem", { name: "Snooze…" }).click();
+    const form = pane.getByRole("form", { name: "Snooze" });
+    expect(await form.getByRole("button").allTextContents()).toEqual(expect.arrayContaining(["Later today", "Tomorrow", "Next week"]));
+    await form.getByRole("button", { name: "Tomorrow" }).click();
+    await expect.poll(needs).toBe(before - 1);
+    // The due day is unchanged; the folded group brings it back to look at, and Wake it now returns it.
+    const listed = (await call<{ items: (Row & { due: string | null; snoozedUntil: string | null })[] }>(page, "inbox.list", {})).data.items.find((r) => r.key === pick.key)!;
+    expect(listed.views).toEqual([]);
+    expect(listed.snoozedUntil).toBeTruthy();
+    await main.getByRole("button", { name: /^\d+ snoozed$/ }).click();
+    await main.getByRole("region", { name: "Snoozed" }).locator(`.ib-row[data-key="${pick.key}"]`).click();
+    await expect.poll(() => pane.locator(".ib-snoozed").textContent()).toMatch(/^Snoozed until tomorrow /);
+    await pane.getByRole("button", { name: /^More for / }).click();
+    await pane.getByRole("menuitem", { name: "Wake it now" }).click();
+    // Back in its views (opened, so seen: a promise due later stays in Promises only), and the counts agree again.
+    await expect.poll(async () => (await call<{ items: Row[] }>(page, "inbox.list", {})).data.items.find((r) => r.key === pick.key)?.views.length).toBeGreaterThan(0);
+    const server = (await call<{ needsYou: number }>(page, "inbox.count", {})).data.needsYou;
+    await expect.poll(needs).toBe(server);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
   it("old deep links open their item in the detail pane", async () => {
     const { page, errors } = await freshPage(h);
     const rows = (await call<{ items: Row[] }>(page, "inbox.list", {})).data.items;
@@ -196,6 +236,35 @@ describe.skipIf(!CHROMIUM)("the Inbox (IB-1)", () => {
       await page.close();
     }
   }, 600_000);
+
+  it.skipIf(!SHOTS)("screenshots, slice 3: a reason and the Snooze form, the snoozed group, the Chatter pane", async () => {
+    for (const theme of ["cooptimize-light", "cooptimize-dark"]) {
+      const tag = theme.endsWith("dark") ? "dark" : "light";
+      const { page } = await freshPage(h, { width: 1920, height: 1080 });
+      expect((await call(page, "ui.set_theme", { theme })).ok).toBe(true);
+      await page.reload();
+      await page.waitForSelector(".topbar");
+      const main = await openInboxView(page, "needs-you");
+      await main.locator(".ib-row").first().waitFor();
+      const promise = main.locator('.ib-row[data-key^="f"], .ib-row[data-key^="c"]').first();
+      await promise.click();
+      const pane = page.locator(".ib-pane");
+      await pane.getByRole("button", { name: /^More for / }).click();
+      await pane.getByRole("menuitem", { name: "Snooze…" }).click();
+      await page.waitForTimeout(300);
+      await shotBoth(page, `ib1-s3-snooze-1920-${tag}`);
+      await pane.getByRole("form", { name: "Snooze" }).getByRole("button", { name: "Tomorrow" }).click();
+      await main.getByRole("button", { name: /^\d+ snoozed$/ }).click();
+      await page.waitForTimeout(300);
+      await shotBoth(page, `ib1-s3-snoozed-1920-${tag}`);
+      const key = await promise.getAttribute("data-key");
+      expect((await call(page, "inbox.snooze", { key, until: null })).ok).toBe(true);
+      await openInboxView(page, "chatter");
+      await page.waitForTimeout(600);
+      await shotBoth(page, `ib1-s3-chatter-1920-${tag}`);
+      await page.close();
+    }
+  }, 300_000);
 
   it("a promise I added and a linked chat promise both offer every action", async () => {
     const { page, errors } = await freshPage(h);

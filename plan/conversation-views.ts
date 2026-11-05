@@ -72,6 +72,9 @@ export type ConversationsData = {
   chatter: { clientKey: string; clientName: string; messages: FilteredMessage[] }[];
   myPromisesOpen: number;
   lastPoll: string | null;
+  /** IB-1 slice 3: the registered chats I see (for the Chatter pane), and whether I'm a FocusTime admin. */
+  chats?: { chatId: string; name: string; link: string; social: boolean }[];
+  admin?: boolean;
   /** ADM-2 (D604): the Rule, for "every N minutes in working hours". */
   pollMinutes?: number;
   writeClients: string[];

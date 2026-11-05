@@ -81,7 +81,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
   const chatter = useMemo(() => chatterRows(src.convs, clients), [src.convs, clients]);
   const rows = useMemo(() => {
     const inv = inView(items, view, clients);
-    const s = sticky && !inv.some((i) => i.key === sticky) ? items.find((i) => i.key === sticky) : undefined;
+    const s = sticky && !inv.some((i) => i.key === sticky) ? items.find((i) => i.key === sticky && !i.snoozedUntil) : undefined;
     const all = s ? [...inv, s] : inv;
     const q = filter.trim().toLowerCase();
     return q ? all.filter((i) => `${i.title} ${i.who ?? ""} ${i.where ?? ""} ${clientName(i.clientKey)}`.toLowerCase().includes(q)) : all;
@@ -89,6 +89,14 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
   const groups = useMemo(() => groupRows(rows, prefs.group, (k) => clientName(k), today), [rows, prefs.group, clientName, today]);
   // Slice 3: snoozed items are in no view and no count; one folded group at the foot brings them back to look at.
   const [showSnoozed, setShowSnoozed] = useState(false);
+  // Slice 3: In progress shows each linked item's live state (CV-5's, from the cards already read).
+  const liveState = useMemo(() => {
+    const m = new Map<string, { id: number; state: string | null; closed: boolean }>();
+    const convs = src.convs ? [...src.convs.needsYou, ...src.convs.inProgress, ...src.convs.teammates, ...src.convs.closed] : [];
+    for (const c of convs) if (c.item) m.set(`v${c.id}`, { id: c.item.id, state: c.item.state ?? null, closed: !!c.item.closed });
+    for (const pr of src.promises?.promises ?? []) if (pr.item) m.set(`c${pr.id}`, { id: pr.item.id, state: pr.item.state ?? null, closed: !!pr.item.closed });
+    return m;
+  }, [src.convs, src.promises]);
   const snoozed = useMemo(() => items.filter((i) => i.snoozedUntil && !i.done && (!clients.length || (i.clientKey !== null && clients.includes(i.clientKey)))), [items, clients]);
   const order = useMemo(() => flatOrder(groups), [groups]);
   const viewCount = (v: InboxView) => (v === "chatter" ? chatterRows(src.convs, clients).length : inView(items, v, clients).length);
@@ -282,6 +290,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
     </div>
   );
   const onWork = (m: ChatterRow["messages"][number]) => void run("conversations.this_is_work", { chatId: m.chatId, messageId: m.messageId }, "Moved into its own conversation");
+  const onSocial = (chatId: string, on: boolean) => void run("chats.social", { chatId, on }, on ? "Marked a Social chat. Its new messages skip AI" : "Not a Social chat any more. Its new messages are sorted again");
 
   const list = (
     <>
@@ -297,10 +306,10 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
       {view === "chatter" ? (
         <ChatterList rows={chatter} tz={tz} open={openChatter?.key ?? null} onOpen={setChatterKey} colors={data.clients} phone={phone} />
       ) : (
-        <ListGroups groups={groups} openKey={openKey} onOpen={open} today={today} tz={tz} colors={data.clients} phone={phone} group={prefs.group} reasons={view === "needs_you"} />
+        <ListGroups groups={groups} openKey={openKey} onOpen={open} today={today} tz={tz} colors={data.clients} phone={phone} group={prefs.group} reasons={view === "needs_you"} live={view === "in_progress" ? liveState : null} />
       )}
       {view !== "chatter" && showSnoozed && snoozed.length > 0 && (
-        <ListGroups groups={[{ id: "snoozed", label: "Snoozed", clientKey: null, rows: snoozed }]} openKey={openKey} onOpen={open} today={today} tz={tz} colors={data.clients} phone={phone} group="kind" reasons={false} />
+        <ListGroups groups={[{ id: "snoozed", label: "Snoozed", clientKey: null, rows: snoozed }]} openKey={openKey} onOpen={open} today={today} tz={tz} colors={data.clients} phone={phone} group="kind" reasons={false} live={null} />
       )}
       {src.list && view !== "chatter" && !rows.length && <EmptyView view={view} />}
       {src.convs && src.convs.unsorted.count > 0 && (view === "needs_you" || view === "chatter") && (
@@ -361,7 +370,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
       )}
       {openChatter && (
         <ItemSheet onBack={() => setChatterKey(null)} entry={null} acts={[]} form={null} title="Inbox · Chatter">
-          <ChatterDetail row={openChatter} tz={tz} color={clientColor(openChatter.clientKey, data.clients)} onWork={onWork} />
+          <ChatterDetail row={openChatter} tz={tz} color={clientColor(openChatter.clientKey, data.clients)} onWork={onWork} chat={src.convs?.chats?.find((c) => c.chatId === openChatter.chatId)} admin={!!src.convs?.admin} onSocial={(on) => onSocial(openChatter.chatId, on)} />
         </ItemSheet>
       )}
     </main>
@@ -462,7 +471,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
         {entry ? (
           <Detail entry={entry} acts={acts} form={form} setForm={setForm} data={data} tz={tz} today={today} clientName={clientName} run={run} submit={submit} reload={() => void reloadAll()} mergeOthers={mergeOthers} merge={merge} snoozeChoices={src.list?.snoozeChoices} />
         ) : openChatter ? (
-          <ChatterDetail row={openChatter} tz={tz} color={clientColor(openChatter.clientKey, data.clients)} onWork={onWork} />
+          <ChatterDetail row={openChatter} tz={tz} color={clientColor(openChatter.clientKey, data.clients)} onWork={onWork} chat={src.convs?.chats?.find((c) => c.chatId === openChatter.chatId)} admin={!!src.convs?.admin} onSocial={(on) => onSocial(openChatter.chatId, on)} />
         ) : (
           <p className="muted ib-pane-empty">{src.list ? "Nothing open. Pick an item from the list." : "Loading…"}</p>
         )}
@@ -523,7 +532,7 @@ function RefreshChats({ run }: { run: (a: string, i: Record<string, unknown>, no
   );
 }
 
-function ListGroups({ groups, openKey, onOpen, today, tz, colors, phone, group, reasons }: { groups: ReturnType<typeof groupRows>; openKey: string | null; onOpen: (k: string) => void; today: string; tz: string; colors: Record<string, string>; phone: boolean; group: Group; reasons: boolean }): ReactNode {
+function ListGroups({ groups, openKey, onOpen, today, tz, colors, phone, group, reasons, live }: { groups: ReturnType<typeof groupRows>; openKey: string | null; onOpen: (k: string) => void; today: string; tz: string; colors: Record<string, string>; phone: boolean; group: Group; reasons: boolean; live: ReadonlyMap<string, { id: number; state: string | null; closed: boolean }> | null }): ReactNode {
   return (
     <>
       {groups.map((g) => (
@@ -534,7 +543,8 @@ function ListGroups({ groups, openKey, onOpen, today, tz, colors, phone, group, 
           </h3>
           <ul className="ib-rows">
             {g.rows.map((r) => {
-              const tag = rowTag(r, today);
+              const it = live?.get(r.key);
+              const tag = it ? { text: it.closed ? `#${it.id} closed · Mark done?` : `#${it.id}${it.state ? ` · ${it.state}` : ""}`, tone: it.closed ? ("soon" as const) : ("plain" as const) } : rowTag(r, today);
               return (
                 <li key={r.key}>
                   <button type="button" className={`ib-row${r.key === openKey ? " open" : ""}${r.late ? " late" : ""}`} data-key={r.key} aria-current={r.key === openKey ? "true" : undefined} onClick={() => onOpen(r.key)}>

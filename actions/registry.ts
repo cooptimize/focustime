@@ -182,6 +182,7 @@ export const ACTIONS = [
   { name: "chats.list", title: "Pick a client chat", group: "Settings", target: "none", summary: "Your Teams group chats to add to a client: names and members, never messages" },
   { name: "chats.add", title: "Add a client chat", group: "Settings", target: "none", summary: "Add one of your Teams group chats to a client; a client can have several, a chat belongs to one client" },
   { name: "chats.reading", title: "Read a client chat or not", group: "Settings", target: "none", summary: "Admins: turn reading a registered client chat for requests on or off (from then on, never history)" },
+  { name: "chats.social", aka: ["social chat"], title: "Mark a client chat as a Social chat", group: "Settings", target: "none", summary: "Admins: a Social chat's messages skip the AI pass and are filed as chatter, for everyone on the chat" },
   { name: "chats.kind", title: "Label a client chat", group: "Settings", target: "none", summary: "Mark a client chat as its Delivery team chat or a Customer collaboration chat" },
   { name: "chats.remove", title: "Remove a client chat", group: "Settings", target: "none", summary: "Forget one of a client's chats (Teams is unchanged)" },
   { name: "chats.refresh", title: "Refresh client chat members", group: "Settings", target: "none", summary: "Read the members of your client chats again from Teams" },

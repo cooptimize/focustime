@@ -20,7 +20,7 @@ import { storedIdentity, type MicrosoftAccount } from "./account.ts";
 import { mapSeq } from "./seq.ts";
 import type { ActionResponse } from "./types.ts";
 
-export type ChatAction = "chats.registered" | "chats.list" | "chats.add" | "chats.remove" | "chats.kind" | "chats.reading" | "chats.refresh" | "permissions.status";
+export type ChatAction = "chats.registered" | "chats.list" | "chats.add" | "chats.remove" | "chats.kind" | "chats.reading" | "chats.social" | "chats.refresh" | "permissions.status";
 
 export type ChatContext = {
   plan?: PlanStore | undefined;
@@ -74,6 +74,7 @@ function view(c: ClientChat, clientName: string, home: string | null, error: str
     error,
     registeredBy: c.members?.find((m) => m.userId?.toLowerCase() === c.registeredBy.toLowerCase())?.displayName ?? null,
     readOn: c.readOn,
+    social: !!c.social,
     poll: chatStatus(c, clientName),
   };
 }
@@ -146,7 +147,7 @@ export async function chatAction(ctx: ChatContext, action: ChatAction, input: un
   const teams = ctx.teams;
   if (!teams) return bad("Client chats aren't available here", 503);
   // D522: registering is an admin's (one check, moving to the admin console next); reading is decided per chat.
-  const ADMIN_ONLY: readonly string[] = ["chats.list", "chats.add", "chats.kind", "chats.reading", "chats.remove"];
+  const ADMIN_ONLY: readonly string[] = ["chats.list", "chats.add", "chats.kind", "chats.reading", "chats.social", "chats.remove"];
   if (ADMIN_ONLY.includes(action) && !((await ctx.isAdmin?.()) ?? false)) return bad("Only a FocusTime admin adds or changes client chats", 403, "admin");
   try {
     switch (action) {
@@ -221,6 +222,15 @@ export async function chatAction(ctx: ChatContext, action: ChatAction, input: un
         const c = (await mine(ctx, teams)).find((x) => x.chatId === o.chatId);
         if (!c) return bad("That chat isn't registered for one of your clients", 404);
         await teams.viewer((await ctx.me())!).setReading(o.chatId, o.on);
+        return { ok: true, data: await registered(ctx, teams, false) };
+      }
+      case "chats.social": {
+        // IB-1: a Social chat skips the AI pass entirely; decided centrally by an admin, for everyone on the chat.
+        const o = only(input, ["chatId", "on"]);
+        if (!o || typeof o.chatId !== "string" || !CHAT_ID.test(o.chatId) || typeof o.on !== "boolean") return bad("chats.social takes { chatId, on }");
+        const c = (await mine(ctx, teams)).find((x) => x.chatId === o.chatId);
+        if (!c) return bad("That chat isn't registered for one of your clients", 404);
+        await teams.viewer((await ctx.me())!).setSocial(o.chatId, o.on);
         return { ok: true, data: await registered(ctx, teams, false) };
       }
       case "chats.remove": {

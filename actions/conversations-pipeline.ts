@@ -209,6 +209,14 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
     return out;
   };
 
+  // IB-1: a Social chat (an admin's switch) skips the AI pass entirely: what the rules didn't place is chatter.
+  if (chat.social) {
+    const rest = work.filter((m) => !placed.has(m.messageId));
+    if (rest.length) await d.convs.place(rest.map((m) => ({ chatId: chat.chatId, messageId: m.messageId, conversationId: null, role: "chatter" as const, reason: "social", placedBy: "rule" as const, at: m.createdAt })));
+    out.chatter += rest.length;
+    return finishByRules();
+  }
+
   // 2a. CV-3: AI off for this client (AI for FocusTime, Allow AI, or no provider key) with the Rule on: conversations
   // by rules only, decided before any AI call (none is counted). Caps and provider errors aren't "off": they wait.
   if (d.groupWithoutAi) {

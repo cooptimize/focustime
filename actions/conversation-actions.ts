@@ -60,6 +60,8 @@ export type ConversationContext = RequestContext & {
   conversations?: ConversationStore | undefined;
   /** Whether I lead this client: Dataverse's leads with admins' overrides (actions/client-lead.ts, ADM-1). */
   isLead: (clientKey: string) => Promise<boolean>;
+  /** IB-1: whether I'm a FocusTime admin (Mark as a Social chat). */
+  isAdmin?: () => Promise<boolean>;
   /** The FocusTime users (for Sort unsorted's own promises). */
   users: () => Promise<FocusUser[]>;
   /** The pipeline's AI for Sort unsorted: my switches, the app's cap. */
@@ -342,6 +344,9 @@ async function list(ctx: ConversationContext, cfg: AppConfig, select: number | n
     byClient.set(chat.clientKey, g);
   }
   out.chatter = [...byClient.values()];
+  // IB-1 slice 3: the Chatter pane's chat facts (name, Teams link, Social) and whether I may mark a Social chat.
+  out.chats = v.chats.map((c) => ({ chatId: c.chatId, name: c.displayName, link: teamsLink(c), social: !!c.social }));
+  out.admin = (await ctx.isAdmin?.().catch(() => false)) ?? false;
   out.myPromisesOpen = (await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))).filter((k) => k.state === "open").length;
   out.pollMinutes = cfg.org?.rules.pollMinutes ?? 5;
   // CV-2: a deep link (#/inbox/conversation/<id>): the one to select, following a merge to where it went now.

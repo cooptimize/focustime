@@ -509,8 +509,15 @@ function SendBody(p: DetailProps): ReactNode {
   );
 }
 
-/** Chatter: one chat's chatter, with This is work and Hide; never Create DevOps item as the primary (slice 3 adds more). */
-export function ChatterDetail({ row, tz, color, onWork }: { row: ChatterRow; tz: string; color: string; onWork: (m: ChatterRow["messages"][number]) => void }): ReactNode {
+/**
+ * Chatter: one chat's chatter. Never Create DevOps item, as the primary or at all: This is work moves a message into its
+ * own conversation first. An admin can mark the chat a Social chat (skips AI for everyone); others see who can and where.
+ */
+export function ChatterDetail({ row, tz, color, onWork, chat, admin, onSocial }: {
+  row: ChatterRow; tz: string; color: string; onWork: (m: ChatterRow["messages"][number]) => void;
+  chat?: { name: string; link: string; social: boolean } | undefined; admin: boolean; onSocial: (on: boolean) => void;
+}): ReactNode {
+  const name = chat?.name ?? "this chat";
   return (
     <article className="ib-detail" aria-label={row.title} style={{ "--c": color } as CSSProperties}>
       <header className="ib-detail-head">
@@ -528,6 +535,25 @@ export function ChatterDetail({ row, tz, color, onWork }: { row: ChatterRow; tz:
       <h2 className="ib-detail-title" tabIndex={-1}>{row.title}</h2>
       <p className="ib-summary">
         {row.messages.length} {row.messages.length === 1 ? "message" : "messages"} filtered as chatter. No question for you, no ask, no promise. They never count toward Needs you.
+      </p>
+      <div className="ib-acts" role="group" aria-label={`Actions for ${row.title}`}>
+        {chat?.link && (
+          <a className="ib-act" href={chat.link} target="_blank" rel="noopener noreferrer">
+            Open in Teams
+          </a>
+        )}
+        {admin && (
+          <button type="button" className="ib-act" onClick={() => onSocial(!chat?.social)}>
+            {chat?.social ? `${name} isn't a Social chat` : `Mark ${name} as a Social chat`}
+          </button>
+        )}
+      </div>
+      <p className="muted ib-form-note">
+        {chat?.social
+          ? `${name} is a Social chat: its messages skip AI and are filed here.${admin ? "" : " A FocusTime admin can change that in Admin › Clients."}`
+          : admin
+            ? "A Social chat's messages skip AI entirely and are filed as chatter, for everyone on the chat."
+            : `If ${name} is only social, a FocusTime admin can mark it a Social chat in Admin › Clients. Its messages then skip AI.`}
       </p>
       <section className="ib-card" aria-label="Messages">
         <h3 className="ib-section">Latest messages</h3>
