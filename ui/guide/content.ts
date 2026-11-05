@@ -20,7 +20,7 @@ export const CHAPTERS = [
   { id: "devops", name: "DevOps first" },
   { id: "keys", name: "Shortcuts" },
   { id: "phone", name: "On your phone" },
-  { id: "asks", name: "Conversations and my promises" },
+  { id: "asks", name: "Conversations and promises" },
   { id: "team", name: "Working with your team" },
   { id: "questions", name: "Questions" },
 ] as const;
@@ -71,7 +71,7 @@ export const BASICS = {
     { name: "Must & nice to have", tone: "action", short: "What you'll definitely touch this week, and what fits if there's room.", more: "A must is a target, not a contract. Moving one is one click and nobody gets scolded. Dropping a promised one offers to draft a heads-up." },
     { name: "Size", tone: "watch", short: "Everything is sized in hours. {size:S} {size:M} {size:L} are shortcuts.", more: "S is 1h, M is 2h, L is 4h. Sizing is optional: an unsized story counts as 2h until you size it. Once a feature's stories are sized, they decide how big the feature is." },
     { name: "Follow-up", tone: "risk", short: "Something you owe someone, until you close the loop.", more: "An update, an answer, a DevOps change. Some open on their own (a slipped must, a done story still Active in DevOps). Close the loop when it's done." },
-    { name: "Capture", tone: "brand", short: "Get a thought out of your head in one line.", more: "Press {key:capture.add} anywhere. Save it as is, or as a follow-up, a draft story or a draft feature. A follow-up's Who is the same search box as everywhere else: pick a person, or keep a plain name. Sort the rest later in Inbox. Enter saves, Shift+Enter starts a new line, and the client chip is where it goes: the Saved note names that client, with Undo for a few seconds. A draft story or feature gets a DevOps-ready version from AI in the background when AI is allowed for that client and you have a write PAT for it; your own words stay as you typed them. Create in DevOps shows yours and the AI version side by side: use either, edit it, pick the parent, then confirm the preview. Ctrl+Enter saves and opens that preview at once. Nothing is created in DevOps until you confirm." },
+    { name: "Capture", tone: "brand", short: "Get a thought out of your head in one line.", more: "Press {key:capture.add} anywhere. Save it as is, or as a follow-up, a draft story or a draft feature. A follow-up's Who is the same search box as everywhere else: pick a person, or keep a plain name. Sort the rest later in Inbox › Captures. Enter saves, Shift+Enter starts a new line, and the client chip is where it goes: the Saved note names that client, with Undo for a few seconds. A draft story or feature gets a DevOps-ready version from AI in the background when AI is allowed for that client and you have a write PAT for it; your own words stay as you typed them. Create in DevOps shows yours and the AI version side by side: use either, edit it, pick the parent, then confirm the preview. Ctrl+Enter saves and opens that preview at once. Nothing is created in DevOps until you confirm." },
     { name: "At risk", tone: "risk", short: "A block that meetings or life are eating into.", more: 'The reason is always written on the card: "At risk · Dentist 12:00". It\'s a heads-up, not a failure.' },
     { name: "Close out", tone: "faint", short: "Leave each client ready to pick up again.", more: "One line per client on where you left off. Next time that client's block comes around, the note is waiting at the top." },
   ] satisfies { name: string; tone: Tone; short: string; more: string }[],
@@ -251,7 +251,7 @@ export const SHORTCUTS = {
     { label: "Capture a thought", keys: [{ command: "capture.add" }], all: true },
     { label: "Midday check-in", keys: [{ command: "view.checkin" }] },
     { label: "Close out", keys: [{ command: "closeout.load" }] },
-    { label: "Confirm the week", keys: [{ command: "view.planweek" }] },
+    { label: "Plan the week", keys: [{ command: "view.planweek" }] },
     { label: "Every action", keys: [{ key: "Ctrl K" }] },
     { label: "Next or previous client", keys: [{ key: "J" }], all: true },
     { label: "Text size", keys: [{ command: "ui.set_text_size" }], all: true },
@@ -281,7 +281,7 @@ export const PHONE = {
 /** CV-1: Conversations and My promises from client chats, read for everyone by one job and sorted by AI when allowed. */
 export const ASKS = {
   eyebrow: "Chapter 7",
-  title: "Conversations and my promises",
+  title: "Conversations and promises",
   sub: "What's said in a client's Teams chats becomes a short card per conversation, so nothing scrolls away, and what you promised there shows on Today.",
   items: [
     { q: "What is a conversation?", a: "One thread of work in a client's Teams chat: a question, the back and forth about it, and what people said they'll do. Each card has a title, two to four lines on where it stands, who's in it and when it last moved. Its status comes from what happened, never from a guess: New, In discussion, <Name> committed, Tracked #id (it has a DevOps item), Resolved or Closed. \"Updated\" means it changed since you last looked." },
@@ -302,7 +302,8 @@ export const ASKS = {
     { q: "When is a promise in Today's urgent strip?", a: "When it's overdue, or due within the next 2 hours. Otherwise it waits at its time in Today's agenda (and on Week's rail), so it doesn't sit at the top all day. One due today with no time is in the follow-ups row of the attention line, and joins the strip in your last 2 working hours." },
     { q: "How do I find the item a promise is about?", a: "Link existing… lists up to 5 likely open items on that client before you type: one you wrote as #id first, then yours, then the ones whose titles share the most words with what was said, each with the reason. Type to search by title or #id. No AI is used." },
     { q: "Can a link open one conversation?", a: "Yes. Each line in Today's urgent strip opens its own conversation or promise, selected and scrolled to. The addresses are #/inbox/conversation/<number> and #/inbox/promise/<number>." },
-    { q: "What are My promises?", a: "What you said you'd do in those chats, one per run of your messages: what, to whom (the person you replied to, else the one you mentioned, else the one you answered) and when it's due. \"I'll be back online at 7:30\" isn't a promise by itself, but it can set the due time of the one before it. The ⓘ shows why it counts. Add to Today or Make it a follow-up (Who starts as the person it was made to); Link, Done and Not needed are under ⋯. When what you said means a DevOps item (\"I'll log a ticket\", \"I'll add a story\", \"I'll track it\"), the card asks Create the DevOps item?, even when the promise isn't in a conversation: Create starts one from your message and the ones just before it." },
+    { q: "What are the Inbox's modes?", a: "Conversations, Promises and Captures, on the switch at the right of the Inbox's header, each with its count. Captures is the capture box, your follow-ups and your drafts (it was called Inbox before). The Inbox opens on the mode you used last in this browser, Conversations the first time; a link to a conversation, a promise or a follow-up opens its own mode. P steps through them." },
+    { q: "What are Promises?", a: "What you said you'd do in those chats, one per run of your messages: what, to whom (the person you replied to, else the one you mentioned, else the one you answered) and when it's due. \"I'll be back online at 7:30\" isn't a promise by itself, but it can set the due time of the one before it. The ⓘ shows why it counts. Add to Today or Make it a follow-up (Who starts as the person it was made to); Link, Done and Not needed are under ⋯. When what you said means a DevOps item (\"I'll log a ticket\", \"I'll add a story\", \"I'll track it\"), the card asks Create the DevOps item?, even when the promise isn't in a conversation: Create starts one from your message and the ones just before it." },
     { q: "How do I choose who a follow-up is for?", a: "Who is a search box: type a name and pick from In this conversation (people from other organizations marked External), On <client> (the people on that client) or Everyone at Cooptimize. You can also type any name and keep it as plain text; it says \"Not linked to a person\", and when the text matches exactly one person it offers to link it." },
     { q: "Where do promises show?", a: "On Today: in Now when due before the half-day ends or overdue, at their time in the agenda (with After your blocks for the evening), and in the follow-ups row when they have no time. On Week, as a mark on the day's rail. Past its due it says \"Was due\" with the time or day, in amber, never red." },
     { q: "What does FocusTime keep?", a: "Each message once, under its client, for the people who see that chat. Messages that aren't part of a conversation or promise are deleted after 14 days. Nothing goes to logs except counts." },

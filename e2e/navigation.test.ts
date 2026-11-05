@@ -121,7 +121,7 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
 
     // The Inbox, as it was.
     await page.keyboard.press("4");
-    await page.getByRole("tablist", { name: "Inbox" }).waitFor();
+    await page.getByRole("navigation", { name: "Inbox modes" }).waitFor();
     await shotAll(page, "nv1-inbox");
 
     // Every older address lands on its new home with its date, block or week.

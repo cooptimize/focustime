@@ -255,7 +255,7 @@ export const notices = {
   /** AP-2: an ask AI sorted as needing me now, once per ask. */
   urgentAsk: (messageId: string, clientName: string, title: string, at: string): Notice => ({ kind: "asks", key: `ask:${messageId}`.slice(0, 200), title: `Urgent request from ${clientName}`, body: `${title}\nClick to open Conversations.`, buttons: [open("Open Conversations")], route: "conversations", at }),
   /** CV-1: one reminder to the committer, a working day after a promise that needs a DevOps item. */
-  commitmentItem: (id: number, clientName: string, what: string, at: string): Notice => ({ kind: "commitment_item", key: `commitment_item:${id}`, title: `DevOps item not created yet · ${clientName}`, body: `${what}\nClick to open My promises.`, buttons: [open("Open My promises")], route: "my_promises", at }),
+  commitmentItem: (id: number, clientName: string, what: string, at: string): Notice => ({ kind: "commitment_item", key: `commitment_item:${id}`, title: `DevOps item not created yet · ${clientName}`, body: `${what}\nClick to open Promises.`, buttons: [open("Open My promises")], route: "my_promises", at }),
   /** CV-1: told quietly, once, that a teammate took a promise over. */
   /** PV-1: told quietly, once, that a teammate took one of my stories (Take one). Never the item's title. */
   storyTaken: (id: number, byName: string, itemId: number, at: string): Notice => ({ kind: "story_taken", key: `story_taken:${id}`, title: `${byName} took #${itemId}`, body: "It's assigned to them in DevOps now. Nothing more for you to do.", buttons: [open("Open Week")], route: "week", at }),

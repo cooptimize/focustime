@@ -9,6 +9,7 @@
 // posted in Teams. Chat text shows only on its own client's card.
 import { TypeIcon } from "./TypeIcon.tsx";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { ModeArea } from "./ModeSwitch.tsx";
 import type { WeekLoadData } from "../actions/types.ts";
 import type { ConversationCard, ConversationMessage, ConversationMessages, ConversationsData } from "../plan/conversation-views.ts";
 import { ImageViewer } from "./ImageViewer.tsx";
@@ -28,26 +29,7 @@ const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((
 type CardForm = "link" | "not_request" | "draft" | "merge";
 const PRIMARY_WORD = { create: "Create item", link: "Link", resolve: "Resolve", take_over: "Take it over", reopen: "Open again" } as const;
 
-export type InboxTab = "inbox" | "conversations" | "my_promises";
-/** The Inbox's tabs: Inbox, Conversations and My promises, each with its count (hidden at none). */
-/** The Inbox's three tabs with their counts (NV-1: the Inbox tab shows its open follow-ups and captures; the top bar badge counts only what is due). */
-export function InboxTabs({ tab, count, promiseCount = null, inboxCount = null, onPick }: { tab: InboxTab; count: number | null; promiseCount?: number | null; inboxCount?: number | null; onPick: (tab: InboxTab) => void }) {
-  const one = (id: InboxTab, label: string, n: number | null) => (
-    <button type="button" role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => onPick(id)}>
-      {label}
-      {n ? <span className="tab-count" aria-label={`${n} open`}>{n}</span> : null}
-    </button>
-  );
-  return (
-    <div className="inbox-tabs" role="tablist" aria-label="Inbox">
-      {one("inbox", "Inbox", inboxCount)}
-      {one("conversations", "Conversations", count)}
-      {one("my_promises", "My promises", promiseCount)}
-    </div>
-  );
-}
-
-export function Conversations({ data, version, onCount, onPromiseCount, onChanged, openSettings, select = null }: { data: WeekLoadData; version: number; onCount: (n: number) => void; onPromiseCount?: (n: number) => void; onChanged?: () => void; openSettings: (section: string) => void; select?: number | null }) {
+export function Conversations({ data, version, onCount, onPromiseCount, onChanged, openSettings, select = null, switcher = null }: { switcher?: ReactNode; data: WeekLoadData; version: number; onCount: (n: number) => void; onPromiseCount?: (n: number) => void; onChanged?: () => void; openSettings: (section: string) => void; select?: number | null }) {
   const [state, setState] = useState<ConversationsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<ReactNode>(null);
@@ -265,6 +247,7 @@ export function Conversations({ data, version, onCount, onPromiseCount, onChange
         }}>
           {busy === "refresh" ? "Reading Teams…" : "Refresh"}
         </button>
+        {switcher && <ModeArea>{switcher}</ModeArea>}
       </div>
       {error && (
         <p className="set-problem" role="alert">

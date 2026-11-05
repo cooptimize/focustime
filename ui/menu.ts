@@ -1027,9 +1027,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "pick.undrop": return { disabled: "Use Undo right after Keep, Move or Drop on a suggested pick" };
     case "planday.carry_hint": return { run: () => env.setView("week") };
     case "draft.add_story": return { next: () => chooseItem(env, "Draft a story under which epic or feature?", (i) => i.level === "portfolio", (k, i) => draftPrompt(env, k, i)) };
-    case "draft.set_parent": return { run: () => env.setView("inbox") };
-    case "draft.remove": return { run: () => env.setView("inbox") };
-    case "draft.update": return { run: () => env.setView("inbox") };
+    case "draft.set_parent": return { run: () => env.setView("capture") };
+    case "draft.remove": return { run: () => env.setView("capture") };
+    case "draft.update": return { run: () => env.setView("capture") };
     case "ui.set_theme": return { next: () => themeStep(env) };
     case "ui.set_view_range": return { next: () => viewRangeStep(env) };
     case "ui.set_text_size": return { next: () => ({ title: "Text size", items: TEXT_SIZES.map((s) => ({ id: s, label: TEXT_SIZE_NAMES[s], checked: env.textSize === s, action: "ui.set_text_size", run: () => env.saveTextSize(s) })) }) };
@@ -1360,7 +1360,7 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: conversations, promises, follow-ups and captures", hint: "4", run: () => env.setView("inbox") },
     { id: "view.requests", action: "view.requests", group: "Views", label: "Inbox › Conversations: what your clients' chats need from you", run: () => env.setView("requests") },
     ...ASK_KEYS.map((k): MenuItem => ({ id: k.id, action: k.id, group: "Requests", label: k.label, hint: k.hint, ...(env.asksOpen ? { run: () => askKey(k.id) } : { disabled: "Open Inbox › Conversations first" }) })),
-    { id: "view.plan", action: "view.plan", aka: ["commit"], group: "Views", label: "Week: Board or Plan; Ahead: Roadmap or Plan ahead; Today: Plan today", hint: "P", run: env.openRitual },
+    { id: "view.plan", action: "view.plan", aka: ["commit"], group: "Views", label: "Week: Board or Plan; Ahead: Roadmap or Plan ahead; Inbox: the next mode; Today: Plan today", hint: "P", run: env.openRitual },
     { id: "view.planday", action: "view.planday", group: "Views", label: "Week › Plan today (the Board on today)", run: () => env.openPlanDay() },
     { id: "view.planday_date", action: "view.planday_date", group: "Views", label: "Plan a day…", next: () => planDateStep(env) },
     { id: "view.planweek", action: "view.planweek", aka: ["commit"], group: "Views", label: "Week › Plan: plan the week (each client's features)", hint: "W", run: () => env.openPlanWeek() },

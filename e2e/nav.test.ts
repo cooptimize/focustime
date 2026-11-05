@@ -145,7 +145,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
       ["ahead", "#/ahead/gantt"],
       ["aheaditem:1113", "#/ahead/item/1113"],
       ["planweek:2026-11-09", "#/week/commit/2026-11-09"],
-      ["inbox", "#/inbox"],
+      ["inbox", "#/inbox/captures"],
       ["followup:1", "#/inbox/1"],
       ["settings:notifications", "#/settings/notifications"],
       ["focus", "#/focus"],

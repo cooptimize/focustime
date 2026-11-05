@@ -146,7 +146,7 @@ export function SortCapture({ capture, clients, today, onDone, onCancel }: { cap
             {SAVE_AS[kind]}
           </button>
         ) : (
-          <span className="muted">Stays in the Inbox until you sort it</span>
+          <span className="muted">Stays in Captures until you sort it</span>
         )}
         {onCancel ? (
           <button type="button" className="mini quiet" disabled={busy} onClick={onCancel}>Cancel</button>
@@ -541,9 +541,9 @@ export function CaptureDialog({ data, onClose, onChanged, onOpenView, defaultCli
       >
         <div className="cap-dialog-head">
           <h2>Quick capture</h2>
-          <span className="muted">Saved at once, even offline. Sort it now with a kind, or later in the Inbox.</span>
+          <span className="muted">Saved at once, even offline. Sort it now with a kind, or later in Captures.</span>
           <button type="button" className="mini quiet" onClick={onOpenView} title="Captures to sort and follow-ups">
-            Open Inbox{data.captures > 0 ? ` (${data.captures} to sort)` : ""}
+            Open Captures{data.captures > 0 ? ` (${data.captures} to sort)` : ""}
           </button>
           <CloseButton onClose={onClose} />
         </div>

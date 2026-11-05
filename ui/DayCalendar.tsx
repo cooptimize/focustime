@@ -75,7 +75,7 @@ export function PromiseRow({ p, tz, onOpen }: { p: DayPromise; tz: string; onOpe
   const time = p.dueAt ? Temporal.Instant.from(p.dueAt).toZonedDateTimeISO(tz).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" }) : null;
   return (
     <li className={`ev-row promise-row${p.overdue ? " overdue" : ""}`}>
-      <button type="button" className="promise-open" onClick={(e) => (e.stopPropagation(), onOpen?.())} title="Open it in Inbox › My promises">
+      <button type="button" className="promise-open" onClick={(e) => (e.stopPropagation(), onOpen?.())} title="Open it in Inbox › Promises">
         {time && <span className="ev-time">{time}</span>}
         <span className="promise-tag">{p.overdue ? `Promise · ${wasDueNow(p, tz).replace(/^Was/, "was")}` : "Promise"}</span>
         <span className="ev-title">{p.what}</span>

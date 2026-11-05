@@ -223,7 +223,7 @@ export const ACTIONS = [
   { name: "conversations.merge", title: "Merge into…", group: "Conversations", target: "conversation", summary: "Moves one or more conversations of the same chat into another: messages, commitments and suggestions; the summary is written again. Undo puts them back" },
   { name: "conversations.unmerge", title: "Undo a merge", group: "Conversations", target: "conversation", summary: "Puts merged conversations back as they were" },
   { name: "conversations.draft", title: "Draft the DevOps item", group: "Conversations", target: "conversation", summary: "A draft bug, story or feature from the whole conversation, to check and create" },
-  { name: "my_promises.list", title: "My promises", group: "Conversations", target: "none", summary: "Inbox › My promises: what you said you'd do in your clients' registered chats" },
+  { name: "my_promises.list", aka: ["my promises"], title: "Promises", group: "Conversations", target: "none", summary: "Inbox › Promises: what you said you'd do in your clients' registered chats" },
   { name: "my_promises.today", title: "Add a promise to Today", group: "Conversations", target: "commitment", summary: "Shows the promise on Today until it's done" },
   { name: "my_promises.followup", title: "Make a promise a follow-up", group: "Conversations", target: "commitment", summary: "A follow-up with who, what and the due filled in; the promise closes when it's done" },
   { name: "my_promises.search", title: "Find an item for a promise", group: "Conversations", target: "commitment", summary: "Likely open items on the promise's client, from its words and the messages around it (no AI); or search by title or #id" },

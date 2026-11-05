@@ -17,10 +17,13 @@ export type WeekMode = "board" | "commit" | "team";
 /** AH-1 (D653): Ahead is one model in three modes: Grid (was Roadmap), Gantt (was Plan ahead) and Fix next. */
 export type AheadMode = "grid" | "gantt" | "fix";
 
-export const MODE_NAMES = { board: "Board", commit: "Plan", team: "Team", grid: "Grid", gantt: "Gantt", fix: "Fix next" } as const;
+/** UI-7: the Inbox's three modes (Inbox was renamed Captures, My promises Promises). */
+export type InboxMode = "conversations" | "promises" | "captures";
+
+export const MODE_NAMES = { board: "Board", commit: "Plan", team: "Team", grid: "Grid", gantt: "Gantt", fix: "Fix next", conversations: "Conversations", promises: "Promises", captures: "Captures" } as const;
 export type ModeName = keyof typeof MODE_NAMES;
-/** Each tab's modes, in switch order (Today and the Inbox have none, so no switch). */
-export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: ["board", "commit", "team"], ahead: ["grid", "gantt", "fix"], inbox: [] };
+/** Each tab's modes, in switch order (Today has none, so no switch). */
+export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: ["board", "commit", "team"], ahead: ["grid", "gantt", "fix"], inbox: ["conversations", "promises", "captures"] };
 
 /** NV-1: the Board focused on one day (Plan the day): `date` null is the default day (today or the next workday); `half` is the block "+ Add work" asked for. */
 export type DayFocus = { date: IsoDate | null; half: Half | null };
@@ -34,7 +37,8 @@ export type Nav =
   | { tab: "today"; flow: TodayFlow | null; date: IsoDate | null }
   | { tab: "week"; mode: WeekMode; week: IsoDate | null; focus: DayFocus | null }
   | { tab: "ahead"; mode: AheadMode; item?: number }
-  | { tab: "inbox"; followUp: number | null; conversations?: boolean; myPromises?: boolean; select?: number };
+  /** UI-7: no flag and no follow-up is the bare #/inbox, which opens the remembered mode (Conversations the first time). */
+  | { tab: "inbox"; followUp: number | null; conversations?: boolean; myPromises?: boolean; captures?: boolean; select?: number };
 
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
 export type Overlay = { kind: "focus" } | { kind: "settings"; section: string } | { kind: "guide"; chapter: string | null } | null;
@@ -48,7 +52,10 @@ export const navOf = {
   ahead: (mode: AheadMode = "grid"): Nav => ({ tab: "ahead", mode }),
   /** AH-1: one item, selected in the Grid (#/ahead/item/<id>), from a notice. */
   aheadItem: (id: number): Nav => ({ tab: "ahead", mode: "grid", item: id }),
+  /** The bare Inbox (the remembered mode), or Captures on one follow-up (#/inbox/<id>). */
   inbox: (followUp: number | null = null): Nav => ({ tab: "inbox", followUp }),
+  /** UI-7: Inbox › Captures (was Inbox › Inbox): the capture box, follow-ups and drafts (#/inbox/captures). */
+  captures: (): Nav => ({ tab: "inbox", followUp: null, captures: true }),
   /** CV-1: Inbox › Conversations (was Requests, and Asks before that). */
   conversations: (): Nav => ({ tab: "inbox", followUp: null, conversations: true }),
   /** CV-1: Inbox › My promises (was Promises). */
@@ -63,6 +70,15 @@ export const HOME: Loc = { nav: navOf.today(), overlay: null };
 /** The mode a tab opens in. */
 export const defaultNav = (tab: Tab): Nav => (tab === "today" ? navOf.today() : tab === "week" ? navOf.week() : tab === "ahead" ? navOf.ahead() : navOf.inbox());
 export const modeOf = (n: Nav): ModeName | null => (n.tab === "week" || n.tab === "ahead" ? n.mode : null);
+/** UI-7: the Inbox's mode: a conversation or promise opens its mode, a follow-up opens Captures, the bare Inbox the remembered one (Conversations the first time). */
+export function inboxModeOf(n: Extract<Nav, { tab: "inbox" }>, remembered: InboxMode | null): InboxMode {
+  if (n.conversations) return "conversations";
+  if (n.myPromises) return "promises";
+  if (n.captures || n.followUp !== null) return "captures";
+  return remembered ?? "conversations";
+}
+/** UI-7: the place for an Inbox mode. */
+export const inboxNav = (m: InboxMode): Nav => (m === "conversations" ? navOf.conversations() : m === "promises" ? navOf.myPromises() : navOf.captures());
 /** NV-1: the Board focused on a day (Plan the day). */
 export const focusOf = (n: Nav): DayFocus | null => (n.tab === "week" && n.mode === "board" ? n.focus : null);
 
@@ -71,13 +87,18 @@ export const isPlanning = (n: Nav): boolean => (n.tab === "today" ? n.flow !== n
 
 /**
  * P: on Week, Board and Commit (a focused day counts as the Board); on Ahead, Grid and Gantt; on Today, Plan
- * today (the Board focused on today), or back to Today from a flow. The Inbox has none.
+ * today (the Board focused on today), or back to Today from a flow. The Inbox steps its three modes (nextInboxMode, in App: it needs the remembered mode).
  */
 export function toggleP(n: Nav): Nav {
   if (n.tab === "today") return n.flow ? navOf.today() : navOf.planDay();
   if (n.tab === "week") return n.mode === "board" ? navOf.week("commit") : navOf.week("board", n.week);
   if (n.tab === "ahead") return navOf.ahead(n.mode === "gantt" ? "grid" : "gantt");
   return n;
+}
+/** UI-7: P on the Inbox steps through its three modes (from the one showing). */
+export function nextInboxMode(m: InboxMode): InboxMode {
+  const all = MODES.inbox as readonly InboxMode[];
+  return all[(all.indexOf(m) + 1) % all.length]!;
 }
 
 /** Done in a planning place: Today's flows back to Today, a focused day back to the whole week it is in, Commit back to the Board, Ahead back to the Grid. */
@@ -103,6 +124,7 @@ export function tabForKey(key: string): Tab | null {
 export function modeNav(tab: Tab, mode: ModeName): Nav {
   if (tab === "week") return navOf.week(mode as WeekMode);
   if (tab === "ahead") return navOf.ahead(mode as AheadMode);
+  if (tab === "inbox") return inboxNav(mode as InboxMode);
   return defaultNav(tab);
 }
 
@@ -143,6 +165,7 @@ export function hashOf(l: Loc): string {
   if (n.tab === "ahead") return n.mode === "gantt" ? "#/ahead/gantt" : n.mode === "fix" ? "#/ahead/fix" : n.item ? `#/ahead/item/${n.item}` : "#/ahead";
   if (n.conversations) return n.select ? `#/inbox/conversation/${n.select}` : "#/inbox/conversations";
   if (n.myPromises) return n.select ? `#/inbox/promise/${n.select}` : "#/inbox/my-promises";
+  if (n.captures) return "#/inbox/captures";
   return n.followUp ? `#/inbox/${n.followUp}` : "#/inbox";
 }
 
@@ -207,7 +230,7 @@ export function parseHash(hash: string): Loc | null {
       return a === undefined ? plain(navOf.myPromises()) : null;
     case "inbox":
       if (a === "conversation" || a === "promise") return c === undefined && b !== undefined && ID.test(b) ? plain(a === "conversation" ? navOf.conversation(Number(b)) : navOf.promise(Number(b))) : null;
-      return b !== undefined ? null : a === undefined ? plain(navOf.inbox()) : a === "conversations" || a === "requests" || a === "asks" ? plain(navOf.conversations()) : a === "my-promises" || a === "promises" ? plain(navOf.myPromises()) : /^[1-9]\d{0,9}$/.test(a) ? plain(navOf.inbox(Number(a))) : null;
+      return b !== undefined ? null : a === undefined ? plain(navOf.inbox()) : a === "conversations" || a === "requests" || a === "asks" ? plain(navOf.conversations()) : a === "my-promises" || a === "promises" ? plain(navOf.myPromises()) : a === "captures" ? plain(navOf.captures()) : /^[1-9]\d{0,9}$/.test(a) ? plain(navOf.inbox(Number(a))) : null;
     default:
       return null;
   }
@@ -233,7 +256,8 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
     case "closeout": return plain(navOf.today("closeout"));
     case "focus": return { loc: { nav: navOf.today(), overlay: { kind: "focus" } }, vmMenu: false };
     case "vm": return { loc: { nav: navOf.today(), overlay: null }, vmMenu: true };
-    case "inbox": return plain(navOf.inbox());
+    // Follow-ups due (several): Captures, where they are.
+    case "inbox": return plain(navOf.captures());
     case "asks":
     case "requests":
     case "conversations": return plain(navOf.conversations());
@@ -254,9 +278,9 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
   switch (v) {
     case "today": return { nav: navOf.today(), overlay: null };
     case "week": return { nav: navOf.week(), overlay: null };
-    case "inbox":
+    case "inbox": return { nav: navOf.inbox(), overlay: null };
     case "follow_ups":
-    case "capture": return { nav: navOf.inbox(), overlay: null };
+    case "capture": return { nav: navOf.captures(), overlay: null };
     case "asks":
     case "requests":
     case "conversations": return { nav: navOf.conversations(), overlay: null };
@@ -309,7 +333,7 @@ export function viewName(loc: Loc): string {
     n.tab === "today" ? (n.flow ? `${TAB_NAMES.today} › ${FLOW_NAMES[n.flow]}` : TAB_NAMES.today)
     : n.tab === "week" ? (n.mode === "commit" ? `${TAB_NAMES.week} › ${MODE_NAMES.commit}` : n.mode === "team" ? `${TAB_NAMES.week} › Team` : n.focus ? `${TAB_NAMES.week} › Plan ${n.focus.date ?? "today"}` : TAB_NAMES.week)
     : n.tab === "ahead" ? `${TAB_NAMES.ahead} › ${MODE_NAMES[n.mode]}`
-    : n.conversations ? `${TAB_NAMES.inbox} › Conversations` : n.myPromises ? `${TAB_NAMES.inbox} › My promises` : TAB_NAMES.inbox;
+    : n.conversations ? `${TAB_NAMES.inbox} › ${MODE_NAMES.conversations}` : n.myPromises ? `${TAB_NAMES.inbox} › ${MODE_NAMES.promises}` : n.captures || n.followUp !== null ? `${TAB_NAMES.inbox} › ${MODE_NAMES.captures}` : TAB_NAMES.inbox;
   const o = loc.overlay;
   return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
 }

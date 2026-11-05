@@ -112,7 +112,7 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["2"], does: "Week: the Board (Plan today) and Plan", command: "view.week" },
   { keys: ["3"], does: "Ahead: features and epics you own (Roadmap), and Plan ahead", command: "roadmap.load" },
   { keys: ["4", "L"], does: "Inbox: conversations, promises, follow-ups and captures", command: "view.inbox" },
-  { keys: ["P"], does: "Week: Board and Plan; Ahead: Roadmap and Plan ahead; Today: Plan today (I also works)", command: "view.plan" },
+  { keys: ["P"], does: "Week: Board and Plan; Ahead: Roadmap and Plan ahead; Inbox: Conversations, Promises and Captures in turn; Today: Plan today (I also works)", command: "view.plan" },
   { keys: ["N", "C"], does: "Quick capture from anywhere: one line, saved at once; then sort it into a follow-up, a draft story or a note (on a focused day, C is Confirm today)", command: "capture.add" },
   { keys: ["W"], does: "Week › Plan: each client's features for the week (next week by default); again for the Board", command: "view.planweek" },
   { keys: ["C"], does: "Confirm today, on the Board focused on a day", command: "planday.commit" },

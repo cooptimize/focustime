@@ -12,7 +12,7 @@ import { Pat } from "../sources/devops/pat.ts";
 import { basic, fakeDevOpsWrite, WRITE_PAT } from "../sources/devops/write-fakes.ts";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { anAiApp } from "../test/builders/index.ts";
-import { CHROMIUM } from "./harness.ts";
+import { CHROMIUM, openCaptures } from "./harness.ts";
 import { appReady, liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "./live.ts";
 import { shotBoth, SHOTS } from "./shots.ts";
 
@@ -73,7 +73,7 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
       page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
       await page.goto(app.url);
       await appReady(page);
-      await page.keyboard.press("4");
+      await openCaptures(page);
       await box(page).waitFor();
 
       // The chip is the client: choose Adatum.

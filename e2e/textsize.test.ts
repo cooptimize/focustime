@@ -79,7 +79,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
       await go(page, "#/ahead/fix");
       await page.locator(".ah-fix").first().waitFor({ timeout: 30_000 });
       await check("Ahead › Fix next");
-      await go(page, "#/inbox");
+      await go(page, "#/inbox/captures");
       await page.locator(".inbox-list li").first().waitFor();
       await check("Inbox");
       for (const s of SECTIONS) {
@@ -108,7 +108,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
       await page.locator("[role=dialog]").waitFor();
       await check("Timebox…");
       await page.locator("[role=dialog]").getByRole("button", { name: "Cancel" }).click();
-      await go(page, "#/inbox");
+      await go(page, "#/inbox/captures");
       await page.locator(".draft-title", { hasText: "Filter presets" }).click();
       await page.locator(".draft-editor").waitFor();
       await check("draft editor");
@@ -168,7 +168,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
     await page.keyboard.press("Control+0");
     await expect.poll(attr).toBe(null);
     // In a text field the keys are left alone.
-    await go(page, "#/inbox");
+    await go(page, "#/inbox/captures");
     await page.locator(".inbox-capture input, .inbox-capture textarea").first().focus();
     await page.keyboard.press("Control+=");
     await page.waitForTimeout(400);
@@ -180,7 +180,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
 
   it("Inbox: each row has one primary action; no New today or Added by me", async () => {
     const { page, errors } = await freshPage(h);
-    await go(page, "#/inbox");
+    await go(page, "#/inbox/captures");
     await page.locator(".inbox-list > li").first().waitFor();
     const primaries = await page.locator(".inbox-list > li").evaluateAll((rows) => rows.map((r) => r.querySelectorAll("button.primary").length));
     expect(primaries.length).toBeGreaterThan(1);

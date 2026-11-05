@@ -27,7 +27,7 @@ describe("the Guide's shortcuts are ui/keys.ts's", () => {
     expect(shown["Capture a thought"]).toEqual(["N", "C"]);
     expect(shown["Midday check-in"]).toEqual(["M"]);
     expect(shown["Close out"]).toEqual(["E"]);
-    expect(shown["Confirm the week"]).toEqual(["W"]);
+    expect(shown["Plan the week"]).toEqual(["W"]);
     expect(shown["Every action"]).toEqual(["Ctrl K"]);
     expect(shown["Next or previous client"]).toEqual(["J", "K"]);
     expect(shown["Text size"]).toEqual(KEYS.find((k) => k.command === "ui.set_text_size")!.keys);
