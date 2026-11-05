@@ -60,7 +60,7 @@ async function setup() {
     conversationCounts: (day) => createConversationStore(db, now, teams).counts(day),
     ai: async () => ({ provider: "stub", keyConfigured: true }),
     appSpentMicros: async () => 0,
-    feedback: async () => ({ state: "local" }),
+    feedback: async () => null,
     build: { env: "dev", sha: "abc1234", pr: "", builtAt: null },
     directory: null,
     removePerson: async (id) => {

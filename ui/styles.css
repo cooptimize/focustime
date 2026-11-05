@@ -1349,8 +1349,25 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .follow-up-who { font-weight: 600; color: var(--text); }
 .follow-up-what { color: var(--text); }
 .follow-up-when { font-size: var(--fs-2); flex-basis: 100%; }
-.follow-up-close { display: flex; gap: 8px; align-items: center; }
-.follow-up-close input { width: 280px; }
+/* IB-1: Close the loop and Snooze open on their own full-width row under the promise, whatever the container's width. */
+.follow-up.has-form, .detail-panel .follow-up.has-form { flex-wrap: wrap; }
+.follow-up-form-row { flex-basis: 100%; min-width: 0; }
+.follow-up-snooze { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+/* IB-1: the shared Close the loop (ui/CloseLoop.tsx): channels wrap (four across, two by two when narrow), the note on
+   its own row, buttons wrap; nothing is wider than its container. */
+.close-loop { container-type: inline-size; display: grid; gap: 10px; min-width: 0; max-width: 640px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--sunken); }
+.close-loop.compact { gap: 8px; padding: 8px; }
+.close-loop-title { margin: 0; font-size: var(--fs-4); font-weight: 600; color: var(--text); }
+.close-loop-how { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
+@container (max-width: 480px) { .close-loop-how { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 180px) { .close-loop-how { grid-template-columns: minmax(0, 1fr); } }
+.close-loop-how legend { grid-column: 1 / -1; padding: 0; margin-bottom: 4px; }
+.close-loop-label { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.close-loop-choice { min-width: 0; padding: 6px 10px; font: inherit; font-size: var(--fs-3); color: var(--text); text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; overflow-wrap: anywhere; }
+.close-loop-choice[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 500; }
+.close-loop-note { display: grid; gap: 4px; min-width: 0; }
+.close-loop-note textarea { width: 100%; box-sizing: border-box; min-width: 0; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; resize: vertical; }
+.close-loop-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .view-tab .count { margin-left: 6px; padding: 0 6px; border-radius: 99px; font-size: var(--fs-1); line-height: calc(16px * var(--text-scale)); background: var(--sunken); color: var(--text); }
 
 /* Close out and Check-in (step 7) */

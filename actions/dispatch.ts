@@ -7,7 +7,7 @@ import { chatAction, type ChatContext } from "./chat-actions.ts";
 import { DEFAULT_DRAFT_MONTHS, storyAction, type StoryContext } from "./story-actions.ts";
 import { serveChatImage, type ServedImage } from "./chat-images.ts";
 import { peoplePicker, pickerPeopleOf } from "./people-picker.ts";
-import { conversationPeople, conversationAction, dayPromises, type ConversationContext } from "./conversation-actions.ts";
+import { conversationPeople, conversationAction, dayPromises, inboxFacts, type ConversationContext } from "./conversation-actions.ts";
 import { refreshStatus } from "./conversations-pipeline.ts";
 import type { ConversationsPort } from "./devops-write-actions.ts";
 import { isClientLead } from "./client-lead.ts";
@@ -72,7 +72,8 @@ import { roadmapAction } from "./roadmap-actions.ts";
 import { aheadAction, type AheadAction, type AheadContext } from "./ahead-actions.ts";
 import { CHECKIN_DONE_MARK } from "./closeout-actions.ts";
 import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
-import { markScheduled, publishWeek, teamAction, type TeamAction, type TeamContext } from "./team-actions.ts";
+import { markScheduled, publishWeek, sendFacts, teamAction, type TeamAction, type TeamContext } from "./team-actions.ts";
+import { inboxAction } from "./inbox-actions.ts";
 import { carryAction, idsByClient, markResolved, planBitsFor, resolvedKeys, type CarryContext } from "./carry-actions.ts";
 import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
 import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
@@ -92,7 +93,9 @@ import { aheadIdentities } from "./identities.ts";
 import { clientRules, teamColors } from "../config/org.ts";
 import { GAP_KINDS, TOP_N } from "../plan/fixnext.ts";
 import { DEFAULT_AI_RULES, type AiRules } from "../ai/types.ts";
-import { feedbackAction, type FeedbackContext, type FeedbackService } from "./feedback-actions.ts";
+import { feedbackAction, type FeedbackBackend, type FeedbackContext } from "./feedback-actions.ts";
+import { devopsFeedbackBackend } from "./feedback-devops.ts";
+import type { FeedbackWriteTarget } from "./devops-write-actions.ts";
 import type { Sender } from "../plan/feedback.ts";
 import { setupAction, type SetupClient } from "./setup-actions.ts";
 import { noticeAction, type PushPort } from "./notice-actions.ts";
@@ -172,8 +175,11 @@ export type ActionContext = {
    */
   account?: (cfg: AppConfig) => MicrosoftAccount | null;
   azure?: (token: () => Promise<string>) => AzureClient;
-  /** F1: Send feedback (the app's feedback service and who is sending). Absent: feedback isn't available here. */
-  feedback?: { service: FeedbackService; sender: () => Promise<Sender | null> };
+  /**
+   * F1, FB-1: Send feedback: who is sending and where it goes (the org.feedback Rule); it is created through the write
+   * framework with their own write PAT. The demo hands in its pretend backlog instead. Absent: feedback isn't available here.
+   */
+  feedback?: { sender: () => Promise<Sender | null>; target?: () => Promise<FeedbackWriteTarget | null>; demo?: FeedbackBackend };
 };
 
 /**
@@ -1268,7 +1274,19 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "feedback.preview":
     case "feedback.send": {
       if (!ctx.feedback) return { ok: false, status: 503, error: "Feedback isn't available here" };
-      const f: FeedbackContext = { ...ctx.feedback, plan: ctx.plan, today: async () => localToday(ctx.now(), userZone(await configured(ctx))) };
+      const fb = ctx.feedback;
+      const backend =
+        fb.demo ??
+        devopsFeedbackBackend({
+          write: await devopsWriteContext(ctx),
+          target: fb.target ?? (async () => null),
+          clients: async () => {
+            const ca = await clientsOf(ctx.org);
+            return { keys: ca?.keys ?? [], internal: ca?.rows.find((r) => r.why === "internal")?.clientKey ?? INTERNAL_CLIENT };
+          },
+          env: ctx.env ?? "local",
+        });
+      const f: FeedbackContext = { backend, sender: fb.sender, plan: ctx.plan, today: async () => localToday(ctx.now(), userZone(await configured(ctx))) };
       return feedbackAction(f, action, req.input, () => Date.parse(ctx.now()));
     }
     case "notify.test": {
@@ -1570,6 +1588,20 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "conversations.unmerge":
     case "my_promises.start_draft":
       return conversationAction(await conversationContext(ctx), action, req.input);
+    case "inbox.list":
+    case "inbox.count":
+    case "inbox.seen":
+      return inboxAction(
+        {
+          plan: ctx.plan,
+          config: () => configured(ctx),
+          now: ctx.now,
+          conversations: async (cfg) => (ctx.requests?.conversations ? inboxFacts(await conversationContext(ctx), cfg) : []),
+          sends: () => (ctx.team ? sendFacts(teamCtx(ctx)) : Promise.resolve([])),
+        },
+        action,
+        req.input,
+      );
     case "people.picker":
       return pickerAction(ctx, req.input);
     case "ai.status":

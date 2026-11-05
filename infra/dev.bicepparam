@@ -18,9 +18,6 @@ param googleClientId = '1059654433254-tdph7ca8a4psvt1sve51mhp6sr5j1re3.apps.goog
 param dataverseUrl = 'https://cooptimize.crm.dynamics.com'
 param dataverseTenantId = 'abf29d42-2ea9-422b-b0af-ed7cb5595b7e'
 param dataverseClientId = 'bf36f621-3e9f-43f9-ab47-89fb89fe7f4a'
-// F1: Send feedback on dev is preview only; deploy-dev's "feedback_live" input switches it on for one test deploy
-// (titles start "[dev]"). The next deploy switches it off again. Org, project and feature: main.bicep's defaults.
-param feedbackLive = bool(readEnvironmentVariable('FT_FEEDBACK_LIVE', 'false'))
 // D522: who registers client chats, from the deploy workflow's FT_ADMINS (the GitHub variable; object ids only).
 param admins = readEnvironmentVariable('FT_ADMINS', '')
 param adminGroupId = readEnvironmentVariable('FT_ADMIN_GROUP_ID', '')

@@ -30,7 +30,7 @@ export type AppSettings = {
    * members are admins (actions/admin.ts). `admins` above stays as the break-glass list. Null: no group yet.
    */
   adminGroupId: string | null;
-  /** F1: where ⋯ › Send feedback creates stories (a child of `parentId`), and whether this FocusTime sends (live) or only previews. Null: not set. */
+  /** F1, FB-1: where ⋯ › Send feedback creates stories (a child of `parentId`), with each person's own DevOps write PAT. Null: not set. */
   feedback: FeedbackSettings | null;
   /**
    * AI-0: the AI provider, model, limits and prices, the same for everyone. `provider` null: the host's default
@@ -51,7 +51,7 @@ export const DEFAULT_AI: AppSettings["ai"] = {
   // AS-1: the assistant's voice (speech-to-text guide and pricing, Nov 5).
   transcribe: { model: "gpt-transcribe", perMinuteUsd: 0.0045 },
 };
-export type FeedbackSettings = { org: string; project: string; parentId: number; live: boolean };
+export type FeedbackSettings = { org: string; project: string; parentId: number };
 
 /**
  * A3: the plan store's database. SQL Server (Azure SQL in the hosted app, a local container for development) signs in
@@ -89,7 +89,6 @@ export const APP_ENV = {
   feedbackOrg: "FOCUSTIME_FEEDBACK_ORG",
   feedbackProject: "FOCUSTIME_FEEDBACK_PROJECT",
   feedbackParentId: "FOCUSTIME_FEEDBACK_PARENT_ID",
-  feedbackLive: "FOCUSTIME_FEEDBACK_LIVE",
   aiProvider: "FOCUSTIME_AI_PROVIDER",
   aiModel: "FOCUSTIME_AI_MODEL",
   aiEffort: "FOCUSTIME_AI_REASONING_EFFORT",
@@ -161,18 +160,17 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
   const adminGroupId = val(APP_ENV.adminGroupId, raw.admin_group_id).toLowerCase() || null;
   if (adminGroupId && !GUID.test(adminGroupId)) errors.push("admin_group_id must be the FocusTime Admins group's object id (a GUID)");
 
-  // [feedback] (F1): org, project, parent_id and live. No org: not set (the dialog says it isn't set up).
+  // [feedback] (F1, FB-1): org, project and parent_id. No org: not set (the dialog says it isn't set up).
   const f = sec("feedback");
   const fbOrg = val(APP_ENV.feedbackOrg, f.org);
   const fbProject = val(APP_ENV.feedbackProject, f.project);
   const fbParentText = val(APP_ENV.feedbackParentId, typeof f.parent_id === "number" ? String(f.parent_id) : f.parent_id);
-  const fbLiveRaw = env[APP_ENV.feedbackLive] ?? (typeof f.live === "boolean" ? String(f.live) : "false");
   const fbParent = Number(fbParentText);
   let feedback: FeedbackSettings | null = null;
   if (fbOrg || fbProject || fbParentText) {
     if (!/^[a-z0-9][a-z0-9-]{0,49}$/i.test(fbOrg) || !fbProject || fbProject.length > 64 || !/^\d{1,9}$/.test(fbParentText) || fbParent < 1)
       errors.push("[feedback] needs org (a DevOps organization name), project and parent_id (a work item number)");
-    else feedback = { org: fbOrg, project: fbProject, parentId: fbParent, live: ["1", "true", "on", "yes"].includes(fbLiveRaw.trim().toLowerCase()) };
+    else feedback = { org: fbOrg, project: fbProject, parentId: fbParent };
   }
   const ai = readAi(sec("ai"), env, errors);
 

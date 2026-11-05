@@ -35,15 +35,13 @@ describe("admins (shared polling, D522)", () => {
 
 describe("feedback settings (F1)", () => {
   const env = { FOCUSTIME_FEEDBACK_ORG: "contoso", FOCUSTIME_FEEDBACK_PROJECT: "Contoso Internal", FOCUSTIME_FEEDBACK_PARENT_ID: "496" };
-  it("come from FOCUSTIME_FEEDBACK_*, live off unless switched on", () => {
-    const off = readAppSettings(env, null, URL);
-    expect(off.ok && off.settings.feedback).toEqual({ org: "contoso", project: "Contoso Internal", parentId: 496, live: false });
-    const on = readAppSettings({ ...env, FOCUSTIME_FEEDBACK_LIVE: "true" }, null, URL);
-    expect(on.ok && on.settings.feedback?.live).toBe(true);
+  it("come from FOCUSTIME_FEEDBACK_*, with no live switch (FB-1: a stale FOCUSTIME_FEEDBACK_LIVE is ignored)", () => {
+    const r = readAppSettings({ ...env, FOCUSTIME_FEEDBACK_LIVE: "true" }, null, URL);
+    expect(r.ok && r.settings.feedback).toEqual({ org: "contoso", project: "Contoso Internal", parentId: 496 });
   });
   it("come from [feedback] in the app config too", () => {
     const r = readAppSettings({}, '[feedback]\norg = "contoso"\nproject = "Contoso Internal"\nparent_id = 12\nlive = true\n', URL);
-    expect(r.ok && r.settings.feedback).toEqual({ org: "contoso", project: "Contoso Internal", parentId: 12, live: true });
+    expect(r.ok && r.settings.feedback).toEqual({ org: "contoso", project: "Contoso Internal", parentId: 12 });
   });
   it("are null when not set, and refused when half set", () => {
     const none = readAppSettings({}, null, URL);

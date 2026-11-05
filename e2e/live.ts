@@ -69,7 +69,7 @@ export async function liveAdminOps(team: LiveTeam, o: { admins: string[]; client
     chats: o.chats ?? (async () => []),
     ai: async () => ({ provider: "stub", keyConfigured: true }),
     appSpentMicros: async () => 0,
-    feedback: async () => ({ state: "local" }),
+    feedback: async () => null,
     build: { env: "dev", sha: "e2e", pr: "", builtAt: null },
     directory: null,
     removePerson: async () => {},

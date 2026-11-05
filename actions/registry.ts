@@ -36,7 +36,7 @@ export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Team" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests" | "Conversations" | "Admin" | "Assistant";
+  readonly group: "Week" | "Team" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests" | "Conversations" | "Inbox" | "Admin" | "Assistant";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -52,8 +52,8 @@ export const ACTIONS = [
   { name: "auth.status", title: "Who's signed in", group: "Settings", target: "none", summary: "The Microsoft account FocusTime works for" },
   { name: "auth.sign_in", title: "Sign in with Microsoft", group: "Settings", target: "none", summary: "One sign-in for you, your calendar and your Azure VM (in your browser)" },
   { name: "feedback.preview", title: "Send feedback", group: "Help", target: "none", summary: "An idea, a problem or a question for the FocusTime team: a preview of the story it becomes, then Send" },
-  { name: "feedback.send", title: "Send the feedback shown", group: "Help", target: "none", summary: "Creates the story from the preview under the FocusTime feature in Cooptimize's DevOps, as FocusTime's own identity; at most 10 a day" },
-  { name: "feedback.status", title: "Feedback setup", group: "Help", target: "none", summary: "Whether Send feedback can create stories here (read only)" },
+  { name: "feedback.send", title: "Send the feedback shown", group: "Help", target: "none", summary: "Creates the story from the preview under the FocusTime feature in Cooptimize's DevOps, as you, with your own DevOps write PAT; at most 10 a day" },
+  { name: "feedback.status", title: "Feedback setup", group: "Help", target: "none", summary: "Whether Send feedback can create stories for you: your write PAT for that project's client, and the parent feature (read only)" },
   { name: "auth.sign_out", title: "Sign out", group: "Settings", target: "none", summary: "Forget the Microsoft sign-in on this device; your plan stays in your FocusTime account" },
   { name: "vm.status", title: "My VM", group: "My VM", target: "none", summary: "Your VM's state and auto-shutdown time" },
   { name: "vm.find", title: "Find my VM", group: "My VM", target: "none", summary: "VMs tagged as yours (Owner tag) in every Azure subscription you can see" },
@@ -225,6 +225,9 @@ export const ACTIONS = [
   { name: "conversations.merge", title: "Merge into…", group: "Conversations", target: "conversation", summary: "Moves one or more conversations of the same chat into another: messages, commitments and suggestions; the summary is written again. Undo puts them back" },
   { name: "conversations.unmerge", title: "Undo a merge", group: "Conversations", target: "conversation", summary: "Puts merged conversations back as they were" },
   { name: "conversations.draft", title: "Draft the DevOps item", group: "Conversations", target: "conversation", summary: "A draft bug, story or feature from the whole conversation, to check and create" },
+  { name: "inbox.list", title: "Inbox items", group: "Inbox", target: "none", summary: "Everything in the Inbox for you: each item's views and the count per view (read only)" },
+  { name: "inbox.count", title: "Inbox count", group: "Inbox", target: "none", summary: "How many items need you: the Inbox badge, the same number as Needs you (read only)" },
+  { name: "inbox.seen", title: "Mark Inbox items seen", group: "Inbox", target: "none", summary: "A new promise you've looked at stops counting as new" },
   { name: "my_promises.list", aka: ["my promises"], title: "Promises", group: "Conversations", target: "none", summary: "Inbox › Promises: what you said you'd do in your clients' registered chats" },
   { name: "my_promises.today", title: "Add a promise to Today", group: "Conversations", target: "commitment", summary: "Shows the promise on Today until it's done" },
   { name: "my_promises.followup", title: "Make a promise a follow-up", group: "Conversations", target: "commitment", summary: "A follow-up with who, what and the due filled in; the promise closes when it's done" },

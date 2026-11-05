@@ -12,6 +12,7 @@ import type { WeekLoadData } from "../actions/types.ts";
 import type { MyPromisesData, PromiseCard } from "../plan/conversation-views.ts";
 import { userZone } from "../week/zone.ts";
 import { call } from "./api.ts";
+import { markSeen } from "./inboxcount.ts";
 import { AlsoComment, DraftItem, LinkedItem } from "./Conversations.tsx";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { Fading } from "./FollowUps.tsx";
@@ -54,6 +55,12 @@ export function MyPromises({ data, version, onCount, onChanged, select = null, s
   }, [show]);
   useEffect(() => void load(), [load, version, writes?.version]);
   useEffect(() => head.current?.focus(), []);
+  // IB-1: the promises listed here are seen; a new one stops counting in Needs you.
+  const changedRef = useRef(onChanged);
+  changedRef.current = onChanged;
+  useEffect(() => {
+    if (state) void markSeen(state.promises.filter((p) => p.state === "open").map((p) => `c${p.id}`), () => changedRef.current());
+  }, [state]);
   // CV-2: a deep link (#/inbox/promise/<id>, the urgent strip): that promise outlined and scrolled to, or a plain note.
   const scrolledTo = useRef<number | null>(null);
   const missing = select !== null && !!state && !state.promises.some((p) => p.id === select);

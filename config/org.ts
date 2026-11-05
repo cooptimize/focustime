@@ -85,7 +85,8 @@ const domains = (v: unknown): string[] => {
 };
 const orNull = <T>(p: (v: unknown) => T) => (v: unknown): T | null => (v === null ? null : p(v));
 
-export type FeedbackRule = { org: string; project: string; parentId: number; live: boolean };
+/** FB-1: where Send feedback goes. A stored `live` (UI-8's switch) is read and ignored. */
+export type FeedbackRule = { org: string; project: string; parentId: number };
 const feedback = (v: unknown): FeedbackRule => {
   if (typeof v !== "object" || v === null || Array.isArray(v)) throw new OrgInputError("Must be a DevOps organization, project and parent feature");
   const o = v as Record<string, unknown>;
@@ -94,7 +95,7 @@ const feedback = (v: unknown): FeedbackRule => {
   const parentId = intIn(1, 99_999_999, "")(o.parentId);
   if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,49}$/.test(org)) throw new OrgInputError("The organization is a DevOps organization name, like cooptimize");
   if (!project) throw new OrgInputError("Name the project");
-  return { org, project, parentId, live: bool(o.live) };
+  return { org, project, parentId };
 };
 
 /** Working week, day shape and risk thresholds for new people (prefilled into Setup; theirs to change after). */

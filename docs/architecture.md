@@ -44,15 +44,17 @@ P1: migration `20261103T2300_notices_push` adds two user tables: `notices` (the 
 
 `sources/`: dataverse (focus time, PTO, teammates, client team, team PTO dates) | graph (write.ts: marker-checked Outlook writer, scan, own-event updates, invites and cancel; schedule.ts: getSchedule, free/busy only; people.ts: attendees of my meetings in a client domain, for Who suggestions; presence.ts: my preferred presence set and clear, my presence, teammates' presence in batches; photos.ts: profile photos, 96 px) | google | devops adapters; oauth/ (PKCE through the host's redirect listener), calendar/ (shared fetch, cache, status), devops/ (per-client work items, Pat, write.ts: DevOps writer with the write PAT), azure/ (Resource Manager and Resource Graph client behind a fixed allowlist, D475: find by tag, the VM, its instance view, start, a start's progress, the auto-shutdown schedule read only; fake-arm.ts for tests and demo), oauth/idtoken.ts (who signed in), demo/ (fictional sources for demo mode, no fetch; azure.ts: demo person and VM)
 
-## Send feedback (F1)
+## Send feedback (F1, FB-1)
 
-The feedback module spans four files, with no other dependencies (D509 to D513):
+Send feedback is a DevOps create through the write framework, as the person sending it, with their own write PAT for the client the feedback project belongs to (FB-1; no app identity):
 - `plan/feedback.ts`, pure: the window's input (kind, text, where; nothing else), the title, the description and the tags. It has no way to reach the plan, clients or work items.
-- `sources/devops/feedback.ts`: the DevOps calls as the app's managed identity (a bearer token for Azure DevOps). It reads the parent, the process's story type, and the default team's iteration; it creates with the parent link in the same JSON Patch (validateOnly for the setup check) and reads back. Logs carry op, status and duration only.
-- `actions/feedback-actions.ts`: the service (one per process, with its cached setup check) and the feedback.status, feedback.preview and feedback.send actions. Previews are held 10 minutes; the daily count is in the person's kv. `actions/feedback-types.ts` holds the types the window shares.
-- `ui/Feedback.tsx`: the dialog (Write, Preview, Sent or the error), opened from ⋯ and Commands. Settings > Connections shows the setup read only.
+- `actions/devops-write-actions.ts` › `feedbackWrites`: finds the client by the target's org and project among the person's clients' DevOps settings (else Cooptimize Internal, clientAccounts()'s why "internal"), checks their write PAT (`envFor`, the same check every write makes), reads the parent with it (feature tier, open), and holds the create (the parent's area and iteration, tags, no assignee) as a write framework preview. GD-1's scan applies.
+- `actions/feedback-devops.ts`: the person's backend: the setup check, the preview, and Send as `devops.confirm` on the held preview (its id never leaves the server), which checks the PAT again, writes, reads back and logs; Undo and Retry are the audit log's.
+- `actions/feedback-actions.ts`: feedback.status, feedback.preview and feedback.send. Previews are held 10 minutes; the daily count is in the person's kv. `actions/feedback-types.ts` holds the types and the setup line the window shares.
+- `sources/demo/feedback.ts`: the demo's pretend backlog in memory and its backend.
+- `ui/Feedback.tsx`: the dialog (Write, Preview, Sent or the error), opened from ⋯ and Commands. Settings > Connections shows the person's own setup, with Turn on DevOps writes when their PAT is missing.
 
-`server/main.ts` builds the service from the app settings: preview only and unchecked locally, live or preview only from FOCUSTIME_FEEDBACK_LIVE when hosted. The demo uses `sources/demo/feedback.ts`, a pretend backlog in memory.
+The destination is the org.feedback Rule (Admin › Organization), bootstrapped by the app settings `FOCUSTIME_FEEDBACK_ORG`, `_PROJECT` and `_PARENT_ID`; `server/main.ts` hands it to the dispatcher. Every environment writes for real.
 
 ## host/: the host boundary
 
@@ -240,7 +242,9 @@ One job reads each registered client chat for everyone; Asks are now Requests. D
 - **Today** (`ui/Today.tsx`): `UrgentStrip` (`plan/urgent.ts`), `MomentCard` (`momentCard` in `plan/modes.ts`), the blocks, After your blocks, This week chips.
 - **Week**: the Board (WeekGrid with `ui/FromLastWeek.tsx` over it for this week, action `planday.carry`), Plan today (`ui/PlanDay.tsx` under Week's header and switch), Commit (`ui/PlanWeek.tsx`).
 - **Coop brief**: `openCoopBrief` (`ui/menu.ts`, a window event) and `CoopBriefHost` / `CoopBriefPanel` (`ui/BreakDownPanel.tsx`), mounted once in App.
-- **Inbox badge**: `ui/inboxcount.ts` (`inboxBadge`, `useConversationCount` over `conversations.count`).
+- **Inbox badge**: `ui/inboxcount.ts` (IB-1: `useInboxCount` over `inbox.count`, read on load, after each week reload and every 5 minutes; `markSeen` over `inbox.seen`; `useConversationCount` over `conversations.count` for the mode switch's own counts until slice 2).
+- **IB-1 Inbox read model.** `plan/inbox-items.ts` (pure: item keys `v`/`c`/`f`/`s`/`k`/`d` + id, `lifecycleOf`, `viewsOf`, `needsYou`, `viewCounts`, `needsYouCount`); `actions/inbox-actions.ts` (`inbox.list`, `inbox.count`, `inbox.seen`) over `inboxFacts` in `actions/conversation-actions.ts` (conversations by `viewOf`, my chat promises), `sendFacts` in `actions/team-actions.ts` (sends to me), the plan store's open and recently closed follow-ups (Promises `f<id>`), captures and drafts, and `inbox_marks` (`inboxMarks`, `markInbox` in `store/plan-store.ts`; migration `20261110T0900_inbox_marks`).
+- **Close the loop.** `ui/CloseLoop.tsx`, the one form (how, note, `onSubmit` as LP-1's seam), used by `FollowUpRow` in `ui/FollowUps.tsx` on its own full-width row (`.follow-up-form-row`), so in Captures, the block panel (`DetailPanel.tsx`), Close out (`Today.tsx`) and Today on the phone (`Phone.tsx`).
 - **Phone**: `ui/Phone.tsx` BottomBar with the four tabs and the Inbox count; Capture is the top bar's +.
 - **e2e**: `e2e/navigation.test.ts`.
 

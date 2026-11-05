@@ -46,7 +46,7 @@ import { soundStep, type SoundKind } from "../plan/focussound.ts";
 import { focusPick } from "../plan/today.ts";
 import { Inbox } from "./Inbox.tsx";
 import { Conversations } from "./Conversations.tsx";
-import { inboxBadge, useConversationCount } from "./inboxcount.ts";
+import { useConversationCount, useInboxCount } from "./inboxcount.ts";
 import { MyPromises } from "./MyPromises.tsx";
 import { Ahead } from "./ahead/Ahead.tsx";
 import { Today } from "./Today.tsx";
@@ -351,6 +351,7 @@ export function App() {
   const weekRef = useRef<string | undefined>(undefined);
   const seq = useRef(0);
   const data = state.kind === "ready" ? state.data : null;
+  const needsYouCount = useInboxCount(captureVersion, data);
   /** Close out's day (Today › Close out), and Plan the week's week (Week › Plan the week: next week unless asked). */
   const closeOutAt: IsoDate | null = nav.tab === "today" && nav.flow === "closeout" && data ? (nav.date ?? data.planDay.date) : null;
   const planWeekAt: IsoDate | null = nav.tab === "week" && nav.mode === "commit" && data ? planWeekOf(nav.week, mondayOf(data.planDay.date)) : null;
@@ -1397,8 +1398,8 @@ export function App() {
   // The real date only: on a weekend the Today key shows next week, but no day there is badged "Today".
   const today = week.days.some((d) => d.date === localToday) ? localToday : "";
   const weekendNote = Temporal.PlainDate.from(localToday).dayOfWeek >= 6 && data.weekStart === data.today.weekStart ? `Today is ${shortDay(localToday)} · showing next week` : null;
-  // NV-1: the badge is what needs me: Needs you, and my follow-ups and promises due today or overdue.
-  const inboxCount = inboxBadge(askCount, data, localToday);
+  // IB-1: the badge is Needs you, the server's one count (conversations, promises new or due, sends waiting).
+  const inboxCount = needsYouCount ?? 0;
   const borrowWeek = borrowedSummary(data.borrowed, week.days[0]!.date, week.days.at(-1)!.date);
   // The running timer's pick and client, for the top bar timer and the focus screen (client color).
   const timerPick = data.timer?.pickId != null ? Object.values(data.plan ?? {}).flatMap((d) => d.picks).find((p) => p.id === data.timer!.pickId) ?? null : null;
