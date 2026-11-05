@@ -439,7 +439,7 @@ describe("Take one (PV-1, D572)", () => {
   });
   it("preview shows the current assignee and me; confirm tests /rev, assigns me, reads back and tells the teammate", async () => {
     const p = await s.preview({ kind: "assign", itemId: 510 });
-    expect(p.summary).toBe("Assign a DevOps story to you");
+    expect(p.summary).toBe("Assign a DevOps story or feature to you");
     expect(p.fields).toContainEqual({ label: "Assigned to", before: `Dana Reyes <${DANA}>`, after: "Sam Tester <avery@cooptimize.example>", changed: true });
     expect(p.notes.join(" ")).toContain("Dana Reyes gets a quiet note in FocusTime");
     const r = await s.confirm(p);
@@ -464,8 +464,9 @@ describe("Take one (PV-1, D572)", () => {
     s.dv.touch(510, { "System.AssignedTo": { displayName: "Lee", uniqueName: "lee@cooptimize.example" } });
     expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "undo", writeId: r.entry.id } })).toMatchObject({ status: 409, code: "changed" });
   });
-  it("only open stories: a feature or a closed story is refused, mine already says so", async () => {
-    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "assign", itemId: 437 } })).toMatchObject({ status: 409 });
+  it("only open stories and features (SW-1): a closed story is refused, a feature previews, mine already says so", async () => {
+    const f = await s.run<{ summary?: string; nothing?: string }>("devops.preview", { clientKey: COOP, change: { kind: "assign", itemId: 437 } });
+    expect(f.nothing ?? f.summary).toMatch(/already assigned to you|Assign a DevOps story or feature to you/);
     expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "assign", itemId: 511 } })).toMatchObject({ status: 409 });
     expect(await s.run("devops.preview", { clientKey: COOP, change: { kind: "assign", itemId: 500 } })).toEqual({ nothing: "#500 is already assigned to you" });
     expect(patches(s)).toHaveLength(0);
