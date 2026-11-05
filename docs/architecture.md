@@ -373,8 +373,8 @@ calls the same allowlisted actions as the buttons. The bot never calls an action
 - **Core.** `server/teams/bot.ts` `createBotCore`: a message is answered at once (200) and its turn runs after (typing,
   then the reply, "On it…" when the assistant takes more than 2.5 s); an activity id is handled once (10 minutes in
   memory; one replica). Quick commands (`server/teams/quick.ts`: what's next, today from `week.load` and
-  `plan/now.ts`, help, open FocusTime) need no AI. Everything else goes to `assistant.handle` (`server/teams/assistant.ts`
-  holds AS-1's proposed interface until AS-1 merges; `assistant: null` until then). A tap (`adaptiveCard/action`) is
+  `plan/now.ts`, help, open FocusTime) need no AI. Everything else goes to `assistant.handle`: `server/teams/assistant.ts`
+  holds the bot's own small types and `teamsAssistant()`, the adapter onto AS-1's hub (`assistants` in `server/main.ts`). A tap (`adaptiveCard/action`) is
   claimed once in `teams_bot_cards`, runs `assistant.confirm` or `cancel` once, and the card becomes its outcome;
   a confirm over 8 s answers "Working on it…" and updates the card after.
 - **Cards.** `server/teams/cards.ts`: Adaptive Cards 1.5, `Action.Execute` with an `Action.Submit` fallback; links
@@ -387,10 +387,48 @@ calls the same allowlisted actions as the buttons. The bot never calls an action
   `infra/main.bicep`; `infra/scripts/bootstrap.sh` registers `Microsoft.BotService`. `scripts/teams-package.ts` (the
   zip), `scripts/teams-icons.ts` (`assets/teams/`). Setup: `docs/setup/teams-bot.md`.
 - **TB-1b.** `server/teams/endorsements.ts`: before the SDK, the token must be Bot Framework's and its signing key must
-  endorse `msteams` (keys fetched and kept a day). `teams_bot_seen` (`store/migrations/20261109T1100_teams_bot_seen.ts`,
+  endorse `msteams` (keys fetched and kept a day). `teams_bot_seen` (`store/migrations/20261109T1300_teams_bot_seen.ts`,
   `firstSeen` in `store/teams-bot-store.ts`): handled activity ids, hashed, a unique insert, a day, so a retry on any
   replica is answered once; per-person order stays in memory (one replica). `recordSoftDelete` (Delete my data) removes
-  the three bot tables at once. `public/legal.html` and `legal.css`: the privacy and terms page the manifest links to.
+  the three bot tables at once, and so does Clear (`clearAssistant`, Settings › Data › Assistant history). `public/legal.html` and `legal.css`: the privacy and terms page the manifest links to.
 - **Tests.** `server/teams/sdk.test.ts` (real token checks against a local key server; the connector gets the bot's
   token), `server/teams/bot.test.ts` (both drivers), `server/teams/quick.test.ts` (demo week),
   `scripts/teams-package.test.ts`, the guard's, `config/notify.test.ts`; e2e `e2e/teams-bot.test.ts`.
+
+## AS-1: the assistant (Nov 5)
+
+One service, two front ends: the in-app panel and TB-1's bot. It calls the same allowlisted actions the buttons call,
+and every write is a proposal the person confirms. The interface: `assistant/types.ts` and `docs/assistant-interface.md`.
+
+- **Service.** `assistant/service.ts` `createAssistant(env)`: `handle` (the client from my words or the screen, the
+  intent round, then the answer round with tools), `confirm` (the re-checks, a fresh preview compared with the shown
+  one, then the button's action), `cancel`, `history`, `clear`. `assistant/allowlist.ts`: the tools (reads, proposals,
+  the close-the-loop stub), `RUNS` (every action its dispatch may run) and `NEVER`. `assistant/reads.ts`: the six reads
+  as cards plus facts. `assistant/actions.ts`: the registry's `assistant.*` actions (`assistant.history` with a context
+  also returns the panel's gate) and the three reads as actions (`assistant.today`, `lookup.day`, `items.get`).
+- **Wiring.** `actions/dispatch.ts` `assistantFor(ctx, channel)` builds it per person (the guard's directory, my clients,
+  GD-1's Internal rule, a dispatch limited to `RUNS`), `assistantGate` (the panel's state and mic) and
+  `assistantTranscribe` (the voice gate). `server/assistant.ts` `createAssistantHub` is the same by Entra object id for
+  the bot (`assistants` in `server/main.ts`, channel "teams", absolute links).
+- **AI.** `ai/service.ts` `runTools` (function tools, `allowed_tools`, at most 4 rounds; the guard over everything
+  sent; a name not allowed is refused without running) and `transcribe` (the caps, cost per second, task
+  `assistant_transcribe`, never text). `ai/openai.ts`: Responses API function calls and `/v1/audio/transcriptions`
+  (multipart, `gpt-transcribe`). `ai/guard.ts` `clientsNamed`. The stub answers tool calls and a fixed transcript.
+- **DevOps.** `actions/devops-write-actions.ts` `description_edit` (canEdit, the whole text before → after, undo
+  refused when changed); comments are step 14's.
+- **Store.** `assistant_turns` and `assistant_proposals`, user tables (`store/migrations/20261109T1200_assistant.ts`),
+  30 days rolling (`pruneAssistant`), in the export, Clear in Settings › Data.
+- **Panel.** `ui/Assistant.tsx`: the side panel (the phone's bottom sheet), cards, proposals with Confirm, Edit and
+  Cancel, push-to-talk (`MediaRecorder`, 60 s, 2 MB, posted raw to `/api/assistant/transcribe`, held in memory only).
+  `ui/App.tsx`: Ctrl+J, /, the top bar's Ask, the context (the address, the client in focus, the item, the block).
+  `server/app.ts`: the voice route (after the session and CSRF checks; 413 over 2 MB; logs the outcome only) and
+  `Permissions-Policy: microphone=(self)`.
+- **Ahead's model.** `plan/ahead-model.ts` (moved from `ui/ahead/model.ts`, which re-exports it): pure, used by the
+  panel's gaps read on the server, where `ui/` isn't shipped. `host/no-ui-import.test.ts` walks the server's imports
+  from `server/main.ts` and fails on any into `ui/`, `e2e/`, `test/` or `docs/`.
+- **Demo.** `sources/demo/assistant.ts`, a scripted provider for the assistant only (`ActionContext.assistantAi`, set in
+  `server/demo.ts`).
+- **Tests.** `assistant/service.test.ts` (allowlist, lookups, one client, AI off, the injection refusals, each request
+  to its action, SW-1 sends, confirm's re-checks, history), `ai/service.test.ts` and
+  `ai/openai.test.ts` (tools, transcribe), `actions/devops-write.test.ts` (description_edit), `server/assistant-voice.test.ts`,
+  `server/teams/assistant.test.ts`; e2e `e2e/assistant.test.ts`, shots `e2e/as1-shots.test.ts`.

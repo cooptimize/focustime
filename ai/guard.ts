@@ -96,3 +96,20 @@ export function otherClientMatch(text: string, client: string, directory: readon
   }
   return null;
 }
+
+/**
+ * AS-1: the clients a text names, by the guard's own rule (a whole name, nickname or DevOps project of 3 letters or
+ * more, or one of its known work item ids). Internal is GD-1's: known by `isInternal` (clientAccounts()'s why
+ * "internal"), never by name, and it never counts. Keys compare without case. The assistant uses it to pick a
+ * request's one client; two or more means "Which client?" and nothing is sent.
+ */
+export function clientsNamed(text: string, directory: readonly ClientEntry[], isInternal: (key: string) => boolean = () => false): string[] {
+  const numbers = new Set([...text.matchAll(/(?<![\w.,$€£/:-])#?(\d{3,})(?![\w%]|[.,/:-]\d)/g)].map((m) => Number(m[1])));
+  const out: string[] = [];
+  for (const c of directory) {
+    if (isInternal(c.key) || out.some((k) => k.toLowerCase() === c.key.toLowerCase())) continue;
+    const words = [c.key, ...c.names, ...c.projects].filter((w) => w.trim().length >= 3);
+    if (words.some((w) => phrase(w).test(text)) || c.itemIds.some((id) => numbers.has(id))) out.push(c.key);
+  }
+  return out;
+}

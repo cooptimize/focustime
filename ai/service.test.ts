@@ -8,7 +8,7 @@ import type { LogRecord } from "../log/logger.ts";
 import { aClientEntry, anAiApp, anAiRules } from "../test/builders/index.ts";
 import { createAi, MAX_RETRY_WAIT_MS, TEST_SCHEMA, type AiAppSettings, type AiDeps } from "./service.ts";
 import { stubProvider } from "./stub.ts";
-import type { AiLogEntry, AiRules, JsonSchema, ProviderCall, ProviderReply } from "./types.ts";
+import type { AiLogEntry, AiRules, JsonSchema, ProviderCall, ProviderReply, ToolSpec } from "./types.ts";
 
 const SCHEMA: JsonSchema = { type: "object", properties: { title: { type: "string" }, urgency: { type: "string", enum: ["now", "later"] } }, required: ["title", "urgency"], additionalProperties: false };
 const TASK = { name: "draft_title", client: "fabrikam", instructions: "Write a short title for this request." };
@@ -241,5 +241,58 @@ describe("Test AI", () => {
     expect(r.ok && r.value).toEqual({ reply: "ok" });
     expect(s.calls[0]).toMatchObject({ schemaName: "test_ai", schema: TEST_SCHEMA });
     expect(s.log[0]).toMatchObject({ task: "test_ai", clientKey: null, outcome: "ok" });
+  });
+});
+
+describe("AS-1: runTools", () => {
+  const TOOL: ToolSpec = { name: "lookup", description: "Look one up", parameters: { type: "object", properties: { id: { type: "integer" } }, required: ["id"], additionalProperties: false } };
+  const OTHER: ToolSpec = { name: "send", description: "Send", parameters: { type: "object", properties: {}, required: [], additionalProperties: false } };
+  const calls = (...c: [string, string][]): ProviderReply => ({ ok: true, text: "", usage: { inputTokens: 10, cachedTokens: 0, outputTokens: 5 }, model: "m", calls: c.map(([name, args], i) => ({ callId: `c${i}`, name, arguments: args })), items: [{ type: "function_call" }] });
+  const R = { type: "object", properties: { reply: { type: "string" } }, required: ["reply"], additionalProperties: false } as JsonSchema;
+  it("runs allowed calls, refuses any other name without running it, and sends the outputs back as the next round", async () => {
+    const s = setup({ replies: [calls(["lookup", '{"id":7}'], ["send", "{}"]), JSON.stringify({ reply: "ok" })] });
+    const ran: unknown[] = [];
+    const r = await s.ai.runTools<{ reply: string }>(TASK, INPUT, R, { tools: [TOOL, OTHER], allowed: ["lookup"], execute: async (n, a) => (ran.push([n, a]), "found") });
+    expect(r).toMatchObject({ ok: true, value: { reply: "ok" }, refused: ["send"] });
+    expect(ran).toEqual([["lookup", { id: 7 }]]);
+    expect(s.calls[0]!.allowedTools).toEqual(["lookup"]);
+    expect(s.calls[1]!.rounds![0]!.outputs.map((o) => o.output)).toEqual(["found", expect.stringContaining("isn't allowed")]);
+    expect(s.log.map((e) => e.outcome)).toEqual(["ok", "ok"]);
+  });
+  it("arguments that don't fit the tool don't run", async () => {
+    const s = setup({ replies: [calls(["lookup", '{"id":"x"}']), JSON.stringify({ reply: "ok" })] });
+    const ran: unknown[] = [];
+    await s.ai.runTools(TASK, INPUT, R, { tools: [TOOL], allowed: ["lookup"], execute: async (n) => (ran.push(n), "x") });
+    expect(ran).toEqual([]);
+  });
+  it("the guard reads tool outputs too: another client's data in one stops the next round before it is sent", async () => {
+    const s = setup({ replies: [calls(["lookup", '{"id":7}']), JSON.stringify({ reply: "ok" })] });
+    const r = await s.ai.runTools(TASK, INPUT, R, { tools: [TOOL], allowed: ["lookup"], execute: async () => "Northwind Traders' item" });
+    expect(r.ok ? null : r.error.kind).toBe("refused_client");
+    expect(s.calls).toHaveLength(1);
+  });
+  it("the last round offers no tools, and a model that keeps calling ends as unusable", async () => {
+    const s = setup({ replies: [calls(["lookup", '{"id":1}']), calls(["lookup", '{"id":2}'])] });
+    const r = await s.ai.runTools(TASK, INPUT, R, { tools: [TOOL], allowed: ["lookup"], execute: async () => "x", maxRounds: 2 });
+    expect(r.ok ? null : r.error.kind).toBe("invalid_output");
+    expect(s.calls[1]!.allowedTools).toEqual([]);
+  });
+  it("switches and caps as for run(): AI off sends nothing", async () => {
+    const s = setup({ person: { on: false } });
+    const r = await s.ai.runTools(TASK, INPUT, R, { tools: [TOOL], allowed: ["lookup"], execute: async () => "x" });
+    expect(r.ok ? null : r.error.kind).toBe("off");
+    expect(s.calls).toEqual([]);
+  });
+});
+
+describe("AS-1: transcribe", () => {
+  it("a minute's price by the second, logged without text; AI off or the client not allowed sends nothing", async () => {
+    const s = setup({ app: { transcribe: { model: "gpt-transcribe", perMinuteUsd: 0.0045 } } });
+    const r = await s.ai.transcribe(new Uint8Array([1, 2, 3]), "audio/webm", 30, "fabrikam");
+    expect(r).toMatchObject({ ok: true, text: "What's next today?" });
+    expect(s.log[0]).toMatchObject({ task: "assistant_transcribe", model: "gpt-transcribe", costMicros: 2250, outcome: "ok", clientKey: "fabrikam" });
+    expect(JSON.stringify(s.log)).not.toContain("What's next");
+    expect((await setup({ person: { on: false } }).ai.transcribe(new Uint8Array([1]), "audio/webm", 3, "none")).ok).toBe(false);
+    expect(await setup({ person: { allowedClients: ["northwind"] } }).ai.transcribe(new Uint8Array([1]), "audio/webm", 3, "fabrikam")).toMatchObject({ ok: false, error: { kind: "client_off" } });
   });
 });

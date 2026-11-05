@@ -58,7 +58,7 @@ export async function startTestApp(o: {
   function browser() {
     const jar = new Map<string, string>();
     const cookieHeader = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
-    function send(path: string, headers: Record<string, string> = {}, method = "GET", body?: string): Promise<Res> {
+    function send(path: string, headers: Record<string, string> = {}, method = "GET", body?: string | Buffer): Promise<Res> {
       return new Promise((resolve, reject) => {
         const h: Record<string, string> = { host: `localhost:${port}`, ...(jar.size ? { cookie: cookieHeader() } : {}), ...headers };
         if (body) h["content-length"] = String(Buffer.byteLength(body));

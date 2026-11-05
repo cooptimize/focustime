@@ -9,7 +9,8 @@ import { extname, join, normalize, sep } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import { currentOperation, newOperation, noteCurrent, runInOperation, type Operation } from "../log/operation.ts";
 import { isActionName } from "../actions/registry.ts";
-import { chatImage, dispatch, type ActionContext } from "../actions/dispatch.ts";
+import { assistantTranscribe, chatImage, dispatch, type ActionContext } from "../actions/dispatch.ts";
+import { VOICE_MAX_BYTES } from "../assistant/types.ts";
 import type { ServedImage } from "../actions/chat-images.ts";
 import type { Logger } from "../log/logger.ts";
 import type { AccountStore, Session } from "../store/accounts.ts";
@@ -65,6 +66,8 @@ export type AppOptions = {
   onRequest?: (r: RequestRecord) => void;
   /** HK-1: an error behind a 500, or one an action threw (telemetry's exceptions; never shown to anyone). */
   onError?: (e: unknown, where: string) => void;
+  /** AS-1: push-to-talk to text for this person; by default actions/dispatch.ts's assistantTranscribe. */
+  transcribe?: typeof assistantTranscribe;
   /** CV-2: one chat image for this person (the member and client checks); by default actions/dispatch.ts's. */
   chatImage?: (ctx: ActionContext, id: number) => Promise<ServedImage>;
   /**
@@ -134,9 +137,25 @@ function baseHeaders(res: ServerResponse, csp: boolean, https: boolean) {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+  // AS-1: the microphone for the assistant's push-to-talk, on FocusTime's own pages only (no frame or other origin).
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=(), payment=(), usb=()");
   if (https) res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   if (csp) res.setHeader("Content-Security-Policy", CSP);
+}
+
+/** AS-1: the panel's push-to-talk endpoint (raw audio body, ?seconds=&client=&item=). */
+export const ASSISTANT_VOICE_PATH = "/api/assistant/transcribe";
+
+/** AS-1: a raw body as bytes, refused past `limit` (the recording stays in this memory only). */
+async function readBytes(req: IncomingMessage, limit: number): Promise<Buffer> {
+  let size = 0;
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    size += (chunk as Buffer).length;
+    if (size > limit) throw new Error("too large");
+    chunks.push(chunk as Buffer);
+  }
+  return Buffer.concat(chunks);
 }
 
 async function readBody(req: IncomingMessage, limit = 64 * 1024): Promise<string> {
@@ -362,6 +381,28 @@ export function createApp(opts: AppOptions) {
         const status = out.ok ? 200 : out.status;
         opts.log({ source: "server", op: typeof out === "object" && out.ok ? "action" : "action_rejected", status, durationMs: performance.now() - started });
         return json(res, status, out);
+      }
+      if (url.pathname === ASSISTANT_VOICE_PATH) {
+        // AS-1: push-to-talk. The audio is read into memory (2 MB at most), handed to the transcription and dropped;
+        // it is never stored, logged or put in an error. Only the outcome's status is logged.
+        if (used) opts.onUse?.(s);
+        const mime = header("content-type") ?? "";
+        const q = url.searchParams;
+        const item = Number(q.get("item"));
+        const client = q.get("client");
+        let audio: Buffer;
+        try {
+          audio = await readBytes(req, VOICE_MAX_BYTES);
+        } catch {
+          return json(res, 413, { ok: false, reason: "too_large", message: "That recording is too large" });
+        }
+        const r = await (opts.transcribe ?? assistantTranscribe)(await opts.ctx(s), { audio, mime, seconds: Number(q.get("seconds")), context: { ...(client && client.length <= 100 ? { clientKey: client } : {}), ...(Number.isInteger(item) && item > 0 ? { itemId: item } : {}) } }).catch((e: unknown) => {
+          opts.onError?.(e, "transcribe");
+          return { ok: false as const, reason: "provider" as const, message: "The recording couldn't be turned into text. Try again, or type it" };
+        });
+        audio.fill(0);
+        opts.log({ source: "server", op: "transcribe", status: r.ok ? 200 : 422, kind: r.ok ? "ok" : r.reason });
+        return json(res, 200, r);
       }
       // The view the launcher or a clicked notification asked for, taken once.
       if (url.pathname === "/api/open-request") return json(res, 200, { view: (await opts.takeOpenRequest?.(s).catch(() => null)) ?? null });

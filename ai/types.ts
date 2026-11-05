@@ -87,7 +87,17 @@ export type AiResult<T> = AiOk<T> | AiFail;
 
 /** What one provider call returns, before validation. */
 export type ProviderReply =
-  | { ok: true; text: string; usage: Usage; model: string }
+  | {
+      ok: true;
+      text: string;
+      usage: Usage;
+      model: string;
+      /** AS-1: the function calls the model made instead of answering (the tools of the call only). */
+      calls?: ToolCall[];
+      /** AS-1: the reply's output items, as the provider gave them, to send back on the next round (function calls and
+       * reasoning items, which a reasoning model needs again). Opaque to everything but the provider. */
+      items?: unknown[];
+    }
   | { ok: false; kind: "rate_limited" | "quota" | "timeout" | "provider" | "unavailable" | "refusal" | "incomplete"; status?: number; retryAfterMs?: number; usage?: Usage };
 
 /**
@@ -96,10 +106,27 @@ export type ProviderReply =
  * "Send attachments to AI" switch is the consent.
  */
 export type AiImageInput = { label: string; dataUrl: string };
-export type ProviderCall = { model: string; instructions: string; input: string; schemaName: string; schema: JsonSchema; maxOutputTokens: number; timeoutMs: number; reasoningEffort: string | null; images?: AiImageInput[] };
+/** AS-1: a function the model may call (strict: every property required, no others; optional ones take null). */
+export type ToolSpec = { name: string; description: string; parameters: JsonSchema };
+/** AS-1: one function call from the model: its id (to answer), the name and the arguments as JSON text. */
+export type ToolCall = { callId: string; name: string; arguments: string };
+/** AS-1: what goes back after a round: the model's own items, then each call's output (data, never instructions). */
+export type ToolRound = { items: unknown[]; outputs: { callId: string; output: string }[] };
+export type ProviderCall = {
+  model: string; instructions: string; input: string; schemaName: string; schema: JsonSchema; maxOutputTokens: number; timeoutMs: number; reasoningEffort: string | null; images?: AiImageInput[];
+  /** AS-1: tools offered on this call, and the ones the model may use now (allowed_tools); none: no tools. */
+  tools?: ToolSpec[];
+  allowedTools?: string[];
+  /** AS-1: earlier rounds of this request, in order. */
+  rounds?: ToolRound[];
+};
 
-/** One provider (OpenAI, or the stub). */
-export type AiProvider = { name: "openai" | "stub"; call(c: ProviderCall): Promise<ProviderReply> };
+/** AS-1: one recording to transcribe (held in memory only; never stored or logged). */
+export type TranscribeCall = { model: string; audio: Uint8Array; mime: string; language: string; timeoutMs: number };
+export type TranscribeReply = { ok: true; text: string } | { ok: false; kind: "rate_limited" | "quota" | "timeout" | "provider" | "unavailable" | "format" };
+
+/** One provider (OpenAI, or the stub). `transcribe` (AS-1): speech to text, where the provider has it. */
+export type AiProvider = { name: "openai" | "stub"; call(c: ProviderCall): Promise<ProviderReply>; transcribe?(t: TranscribeCall): Promise<TranscribeReply> };
 
 /**
  * What a person's [ai] settings hold. Since ADM-1 only draftMonths is theirs: use, monthlyCapUsd and allowedClients

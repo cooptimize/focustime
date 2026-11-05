@@ -1,7 +1,8 @@
-// TB-1: the assistant service as AS-1 proposed it (one brain, two front ends: the in-app panel and this bot). The bot
-// codes against exactly this shape; when AS-1 merges, these types come from its module and this file goes, and if its
-// final types differ the bot adapts to them. Nothing in server/teams calls an AI provider or an action itself: reads
-// are answered by the assistant (or a quick command), and every write is a proposal the person confirms.
+// TB-1: the assistant as the bot sees it (one brain, two front ends: the in-app panel and this bot). AS-1's service
+// (assistant/types.ts) is adapted to this shape by teamsAssistant() below, so the bot and its tests keep their own
+// small types. Nothing in server/teams calls an AI provider or an action itself: reads are answered by the assistant
+// (or a quick command), and every write is a proposal the person confirms.
+import type { Assistant, Card as AsCard, Link as AsLink, Proposal as AsProposal } from "../../assistant/types.ts";
 
 export type AssistantPerson = { userId: string };
 
@@ -53,3 +54,58 @@ export type AssistantService = {
 
 /** Proposals expire after this long (AS-1); a card past it shows Expired. */
 export const PROPOSAL_MINUTES = 15;
+
+/** AS-1: a card's title, a few lines and its link, for Teams (the service already writes absolute links for "teams"). */
+function cardOf(c: AsCard): AssistantCard {
+  const links = (l: AsLink | undefined) => (l ? [{ label: l.label, url: l.href }] : []);
+  switch (c.kind) {
+    case "note":
+      return { title: c.text, links: links(c.link) };
+    case "item": {
+      const dates = c.start || c.target ? [`${c.start ?? "No start"} to ${c.target ?? "no target"}`] : [];
+      const kids = c.children.slice(0, 5).map((k) => `#${k.id} ${k.title} · ${k.state}${k.owner ? ` · ${k.owner}` : ""}`);
+      return { title: `#${c.id} ${c.title}`, lines: [`${c.clientName} · ${c.type} · ${c.state} · ${c.owner ?? "Unassigned"}`, ...dates, ...kids], links: [...links(c.link), ...(c.devopsUrl ? [{ label: "Open in DevOps", url: c.devopsUrl }] : [])] };
+    }
+    case "block":
+      return { title: `${c.clientName} · ${c.date} ${c.half}`, lines: [`${c.time} · ${c.status}`, ...c.picks.map((p) => `${p.done ? "Done: " : ""}${p.title} (${p.size})`)], links: links(c.link) };
+    case "pick":
+      return { title: `${c.done ? "Done: " : ""}${c.title}`, lines: [`${c.clientName} · ${c.date} ${c.half}${c.time ? ` · ${c.time}` : ""}`], links: links(c.link) };
+    case "send":
+      return { title: c.title, lines: [`${c.clientName} · ${c.from} to ${c.to} · ${c.tier === "must" ? "Must" : "Suggested"} · week of ${c.weekStart} · ${c.state}`], links: links(c.link) };
+    case "promise":
+      return { title: c.what, lines: [`${c.clientName} · ${c.who}${c.toWhom ? ` to ${c.toWhom}` : ""}${c.due ? ` · due ${c.due}` : ""}`], links: links(c.link) };
+  }
+}
+
+function proposalOf(p: AsProposal): Proposal {
+  const note = p.preview.notes.join(" ");
+  return { id: String(p.id), title: p.clientName ? `${p.title} (${p.clientName})` : p.title, whoSees: p.whoSees, changes: p.preview.rows.map((r) => ({ field: r.label, before: r.before, after: r.after })), note: note || null, expiresAt: p.expiresAt };
+}
+
+/**
+ * AS-1: the bot's AssistantService on the real assistant (server/assistant.ts's hub, channel "teams"). Ids are numbers
+ * in the service and strings here; a DevOps write's undo is in FocusTime's audit log (Settings › Data).
+ */
+export function teamsAssistant(a: Pick<Assistant, "handle" | "confirm" | "cancel">, publicUrl: string): AssistantService {
+  const base = publicUrl.replace(/\/$/, "");
+  const idOf = (s: string) => (/^\d{1,10}$/.test(s) ? Number(s) : 0);
+  return {
+    async handle(i) {
+      const r = await a.handle({ person: i.person, channel: "teams", text: i.text, context: { screen: "teams" } });
+      return { turnId: String(r.turnId), status: r.status, reply: r.reply, cards: r.cards.map(cardOf), proposals: r.proposals.map(proposalOf), links: r.links.map((l) => ({ label: l.label, url: l.href })) };
+    },
+    async confirm(i) {
+      const edits = Object.fromEntries(Object.entries(i.edits ?? {}).filter(([, v]) => typeof v === "string")) as Record<string, string>;
+      const r = await a.confirm({ person: i.person, proposalId: idOf(i.proposalId), ...(Object.keys(edits).length ? { edits } : {}) });
+      if (r.ok) {
+        const shown = cardOf(r.result);
+        return { status: "ok", message: r.message, undo: r.undo?.kind === "devops" ? { label: "Undo in FocusTime", url: `${base}/#/settings/data` } : null, links: shown.links ?? [] };
+      }
+      if (r.reason === "changed" && r.proposal) return { status: "changed", message: r.message, proposal: proposalOf(r.proposal) };
+      return { status: r.reason === "changed" ? "gone" : r.reason, message: r.message };
+    },
+    async cancel(i) {
+      await a.cancel({ person: i.person, proposalId: idOf(i.proposalId) });
+    },
+  };
+}

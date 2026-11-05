@@ -22,6 +22,8 @@ export const CHROMIUM = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr
  */
 export const WEBKIT = existsSync(webkit.executablePath()) ? webkit.executablePath() : null;
 export const NOW = "2026-11-02T09:30:00-05:00";
+/** AS-1: Chromium's fake microphone, granted without a prompt (push-to-talk tests). */
+export const FAKE_MIC = ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"];
 
 /**
  * An https://localhost front for the server, for WebKit: it keeps no Secure cookie over http (Chromium does on
@@ -79,7 +81,7 @@ export type Harness = { url: string; browser: Browser; stop: () => Promise<void>
  * one (test/ports.ts). WebKit's TLS front gets its port the same way; the server's public URL names that front.
  */
 /** `clock` pins the server and the page to another instant than NOW (UI-B: a day mid-week). */
-export async function startDemo(engine: "chromium" | "webkit" = "chromium", extraEnv: Record<string, string> = {}, clock: string = NOW): Promise<Harness> {
+export async function startDemo(engine: "chromium" | "webkit" = "chromium", extraEnv: Record<string, string> = {}, clock: string = NOW, /** AS-1: extra Chromium flags (the fake microphone). */ browserArgs: string[] = []): Promise<Harness> {
   const dir = await mkdtemp(join(tmpdir(), "focustime-e2e-"));
   // A2: no sign-in is set up here; the sign-in page offers "Try the demo", which every test uses.
   await mkdir(join(dir, "data", "focustime"), { recursive: true });
@@ -119,7 +121,7 @@ export async function startDemo(engine: "chromium" | "webkit" = "chromium", extr
       }
     }));
   } else server = await onFreePort((port) => startServer(port, null));
-  const launched = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: CHROMIUM!, args: ["--disable-gpu"] });
+  const launched = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: CHROMIUM!, args: ["--disable-gpu", ...browserArgs] });
   const browser = noServiceWorkers(launched);
   return {
     url: `${server.url}?now=${encodeURIComponent(clock)}`,

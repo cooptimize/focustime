@@ -69,6 +69,8 @@ describe("server", () => {
     expect(page.headers["x-frame-options"]).toBe("DENY");
     expect(page.headers["x-content-type-options"]).toBe("nosniff");
     expect(page.headers["referrer-policy"]).toBe("no-referrer");
+    // AS-1: the microphone only for FocusTime's own pages (push-to-talk); the camera and the rest stay off.
+    expect(page.headers["permissions-policy"]).toBe("camera=(), microphone=(self), geolocation=(), payment=(), usb=()");
     expect((await app.browser().send("/assets/app.js")).status).toBe(200);
   });
 

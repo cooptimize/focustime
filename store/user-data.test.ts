@@ -74,6 +74,25 @@ describe("delete my data (A2)", () => {
     expect(await bot("ben")).toBe(3);
   });
 
+  it("Clear (Settings › Data › Assistant history) removes the Teams bot's rows too, only this person's (TB-1b)", async () => {
+    const t = await setup();
+    await t.person("ana");
+    await t.person("ben");
+    for (const id of ["ana", "ben"]) {
+      const bot = createTeamsBotStore({ db: t.db, userId: id, now });
+      await bot.saveChat({ conversationId: `a:${id}`, serviceUrl: "https://smba.trafficmanager.net/amer/", tenantId: "t", botId: "28:bot" });
+      await bot.cardSent(`p-${id}`, "msg-1", now().add({ minutes: 15 }).toString(), "Move a date");
+      await bot.firstSeen(`act-${id}`);
+    }
+    const bot = async (id: string) => {
+      let n = 0;
+      for (const tb of BOT_TABLES) n += Number((await t.db.get(`SELECT COUNT(*) AS n FROM ${tb} WHERE user_id = ?`, [id]))!.n);
+      return n;
+    };
+    await planStoreOn(t.db, { userId: "ana", now: () => now().toZonedDateTimeISO(NY) }).clearAssistant();
+    expect([await bot("ana"), await bot("ben")]).toEqual([0, 3]);
+  });
+
   it("soft first (rows kept, a hashed record), then every row removed after 30 days, nobody else's touched", async () => {
     const t = await setup();
     await t.person("ana");

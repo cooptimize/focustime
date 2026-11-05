@@ -8,7 +8,7 @@
 import type { NamedMigration } from "./named.ts";
 
 export const teamsBotSeen: NamedMigration = {
-  name: "20261109T1100_teams_bot_seen",
+  name: "20261109T1300_teams_bot_seen",
   sqlite: `CREATE TABLE teams_bot_seen (
      user_id TEXT NOT NULL,
      activity_hash TEXT NOT NULL,

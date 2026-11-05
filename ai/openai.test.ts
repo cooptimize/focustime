@@ -160,3 +160,39 @@ describe("through the service", () => {
     expect([seen.length, slept]).toEqual([2, [1000]]);
   });
 });
+
+describe("AS-1: tools and speech to text", () => {
+  const TOOL = { name: "item", description: "One item", parameters: { type: "object" as const, properties: { id: { type: "integer" as const } }, required: ["id"], additionalProperties: false as const } };
+  it("function tools are strict, only the allowed ones usable (allowed_tools); earlier rounds go back with their outputs; store false", async () => {
+    const { f, seen } = fake(json({ status: "completed", model: "m", output: [{ type: "reasoning", id: "rs_1", encrypted_content: "x" }, { type: "function_call", id: "fc_1", call_id: "call_1", name: "item", arguments: '{"id":7}' }], usage: { input_tokens: 5, output_tokens: 2 } }));
+    const r = await openAiProvider({ key: async () => KEY, fetch: f }).call({ ...CALL, tools: [TOOL], allowedTools: ["item"], rounds: [{ items: [{ type: "function_call", call_id: "call_0", name: "item", arguments: "{}" }], outputs: [{ callId: "call_0", output: "found" }] }] });
+    const body = JSON.parse(String(seen[0]!.init.body));
+    expect(body.store).toBe(false);
+    expect(body.tools).toEqual([{ type: "function", name: "item", description: "One item", parameters: TOOL.parameters, strict: true }]);
+    expect(body.tool_choice).toEqual({ type: "allowed_tools", mode: "auto", tools: [{ type: "function", name: "item" }] });
+    expect(body.include).toEqual(["reasoning.encrypted_content"]);
+    expect(body.input).toEqual([{ role: "user", content: "Say ok." }, { type: "function_call", call_id: "call_0", name: "item", arguments: "{}" }, { type: "function_call_output", call_id: "call_0", output: "found" }]);
+    expect(r).toMatchObject({ ok: true, calls: [{ callId: "call_1", name: "item", arguments: '{"id":7}' }], items: [{ type: "reasoning" }, { type: "function_call" }] });
+  });
+  it("no allowed tools: tool_choice none (the last round answers)", async () => {
+    const { f, seen } = fake(json(anOpenAiResponse({ reply: "ok" })));
+    await openAiProvider({ key: async () => KEY, fetch: f }).call({ ...CALL, tools: [TOOL], allowedTools: [] });
+    expect(JSON.parse(String(seen[0]!.init.body)).tool_choice).toBe("none");
+  });
+  it("transcribe: multipart to /audio/transcriptions with the file, gpt-transcribe and languages[]; the key only in the header", async () => {
+    const { f, seen } = fake(json({ text: " Move it to Thursday. " }));
+    const r = await openAiProvider({ key: async () => KEY, fetch: f }).transcribe!({ model: "gpt-transcribe", audio: new Uint8Array([1, 2, 3]), mime: "audio/webm;codecs=opus", language: "en", timeoutMs: 1000 });
+    expect(r).toEqual({ ok: true, text: " Move it to Thursday. " });
+    expect(seen[0]!.url).toBe("https://api.openai.com/v1/audio/transcriptions");
+    const form = seen[0]!.init.body as FormData;
+    expect([form.get("model"), form.get("languages[]"), (form.get("file") as File).name, (form.get("file") as File).type]).toEqual(["gpt-transcribe", "en", "speech.webm", "audio/webm"]);
+    expect((seen[0]!.init.headers as Record<string, string>).authorization).toBe(`Bearer ${KEY}`);
+  });
+  it("transcribe: a rejected format and a busy service are typed", async () => {
+    const { f } = fake(json({ error: { code: "invalid_file" } }, 400), json({ error: {} }, 429));
+    const p = openAiProvider({ key: async () => KEY, fetch: f });
+    const t = { model: "gpt-transcribe", audio: new Uint8Array([1]), mime: "audio/mp4", language: "en", timeoutMs: 1000 };
+    expect(await p.transcribe!(t)).toEqual({ ok: false, kind: "format" });
+    expect(await p.transcribe!(t)).toEqual({ ok: false, kind: "rate_limited" });
+  });
+});
