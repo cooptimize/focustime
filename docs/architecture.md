@@ -434,9 +434,27 @@ and every write is a proposal the person confirms. The interface: `assistant/typ
 - **Ahead's model.** `plan/ahead-model.ts` (moved from `ui/ahead/model.ts`, which re-exports it): pure, used by the
   panel's gaps read on the server, where `ui/` isn't shipped. `host/no-ui-import.test.ts` walks the server's imports
   from `server/main.ts` and fails on any into `ui/`, `e2e/`, `test/` or `docs/`.
-- **Demo.** `sources/demo/assistant.ts`, a scripted provider for the assistant only (`ActionContext.assistantAi`, set in
-  `server/demo.ts`).
+- **Demo.** `sources/demo/assistant.ts`, the scripted assistant, answers when the demo's AI (`sources/demo/ai.ts`) has
+  no real call to make (DM-1; `ActionContext.assistantAi` is gone, the assistant uses `aiFor(ctx)` like everything else).
 - **Tests.** `assistant/service.test.ts` (allowlist, lookups, one client, AI off, the injection refusals, each request
   to its action, SW-1 sends, confirm's re-checks, history), `ai/service.test.ts` and
   `ai/openai.test.ts` (tools, transcribe), `actions/devops-write.test.ts` (description_edit), `server/assistant-voice.test.ts`,
   `server/teams/assistant.test.ts`; e2e `e2e/assistant.test.ts`, shots `e2e/as1-shots.test.ts`.
+
+## DM-1: demo readiness
+
+The demo, how it's seeded, reset and checked: `docs/demo/README.md`; the script: `docs/demo/script.md`.
+
+- **Seeds.** `sources/demo/seeds/` (`types.ts`, `index.ts` with `DEMO_SEEDS`, one file per feature; `inbox.ts` for
+  IB-1 and `assistant.ts` for AS-2, empty), run by `seedDemo` in `server/demo.ts`.
+- **Simulated writes.** `sources/demo/devops.ts` (`createDemoDevOps`) and `sources/demo/outlook.ts`
+  (`createDemoOutlook`): in-memory DevOps and calendar behind the real writers; `sources/demo/sources.ts` reads from
+  them. `sources/demo/data.ts` `demoItems()` is each session's starting items.
+- **AI.** `sources/demo/ai.ts` (`demoAi`): real calls under the caps, else samples per task; `server/main.ts` lends it
+  the app's runtime (`DemoRealAi`).
+- **Reset and status.** `demo.reset` and `demo.status` in `actions/dispatch.ts` (registry, menu); `ui/settings/Demo.tsx`;
+  `server/main.ts` `buildDemo`, `resetDemo`; `server/demo.ts` `demoSessionOf` (the session's DevOps, calendar and AI,
+  for tests).
+- **Preflight.** `scripts/demo-check.ts` (`npm run demo:check`).
+- **Tests.** `test/no-outbound.ts` (and its test), `server/demo-writes.test.ts`, `e2e/demo-script.test.ts`,
+  `e2e/demo-reset.test.ts`, `e2e/demo-check.test.ts`, `e2e/demo-names.test.ts`.
