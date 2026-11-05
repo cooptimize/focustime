@@ -55,6 +55,9 @@ export async function fill(db: Conn, userId: string): Promise<PlanStore> {
   await plan.addAsk({ chatId: `19:${tag}@thread.v2`, messageId: "1730000000001", clientKey: "cooptimize", rule: "question", ruleDetail: null, at: "2026-11-02T15:00:00Z" });
   await plan.addPromise({ chatId: `19:${tag}@thread.v2`, messageId: "1730000000001", clientKey: "cooptimize", phrase: "i'll", at: "2026-11-02T15:00:00Z", draft: { what: tag, due: null, toWhom: null, answers: null, reason: null }, aiStatus: null });
   await plan.seeConversation(1, 1);
+  // IB-1: a seen promise and a snoozed one.
+  await plan.markInbox(["c1", "f1"], { seen: true });
+  await plan.markInbox(["v1"], { snoozedUntil: "2026-11-09T14:00:00Z" });
   (await plan.addNotice({ key: `n-${tag}`, kind: "followups", title: tag, body: tag, route: "inbox" }));
   (await plan.setRoadmapDates("cooptimize", 7001, { start: "2026-11-02", end: "2026-11-20" }));
   // AH-1: a pending change and a kept half-day.

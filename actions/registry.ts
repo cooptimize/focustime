@@ -36,7 +36,7 @@ export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Team" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests" | "Conversations" | "Admin" | "Assistant";
+  readonly group: "Week" | "Team" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests" | "Conversations" | "Inbox" | "Admin" | "Assistant";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -223,6 +223,9 @@ export const ACTIONS = [
   { name: "conversations.merge", title: "Merge into…", group: "Conversations", target: "conversation", summary: "Moves one or more conversations of the same chat into another: messages, commitments and suggestions; the summary is written again. Undo puts them back" },
   { name: "conversations.unmerge", title: "Undo a merge", group: "Conversations", target: "conversation", summary: "Puts merged conversations back as they were" },
   { name: "conversations.draft", title: "Draft the DevOps item", group: "Conversations", target: "conversation", summary: "A draft bug, story or feature from the whole conversation, to check and create" },
+  { name: "inbox.list", title: "Inbox items", group: "Inbox", target: "none", summary: "Everything in the Inbox for you: each item's views and the count per view (read only)" },
+  { name: "inbox.count", title: "Inbox count", group: "Inbox", target: "none", summary: "How many items need you: the Inbox badge, the same number as Needs you (read only)" },
+  { name: "inbox.seen", title: "Mark Inbox items seen", group: "Inbox", target: "none", summary: "A new promise you've looked at stops counting as new" },
   { name: "my_promises.list", aka: ["my promises"], title: "Promises", group: "Conversations", target: "none", summary: "Inbox › Promises: what you said you'd do in your clients' registered chats" },
   { name: "my_promises.today", title: "Add a promise to Today", group: "Conversations", target: "commitment", summary: "Shows the promise on Today until it's done" },
   { name: "my_promises.followup", title: "Make a promise a follow-up", group: "Conversations", target: "commitment", summary: "A follow-up with who, what and the due filled in; the promise closes when it's done" },
