@@ -4,6 +4,8 @@
 // it, and Settings › Data clears the history.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CHROMIUM, FAKE_MIC, freshPage, NOW, startDemo, type Harness } from "./harness.ts";
+/** The demo's sample transcript (DM-1: the script's dictated comment). */
+const DEMO_TRANSCRIPT = "Comment on #1112 saying the date filter works for orders and the export screen is next";
 
 const T = 180_000;
 
@@ -52,8 +54,8 @@ describe.skipIf(!CHROMIUM)("AS-1 the assistant panel", () => {
     await panel.locator(".as-rec").waitFor({ timeout: 10_000 });
     await page.waitForTimeout(1200);
     await page.mouse.up();
-    await expect.poll(() => box.inputValue(), { timeout: 30_000 }).toBe("What's next today?");
-    await expect(panel.locator(".as-turn.me", { hasText: "What's next today?" }).count()).resolves.toBe(0);
+    await expect.poll(() => box.inputValue(), { timeout: 30_000 }).toBe(DEMO_TRANSCRIPT);
+    await expect(panel.locator(".as-turn.me", { hasText: DEMO_TRANSCRIPT }).count()).resolves.toBe(0);
 
     // × closes it; Settings › Data clears the history.
     await panel.getByRole("button", { name: "Close" }).click();

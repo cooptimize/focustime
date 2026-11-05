@@ -28,7 +28,8 @@ export async function fill(db: Conn, userId: string): Promise<PlanStore> {
   (await plan.makeUp(pick.id, { date: "2026-11-03", half: "AM" }, { minutes: 30, payback: "friday" }));
   (await plan.logAzureWrite({ op: "start", vmId: `/vm/${tag}`, vmName: tag, before: null, after: null, auto: false }));
   (await plan.markBreakdown("cooptimize", 7001, true));
-  (await plan.setDevopsIdentity({ clientKey: "cooptimize", org: "org", id: tag, name: tag, email: `${tag}@example.com`, expires: null }));
+  // DM-1: not a demo client key (the demo sets its own identities; SQL Server compares keys without case).
+  (await plan.setDevopsIdentity({ clientKey: "proseware", org: "org", id: tag, name: tag, email: `${tag}@example.com`, expires: null }));
   const draft = (await plan.addDraft({ clientKey: "cooptimize", parentItemId: null, title: tag, size: "S", level: "feature" }));
   (await plan.setWeekDraft(MON, draft.id, "must"));
   (await plan.setWeekQuiet(MON, "proseware", true));

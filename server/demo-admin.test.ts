@@ -36,8 +36,8 @@ describe("the demo's admin console", () => {
     const ctx = await demo();
     expect(await data(ctx, "admin.status")).toEqual({ admin: true, via: "demo" });
     const ai = await data<{ on: boolean; allowedClients: string[] }>(ctx, "admin.load", { section: "ai" });
-    expect(ai.on).toBe(false); // not the real FocusTime's "on"
-    await data(ctx, "admin.set", { scope: "org", key: "ai.on", value: true });
+    expect(ai.on).toBe(true); // the demo's own "on" (DM-1), not the real FocusTime's
+    await data(ctx, "admin.set", { scope: "org", key: "ai.on", value: false });
     await data(ctx, "admin.set", { scope: "client:Northwind", key: "allow_ai", value: true });
     const people = await data<{ people: { name: string }[] }>(ctx, "admin.load", { section: "people" });
     expect(people.people.map((p) => p.name)).not.toContain("Real Person");
@@ -56,7 +56,8 @@ describe("the demo's admin console", () => {
   it("two demos don't share their team settings", async () => {
     const a = await demo();
     const b = await demo();
-    await data(a, "admin.set", { scope: "org", key: "ai.on", value: true });
-    expect((await data<{ on: boolean }>(b, "admin.load", { section: "ai" })).on).toBe(false);
+    await data(a, "admin.set", { scope: "org", key: "ai.on", value: false });
+    expect((await data<{ on: boolean }>(a, "admin.load", { section: "ai" })).on).toBe(false);
+    expect((await data<{ on: boolean }>(b, "admin.load", { section: "ai" })).on).toBe(true);
   });
 });

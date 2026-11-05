@@ -4,7 +4,7 @@
 // about; a chat added for one client isn't offered to another; Remove forgets one and leaves the rest; Add a chat works
 // while the saved chats still load. Settings > Connections lists Chat.ReadBasic with its state. Screenshots at 1920 and
 // Text size Larger when FOCUSTIME_SHOTS is set.
-import type { Locator } from "playwright-core";
+import type { Locator, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CHROMIUM, freshPage, openSettings, startDemo, type Harness } from "./harness.ts";
 import { shotBoth } from "./shots.ts";
@@ -12,6 +12,9 @@ import { shotBoth } from "./shots.ts";
 let h: Harness;
 /** The picker's chat list (the kind dropdowns have options too). */
 const picks = (g: Locator) => g.getByRole("listbox", { name: "Your Teams group chats" });
+
+const call = (page: Page, action: string, input: unknown) =>
+  page.evaluate(([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()), [action, input] as const) as Promise<{ ok: boolean }>;
 
 describe.skipIf(!CHROMIUM)("Delivery chats", () => {
   beforeAll(async () => {
@@ -21,6 +24,9 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
 
   it("adds two chats by keyboard, flags external members, relabels one with a warning, removes one", async () => {
     const { page, errors } = await freshPage(h);
+    // DM-1: the demo starts with Northwind's two chats registered (its conversations); forget them so this test adds them.
+    for (const chatId of ["19:demo-northwind-delivery@thread.v2", "19:demo-northwind-collab@thread.v2"]) expect((await call(page, "chats.remove", { chatId })).ok).toBe(true);
+    await page.reload();
     await openSettings(page);
     // ADM-1: registering chats is in Admin › Clients (the demo's person is the demo's admin).
     await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Clients" }).click();
@@ -105,6 +111,9 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
 
   it("Connections lists every Microsoft permission, Chat.ReadBasic among them", async () => {
     const { page, errors } = await freshPage(h);
+    // DM-1: the demo starts with Northwind's two chats registered (its conversations); forget them so this test adds them.
+    for (const chatId of ["19:demo-northwind-delivery@thread.v2", "19:demo-northwind-collab@thread.v2"]) expect((await call(page, "chats.remove", { chatId })).ok).toBe(true);
+    await page.reload();
     await openSettings(page);
     await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Connections" }).click();
     const row = page.locator(".perms li", { hasText: "Chat.ReadBasic" });

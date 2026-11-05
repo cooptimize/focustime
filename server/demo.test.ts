@@ -71,14 +71,16 @@ describe("demo mode (D272)", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("shows meetings I'm invited to with their organizer, previews an answer, and refuses to send it (step 16)", async () => {
+  it("shows meetings I'm invited to with their organizer, previews an answer, and sends it to the demo's own calendar only (step 16, DM-1)", async () => {
     const ctx = await demo();
     const w = await ok<WeekLoadData>(ctx, "week.load", {});
     const id = Object.keys(w.eventEdit).find((k) => k.includes("nwstatus"))!;
     expect(w.eventEdit[id]).toMatchObject({ isOrganizer: false, organizer: "Dana Morales", response: "accepted" });
     const p = await ok<{ preview: { previewId: string; summary: string; visibility: string } }>(ctx, "write.preview", { rsvp: { id: id.replace(/^outlook:/, ""), response: "declined", comment: "Out that afternoon" } });
     expect(p.preview).toMatchObject({ summary: "Decline the meeting", visibility: expect.stringMatching(/^Dana Morales gets your response/) });
-    expect(await run(ctx, "write.confirm", { previewId: p.preview.previewId })).toMatchObject({ ok: false, code: "demo" });
+    expect(await run(ctx, "write.confirm", { previewId: p.preview.previewId })).toMatchObject({ ok: true });
+    const after = await ok<WeekLoadData>(ctx, "week.load", { refresh: true });
+    expect(after.eventEdit[id]).toMatchObject({ response: "declined" });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -88,9 +90,10 @@ describe("demo mode (D272)", () => {
       const r = await run(ctx, action, {});
       expect(r, action).toMatchObject({ ok: false, status: 403, code: "demo" });
     }
-    expect(DEMO_REFUSED).toEqual(expect.arrayContaining(["write.confirm", "devops.confirm", "devops.set_write_pat", "secret.set", "link.open", "data.export"]));
-    expect(ctx.writePats).toBeUndefined();
-    expect(ctx.devopsWriter).toBeUndefined();
+    // DM-1: writes are simulated in the demo, but secrets, connecting, signing in and export stay refused.
+    expect(DEMO_REFUSED).toEqual(expect.arrayContaining(["devops.set_write_pat", "devops.clear_write_pat", "secret.set", "link.open", "data.export", "auth.sign_in", "auth.connect_microsoft", "auth.connect_google"]));
+    expect(DEMO_REFUSED).not.toContain("write.confirm");
+    expect(DEMO_REFUSED).not.toContain("devops.confirm");
     expect(ctx.links).toBeUndefined();
     expect(fetchSpy).not.toHaveBeenCalled();
   });

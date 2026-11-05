@@ -19,7 +19,7 @@ export function demoPhotos(): PhotoClient {
     mine: async () => svg(DEMO_PERSON.name),
     person: async (oid) => {
       const p = DEMO_PEOPLE.find((x) => x.aadId === oid.toLowerCase());
-      return p && p.name !== "Alex Kim" ? svg(p.name) : null;
+      return p && p.name !== "Taylor Kim" ? svg(p.name) : null;
     },
   };
 }

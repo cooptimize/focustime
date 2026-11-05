@@ -4,6 +4,7 @@ import type { PtoEntry } from "../../week/pto.ts";
 import { scopeOf, type ProjectAreas, type ScopeItem } from "../../plan/devops-scope.ts";
 import type { ScopeDeps } from "../devops/source.ts";
 import { buildProcessModel, looksOf, type ProcessModel, type ProcessOverrides } from "../../plan/process.ts";
+import type { DemoItem } from "./devops.ts";
 import type { CalEvent, ClientPortfolio, ClientWork, FocusPattern, IsoDate, PortfolioChild, PortfolioItem, WorkItem } from "../../week/types.ts";
 
 export const DEMO_TZ = "America/New_York";
@@ -23,7 +24,7 @@ export const DEMO_PEOPLE = [
   { id: "d3300000-0000-4000-8000-000000000011", name: "Jordan Lee", email: "jordan.lee@example.com", aadId: "a4d00000-0000-4000-8000-000000000011" },
   { id: "d3300000-0000-4000-8000-000000000012", name: "Priya Shah", email: "priya.shah@example.com", aadId: "a4d00000-0000-4000-8000-000000000012" },
   { id: "d3300000-0000-4000-8000-000000000013", name: "Sam Ortiz", email: "sam.ortiz@example.com", aadId: "a4d00000-0000-4000-8000-000000000013" },
-  { id: "d3300000-0000-4000-8000-000000000014", name: "Alex Kim", email: "alex.kim@example.com", aadId: "a4d00000-0000-4000-8000-000000000014" },
+  { id: "d3300000-0000-4000-8000-000000000014", name: "Taylor Kim", email: "taylor.kim@example.com", aadId: "a4d00000-0000-4000-8000-000000000014" },
 ];
 /** Step 16.3: their fictional Teams presence (availability, activity). */
 export const DEMO_PRESENCE: Record<string, { availability: string; activity: string }> = {
@@ -121,13 +122,13 @@ export function demoOrganizer(id: string): string {
   return "Jordan Lee";
 }
 
-/** Personal events (Google): one crosses the morning and afternoon seam on Monday. */
+/** Personal events (Google): one crosses the morning and afternoon seam on Monday; DM-1: Wednesday afternoon out. */
 export function demoGoogle(monday: IsoDate): CalEvent[] {
   const g = (id: string, day: number, title: string, from: string, to: string): CalEvent => {
     const d = plus(monday, day);
     return { id: `google-demo-${id}-${d}`, source: "google", title, start: at(d, from), end: at(d, to), allDay: false, showAs: "busy", isPersonal: true };
   };
-  return [g("dentist", 0, "Dentist", "12:00", "13:00"), g("pickup", 1, "School pickup", "15:30", "16:00"), g("run", 2, "Run club", "17:30", "18:30")];
+  return [g("dentist", 0, "Dentist", "12:00", "13:00"), g("pickup", 1, "School pickup", "15:30", "16:00"), g("run", 2, "Run club", "17:30", "18:30"), g("out", 2, "Out: school event", "13:30", "16:30")];
 }
 
 /** PTO: Thursday is a day off. */
@@ -139,8 +140,9 @@ export function demoPto(from: IsoDate, to: IsoDate): PtoEntry[] {
 }
 
 type Raw = [id: number, type: string, state: string, parent: number | null, title: string, assignee: string | null, target?: IsoDate | null];
-const ME = "You";
-/** Work items per client: id, type, state, parent, title, assignee ("You" is me), target date. */
+/** "You": the demo's person, as the items name them. */
+export const ME = "You";
+/** Work items per client, in backlog order: id, type, state, parent, title, assignee ("You" is me), target date. */
 const ITEMS: Record<DemoClientKey, Raw[]> = {
   Cooptimize: [
     [4410, "Feature", "Active", null, "Internal reporting refresh", ME, "2026-11-20"],
@@ -217,21 +219,63 @@ const BLOCKED = new Set([2212, 3341]);
 /** Step 17: DevOps Start Date on some features (the demo process has the field); the rest are estimated in Plan ahead. */
 const START: Record<number, IsoDate> = { 4410: "2026-10-26", 1110: "2026-10-19", 2210: "2026-10-12", 4430: "2026-11-09" };
 const UNSIZED = new Set([1113, 2213]);
+/** DM-1: descriptions where the demo shows them (Break down reads Supplier onboarding's; the rest are one line). */
+const DESCRIPTIONS: Record<number, string> = {
+  1120: "<div>Suppliers sign up through the portal instead of emailing the purchasing team. They enter company details, upload their certificates and choose payment terms; purchasing reviews and approves each one.</div><div>Today onboarding takes about two weeks of back and forth.</div>",
+  1110: "<div>Customers export their order history from the portal, filtered by date, as CSV.</div>",
+  2210: "<div>Patients complete the intake form before their first visit, on a phone or at home.</div>",
+};
+const ACCEPTANCE: Record<number, string> = {
+  1120: "<div>A supplier can save a draft and come back to it.</div><div>Purchasing gets one notification per new supplier.</div><div>Certificates are PDF or image files up to 10 MB.</div>",
+};
 
 const client = (k: DemoClientKey) => DEMO_CLIENTS.find((c) => c.key === k)!;
 const urlOf = (k: DemoClientKey, id: number) => `https://dev.azure.com/${client(k).org}/${encodeURIComponent(client(k).project)}/_workitems/edit/${id}`;
 const isPortfolio = (t: string) => t === "Feature" || t === "Epic";
-const category = (s: string) => (s === "New" ? "Proposed" : s === "Closed" ? "Completed" : s === "Resolved" ? "Resolved" : "InProgress");
+const category = (s: string) => (s === "New" ? "Proposed" : s === "Closed" ? "Completed" : s === "Resolved" ? "Resolved" : s === "Removed" ? "Removed" : "InProgress");
+const emailOf = (who: string | null) => (who === ME ? "you@example.com" : who ? (CLIENT_STAFF[who] ?? DEMO_PEOPLE.find((p) => p.name === who)?.email ?? null) : null);
 
-function item(k: DemoClientKey, r: Raw, order: number): WorkItem {
-  const [id, type, state, parent, title, who, target] = r;
+/** DM-1: the items a demo session's DevOps starts with (sources/demo/devops.ts keeps them, with every write). */
+export function demoItems(): DemoItem[] {
+  const out: DemoItem[] = [];
+  for (const c of DEMO_CLIENTS) {
+    const rows = [...ITEMS[c.key].map((r) => [r, false] as const), ...(PROJECT_ONLY[c.key] ?? []).map((r) => [r, true] as const)];
+    rows.forEach(([r, projectOnly], n) => {
+      const [id, type, state, parent, title, who, target] = r;
+      out.push({
+        clientKey: c.key, id, rev: 3 + (id % 7), type, state, parent, title, who, whoEmail: emailOf(who), target: target ?? null, start: START[id] ?? null,
+        size: isPortfolio(type) || UNSIZED.has(id) ? null : 3, changedAt: QUIET.has(id) ? "2026-10-09T15:00:00Z" : "2026-10-30T15:00:00Z", order: n + 1, blocked: BLOCKED.has(id),
+        description: DESCRIPTIONS[id] ?? "<div>A fictional work item for the FocusTime demo.</div>", acceptance: ACCEPTANCE[id] ?? "", projectOnly, createdBy: null, area: c.key !== "Northwind" ? c.project : projectOnly ? `${c.project}\\Finance` : `${c.project}\\Web`, iteration: `${c.project}\\Sprint 23`, relations: [],
+      });
+    });
+  }
+  return out;
+}
+/** The names the demo knows for DevOps emails (an assignee written by email reads back as that person). */
+export function demoDevOpsPeople(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const p of DEMO_PEOPLE) out[p.email.toLowerCase()] = p.name;
+  for (const [name, email] of Object.entries(CLIENT_STAFF)) out[email.toLowerCase()] = name;
+  return out;
+}
+
+/** What the demo's reads need from its DevOps: one client's items in backlog order. */
+export type DemoItems = { items: (k: DemoClientKey) => DemoItem[] };
+
+function item(k: DemoClientKey, i: DemoItem): WorkItem {
   return {
-    id, title, type, state, stateCategory: category(state), level: isPortfolio(type) ? "portfolio" : "story", ...(isPortfolio(type) ? { tier: type === "Epic" ? ("epic" as const) : ("feature" as const) } : {}),
-    order, parentId: parent, changedAt: "2026-10-30T15:00:00Z", url: urlOf(k, id), tags: [], blocked: false, changedByMe: false,
-    assignedTo: who === ME ? "You" : who, assignedToMe: who === ME, targetDate: target ?? null,
+    id: i.id, title: i.title, type: i.type, state: i.state, stateCategory: category(i.state), level: isPortfolio(i.type) ? "portfolio" : "story", ...(isPortfolio(i.type) ? { tier: i.type === "Epic" ? ("epic" as const) : ("feature" as const) } : {}),
+    order: i.order, parentId: i.parent, changedAt: i.changedAt, url: urlOf(k, i.id), tags: [], blocked: false, changedByMe: false,
+    assignedTo: i.who === ME ? "You" : i.who, assignedToMe: i.who === ME, targetDate: i.target,
     // Step 16.4: the fictional assignee's email (DevOps uniqueName), matched to the demo team by email.
-    assignedToEmail: who === ME ? "you@example.com" : who ? (CLIENT_STAFF[who] ?? DEMO_PEOPLE.find((p) => p.name === who)?.email ?? null) : null,
+    assignedToEmail: i.whoEmail,
   };
+}
+
+/** One item as the Week reads it (CV-5's live state of a linked item), or null. */
+export function demoWorkItem(d: DemoItems, k: DemoClientKey, id: number): WorkItem | null {
+  const i = d.items(k).find((x) => x.id === id);
+  return i ? item(k, i) : null;
 }
 
 /** WT-1: the demo's process (fictional, shaped like Agile): what its types look like and where they sit. */
@@ -247,9 +291,12 @@ export function demoProcess(k: DemoClientKey, overrides: ProcessOverrides = {}):
   }, overrides);
 }
 
+const live = (i: DemoItem) => category(i.state) !== "Removed";
+const mineOrScope = (d: DemoItems, k: DemoClientKey) => d.items(k).filter((i) => !i.projectOnly && live(i));
+
 /** One client's DevOps read: my open items in board order, and the open children of my features and epics. */
-export function demoWork(k: DemoClientKey, fetchedAt: string): ClientWork {
-  const all = ITEMS[k].map((r, n) => item(k, r, n + 1)).filter((i) => i.stateCategory !== "Completed");
+export function demoWork(d: DemoItems, k: DemoClientKey, fetchedAt: string): ClientWork {
+  const all = mineOrScope(d, k).map((r) => item(k, r)).filter((i) => i.stateCategory !== "Completed");
   const mine = all.filter((i) => i.assignedToMe);
   const mineIds = new Set(mine.map((i) => i.id));
   const children = all.filter((i) => !mineIds.has(i.id) && i.parentId !== null);
@@ -257,17 +304,22 @@ export function demoWork(k: DemoClientKey, fetchedAt: string): ClientWork {
 }
 
 /** One client's features and epics for Plan the week, with every child (any state). */
-export function demoPortfolio(k: DemoClientKey, fetchedAt: string): ClientPortfolio {
-  const all = ITEMS[k].map((r, n) => item(k, r, n + 1));
-  const child = (c: WorkItem): PortfolioChild => ({
-    id: c.id, title: c.title, type: c.type, state: c.state, stateCategory: c.stateCategory, open: c.stateCategory !== "Completed", level: c.level, order: c.order, url: c.url, assignedTo: c.assignedTo ?? null, assignedToEmail: c.assignedToEmail ?? null, mine: !!c.assignedToMe,
-    changedAt: QUIET.has(c.id) ? "2026-10-09T15:00:00Z" : c.changedAt, size: UNSIZED.has(c.id) ? null : 3, blocked: BLOCKED.has(c.id), targetDate: c.targetDate ?? null,
-  });
+export function demoPortfolio(d: DemoItems, k: DemoClientKey, fetchedAt: string): ClientPortfolio {
+  const rows = mineOrScope(d, k);
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const all = rows.map((r) => item(k, r));
+  const child = (c: WorkItem): PortfolioChild => {
+    const r = byId.get(c.id)!;
+    return {
+      id: c.id, title: c.title, type: c.type, state: c.state, stateCategory: c.stateCategory, open: c.stateCategory !== "Completed", level: c.level, order: c.order, url: c.url, assignedTo: c.assignedTo ?? null, assignedToEmail: c.assignedToEmail ?? null, mine: !!c.assignedToMe,
+      changedAt: r.changedAt, size: r.size, blocked: r.blocked, targetDate: c.targetDate ?? null,
+    };
+  };
   const items: PortfolioItem[] = all
     .filter((i) => i.level === "portfolio")
     .map((i) => ({
       id: i.id, title: i.title, type: i.type, state: i.state, stateCategory: i.stateCategory, tier: i.tier ?? "feature", order: i.order, parentId: i.parentId, url: i.url,
-      targetDate: i.targetDate ?? null, startDate: START[i.id] ?? null, assignedTo: i.assignedTo ?? null, mine: !!i.assignedToMe,
+      targetDate: i.targetDate ?? null, startDate: byId.get(i.id)!.start, assignedTo: i.assignedTo ?? null, mine: !!i.assignedToMe,
       why: i.assignedToMe ? ["assigned"] : ["parent"],
       children: all.filter((c) => c.parentId === i.id).map(child),
       areaPath: client(k).project, iterationPath: `${client(k).project}\\Sprint 23`,
@@ -277,13 +329,14 @@ export function demoPortfolio(k: DemoClientKey, fetchedAt: string): ClientPortfo
 
 export const isDemoClient = (k: string): k is DemoClientKey => DEMO_CLIENTS.some((c) => c.key === k);
 
-/**
- * AH-2: the client's own work beside ours in Northwind's project (fictional): an area of their finance program, by
- * their own staff (not Cooptimizers). Only Ahead reads it (the store has the whole project; Week starts from my items).
- */
 /** AH-3: Cooptimizers' client logins on Harbor's DevOps (fictional): Priya's is in Dataverse, Sam's only suggested. */
 export const DEMO_LOGINS: Record<string, string> = { "Ext-Priya Shah": "ext-priya.shah@harbor.example", "Ext-Sam Ortiz": "ext-sam.ortiz@harbor.example" };
 const CLIENT_STAFF: Record<string, string> = { "Dana Fields": "dana.fields@northwind.example", "Omar Reyes": "omar.reyes@northwind.example", ...DEMO_LOGINS };
+/**
+ * AH-2: the client's own work beside ours in Northwind's project (fictional): an area of their finance program, by
+ * their own staff (not Cooptimizers). Only Ahead reads it (the store has the whole project; Week starts from my items).
+ * AH-3: Harbor's own work signed in with client logins: Priya's (linked) shows as Priya Shah, Sam's as DevOps has it.
+ */
 const PROJECT_ONLY: Partial<Record<DemoClientKey, Raw[]>> = {
   Northwind: [
     [1700, "Epic", "Active", null, "Finance close automation", "Dana Fields"],
@@ -292,7 +345,6 @@ const PROJECT_ONLY: Partial<Record<DemoClientKey, Raw[]>> = {
     [1712, "User Story", "New", 1710, "Journal approval step", null],
     [1720, "Feature", "New", 1700, "Vendor payment run", "Omar Reyes"],
   ],
-  // AH-3: Harbor's own work signed in with client logins: Priya's (linked) shows as Priya Shah, Sam's as DevOps has it.
   Harbor: [
     [2250, "Feature", "Active", null, "Referral tracking", "Ext-Priya Shah", "2026-11-26"],
     [2251, "User Story", "New", 2250, "Referral source field", "Ext-Sam Ortiz"],
@@ -311,23 +363,25 @@ export function demoAreas(k: DemoClientKey): ProjectAreas {
     ],
   };
 }
-const areaOf = (k: DemoClientKey, id: number) => (k !== "Northwind" ? client(k).project : PROJECT_ONLY.Northwind!.some((r) => r[0] === id) ? `${client(k).project}\\Finance` : `${client(k).project}\\Web`);
+const areaOf = (k: DemoClientKey, i: DemoItem) => (k !== "Northwind" ? client(k).project : i.projectOnly ? `${client(k).project}\\Finance` : `${client(k).project}\\Web`);
 
 /** AH-2: the demo's items as the scope rules read them (every level, the project-only ones too). */
-export function demoScopeItems(k: DemoClientKey): ScopeItem[] {
-  return [...ITEMS[k], ...(PROJECT_ONLY[k] ?? [])].filter((r) => r[2] !== "Closed").map((r) => ({ id: r[0], parentId: r[3], area: areaOf(k, r[0]), assigneeEmail: r[5] === ME ? "you@example.com" : r[5] ? (CLIENT_STAFF[r[5]] ?? DEMO_PEOPLE.find((p) => p.name === r[5])?.email ?? null) : null, portfolio: isPortfolio(r[1]) }));
+export function demoScopeItems(d: DemoItems, k: DemoClientKey): ScopeItem[] {
+  return d.items(k).filter((r) => r.state !== "Closed" && live(r)).map((r) => ({ id: r.id, parentId: r.parent, area: areaOf(k, r), assigneeEmail: r.whoEmail, portfolio: isPortfolio(r.type) }));
 }
 
 /**
- * AH-1: one client's items for Ahead, every level, as the central store would give them (fictional). Revisions are
- * fixed per item. Harbor's process sizes stories in Effort; the others in Story Points (two processes, D657).
- * AH-2: through the client's scope (the same rules as the hosted app's); outside it only with `whole`.
+ * AH-1: one client's items for Ahead, every level, as the central store would give them (fictional). Harbor's process
+ * sizes stories in Effort; the others in Story Points (two processes, D657). AH-2: through the client's scope (the
+ * same rules as the hosted app's); outside it only with `whole`. DM-1: the revisions are the demo DevOps's own, so a
+ * save's `test /rev` matches what Ahead showed.
  */
-export function demoAheadClient(k: DemoClientKey, fetchedAt: string, sc: { deps: ScopeDeps | null; whole: boolean } = { deps: null, whole: false }): import("../../actions/types.ts").AheadClient {
+export function demoAheadClient(d: DemoItems, k: DemoClientKey, fetchedAt: string, sc: { deps: ScopeDeps | null; whole: boolean } = { deps: null, whole: false }): import("../../actions/types.ts").AheadClient {
   const model = demoProcess(k);
-  const rows = [...ITEMS[k], ...(PROJECT_ONLY[k] ?? [])];
-  const all = rows.map((r, n) => item(k, r, n + 1)).filter((i) => i.stateCategory !== "Completed" || rows.some((r) => r[3] === i.id));
-  const result = sc.deps ? scopeOf(demoScopeItems(k), sc.deps.rule, { areas: demoAreas(k), isCooptimizer: sc.deps.isCooptimizer, me: "you@example.com" }) : null;
+  const rows = d.items(k).filter(live);
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const all = rows.map((r) => item(k, r)).filter((i) => i.stateCategory !== "Completed" || rows.some((r) => r.parent === i.id));
+  const result = sc.deps ? scopeOf(demoScopeItems(d, k), sc.deps.rule, { areas: demoAreas(k), isCooptimizer: sc.deps.isCooptimizer, me: "you@example.com" }) : null;
   const inScope = (id: number) => !result || result.all || result.ids.has(id);
   const open = all.filter((i) => i.stateCategory !== "Completed");
   const keep = new Set(open.filter((i) => sc.whole || inScope(i.id)).map((i) => i.id));
@@ -344,28 +398,29 @@ export function demoAheadClient(k: DemoClientKey, fetchedAt: string, sc: { deps:
     fieldNames: { "Microsoft.VSTS.Scheduling.StartDate": "Start Date", "Microsoft.VSTS.Scheduling.TargetDate": "Target Date", [sizeRef]: k === "Harbor" ? "Effort" : "Story Points" },
     types: looksOf(model),
     scope: { kind: result?.kind ?? "whole", automatic: result?.kind === "automatic", all: result ? result.all : true, inScope: open.filter((i) => inScope(i.id)).length, total: open.length, problem: result?.problem ?? null, whole: sc.whole },
-    items: all.filter((i) => keep.has(i.id)).map((i) => ({
-      id: i.id, rev: 3 + (i.id % 7), title: i.title, type: i.type, state: i.state, stateCategory: i.stateCategory,
-      level: model.types.find((t) => t.name === i.type)?.level ?? null, rung: model.ladder.findIndex((r) => r.includes(i.type)),
-      parentId: i.parentId,
-      assignee: i.assignedToMe ? { name: "Alex Rivera", email: "you@example.com" } : i.assignedTo ? { name: i.assignedTo, email: i.assignedToEmail ?? null } : null,
-      start: START[i.id] ?? null, target: i.targetDate ?? null,
-      size: i.level === "portfolio" || UNSIZED.has(i.id) || i.stateCategory === "Completed" ? null : 3,
-      url: i.url, changedAt: QUIET.has(i.id) ? "2026-10-09T15:00:00Z" : i.changedAt, inScope: inScope(i.id), order: i.order,
-    })),
+    items: all.filter((i) => keep.has(i.id)).map((i) => {
+      const r = byId.get(i.id)!;
+      return {
+        id: i.id, rev: r.rev, title: i.title, type: i.type, state: i.state, stateCategory: i.stateCategory,
+        level: model.types.find((t) => t.name === i.type)?.level ?? null, rung: model.ladder.findIndex((x) => x.includes(i.type)),
+        parentId: i.parentId,
+        assignee: i.assignedToMe ? { name: "Alex Rivera", email: "you@example.com" } : i.assignedTo ? { name: i.assignedTo, email: i.assignedToEmail ?? null } : null,
+        start: r.start, target: r.target,
+        size: i.level === "portfolio" || i.stateCategory === "Completed" ? null : r.size,
+        url: i.url, changedAt: r.changedAt, inScope: inScope(i.id), order: i.order,
+      };
+    }),
     // AH-3: Harbor Health's demo project has no backlog order field, so its Fix next ranks by target date.
     orderField: k === "Harbor" ? null : "Microsoft.VSTS.Common.StackRank",
   };
 }
 
 /** AH-3: who is assigned work in a demo project (DevOps email and display name), as the central store would say. */
-export function demoAssignees(k: DemoClientKey): { email: string; name: string }[] {
+export function demoAssignees(d: DemoItems, k: DemoClientKey): { email: string; name: string }[] {
   const out = new Map<string, { email: string; name: string }>();
-  for (const r of [...ITEMS[k], ...(PROJECT_ONLY[k] ?? [])]) {
-    const who = r[5];
-    if (!who) continue;
-    const email = who === ME ? "you@example.com" : (CLIENT_STAFF[who] ?? DEMO_PEOPLE.find((p) => p.name === who)?.email ?? null);
-    if (email && !out.has(email)) out.set(email, { email, name: who === ME ? "Alex Rivera" : who });
+  for (const r of d.items(k)) {
+    if (!r.who || !r.whoEmail) continue;
+    if (!out.has(r.whoEmail)) out.set(r.whoEmail, { email: r.whoEmail, name: r.who === ME ? "Alex Rivera" : r.who });
   }
   return [...out.values()];
 }
