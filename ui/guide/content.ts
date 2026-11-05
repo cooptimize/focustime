@@ -197,13 +197,32 @@ export const DEVOPS = {
   title: "DevOps first",
   quote: ["If it isn't in DevOps, ", "it isn't planned yet."] as const,
   body: "FocusTime makes the healthy path the easy one. It reads your work from DevOps, nudges big things into smaller pieces, and offers to update DevOps when you finish. It never changes anything without showing you first.",
+  // WT-1: levels come from each client's DevOps process, not type names; the icon is the type's usual DevOps icon.
   ladder: [
-    { level: "Epic", text: "Lives on the Roadmap. Needs features before it reaches a week." },
-    { level: "Feature", text: "Goes on a week as a must or nice to have." },
-    { level: "Needs stories", text: "A feature with no stories can't go on a day yet. {b:Draft stories} or send a {b:Coop brief}.", flag: true },
-    { level: "Story", text: "Goes on a day, gets a size, gets done." },
-    { level: "Done", text: "Tick it, then {b:Mark done in DevOps} from Close out." },
-  ] as { level: string; text: string; flag?: boolean }[],
+    { level: "Top", icon: "icon_crown", text: "Epics (or whatever the top level is called). Live on the Roadmap. Need features before they reach a week." },
+    { level: "Parent", icon: "icon_trophy", text: "Features, and any type at the same level. Go on a week as a must or nice to have." },
+    { level: "Needs stories", text: "A feature with no stories can't go on a day yet. {b:Draft stories} or send a {b:Coop brief}. An admin can turn this off for a type that's worked directly.", flag: true },
+    { level: "Child", icon: "icon_book", text: "Stories, and bugs and tasks where the team tracks them. Go on a day, get a size, get done." },
+    { level: "Done", text: "Tick it, then {b:Mark done in DevOps} from Close out. Resolved in DevOps means no hours left; it drops off planning lists." },
+  ] as { level: string; icon?: string; text: string; flag?: boolean }[],
+  /** WT-1: the icons that stand for work item types, drawn in each project's own colors. */
+  icons: {
+    intro: "FocusTime shows a small icon for each work item type instead of its name, in the color the client's DevOps project gives it. Hover an icon to see the type's name. The usual ones:",
+    legend: [
+      { icon: "icon_crown", color: "E06C00", name: "Epic, Domain" },
+      { icon: "icon_trophy", color: "773B93", name: "Feature" },
+      { icon: "icon_asterisk", color: "5c197b", name: "Recurring" },
+      { icon: "icon_flame", color: "5c197b", name: "Ongoing, Risk" },
+      { icon: "icon_book", color: "009CCC", name: "User Story" },
+      { icon: "icon_list", color: "009CCC", name: "Product Backlog Item" },
+      { icon: "icon_clipboard", color: "A4880A", name: "Task" },
+      { icon: "icon_insect", color: "CC293D", name: "Bug" },
+      { icon: "icon_gavel", color: "222222", name: "Decision" },
+      { icon: "icon_parachute", color: "009CCC", name: "Action Item" },
+      { icon: "icon_chart", color: "e87025", name: "Change Request" },
+      { icon: null, color: null, name: "Any other type" },
+    ] as { icon: string | null; color: string | null; name: string }[],
+  },
   /** DS-1: Draft stories with AI, in three steps. */
   draft: [
     { q: "What does Draft stories do?", a: "On a feature that {b:Needs stories}, {b:Draft stories} asks the AI to propose the stories it's missing. It works in three steps: Prepare (see what will be sent), Review (edit the cards) and Publish (preview, then create in DevOps). Nothing is written to DevOps until you confirm the preview." },

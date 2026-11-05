@@ -5,6 +5,7 @@
 // agenda open only on the selected block; Enter in the type box makes a draft story under the chosen feature and plans
 // it, Shift+Enter a plain intention ("not in DevOps"); features aren't picks, so they offer Draft stories instead.
 // Everything here is local: the actions only write FocusTime's plan store.
+import { countsFor } from "../plan/process.ts";
 import { ModeArea } from "./ModeSwitch.tsx";
 import { planDayTitle } from "./nav.ts";
 import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
@@ -24,7 +25,8 @@ import type { PlanDayState, Pick } from "../plan/types.ts";
 import type { Day, Half, Slot, WorkItem } from "../week/types.ts";
 import { clientColor, halfName, halfTag, longDate, shortDate, shortRange } from "./labels.ts";
 import { cardHalves, slotOf } from "./halves.ts";
-import { DevOpsWork, typeTag } from "./work.ts";
+import { DevOpsWork } from "./work.ts";
+import { TypeIcon } from "./TypeIcon.tsx";
 import { PlanCtx, useFocused } from "./planview.ts";
 import { focusLabel } from "../plan/focus.ts";
 import { formatDuration } from "../week/format.ts";
@@ -99,14 +101,17 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
   const timing = tbEnv?.settings.enabled !== false;
   const nowI = Temporal.Instant.from(now);
   const dayPicks = state.picks.filter((p) => p.date === day.date);
+  const counts = countsFor(useContext(DevOpsWork).values());
   const picked = new Set(dayPicks.filter(inPlay).map(pickedKey));
   // S1 (D453): a PTO half isn't a block to plan (a pick already there stays visible, to move).
   const halves = cardHalves(day).filter((h) => ((!slotOf(day, h)!.off || day.kind === "overflow") && !slotOf(day, h)!.pto) || dayPicks.some((p) => p.half === h && inPlay(p)));
   const blocks = halves.map((h) => {
     const slot = slotOf(day, h)!;
     const picks = dayPicks.filter((p) => p.half === h && inPlay(p));
-    const fit = planFit(picks, pv.sizes, pv.timeboxes, slot);
-    return { half: h, slot, picks, fit, words: fitWords(fit), ended: Temporal.Instant.compare(nowI, Temporal.Instant.from(slot.end)) >= 0, planned: planMinutes(picks, pv.sizes, pv.timeboxes, slot), free: freeMinutes(slot) };
+    // WT-1: a background type (Settings' background_types) doesn't count against the block's hours.
+    const counted = picks.filter((p) => counts(p.clientKey, p.itemType));
+    const fit = planFit(counted, pv.sizes, pv.timeboxes, slot);
+    return { half: h, slot, picks, fit, words: fitWords(fit), ended: Temporal.Instant.compare(nowI, Temporal.Instant.from(slot.end)) >= 0, planned: planMinutes(counted, pv.sizes, pv.timeboxes, slot), free: freeMinutes(slot) };
   });
   const firstSel = () => defaultBlock(blocks.map((b) => ({ half: b.half, ended: b.ended, fit: b.words.kind })), start?.half) ?? halves[0] ?? "AM";
   const [sel, setSel] = useState<Half>(firstSel);
@@ -596,7 +601,7 @@ function AddPaneDay({ slot, picks, overflow, state, picked, here, clients, color
                     {s!.rest.map((r) =>
                       r.kids.length ? (
                         <li key={r.item.id} className="pd2-group">
-                          <span className="pd2-group-title"><span className="pr-type">{typeTag(r.item.type)}</span> {r.item.title}</span>
+                          <span className="pd2-group-title"><TypeIcon clientKey={clientKey} type={r.item.type} /> {r.item.title}</span>
                           <ul>
                             {r.kids.map((k) => <ItemAdd key={k.id} item={k} clientKey={clientKey} add={add} tag />)}
                           </ul>
@@ -715,12 +720,12 @@ function AddRow({ onAdd, label, children, menu, k, drag }: { onAdd: () => void; 
   );
 }
 
-/** A DevOps item to add. Its type shows only where types mix (Everything else); under a feature they're all stories. */
-function ItemAdd({ item, clientKey, add, tag = false, after }: { item: WorkItem; clientKey: string; add: (i: Record<string, unknown>) => Promise<boolean>; tag?: boolean; after?: ReactNode }) {
+/** A DevOps item to add, with its type's icon (WT-1) and, when DevOps has resolved it, the Resolved marker. */
+function ItemAdd({ item, clientKey, add, after }: { item: WorkItem; clientKey: string; add: (i: Record<string, unknown>) => Promise<boolean>; tag?: boolean; after?: ReactNode }) {
   const menu = useMenu((env) => itemMenu(env, clientKey, item));
   return (
     <AddRow k={`i${clientKey}:${item.id}`} drag={{ clientKey, title: item.title, input: { itemId: item.id } }} onAdd={() => void add({ itemId: item.id })} label={`Add ${item.title}`} menu={menu}>
-      {tag && <span className="pr-type">{typeTag(item.type)}</span>}
+      <TypeIcon clientKey={clientKey} type={item.type} />
       <span className="pr-title" title={`${item.type} ${item.id} · ${item.state}`}>
         <WorkLink clientKey={clientKey} url={item.url}>{item.title}</WorkLink>
       </span>

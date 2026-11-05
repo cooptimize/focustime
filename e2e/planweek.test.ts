@@ -115,10 +115,10 @@ describe.skipIf(!CHROMIUM)("Plan the week one client at a time (U6)", () => {
     // D437: the feature and the orphan story are rows; the feature's stories nest under it, never rows of their own.
     expect(await offered(page)).toEqual(expect.arrayContaining([4410, 4420]));
     expect(await offered(page)).not.toContain(4411);
-    expect(await page.locator('.pw-addpane .pw-addrow[data-item="4410"] .pw-add-kid').allTextContents()).toEqual([
-      expect.stringMatching(/#4411 Timesheet summary query\s+Story$/),
-      expect.stringMatching(/#4412 Utilization chart\s+Story$/),
-    ]);
+    // WT-1: the type is an icon named for the process's type, not a word.
+    const kids = page.locator('.pw-addpane .pw-addrow[data-item="4410"] .pw-add-kid');
+    expect((await kids.allInnerTexts()).map((t) => t.trim())).toEqual(["#4411 Timesheet summary query", "#4412 Utilization chart"]);
+    expect(await kids.locator(".type-icon").evaluateAll((els) => els.map((e) => e.getAttribute("title")))).toEqual(["User Story", "User Story"]);
     await page.getByRole("button", { name: "Add #4410 as a must" }).click();
     const row = page.locator(".pw-client .pw-row", { hasText: "Internal reporting refresh" });
     await row.waitFor();
@@ -180,7 +180,7 @@ describe.skipIf(!CHROMIUM)("Plan the week one client at a time (U6)", () => {
     await page.close();
   }, T);
 
-  it("each row says its type (Feature with its target date, Story), never User Story; no epics; an epic with no features is a line on the card that opens the draft editor", async () => {
+  it("each row shows its type as an icon named for the type (WT-1), a feature with its target date; no epics; an epic with no features is a line on the card that opens the draft editor", async () => {
     const { page, errors } = await freshPage(h);
     await reset(page);
     await go(page, `#/week/plan/${NEXT}`);
@@ -189,19 +189,19 @@ describe.skipIf(!CHROMIUM)("Plan the week one client at a time (U6)", () => {
     for (const name of names) {
       await weekClient(page, name);
       await expect.poll(() => paneName(page)).toBe(name);
-      const words = await page.locator(".pw-addpane .pw-addrow > .pw-title .pw-type-word").allTextContents();
-      expect(words.length, name).toBe(await page.locator(".pw-addpane .pw-addrow").count());
-      // A story-tier item that is not the process's story type (a Bug) keeps its own word; "User Story" is always "Story".
-      for (const w of words) expect(["Feature", "Story", "Bug"], name).toContain(w);
-      rows += words.length;
+      // WT-1: each row's type is an icon with the process's type name as its accessible name; no type words.
+      const types = await page.locator(".pw-addpane .pw-addrow > .pw-title > .type-icon svg").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
+      expect(types.length, name).toBe(await page.locator(".pw-addpane .pw-addrow").count());
+      for (const t of types) expect(["Feature", "User Story", "Bug"], name).toContain(t);
+      rows += types.length;
       const pane = await page.locator(".pw-addpane").innerText();
-      expect(pane, name).not.toContain("User Story");
+      expect(pane, name).not.toMatch(/\b(User Story|Story|Feature)\b(?! for)/);
       expect(pane, name).not.toMatch(/\bEpics?\b/);
     }
     expect(rows).toBeGreaterThan(0);
     // A feature with a target date says it after its type word.
     await weekClient(page, "Cooptimize");
-    await expect(page.locator('.pw-addpane .pw-addrow[data-item="4410"] > .pw-title').innerText()).resolves.toMatch(/Internal reporting refresh\s+Feature · target Nov 20/);
+    await expect(page.locator('.pw-addpane .pw-addrow[data-item="4410"] > .pw-title').innerText()).resolves.toMatch(/Internal reporting refresh · target Nov 20/);
     // The type box saves a draft feature, never a story.
     await expect(page.locator(".pw-addpane .pw-type").innerText()).resolves.toContain("Enter saves a draft feature as a must");
     // Atlas's epic with no features: once, at the top of its card; Draft feature opens the draft editor under it.

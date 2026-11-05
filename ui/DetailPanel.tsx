@@ -3,6 +3,8 @@
 // and Today's 3840 pick detail. Contents: client and time range with the risk reasons, the block's agenda with free
 // gaps (as Plan the day's), the picks as full rows, the client's features this week with story counts and Needs
 // stories actions, the client's follow-ups, DevOps items assigned to me there and not planned yet, and the ⋯ actions.
+import { TypeIcon } from "./TypeIcon.tsx";
+import { typeNeedsBreakdown } from "../plan/process.ts";
 import { useCallback, useContext, useEffect, useRef, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import { rankRisks } from "../week/risks.ts";
@@ -184,15 +186,21 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
                 const stories = storiesUnder(work, f.itemId);
                 const done = stories.filter((s) => weekPicks.some((p) => p.clientKey === f.clientKey && p.itemId === s.id)).length;
                 const item = work ? [...work.items, ...work.children].find((i) => i.id === f.itemId) ?? null : null;
+                const type = item?.type ?? f.itemType;
+                // WT-1: only a type that needs breakdown in the project's process asks for stories.
+                const needs = !stories.length && (!type || typeNeedsBreakdown(work?.types, type));
                 return (
-                  <li key={f.itemId} className={stories.length ? undefined : "needs"}>
+                  <li key={f.itemId} className={needs ? "needs" : undefined}>
                     <WorkLink clientKey={f.clientKey} url={f.url} className="feat-link">
+                      {type && <TypeIcon clientKey={f.clientKey} type={type} />}
                       {f.title}
                     </WorkLink>
-                    {stories.length ? (
+                    {!needs ? (
+                      stories.length > 0 && (
                       <span className="dp-count">
                         {done} of {stories.length} {stories.length === 1 ? "story" : "stories"} planned
                       </span>
+                      )
                     ) : (
                       <span className="dp-needs">
                         <span className="tw-needs">Needs stories</span>
@@ -232,6 +240,7 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
                 {unplanned.map((i) => (
                   <MenuRow key={i.id} build={(env) => itemMenu(env, work.clientKey, i)} label={`Actions for ${i.type} ${i.id}`} item={{ clientKey: work.clientKey, url: i.url }}>
                     <WorkLink clientKey={work.clientKey} url={i.url} className="wi-link">
+                      <TypeIcon clientKey={work.clientKey} type={i.type} />
                       <span className="wi-id">#{i.id}</span>
                       <span className="wi-title">{i.title}</span>
                       <span className="wi-state">{i.state}</span>
