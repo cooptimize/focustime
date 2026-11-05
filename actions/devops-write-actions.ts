@@ -786,9 +786,8 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       };
       let internalImages = false;
       if (internal && !include) for (const p of (await cv.view.placesIn([c.id])).filter((x) => x.role === "work")) if ((await shared.teams.images(p.chatId, [p.messageId])).length) internalImages = true;
+      // CV-5: who will see it is the preview's own "Who can see it" (VISIBILITY), above the full text.
       const notesOut = [
-        // CV-5: who will see it.
-        `Everyone with access to ${env.projectName} in ${env.clientName}'s DevOps will see this item and its full text.`,
         ...(acceptance.trim() && !acField ? [`${t.type} has no acceptance criteria field in this project, so they're left out.`] : []),
         ...(internalImages ? ["The chat's images are left out with its messages: it's an internal chat. Include the internal messages to offer them."] : []),
       ];

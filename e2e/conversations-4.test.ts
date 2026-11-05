@@ -239,7 +239,7 @@ describe.skipIf(!CHROMIUM)("Chat images, CV-4", () => {
       if (!(await title.inputValue())) await title.fill("Overnight refresh fails");
       await draft.getByRole("button", { name: "Preview in DevOps" }).click();
       const preview = page.getByRole("dialog", { name: "Create a DevOps item" });
-      const pick = preview.getByRole("group", { name: /Attach images from the chat/ });
+      const pick = preview.getByRole("group", { name: /^Attach 3 images/ });
       await pick.getByText("· 3 of 3").waitFor();
       await shotAll(page, "cv4-create-preview-images", pick);
       await pick.getByRole("checkbox", { name: /^Attach image 2 from Blake Novak/ }).click();

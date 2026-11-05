@@ -727,7 +727,7 @@ describe("CV-1: a DevOps item, a comment and a description change from a convers
     await s.enable();
     const { c } = await world(s);
     const p = await s.preview({ kind: "conversation_create", conversationId: c.id, title: "Totals gap on the dashboard", description: "What's being asked\nTotals are off.", level: "story", acceptance: "- Totals match the BOM report", assign: "none" });
-    expect(p.notes.join(" ")).toMatch(/Everyone with access to Cooptimize Project in .*'s DevOps will see this item and its full text\./);
+    expect(p.visibility).toMatch(/Cooptimize Project/);
     const desc = p.fields.find((f) => f.label === "Description")!.after!;
     expect(desc).toContain("Blake Novak · 2026-11-02 08:00: Avery the totals are off by 7.7k lb");
     expect(desc).toMatch(/Open the chat in Teams: https:\/\/teams\.microsoft\.com\//);

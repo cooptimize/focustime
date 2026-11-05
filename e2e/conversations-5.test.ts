@@ -138,7 +138,7 @@ describe.skipIf(!CHROMIUM)("Create DevOps item and Link to item, CV-5", () => {
       await shots(page, "cv5-create-form", draft);
       await draft.getByRole("button", { name: "Preview in DevOps" }).click();
       const preview = page.getByRole("dialog", { name: "Create a DevOps item" });
-      await preview.getByText(/Everyone with access to .* will see this item and its full text/).waitFor();
+      await preview.getByText("Who can see it:").waitFor();
       await preview.getByText(/Blake Novak · 2026-11-02 \d\d:31: The sales view takes 20 seconds/).first().waitFor();
       await preview.getByRole("button", { name: "Create in DevOps" }).click();
       await preview.waitFor({ state: "detached" });
