@@ -10,6 +10,8 @@ import { presenceContext, vmContext, expiringFor } from "../actions/dispatch.ts"
 import { syncTeamsStatus, TEAMS_STATUS_KEY } from "../actions/presence-actions.ts";
 import { requestContext, teamCtx } from "../actions/dispatch.ts";
 import { teamNotices } from "../actions/team-actions.ts";
+import { myLinkedLogins } from "../actions/identities.ts";
+import { storedIdentity } from "../actions/account.ts";
 import { visibleChats } from "../actions/request-actions.ts";
 import { urgentRequests } from "../actions/request-actions.ts";
 import { UNMATCHED_DAYS } from "../plan/asks.ts";
@@ -382,7 +384,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const takes = liveCtx.takes;
     if (!takes || !notifier.allows("story_taken")) return;
     const me = await liveCtx.signedInAs?.().catch(() => undefined);
-    const emails = [me?.email, me?.upn, ...((await store.devopsIdentities()).map((i) => i.email))].filter((e): e is string => !!e);
+    const emails = [me?.email, me?.upn, ...((await store.devopsIdentities()).map((i) => i.email)), ...(await myLinkedLogins(liveCtx.org, (await storedIdentity(store))?.oid))].filter((e): e is string => !!e);
     const at = instantNow();
     for (const t of await takes.from(emails, at.subtract({ hours: 72 }).toString())) {
       if (await store.markOnce(`story_taken_notice:${t.id}`, t.takenAt)) await send(notices.storyTaken(t.id, t.byName.split(/\s+/)[0] || "A teammate", t.itemId, at.toString()));
@@ -394,7 +396,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const notes = liveCtx.devopsNotes;
     if (!notes) return;
     const me = await liveCtx.signedInAs?.().catch(() => undefined);
-    const emails = [me?.email, me?.upn, ...((await store.devopsIdentities()).map((i) => i.email))].filter((e): e is string => !!e);
+    const emails = [me?.email, me?.upn, ...((await store.devopsIdentities()).map((i) => i.email)), ...(await myLinkedLogins(liveCtx.org, (await storedIdentity(store))?.oid))].filter((e): e is string => !!e);
     const at = instantNow();
     const first = (n: string) => n.split(/\s+/)[0] || "A teammate";
     const got = await notes.to(emails, at.subtract({ hours: 72 }).toString());

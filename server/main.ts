@@ -86,6 +86,7 @@ import type { RequestsPort } from "../actions/request-actions.ts";
 import { createAdminCheck } from "../actions/admin.ts";
 import { createOrgRuntime } from "../actions/org.ts";
 import { scopeDepsOf } from "../actions/scope-deps.ts";
+import { assigneesOf } from "../actions/identities.ts";
 import type { ClientScopeFacts } from "../actions/admin-actions.ts";
 import { createAdminOps } from "./admin-ops.ts";
 import { createDevOpsPoller, createLimiter, devopsStatusSource, NO_SNAPSHOTS, pollAccounts, type DevOpsPoller } from "../actions/devops-poll.ts";
@@ -296,6 +297,14 @@ const itemMapOf = (who: Person) => (clientKey: string, ids: number[]) => {
 };
 /** AH-2: each client's DevOps scope and who is a Cooptimizer (read when a screen reads the store). */
 const devopsScope = (clientKey: string) => scopeDepsOf(org)(clientKey);
+/** AH-3: this person's linked client logins and Cooptimizers' FocusTime names, for the DevOps source. */
+const devopsIdentitiesOf = (who: Person) => async (clientKey: string) => {
+  const [ix, writes] = await Promise.all([org.identities(), planFor(who).devopsIdentities().catch(() => [])]);
+  return {
+    mine: [...ix.emailsOf(clientKey, who.userId), ...writes.filter((w) => w.clientKey === clientKey).map((w) => w.email)],
+    nameOf: (e: string) => ix.personOf(clientKey, e)?.name ?? null,
+  };
+};
 const devopsFor = (who: Person) => (cfg: DataverseConfig, timeZone: string) => {
   const key = JSON.stringify([who.userId, cfg, timeZone]);
   let s = devopsSources.get(key);
@@ -304,7 +313,7 @@ const devopsFor = (who: Person) => (cfg: DataverseConfig, timeZone: string) => {
     // DV-1: with the central poller, screens read its store: Dataverse here says only which clients this person may
     // see (active Account Worker) and their DevOps identity, never the PAT. Without it (no app Dataverse), as before.
     s = devopsPoller
-      ? createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys, { withPat: false }), processOverrides: (k) => who.process[k] ?? {}, openStates: (k) => who.openStates[k] ?? [], onItems: itemMapOf(who), central: devopsPoller.reads, limiter: devopsLimiter, scope: devopsScope })
+      ? createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys, { withPat: false }), processOverrides: (k) => who.process[k] ?? {}, openStates: (k) => who.openStates[k] ?? [], onItems: itemMapOf(who), central: devopsPoller.reads, limiter: devopsLimiter, scope: devopsScope, identities: devopsIdentitiesOf(who) })
       : createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys), processOverrides: (k) => who.process[k] ?? {}, openStates: (k) => who.openStates[k] ?? [], onItems: itemMapOf(who) });
     devopsSources.set(key, s);
   }
@@ -902,6 +911,12 @@ const adminOps = createAdminOps({
         return [k, facts] as const;
       }),
     );
+    return Object.fromEntries(rows);
+  },
+  // AH-3: who is assigned work on each client, by DevOps email and display name (for client-login matching only).
+  assignees: async (keys) => {
+    if (!devopsPoller) return {};
+    const rows = await Promise.all(keys.map(async (k) => [k, assigneesOf((await devopsPoller!.reads.view(k, { force: false })).values)] as const));
     return Object.fromEntries(rows);
   },
   log,

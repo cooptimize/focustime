@@ -15,6 +15,7 @@ import type { ClientProcess } from "../../actions/types.ts";
 import type { StatusGroup } from "../../actions/status-rows.ts";
 import { StatusRows } from "./StatusRows.tsx";
 import { ScopeField, type ClientScopeRow } from "./AdminScope.tsx";
+import { GAP_KINDS, GAP_WORDS, type GapKind } from "../../plan/fixnext.ts";
 
 export const ADMIN_UI_SECTIONS = [
   ["admin-clients", "Clients"],
@@ -178,7 +179,7 @@ const colorVar = (c: string | null) => (c ? (c.startsWith("#") ? c : `var(--clie
 
 // ---------- Clients ----------
 
-type ClientRow = { key: string; isClient: boolean; whyText: string; names: string[]; types: string[]; treatAsClient: boolean; hidden: boolean; hasSettings: boolean; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; houseStyle: string | null; process: ClientProcess; scope: ClientScopeRow | null; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
+type ClientRow = { key: string; isClient: boolean; whyText: string; names: string[]; types: string[]; treatAsClient: boolean; hidden: boolean; hasSettings: boolean; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; houseStyle: string | null; fixGaps?: GapKind[]; process: ClientProcess; scope: ClientScopeRow | null; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
 type ClientFilterValue = "customers" | "all";
 type ClientCounts = { customers: number; all: number };
 type ClientsData = { palette: string[]; suggested: string[]; filter: ClientFilterValue; accountsRead: boolean; counts: ClientCounts; clients: ClientRow[] };
@@ -331,6 +332,7 @@ function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: Clie
       <DeliveryChatField clientKey={c.key} clientName={c.key} />
       <ProcessView c={c} saver={saver} onRefresh={onRefresh} refreshing={refreshing} />
       {c.scope && <ScopeField clientKey={c.key} project={c.process.ok ? c.process.project : null} s={c.scope} save={(v) => saver.save(scope, "devops_scope", v, `${c.key}: Cooptimize's work`)} status={saver.status(scope, "devops_scope")} retry={() => void saver.save(scope, "devops_scope", c.scope?.rule ?? undefined, `${c.key}: Cooptimize's work`)} />}
+      {c.isClient && <FixGapsField c={c} saver={saver} />}
       <div className="set-form set-house-style">
         <AField label="House style for Break down" kind="Rule" s={saver.status(scope, "house_style")} retry={() => void saver.save(scope, "house_style", c.houseStyle, `${c.key}: house style`)} hint="Sent with every Break down request for this client. Empty goes back to the style learned from its own features.">
           <textarea
@@ -343,6 +345,26 @@ function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: Clie
           />
         </AField>
       </div>
+    </div>
+  );
+}
+
+/** AH-3: the gaps Ahead's Fix next and Readiness count for this client (all four by default). */
+function FixGapsField({ c, saver }: { c: ClientRow; saver: Saver }) {
+  const scope = `client:${c.key}`;
+  const on = saver.shown(scope, "fix_gaps", c.fixGaps ?? [...GAP_KINDS]);
+  const save = (v: GapKind[]) => void saver.save(scope, "fix_gaps", GAP_KINDS.filter((k) => v.includes(k)), `${c.key}: gaps Fix next counts`);
+  return (
+    <div className="set-form adm-fixgaps">
+      <AField label="Gaps Fix next counts" kind="Rule" s={saver.status(scope, "fix_gaps")} retry={() => save(on)} hint="Ahead's Fix next and Readiness show only these for this client. Turn off Unsized for a client that doesn't size in DevOps.">
+        <span className="adm-switches" role="group" aria-label={`${c.key}: gaps Fix next counts`}>
+          {GAP_KINDS.map((k) => (
+            <label key={k} className="adm-switch">
+              <input type="checkbox" role="switch" checked={on.includes(k)} aria-label={`${c.key}: count ${GAP_WORDS[k]}`} onChange={(e) => save(e.target.checked ? [...on, k] : on.filter((x) => x !== k))} /> {GAP_WORDS[k]}
+            </label>
+          ))}
+        </span>
+      </AField>
     </div>
   );
 }
@@ -610,7 +632,9 @@ type Person = {
   sources: { microsoft: boolean; google: boolean; devopsWrites: number } | null;
 };
 type Position = { name: string; people: number; mapped: boolean; level: string | null };
-type PeopleData = { people: Person[]; others: Person[]; positions: Position[]; unmappedPositions: number; noDomains: boolean; leadsShown: number; admins: { id: string; name: string | null; via: string | null; checkedAt: string | null }[]; groupLink: string | null; groupSet: boolean; refreshedAt: string | null; levels: { id: string; name: string }[] };
+type IdentityRowView = import("../../plan/identities.ts").IdentityRowView;
+type ClientIdentitiesView = import("../../plan/identities.ts").ClientIdentitiesView;
+type PeopleData = { identities?: ClientIdentitiesView[]; people: Person[]; others: Person[]; positions: Position[]; unmappedPositions: number; noDomains: boolean; leadsShown: number; admins: { id: string; name: string | null; via: string | null; checkedAt: string | null }[]; groupLink: string | null; groupSet: boolean; refreshedAt: string | null; levels: { id: string; name: string }[] };
 
 const SETUP_WORDS = { done: "Done", skipped: "Skipped", started: "Started", not_started: "Not started" } as const;
 
@@ -697,9 +721,94 @@ function AdminPeople() {
           )}
         </div>
       )}
+      <ClientIdentities clients={data.identities ?? []} people={data.people} reload={load} />
       <PositionMap positions={data.positions} unmapped={data.unmappedPositions} levels={data.levels} saver={saver} />
       {removing && <RemovePerson p={removing} onClose={() => setRemoving(null)} onDone={async (m) => (setRemoving(null), setMsg(m), await load())} />}
     </div>
+  );
+}
+
+/**
+ * AH-3: client DevOps identities. A Cooptimizer often signs in to a client's DevOps with a client login ("Ext-…"). Linked
+ * ones (from their Account Worker row in Dataverse, or confirmed here) count as them everywhere; a suggestion (the same
+ * name once a prefix or suffix is off) waits for Confirm; unmatched ones show as DevOps has them, with Link to a person.
+ * Emails never reach this page: rows carry a display name and an opaque ref. Every change is in Admin › Audit.
+ */
+function ClientIdentities({ clients, people, reload }: { clients: ClientIdentitiesView[]; people: Person[]; reload: () => Promise<void> }) {
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const act = async (r: IdentityRowView, op: "link" | "remove", personId: string, what: string) => {
+    setBusy(r.ref);
+    setMsg(null);
+    try {
+      await call("admin.identity", { clientKey: r.clientKey, ref: r.ref, personId, op });
+      await reload();
+      setMsg(`${what}. Logged in Admin › Audit.`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Not saved");
+    } finally {
+      setBusy(null);
+    }
+  };
+  const coops = people.filter((p) => p.cooptimizer);
+  return (
+    <section className="adm-identities" aria-label="Client DevOps identities">
+      <h3>Client DevOps identities</h3>
+      <p className="muted">When someone signs in to a client's DevOps with a client login, FocusTime counts that login as them: their items, the names shown, leads, Team and notes. Suggestions are only applied when you confirm them.</p>
+      {msg && (
+        <p className="set-hint" role="status">
+          {msg}
+        </p>
+      )}
+      {clients.length === 0 && <p className="muted">No client logins seen in the clients' DevOps.</p>}
+      {clients.map((c) => (
+        <div key={c.clientKey} className="adm-id-client">
+          <h4>{c.clientKey}</h4>
+          <p className="muted adm-id-line">{c.line}</p>
+          <ul className="set-list adm-id-list" aria-label={`${c.clientKey} identities`}>
+            {c.rows.map((r) => (
+              <li key={r.ref} className={`adm-id-row ${r.state}`}>
+                <span className="adm-id-name">{r.name}</span>
+                {r.state === "linked" && (
+                  <>
+                    <span className="muted">
+                      {r.personName ?? "Someone"} · {r.source === "dataverse" ? "from Dataverse" : "confirmed"}
+                    </span>
+                    <button type="button" className="mini quiet" disabled={busy === r.ref} onClick={() => void act(r, "remove", r.personId!, `${r.name} is no longer ${r.personName ?? "linked"}`)} aria-label={`Remove ${r.name} from ${r.personName ?? "this person"}`}>
+                      Remove
+                    </button>
+                  </>
+                )}
+                {r.state === "suggested" && (
+                  <>
+                    <span className="muted">Looks like {r.personName}</span>
+                    <button type="button" className="mini" disabled={busy === r.ref} onClick={() => void act(r, "link", r.personId!, `${r.name} is ${r.personName} on ${r.clientKey}`)} aria-label={`Confirm ${r.name} is ${r.personName}`}>
+                      Confirm
+                    </button>
+                    <button type="button" className="mini quiet" disabled={busy === r.ref} onClick={() => void act(r, "remove", r.personId!, `${r.name} won't be suggested for ${r.personName} again`)} aria-label={`${r.name} isn't ${r.personName}`}>
+                      Not them
+                    </button>
+                  </>
+                )}
+                {r.state === "unmatched" && (
+                  <label className="adm-id-link">
+                    <span className="muted">Not linked</span>
+                    <select aria-label={`Link ${r.name} to a person`} value="" disabled={busy === r.ref} onChange={(e) => { const p = coops.find((x) => x.id === e.target.value); if (p) void act(r, "link", p.id, `${r.name} is ${p.name} on ${r.clientKey}`); }}>
+                      <option value="">Link to a person…</option>
+                      {coops.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -959,6 +1068,8 @@ type OrgData = {
   feedback: { org: string; project: string; parentId: number; live: boolean } | null;
   retentionYears: number;
   idleMinutes: number;
+  /** AH-3: Fix next looks at the top N of each backlog. */
+  fixTopN?: number;
   newPerson: NewPerson;
   inviteFromBootstrap: boolean;
   feedbackFromBootstrap: boolean;
@@ -994,6 +1105,9 @@ function AdminOrganization() {
         </AField>
         <AField label="Counts as in use (minutes)" kind="Rule" s={saver.status(o, "org.idle_minutes")} retry={() => void saver.save(o, "org.idle_minutes", data.idleMinutes, "In use")} hint="5 to 60. An open page counts as someone using FocusTime only this long after their last key, click or scroll. Background work waits otherwise.">
           <NumInput label="Counts as in use (minutes)" value={data.idleMinutes} min={5} max={60} onSave={(v) => void saver.save(o, "org.idle_minutes", v, "In use")} />
+        </AField>
+        <AField label="Fix next looks at the top N of each backlog" kind="Rule" s={saver.status(o, "ahead.fix_top_n")} retry={() => void saver.save(o, "ahead.fix_top_n", data.fixTopN ?? 30, "Fix next top N")} hint="10 to 100, for epics, features and stories each. Ahead's Fix next also shows what's dated in the next 4 weeks and the features and epics each person owns.">
+          <NumInput label="Fix next looks at the top N of each backlog" value={data.fixTopN ?? 30} min={10} max={100} onSave={(v) => void saver.save(o, "ahead.fix_top_n", v, "Fix next top N")} />
         </AField>
       </div>
       <h3>Send feedback</h3>

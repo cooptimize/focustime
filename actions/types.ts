@@ -507,6 +507,8 @@ export type AheadItem = {
   changedAt: string;
   /** AH-2: in Cooptimize's scope for this client (my items always are). Out of it: shown only with "Show the whole project", never in Fix next. */
   inScope: boolean;
+  /** AH-3: the backlog order (the process's StackRank or BacklogPriority, ascending); null when unset or the project has none. Missing before AH-3. */
+  order?: number | null;
 };
 /** AH-2: a client's scope as Ahead shows it. Counts are open items. */
 export type AheadScope = { kind: import("../plan/devops-scope.ts").ScopeKind; automatic: boolean; all: boolean; inScope: number; total: number; problem: string | null; whole: boolean };
@@ -530,6 +532,8 @@ export type AheadClient = {
   items: AheadItem[];
   /** AH-2: absent before AH-2 and on a failed read. */
   scope?: AheadScope;
+  /** AH-3: the project's backlog order field (null: none, Fix next ranks by target date). Missing before AH-3. */
+  orderField?: string | null;
 };
 /** ahead.load: every client's items, my rights on each, my change set and my kept half-days. */
 export type AheadLoad = {
@@ -544,7 +548,13 @@ export type AheadLoad = {
     canWrite: boolean;
     /** FocusTime's own size of an item (a story's S/M/L, a feature's estimate), as a hint beside the DevOps field. */
     hints: Record<number, { text: string; minutes: number }>;
+    /** AH-3: every address that is me on this client (my own, my DevOps emails, linked client logins), lowercase. */
+    mine?: string[];
+    /** AH-3: the gaps this client counts (the Rule fix_gaps). */
+    fixGaps: import("../plan/fixnext.ts").GapKind[];
   })[];
+  /** AH-3: Fix next looks at the top N of each backlog (the Rule ahead.fix_top_n). */
+  fixTopN: number;
   changes: import("../plan/ahead-edit.ts").StagedChange[];
   halves: { clientKey: string; itemId: number; field: "start" | "target"; day: string; half: "AM" | "PM" }[];
   /** I'm flagged as an automation account (nothing is editable). */

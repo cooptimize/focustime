@@ -38,8 +38,8 @@ describe("design tokens", () => {
 
   it("every token a component uses is defined in the default root", () => {
     const local = declared(components); // element-level, e.g. --c (the block's client color)
-    // Set from script: a block's client colors (--c, --c2, inline styles; Plan ahead's label and timeline widths) and the fallbacks they name (ui/labels.ts).
-    const fromScript = (v: string) => v === "--c" || v === "--c2" || v === "--label-w" || v === "--tl-w" || /^--client-fallback-\d$/.test(v) || /^--client-[a-z]+$/.test(v);
+    // Set from script: a block's client colors (--c, --c2, inline styles; Plan ahead's label and timeline widths; Ahead's row depth, AH-3) and the fallbacks they name (ui/labels.ts).
+    const fromScript = (v: string) => v === "--c" || v === "--c2" || v === "--label-w" || v === "--tl-w" || v === "--ah-depth" || /^--client-fallback-\d$/.test(v) || /^--client-[a-z]+$/.test(v);
     const missing = [...used(components)].filter((v) => !declared(root).has(v) && !local.has(v) && !fromScript(v));
     expect(missing).toEqual([]);
   });

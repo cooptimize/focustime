@@ -11,6 +11,7 @@ import { DEFAULT_ACK_PHRASES, DEFAULT_PROMISE_PHRASES, DEFAULT_REQUEST_PHRASES }
 import { WEEKDAY_KEYS, parseSpan, type WeekdayKey } from "../week/hours.ts";
 import { CLIENT_SLOTS } from "./schema.ts";
 import { parseScope, ScopeInputError, type DevOpsScope } from "../plan/devops-scope.ts";
+import { GAP_KINDS, type GapKind } from "../plan/fixnext.ts";
 
 export type SettingKind = "rule" | "default" | "level" | "personal";
 export const KIND_NAMES: Record<SettingKind, string> = { rule: "Rule", default: "Default", level: "Default by level", personal: "Personal" };
@@ -235,6 +236,9 @@ export const ORG_SPECS = {
   "org.position_levels": { kind: "rule", area: "people", label: "Positions to levels", builtin: BUILTIN_POSITION_LEVELS, parse: positionLevels },
   // DV-1: how often the central poller checks each client's DevOps in working hours (10 minutes outside them).
   "devops.poll_minutes": { kind: "rule", area: "organization", label: "DevOps check interval (minutes)", builtin: 1, parse: intIn(1, 30, "minutes") },
+  // AH-3: Fix next looks at the top N of each backlog (epics, features, stories, each on its own), plus what's dated in
+  // the next 4 weeks and what I own or lead.
+  "ahead.fix_top_n": { kind: "rule", area: "organization", label: "Fix next looks at the top N of each backlog", builtin: 30, parse: intIn(10, 100, "items") },
   "org.new_person": { kind: "default", area: "organization", label: "Working week for new people", builtin: BUILTIN_NEW_PERSON, parse: newPerson },
 } satisfies Record<string, Spec>;
 export type OrgKey = keyof typeof ORG_SPECS;
@@ -261,6 +265,12 @@ export const CLIENT_SPECS = {
   // ADM-2 (D597): an admin's two per-account overrides of the customer rule (plan/client-accounts.ts).
   treat_as_client: { kind: "rule", area: "clients", label: "Treat as a client", builtin: false, parse: bool },
   hidden: { kind: "rule", area: "clients", label: "Hide from FocusTime", builtin: false, parse: bool },
+  // AH-3: the gaps Fix next (and Ahead's Readiness) counts for this client; all four by default. Turning Unsized off
+  // suits a client that doesn't size in DevOps.
+  fix_gaps: { kind: "rule", area: "clients", label: "Gaps Fix next counts", builtin: [...GAP_KINDS] as GapKind[], parse: (v) => {
+    if (!Array.isArray(v) || v.some((x) => typeof x !== "string" || !(GAP_KINDS as readonly string[]).includes(x))) throw new OrgInputError(`A list of gaps from: ${GAP_KINDS.join(", ")}`);
+    return GAP_KINDS.filter((k) => v.includes(k));
+  } },
   // AH-2: Cooptimize's work in this client's DevOps project (plan/devops-scope.ts). Null: automatic.
   devops_scope: { kind: "rule", area: "clients", label: "Cooptimize's work in this project", builtin: null as DevOpsScope | null, parse: orNull((v) => {
     try {
@@ -322,6 +332,8 @@ export type OrgRules = {
   organization: { inviteDomains: string[]; neverSuggest: string[]; feedback: FeedbackRule | null; retentionYears: number; newPerson: NewPersonDefaults; positionLevels: PositionLevels; /** HK-3. */ idleMinutes: number };
   /** DV-1: the central DevOps poller's Rule. */
   devops: { pollMinutes: number };
+  /** AH-3: Fix next's Rule. */
+  ahead: { fixTopN: number };
   clients: Record<string, ClientRules>;
   levels: Record<Level, Guidance>;
   /** ADM-2: ids an admin flagged as automation accounts. */
@@ -329,8 +341,8 @@ export type OrgRules = {
   /** ADM-2 (D604): team values stored that no longer validate, each read as its built-in value (Status shows them). */
   problems: { key: string; label: string; fallback: unknown }[];
 };
-export type ClientRules = { color: string | null; allowAi: boolean; /** CV-3: rules-only grouping while AI is off (on by default). */ groupWithoutAi: boolean; attachmentsAi: boolean; openStates: string[]; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean; /** AH-2: null is automatic. */ devopsScope: DevOpsScope | null };
-export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, groupWithoutAi: true, attachmentsAi: false, openStates: [], noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false, devopsScope: null };
+export type ClientRules = { color: string | null; allowAi: boolean; /** CV-3: rules-only grouping while AI is off (on by default). */ groupWithoutAi: boolean; attachmentsAi: boolean; openStates: string[]; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean; /** AH-2: null is automatic. */ devopsScope: DevOpsScope | null; /** AH-3: the gaps Fix next counts. */ fixGaps: GapKind[] };
+export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, groupWithoutAi: true, attachmentsAi: false, openStates: [], noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false, devopsScope: null, fixGaps: [...GAP_KINDS] };
 
 const parsed = (r: OrgRow): unknown => {
   try {
@@ -370,7 +382,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
   for (const k of clientKeys) {
     const s = `client:${k}`;
     const c = <K extends ClientKeyName>(key: K) => valueOf(m, s, key, CLIENT_SPECS[key] as Spec, CLIENT_SPECS[key].builtin) as (typeof CLIENT_SPECS)[K]["builtin"];
-    clients[k] = { color: c("color"), allowAi: c("allow_ai"), groupWithoutAi: c("group_without_ai"), attachmentsAi: c("attachments_ai"), openStates: c("open_states"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden"), devopsScope: c("devops_scope") };
+    clients[k] = { color: c("color"), allowAi: c("allow_ai"), groupWithoutAi: c("group_without_ai"), attachmentsAi: c("attachments_ai"), openStates: c("open_states"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden"), devopsScope: c("devops_scope"), fixGaps: c("fix_gaps") };
   }
   const levels = Object.fromEntries(
     LEVELS.map((l) => {
@@ -402,6 +414,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
       idleMinutes: o("org.idle_minutes"),
     },
     devops: { pollMinutes: o("devops.poll_minutes") },
+    ahead: { fixTopN: o("ahead.fix_top_n") },
     clients,
     levels,
     automation: rows.filter((r) => r.scope.startsWith("person:") && r.key === "automation" && parsed(r) === true).map((r) => r.scope.slice(7)).sort(),

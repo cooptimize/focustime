@@ -19,9 +19,10 @@ import { DraftEditorCtx } from "../DraftEditor.tsx";
 import { MenuCtx } from "../Menus.tsx";
 import { HoursStepper } from "../plan/Estimate.tsx";
 import { WorkLink } from "../WorkLink.tsx";
+import { ganttLabelW, useWindowScale } from "./layout.ts";
 import { useAhead } from "./Ahead.tsx";
 import { Editor } from "./Grid.tsx";
-import { OneChip, stateChip } from "./Chips.tsx";
+import { OneChip, ReadyChips, stateChip } from "./Chips.tsx";
 import { isOpen, type Group, type Row } from "./model.ts";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -82,7 +83,9 @@ export function Gantt({ data, groups: incoming, onChanged }: { data: WeekLoadDat
     return () => ro.disconnect();
   }, [ahead]);
 
-  const labelW = width >= 2400 ? 440 : width >= 1600 ? 320 : 240;
+  // AH-3: a readable label column at any size (240 at Default, more with the text), the timeline scrolling in its box.
+  const { scale: textScale } = useWindowScale();
+  const labelW = ganttLabelW(width, textScale);
   const cols = ahead?.columns ?? [];
   const months = cols.filter((c) => c.kind === "month").length;
   const pastN = cols.filter((c) => c.kind === "past").length;
@@ -112,7 +115,7 @@ export function Gantt({ data, groups: incoming, onChanged }: { data: WeekLoadDat
           <HeaderRow cols={cols} scale={scale} />
           {held.shown.map((g) =>
             g.client.status === "ok" && g.rows.length ? (
-              <ClientGroup key={g.client.clientKey} g={g} ahead={ahead} scale={scale} cols={cols} pastN={pastN} wide={labelW >= 440} nudges={data.guidance?.readinessNudges !== false} closed={closed} toggle={(k) => setClosed((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; })} setHours={setHours} frozen={frozen?.get(g.client.clientKey) ?? null} begin={begin} end={end} onChanged={onChanged} />
+              <ClientGroup key={g.client.clientKey} g={g} ahead={ahead} scale={scale} cols={cols} pastN={pastN} wide={labelW >= 400 * textScale} narrow={labelW < 300 * textScale} nudges={data.guidance?.readinessNudges !== false} closed={closed} toggle={(k) => setClosed((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; })} setHours={setHours} frozen={frozen?.get(g.client.clientKey) ?? null} begin={begin} end={end} onChanged={onChanged} />
             ) : null,
           )}
         </div>
@@ -147,6 +150,8 @@ type GroupProps = {
   cols: AheadColumn[];
   pastN: number;
   wide: boolean;
+  /** AH-3: a narrow label column: the state as a dot (its words in the tooltip), so the title keeps the room. */
+  narrow?: boolean;
   nudges: boolean;
   closed: Set<string>;
   toggle: (k: string) => void;
@@ -400,7 +405,7 @@ function BarRow({ l, gp, rows, crowded, first, freeze, lane }: { l: Line; gp: Gr
         )}
         {rm && isOpen(r.item) && (
           <span className="pa-badge">
-            <OneChip c={stateChip(rm.status.state, rm.status.reason)} />
+            {gp.narrow ? <ReadyChips chips={[stateChip(rm.status.state, rm.status.reason)]} dots /> : <OneChip c={stateChip(rm.status.state, rm.status.reason)} />}
           </span>
         )}
         <span className="pa-title" title={`${r.item.title} (#${r.item.id})${rm ? `: ${rm.status.reason}` : ""}`}>

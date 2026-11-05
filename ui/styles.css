@@ -4486,28 +4486,38 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 /* AH-1: Ahead (Grid · Gantt · Fix next), the change set and the review. */
 .ah-pending { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--selected); border-radius: 8px; background: color-mix(in oklab, var(--selected) 10%, var(--surface)); max-width: 1400px; }
 .ah-ro-note { margin: 0 0 10px; }
-.ah-body.with-pane { display: grid; grid-template-columns: minmax(0, 1fr) calc(260px * var(--text-scale)); gap: 16px; align-items: start; }
 .ah-main { min-width: 0; }
-.ah-pane { position: sticky; top: 8px; display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
-.ah-pane h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+/* AH-3: the filters wrap into clean rows; the search takes what's left of its row. */
+.ah-filters { max-width: none; }
+.ah-filters .rm-sort select { max-width: 16em; }
+.ah-filters .rm-search { flex: 1 1 14em; min-width: 10em; max-width: 24em; }
 .ah-client { margin: 0 0 18px; }
 .ah-client-head { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: var(--fs-3); font-weight: 600; }
 .ah-grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--fs-3); }
-.ah-grid .w-item { width: auto; } .ah-grid .w-state { width: 9em; } .ah-grid .w-date { width: 10em; } .ah-grid .w-who { width: 11em; } .ah-grid .w-size { width: 13em; } .ah-grid .w-ready { width: 19em; }
+/* AH-3: Item takes what's left and never goes under its minimum (ui/ahead/layout.ts picks the columns so it fits); the
+   rest are compact and fixed. Widths are in em so they grow with the Text size, and the layout counts that too. */
+.ah-grid .w-item { width: auto; } .ah-grid .w-state { width: 8em; } .ah-grid .w-date { width: 6.5em; } .ah-grid .w-dates { width: 12em; } .ah-grid .w-who { width: 9em; } .ah-grid .w-size { width: 5.5em; } .ah-grid .w-ready { width: 15em; }
+.lay-dots .ah-grid .w-ready { width: 5em; }
 .ah-grid th { text-align: left; font-size: var(--fs-1); font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 4px 8px; border-bottom: 1px solid var(--border-strong); }
 .ah-cell { position: relative; padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: top; overflow: hidden; text-overflow: ellipsis; }
 .ah-cell:focus { outline: 2px solid var(--focus); outline-offset: -2px; }
 .ah-cell.ah-col-item { white-space: normal; }
-.ah-cell.ah-col-state, .ah-cell.ah-col-start, .ah-cell.ah-col-target, .ah-cell.ah-col-assignee, .ah-cell.ah-col-ready { white-space: nowrap; }
-.ah-col-ready .ah-ready { flex-wrap: nowrap; }
-/* A smaller window: Readiness gives the room back to Item, its two chips wrapping. */
-@media (max-width: 1599.98px) { .ah-grid .w-ready { width: 13em; } .ah-cell.ah-col-ready { white-space: normal; } .ah-col-ready .ah-ready { flex-wrap: wrap; } }
+.ah-cell.ah-col-state, .ah-cell.ah-col-start, .ah-cell.ah-col-target, .ah-cell.ah-col-dates, .ah-cell.ah-col-assignee, .ah-cell.ah-col-size, .ah-cell.ah-col-ready { white-space: nowrap; }
+.ah-col-ready .ah-ready { flex-wrap: nowrap; overflow: hidden; }
+.ah-who { display: block; overflow: hidden; text-overflow: ellipsis; }
+.ah-dates .ah-arrow { color: var(--text-faint); }
+.ah-dates-edit { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; white-space: normal; }
 .ah-cell.ah-pend { background: color-mix(in oklab, var(--selected) 12%, transparent); }
 .ah-cell.ah-conf { box-shadow: inset 0 0 0 2px var(--watch); }
 .ah-cell.ah-abs { color: var(--text-faint); }
 .ah-dot { position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--selected); }
 .ah-cell.ah-conf .ah-dot { background: var(--watch); }
-.ah-item { display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.ah-item { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.ah-item .rm-expand, .ah-item .rm-expand-space { flex: none; }
+.ah-item .ah-type-icon { flex: none; margin-top: calc(2px * var(--text-scale)); }
+/* The title on one or two lines, #id right after it. */
+.ah-title { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.ah-item .ah-ro { flex: none; }
 .ah-row.tier-epic .ah-item a, .ah-row.tier-epic .ah-item { font-weight: 600; }
 .ah-row.context { opacity: 0.6; }
 .ah-row.highlighted td { background: color-mix(in oklab, var(--selected) 16%, transparent); }
@@ -4523,7 +4533,24 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .ah-state-dot.cat-removed { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-faint); }
 .ah-row.closed > td { opacity: 0.55; }
 .ah-row.out-scope .ah-item a { color: var(--text-muted); }
-.ah-size { display: inline-grid; gap: 1px; }
+.ah-size { white-space: nowrap; }
+.ah-dots { display: inline-flex; gap: 5px; align-items: center; }
+.ah-gapdot { flex: none; width: 8px; height: 8px; padding: 0; border-radius: 50%; border: 0; background: var(--text-faint); }
+.ah-gapdot.action { background: var(--ah-attention); }
+button.ah-gapdot { cursor: pointer; }
+button.ah-gapdot:hover, button.ah-gapdot:focus-visible { box-shadow: 0 0 0 2px var(--border-strong); }
+.ms-count { font-weight: 400; color: var(--text-muted); }
+/* Under 900 and on the phone: each row a two-line card. Line one: the item; line two: state, dates, assignee, gap dots. */
+.lay-cards .ah-grid, .lay-cards .ah-grid tbody { display: block; width: 100%; }
+.lay-cards .ah-grid colgroup, .lay-cards .ah-grid thead { display: none; }
+.lay-cards .ah-row { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.lay-cards .ah-cell { display: block; padding: 2px 6px; border-bottom: 0; }
+.lay-cards .ah-cell.ah-col-item { flex: 1 1 100%; }
+.lay-cards .ah-cell:not(.ah-col-item) { flex: none; max-width: 100%; font-size: var(--fs-2); color: var(--text-muted); }
+.lay-cards .ah-cell.ah-col-state, .lay-cards .ah-cell.ah-col-dates, .lay-cards .ah-cell.ah-col-assignee, .lay-cards .ah-cell.ah-col-ready { padding-inline-start: calc(6px + 22px + var(--ah-depth, 0) * 18px); }
+.lay-cards .ah-cell:not(.ah-col-item) ~ .ah-cell:not(.ah-col-item) { padding-inline-start: 0; }
+.lay-cards .ah-cell.ah-col-assignee { max-width: 14em; }
+.lay-cards .ah-cell.ah-col-ready:empty { display: none; }
 .ah-hint { font-size: var(--fs-2); }
 .ah-ready { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 /* AH-2: readiness as quiet outlined chips; the dot is the one muted amber for "needs action", neutral otherwise. */
@@ -4537,15 +4564,20 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .ah-editor { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .ah-editor input[type="number"] { width: 6em; }
 .ah-assignee { position: relative; }
-.ah-fix { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: 8px; background: var(--surface); max-width: 720px; }
-.ah-fix.compact { padding: 8px 10px; }
-.ah-fix-what { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0; font-size: var(--fs-2); }
-.ah-fix-title { margin: 0; font-size: var(--fs-4); font-weight: 600; }
-.ah-fix.compact .ah-fix-title { font-size: var(--fs-3); }
-.ah-fix-actions, .ah-fix-edit { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.ah-fix-mode { display: grid; gap: 16px; }
-.ah-fix-next ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: var(--fs-3); }
-.ah-fix-next h3 { margin: 0 0 6px; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+/* AH-3: Fix next, ranked: one section per client, rows grouped epic › feature, each with its gaps and one action. */
+.ah-fix-mode { display: grid; gap: 18px; max-width: 1200px; }
+.ah-fx-intro { margin: 0; max-width: 80ch; }
+.ah-fx-note { margin: 0 0 6px; font-size: var(--fs-2); }
+.ah-fx-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+.ah-fx-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 12px; padding: 6px 6px 6px calc(6px + var(--ah-depth, 0) * 18px); border-bottom: 1px solid var(--border); font-size: var(--fs-3); }
+.ah-fx-row.ctx { color: var(--text-muted); padding-block: 4px; }
+.ah-fx-row.ctx .ah-title a { color: var(--text-muted); }
+.ah-fx-item { flex: 1 1 20em; min-width: 0; display: flex; align-items: flex-start; gap: 6px; }
+.ah-fx-side { flex: none; display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.ah-fx-acts { display: inline-flex; gap: 6px; align-items: center; }
+.ah-fx-edit { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-inline-start: 22px; }
+.ah-fx-due { font-size: var(--fs-2); }
+.ah-fx-more { margin-top: 6px; }
 /* AH-2: Gantt in Ahead, calmer than Plan ahead's: quiet flags and month cells, the text in the normal color. */
 .ahead .pa-flags { border-color: var(--border-strong); background: transparent; font-weight: 400; }
 .ahead .pa-flags:hover, .ahead .pa-flags:focus-visible { background: var(--raised); }
@@ -4603,14 +4635,9 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   .ah-rv-after { grid-area: after; }
   .ah-rv-remove { grid-area: remove; }
 }
-@media (max-width: 1100px) {
-  .ah-body.with-pane { grid-template-columns: minmax(0, 1fr); }
-  .ah-pane { position: static; }
-}
-@media (max-width: 700px) {
-  .ah-grid-box { overflow-x: auto; }
-  .ah-grid { min-width: 900px; }
-}
+/* AH-3: the Gantt's labels stay put while the timeline scrolls; titles on one or two lines. */
+.ah-gantt .pa-label { position: sticky; left: 0; z-index: 2; background: var(--bg); }
+.ah-gantt .pa-title { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }
 .bd-item-acts { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--fs-3); }
 .bd-item-acts .muted { font-size: var(--fs-2); }
 /* AH-1 (D665): Send to… opens over Break down's side panel (both were z-index 60 and the panel came later). */
@@ -4742,3 +4769,12 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .dw-attach img, .dw-attach-gone { grid-column: 2; display: block; inline-size: 100%; max-block-size: 90px; object-fit: cover; border: 1px solid var(--border); border-radius: 4px; background: var(--raised); }
 .dw-attach-gone { padding: 8px; font-size: var(--fs-1); }
 .dw-attach-who { grid-column: 1 / -1; font-size: var(--fs-1); overflow-wrap: anywhere; }
+
+/* AH-3: Admin › People's client DevOps identities. */
+.adm-identities .adm-id-client { margin-top: 12px; }
+.adm-identities h4 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.adm-identities .adm-id-line { margin: 2px 0 6px; }
+.adm-id-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 28px; }
+.adm-id-row .adm-id-name { font-weight: 500; overflow-wrap: anywhere; }
+.adm-id-link { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.adm-id-link select { max-width: 100%; }

@@ -281,7 +281,9 @@ export const isDemoClient = (k: string): k is DemoClientKey => DEMO_CLIENTS.some
  * AH-2: the client's own work beside ours in Northwind's project (fictional): an area of their finance program, by
  * their own staff (not Cooptimizers). Only Ahead reads it (the store has the whole project; Week starts from my items).
  */
-const CLIENT_STAFF: Record<string, string> = { "Dana Fields": "dana.fields@northwind.example", "Omar Reyes": "omar.reyes@northwind.example" };
+/** AH-3: Cooptimizers' client logins on Harbor's DevOps (fictional): Priya's is in Dataverse, Sam's only suggested. */
+export const DEMO_LOGINS: Record<string, string> = { "Ext-Priya Shah": "ext-priya.shah@harbor.example", "Ext-Sam Ortiz": "ext-sam.ortiz@harbor.example" };
+const CLIENT_STAFF: Record<string, string> = { "Dana Fields": "dana.fields@northwind.example", "Omar Reyes": "omar.reyes@northwind.example", ...DEMO_LOGINS };
 const PROJECT_ONLY: Partial<Record<DemoClientKey, Raw[]>> = {
   Northwind: [
     [1700, "Epic", "Active", null, "Finance close automation", "Dana Fields"],
@@ -289,6 +291,11 @@ const PROJECT_ONLY: Partial<Record<DemoClientKey, Raw[]>> = {
     [1711, "User Story", "New", 1710, "Map ledger accounts", "Omar Reyes"],
     [1712, "User Story", "New", 1710, "Journal approval step", null],
     [1720, "Feature", "New", 1700, "Vendor payment run", "Omar Reyes"],
+  ],
+  // AH-3: Harbor's own work signed in with client logins: Priya's (linked) shows as Priya Shah, Sam's as DevOps has it.
+  Harbor: [
+    [2250, "Feature", "Active", null, "Referral tracking", "Ext-Priya Shah", "2026-11-26"],
+    [2251, "User Story", "New", 2250, "Referral source field", "Ext-Sam Ortiz"],
   ],
 };
 /** AH-2: the demo projects' areas and teams: Northwind's has two areas below its root; the others only the root. */
@@ -344,7 +351,21 @@ export function demoAheadClient(k: DemoClientKey, fetchedAt: string, sc: { deps:
       assignee: i.assignedToMe ? { name: "Alex Rivera", email: "you@example.com" } : i.assignedTo ? { name: i.assignedTo, email: i.assignedToEmail ?? null } : null,
       start: START[i.id] ?? null, target: i.targetDate ?? null,
       size: i.level === "portfolio" || UNSIZED.has(i.id) || i.stateCategory === "Completed" ? null : 3,
-      url: i.url, changedAt: QUIET.has(i.id) ? "2026-10-09T15:00:00Z" : i.changedAt, inScope: inScope(i.id),
+      url: i.url, changedAt: QUIET.has(i.id) ? "2026-10-09T15:00:00Z" : i.changedAt, inScope: inScope(i.id), order: i.order,
     })),
+    // AH-3: Harbor Health's demo project has no backlog order field, so its Fix next ranks by target date.
+    orderField: k === "Harbor" ? null : "Microsoft.VSTS.Common.StackRank",
   };
+}
+
+/** AH-3: who is assigned work in a demo project (DevOps email and display name), as the central store would say. */
+export function demoAssignees(k: DemoClientKey): { email: string; name: string }[] {
+  const out = new Map<string, { email: string; name: string }>();
+  for (const r of [...ITEMS[k], ...(PROJECT_ONLY[k] ?? [])]) {
+    const who = r[5];
+    if (!who) continue;
+    const email = who === ME ? "you@example.com" : (CLIENT_STAFF[who] ?? DEMO_PEOPLE.find((p) => p.name === who)?.email ?? null);
+    if (email && !out.has(email)) out.set(email, { email, name: who === ME ? "Alex Rivera" : who });
+  }
+  return [...out.values()];
 }
