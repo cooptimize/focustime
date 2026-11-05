@@ -4119,6 +4119,8 @@ button.ask-label { cursor: pointer; }
 .adm-table { border-collapse: collapse; font-size: var(--fs-2); width: 100%; }
 .adm-table th, .adm-table td { text-align: left; vertical-align: top; padding: 6px 14px 6px 0; border-bottom: 1px solid var(--border); }
 .adm-table thead th { font-weight: 500; color: var(--text-faint); white-space: nowrap; }
+/* CV-3: Admin › AI's client table has three switch columns; on a phone its headings wrap. */
+@media (max-width: 599.98px) { .adm-ai-clients thead th { white-space: normal; } .adm-ai-clients th, .adm-ai-clients td { padding-right: 8px; } }
 .adm-table tbody th { font-weight: 500; }
 .adm-table input[type="number"] { width: 6em; }
 /* position: a screen-reader label inside (absolute) stays in the scroll box instead of widening the page. */

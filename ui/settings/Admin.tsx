@@ -489,7 +489,7 @@ function AdminAi() {
       {data.clients.length === 0 ? (
         <p className="muted">No clients yet.</p>
       ) : (
-        <table className="adm-table">
+        <table className="adm-table adm-ai-clients">
           <thead>
             <tr>
               <th scope="col">Client</th>

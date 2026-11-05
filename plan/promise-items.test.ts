@@ -22,7 +22,7 @@ describe("likely items for a promise", () => {
   it("puts a #id first, then mine, then the most matched words, with reasons", () => {
     const r = likelyItems({ texts: ["I'll check the October totals and the filter", "The October filter drops the last day? Also #14"], items, myEmail: ME });
     expect(r.map((x) => x.id)).toEqual([14, 12, 11]);
-    expect(r.map((x) => x.reason)).toEqual(["Mentioned as #14", "Assigned to you · matches october, total", "Matches october, filter, drop"]);
+    expect(r.map((x) => x.reason)).toEqual(["Mentioned as #14", "Assigned to you · matches october, totals", "Matches october, filter, drops"]);
   });
 
   it("shows my items when nothing matches, and a typed query narrows by title or #id", () => {

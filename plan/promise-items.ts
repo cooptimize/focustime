@@ -16,12 +16,16 @@ const STOP = new Set(
 
 /** The words worth matching in a text: lower case, letters or digits, 3 or more characters, stopwords dropped. */
 export function wordsOf(text: string): string[] {
-  const out = new Set<string>();
+  return [...spelled(text).keys()];
+}
+/** Each matchable word (its stem) with how it was first written, for the reason. */
+function spelled(text: string): Map<string, string> {
+  const out = new Map<string, string>();
   for (const raw of text.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").split(/[^\p{L}\p{N}]+/u)) {
     if (raw.length < 3 || STOP.has(raw)) continue;
-    out.add(stem(raw));
+    if (!out.has(stem(raw))) out.set(stem(raw), raw);
   }
-  return [...out];
+  return out;
 }
 /** A plain plural or -ing/-ed ending off, so "exports" meets "export". */
 const stem = (w: string) => (/\d/.test(w) || w.length < 5 ? w : w.replace(/(ing|ed|es|s)$/, ""));
@@ -43,7 +47,8 @@ export function likelyItems(o: { texts: readonly string[]; items: readonly WorkI
   const q = (o.query ?? "").trim().toLowerCase();
   const qId = /^#?\d+$/.test(q) ? Number(q.replace(/^#/, "")) : null;
   const qWords = qId === null ? q.split(/\s+/).filter(Boolean) : [];
-  const words = wordsOf(o.texts.join("\n"));
+  const said = spelled(o.texts.join("\n"));
+  const words = [...said.keys()];
   const named = new Set(idsIn(o.texts));
   const isMine = (i: WorkItem) => !!i.assignedToMe || (!!o.myEmail && !!i.assignedToEmail && i.assignedToEmail.toLowerCase() === o.myEmail.toLowerCase());
   const scored = o.items
@@ -60,7 +65,7 @@ export function likelyItems(o: { texts: readonly string[]; items: readonly WorkI
   return pool
     .sort((a, b) => Number(!!b.pointed) - Number(!!a.pointed) || Number(b.mine) - Number(a.mine) || b.hits.length - a.hits.length || (b.i.changedAt ?? "").localeCompare(a.i.changedAt ?? "") || a.i.id - b.i.id)
     .slice(0, o.max ?? LIKELY_MAX)
-    .map(({ i, hits, pointed, mine }) => ({ id: i.id, title: i.title, type: i.type, state: i.state, url: i.url, tier: i.tier ?? null, mine, reason: reasonOf(i.id, hits, pointed, mine) }));
+    .map(({ i, hits, pointed, mine }) => ({ id: i.id, title: i.title, type: i.type, state: i.state, url: i.url, tier: i.tier ?? null, mine, reason: reasonOf(i.id, hits.map((h) => said.get(h) ?? h), pointed, mine) }));
 }
 
 function reasonOf(id: number, hits: readonly string[], pointed: string | null, mine: boolean): string {
