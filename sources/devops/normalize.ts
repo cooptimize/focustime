@@ -97,6 +97,32 @@ export function buildAllChildrenWiql(parentIds: number[], orderField: string | n
   return `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.Parent] IN (${ids.join(", ")}) ORDER BY ${order}`;
 }
 
+/** DV-1: how far back closed items are kept in the store (Roadmap's pace and done counts read them). */
+export const CLOSED_KEEP_DAYS = 90;
+
+/**
+ * DV-1: the store's scope in the client's projects: open items of the types the process knows (per type, states
+ * outside a Completed or Removed category), and anything changed in the last 90 days. One query for all projects.
+ */
+export function buildScopeWiql(projects: readonly string[], categories: StateCategories): string {
+  const open: string[] = [];
+  for (const [type, states] of [...categories.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const done = [...states.entries()].filter(([, c]) => isClosed(c)).map(([n]) => n);
+    const t = `[System.WorkItemType] = ${wiqlString(type)}`;
+    open.push(done.length ? `(${t} AND [System.State] NOT IN (${done.map(wiqlString).join(", ")}))` : `(${t})`);
+  }
+  const keep = `[System.ChangedDate] >= @today - ${CLOSED_KEEP_DAYS}`;
+  return `SELECT [System.Id] FROM WorkItems WHERE ${projectClause(projects)} AND (${[...open, keep].join(" OR ")})`;
+}
+
+/** DV-1: items changed at or after an instant (UTC, to the second; the query runs with timePrecision). */
+export function buildChangedWiql(projects: readonly string[], since: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(since)) throw new Error("since must be an instant to the second, in UTC");
+  return `SELECT [System.Id] FROM WorkItems WHERE ${projectClause(projects)} AND [System.ChangedDate] >= '${since}' ORDER BY [System.ChangedDate] ASC`;
+}
+
+const projectClause = (projects: readonly string[]) => (projects.length === 1 ? `[System.TeamProject] = ${wiqlString(projects[0]!)}` : `[System.TeamProject] IN (${projects.map(wiqlString).join(", ")})`);
+
 /** A DevOps HTML field (a description) as plain text with simple bullets, at most 4000 characters (step 8). */
 export function htmlToText(html: string): string {
   const named: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
