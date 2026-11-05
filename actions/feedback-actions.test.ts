@@ -6,6 +6,8 @@ import { createDemoFeedbackDevOps, type DemoFeedbackParent } from "../sources/de
 import { DEMO_CLIENTS, DEMO_PEOPLE } from "../sources/demo/data.ts";
 import { aFeedbackDraft, aSender, aUser } from "../test/builders/index.ts";
 import { DAILY_LIMIT, LIMIT_REACHED, NOT_SET_UP } from "../plan/feedback.ts";
+import { itemWebUrl } from "../sources/devops/feedback.ts";
+import { FEEDBACK_LOG_KEY, type DevOpsWriteEntry } from "../plan/devopswrite.ts";
 
 const NOW = "2026-11-03T15:00:00Z";
 const sender = aSender(aUser({ displayName: "Alex Rivera", email: "alex@contoso.example" }));
@@ -105,6 +107,35 @@ describe("Send feedback (F1)", () => {
     expect(pv.message).toContain("Preview only");
     expect(await p.run("feedback.send", { previewId: pv.previewId })).toEqual({ ok: true, data: { sent: false, previewOnly: true, message: "Preview only here: nothing was created." } });
     expect(p.devops.created).toEqual([]);
+  });
+
+  // UI-8: the write framework's audit for feedback: one create, read back, logged with the link; no Undo or Retry.
+  it("creates once, logs it in the DevOps write log with no Undo or Retry, and returns the item's link", async () => {
+    const p = await person({ seed: false });
+    let creates = 0;
+    const create = p.devops.create;
+    p.devops.create = async (...a) => (a[4] ? null : creates++, create(...a));
+    const read = p.devops.read;
+    p.devops.read = async (id) => ({ ...(await read(id)), url: itemWebUrl(p.devops.target, id) });
+    const pv = await p.preview();
+    const r = await p.run<FeedbackSent>("feedback.send", { previewId: pv.previewId });
+    expect(r).toEqual({ ok: true, data: { sent: true, id: 9001, url: "https://dev.azure.com/demo/Demo%20Internal/_workitems/edit/9001", confirmed: true, message: "Sent. Thanks." } });
+    expect(creates).toBe(1);
+    const log = await p.run<{ entries: (DevOpsWriteEntry & { undoable: boolean; retryable: boolean })[] }>("devops.log");
+    const e = log.ok ? log.data.entries.find((x) => x.op === "feedback") : undefined;
+    expect(e).toMatchObject({ clientKey: FEEDBACK_LOG_KEY, org: "demo", project: "Demo Internal", parentId: 496, itemId: 9001, status: "confirmed", title: pv.title, undoable: false, retryable: false });
+    // Only the title and tags are kept, never the text.
+    expect(JSON.stringify(e)).not.toContain("From Alex Rivera");
+    expect(await p.run("devops.retry", { id: e!.id })).toMatchObject({ ok: false });
+  });
+
+  it("logs a failed send as failed and says Not sent", async () => {
+    const p = await person({ failCreate: true, seed: false });
+    const pv = await p.preview();
+    const r = await p.run("feedback.send", { previewId: pv.previewId });
+    expect(r).toMatchObject({ ok: false, error: expect.stringMatching(/^Not sent: DevOps refused it \(HTTP 500\)/) });
+    const log = await p.run<{ entries: DevOpsWriteEntry[] }>("devops.log");
+    expect(log.ok && log.data.entries.filter((x) => x.op === "feedback").map((x) => [x.status, x.itemId])).toEqual([["failed", null]]);
   });
 
   it("refuses a preview that expired or isn't theirs", async () => {

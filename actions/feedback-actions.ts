@@ -6,7 +6,8 @@
 // and is shown read only in Settings > Connections.
 import { randomUUID } from "node:crypto";
 import { buildFeedback, DAILY_LIMIT, DESTINATION, LIMIT_REACHED, NOT_SET_UP, parseDraft, sentToday, type FeedbackPayload, type Sender } from "../plan/feedback.ts";
-import { FeedbackFailure, itemWebUrl, type CreatedItem, type FeedbackDevOps } from "../sources/devops/feedback.ts";
+import { FeedbackFailure, itemWebUrl, type CreatedItem, type FeedbackDevOps, type FeedbackTarget } from "../sources/devops/feedback.ts";
+import { FEEDBACK_LOG_KEY } from "../plan/devopswrite.ts";
 import type { Logger } from "../log/logger.ts";
 import { readBack, type Sleep } from "./readback.ts";
 import type { PlanStore } from "../store/plan-store.ts";
@@ -25,6 +26,8 @@ export type FeedbackService = {
   /** The demo: a pretend backlog in memory (sources/demo/feedback.ts); the preview says so. */
   demo: boolean;
   check: (force?: boolean) => Promise<FeedbackSetup>;
+  /** UI-8: where a send goes (org, project, feature), for the audit log; null when nothing is sent from here. */
+  target: () => Promise<FeedbackTarget | null>;
   send: (p: FeedbackPayload) => Promise<{ item: CreatedItem; confirmed: boolean }>;
 };
 
@@ -87,7 +90,7 @@ export function createFeedbackService(o: { devops: FeedbackDevOps | null; mode: 
     }
   }
 
-  return { mode: o.mode, env: o.env, demo: o.demo === true, check, send };
+  return { mode: o.mode, env: o.env, demo: o.demo === true, check, target: async () => o.devops?.target ?? null, send };
 }
 
 /** What a person's request needs: the service, who they are, their local day, and their store (the daily count). */
@@ -148,12 +151,19 @@ export async function feedbackAction(ctx: FeedbackContext, action: FeedbackActio
       // Counted before the create: a send that reached DevOps counts, whatever happened next.
       await ctx.plan?.setState(COUNT_KEY, { date, count: n + 1 });
       held.delete(h.id);
+      // UI-8: the write framework's audit: logged before the create (pending), settled after the read back. The
+      // person's DevOps write log lists it with no Undo or Retry; only the title and tags are kept, never the text.
+      const target = await s.target();
+      const entry = target && ctx.plan ? await ctx.plan.logDevopsWrite({ clientKey: FEEDBACK_LOG_KEY, org: target.org, project: target.project, op: "feedback", itemId: null, parentId: target.parentId, title: h.payload.title, identity: "FocusTime's identity", before: {}, after: { Title: h.payload.title, Tags: h.payload.tags.join("; ") }, ops: null, revBefore: null, revAfter: null, commentId: null, draftId: null, followUpId: null, undoOf: null }).catch(() => null) : null;
+      const settle = (st: Parameters<NonNullable<FeedbackContext["plan"]>["settleDevopsWrite"]>[1]) => (entry && ctx.plan ? ctx.plan.settleDevopsWrite(entry.id, st).catch(() => null) : null);
       try {
         const { item, confirmed } = await s.send(h.payload);
+        await settle({ status: confirmed ? "confirmed" : "unconfirmed", itemId: item.id, revAfter: item.rev || null, message: confirmed ? null : "Created, but the read back didn't match" });
         const out: FeedbackSent = { sent: true, id: item.id, url: item.url, confirmed, message: confirmed ? "Sent. Thanks." : `Sent as #${item.id}, but FocusTime couldn't check it in DevOps.` };
         return { ok: true, data: out };
       } catch (e) {
         const msg = e instanceof FeedbackFailure ? e.message : "Something went wrong sending it";
+        await settle({ status: "failed", message: msg });
         return fail(502, `Not sent: ${msg}. Your text is still here; Copy text keeps it.`, "devops");
       }
     }

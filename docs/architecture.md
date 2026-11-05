@@ -354,6 +354,14 @@ One job reads each registered client chat for everyone; Asks are now Requests. D
 - **Inbox's modes.** `ui/nav.ts`: `InboxMode`, `MODES.inbox`, `navOf.captures`, `inboxModeOf`, `inboxNav`, `nextInboxMode`; `ui/ModeSwitch.tsx` `badges` (AH-3 owns `counts`, " · N"); `ui/App.tsx` remembers the mode (`focustime.inboxMode`) and passes `switches.inbox` to `Conversations`, `MyPromises` and `Inbox` (Captures), which put it in their header's `ModeArea`. `InboxTabs` is gone. `openCaptures` in `e2e/harness.ts`.
 - **Tests.** `ui/plan-words.test.ts`, the UI-7 parts of `ui/nav.test.ts` and `actions/draft-prepare.test.ts`; e2e `e2e/ui7-capture.test.ts`, `e2e/ui7-inbox.test.ts`, and Prepare again in `e2e/capture-devops.test.ts`.
 
+## UI-8: the Nov 5 bug round (outside Inbox)
+
+- **Friday with the panel open.** `WeekGrid`'s `panelOpen` (from `App.tsx`: Week's detail panel is open) adds `with-panel` to `.grid`, which pads the panel's width (`--dp-w` on `:root`, 440 px, 560 px from 3000 px; `.detail-panel` uses it too). Under 1600 px the day headers drop the date and Today pill while it's open; a later `@container (max-width: 230px)` rule removes a hidden rail's margin. `useDropTarget` in `ui/WeekStories.tsx` handles dragenter like dragover (`enterOrOver`).
+- **Dialog headers.** `.command-menu` is `overflow: clip` with its head and foot `flex: none` and the rest scrolling. `ui/Feedback.tsx`: ‹ Back (`menu-back`) in the header on the preview and error, Esc closes. The Guide's `.guide-top .guide-wrap` doesn't wrap; `.guide-chapters` wraps inside.
+- **Feedback audit.** `FeedbackService.target()`; `feedback.send` logs a `feedback` op (`FEEDBACK_LOG_KEY` in `plan/devopswrite.ts`) with `logDevopsWrite` before the create and settles it after; `devops.log` lists it without Undo or Retry, `devops.retry` and the undo preview refuse it, `undoTops` skips it.
+- **Break down in DevOps health.** `ReadyRow` in `ui/PlanWeek.tsx` renders `BreakDownButton` on "Feature with no stories".
+- **Tests.** The UI-8 parts of `actions/feedback-actions.test.ts`; e2e `e2e/ui8.test.ts`.
+
 ## TB-1: the FocusTime bot in Teams (Nov 5)
 
 One brain, two front ends: the bot is a Teams front end on the same assistant service as the in-app panel (AS-1), which
