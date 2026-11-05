@@ -1088,6 +1088,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "admin.refresh_people":
     case "admin.remove_person": return env.admin ? { run: () => env.openSettings("admin-people") } : { disabled: "Only for FocusTime admins" };
     case "admin.audit": return env.admin ? { run: () => env.openSettings("admin-audit") } : { disabled: "Only for FocusTime admins" };
+    case "admin.status_action": return env.admin ? { run: () => env.openSettings("admin-status") } : { disabled: "Only for FocusTime admins" };
     // BD-1: Break down opens its panel on any item whose type needs breaking down (the process model); the rest
     // happens in the panel.
     case "stories.prepare": return { next: () => chooseItem(env, "Break down which item?", (i, k) => i.level === "portfolio" && typeNeedsBreakdown(env.work.get(k)?.types, i.type), (k, i) => () => void openBreakDown(k, { id: i.id, title: i.title, type: i.type })) };

@@ -11,6 +11,8 @@ import { shortDate } from "../labels.ts";
 import { TypeIcon } from "../TypeIcon.tsx";
 import { STATUS_WORD, type ConversationStatus } from "../../plan/conversations.ts";
 import type { ClientProcess } from "../../actions/types.ts";
+import type { StatusGroup } from "../../actions/status-rows.ts";
+import { StatusRows } from "./StatusRows.tsx";
 
 export const ADMIN_UI_SECTIONS = [
   ["admin-clients", "Clients"],
@@ -836,6 +838,7 @@ type StatusData = {
   chats: { chatId: string; clientKey: string; name: string; reading: boolean; polledAt: string | null; state: string | null; note: string | null; via: string | null }[];
   lastPoll: string | null;
   conversations: { conversationsByStatus: Record<string, number>; messagesByRole: Record<string, number>; commitmentsByState: Record<string, number>; aiCallsToday: { chatName: string; clientKey: string; calls: number }[] } | null;
+  groups?: StatusGroup[];
 };
 const ROLE_WORDS: Record<string, string> = { work: "work", chatter: "chatter", ack: "short replies", unsorted: "unsorted" };
 const COMMIT_WORDS: Record<string, string> = { open: "open", followup: "follow-ups", linked: "linked", created: "item created", done: "done", not_needed: "not needed" };
@@ -878,6 +881,7 @@ function AdminStatus() {
           <span className="set-value">Per person, in Settings › Connections (Microsoft permissions and DevOps write access).</span>
         </div>
       </div>
+      {data.groups?.length ? <StatusRows groups={data.groups} /> : null}
       <h3>Client chats</h3>
       <p className="muted">Last poll: {when(data.lastPoll)}.</p>
       {data.chats.length === 0 ? (
