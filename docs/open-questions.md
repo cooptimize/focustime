@@ -260,15 +260,15 @@ What DS-1 learned, and what is still open:
 ## Conversations fixes (CV-2, Nov 5)
 
 - Q-CV2-1: Chat images live in Azure SQL (`teams_message_images`, D623). Move the bytes to Blob storage (a private container, the app's managed identity, the row keeping the blob name) in an HK step once the monthly size is known. Size per month is about chats x images per chat per working day x 21 x the average stripped size (a pasted screenshot is usually 100 to 400 KB): 20 chats with 3 a day at 250 KB is about 315 MB a month, kept as long as their messages are.
-- Q-CV2-2: With AI off for a client, nothing groups its messages into conversations (the rules path finds Requests and promises only). A rules-only grouping (same chat; a reply or a mention; within 45 minutes) would give those clients conversations too. Worth a step if clients without AI stay common.
-- Q-CV2-3: Capture's Who still uses the older name box (`WhoInput`); moving it to the PersonPicker keeps one way to choose a person, and is Capture's step.
-- Q-CV2-4: Link existing… on a promise with no conversation searches with no conversation's context (no likely item); Create works (D628). Should Link start a conversation the same way?
+- Q-CV2-2: Resolved by CV-3 (D648): rules-only grouping for clients with AI off, behind the client Rule "Group messages without AI".
+- Q-CV2-3: Resolved by CV-3 (D645): Capture's Who is the PersonPicker.
+- Q-CV2-4: Resolved by CV-3 (D646): Link existing… suggests likely items with or without a conversation (rules only); Link doesn't start a conversation (Create still does, D628).
 - Q-CV2-5: A promise that implies an item shows only Create the DevOps item? (Create, Link existing…, Not needed), as in CV-1: Make it a follow-up, Done and ⋯ come once it's linked. Past its due, should Make it a follow-up or Done be offered there too?
-- Q-CV2-6: Week's rail shows a promise past its due as "was due" in its title and label only; the rail's own amber treatment is PL-1's to decide.
+- Q-CV2-6: Resolved by CV-3 (D647): the Board rail shows "was due …" in amber, and carries earlier or untimed overdue promises to now on today's block.
 
 ## Sending work (SW-1, Nov 5)
 
-- Q-SW1-1: Answered by AH-1 (D661): Send to… is on Break down's side panel action list in Ahead, for features.
+- Q-SW1-1: Answered by AH-1 (D665): Send to… is on Break down's side panel action list in Ahead, for features.
 - Q-SW1-2: A sender-side assign ("assign it to them now") could reuse AH-1's assign to someone else once it merges; SW-1 only offers the recipient's Also assign to me in DevOps (D635).
 - Q-SW1-3: A send waiting when its week ends becomes Not answered and stays on the lists. Should it offer "Send for next week" to the sender, or drop off after a week?
 - Q-SW1-4: Team shows features committed and watched only. Should a person's stories under a committed feature show as a count (never hours), or is the feature enough?
@@ -276,3 +276,10 @@ What DS-1 learned, and what is still open:
 - Q-AH1-1: The Send to… dialog doesn't take focus when it opens, so Escape reaches what is behind it (over Break down's panel it closes the panel, not the dialog). Should the dialog focus itself on open? Left as SW-1 built it.
 - Q-AH1-2: Stories in Grid have no side panel, so Send to… for a story is still from Week (Your stories, Commit). Should Grid rows get a ⋯ with the same list?
 - Q-AH1-3: Should a lead's commit for someone else's item ask before notifying, or is the quiet note enough?
+
+## Costs (HK-2, Nov 5)
+
+- Q-HK2-1: One open tab kept prod "in use" all night on Nov 4 to 5 (about 150 `/api/action` calls an hour), so the idle rule never let the scheduler sleep: the pollers and the container stayed busy, and before HK-2 the database stayed awake. Count someone as active only while a tab is visible and there has been input in the last N minutes? Not HK-2's step (app code).
+- Q-HK2-2: The workbook's views (merges, group-by sums, the Yesterday column) are built from gallery-proven settings but couldn't be rendered from the CLI; check dev's copy after the merge against the PR's expected figures before deploying prod. If a view doesn't sum, the fallback is a second query for that view only.
+- Q-HK2-3: The budget alerts go to one person's address (FT_BUDGET_EMAIL) and the resource group Owners. A mail-enabled FocusTime Admins group, or an action group, would reach every admin; worth it once there's more than one?
+- Q-HK2-4: The Container Apps free grant is per subscription and shared with every other app in "Production Services and Apps", so prod's container cost depends on what else runs there. Track it in the workbook after Nov 7.

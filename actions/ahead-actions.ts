@@ -1,6 +1,6 @@
-// AH-1: Ahead's one model (D649) and my change set (D653). ahead.load reads every client's items from the central
-// DevOps store (all levels), my rights on each (D652), my pending changes reconciled against what DevOps has now (a
-// conflict only when a field I'm changing changed there, D654), my kept half-days and FocusTime's own sizes as hints.
+// AH-1: Ahead's one model (D653) and my change set (D657). ahead.load reads every client's items from the central
+// DevOps store (all levels), my rights on each (D656), my pending changes reconciled against what DevOps has now (a
+// conflict only when a field I'm changing changed there, D658), my kept half-days and FocusTime's own sizes as hints.
 // Edits never write: ahead.stage keeps a change in the plan store; committing goes through the write framework
 // (devops.preview / devops.confirm with kind "fields", actions/devops-write-actions.ts), one patch per item.
 import type { AppConfig } from "../config/schema.ts";
@@ -172,7 +172,7 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
 /**
  * Against what DevOps has now: a change DevOps already shows goes (it landed, or someone made the same change); a
  * field that changed since I started editing it is a conflict (its value kept beside mine); a conflict DevOps undid
- * clears. Other changes to the item don't count (D654).
+ * clears. Other changes to the item don't count (D658).
  */
 async function reconcile(plan: PlanStore, clients: readonly AheadClient[]): Promise<void> {
   const items = new Map(clients.flatMap((c) => c.items.map((i) => [`${c.clientKey}:${i.id}`, i] as const)));
@@ -238,7 +238,7 @@ async function hintsOf(plan: PlanStore, today: IsoDate): Promise<Map<string, Rec
   return out;
 }
 
-// ---- Filters, remembered per person (D650) ----
+// ---- Filters, remembered per person (D654) ----
 export const FILTERS_KEY = "ahead_filters";
 export type { AheadFilters, AheadOwner };
 export function checkFilters(v: unknown): AheadFilters | null {

@@ -45,7 +45,7 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
     const { page, errors } = await freshPage(h);
     const line = page.locator(".sent-line");
     await line.waitFor({ timeout: 30_000 });
-    await expect(line.textContent()).resolves.toBe("2 items sent to your week · 1 Must");
+    await expect(line.locator(".us-what").textContent()).resolves.toBe("2 items sent to your week · 1 Must");
     await line.getByRole("button").click();
     const group = page.locator("section.team-group");
     await group.waitFor({ timeout: 30_000 });

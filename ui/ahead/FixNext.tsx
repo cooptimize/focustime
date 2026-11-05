@@ -1,4 +1,4 @@
-// AH-1 (D658): Fix next: readiness gaps as actions, one at a time, on items I may change: Break down (no open items
+// AH-1 (D662): Fix next: readiness gaps as actions, one at a time, on items I may change: Break down (no open items
 // under it), Set dates, Assign, Size. Soonest target first. What I do here goes into the change set like any edit
 // (Break down opens its side panel, which publishes on its own). Skip puts one aside for the session. Its own mode
 // (#/ahead/fix) and a slim pane beside Grid and Gantt.

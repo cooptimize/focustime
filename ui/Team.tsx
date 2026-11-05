@@ -5,9 +5,10 @@
 //                     <lead> to look with their reply
 //   Team              Week's third mode: per client I'm on, each teammate's committed features, the sends, the
 //                     priorities and the watched features. Read-only on the phone. Never day plans, focus, notes or hours
-//   Today's line      one line when something waits for me ("Priya sent you Loyalty points (Must)")
+//   Today's line      one line in the urgent strip when something waits for me ("Priya sent you Loyalty points (Must)")
 // Plain words; nothing here reads as anyone checking on anyone.
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import type { SentToday } from "../plan/urgent.ts";
 import type { PeoplePickerData, PickerPerson } from "../actions/people-picker.ts";
 import type { CommitClient, CommitData, LookView, PickerPersonView, PriorityView, SendView, TeamData, TeamPerson } from "../plan/team-types.ts";
 import type { IsoDate } from "../week/types.ts";
@@ -484,21 +485,16 @@ export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, 
 }
 
 /** Today's one line while something waits for me, linking to Commit on its week. */
-export function SentToYouLine({ version, onOpen }: { version: unknown; onOpen: (weekStart: IsoDate) => void }) {
-  const [d, setD] = useState<{ line: string | null; count: number; weekStart: IsoDate } | null>(null);
+/** Today's sends line's data (send.today), refreshed with `version`; Today shows it in the urgent strip (CV-3's sends source). */
+export function useSentToday(version: unknown, on: boolean): SentToday | null {
+  const [d, setD] = useState<SentToday | null>(null);
   useEffect(() => {
+    if (!on) return setD(null);
     let live = true;
-    call<{ line: string | null; count: number; weekStart: IsoDate }>("send.today", {}).then((x) => live && setD(x), () => live && setD(null));
+    call<SentToday>("send.today", {}).then((x) => live && setD(x), () => live && setD(null));
     return () => void (live = false);
-  }, [version]);
-  if (!d?.line) return null;
-  return (
-    <p className="sent-line">
-      <button type="button" className="link-btn" onClick={() => onOpen(d.weekStart)}>
-        {d.line}
-      </button>
-    </p>
-  );
+  }, [version, on]);
+  return d;
 }
 
 const STATE_WORDS: Record<TeamPerson["state"], string> = { committed: "", draft: "Not committed yet", not_on_focustime: "Not on FocusTime yet" };

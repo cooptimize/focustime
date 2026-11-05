@@ -42,7 +42,7 @@ export function changerOf(f: Fields): { byName: string | null; byUnique: string 
  * parent only when it was created since `newSince` (an older item coming into scope isn't news). With several
  * revisions between two reads the entry is the net change, credited to the last changer.
  */
-export function diffItem(o: { id: number; before: Fields | null; after: Fields; targetField?: string | null; startField?: string | null; /** AH-1: the type's own size field (D653). */ sizeField?: string | null; newSince: string }): ChangeEntry[] {
+export function diffItem(o: { id: number; before: Fields | null; after: Fields; targetField?: string | null; startField?: string | null; /** AH-1: the type's own size field (D657). */ sizeField?: string | null; newSince: string }): ChangeEntry[] {
   const { id, before, after } = o;
   const rev = revOf(after);
   if (before && revOf(before) >= rev) return [];

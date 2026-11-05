@@ -388,7 +388,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       if (await store.markOnce(`story_taken_notice:${t.id}`, t.takenAt)) await send(notices.storyTaken(t.id, t.byName.split(/\s+/)[0] || "A teammate", t.itemId, at.toString()));
     }
   };
-  // AH-1 (D660): notes from teammates' commits in Ahead: one notice per assignment, and dates moves by the same person
+  // AH-1 (D664): notes from teammates' commits in Ahead: one notice per assignment, and dates moves by the same person
   // within 10 minutes as one (one commit runs in batches). The last 3 days only, once each.
   const notesTick = async () => {
     const notes = liveCtx.devopsNotes;

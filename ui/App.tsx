@@ -35,7 +35,7 @@ import { StatusBar } from "./StatusBar.tsx";
 import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
 import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { MustsSummary, TopTimer } from "./NowStrip.tsx";
-import { PersonChip, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
+import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
 import { afterDone, defaultNav, focusOf, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, planDayNav, planWeekOf, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
 import { ModeArea, ModeSwitch } from "./ModeSwitch.tsx";
 import { dayModeStatus, momentCard, weekModeStatus } from "../plan/modes.ts";
@@ -230,6 +230,8 @@ export function App() {
   const planDayFocus = focusOf(nav);
   /** Settings (step 6b) at a section, or closed (back to the place under it). */
   const setSettingsAt = useCallback((section: SettingsSectionId | null) => go((l) => ({ nav: l.nav, overlay: section ? { kind: "settings", section } : null })), [go]);
+  // CV-3: the account menu, for the phone's ⋯ first row (the person chip on wider screens).
+  const account = useAccountMenu(() => setSettingsAt("you"));
   // G1: the tour link shows on the first Today (Now) a person sees, once: it is recorded as shown when it first
   // appears, and stays for this visit until they open the Guide from it or say Not now.
   const showTour = tourOffer && !loc.overlay && loc.nav.tab === "today" && loc.nav.flow === null;
@@ -1434,7 +1436,7 @@ export function App() {
           </button>
           {data.demo && (
             <button type="button" className="demo-tag" onClick={() => setSettingsAt("display")} title="Demo mode: fictional data, nothing leaves FocusTime. Turn it off in Settings > Display">
-              Demo data
+              {phone ? "Demo" : "Demo data"}
             </button>
           )}
         </div>
@@ -1512,6 +1514,7 @@ export function App() {
           <PersonChip
             onOpen={(at, step) => setPersonMenu({ at, step })}
             onSettings={() => setSettingsAt(settingsAt === null ? "you" : null)}
+            menuOnly={phone}
           />
         </div>
       </header>
@@ -1846,6 +1849,8 @@ export function App() {
           step={{
             title: "More",
             items: [
+              // CV-3: on the phone the person chip is this first row (the top bar keeps room for the name).
+              { id: "account", label: account.title, next: account.step },
               { id: "notices", label: "Notifications", ...(notices.unread > 0 ? { hint: `${notices.unread} new` } : {}), run: () => openNotices() },
               ...(data.timer ? [{ id: "focus", label: "Focus screen", run: () => setView("focus") }] : [{ id: "focus", label: "Start focus", run: () => setTimerMenuAt(phoneMoreAt) }]),
               { id: "settings", label: "Settings", run: () => setSettingsAt("you") },

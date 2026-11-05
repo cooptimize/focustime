@@ -7,6 +7,8 @@
 // after thanks only suggests "Looks wrapped up. Resolve?". The DevOps draft for a commitment is made when its
 // committer opens it (their own cap); creating and commenting go through the write framework. Chat text goes only to
 // that client's cards, never a log or an error (ids and counts only, and not even ids in logs).
+import { groupingRules } from "./conversations-pipeline.ts";
+import { likelyItems } from "../plan/promise-items.ts";
 import { typeChoices } from "./work-item-types.ts";
 import type { ProcessModel } from "../plan/process.ts";
 import type { AiService } from "../ai/service.ts";
@@ -42,6 +44,7 @@ export const CONVERSATION_ACTIONS = [
   "conversations.hide", "conversations.move", "conversations.this_is_work", "conversations.link", "conversations.take_over", "conversations.sort_unsorted", "conversations.search",
   "conversations.draft", "my_promises.list", "my_promises.today", "my_promises.followup", "my_promises.link", "my_promises.done", "my_promises.not_needed", "my_promises.reopen",
   "suggestions.skip", "conversations.merge", "conversations.unmerge", "my_promises.start_draft",
+  "my_promises.search",
 ] as const;
 export type ConversationAction = (typeof CONVERSATION_ACTIONS)[number];
 
@@ -659,7 +662,7 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
           if (!waiting.length) continue;
           const ms = (await mapSeq(waiting, (p) => v.teams.message(p.chatId, p.messageId))).filter((m): m is NonNullable<typeof m> => !!m);
           const r = await runPipeline({
-            teams: ctx.requests.teams, convs: v.store, users, homeTenant: await ctx.homeTenant(), now: stamp, clientName: cfg.clientSettings[chat.clientKey]?.name ?? chat.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, chatCap: cfg.org?.rules.chatAiDailyCap ?? CHAT_DAILY_AI_CALLS,
+            teams: ctx.requests.teams, convs: v.store, users, homeTenant: await ctx.homeTenant(), now: stamp, clientName: cfg.clientSettings[chat.clientKey]?.name ?? chat.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, chatCap: cfg.org?.rules.chatAiDailyCap ?? CHAT_DAILY_AI_CALLS, ...groupingRules(cfg, chat.clientKey),
             items: await ctx.openItems(cfg, chat.clientKey).catch(() => null), author: async (uid) => (same(uid, v.me) ? { zone: userZone(cfg), promisePhrases: cfg.asks.promisePhrases } : null),
           }, chat, ms);
           sorted += r.work + r.chatter;
@@ -772,6 +775,33 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         await v.convs.updateCommitment(k.id, { state: "followup", followUpId: f.id });
         ctx.log({ source: "plan", op: "promise_resolved", kind: "followup" });
         return { ok: true, data: { ...(await myPromises(ctx, cfg)), followUpId: f.id } };
+      }
+      case "my_promises.search": {
+        // CV-3 (Q-CV2-4): likely items for Link existing…, with or without a conversation, by rules only. The words
+        // come from the promise and its messages, and its conversation's messages or else the ones just before it in
+        // that chat (45 minutes, at most 12). One client's open items (openItems reads DV-1's store when it runs).
+        const o = only(input, ["id"], ["query"]);
+        const k = o && (await mine(o.id));
+        if (!o || !k || (o.query !== undefined && (typeof o.query !== "string" || o.query.length > 200))) return bad("my_promises.search takes { id, query? }");
+        const items = await ctx.openItems(cfg, k.clientKey);
+        if (!items) return { ok: true, data: { available: false, items: [] } };
+        const own = (await mapSeq(k.messageIds, (id) => v.teams.message(k.chatId, id))).filter((m): m is NonNullable<typeof m> => !!m).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        const c = k.conversationId !== null ? await v.convs.conversation(k.conversationId) : null;
+        const around: string[] = [];
+        if (c) {
+          const places = (await v.convs.placesIn([c.id])).filter((p) => p.role === "work").slice(-12);
+          for (const p of places) {
+            const m = await v.teams.message(p.chatId, p.messageId);
+            if (m) around.push(m.text);
+          }
+          around.push(c.title);
+        } else if (own[0]) {
+          const firstAt = own[0].createdAt;
+          for (const m of await v.teams.messagesBefore(k.chatId, firstAt, 12)) if ((Date.parse(firstAt) - Date.parse(m.createdAt)) / 60_000 <= 45) around.push(m.text);
+        }
+        const email = ctx.devopsEmail ? await ctx.devopsEmail(k.clientKey).catch(() => null) : null;
+        const hits = likelyItems({ texts: [k.what, ...own.map((m) => m.text), ...around], items, myEmail: email, suggestedId: c?.likelyItem ?? null, query: typeof o.query === "string" ? o.query : "" });
+        return { ok: true, data: { available: true, items: hits } };
       }
       case "my_promises.link": {
         const o = only(input, ["id", "itemId"]);

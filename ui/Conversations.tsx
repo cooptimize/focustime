@@ -414,11 +414,16 @@ function ConvCard(p: {
         ))}
         {c.participants.some((x) => x.external) && <span className="ask-ext">External</span>}
       </p>
-      <p className="conv-summary">
-        {c.summary.split("\n").slice(0, 4).map((l, i) => (
-          <span key={i}>{l}</span>
-        ))}
-      </p>
+      {c.summary.trim() ? (
+        <p className="conv-summary">
+          {c.summary.split("\n").slice(0, 4).map((l, i) => (
+            <span key={i}>{l}</span>
+          ))}
+        </p>
+      ) : (
+        // CV-3: grouped by rules (AI off for this client): no summary; Show messages has them all.
+        <p className="conv-summary muted">Grouped without AI, so there's no summary. Show messages to read it.</p>
+      )}
       {c.item && (
         <p className="conv-item">
           Tracked as{" "}

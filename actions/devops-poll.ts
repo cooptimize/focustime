@@ -490,7 +490,7 @@ export function createDevOpsPoller(d: PollerDeps) {
       return { known: true, itemIds: [...ids].sort((a, b) => a - b) };
     },
     async stored(key, v) {
-      // AH-1 (D656): a write's read-back goes straight in, with its change log entries, so every screen shows it now.
+      // AH-1 (D660): a write's read-back goes straight in, with its change log entries, so every screen shows it now.
       const c = await stateOf(key);
       if (!c.process || !c.fields) return;
       const keep = new Set(fieldsOf(c.process, c.fields));

@@ -1092,6 +1092,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "my_promises.followup":
     case "my_promises.start_draft":
     case "my_promises.link":
+    case "my_promises.search":
     case "my_promises.done":
     case "my_promises.not_needed":
     case "my_promises.reopen":
@@ -1323,7 +1324,7 @@ export const BREAK_DOWN_EVENT = "focustime:break-down";
 export const PV_BREAKDOWN_EVENT = "focustime:breakdown";
 /** DS-1's event name, still heard so anything that sends it opens Break down. */
 export const DRAFT_STORIES_EVENT = "focustime:draft-stories";
-/** AH-1 (D661): `actions` is the panel's action list for the item, given by the caller (Ahead adds Send to…); more go here. */
+/** AH-1 (D665): `actions` is the panel's action list for the item, given by the caller (Ahead adds Send to…); more go here. */
 export type PanelAction = { id: string; label: string; hint?: string; run: () => void };
 export type BreakDownTarget = { id: number; title: string; type?: string; actions?: PanelAction[] };
 export const openBreakDown = (clientKey: string, item: BreakDownTarget) => window.dispatchEvent(new CustomEvent(BREAK_DOWN_EVENT, { detail: { clientKey, item } }));

@@ -1,4 +1,4 @@
-// AH-1 (D659): can a feature's open work reach its target date? Its open stories' hours (FocusTime's size, unsized as
+// AH-1 (D663): can a feature's open work reach its target date? Its open stories' hours (FocusTime's size, unsized as
 // 2h; a DevOps size field is in its own unit, so it isn't hours) against the free focus time before the target in the
 // blocks of the people they're assigned to. Only my own blocks are known to FocusTime, so a story assigned to someone
 // else (or to nobody) means it can't be checked, and that is said, never guessed. Pure; minutes in.

@@ -215,7 +215,7 @@ describe("each write", () => {
     const r = await s.write({ kind: "target_date", itemId: 437, date: "2026-11-20" });
     expect(r.confirmed).toBe(true);
     expect(s.dv.items.get(437)!.fields["Microsoft.VSTS.Scheduling.TargetDate"]).toBe("2026-11-20T05:00:00Z");
-    // AH-1 (D652): the shared rule: Dana's feature sits under my epic, so I may set it; one under nobody's of mine I may not.
+    // AH-1 (D656): the shared rule: Dana's feature sits under my epic, so I may set it; one under nobody's of mine I may not.
     expect((await s.preview({ kind: "target_date", itemId: 601, date: "2026-11-20" })).op).toBe("target_date");
     s.dv.add(602, { "System.WorkItemType": "Feature", "System.Title": "Lee's feature", "System.State": "Active", "System.AssignedTo": { uniqueName: "lee@cooptimize.example" } });
     expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "target_date", itemId: 602, date: "2026-11-20" } })).toMatchObject({ status: 409 });
@@ -411,7 +411,7 @@ describe("undo of each kind", () => {
     expect(s.dv.items.get(437)!.fields["Microsoft.VSTS.Scheduling.StartDate"]).toBeUndefined();
     expect(s.dv.items.get(437)!.fields["Microsoft.VSTS.Scheduling.TargetDate"]).toBeUndefined();
   });
-  it("step 17, Save dates: refused where the process has no Start Date, on items I may not change (D652), or a start after the target", async () => {
+  it("step 17, Save dates: refused where the process has no Start Date, on items I may not change (D656), or a start after the target", async () => {
     const t = setup({ startDate: false });
     await t.enable();
     expect(await t.fail("devops.preview", { clientKey: COOP, change: { kind: "target_date", itemId: 437, date: "2026-12-11", startDate: "2026-11-16" } })).toMatchObject({ status: 409 });
@@ -759,7 +759,7 @@ describe("CV-1: a DevOps item, a comment and a description change from a convers
   });
 });
 
-describe("AH-1: Ahead's change set as one fields write per item (D653 to D656)", () => {
+describe("AH-1: Ahead's change set as one fields write per item (D657 to D660)", () => {
   let s: S;
   const DANA = "dana@cooptimize.example";
   const stage = (itemId: number, field: "start" | "target" | "size" | "assignee", value: unknown, baseValue: unknown = null, half: "AM" | "PM" | null = null, baseRev = 3) =>

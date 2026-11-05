@@ -1,6 +1,6 @@
-// AH-1: Ahead's Gantt, pure. Half-day positions (DevOps stores the day; the half is FocusTime's, for display, D655),
+// AH-1: Ahead's Gantt, pure. Half-day positions (DevOps stores the day; the half is FocusTime's, for display, D659),
 // dragging a bar or an edge in half-days, the bars' dates with dashed edges where a date is missing, and the frozen row
-// order that fixes the drag bug (D651): while a drag runs, rows keep their order and reloads wait; one reflow on drop.
+// order that fixes the drag bug (D655): while a drag runs, rows keep their order and reloads wait; one reflow on drop.
 import type { IsoDate } from "../week/types.ts";
 import type { DayHalf as Half } from "./ahead-edit.ts";
 import type { Scale } from "./ahead.ts";
@@ -65,7 +65,7 @@ export function ganttBar(i: { start: IsoDate | null; target: IsoDate | null; sta
 /** Dates as DevOps will get them: the day only (the half stays in FocusTime). */
 export const dayOf = (p: HalfPos): IsoDate => p.date;
 
-// ---- The drag fix (D651) ----
+// ---- The drag fix (D655) ----
 
 /**
  * The row order to show. While a drag runs (`frozen` is the order when it began), the frozen order stands: rows that
@@ -80,7 +80,7 @@ export function shownOrder(frozen: readonly string[] | null, next: readonly stri
 }
 
 /**
- * Data that arrives during a drag waits (a reload landing mid-drag re-sorted the rows before, D651). `dragging` true:
+ * Data that arrives during a drag waits (a reload landing mid-drag re-sorted the rows before, D655). `dragging` true:
  * keep showing what was shown and hold the newest arrival; false: show the newest.
  */
 export type Held<T> = { shown: T; pending: T | null };

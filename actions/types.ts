@@ -480,7 +480,7 @@ export type PhotosData = { available: boolean; reason: PhotoAccess | null; me: s
 export type ProcessTypeRow = TypeLook & { breakdownSource: "default" | "override" | "level"; history: string | null; bug: boolean };
 export type ClientProcess = { ok: true; process: string | null; project: string; bugs: string | null; types: ProcessTypeRow[] } | { ok: false; message: string };
 
-// ---- AH-1: Ahead's grid, Gantt and Fix next (one model, D649) ----
+// ---- AH-1: Ahead's grid, Gantt and Fix next (one model, D653) ----
 /** One DevOps item as Ahead shows it: any level the process has, from the central store. */
 export type AheadItem = {
   id: number;
@@ -524,7 +524,7 @@ export type AheadClient = {
 export type AheadLoad = {
   today: string;
   clients: (AheadClient & {
-    /** isClientLead for me (D652). */
+    /** isClientLead for me (D656). */
     lead: boolean;
     /** Item ids I may change; the rest are read-only with `note`. */
     editable: number[];

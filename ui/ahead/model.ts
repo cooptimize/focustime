@@ -1,4 +1,4 @@
-// AH-1 (D649, D650): Ahead's one model, pure. ahead.load's items with my pending changes laid over them, grouped
+// AH-1 (D653, D654): Ahead's one model, pure. ahead.load's items with my pending changes laid over them, grouped
 // client › epic › feature › story in DevOps order, my rights on each, the gaps Fix next works through, and the filters
 // Grid and Gantt share (client, epic, owner, has gaps, date range, text). Levels come from the process model (the
 // item's level), never from type names.
@@ -49,7 +49,7 @@ export const tierOf = (i: Pick<AheadItem, "level">): Tier | null => (i.level ? (
 export const isOpen = (i: AheadItem) => isOpenCategory(i.stateCategory);
 const lc = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
 
-/** The owner filter for a client: what I chose, else All for a lead and Mine for everyone else (D650). */
+/** The owner filter for a client: what I chose, else All for a lead and Mine for everyone else (D654). */
 export const ownerOf = (f: AheadFilters, c: Pick<LoadClient, "clientKey" | "lead">): AheadOwner => f.owner[c.clientKey] ?? (c.lead ? "all" : "mine");
 
 function effOf(i: AheadItem, p: Row["pending"]): Eff {

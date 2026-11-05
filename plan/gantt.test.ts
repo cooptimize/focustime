@@ -4,7 +4,7 @@ import { aheadColumns, aheadWeeks, timelineScale } from "./ahead.ts";
 
 const scale = timelineScale(aheadColumns(aheadWeeks("2026-11-02")), { week: 140, month: 200 });
 
-describe("half-day snap (D655)", () => {
+describe("half-day snap (D659)", () => {
   it("counts two halves a day", () => {
     const a = { date: "2026-11-02", half: "AM" as const };
     expect(halfIndex({ date: "2026-11-02", half: "PM" }) - halfIndex(a)).toBe(1);
@@ -40,7 +40,7 @@ describe("bars with a missing date", () => {
   });
 });
 
-describe("the drag bug (D651): order frozen during a drag, one reflow on drop", () => {
+describe("the drag bug (D655): order frozen during a drag, one reflow on drop", () => {
   it("keeps the order a drag began with, whatever arrives", () => {
     const frozen = ["a", "b", "c"];
     expect(shownOrder(frozen, ["b", "a", "c"])).toEqual(["a", "b", "c"]);

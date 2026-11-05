@@ -1,4 +1,4 @@
-// AH-1: Ahead › Grid (was Roadmap, D649): every level grouped client › epic › feature › story, collapsible, with
+// AH-1: Ahead › Grid (was Roadmap, D653): every level grouped client › epic › feature › story, collapsible, with
 // State, Start, Target, Assigned to, Size and Readiness. Gaps are highlighted; a field the type doesn't have reads
 // "Not in <project>'s process". Edits are inline and go into my change set (nothing is written until Commit): Enter
 // edits, Enter keeps, Esc cancels; arrows move between cells. Items I may not change say who can.

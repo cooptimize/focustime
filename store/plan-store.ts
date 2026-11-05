@@ -1571,7 +1571,7 @@ const toCapture = (r: Row): Capture => ({
 
 /** How a capture is sorted (step 9). */
 export type CaptureRoute =
-  | { as: "follow_up"; clientKey: string | null; who: string; what: string; due: IsoDate | null; channel?: string | null; itemId?: number | null }
+  | { as: "follow_up"; clientKey: string | null; who: string; /** CV-3: the person from the PersonPicker, or none (a plain name). */ whoRef?: PersonRef | null; what: string; due: IsoDate | null; channel?: string | null; itemId?: number | null }
   | { as: "draft"; clientKey: string; parentItemId: number | null; title: string; size: Size }
   | { as: "draft_feature"; clientKey: string; parentItemId: number | null; title: string; targetDate?: IsoDate | null }
   | { as: "dismissed" };
@@ -2098,7 +2098,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         let routedId: number | null = null;
         if (r.as === "follow_up") {
           if (!r.what.trim()) throw new PlanError("A follow-up needs what you owe");
-          routedId = Number((await db.run("INSERT INTO follow_ups (kind, client_key, who, what, due, channel, item_id, opened_at) VALUES ('capture', ?, ?, ?, ?, ?, ?, ?)", r.clientKey, r.who.trim() || null, r.what.trim(), r.due, r.channel ?? null, r.clientKey ? (r.itemId ?? null) : null, at)).lastId);
+          routedId = Number((await db.run("INSERT INTO follow_ups (kind, client_key, who, who_ref, what, due, channel, item_id, opened_at) VALUES ('capture', ?, ?, ?, ?, ?, ?, ?, ?)", r.clientKey, r.who.trim() || null, refJson(r.who.trim() ? (r.whoRef ?? null) : null), r.what.trim(), r.due, r.channel ?? null, r.clientKey ? (r.itemId ?? null) : null, at)).lastId);
         } else if (r.as === "draft") {
           if (!r.title.trim()) throw new PlanError("A draft story needs a title");
           routedId = Number((await db.run("INSERT INTO draft_stories (client_key, parent_item_id, title, size, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", r.clientKey, r.parentItemId, r.title.trim(), r.size, at, at)).lastId);
@@ -2744,7 +2744,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         (await db.run("INSERT INTO roadmap_dates (client_key, item_id, start_date, end_date, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (client_key, item_id) DO UPDATE SET start_date = excluded.start_date, end_date = excluded.end_date, updated_at = excluded.updated_at", clientKey, itemId, dates.start, dates.end, stamp()));
       });
     },
-    /** AH-1 (D653): my pending DevOps edits in Ahead, oldest first. */
+    /** AH-1 (D657): my pending DevOps edits in Ahead, oldest first. */
     async aheadChanges(): Promise<StagedChange[]> {
       const rows = (await db.all("SELECT * FROM ahead_changes ORDER BY created_at, client_key, item_id, field")) as Row[];
       const parse = (v: unknown) => (typeof v === "string" ? (JSON.parse(v) as ChangeValue) : null);
@@ -2778,7 +2778,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return (await db.run("DELETE FROM ahead_changes WHERE client_key = ? AND item_id = ? AND field = ?", clientKey, itemId, field)).changes;
       });
     },
-    /** AH-1 (D655): the half-day I chose for a date that landed in DevOps (DevOps keeps the day). */
+    /** AH-1 (D659): the half-day I chose for a date that landed in DevOps (DevOps keeps the day). */
     async aheadHalves(): Promise<{ clientKey: string; itemId: number; field: "start" | "target"; day: IsoDate; half: DayHalf }[]> {
       return ((await db.all("SELECT client_key, item_id, field, day, half FROM ahead_halves")) as Row[]).map((r) => ({ clientKey: r.client_key as string, itemId: r.item_id as number, field: r.field as "start" | "target", day: String(r.day).slice(0, 10), half: r.half as DayHalf }));
     },

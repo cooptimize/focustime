@@ -6,7 +6,7 @@ const ladder = [["E"], ["F"], ["S"]];
 const at = (type: string, email: string | null) => ({ assigneeEmail: email, rung: rungOf(ladder, type) });
 const me = { email: "avery@example.com", lead: false, automation: false };
 
-describe("who can edit (D652)", () => {
+describe("who can edit (D656)", () => {
   it("a lead edits anything of the client", () => {
     expect(canEdit({ ...me, lead: true }, at("S", "dana@example.com"), at("F", "dana@example.com"), "Contoso")).toEqual({ ok: true, why: "lead" });
   });
@@ -37,7 +37,7 @@ describe("change values", () => {
     expect(checkValue("assignee", { email: " Dana@Example.com ", name: "Dana" })).toEqual({ email: "dana@example.com", name: "Dana" });
     expect(checkValue("assignee", null)).toBeNull();
   });
-  it("a conflict only when this field changed since editing began (D654)", () => {
+  it("a conflict only when this field changed since editing began (D658)", () => {
     expect(conflictOf({ field: "target", baseValue: "2026-11-20" }, "2026-11-20")).toEqual({ conflict: false });
     expect(conflictOf({ field: "target", baseValue: "2026-11-20" }, "2026-11-27")).toEqual({ conflict: true, theirs: "2026-11-27" });
     expect(sameValue("assignee", { email: "A@x.com", name: "A" }, { email: "a@x.com", name: "Other name" })).toBe(true);

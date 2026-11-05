@@ -1,6 +1,7 @@
 // Quick capture (step 9): save first, sort later. A capture is written to the local plan store only, so it works
 // with every source offline; routing makes a follow-up, a draft story or (step 13.5) a draft feature, also local.
 // The only DevOps read is a client's open features and epics (to put a draft under), read-only and optional. No AI.
+import { personRef } from "../plan/person-ref.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { Size } from "../plan/types.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
@@ -123,15 +124,22 @@ export async function captureAction(ctx: CaptureContext, action: CaptureAction, 
         return { ok: true, data: await featuresOf(ctx, await ctx.config().catch(() => null), key) };
       }
       case "capture.route": {
-        const o = fields(input, ["id", "as"], ["clientKey", "who", "what", "due", "title", "size", "parentItemId", "channel", "itemId", "targetDate"]);
+        const o = fields(input, ["id", "as"], ["clientKey", "who", "whoRef", "what", "due", "title", "size", "parentItemId", "channel", "itemId", "targetDate"]);
         const capId = id(o.id, "id");
         let route: CaptureRoute;
         // Step 15.3: a follow-up's linked item (needs a client) and a draft feature's target date; nothing else takes them.
         if (o.itemId !== undefined && o.itemId !== null && o.as !== "follow_up") throw new Invalid("Only a follow-up links a work item here");
+        if (o.whoRef !== undefined && o.whoRef !== null && o.as !== "follow_up") throw new Invalid("Only a follow-up has a Who");
         if (o.targetDate !== undefined && o.targetDate !== null && o.as !== "draft_feature") throw new Invalid("A target date is for a draft feature");
         switch (o.as) {
           case "follow_up":
             route = { as: "follow_up", clientKey: optClient(o.clientKey), who: text(o.who ?? "", "who", 100), what: text(o.what, "what", 200), due: date(o.due), channel: o.channel === undefined || o.channel === null || o.channel === "" ? null : (["teams", "email", "devops", "call"].includes(String(o.channel)) ? String(o.channel) : (() => { throw new Invalid("channel must be teams, email, devops or call"); })()) };
+            // CV-3: Who as a person from the PersonPicker (as on a follow-up), or a plain name with no reference.
+            if (o.whoRef !== undefined && o.whoRef !== null) {
+              const ref = personRef(o.whoRef);
+              if (!ref) throw new Invalid("whoRef is a person from the picker, or null");
+              if (route.who.trim()) route.whoRef = ref;
+            }
             if (o.itemId !== undefined && o.itemId !== null) {
               if (!route.clientKey) throw new Invalid("A linked work item needs a client");
               route.itemId = id(o.itemId, "itemId");

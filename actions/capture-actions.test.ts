@@ -155,4 +155,25 @@ describe("quick capture actions (step 9)", () => {
     const followUps = await t.run<{ followUps: FollowUpView[] }>("followups.list", {});
     expect(followUps.followUps).toEqual([expect.objectContaining({ kind: "capture", what: "Call the vendor", due: null })]);
   });
+
+  it("CV-3: Who from the PersonPicker saves the person beside the name; free text stays a plain name; old captures keep their text", async () => {
+    const t = setup();
+    const evan = { kind: "cooptimizer", id: "evan-oid", name: "Evan Ford" };
+    // An older capture, saved before the picker, waits in the inbox with its own text.
+    const old = (await t.run<{ capture: { id: number; text: string } }>("capture.add", { text: "Promised Dana the export" })).capture;
+    const a = (await t.run<{ capture: { id: number } }>("capture.add", { text: "Told Evan Ford I'd send the totals" })).capture;
+    await t.run("capture.route", { id: a.id, as: "follow_up", who: "Evan Ford", whoRef: evan, what: "Send the totals" });
+    const b = (await t.run<{ capture: { id: number } }>("capture.add", { text: "Owe the vendor a call" })).capture;
+    await t.run("capture.route", { id: b.id, as: "follow_up", who: "the vendor", what: "Call the vendor" });
+    const { followUps } = await t.run<{ followUps: FollowUpView[] }>("followups.list", {});
+    expect(followUps.find((f) => f.what === "Send the totals")).toMatchObject({ who: "Evan Ford", whoRef: evan, kind: "capture" });
+    expect(followUps.find((f) => f.what === "Call the vendor")).toMatchObject({ who: "the vendor", whoRef: null });
+    expect((await t.run<CaptureState>("capture.load", {})).inbox).toEqual([expect.objectContaining({ id: old.id, text: "Promised Dana the export" })]);
+    // A reference only with a name, only on a follow-up, and only one from the picker.
+    const c = (await t.run<{ capture: { id: number } }>("capture.add", { text: "Something" })).capture;
+    expect((await t.fail("capture.route", { id: c.id, as: "follow_up", who: "Evan", whoRef: { kind: "cooptimizer", id: "x", name: "Evan", email: "e@contoso.example" }, what: "x" })).status).toBe(400);
+    expect((await t.fail("capture.route", { id: c.id, as: "draft", clientKey: "contoso", title: "x", size: "M", whoRef: evan })).status).toBe(400);
+    await t.run("capture.route", { id: c.id, as: "follow_up", who: "", whoRef: evan, what: "Nobody named" });
+    expect((await t.run<{ followUps: FollowUpView[] }>("followups.list", {})).followUps.find((f) => f.what === "Nobody named")).toMatchObject({ whoRef: null });
+  });
 });

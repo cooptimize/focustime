@@ -223,6 +223,7 @@ export const ACTIONS = [
   { name: "my_promises.list", title: "My promises", group: "Conversations", target: "none", summary: "Inbox › My promises: what you said you'd do in your clients' registered chats" },
   { name: "my_promises.today", title: "Add a promise to Today", group: "Conversations", target: "commitment", summary: "Shows the promise on Today until it's done" },
   { name: "my_promises.followup", title: "Make a promise a follow-up", group: "Conversations", target: "commitment", summary: "A follow-up with who, what and the due filled in; the promise closes when it's done" },
+  { name: "my_promises.search", title: "Find an item for a promise", group: "Conversations", target: "commitment", summary: "Likely open items on the promise's client, from its words and the messages around it (no AI); or search by title or #id" },
   { name: "my_promises.link", title: "Link a promise to a DevOps item", group: "Conversations", target: "commitment", summary: "The promise is kept by that item" },
   { name: "my_promises.done", title: "Mark a promise done", group: "Conversations", target: "commitment", summary: "Done, with Undo" },
   { name: "my_promises.not_needed", title: "A promise isn't needed", group: "Conversations", target: "commitment", summary: "Closes it quietly, with Undo" },

@@ -441,7 +441,7 @@ function ProcessView({ c, saver, onRefresh, refreshing }: { c: ClientRow; saver:
 
 // ---------- AI ----------
 
-type AiData = { on: boolean; model: string; personCapUsd: number; appCapUsd: number; provider: string; keyConfigured: boolean; appSpentMicros: number; zero: { person: boolean; app: boolean }; filter: ClientFilterValue; counts: ClientCounts; clients: { key: string; isClient: boolean; whyText: string; allowAi: boolean; attachmentsAi: boolean }[] };
+type AiData = { on: boolean; model: string; personCapUsd: number; appCapUsd: number; provider: string; keyConfigured: boolean; appSpentMicros: number; zero: { person: boolean; app: boolean }; filter: ClientFilterValue; counts: ClientCounts; clients: { key: string; isClient: boolean; whyText: string; allowAi: boolean; groupWithoutAi: boolean; attachmentsAi: boolean }[] };
 
 function AdminAi() {
   const [filter, setFilter] = useState<ClientFilterValue>("customers");
@@ -489,11 +489,12 @@ function AdminAi() {
       {data.clients.length === 0 ? (
         <p className="muted">No clients yet.</p>
       ) : (
-        <table className="adm-table">
+        <table className="adm-table adm-ai-clients">
           <thead>
             <tr>
               <th scope="col">Client</th>
               <th scope="col">Allow AI <Kind kind="Rule" /></th>
+              <th scope="col" title="While AI is off for the client, or not set up: replies, mentions and the same person within 45 minutes join a conversation">Group messages without AI <Kind kind="Rule" /></th>
               <th scope="col">Send attachments to AI</th>
             </tr>
           </thead>
@@ -509,6 +510,13 @@ function AdminAi() {
                     <input type="checkbox" role="switch" checked={saver.shown(`client:${c.key}`, "allow_ai", c.allowAi)} aria-label={`Allow AI for ${c.key}`} onChange={(e) => void saver.save(`client:${c.key}`, "allow_ai", e.target.checked, `${c.key}: Allow AI`)} /> {c.allowAi ? "Allowed" : "Off"}
                   </label>
                   <SaveMark s={saver.status(`client:${c.key}`, "allow_ai")} retry={() => void saver.save(`client:${c.key}`, "allow_ai", c.allowAi, `${c.key}: Allow AI`)} />
+                </td>
+                <td>
+                  {/* CV-3: rules-only grouping while AI is off for this client (or not set up). */}
+                  <label className="set-check">
+                    <input type="checkbox" role="switch" checked={saver.shown(`client:${c.key}`, "group_without_ai", c.groupWithoutAi)} aria-label={`Group messages without AI for ${c.key}`} onChange={(e) => void saver.save(`client:${c.key}`, "group_without_ai", e.target.checked, `${c.key}: Group messages without AI`)} /> {c.groupWithoutAi ? "On" : "Off"}
+                  </label>
+                  <SaveMark s={saver.status(`client:${c.key}`, "group_without_ai")} retry={() => void saver.save(`client:${c.key}`, "group_without_ai", c.groupWithoutAi, `${c.key}: Group messages without AI`)} />
                 </td>
                 <td>
                   <label className="set-check muted" title="Comes in a later step">

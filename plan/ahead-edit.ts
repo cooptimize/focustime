@@ -1,6 +1,6 @@
 // AH-1: who may change an item's dates, size and assignee in Ahead, and the change set's values. Pure: no I/O.
 //
-// Who can edit (D652): a lead of the item's client (isClientLead over clientAccounts(), Internal included like any
+// Who can edit (D656): a lead of the item's client (isClientLead over clientAccounts(), Internal included like any
 // client), the item's owner (its Assigned To), and the owner of the item one level up: a feature's owner over its
 // stories, an epic's owner over the features directly under it (never further down). Everyone can edit items assigned
 // to themselves. Automation accounts never edit (guests can't sign in, D602). Levels come from the process model's
@@ -86,7 +86,7 @@ export function sameValue(field: ChangeField, a: ChangeValue | undefined, b: Cha
 }
 
 /**
- * A staged change against what DevOps has now (D654): a conflict only when this field changed in DevOps since I
+ * A staged change against what DevOps has now (D658): a conflict only when this field changed in DevOps since I
  * started editing it. Any other change to the item (a comment, the state) doesn't count: my values go on the new rev.
  */
 export function conflictOf(c: Pick<StagedChange, "field" | "baseValue">, current: ChangeValue): { conflict: false } | { conflict: true; theirs: ChangeValue } {
@@ -141,6 +141,6 @@ export function valueText(field: ChangeField, v: ChangeValue | undefined, half: 
   return half ? `${d} ${half}` : d;
 }
 
-// ---- Filters (D650): shared by Grid and Gantt, remembered per person ----
+// ---- Filters (D654): shared by Grid and Gantt, remembered per person ----
 export type AheadOwner = "mine" | "contributing" | "all";
 export type AheadFilters = { owner: Record<string, AheadOwner>; clients: string[]; epic: string | null; gaps: boolean; from: string | null; to: string | null; q: string; states: string[] };
