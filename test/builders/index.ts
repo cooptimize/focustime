@@ -2,6 +2,8 @@
 // it is about: aPto({ date: "2026-11-12" }), aFocusBlock({ client: aClient({ name: "Adatum" }), days: { Thu: "AM" } }).
 // Fictional names only (the demo set). Dates default to the week of Mon Nov 2, 2026 in New York, like the e2e clock.
 // New and edited tests use these instead of hand-written fixtures (CLAUDE.md, Working style).
+import { applyOrg } from "../../config/org-apply.ts";
+import { resolveRules } from "../../config/org.ts";
 import { legacyHours } from "../../config/schema.ts";
 import type { MyClient } from "../../sources/dataverse/source.ts";
 import type { UserRow } from "../../store/accounts.ts";
@@ -167,6 +169,25 @@ export function anAiApp(o: Partial<import("../../ai/service.ts").AiAppSettings> 
 /** A person's AI settings with both switches on for one client. */
 export function anAiPerson(o: Partial<import("../../ai/types.ts").AiPersonSettings> = {}): import("../../ai/types.ts").AiPersonSettings {
   return { use: true, monthlyCapUsd: 10, allowedClients: ["fabrikam"], ...o };
+}
+
+/** ADM-1: the team's AI rules for tests: AI on for FocusTime and allowed for one client. */
+export function anAiRules(o: Partial<import("../../ai/types.ts").AiRules> = {}): import("../../ai/types.ts").AiRules {
+  return { on: true, personCapUsd: 10, allowedClients: ["fabrikam"], ...o };
+}
+
+/**
+ * ADM-1: a parsed config with the team's settings applied, as the server's loadConfig gives it. `ai`: AI on for
+ * FocusTime with these clients allowed; `rows`: any other org settings ({scope, key, value}).
+ */
+export function withTeam<P extends import("../../config/schema.ts").ParseResult>(parsed: P, o: { ai?: { on?: boolean; allowed?: string[] }; rows?: { scope: string; key: string; value: unknown }[]; level?: import("../../config/org.ts").Level | null } = {}): P {
+  if (!parsed.ok) return parsed;
+  const rows = [
+    ...(o.ai ? [{ scope: "org", key: "ai.on", value: o.ai.on ?? true }, ...(o.ai.allowed ?? []).map((k) => ({ scope: `client:${k}`, key: "allow_ai", value: true }))] : []),
+    ...(o.rows ?? []),
+  ].map((r) => ({ scope: r.scope, key: r.key, value: JSON.stringify(r.value), updatedAt: "2026-11-04T12:00:00Z", updatedBy: null }));
+  const rules = resolveRules(rows, { model: "test-model", appCapUsd: 100, inviteDomains: [], feedback: null });
+  return { ...parsed, config: applyOrg(parsed.config, rules, { level: o.level ?? null, levelSource: o.level ? "dataverse" : null }) };
 }
 
 /** An OpenAI Responses API body with a structured answer and its usage. */

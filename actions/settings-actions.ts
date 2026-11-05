@@ -1,6 +1,6 @@
 // Settings actions (step 6b): load everything Settings shows, save one section, store an app secret in the keyring,
 // export the plan store. Secrets are never returned: only whether they are set and an expiry date I entered.
-import { DEFAULT_AI_PERSON } from "../ai/types.ts";
+import { DEFAULT_AI_PERSON, DEFAULT_AI_RULES } from "../ai/types.ts";
 import { mapSeq } from "./seq.ts";
 import { DEFAULT_THRESHOLDS } from "../plan/roadmap.ts";
 import { DEFAULT_ASK_SETTINGS } from "../plan/asks.ts";
@@ -62,7 +62,7 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
   );
   const base = { configPath: loaded.path, fromFile: isFilePath(loaded.path), palette: CLIENT_SLOTS, secrets, data: { planStore: !!ctx.plan } };
   if (!loaded.parsed.ok)
-    return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [], backgroundTypes: [], ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } }, focus: { ...DEFAULT_FOCUS, playlists: [] }, clients: [], display: null, timebox: { ...DEFAULT_TIMEBOX }, collab: { ...DEFAULT_COLLAB, domains: [] }, notify: { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds } }, vm: { startWithoutAsking: DEFAULT_AZURE.startWithoutAsking }, roadmap: { ...DEFAULT_THRESHOLDS }, asks: { ...DEFAULT_ASK_SETTINGS, requestPhrases: [...DEFAULT_ASK_SETTINGS.requestPhrases], ackPhrases: [...DEFAULT_ASK_SETTINGS.ackPhrases] }, ai: { ...DEFAULT_AI_PERSON, allowedClients: [] } };
+    return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [], backgroundTypes: [], ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } }, focus: { ...DEFAULT_FOCUS, playlists: [] }, clients: [], display: null, timebox: { ...DEFAULT_TIMEBOX }, collab: { ...DEFAULT_COLLAB, domains: [] }, notify: { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds } }, vm: { startWithoutAsking: DEFAULT_AZURE.startWithoutAsking }, roadmap: { ...DEFAULT_THRESHOLDS }, asks: { ...DEFAULT_ASK_SETTINGS, requestPhrases: [...DEFAULT_ASK_SETTINGS.requestPhrases], ackPhrases: [...DEFAULT_ASK_SETTINGS.ackPhrases] }, ai: { ...DEFAULT_AI_PERSON, allowedClients: [] }, aiRules: { ...DEFAULT_AI_RULES, allowedClients: [] }, org: null, guidance: {} };
   const tz = userZone(loaded.parsed.config);
   // Who I am in Dataverse: the kept user, else a match now (the same as the week's), else why not.
   let matchProblem: string | null = null;
@@ -98,7 +98,9 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
     // Step 14: whose write PAT this client has, if any (never the PAT).
     const w = (await ctx.plan?.devopsIdentity(key)) ?? null;
     const write = w ? { name: w.name, email: w.email, org: w.org, validatedAt: w.validatedAt, expires: w.expires } : null;
-    return { key, dataverseName: m?.clientName ?? null, devopsEmail: m?.devopsEmail ?? null, devops: m?.devops ?? false, setting, css: setting.color ? colorCss(setting.color) : null, follow: state, write };
+    const teamColor = cfg.org?.teamColors[key] ?? null;
+    const shown = setting.color ?? teamColor;
+    return { key, dataverseName: m?.clientName ?? null, devopsEmail: m?.devopsEmail ?? null, devops: m?.devops ?? false, setting, css: shown ? colorCss(shown) : null, teamColor, follow: state, write };
   });
   return {
     ...base,
@@ -114,12 +116,16 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
     clients,
     display: cfg.ui,
     timebox: cfg.timebox,
-    collab: { ...cfg.collab, domains: inviteDomains(cfg) },
+    // ADM-1: a person edits only their own additions; the team's lists show beside them (cfg.org).
+    collab: { ...cfg.collab, domains: inviteDomains(cfg), exclude: cfg.org ? [...(cfg.mine.exclude ?? [])] : cfg.collab.exclude },
     notify: cfg.notify,
     vm: { startWithoutAsking: cfg.azure.startWithoutAsking },
     roadmap: cfg.roadmap,
-    asks: cfg.asks,
+    asks: cfg.org ? { ...cfg.asks, requestPhrases: [...cfg.org.phrases.mine.request], ackPhrases: [...cfg.org.phrases.mine.ack], promisePhrases: [...cfg.org.phrases.mine.promise] } : cfg.asks,
     ai: cfg.ai,
+    aiRules: cfg.aiRules,
+    org: cfg.org,
+    guidance: cfg.guidance,
   };
 }
 

@@ -1,8 +1,9 @@
-// CV-1: who leads a client (sees its unclaimed commitments in Needs you). ADM-1 (admin console) owns people and client
-// leads and will expose isClientLead(user, client); until it merges, a FocusTime admin counts as every client's lead.
-// Switching is this one function.
-import { isAdmin } from "./admin.ts";
+// CV-1, ADM-1: who leads a client (sees its unclaimed commitments in Needs you). The real leads: Dataverse's (the
+// account's owner and Lead Consultants on the account) with an admin's overrides, from the org runtime (actions/org.ts).
+// No org runtime (a test or a context without the admin store): nobody is a lead. Admins are not leads by being admins.
+import type { OrgRuntime } from "./org.ts";
 
-export function isClientLead(userId: string | null, _clientKey: string, admins: readonly string[] | undefined): boolean {
-  return isAdmin(userId, admins);
+export async function isClientLead(org: Pick<OrgRuntime, "isClientLead"> | null | undefined, userId: string | null, clientKey: string): Promise<boolean> {
+  if (!org || !userId) return false;
+  return org.isClientLead(userId, clientKey).catch(() => false);
 }

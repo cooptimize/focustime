@@ -4,6 +4,7 @@
 // (else the host clock's).
 import type { Logger } from "../log/logger.ts";
 import { starterToml } from "../config/starter.ts";
+import type { NewPersonDefaults } from "../config/org.ts";
 import type { ParseResult } from "../config/schema.ts";
 import { userZone } from "../week/zone.ts";
 import type { AccountStore } from "../store/accounts.ts";
@@ -22,6 +23,8 @@ export type PeopleDeps = {
   /** A new person's zone from Outlook (null when Graph can't say). */
   mailboxZone: (accessToken: string) => Promise<string | null>;
   hostZone: () => string;
+  /** ADM-1: the team's working week, day shape and risk thresholds for new people (Admin › Organization), if any. */
+  newPerson?: () => Promise<NewPersonDefaults | undefined>;
   log: Logger;
 };
 
@@ -38,7 +41,7 @@ export function createPeople(d: PeopleDeps) {
       return;
     }
     const zone = o.zone ?? (await d.accounts.users.get(u.oid))?.timeZone ?? d.hostZone();
-    await s.seed(starterToml(zone));
+    await s.seed(starterToml(zone, await d.newPerson?.().catch(() => undefined)));
     await d.accounts.users.setTimeZone(u.oid, zone);
     d.log({ source: "plan", op: "settings_seeded", kind: o.zone ? "starter_mailbox_zone" : "starter_host_zone" });
   }

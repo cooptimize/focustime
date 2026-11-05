@@ -37,8 +37,8 @@ export type AiTask = {
 
 /** Every way a run can fail, each with a plain message the UI can show as is. */
 export type AiErrorKind =
-  | "off" // the person's Use AI switch is off
-  | "client_off" // the task's client hasn't Allow AI on
+  | "off" // AI is off for FocusTime (an admin's switch, ADM-1)
+  | "client_off" // the task's client hasn't Allow AI on (an admin's switch per client)
   | "not_set_up" // no provider key
   | "refused_client" // another client's name, project or item in the payload
   | "refused_secret" // a token, key, secret or VM detail in the payload
@@ -63,8 +63,8 @@ export class AiError extends Error {
 
 /** Plain words for each kind (no em dashes; never carries the input or the answer). */
 export const AI_MESSAGES: Record<AiErrorKind, string> = {
-  off: "AI is off. Turn on Use AI in Settings › AI.",
-  client_off: "AI isn't allowed for this client. Turn on Allow AI in Settings › Clients.",
+  off: "AI is off for FocusTime. A FocusTime admin turns it on in Admin › AI.",
+  client_off: "AI isn't allowed for this client. A FocusTime admin allows it in Admin › AI.",
   not_set_up: "AI isn't set up",
   refused_client: "Not sent: it mentions another client",
   refused_secret: "Not sent: it contains something that looks like a key, token or secret",
@@ -95,9 +95,19 @@ export type ProviderCall = { model: string; instructions: string; input: string;
 /** One provider (OpenAI, or the stub). */
 export type AiProvider = { name: "openai" | "stub"; call(c: ProviderCall): Promise<ProviderReply> };
 
-/** A person's AI settings (Settings › AI and Settings › Clients): both switches off by default, a 10 dollar cap. */
+/**
+ * What a person's [ai] settings hold. Since ADM-1 only draftMonths is theirs: use, monthlyCapUsd and allowedClients
+ * are read (older settings have them, and the org bootstrap migrates them once) and never enforced.
+ */
 export type AiPersonSettings = { use: boolean; monthlyCapUsd: number; allowedClients: string[]; /** DS-1: how far back Draft stories looks for examples, in months (12 when unset). */ draftMonths?: number };
 export const DEFAULT_AI_PERSON: AiPersonSettings = { use: false, monthlyCapUsd: 10, allowedClients: [] };
+
+/**
+ * ADM-1: AI is an admin decision only. A request runs only when `on` (global, also the emergency off) and, for a
+ * client, that client is in `allowedClients`; "none" tasks need only `on`. Caps and the model are the admins' too.
+ */
+export type AiRules = { on: boolean; allowedClients: readonly string[]; personCapUsd: number; appCapUsd?: number; model?: string };
+export const DEFAULT_AI_RULES: AiRules = { on: false, allowedClients: [], personCapUsd: 10 };
 
 /** The outcomes the log keeps (D497). */
 export type AiOutcome = "ok" | "refused" | "invalid" | "provider_error" | "over_budget";
@@ -125,9 +135,12 @@ export type AiStatus = {
   setUp: boolean;
   provider: "openai" | "stub" | "off";
   model: string;
-  use: boolean;
+  /** AI for FocusTime (the admins' switch). */
+  on: boolean;
   allowedClients: string[];
   capMicros: number;
+  /** The app's cap, in millionths of a dollar. */
+  appCapMicros: number;
   spentMicros: number;
   /** The app's cap is reached (everyone's requests stop until next month). */
   appReached: boolean;

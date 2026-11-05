@@ -5,17 +5,17 @@
 // log nor the logger ever holds the instructions, the input or the answer.
 import { describe, expect, it } from "vitest";
 import type { LogRecord } from "../log/logger.ts";
-import { aClientEntry, anAiApp, anAiPerson } from "../test/builders/index.ts";
+import { aClientEntry, anAiApp, anAiRules } from "../test/builders/index.ts";
 import { createAi, MAX_RETRY_WAIT_MS, TEST_SCHEMA, type AiAppSettings, type AiDeps } from "./service.ts";
 import { stubProvider } from "./stub.ts";
-import type { AiLogEntry, AiPersonSettings, JsonSchema, ProviderCall, ProviderReply } from "./types.ts";
+import type { AiLogEntry, AiRules, JsonSchema, ProviderCall, ProviderReply } from "./types.ts";
 
 const SCHEMA: JsonSchema = { type: "object", properties: { title: { type: "string" }, urgency: { type: "string", enum: ["now", "later"] } }, required: ["title", "urgency"], additionalProperties: false };
 const TASK = { name: "draft_title", client: "fabrikam", instructions: "Write a short title for this request." };
 const INPUT = "The export button does nothing on the March report";
 const ANSWER = { title: "Export button broken on March report", urgency: "now" };
 
-function setup(o: { person?: Partial<AiPersonSettings>; app?: Partial<AiAppSettings>; replies?: (string | ProviderReply)[]; noKey?: boolean; now?: string } = {}) {
+function setup(o: { person?: Partial<AiRules>; app?: Partial<AiAppSettings>; replies?: (string | ProviderReply)[]; noKey?: boolean; now?: string } = {}) {
   const log: AiLogEntry[] = [];
   const records: LogRecord[] = [];
   const spend = new Map<string, number>();
@@ -23,7 +23,7 @@ function setup(o: { person?: Partial<AiPersonSettings>; app?: Partial<AiAppSetti
   const slept: number[] = [];
   const replies = [...(o.replies ?? [JSON.stringify(ANSWER)])];
   let now = o.now ?? "2026-11-04T15:00:00Z";
-  const person = anAiPerson(o.person);
+  const person = anAiRules(o.person);
   const provider = stubProvider({
     respond: (c) => {
       calls.push(c);
@@ -33,7 +33,7 @@ function setup(o: { person?: Partial<AiPersonSettings>; app?: Partial<AiAppSetti
   const deps: AiDeps = {
     provider: async () => (o.noKey ? null : provider),
     app: anAiApp(o.app),
-    person: async () => person,
+    rules: async () => person,
     guard: async () => ({ directory: [aClientEntry({ key: "fabrikam", names: [], projects: [], itemIds: [] }), aClientEntry({ key: "northwind", names: ["Northwind Traders"], projects: [], itemIds: [5150] })], homeDomains: ["cooptimize.example"], forbidden: [] }),
     log: {
       add: async (e) => void log.push(e),
@@ -50,8 +50,8 @@ function setup(o: { person?: Partial<AiPersonSettings>; app?: Partial<AiAppSetti
 }
 
 describe("switches", () => {
-  it("Use AI off: nothing is sent or logged", async () => {
-    const s = setup({ person: { use: false } });
+  it("AI off for FocusTime (the emergency off): nothing is sent or logged", async () => {
+    const s = setup({ person: { on: false } });
     const r = await s.ai.run(TASK, INPUT, SCHEMA);
     expect(r.ok ? null : r.error.kind).toBe("off");
     expect([s.calls.length, s.log.length]).toEqual([0, 0]);
@@ -113,7 +113,7 @@ describe("budget", () => {
   // 100 input + 20 output tokens at $1 and $2 per million: 140 millionths of a dollar a request.
   const usage = (input: number, output: number): ProviderReply => ({ ok: true, text: JSON.stringify(ANSWER), model: "test-model", usage: { inputTokens: input, cachedTokens: 0, outputTokens: output } });
   it("the person's cap: over it, AI budget reached for this month (logged), until the month turns", async () => {
-    const s = setup({ person: { monthlyCapUsd: 0.00028 }, replies: [usage(100, 20), usage(100, 20), usage(100, 20), usage(100, 20)] });
+    const s = setup({ person: { personCapUsd: 0.00028 }, replies: [usage(100, 20), usage(100, 20), usage(100, 20), usage(100, 20)] });
     expect((await s.ai.run(TASK, INPUT, SCHEMA)).ok).toBe(true);
     expect((await s.ai.run(TASK, INPUT, SCHEMA)).ok).toBe(true);
     const r = await s.ai.run(TASK, INPUT, SCHEMA);

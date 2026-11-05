@@ -213,3 +213,10 @@ What DS-1 learned, and what is still open:
 - Q-CV-3: Should "Not a request" have a short list of reasons (social, already handled elsewhere, wrong chat) instead of free text?
 - Q-CV-4: When the AI says a commitment implies an item but the committer is outside FocusTime (no user row), who gets the Create? Today nobody until a lead takes it over.
 - Q-CV-5: AP-3 (Teams messages from FocusTime) would need a write scope and a new hard rule; nothing in CV-1 posts to Teams.
+
+## Admin (ADM-1, Nov 4)
+
+- Q-ADM1-1: Plan data retention is shown as a 2-year Rule, but nothing purges yet. A purge job (per person, oldest first, logged as counts) is a later step; which tables it covers and whether people get a notice first is open.
+- Q-ADM1-2: The poll interval and unmatched-message retention in Admin › Conversations are stored and audited, but the poll job and the 14-day purge still use their own constants (the per-chat AI cap is wired). A later step should read them from the org runtime.
+- Q-ADM1-3: Levels come from Dataverse position names (Consultant, Senior Consultant, Lead Consultant). A new position name reads as no level until it is mapped in `levelFromPosition`; should Admin › People offer the mapping?
+- Q-ADM1-4: In the demo, Admin › Clients' process switches change the demo's process view but not the demo week's picks; worth wiring if the demo is used to show them.

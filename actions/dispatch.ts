@@ -18,7 +18,7 @@ import type { Logger } from "../log/logger.ts";
 import type { PhotoCache } from "../host/types.ts";
 import { expiringSoon } from "../plan/expiry.ts";
 import { clients as defaultClients, weekConfig as defaultWeekConfig } from "../config/defaults.ts";
-import { DEFAULT_PLAN, DEFAULT_TIMEBOX, DEFAULT_UI, TEXT_SIZES, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";
+import { colorCss, DEFAULT_PLAN, DEFAULT_TIMEBOX, DEFAULT_UI, TEXT_SIZES, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";
 import { setValue, type WriteResult } from "../config/edit.ts";
 import type { CalendarSource } from "../sources/calendar/source.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
@@ -71,7 +71,11 @@ import { vmAction, vmKey, type VmContext } from "./vm-actions.ts";
 import { presenceAction, syncTeamsStatusWith, type PresenceContext } from "./presence-actions.ts";
 import type { AzureClient } from "../sources/azure/client.ts";
 import { userZone } from "../week/zone.ts";
-import { isAdmin } from "./admin.ts";
+import { inList } from "./admin.ts";
+import { adminAction, type AdminAction, type AdminOps } from "./admin-actions.ts";
+import type { OrgRuntime } from "./org.ts";
+import { teamColors } from "../config/org.ts";
+import { DEFAULT_AI_RULES } from "../ai/types.ts";
 import { feedbackAction, type FeedbackContext, type FeedbackService } from "./feedback-actions.ts";
 import type { Sender } from "../plan/feedback.ts";
 import { setupAction, type SetupClient } from "./setup-actions.ts";
@@ -89,8 +93,12 @@ export type ActionContext = {
   ai?: AiRuntime;
   /** Shared polling (D514): the shared Teams store and the poll job's Refresh. Absent: no client chats or Requests. */
   requests?: RequestsPort;
-  /** D522: the app's admins (Entra object ids, from the app config), read only through `isAdmin()`. */
+  /** D522: a plain list of admins (Entra object ids), for tests and contexts without `adminOps`. */
   admins?: readonly string[];
+  /** ADM-1: the admin console's server side (the one admin check, the org settings, people, health). Absent: no Admin. */
+  adminOps?: AdminOps;
+  /** ADM-1: the team's settings and people (levels, client leads), for every action. Absent: built-in defaults. */
+  org?: OrgRuntime;
   /** AP-1: the structured logger (counts and kinds only). Absent: nothing is logged (tests, demo). */
   log?: Logger;
   /** S1 (D452): where this runs: local, dev, prod or demo (runtime config). Absent: local. */
@@ -436,7 +444,14 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const own = ctx.plan ? ownEventIds((await ctx.plan.ownEvents())) : new Set<string>();
   const week = buildWeek({ weekStart, patterns: dataverse.items, events: withoutOwn([...outlook.items, ...google.items], own), config: weekConfig, pto, unavailable, flex, viewRange: input.viewRange ?? cfg?.ui.viewRange ?? DEFAULT_UI.viewRange, weekendPlanned });
   const todayDay = week.days.find((d) => d.date === todayDate);
-  const clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
+  let clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
+  // ADM-1: every client on the week has a team color (suggested the first time), unless the person picked their own.
+  if (cfg && ctx.org) {
+    const keys = [...new Set([...dataverse.items.map((p) => p.clientKey), ...planClients.map((c) => c.clientKey)])];
+    await ctx.org.suggestColors(keys).catch(() => undefined);
+    const team = teamColors(await ctx.org.rules());
+    clientColors = { ...Object.fromEntries(Object.entries(team).map(([k, c]) => [k, colorCss(c)])), ...cfg.clients };
+  }
 
   // Follow-up rules (step 7) on the fresh DevOps results, and borrowed time paid by done payback picks. By the server's
   // clock, like the flex follow-ups.
@@ -471,6 +486,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     sources: [dataverse, ...(ptoResult ? [ptoResult] : []), outlook, google].map(summarize),
     devops,
     clients: clientColors,
+    guidance: cfg?.org?.guidance ?? null,
     hours: model,
     thresholds: weekConfig.thresholds,
     planning: planningOf(cfg),
@@ -582,7 +598,7 @@ export async function chatContext(ctx: ActionContext): Promise<ChatContext> {
     ...(ctx.plan ? { plan: ctx.plan } : {}),
     ...(ctx.requests ? { teams: ctx.requests.teams } : {}),
     me: async () => (await storedIdentity(ctx.plan))?.oid ?? null,
-    isAdmin: async () => isAdmin((await storedIdentity(ctx.plan))?.oid ?? null, ctx.admins),
+    isAdmin: () => amAdmin(ctx),
     account: await accountOf(ctx),
     homeTenant: async () => (await configured(ctx))?.outlook?.tenantId ?? (await storedIdentity(ctx.plan))?.tid ?? null,
     clientKeys: async () => {
@@ -627,6 +643,12 @@ async function aiDirectory(ctx: ActionContext, cfg: AppConfig): Promise<ClientEn
   });
 }
 
+/** ADM-1: whether the signed-in person is an admin: the one check (the group or the break-glass list), else a plain list. */
+export async function amAdmin(ctx: ActionContext): Promise<boolean> {
+  const id = (await storedIdentity(ctx.plan))?.oid ?? null;
+  return ctx.adminOps ? ctx.adminOps.check.isAdmin(id) : inList(id, ctx.admins);
+}
+
 /** AI-0: the AI service for this person and request, or null where AI isn't available (demo, no plan store). */
 export async function aiFor(ctx: ActionContext, o: { cap?: "person" | "app" } = {}): Promise<AiService | null> {
   const rt = ctx.ai;
@@ -639,7 +661,8 @@ export async function aiFor(ctx: ActionContext, o: { cap?: "person" | "app" } = 
     ...(o.cap === "app" ? { cap: "app" as const } : {}),
     provider: rt.provider,
     app: rt.app,
-    person: async () => (await configured(ctx))?.ai ?? { use: false, monthlyCapUsd: 10, allowedClients: [] },
+    // ADM-1: the admins' rules only (applied to the config by the org runtime): no per-person switch.
+    rules: async () => (await configured(ctx))?.aiRules ?? DEFAULT_AI_RULES,
     guard: async () => {
       const cfg = await configured(ctx);
       if (!cfg) return { directory: [], homeDomains: [], forbidden: [] };
@@ -763,7 +786,7 @@ export async function conversationContext(ctx: ActionContext): Promise<Conversat
   return {
     ...rc,
     ...(port?.conversations ? { conversations: port.conversations } : {}),
-    isLead: async (clientKey) => isClientLead(await rc.me(), clientKey, ctx.admins),
+    isLead: async (clientKey) => isClientLead(ctx.org, await rc.me(), clientKey),
     users: async () => (port?.users ? port.users() : []),
     pipelineAi: () => aiFor(ctx, { cap: "app" }),
     devopsEmail: async (clientKey) => (await ctx.plan?.devopsIdentities().catch(() => []))?.find((i) => i.clientKey === clientKey)?.email ?? null,
@@ -1156,6 +1179,33 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "promises.followup":
     case "promises.link":
       return requestAction(await requestContext(ctx), action, req.input);
+    case "admin.status":
+    case "admin.load":
+    case "admin.set":
+    case "admin.override":
+    case "admin.refresh_people":
+    case "admin.remove_person":
+    case "admin.audit":
+      return adminAction(
+        {
+          ops: ctx.adminOps ?? null,
+          me: async () => {
+            const me = await storedIdentity(ctx.plan);
+            return me ? { id: me.oid, name: me.name || me.username || "An admin" } : null;
+          },
+          // WT-1: each client's process model, read with the company read PAT through this admin's DevOps source.
+          process: async (keys, refresh) => {
+            const cfg = await configured(ctx);
+            return cfg ? ctx.makeDevOps(cfg.dataverse, userZone(cfg)).processModels(keys, { refresh }) : null;
+          },
+          today: async () => {
+            const cfg = await configured(ctx);
+            return localToday(ctx.now(), cfg ? userZone(cfg) : "UTC");
+          },
+        },
+        action as AdminAction,
+        req.input,
+      );
     case "conversations.list":
     case "conversations.refresh":
     case "conversations.messages":

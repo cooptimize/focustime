@@ -1,8 +1,21 @@
 // Commented starter config, written to ~/.config/focustime/config.toml when it is missing.
 // Not secret, but keep it out of public repos.
+import type { NewPersonDefaults } from "./org.ts";
+import { WEEKDAY_KEYS } from "../week/hours.ts";
+
 /** The starter config, its working hours in the given zone (the host clock's for a new person). */
-export function starterToml(timeZone: string): string {
-  return STARTER.replace("@TIME_ZONE@", timeZone);
+export function starterToml(timeZone: string, team?: NewPersonDefaults): string {
+  let t = STARTER.replace("@TIME_ZONE@", timeZone);
+  if (!team) return t;
+  // ADM-1: the team's working week, day shape and risk thresholds for new people (Admin › Organization), which the
+  // first-run Setup then shows prefilled; theirs to change.
+  const list = (xs: readonly string[]) => `[${xs.map((x) => JSON.stringify(x)).join(", ")}]`;
+  t = t.replace(/^lunch = .*$/m, `lunch = ${JSON.stringify(team.lunch)}`);
+  for (const d of WEEKDAY_KEYS) t = t.replace(new RegExp(`^${d} = .*$`, "m"), `${d} = ${list(team.weekdays[d])}`);
+  t = t.replace(/^meeting_watch_minutes = .*$/m, `meeting_watch_minutes = ${team.risk.watch}`);
+  t = t.replace(/^meeting_at_risk_minutes = .*$/m, `meeting_at_risk_minutes = ${team.risk.atRisk}`);
+  t = t.replace(/^min_focus_window_minutes = .*$/m, `min_focus_window_minutes = ${team.risk.minWindow}`);
+  return t;
 }
 
 const STARTER = `# FocusTime configuration.
@@ -68,14 +81,6 @@ min_focus_window_minutes = 90
 # Dataverse; Settings > Clients sets these. None by default, for example:
 # [clients]
 # Cooptimize = "#4a7fd4"
-
-# Planning. Every type at a feature or epic level needs breaking down by default
-# (levels come from each client's DevOps process). Types listed here don't, so
-# they can be picked directly; background_types don't count against hours.
-# Both are matched without regard to case, until Admin hosts these switches.
-[plan]
-pickable_portfolio_types = []
-background_types = []
 
 # Display. Theme: "cooptimize-dark" (default), "cooptimize-light" or "neutral". Settings changes it too.
 [ui]

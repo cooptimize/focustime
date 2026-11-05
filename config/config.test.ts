@@ -357,16 +357,13 @@ describe("[ai] (AI-0)", () => {
     expect(r.ok).toBe(ok);
     if (r.ok && toml.startsWith("use = true")) expect(r.config.ai).toEqual({ use: true, monthlyCapUsd: 2.5, allowedClients: ["fabrikam", "contoso"] });
   });
-  it("Allow AI turns one client on or off without touching the others; Use AI and the cap save as given", () => {
+  it("ADM-1: a person's [ai] edit takes only Draft stories' months; Use AI, the cap and Allow AI are an admin's", () => {
     const apply = (text: string, input: unknown) => settingsEdit("ai", input)(text);
-    let t = apply(valid, { allow: { client: "fabrikam", on: true } });
-    t = apply(t, { allow: { client: "contoso", on: true } });
-    t = apply(t, { allow: { client: "fabrikam", on: false } });
-    t = apply(t, { use: true, monthlyCapUsd: 5 });
+    const t = apply(valid, { draftMonths: 6 });
     const r = parseConfig(t);
-    expect(r.ok && r.config.ai).toEqual({ use: true, monthlyCapUsd: 5, allowedClients: ["contoso"] });
-    expect(() => apply(valid, { allow: { client: "", on: true } })).toThrow();
-    expect(() => apply(valid, { monthlyCapUsd: 5000 })).toThrow();
-    expect(() => apply(valid, { model: "x" })).toThrow();
+    expect(r.ok && r.config.ai.draftMonths).toBe(6);
+    expect(() => apply(valid, { use: true })).toThrow();
+    expect(() => apply(valid, { monthlyCapUsd: 5 })).toThrow();
+    expect(() => apply(valid, { allow: { client: "fabrikam", on: true } })).toThrow();
   });
 });

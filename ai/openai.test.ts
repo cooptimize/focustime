@@ -130,7 +130,7 @@ describe("through the service", () => {
     const ai = createAi({
       provider: async () => openAiProvider({ key: async () => KEY, fetch: f }),
       app: anAiApp({ provider: "openai" }),
-      person: async () => ({ use: true, monthlyCapUsd: 10, allowedClients: [] }),
+      rules: async () => ({ on: true, personCapUsd: 10, allowedClients: [] }),
       guard: async () => ({ directory: [], homeDomains: [], forbidden: [] }),
       log: { add: async () => {}, spentMicros: async () => 0, recent: async () => [] },
       appSpend: { get: async () => 0, add: async () => {} },
