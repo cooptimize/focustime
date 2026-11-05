@@ -190,7 +190,7 @@ const BOX_NAME: Record<BoxKind, string> = { later: "Sort later", ...KIND_NAME };
 
 /**
  * The capture box (step 15.3: the one way to add something new). Enter saves at once; Shift+Enter is a new line (CP-1:
- * a small textarea that grows to about four lines); the ↵ button saves too. One client chip (step 15.2): filled from
+ * a small textarea that grows to about four lines); the ↵ button beside it saves too. One client chip (step 15.2): filled from
  * the selected block when the box opens, @nickname sets it, a click chooses another. CP-1: the chip is the client a
  * capture is saved to, always; it never changes on its own after a save, and the Saved toast names it, with Undo.
  * Under the box, kind chips: the rules highlight one while I type; a click or Tab picks another. Each kind's fields open
@@ -395,10 +395,11 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
           aria-expanded={done.length > 0}
           aria-describedby="cap-kind-hint"
         />
+        </div>
+        {/* UI-7: ↵ is its own button between the box and the client chip, never over the box or its scrollbar. */}
         <button type="button" className="cap-send" aria-label="Save" title="Save (Enter)" disabled={busy || !text.trim()} onMouseDown={(e) => e.preventDefault()} onClick={() => void submit()}>
           ↵
         </button>
-        </div>
         <button
           type="button"
           className={`chip-btn cap-client${client ? "" : " none"}`}
