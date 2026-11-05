@@ -4,6 +4,7 @@
 // picks, follow-ups, captures, focus sessions, write PATs, AI request content or chat messages: a person's health is
 // names, dates and yes or no (AdminOps.people), and the store has no read for anything else. Every change is audited
 // (store/admin-store.ts) with who, when, what, old and new value; secrets are never settings.
+import type { StatusGroup, StatusRegistry } from "./status-rows.ts";
 import { clientScope, CLIENT_SPECS, KIND_NAMES, LEVEL_NAMES, LEVEL_SPECS, LEVELS, ORG_SPECS, OrgInputError, specFor, SUGGESTED_SLOTS, type AdminArea, type Guidance, type Level, type OrgRules } from "../config/org.ts";
 import { CLIENT_SLOTS } from "../config/schema.ts";
 import { LEAD_WHY_NAMES, type LeadWhy } from "../plan/levels.ts";
@@ -15,7 +16,7 @@ import type { ProcessModelResult } from "../sources/devops/source.ts";
 import type { ConversationCounts } from "../store/conversation-store.ts";
 import type { ActionResponse, ClientProcess } from "./types.ts";
 
-export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit"] as const;
+export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit", "admin.status_action"] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 export const ADMIN_SECTIONS = ["clients", "ai", "conversations", "people", "organization", "status", "audit"] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
@@ -44,6 +45,8 @@ export type AdminStatus = {
   lastPoll: string | null;
   /** CV-1's counts: conversations by status, messages by role, commitments by state, AI calls per chat today. Never text or ids. */
   conversations: ConversationCounts | null;
+  /** DV-1: the status rows registry's groups (DevOps polling, and whatever registers later). */
+  groups?: StatusGroup[];
 };
 
 /** What the server gives the admin console (server/main.ts; the demo's in server/demo.ts, over the demo's store only). */
@@ -62,6 +65,8 @@ export type AdminOps = {
   appSpentMicros(): Promise<number>;
   /** `day`: the admin's today, for the per-chat AI calls. */
   status(day: string): Promise<AdminStatus>;
+  /** DV-1: the status rows registry (Admin › Status renders its groups; a row's action runs through admin.status_action). */
+  statusRows?: StatusRegistry;
   refreshPeople(): Promise<{ ok: boolean; message: string | null; people: number }>;
   /** Deletes a person's FocusTime data and personal secrets now, and ends their sessions. */
   removePerson(id: string): Promise<void>;
@@ -211,8 +216,10 @@ async function section(ops: AdminOps, s: AdminSection, meId: string, input: Reco
     }
     case "people":
       return peopleSection(ops, meId);
-    case "status":
-      return ops.status(today ? await today() : new Date().toISOString().slice(0, 10));
+    case "status": {
+      const [st, groups] = await Promise.all([ops.status(today ? await today() : new Date().toISOString().slice(0, 10)), ops.statusRows ? ops.statusRows.groups() : Promise.resolve([])]);
+      return { ...st, groups };
+    }
     case "audit": {
       const area = typeof input.area === "string" && input.area ? input.area : null;
       const text = typeof input.text === "string" ? input.text.slice(0, 100) : null;
@@ -290,6 +297,14 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
       await ops.org.store.setOverride({ personId: id, personName: name, kind, ...(kind !== "level" ? { clientKey: (i.clientKey as string).trim() } : {}), value: kind === "level" ? (i.value as string) : null, clear, actor });
       ops.org.invalidate();
       return { ok: true, data: { personId: id, kind, clear } };
+    }
+    case "admin.status_action": {
+      // DV-1: a status row's action (Check now). It changes nothing anyone set, so it isn't in the audit log.
+      const extra = only(i, ["source", "row", "action"]);
+      if (extra) return bad(`unknown input field ${extra}`);
+      if (typeof i.source !== "string" || typeof i.row !== "string" || typeof i.action !== "string") return bad("admin.status_action takes { source, row, action }");
+      const done = ops.statusRows ? await ops.statusRows.act(i.source, i.row, i.action) : false;
+      return done ? { ok: true, data: { groups: await ops.statusRows!.groups() } } : bad("No such status action", 404);
     }
     case "admin.refresh_people": {
       if (Object.keys(i).length) return bad("admin.refresh_people takes {}");

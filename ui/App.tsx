@@ -465,7 +465,7 @@ export function App() {
 
   /** Loads a week. Data on screen stays put until the new data arrives; a failure keeps it (afterLoad). */
   const load = useCallback(
-    async (input: { weekStart?: string; refresh?: boolean }, opts: { selectToday?: boolean; quiet?: boolean } = {}) => {
+    async (input: { weekStart?: string; refresh?: boolean; quiet?: boolean }, opts: { selectToday?: boolean; quiet?: boolean } = {}) => {
       const id = ++seq.current;
       if (input.weekStart) weekRef.current = input.weekStart;
       if (!opts.quiet) setLoading(true);
@@ -538,7 +538,8 @@ export function App() {
     () =>
       createAutoRefresh({
         isHidden: () => document.hidden,
-        refresh: async (t: RefreshTrigger) => void (await load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}), refresh: true }, { quiet: t === "focus" || t === "interval" })),
+        // DV-1: focus and the timer read DevOps from the store (quiet); R and Refresh make it check now.
+        refresh: async (t: RefreshTrigger) => void (await load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}), refresh: true, ...(t === "focus" || t === "interval" ? { quiet: true } : {}) }, { quiet: t === "focus" || t === "interval" })),
       }),
     [load],
   );

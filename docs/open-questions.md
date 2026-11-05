@@ -228,3 +228,12 @@ What DS-1 learned, and what is still open:
 - Q-NV1-1: "Intention" is still the word for a pick that is neither a DevOps item nor a draft. A person reads it in the block menu's "Add an intention" and its dialog "Intention for <day> <half>" (`ui/menu.ts`), a pick's disabled "Open in browser" ("An intention has no link", `ui/menu.ts`), Check-in's walk-on choice "Typed intention" (`ui/Today.tsx`) and the key legend for A (`ui/keys.ts`). Plan today's type box calls the same thing "a plain note, not in DevOps". NV-1 kept the wording. Should there be one word everywhere, and which one?
 - Q-NV1-2: The urgent strip's lines open Inbox › Conversations or My promises, not the one item. Selecting the item needs a small change inside Conversations; worth doing in CV-2.
 - Q-NV1-3: Ahead keeps "Roadmap" as its first mode's name. Is that the right name inside Ahead, or should it read "Features"?
+
+## DevOps polling (DV-1, Nov 5)
+
+- Q-DV1-1: `pollAccounts()` decides which clients are polled from people_clients and recent asks; it should be ADM-2's `clientAccounts()` once that merges (the TODO in `actions/devops-poll.ts`).
+- Q-DV1-2: The Rule "DevOps check interval" isn't in Admin's form; the step that owns Admin's screens adds the field (the spec is in `config/org.ts`).
+- Q-DV1-3: The old per-person DevOps snapshot files are no longer written but still on disk. Delete them in a later release, once DV-1 has run on prod a while.
+- Q-DV1-4: Is 1 minute right in hours? Dev's Status rows show calls today and each call's TSTU cost; check them after a full working day before prod.
+- Q-DV1-5: An item read once by id (a parent outside the scope, an item on demand) stays in the store until the reconcile drops it. Should on-demand reads get their own expiry?
+

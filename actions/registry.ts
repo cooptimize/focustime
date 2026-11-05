@@ -205,6 +205,7 @@ export const ACTIONS = [
   { name: "admin.refresh_people", title: "Read levels and leads again", group: "Admin", target: "none", summary: "Admins: read people's levels and client leads from Dataverse now (it happens daily anyway)" },
   { name: "admin.remove_person", title: "Remove a person who has left", group: "Admin", target: "none", summary: "Admins: delete a person's FocusTime data and personal secrets after typing their name; logged; never yourself" },
   { name: "admin.audit", title: "Admin audit", group: "Admin", target: "none", summary: "Admins: the last 200 admin changes, filtered by area or text" },
+  { name: "admin.status_action", title: "Status row action", group: "Admin", target: "none", summary: "Admins: run a row's action in Admin › Status, such as Check now for a client's DevOps" },
   { name: "ai.test", title: "Test AI", group: "Settings", target: "none", summary: "Sends one fixed harmless request (no client) and says whether it worked, how long it took and what it cost" },
   { name: "permissions.status", title: "Microsoft permissions", group: "Settings", target: "none", summary: "Every permission FocusTime asks Microsoft for, and whether it's allowed (Settings > Connections)" },
   { name: "people.photos", title: "Profile photos", group: "Focus", target: "none", summary: "Photos of me and the Cooptimizers on screen, from Microsoft; cached 7 days, initials when there is none" },

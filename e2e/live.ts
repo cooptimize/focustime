@@ -26,6 +26,7 @@ import { createAdminCheck } from "../actions/admin.ts";
 import type { AdminOps } from "../actions/admin-actions.ts";
 import { createAdminOps } from "../server/admin-ops.ts";
 import type { ClientChat } from "../plan/requests.ts";
+import type { StatusRegistry } from "../actions/status-rows.ts";
 
 export const T = 120_000;
 export const NOW = "2026-11-02T09:30:00-05:00";
@@ -54,7 +55,7 @@ export type LiveTeam = { org: OrgRuntime; store: AdminStore; set: (scope: string
  * ADM-1: an admin console over a team, for e2e: `admins` is the break-glass list (change it to make someone an admin
  * or not; the next check reads it), `clients` the clients Admin › Clients lists, `chats` the registered client chats.
  */
-export async function liveAdminOps(team: LiveTeam, o: { admins: string[]; clients?: string[]; chats?: () => Promise<ClientChat[]> }): Promise<AdminOps> {
+export async function liveAdminOps(team: LiveTeam, o: { admins: string[]; clients?: string[]; chats?: () => Promise<ClientChat[]>; statusRows?: StatusRegistry }): Promise<AdminOps> {
   if (o.clients?.length) await team.store.replaceDirectory([], [], o.clients.map((clientKey) => ({ personId: ME, clientKey })));
   return createAdminOps({
     check: createAdminCheck({ groupId: null, breakGlass: o.admins, graph: async () => null, now: Date.now }),
@@ -73,6 +74,7 @@ export async function liveAdminOps(team: LiveTeam, o: { admins: string[]; client
     build: { env: "dev", sha: "e2e", pr: "", builtAt: null },
     directory: null,
     removePerson: async () => {},
+    ...(o.statusRows ? { statusRows: o.statusRows } : {}),
     log: () => {},
   });
 }

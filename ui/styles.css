@@ -4273,3 +4273,11 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .checklist .card-feat:first-child { margin-top: 0; }
 .card-feat .cf-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pick-row.dens-week[draggable="true"] { cursor: grab; }
+
+/* DV-1: the status rows registry's states in Admin › Status. */
+.adm-status-group + .adm-status-group { margin-top: 12px; }
+.adm-state { font-weight: 500; }
+.adm-state-ok { color: var(--ok); }
+.adm-state-warn { color: var(--watch); }
+.adm-state-error { color: var(--risk); }
+.adm-state-idle { color: var(--text-faint); }

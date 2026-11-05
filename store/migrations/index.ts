@@ -13,6 +13,7 @@ import { storyDrafts } from "./20261105T0100_story_drafts.ts";
 import { admin } from "./20261105T0200_admin.ts";
 import { conversations } from "./20261105T1200_conversations.ts";
 import { devopsTakes } from "./20261105T1300_devops_takes.ts";
+import { devopsPoll } from "./20261105T2000_devops_poll.ts";
 import type { NamedMigration } from "./named.ts";
 
-export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes];
+export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll];

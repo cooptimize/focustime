@@ -7,9 +7,9 @@ import type { SnapshotStore } from "../../host/types.ts";
 import type { Logger } from "../../log/logger.ts";
 import type { ClientPortfolio, ClientWork, ClientWorkStatus, FailureCause, PortfolioItem, WorkItem } from "../../week/types.ts";
 import { formatFetchedAt } from "../when.ts";
-import { batchFields, buildAllChildrenWiql, buildChildrenWiql, buildWiql, detectOrderField, detectSizeField, detectTargetField, START_DATE_FIELD, ACCEPTANCE_FIELD, htmlToText, normalizeWorkItems, type BacklogLevels, type FieldInfo, type NormalizeContext, type StateCategories } from "./normalize.ts";
+import { batchFields, buildAllChildrenWiql, buildChildrenWiql, buildWiql, detectOrderField, identityEmail, detectSizeField, detectTargetField, START_DATE_FIELD, ACCEPTANCE_FIELD, htmlToText, normalizeWorkItems, type BacklogLevels, type FieldInfo, type NormalizeContext, type StateCategories } from "./normalize.ts";
 import { buildProcessModel, isClosed, isOpen, looksOf, type TypeLook, planningLevels, stateCategories, typeOf, type ProcessModel, type ProcessOverrides, type RawProcess } from "../../plan/process.ts";
-import type { Pat } from "./pat.ts";
+import { Pat } from "./pat.ts";
 import type { DevOpsTarget, TargetsResult } from "./types.ts";
 import type { ExemplarCandidate, FeatureSignals } from "../../plan/stories.ts";
 import { CHILD_FIELDS, childrenWiql, COMMENTS_API, COMMENTS_TOP, EPIC_FIELDS, FEATURE_FIELDS, parseChild, parseComments, parseEpic, parseFeature, POOL_FEATURE_FIELDS, POOL_FEATURES, poolCandidates, poolStoriesWiql, poolStoryFields, poolWiql } from "./signals.ts";
@@ -47,12 +47,49 @@ export type DevOpsDeps = {
   openStates?: (clientKey: string) => readonly string[];
   /** AP-2: the ids of a client's items just read from DevOps (never from the cache), for the AI guard's map. */
   onItems?: (clientKey: string, ids: number[]) => void;
+  /** DV-1: the per-client limiter around every request (sources/devops/poller.ts): a pending Retry-After refuses at once. */
+  limiter?: Limiter;
+  /** DV-1: screens read the central store (the poller's) instead of DevOps; `targets` then gives visibility and identity only. */
+  central?: CentralReads;
 };
+
+/** DV-1: one client's limits. `before` throws a DevOpsFailure while DevOps asked to wait; `after` reads the headers. */
+export type Limiter = { before(clientKey: string): void; after(clientKey: string, status: number, headers: Headers): void };
+
+/** A stored item as the batch call returned it. */
+export type RawValue = { id: number; fields: Readonly<Record<string, unknown>> };
+
+/** DV-1: what the central store gives one reader for a client. */
+export type CentralView = {
+  /** Every stored item of the client (open, or closed in the last 90 days, and those read by id). */
+  values: readonly RawValue[];
+  /** The process responses and fields the poller read with (null until the first check got them). */
+  process: ProcessRaw | null;
+  fields: FieldSet | null;
+  /** The last check that worked, and the current failure (plain words), if any. */
+  okAt: string | null;
+  failure: { status: ClientWorkStatus; message: string } | null;
+  loaded: boolean;
+};
+
+export type CentralReads = {
+  /** The client's store; `force` (Refresh) asks for a check first (once per 30 s per client, shared). */
+  view(clientKey: string, o: { force: boolean }): Promise<CentralView>;
+  /** Items not in the store, read by id once and kept (follow-ups about old items). */
+  byIds(clientKey: string, ids: readonly number[]): Promise<RawValue[]>;
+  /** The poller's target (with the read PAT, memory only) for a read on demand. */
+  target(clientKey: string): Promise<DevOpsTarget | null>;
+  /** After a write: check the client now, so the next read shows the change. */
+  afterWrite(clientKey: string): void;
+};
+
+/** The fields a project has for Plan the week, cached an hour. */
+export type FieldSet = { fields: Record<string, string>; starts: Record<string, string>; size: string | null; ac: boolean };
 
 export type ClientRef = { clientKey: string; clientName: string };
 
 /** A safe, plain failure. Never carries bodies, headers or PATs. */
-class DevOpsFailure extends Error {
+export class DevOpsFailure extends Error {
   readonly status: ClientWorkStatus;
   /** Shared root cause (keyring, network), so the status bar names it once. */
   readonly rootCause: FailureCause | undefined;
@@ -66,7 +103,7 @@ class DevOpsFailure extends Error {
 type Metadata = { orderField: string | null; /** WT-1: the project's process model, with the person's overrides. */ model: ProcessModel; categories: StateCategories; levels: BacklogLevels; /** Plan the week (step 8): portfolio tiers from the backlog levels. */ tiers: { feature: Set<string>; epic: Set<string> }; /** DS-1: the child level's default type, the type Draft stories creates by default. */ storyType: string | null; requirementTypes: string[] };
 
 /** WT-1: what is cached per project (a day): the raw process responses and the board order field, never a PAT. */
-type ProcessRaw = { raw: RawProcess; orderField: string | null };
+export type ProcessRaw = { raw: RawProcess; orderField: string | null };
 const DAY_MS = 24 * 60 * 60_000;
 /** WT-1: the history behind Admin's "75% broken down": items past Proposed in the last 12 months. */
 const HISTORY_DAYS = 365;
@@ -81,6 +118,8 @@ type WorkSnapshot = { fetchedAt: string; items: WorkItem[]; children?: WorkItem[
 const withLevel = (i: WorkItem): WorkItem => (i.level ? i : { ...i, level: "story" });
 
 const ORG = /^[A-Za-z0-9][A-Za-z0-9-]{0,49}$/;
+/** DV-1: a reader on the central store has no PAT: its views never call DevOps (reads on demand use the poller's). */
+const NO_PAT = new Pat("");
 
 export function cacheKey(clientKey: string): string {
   const slug = clientKey.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "client";
@@ -126,6 +165,8 @@ export function createDevOpsSource(d: DevOpsDeps) {
     // DS-1: a path may name its own api-version (the comments API is a preview version).
     const url = path.includes("api-version=") ? `${c.base}/${path}` : `${c.base}/${path}${path.includes("?") ? "&" : "?"}api-version=${API_VERSION}`;
     const started = performance.now();
+    // DV-1: a client DevOps asked to wait gets no request until then (a plain failure instead, no tight loop).
+    d.limiter?.before(c.clientKey);
     let res: Response | null = null;
     // Every call is a read, so one retry after a network blip is safe (step 6c live run: one failed request
     // made a whole client "unreachable"). A host that doesn't exist is not retried.
@@ -146,6 +187,8 @@ export function createDevOpsSource(d: DevOpsDeps) {
       }
     }
     log(op, { status: res.status, durationMs: performance.now() - started });
+    d.limiter?.after(c.clientKey, res.status, res.headers);
+    if (res.status === 429 || res.status === 503) throw new DevOpsFailure("error", "DevOps asked FocusTime to wait");
     // Azure DevOps answers a bad PAT with 401, or with a 203 or a redirect to a sign-in page.
     if (res.status === 401 || res.status === 203 || (res.status >= 300 && res.status < 400) || res.type === "opaqueredirect")
       throw new DevOpsFailure("auth_failed", `DevOps PAT expired or invalid for ${c.client}`);
@@ -253,47 +296,78 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return out;
   }
 
-  /** WIQL for ids, then the batch call in chunks of 200, normalized. */
-const ASSIGNED_FIELD = "System.AssignedTo";
-  /** `people` (PV-1): also the assignee (display name, and the email only to match a Cooptimizer), for children. */
-  async function fetchItems(ctx: Ctx, project: string, meta: Metadata, query: string, people = false): Promise<WorkItem[]> {
+  /**
+   * DV-1: the four reads the item views are built from, either from DevOps (WIQL for ids, then the batch call in
+   * chunks of 200) or from the central store. Both give raw values ({ id, fields }); normalizing stays with the caller.
+   */
+  type Reads = {
+    /** Open items assigned to this identity (types the process knows). */
+    mine(email: string, fields: string[]): Promise<unknown[]>;
+    /** Open children of these parents. */
+    openChildren(parents: readonly number[], fields: string[]): Promise<unknown[]>;
+    /** Every child of these parents, closed ones too. */
+    allChildren(parents: readonly number[], fields: string[]): Promise<unknown[]>;
+    byIds(ids: readonly number[], fields: string[]): Promise<unknown[]>;
+  };
+
+  const ASSIGNED_FIELD = "System.AssignedTo";
+
+  function httpReads(ctx: Ctx, project: string, meta: Metadata): Reads {
     const p = encodeURIComponent(project);
-    const wiql = await call<{ workItems?: { id?: unknown }[] }>(ctx, "wiql", `${p}/_apis/wit/wiql?$top=${WIQL_TOP}`, { query });
-    const ids = (wiql.workItems ?? []).map((w) => w.id).filter((id): id is number => typeof id === "number" && Number.isInteger(id));
-    const values: unknown[] = [];
-    for (let i = 0; i < ids.length; i += BATCH_MAX) {
-      const page = await call<{ value?: unknown[] }>(ctx, "workitemsbatch", `${p}/_apis/wit/workitemsbatch`, {
-        ids: ids.slice(i, i + BATCH_MAX),
-        fields: people ? [...batchFields(meta.orderField), ASSIGNED_FIELD] : batchFields(meta.orderField),
-        errorPolicy: "omit",
-      });
-      values.push(...(page.value ?? []));
-    }
-    const { items, skipped } = normalizeWorkItems(values, { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels, tiers: meta.tiers, me: ctx.me, ...(people ? { people: true } : {}) });
+    const byIds = async (ids: readonly number[], fields: string[]) => {
+      const values: unknown[] = [];
+      for (let i = 0; i < ids.length; i += BATCH_MAX) {
+        const page = await call<{ value?: unknown[] }>(ctx, "workitemsbatch", `${p}/_apis/wit/workitemsbatch`, { ids: ids.slice(i, i + BATCH_MAX), fields, errorPolicy: "omit" });
+        values.push(...(page.value ?? []));
+      }
+      return values;
+    };
+    const viaWiql = async (query: string, fields: string[]) => {
+      const wiql = await call<{ workItems?: { id?: unknown }[] }>(ctx, "wiql", `${p}/_apis/wit/wiql?$top=${WIQL_TOP}`, { query });
+      return byIds((wiql.workItems ?? []).map((w) => w.id).filter((id): id is number => typeof id === "number" && Number.isInteger(id)), fields);
+    };
+    return {
+      mine: (email, fields) => viaWiql(buildWiql(email, meta.categories, meta.orderField), fields),
+      openChildren: (parents, fields) => viaWiql(buildChildrenWiql([...parents], meta.categories, meta.orderField), fields),
+      allChildren: (parents, fields) => viaWiql(buildAllChildrenWiql([...parents], meta.orderField), fields),
+      byIds,
+    };
+  }
+
+  /** DV-1: the same reads over a client's stored items. Items read by id that the store lacks are read once and kept. */
+  function storeReads(clientKey: string, values: readonly RawValue[], meta: Metadata): Reads {
+    const byId = new Map(values.map((v) => [v.id, v]));
+    const open = (v: RawValue) => {
+      const type = typeof v.fields["System.WorkItemType"] === "string" ? (v.fields["System.WorkItemType"] as string) : "";
+      const states = meta.categories.get(type);
+      if (!states) return false;
+      const state = typeof v.fields["System.State"] === "string" ? (v.fields["System.State"] as string).toLowerCase() : "";
+      return !isClosed(states.get(state) ?? "Unknown");
+    };
+    const parentIn = (ids: ReadonlySet<number>) => (v: RawValue) => typeof v.fields["System.Parent"] === "number" && ids.has(v.fields["System.Parent"] as number);
+    return {
+      mine: async (email) => values.filter((v) => open(v) && identityEmail(v.fields[ASSIGNED_FIELD]) === email.toLowerCase()),
+      openChildren: async (parents) => values.filter((v) => open(v) && parentIn(new Set(parents))(v)),
+      allChildren: async (parents) => values.filter(parentIn(new Set(parents))),
+      byIds: async (ids) => {
+        const missing = ids.filter((id) => !byId.has(id));
+        const got = missing.length && d.central ? await d.central.byIds(clientKey, missing) : [];
+        for (const g of got) byId.set(g.id, g);
+        return ids.map((id) => byId.get(id)).filter((v): v is RawValue => !!v);
+      },
+    };
+  }
+
+  /** Normalized. `people` (PV-1): also the assignee (display name, and the email only to match a Cooptimizer), for children. */
+  function normalized(ctx: Ctx, meta: Metadata, values: unknown[], o: { people?: boolean; keepDone?: boolean; tiers?: boolean } = {}): WorkItem[] {
+    const { items, skipped } = normalizeWorkItems(values, { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels, ...(o.tiers === false ? {} : { tiers: meta.tiers }), me: ctx.me, ...(o.people ? { people: true } : {}), ...(o.keepDone ? { keepDone: true } : {}) });
     if (skipped) log("normalize", { kind: "skipped", count: skipped });
     return items;
   }
 
-  /** Items read by id (step 7): those an open follow-up is about that aren't among my open items, completed ones too. */
-  async function fetchWatched(ctx: Ctx, project: string, meta: Metadata, ids: number[]): Promise<WorkItem[]> {
-    if (!ids.length) return [];
-    const page = await call<{ value?: unknown[] }>(ctx, "workitemsbatch", `${encodeURIComponent(project)}/_apis/wit/workitemsbatch`, { ids: ids.slice(0, BATCH_MAX), fields: batchFields(meta.orderField), errorPolicy: "omit" });
-    return normalizeWorkItems(page.value ?? [], { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels, tiers: meta.tiers, keepDone: true, me: ctx.me }).items.filter((i) => ids.includes(i.id));
-  }
-
   function contextOf(ref: ClientRef, target: DevOpsTarget): { ctx: Ctx; project: string } {
     const org = target.org!;
-    return { ctx: { client: ref.clientName, clientKey: ref.clientKey, org, base: `https://dev.azure.com/${encodeURIComponent(org)}`, projectName: target.projectName ?? target.project!, pat: target.pat!, me: target.email }, project: target.project! };
-  }
-
-  /** The batch call for given ids and fields, in chunks of 200, normalized with the given context. */
-  async function readByIds(ctx: Ctx, project: string, ids: readonly number[], fields: string[], n: Omit<NormalizeContext, "org" | "projectName">): Promise<WorkItem[]> {
-    const values: unknown[] = [];
-    for (let i = 0; i < ids.length; i += BATCH_MAX) {
-      const page = await call<{ value?: unknown[] }>(ctx, "workitemsbatch", `${encodeURIComponent(project)}/_apis/wit/workitemsbatch`, { ids: ids.slice(i, i + BATCH_MAX), fields, errorPolicy: "omit" });
-      values.push(...(page.value ?? []));
-    }
-    return normalizeWorkItems(values, { org: ctx.org, projectName: ctx.projectName, ...n }).items;
+    return { ctx: { client: ref.clientName, clientKey: ref.clientKey, org, base: `https://dev.azure.com/${encodeURIComponent(org)}`, projectName: target.projectName ?? target.project!, pat: target.pat ?? NO_PAT, me: target.email }, project: target.project! };
   }
 
   /** Q47: without a story level the backlog levels can't tell stories from features, so the client fails instead of guessing. */
@@ -302,40 +376,50 @@ const ASSIGNED_FIELD = "System.AssignedTo";
       throw new DevOpsFailure("error", `The process for ${ctx.projectName || project} (${ctx.client}) has no story level in its backlog levels, so FocusTime can't tell stories from features there. Nothing is guessed; check the project's backlog configuration`);
   }
 
-  async function fetchClient(ref: ClientRef, target: DevOpsTarget, watch: readonly number[] = [], features: readonly number[] = []): Promise<{ items: WorkItem[]; children: WorkItem[]; watched: WorkItem[]; committed: WorkItem[]; parents: WorkItem[]; model: ProcessModel }> {
-    const { ctx, project } = contextOf(ref, target);
-    const raw = await loadMetadata(ctx, project);
-    needStoryLevel(raw, ctx, project);
-    const meta = { ...raw, categories: stateCategories(raw.model, d.openStates?.(ref.clientKey) ?? []) };
+  type ClientRead = { items: WorkItem[]; children: WorkItem[]; watched: WorkItem[]; committed: WorkItem[]; parents: WorkItem[]; model: ProcessModel };
+
+  /** One client's views of my work, from the given reads (DevOps or the store). */
+  async function readClient(ctx: Ctx, raw: Metadata, r: (meta: Metadata) => Reads, watch: readonly number[] = [], features: readonly number[] = []): Promise<ClientRead> {
+    needStoryLevel(raw, ctx, ctx.projectName);
+    const meta = { ...raw, categories: stateCategories(raw.model, d.openStates?.(ctx.clientKey) ?? []) };
+    const reads = r(meta);
+    const base = batchFields(meta.orderField);
     // WT-1 safety net: a bug assigned to me is always at child level, even when the team has bugs off.
     // PV-1: mine by the query (the assignee is me), so the Week panel can tell them from teammates' children.
-    const items = (await fetchItems(ctx, project, meta, buildWiql(target.email!, meta.categories, meta.orderField))).map((i) => ({ ...(i.level === "other" && typeOf(meta.model, i.type)?.bug ? { ...i, level: "story" as const } : i), assignedToMe: true }));
+    const items = normalized(ctx, meta, await reads.mine(ctx.me!, base)).map((i) => ({ ...(i.level === "other" && typeOf(meta.model, i.type)?.bug ? { ...i, level: "story" as const } : i), assignedToMe: true }));
     log("items", { count: items.length });
     // Features committed to a week (step 8) that aren't mine: read by id (open ones), so their stories can be offered.
     const mineIds = new Set(items.map((i) => i.id));
     const wanted = features.filter((id) => Number.isInteger(id) && id > 0 && !mineIds.has(id)).slice(0, BATCH_MAX);
-    const committed = wanted.length ? (await readByIds(ctx, project, wanted, batchFields(meta.orderField), { orderField: meta.orderField, categories: meta.categories, levels: meta.levels, me: ctx.me })).filter((i) => wanted.includes(i.id)) : [];
+    const committed = wanted.length ? normalized(ctx, meta, await reads.byIds(wanted, base), { tiers: false }).filter((i) => wanted.includes(i.id)) : [];
     // Epics and features can't be picked: read their open children (any assignee), up to two levels down, read-only.
     const children: WorkItem[] = [];
     const seen = new Set([...items.map((i) => i.id), ...committed.map((i) => i.id)]);
     let parents = [...items.filter((i) => i.level === "portfolio").map((i) => i.id), ...committed.map((i) => i.id)];
     for (let depth = 0; depth < CHILD_DEPTH && parents.length; depth++) {
-      const found = (await fetchItems(ctx, project, meta, buildChildrenWiql(parents.slice(0, MAX_PARENTS), meta.categories, meta.orderField), true)).filter((c) => !seen.has(c.id));
+      const found = normalized(ctx, meta, await reads.openChildren(parents.slice(0, MAX_PARENTS), [...base, ASSIGNED_FIELD]), { people: true }).filter((c) => !seen.has(c.id));
       for (const c of found) seen.add(c.id);
       children.push(...found);
       parents = found.filter((c) => c.level === "portfolio").map((c) => c.id);
     }
     if (children.length) log("children", { count: children.length });
-    const missing = watch.filter((id) => Number.isInteger(id) && id > 0 && !seen.has(id));
-    const watched = await fetchWatched(ctx, project, meta, missing);
+    // Items read by id (step 7): those an open follow-up is about that aren't among my open items, completed ones too.
+    const missing = watch.filter((id) => Number.isInteger(id) && id > 0 && !seen.has(id)).slice(0, BATCH_MAX);
+    const watched = missing.length ? normalized(ctx, meta, await reads.byIds(missing, base), { keepDone: true }).filter((i) => missing.includes(i.id)) : [];
     if (watched.length) log("watched", { count: watched.length });
     // PV-1 (D570): the parents of my stories that no read above has (a feature that's neither mine nor committed), by
     // id, so the Week panel can group every story under its feature.
     const known = new Set([...seen, ...watched.map((w) => w.id)]);
     const up = [...new Set([...items, ...children].filter((i) => i.assignedToMe && i.level === "story" && i.parentId !== null && !known.has(i.parentId)).map((i) => i.parentId!))].slice(0, BATCH_MAX);
-    const parentItems = up.length ? (await readByIds(ctx, project, up, batchFields(meta.orderField), { orderField: meta.orderField, categories: meta.categories, levels: meta.levels, me: ctx.me })).filter((i) => up.includes(i.id)) : [];
+    const parentItems = up.length ? normalized(ctx, meta, await reads.byIds(up, base), { tiers: false }).filter((i) => up.includes(i.id)) : [];
     if (parentItems.length) log("parents", { count: parentItems.length });
     return { items, children, watched, committed, parents: parentItems, model: meta.model };
+  }
+
+  async function fetchClient(ref: ClientRef, target: DevOpsTarget, watch: readonly number[] = [], features: readonly number[] = []): Promise<ClientRead> {
+    const { ctx, project } = contextOf(ref, target);
+    const raw = await loadMetadata(ctx, project);
+    return readClient(ctx, raw, (meta) => httpReads(ctx, project, meta), watch, features);
   }
 
   // ---- Plan the week (step 8): features and epics, read-only ----
@@ -384,40 +468,46 @@ const ASSIGNED_FIELD = "System.AssignedTo";
     return { fields: out, starts, size, ac };
   }
 
-  async function fetchPortfolio(ref: ClientRef, target: DevOpsTarget, mine: readonly WorkItem[]): Promise<{ items: PortfolioItem[]; targetFields: Record<string, string>; startFields: Record<string, string>; sizeField: string | null; acceptanceField: boolean }> {
+  type PortfolioRead = { items: PortfolioItem[]; targetFields: Record<string, string>; startFields: Record<string, string>; sizeField: string | null; acceptanceField: boolean };
+
+  async function fetchPortfolio(ref: ClientRef, target: DevOpsTarget, mine: readonly WorkItem[]): Promise<PortfolioRead> {
     const { ctx, project } = contextOf(ref, target);
     const raw = await loadMetadata(ctx, project);
+    const portfolioTypes = [...raw.tiers.feature, ...raw.tiers.epic];
+    return readPortfolio(ctx, raw, mine, (meta) => httpReads(ctx, project, meta), () => targetFieldsFor(ctx, project, portfolioTypes, [...raw.levels.story]));
+  }
+
+  /** Features and epics for my items (step 8), from the given reads and fields (DevOps or the store). */
+  async function readPortfolio(ctx: Ctx, raw: Metadata, mine: readonly WorkItem[], r: (meta: Metadata) => Reads, fieldsOf: () => Promise<FieldSet>): Promise<PortfolioRead> {
+    const project = ctx.projectName;
     needStoryLevel(raw, ctx, project);
-    const categories = stateCategories(raw.model, d.openStates?.(ref.clientKey) ?? []);
+    const categories = stateCategories(raw.model, d.openStates?.(ctx.clientKey) ?? []);
     const portfolioTypes = new Set([...raw.tiers.feature, ...raw.tiers.epic]);
     // Assigned to me, or the parent of a story-level item assigned to me (raw backlog levels, not the pickable list).
     const assigned = new Set(mine.filter((i) => portfolioTypes.has(i.type)).map((i) => i.id));
     const parents = new Set(mine.filter((i) => raw.levels.story.has(i.type) && i.parentId !== null).map((i) => i.parentId!));
     const ids = [...new Set([...assigned, ...parents])].slice(0, MAX_PARENTS);
     if (!ids.length) return { items: [], targetFields: {}, startFields: {}, sizeField: null, acceptanceField: false };
-    const { fields: targetFields, starts: startFields, size: sizeField, ac: acceptanceField } = await targetFieldsFor(ctx, project, [...portfolioTypes], [...raw.levels.story]);
+    const { fields: targetFields, starts: startFields, size: sizeField, ac: acceptanceField } = await fieldsOf();
+    const reads = r({ ...raw, categories });
+    const readByIds = async (ids: readonly number[], f: string[], n: Omit<NormalizeContext, "org" | "projectName">) => normalizeWorkItems(await reads.byIds(ids, f), { org: ctx.org, projectName: ctx.projectName, ...n }).items;
     const fields = [...batchFields(raw.orderField), "System.AssignedTo", "System.AreaPath", "System.IterationPath", ...new Set([...Object.values(targetFields), ...Object.values(startFields)]), ...(sizeField ? [sizeField] : [])];
     const n = { orderField: raw.orderField, categories, levels: raw.levels, keepDone: true, me: ctx.me, people: true, targetFields, startFields, timeZone: d.timeZone, sizeField, paths: true };
-    const found = (await readByIds(ctx, project, ids, fields, n)).filter((i) => portfolioTypes.has(i.type) && !isClosed(i.stateCategory));
+    const found = (await readByIds(ids, fields, n)).filter((i) => portfolioTypes.has(i.type) && !isClosed(i.stateCategory));
     // Q49: follow parent links up to the top portfolio level, so the epics above my features are read too.
     const above = new Set<number>();
     for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
       const have = new Set(found.map((i) => i.id));
       const up = [...new Set(found.map((i) => i.parentId).filter((id): id is number => id !== null && !have.has(id)))].slice(0, MAX_PARENTS);
       if (!up.length) break;
-      const got = (await readByIds(ctx, project, up, fields, n)).filter((i) => portfolioTypes.has(i.type) && !isClosed(i.stateCategory) && !have.has(i.id));
+      const got = (await readByIds(up, fields, n)).filter((i) => portfolioTypes.has(i.type) && !isClosed(i.stateCategory) && !have.has(i.id));
       if (!got.length) break;
       for (const i of got) above.add(i.id);
       found.push(...got);
     }
     found.sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER) || a.id - b.id);
     const kids: WorkItem[] = [];
-    if (found.length) {
-      const p = encodeURIComponent(project);
-      const wiql = await call<{ workItems?: { id?: unknown }[] }>(ctx, "wiql", `${p}/_apis/wit/wiql?$top=${WIQL_TOP}`, { query: buildAllChildrenWiql(found.map((i) => i.id), raw.orderField) });
-      const kidIds = (wiql.workItems ?? []).map((w) => w.id).filter((id): id is number => typeof id === "number" && Number.isInteger(id));
-      kids.push(...(await readByIds(ctx, project, kidIds, fields, n)));
-    }
+    if (found.length) kids.push(...normalizeWorkItems(await reads.allChildren(found.map((i) => i.id), fields), { org: ctx.org, projectName: ctx.projectName, ...n }).items);
     log("portfolio", { count: found.length });
     const items: PortfolioItem[] = found.map((i) => ({
       id: i.id,
@@ -444,6 +534,7 @@ const ASSIGNED_FIELD = "System.AssignedTo";
 
   /** Features and epics per followed client (step 8), after the usual read of my items. Cached for five minutes. */
   async function portfolio(clients: ClientRef[], opts: { refresh?: boolean } = {}): Promise<ClientPortfolio[]> {
+    if (d.central) return centralPortfolio(clients, opts);
     const t = now().epochMilliseconds;
     const fresh = (ref: ClientRef) => {
       const hit = portfolioMemory.get(ref.clientKey);
@@ -494,10 +585,18 @@ const ASSIGNED_FIELD = "System.AssignedTo";
   /** One work item's description as plain text, read when asked (the Coop brief). Never cached or logged. */
   async function description(clientKey: string, id: number): Promise<string | null> {
     if (!Number.isInteger(id) || id <= 0) return null;
-    const targets = await d.targets([clientKey]).catch(() => null);
-    const target = targets?.ok ? targets.targets.find((x) => x.clientKey === clientKey) : undefined;
-    const ref = { clientKey, clientName: target?.clientName ?? clientKey };
-    if (!target || precheck(ref, target)) return null;
+    let ref: ClientRef;
+    let target: DevOpsTarget | undefined;
+    if (d.central) {
+      const c = await centralTarget(clientKey);
+      if (typeof c === "string") return null;
+      ({ ref, target } = c);
+    } else {
+      const targets = await d.targets([clientKey]).catch(() => null);
+      target = targets?.ok ? targets.targets.find((x) => x.clientKey === clientKey) : undefined;
+      ref = { clientKey, clientName: target?.clientName ?? clientKey };
+      if (!target || precheck(ref, target)) return null;
+    }
     const { ctx, project } = contextOf(ref, target);
     const page = await call<{ value?: { id?: unknown; fields?: Record<string, unknown> }[] }>(ctx, "workitemsbatch", `${encodeURIComponent(project)}/_apis/wit/workitemsbatch`, { ids: [id], fields: ["System.Id", "System.Description"], errorPolicy: "omit" });
     const html = page.value?.find((v) => v.id === id)?.fields?.["System.Description"];
@@ -506,6 +605,13 @@ const ASSIGNED_FIELD = "System.AssignedTo";
 
   /** DS-1: the client's target and context for a read on demand (Draft stories), or a plain reason. */
   async function onDemand(clientKey: string): Promise<{ ctx: Ctx; project: string; meta: Metadata } | string> {
+    if (d.central) {
+      const c = await centralTarget(clientKey);
+      if (typeof c === "string") return c;
+      const { ctx, project } = contextOf(c.ref, c.target);
+      const view = await d.central.view(clientKey, { force: false }).catch(() => null);
+      return { ctx, project, meta: view?.process ? metaOf(view.process, clientKey) : await loadMetadata(ctx, project) };
+    }
     const targets = await d.targets([clientKey]).catch(() => null);
     if (!targets?.ok) return `DevOps settings can't be read from Dataverse now${targets && !targets.ok ? ` (${targets.message})` : ""}`;
     const target = targets.targets.find((x) => x.clientKey === clientKey);
@@ -599,6 +705,22 @@ const ASSIGNED_FIELD = "System.AssignedTo";
    * the default child. Cached a day; `refresh` reads again.
    */
   async function processModels(clientKeys: string[], opts: { refresh?: boolean } = {}): Promise<ProcessModelResult[]> {
+    if (d.central)
+      return Promise.all(
+        clientKeys.map(async (clientKey): Promise<ProcessModelResult> => {
+          const c = await centralTarget(clientKey);
+          if (typeof c === "string") return { clientKey, ok: false, message: c };
+          try {
+            const { ctx, project } = contextOf(c.ref, c.target);
+            const view = opts.refresh ? null : await d.central!.view(clientKey, { force: false }).catch(() => null);
+            const raw = view?.process ?? (await loadProcess(ctx, project, opts.refresh));
+            const history = await loadHistory(ctx, project, metaOf(raw, clientKey).model, opts.refresh);
+            return { clientKey, ok: true, model: metaOf(raw, clientKey, history).model };
+          } catch (e) {
+            return { clientKey, ok: false, message: plainFailure(e, "Reading the process") };
+          }
+        }),
+      );
     let targets: TargetsResult;
     try {
       targets = await d.targets(clientKeys);
@@ -624,12 +746,15 @@ const ASSIGNED_FIELD = "System.AssignedTo";
     );
   }
 
-  /** Check the target is usable. Identity is never guessed. */
-  function precheck(ref: ClientRef, target: DevOpsTarget | undefined): DevOpsFailure | null {
-    if (!target) return new DevOpsFailure("not_set_up", `No Account Worker for ${ref.clientName} in Dataverse`);
+  /**
+   * Check the target is usable. Identity is never guessed. DV-1: a reader on the central store needs no PAT (the
+   * poller has it), and the poller needs no identity (it reads everyone's items).
+   */
+  function precheck(ref: ClientRef, target: DevOpsTarget | undefined, o: { pat?: boolean; identity?: boolean } = {}): DevOpsFailure | null {
+    if (!target) return new DevOpsFailure("not_set_up", o.identity === false ? `DevOps isn't set up for ${ref.clientName} in Dataverse` : `No Account Worker for ${ref.clientName} in Dataverse`);
     if (target.problem) return new DevOpsFailure("error", target.problem);
-    if (!target.email) return new DevOpsFailure("identity_missing", `DevOps identity missing for ${ref.clientName}`);
-    const missing = [!target.org && "organization", !target.project && "project", !target.pat && "PAT"].filter(Boolean);
+    if (o.identity !== false && !target.email) return new DevOpsFailure("identity_missing", `DevOps identity missing for ${ref.clientName}`);
+    const missing = [!target.org && "organization", !target.project && "project", o.pat !== false && !target.pat && "PAT"].filter(Boolean);
     if (missing.length) return new DevOpsFailure("not_set_up", `DevOps not set up for ${ref.clientName} (missing ${missing.join(", ")})`);
     if (!ORG.test(target.org!)) return new DevOpsFailure("not_set_up", `DevOps organization for ${ref.clientName} is not a valid name`);
     return null;
@@ -667,6 +792,7 @@ const ASSIGNED_FIELD = "System.AssignedTo";
 
   /** One result per client, in the order given. A client never sees another client's items. */
   async function load(clients: ClientRef[], opts: { refresh?: boolean; watch?: Readonly<Record<string, readonly number[]>>; features?: Readonly<Record<string, readonly number[]>> } = {}): Promise<ClientWork[]> {
+    if (d.central) return (await centralLoad(clients, opts)).map((r) => r.work);
     const t = now().epochMilliseconds;
     // What was asked for besides my items (committed features, items read by id): asking for other ones reads again.
     const ids = (r?: Readonly<Record<string, readonly number[]>>, k = "") => (r?.[k] ?? []).slice().sort((a, b) => a - b).join(",");
@@ -718,9 +844,145 @@ const ASSIGNED_FIELD = "System.AssignedTo";
   function forget(clientKey: string) {
     memory.delete(clientKey);
     portfolioMemory.delete(clientKey);
+    // DV-1: the store is brought up to date from DevOps now, so the next read shows the change.
+    d.central?.afterWrite(clientKey);
   }
 
-  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels };
+  // ---- DV-1: reading the central store ----
+  /**
+   * Who may see a client is decided as before: `targets` (here without the PAT) lists only accounts the person is an
+   * active Account Worker on, with their DevOps identity. Kept 5 minutes per client; Refresh reads it again.
+   */
+  const visible = new Map<string, { at: number; target: DevOpsTarget | null }>();
+  async function viewerTargets(keys: readonly string[], force: boolean): Promise<TargetsResult> {
+    const t = now().epochMilliseconds;
+    const stale = keys.filter((k) => force || !visible.has(k) || t - visible.get(k)!.at >= ttl);
+    if (stale.length) {
+      let r: TargetsResult;
+      try {
+        r = await d.targets([...stale]);
+      } catch {
+        r = { ok: false, message: "Dataverse read failed" };
+      }
+      if (!r.ok) {
+        // Nothing known yet: the failure is the answer. Known before: keep what was known.
+        if (stale.some((k) => !visible.has(k))) return r;
+      } else for (const k of stale) visible.set(k, { at: t, target: r.targets.find((x) => x.clientKey === k) ?? null });
+    }
+    return { ok: true, targets: keys.map((k) => visible.get(k)?.target).filter((x): x is DevOpsTarget => !!x) };
+  }
+
+  const stamp = (at: string | null) => (at ? Temporal.Instant.from(at).toZonedDateTimeISO(d.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" }) : null);
+  const firstRead = (ref: ClientRef) => `FocusTime is reading ${ref.clientName}'s DevOps for the first time. Try again in a minute`;
+
+  type CentralRead = { work: ClientWork; ctx: Ctx | null; meta: Metadata | null; view: CentralView | null };
+
+  /** One client's work from the store, for this person. */
+  async function centralWork(ref: ClientRef, targets: TargetsResult, o: { force: boolean; watch: readonly number[]; features: readonly number[] }): Promise<CentralRead> {
+    const failed = (status: ClientWorkStatus, message: string, cause?: FailureCause): CentralRead => ({ work: { clientKey: ref.clientKey, clientName: ref.clientName, status, message, ...(cause ? { cause } : {}), fetchedAt: null, fromCache: false, items: [], children: [] }, ctx: null, meta: null, view: null });
+    if (!targets.ok) return failed(targets.cause === "keyring" ? "error" : "unreachable", `DevOps settings unavailable (${targets.message})`, targets.cause);
+    const target = targets.targets.find((t) => t.clientKey === ref.clientKey);
+    if (target?.org && ORG.test(target.org)) orgs.set(ref.clientKey, target.org);
+    const pre = precheck(ref, target, { pat: false });
+    if (pre) return failed(pre.status, pre.message, pre.rootCause);
+    const view = await d.central!.view(ref.clientKey, { force: o.force });
+    const fetchedAt = stamp(view.okAt);
+    if (!view.process || !view.loaded) {
+      const f = view.failure ?? { status: "error" as const, message: firstRead(ref) };
+      return { ...failed(f.status, f.message), view };
+    }
+    const { ctx } = contextOf(ref, { ...target!, pat: null });
+    const meta = metaOf(view.process, ref.clientKey);
+    try {
+      const r = await readClient(ctx, meta, (m) => storeReads(ref.clientKey, view.values, m), o.watch, o.features);
+      reportItems(ref.clientKey, [...r.items, ...r.children, ...r.watched, ...r.committed, ...r.parents]);
+      const types = looksOf(r.model);
+      const f = view.failure;
+      const message = f ? `${f.message}. Showing items from ${formatFetchedAt(fetchedAt ?? "", d.timeZone, now())}` : undefined;
+      return { work: { clientKey: ref.clientKey, clientName: ref.clientName, status: f ? f.status : "ok", ...(message ? { message } : {}), fetchedAt, fromCache: !!f, items: r.items, children: r.children, watched: r.watched, committed: r.committed, parents: r.parents, types }, ctx, meta, view };
+    } catch (e) {
+      const f = e instanceof DevOpsFailure ? e : new DevOpsFailure("error", `DevOps load failed for ${ref.clientName}`);
+      if (!(e instanceof DevOpsFailure)) log("load", { kind: "unexpected" });
+      return { ...failed(f.status, f.message, f.rootCause), view };
+    }
+  }
+
+  async function centralLoad(clients: ClientRef[], opts: { refresh?: boolean; watch?: Readonly<Record<string, readonly number[]>>; features?: Readonly<Record<string, readonly number[]>> }): Promise<CentralRead[]> {
+    const force = !!opts.refresh;
+    const targets = await viewerTargets(clients.map((c) => c.clientKey), force);
+    const ids = (r?: Readonly<Record<string, readonly number[]>>, k = "") => (r?.[k] ?? []).slice().sort((a, b) => a - b).join(",");
+    const reads = await Promise.all(clients.map((ref) => centralWork(ref, targets, { force, watch: opts.watch?.[ref.clientKey] ?? [], features: opts.features?.[ref.clientKey] ?? [] })));
+    clients.forEach((ref, i) => memory.set(ref.clientKey, { at: now().epochMilliseconds, result: reads[i]!.work, features: `${ids(opts.features, ref.clientKey)}|${ids(opts.watch, ref.clientKey)}` }));
+    return reads;
+  }
+
+  async function centralPortfolio(clients: ClientRef[], opts: { refresh?: boolean }): Promise<ClientPortfolio[]> {
+    const features = Object.fromEntries(clients.map((c) => [c.clientKey, (memory.get(c.clientKey)?.features ?? "").split("|")[0]!.split(",").filter(Boolean).map(Number)]));
+    const reads = await centralLoad(clients, { ...opts, features });
+    return Promise.all(
+      reads.map(async ({ work: w, ctx, meta, view }): Promise<ClientPortfolio> => {
+        const base = { clientKey: w.clientKey, clientName: w.clientName, status: w.status, ...(w.message ? { message: w.message.replace("Showing items from", "Showing features from") } : {}), ...(w.cause ? { cause: w.cause } : {}), fetchedAt: w.fetchedAt, fromCache: w.fromCache };
+        const none = { items: [], targetFields: {}, startFields: {}, sizeField: null, acceptanceField: false };
+        if (!ctx || !meta || !view) return { ...base, ...none };
+        try {
+          const p = await readPortfolio(ctx, meta, w.items, (m) => storeReads(w.clientKey, view.values, m), async () => view.fields ?? { fields: {}, starts: {}, size: null, ac: false });
+          reportItems(w.clientKey, [...p.items, ...p.items.flatMap((i) => i.children)]);
+          const out: ClientPortfolio = { ...base, ...p };
+          portfolioMemory.set(w.clientKey, { at: now().epochMilliseconds, result: out });
+          return out;
+        } catch (e) {
+          const f = e instanceof DevOpsFailure ? e : new DevOpsFailure("error", `DevOps load failed for ${w.clientName}`);
+          return { ...base, status: f.status, message: f.message, ...none };
+        }
+      }),
+    );
+  }
+
+  /**
+   * DV-1: a read on demand (Break down, a description, the process view) for a client this person can see, with the
+   * poller's PAT (memory only) and this person's identity. Through the same limiter as the poller's reads.
+   */
+  async function centralTarget(clientKey: string): Promise<{ ref: ClientRef; target: DevOpsTarget } | string> {
+    const mine = await viewerTargets([clientKey], false);
+    if (!mine.ok) return `DevOps settings can't be read from Dataverse now (${mine.message})`;
+    const v = mine.targets.find((x) => x.clientKey === clientKey);
+    const ref = { clientKey, clientName: v?.clientName ?? clientKey };
+    const pre = precheck(ref, v, { pat: false });
+    if (pre) return pre.message;
+    const t = await d.central!.target(clientKey).catch(() => null);
+    if (!t?.pat) return `DevOps isn't readable for ${ref.clientName} now`;
+    return { ref, target: { ...t, email: v!.email } };
+  }
+
+  // ---- DV-1: what the central poller uses (an app-level source: targets carry the company read PAT, no identity) ----
+  const internal = {
+    /** Why a client can't be polled, or null. */
+    check: (target: DevOpsTarget | undefined, ref: ClientRef) => precheck(ref, target, { identity: false }),
+    /** The process (a day) and the Plan the week fields (an hour) of the client's project. */
+    async meta(target: DevOpsTarget, o: { refresh?: boolean } = {}): Promise<{ process: ProcessRaw; meta: Metadata; fields: FieldSet }> {
+      const { ctx, project } = contextOf({ clientKey: target.clientKey, clientName: target.clientName }, target);
+      const process = await loadProcess(ctx, project, o.refresh);
+      const meta = metaOf(process, target.clientKey);
+      const fields = await targetFieldsFor(ctx, project, [...meta.tiers.feature, ...meta.tiers.epic], [...meta.levels.story]);
+      return { process, meta: { ...meta, categories: stateCategories(meta.model, d.openStates?.(target.clientKey) ?? []) }, fields };
+    },
+    /** A WIQL query in the client's project with time precision: the ids, and the server's "as of" time. */
+    async ids(target: DevOpsTarget, query: string, top: number): Promise<{ ids: number[]; asOf: string | null }> {
+      const { ctx, project } = contextOf({ clientKey: target.clientKey, clientName: target.clientName }, target);
+      const r = await call<{ workItems?: { id?: unknown }[]; asOf?: unknown }>(ctx, "wiql_changed", `${encodeURIComponent(project)}/_apis/wit/wiql?timePrecision=true&$top=${top}`, { query });
+      return { ids: (r.workItems ?? []).map((w) => w.id).filter((id): id is number => typeof id === "number" && Number.isInteger(id)), asOf: typeof r.asOf === "string" ? r.asOf : null };
+    },
+    /** The batch call in chunks of 200, as raw values. */
+    async batch(target: DevOpsTarget, ids: readonly number[], fields: string[]): Promise<RawValue[]> {
+      const { ctx, project } = contextOf({ clientKey: target.clientKey, clientName: target.clientName }, target);
+      return (await httpReads(ctx, project, null as never).byIds(ids, fields)).filter((v): v is RawValue => typeof (v as RawValue)?.id === "number" && typeof (v as RawValue)?.fields === "object" && (v as RawValue).fields !== null);
+    },
+  };
+
+  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, internal };
 }
 
-export type DevOpsSource = ReturnType<typeof createDevOpsSource>;
+/** What screens use (the same interface whether it reads DevOps or the central store). */
+export type DevOpsSource = Omit<ReturnType<typeof createDevOpsSource>, "internal">;
+/** DV-1: what the central poller uses of an app-level source. */
+export type DevOpsInternal = ReturnType<typeof createDevOpsSource>["internal"];

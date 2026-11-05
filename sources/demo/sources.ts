@@ -19,6 +19,7 @@ export function createDemoSources(now: () => string, processOverrides: (clientKe
     following: async () => ok("dataverse", demoPatterns()),
     resolveUserId: async () => ({ ok: true, id: DEMO_ME }),
     devopsTargets: async () => ({ ok: true, targets: [] }),
+    accountTargets: async () => ({ ok: true, targets: [] }),
     myClients: async () => DEMO_CLIENTS.map((c) => ({ clientKey: c.key, clientName: c.key === "Cooptimize" ? c.name : c.key, devops: true, devopsEmail: "you@example.com" })),
     pto: async (from: string, to: string) => ok("pto", demoPto(from, to)),
     teammates: async () => ({ ok: true, people: DEMO_PEOPLE }),

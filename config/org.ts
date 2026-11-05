@@ -204,6 +204,8 @@ export const ORG_SPECS = {
   "org.never_suggest": { kind: "rule", area: "organization", label: "Never suggested as helpers or Who", builtin: ["Kat 🤖"], parse: list(100, 100) },
   "org.feedback": { kind: "rule", area: "organization", label: "Send feedback goes to", builtin: null as FeedbackRule | null, parse: orNull(feedback) },
   "org.retention_years": { kind: "rule", area: "organization", label: "Keep people's data (years)", builtin: 2, parse: intIn(1, 10, "years") },
+  // DV-1: how often the central poller checks each client's DevOps in working hours (10 minutes outside them).
+  "devops.poll_minutes": { kind: "rule", area: "organization", label: "DevOps check interval (minutes)", builtin: 1, parse: intIn(1, 30, "minutes") },
   "org.new_person": { kind: "default", area: "organization", label: "Working week for new people", builtin: BUILTIN_NEW_PERSON, parse: newPerson },
 } satisfies Record<string, Spec>;
 export type OrgKey = keyof typeof ORG_SPECS;
@@ -266,6 +268,8 @@ export type OrgRules = {
   ai: { on: boolean; model: string; personCapUsd: number; appCapUsd: number; allowedClients: string[] };
   conversations: { pollMinutes: number; retentionDays: number; chatAiDailyCap: number; requestPhrases: string[]; ackPhrases: string[]; promisePhrases: string[] };
   organization: { inviteDomains: string[]; neverSuggest: string[]; feedback: FeedbackRule | null; retentionYears: number; newPerson: NewPersonDefaults };
+  /** DV-1: the central DevOps poller's Rule. */
+  devops: { pollMinutes: number };
   clients: Record<string, ClientRules>;
   levels: Record<Level, Guidance>;
 };
@@ -327,6 +331,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
       retentionYears: o("org.retention_years"),
       newPerson: o("org.new_person"),
     },
+    devops: { pollMinutes: o("devops.poll_minutes") },
     clients,
     levels,
   };
