@@ -21,3 +21,15 @@ describe("chat Rules", () => {
     expect(resolveRules([row("conv.poll_minutes", 12)], BOOT).problems).toEqual([]);
   });
 });
+
+describe("the in-use Rule (HK-3)", () => {
+  it("is 5 to 60 minutes, 10 by default; a stored value outside reads as 10", () => {
+    expect(resolveRules([], BOOT).organization.idleMinutes).toBe(10);
+    expect(ORG_SPECS["org.idle_minutes"].parse(5)).toBe(5);
+    expect(ORG_SPECS["org.idle_minutes"].parse(60)).toBe(60);
+    expect(() => ORG_SPECS["org.idle_minutes"].parse(4)).toThrow();
+    expect(() => ORG_SPECS["org.idle_minutes"].parse(61)).toThrow();
+    expect(resolveRules([row("org.idle_minutes", 30)], BOOT).organization.idleMinutes).toBe(30);
+    expect(resolveRules([row("org.idle_minutes", 2)], BOOT).organization.idleMinutes).toBe(10);
+  });
+});

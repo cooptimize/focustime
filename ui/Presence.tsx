@@ -25,7 +25,8 @@ export function usePresence(people: { emails?: readonly string[]; names?: readon
     const read = async () => {
       if (document.visibilityState !== "visible") return;
       try {
-        const r = await call<PresencePeopleData>("presence.people", { ...(emails.length ? { emails: emails.slice(0, 100) } : {}), ...(names.length ? { names: names.slice(0, Math.max(0, 100 - emails.length)) } : {}), ...(me ? { me } : {}) });
+        // HK-3: a background read (on a timer and on showing the page), never someone using FocusTime.
+        const r = await call<PresencePeopleData>("presence.people", { ...(emails.length ? { emails: emails.slice(0, 100) } : {}), ...(names.length ? { names: names.slice(0, Math.max(0, 100 - emails.length)) } : {}), ...(me ? { me } : {}) }, { background: true });
         if (!live) return;
         setMap(r.available ? { byEmail: new Map(r.people.map((p) => [p.email, p.word])), byName: new Map(r.people.map((p) => [p.name.toLowerCase(), p.word])), me: r.me ?? null } : EMPTY);
       } catch {
@@ -62,7 +63,7 @@ export function TeamsFocusLine({ sessionKey }: { sessionKey: string }) {
   const [v, setV] = useState<TeamsStatusView | null>(null);
   useEffect(() => {
     let live = true;
-    const read = () => void call<TeamsStatusView>("presence.status", {}).then((r) => live && setV(r), () => live && setV(null));
+    const read = () => void call<TeamsStatusView>("presence.status", {}, { background: true }).then((r) => live && setV(r), () => live && setV(null));
     read();
     // The server sets the status just after a timer change: read again shortly after.
     const soon = window.setTimeout(read, 2500);

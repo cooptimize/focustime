@@ -87,3 +87,17 @@ await onSqlServer("SQL Server migrations (A3)", () => {
     }
   });
 });
+
+await onSqlServer("a database a branch build migrated (HK-3)", () => {
+  it("says to reset it instead of SQL Server's own error", async () => {
+    const db = await emptySqlServer();
+    try {
+      const mine = { name: "20261105T1300_demo_takes", sqlite: "", sqlserver: "CREATE TABLE demo_takes (id int NOT NULL PRIMARY KEY);" };
+      // The branch's copy, under an earlier timestamp, made the table.
+      await migrateSqlServer(db.conn, { named: [{ ...mine, name: "20261104T2200_demo_takes" }] });
+      await expect(migrateSqlServer(db.conn, { named: [mine] })).rejects.toThrow("This database was migrated by a branch build: run npm run db:reset (20261104T2200_demo_takes is 20261105T1300_demo_takes here)");
+    } finally {
+      await db.drop();
+    }
+  });
+});

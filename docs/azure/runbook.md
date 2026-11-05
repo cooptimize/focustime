@@ -248,6 +248,24 @@ To move feedback to another feature, change `feedbackParentId` in main.bicep and
    delete it there.
 3. Switch back: run deploy-dev again without the box ticked (any push to main does the same).
 
+## Reset the local dev database (HK-3)
+
+`focustime_dev` (on the local container, localhost:14330) fails to migrate when a branch build migrated it and the
+merge then renamed a migration's timestamp (on Nov 5, `devops_takes` and five others). The server and
+`npm run db:migrate` now say so instead of SQL Server's own error:
+
+> This database was migrated by a branch build: run npm run db:reset (20261105T0430_devops_takes is 20261105T1300_devops_takes here)
+
+`npm run db:reset` drops, recreates and migrates `focustime_dev`. It resets nothing else: any other name is refused
+(the service's `focustime`, and the tests' `focustime_test_*`), and it refuses unless `podman port focustime-sqlserver`
+shows 1433 published on 14330 (so another SQL Server on that port is never touched). What was in `focustime_dev` is
+gone; it holds only what `npm run dev` made.
+
+The tests make and drop their own `focustime_test_<pid>_<n>_<id>` databases. A test run that was killed leaves its
+database behind (9 on Nov 5, from Nov 3 and 4). `db:reset` doesn't touch them; they take only disk. To drop them,
+with no tests running, use a SQL client on the container as sa and `DROP DATABASE [focustime_test_…]` for each one
+listed by `SELECT name FROM sys.databases WHERE name LIKE 'focustime_test_%'`.
+
 ## Prod (A5)
 
 ### Deploy by SHA
@@ -386,7 +404,27 @@ no cost rows.
   each month expect Container Apps lines for prod: about $10 a month if it is idle all month, about $20 if it is
   active through working hours.
 - **The idle rule (D431) and DV-1's outside-hours behavior stay.** They no longer save database money (the database
-  never pauses), but they still save container time, Graph calls and DevOps calls.
+  never pauses), but they still save container time, Graph calls and DevOps calls. Since HK-3 they hear only real use:
+  see "Who counts as using FocusTime" below.
+
+### Who counts as using FocusTime (HK-3)
+
+Before HK-3 any signed-in call kept the server "in use", so one tab left open overnight (its notices, presence, Inbox
+count and quiet week refresh, about 150 calls an hour) kept the scheduler, DevOps' outside-hours checks and the chat
+poller awake all night (Q-HK2-1). Now:
+
+- A page counts as in use only while it is visible and someone gave it input (a key, a click, a touch, the wheel, a
+  mouse move) in the last N minutes. Its calls then carry `X-FocusTime-Use: active`, and input reports itself at most
+  once a minute (`POST /api/activity`), so reading without clicking still counts.
+- Timer calls (notices, presence, Teams status on the focus screen, the Inbox count, the week's quiet 5-minute
+  refresh) always say `background` and never count. A hidden tab never counts. A demo session never counts.
+- N is the team's Rule **Counts as in use (minutes)** in Admin › Organization (`org.idle_minutes`): 10 by default,
+  5 to 60. The server reads it from memory (`server/use.ts`), never the database.
+- Running a focus timer or a notification still works with nobody active: the scheduler wakes at the stored next-due
+  time (D431), as before.
+
+To check it on dev or prod: leave a tab open and untouched for more than N minutes, then look in the logs for the
+scheduler going idle (`op: "scheduler"`, `kind: "idle"`, with the minutes until its next due time as the count).
 - OpenAI usage is billed by OpenAI, not Azure (Settings › AI).
 
 **What S0 and S1 give:** S0 is 10 DTU (about 0.1 vCore), S1 20 DTU (about 0.2 vCore); 60 or 90 workers and logins,

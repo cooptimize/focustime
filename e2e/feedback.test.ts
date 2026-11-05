@@ -49,8 +49,8 @@ describe.skipIf(!CHROMIUM)("Send feedback (F1)", () => {
     await done.waitFor();
     await expect(done.textContent()).resolves.toBe("Sent. Thanks. #9001");
     await shotBoth(page, "feedback-sent");
-    // The footer Close after sending (UI-3: the header × is the other "Close").
-    await dialog.getByRole("button", { name: "Close", exact: true }).last().click();
+    // HK-3: the footer says Done after sending (the header × stays "Close").
+    await dialog.getByRole("button", { name: "Done", exact: true }).click();
     await expect(dialog.count()).resolves.toBe(0);
 
     // The command menu has it too; without "where I am" the description stops at the environment.

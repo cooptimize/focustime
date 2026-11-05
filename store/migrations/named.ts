@@ -62,4 +62,26 @@ export function newerThanBuild(list: readonly Pick<NamedMigration, "name">[], ap
   return [...applied].filter((n) => !known.has(n) && n > newest).sort();
 }
 
+/**
+ * HK-3: recorded migrations that are one of this build's under another timestamp (a branch build migrated the database,
+ * then the merge renamed the file). Applying the build's copy would fail on what the branch's already made.
+ */
+export function renamedByBranch(list: readonly Pick<NamedMigration, "name">[], applied: ReadonlySet<string>): { recorded: string; build: string }[] {
+  const what = (n: string) => (prefixOf(n) ? n.slice(14) : null);
+  const recorded = new Map<string, string>();
+  for (const n of applied) {
+    const w = what(n);
+    if (w) recorded.set(w, n);
+  }
+  const out: { recorded: string; build: string }[] = [];
+  for (const m of inOrder(list)) {
+    const r = recorded.get(what(m.name) ?? "");
+    if (r && r !== m.name && !applied.has(m.name)) out.push({ recorded: r, build: m.name });
+  }
+  return out;
+}
+
+/** HK-3: the words for a database a branch build migrated (in place of SQL Server's own error). */
+export const BRANCH_BUILT = "This database was migrated by a branch build: run npm run db:reset";
+
 export const NAMES_TABLE = "schema_migration_names";

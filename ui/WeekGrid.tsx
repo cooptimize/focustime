@@ -755,7 +755,7 @@ function Ruler({ slot, half, tz, label, now }: { slot: Slot; half: string; tz: s
       <RulerPromises rail={{ key: `${slot.date}|${half}`, ...bounds }} tz={tz} />
       </div>
       {now && <NowPast at={now.past} />}
-      {now?.at != null && <NowLine at={now.at} label={now.label} onClick={now.onClick} />}
+      {now?.at != null && <NowLine at={now.at} label={now.label} onClick={now.onClick} avoid=".r-hour span" />}
     </div>
   );
 }

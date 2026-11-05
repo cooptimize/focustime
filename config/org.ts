@@ -230,6 +230,8 @@ export const ORG_SPECS = {
   "org.never_suggest": { kind: "rule", area: "organization", label: "Never suggested as helpers or Who", builtin: ["Kat 🤖"], parse: list(100, 100) },
   "org.feedback": { kind: "rule", area: "organization", label: "Send feedback goes to", builtin: null as FeedbackRule | null, parse: orNull(feedback) },
   "org.retention_years": { kind: "rule", area: "organization", label: "Keep people's data (years)", builtin: 2, parse: intIn(1, 10, "years") },
+  // HK-3: how long after the last input an open, visible page counts as someone using FocusTime (the idle rule's signal).
+  "org.idle_minutes": { kind: "rule", area: "organization", label: "Counts as in use after the last input (minutes)", builtin: 10, parse: intIn(5, 60, "minutes") },
   "org.position_levels": { kind: "rule", area: "people", label: "Positions to levels", builtin: BUILTIN_POSITION_LEVELS, parse: positionLevels },
   // DV-1: how often the central poller checks each client's DevOps in working hours (10 minutes outside them).
   "devops.poll_minutes": { kind: "rule", area: "organization", label: "DevOps check interval (minutes)", builtin: 1, parse: intIn(1, 30, "minutes") },
@@ -317,7 +319,7 @@ export type OrgBootstrap = { model: string; appCapUsd: number; inviteDomains: re
 export type OrgRules = {
   ai: { on: boolean; model: string; personCapUsd: number; appCapUsd: number; allowedClients: string[] };
   conversations: { pollMinutes: number; retentionDays: number; closedShownDays: number; chatAiDailyCap: number; requestPhrases: string[]; ackPhrases: string[]; promisePhrases: string[] };
-  organization: { inviteDomains: string[]; neverSuggest: string[]; feedback: FeedbackRule | null; retentionYears: number; newPerson: NewPersonDefaults; positionLevels: PositionLevels };
+  organization: { inviteDomains: string[]; neverSuggest: string[]; feedback: FeedbackRule | null; retentionYears: number; newPerson: NewPersonDefaults; positionLevels: PositionLevels; /** HK-3. */ idleMinutes: number };
   /** DV-1: the central DevOps poller's Rule. */
   devops: { pollMinutes: number };
   clients: Record<string, ClientRules>;
@@ -397,6 +399,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
       retentionYears: o("org.retention_years"),
       newPerson: o("org.new_person"),
       positionLevels: o("org.position_levels"),
+      idleMinutes: o("org.idle_minutes"),
     },
     devops: { pollMinutes: o("devops.poll_minutes") },
     clients,

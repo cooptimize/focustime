@@ -4,7 +4,8 @@
 //   node scripts/db.ts up                         start the container; the first time, make the sa password (keyring
 //                                                 entry sql-password), then create and migrate focustime_dev
 //   node scripts/db.ts migrate [--database <db>]  create the database if missing and bring it to this build's schema
-//   node scripts/db.ts reset [--database <db>]    drop and recreate a database (never focustime: the service's)
+//   node scripts/db.ts reset                      drop, recreate and migrate focustime_dev (HK-3: only that one, and only
+//                                                 when port 14330 is the local container's; scripts/db-guard.ts)
 //   node scripts/db.ts down                       stop the container (the volume keeps the data)
 //   node scripts/db.ts start-if-configured        the service's first step: start the container when the app config
 //                                                 names the local one (localhost:14330); otherwise nothing
@@ -18,6 +19,7 @@ import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { localPaths } from "../host/local/paths.ts";
+import { CONTAINER, portIsContainer, resetRefusal } from "./db-guard.ts";
 import { readAppSettings } from "../server/appconfig.ts";
 import { runSecretTool } from "../host/local/keyring.ts";
 import { migrateSqlServer } from "../store/sql/migrate.ts";
@@ -54,6 +56,16 @@ const podman = (args: string[], env: NodeJS.ProcessEnv = {}) =>
     const p = spawn("podman", args, { stdio: "inherit", env: { ...process.env, PODMAN_COMPOSE_PROVIDER: "podman-compose", PODMAN_COMPOSE_WARNING_LOGS: "false", ...env } });
     p.on("error", () => reject(new Error("podman isn't installed (sudo pacman -S podman podman-compose)")));
     p.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`podman ${args[0]} ${args[1] ?? ""} failed (${code})`))));
+  });
+
+/** What `podman port <container>` prints ("" when Podman or the container isn't there). */
+const podmanPort = () =>
+  new Promise<string>((resolve) => {
+    let out = "";
+    const p = spawn("podman", ["port", CONTAINER], { stdio: ["ignore", "pipe", "ignore"] });
+    p.stdout.on("data", (c) => (out += c));
+    p.on("error", () => resolve(""));
+    p.on("exit", (code) => resolve(code === 0 ? out : ""));
   });
 
 const run = (cmd: string, args: string[]) =>
@@ -113,9 +125,14 @@ try {
     case "migrate":
       await ensureDatabase(a.database ?? "focustime_dev", await password(false));
       break;
-    case "reset":
-      await ensureDatabase(a.database ?? "focustime_dev", await password(false), true);
+    case "reset": {
+      const name = a.database ?? "focustime_dev";
+      const refused = resetRefusal(name);
+      if (refused) fail(refused);
+      if (!portIsContainer(await podmanPort())) fail(`Refusing to reset: localhost:14330 isn't the ${CONTAINER} container (start it with npm run db:up)`);
+      await ensureDatabase(name, await password(false), true);
       break;
+    }
     case "start-if-configured": {
       // No password needed: the container keeps its own settings. SQL Server takes a few seconds to answer after this;
       // the store's retry rule waits for it (store/sql/sqlserver.ts).
@@ -132,7 +149,7 @@ try {
       await podman(["compose", "-f", COMPOSE, "down"], { MSSQL_SA_PASSWORD: "unused" });
       break;
     default:
-      fail("Usage: node scripts/db.ts up | migrate [--database <db>] | reset [--database <db>] | down | start-if-configured");
+      fail("Usage: node scripts/db.ts up | migrate [--database <db>] | reset | down | start-if-configured");
   }
 } catch (e) {
   fail(e instanceof Error ? e.message : String(e));

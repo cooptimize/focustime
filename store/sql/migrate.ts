@@ -6,7 +6,7 @@
 
 import type { Logger } from "../../log/logger.ts";
 import { NAMED_MIGRATIONS } from "../migrations/index.ts";
-import { NAMES_TABLE, newerThanBuild, pending, type NamedMigration } from "../migrations/named.ts";
+import { BRANCH_BUILT, NAMES_TABLE, newerThanBuild, pending, renamedByBranch, type NamedMigration } from "../migrations/named.ts";
 import { BASELINE, BASELINE_VERSION } from "./baseline.ts";
 import type { SqlServerConn } from "./sqlserver.ts";
 
@@ -114,16 +114,24 @@ export async function migrateSqlServer(conn: SqlServerConn, o: { log?: Logger; m
     const newer = newerThanBuild(o.named ?? NAMED_MIGRATIONS, recorded);
     // D468: a newer database is fine (migrations only add): an older revision after a rollback runs on it.
     if (newer.length) o.log?.({ source: "database", op: "newer_schema", count: newer.length });
+    // HK-3: a branch build's copy of a migration recorded under another timestamp: the build's own would fail on it.
+    const renamed = renamedByBranch(o.named ?? NAMED_MIGRATIONS, recorded);
     for (const m of pending(o.named ?? NAMED_MIGRATIONS, recorded)) {
-      await conn.tx(async () => {
-        const done = await conn.get(`SELECT name FROM ${NAMES_TABLE} WITH (UPDLOCK, HOLDLOCK) WHERE name = ?`, [m.name]);
-        if (done) return;
-        const n = m.count ? Number((await conn.get(m.count.sql))?.n ?? 0) : null;
-        await conn.batch(m.sqlserver);
-        if (m.count && n !== null) o.log?.({ source: "database", op: m.count.op, count: n });
-        await conn.run(`INSERT INTO ${NAMES_TABLE} (name, applied_at) VALUES (?, SYSUTCDATETIME())`, [m.name]);
-        applied.push(m.name);
-      });
+      await conn
+        .tx(async () => {
+          const done = await conn.get(`SELECT name FROM ${NAMES_TABLE} WITH (UPDLOCK, HOLDLOCK) WHERE name = ?`, [m.name]);
+          if (done) return;
+          const n = m.count ? Number((await conn.get(m.count.sql))?.n ?? 0) : null;
+          await conn.batch(m.sqlserver);
+          if (m.count && n !== null) o.log?.({ source: "database", op: m.count.op, count: n });
+          await conn.run(`INSERT INTO ${NAMES_TABLE} (name, applied_at) VALUES (?, SYSUTCDATETIME())`, [m.name]);
+          applied.push(m.name);
+        })
+        .catch((e: unknown) => {
+          if (!renamed.length) throw e;
+          o.log?.({ source: "database", op: "branch_built", count: renamed.length });
+          throw new Error(`${BRANCH_BUILT} (${renamed.map((r) => `${r.recorded} is ${r.build} here`).join(", ")})`);
+        });
       o.log?.({ source: "database", op: "migrate_named", count: applied.length });
     }
   }

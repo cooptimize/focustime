@@ -470,12 +470,12 @@ export function App() {
 
   /** Loads a week. Data on screen stays put until the new data arrives; a failure keeps it (afterLoad). */
   const load = useCallback(
-    async (input: { weekStart?: string; refresh?: boolean; quiet?: boolean }, opts: { selectToday?: boolean; quiet?: boolean } = {}) => {
+    async (input: { weekStart?: string; refresh?: boolean; quiet?: boolean }, opts: { selectToday?: boolean; quiet?: boolean; background?: boolean } = {}) => {
       const id = ++seq.current;
       if (input.weekStart) weekRef.current = input.weekStart;
       if (!opts.quiet) setLoading(true);
       try {
-        const d = await weekLoad({ ...input, ...(now ? { now } : {}), ...(rangeRef.current ? { viewRange: rangeRef.current } : {}) });
+        const d = await weekLoad({ ...input, ...(now ? { now } : {}), ...(rangeRef.current ? { viewRange: rangeRef.current } : {}) }, { background: !!opts.background });
         if (id !== seq.current) return undefined;
         weekRef.current = d.weekStart;
         setState((prev) => afterLoad(prev, { kind: "ok", data: d }));
@@ -550,7 +550,7 @@ export function App() {
       createAutoRefresh({
         isHidden: () => document.hidden,
         // DV-1: focus and the timer read DevOps from the store (quiet); R and Refresh make it check now.
-        refresh: async (t: RefreshTrigger) => void (await load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}), refresh: true, ...(t === "focus" || t === "interval" ? { quiet: true } : {}) }, { quiet: t === "focus" || t === "interval" })),
+        refresh: async (t: RefreshTrigger) => void (await load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}), refresh: true, ...(t === "focus" || t === "interval" ? { quiet: true } : {}) }, { quiet: t === "focus" || t === "interval", background: t === "interval" })),
       }),
     [load],
   );
@@ -717,6 +717,12 @@ export function App() {
     },
     [pd, reloadQuiet],
   );
+
+  // HK-3: after Keep, Move to… or Drop on a suggested card in Plan today, its state and the week both read again.
+  const refreshPlanDay = useCallback(() => {
+    reloadQuiet();
+    if (pd) void planAction("planday.start", { date: pd.date }).then((st) => setPd((cur) => (cur?.date === st.date ? st : cur)), () => undefined);
+  }, [pd, reloadQuiet]);
 
   const closePlanDay = useCallback(() => {
     setPd(null);
@@ -1658,7 +1664,9 @@ export function App() {
             const dayIndex = week.days.findIndex((d) => d.date === pd.date);
             const fri = week.days[4]!.date;
             return (
-                    // NV-1 (narrowing D476): Plan today works on the phone too, so no read-only gate here.
+                    // NV-1 (narrowing D476): Plan today works on the phone too, so no read-only gate here. HK-3: inside the
+                    // Board's CarryProvider, so a pick suggested in one of this day's blocks is the same dashed card here.
+                    <CarryProvider active={data.weekStart === data.today.weekStart} version={pd} week={week} now={now ?? new Date(clock).toISOString()} onChanged={refreshPlanDay}>
                     <PlanDay
                       switcher={switches.week}
                       key={pd.date}
@@ -1692,6 +1700,7 @@ export function App() {
                         openPlanWeek(week.days[0]!.date);
                       }}
                     />
+                    </CarryProvider>
           );
           })()
         ) : (

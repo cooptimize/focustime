@@ -93,7 +93,8 @@ import { clientAccountsStatusSource } from "../actions/client-accounts-status.ts
 import { createStatusRegistry } from "../actions/status-rows.ts";
 import { createDevOpsStore } from "../store/devops-store.ts";
 import { DEFAULT_MINUTES } from "../plan/devops-pace.ts";
-import type { OrgRules } from "../config/org.ts";
+import { ORG_SPECS, type OrgRules } from "../config/org.ts";
+import { createUseSignal } from "./use.ts";
 import type { TimeModel } from "../week/hours.ts";
 import { createAdminStore, FOCUSTIME } from "../store/admin-store.ts";
 import { inGroup } from "../sources/graph/groups.ts";
@@ -450,9 +451,11 @@ const aiRuntime: AiRuntime = {
   appSpend: appSpendStore(db, instantNow),
   logger: log,
 };
-/** A3: when a signed-in person last used FocusTime (in memory; the idle rule's "someone is active"). */
-let lastUse = 0;
-const ACTIVE_MS = 15 * 60_000;
+/**
+ * A3: when a signed-in person last used FocusTime (in memory; the idle rule's "someone is active"). HK-3: real use only
+ * (the page marks timer calls as background), for the team's Rule's minutes (org.idle_minutes, read from memory).
+ */
+const use = createUseSignal({ now: () => Date.now(), idleMinutes: () => orgRulesNow?.organization.idleMinutes ?? ORG_SPECS["org.idle_minutes"].builtin });
 const accounts = createAccountStore(db, instantNow);
 /** A2: each person's plan store on the one database (every statement scoped to them, store/scope.ts). */
 const plans = new Map<string, PlanStore>();
@@ -670,10 +673,14 @@ const server = createApp({
   reopen: reopenWindow,
   dbStatus: () => opened.status?.() ?? "ok",
   ...(telemetry ? { onRequest: telemetry.request, onError: telemetry.exception } : {}),
-  ctx: (s) => {
-    if (s.demo) return demoFor(s.userId);
-    lastUse = Date.now();
-    return runtimeFor(s.userId);
+  ctx: (s) => (s.demo ? demoFor(s.userId) : runtimeFor(s.userId)),
+  // HK-3: only real use keeps the server awake; the Rule's minutes go back to the page. A demo session never counts.
+  onUse: (s) => {
+    if (s.demo) return null;
+    const wasIdle = !use.active();
+    use.used();
+    if (wasIdle) void refreshRules();
+    return use.minutes();
   },
 });
 /**
@@ -944,7 +951,7 @@ devopsPoller = devopsApp && directorySource
       targets: (keys) => directorySource.accountTargets(keys),
       hours: followerHours,
       ruleMinutes: async () => (await refreshRules())?.devops.pollMinutes ?? DEFAULT_MINUTES,
-      active: () => Date.now() - lastUse < ACTIVE_MS,
+      active: use.active,
       now: instantNow,
       log,
       job: jobs,
@@ -1002,7 +1009,7 @@ void whoRepair({
 
 // Everyone who has signed in before gets their background work back (a timer that was running ends on time), all of it
 // run by one scheduler (server/scheduler.ts) that reads what is due from each person's rows. A3, the idle rule: the
-// passes run while someone has used FocusTime in the last 15 minutes; otherwise the scheduler sleeps until the stored
+// passes run while someone has really used FocusTime in the last 10 minutes (HK-3: the Rule org.idle_minutes); otherwise the scheduler sleeps until the stored
 // next-due time and makes no database call before it. Everyone's runtimes are built on the first pass (not at start,
 // so an idle start reads nothing), and the app's own upkeep (hard deletes, ended sessions) rides on the slow pass.
 let everyone = false;
@@ -1067,7 +1074,7 @@ const scheduler = createScheduler({
     return [...runtimes.values()].map((r) => r.ticks);
   },
   log,
-  active: () => Date.now() - lastUse < ACTIVE_MS,
+  active: use.active,
   wakeStore: wakeStoreOn(db, instantNow),
   maintenance: {
     everyMs: 3600_000,
