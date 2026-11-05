@@ -48,6 +48,8 @@ import { rememberIdentity, type MicrosoftAccount } from "../actions/account.ts";
 import { createPresenceClient, type PresenceClient } from "../sources/graph/presence.ts";
 import { createPhotoClient, type PhotoClient } from "../sources/graph/photos.ts";
 import { createAzureClient } from "../sources/azure/client.ts";
+import { jobRunner, plainJob, type JobRunner } from "../log/operation.ts";
+import { cycleCounts, telemetryStatusSource } from "./telemetry-status.ts";
 import { stderrLogger } from "../log/logger.ts";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
 import type { CalendarSource } from "../sources/calendar/source.ts";
@@ -108,8 +110,12 @@ const zonedNow = (tz: string) => instantNow().toZonedDateTimeISO(tz);
 const root = resolve(import.meta.dirname, "..");
 /** A4: the hosted app's telemetry (Application Insights, from its connection string), on top of stderr. */
 const telemetry =
-  process.env.FOCUSTIME_HOST === "azure" && process.env.APPLICATIONINSIGHTS_CONNECTION_STRING ? appInsights({ connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING, next: stderrLogger }) : null;
+  process.env.FOCUSTIME_HOST === "azure" && process.env.APPLICATIONINSIGHTS_CONNECTION_STRING ? appInsights({ connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING, next: stderrLogger, root }) : null;
 const log = telemetry?.log ?? stderrLogger;
+/** HK-1: background work as job operations (each run its own, with outcome and counts); a plain call without telemetry. */
+const jobs: JobRunner = telemetry ? jobRunner({ done: telemetry.job, onError: (e) => telemetry.exception(e, "job") }) : plainJob;
+// HK-1: an error that would end the process is reported first (best effort; this listener changes nothing about it).
+if (telemetry) process.on("uncaughtExceptionMonitor", (e) => telemetry.exception(e, "uncaught"));
 
 const hostKind = process.env.FOCUSTIME_HOST ?? "local";
 /** A4 (hosted): the data key, wrapped by Key Vault (set once the store is open). */
@@ -342,7 +348,8 @@ await backfillRequests(teams, conversations, app.entra?.tenantId ?? null).then(
   (n) => n && log({ source: "plan", op: "requests_moved", count: n }),
   () => log({ source: "plan", op: "requests_moved", kind: "failed" }),
 );
-pollDeps.upkeep = async (now) => {
+pollDeps.upkeep = (now) => jobs("conversations_upkeep", {}, () => upkeep(now));
+async function upkeep(now: string): Promise<void> {
   // The person whose sign-in reads for a client (its first chat's registrant): DevOps reads and AI, once per run.
   const memo = new Map<string, Promise<PollPerson | null>>();
   const readerFor = (clientKey: string) =>
@@ -370,8 +377,8 @@ pollDeps.upkeep = async (now) => {
     clientName: async (k) => (await readerFor(k))?.config?.clientSettings[k]?.name ?? k,
     log,
   });
-};
-const requestsPort: RequestsPort = { teams, refresh: (chatIds) => pollCycle(pollDeps, { force: true, chatIds }), conversations, users: pollDeps.users };
+}
+const requestsPort: RequestsPort = { teams, refresh: (chatIds) => jobs("requests_refresh", {}, async (job) => cycleCounts(job, await pollCycle(pollDeps, { force: true, chatIds }))), conversations, users: pollDeps.users };
 // D475: next-morning auto-shutdown restores from before (they'd write the schedule) never run; mark them cancelled.
 await cancelShutdownRestores(db, instantNow).then(
   (c) => c.length && log({ source: "azure", op: "restore_cancelled", count: c.length }),
@@ -607,7 +614,7 @@ const server = createApp({
   takeOpenRequest: async (s) => (s.demo ? null : ((await host.launch.takeOpenRequest()) ?? (await takeRouteFor(s.userId)))),
   reopen: reopenWindow,
   dbStatus: () => opened.status?.() ?? "ok",
-  ...(telemetry ? { onRequest: telemetry.request } : {}),
+  ...(telemetry ? { onRequest: telemetry.request, onError: telemetry.exception } : {}),
   ctx: (s) => {
     if (s.demo) return demoFor(s.userId);
     lastUse = Date.now();
@@ -871,9 +878,12 @@ devopsPoller = devopsApp && directorySource
       active: () => Date.now() - lastUse < ACTIVE_MS,
       now: instantNow,
       log,
+      job: jobs,
     })
   : null;
 if (devopsPoller) statusRows.register(devopsStatusSource(devopsPoller));
+// HK-1: telemetry's own health in Admin › Status: one row, a warning once anything was dropped or refused.
+if (telemetry) statusRows.register(telemetryStatusSource(telemetry));
 
 // ADM-1: the one-time move of team settings out of people's own settings, at the first start of this build.
 void orgBootstrap({
@@ -921,7 +931,11 @@ const peopleJob = {
   name: "people_refresh",
   run: async () => {
     if (Temporal.Instant.compare(await peopleDue(), instantNow()) > 0) return;
-    const r = await refreshPeople();
+    const r = await jobs("people_refresh", {}, async (job) => {
+      const r = await refreshPeople();
+      job.set({ outcome: r.ok ? "ok" : "failed", counts: { people: r.people ?? 0 } });
+      return r;
+    });
     peopleRetryAt = r.ok ? null : instantNow().add({ hours: 1 });
     log({ source: "dataverse", op: "people_refresh", kind: r.ok ? "done" : "failed", count: r.people });
   },
@@ -934,7 +948,7 @@ const scheduler = createScheduler({
     ...(pollInBackground
       ? [{
           name: "requests_poll",
-          run: async () => void (await pollCycle(pollDeps)),
+          run: () => jobs("requests_poll", {}, async (job) => void cycleCounts(job, await pollCycle(pollDeps))),
           wake: async () => {
             const due = await requestsNextDue(pollDeps);
             return due ? Temporal.Instant.from(due) : null;

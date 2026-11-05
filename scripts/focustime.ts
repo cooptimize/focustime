@@ -28,12 +28,14 @@ import { exportLocal } from "../store/export-local.ts";
 import { countRows, importUser } from "../store/import.ts";
 import { openStore } from "../store/open.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
+import { clientRef } from "../log/operation.ts";
 
 const USAGE = `Usage:
   focustime export-local [--out <file>] [--user <id>]
   focustime import --file <export.json> --user <oid> [--dry-run]
   focustime counts --user <oid> [--sqlite]
-  focustime migrate`;
+  focustime migrate
+  focustime client-ref <client key>   the client's id in telemetry (HK-1), to search Application Insights by`;
 
 const fail = (msg: string): never => {
   process.stderr.write(`${msg}\n`);
@@ -41,6 +43,12 @@ const fail = (msg: string): never => {
 };
 
 const [cmd, ...rest] = process.argv.slice(2);
+// HK-1: telemetry carries a client only as its one-way ref; this prints it for a key (nothing is read or written).
+if (cmd === "client-ref") {
+  if (!rest[0]) fail(USAGE);
+  process.stdout.write(`${clientRef(rest.join(" "))}\n`);
+  process.exit(0);
+}
 const { values: a } = parseArgs({
   args: rest,
   options: { out: { type: "string" }, user: { type: "string" }, file: { type: "string" }, "dry-run": { type: "boolean" }, sqlite: { type: "boolean" } },
