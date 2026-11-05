@@ -4,6 +4,7 @@
 // picks, follow-ups, captures, focus sessions, write PATs, AI request content or chat messages: a person's health is
 // names, dates and yes or no (AdminOps.people), and the store has no read for anything else. Every change is audited
 // (store/admin-store.ts) with who, when, what, old and new value; secrets are never settings.
+import { GAP_KINDS } from "../plan/fixnext.ts";
 import type { StatusGroup, StatusRegistry } from "./status-rows.ts";
 import { clientScope, CLIENT_SPECS, KIND_NAMES, LEVEL_NAMES, LEVEL_SPECS, LEVELS, ORG_SPECS, OrgInputError, specFor, SUGGESTED_SLOTS, type AdminArea, type Guidance, type Level, type OrgRules } from "../config/org.ts";
 import { CLIENT_SLOTS } from "../config/schema.ts";
@@ -202,6 +203,7 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
         noBreakdown: c?.noBreakdown ?? [],
         background: c?.background ?? [],
         houseStyle: c?.houseStyle ?? null,
+        fixGaps: c?.fixGaps ?? [...GAP_KINDS],
         process: isClient ? processOf(k) : { ok: false, message: "Not a client" },
         scope: isClient ? { rule: c?.devopsScope ?? null, words: scopeWords(c?.devopsScope ?? null), facts: facts?.[k] ?? null, polled: !!ops.scope } : null,
         leads: isClient ? lv.clientLeads(k).map((l) => ({ personId: l.personId, name: nameOf(l.personId), primary: l.primary, why: l.why.map((w) => LEAD_WHY_NAMES[w]) })) : [],
@@ -343,6 +345,7 @@ async function section(ops: AdminOps, s: AdminSection, meId: string, input: Reco
       const stored = (k: string) => rows.some((r) => r.scope === "org" && r.key === k);
       return {
         ...rules.organization,
+        fixTopN: rules.ahead.fixTopN,
         inviteFromBootstrap: !stored("org.invite_domains"),
         feedbackFromBootstrap: !stored("org.feedback"),
         levels: rules.levels,

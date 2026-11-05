@@ -13,6 +13,7 @@ import { localToday, mondayOf } from "../week/dates.ts";
 import type { IsoDate } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
 import type { ActionResponse, AheadClient, AheadItem, AheadLoad } from "./types.ts";
+import { GAP_KINDS, TOP_N, type GapKind } from "../plan/fixnext.ts";
 
 export const AHEAD_ACTIONS = ["ahead.load", "ahead.stage", "ahead.unstage", "ahead.discard", "ahead.resolve", "ahead.filters", "ahead.set_filters"] as const;
 export type AheadAction = (typeof AHEAD_ACTIONS)[number];
@@ -32,6 +33,8 @@ export type AheadContext = {
   /** Whom I may assign on this client: its Account Workers who are Cooptimizers, and me (by email). */
   assignable: (clientKey: string, email: string) => Promise<boolean>;
   now: () => string;
+  /** AH-3: Fix next's Rules: the top N of each backlog and each client's counted gaps. Missing: the built-ins. */
+  fixRules?: () => Promise<{ topN: number; gaps: (clientKey: string) => GapKind[] }>;
 };
 
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
@@ -101,15 +104,16 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     const clients = read && refs.length ? await read(refs, { ...(o.refresh === true ? { refresh: true } : {}), ...(whole ? { whole: true } : {}) }) : [];
     const hints = await hintsOf(plan, today);
     const out: AheadLoad["clients"] = [];
+    const fr = (await ctx.fixRules?.().catch(() => null)) ?? { topN: TOP_N, gaps: () => [...GAP_KINDS] };
     for (const c of clients) {
       const lead = await ctx.isLead(c.clientKey).catch(() => false);
       const rights = rightsOf(c, { lead, automation });
-      out.push({ ...c, lead, editable: [...rights].filter(([, r]) => r.ok).map(([id]) => id), note: automation ? "Automation accounts don't change DevOps from FocusTime." : `Only ${c.clientName}'s leads and the owner can change this.`, canWrite: await ctx.canWrite(c.clientKey).catch(() => false), hints: hints.get(c.clientKey) ?? {} });
+      out.push({ ...c, lead, editable: [...rights].filter(([, r]) => r.ok).map(([id]) => id), note: automation ? "Automation accounts don't change DevOps from FocusTime." : `Only ${c.clientName}'s leads and the owner can change this.`, canWrite: await ctx.canWrite(c.clientKey).catch(() => false), hints: hints.get(c.clientKey) ?? {}, fixGaps: fr.gaps(c.clientKey) });
     }
     await moveOldDrags(plan, out);
     await reconcile(plan, out);
     const halves = await keptHalves(plan, out);
-    return { ok: true, data: { today, clients: out, changes: await plan.aheadChanges(), halves, automation } satisfies AheadLoad };
+    return { ok: true, data: { today, clients: out, changes: await plan.aheadChanges(), halves, automation, fixTopN: fr.topN } satisfies AheadLoad };
   }
 
   if (action === "ahead.stage") {

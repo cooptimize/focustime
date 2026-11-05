@@ -14,6 +14,7 @@ import type { ClientProcess } from "../../actions/types.ts";
 import type { StatusGroup } from "../../actions/status-rows.ts";
 import { StatusRows } from "./StatusRows.tsx";
 import { ScopeField, type ClientScopeRow } from "./AdminScope.tsx";
+import { GAP_KINDS, GAP_WORDS, type GapKind } from "../../plan/fixnext.ts";
 
 export const ADMIN_UI_SECTIONS = [
   ["admin-clients", "Clients"],
@@ -177,7 +178,7 @@ const colorVar = (c: string | null) => (c ? (c.startsWith("#") ? c : `var(--clie
 
 // ---------- Clients ----------
 
-type ClientRow = { key: string; isClient: boolean; whyText: string; names: string[]; types: string[]; treatAsClient: boolean; hidden: boolean; hasSettings: boolean; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; houseStyle: string | null; process: ClientProcess; scope: ClientScopeRow | null; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
+type ClientRow = { key: string; isClient: boolean; whyText: string; names: string[]; types: string[]; treatAsClient: boolean; hidden: boolean; hasSettings: boolean; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; houseStyle: string | null; fixGaps?: GapKind[]; process: ClientProcess; scope: ClientScopeRow | null; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
 type ClientFilterValue = "customers" | "all";
 type ClientCounts = { customers: number; all: number };
 type ClientsData = { palette: string[]; suggested: string[]; filter: ClientFilterValue; accountsRead: boolean; counts: ClientCounts; clients: ClientRow[] };
@@ -330,6 +331,7 @@ function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: Clie
       <DeliveryChatField clientKey={c.key} clientName={c.key} />
       <ProcessView c={c} saver={saver} onRefresh={onRefresh} refreshing={refreshing} />
       {c.scope && <ScopeField clientKey={c.key} project={c.process.ok ? c.process.project : null} s={c.scope} save={(v) => saver.save(scope, "devops_scope", v, `${c.key}: Cooptimize's work`)} status={saver.status(scope, "devops_scope")} retry={() => void saver.save(scope, "devops_scope", c.scope?.rule ?? undefined, `${c.key}: Cooptimize's work`)} />}
+      {c.isClient && <FixGapsField c={c} saver={saver} />}
       <div className="set-form set-house-style">
         <AField label="House style for Break down" kind="Rule" s={saver.status(scope, "house_style")} retry={() => void saver.save(scope, "house_style", c.houseStyle, `${c.key}: house style`)} hint="Sent with every Break down request for this client. Empty goes back to the style learned from its own features.">
           <textarea
@@ -342,6 +344,26 @@ function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: Clie
           />
         </AField>
       </div>
+    </div>
+  );
+}
+
+/** AH-3: the gaps Ahead's Fix next and Readiness count for this client (all four by default). */
+function FixGapsField({ c, saver }: { c: ClientRow; saver: Saver }) {
+  const scope = `client:${c.key}`;
+  const on = saver.shown(scope, "fix_gaps", c.fixGaps ?? [...GAP_KINDS]);
+  const save = (v: GapKind[]) => void saver.save(scope, "fix_gaps", GAP_KINDS.filter((k) => v.includes(k)), `${c.key}: gaps Fix next counts`);
+  return (
+    <div className="set-form adm-fixgaps">
+      <AField label="Gaps Fix next counts" kind="Rule" s={saver.status(scope, "fix_gaps")} retry={() => save(on)} hint="Ahead's Fix next and Readiness show only these for this client. Turn off Unsized for a client that doesn't size in DevOps.">
+        <span className="adm-switches" role="group" aria-label={`${c.key}: gaps Fix next counts`}>
+          {GAP_KINDS.map((k) => (
+            <label key={k} className="adm-switch">
+              <input type="checkbox" role="switch" checked={on.includes(k)} aria-label={`${c.key}: count ${GAP_WORDS[k]}`} onChange={(e) => save(e.target.checked ? [...on, k] : on.filter((x) => x !== k))} /> {GAP_WORDS[k]}
+            </label>
+          ))}
+        </span>
+      </AField>
     </div>
   );
 }
@@ -946,6 +968,8 @@ type OrgData = {
   neverSuggest: string[];
   feedback: { org: string; project: string; parentId: number; live: boolean } | null;
   retentionYears: number;
+  /** AH-3: Fix next looks at the top N of each backlog. */
+  fixTopN?: number;
   newPerson: NewPerson;
   inviteFromBootstrap: boolean;
   feedbackFromBootstrap: boolean;
@@ -978,6 +1002,9 @@ function AdminOrganization() {
         </AField>
         <AField label="Keep people's data (years)" kind="Rule" s={saver.status(o, "org.retention_years")} retry={() => void saver.save(o, "org.retention_years", data.retentionYears, "Data retention")} hint="Shown to everyone. Deleting older data automatically comes in a later step.">
           <NumInput label="Keep people's data (years)" value={data.retentionYears} min={1} max={10} onSave={(v) => void saver.save(o, "org.retention_years", v, "Data retention")} />
+        </AField>
+        <AField label="Fix next looks at the top N of each backlog" kind="Rule" s={saver.status(o, "ahead.fix_top_n")} retry={() => void saver.save(o, "ahead.fix_top_n", data.fixTopN ?? 30, "Fix next top N")} hint="10 to 100, for epics, features and stories each. Ahead's Fix next also shows what's dated in the next 4 weeks and what each person owns or leads.">
+          <NumInput label="Fix next looks at the top N of each backlog" value={data.fixTopN ?? 30} min={10} max={100} onSave={(v) => void saver.save(o, "ahead.fix_top_n", v, "Fix next top N")} />
         </AField>
       </div>
       <h3>Send feedback</h3>

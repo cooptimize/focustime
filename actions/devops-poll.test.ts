@@ -441,6 +441,14 @@ describe("AH-2: Cooptimize's scope", () => {
   const shown = (c: Awaited<ReturnType<typeof ahead>>) => c.items.map((i) => i.id).sort((a, b) => a - b);
   const inScope = (c: Awaited<ReturnType<typeof ahead>>) => c.items.filter((i) => i.inScope).map((i) => i.id).sort((a, b) => a - b);
 
+  it("AH-3: Ahead's items carry the backlog order from the stored order field, and the client names the field", async () => {
+    const h = setup();
+    await h.tick();
+    const c = await ahead(h, null, { whole: true });
+    expect(c.orderField).toBe("Microsoft.VSTS.Common.StackRank");
+    expect(c.items.find((i) => i.id === 12)?.order).toBe(12);
+  });
+
   it("reads the project's area tree and its teams once a day, and a token without Project read leaves teams out softly", async () => {
     const h = setup(TEAMS);
     await h.tick();

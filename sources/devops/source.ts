@@ -1080,6 +1080,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
           const sz = sizeField ? v.fields[sizeField] : null;
           const who = v.fields["System.AssignedTo"];
           const rung = meta.model.ladder.findIndex((r) => r.includes(type));
+          const ord = meta.orderField ? v.fields[meta.orderField] : null;
           return {
             id: v.id, rev: typeof v.fields["System.Rev"] === "number" ? (v.fields["System.Rev"] as number) : 0,
             title: str(v.fields["System.Title"]).trim() || "(No title)", type, state, stateCategory: category,
@@ -1090,6 +1091,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
             target: f.fields[type] ? dateOnly(v.fields[f.fields[type]!], tz) : null,
             size: typeof sz === "number" && Number.isFinite(sz) ? sz : null,
             url: workItemUrl(ctx.org, ctx.projectName, v.id), changedAt: str(v.fields["System.ChangedDate"]),
+            order: typeof ord === "number" && Number.isFinite(ord) ? ord : null,
           };
         });
         const known = all.filter((i) => i.level !== null && cats.has(i.type));
@@ -1110,7 +1112,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
           clientKey: ref.clientKey, clientName: ref.clientName, status: view.failure ? view.failure.status : "ok", ...(view.failure ? { message: view.failure.message } : {}),
           fetchedAt, project: ctx.projectName, me: target?.email ?? null,
           startFields: pick(f.starts), targetFields: pick(f.fields), sizeFields: pick(f.sizes ?? {}), fieldNames: f.names ?? {},
-          types: looksOf(meta.model), items, scope,
+          types: looksOf(meta.model), items, scope, orderField: meta.orderField,
         };
       }),
     );

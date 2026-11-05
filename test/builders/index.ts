@@ -465,10 +465,11 @@ export function anAheadClient(o: Partial<AheadClient> = {}): AheadClient {
     fieldNames: { [sizeField]: "Story Points" },
     types: [],
     items: [],
+    orderField: "Microsoft.VSTS.Common.StackRank",
     ...o,
   };
 }
 /** ahead.load's answer for some clients (nothing pending, nothing editable unless given). */
 export function anAheadLoad(clients: (AheadClient & Partial<AheadLoad["clients"][number]>)[], o: Partial<Omit<AheadLoad, "clients">> = {}): AheadLoad {
-  return { today: "2026-11-02", clients: clients.map((c) => ({ lead: false, editable: [], note: `Only ${c.clientName}'s leads and the owner can change this.`, canWrite: true, hints: {}, ...c })), changes: [], halves: [], automation: false, ...o };
+  return { today: "2026-11-02", clients: clients.map((c) => ({ lead: false, editable: [], note: `Only ${c.clientName}'s leads and the owner can change this.`, canWrite: true, hints: {}, fixGaps: ["needs_stories", "no_dates", "unassigned", "unsized"], ...c })), changes: [], halves: [], automation: false, fixTopN: 30, ...o };
 }

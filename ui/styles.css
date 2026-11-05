@@ -4559,15 +4559,20 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .ah-editor { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .ah-editor input[type="number"] { width: 6em; }
 .ah-assignee { position: relative; }
-.ah-fix { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: 8px; background: var(--surface); max-width: 720px; }
-.ah-fix.compact { padding: 8px 10px; }
-.ah-fix-what { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0; font-size: var(--fs-2); }
-.ah-fix-title { margin: 0; font-size: var(--fs-4); font-weight: 600; }
-.ah-fix.compact .ah-fix-title { font-size: var(--fs-3); }
-.ah-fix-actions, .ah-fix-edit { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.ah-fix-mode { display: grid; gap: 16px; }
-.ah-fix-next ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: var(--fs-3); }
-.ah-fix-next h3 { margin: 0 0 6px; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+/* AH-3: Fix next, ranked: one section per client, rows grouped epic › feature, each with its gaps and one action. */
+.ah-fix-mode { display: grid; gap: 18px; max-width: 1200px; }
+.ah-fx-intro { margin: 0; max-width: 80ch; }
+.ah-fx-note { margin: 0 0 6px; font-size: var(--fs-2); }
+.ah-fx-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+.ah-fx-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 12px; padding: 6px 6px 6px calc(6px + var(--ah-depth, 0) * var(--ah-indent, 18px)); border-bottom: 1px solid var(--border); font-size: var(--fs-3); }
+.ah-fx-row.ctx { color: var(--text-muted); padding-block: 4px; }
+.ah-fx-row.ctx .ah-title a { color: var(--text-muted); }
+.ah-fx-item { flex: 1 1 20em; min-width: 0; display: flex; align-items: flex-start; gap: 6px; }
+.ah-fx-side { flex: none; display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.ah-fx-acts { display: inline-flex; gap: 6px; align-items: center; }
+.ah-fx-edit { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-inline-start: 22px; }
+.ah-fx-due { font-size: var(--fs-2); }
+.ah-fx-more { margin-top: 6px; }
 /* AH-2: Gantt in Ahead, calmer than Plan ahead's: quiet flags and month cells, the text in the normal color. */
 .ahead .pa-flags { border-color: var(--border-strong); background: transparent; font-weight: 400; }
 .ahead .pa-flags:hover, .ahead .pa-flags:focus-visible { background: var(--raised); }

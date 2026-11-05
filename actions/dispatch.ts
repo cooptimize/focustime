@@ -82,7 +82,8 @@ import { userZone } from "../week/zone.ts";
 import { inList } from "./admin.ts";
 import { adminAction, type AdminAction, type AdminOps } from "./admin-actions.ts";
 import type { OrgRuntime } from "./org.ts";
-import { teamColors } from "../config/org.ts";
+import { clientRules, teamColors } from "../config/org.ts";
+import { GAP_KINDS, TOP_N } from "../plan/fixnext.ts";
 import { DEFAULT_AI_RULES } from "../ai/types.ts";
 import { feedbackAction, type FeedbackContext, type FeedbackService } from "./feedback-actions.ts";
 import type { Sender } from "../plan/feedback.ts";
@@ -793,6 +794,10 @@ async function aheadContext(ctx: ActionContext): Promise<AheadContext> {
       return !!p && p.picker.workers(clientKey).some((w) => w.email?.toLowerCase() === email.toLowerCase());
     },
     now: ctx.now,
+    fixRules: async () => {
+      const r = ctx.org ? await ctx.org.rules() : null;
+      return { topN: r?.ahead.fixTopN ?? TOP_N, gaps: (k) => (r ? clientRules(r, k).fixGaps : [...GAP_KINDS]) };
+    },
   };
 }
 

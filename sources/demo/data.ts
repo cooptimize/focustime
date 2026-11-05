@@ -344,7 +344,9 @@ export function demoAheadClient(k: DemoClientKey, fetchedAt: string, sc: { deps:
       assignee: i.assignedToMe ? { name: "Alex Rivera", email: "you@example.com" } : i.assignedTo ? { name: i.assignedTo, email: i.assignedToEmail ?? null } : null,
       start: START[i.id] ?? null, target: i.targetDate ?? null,
       size: i.level === "portfolio" || UNSIZED.has(i.id) || i.stateCategory === "Completed" ? null : 3,
-      url: i.url, changedAt: QUIET.has(i.id) ? "2026-10-09T15:00:00Z" : i.changedAt, inScope: inScope(i.id),
+      url: i.url, changedAt: QUIET.has(i.id) ? "2026-10-09T15:00:00Z" : i.changedAt, inScope: inScope(i.id), order: i.order,
     })),
+    // AH-3: Harbor Health's demo project has no backlog order field, so its Fix next ranks by target date.
+    orderField: k === "Harbor" ? null : "Microsoft.VSTS.Common.StackRank",
   };
 }
