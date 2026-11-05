@@ -1,6 +1,7 @@
 // Local plan store (D23): SQLite through Node's built-in node:sqlite, under ~/.local/share/focustime/.
 // Holds only FocusTime's own plan (day plans, picks, draft stories) and a few one-time markers.
 // Nothing here is ever written to DevOps, Outlook, Google or Dataverse.
+import { isOwner, type Owner } from "../plan/follow-who.ts";
 import type { ChangeField, ChangeValue, DayHalf, StagedChange } from "../plan/ahead-edit.ts";
 import { ASK_STATUSES, type Ask, type AskRule, type AskStatus, type StoredMessage } from "../plan/asks.ts";
 import { PROMISE_STATUSES, type AskSort, type NotSorted, type PromiseDraft, type PromiseStatus, type StoredPromise } from "../plan/asks-ai.ts";
@@ -2052,6 +2053,31 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         if (n.itemId && !n.clientKey) throw new PlanError("A work item needs the client it belongs to");
         (await db.run("UPDATE follow_ups SET client_key = ?, who = ?, who_ref = ?, what = ?, channel = ?, due = ?, item_id = ? WHERE id = ?", n.clientKey, n.who, refJson(n.who ? n.whoRef : null), n.what, n.channel, n.due, n.itemId, id));
         return toFollowUp((await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row);
+      });
+    },
+    /**
+     * CV-3b: the one-time repair. Clears Who on my follow-ups (open or closed) whose Who is me, and "to whom" on my
+     * promises that name me; nothing is deleted. Returns how many of each were cleared.
+     */
+    async clearOwnWho(owner: Owner): Promise<{ followUps: number; promises: number }> {
+      return tx(async () => {
+        let followUps = 0;
+        for (const r of (await db.all("SELECT * FROM follow_ups WHERE who IS NOT NULL OR who_ref IS NOT NULL")) as Row[]) {
+          const f = toFollowUp(r);
+          if (!isOwner(f, owner)) continue;
+          await db.run("UPDATE follow_ups SET who = NULL, who_ref = NULL WHERE id = ?", f.id);
+          followUps++;
+        }
+        let promises = 0;
+        for (const r of (await db.all("SELECT chat_id, message_id, to_whom FROM promises WHERE to_whom IS NOT NULL")) as Row[]) {
+          // A stored "to whom" may list several names; only mine go.
+          const names = String(r.to_whom).split(",").map((n) => n.trim()).filter(Boolean);
+          const kept = names.filter((n) => !isOwner({ who: n }, owner));
+          if (kept.length === names.length) continue;
+          await db.run("UPDATE promises SET to_whom = ? WHERE chat_id = ? AND message_id = ?", kept.length ? kept.join(", ") : null, String(r.chat_id), String(r.message_id));
+          promises++;
+        }
+        return { followUps, promises };
       });
     },
     async getFollowUp(id: number): Promise<FollowUp | null> {

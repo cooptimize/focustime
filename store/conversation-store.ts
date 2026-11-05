@@ -376,6 +376,20 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         return (await commitmentById(r.lastId!))!;
       });
     },
+    /** CV-3b: the one-time repair: a commitment made "to" its own committer (by id or by name) has no "to". The count. */
+    async clearSelfTo(): Promise<number> {
+      return db.tx(async () => {
+        const norm = (x: string | null) => (x ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+        let n = 0;
+        for (const k of (await db.all("SELECT * FROM commitments WHERE to_id IS NOT NULL OR to_name IS NOT NULL")).map(toCommitment)) {
+          const self = (!!k.toId && !!k.whoId && k.toId.toLowerCase() === k.whoId.toLowerCase()) || (!!norm(k.toName) && norm(k.toName) === norm(k.whoName));
+          if (!self) continue;
+          await db.run("UPDATE commitments SET to_id = NULL, to_name = NULL WHERE id = ?", [k.id]);
+          n++;
+        }
+        return n;
+      });
+    },
     async updateCommitment(id: number, p: CommitmentPatch): Promise<Commitment> {
       return db.tx(async () => {
         if (!(await commitmentById(id))) throw new PlanError("No such commitment");

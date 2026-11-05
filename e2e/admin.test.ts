@@ -136,6 +136,9 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await body.getByRole("heading", { name: "Admin › Clients" }).waitFor();
       const adatum = page.locator(".adm-client").filter({ has: page.getByRole("heading", { name: "Adatum" }) });
       await adatum.waitFor();
+      // CV-3b: account types not read here, so the fallback says so; only active accounts are clients.
+      await body.getByText("Account types aren't read from Dataverse yet", { exact: false }).waitFor();
+      await shotBoth(page, "admin-clients-list", body.getByRole("heading", { name: "Admin › Clients" }));
 
       // Register the chat.
       const group = adatum.getByRole("group", { name: /^Delivery chats for Adatum/ });

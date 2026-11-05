@@ -204,6 +204,9 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
   };
 }
 
+/** CV-3b: while account types aren't read, the fallback decides who is a client; Status and Admin › Clients say so. */
+export const CLIENT_FALLBACK_TEXT = "Account types aren't read from Dataverse yet. Until they are, only accounts with Account Workers or Focus Time, Cooptimize Internal and accounts treated as clients count as clients; prospects don't. Refresh to read them now.";
+
 /** A Status line (ADM-2): something an admin may want to look at; never blocks anything. */
 export type StatusWarning = { area: "clients" | "people" | "rules" | "jobs"; text: string };
 
@@ -214,7 +217,7 @@ export type StatusWarning = { area: "clients" | "people" | "rules" | "jobs"; tex
 export async function clientWarnings(ops: AdminOps): Promise<StatusWarning[]> {
   const [ca, rules, chats, overrides] = await Promise.all([ops.org.clientAccounts(), ops.org.rules(), ops.chatClients(), ops.org.store.overrides()]);
   const out: StatusWarning[] = [];
-  if (!ca.read) out.push({ area: "clients", text: "Client accounts aren't read from Dataverse yet, so every account counts as a client. Refresh from Dataverse in Admin › People." });
+  if (!ca.read) out.push({ area: "clients", text: CLIENT_FALLBACK_TEXT });
   const keys = [...new Set([...ca.rows.map((r) => r.clientKey), ...Object.keys(rules.clients), ...chats, ...overrides.filter((o) => o.kind !== "level" && o.clientKey).map((o) => o.clientKey)])].sort((a, b) => a.localeCompare(b));
   for (const k of keys) {
     if (ca.isClient(k)) continue;

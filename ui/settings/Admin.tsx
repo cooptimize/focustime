@@ -274,7 +274,7 @@ function AdminClients() {
         <span className="set-hint">Clients are active Dataverse accounts of type Customer, plus Cooptimize Internal and any account treated as a client below. Nothing is deleted.</span>
       </div>
       {saver.warning && <p className="set-problem" role="status">{saver.warning}</p>}
-      {!data.accountsRead && <p className="set-problem">Accounts aren't read from Dataverse yet, so every account counts as a client. Admin › People › Refresh from Dataverse.</p>}
+      {!data.accountsRead && <p className="set-problem">Account types aren't read from Dataverse yet. Until they are, only accounts with Account Workers or Focus Time, Cooptimize Internal and accounts treated as clients count; prospects don't. Admin › Status › Refresh.</p>}
       {data.clients.length === 0 && <p className="muted">No clients yet. They come from Dataverse once people are read (Admin › People › Refresh from Dataverse).</p>}
       {filter === "all" ? (
         <AllAccounts rows={data.clients} saver={saver} />

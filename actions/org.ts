@@ -69,8 +69,9 @@ export function createOrgRuntime(o: {
   }
   function accounts(): Promise<ClientAccounts> {
     if (!fresh(accountsHeld)) {
-      const value = Promise.all([o.store.accounts(), rules()]).then(([accts, r]) =>
-        clientAccounts({ accounts: accts, overrides: Object.fromEntries(Object.entries(r.clients).map(([k, c]) => [k, { treatAsClient: c.treatAsClient, hidden: c.hidden }])), internal: INTERNAL_CLIENT, extra: Object.keys(r.clients) }),
+      // CV-3b: people_clients (active Account Workers and current Focus Time) is the fallback until types are read.
+      const value = Promise.all([o.store.accounts(), rules(), o.store.peopleClients()]).then(([accts, r, pc]) =>
+        clientAccounts({ accounts: accts, overrides: Object.fromEntries(Object.entries(r.clients).map(([k, c]) => [k, { treatAsClient: c.treatAsClient, hidden: c.hidden }])), internal: INTERNAL_CLIENT, extra: Object.keys(r.clients), active: pc.map((x) => x.clientKey) }),
       );
       accountsHeld = { at: now(), value };
       value.catch(() => (accountsHeld = null));

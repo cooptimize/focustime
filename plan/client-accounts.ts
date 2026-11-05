@@ -5,10 +5,11 @@
 //               plus any account an admin marked "Treat as a client";
 //   never     = an account an admin marked "Hide from FocusTime" (Internal can't be hidden).
 // Nothing is deleted: a non-client's settings stay stored and show under All accounts ("Has settings, not a client").
-// Before the first read with this build (or with no Dataverse, as in the demo), every key counts as a client, so
-// nothing disappears while the accounts aren't known yet; Status says so.
+// CV-3b: it fails closed. Before the relationship types are read (no accounts read yet, or none with a type), only
+// accounts with active Account Workers or current Focus Time count, plus Internal and the "Treat as a client" ones;
+// prospects never do. Status warns while this fallback is in use, with Refresh.
 
-export type ClientWhy = "customer" | "internal" | "treated" | "hidden" | "not_customer" | "not_in_dataverse" | "not_read";
+export type ClientWhy = "customer" | "internal" | "treated" | "hidden" | "not_customer" | "not_in_dataverse" | "not_read" | "active_unread";
 export type AccountIn = { clientKey: string; name: string; type: string | null; workers: number; focus: number };
 export type AccountOverrides = Readonly<Record<string, { treatAsClient?: boolean; hidden?: boolean } | undefined>>;
 
@@ -27,7 +28,7 @@ export type ClientAccountRow = {
 };
 
 export type ClientAccounts = {
-  /** False before the first account read (everything counts as a client then). */
+  /** False until the relationship types are read: the fallback (active accounts, Internal, treated) is in use. */
   read: boolean;
   isClient(clientKey: string | null | undefined): boolean;
   /** Every client key, sorted. */
@@ -39,8 +40,11 @@ export type ClientAccounts = {
 
 const lower = (s: string) => s.toLowerCase();
 
-export function clientAccounts(i: { accounts: readonly AccountIn[]; overrides: AccountOverrides; internal: string; extra?: readonly string[] }): ClientAccounts {
-  const read = i.accounts.length > 0;
+export function clientAccounts(i: { accounts: readonly AccountIn[]; overrides: AccountOverrides; internal: string; extra?: readonly string[]; active?: readonly string[] }): ClientAccounts {
+  // Types are read once any account has one (a read before ADM-2 kept none).
+  const read = i.accounts.some((a) => a.type !== null);
+  // The fallback's accounts: active Account Workers or current Focus Time (people_clients), or counted on an account.
+  const active = new Set([...(i.active ?? []), ...i.accounts.filter((a) => a.workers > 0 || a.focus > 0).map((a) => a.clientKey)].map(lower));
   const byKey = new Map<string, AccountIn[]>();
   for (const a of i.accounts) {
     const l = byKey.get(a.clientKey);
@@ -56,12 +60,12 @@ export function clientAccounts(i: { accounts: readonly AccountIn[]; overrides: A
     const treated = !!o?.treatAsClient;
     const hidden = !!o?.hidden && !isInternal;
     const customer = accts.some((a) => a.type === "customer");
-    const why: ClientWhy = isInternal ? "internal" : hidden ? "hidden" : customer ? "customer" : treated ? "treated" : !read ? "not_read" : accts.length ? "not_customer" : "not_in_dataverse";
+    const why: ClientWhy = isInternal ? "internal" : hidden ? "hidden" : customer ? "customer" : treated ? "treated" : !read ? (active.has(lower(k)) ? "active_unread" : "not_read") : accts.length ? "not_customer" : "not_in_dataverse";
     return {
       clientKey: k,
       names: [...new Set(accts.map((a) => a.name))].sort(),
       types: [...new Set(accts.map((a) => a.type).filter((t): t is string => !!t))].sort(),
-      isClient: why === "internal" || why === "customer" || why === "treated" || why === "not_read",
+      isClient: why === "internal" || why === "customer" || why === "treated" || why === "active_unread",
       why,
       workers: accts.reduce((n, a) => n + a.workers, 0),
       focus: accts.reduce((n, a) => n + a.focus, 0),
@@ -69,7 +73,7 @@ export function clientAccounts(i: { accounts: readonly AccountIn[]; overrides: A
       hidden,
     };
   };
-  const allKeys = [...new Set([...byKey.keys(), ...Object.keys(i.overrides), ...(i.extra ?? []), i.internal])].filter(Boolean).sort((a, b) => a.localeCompare(b));
+  const allKeys = [...new Set([...byKey.keys(), ...Object.keys(i.overrides), ...(i.extra ?? []), ...(read ? [] : (i.active ?? [])), i.internal])].filter(Boolean).sort((a, b) => a.localeCompare(b));
   const rows = allKeys.map(decide);
   const index = new Map(rows.map((r) => [lower(r.clientKey), r]));
   const isClient = (k: string | null | undefined): boolean => {
@@ -94,5 +98,6 @@ export const CLIENT_WHY_TEXT: Record<ClientWhy, string> = {
   hidden: "Hidden from FocusTime by an admin",
   not_customer: "Not a customer in Dataverse",
   not_in_dataverse: "Not an active Dataverse account",
-  not_read: "Accounts not read from Dataverse yet",
+  not_read: "Account types not read from Dataverse yet, and no Account Workers or Focus Time",
+  active_unread: "Has Account Workers or Focus Time in Dataverse (account types not read yet)",
 };

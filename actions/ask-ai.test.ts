@@ -291,6 +291,18 @@ describe("promises (promises.extract)", () => {
     expect((await s.run<PromisesData>("promises.list", {})).promises[0]!.status).toBe("done");
   });
 
+  it("CV-3b: my own name is never sent as people_in_chat nor kept as to whom; a follow-up's Who is never me", async () => {
+    const s = await setup({ answer: promiseAnswer({ to_whom: "Sam Tester" }) });
+    const m = s.say({ chatId: FAB.chatId, authorId: ME, authorTenant: HOME_TENANT, text: "I'll rerun the data tonight" });
+    await s.poll();
+    const sent = s.calls.map((c) => c.input).join("\n");
+    expect(sent).toContain("people_in_chat");
+    expect(sent).not.toContain("Sam Tester");
+    expect((await s.run<PromisesData>("promises.list", {})).promises[0]!.toWhom).toBeNull();
+    const r = await s.run<PromisesData & { followUpId: number }>("promises.followup", { chatId: FAB.chatId, messageId: m.messageId, who: "Sam Tester" });
+    expect((await s.plan.getFollowUp(r.followUpId))!.who).toBeNull();
+  });
+
   it("Link: closes when the item is done in DevOps", async () => {
     const s = await setup({ answer: promiseAnswer() });
     const m = s.say({ chatId: FAB.chatId, authorId: ME, authorTenant: HOME_TENANT, text: "I will fix the export" });
