@@ -123,7 +123,7 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await shotBoth(page, "admin-clients", adatum);
 
       // Admin › AI: on for FocusTime, allowed for Adatum.
-      await page.locator(".set-admin-nav").getByRole("button", { name: "AI" }).click();
+      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "AI" }).click();
       await body.getByRole("heading", { name: "Admin › AI" }).waitFor();
       await body.getByRole("switch", { name: "AI on" }).check();
       await body.getByRole("switch", { name: "Allow AI for Adatum" }).check();
@@ -135,12 +135,12 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       expect((await team.org.rules()).ai.on).toBe(true);
 
       // Admin › Conversations.
-      await page.locator(".set-admin-nav").getByRole("button", { name: "Conversations" }).click();
+      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Conversations" }).click();
       await body.getByLabel("Request phrases").waitFor();
       await shotBoth(page, "admin-conversations", body);
 
       // Admin › People: Kim becomes a lead of Adatum (an override, marked).
-      await page.locator(".set-admin-nav").getByRole("button", { name: "People" }).click();
+      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "People" }).click();
       const kim = body.locator("tr", { has: page.getByRole("rowheader", { name: /Kim Person/ }) });
       await kim.getByRole("combobox", { name: "Kim Person: add as lead of" }).selectOption("Adatum");
       await kim.getByRole("button", { name: "Add" }).click();
@@ -150,13 +150,13 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await shotBoth(page, "admin-people", body);
 
       // Admin › Organization, Status and Audit.
-      await page.locator(".set-admin-nav").getByRole("button", { name: "Organization" }).click();
+      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Organization" }).click();
       await body.getByLabel("Help invites go only to").waitFor();
       await shotBoth(page, "admin-organization", body);
-      await page.locator(".set-admin-nav").getByRole("button", { name: "Status" }).click();
+      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Status" }).click();
       await body.getByText("Adatum Delivery Team").waitFor();
       await shotBoth(page, "admin-status", body);
-      await page.locator(".set-admin-nav").getByRole("button", { name: "Audit" }).click();
+      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Audit" }).click();
       const audit = body.locator(".adm-audit");
       await audit.locator("tr", { hasText: "client:Adatum/color" }).filter({ hasText: "violet" }).filter({ hasNotText: "suggested" }).waitFor();
       await audit.getByText("client:Adatum/allow_ai").waitFor();
@@ -179,8 +179,8 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await page.goto(kimApp.url);
       await page.locator(".topbar").waitFor();
       await openSettings(page);
-      await page.locator(".set-nav").getByRole("button", { name: "Clients" }).click();
-      expect(await page.locator(".set-admin-nav").count()).toBe(0);
+      await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Clients" }).click();
+      expect(await page.getByRole("navigation", { name: "Admin sections" }).count()).toBe(0);
       const card = page.locator(".set-client-wrap").filter({ has: page.getByRole("heading", { name: "Adatum" }) });
       await card.waitFor();
       // Read-only: the chat (no Add or Remove), AI allowed, the open states, all "Set by your FocusTime admin".
@@ -214,7 +214,7 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await expect(card.getByRole("radio", { name: "violet" }).isChecked()).resolves.toBe(true);
 
       // Settings › AI: read-only, AI on, allowed for Adatum.
-      await page.locator(".set-nav").getByRole("button", { name: "AI", exact: true }).click();
+      await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "AI", exact: true }).click();
       await page.locator(".set-ai .set-field", { hasText: "AI for FocusTime" }).getByText("On", { exact: true }).waitFor();
       await shotBoth(page, "settings-ai-read-only", page.locator(".set-ai"));
       expect(errors).toEqual([]);

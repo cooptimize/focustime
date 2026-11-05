@@ -1216,7 +1216,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* Settings (step 6b): a section list on the left, one section at a time on the right */
 .settings { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr); align-items: start; gap: 20px; padding: 6px 24px 12px; overflow-y: auto; }
 /* fix/settings-autosave: Settings scrolls as one page; the section list stays in view beside it. */
-.set-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; max-height: 100%; overflow-y: auto; }
 .set-tab { text-align: left; border: 0; background: transparent; padding: 8px 12px; border-radius: 8px; color: var(--text-muted); font: inherit; font-size: var(--fs-3); }
 .set-tab:hover { background: var(--raised); color: var(--text); }
 .set-tab[aria-current="page"] { background: var(--raised); color: var(--text); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
@@ -1268,7 +1267,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .set-row.secret strong { min-width: 200px; }
 .set-row.secret input[type="password"] { flex: 1; min-width: 220px; }
 .top-btn[aria-current="page"] { color: var(--text); border-color: var(--accent); }
-@media (max-width: 900px) { .settings { grid-template-columns: 1fr; } .set-nav { flex-direction: row; flex-wrap: wrap; background: var(--bg); z-index: 2; padding-bottom: 6px; } }
+@media (max-width: 900px) { .settings { grid-template-columns: 1fr; } }
 
 /* Now strip (step 6b slice 4): one line under the top bar; clicking selects the current half-day. Step 6c adds the timer. */
 .app > .nowstrip { flex: none; }
@@ -3695,7 +3694,6 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
   /* Settings: the sections as a row of tabs that scrolls sideways, then one column. */
   .app.phone .settings { display: block; overflow-y: auto; flex: 1; padding: 0 16px 16px; }
-  .app.phone .set-nav { flex-wrap: nowrap; overflow-x: auto; position: sticky; top: 0; margin: 0 -16px; padding: 8px 16px; }
   .app.phone .set-tab { white-space: nowrap; flex: none; }
   .app.phone .set-grid { grid-template-columns: minmax(0, 1fr); }
 }
@@ -4029,9 +4027,6 @@ button.ask-label { cursor: pointer; }
 
 /* ADM-1: the Admin part of Settings (ui/settings/Admin.tsx): its own nav under the Settings nav, one sticky sidebar. */
 .set-side { position: sticky; top: 0; max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; }
-.set-side > .set-nav { position: static; max-height: none; overflow: visible; }
-.set-admin-nav { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--border); }
-.set-nav-group { margin: 14px 12px 2px; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
 .adm-kind { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; font-size: var(--fs-1); font-weight: 500; color: var(--text-faint); vertical-align: 1px; }
 .adm-mark { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--raised); font-size: var(--fs-1); font-weight: 500; color: var(--text-muted); }
 .adm-ok { color: var(--ok); font-weight: 500; }
@@ -4052,12 +4047,6 @@ button.ask-label { cursor: pointer; }
 .adm-admins li { padding: 6px 10px; }
 .set-pre { white-space: pre-wrap; }
 .set-team-color { flex-basis: 100%; }
-@media (max-width: 900px) {
-  .set-side { overflow: visible; z-index: 2; background: var(--bg); }
-  .set-admin-nav { flex-direction: row; flex-wrap: wrap; align-items: center; }
-  .set-admin-nav .set-nav-group { margin: 0 8px 0 12px; }
-}
-.app.phone .set-admin-nav { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px; padding: 6px 16px; }
 .guide-icons { list-style: none; padding: 0; margin: 8px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px 16px; }
 .guide-icons li { display: flex; align-items: center; gap: 6px; }
 

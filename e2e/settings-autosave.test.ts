@@ -36,7 +36,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     const { page, errors } = await freshPage(h);
     const sent = saves(page);
     await openSettings(page);
-    await page.locator(".set-nav").getByRole("button", { name: "Planning" }).click();
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Planning" }).click();
     const field = page.locator(".set-field", { hasText: "Focus length (minutes)" });
     const input = field.locator("input");
     await input.waitFor();
@@ -69,7 +69,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
   it("a refused value: the message under the field, the typed value stays, nothing saved; a network error offers Retry", async () => {
     const { page, errors } = await freshPage(h);
     await openSettings(page);
-    await page.locator(".set-nav").getByRole("button", { name: "Risk rules" }).click();
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Risk rules" }).click();
     const atRisk = page.locator(".set-field", { hasText: "At risk at" });
     const input = atRisk.locator("input");
     await input.waitFor();
@@ -86,7 +86,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     await shotBoth(page, "settings-risk-error", atRisk);
 
     // Leaving with that field still wrong doesn't drop it silently: Settings stays and the field is focused.
-    await page.locator(".set-nav").getByRole("button", { name: "Planning" }).click();
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Planning" }).click();
     await page.waitForTimeout(400);
     await expect(page.locator(".set-body h2").textContent()).resolves.toBe("Risk rules");
 
@@ -106,31 +106,30 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
   it("an edited field saves when Settings closes with it focused", async () => {
     const { page } = await freshPage(h);
     await openSettings(page);
-    await page.locator(".set-nav").getByRole("button", { name: "Roadmap" }).click();
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Roadmap" }).click();
     const input = page.locator(".set-field", { hasText: "Stalled after" }).locator("input");
     await input.waitFor();
     const before = (await load(page)).roadmap.stalledDays;
     await input.fill(String(before + 1));
     // Back with the field still focused.
-    await page.locator(".set-nav").getByRole("button", { name: "Back" }).click();
+    await page.locator(".set-side").getByRole("button", { name: "Back" }).click();
     await page.locator(".settings").waitFor({ state: "detached" });
     await expect.poll(async () => (await load(page)).roadmap.stalledDays).toBe(before + 1);
     await page.close();
   }, T);
 
-  it("the page scrolls as one; the section list stays in view and marks the section shown", async () => {
+  it("the body scrolls on its own beside the menu; the menu stays in view and marks the section shown (ADM-2)", async () => {
     const { page } = await freshPage(h);
     await openSettings(page);
-    await page.locator(".set-nav").getByRole("button", { name: "Planning" }).click();
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Planning" }).click();
     await page.locator(".set-field", { hasText: "Focus length" }).waitFor();
     const layout = await page.evaluate(() => {
       const body = document.querySelector<HTMLElement>(".set-body")!;
-      const page = document.querySelector<HTMLElement>(".settings")!;
-      page.scrollTo({ top: page.scrollHeight });
-      const nav = document.querySelector<HTMLElement>(".set-nav")!.getBoundingClientRect();
-      return { inner: getComputedStyle(body).overflowY, innerScrolls: body.scrollHeight > body.clientHeight + 1, scrolled: page.scrollTop > 0, navTop: nav.top, width: body.getBoundingClientRect().width };
+      body.scrollTo({ top: body.scrollHeight });
+      const nav = document.querySelector<HTMLElement>(".set-side")!.getBoundingClientRect();
+      return { inner: getComputedStyle(body).overflowY, scrolled: body.scrollTop > 0, page: document.querySelector<HTMLElement>(".settings")!.scrollTop, navTop: nav.top, width: body.querySelector("h2")!.getBoundingClientRect().width };
     });
-    expect(layout).toMatchObject({ inner: "visible", innerScrolls: false, scrolled: true });
+    expect(layout).toMatchObject({ inner: "auto", scrolled: true, page: 0 });
     expect(layout.navTop).toBeGreaterThanOrEqual(0);
     expect(layout.width).toBeLessThanOrEqual(1100);
     await expect(page.locator('.set-tab[aria-current="page"]').textContent()).resolves.toBe("Planning");
@@ -140,7 +139,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
   it("a DevOps write PAT keeps its one explicit button, Check and save", async () => {
     const { page } = await freshPage(h);
     await openSettings(page);
-    await page.locator(".set-nav").getByRole("button", { name: "Clients" }).click();
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Clients" }).click();
     const pat = page.locator("form.devops-write").first();
     await pat.waitFor({ timeout: 20_000 });
     await expect(pat.getByRole("button", { name: "Check and save" }).count()).resolves.toBe(1);

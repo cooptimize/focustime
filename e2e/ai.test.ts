@@ -46,7 +46,7 @@ describe.skipIf(!CHROMIUM)("AI settings", () => {
 
       // Settings › AI: no switch of my own; AI for FocusTime is off, set by an admin; no key yet.
       await openSettings(page);
-      await page.locator(".set-nav").getByRole("button", { name: "AI", exact: true }).click();
+      await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "AI", exact: true }).click();
       const ai = page.locator(".set-ai");
       await ai.getByText("AI for FocusTime").waitFor();
       expect(await page.getByRole("switch", { name: "Use AI" }).count()).toBe(0);
@@ -76,18 +76,18 @@ describe.skipIf(!CHROMIUM)("AI settings", () => {
 
       // The admin allows Adatum: Settings › AI and Settings › Clients show it, read-only.
       await team.set("client:Adatum", "allow_ai", true);
-      await page.locator(".set-nav").getByRole("button", { name: "Clients" }).click();
+      await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Clients" }).click();
       const adatum = page.locator(".set-client-wrap").filter({ has: page.getByRole("heading", { name: "Adatum" }) });
       await adatum.getByText("Allowed for Adatum").waitFor();
       expect(await adatum.getByRole("switch", { name: /Allow AI/ }).count()).toBe(0);
-      await page.locator(".set-nav").getByRole("button", { name: "AI", exact: true }).click();
+      await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "AI", exact: true }).click();
       await ai.locator(".set-field", { hasText: "AI for FocusTime" }).getByText("On", { exact: true }).waitFor();
       await ai.getByText("Adatum").first().waitFor();
 
       // A $0 cap: "AI budget is set to $0", never "reached".
       await team.set("org", "ai.person_cap_usd", 0);
-      await page.locator(".set-nav").getByRole("button", { name: "Clients" }).click();
-      await page.locator(".set-nav").getByRole("button", { name: "AI", exact: true }).click();
+      await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Clients" }).click();
+      await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "AI", exact: true }).click();
       await ai.getByText("AI budget is set to $0").first().waitFor();
       expect(await ai.textContent()).not.toMatch(/reached/i);
       await shotBoth(page, "ai-budget-zero", ai);
