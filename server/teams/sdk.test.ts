@@ -16,6 +16,9 @@ const SECRET_TEXT = "please move the dentist thing";
 
 const good = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const other = generateKeyPairSync("rsa", { modulusLength: 2048 });
+/** Published by Bot Framework but endorsed for another channel only, and one with no endorsements. */
+const webchat = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const bare = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const b64 = (v: string | Buffer) => Buffer.from(v).toString("base64url");
 function jwt(claims: Record<string, unknown>, key: KeyObject = good.privateKey, kid = "k1") {
   const h = b64(JSON.stringify({ alg: "RS256", typ: "JWT", kid }));
@@ -42,10 +45,12 @@ const listen = (s: Server) => onFreePort((port) => new Promise<number>((ok, fail
 
 beforeAll(async () => {
   keys = createServer((req, res) => {
-    const jwk = { ...good.publicKey.export({ format: "jwk" }), kid: "k1", use: "sig", alg: "RS256", endorsements: ["msteams"] };
+    const jwk = { ...good.publicKey.export({ format: "jwk" }), kid: "k1", use: "sig", alg: "RS256", endorsements: ["msteams", "webchat"] };
+    const wjwk = { ...webchat.publicKey.export({ format: "jwk" }), kid: "k2", use: "sig", alg: "RS256", endorsements: ["webchat", "skype"] };
+    const bjwk = { ...bare.publicKey.export({ format: "jwk" }), kid: "k3", use: "sig", alg: "RS256" };
     res.writeHead(200, { "content-type": "application/json" });
     const meta = { issuer: ISSUER, jwks_uri: `${keysUrl}/v1/.well-known/keys`, id_token_signing_alg_values_supported: ["RS256"] };
-    res.end(JSON.stringify(req.url?.endsWith("/openidconfiguration") ? meta : { keys: [jwk] }));
+    res.end(JSON.stringify(req.url?.endsWith("/openidconfiguration") ? meta : { keys: [jwk, wjwk, bjwk] }));
   });
   keysUrl = `http://127.0.0.1:${await listen(keys)}`;
   connector = createServer(async (req, res) => {
@@ -110,7 +115,21 @@ it("rejects a missing, forged, expired, wrong-audience, wrong-issuer or wrong-se
   ];
   for (const [why, auth] of cases) expect((await post(activity(), auth)).status, why).toBe(401);
   expect(seen.length).toBe(before);
-  expect(logs.filter((l) => l.op === "teams_token").every((l) => l.kind === "rejected")).toBe(true);
+  expect(logs.filter((l) => l.op === "teams_token").every((l) => l.kind === "rejected" || l.kind === "not_endorsed")).toBe(true);
+});
+
+it("rejects a token whose signing key doesn't endorse msteams, an Entra-issued token, and a non-Teams activity, with 401 (TB-1b)", async () => {
+  const before = seen.length;
+  const cases: [string, string, Partial<InActivity>][] = [
+    ["endorsed for webchat only", `Bearer ${jwt(claims(), webchat.privateKey, "k2")}`, {}],
+    ["no endorsements", `Bearer ${jwt(claims(), bare.privateKey, "k3")}`, {}],
+    ["unknown key", `Bearer ${jwt(claims(), other.privateKey, "k9")}`, {}],
+    ["Entra issuer", `Bearer ${jwt(claims({ iss: `https://sts.windows.net/${TENANT}/` }))}`, {}],
+    ["webchat activity", `Bearer ${jwt(claims())}`, { channelId: "webchat" }],
+  ];
+  for (const [why, auth, o] of cases) expect((await post(activity(o), auth)).status, why).toBe(401);
+  expect(seen.length).toBe(before);
+  expect(logs.some((l) => l.op === "teams_token" && l.kind === "not_endorsed")).toBe(true);
 });
 
 it("never puts a message's text, a token or a header in the log", async () => {
