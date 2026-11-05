@@ -14,7 +14,7 @@ import { readBack, type Sleep } from "./readback.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, completedState, createOps, descriptionOps, textToHtml, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
 import { dateOnly, detectTargetField, htmlToText, identityEmail, workItemUrl } from "../sources/devops/normalize.ts";
-import { levelsFromProcessConfig } from "../plan/process.ts";
+import { breakdownChildTypes, levelsFromProcessConfig } from "../plan/process.ts";
 /** WT-1: the portfolio tiers from the process model (process configuration on the write path), never type names. */
 const portfolioTiers = (pc: unknown) => levelsFromProcessConfig(pc).tiers;
 import { Pat } from "../sources/devops/pat.ts";
@@ -431,11 +431,11 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const once = <T,>(k: string, f: () => Promise<T>) => (memo.get(k) ?? memo.set(k, f()).get(k)!) as Promise<T>;
       const parent = await once(`item:${draft.featureId}`, () => writer.item(org, pat, project, draft.featureId));
       const pc = await once("pc", () => writer.processConfig(org, pat, project));
-      if (!portfolioTiers(pc).feature.has(parent.type)) throw new Refused(`#${parent.id} is a ${parent.type}: stories are drafted under features`, 409);
-      // WT-1: the draft's child type when the parent's type takes it (the next level down), else the default.
-      const valid = levelsFromProcessConfig(pc).childrenOf(parent.type);
-      const type = draft.storyType && valid.includes(draft.storyType) ? draft.storyType : defaultType(pc, "story");
-      if (!type) throw new Refused("This project's process has no story level", 409);
+      // BD-1: any parent type that needs breaking down (the process model, the person's overrides), and only a child
+      // type that type takes (the next level down): the draft's own, else the first.
+      const valid = breakdownChildTypes(pc, parent.type, { noBreakdown: env.cfg.plan.pickablePortfolioTypes });
+      if (!valid.length) throw new Refused(`#${parent.id} is a ${parent.type}, which isn't broken down in this project`, 409);
+      const type = draft.storyType && valid.includes(draft.storyType) ? draft.storyType : valid[0]!;
       const parentStates = await once(`states:${parent.type}`, () => writer.states(org, pat, project, parent.type));
       if (!isOpenCategory(parentStates.find((s) => s.name === parent.state)?.category)) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime adds items only under open parents`, 409);
       const typeHas = await once(`fields:${type}`, () => writer.typeFields(org, pat, project, type));

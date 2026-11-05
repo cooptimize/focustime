@@ -1,6 +1,6 @@
 // Plan the day actions (step 5). Local only: they read DevOps results already in memory to check a pick,
 // and write only to the local plan store. Nothing here calls DevOps, Outlook, Google or Dataverse.
-import { isOpen } from "../plan/process.ts";
+import { isOpen, typeNeedsBreakdown } from "../plan/process.ts";
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { carryTarget, dayLabel, dayRule, SCAN_DAYS, upcomingStart, type DayRule, type HasHours } from "../plan/days.ts";
@@ -22,7 +22,7 @@ export const isPlanAction = (a: unknown): a is PlanAction => typeof a === "strin
 export type PlanContext = {
   plan: PlanStore | undefined;
   config: () => Promise<AppConfig | null>;
-  devops: (cfg: AppConfig) => Pick<DevOpsSource, "lookup">;
+  devops: (cfg: AppConfig) => Pick<DevOpsSource, "lookup" | "last">;
   /** PTO on a date (step 6), or null. A full PTO day takes no picks. */
   pto?: (cfg: AppConfig, date: IsoDate) => Promise<PtoDay | null>;
   /** PTO dates from a Monday for about five weeks (the same read as week.load's look-ahead), for the carry-over day. */
@@ -306,9 +306,11 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const cfg = await ctx.config();
         if (!cfg) return bad("Fix the config first", 409);
         if (parentItemId === null) return { ok: true, data: { draft: (await plan.addDraft({ clientKey: key, parentItemId: null, title, size: sz })) } };
-        const parent = ctx.devops(cfg).lookup(key, parentItemId);
+        const dv = ctx.devops(cfg);
+        const parent = dv.lookup(key, parentItemId);
         if (!parent) return bad(`Item ${parentItemId} is not among the loaded DevOps items for ${key}. Refresh and try again`, 409);
-        if (parent.level !== "portfolio") return bad("Draft stories go under an epic or feature; this item can be picked directly", 422);
+        // BD-1: from the process model: a draft goes under a type that needs breaking down (an override can turn it off).
+        if (parent.level !== "portfolio" || !typeNeedsBreakdown(dv.last(key)?.types, parent.type)) return bad("Draft items go under an item that needs breaking down; this item can be picked directly", 422);
         return { ok: true, data: { draft: (await plan.addDraft({ clientKey: key, parentItemId, title, size: sz })) } };
       }
       case "draft.set_parent": {

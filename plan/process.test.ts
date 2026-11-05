@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { aClientProcess, anInternalProcess } from "../test/builders/index.ts";
 import type { PortfolioItem } from "../week/types.ts";
 import { needsBreakdown } from "./weekplan.ts";
-import { breakdownText, bucketOf, buildProcessModel, countsAsDone, isClosed, isOpen, isResolved, pickableTypes, planningLevels, stateCategories, typeOf } from "./process.ts";
+import { breakdownChildTypes, breakdownText, bucketOf, buildProcessModel, countsAsDone, isClosed, isOpen, isResolved, pickableTypes, planningLevels, stateCategories, typeOf } from "./process.ts";
 
 describe("state categories, one rule", () => {
   it("open is Proposed or In Progress, resolved is Resolved, closed is Completed or Removed", () => {
@@ -103,5 +103,26 @@ describe("Needs stories uses levels and the type's setting", () => {
   it("a resolved story doesn't count as an open child", () => {
     const kid = { id: 1, title: "t", type: "User Story", state: "Resolved", stateCategory: "Resolved", open: isOpen("Resolved"), level: "story" as const, order: null, url: "", assignedTo: null, mine: false };
     expect(needsBreakdown(feature("Feature", [kid]))).toBe(true);
+  });
+});
+
+describe("BD-1: what Break down may create under a parent (the write path, process configuration only)", () => {
+  const pc = {
+    requirementBacklog: { name: "Stories", defaultWorkItemType: { name: "User Story" }, workItemTypes: [{ name: "User Story" }] },
+    taskBacklog: { name: "Tasks", workItemTypes: [{ name: "Task" }] },
+    portfolioBacklogs: [
+      { name: "Epics", defaultWorkItemType: { name: "Epic" }, workItemTypes: [{ name: "Epic" }] },
+      { name: "Features", defaultWorkItemType: { name: "Feature" }, workItemTypes: [{ name: "Feature" }, { name: "Recurring" }] },
+    ],
+  };
+  it("takes any parent or top level type, with the next level's types", () => {
+    expect(breakdownChildTypes(pc, "Feature")).toEqual(["User Story"]);
+    expect(breakdownChildTypes(pc, "Recurring")).toEqual(["User Story"]);
+    expect(breakdownChildTypes(pc, "Epic")).toEqual(["Feature", "Recurring"]);
+  });
+  it("takes nothing under a story or task, or a type an override says isn't broken down", () => {
+    expect(breakdownChildTypes(pc, "User Story")).toEqual([]);
+    expect(breakdownChildTypes(pc, "Task")).toEqual([]);
+    expect(breakdownChildTypes(pc, "Recurring", { noBreakdown: ["recurring"] })).toEqual([]);
   });
 });

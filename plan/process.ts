@@ -248,6 +248,17 @@ export function levelsFromProcessConfig(pc: unknown): { levels: Record<ProcessLe
   return { levels: m.levels, tiers: { feature: new Set(m.levels.parent), epic: new Set(m.levels.top) }, childrenOf };
 }
 
+/**
+ * BD-1: the child types Break down may create under a parent type, from process configuration alone (the write path):
+ * the next level's types when the parent sits at parent or top level and no override turns breakdown off; else none.
+ */
+export function breakdownChildTypes(pc: unknown, parentType: string, o: ProcessOverrides = {}): string[] {
+  const l = levelsFromProcessConfig(pc);
+  const portfolio = l.levels.parent.includes(parentType) || l.levels.top.includes(parentType);
+  if (!portfolio || ci(o.noBreakdown).has(parentType.toLowerCase())) return [];
+  return l.childrenOf(parentType);
+}
+
 /** Whether a type needs breakdown, from the type looks a DevOps read carries; unknown (older caches) counts as yes. */
 export const typeNeedsBreakdown = (types: readonly TypeLook[] | undefined, name: string): boolean => types?.find((t) => t.name === name)?.needsBreakdown ?? true;
 /** Whether a type counts against hours, from the type looks; unknown counts. */
