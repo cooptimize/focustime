@@ -11,11 +11,11 @@ export type Verb = "confirm" | "cancel";
 /** What a tap sends back: the verb and the proposal. Nothing else is trusted from it. */
 export type TapData = { ft: Verb; proposalId: string };
 
-const card = (body: unknown[], actions?: unknown[]): Card => ({ type: "AdaptiveCard", $schema: "http://adaptivecards.io/schemas/adaptive-card.json", version: "1.5", body, ...(actions?.length ? { actions } : {}) });
-const text = (t: string, o: Record<string, unknown> = {}) => ({ type: "TextBlock", text: t, wrap: true, ...o });
-const title = (t: string) => text(t, { weight: "Bolder", size: "Medium" });
-const muted = (t: string) => text(t, { isSubtle: true, size: "Small", spacing: "Small" });
-const openUrl = (l: AssistantLink) => ({ type: "Action.OpenUrl", title: l.label, url: l.url });
+export const card = (body: unknown[], actions?: unknown[]): Card => ({ type: "AdaptiveCard", $schema: "http://adaptivecards.io/schemas/adaptive-card.json", version: "1.5", body, ...(actions?.length ? { actions } : {}) });
+export const text = (t: string, o: Record<string, unknown> = {}) => ({ type: "TextBlock", text: t, wrap: true, ...o });
+export const title = (t: string) => text(t, { weight: "Bolder", size: "Medium" });
+export const muted = (t: string) => text(t, { isSubtle: true, size: "Small", spacing: "Small" });
+export const openUrl = (l: AssistantLink) => ({ type: "Action.OpenUrl", title: l.label, url: l.url });
 /** Links must be FocusTime's own pages (absolute, on the public URL); anything else is dropped. */
 export const ownLinks = (links: readonly AssistantLink[] | undefined, publicUrl: string): AssistantLink[] => {
   const origin = new URL(publicUrl).origin;
@@ -36,7 +36,7 @@ const tap = (verb: Verb, label: string, proposalId: string, style?: "positive") 
   const data: TapData = { ft: verb, proposalId };
   return { type: "Action.Execute", title: label, verb, data, ...(style ? { style } : {}), fallback: { type: "Action.Submit", title: label, data } };
 };
-const shown = (v: string | null) => (v === null || v === "" ? "(none)" : v);
+export const shown = (v: string | null) => (v === null || v === "" ? "(none)" : v);
 
 /** The preview with Confirm and Cancel. `again`: things changed since the last preview, so it says so first. */
 export function proposalCard(p: Proposal, o: { again?: string | null } = {}): Card {

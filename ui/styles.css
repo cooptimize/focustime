@@ -2324,6 +2324,17 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .set-notify-row .set-hint { grid-column: 2; }
 }
 .set-actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 6px 0 12px; }
+/* TB-2: Settings > Notifications > In Teams. */
+.set-teams { margin: 8px 0 10px; }
+.set-teams[disabled] { opacity: 0.6; }
+.set-teams-row { border-top: 1px solid var(--border); padding: 2px 0 8px; }
+.set-teams-row:first-of-type { border-top: 0; }
+.set-teams-row .set-notify-row { border-top: 0; }
+.set-teams-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding-left: 26px; min-width: 0; }
+.set-teams-time { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.set-teams-controls input[type="number"] { width: 5em; }
+.set-teams-controls select, .set-teams-controls input { font: inherit; font-size: var(--fs-2); padding: 2px 6px; }
+.set-warn { color: var(--watch); font-weight: 500; }
 .signin-alt { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin-top: 12px; }
 .signin-alt .link-btn { font-size: var(--fs-3); padding: 0; }
 .followup-highlight { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }

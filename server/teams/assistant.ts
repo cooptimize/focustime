@@ -2,7 +2,7 @@
 // (assistant/types.ts) is adapted to this shape by teamsAssistant() below, so the bot and its tests keep their own
 // small types. Nothing in server/teams calls an AI provider or an action itself: reads are answered by the assistant
 // (or a quick command), and every write is a proposal the person confirms.
-import type { Assistant, Card as AsCard, Link as AsLink, Proposal as AsProposal } from "../../assistant/types.ts";
+import type { Assistant, Card as AsCard, Link as AsLink, ProposeInput, Proposal as AsProposal } from "../../assistant/types.ts";
 
 export type AssistantPerson = { userId: string };
 
@@ -50,6 +50,8 @@ export type AssistantService = {
   handle(i: { person: AssistantPerson; channel: "teams"; text: string; context: TeamsContext }): Promise<HandleResult>;
   confirm(i: { person: AssistantPerson; proposalId: string; edits?: Record<string, unknown> }): Promise<ConfirmResult>;
   cancel(i: { person: AssistantPerson; proposalId: string }): Promise<void>;
+  /** TB-2: a proposal a card's button asks for (no AI): FocusTime's plan tools only (assistant/allowlist.ts PROPOSE_TOOLS). */
+  propose(i: { person: AssistantPerson; tool: ProposeInput["tool"]; args: Record<string, unknown> }): Promise<{ ok: true; proposal: Proposal } | { ok: false; message: string }>;
 };
 
 /** Proposals expire after this long (AS-1); a card past it shows Expired. */
@@ -86,7 +88,7 @@ function proposalOf(p: AsProposal): Proposal {
  * AS-1: the bot's AssistantService on the real assistant (server/assistant.ts's hub, channel "teams"). Ids are numbers
  * in the service and strings here; a DevOps write's undo is in FocusTime's audit log (Settings › Data).
  */
-export function teamsAssistant(a: Pick<Assistant, "handle" | "confirm" | "cancel">, publicUrl: string): AssistantService {
+export function teamsAssistant(a: Pick<Assistant, "handle" | "confirm" | "cancel" | "propose">, publicUrl: string): AssistantService {
   const base = publicUrl.replace(/\/$/, "");
   const idOf = (s: string) => (/^\d{1,10}$/.test(s) ? Number(s) : 0);
   return {
@@ -106,6 +108,10 @@ export function teamsAssistant(a: Pick<Assistant, "handle" | "confirm" | "cancel
     },
     async cancel(i) {
       await a.cancel({ person: i.person, proposalId: idOf(i.proposalId) });
+    },
+    async propose(i) {
+      const r = await a.propose({ person: i.person, tool: i.tool, args: i.args });
+      return r.ok ? { ok: true, proposal: proposalOf(r.proposal) } : r;
     },
   };
 }

@@ -2,17 +2,55 @@
 // (adaptivecards 3.0.6 from unpkg, loaded into the system Chromium for the screenshot only; nothing ships with it) in
 // Teams' light and dark colors, about as wide as a 1:1 chat's card. The cards are the bot's real ones
 // (server/teams/cards.ts), so a change there shows up here.
+// TB-2 adds the rhythm's cards (brief, check-in, close out, nudges, capture), each before and after a tap.
 // Usage: node scripts/teams-card-previews.ts <outDir>
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright-core";
 import { CHROMIUM } from "../e2e/harness.ts";
+import { briefCard, captureCard, checkinCard, closeoutCard, nudgeCard, type InlineProposal, type PickRow } from "../server/teams/rhythm-cards.ts";
 import { cancelledCard, doneCard, expiredCard, failedCard, helpCard, proposalCard, resultCard, workingCard, type Card } from "../server/teams/cards.ts";
 
 const out = process.argv[2] ?? "screenshots/teams";
 mkdirSync(out, { recursive: true });
 const URL_ = "https://focustime.example.com";
 const proposal = { id: "p-1", title: "Move #4211 to Thursday", whoSees: "Everyone on Northwind's DevOps project", changes: [{ field: "Target date", before: "Nov 5", after: "Nov 6" }, { field: "Start date", before: "Nov 3", after: "Nov 4" }], note: "Its two open stories keep their dates.", expiresAt: "2026-11-05T15:15:00Z" };
+// TB-2: the rhythm's cards, fictional.
+const D = { date: "2026-11-05", dateLabel: "Thursday, Nov 5" };
+const pk = (id: number, title: string, client: string, state: PickRow["state"] = "open", note: string | null = null): PickRow => ({ id, title, client, state, note });
+const dests = [{ value: "next", label: "Its next block" }, { value: "2026-11-05:PM", label: "This afternoon" }, { value: "2026-11-09:AM", label: "Mon, Nov 9 morning" }];
+const ip = (o: Partial<InlineProposal>): InlineProposal => ({ proposalId: "41", title: "Close out Thursday, Nov 5: 2 done, 1 moved on", whoSees: "Only you", changes: [{ field: "Fix the login timeout", before: "Not done", after: "Done" }, { field: "Review the export mapping", before: "Not done", after: "Done" }, { field: "Write the onboarding note", before: "Thu, Nov 5 afternoon", after: "Moves to Mon, Nov 9 morning" }, { field: "The day", before: "Open", after: "Closed out" }], note: null, expiresAt: "2026-11-05T22:15:00Z", state: "open", ...o });
+const briefBlocks = [
+  { label: "Morning 08:00–12:00", client: "Northwind", meetings: ["10:30 Standup (20 min)"], picks: [pk(1, "Fix the login timeout", "Northwind"), pk(2, "Review the export mapping", "Northwind")] },
+  { label: "Afternoon 13:00–17:00", client: "Internal", meetings: [], picks: [pk(3, "Write the onboarding note", "Internal")] },
+];
+const brief = { kind: "brief" as const, occasion: "brief:2026-11-05", ...D, blocks: briefBlocks, promises: ["Send the March totals (Northwind)"], sends: ["Export spec (Northwind), from Sam"], committed: false, destinations: dests, more: 0 };
+const checkPicks = [pk(1, "Fix the login timeout", "Northwind"), pk(2, "Review the export mapping", "Northwind"), pk(3, "Write the onboarding note", "Internal")];
+const checkin = { kind: "checkin" as const, occasion: "checkin:2026-11-05", ...D, picks: checkPicks, destinations: dests };
+const closeout = { kind: "closeout" as const, occasion: "closeout:2026-11-05", ...D, picks: checkPicks, closed: false };
+const nudges = { kind: "nudges" as const, occasion: "nudges:2026-11-05T19", items: [
+  { key: "promise:f1", kind: "promise_tonight" as const, title: "Send the March totals", clientName: "Northwind", line: "Due today, still open", route: "#/inbox/my-promises" },
+  { key: "send:s1", kind: "send_waiting" as const, title: "Export spec", clientName: "Northwind", line: "From Sam, waiting for your answer", route: "#/week/commit" },
+  { key: "taken:4417-9", kind: "taken_over" as const, title: "#4417 Login fix", clientName: "Northwind", line: "Sam assigned it to someone else", route: "#/ahead" },
+] };
+const rhythmCards: [string, Card][] = [
+  ["brief", briefCard(brief, URL_)],
+  ["brief-proposal", briefCard({ ...brief, proposal: ip({ title: "Confirm Thursday, Nov 5", changes: [{ field: "Plan", before: "Draft", after: "Confirmed, 3 picks" }] }) }, URL_)],
+  ["brief-done", briefCard({ ...brief, committed: true, proposal: ip({ title: "Confirm Thursday, Nov 5", changes: [{ field: "Plan", before: "Draft", after: "Confirmed, 3 picks" }], state: "done", message: "Thursday is confirmed." }) }, URL_)],
+  ["checkin", checkinCard(checkin, URL_)],
+  ["checkin-ticked", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), pk(2, "Review the export mapping", "Northwind", "not_yet"), checkPicks[2]!] }, URL_)],
+  ["checkin-proposal", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), checkPicks[1]!, checkPicks[2]!], proposal: ip({ title: "Move 2 picks", changes: [{ field: "Review the export mapping", before: "Thu, Nov 5 morning", after: "Thu, Nov 5 afternoon" }, { field: "Write the onboarding note", before: "Thu, Nov 5 afternoon", after: "Mon, Nov 9 morning" }] }) }, URL_)],
+  ["checkin-moved", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), pk(2, "Review the export mapping", "Northwind", "moved", "This afternoon"), pk(3, "Write the onboarding note", "Internal", "moved", "Mon, Nov 9 morning")], proposal: ip({ title: "Move 2 picks", state: "done", message: "Moved 2 picks." }) }, URL_)],
+  ["closeout", closeoutCard(closeout, URL_)],
+  ["closeout-proposal", closeoutCard({ ...closeout, proposal: ip({}) }, URL_)],
+  ["closeout-done", closeoutCard({ ...closeout, closed: true, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), pk(2, "Review the export mapping", "Northwind", "done"), pk(3, "Write the onboarding note", "Internal", "moved", "Mon, Nov 9 morning")], proposal: ip({ state: "done", message: "Day closed out." }) }, URL_)],
+  ["nudges", nudgeCard(nudges, URL_)],
+  ["capture", captureCard({ id: 7, text: "Call Dana about the March export" }, URL_)],
+  ["capture-undone", captureCard({ id: 7, text: "Call Dana about the March export", undone: true }, URL_)],
+  ["brief-test", briefCard({ ...brief, test: true }, URL_)],
+];
+
 const cards: [string, Card][] = [
+  ...rhythmCards,
   ["proposal", proposalCard(proposal)],
   ["changed", proposalCard({ ...proposal, id: "p-2", changes: [{ field: "Target date", before: "Nov 7", after: "Nov 6" }] }, { again: "Someone changed the target date since. Here's the new preview." })],
   ["done", doneCard({ title: proposal.title, message: "Target date is Nov 6 now.", undo: { label: "Undo in FocusTime", url: `${URL_}/#/settings/data` }, links: [{ label: "Open in Ahead", url: `${URL_}/#/ahead` }] }, URL_)],
@@ -49,6 +87,12 @@ for (const [theme, c] of Object.entries(THEMES)) {
           actions: { actionsOrientation: "horizontal", buttonSpacing: 8, showCard: { actionMode: "inline" } },
           factSet: { title: { weight: "Bolder", color: "default", wrap: true, maxWidth: 140 }, value: { wrap: true, color: "default" }, spacing: 10 },
         });
+        // Teams renders markdown links in a TextBlock; the bare renderer needs telling.
+        AC.AdaptiveCard.onProcessMarkdown = (text: string, result: { outputHtml?: string; didProcess?: boolean }) => {
+          const esc = text.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+          result.outputHtml = esc.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, `<a href="$2" style="color:${c.accent}">$1</a>`);
+          result.didProcess = true;
+        };
         ac.parse(card);
         const el = document.getElementById("c")!;
         el.innerHTML = "";
