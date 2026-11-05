@@ -36,7 +36,7 @@ export const TYPE_ICONS: Record<string, string[]> = {
   icon_diamond: ["M8 1 15 8 8 15 1 8z"],
   // Assumption
   icon_palette: ["M8 1.5a6.5 6.5 0 0 0 0 13c1 0 1.5-.6 1.5-1.3 0-1-.9-1.2-.9-2s.6-1.2 1.4-1.2h1.5a3 3 0 0 0 3-3C14.5 3.8 11.6 1.5 8 1.5zM4.5 6.5a1.2 1.2 0 1 1 0 .01zm2.5-2.5a1.2 1.2 0 1 1 0 .01zm3.5.5a1.2 1.2 0 1 1 0 .01z"],
-  // Action (W&C)
+  // Action
   icon_megaphone: ["M1.5 6h3l7-4v12l-7-4h-3zM4.5 10.5h2L7.5 15H5.5zM13 6.5h2v3h-2z"],
   // Deliverable
   icon_check_box: ["M2 2h12v12H2zm1.5 1.5v9h9v-9zM4.6 7.7l1.1-1.1L7.3 8.2l3.1-3.1 1.1 1.1-4.2 4.2z"],
