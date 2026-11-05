@@ -1269,6 +1269,7 @@ export const ESTIMATE_CONVERSION = { sqliteVersion: 28, count: "SELECT COUNT(*) 
 import type { AzureWriteEntry, TeamsStatusEntry } from "../actions/account-types.ts";
 import type { Logger } from "../log/logger.ts";
 import { scopedDb } from "./scope.ts";
+import { BOT_TABLES } from "./teams-bot-store.ts";
 export type { TeamsStatusEntry };
 const toTeamsStatus = (r: Row): TeamsStatusEntry => ({
   id: r.id as number, at: r.at as string, op: r.op as TeamsStatusEntry["op"], status: (r.status as TeamsStatusEntry["status"]) ?? null,
@@ -2945,9 +2946,17 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         await db.run("UPDATE assistant_proposals SET state = ?, done_at = ? WHERE id = ?", c.state, done, id);
       });
     },
-    /** AS-1: Clear in Settings › Data: every turn and proposal of mine. */
+    /**
+     * AS-1: Clear in Settings › Data: every turn and proposal of mine. TB-1b: and the Teams bot's rows (its cards are
+     * the same history from Teams; the chat address and handled ids are rebuilt by my next message). The count is the
+     * assistant's turns and proposals, what the Settings line names.
+     */
     async clearAssistant(): Promise<number> {
-      return tx(async () => (await db.run("DELETE FROM assistant_proposals")).changes + (await db.run("DELETE FROM assistant_turns")).changes);
+      return tx(async () => {
+        const n = (await db.run("DELETE FROM assistant_proposals")).changes + (await db.run("DELETE FROM assistant_turns")).changes;
+        for (const t of BOT_TABLES) await db.run(`DELETE FROM ${t}`);
+        return n;
+      });
     },
     /** AS-1: turns older than `days` go; a proposal goes once it is past its expiry or settled for a day. */
     async pruneAssistant(days: number): Promise<number> {

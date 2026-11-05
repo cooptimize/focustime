@@ -27,6 +27,7 @@ import { assistant } from "./20261109T1200_assistant.ts";
 import { draftAi } from "./20261107T1347_draft_ai.ts";
 import { imagesNoBytes } from "./20261107T1400_images_no_bytes.ts";
 import { teamsBot } from "./20261109T1000_teams_bot.ts";
+import { teamsBotSeen } from "./20261109T1300_teams_bot_seen.ts";
 import type { NamedMigration } from "./named.ts";
 
-export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll, clientAccounts, weekCarry, conversationMerges, messageReactions, messageImages, followUpWhoRef, teamSends, aheadChanges, draftAi, imagesNoBytes, clientLogins, teamsBot, assistant];
+export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll, clientAccounts, weekCarry, conversationMerges, messageReactions, messageImages, followUpWhoRef, teamSends, aheadChanges, draftAi, imagesNoBytes, clientLogins, teamsBot, assistant, teamsBotSeen];

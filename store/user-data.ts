@@ -5,13 +5,16 @@
 import { createHash } from "node:crypto";
 import type { UserRow } from "./accounts.ts";
 import { scopedDb, USER_TABLES } from "./scope.ts";
+import { createTeamsBotStore } from "./teams-bot-store.ts";
 import type { Conn } from "./sql/conn.ts";
 
 /**
  * User tables left out of the export: sealed secrets, push subscriptions (sealed, and tied to one browser), and the
- * Teams bot's chat and cards (TB-1: Teams' plumbing for this tenant, rebuilt by the person's next message).
+ * Teams bot's tables (TB-1, TB-1b): technical addresses (the 1:1 chat's conversation id and service URL), card state
+ * (a proposal id, its title and the outcome card) and hashes of handled activity ids. No content of the person's;
+ * meaningless outside this tenant's bot, and rebuilt by their next message. Delete my data removes them at once.
  */
-export const NOT_EXPORTED: readonly string[] = ["user_secrets", "push_devices", "teams_bot_chats", "teams_bot_cards"];
+export const NOT_EXPORTED: readonly string[] = ["user_secrets", "push_devices", "teams_bot_chats", "teams_bot_cards", "teams_bot_seen"];
 
 /** How long a soft delete waits before everything is removed. */
 export const HARD_DELETE_AFTER_DAYS = 30;
@@ -61,9 +64,14 @@ export async function exportUser(db: Conn, user: UserRow, now: Temporal.Instant)
   };
 }
 
-/** A soft delete: recorded now; the rows stay until the hard delete. The caller ends sessions and forgets secrets. */
+/**
+ * A soft delete: recorded now; the plan's rows stay until the hard delete. The Teams bot's rows go now (TB-1b): where
+ * the person's 1:1 chat is, their cards' state and handled activity ids are only for reaching them, which ends here.
+ * The caller ends sessions and forgets secrets.
+ */
 export async function recordSoftDelete(db: Conn, userId: string, at: Temporal.Instant): Promise<void> {
   await db.run("INSERT INTO deletions (user_hash, requested_at) VALUES (?, ?)", [hashOf(userId), at.toString()]);
+  await createTeamsBotStore({ db, userId, now: () => at }).forget();
 }
 
 /** Removes every row of everyone whose soft delete is 30 days old; returns how many people. */
