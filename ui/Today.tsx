@@ -57,7 +57,7 @@ import { DetailPanel, BreakDown, interactive } from "./DetailPanel.tsx";
 import type { PanelFocus } from "./WeekGrid.tsx";
 import { userZone } from "../week/zone.ts";
 import type { Moment } from "../plan/modes.ts";
-import { urgentLines } from "../plan/urgent.ts";
+import { conversationSource, promiseSource, untimedDue, urgentLines, type UrgentSource } from "../plan/urgent.ts";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { openCoopBrief } from "./menu.ts";
 
@@ -70,6 +70,8 @@ type Props = {
   target: { date: string; isToday: boolean };
   now: string;
   nowMs: number;
+  /** CV-3: more urgent strip sources after conversations and promises (SW-1's sends register here). */
+  urgentSources?: readonly UrgentSource[];
   /** U2: Now, Check-in or Close out: states of this one page. */
   mode: TodayMode;
   /** Close out's day (today by default; any earlier day). */
@@ -146,6 +148,13 @@ export function Today(props: Props) {
   // CV-1: my promises at their time (before, in a block, after), the rest in the follow-ups row; today only.
   const spots = placePromises(target.isToday ? (data.promises ?? []) : [], blocks.map((s) => ({ key: s.half, start: s.start, end: s.end })), date);
   const onPromise = props.onPromises ?? props.onInbox;
+  // CV-3: the strip's sources, and what the attention line carries: promises due today with no time, until their last
+  // 2 working hours (the end of today's last block). The agenda keeps every timed one at its time.
+  const todayPromises = target.isToday ? (data.promises ?? []) : [];
+  const dayEnd = blocks.length ? blocks.map((s) => s.end).sort().at(-1)! : null;
+  const clockNow = new Date(nowMs).toISOString();
+  const urgentSources: UrgentSource[] = [conversationSource(data.requests?.urgent ?? []), promiseSource(todayPromises, { today: date, dayEnd }), ...(props.urgentSources ?? [])];
+  const untimed = untimedDue(todayPromises, { now: clockNow, today: date, dayEnd });
   const focused = useFocused();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -272,7 +281,7 @@ export function Today(props: Props) {
       </h1>
     );
 
-  const attention = mode === "now" ? <Attention noDue={phone}  onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
+  const attention = mode === "now" ? <Attention noDue={phone} promises={untimed} onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
   const panelSlot = panel ? blocks.find((s) => s.half === panel.half) ?? null : null;
 
   return (
@@ -324,7 +333,7 @@ export function Today(props: Props) {
           onDone={committed ? (p) => view.toggle(p.id, true) : null}
         />
       )}
-      {mode === "now" && <UrgentStrip urgent={data.requests?.urgent ?? []} promises={target.isToday ? (data.promises ?? []) : []} today={date} tz={tz} onAsks={props.onAsks ?? props.onInbox} onPromises={onPromise} onAskFocus={(u) => void startAsk(u)} />}
+      {mode === "now" && <UrgentStrip sources={urgentSources} now={clockNow} today={date} tz={tz} onAsks={props.onAsks ?? props.onInbox} onPromises={onPromise} onAskFocus={(u) => void startAsk(u)} />}
       {!wide && attention}
       {mode === "now" && props.moment && <MomentCard m={props.moment} onPlan={() => props.onPlan(date)} onCheckIn={props.onCheckIn} onCloseOut={props.onCloseOut} />}
       {mode === "now" && props.setupLine && props.onSetup && (
@@ -509,27 +518,32 @@ function Attention({ noDue = false, promises = [], soon = [], onPromises, data, 
  * urgency "now") and my promises due today or overdue, one short line each, linking to Inbox › Conversations or
  * My promises. An urgent request keeps its Start focus. Hidden when there is nothing.
  */
-export function UrgentStrip({ urgent, promises, today, tz, onAsks, onPromises, onAskFocus }: { urgent: readonly UrgentAsk[]; promises: readonly DayPromise[]; today: IsoDate; tz: string; onAsks: (conversationId?: number) => void; onPromises: (promiseId?: number) => void; onAskFocus: (u: UrgentAsk) => void }) {
-  const lines = urgentLines(urgent, promises, today);
+export function UrgentStrip({ sources, now, today, tz, onAsks, onPromises, onAskFocus }: { sources: readonly UrgentSource[]; now: string; today: IsoDate; tz: string; onAsks: (conversationId?: number) => void; onPromises: (promiseId?: number) => void; onAskFocus: (u: UrgentAsk) => void }) {
+  const lines = urgentLines(sources, now, tz);
   if (!lines.length) return null;
   return (
     <section className="urgent-strip" aria-label="Urgent">
       <ul>
-        {lines.map((l) => (
-          <li key={l.key} className={`us-item us-${l.kind}${l.kind === "promise" && l.overdue ? " overdue" : ""}`}>
-            <button type="button" className="us-line" onClick={() => (l.kind === "conversation" ? onAsks(l.ask.conversationId ?? undefined) : onPromises(l.promise.id))} title={l.kind === "conversation" ? "Open it in Inbox › Conversations" : "Open it in Inbox › My promises"}>
-              <span className="us-tag">{l.kind === "conversation" ? "Needs you now" : l.overdue ? `Promise · ${wasDueText(l.promise, today, tz).replace(/^Was/, "was")}` : l.dueAt ? `Promise · ${clock(l.dueAt, tz)}` : "Promise due today"}</span>
-              <span className="us-who">{l.who}</span>
-              <span className="us-what">{l.what}</span>
-              <span className="us-go" aria-hidden="true">›</span>
-            </button>
-            {l.kind === "conversation" && (
-              <button type="button" className="mini" onClick={() => onAskFocus(l.ask)} title="Add it to the block under way and start focus on it">
-                Start focus
+        {lines.map((l) => {
+          const open = () => (l.kind === "conversation" ? onAsks(l.ask.conversationId ?? undefined) : l.kind === "promise" ? onPromises(l.promise.id) : l.open?.());
+          const tag = l.kind === "conversation" ? "Needs you now" : l.kind === "other" ? l.tag : l.overdue ? `Promise · ${wasDueText(l.promise, today, tz).replace(/^Was/, "was")}` : l.dueAt ? `Promise · ${clock(l.dueAt, tz)}` : "Promise due today";
+          const late = l.kind !== "conversation" && !!l.overdue;
+          return (
+            <li key={l.key} className={`us-item us-${l.kind === "other" ? l.source : l.kind}${late ? " overdue" : ""}`}>
+              <button type="button" className="us-line" onClick={open} title={l.kind === "conversation" ? "Open it in Inbox › Conversations" : l.kind === "promise" ? "Open it in Inbox › My promises" : undefined}>
+                <span className="us-tag">{tag}</span>
+                <span className="us-who">{l.who}</span>
+                <span className="us-what">{l.what}</span>
+                <span className="us-go" aria-hidden="true">›</span>
               </button>
-            )}
-          </li>
-        ))}
+              {l.kind === "conversation" && (
+                <button type="button" className="mini" onClick={() => onAskFocus(l.ask)} title="Add it to the block under way and start focus on it">
+                  Start focus
+                </button>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
