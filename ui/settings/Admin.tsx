@@ -485,6 +485,7 @@ function AdminAi() {
         </AField>
       </div>
       <h3>Per client</h3>
+      <p className="set-hint">Send attachments to AI: images pasted into the client's chats go to the AI to be described, with Allow AI on. The AI safety check reads text only and can't inspect images, so turning this on is the consent. Images are never kept in FocusTime.</p>
       <div className="set-row-actions">
         <ClientFilter value={filter} counts={data.counts} onChange={setFilter} />
       </div>
@@ -497,7 +498,7 @@ function AdminAi() {
               <th scope="col">Client</th>
               <th scope="col">Allow AI <Kind kind="Rule" /></th>
               <th scope="col" title="While AI is off for the client, or not set up: replies, mentions and the same person within 45 minutes join a conversation">Group messages without AI <Kind kind="Rule" /></th>
-              <th scope="col">Send attachments to AI</th>
+              <th scope="col" title="Chat images go to the AI to be described. The AI safety check reads text only and can't inspect images, so turning this on is the consent">Send attachments to AI <Kind kind="Rule" /></th>
             </tr>
           </thead>
           <tbody>
@@ -521,9 +522,11 @@ function AdminAi() {
                   <SaveMark s={saver.status(`client:${c.key}`, "group_without_ai")} retry={() => void saver.save(`client:${c.key}`, "group_without_ai", c.groupWithoutAi, `${c.key}: Group messages without AI`)} />
                 </td>
                 <td>
-                  <label className="set-check muted" title="Comes in a later step">
-                    <input type="checkbox" disabled checked={false} aria-label={`Send attachments to AI for ${c.key}`} /> Off (later)
+                  {/* CV-4: images from this client's chats go to the AI to be described; the safety check can't inspect images. */}
+                  <label className="set-check">
+                    <input type="checkbox" role="switch" checked={saver.shown(`client:${c.key}`, "attachments_ai", c.attachmentsAi)} aria-label={`Send attachments to AI for ${c.key}`} onChange={(e) => void saver.save(`client:${c.key}`, "attachments_ai", e.target.checked, `${c.key}: Send attachments to AI`)} /> {c.attachmentsAi ? "On" : "Off"}
                   </label>
+                  <SaveMark s={saver.status(`client:${c.key}`, "attachments_ai")} retry={() => void saver.save(`client:${c.key}`, "attachments_ai", c.attachmentsAi, `${c.key}: Send attachments to AI`)} />
                 </td>
               </tr>
             ))}

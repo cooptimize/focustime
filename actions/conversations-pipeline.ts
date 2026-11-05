@@ -16,13 +16,15 @@
 // until Sort unsorted. A FocusTime user's own message with a promise phrase still becomes their promise.
 // Nothing here logs text: counts and kinds only.
 import type { AiService } from "../ai/service.ts";
+import type { AiImage } from "./chat-images.ts";
+import { hostedImageIds } from "../plan/sanitize.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { NO_CLIENT_RULES } from "../config/org.ts";
 import { AiError } from "../ai/types.ts";
 import { askTitle, DEFAULT_ASK_SETTINGS, matchAsk, type AskSettings, type IncomingMessage } from "../plan/asks.ts";
 import { isExternal } from "../plan/chats.ts";
 import {
-  BadAnswer, buildUpdate, checkDue, checkUpdate, dueFromText, dueOf, hintFor, mergeByGroup, messageGroups, NEAR_MINUTES, oneLine, promisePhrase, promiseWhatWithoutAi, ruleVerdict, statusOf, UPDATE_INSTRUCTIONS, UPDATE_SCHEMA, UPDATE_TASK,
+  BadAnswer, buildUpdate, checkDue, checkImageDescriptions, IMAGE_INSTRUCTIONS, UPDATE_SCHEMA_WITH_IMAGES, checkUpdate, dueFromText, dueOf, hintFor, mergeByGroup, messageGroups, NEAR_MINUTES, oneLine, promisePhrase, promiseWhatWithoutAi, ruleVerdict, statusOf, UPDATE_INSTRUCTIONS, UPDATE_SCHEMA, UPDATE_TASK,
   type BatchMessage, type Commitment, type Conversation, type Hint, type OpenConversation, type Participant, type UpdateAnswer,
 } from "../plan/conversations.ts";
 import type { ClientChat, FocusUser, TeamsMessage } from "../plan/requests.ts";
@@ -60,9 +62,14 @@ export type PipelineDeps = {
   groupWithoutAi?: boolean;
   /** The team's request phrases (AP-1's rules), for a rules-only conversation's first message. */
   requestPhrases?: readonly string[];
+  /**
+   * CV-4: the client's "Send attachments to AI" is on: the batch's images, read now with the poll's token (stripped,
+   * within the limits). Absent: no image is sent, only counted.
+   */
+  images?: (messageIds: readonly string[]) => Promise<{ images: AiImage[]; skipped: number }>;
 };
 
-export type PipelineResult = { work: number; chatter: number; acks: number; unsorted: number; conversations: number; commitments: number; aiCalls: number; aiOutcome: string | null };
+export type PipelineResult = { work: number; chatter: number; acks: number; unsorted: number; conversations: number; commitments: number; aiCalls: number; aiOutcome: string | null; /** CV-4 */ imagesSent: number; imagesNotSent: number; described: number };
 
 const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
 
@@ -89,7 +96,7 @@ const firstName = (n: string) => n.split(/\s+/)[0] ?? n;
  * passes the messages waiting as unsorted, which are placed again. Never throws for a message.
  */
 export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: readonly TeamsMessage[]): Promise<PipelineResult> {
-  const out: PipelineResult = { work: 0, chatter: 0, acks: 0, unsorted: 0, conversations: 0, commitments: 0, aiCalls: 0, aiOutcome: null };
+  const out: PipelineResult = { work: 0, chatter: 0, acks: 0, unsorted: 0, conversations: 0, commitments: 0, aiCalls: 0, aiOutcome: null, imagesSent: 0, imagesNotSent: 0, described: 0 };
   if (!batchIn.length) return out;
   const batch = [...batchIn].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((m) => batchOf(m, chat, d.homeTenant));
   const byId = new Map(batch.map((m) => [m.messageId, m]));
@@ -182,8 +189,14 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
   let answer: ReturnType<typeof checkUpdate> | null = null;
   let reason: string | null = null;
   const day = localToday(d.now, d.zone);
+  // CV-4: images in this batch not sent to an AI (switch off or no AI): counted, never read.
+  const batchImages = work.reduce((n, m) => n + hostedImageIds(m.html ?? null).length, 0);
+  if (!d.images || !d.ai) out.imagesNotSent = batchImages;
   if (!d.ai) reason = "not_set_up";
-  else if ((await d.convs.aiCalls(chat.chatId, day)) >= (d.chatCap ?? CHAT_DAILY_AI_CALLS)) reason = "chat_cap";
+  else if ((await d.convs.aiCalls(chat.chatId, day)) >= (d.chatCap ?? CHAT_DAILY_AI_CALLS)) {
+    reason = "chat_cap";
+    out.imagesNotSent = batchImages;
+  }
   else {
     const people = withParticipants(open.flatMap((c) => c.participants), [...before, ...work].map(participantOf));
     const recent = new Map<number, BatchMessage[]>();
@@ -197,9 +210,23 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
       recent.set(c.id, ms);
     }
     const built = buildUpdate({ clientName: d.clientName, chatKind: chat.kind, zone: d.zone, now: d.now, people, open, recent, items: [...(d.items ?? [])].sort((a, b) => (b.changedAt ?? "").localeCompare(a.changedAt ?? "")), batch: work, hints, groups });
+    // CV-4: with the client's switch on, the batch's images go in the same request, each labelled with its message.
+    const withImages = work.filter((m) => hostedImageIds(m.html ?? null).length).map((m) => m.messageId);
+    const pics = withImages.length && d.images ? await d.images(withImages).catch(() => ({ images: [] as AiImage[], skipped: withImages.length })) : { images: [] as AiImage[], skipped: 0 };
+    const refOf = new Map([...built.refs.messages].map(([r, id]) => [id, r]));
+    const sent = pics.images.filter((i) => refOf.has(i.messageId));
+    out.imagesSent = sent.length;
+    if (d.images) out.imagesNotSent = pics.skipped + (pics.images.length - sent.length);
     await d.convs.countAiCall(chat.chatId, day);
     out.aiCalls++;
-    const r = await d.ai.run<UpdateAnswer>({ name: UPDATE_TASK, client: chat.clientKey, instructions: UPDATE_INSTRUCTIONS }, built.text, UPDATE_SCHEMA);
+    const r = sent.length
+      ? await d.ai.run<UpdateAnswer & { images: { ref: string; description: string }[] }>(
+          { name: UPDATE_TASK, client: chat.clientKey, instructions: `${UPDATE_INSTRUCTIONS}\n${IMAGE_INSTRUCTIONS}` },
+          built.text,
+          UPDATE_SCHEMA_WITH_IMAGES,
+          { images: sent.map((i) => ({ label: `Image ${i.ref}, in message ${refOf.get(i.messageId)}:`, dataUrl: i.dataUrl })) },
+        )
+      : await d.ai.run<UpdateAnswer>({ name: UPDATE_TASK, client: chat.clientKey, instructions: UPDATE_INSTRUCTIONS }, built.text, UPDATE_SCHEMA);
     if (!r.ok) reason = r.error instanceof AiError ? r.error.kind : "provider";
     else {
       try {
@@ -207,6 +234,13 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
       } catch (e) {
         if (!(e instanceof BadAnswer)) throw e;
         reason = "unknown_ref";
+      }
+      // The descriptions, only for images that were sent (an unknown ref is ignored, never stored).
+      if (answer && sent.length) {
+        for (const x of checkImageDescriptions((r.value as { images?: { ref: string; description: string }[] }).images ?? [], sent)) {
+          await d.teams.setImageDescription(x.id, x.description);
+          out.described++;
+        }
       }
     }
     out.aiOutcome = answer ? "ok" : reason;

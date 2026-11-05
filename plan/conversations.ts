@@ -368,6 +368,41 @@ export const UPDATE_SCHEMA: JsonSchema = {
   additionalProperties: false,
 };
 
+/** CV-4: the longest image description kept (shown on the card and under the image, only to chat members). */
+export const IMAGE_DESCRIPTION_MAX = 120;
+/** CV-4: added to the instructions when the batch's images go with the request. */
+export const IMAGE_INSTRUCTIONS = [
+  "After the input come images pasted into the batch's messages, each after a line naming it and its message (\"Image i1, in message m3:\"). Read them with their message: an image is part of what that message says.",
+  `images: for every image given, ref (its i ref) and description: at most ${IMAGE_DESCRIPTION_MAX} characters, plain words, what it shows that matters for the work (an error and its text, a report or screen and what is wrong in it). No email addresses, no passwords or keys even if the image shows them.`,
+].join("\n");
+export const UPDATE_SCHEMA_WITH_IMAGES: JsonSchema = {
+  ...UPDATE_SCHEMA,
+  properties: {
+    ...UPDATE_SCHEMA.properties,
+    images: {
+      type: "array",
+      items: { type: "object", properties: { ref: { type: "string" }, description: { type: "string" } }, required: ["ref", "description"], additionalProperties: false },
+    },
+  },
+  required: [...(UPDATE_SCHEMA.required ?? []), "images"],
+};
+/** Secret shapes the guard looks for are never kept in a description (an image may show one). */
+const SECRETISH = /\b(?:[A-Za-z0-9+/_-]{40,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|(?:password|pwd|secret|token|key)\s*[:=]\s*\S+)/gi;
+/**
+ * CV-4: the AI's image descriptions mapped back to the images that were sent: unknown refs are dropped (never
+ * stored), email addresses and anything shaped like a secret removed, one line, at most 120 characters.
+ */
+export function checkImageDescriptions(given: readonly { ref: string; description: string }[], sent: readonly { ref: string; id: number }[]): { id: number; description: string }[] {
+  const out: { id: number; description: string }[] = [];
+  for (const g of given) {
+    const img = sent.find((x) => x.ref === g.ref);
+    if (!img || out.some((x) => x.id === img.id)) continue;
+    const d = withoutEmails(g.description).replace(SECRETISH, "[hidden]").replace(/\s+/g, " ").trim();
+    if (d) out.push({ id: img.id, description: d.length > IMAGE_DESCRIPTION_MAX ? `${d.slice(0, IMAGE_DESCRIPTION_MAX - 1)}…` : d });
+  }
+  return out;
+}
+
 export type UpdateAnswer = {
   messages: { ref: string; kind: "work" | "chatter"; conversation: string | null; confident_new_topic: boolean }[];
   conversations: {

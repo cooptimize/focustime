@@ -248,11 +248,9 @@ export const CLIENT_SPECS = {
   allow_ai: { kind: "rule", area: "ai", label: "Allow AI", builtin: false, parse: bool },
   // CV-3: with AI off for the client (or not set up), group its chat messages into conversations by rules only.
   group_without_ai: { kind: "rule", area: "ai", label: "Group messages without AI", builtin: true, parse: bool },
-  attachments_ai: { kind: "rule", area: "ai", label: "Send attachments to AI", builtin: false, parse: (v) => {
-    // A later step: the switch is shown and stays off.
-    if (bool(v)) throw new OrgInputError("Sending attachments to AI comes in a later step");
-    return false;
-  } },
+  // CV-4: the client's chat images go to the AI with conversations.update, to be described (off by default). The AI
+  // safety check reads text only and can't inspect an image, so this switch is the consent.
+  attachments_ai: { kind: "rule", area: "ai", label: "Send attachments to AI", builtin: false, parse: bool },
   open_states: { kind: "rule", area: "clients", label: "States treated as open", builtin: [] as string[], parse: list(20, 60) },
   // WT-1's process overrides, one switch per type in Admin › Clients (type names; matched without case).
   no_breakdown: { kind: "rule", area: "clients", label: "Types that don't need breakdown", builtin: [] as string[], parse: list(40, 100) },
@@ -370,7 +368,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
   for (const k of clientKeys) {
     const s = `client:${k}`;
     const c = <K extends ClientKeyName>(key: K) => valueOf(m, s, key, CLIENT_SPECS[key] as Spec, CLIENT_SPECS[key].builtin) as (typeof CLIENT_SPECS)[K]["builtin"];
-    clients[k] = { color: c("color"), allowAi: c("allow_ai"), groupWithoutAi: c("group_without_ai"), attachmentsAi: false, openStates: c("open_states"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden"), devopsScope: c("devops_scope") };
+    clients[k] = { color: c("color"), allowAi: c("allow_ai"), groupWithoutAi: c("group_without_ai"), attachmentsAi: c("attachments_ai"), openStates: c("open_states"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden"), devopsScope: c("devops_scope") };
   }
   const levels = Object.fromEntries(
     LEVELS.map((l) => {
