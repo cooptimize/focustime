@@ -392,7 +392,7 @@ calls the same allowlisted actions as the buttons. The bot never calls an action
 - **Cards.** `server/teams/cards.ts`: Adaptive Cards 1.5, `Action.Execute` with an `Action.Submit` fallback; links
   only to FocusTime's own origin. Previews: `scripts/teams-card-previews.ts`, `docs/teams/screens/`.
 - **Store.** `store/teams-bot-store.ts` over the user tables `teams_bot_chats` (where the 1:1 chat is, for later
-  proactive steps; nothing sends from it in TB-1) and `teams_bot_cards` (`store/migrations/20261109T1000_teams_bot.ts`),
+  proactive steps; TB-2 sends from it) and `teams_bot_cards` (`store/migrations/20261109T1000_teams_bot.ts`),
   both left out of the export.
 - **Settings.** `[notify] teams_messages` (`plan/notify.ts` `teamsMessages`, off), Settings › Notifications › In Teams.
 - **Infra and package.** `infra/modules/bot.bicep` (the Azure Bot and its Teams channel) and the identity in
@@ -406,6 +406,38 @@ calls the same allowlisted actions as the buttons. The bot never calls an action
 - **Tests.** `server/teams/sdk.test.ts` (real token checks against a local key server; the connector gets the bot's
   token), `server/teams/bot.test.ts` (both drivers), `server/teams/quick.test.ts` (demo week),
   `scripts/teams-package.test.ts`, the guard's, `config/notify.test.ts`; e2e `e2e/teams-bot.test.ts`.
+
+## TB-2: the bot's daily rhythm in Teams (Nov 5)
+
+The bot can come to the person: a morning brief, a midday check-in, a close out and nudges, each opt-in, in their own
+1:1 chat, through the same actions and the same assistant service as the app.
+
+- **Rules.** `plan/teams-rhythm.ts` (pure): the kinds and their settings (`TeamsRhythm`, in `[notify]` beside
+  `teams_messages`), each kind's window from the person's hours (`rhythmTimes`), the days (`rhythmDay`: Monday to
+  Thursday, Friday when on, never weekends or PTO), what's due and what waits (`rhythmDue`, focus and quiet hours),
+  the idle wake (`nextRhythmWake`), nudges and their hourly limit, `captureText`, `doneFromWords` (close out in my
+  words, matched locally) and `takeoversOf` (DV-1's change log).
+- **Engine.** `server/teams/rhythm.ts` `createRhythm`: `tick` runs first in each person's slow tick
+  (`server/ticks.ts`, the notifier's facts), claims each due occasion in `teams_rhythm` (`store/teams-rhythm-store.ts`,
+  `store/migrations/20261111T0900_teams_rhythm.ts`) and sends its card; a claim is never sent twice (failed and lost
+  rows stay). Data comes only through dispatch: `week.load`, `inbox.list` (IB-1's rows, or `week.load`'s lists and
+  `team.commit` before IB-1), the day's Outlook meetings. `tap` handles the cards' buttons: Done and Undo run
+  `pick.mark_done`; moves, Confirm today and Close out go through the assistant's `propose()` and its confirm
+  (claimed once in `teams_bot_cards`). `capture` and `closeoutReply` serve the bot's messages; `test` sends one kind now.
+  `pacedSender`: 10 sends a second, 3 retries on 429, 412, 502 and 504 with backoff and jitter, `Blocked` on a
+  blocked chat (turns the setting off; `BLOCKED_KEY` in the plan state until the next message).
+- **Cards.** `server/teams/rhythm-cards.ts`: one card per kind, updated in place after each tap, with the proposal
+  inline; links to the app's own routes and to Settings › Notifications › In Teams. Previews:
+  `scripts/teams-card-previews.ts` (light and dark, every card and its after-tap states).
+- **Bot.** `server/teams/bot.ts`: a message starting "capture:" or "c:" is captured; quick commands next; then a reply
+  to an open Close out card; then the assistant. A rhythm tap is recognized before TB-1's confirm and cancel.
+- **Assistant.** `propose(tool, args)` and the tools `move_picks` and `close_day` (`assistant/service.ts`,
+  `assistant/allowlist.ts`, `docs/assistant-interface.md`).
+- **Settings.** Settings › Notifications › In Teams: the status line (hosted only, blocked, no chat yet), the master
+  switch, What FocusTime sends (each kind, its time, Send me a test now, Also on Fridays). Actions `teams.status` and
+  `teams.test` (`actions/dispatch.ts`, wired by `server/main.ts` only where the bot runs).
+- **Tests.** `plan/teams-rhythm.test.ts`, `server/teams/rhythm.test.ts` (both drivers, real dispatch and assistant),
+  `server/teams/bot.test.ts`, `assistant/service.test.ts` (propose, move_picks, close_day), e2e `e2e/teams-bot.test.ts`.
 
 ## AS-1: the assistant (Nov 5)
 

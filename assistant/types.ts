@@ -145,6 +145,14 @@ export type ConfirmResult =
 
 export type CancelInput = { person: Person; proposalId: number };
 
+/**
+ * TB-2: a proposal a button asks for, with no AI call (it works with AI off). Only FocusTime plan tools
+ * (assistant/allowlist.ts PROPOSE_TOOLS); the args are the tool's own (allowlist.ts specs). The proposal is the same
+ * one the model would make: the button's preview, 15 minutes, and confirm() re-checks everything.
+ */
+export type ProposeInput = { person: Person; tool: "move_pick" | "keep_pick" | "drop_pick" | "confirm_day" | "move_picks" | "close_day"; args: Record<string, unknown> };
+export type ProposeResult = { ok: true; proposal: Proposal } | { ok: false; message: string };
+
 export type TranscribeInput = { person: Person; audio: Uint8Array; mime: string; seconds: number; context?: AssistantContext };
 export type TranscribeResult = { ok: true; text: string } | { ok: false; reason: "off" | "client_off" | "not_set_up" | "over_budget" | "too_long" | "too_large" | "format" | "provider"; message: string };
 
@@ -155,6 +163,7 @@ export type Assistant = {
   handle(i: HandleInput): Promise<HandleResult>;
   confirm(i: ConfirmInput): Promise<ConfirmResult>;
   cancel(i: CancelInput): Promise<{ ok: true }>;
+  propose(i: ProposeInput): Promise<ProposeResult>;
   transcribe(i: TranscribeInput): Promise<TranscribeResult>;
   history(i: { person: Person; limit?: number }): Promise<Turn[]>;
   clear(i: { person: Person }): Promise<{ ok: true; removed: number }>;

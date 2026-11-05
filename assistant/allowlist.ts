@@ -34,6 +34,9 @@ export const TOOLS = {
   send: { kind: "proposal", actions: ["send.people", "send.create"], spec: { name: "send", description: "Propose sending a feature or story to a teammate's week (this week or next), as suggested or (leads only) must.", parameters: obj({ itemId: id("The work item id"), to: s("The person's name as I said it"), kind: { type: "string", enum: ["suggested", "must"] }, week: { type: "string", enum: ["this", "next"] }, note: sn("A short note, or null") }) } },
   comment: { kind: "proposal", actions: ["devops.preview", "devops.confirm"], spec: { name: "comment", description: "Propose adding a comment to a DevOps work item, in my words.", parameters: obj({ itemId: id("The work item id"), text: s("The comment, from what I said") }) } },
   description: { kind: "proposal", actions: ["devops.preview", "devops.confirm"], spec: { name: "description", description: "Propose a new description for a DevOps work item (the whole text after the change).", parameters: obj({ itemId: id("The work item id"), after: s("The whole description after the change") }) } },
+  // TB-2: several picks at once (Check-in's Move the rest, a Teams card's choices), and Close out in one confirm.
+  move_picks: { kind: "proposal", actions: ["pick.move"], spec: { name: "move_picks", description: "Propose moving several of my picks, each to a day and half.", parameters: obj({ moves: { type: "array", minItems: 1, maxItems: 12, items: obj({ pickId: id("The pick's id, from a read"), date: date("The day to move it to"), half }) } }) } },
+  close_day: { kind: "proposal", actions: ["pick.mark_done", "pick.move", "closeout.commit"], spec: { name: "close_day", description: "Propose closing out a day: mark the picks I name done, move the unfinished ones into their client's next block (or the unfinished list when there is none), and mark the day closed out.", parameters: obj({ date: date("The day, YYYY-MM-DD"), donePickIds: { type: "array", maxItems: 30, items: id("A pick's id, from a read") } }) } },
   capture: { kind: "proposal", actions: ["capture.add", "capture.route", "draft.prepare"], spec: { name: "capture", description: "Propose capturing a line to sort later, or as a draft story for the client.", parameters: obj({ text: s("What to capture, in my words"), as: { type: "string", enum: ["sort_later", "draft_story"] } }) } },
   // ---- Not yet ----
   close_loop: { kind: "stub", actions: [], spec: { name: "close_loop", description: "Close a loop (a follow-up or promise). Not available yet.", parameters: obj({}) } },
@@ -45,11 +48,19 @@ export const isTool = (n: string): n is ToolName => Object.hasOwn(TOOLS, n);
 /** Proposal tools that change DevOps items or the change set: their item must come from my words, the screen or a read. */
 export const ITEM_TOOLS: readonly ToolName[] = ["add_must", "ahead_change", "send", "comment", "description"];
 export const PICK_TOOLS: readonly ToolName[] = ["move_pick", "drop_pick", "keep_pick"];
+/** TB-2: tools whose arguments carry several pick ids (each must come from a read, like PICK_TOOLS' one). */
+export const PICKS_TOOLS: readonly ToolName[] = ["move_picks", "close_day"];
+/**
+ * TB-2: the proposals a button may ask for with propose() (no AI call): FocusTime's plan only, never DevOps. The
+ * preview, the 15 minutes and every confirm check are the same as a proposal the model made.
+ */
+export const PROPOSE_TOOLS = ["move_pick", "keep_pick", "drop_pick", "confirm_day", "move_picks", "close_day"] as const satisfies readonly ToolName[];
+export type ProposeTool = (typeof PROPOSE_TOOLS)[number];
 
 /** Never reachable from the assistant, whatever the model asks (checked by the test against the list above). */
 export const NEVER: readonly string[] = [
   "admin.", "settings.save", "secret.set", "devops.set_write_pat", "devops.clear_write_pat", "auth.", "data.", "plan.reset", "demo.set", "chats.", "requests.purge", "vm.", "timer.", "presence.", "push.",
-  "assistant.ask", "assistant.confirm", "assistant.cancel", "assistant.clear", "write.confirm", "stories.publish", "feedback.send",
+  "assistant.ask", "assistant.confirm", "assistant.cancel", "assistant.clear", "teams.", "write.confirm", "stories.publish", "feedback.send",
 ];
 
 /**
@@ -58,5 +69,5 @@ export const NEVER: readonly string[] = [
  */
 export const RUNS: ReadonlySet<ActionName> = new Set<ActionName>([
   ...Object.values(TOOLS).flatMap((t) => t.actions as readonly ActionName[]),
-  "week.load", "ahead.load", "conversations.list", "team.commit", "send.today", "send.people", "devops.preview", "devops.confirm", "capture.route", "draft.prepare",
+  "week.load", "ahead.load", "conversations.list", "pick.mark_done", "closeout.commit", "team.commit", "send.today", "send.people", "devops.preview", "devops.confirm", "capture.route", "draft.prepare",
 ]);

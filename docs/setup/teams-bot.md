@@ -100,6 +100,24 @@ and FocusTime replies with a token for the bot's managed identity that Azure iss
 had to be replaced, deleting `ft-<env>-bot-id` and deploying again makes a new one with a new client id; then build
 and upload the package again with the new `--bot-id` (people keep their chat).
 
+## Testing the daily rhythm on dev (TB-2)
+
+Dev scales to zero, and there is no scheduled wake-up for it, so a morning brief, check-in or close out goes on dev
+only if the app happens to be awake inside that kind's window. To see each one:
+
+1. In Teams, send FocusTime (dev) any message once, so it knows where your chat is.
+2. In dev's FocusTime: Settings › Notifications › In Teams. The line at the top should not say "Message FocusTime in
+   Teams once…" (it does until step 1 reaches it).
+3. Turn on Let FocusTime message me in Teams, then Send me a test now beside a kind. The card comes at once, marked
+   "(test)", whatever the switches, the time, quiet hours or focus say. Nudges use a sample when nothing is due.
+4. Tap through it: Done and Undo change your plan at once (look at Today); Move…, Confirm today and Close out show a
+   proposal in the card that changes nothing until Confirm. Reply to a Close out card in your own words ("all but 2").
+   Send "capture: something" and look in Inbox › Captures.
+
+In prod (always at one replica) each kind goes at its time for people who turned it on. If Teams says a person
+blocked the bot or removed the app, their switch turns off and Settings says "FocusTime can't message you in Teams.
+Add the app again."; their next message to the bot clears that.
+
 ## Who can use it
 
 Only Cooptimizers who have signed in to FocusTime once: their Teams sign-in (Entra object id) is their FocusTime user.
