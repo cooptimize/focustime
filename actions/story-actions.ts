@@ -12,7 +12,7 @@ import { validate } from "../ai/schema.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { sizeChipText, validStorySize } from "../plan/estimate.ts";
 import {
-  COOP_PROPOSALS_V1, draftInput, publishOrder, DRAFT_INSTRUCTIONS, editProblem, estimateMicros, exemplarView, houseStyle, houseStyleStale, HOUSE_STYLE_MAX, MAX_PROPOSALS, NOTE_MAX, proposalProblems, rankExemplars, styleText, toProposal, trimComments,
+  COOP_PROPOSALS_V1, draftInput, publishOrder, DRAFT_INSTRUCTIONS, editProblem, estimateMicros, exemplarView, houseStyle, houseStyleStale, MAX_PROPOSALS, NOTE_MAX, proposalProblems, rankExemplars, styleText, toProposal, trimComments,
   EXEMPLAR_MAX, type CoopProposals, type ExemplarCandidate, type FeatureSignals, type HouseStyle, type Proposal, type StoryDraft,
 } from "../plan/stories.ts";
 import type { DevOpsWriteEntry } from "../plan/devopswrite.ts";
@@ -88,21 +88,21 @@ export async function storyAction(ctx: StoryContext, action: StoryAction, input:
   }
 }
 
-/** Where AI stands for a client: on, off (Use AI), not allowed for it, not set up, or not here at all. */
+/** Where AI stands for a client: on, off (an admin's switch for FocusTime), not allowed for it, not set up. */
 type AiState = "on" | "off" | "client_off" | "not_set_up";
 async function aiState(ctx: StoryContext, cfg: AppConfig, clientKey: string | null): Promise<AiState> {
   const ai = await ctx.ai();
   if (!ai) return "not_set_up";
   const st = await ai.status();
   if (!st.setUp) return "not_set_up";
-  if (!cfg.ai.use) return "off";
-  if (clientKey && !cfg.ai.allowedClients.includes(clientKey)) return "client_off";
+  if (!cfg.aiRules.on) return "off";
+  if (clientKey && !cfg.aiRules.allowedClients.includes(clientKey)) return "client_off";
   return "on";
 }
 
 const AI_WORDS: Record<Exclude<AiState, "on">, (client: string) => string> = {
-  off: () => "AI is off. Turn on Use AI in Settings › AI.",
-  client_off: (c) => `AI is off for ${c}. Turn on Allow AI for ${c} in Settings › Clients.`,
+  off: () => "AI is off for FocusTime. A FocusTime admin turns it on in Admin › AI.",
+  client_off: (c) => `AI is off for ${c}. A FocusTime admin allows it in Admin › AI.`,
   not_set_up: () => "AI isn't set up for this FocusTime yet. The Coop brief still works.",
 };
 const NO_PAT = (c: string) => `Add DevOps write access for ${c} in Settings`;
@@ -141,14 +141,24 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
     return { ...rest, cost: fmtUsd(costMicros), cards, published, left };
   };
 
-  /** The house style for a client: the person's edit, else the computed one (computed again after a week). */
+  /**
+   * ADM-1: the house style is a Rule per client. The team's style (Admin › Clients) wins; without one, the learned
+   * style is used (computed again after a week). A person's own edit from before is no longer used.
+   */
+  const teamStyle = (clientKey: string): string | null => cfg.org?.clients[clientKey]?.houseStyle ?? null;
+  const withTeam = (clientKey: string, h: HouseStyle | null): HouseStyle | null => {
+    const team = teamStyle(clientKey);
+    if (team) return { clientKey, computed: h?.computed ?? null, computedAt: h?.computedAt ?? null, learned: h?.learned ?? false, edited: team, editedAt: null };
+    return h ? { ...h, edited: null, editedAt: null } : null;
+  };
+  const styleOf = async (clientKey: string) => withTeam(clientKey, await plan.houseStyle(clientKey));
   const styleFor = async (clientKey: string, pool: readonly ExemplarCandidate[] | null): Promise<HouseStyle | null> => {
     const cur = await plan.houseStyle(clientKey);
     if (pool && (!cur?.computedAt || houseStyleStale(cur.computedAt, ctx.now()))) {
       const h = houseStyle(pool);
-      return plan.setComputedHouseStyle(clientKey, h.text, h.learned);
+      return withTeam(clientKey, await plan.setComputedHouseStyle(clientKey, h.text, h.learned));
     }
-    return cur;
+    return withTeam(clientKey, cur);
   };
 
   const signalsOf = async (clientKey: string, featureId: number): Promise<FeatureSignals> => {
@@ -189,7 +199,8 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
       fields(input ?? {}, []);
       const ai = await ctx.ai();
       const st = ai ? await ai.status() : null;
-      return { ok: true, data: { setUp: !!st?.setUp, use: cfg.ai.use, allowed: cfg.ai.allowedClients, write: await ctx.writeClients() } };
+      // ADM-1: AI is the admins' (on for FocusTime, allowed per client); "offered" is the person's guidance (their level's default or their own).
+      return { ok: true, data: { setUp: !!st?.setUp, on: cfg.aiRules.on, allowed: [...cfg.aiRules.allowedClients], offered: cfg.org?.guidance.draftStories ?? true, write: await ctx.writeClients() } };
     }
     case "stories.prepare": {
       const o = fields(input, ["clientKey", "featureId"]);
@@ -257,7 +268,7 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
       const signals = await signalsOf(d.clientKey, d.featureId);
       const pool = (await poolOf(d.clientKey)) ?? [];
       const exemplars = d.exemplarIds.map((id) => pool.find((c) => c.id === id)).filter((c): c is ExemplarCandidate => !!c);
-      const style = styleText(await plan.houseStyle(d.clientKey));
+      const style = styleText(await styleOf(d.clientKey));
       if (o.proposalId !== undefined) {
         const pid = text(o.proposalId, "proposalId", 16);
         const target = d.proposals.find((p) => p.id === pid);
@@ -345,15 +356,13 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
       const clientKey = text(o.clientKey, "clientKey", 100);
       const pool = o.recompute === true ? await poolOf(clientKey) : null;
       if (o.recompute === true && pool) await plan.setComputedHouseStyle(clientKey, houseStyle(pool).text, houseStyle(pool).learned);
-      const h = await plan.houseStyle(clientKey);
-      return { ok: true, data: { clientKey, text: styleText(h), computed: h?.computed ?? null, computedAt: h?.computedAt ?? null, learned: !!h?.learned, edited: h?.edited ?? null, read: o.recompute === true ? pool !== null : null } };
+      const h = await styleOf(clientKey);
+      return { ok: true, data: { clientKey, text: styleText(h), computed: h?.computed ?? null, computedAt: h?.computedAt ?? null, learned: !!h?.learned, edited: null, team: teamStyle(clientKey), read: o.recompute === true ? pool !== null : null } };
     }
     case "stories.house_style_save": {
-      const o = fields(input, ["clientKey", "text"]);
-      const clientKey = text(o.clientKey, "clientKey", 100);
-      const t = o.text === null ? null : text(o.text, "text", HOUSE_STYLE_MAX, true).trim() || null;
-      const h = await plan.editHouseStyle(clientKey, t);
-      return { ok: true, data: { clientKey, text: styleText(h), computed: h.computed, computedAt: h.computedAt, learned: h.learned, edited: h.edited } };
+      // ADM-1: a client's house style is the team's (a Rule): admins set it in Admin › Clients (admin.set).
+      fields(input, ["clientKey", "text"]);
+      throw new Refused("A client's house style is set by your FocusTime admin, in Admin › Clients", 403, "admin_setting");
     }
   }
 }

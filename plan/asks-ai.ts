@@ -162,6 +162,7 @@ export function notSortedText(k: NotSorted, clientName: string): string {
     case "client_off": return `AI isn't allowed for ${clientName}`;
     case "not_set_up": return "AI isn't set up";
     case "over_budget": return "AI budget reached for this month";
+    case "budget_zero": return "AI budget is set to $0";
     case "refused_client": return "it mentions another client";
     case "refused_secret": return "it contains something that looks like a key or secret";
     case "refused_email": return "it contains an email address";

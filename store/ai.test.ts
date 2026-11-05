@@ -4,7 +4,7 @@
 // instructions, the input or the answer.
 import { expect, it } from "vitest";
 import { addUsers, forEachDriver } from "../test/db.ts";
-import { aClientEntry, anAiApp, anAiPerson } from "../test/builders/index.ts";
+import { aClientEntry, anAiApp, anAiRules } from "../test/builders/index.ts";
 import { createAi } from "../ai/service.ts";
 import { stubProvider } from "../ai/stub.ts";
 import type { AiLogEntry } from "../ai/types.ts";
@@ -66,7 +66,7 @@ await forEachDriver("AI log and spend (AI-0)", ({ open }) => {
     const ai = createAi({
       provider: async () => stubProvider({ respond: () => replies.shift() ?? "{}" }),
       app: anAiApp(),
-      person: async () => anAiPerson({ allowedClients: ["fabrikam"] }),
+      rules: async () => anAiRules({ allowedClients: ["fabrikam"] }),
       guard: async () => ({ directory: [aClientEntry({ key: "fabrikam" }), aClientEntry({ key: "northwind", names: ["Northwind Traders"], projects: [], itemIds: [] })], homeDomains: ["cooptimize.example"], forbidden: [] }),
       log: { add: (e) => ana.addAiRequest(e), spentMicros: (a, b) => ana.aiSpentMicros(a, b), recent: (n) => ana.aiRequests(n) },
       appSpend: spend,

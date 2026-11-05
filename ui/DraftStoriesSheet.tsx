@@ -9,7 +9,7 @@ import { call } from "./api.ts";
 import { DRAFT_STORIES_EVENT, openDraftStories } from "./menu.ts";
 import { WorkLink } from "./WorkLink.tsx";
 
-type StoryStatus = { setUp: boolean; use: boolean; allowed: string[]; write: string[] };
+type StoryStatus = { setUp: boolean; on: boolean; allowed: string[]; offered: boolean; write: string[] };
 type Size = "S" | "M" | "L" | null;
 type CardStatus = { state: "not_sent" } | { state: "created"; itemId: number; url: string | null } | { state: "pending" | "unconfirmed" | "failed" | "refused" | "undone"; message: string; writeId: number };
 type Card = { id: string; title: string; description: string; acceptance: string[]; dependsOn: string[]; size: Size; evidence: string[]; questions: string[]; keep: boolean; status: CardStatus; after: string[]; sizeText: string };
@@ -42,12 +42,13 @@ const forgetStatus = () => void (statusCache = null);
 /** The button on a Needs stories row: opens the sheet, or Settings when AI is off for this client. */
 export function DraftStoriesButton({ clientKey, clientName, item }: { clientKey: string; clientName?: string; item: { id: number; title: string } }) {
   const st = useStoryStatus();
-  const on = !!st && st.setUp && st.use && st.allowed.includes(clientKey);
+  const on = !!st && st.setUp && st.on && st.allowed.includes(clientKey);
   const name = clientName ?? clientKey;
+  // ADM-1: a person (or their level's default) can turn the offer off in Settings › Planning; the Coop brief stays.
+  if (st && !st.offered) return null;
   if (st && !on) {
-    const section = !st.setUp || !st.use ? "ai" : "clients";
     return (
-      <button type="button" className="link-btn tw-draft ds-off" title={!st.setUp ? "AI isn't set up for this FocusTime" : !st.use ? "Turn on Use AI in Settings › AI" : `Turn on Allow AI for ${name} in Settings › Clients`} onClick={() => void (location.hash = `#/settings/${section}`)}>
+      <button type="button" className="link-btn tw-draft ds-off" title={!st.setUp ? "AI isn't set up for this FocusTime" : !st.on ? "AI is off for FocusTime. A FocusTime admin turns it on." : `AI isn't allowed for ${name}. A FocusTime admin decides.`} onClick={() => void (location.hash = "#/settings/ai")}>
         Draft stories (AI is off for {name})
       </button>
     );
