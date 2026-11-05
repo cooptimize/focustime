@@ -7,6 +7,7 @@
 import { mkdirSync } from "node:fs";
 import { devices, type Page } from "playwright-core";
 import { startDemo, WEBKIT } from "../e2e/harness.ts";
+import { isPickable } from "../plan/rules.ts";
 
 const out = process.argv[2] ?? "screenshots/phone";
 const only = process.argv[3]?.split(",") ?? null;
@@ -49,7 +50,7 @@ async function planToday(page: Page) {
     const client = slot.focus[0]?.clientKey;
     if (!client || slot.off) continue;
     const work = d.devops?.find((w) => w.clientKey === client);
-    const stories = [...(work?.children ?? []), ...(work?.items ?? [])].filter((i) => i.level === "story" && i.stateCategory !== "Resolved" && !used.has(i.id)).slice(0, 2);
+    const stories = [...(work?.children ?? []), ...(work?.items ?? [])].filter((i) => isPickable(i as never) && !used.has(i.id)).slice(0, 2);
     for (const [k, s] of stories.entries()) {
       used.add(s.id);
       await act(page, "pick.add", { date, half: slot.half, clientKey: client, itemId: s.id, size: k === 0 ? "M" : "S" });

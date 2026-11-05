@@ -1,6 +1,7 @@
 // The Roadmap view (step 16, D278 to D282): features and epics I own across followed clients, read-only. Built from
 // the step 8 portfolio read; the only thing it writes is a local daily snapshot of done and open counts per item, from
 // a live read. Nothing external is written here: the row actions use the existing named actions.
+import { countsAsDone, isProposed, isRemoved } from "../plan/process.ts";
 import { mapSeq } from "./seq.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { matchCooptimizer, type Teammate } from "../plan/people.ts";
@@ -116,10 +117,9 @@ const GROUP_ORDER: Record<RoadmapStory["group"], number> = { blocked: 0, active:
 function storiesOf(i: PortfolioItem, match: (name: string | null, email: string | null | undefined) => string | null): RoadmapStory[] {
   const level = i.tier === "epic" ? "portfolio" : "story";
   return i.children
-    .filter((c) => c.level === level && c.stateCategory !== "Removed")
+    .filter((c) => c.level === level && !isRemoved(c.stateCategory))
     .map((c): RoadmapStory => {
-      const done = c.stateCategory === "Resolved" || c.stateCategory === "Completed";
-      const group = done ? "done" : c.blocked ? "blocked" : c.stateCategory === "Proposed" ? "new" : "active";
+      const group = countsAsDone(c.stateCategory) ? "done" : c.blocked ? "blocked" : isProposed(c.stateCategory) ? "new" : "active";
       return { id: c.id, title: c.title, state: c.state, group, assignee: c.mine ? "You" : c.assignedTo, email: c.mine ? null : match(c.assignedTo, c.assignedToEmail), url: c.url };
     })
     .sort((a, b) => GROUP_ORDER[a.group] - GROUP_ORDER[b.group]);

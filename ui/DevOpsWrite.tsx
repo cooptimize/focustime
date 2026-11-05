@@ -3,6 +3,7 @@ import { whenText } from "./labels.ts";
 // and after, link changes, the identity it writes as and who can see it. Confirm writes (with the rev test), reads
 // back, and only then says so; a refusal because the item changed offers Reload (a fresh preview), anything not
 // confirmed offers Retry. Clients without a write PAT get "Enable DevOps writes" (Settings > Clients) instead.
+import { categoryWord } from "../plan/process.ts";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { DevOpsLogView, DevOpsPreview, DevOpsResult } from "../actions/types.ts";
 import type { StateInfo } from "../plan/devopswrite.ts";
@@ -290,7 +291,7 @@ function AskDialog({ ask, onClose, onPreview }: { ask: Ask; onClose: () => void;
               <select ref={first} value={state} onChange={(e) => setState(e.target.value)}>
                 {states.map((s) => (
                   <option key={s.name} value={s.name}>
-                    {s.name} ({s.category === "InProgress" ? "in progress" : s.category.toLowerCase()})
+                    {s.name} ({categoryWord(s.category)})
                   </option>
                 ))}
               </select>
