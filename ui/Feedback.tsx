@@ -201,7 +201,7 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
               <p className="feedback-note" role="status">{step.r.message}</p>
             )}
             <div className="feedback-actions">
-              <button ref={primary} type="button" className="commit" onClick={onClose}>Close</button>
+              <button ref={primary} type="button" className="commit" onClick={onClose}>Done</button>
             </div>
           </div>
         )}

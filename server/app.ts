@@ -67,7 +67,16 @@ export type AppOptions = {
   onError?: (e: unknown, where: string) => void;
   /** CV-2: one chat image for this person (the member and client checks); by default actions/dispatch.ts's. */
   chatImage?: (ctx: ActionContext, id: number) => Promise<ServedImage>;
+  /**
+   * HK-3: someone really used FocusTime (a call the page marked "active": visible, with input in the last N minutes;
+   * or its once-a-minute report at /api/activity). Returns the Rule's minutes for the page. Background calls never
+   * reach this.
+   */
+  onUse?: (s: Session) => number | null;
 };
+
+/** HK-3: the header a page call carries: "active" only for real use (ui/activity.ts). */
+export const USE_HEADER = "x-focustime-use";
 
 /** A4: liveness and readiness for the platform's probes (no session, no database call). */
 export const HEALTH_PATH = "/healthz";
@@ -318,7 +327,11 @@ export function createApp(opts: AppOptions) {
         opts.log({ source: "server", op: "denied", status: 403, kind: "csrf" });
         return json(res, 403, { ok: false, status: 403, code: "csrf", error: "This page is out of date. Reload it" });
       }
+      const used = header(USE_HEADER) === "active";
+      // HK-3: the page's report of real use; nothing else happens here.
+      if (url.pathname === "/api/activity") return json(res, 200, { idleMinutes: (used ? opts.onUse?.(s) : null) ?? null });
       if (url.pathname === "/api/action") {
+        if (used) opts.onUse?.(s);
         if (!(header("content-type") ?? "").startsWith("application/json")) {
           res.writeHead(415);
           return res.end();

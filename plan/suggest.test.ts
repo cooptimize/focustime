@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { legacyHours } from "../config/schema.ts";
 import { aClient, aFocusBlock, aPick, aPto, aWeek, aWeekConfig, WEEK } from "../test/builders/index.ts";
-import { nextBlockFor, originNote, suggestCarry } from "./suggest.ts";
+import { carryListed, nextBlockFor, originNote, suggestCarry } from "./suggest.ts";
 
 const contoso = aClient({ name: "Contoso" });
 const other = aClient({ name: "Fabrikam" });
@@ -60,5 +60,22 @@ describe("originNote (UI-B)", () => {
     expect(originNote(p, new Map([[7, { date: "2026-11-05", half: "PM" as const }]]))).toBe("→ suggested Thu PM");
     expect(originNote({ ...p, status: "moved", carriedTo: { date: "2026-11-05", half: "PM" } }, new Map())).toBe("→ moved to Thu PM");
     expect(originNote(p, new Map())).toBeNull();
+  });
+});
+
+describe("Plan today's list (HK-3)", () => {
+  it("leaves out picks suggested in a block, this day's or another day's; keeps those with no block left", () => {
+    const week = aWeek({ patterns: [aFocusBlock({ client: contoso, days: { Wed: "PM", Thu: "AM" } })] });
+    const here = aPick({ clientKey: contoso.clientKey, date: "2026-11-02" });
+    const noBlock = aPick({ clientKey: other.clientKey, date: "2026-11-03" });
+    const lastWeek = aPick({ clientKey: other.clientKey, date: "2026-10-28" });
+    // Wednesday afternoon: Contoso's next block is Wed PM.
+    const wed = suggestCarry([here, noBlock, lastWeek], week.days, WEEK, at("2026-11-04T13:00"));
+    const suggested = new Map(wed.cards.map((s) => [s.pick.id, s.to] as const));
+    expect(carryListed([here, noBlock, lastWeek], suggested).map((p) => p.id)).toEqual([noBlock.id, lastWeek.id]);
+    // After Wednesday's block ends it is suggested Thursday morning: still not in Wednesday's list.
+    const thu = suggestCarry([here], week.days, WEEK, at("2026-11-04T18:00"));
+    expect(thu.cards[0]?.to).toEqual({ date: "2026-11-05", half: "AM" });
+    expect(carryListed([here], new Map(thu.cards.map((s) => [s.pick.id, s.to] as const)))).toEqual([]);
   });
 });

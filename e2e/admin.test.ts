@@ -176,6 +176,8 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await body.getByRole("switch", { name: "AI on" }).click();
       await body.getByRole("alertdialog", { name: "Turn AI off for everyone" }).getByRole("button", { name: "Cancel" }).click();
       expect((await team.org.rules()).ai.on).toBe(true);
+      // HK-3: focus goes back to the switch.
+      await expect.poll(() => body.getByRole("switch", { name: "AI on" }).evaluate((e) => e === document.activeElement)).toBe(true);
 
       // Admin › Conversations.
       await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Conversations" }).click();

@@ -28,7 +28,7 @@ export function useConversationCount(version: number): [number | null, (n: numbe
   const [promises, setPromises] = useState<number | null>(null);
   useEffect(() => {
     let live = true;
-    const read = () => void call<{ needsYou: number; myPromisesOpen: number }>("conversations.count", {}).then((d) => live && (setCount(d.needsYou), setPromises(d.myPromisesOpen)), () => undefined);
+    const read = () => void call<{ needsYou: number; myPromisesOpen: number }>("conversations.count", {}, { background: true }).then((d) => live && (setCount(d.needsYou), setPromises(d.myPromisesOpen)), () => undefined);
     read();
     const id = setInterval(() => !document.hidden && read(), INBOX_COUNT_MS);
     return () => {

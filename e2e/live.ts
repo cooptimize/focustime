@@ -4,7 +4,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { chromium, type Browser, type Page } from "playwright-core";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { createServer, type ViteDevServer } from "vite";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { parseConfig } from "../config/schema.ts";
@@ -170,11 +170,17 @@ export async function liveBrowser(): Promise<LiveBrowser> {
     start: async (ctx) => {
       const app = await startTestApp({ ctx, now: () => Temporal.Instant.from(NOW), ...(dist ? { distDir: dist } : {}), extra: vite ? { devMiddleware: vite.middlewares } : {} });
       const s = await app.browser().signIn(ME);
+      const contexts = new Set<BrowserContext>();
       return {
         url: `${app.publicUrl}/?now=${encodeURIComponent(NOW)}`,
-        close: app.close,
+        // HK-3: the browser first, so its pages' timers stop before the server waits on their connections.
+        close: async () => {
+          await Promise.all([...contexts].map((c) => c.close().catch(() => {})));
+          await app.close();
+        },
         page: async () => {
           const context = await browser.newContext({ viewport: { width: 1920, height: 1080 }, serviceWorkers: "block" });
+          contexts.add(context);
           await context.addCookies([
             { name: SESSION_COOKIE, value: s.cookie, url: app.publicUrl.replace("http:", "https:"), secure: true, httpOnly: true, sameSite: "Lax" },
             { name: CSRF_COOKIE, value: s.csrf, url: app.publicUrl.replace("http:", "https:"), secure: true, sameSite: "Strict" },
