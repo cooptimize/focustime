@@ -61,3 +61,31 @@ export function agendaNowIndex(starts: readonly (string | number)[], now: string
 export function ownsNow(view: View, half: string, now: string): boolean {
   return railAt(view, now) !== null || (half === "AM" && ms(now) < ms(view.start));
 }
+
+/** HK-3: a box on a rail, in pixels from its top left. */
+export type Box = { top: number; bottom: number; left: number; right: number };
+/** Where the now line's time pill goes on a compact rail: on the line, just above or below an hour mark, or at the right end. */
+export type PillSpot = { spot: "center" | "above" | "below" | "end"; top: number };
+
+const hits = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+/**
+ * HK-3: the pill sits centered on the line unless that covers an hour mark's label; then just above or just below that
+ * label (the nearer one that covers nothing and stays on the rail), else at the rail's right end, centered on the line
+ * (on a narrow card, where neither fits). The line itself never moves. `top` is the pill's top in rail pixels.
+ */
+export function pillSpot(o: { line: number; pill: { width: number; height: number }; left: number; rail: { width: number; height: number }; labels: readonly Box[] }): PillSpot {
+  const { line, pill, left, rail, labels } = o;
+  const at = (top: number, l = left): Box => ({ top, bottom: top + pill.height, left: l, right: l + pill.width });
+  const free = (b: Box) => b.top >= 0 && b.bottom <= rail.height && !labels.some((l) => hits(b, l));
+  const center = line - pill.height / 2;
+  if (!labels.some((l) => hits(at(center), l))) return { spot: "center", top: center };
+  const covered = labels.filter((l) => hits(at(center), l));
+  const tries: PillSpot[] = covered.flatMap((l) => [
+    { spot: "above" as const, top: l.top - 1 - pill.height },
+    { spot: "below" as const, top: l.bottom + 1 },
+  ]);
+  tries.sort((a, b) => Math.abs(a.top + pill.height / 2 - line) - Math.abs(b.top + pill.height / 2 - line));
+  const fit = tries.find((t) => free(at(t.top)));
+  return fit ?? { spot: "end", top: center };
+}
