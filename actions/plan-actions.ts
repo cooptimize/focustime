@@ -1,5 +1,6 @@
 // Plan the day actions (step 5). Local only: they read DevOps results already in memory to check a pick,
 // and write only to the local plan store. Nothing here calls DevOps, Outlook, Google or Dataverse.
+import { markResolved, materializeCheckins } from "./carry-actions.ts";
 import { isOpen, typeNeedsBreakdown } from "../plan/process.ts";
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
@@ -29,6 +30,8 @@ export type PlanContext = {
   ptoAhead?: (cfg: AppConfig, monday: IsoDate) => Promise<ReadonlySet<IsoDate>>;
   /** The real clock (ISO instant). Past days and the carry-over day are judged by it, never by the UI. */
   now: () => string;
+  /** PL-1: which of these DevOps items are resolved, closed or removed ("client\u0000id"); absent: none known. */
+  resolved?: (cfg: AppConfig, items: readonly { clientKey: string; itemId: number | null }[]) => Promise<ReadonlySet<string>>;
 };
 
 /** Whether a date has working hours or a flex session (D127): the one plannability rule, from the time model. */
@@ -172,10 +175,15 @@ async function pendingSession(ctx: PlanContext, plan: PlanStore, cfg: AppConfig 
 async function state(ctx: PlanContext, plan: PlanStore, d: IsoDate, opened = true): Promise<PlanDayState> {
   const { today, cfg } = await clock(ctx);
   const day = (await plan.start(d));
+  // PL-1: a Watching check-in reserved on this day becomes a pick now that the day is opened.
+  if (d >= today) await materializeCheckins(plan, d);
   const carry = await carryDay(ctx, plan);
   // Unfinished picks from before the first upcoming day, offered only on the carry-over day.
   const carryOver = carry.target === d ? (await plan.carryOverFor(carry.upcoming, cfg?.plan.carryDays, await pendingSession(ctx, plan, cfg, carry.upcoming))) : [];
-  const picks = (await plan.picksFor(d));
+  const picks0 = (await plan.picksFor(d));
+  // PL-1: a pick of a resolved item counts zero and shows as done.
+  const resolved = cfg && ctx.resolved ? await ctx.resolved(cfg, picks0).catch(() => new Set<string>()) : new Set<string>();
+  const picks = resolved.size ? markResolved(picks0, resolved) : picks0;
   // Focused seconds per pick (step 6d): the day's picks and the carry-over offered.
   const focused = (await plan.focusedSeconds([...picks, ...carryOver].map((p) => p.id)));
   // Where I left off per client (step 7): the latest resume note on or before this day.

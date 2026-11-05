@@ -8,8 +8,10 @@ import type { Pick } from "../plan/types.ts";
 import type { FollowUpView } from "../actions/types.ts";
 import { weekDueBadges } from "../plan/due.ts";
 import { canAddWork, planButton } from "../plan/days.ts";
-import { dayMenu, eventMenu, slotMenu } from "./menu.ts";
-import { useMenu } from "./Menus.tsx";
+import { checkinMenu, dayMenu, eventMenu, slotMenu } from "./menu.ts";
+import { MenuRow, useMenu } from "./Menus.tsx";
+import { EyeIcon } from "./Watching.tsx";
+import type { IsoDate } from "../week/types.ts";
 import { PickRow } from "./PickRow.tsx";
 import { DueBadge } from "./FollowUps.tsx";
 import { hourMarks, labelHere, layoutEvents, rulerSpan, showRuler } from "./layout.ts";
@@ -481,6 +483,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
         </ul>
       )}
       {shown.length > 0 && <CardPicks picks={shown} label={`Plan for ${dayLabel} ${slot.half}`} tabIndex={selected ? 0 : -1} />}
+      {!eve && <CheckinChips date={slot.date} half={slot.half as "AM" | "PM"} tabIndex={selected ? 0 : -1} />}
       {doneHidden.length > 0 && <div className="card-done">{doneHidden.length} done</div>}
       {addWork && !phone && (
         <button
@@ -567,6 +570,28 @@ function CardPicks({ picks, label, tabIndex }: { picks: readonly Pick[]; label: 
             <CardPick key={p.id} pick={p} tabIndex={tabIndex} />
           ))}
         </Fragment>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * PL-1: a Watching row's 30-minute check-in, before its day is planned or opened: a ghost chip on its half-day ("Check-in"
+ * with the feature). Move or remove it from its menu; it becomes a real pick when that day is planned or opened.
+ */
+function CheckinChips({ date, half, tabIndex }: { date: IsoDate; half: "AM" | "PM"; tabIndex: number }) {
+  const plan = useContext(PlanCtx);
+  const here = (plan.checkins ?? []).filter((c) => c.date === date && c.half === half);
+  if (!here.length) return null;
+  return (
+    <ul className="checkin-chips" aria-label="Check-ins">
+      {here.map((c) => (
+        <MenuRow key={`${c.clientKey}:${c.itemId}`} build={(env) => checkinMenu(env, c)} label={`More for the check-in on ${c.title}`} className="checkin-chip" title={`Watching ${c.title}: a ${c.minutes}-minute check-in. It becomes a pick when this day is planned`}>
+          <EyeIcon />
+          <span className="cc-word">Check-in</span>
+          <span className="cc-title" tabIndex={tabIndex}>{c.title}</span>
+          <span className="cc-min">{c.minutes}m</span>
+        </MenuRow>
       ))}
     </ul>
   );

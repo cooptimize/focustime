@@ -1404,7 +1404,7 @@ export function App() {
     <SampleSources.Provider value={samples}>
     <DevOpsWork.Provider value={work}>
     <WeekItems.Provider value={weekItems}>
-    <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, minSizes: data.planning.minSizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures, timeboxes: data.timeboxes, followUps: data.followUps, today: data.planDay.date }}>
+    <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, minSizes: data.planning.minSizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures, timeboxes: data.timeboxes, followUps: data.followUps, today: data.planDay.date, checkins: data.checkins ?? [] }}>
     <TimeboxCtx.Provider value={tbEnv}>
     <DevOpsWriteCtx.Provider value={devopsWrites.env}>
     <MenuHost env={env}>
@@ -1770,7 +1770,7 @@ export function App() {
               {switches.week}
             </ModeArea>
           </header>
-      {data.weekStart === data.today.weekStart && <FromLastWeek version={data} colors={data.clients} nameOf={(k) => data.planClients.find((c) => c.clientKey === k)?.clientName ?? k} onPlanDay={(d) => openPlanDay(d)} />}
+      {data.weekStart === data.today.weekStart && <FromLastWeek version={data} colors={data.clients} nameOf={(k) => data.planClients.find((c) => c.clientKey === k)?.clientName ?? k} onPlanDay={(d) => openPlanDay(d)} weekStart={data.weekStart} week={week} today={data.planDay.date} onChanged={reloadQuiet} />}
       <WeekGrid
         week={week}
         colors={data.clients}
