@@ -93,7 +93,7 @@ describe.skipIf(!CHROMIUM)("first-run setup", () => {
       await dialog.getByRole("link", { name: "Guide" }).waitFor();
       await shot("setup-5-done");
       await dialog.getByRole("button", { name: "Plan your week" }).click();
-      await page.waitForURL(/#\/week\/plan/);
+      await page.waitForURL(/#\/week\/commit/);
 
       // Today: one quiet line, which opens the flow at the first step left.
       await page.goto(`${app.url}#/today`);

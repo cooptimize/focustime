@@ -1,5 +1,5 @@
 // P1: the phone layout (under 600 px) in the browser, demo mode, clock pinned to Mon Nov 2, 9:30 AM. The layout
-// (bottom bar, no hover-only controls, planning read-only) and the main path: Today, start focus, mark done, capture,
+// (bottom bar of four tabs, Capture and ⋯ at the top, no hover-only controls, Commit and Ahead read-only) and the main path: Today, start focus, mark done, capture,
 // then ⋯ › Notifications.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
@@ -25,12 +25,15 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
   }, T);
   afterAll(() => h?.stop());
 
-  it("has the bottom bar and a small top bar, no hover-only controls, and planning screens read-only", async () => {
+  it("has the bottom bar and a small top bar, no hover-only controls, Plan today on the phone, Commit and Ahead read-only", async () => {
     const { page, errors } = await freshPage(h, PHONE);
     await open(page, "#/today");
-    expect(await page.locator(".bottom-bar .bb-tab").allTextContents()).toEqual(["Today", "Week", "Capture", "More"]);
+    // NV-1: the bottom bar is the four tabs; Capture is the + and ⋯ the menu, in the top bar.
+    expect(await page.locator(".bottom-bar .bb-tab").allTextContents()).toEqual(["Today", "Week", "Ahead", expect.stringMatching(/^Inbox/)]);
     expect(await page.locator(".topbar .views").count()).toBe(0);
-    expect(await page.locator(".topbar .capture-btn, .topbar .timer-btn, .topbar .top-more").count()).toBe(0);
+    expect(await page.locator(".topbar .capture-btn, .topbar .timer-btn").count()).toBe(0);
+    expect(await page.locator(".topbar .phone-capture").count()).toBe(1);
+    expect(await page.locator(".topbar .top-more").count()).toBe(1);
     // The page itself scrolls (Safari's own scrolling), with nothing left behind the bottom bar at the end.
     const scroll = await page.evaluate(() => {
       const inner = [...document.querySelectorAll(".app *")].filter((e) => /(auto|scroll)/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight + 2 && !e.closest(".bottom-bar"));
@@ -55,8 +58,12 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
     await grid.dispatchEvent("touchend", { changedTouches: [{ identifier: 1, clientX: 100, clientY: 410 }] });
     await expect.poll(() => page.locator(".day-tab.current").textContent()).not.toBe(before);
 
-    // Plan the week, Plan the day and Roadmap read only, with the line, Copy link, and nothing to tap inside.
-    for (const hash of ["#/week/plan", "#/today/plan", "#/roadmap"]) {
+    // Plan today works on the phone (NV-1 narrows D476): the day arrows and Commit today, no read-only line.
+    await open(page, "#/week/day");
+    await page.getByRole("button", { name: "Next day (→)" }).waitFor();
+    expect(await page.locator(".phone-ro").count()).toBe(0);
+    // Commit, Ahead and Plan ahead read only, with the line, Copy link, and nothing to tap inside.
+    for (const hash of ["#/week/commit", "#/ahead", "#/ahead/plan"]) {
       await open(page, hash);
       await page.waitForSelector(".phone-ro");
       expect(await page.locator(".phone-ro-bar").textContent()).toContain("Planning works best on a bigger screen");
@@ -92,32 +99,31 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
     await now.getByRole("button", { name: "Mark done" }).click();
     await expect.poll(async () => ((await call(page, "week.load", {})).data.plan["2026-11-02"].picks as { status: string }[]).filter((p) => p.status === "done").length).toBe(2);
 
-    // Capture from the bottom bar: a full-screen sheet, Enter saves.
-    await page.locator(".bottom-bar .bb-tab", { hasText: "Capture" }).click();
+    // Capture from the top bar's +: a full-screen sheet, Enter saves.
+    await page.locator(".topbar .phone-capture").click();
     const sheet = page.locator(".cap-dialog");
     await sheet.waitFor();
     expect(await sheet.evaluate((e) => Math.round(e.getBoundingClientRect().width))).toBe(PHONE.width);
     await sheet.locator("input").first().fill("Ask Jordan about the invoice");
     await page.keyboard.press("Enter");
     await expect.poll(async () => JSON.stringify((await call(page, "capture.load", {})).data)).toContain("Ask Jordan about the invoice");
-    // The bottom bar stays under Capture, and another tab closes it.
-    expect(await page.locator(".bottom-bar .bb-tab[aria-current='page']").textContent()).toBe("Capture");
-    await page.locator(".bottom-bar .bb-tab", { hasText: "Today" }).click();
+    // Esc closes it.
+    if (await sheet.count()) await page.keyboard.press("Escape");
     await sheet.waitFor({ state: "detached" });
 
     // Part B: this morning's notifications: ⋯ has its dot; in the list the new one keeps its mark while it's open.
     await open(page, "#/today");
-    await page.locator(".bottom-bar .bb-dot").waitFor();
-    await page.locator(".bottom-bar .bb-tab", { hasText: "More" }).click();
+    await page.locator(".topbar .top-more .top-dot").waitFor();
+    await page.locator(".topbar .top-more").click();
     await page.getByRole("menuitem", { name: /Notifications/ }).click();
     const panel = page.locator(".notices-panel");
     await panel.waitFor();
     expect(await panel.locator(".notice-row").count()).toBeGreaterThanOrEqual(2);
     expect(await panel.locator(".notice-row.unread .nr-title").first().textContent()).toContain("Follow-ups due");
     await panel.getByRole("button", { name: "Close" }).click();
-    // Read now: ⋯ no longer counts them (its dot stays while the Inbox has something).
+    // Read now: ⋯ no longer counts them.
     expect((await call(page, "notices.list", {})).data.unread).toBe(0);
-    await page.locator(".bottom-bar .bb-tab", { hasText: "More" }).click();
+    await page.locator(".topbar .top-more").click();
     expect(await page.getByRole("menuitem", { name: /Notifications/ }).textContent()).not.toContain("new");
     expect(errors).toEqual([]);
   }, T);

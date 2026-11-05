@@ -51,7 +51,7 @@ describe.skipIf(!CHROMIUM)("the Guide (G1)", () => {
         await expect.poll(() => guide.locator(".guide-concept").first().getAttribute("aria-expanded")).toBe("true");
         // Chapter 2: the stepper moves, by click and by arrow key.
         await guide.locator(".guide-panel .primary").click();
-        await expect.poll(() => guide.locator(".guide-panel h3").textContent()).toBe("Plan the day");
+        await expect.poll(() => guide.locator(".guide-panel h3").textContent()).toBe("Plan today");
         await page.keyboard.press("ArrowRight");
         await expect.poll(() => guide.locator(".guide-panel h3").textContent()).toBe("Now");
         // Chapter 3: the sandbox's words are plan/fit.ts's.
