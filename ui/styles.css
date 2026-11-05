@@ -4204,3 +4204,11 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .checklist .card-feat:first-child { margin-top: 0; }
 .card-feat .cf-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pick-row.dens-week[draggable="true"] { cursor: grab; }
+
+/* ADM-2: Customers | All accounts on Admin › Clients and AI. */
+.adm-filter { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 7px; overflow: hidden; }
+.adm-filter button { padding: 4px 12px; border: 0; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-3); cursor: pointer; }
+.adm-filter button + button { border-left: 1px solid var(--border-strong); }
+.adm-filter button[aria-checked="true"] { background: var(--text); color: var(--surface); font-weight: 600; }
+.adm-filter button[aria-checked="true"] .muted { color: inherit; opacity: 0.75; }
+.adm-accounts .set-hint { display: block; }

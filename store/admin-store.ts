@@ -13,10 +13,14 @@ export const FOCUSTIME: Actor = { id: null, name: "FocusTime" };
 export type AuditEntry = { id: number; at: string; actorId: string | null; actorName: string; area: string; target: string; setting: string; oldValue: string | null; newValue: string | null; note: string | null };
 export type AuditInput = Omit<AuditEntry, "id" | "at" | "actorId" | "actorName">;
 
-export type DirectoryPerson = { personId: string; systemUserId: string; name: string; email: string | null; level: Level | null; positionName: string | null; refreshedAt: string };
+/** `personId`: the Entra object id, or "dv:<systemuserid>" when Dataverse has none (`entra` false). `guest`: a B2B guest. */
+export type DirectoryPerson = { personId: string; systemUserId: string; name: string; email: string | null; level: Level | null; positionName: string | null; guest: boolean; entra: boolean; refreshedAt: string };
+/** ADM-2: one active Dataverse account, for clientAccounts(). `type`: the relationship type as a word, or null. */
+export type DirectoryAccount = { accountId: string; clientKey: string; name: string; type: string | null; workers: number; focus: number };
 export type LeadSource = "owner" | "lead_worker";
 export type DirectoryLead = { clientKey: string; personId: string; source: LeadSource };
-export type PersonClient = { personId: string; clientKey: string };
+/** `worker`: an Account Worker on the client (else Focus Time only; older rows: unknown, treated as a worker). */
+export type PersonClient = { personId: string; clientKey: string; worker?: boolean };
 export type OverrideKind = "level" | "lead_add" | "lead_remove";
 export type PersonOverride = { personId: string; kind: OverrideKind; clientKey: string; value: string | null; byId: string | null; byName: string; at: string };
 export type SeenAdmin = { personId: string; isAdmin: boolean; via: AdminVia | null; checkedAt: string };
@@ -107,13 +111,21 @@ export function createAdminStore(db: Conn, now: () => Temporal.Instant) {
 
     // ---- people and client leads (Dataverse, daily) ----
     /** Replaces the whole directory with a fresh read (a read that failed never gets here, so the old one stays). */
-    async replaceDirectory(people: readonly Omit<DirectoryPerson, "refreshedAt">[], leads: readonly DirectoryLead[], clients: readonly PersonClient[]): Promise<void> {
+    async replaceDirectory(people: readonly (Omit<DirectoryPerson, "refreshedAt" | "guest" | "entra"> & { guest?: boolean })[], leads: readonly DirectoryLead[], clients: readonly PersonClient[], accounts?: readonly DirectoryAccount[]): Promise<void> {
       const at = stamp();
       await db.tx(async () => {
         await db.run("DELETE FROM people_directory");
         await db.run("DELETE FROM client_leads");
         await db.run("DELETE FROM people_clients");
-        for (const p of people) await db.run("INSERT INTO people_directory (person_id, systemuser_id, name, email, level, position_name, refreshed_at) VALUES (?, ?, ?, ?, ?, ?, ?)", [p.personId.toLowerCase(), p.systemUserId, p.name.slice(0, 200), p.email, p.level, p.positionName, at]);
+        // ADM-2: the accounts are replaced only when the read brought them (older callers and tests leave them).
+        if (accounts) {
+          await db.run("DELETE FROM directory_accounts");
+          for (const a of accounts) await db.run("INSERT INTO directory_accounts (account_id, client_key, name, account_type, workers, focus, refreshed_at) VALUES (?, ?, ?, ?, ?, ?, ?)", [a.accountId.toLowerCase(), a.clientKey.slice(0, 100), a.name.slice(0, 200), a.type, a.workers, a.focus, at]);
+        }
+        for (const p of people) {
+          const id = p.personId.toLowerCase();
+          await db.run("INSERT INTO people_directory (person_id, systemuser_id, name, email, level, position_name, guest, entra, refreshed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [id, p.systemUserId, p.name.slice(0, 200), p.email, p.level, p.positionName, p.guest ? 1 : 0, id.startsWith("dv:") ? 0 : 1, at]);
+        }
         const seenLead = new Set<string>();
         for (const l of leads) {
           const k = `${l.clientKey}\u0000${l.personId.toLowerCase()}\u0000${l.source}`;
@@ -126,12 +138,15 @@ export function createAdminStore(db: Conn, now: () => Temporal.Instant) {
           const k = `${c.personId.toLowerCase()}\u0000${c.clientKey}`;
           if (seenClient.has(k)) continue;
           seenClient.add(k);
-          await db.run("INSERT INTO people_clients (person_id, client_key, refreshed_at) VALUES (?, ?, ?)", [c.personId.toLowerCase(), c.clientKey.slice(0, 100), at]);
+          await db.run("INSERT INTO people_clients (person_id, client_key, worker, refreshed_at) VALUES (?, ?, ?, ?)", [c.personId.toLowerCase(), c.clientKey.slice(0, 100), c.worker === false ? 0 : 1, at]);
         }
       });
     },
     async directory(): Promise<DirectoryPerson[]> {
-      return ((await db.all("SELECT person_id, systemuser_id, name, email, level, position_name, refreshed_at FROM people_directory ORDER BY name")) as Row[]).map((r) => ({ personId: r.person_id as string, systemUserId: r.systemuser_id as string, name: r.name as string, email: (r.email as string | null) ?? null, level: (r.level as Level | null) ?? null, positionName: (r.position_name as string | null) ?? null, refreshedAt: iso(r.refreshed_at) }));
+      return ((await db.all("SELECT person_id, systemuser_id, name, email, level, position_name, guest, entra, refreshed_at FROM people_directory ORDER BY name")) as Row[]).map((r) => {
+        const personId = r.person_id as string;
+        return { personId, systemUserId: r.systemuser_id as string, name: r.name as string, email: (r.email as string | null) ?? null, level: (r.level as Level | null) ?? null, positionName: (r.position_name as string | null) ?? null, guest: !!r.guest, entra: r.entra === null || r.entra === undefined ? !personId.startsWith("dv:") : !!r.entra, refreshedAt: iso(r.refreshed_at) };
+      });
     },
     async directoryRefreshedAt(): Promise<string | null> {
       const r = (await db.get("SELECT MAX(refreshed_at) AS at FROM people_directory")) as Row | undefined;
@@ -141,7 +156,11 @@ export function createAdminStore(db: Conn, now: () => Temporal.Instant) {
       return ((await db.all("SELECT client_key, person_id, source FROM client_leads ORDER BY client_key, person_id")) as Row[]).map((r) => ({ clientKey: r.client_key as string, personId: r.person_id as string, source: r.source as LeadSource }));
     },
     async peopleClients(): Promise<PersonClient[]> {
-      return ((await db.all("SELECT person_id, client_key FROM people_clients ORDER BY person_id, client_key")) as Row[]).map((r) => ({ personId: r.person_id as string, clientKey: r.client_key as string }));
+      return ((await db.all("SELECT person_id, client_key, worker FROM people_clients ORDER BY person_id, client_key")) as Row[]).map((r) => ({ personId: r.person_id as string, clientKey: r.client_key as string, worker: r.worker === null || r.worker === undefined ? true : !!r.worker }));
+    },
+    /** ADM-2: the active Dataverse accounts from the last read (none until a read with this build). */
+    async accounts(): Promise<DirectoryAccount[]> {
+      return ((await db.all("SELECT account_id, client_key, name, account_type, workers, focus FROM directory_accounts ORDER BY client_key, name")) as Row[]).map((r) => ({ accountId: r.account_id as string, clientKey: r.client_key as string, name: r.name as string, type: (r.account_type as string | null) ?? null, workers: Number(r.workers ?? 0), focus: Number(r.focus ?? 0) }));
     },
 
     // ---- admin overrides ----

@@ -174,11 +174,87 @@ const colorVar = (c: string | null) => (c ? (c.startsWith("#") ? c : `var(--clie
 
 // ---------- Clients ----------
 
-type ClientRow = { key: string; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; houseStyle: string | null; process: ClientProcess; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
-type ClientsData = { palette: string[]; suggested: string[]; clients: ClientRow[] };
+type ClientRow = { key: string; isClient: boolean; whyText: string; names: string[]; types: string[]; treatAsClient: boolean; hidden: boolean; hasSettings: boolean; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; houseStyle: string | null; process: ClientProcess; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
+type ClientFilterValue = "customers" | "all";
+type ClientCounts = { customers: number; all: number };
+type ClientsData = { palette: string[]; suggested: string[]; filter: ClientFilterValue; accountsRead: boolean; counts: ClientCounts; clients: ClientRow[] };
+
+/** ADM-2: Customers (the default) or All accounts, on Admin › Clients and AI. */
+function ClientFilter({ value, counts, onChange }: { value: ClientFilterValue; counts: ClientCounts | undefined; onChange: (v: ClientFilterValue) => void }) {
+  return (
+    <span className="adm-filter" role="radiogroup" aria-label="Which accounts">
+      {(["customers", "all"] as const).map((v) => (
+        <button key={v} type="button" role="radio" aria-checked={value === v} onClick={() => onChange(v)}>
+          {v === "customers" ? "Customers" : "All accounts"}
+          {counts ? <span className="muted"> {v === "customers" ? counts.customers : counts.all}</span> : null}
+        </button>
+      ))}
+    </span>
+  );
+}
+
+const TYPE_WORDS: Record<string, string> = { customer: "Customer", prospect: "Prospect", partner: "Partner", vendor: "Vendor", consultant: "Consultant", other: "Other", competitor: "Competitor", investor: "Investor", influencer: "Influencer", press: "Press", reseller: "Reseller", supplier: "Supplier" };
+
+/** ADM-2: every account with why it is or isn't a client, and the admins' two overrides (each audited). */
+function AllAccounts({ rows, saver }: { rows: ClientRow[]; saver: Saver }) {
+  return (
+    <div className="adm-scroll">
+      <table className="adm-table adm-accounts">
+        <thead>
+          <tr>
+            <th scope="col">Account</th>
+            <th scope="col">In Dataverse</th>
+            <th scope="col">Client?</th>
+            <th scope="col">Treat as a client <Kind kind="Rule" /></th>
+            <th scope="col">Hide from FocusTime <Kind kind="Rule" /></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((c) => {
+            const scope = `client:${c.key}`;
+            const internal = c.whyText === "Cooptimize Internal";
+            return (
+              <tr key={c.key}>
+                <th scope="row">
+                  {c.key}
+                  {c.names.length > 0 && c.names.join(", ") !== c.key && <span className="muted adm-email">{c.names.join(", ")}</span>}
+                </th>
+                <td>{c.types.length ? c.types.map((t) => TYPE_WORDS[t] ?? t).join(", ") : <span className="muted">No type</span>}</td>
+                <td>
+                  {c.isClient ? "Client" : <span className="muted">Not a client</span>}
+                  <span className="set-hint">{c.whyText}</span>
+                  {c.hasSettings && <span className="adm-mark">Has settings, not a client</span>}
+                </td>
+                <td>
+                  {!internal && (
+                    <label className="adm-switch">
+                      <input type="checkbox" role="switch" checked={saver.shown(scope, "treat_as_client", c.treatAsClient)} aria-label={`Treat ${c.key} as a client`} onChange={(e) => void saver.save(scope, "treat_as_client", e.target.checked ? true : undefined, `${c.key}: treat as a client`)} /> {c.treatAsClient ? "Yes" : "No"}
+                    </label>
+                  )}
+                  <SaveMark s={saver.status(scope, "treat_as_client")} retry={() => void saver.save(scope, "treat_as_client", c.treatAsClient, `${c.key}: treat as a client`)} />
+                </td>
+                <td>
+                  {internal ? (
+                    <span className="muted">Always a client</span>
+                  ) : (
+                    <label className="adm-switch">
+                      <input type="checkbox" role="switch" checked={saver.shown(scope, "hidden", c.hidden)} aria-label={`Hide ${c.key} from FocusTime`} onChange={(e) => void saver.save(scope, "hidden", e.target.checked ? true : undefined, `${c.key}: hide from FocusTime`)} /> {c.hidden ? "Hidden" : "No"}
+                    </label>
+                  )}
+                  <SaveMark s={saver.status(scope, "hidden")} retry={() => void saver.save(scope, "hidden", c.hidden, `${c.key}: hide from FocusTime`)} />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function AdminClients() {
-  const { data, error, load, loadWith } = useSection<ClientsData>("clients");
+  const [filter, setFilter] = useState<ClientFilterValue>("customers");
+  const { data, error, load, loadWith } = useSection<ClientsData>("clients", { filter });
   const saver = useAdminSave(load);
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
@@ -191,12 +267,22 @@ function AdminClients() {
   return (
     <DeliveryChatsProvider>
       <p className="muted">Each client's chats, team color, process settings and house style, for everyone. People see these read-only, marked "Set by your FocusTime admin"; a person may still pick their own color.</p>
-      {data.clients.length === 0 && <p className="muted">No clients yet. They come from Dataverse once people are read (Admin › People › Refresh from Dataverse).</p>}
-      <div className="set-clients">
-        {data.clients.map((c) => (
-          <AdminClientCard key={c.key} c={c} palette={data.palette} saver={saver} onRefresh={onRefresh} refreshing={refreshing} />
-        ))}
+      <div className="set-row-actions">
+        <ClientFilter value={filter} counts={data.counts} onChange={setFilter} />
+        <span className="set-hint">Clients are active Dataverse accounts of type Customer, plus Cooptimize Internal and any account treated as a client below. Nothing is deleted.</span>
       </div>
+      {saver.warning && <p className="set-problem" role="status">{saver.warning}</p>}
+      {!data.accountsRead && <p className="set-problem">Accounts aren't read from Dataverse yet, so every account counts as a client. Admin › People › Refresh from Dataverse.</p>}
+      {data.clients.length === 0 && <p className="muted">No clients yet. They come from Dataverse once people are read (Admin › People › Refresh from Dataverse).</p>}
+      {filter === "all" ? (
+        <AllAccounts rows={data.clients} saver={saver} />
+      ) : (
+        <div className="set-clients">
+          {data.clients.map((c) => (
+            <AdminClientCard key={c.key} c={c} palette={data.palette} saver={saver} onRefresh={onRefresh} refreshing={refreshing} />
+          ))}
+        </div>
+      )}
     </DeliveryChatsProvider>
   );
 }
@@ -353,10 +439,11 @@ function ProcessView({ c, saver, onRefresh, refreshing }: { c: ClientRow; saver:
 
 // ---------- AI ----------
 
-type AiData = { on: boolean; model: string; personCapUsd: number; appCapUsd: number; provider: string; keyConfigured: boolean; appSpentMicros: number; zero: { person: boolean; app: boolean }; clients: { key: string; allowAi: boolean; attachmentsAi: boolean }[] };
+type AiData = { on: boolean; model: string; personCapUsd: number; appCapUsd: number; provider: string; keyConfigured: boolean; appSpentMicros: number; zero: { person: boolean; app: boolean }; filter: ClientFilterValue; counts: ClientCounts; clients: { key: string; isClient: boolean; whyText: string; allowAi: boolean; attachmentsAi: boolean }[] };
 
 function AdminAi() {
-  const { data, error, load } = useSection<AiData>("ai");
+  const [filter, setFilter] = useState<ClientFilterValue>("customers");
+  const { data, error, load } = useSection<AiData>("ai", { filter });
   const saver = useAdminSave(load);
   const [confirmOff, setConfirmOff] = useState(false);
   if (error) return <p className="field-problem">{error}</p>;
@@ -394,6 +481,9 @@ function AdminAi() {
         </AField>
       </div>
       <h3>Per client</h3>
+      <div className="set-row-actions">
+        <ClientFilter value={filter} counts={data.counts} onChange={setFilter} />
+      </div>
       {data.clients.length === 0 ? (
         <p className="muted">No clients yet.</p>
       ) : (
@@ -408,7 +498,10 @@ function AdminAi() {
           <tbody>
             {data.clients.map((c) => (
               <tr key={c.key}>
-                <th scope="row">{c.key}</th>
+                <th scope="row">
+                  {c.key}
+                  {!c.isClient && <span className="set-hint">{c.whyText}</span>}
+                </th>
                 <td>
                   <label className="set-check">
                     <input type="checkbox" role="switch" checked={saver.shown(`client:${c.key}`, "allow_ai", c.allowAi)} aria-label={`Allow AI for ${c.key}`} onChange={(e) => void saver.save(`client:${c.key}`, "allow_ai", e.target.checked, `${c.key}: Allow AI`)} /> {c.allowAi ? "Allowed" : "Off"}
@@ -836,6 +929,8 @@ type StatusData = {
   chats: { chatId: string; clientKey: string; name: string; reading: boolean; polledAt: string | null; state: string | null; note: string | null; via: string | null }[];
   lastPoll: string | null;
   conversations: { conversationsByStatus: Record<string, number>; messagesByRole: Record<string, number>; commitmentsByState: Record<string, number>; aiCallsToday: { chatName: string; clientKey: string; calls: number }[] } | null;
+  warnings?: { area: string; text: string }[];
+  jobs?: { name: string; every: string; lastRun: string | null; note: string | null }[];
 };
 const ROLE_WORDS: Record<string, string> = { work: "work", chatter: "chatter", ack: "short replies", unsorted: "unsorted" };
 const COMMIT_WORDS: Record<string, string> = { open: "open", followup: "follow-ups", linked: "linked", created: "item created", done: "done", not_needed: "not needed" };
@@ -851,6 +946,18 @@ function AdminStatus() {
   return (
     <div className="set-form">
       <p className="muted">Names and states only; never a secret's value.</p>
+      {data.warnings && data.warnings.length > 0 && (
+        <div className="adm-warnings">
+          <h3>To look at ({data.warnings.length})</h3>
+          <ul className="set-list">
+            {data.warnings.map((w, i) => (
+              <li key={i} className="set-problem">
+                {w.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="set-grid">
         <div className="set-field">
           <span className="set-label">This environment</span>

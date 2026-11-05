@@ -8,6 +8,7 @@ import { conversationAction, dayPromises, type ConversationContext } from "./con
 import { refreshStatus } from "./conversations-pipeline.ts";
 import type { ConversationsPort } from "./devops-write-actions.ts";
 import { isClientLead } from "./client-lead.ts";
+import { clientsOf, onlyClients } from "./client-accounts.ts";
 import { requestAction, urgentRequests, visibleChats, type RequestContext, type RequestsPort } from "./request-actions.ts";
 import { aiAction, type AiActionName, type AiRuntime } from "./ai-actions.ts";
 import { createAi, type AiService } from "../ai/service.ts";
@@ -280,7 +281,8 @@ async function devopsClients(ctx: ActionContext, cfg: AppConfig, weekStart: stri
   const [mineR, follow] = await Promise.all([dvSource.myClients?.().catch(() => null), followOptions(dvSource, cfg, todayDate, refresh, patterns)]);
   const mine = mineR ?? [];
   const clients = followedKeys(weekClients(buildWeek({ weekStart, patterns, events: [], config: weekConfig }), weekConfig.standingBlocks), follow.patterns, follow.options);
-  const planClients = [...clients];
+  const ca = await clientsOf(ctx.org);
+  const planClients = clients.filter((c) => !ca || ca.isClient(c.clientKey));
   for (const c of followedKeys(mine, follow.patterns, follow.options)) if (!planClients.some((p) => p.clientKey === c.clientKey)) planClients.push({ clientKey: c.clientKey, clientName: c.clientName });
   const fetch = [...clients, ...followedKeys(mine, follow.patterns, follow.options).filter((c) => c.devops && !clients.some((w) => w.clientKey === c.clientKey)).map(({ clientKey, clientName }) => ({ clientKey, clientName }))];
   return { planClients, fetch };
@@ -838,6 +840,8 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
   // Step 15.4: "me" comes from the Microsoft sign-in (config's my_email stays the fallback). Settings writes the file as
   // is (raw), but shows "me" and finds the Dataverse user the same way as every other action (settingsCtx below): it
   // once read the raw file only, so a person whose Dataverse user was kept with their sign-in saw no clients (A5 fix).
+  // ADM-2: clients only, everywhere a person's clients are listed (actions/client-accounts.ts).
+  ctx = onlyClients(ctx);
   const raw = ctx;
   if (action !== "settings.load" && action !== "settings.save") ctx = withSignedIn(ctx);
   if (ctx.demo?.on && DEMO_REFUSED.includes(action)) return { ok: false, status: 403, error: DEMO_REFUSAL, code: "demo" };
@@ -1428,6 +1432,7 @@ function settingsCtx(raw: ActionContext, ctx: ActionContext): SettingsContext {
     },
     makeDataverse: ctx.makeDataverse,
     now: ctx.now,
+    ...(ctx.org ? { org: ctx.org } : {}),
     ...(ctx.writeConfig ? { writeConfig: ctx.writeConfig } : {}),
     ...(ctx.plan ? { plan: ctx.plan } : {}),
     ...(ctx.secrets ? { secrets: ctx.secrets } : {}),

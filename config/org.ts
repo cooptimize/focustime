@@ -226,7 +226,10 @@ export const CLIENT_SPECS = {
   // WT-1's process overrides, one switch per type in Admin › Clients (type names; matched without case).
   no_breakdown: { kind: "rule", area: "clients", label: "Types that don't need breakdown", builtin: [] as string[], parse: list(40, 100) },
   background: { kind: "rule", area: "clients", label: "Background types", builtin: [] as string[], parse: list(40, 100) },
-  house_style: { kind: "rule", area: "clients", label: "House style for Draft stories", builtin: null as string | null, parse: orNull(text(1200)) },
+  house_style: { kind: "rule", area: "clients", label: "House style for Break down", builtin: null as string | null, parse: orNull(text(1200)) },
+  // ADM-2 (D575): an admin's two per-account overrides of the customer rule (plan/client-accounts.ts).
+  treat_as_client: { kind: "rule", area: "clients", label: "Treat as a client", builtin: false, parse: bool },
+  hidden: { kind: "rule", area: "clients", label: "Hide from FocusTime", builtin: false, parse: bool },
 } satisfies Record<string, Spec>;
 export type ClientKeyName = keyof typeof CLIENT_SPECS;
 
@@ -269,8 +272,8 @@ export type OrgRules = {
   clients: Record<string, ClientRules>;
   levels: Record<Level, Guidance>;
 };
-export type ClientRules = { color: string | null; allowAi: boolean; attachmentsAi: boolean; openStates: string[]; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null };
-export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, attachmentsAi: false, openStates: [], noBreakdown: [], background: [], houseStyle: null };
+export type ClientRules = { color: string | null; allowAi: boolean; attachmentsAi: boolean; openStates: string[]; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean };
+export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, attachmentsAi: false, openStates: [], noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false };
 
 const parsed = (r: OrgRow): unknown => {
   try {
@@ -298,7 +301,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
   for (const k of clientKeys) {
     const s = `client:${k}`;
     const c = <K extends ClientKeyName>(key: K) => valueOf(m, s, key, CLIENT_SPECS[key] as Spec, CLIENT_SPECS[key].builtin) as (typeof CLIENT_SPECS)[K]["builtin"];
-    clients[k] = { color: c("color"), allowAi: c("allow_ai"), attachmentsAi: false, openStates: c("open_states"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style") };
+    clients[k] = { color: c("color"), allowAi: c("allow_ai"), attachmentsAi: false, openStates: c("open_states"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden") };
   }
   const levels = Object.fromEntries(
     LEVELS.map((l) => {

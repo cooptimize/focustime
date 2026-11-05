@@ -108,7 +108,7 @@ export function createAdminOps(d: AdminOpsDeps): AdminOps {
         lastDirectory = { ok: false, message: "Dataverse couldn't be read. FocusTime keeps the last levels and leads it read." };
         return { ...lastDirectory, people: 0 };
       }
-      await d.org.store.replaceDirectory(r.read.people, r.read.leads, r.read.clients);
+      await d.org.store.replaceDirectory(r.read.people, r.read.leads, r.read.clients, r.read.accounts);
       d.org.invalidate();
       lastDirectory = { ok: true, message: null };
       return { ok: true, message: null, people: r.read.people.length };

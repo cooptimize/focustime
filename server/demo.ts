@@ -55,7 +55,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   const dir = demoDirectory();
   // The demo's clients start on team colors (the ones the demo always had), so a person's own color shows as theirs.
   const ready = (async () => {
-    await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients);
+    await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients, dir.accounts);
     for (const c of DEMO_CLIENTS) await adminStore.setOrg({ scope: clientScope(c.key), key: "color", value: c.color, actor: FOCUSTIME, area: "clients", target: c.key, note: "demo" });
   })();
   const adminOps: AdminOps = {
@@ -79,7 +79,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
       conversations: null,
     }),
     refreshPeople: async () => {
-      await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients);
+      await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients, dir.accounts);
       org.invalidate();
       return { ok: true, message: null, people: dir.people.length };
     },

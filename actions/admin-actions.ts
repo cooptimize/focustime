@@ -7,6 +7,8 @@
 import { clientScope, CLIENT_SPECS, KIND_NAMES, LEVEL_NAMES, LEVEL_SPECS, LEVELS, ORG_SPECS, OrgInputError, specFor, SUGGESTED_SLOTS, type AdminArea, type Guidance, type Level, type OrgRules } from "../config/org.ts";
 import { CLIENT_SLOTS } from "../config/schema.ts";
 import { LEAD_WHY_NAMES, type LeadWhy } from "../plan/levels.ts";
+import { CLIENT_WHY_TEXT } from "../plan/client-accounts.ts";
+import { INTERNAL_CLIENT } from "../week/follow.ts";
 import type { Actor, AuditEntry, OverrideKind } from "../store/admin-store.ts";
 import type { AdminCheck, AdminVia } from "./admin.ts";
 import type { OrgRuntime } from "./org.ts";
@@ -44,6 +46,8 @@ export type AdminStatus = {
   lastPoll: string | null;
   /** CV-1's counts: conversations by status, messages by role, commitments by state, AI calls per chat today. Never text or ids. */
   conversations: ConversationCounts | null;
+  /** ADM-2: things to look at (clients filtered out with settings, Rules out of range, people). */
+  warnings?: StatusWarning[];
 };
 
 /** What the server gives the admin console (server/main.ts; the demo's in server/demo.ts, over the demo's store only). */
@@ -108,17 +112,24 @@ const json = (v: string | null): unknown => {
 /** The Entra page where the group's members are managed (FocusTime never adds anyone itself). */
 export const groupLink = (groupId: string | null) => (groupId ? `https://entra.microsoft.com/#view/Microsoft_AAD_IAM/GroupDetailsMenuBlade/~/Members/groupId/${groupId}` : null);
 
-async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminContext["process"], refresh: boolean) {
-  const [rows, chatKeys, dirClients, lv, users, dir] = await Promise.all([ops.org.store.orgRows(), ops.chatClients(), ops.org.store.peopleClients(), ops.org.levels(), ops.people(), ops.org.store.directory()]);
-  const leadKeys = (await ops.org.store.leads()).map((l) => l.clientKey);
-  const keys = [...new Set([...Object.keys(rules.clients), ...chatKeys, ...dirClients.map((c) => c.clientKey), ...leadKeys])].sort((a, b) => a.localeCompare(b));
-  // A client with no team color gets one now (the same suggestion everyone would get).
-  if (keys.some((k) => !rules.clients[k]?.color)) {
-    await ops.org.suggestColors(keys);
+/**
+ * Admin › Clients (and AI): the clients by clientAccounts() (ADM-2, D575), or with `all` every account FocusTime knows
+ * of: the active Dataverse accounts, keys with team settings and registered chats. Leads never add a client here.
+ */
+async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminContext["process"], refresh: boolean, all = false) {
+  const [rows, chatKeys, lv, users, dir, ca, overrides] = await Promise.all([ops.org.store.orgRows(), ops.chatClients(), ops.org.levels(), ops.people(), ops.org.store.directory(), ops.org.clientAccounts(), ops.org.store.overrides()]);
+  const settingsKeys = new Set([...Object.keys(rules.clients), ...chatKeys, ...overrides.filter((o) => o.kind !== "level" && o.clientKey).map((o) => o.clientKey)]);
+  const known = [...new Set([...ca.rows.map((r) => r.clientKey), ...settingsKeys])];
+  const keys = (all ? known : known.filter((k) => ca.isClient(k))).sort((a, b) => a.localeCompare(b));
+  // A client with no team color gets one now (the same suggestion everyone would get); never a non-client.
+  const needColor = keys.filter((k) => ca.isClient(k) && !rules.clients[k]?.color);
+  if (needColor.length) {
+    await ops.org.suggestColors(needColor);
     rules = await ops.org.rules();
   }
   const by = new Map(rows.filter((r) => r.key === "color").map((r) => [r.scope.slice(7), r.updatedBy]));
-  const models = process && keys.length ? await process(keys, refresh).catch(() => null) : null;
+  const processKeys = keys.filter((k) => ca.isClient(k));
+  const models = process && processKeys.length ? await process(processKeys, refresh).catch(() => null) : null;
   const processOf = (k: string): ClientProcess => {
     const r = models?.find((x) => x.clientKey === k);
     return r ? processView(r) : { ok: false, message: models ? "Not read" : "DevOps can't be read from here" };
@@ -127,10 +138,23 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
   return {
     palette: CLIENT_SLOTS,
     suggested: SUGGESTED_SLOTS,
+    filter: all ? "all" : "customers",
+    accountsRead: ca.read,
+    counts: { customers: known.filter((k) => ca.isClient(k)).length, all: known.length },
     clients: keys.map((k) => {
       const c = rules.clients[k];
+      const row = ca.row(k);
+      const isClient = ca.isClient(k);
       return {
         key: k,
+        isClient,
+        why: row?.why ?? (isClient ? "customer" : "not_in_dataverse"),
+        whyText: CLIENT_WHY_TEXT[row?.why ?? (isClient ? "customer" : "not_in_dataverse")],
+        names: row?.names ?? [],
+        types: row?.types ?? [],
+        treatAsClient: c?.treatAsClient ?? false,
+        hidden: c?.hidden ?? false,
+        hasSettings: !isClient && settingsKeys.has(k),
         color: c?.color ?? null,
         colorFrom: by.get(k) === null ? "suggested" : "admin",
         allowAi: c?.allowAi ?? false,
@@ -139,11 +163,41 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
         noBreakdown: c?.noBreakdown ?? [],
         background: c?.background ?? [],
         houseStyle: c?.houseStyle ?? null,
-        process: processOf(k),
-        leads: lv.clientLeads(k).map((l) => ({ personId: l.personId, name: nameOf(l.personId), primary: l.primary, why: l.why.map((w) => LEAD_WHY_NAMES[w]) })),
+        process: isClient ? processOf(k) : { ok: false, message: "Not a client" },
+        leads: isClient ? lv.clientLeads(k).map((l) => ({ personId: l.personId, name: nameOf(l.personId), primary: l.primary, why: l.why.map((w) => LEAD_WHY_NAMES[w]) })) : [],
       };
     }),
   };
+}
+
+/** A Status line (ADM-2): something an admin may want to look at; never blocks anything. */
+export type StatusWarning = { area: "clients" | "people" | "rules" | "jobs"; text: string };
+
+/**
+ * ADM-2: what a filtered-out account still has (D576): focus blocks (Account Workers or Focus Time in Dataverse), a
+ * registered chat, DevOps settings, AI allowed or a lead override. An account with AI allowed always gets a line.
+ */
+export async function clientWarnings(ops: AdminOps): Promise<StatusWarning[]> {
+  const [ca, rules, chats, overrides] = await Promise.all([ops.org.clientAccounts(), ops.org.rules(), ops.chatClients(), ops.org.store.overrides()]);
+  const out: StatusWarning[] = [];
+  if (!ca.read) out.push({ area: "clients", text: "Client accounts aren't read from Dataverse yet, so every account counts as a client. Refresh from Dataverse in Admin › People." });
+  const keys = [...new Set([...ca.rows.map((r) => r.clientKey), ...Object.keys(rules.clients), ...chats, ...overrides.filter((o) => o.kind !== "level" && o.clientKey).map((o) => o.clientKey)])].sort((a, b) => a.localeCompare(b));
+  for (const k of keys) {
+    if (ca.isClient(k)) continue;
+    const row = ca.row(k);
+    const c = rules.clients[k];
+    const has: string[] = [];
+    if (row && (row.workers > 0 || row.focus > 0)) has.push(`${row.workers + row.focus} Account Worker or Focus Time ${row.workers + row.focus === 1 ? "row" : "rows"}`);
+    if (chats.includes(k)) has.push("a registered chat");
+    if (c && (c.openStates.length || c.noBreakdown.length || c.background.length || c.houseStyle)) has.push("DevOps settings");
+    if (c?.allowAi) has.push("AI allowed");
+    const leadOverrides = overrides.filter((o) => o.kind !== "level" && o.clientKey === k).length;
+    if (leadOverrides) has.push(`${leadOverrides} lead ${leadOverrides === 1 ? "override" : "overrides"}`);
+    if (!has.length) continue;
+    const why = row?.hidden ? "is hidden from FocusTime" : "isn't a client";
+    out.push({ area: "clients", text: `${k} ${why} but has ${has.join(", ")}. Treat it as a client in Admin › Clients (All accounts), or leave it.` });
+  }
+  return out;
 }
 
 async function peopleSection(ops: AdminOps, meId: string) {
@@ -189,10 +243,10 @@ async function section(ops: AdminOps, s: AdminSection, meId: string, input: Reco
   const rules = await ops.org.rules();
   switch (s) {
     case "clients":
-      return clientsSection(ops, rules, process, input.refresh === true);
+      return clientsSection(ops, rules, process, input.refresh === true, input.filter === "all");
     case "ai": {
-      const [setup, spent, clients] = await Promise.all([ops.aiSetUp(), ops.appSpentMicros(), clientsSection(ops, rules, undefined, false)]);
-      return { ...rules.ai, ...setup, appSpentMicros: spent, zero: { person: rules.ai.personCapUsd === 0, app: rules.ai.appCapUsd === 0 }, clients: clients.clients.map((c) => ({ key: c.key, allowAi: c.allowAi, attachmentsAi: c.attachmentsAi })), keys: specList({ "ai.on": ORG_SPECS["ai.on"], "ai.model": ORG_SPECS["ai.model"], "ai.person_cap_usd": ORG_SPECS["ai.person_cap_usd"], "ai.app_cap_usd": ORG_SPECS["ai.app_cap_usd"] }) };
+      const [setup, spent, clients] = await Promise.all([ops.aiSetUp(), ops.appSpentMicros(), clientsSection(ops, rules, undefined, false, input.filter === "all")]);
+      return { ...rules.ai, ...setup, appSpentMicros: spent, zero: { person: rules.ai.personCapUsd === 0, app: rules.ai.appCapUsd === 0 }, filter: clients.filter, counts: clients.counts, clients: clients.clients.map((c) => ({ key: c.key, isClient: c.isClient, whyText: c.whyText, allowAi: c.allowAi, attachmentsAi: c.attachmentsAi })), keys: specList({ "ai.on": ORG_SPECS["ai.on"], "ai.model": ORG_SPECS["ai.model"], "ai.person_cap_usd": ORG_SPECS["ai.person_cap_usd"], "ai.app_cap_usd": ORG_SPECS["ai.app_cap_usd"] }) };
     }
     case "conversations":
       // CV-1 lists the settings it needs; they are hosted here as they appear (read through the settings reader).
@@ -211,8 +265,10 @@ async function section(ops: AdminOps, s: AdminSection, meId: string, input: Reco
     }
     case "people":
       return peopleSection(ops, meId);
-    case "status":
-      return ops.status(today ? await today() : new Date().toISOString().slice(0, 10));
+    case "status": {
+      const [st, warnings] = await Promise.all([ops.status(today ? await today() : new Date().toISOString().slice(0, 10)), clientWarnings(ops)]);
+      return { ...st, warnings: [...(st.warnings ?? []), ...warnings] };
+    }
     case "audit": {
       const area = typeof input.area === "string" && input.area ? input.area : null;
       const text = typeof input.text === "string" ? input.text.slice(0, 100) : null;
@@ -240,7 +296,7 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
 
   switch (action) {
     case "admin.load": {
-      const extra = only(i, ["section", "area", "text", "refresh"]);
+      const extra = only(i, ["section", "area", "text", "refresh", "filter"]);
       if (extra) return bad(`unknown input field ${extra}`);
       if (typeof i.section !== "string" || !(ADMIN_SECTIONS as readonly string[]).includes(i.section)) return bad(`section must be one of ${ADMIN_SECTIONS.join(", ")}`);
       return { ok: true, data: await section(ops, i.section as AdminSection, me.id, i, ctx.process, ctx.today) };
@@ -267,11 +323,19 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
           throw e;
         }
       }
+      if (i.key === "hidden" && value === true && i.scope.toLowerCase() === clientScope(INTERNAL_CLIENT).toLowerCase()) return bad("Cooptimize Internal is always a client", 422, "invalid");
+      const before = i.scope.startsWith("client:") ? (await ops.org.rules()).clients[i.scope.slice(7)] : undefined;
       const r = await ops.org.store.setOrg({ scope: i.scope, key: i.key, value, actor, area: spec.area, target: targetOf(i.scope) });
       ops.org.invalidate();
       const next = await ops.org.rules();
       const warning =
-        (i.key === "ai.person_cap_usd" || i.key === "ai.app_cap_usd") && value === 0 ? "AI budget is set to $0: AI requests stop until the cap is raised." : i.key === "ai.on" && value === false ? "AI is off for everyone." : null;
+        (i.key === "ai.person_cap_usd" || i.key === "ai.app_cap_usd") && value === 0
+          ? "AI budget is set to $0: AI requests stop until the cap is raised."
+          : i.key === "ai.on" && value === false
+            ? "AI is off for everyone."
+            : i.key === "hidden" && value === true && before?.allowAi
+              ? `${i.scope.slice(7)} has AI allowed. It's hidden now, and Admin › Status lists it until AI is turned off for it.`
+              : null;
       return { ok: true, data: { scope: i.scope, key: i.key, old: json(r.old), value: json(r.next), warning, ai: next.ai } };
     }
     case "admin.override": {
