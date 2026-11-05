@@ -7,8 +7,11 @@ import type { UserRow } from "./accounts.ts";
 import { scopedDb, USER_TABLES } from "./scope.ts";
 import type { Conn } from "./sql/conn.ts";
 
-/** User tables left out of the export: sealed secrets, and push subscriptions (sealed, and tied to one browser). */
-export const NOT_EXPORTED: readonly string[] = ["user_secrets", "push_devices"];
+/**
+ * User tables left out of the export: sealed secrets, push subscriptions (sealed, and tied to one browser), and the
+ * Teams bot's chat and cards (TB-1: Teams' plumbing for this tenant, rebuilt by the person's next message).
+ */
+export const NOT_EXPORTED: readonly string[] = ["user_secrets", "push_devices", "teams_bot_chats", "teams_bot_cards"];
 
 /** How long a soft delete waits before everything is removed. */
 export const HARD_DELETE_AFTER_DAYS = 30;

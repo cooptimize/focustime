@@ -7,6 +7,7 @@ import type { Conn } from "../store/sql/conn.ts";
 import { createUserSettings } from "../store/user-settings.ts";
 import { createUserSecrets, fakeKeyProvider } from "../store/user-secrets.ts";
 import { createPushDevices } from "../store/push-devices.ts";
+import { createTeamsBotStore } from "../store/teams-bot-store.ts";
 
 export const FILL_NOW = "2026-11-02T14:30:00Z";
 export const FILL_MON = "2026-11-02";
@@ -67,6 +68,9 @@ export async function fill(db: Conn, userId: string): Promise<PlanStore> {
   await createUserSettings({ db, userId, app: { dataverse: null, entra: null, google: null }, person: () => ({ email: `${tag}@example.com`, upn: `${tag}@example.com`, timeZone: null }), setZone: () => {}, defaultZone: DEMO_TZ, now: () => Temporal.Instant.from(NOW) }).seed(starterToml(DEMO_TZ));
   await createUserSecrets({ db, userId, keys: KEYS, now: () => Temporal.Instant.from(NOW) }).set("devops-write-pat:cooptimize", `pat-${tag}`);
   await createPushDevices({ db, userId, keys: KEYS, now: () => Temporal.Instant.from(NOW) }).save(`device-${tag}-0000000000`, "Phone", { endpoint: `https://fcm.googleapis.com/fcm/send/${tag}`, keys: { p256dh: "x", auth: "y" } });
+  const bot = createTeamsBotStore({ db, userId, now: () => Temporal.Instant.from(NOW) });
+  await bot.saveChat({ conversationId: `a:conv-${tag}`, serviceUrl: "https://smba.trafficmanager.net/amer/", tenantId: "tenant-1", botId: "28:bot" });
+  await bot.cardSent(`p-${tag}`, `act-${tag}`, "2026-11-02T14:45:00Z", tag);
   // Only migration 21 writes the dedupe log; a row as it would have left one.
   await db.run("INSERT INTO dedupe_log (user_id, at, table_name, removed_id, kept_id) VALUES (?, ?, 'week_features', 1, 2)", [userId, NOW]);
   // Links within a table: a pick moved to another day (carried_from), and undone writes (undo_of, undone_by).

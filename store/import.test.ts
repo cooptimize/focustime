@@ -71,10 +71,12 @@ await forEachDriver("import an export", ({ driver, open }) => {
     }
     // Every count matches, except secrets: never exported (sealed with the old store's key; set again after the move).
     // Push subscriptions neither (sealed too, and tied to one browser: the device turns push on again).
-    const { user_secrets: kept, push_devices: devices, ...rest } = await countRows(src.conn, "ana");
+    // TB-1: the Teams bot's chat and cards neither (Teams' plumbing, rebuilt by the person's next message).
+    const { user_secrets: kept, push_devices: devices, teams_bot_chats: chats, teams_bot_cards: cards, ...rest } = await countRows(src.conn, "ana");
     expect(kept).toBe(1);
     expect(devices).toBe(1);
-    expect(await countRows(db, "oid-ana")).toEqual({ ...rest, user_secrets: 0, push_devices: 0 });
+    expect([chats, cards]).toEqual([1, 1]);
+    expect(await countRows(db, "oid-ana")).toEqual({ ...rest, user_secrets: 0, push_devices: 0, teams_bot_chats: 0, teams_bot_cards: 0 });
     // New rows after an import get new ids (SQL Server's identities move past the imported ones).
     await addUsers(db, "ben");
     await fill(db, "ben");
