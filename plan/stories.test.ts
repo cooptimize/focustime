@@ -7,7 +7,7 @@ import { aCoopProposal, aFeatureSignals, anExemplarCandidate, aProposalsAnswer }
 import { htmlToText } from "../sources/devops/normalize.ts";
 import { parseComments, poolCandidates } from "../sources/devops/signals.ts";
 import {
-  coopLine, COOP_PROPOSALS_V1, DEFAULT_STYLE, draftInput, DRAFT_INSTRUCTIONS, estimateMicros, houseStyle, houseStyleStale, proposalProblems, publishDescription, publishOrder, rankExemplars, toProposal, trimComments, type ExemplarCandidate,
+  coopLine, COOP_PROPOSALS_V1, DEFAULT_STYLE, draftInput, DRAFT_INSTRUCTIONS, estimateMicros, houseStyle, houseStyleStale, proposalProblems, publishDescription, publishOrder, rankExemplars, sentSummary, toProposal, trimComments, type ExemplarCandidate,
 } from "./stories.ts";
 
 describe("signals", () => {
@@ -145,5 +145,26 @@ describe("review and publish", () => {
     const m = estimateMicros(input, { inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5 });
     expect(m).toBeGreaterThan(1_000);
     expect(m).toBeLessThan(5_000);
+  });
+});
+
+describe("BD-1: what's sent to the AI, in plain words", () => {
+  it("lists the fields, comments, children, examples and house style the request uses", () => {
+    const lines = sentSummary({ signals: aFeatureSignals(), examples: 3, clientName: "Contoso", style: { learned: true, edited: null } });
+    expect(lines[0]).toBe("The Feature's title, state, priority, tags, area, iteration, description and acceptance criteria");
+    expect(lines).toContain("Its parent #230: title and a short description");
+    expect(lines).toContain("2 of 2 comments, newest first");
+    expect(lines).toContain("1 existing child: titles and states, so they aren't proposed again");
+    expect(lines).toContain("3 examples from Contoso's own items, with their children");
+    expect(lines).toContain("House style: learned from Contoso's own items");
+  });
+  it("says when there are none, and when the house style is the default", () => {
+    const lines = sentSummary({ signals: aFeatureSignals({ feature: { tags: [], priority: null, acceptance: "" }, epic: null, children: [], comments: [] }), examples: 0, clientName: "Contoso", style: null });
+    expect(lines[0]).toBe("The Feature's title, state, area, iteration and description");
+    expect(lines.some((l) => l.startsWith("Its parent"))).toBe(false);
+    expect(lines).toContain("No comments (there are none)");
+    expect(lines).toContain("No existing children (there are none)");
+    expect(lines).toContain("No examples: too few of Contoso's own items with children to learn from");
+    expect(lines).toContain("House style: the default");
   });
 });

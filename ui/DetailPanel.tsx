@@ -15,7 +15,7 @@ import { captureClients } from "./Capture.tsx";
 import { FollowUpRow, copy } from "./FollowUps.tsx";
 import { clientColor, longDate, slotRange } from "./labels.ts";
 import { itemMenu, slotMenu } from "./menu.ts";
-import { DraftStoriesButton } from "./DraftStoriesSheet.tsx";
+import { BreakDownButton } from "./BreakDownPanel.tsx";
 import { MenuRow, useMenu } from "./Menus.tsx";
 import { Agenda } from "./PlanDay.tsx";
 import { PickRow } from "./PickRow.tsx";
@@ -219,7 +219,7 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
                     ) : (
                       <span className="dp-needs">
                         <span className="tw-needs">Needs stories</span>
-                        {item && <DraftStories clientKey={f.clientKey} item={item} />}
+                        {item && <BreakDown clientKey={f.clientKey} item={item} />}
                         <button type="button" className="link-btn" onClick={() => void brief(f.itemId)}>
                           Coop brief
                         </button>
@@ -348,11 +348,11 @@ export function PanelShell({ title, sub, color, menu, label, onClose, children }
 }
 
 /**
- * Draft stories on a Needs stories row (Today's This week chips, the panel, Plan the day, Plan the week): DS-1's sheet
- * with AI, or "(AI is off for <client>)" to Settings. A single draft story by hand stays in the item's ⋯ menu.
+ * Break down on a Needs stories row (Today's This week chips, the panel, Plan the day, Plan the week): BD-1's side panel,
+ * labelled with the parent's type. A single draft story by hand stays in the item's ⋯ menu.
  */
-export function DraftStories({ clientKey, item }: { clientKey: string; item: { id: number; title: string } }) {
-  return <DraftStoriesButton clientKey={clientKey} item={item} />;
+export function BreakDown({ clientKey, item }: { clientKey: string; item: { id: number; title: string; type?: string } }) {
+  return <BreakDownButton clientKey={clientKey} item={item} />;
 }
 
 /** The panel's block for a selection: the day and its slot (AM for a whole-day cell). */

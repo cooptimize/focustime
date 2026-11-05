@@ -24,16 +24,16 @@ const NOW = "2026-11-04T15:00:00Z";
 const COOP = "Cooptimize";
 const FEATURE = 437;
 
-function setup(o: { allowed?: string[]; teamStyle?: string; signals?: Partial<FeatureSignals>; answer?: (c: ProviderCall) => string } = {}) {
+function setup(o: { allowed?: string[]; teamStyle?: string; signals?: Partial<FeatureSignals>; answer?: (c: ProviderCall) => string; parentType?: string } = {}) {
   clearDevopsPreviews();
-  const dv = fakeDevOpsWrite({ now: () => NOW });
-  dv.add(FEATURE, { "System.WorkItemType": "Feature", "System.Title": "Monthly export for the finance team", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
+  const dv = fakeDevOpsWrite({ now: () => NOW, recurring: true });
+  dv.add(FEATURE, { "System.WorkItemType": o.parentType ?? "Feature", "System.Title": "Monthly export for the finance team", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
   dv.add(441, { "System.WorkItemType": "User Story", "System.Title": "Pick the columns for the export", "System.State": "Closed" }, FEATURE);
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });
   const toml = `${STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-4444-8444-444444444444"').replace('my_email = ""', 'my_email = "me@example.com"')}\n[clients.Northwind]\nname = "Northwind"\n`;
   const keyring = new Map<string, string>();
   const calls: ProviderCall[] = [];
-  const signals = aFeatureSignals({ feature: { id: FEATURE }, children: [{ id: 441, title: "Pick the columns for the export", type: "User Story", state: "Closed" }], ...o.signals });
+  const signals = aFeatureSignals({ feature: { id: FEATURE, ...(o.parentType ? { type: o.parentType } : {}) }, children: [{ id: 441, title: "Pick the columns for the export", type: "User Story", state: "Closed" }], ...o.signals });
   // Each client's own pool; Northwind's must never show up for Cooptimize.
   const pools: Record<string, ExemplarCandidate[]> = {
     [COOP]: [anExemplarCandidate({ id: 301 }), anExemplarCandidate({ id: 302, title: "Monthly export for HR" }), anExemplarCandidate({ id: 303, areaPath: "Other" })],
@@ -81,15 +81,18 @@ const cardsInput = (d: DraftView, f: (c: DraftView["cards"][number]) => Partial<
 describe("Draft stories", () => {
   beforeEach(() => clearDevopsPreviews());
 
-  it("prepares: the signals, this client's examples only, the house style and the cost", async () => {
+  it("prepares: the item, its description, parent and children, and what's sent in plain words (BD-1)", async () => {
     const s = setup();
-    const p = await s.run<{ signals: { children: unknown[]; comments: { total: number } }; exemplars: { id: number }[]; style: { learned: boolean; text: string }; estimate: string; ai: string; write: boolean; writeMessage: string }>("stories.prepare", { clientKey: COOP, featureId: FEATURE });
-    expect(p.signals.children).toHaveLength(1);
-    expect(p.signals.comments.total).toBe(2);
-    expect(p.exemplars.map((e) => e.id)).toEqual([302, 301, 303]);
-    expect(p.exemplars.some((e) => e.id === 901)).toBe(false);
-    expect(p.style.learned).toBe(true);
-    expect(p.estimate).toMatch(/^\$|^under/);
+    type P = { item: { state: string; priority: number | null; description: string }; parent: { id: number; type: string; url: string } | null; children: { id: number }[]; sent: string[]; ai: string; write: boolean; writeMessage: string } & Record<string, unknown>;
+    const p = await s.run<P>("stories.prepare", { clientKey: COOP, featureId: FEATURE });
+    expect(p.item).toEqual({ state: "Active", priority: 2, description: "Finance needs the monthly totals as a CSV file." });
+    expect(p.parent).toEqual({ id: 230, title: "Finance reporting", type: "Epic", url: "https://dev.azure.com/contoso/Contoso/_workitems/edit/230" });
+    expect(p.children.map((c) => c.id)).toEqual([441]);
+    expect(p.sent).toContain("3 examples from Cooptimize's own items, with their children");
+    expect(p.sent).toContain("House style: learned from Cooptimize's own items");
+    expect(p.sent).toContain("2 of 2 comments, newest first");
+    // Removed from the panel: the field table, examples, house style text, cost and model.
+    for (const k of ["signals", "exemplars", "style", "estimate", "model", "poolRead"]) expect(p, k).not.toHaveProperty(k);
     expect(p.ai).toBe("on");
     expect(p.write).toBe(false);
     expect(p.writeMessage).toBe("Add DevOps write access for Cooptimize in Settings");
@@ -141,6 +144,8 @@ describe("Draft stories", () => {
     expect(input.note_from_the_person).toBe("split by report");
     expect(input.existing_children.map((x) => x.id)).toEqual([441]);
     expect(input.examples.some((e) => /Northwind/.test(e.title))).toBe(false);
+    // BD-1: no picker any more: the top ranked examples go (at most 5), as Prepare counted them.
+    expect(input.examples).toHaveLength(3);
     expect(s.calls[0]!.schemaName).toBe("stories_draft");
 
     // Edit the first, add a third card's worth of drop: keep P1 (edited, L), drop nothing, reorder P2 first.
@@ -166,6 +171,28 @@ describe("Draft stories", () => {
     expect(s.created()).toHaveLength(2);
     // A dropped card is never sent; a sent one can't be edited any more.
     expect((await s.fail("stories.save", { draftId: d.id, cards: cardsInput(r.draft, () => ({ title: "Changed" })) })).status).toBe(409);
+  });
+
+  it("breaks down a Recurring item (parent level beside Feature) into its child type, through the same create", async () => {
+    const s = setup({ parentType: "Recurring" });
+    await s.enable();
+    const p = await s.run<{ featureType: string; childTypes: string[] }>("stories.prepare", { clientKey: COOP, featureId: FEATURE });
+    expect(p.featureType).toBe("Recurring");
+    const d = await s.draft();
+    const pv = await s.run<{ previews: DevOpsPreview[] }>("stories.publish_preview", { draftId: d.id });
+    expect(pv.previews.map((x) => x.fields.find((f) => f.label === "Type")?.after)).toEqual(["User Story", "User Story"]);
+    const r = await s.run<{ created: number }>("stories.publish", { draftId: d.id, previewIds: pv.previews.map((x) => x.previewId) });
+    expect(r.created).toBe(2);
+    expect(s.created().every((i) => i.fields["System.Parent"] === FEATURE && i.fields["System.WorkItemType"] === "User Story")).toBe(true);
+  });
+
+  it("refuses to create under a type that isn't broken down (a story), and sends nothing", async () => {
+    const s = setup({ parentType: "User Story" });
+    await s.enable();
+    const d = await s.draft();
+    const pv = await s.fail("stories.publish_preview", { draftId: d.id });
+    expect(pv.error).toContain("isn't broken down");
+    expect(s.created()).toHaveLength(0);
   });
 
   it("never makes a second item when an answer is lost: Retry checks first", async () => {

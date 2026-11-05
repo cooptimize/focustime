@@ -84,7 +84,7 @@ export function createDemoSources(now: () => string, processOverrides: (clientKe
     description: async () => "A fictional work item for the FocusTime demo.",
     forget: (clientKey) => void last.delete(clientKey),
     // DS-1: the demo has no AI, so Draft stories never reads; these say so if anything asks.
-    featureSignals: async () => ({ ok: false, message: "Draft stories isn't available in the demo" }),
+    featureSignals: async () => ({ ok: false, message: "Break down isn't available in the demo" }),
     exemplarPool: async () => ({ ok: true, value: [] }),
     processModels: async (keys) => Promise.all(keys.map(async (clientKey) => (isDemoClient(clientKey) ? { clientKey, ok: true as const, model: demoProcess(clientKey, await processOverrides(clientKey)) } : { clientKey, ok: false as const, message: "Not a demo client" }))),
   };

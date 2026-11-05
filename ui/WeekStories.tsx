@@ -16,7 +16,7 @@ import { ActionRefusal, call, planAction } from "./api.ts";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { MenuCtx } from "./Menus.tsx";
 import type { MenuItem, MenuStep } from "./menu.ts";
-import { openDraftStories } from "./menu.ts";
+import { PV_BREAKDOWN_EVENT } from "./menu.ts";
 import { SizeChip } from "./plan/Estimate.tsx";
 import { Avatar, usePhotos } from "./Presence.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
@@ -25,12 +25,8 @@ import { WorkLink } from "./WorkLink.tsx";
 
 /** The drag type for a story or a planned pick moving between Week's blocks. */
 export const STORY_DRAG = "application/x-focustime-story";
-/**
- * PV-1: "Break down this feature". BD-1's panel listens and calls preventDefault(); until it does, Week opens the
- * Draft stories sheet for the feature instead.
- */
-export const BREAKDOWN_EVENT = "focustime:breakdown";
-export const openBreakdown = (clientKey: string, itemId: number) => window.dispatchEvent(new CustomEvent(BREAKDOWN_EVENT, { detail: { clientKey, itemId }, cancelable: true }));
+/** PV-1: "Break down" sends { clientKey, itemId }; BD-1's Break down panel (ui/BreakDownPanel.tsx) opens for it. */
+export const openBreakdown = (clientKey: string, itemId: number) => window.dispatchEvent(new CustomEvent(PV_BREAKDOWN_EVENT, { detail: { clientKey, itemId } }));
 
 /** One of the week's blocks a story can go to. */
 export type Block = { date: IsoDate; half: Half; label: string; slot: Slot; ptoDay: boolean; catchUp: boolean };
@@ -181,21 +177,6 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
       document.body.classList.remove("touch-dragging");
     };
   }, [touch !== null, place]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Break down: BD-1's panel takes the event (preventDefault); until then, the Draft stories sheet for the feature.
-  useEffect(() => {
-    const on = (e: Event) => {
-      const { clientKey, itemId } = (e as CustomEvent<{ clientKey: string; itemId: number }>).detail;
-      setTimeout(() => {
-        if (e.defaultPrevented) return;
-        const w = (data.devops ?? []).find((c) => c.clientKey === clientKey);
-        const f = w ? [...w.items, ...w.children, ...(w.committed ?? []), ...(w.parents ?? [])].find((i) => i.id === itemId) : undefined;
-        openDraftStories(clientKey, { id: itemId, title: f?.title ?? `#${itemId}` });
-      }, 0);
-    };
-    window.addEventListener(BREAKDOWN_EVENT, on);
-    return () => window.removeEventListener(BREAKDOWN_EVENT, on);
-  }, [data.devops]);
 
   const api: DndApi = {
     dragging,

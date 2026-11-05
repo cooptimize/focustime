@@ -533,9 +533,10 @@ const ASSIGNED_FIELD = "System.AssignedTo";
       const url = `https://dev.azure.com/${encodeURIComponent(ctx.org)}/${encodeURIComponent(ctx.projectName)}/_workitems/edit/${id}`;
       const feature = raw ? parseFeature(raw, url) : null;
       if (!feature) return { ok: false, message: `#${id} isn't in ${ctx.projectName}, or you can't see it` };
-      if (!meta.tiers.feature.has(feature.type)) return { ok: false, message: `#${id} is a ${feature.type}: Draft stories works on features` };
-      // WT-1: the child types this feature's type takes, the most common in this project's history first.
+      // BD-1: any type the process model says needs breaking down (parent or top level, no override), not only features.
       const ft = typeOf(meta.model, feature.type);
+      if (!ft?.needsBreakdown) return { ok: false, message: `#${id} is a ${feature.type}, which isn't broken down in ${ctx.projectName}` };
+      // WT-1: the child types this type takes, the most common in this project's history first.
       const valid = ft?.validChildren ?? [];
       const def = valid.length > 1 ? typeOf(metaOf(await loadProcess(ctx, project), ctx.clientKey, await loadHistory(ctx, project, meta.model)).model, feature.type)?.defaultChild : valid[0];
       const childTypes = def ? [def, ...valid.filter((t) => t !== def)] : valid;

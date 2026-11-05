@@ -1,9 +1,11 @@
-// DS-1: Draft stories, the main path, in a real (not demo) session on fake sources, a fake DevOps (reads and writes
-// share what was created) and the stub AI provider. A Needs stories row in Plan the week → Draft stories → Prepare
-// (signals, this client's examples, the cost) → Run → Review (edit one card, drop one; a dependency shows as
-// "after <title>") → Publish (the exact batch) → Create → the row no longer says Needs stories. The AI-off state is
-// the button "Draft stories (AI is off for Adatum)". Edge cases are unit tests (plan/stories.test.ts,
-// actions/story-actions.test.ts). Screenshots at 1920 and Text size Larger when FOCUSTIME_SHOTS is set.
+// BD-1: Break down (was Draft stories), the main path, in a real (not demo) session on fake sources, a fake DevOps
+// (reads and writes share what was created) and the stub AI provider. A Needs stories row in Plan the week →
+// "Break down Feature" → the side panel's Prepare (the item, chips, no children yet, what's sent behind a fold) → Run
+// from the note with Enter → Review (edit one, drop one with Undo, reorder by keys, a size, "after <title>", the total)
+// → Publish (the exact batch) → Create all → the row no longer says Needs stories. Also: the AI-off panel, focus back
+// on the row after Esc, and the old and PV-1 events opening the panel. Edge cases are unit tests (plan/breakdown.test.ts,
+// plan/stories.test.ts, actions/story-actions.test.ts). Screenshots at 1920, Text size Larger and the phone (390 wide,
+// a 17px root font as on iPhone) when FOCUSTIME_SHOTS is set.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { IDENTITY_KEY } from "../actions/account.ts";
 import { dispatch } from "../actions/dispatch.ts";
@@ -20,7 +22,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CHROMIUM } from "./harness.ts";
 import { liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "./live.ts";
-import { shotBoth } from "./shots.ts";
+import { shotBoth, SHOTS } from "./shots.ts";
+import type { Page } from "playwright-core";
 
 const FEATURE = 240;
 const WEEK = "2026-11-02";
@@ -78,7 +81,23 @@ function readFetch(created: () => FakeItem[]) {
   }) as typeof fetch;
 }
 
-describe.skipIf(!CHROMIUM)("Draft stories", () => {
+/** 1920 and Larger, then the phone: 390 by 844 with a 17px root font (iPhone's body text), then back. */
+async function shotAll(page: Page, name: string) {
+  await shotBoth(page, name);
+  if (!SHOTS) return;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => void (document.documentElement.style.fontSize = "17px"));
+  await page.waitForTimeout(250);
+  // Nothing wider than the phone.
+  const over = await page.evaluate(() => { const p = document.querySelector(".bd-panel"); return p ? p.scrollWidth - p.clientWidth : 0; });
+  expect(over, `${name}: the panel is wider than the phone`).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `${SHOTS}/${name}-phone.png` });
+  await page.evaluate(() => void (document.documentElement.style.fontSize = ""));
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.waitForTimeout(150);
+}
+
+describe.skipIf(!CHROMIUM)("Break down", () => {
   let lb: LiveBrowser;
   beforeAll(async () => {
     lb = await liveBrowser();
@@ -87,11 +106,12 @@ describe.skipIf(!CHROMIUM)("Draft stories", () => {
     await lb?.close();
   }, T);
 
-  it("Needs stories → Prepare → Run → edit and drop a card → Publish → the row no longer needs stories", async () => {
+  it("Needs stories → Break down → Run → drop one, edit one → Create all → the row no longer needs stories", async () => {
     const dv = fakeDevOpsWrite({ org: "contoso", identities: { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "me@contoso.example" } } });
     dv.add(FEATURE, { "System.WorkItemType": "Feature", "System.Title": "My feature with no stories", "System.State": "Active", "System.AreaPath": "Project Ada", "System.IterationPath": "Project Ada\\Sprint 4" });
     const created = () => [...dv.items.values()].filter((i) => i.fields["System.Parent"] === FEATURE);
     const pats = new Map([["Adatum", WRITE_PAT]]);
+    const team = liveTeam();
     const answer = aProposalsAnswer({
       feature_id: FEATURE,
       rationale: "The feature has no stories yet: the filter first, then delivery, then a check with finance.",
@@ -102,7 +122,6 @@ describe.skipIf(!CHROMIUM)("Draft stories", () => {
         aCoopProposal({ id: "P3", title: "Review the export with finance", description: "A short call.", acceptance_criteria: [], depends_on: [], size: null, open_questions: ["Who signs off?"] }),
       ],
     });
-    const team = liveTeam();
     const base = await liveContext({
       team,
       extra: {
@@ -113,7 +132,7 @@ describe.skipIf(!CHROMIUM)("Draft stories", () => {
     });
     const fetch = readFetch(created);
     let devops: ReturnType<typeof createDevOpsSource> | null = null;
-    const ctx = { ...base, makeDevOps: ((cfg, tz) => (devops ??= createDevOpsSource({ fetch, log: () => {}, snapshots: createSnapshotStore(mkdtempSync(join(tmpdir(), "ds1-ado-"))), timeZone: tz, targets: (k) => base.makeDataverse(cfg, tz).devopsTargets(k) }))) as typeof base.makeDevOps };
+    const ctx = { ...base, makeDevOps: ((cfg, tz) => (devops ??= createDevOpsSource({ fetch, log: () => {}, snapshots: createSnapshotStore(mkdtempSync(join(tmpdir(), "bd1-ado-"))), timeZone: tz, targets: (k) => base.makeDataverse(cfg, tz).devopsTargets(k) }))) as typeof base.makeDevOps };
     await ctx.plan!.setAccountState(IDENTITY_KEY, { oid: ME, tid: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", username: "me@contoso.example", email: "me@contoso.example", signedInAt: "2026-11-02T14:00:00Z", systemUserId: null, systemUserEmail: null });
     await ctx.plan!.setDevopsIdentity({ clientKey: "Adatum", org: "contoso", id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "me@contoso.example", expires: null });
     const app = await lb.start(ctx);
@@ -127,7 +146,6 @@ describe.skipIf(!CHROMIUM)("Draft stories", () => {
       const added = await dispatch(ctx, { action: "weekplan.add", input: { weekStart: WEEK, clientKey: "Adatum", itemId: FEATURE, tier: "must" } });
       expect(added.ok, JSON.stringify(added)).toBe(true);
 
-      // AI off for Adatum: the button says so (and goes to Settings); the Coop brief stays.
       await page.goto(`${app.url}#/week/plan/${WEEK}`);
       const row = () => page.locator(".pw-needs").filter({ has: page.locator(".pw-needs-word") }).first();
       const openAdatum = async () => {
@@ -135,10 +153,20 @@ describe.skipIf(!CHROMIUM)("Draft stories", () => {
         if (!(await row().isVisible().catch(() => false)) && (await line.isVisible().catch(() => false))) await line.click();
       };
       await openAdatum();
-      await row().getByRole("button", { name: "Draft stories (AI is off for Adatum)" }).waitFor();
-      await row().getByRole("button", { name: "Coop brief" }).waitFor();
       await page.locator("[data-moment]").waitFor({ state: "detached", timeout: 10_000 }).catch(() => {});
-      await shotBoth(page, "draft-stories-ai-off", row());
+      const panel = page.getByRole("dialog", { name: /^Break down Feature: / });
+
+      // AI off for Adatum: the label follows the type; the panel says so in one line, with no Run. Esc goes back to the row.
+      const button = row().getByRole("button", { name: "Break down Feature", exact: true });
+      await row().getByRole("button", { name: "Coop brief" }).waitFor();
+      await button.focus();
+      await button.press("Enter");
+      await panel.getByText("AI is off for Adatum. Ask your FocusTime admin.").waitFor();
+      expect(await panel.getByRole("button", { name: "Run" }).count()).toBe(0);
+      await shotAll(page, "break-down-ai-off");
+      await page.keyboard.press("Escape");
+      await panel.waitFor({ state: "detached" });
+      await expect.poll(() => page.evaluate(() => document.activeElement?.textContent ?? "")).toBe("Break down Feature");
 
       // ADM-1: an admin turns AI on for FocusTime and allows it for Adatum.
       await team.set("org", "ai.on", true);
@@ -146,51 +174,89 @@ describe.skipIf(!CHROMIUM)("Draft stories", () => {
       await page.reload();
       await page.locator(".topbar").waitFor();
       await openAdatum();
-      await row().getByRole("button", { name: "Draft stories", exact: true }).click();
 
-      // Prepare: the signals found, the client's own examples, the house style, the story type and the cost.
-      const sheet = page.getByRole("dialog", { name: /^Draft stories: / });
-      await sheet.getByRole("region", { name: "Found in DevOps" }).waitFor();
-      await sheet.getByText("2 of 2, newest first; 1 Coop block as one line").waitFor();
-      const examples = sheet.getByRole("region", { name: /^Examples from Adatum/ });
-      await examples.getByText("Weekly sales report export").waitFor();
-      // WT-1: the type to create, with its icon first, from the feature's valid child types.
-      const runLine = sheet.locator(".ds-run-line");
-      await runLine.getByText(/items under #240/).waitFor();
-      // The fake has no team settings, so bugs sit with stories: a choice, the most common type first.
-      expect(await runLine.getByLabel("Type to create").inputValue()).toBe("User Story");
-      expect(await runLine.locator('.type-icon svg[aria-hidden="true"]').count()).toBe(1);
-      expect(await sheet.locator(".ds-feature .type-icon").getAttribute("title")).toBe("Feature");
-      await sheet.getByText(/at gpt-6-luna/).waitFor();
-      await sheet.getByLabel("Note for the AI (optional)").fill("split by report, skip the data model");
-      await shotBoth(page, "draft-stories-prepare", sheet);
-      await sheet.getByRole("button", { name: "Run" }).click();
+      // The old event name and PV-1's event ({ clientKey, itemId }) open the same panel.
+      await page.evaluate(() => window.dispatchEvent(new CustomEvent("focustime:draft-stories", { detail: { clientKey: "Adatum", item: { id: 240, title: "My feature with no stories" } } })));
+      await panel.getByRole("button", { name: "Run" }).waitFor();
+      await page.keyboard.press("Escape");
+      await panel.waitFor({ state: "detached" });
+      await page.evaluate(() => window.dispatchEvent(new CustomEvent("focustime:breakdown", { detail: { clientKey: "Adatum", itemId: 240 } })));
+      await panel.getByRole("complementary", { name: "The item" }).getByText("#240 My feature with no stories").waitFor();
+      await page.keyboard.press("Escape");
+      await panel.waitFor({ state: "detached" });
 
-      // Review: three cards; the second is after the first. Edit the first title, drop the third.
-      const card = (t: string | RegExp) => sheet.getByRole("listitem", { name: typeof t === "string" ? `Card ${t}` : t });
+      await row().getByRole("button", { name: "Break down Feature", exact: true }).click();
+
+      // Prepare: the item with its state chip and description, no children section (it has none), the child type
+      // choice (the fake has bugs with stories), and what's sent behind a fold. The removed sections are gone.
+      const item = panel.getByRole("complementary", { name: "The item" });
+      await item.getByRole("list", { name: "About the item" }).getByText("Active").waitFor();
+      await item.locator(".bd-desc").waitFor();
+      expect(await item.getByRole("region", { name: "Existing children" }).count()).toBe(0);
+      expect(await panel.locator(".bd-head .type-icon").getAttribute("data-type")).toBe("Feature");
+      const types = panel.getByRole("radiogroup", { name: "Type to create" });
+      await types.getByRole("radio", { name: "User Story", checked: true }).waitFor();
+      await panel.getByText(/items under #240 after you review and confirm\./).waitFor();
+      await item.getByText("What's sent to the AI").click();
+      await item.getByText("3 examples from Adatum's own items, with their children").waitFor();
+      for (const gone of ["Found in DevOps", "House style", "gpt-6-luna", "Edit it in Settings", "Text only: no attachments"]) expect(await panel.getByText(gone, { exact: gone === "House style" }).count(), gone).toBe(0);
+      await item.getByText("What's sent to the AI").click();
+      await shotAll(page, "break-down-prepare");
+
+      // Enter in the note runs.
+      const noteBox = panel.getByLabel("Note for the AI (optional)");
+      await noteBox.fill("split by report, skip the data model");
+      await noteBox.press("Enter");
+
+      // Review: three cards; the second is after the first. Edit the first title, drop the third (Undo, then drop
+      // again), move the first down and back with the keys, size the first L; the total follows.
+      const card = (t: string) => panel.getByRole("listitem", { name: `Card ${t}` });
       await card("Email the export to finance").getByText("after Add the date filter to the export").waitFor();
+      await panel.getByText("3 items · about 5h").waitFor();
       await card("Add the date filter to the export").getByLabel("Title").fill("Add a month filter to the export");
       await card("Email the export to finance").getByText("after Add a month filter to the export").waitFor();
       await card("Review the export with finance").getByRole("button", { name: "Drop" }).click();
-      await card("Review the export with finance").getByRole("button", { name: "Keep" }).waitFor();
-      await shotBoth(page, "draft-stories-review", sheet);
-      await sheet.getByRole("button", { name: "Publish 2 stories…" }).click();
+      const dropped = panel.getByRole("listitem", { name: "Dropped Review the export with finance" });
+      await dropped.getByRole("button", { name: "Undo" }).click();
+      await card("Review the export with finance").getByRole("button", { name: "Drop" }).click();
+      await dropped.waitFor();
+      await panel.getByText("2 items · about 3h").waitFor();
+      const titles = () => panel.locator(".bd-card:not(.dropped) .bd-title").evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
+      await card("Add a month filter to the export").locator(".bd-handle").press("ArrowDown");
+      await expect.poll(titles).toEqual(["Email the export to finance", "Add a month filter to the export"]);
+      await card("Add a month filter to the export").locator(".bd-handle").press("ArrowUp");
+      await expect.poll(titles).toEqual(["Add a month filter to the export", "Email the export to finance"]);
+      await card("Add a month filter to the export").getByRole("button", { name: "L · 4h" }).click();
+      await panel.getByText("2 items · about 5h").waitFor();
+      await card("Add a month filter to the export").getByRole("button", { name: "M · 2h" }).click();
+      await panel.getByText("2 items · about 3h").waitFor();
+      await panel.getByText(/^Why these, and 1 left out$/).waitFor();
+      await shotAll(page, "break-down-review");
+      await panel.getByRole("button", { name: "Preview 2 items…" }).click();
 
-      // Publish: the exact batch, nothing in DevOps until Create.
-      await sheet.getByRole("region", { name: "New User Story: Add a month filter to the export" }).waitFor();
-      await sheet.getByRole("region", { name: "New User Story: Email the export to finance" }).getByText("S · 1h (not written to DevOps)").waitFor();
+      // Publish: the exact batch (types, titles, sizes, parent), nothing in DevOps until Create all.
+      await panel.getByRole("listitem", { name: "New User Story: Add a month filter to the export" }).waitFor();
+      await panel.getByRole("listitem", { name: "New User Story: Email the export to finance" }).getByText("S · 1h").waitFor();
       expect(created()).toHaveLength(0);
-      await shotBoth(page, "draft-stories-publish", sheet);
-      await sheet.getByRole("button", { name: "Create 2 stories in DevOps" }).click();
-      await sheet.getByText(/^Created 2 stories under #240/).waitFor();
+      await shotAll(page, "break-down-publish");
+      await panel.getByRole("button", { name: "Create all" }).click();
+      await panel.getByText(/^Created 2 items under/).waitFor();
       expect(created().map((i) => i.fields["System.Title"])).toEqual(["Add a month filter to the export", "Email the export to finance"]);
       expect(created().some((i) => i.fields["System.Title"] === "Review the export with finance")).toBe(false);
-      await sheet.getByRole("button", { name: "Done" }).click();
-      await sheet.waitFor({ state: "detached" });
+      await panel.getByRole("button", { name: "Done" }).click();
+      await panel.waitFor({ state: "detached" });
 
       // The row refreshes: the feature has stories now, so it no longer says Needs stories.
       await page.locator(".pw-count").filter({ hasText: "2 stories" }).first().waitFor();
       await expect(page.locator(".pw-needs-word").count()).resolves.toBe(0);
+
+      // Prepare again (PV-1's event): now with its existing children, and the earlier draft as one muted line.
+      await page.evaluate(() => window.dispatchEvent(new CustomEvent("focustime:breakdown", { detail: { clientKey: "Adatum", itemId: 240 } })));
+      await panel.getByRole("region", { name: "Existing children" }).getByText("Email the export to finance").waitFor();
+      await panel.getByRole("button", { name: "Open that draft" }).waitFor();
+      await shotAll(page, "break-down-prepare-children");
+      await page.keyboard.press("Escape");
+      await panel.waitFor({ state: "detached" });
       expect(errors).toEqual([]);
     } finally {
       await app.close();

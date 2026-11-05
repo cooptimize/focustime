@@ -114,6 +114,12 @@ describe("command menu (built from the action registry)", () => {
     expect(filterCommands(list, "BROWSER open").map((c) => c.action)).toEqual(["ui.open_focused", "link.open"]);
     expect(filterCommands(list, "plan a day")[0]?.label).toBe("Plan a day…");
   });
+  it("BD-1: finds Break down by its old name, Draft stories", () => {
+    const list = commandList(env().e);
+    expect(filterCommands(list, "break down with").map((c) => c.action)).toEqual(["stories.prepare"]);
+    expect(filterCommands(list, "draft stories").map((c) => c.action)).toContain("stories.prepare");
+    expect(list.find((c) => c.action === "stories.prepare")?.label).toBe("Break down with AI");
+  });
   it("commit is only available while Plan the day is open", () => {
     expect(commandList(env().e).find((c) => c.action === "planday.commit")?.disabled).toBe("Open Plan the day first");
   });
