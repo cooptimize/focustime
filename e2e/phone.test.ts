@@ -132,14 +132,13 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
   }, T);
 
   it("CV-3: the FocusTime name stays whole at the phone's 17px root font (and 21px), with no sideways overflow; the person chip is ⋯'s first row", async () => {
-    // iPhone Safari's text is 17px and up (-apple-system-body); Chromium needs it set by hand (bypassCSP for the style).
-    const page = await h.browser.newPage({ viewport: { width: 390, height: 844 }, bypassCSP: true });
-    await page.goto(h.url);
-    await page.getByRole("button", { name: /Try the demo/ }).click({ timeout: 60_000 });
-    await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
+    // iPhone Safari's text is 17px and up (-apple-system-body); Chromium needs it set by hand (through the CSSOM, which the CSP allows).
+    const { page } = await freshPage(h, { width: 390, height: 844 });
     for (const px of [17, 21]) {
-      await page.addStyleTag({ content: `html { font-size: ${px}px !important; }` });
-      await page.waitForTimeout(200);
+      await page.evaluate((n) => document.documentElement.style.setProperty("font-size", `${n}px`, "important"), px);
+      await page.waitForFunction((n) => getComputedStyle(document.documentElement).fontSize === `${n}px` && !!document.querySelector(".topbar .brand .name"), px);
+      // Measured once layout settles (a busy machine can be a frame behind).
+      await expect.poll(() => page.evaluate(() => { const n = document.querySelector<HTMLElement>(".topbar .brand .name")!; return Math.round(n.getBoundingClientRect().width) >= n.scrollWidth; })).toBe(true);
       const m = await page.evaluate(() => {
         const r = (s: string) => document.querySelector(s)?.getBoundingClientRect() ?? null;
         const name = document.querySelector<HTMLElement>(".topbar .brand .name")!;
@@ -155,5 +154,5 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
     const first = page.getByRole("menu").getByRole("menuitem").first();
     await expect.poll(() => first.textContent()).toMatch(/^Alex Rivera/);
     await page.close();
-  });
+  }, T);
 });

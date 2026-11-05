@@ -1871,8 +1871,6 @@ export function App() {
           step={{
             title: "More",
             items: [
-              // CV-3: on the phone the person chip is this first row (the top bar keeps room for the name).
-              { id: "account", label: account.title, next: account.step },
               { id: "notices", label: "Notifications", ...(notices.unread > 0 ? { hint: `${notices.unread} new` } : {}), run: () => openNotices() },
               { id: "commands", label: "Commands", hint: "Ctrl K", run: () => openCommands() },
               { id: "guide", label: "Guide", hint: "?", run: () => openGuide() },
