@@ -1,4 +1,4 @@
-// Step 16.2, NV-1: tabs (Today · Week · Ahead · Inbox), Week's Board and Commit, Ahead's Roadmap and Plan ahead,
+// Step 16.2, NV-1: tabs (Today · Week · Ahead · Inbox), Week's Board and Commit, Ahead's Grid, Gantt and Fix next (AH-1),
 // Today's flows, addresses (back and reopen), every older address redirecting with its date or id kept, P, keys 1–4,
 // entry points, and notification and command routes.
 import { describe, expect, it } from "vitest";
@@ -8,12 +8,12 @@ import { afterDone, focusOf, hashOf, HOME, isPlanning, MODES, modeNav, navOf, pa
 const loc = (nav: Nav): Loc => ({ nav, overlay: null });
 
 describe("tabs and modes", () => {
-  it("four tabs in order, Roadmap now named Ahead; Week has Board and Commit, Ahead Roadmap and Plan ahead, Today and the Inbox none", () => {
+  it("four tabs in order, Roadmap now named Ahead; Week has Board and Commit, Ahead Grid, Gantt and Fix next, Today and the Inbox none", () => {
     expect(TABS).toEqual(["today", "week", "ahead", "inbox"]);
     expect(TABS.map((t) => TAB_NAMES[t])).toEqual(["Today", "Week", "Ahead", "Inbox"]);
     expect(MODES.today).toEqual([]);
     expect(MODES.week).toEqual(["board", "commit"]);
-    expect(MODES.ahead).toEqual(["roadmap", "ahead"]);
+    expect(MODES.ahead).toEqual(["grid", "gantt", "fix"]);
     expect(MODES.inbox).toEqual([]);
   });
 
@@ -23,25 +23,26 @@ describe("tabs and modes", () => {
     expect(tabForKey("p")).toBeNull();
   });
 
-  it("P: Week toggles Board and Commit, Ahead Roadmap and Plan ahead, Today opens Plan today (and a flow goes back); the Inbox has none", () => {
+  it("P: Week toggles Board and Commit, Ahead Grid and Gantt, Today opens Plan today (and a flow goes back); the Inbox has none", () => {
     expect(toggleP(navOf.week("board", "2026-11-02"))).toEqual(navOf.week("commit"));
     expect(toggleP(navOf.planDay("2026-11-03"))).toEqual(navOf.week("commit"));
     expect(toggleP(navOf.week("commit", "2026-11-09"))).toEqual(navOf.week("board", "2026-11-09"));
-    expect(toggleP(navOf.ahead())).toEqual(navOf.ahead("ahead"));
-    expect(toggleP(navOf.ahead("ahead"))).toEqual(navOf.ahead());
+    expect(toggleP(navOf.ahead())).toEqual(navOf.ahead("gantt"));
+    expect(toggleP(navOf.ahead("gantt"))).toEqual(navOf.ahead());
+    expect(toggleP(navOf.ahead("fix"))).toEqual(navOf.ahead("gantt"));
     expect(toggleP(navOf.today())).toEqual(navOf.planDay());
     expect(toggleP(navOf.today("checkin"))).toEqual(navOf.today());
     expect(toggleP(navOf.inbox())).toEqual(navOf.inbox());
   });
 
   it("planning places have a Done that returns to their view; a focused day goes back to its own week", () => {
-    expect([navOf.planDay(), navOf.today("checkin"), navOf.today("closeout"), navOf.week("commit"), navOf.ahead("ahead")].map(isPlanning)).toEqual([true, true, true, true, true]);
-    expect([navOf.today(), navOf.week(), navOf.ahead(), navOf.inbox()].map(isPlanning)).toEqual([false, false, false, false]);
+    expect([navOf.planDay(), navOf.today("checkin"), navOf.today("closeout"), navOf.week("commit")].map(isPlanning)).toEqual([true, true, true, true]);
+    expect([navOf.today(), navOf.week(), navOf.ahead(), navOf.ahead("gantt"), navOf.ahead("fix"), navOf.inbox()].map(isPlanning)).toEqual([false, false, false, false, false, false]);
     expect(afterDone(navOf.today("closeout", "2026-11-02"))).toEqual(navOf.today());
     expect(afterDone(navOf.week("commit", "2026-11-09"))).toEqual(navOf.week());
     expect(afterDone(navOf.planDay("2026-11-11", "PM"))).toEqual(navOf.week("board", "2026-11-09"));
     expect(afterDone(navOf.planDay())).toEqual(navOf.week());
-    expect(afterDone(navOf.ahead("ahead"))).toEqual(navOf.ahead());
+    expect(afterDone(navOf.ahead("gantt"))).toEqual(navOf.ahead());
   });
 
   it("each mode on a switch opens its place", () => {
@@ -70,7 +71,9 @@ describe("addresses", () => {
     [loc(navOf.week("commit")), "#/week/commit"],
     [loc(navOf.week("commit", "2026-11-09")), "#/week/commit/2026-11-09"],
     [loc(navOf.ahead()), "#/ahead"],
-    [loc(navOf.ahead("ahead")), "#/ahead/plan"],
+    [loc(navOf.ahead("gantt")), "#/ahead/gantt"],
+    [loc(navOf.ahead("fix")), "#/ahead/fix"],
+    [loc(navOf.aheadItem(437)), "#/ahead/item/437"],
     [loc(navOf.inbox()), "#/inbox"],
     [loc(navOf.inbox(12)), "#/inbox/12"],
     [loc(navOf.conversations()), "#/inbox/conversations"],
@@ -93,7 +96,8 @@ describe("addresses", () => {
     ["#/week/plan", loc(navOf.week("commit")), "#/week/commit"],
     ["#/week/plan/2026-11-09", loc(navOf.week("commit", "2026-11-09")), "#/week/commit/2026-11-09"],
     ["#/roadmap", loc(navOf.ahead()), "#/ahead"],
-    ["#/roadmap/ahead", loc(navOf.ahead("ahead")), "#/ahead/plan"],
+    ["#/roadmap/ahead", loc(navOf.ahead("gantt")), "#/ahead/gantt"],
+    ["#/ahead/plan", loc(navOf.ahead("gantt")), "#/ahead/gantt"],
     ["#/conversations", loc(navOf.conversations()), "#/inbox/conversations"],
     ["#/my-promises", loc(navOf.myPromises()), "#/inbox/my-promises"],
     ["#/inbox/requests", loc(navOf.conversations()), "#/inbox/conversations"],
@@ -110,7 +114,7 @@ describe("addresses", () => {
   it("an empty address is Today; anything unknown or malformed is refused", () => {
     expect(parseHash("")).toEqual(HOME);
     expect(parseHash("#/")).toEqual(HOME);
-    for (const bad of ["#/delivery", "#/plan", "#/today/plan/2026-13-40", "#/today/plan/soon", "#/today/checkin/2026-11-02", "#/today/plan/2026-11-03/XM", "#/week/plan/x", "#/week/day/2026-11-03/XM", "#/week/commit/x/y", "#/inbox/0", "#/settings/../x", "#/roadmap/later", "#/ahead/later", "#/conversations/1", "#/today/plan/2026-11-03/PM/extra", "#/" + "x".repeat(90)]) expect(parseHash(bad), bad).toBeNull();
+    for (const bad of ["#/delivery", "#/plan", "#/today/plan/2026-13-40", "#/today/plan/soon", "#/today/checkin/2026-11-02", "#/today/plan/2026-11-03/XM", "#/week/plan/x", "#/week/day/2026-11-03/XM", "#/week/commit/x/y", "#/inbox/0", "#/settings/../x", "#/roadmap/later", "#/ahead/later", "#/ahead/item/0", "#/ahead/gantt/x", "#/conversations/1", "#/today/plan/2026-11-03/PM/extra", "#/" + "x".repeat(90)]) expect(parseHash(bad), bad).toBeNull();
   });
 });
 
@@ -136,8 +140,9 @@ describe("entry points", () => {
     expect(viewName(loc(navOf.planDay()))).toBe("Week › Plan today");
     expect(viewName(loc(navOf.planDay("2026-11-03")))).toBe("Week › Plan 2026-11-03");
     expect(viewName(loc(navOf.week("commit")))).toBe("Week › Commit");
-    expect(viewName(loc(navOf.ahead()))).toBe("Ahead");
-    expect(viewName(loc(navOf.ahead("ahead")))).toBe("Ahead › Plan ahead");
+    expect(viewName(loc(navOf.ahead()))).toBe("Ahead › Grid");
+    expect(viewName(loc(navOf.ahead("gantt")))).toBe("Ahead › Gantt");
+    expect(viewName(loc(navOf.ahead("fix")))).toBe("Ahead › Fix next");
     expect(viewName(loc(navOf.conversations()))).toBe("Inbox › Conversations");
   });
 });
@@ -157,9 +162,9 @@ describe("notification routes (all kinds of step 15.5)", () => {
     ["followups (one)", notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }], at)!, loc(navOf.inbox(7)), false],
     ["followups (several)", notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }, { id: 8, what: "B", overdue: true }], at)!, loc(navOf.inbox()), false],
     ["expiry", notices.expiry("2026-11-02", [{ text: "x", section: "clients" }], at)!, { nav: navOf.today(), overlay: { kind: "settings", section: "clients" } }, false],
-    // Both Plan ahead rituals open Ahead › Plan ahead.
-    ["plan_ahead", notices.planAhead("plan_ahead:2026-11-05", at), loc(navOf.ahead("ahead")), false],
-    ["direction", notices.direction("direction:2026-12", "2026-12-03", at), loc(navOf.ahead("ahead")), false],
+    // Both Plan ahead rituals open Ahead › Gantt (AH-1).
+    ["plan_ahead", notices.planAhead("plan_ahead:2026-11-05", at), loc(navOf.ahead("gantt")), false],
+    ["direction", notices.direction("direction:2026-12", "2026-12-03", at), loc(navOf.ahead("gantt")), false],
   ];
   it("each opens its tab, mode or flow", () => {
     for (const [name, n, want, vmMenu] of all) {
@@ -173,7 +178,7 @@ describe("notification routes (all kinds of step 15.5)", () => {
 describe("command menu views", () => {
   it("every view a command opens is a tab and mode, a flow, or an overlay", () => {
     const want: Partial<Record<ViewName, string>> = {
-      today: "#/today", week: "#/week", inbox: "#/inbox", follow_ups: "#/inbox", capture: "#/inbox", roadmap: "#/ahead", ahead: "#/ahead/plan",
+      today: "#/today", week: "#/week", inbox: "#/inbox", follow_ups: "#/inbox", capture: "#/inbox", roadmap: "#/ahead", ahead: "#/ahead/gantt",
       planday: "#/week/day", planweek: "#/week/commit", commit: "#/week/commit", checkin: "#/today/checkin", closeout: "#/today/closeout", focus: "#/focus", settings: "#/settings/you",
       conversations: "#/inbox/conversations", requests: "#/inbox/conversations", my_promises: "#/inbox/my-promises",
     };

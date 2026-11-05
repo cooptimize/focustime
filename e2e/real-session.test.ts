@@ -41,8 +41,8 @@ const SCREENS: [string, string, string][] = [
   ["Close out", "#/today/closeout", "main"],
   ["Week", "#/week", ".week-head"],
   ["Plan the week", "#/week/plan/2026-11-02", ".pw-client, .pw-empty, .planweek"],
-  ["Roadmap", "#/roadmap", ".rm-row, .dl-empty, .roadmap"],
-  ["Plan ahead", "#/roadmap/ahead", ".pa-item, .pa-empty, .planahead, .roadmap"],
+  ["Ahead › Grid", "#/ahead", ".ahead"],
+  ["Ahead › Gantt", "#/ahead/gantt", ".ahead"],
   ["Inbox", "#/inbox", "main"],
 ];
 

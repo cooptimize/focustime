@@ -113,7 +113,7 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await page.keyboard.press("p");
     await expect.poll(() => hash(page)).toBe("#/week");
 
-    // Ahead holds the Roadmap as it was, and Plan ahead.
+    // AH-1: Ahead is Grid, Gantt and Fix next.
     await page.keyboard.press("3");
     await page.locator("main.roadmap").waitFor();
     await page.getByRole("navigation", { name: "Ahead modes" }).waitFor();
@@ -130,7 +130,8 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
       ["#/today/plan", "#/week/day"],
       ["#/week/plan/2026-11-09", "#/week/commit/2026-11-09"],
       ["#/roadmap", "#/ahead"],
-      ["#/roadmap/ahead", "#/ahead/plan"],
+      ["#/roadmap/ahead", "#/ahead/gantt"],
+      ["#/ahead/plan", "#/ahead/gantt"],
       ["#/conversations", "#/inbox/conversations"],
       ["#/my-promises", "#/inbox/my-promises"],
     ] as const) {
