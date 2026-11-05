@@ -718,6 +718,12 @@ export function App() {
     [pd, reloadQuiet],
   );
 
+  // HK-3: after Keep, Move to… or Drop on a suggested card in Plan today, its state and the week both read again.
+  const refreshPlanDay = useCallback(() => {
+    reloadQuiet();
+    if (pd) void planAction("planday.start", { date: pd.date }).then((st) => setPd((cur) => (cur?.date === st.date ? st : cur)), () => undefined);
+  }, [pd, reloadQuiet]);
+
   const closePlanDay = useCallback(() => {
     setPd(null);
     setPdError(null);
@@ -1658,7 +1664,9 @@ export function App() {
             const dayIndex = week.days.findIndex((d) => d.date === pd.date);
             const fri = week.days[4]!.date;
             return (
-                    // NV-1 (narrowing D476): Plan today works on the phone too, so no read-only gate here.
+                    // NV-1 (narrowing D476): Plan today works on the phone too, so no read-only gate here. HK-3: inside the
+                    // Board's CarryProvider, so a pick suggested in one of this day's blocks is the same dashed card here.
+                    <CarryProvider active={data.weekStart === data.today.weekStart} version={pd} week={week} now={now ?? new Date(clock).toISOString()} onChanged={refreshPlanDay}>
                     <PlanDay
                       switcher={switches.week}
                       key={pd.date}
@@ -1692,6 +1700,7 @@ export function App() {
                         openPlanWeek(week.days[0]!.date);
                       }}
                     />
+                    </CarryProvider>
           );
           })()
         ) : (

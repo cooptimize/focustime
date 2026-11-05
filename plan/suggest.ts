@@ -52,6 +52,12 @@ export function suggestCarry(picks: readonly Pick[], days: readonly BlockDay[], 
   return out;
 }
 
+/**
+ * HK-3: Plan today's "Unfinished from earlier days" list: the day's carry-over without the picks suggested as a card in
+ * a block this week (shown as that card in the block when it is this day's, and not here at all when it is another's).
+ */
+export const carryListed = (picks: readonly Pick[], suggested: ReadonlyMap<number, BlockAt>): Pick[] => picks.filter((p) => !suggested.has(p.id));
+
 /** "Mon AM" for a block. */
 export const blockName = (b: { date: IsoDate; half: Half }) => `${Temporal.PlainDate.from(b.date).toLocaleString("en-US", { weekday: "short" })} ${b.half === "EVE" ? "evening" : b.half}`;
 
