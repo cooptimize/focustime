@@ -14,6 +14,45 @@ import { createTeamsStore } from "../store/teams-store.ts";
 import { CHROMIUM, openSettings } from "./harness.ts";
 import { liveAdminOps, liveBrowser, liveContext, liveTeam, ME, NOW, T, type LiveBrowser } from "./live.ts";
 import { shotBoth } from "./shots.ts";
+import { createDevOpsPoller, createLimiter, devopsStatusSource, NO_SNAPSHOTS } from "../actions/devops-poll.ts";
+import { createStatusRegistry } from "../actions/status-rows.ts";
+import { legacyHours } from "../config/schema.ts";
+import { createDevOpsSource } from "../sources/devops/source.ts";
+import { aFakeItem, fakeLiveDevOps } from "../sources/devops/poll-fakes.ts";
+import { target } from "../sources/devops/test-fakes.ts";
+import { createDevOpsStore } from "../store/devops-store.ts";
+import type { TargetsResult } from "../sources/devops/types.ts";
+
+/** DV-1: the central DevOps poller over a fake dev.azure.com, its rows in Admin › Status. */
+function devopsStatus() {
+  const clock = () => Temporal.Now.instant();
+  const fake = fakeLiveDevOps(
+    {
+      Adatum: { project: "Delivery", items: [aFakeItem({ id: 1, type: "Feature" }), aFakeItem({ id: 2, parent: 1 })], headers: { "X-RateLimit-Resource": "Core", "X-RateLimit-Limit": "200", "X-RateLimit-Remaining": "196", "X-RateLimit-Cost": "0.3" } },
+      Fabrikam: { project: "Ops", items: [], status: 401 },
+    },
+    clock,
+  );
+  const limiter = createLimiter(clock);
+  const keys = ["Adatum", "Fabrikam"];
+  const targets = async (ks: string[]): Promise<TargetsResult> => ({ ok: true, targets: ks.filter((k) => keys.includes(k)).map((k) => target(k, k, { email: null, project: k === "Adatum" ? "Delivery" : "Ops", projectName: k === "Adatum" ? "Delivery" : "Ops" })) });
+  const app = createDevOpsSource({ fetch: fake.fetch, log: () => {}, snapshots: NO_SNAPSHOTS, timeZone: "America/New_York", targets, limiter, now: clock, retryDelayMs: 0 });
+  const poller = createDevOpsPoller({
+    store: createDevOpsStore(sqliteConn(openPlanDb({ path: ":memory:", now: () => clock().toZonedDateTimeISO("UTC") })), clock),
+    source: () => app.internal,
+    limiter,
+    accounts: async () => keys,
+    targets,
+    hours: async () => [legacyHours({ start: "00:00", split: "12:00", end: "23:59", timeZone: "America/New_York" })],
+    ruleMinutes: async () => 1,
+    active: () => true,
+    now: clock,
+    log: () => {},
+  });
+  const registry = createStatusRegistry();
+  registry.register(devopsStatusSource(poller));
+  return { registry, fake };
+}
 
 const HOME = "11111111-1111-4111-8111-111111111111";
 const KIM = "e2e00000-0000-4000-8000-0000000000bb";
@@ -52,7 +91,8 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       [{ clientKey: "Adatum", personId: ME, source: "owner" }],
       [{ personId: ME, clientKey: "Adatum" }, { personId: KIM, clientKey: "Adatum" }],
     );
-    const ops = await liveAdminOps(team, { admins, chats: () => teams.chats() });
+    const devops = devopsStatus();
+    const ops = await liveAdminOps(team, { admins, chats: () => teams.chats(), statusRows: devops.registry });
     const chats = createChatsClient({ fetch: graphFetch, token: async () => "fake-graph-token", invalidate: () => {}, log: () => {} });
     const person = async (id: string, name: string, email: string): Promise<ActionContext> => {
       const ctx = await liveContext({
@@ -155,6 +195,13 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await shotBoth(page, "admin-organization", body);
       await page.locator(".set-admin-nav").getByRole("button", { name: "Status" }).click();
       await body.getByText("Adatum Delivery Team").waitFor();
+      // DV-1: one row per client; Check now reads DevOps once for it, and a refused token says so in plain words.
+      const adatumRow = body.locator(".adm-status-group tr", { hasText: "Adatum" });
+      await adatumRow.getByRole("button", { name: "Check now" }).click();
+      await adatumRow.getByText(/every minute/).waitFor();
+      await body.locator(".adm-status-group tr", { hasText: "Fabrikam" }).getByRole("button", { name: "Check now" }).click();
+      await body.locator(".adm-status-group tr", { hasText: "Fabrikam" }).getByText("Token not valid").waitFor();
+      expect(devops.fake.calls.filter((c) => c.org === "Adatum" && c.op === "wiql").length).toBeGreaterThan(0);
       await shotBoth(page, "admin-status", body);
       await page.locator(".set-admin-nav").getByRole("button", { name: "Audit" }).click();
       const audit = body.locator(".adm-audit");
