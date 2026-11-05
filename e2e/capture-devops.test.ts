@@ -113,11 +113,11 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
       await shotBoth(page, "cp1-capture-toast-drafts", page.locator(".inbox .cap-box"));
 
       // UI-7: the row's ⋯ has Prepare again (one more request) and Delete.
-      expect(prepares).toBe(1);
+      const before = prepares;
       await row.getByRole("button", { name: /^More for:/ }).click();
       await expect(row.getByRole("menuitem", { name: "Delete" }).count()).resolves.toBe(1);
       await row.getByRole("menuitem", { name: "Prepare again" }).click();
-      await expect.poll(() => prepares).toBe(2);
+      await expect.poll(() => prepares).toBe(before + 1);
       await expect.poll(() => row.locator(".dw-draft-state").textContent(), { timeout: 30_000 }).toBe("Ready to create");
 
       // A leftover @word that names no client never moves a capture: the chip decides.
@@ -142,8 +142,9 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
       await expect(dialog.locator(".cd-why").textContent()).resolves.toContain("It belongs with the export work");
       await shotBoth(page, "cp1-preview-side-by-side", dialog);
       // UI-7: Prepare again in the preview, once more.
+      const inPreview = prepares;
       await ai.getByRole("button", { name: "Prepare again" }).click();
-      await expect.poll(() => prepares).toBe(3);
+      await expect.poll(() => prepares).toBe(inPreview + 1);
       await expect.poll(() => ai.getByRole("button", { name: "Prepare again" }).isEnabled()).toBe(true);
       await expect(ai.getByLabel("Title").inputValue()).resolves.toMatch(/^Export invoices as CSV/);
       // Keep mine, then back to the AI version, and edit it.

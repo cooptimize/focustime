@@ -233,9 +233,9 @@ One job reads each registered client chat for everyone; Asks are now Requests. D
 
 - **Tabs and routes** (`ui/nav.ts`, tested in `ui/nav.test.ts`). Today · Week · Ahead · Inbox, keys 1 to 4.
   - Today: `#/today`; flows `#/today/checkin` and `#/today/closeout[/date]`. No modes.
-  - Week: `#/week[/monday]` (the Board), `#/week/day[/date[/half]]` (Plan today: the Board focused on a day, `focusOf`), `#/week/commit[/monday]` (Commit, Plan the week).
+  - Week: `#/week[/monday]` (the Board), `#/week/day[/date[/half]]` (Plan today: the Board focused on a day, `focusOf`), `#/week/commit[/monday]` (Plan, Plan the week; labelled Commit until UI-7).
   - Ahead: `#/ahead` (Grid), `#/ahead/gantt` (Gantt), `#/ahead/fix` (Fix next), `#/ahead/item/<id>` (an item highlighted); `#/ahead/plan` lands on Gantt (AH-1).
-  - Inbox: `#/inbox`, `#/inbox/conversations`, `#/inbox/my-promises`; one item: `#/inbox/conversation/<id>`, `#/inbox/promise/<id>` (CV-2). Settings sections may have hyphens (`#/settings/admin-audit`).
+  - Inbox: `#/inbox` (the remembered mode, `inboxModeOf`), `#/inbox/conversations`, `#/inbox/my-promises`, `#/inbox/captures` (UI-7), `#/inbox/<followUpId>` (Captures); one item: `#/inbox/conversation/<id>`, `#/inbox/promise/<id>` (CV-2). Settings sections may have hyphens (`#/settings/admin-audit`).
   - Redirects (D581): `#/today/plan…`, `#/week/plan…`, `#/roadmap`, `#/roadmap/ahead`, `#/conversations`, `#/requests`, `#/asks`, `#/my-promises`, `#/promises`. `ui/App.tsx` replaces the history entry when the parsed address differs from the one typed.
 - **Today** (`ui/Today.tsx`): `UrgentStrip` (`plan/urgent.ts`), `MomentCard` (`momentCard` in `plan/modes.ts`), the blocks, After your blocks, This week chips.
 - **Week**: the Board (WeekGrid with `ui/FromLastWeek.tsx` over it for this week, action `planday.carry`), Plan today (`ui/PlanDay.tsx` under Week's header and switch), Commit (`ui/PlanWeek.tsx`).
@@ -338,3 +338,11 @@ One job reads each registered client chat for everyone; Asks are now Requests. D
 - **Local dev database.** `scripts/db-guard.ts` (`resetRefusal`, `portIsContainer`) used by `scripts/db.ts reset`; `store/migrations/named.ts` (`renamedByBranch`, `BRANCH_BUILT`) used by `store/sql/migrate.ts` when applying a named migration fails.
 - **Plan today and the now line.** `ui/App.tsx` mounts `PlanDay` in a `CarryProvider` (`refreshPlanDay` after a change); `ui/PlanDay.tsx` draws `SuggestedCards` in each block and lists `carryListed` (`plan/suggest.ts`). `plan/nowline.ts` `pillSpot` and `ui/NowLine.tsx` (`avoid`: the rail's hour labels, measured with a ResizeObserver) on `Ruler` in `ui/WeekGrid.tsx`.
 - **Tests.** `ui/activity.test.ts`, `server/use.test.ts`, `server/app-use.test.ts`, `config/org-rules.test.ts`, `scripts/db-guard.test.ts`, `store/migrations/named.test.ts`, `store/sql/migrate.test.ts`, `plan/suggest.test.ts`, `plan/nowline.test.ts`; e2e `e2e/planday-suggest.test.ts` (with the no-hours prompt's focus) and `e2e/nowline-label.test.ts`, plus Done in `e2e/feedback.test.ts` and `e2e/sends.test.ts` and the AI-off focus in `e2e/admin.test.ts`.
+
+## UI-7 (quick fix round)
+
+- **Capture's ↵.** `ui/Capture.tsx` `CaptureBox`: ↵ (`.cap-send`) is a grid item between `.cap-field` and the client chip (`.cap-input`'s areas field · send · client; on the phone field over send · client); `--cap-line` is one line of the box, the height of ↵ and the chip.
+- **Words.** Labels only: `MODE_NAMES.commit` is "Plan"; `weekState` and `finishLabel` in `ui/PlanWeek.tsx` (Draft, Confirmed, changed since you confirmed; Confirm week); `ModeArea`'s optional `note`; `pendingText` in `plan/ahead-edit.ts`; `aka: ["commit"]` on the renamed actions in `actions/registry.ts` and `ui/menu.ts`. `ui/plan-words.test.ts` guards it.
+- **Prepare again.** `prepareAgain` in `plan/capture-prepare.ts` (hidden, writing, ready); `DraftAiView.aiOn` from `actions/draft-prepare.ts`; `DraftMenu` in `ui/DevOpsWrite.tsx` (the draft row's ⋯: Prepare again, Delete); `useDraftView().again` and the AI side's button in `ui/CreateDraft.tsx`.
+- **Inbox's modes.** `ui/nav.ts`: `InboxMode`, `MODES.inbox`, `navOf.captures`, `inboxModeOf`, `inboxNav`, `nextInboxMode`; `ui/ModeSwitch.tsx` `counts`; `ui/App.tsx` remembers the mode (`focustime.inboxMode`) and passes `switches.inbox` to `Conversations`, `MyPromises` and `Inbox` (Captures), which put it in their header's `ModeArea`. `InboxTabs` is gone. `openCaptures` in `e2e/harness.ts`.
+- **Tests.** `ui/plan-words.test.ts`, the UI-7 parts of `ui/nav.test.ts` and `actions/draft-prepare.test.ts`; e2e `e2e/ui7-capture.test.ts`, `e2e/ui7-inbox.test.ts`, and Prepare again in `e2e/capture-devops.test.ts`.
