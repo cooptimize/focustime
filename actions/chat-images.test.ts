@@ -1,8 +1,8 @@
-// CV-2: images pasted into a client chat. Rows follow their message's body (made on save, kept on a reaction-only
-// update, dropped with an edit that removes them and with the message itself); the poll fetches them with the token
-// that read the chat, stripped of metadata; a viewer's own token fetches one the poll hasn't; only a member of the
-// chat who follows its client gets the bytes (403 otherwise); the page only ever sees FocusTime's own address, never
-// Graph's; logs carry counts only. Fictional names and images.
+// CV-2, CV-4: images pasted into a client chat. Rows follow their message's body (made on save, kept on a reaction-only
+// update, dropped with an edit that removes them and with the message itself). CV-4: never stored: read from Teams
+// on view with the viewer's own token (FocusTime's member and client checks first), stripped, held in memory 5
+// minutes per image and viewer; a failure shows Open in Teams; the poll no longer fetches them. The page only ever
+// sees FocusTime's own address, never Graph's; logs carry counts only. Fictional names and images.
 import { describe, expect, it } from "vitest";
 import type { ConversationMessages } from "../plan/conversation-views.ts";
 import { HttpError } from "../sources/calendar/http.ts";
@@ -10,7 +10,7 @@ import type { ChatMessagesClient } from "../sources/graph/chats.ts";
 import { gifWithMetadata, jpegWithMetadata, leaks, SECRET } from "../test/images.ts";
 import { BLAKE, CHAT, EVAN, LENA, world } from "../test/conversations.ts";
 import { OUTSIDER, people, type W } from "../test/conversation-people.ts";
-import { fetchChatImages, serveChatImage } from "./chat-images.ts";
+import { ImageCache, readImage, serveChatImage, VIEW_CACHE_MS } from "./chat-images.ts";
 
 const src = (hosted: string, messageId = "1730750000000") => `https://graph.microsoft.com/v1.0/chats/${CHAT.chatId}/messages/${messageId}/hostedContents/${hosted}/$value`;
 const body = (...hosted: string[]) =>
@@ -53,44 +53,77 @@ describe("chat images", () => {
     expect((await w.teams.images(CHAT.chatId, [m.messageId])).map((r) => r.id)).toEqual([rows[0]!.id]);
   });
 
-  it("the poll fetches them with its token, strips the metadata, skips what isn't a PNG, JPEG or GIF or is over 10 MB, and waits out a throttle", async () => {
+  it("read with a member's token: stripped, type and size noted, never the bytes; what isn't a PNG, JPEG or GIF or is over 10 MB is skipped for good; one retry on a throttle", async () => {
     const w = world();
-    const { m } = await withImages(w, ["jpeg", "gif", "svg", "huge", "refuse", "slow"]);
+    const { m } = await withImages(w, ["jpeg", "gif", "svg", "huge", "refuse"]);
     const g = graph({ jpeg: jpegWithMetadata(), gif: gifWithMetadata() });
-    expect(await fetchChatImages(w.teams, g.client, CHAT.chatId)).toEqual({ ok: 2, skipped: 2, failed: 1 });
     const rows = await w.teams.images(CHAT.chatId, [m.messageId]);
-    expect(rows.map((r) => [r.state, r.reason, r.contentType])).toEqual([
-      ["ok", null, "image/jpeg"], ["ok", null, "image/gif"], ["skipped", "not a PNG, JPEG or GIF", null], ["skipped", "too big", null], ["failed", "refused", null], ["pending", null, null],
+    const got = [];
+    for (const r of rows) got.push(await readImage(w.teams, g.client, r, { sleep: async () => {} }));
+    expect(got.map((x) => (x.ok ? x.type : x.why))).toEqual(["image/jpeg", "image/gif", "skipped", "skipped", "gone"]);
+    for (const x of got) if (x.ok) expect(leaks(x.bytes)).toEqual([]);
+    const after = await w.teams.images(CHAT.chatId, [m.messageId]);
+    expect(after.map((r) => [r.state, r.reason, r.contentType])).toEqual([
+      ["ok", null, "image/jpeg"], ["ok", null, "image/gif"], ["skipped", "not a PNG, JPEG or GIF", null], ["skipped", "too big", null], ["pending", null, null],
     ]);
-    for (const r of rows.slice(0, 2)) expect(leaks((await w.teams.imageBytes(r.id))!.bytes)).toEqual([]);
-    // Next cycle: only the failed one and the throttled one again; skipped ones are never fetched again.
-    g.calls.length = 0;
-    await fetchChatImages(w.teams, g.client, CHAT.chatId);
-    expect(g.calls).toEqual(["refuse", "slow"]);
+    expect(after[0]!.byteSize).toBe((got[0] as { bytes: Uint8Array }).bytes.length);
+    expect(await w.conn.all("SELECT id FROM teams_message_images WHERE bytes IS NOT NULL")).toEqual([]);
+    // A throttle: one wait (Retry-After, at most 5 s), one more try.
+    let tries = 0;
+    const slow: ChatMessagesClient = { messagesSince: async () => ({ messages: [], newest: null }), hostedContent: async () => (++tries === 1 ? Promise.reject(new HttpError(429, 30)) : { bytes: jpegWithMetadata() }) };
+    const waits: number[] = [];
+    expect(await readImage(w.teams, slow, rows[0]!, { sleep: async (ms) => void waits.push(ms) })).toMatchObject({ ok: true });
+    expect([tries, waits]).toEqual([2, [5000]]);
   });
 
-  it("serves the bytes only to a member who follows the client; 403 for anyone else; a viewer's own token fetches one the poll hasn't", async () => {
+  it("served to a member who follows the client, read with their own token, held 5 minutes per viewer; 403 for anyone else; a failure is 404 for 5 minutes", async () => {
     const w = world();
-    const { m } = await withImages(w, ["jpeg", "svg"]);
-    const [jpeg, svg] = await w.teams.images(CHAT.chatId, [m.messageId]);
+    const { m } = await withImages(w, ["jpeg", "svg", "refuse"]);
+    const [jpeg, svg, refused] = await w.teams.images(CHAT.chatId, [m.messageId]);
     const p = await people(w);
+    const cache = new ImageCache();
+    const t0 = Date.parse("2026-11-04T21:30:00Z");
     const mine = graph({ jpeg: jpegWithMetadata() });
     const lena = { ...p.as(LENA).ctx, chatMessages: async () => mine.client };
-    const first = await serveChatImage(lena, jpeg!.id);
+    const first = await serveChatImage(lena, jpeg!.id, { cache, now: t0 });
     expect(first).toMatchObject({ status: 200, contentType: "image/jpeg" });
     expect(leaks((first as { bytes: Uint8Array }).bytes)).toEqual([]);
     expect(mine.calls).toEqual(["jpeg"]);
-    // Fetched once: the next view is from the store.
-    await serveChatImage(lena, jpeg!.id);
+    // Within 5 minutes: from memory. After: read again with her token.
+    await serveChatImage(lena, jpeg!.id, { cache, now: t0 + 60_000 });
     expect(mine.calls).toEqual(["jpeg"]);
-    expect(await serveChatImage(lena, svg!.id)).toEqual({ status: 404 });
-    // Not in the chat, or in it without following Contoso: refused, and nothing fetched with their token.
+    await serveChatImage(lena, jpeg!.id, { cache, now: t0 + VIEW_CACHE_MS + 1 });
+    expect(mine.calls).toEqual(["jpeg", "jpeg"]);
+    // Another member gets it with their own token, never from Lena's read.
+    const blakes = graph({ jpeg: jpegWithMetadata() });
+    expect(await serveChatImage({ ...p.as(BLAKE).ctx, chatMessages: async () => blakes.client }, jpeg!.id, { cache, now: t0 + 60_000 })).toMatchObject({ status: 200 });
+    expect(blakes.calls).toEqual(["jpeg"]);
+    // Skipped: 404 and never read again. Refused by Teams: 404, remembered for 5 minutes.
+    expect(await serveChatImage(lena, svg!.id, { cache, now: t0 })).toEqual({ status: 404 });
+    expect(await serveChatImage(lena, svg!.id, { cache, now: t0 + VIEW_CACHE_MS + 1 })).toEqual({ status: 404 });
+    expect(await serveChatImage(lena, refused!.id, { cache, now: t0 })).toEqual({ status: 404 });
+    expect(await serveChatImage(lena, refused!.id, { cache, now: t0 + 60_000 })).toEqual({ status: 404 });
+    expect(mine.calls.filter((c) => c !== "jpeg")).toEqual(["svg", "refuse"]);
+    // Not in the chat, or in it without following Contoso: refused, and nothing read with their token.
     const theirs = graph({ jpeg: jpegWithMetadata() });
-    expect(await serveChatImage({ ...p.as(OUTSIDER).ctx, chatMessages: async () => theirs.client }, jpeg!.id)).toEqual({ status: 403 });
+    expect(await serveChatImage({ ...p.as(OUTSIDER).ctx, chatMessages: async () => theirs.client }, jpeg!.id, { cache })).toEqual({ status: 403 });
     const notFollowing = await people(w, { followed: ["wingtip"] });
-    expect(await serveChatImage({ ...notFollowing.as(EVAN).ctx, chatMessages: async () => theirs.client }, jpeg!.id)).toEqual({ status: 403 });
+    expect(await serveChatImage({ ...notFollowing.as(EVAN).ctx, chatMessages: async () => theirs.client }, jpeg!.id, { cache })).toEqual({ status: 403 });
     expect(theirs.calls).toEqual([]);
-    expect(await serveChatImage(lena, 99999)).toEqual({ status: 404 });
+    expect(await serveChatImage(lena, 99999, { cache })).toEqual({ status: 404 });
+    // Nothing on disk: no bytes in the store after all that.
+    expect(await w.conn.all("SELECT id FROM teams_message_images WHERE bytes IS NOT NULL")).toEqual([]);
+  });
+
+  it("the memory holds about 64 MB in all: the oldest go first", () => {
+    const c = new ImageCache(VIEW_CACHE_MS, 10);
+    const img = (n: number) => ({ contentType: "image/png", bytes: new Uint8Array(n) });
+    c.set(1, "a", img(4), 0);
+    c.set(2, "a", img(4), 1);
+    c.set(3, "b", img(4), 2);
+    expect([c.get(1, "a", 3), !!c.get(2, "a", 3), !!c.get(3, "b", 3), c.bytes]).toEqual([undefined, true, true, 8]);
+    c.set(4, "a", img(11), 4);
+    expect(c.get(4, "a", 5)).toBeUndefined();
   });
 
   it("Show messages gives FocusTime's own address for each image and leaves the images out of the body; never Graph's URL; the card counts them", async () => {
@@ -99,7 +132,8 @@ describe("chat images", () => {
     const p = (await people(w)).as(LENA);
     const r = await p.run<ConversationMessages>("conversations.messages", { id: c.id });
     const ids = (await w.teams.images(CHAT.chatId, [m.messageId])).map((i) => i.id);
-    expect(r.messages[0]!.images).toEqual(ids.map((id) => ({ id, src: `/media/chat-images/${id}`, note: null })));
+    const link = expect.stringMatching(/^https:\/\/teams\.microsoft\.com\//);
+    expect(r.messages[0]!.images).toEqual(ids.map((id) => ({ id, src: `/media/chat-images/${id}`, note: null, link })));
     expect(r.messages[0]!.html).toBe("<p>See the totals:</p><p></p><p></p><p>Thanks 🙂</p>");
     const json = JSON.stringify(r);
     for (const x of ["graph.microsoft.com", "hostedContents", "aWQ9MQ"]) expect(json).not.toContain(x);
@@ -108,18 +142,25 @@ describe("chat images", () => {
     expect(JSON.stringify(list)).not.toContain("hostedContents");
   });
 
-  it("a skipped image says why instead of a thumbnail", async () => {
+  it("a skipped image says why instead of a thumbnail; a described one carries its words, on the card too", async () => {
     const w = world();
-    const { c } = await withImages(w, ["huge"]);
-    await fetchChatImages(w.teams, graph({}).client, CHAT.chatId);
-    const r = await (await people(w)).as(LENA).run<ConversationMessages>("conversations.messages", { id: c.id });
-    expect(r.messages[0]!.images).toEqual([{ id: expect.any(Number), src: null, note: "Image not shown: over 10 MB" }]);
+    const { c, m } = await withImages(w, ["huge", "jpeg"]);
+    const [huge, jpeg] = await w.teams.images(CHAT.chatId, [m.messageId]);
+    await readImage(w.teams, graph({}).client, huge!);
+    await w.teams.setImageDescription(jpeg!.id, "Refresh failed error on the sales model");
+    const p = (await people(w)).as(LENA);
+    const r = await p.run<ConversationMessages>("conversations.messages", { id: c.id });
+    expect(r.messages[0]!.images).toEqual([
+      { id: huge!.id, src: null, note: "Image not shown: over 10 MB", link: expect.any(String) },
+      { id: jpeg!.id, src: `/media/chat-images/${jpeg!.id}`, note: null, link: expect.any(String), description: "Refresh failed error on the sales model" },
+    ]);
+    const list = await p.run("conversations.list");
+    expect([...list.needsYou, ...list.teammates][0]).toMatchObject({ images: 2, imageNote: "Refresh failed error on the sales model" });
   });
 
   it("go with their message: expiry, a purge and a removed chat; never in the poll's logs but as counts", async () => {
     const w = world();
     const { m } = await withImages(w, ["jpeg"]);
-    await fetchChatImages(w.teams, graph({ jpeg: jpegWithMetadata() }).client, CHAT.chatId);
     // Not a work message any more (unplaced): expiry takes it and its image.
     await w.conn.run("DELETE FROM conversation_messages");
     expect(await w.teams.expire("2026-11-30T00:00:00Z")).toBe(1);
@@ -138,14 +179,14 @@ describe("chat images", () => {
 });
 
 describe("the poll cycle", () => {
-  it("fetches a chat's images after reading it, and logs only counts", async () => {
+  it("CV-4: no longer reads a chat's images (they are read on view, or for the AI with the client's switch on)", async () => {
     const { pollCycle } = await import("./request-poll.ts");
     const w = world();
     await withImages(w, ["jpeg"]);
     const logs: unknown[] = [];
     const g = graph({ jpeg: jpegWithMetadata() });
     await w.teams.recordPoll(CHAT.chatId, { polledAt: null, retryAt: null, failures: 0, state: null, note: null, tokenUser: null });
-    const r = await pollCycle(
+    await pollCycle(
       {
         teams: w.teams,
         users: async () => w.users,
@@ -156,10 +197,8 @@ describe("the poll cycle", () => {
       },
       { force: true },
     );
-    expect(r.images).toBe(1);
-    expect(g.calls).toEqual(["jpeg"]);
+    expect(g.calls).toEqual([]);
     const logged = JSON.stringify(logs);
-    expect(logged).toContain('"op":"chat_images"');
     for (const x of ["jpeg", CHAT.chatId, SECRET.place, "hostedContents"]) expect(logged).not.toContain(x);
   });
 });

@@ -8,7 +8,7 @@ import type { Logger } from "../log/logger.ts";
 import { costMicros, micros, monthBounds, monthOf, type Prices } from "./cost.ts";
 import { guard, type GuardInput } from "./guard.ts";
 import { strictProblems, validate } from "./schema.ts";
-import { AI_MESSAGES, AiError, NO_CLIENT, type AiRules, type AiStatus, type AiErrorKind, type AiLogEntry, type AiOutcome, type AiProvider, type AiResult, type JsonSchema, type ProviderReply, type Usage } from "./types.ts";
+import { AI_MESSAGES, AiError, NO_CLIENT, type AiImageInput, type AiRules, type AiStatus, type AiErrorKind, type AiLogEntry, type AiOutcome, type AiProvider, type AiResult, type JsonSchema, type ProviderReply, type Usage } from "./types.ts";
 
 /** App-level settings (server/appconfig.ts [ai], FOCUSTIME_AI_*): the same for everyone, never per person. */
 export type AiAppSettings = {
@@ -54,6 +54,8 @@ export type AiDeps = {
 
 export type AiTaskSpec = { name: string; client: string; instructions: string };
 
+/** CV-4: images in one request at most (conversations.update sends 10). */
+export const MAX_IMAGES = 10;
 /** The longest Retry-After worth waiting for inside one request; longer fails as busy. */
 export const MAX_RETRY_WAIT_MS = 20_000;
 /** Backoff before the one retry when the provider gave no Retry-After: about a second, with jitter. */
@@ -90,7 +92,9 @@ export function createAi(d: AiDeps) {
     return provider ? "ok" : "not_set_up";
   }
 
-  async function run<T>(task: AiTaskSpec, input: string, schema: JsonSchema): Promise<AiResult<T>> {
+  /** CV-4: `images` go after the input, each with its label (only the labels are guarded: images can't be read by the guards). */
+  async function run<T>(task: AiTaskSpec, input: string, schema: JsonSchema, o: { images?: readonly AiImageInput[] } = {}): Promise<AiResult<T>> {
+    if ((o.images?.length ?? 0) > MAX_IMAGES || o.images?.some((i) => !/^data:image\/(png|jpeg|gif);base64,[A-Za-z0-9+/=]+$/.test(i.dataUrl) || i.label.length > 80)) return fail("bad_task");
     if (!task.name || !/^[a-z][a-z0-9_]{0,30}(\.[a-z][a-z0-9_]{0,30})?$/.test(task.name) || !task.client || !task.instructions.trim() || !input.trim() || strictProblems(schema).length) return fail("bad_task");
     const me = await d.rules();
     if (!me.on) return fail("off");
@@ -101,7 +105,7 @@ export function createAi(d: AiDeps) {
     if (!provider) return fail("not_set_up");
 
     const g = await d.guard();
-    const hit = guard(`${task.instructions}\n${input}`, { ...g, client: task.client });
+    const hit = guard(`${task.instructions}\n${input}${(o.images ?? []).map((i) => `\n${i.label}`).join("")}`, { ...g, client: task.client });
     if (hit) {
       await record(task, "refused", hit.kind, ZERO, 0, model);
       return fail(hit.kind);
@@ -132,6 +136,7 @@ export function createAi(d: AiDeps) {
       maxOutputTokens: d.app.maxOutputTokens[task.name.replace(/\./g, "_")] ?? d.app.maxOutputTokens.default,
       timeoutMs: d.app.timeoutMs,
       reasoningEffort: d.app.reasoningEffort,
+      ...(o.images?.length ? { images: [...o.images] } : {}),
     };
     const started = Date.now();
     let reply: ProviderReply = await provider.call(call);

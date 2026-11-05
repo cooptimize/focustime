@@ -102,7 +102,6 @@ describe("admin actions", () => {
     expect(await s.run(s.admin, "admin.set", { scope: "org", key: "ai.on", value: false })).toMatchObject({ ok: true, data: { old: true, value: false, warning: "AI is off for everyone." } });
     expect(await s.run(s.admin, "admin.set", { scope: "org", key: "ai.person_cap_usd", value: 0 })).toMatchObject({ ok: true, data: { warning: expect.stringContaining("AI budget is set to $0") } });
     expect(await s.run(s.admin, "admin.set", { scope: "client:fabrikam", key: "color", value: "#00416b" })).toMatchObject({ ok: false, status: 422 });
-    expect(await s.run(s.admin, "admin.set", { scope: "client:fabrikam", key: "attachments_ai", value: true })).toMatchObject({ ok: false, status: 422 });
     expect(await s.run(s.admin, "admin.set", { scope: "org", key: "nope", value: 1 })).toMatchObject({ ok: false, status: 400 });
     const audit = await s.store.auditList({});
     expect(audit.map((e) => [e.actorName, e.setting, e.oldValue, e.newValue])).toEqual([
@@ -111,6 +110,15 @@ describe("admin actions", () => {
       ["Ada Admin", "org/ai.on", null, "true"],
     ]);
     expect((await s.store.auditList({ area: "ai", text: "cap" })).map((e) => e.setting)).toEqual(["org/ai.person_cap_usd"]);
+  });
+
+  it("CV-4: Send attachments to AI is a client Rule, off by default, saved and audited", async () => {
+    const s = await setup();
+    const ai = async () => ((await s.run(s.admin, "admin.load", { section: "ai" })) as { data: { clients: { key: string; attachmentsAi: boolean }[] } }).data.clients;
+    expect((await ai()).find((c) => c.key === "fabrikam")?.attachmentsAi).toBe(false);
+    expect(await s.run(s.admin, "admin.set", { scope: "client:fabrikam", key: "attachments_ai", value: true })).toMatchObject({ ok: true, data: { old: null, value: true } });
+    expect((await ai()).find((c) => c.key === "fabrikam")?.attachmentsAi).toBe(true);
+    expect((await s.store.auditList({})).map((e) => [e.actorName, e.setting, e.oldValue, e.newValue])[0]).toEqual(["Ada Admin", "client:fabrikam/attachments_ai", null, "true"]);
   });
 
   it("CV-3: Group messages without AI is a client Rule, on by default, saved and audited like Allow AI", async () => {

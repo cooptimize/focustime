@@ -31,7 +31,8 @@ export function createDevOpsWriter(d: { fetch: typeof fetch; log: Logger; timeou
       res = await d.fetch(url, {
         method,
         headers: { accept: "application/json", authorization: pat.basicAuth(), ...(body === undefined ? {} : { "content-type": contentType }) },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        // CV-4: an attachment's bytes go as they are (application/octet-stream); everything else is JSON.
+        ...(body === undefined ? {} : { body: body instanceof Uint8Array ? new Uint8Array(body) : JSON.stringify(body) }),
         redirect: "manual",
         signal: AbortSignal.timeout(timeoutMs),
       });
@@ -84,6 +85,15 @@ export function createDevOpsWriter(d: { fetch: typeof fetch; log: Logger; timeou
     async create(org: string, pat: Pat, project: string, type: string, ops: PatchOp[]): Promise<ItemSnapshot> {
       return snapshot(await req<RawItem>(org, pat, "create", "POST", `${p(project)}/_apis/wit/workitems/$${encodeURIComponent(type)}?$expand=relations`, WIT_API, ops, "application/json-patch+json"));
     },
+    /**
+     * CV-4: one file uploaded as a work item attachment (POST _apis/wit/attachments?fileName=, the bytes as
+     * application/octet-stream; 7.1). It is linked only by an AttachedFile relation on the item; DevOps has no delete.
+     */
+    async uploadAttachment(org: string, pat: Pat, fileName: string, bytes: Uint8Array): Promise<{ id: string; url: string }> {
+      const r = await req<{ id?: unknown; url?: unknown }>(org, pat, "attachment", "POST", `_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}&uploadType=simple`, WIT_API, bytes, "application/octet-stream");
+      if (typeof r.id !== "string" || typeof r.url !== "string" || !r.url.startsWith(`${orgBase(org)}/`)) throw new WriteFailure("error", "DevOps answered without the attachment");
+      return { id: r.id, url: r.url };
+    },
     async addComment(org: string, pat: Pat, project: string, id: number, text: string): Promise<Comment> {
       return comment(await req<RawComment>(org, pat, "comment_add", "POST", `${p(project)}/_apis/wit/workItems/${id}/comments`, COMMENTS_API, { text }));
     },
@@ -119,7 +129,7 @@ async function safeMessage(res: Response): Promise<string | null> {
   }
 }
 
-type RawItem = { id?: unknown; rev?: unknown; fields?: Record<string, unknown>; relations?: { rel?: unknown; url?: unknown }[]; commentVersionRef?: { commentId?: unknown } };
+type RawItem = { id?: unknown; rev?: unknown; fields?: Record<string, unknown>; relations?: { rel?: unknown; url?: unknown; attributes?: unknown }[]; commentVersionRef?: { commentId?: unknown } };
 type RawComment = { id?: unknown; commentId?: unknown; text?: unknown; isDeleted?: unknown; createdBy?: { uniqueName?: unknown }; createdDate?: unknown };
 
 function snapshot(r: RawItem): ItemSnapshot {

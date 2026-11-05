@@ -32,6 +32,9 @@ import { publishAcceptance, publishDescription } from "../plan/stories.ts";
 import { sizeChipText } from "../plan/estimate.ts";
 import type { TeamsView } from "../store/teams-store.ts";
 import type { ChatMember } from "../plan/chats.ts";
+import type { ChatMessagesClient } from "../sources/graph/chats.ts";
+import { readImage, type ReadImage } from "./chat-images.ts";
+import { chatImageSrc } from "../plan/conversation-views.ts";
 export type { DevOpsPreview, DevOpsResult };
 
 export const DEVOPS_WRITE_ACTIONS = ["devops.set_write_pat", "devops.clear_write_pat", "devops.write_status", "devops.states", "devops.preview", "devops.confirm", "devops.retry", "devops.log"] as const;
@@ -61,7 +64,19 @@ export type DevOpsWriteContext = {
   ahead?: AheadPort | undefined;
   /** AH-1 (D664): notices to a new assignee and to owners whose dates moved (an app table). */
   notes?: NotesStore | undefined;
+  /** CV-4: my own Chat.Read reader, for a conversation's images when I create its item (read then, never stored). */
+  chatImages?: (() => Promise<ChatMessagesClient | null>) | undefined;
 };
+
+/** CV-4: images attached to one item at most, and the largest one (as read from Teams, after stripping). */
+export const ATTACH_LIMIT = 10;
+/** One image the create preview offers: from a message being included, with who sent it and when. */
+type AttachOffer = { id: number; messageId: string; sender: string; at: string; description: string | null };
+/** CV-4: an AttachedFile relation in a patch (the upload's URL, and the attachment id inside it). */
+const ATTACHED = "AttachedFile";
+const attachmentId = (url: string) => /\/attachments\/([0-9a-fA-F-]{36})/.exec(url)?.[1]?.toLowerCase() ?? null;
+export const attachedUrls = (ops: DevOpsWriteEntry["ops"]): string[] =>
+  Array.isArray(ops) ? ops.flatMap((p) => (p.op === "add" && p.path === "/relations/-" && (p.value as { rel?: unknown })?.rel === ATTACHED ? [String((p.value as { url: unknown }).url)] : [])) : [];
 
 /** AH-1: what the write framework needs from Ahead. */
 export type AheadPort = {
@@ -104,6 +119,8 @@ type Held = {
   conv?: DevOpsWriteEntry["conv"];
   /** AH-1: extra lines for the preview (a kept half-day, who gets a notice). */
   notes?: string[];
+  /** CV-4: the conversation's images offered, and the ones ticked (uploaded on confirm with my token). */
+  attach?: { offered: AttachOffer[]; ticked: number[] };
 };
 const held = new Map<string, Held>();
 export const clearDevopsPreviews = () => held.clear();
@@ -310,7 +327,12 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
           }
           const entry = (await plan.logDevopsWrite({ clientKey: h.clientKey, org: h.org, project: h.project, op: h.op, itemId: h.itemId, parentId: h.parentId, title: h.title, identity: env.me.email, before: h.before, after: h.after, ops: h.ops, revBefore: h.rev, revAfter: null, commentId: h.commentId, draftId: h.draftId, pickIds: h.pickIds, followUpId: h.followUpId, undoOf: h.undoOf, ask: h.op === "create" ? h.ask : null, conv: h.conv ?? null }));
           if (h.proposal) await plan.linkStoryDraftWrite(h.proposal.draftId, h.proposal.proposalId, entry.id);
-          results.push(await attempt(ctx, env, entry, false, tz));
+          // CV-4: the ticked images are read now with my token, uploaded, and linked in the same create patch.
+          if (h.op === "create" && h.attach?.ticked.length) {
+            const a = await attachImages(ctx, env, entry, h.attach, tz);
+            const r = await attempt(ctx, env, a.entry, false, tz);
+            results.push({ ...r, message: `${r.message}${a.attached ? ` with ${a.attached === 1 ? "1 image" : `${a.attached} images`}` : ""}${a.failed ? `. ${a.failed === 1 ? "1 image" : `${a.failed} images`} couldn't be read from Teams or uploaded, so ${a.failed === 1 ? "it was" : "they were"} left out` : ""}` });
+          } else results.push(await attempt(ctx, env, entry, false, tz));
         } catch (e) {
           if (e instanceof Refused) results.push({ error: e.message, status: e.status });
           else throw e;
@@ -357,11 +379,13 @@ function hold(h: HeldIn, env: Env): DevOpsPreview {
   if (h.op === "assign" && assigneeEmail(h.before["Assigned to"])) notes.push(`${(h.before["Assigned to"] ?? "").replace(/\s*<[^>]*>$/, "")} gets a quiet note in FocusTime, if they use it. Undo gives it back.`);
   if (h.op === "description") notes.push("Replaces the whole description with the text above. The old text is kept in the audit log, and Undo puts it back.");
   notes.push(...(h.notes ?? []));
+  if (h.attach?.ticked.length) notes.push(`The ${h.attach.ticked.length === 1 ? "image is" : `${h.attach.ticked.length} images are`} read from Teams with your sign-in when you confirm, uploaded to DevOps and linked to the new item. FocusTime keeps no copy. An image that can't be read is left out and the item is still created.`);
   if (h.rev !== null) notes.push(`Written only if the item is still at revision ${h.rev}; if anyone changed it since, nothing is written.`);
   return {
     previewId: id, expiresAt: new Date(expiresAt).toISOString(), op: h.op, summary: SUMMARY[h.op], system: "DevOps", org: h.org, project: h.projectName,
     item: h.itemId ? `#${h.itemId} ${h.title}` : `New ${h.type ?? "item"}: ${h.title}`, identity: `${env.me.name} <${env.me.email}>`, fields: fieldsRows, links, notes,
     visibility: VISIBILITY(h.projectName), undo: h.undoOf !== null,
+    ...(h.attach ? { attachments: h.attach.offered.map((a) => ({ id: a.id, src: chatImageSrc(a.id), sender: a.sender, at: a.at, description: a.description, ticked: h.attach!.ticked.includes(a.id) })) } : {}),
   };
 }
 
@@ -370,7 +394,7 @@ const none = { draftId: null, followUpId: null, undoOf: null, commentId: null, p
 
 /** One change → what to hold, or a reason there is nothing to do. Reads the item now (fresh rev). */
 async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Promise<unknown>> = new Map()): Promise<HeldIn | string> {
-  const o = fields(c, ["kind"], ["itemId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type"]);
+  const o = fields(c, ["kind"], ["itemId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images"]);
   const { writer, org, pat, project, plan } = env;
   switch (o.kind) {
     case "state": {
@@ -641,6 +665,8 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const internal = chat?.kind === "delivery";
       const include = o.includeInternal === true;
       const originals: OriginalMessage[] = [];
+      // CV-4: the images of the messages going with it (an internal chat's only with "include internal").
+      const offered: AttachOffer[] = [];
       if (!internal || include) {
         for (const p of (await cv.view.placesIn([c.id])).filter((x) => x.role === "work")) {
           const m = await shared.teams.message(p.chatId, p.messageId);
@@ -649,7 +675,14 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
           const byAt: { name: string | null }[] = [];
           m.mentions.forEach((x, i) => (byAt[x.at ?? i] = { name: x.name }));
           originals.push({ sender, at: m.createdAt, html: sanitizeMessageHtml(m.html ?? m.text, { contentType: m.html ? "html" : "text", mentions: byAt }) });
+          for (const i of (await shared.teams.images(m.chatId, [m.messageId])).filter((x) => x.state !== "skipped").sort((a, b) => a.position - b.position)) offered.push({ id: i.id, messageId: m.messageId, sender, at: m.createdAt, description: i.description });
         }
+      }
+      let ticked = offered.slice(0, ATTACH_LIMIT).map((x) => x.id);
+      if (o.images !== undefined) {
+        if (!Array.isArray(o.images) || o.images.some((x) => typeof x !== "number" || !offered.some((y) => y.id === x))) throw new Invalid("images must be ids of this conversation's images");
+        if (o.images.length > ATTACH_LIMIT) throw new Invalid(`At most ${ATTACH_LIMIT} images on one item`);
+        ticked = [...new Set(o.images as number[])];
       }
       const chatName = chat?.displayName ?? "a client chat";
       const description = descriptionHtml(path, originals, { zone: tz, chatName, chatLink: chat ? teamsLink(chat) : messageLink(c.chatId, "0") });
@@ -658,9 +691,13 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const area = parent ? String(parent.fields["System.AreaPath"] ?? "") || null : null;
       const iteration = parent ? String(parent.fields["System.IterationPath"] ?? "") || null : null;
       const ops = createOps({ org, title, description, descriptionIsHtml: true, acField: false, assignedTo: env.me.email, areaPath: area, iterationPath: iteration, parentId: parent?.id ?? null, descriptionField, timeZone: tz });
-      const tail = originals.length ? `Then the ${originals.length === 1 ? "original message" : `${originals.length} original messages`} from ${chatName}, with who and when, and a link to the chat.` : internal ? `The messages from ${chatName} are left out: it's an internal chat. Only a link to it is added.` : "Then a link to the chat.";
+      const pics = ticked.length ? ` Attached: ${ticked.length === 1 ? "1 image" : `${ticked.length} images`} from the chat.` : "";
+      const tail = (originals.length ? `Then the ${originals.length === 1 ? "original message" : `${originals.length} original messages`} from ${chatName}, with who and when, and a link to the chat.` : internal ? `The messages from ${chatName} are left out: it's an internal chat. Only a link to it is added.` : "Then a link to the chat.") + pics;
       const after: Record<string, string | null> = { Type: t.type, Title: title, [descriptionField === REPRO_FIELD ? "Repro steps" : "Description"]: `${path}${path ? "\n\n" : ""}${tail}`, "Assigned to": `${env.me.name} <${env.me.email}>`, Area: area ?? "The project's default", Iteration: iteration ?? "The project's default", ...(parent ? { Parent: `#${parent.id} ${parent.title}` } : {}) };
-      return { ...base(env), ...none, op: "create", itemId: null, parentId: parent?.id ?? null, title, ops, rev: null, before: {}, after, type: t.type, conv: { conversationId: c.id, commitmentId, suggestionId: null } };
+      let internalImages = false;
+      if (internal && !include) for (const p of (await cv.view.placesIn([c.id])).filter((x) => x.role === "work")) if ((await shared.teams.images(p.chatId, [p.messageId])).length) internalImages = true;
+      const notesOut = internalImages ? ["The chat's images are left out with its messages: it's an internal chat. Include the internal messages to offer them."] : [];
+      return { ...base(env), ...none, op: "create", itemId: null, parentId: parent?.id ?? null, title, ops, rev: null, before: {}, after, type: t.type, conv: { conversationId: c.id, commitmentId, suggestionId: null }, notes: notesOut, ...(offered.length ? { attach: { offered, ticked } } : {}) };
     }
     case "conversation_comment":
     case "description_update": {
@@ -769,7 +806,17 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const removed = removedState(states);
       if (!removed) throw new Refused(`${item.type} has no Removed state in this process. FocusTime never deletes items: close or remove #${item.id} in DevOps`, 409);
       if (item.state === removed) return `#${item.id} is already ${removed}`;
-      return { ...u, op: "undo_create", ops: removeOps(item.rev, removed), rev: item.rev, before: { State: item.state, Comment: null }, after: { State: removed, Comment: REMOVED_COMMENT }, draftId: entry.draftId, pickIds: entry.pickIds, ask: entry.ask ?? null, conv: entry.conv ?? null };
+      // CV-4: the images it linked are unlinked in the same patch (by index, highest first); the files stay in DevOps.
+      const ours = new Set(attachedUrls(entry.ops).map(attachmentId));
+      const at = item.relations.flatMap((r, i) => (r.rel === ATTACHED && ours.has(attachmentId(r.url)) ? [i] : [])).sort((a, b) => b - a);
+      const unlink: PatchOp[] = at.map((i) => ({ op: "remove", path: `/relations/${i}` }));
+      const pics = at.length === 1 ? "1 image" : `${at.length} images`;
+      return {
+        ...u, op: "undo_create", ops: [...removeOps(item.rev, removed), ...unlink], rev: item.rev,
+        before: { State: item.state, Comment: null, ...(at.length ? { Attachments: `${pics} linked` } : {}) }, after: { State: removed, Comment: REMOVED_COMMENT, ...(at.length ? { Attachments: "Unlinked" } : {}) },
+        draftId: entry.draftId, pickIds: entry.pickIds, ask: entry.ask ?? null, conv: entry.conv ?? null,
+        ...(at.length ? { notes: [`Unlinks the ${pics}. The files stay in DevOps, unlinked: DevOps has no way to delete an attachment.`] } : {}),
+      };
     }
     default:
       throw new Invalid("kind must be state, comment, create, request_create, proposal_create, conversation_create, conversation_comment, description_update, target_date, assign, fields or undo");
@@ -852,6 +899,52 @@ async function rightsOn(env: Env, item: ItemSnapshot, memo: Map<string, Promise<
 const applied = (e: DevOpsWriteEntry, now: Record<string, string | null>) => Object.keys(now).every((k) => (now[k] ?? null) === asCurrent(e, k, e.after[k]));
 
 /**
+ * CV-4: before a create from a conversation is sent, each ticked image is read from Teams with my own token (the
+ * member check again, the stripper, 10 MB at most), kept in memory only, uploaded as an attachment with my write PAT,
+ * and added to the create patch as an AttachedFile relation ("From Teams, <name>, <date time>"); the description
+ * gains "Attached: N images from the chat". The audit log keeps the image ids, file names, sizes, attachment ids and
+ * URLs, never the bytes. One that can't be read or uploaded is left out and the item is still created. Saved on the
+ * log entry before the create, so a retry never uploads again.
+ */
+async function attachImages(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntry, attach: NonNullable<Held["attach"]>, tz: string): Promise<{ entry: DevOpsWriteEntry; attached: number; failed: number }> {
+  const teams = env.requests?.teams;
+  const client = teams ? await ctx.chatImages?.().catch(() => null) : null;
+  const rels: PatchOp[] = [];
+  const lines: string[] = [];
+  let failed = 0;
+  const when = (iso: string) => Temporal.Instant.from(iso).toZonedDateTimeISO(tz).toPlainDateTime().toString({ smallestUnit: "minute" }).replace("T", " ");
+  for (const id of attach.ticked.slice(0, ATTACH_LIMIT)) {
+    const offer = attach.offered.find((x) => x.id === id);
+    const row = teams && offer ? await teams.image(id).catch(() => null) : null;
+    const got: ReadImage = row && client && teams ? await readImage(teams, client, row).catch((): ReadImage => ({ ok: false, why: "gone" })) : { ok: false, why: "gone" };
+    if (!got.ok || !offer) {
+      failed++;
+      lines.push(`Image ${id}: not attached (couldn't be read from Teams)`);
+      continue;
+    }
+    const n = rels.length + 1;
+    const stamp = when(offer.at).replace(/[-: ]/g, "").slice(0, 12);
+    const name = `teams-image-${stamp}-${n}.${got.type === "image/png" ? "png" : got.type === "image/gif" ? "gif" : "jpg"}`;
+    try {
+      const up = await env.writer.uploadAttachment(env.org, env.pat, name, got.bytes);
+      rels.push({ op: "add", path: "/relations/-", value: { rel: ATTACHED, url: up.url, attributes: { comment: `From Teams, ${offer.sender}, ${when(offer.at)}` } } });
+      lines.push(`Image ${id}: ${name}, ${Math.max(1, Math.round(got.bytes.length / 1024))} KB, attachment ${up.id}, ${up.url}`);
+    } catch (e) {
+      if (!(e instanceof WriteFailure)) throw e;
+      failed++;
+      lines.push(`Image ${id}: not attached (DevOps refused the upload)`);
+    }
+  }
+  const ops = (entry.ops as PatchOp[]).map((p) =>
+    rels.length && p.op === "add" && (p.path === "/fields/System.Description" || p.path === `/fields/${REPRO_FIELD}`) && typeof p.value === "string"
+      ? { ...p, value: `${p.value}<div>Attached: ${rels.length === 1 ? "1 image" : `${rels.length} images`} from the chat</div>` }
+      : p,
+  );
+  const saved = await env.plan.setDevopsWriteOps(entry.id, [...ops, ...rels], { ...entry.after, Attachments: lines.join("\n") || null });
+  return { entry: saved, attached: rels.length, failed };
+}
+
+/**
  * One attempt at a logged write, safe to repeat: a retry first checks whether the change is already there (an update
  * already applied, a comment already posted, a created item already under its parent) and adopts it rather than
  * writing twice. Success only after reading it back.
@@ -908,6 +1001,9 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       const back = await again(() => writer.item(org, pat, project, id!));
       const ok = back.title === entry.title && (back.parentId ?? null) === entry.parentId && identityEmail(back.fields["System.AssignedTo"]) === env.me.email.toLowerCase();
       if (!ok) return settle("unconfirmed", `DevOps didn't show #${id} as asked yet (title, parent or assignee). Retry checks first and won't create another`, { itemId: id });
+      // CV-4: every image it was meant to have is linked.
+      const linked = new Set(back.relations.filter((r) => r.rel === ATTACHED).map((r) => attachmentId(r.url)));
+      if (attachedUrls(entry.ops).some((u) => !linked.has(attachmentId(u)))) return settle("unconfirmed", `DevOps didn't show the images on #${id} yet. Retry checks first and won't create another`, { itemId: id });
       const url = workItemUrl(org, env.projectName, id);
       const pickIds = entry.draftId !== null && (await plan.getDraft(entry.draftId)) && !(await plan.getDraft(entry.draftId))!.devopsId ? (await plan.markDraftCreated(entry.draftId, { itemId: id, url, title: back.title, type: back.type })) : entry.pickIds;
       // The request it came from is resolved as created, for everyone (once; a second confirm finds it resolved already).
@@ -946,6 +1042,14 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
     // AH-1 (D660): the read-back goes straight into the central store and its change log, so every screen shows it.
     await ctx.ahead?.stored?.(env.clientKey, { id: back.id, fields: { ...back.fields, "System.Rev": back.rev } }).catch(() => {});
     if (entry.op === "fields" || entry.op === "undo_fields") await aheadLanded(ctx, env, entry, back, tz).catch(() => {});
+    // CV-4: an undone create's images are unlinked (the files stay in DevOps: there's no delete).
+    let unlinked = 0;
+    if (entry.op === "undo_create" && entry.undoOf !== null) {
+      const made = await plan.devopsWrite(entry.undoOf);
+      const ours = new Set(attachedUrls(made?.ops ?? null).map(attachmentId));
+      if (ours.size && back.relations.some((r) => r.rel === ATTACHED && ours.has(attachmentId(r.url)))) return settle("unconfirmed", "DevOps still shows the images linked. Retry checks first", { revAfter: back.rev });
+      unlinked = ours.size;
+    }
     if (entry.op === "undo_state" && entry.commentId !== null) {
       // The comment that came with the original change goes too.
       const cm = await writer.getComment(org, pat, project, itemId, entry.commentId).catch(() => null);
@@ -975,7 +1079,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       if (f && !f.closedAt) (await plan.closeFollowUp(entry.followUpId, `Marked ${entry.after.State} in DevOps`, "me", { how: "devops", outcome: "done" }));
     }
     forget();
-    const msg = entry.op.startsWith("undo_") ? "Undone in DevOps" : entry.op === "fields" ? `#${itemId} changed in DevOps` : entry.op === "state" ? `#${itemId} is ${entry.after.State} in DevOps` : entry.op === "description" ? "Description changed in DevOps" : entry.op === "assign" ? `#${itemId} is assigned to you in DevOps` : "Target date set in DevOps";
+    const msg = entry.op === "undo_create" && unlinked ? `Undone in DevOps. The ${unlinked === 1 ? "image stays in DevOps as a file" : `${unlinked} images stay in DevOps as files`}, unlinked: DevOps has no way to delete an attachment` : entry.op.startsWith("undo_") ? "Undone in DevOps" : entry.op === "fields" ? `#${itemId} changed in DevOps` : entry.op === "state" ? `#${itemId} is ${entry.after.State} in DevOps` : entry.op === "description" ? "Description changed in DevOps" : entry.op === "assign" ? `#${itemId} is assigned to you in DevOps` : "Target date set in DevOps";
     return settle("confirmed", msg, { revAfter: back.rev, ...(wrote.commentId !== null ? { commentId: wrote.commentId } : {}) });
   } catch (e) {
     if (e instanceof WriteFailure) {

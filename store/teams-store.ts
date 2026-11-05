@@ -105,15 +105,16 @@ const toRequest = (r: Row): Request => ({
 });
 
 export type ChatChange = { at: string; byUser: string; clientKey: string; chatId: string; change: "added" | "kind" | "removed" | "migrated" | "reading_on" | "reading_off" };
-/** CV-2: one image of a stored message, without its bytes. */
-export type MessageImage = { id: number; chatId: string; messageId: string; position: number; state: ImageState; reason: string | null; contentType: string | null; byteSize: number | null; attempts: number };
+/** CV-2: one image of a stored message. CV-4: FocusTime never keeps its bytes; it is read from Teams when needed. */
+export type MessageImage = { id: number; chatId: string; messageId: string; position: number; state: ImageState; reason: string | null; contentType: string | null; byteSize: number | null; attempts: number; /** CV-4: the AI's short description (at most 120 characters), only for chat members. */ description: string | null };
 export type ImageState = "pending" | "ok" | "skipped" | "failed";
 /** A failed fetch is tried again on later cycles, this many times in all. */
 export const IMAGE_ATTEMPTS = 3;
-const IMAGE_COLS = "id, chat_id, message_id, position, state, reason, content_type, byte_size, attempts";
+const IMAGE_COLS = "id, chat_id, message_id, position, state, reason, content_type, byte_size, attempts, description";
 const toImage = (r: Row): MessageImage => ({
   id: Number(r.id), chatId: r.chat_id as string, messageId: r.message_id as string, position: Number(r.position), state: r.state as ImageState,
   reason: (r.reason as string | null) ?? null, contentType: (r.content_type as string | null) ?? null, byteSize: r.byte_size == null ? null : Number(r.byte_size), attempts: Number(r.attempts),
+  description: (r.description as string | null) ?? null,
 });
 /** Images whose message is gone go with it (expiry, purge, a removed chat). */
 const ORPHAN_IMAGES = "DELETE FROM teams_message_images WHERE NOT EXISTS (SELECT 1 FROM teams_messages m WHERE m.chat_id = teams_message_images.chat_id AND m.message_id = teams_message_images.message_id)";
@@ -340,28 +341,22 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
       const r = await db.get("SELECT chat_id, message_id, hosted_id FROM teams_message_images WHERE id = ?", [id]);
       return r ? { chatId: r.chat_id as string, messageId: r.message_id as string, hostedId: r.hosted_id as string } : null;
     },
-    /** The stripped bytes of a fetched image, with the type read from them. */
-    async imageBytes(id: number): Promise<{ contentType: string; bytes: Uint8Array } | null> {
-      const r = await db.get("SELECT content_type, bytes FROM teams_message_images WHERE id = ? AND state = 'ok'", [id]);
-      return r && r.bytes ? { contentType: r.content_type as string, bytes: r.bytes as Uint8Array } : null;
-    },
-    /** Images of a chat still to fetch: pending, or failed fewer than IMAGE_ATTEMPTS times; oldest first. */
-    async imagesToFetch(chatId: string, n: number): Promise<MessageImage[]> {
-      const top = Math.max(0, Math.floor(n));
-      return (await db.all(
-        db.dialect === "sqlserver"
-          ? `SELECT TOP (${top}) ${IMAGE_COLS} FROM teams_message_images WHERE chat_id = ? AND (state = 'pending' OR (state = 'failed' AND attempts < ${IMAGE_ATTEMPTS})) ORDER BY id`
-          : `SELECT ${IMAGE_COLS} FROM teams_message_images WHERE chat_id = ? AND (state = 'pending' OR (state = 'failed' AND attempts < ${IMAGE_ATTEMPTS})) ORDER BY id LIMIT ${top}`,
-        [chatId],
-      )).map(toImage);
-    },
-    /** A fetch's outcome: the bytes (already stripped) when ok, else why not. */
-    async setImage(id: number, r: { state: "ok"; contentType: string; bytes: Uint8Array } | { state: "skipped" | "failed"; reason: string }): Promise<void> {
+    /**
+     * A read's outcome (CV-4: never the bytes): ok with the type and size read from them, or why it can't be shown.
+     * A failure is counted; a later success clears it.
+     */
+    async setImage(id: number, r: { state: "ok"; contentType: string; byteSize: number } | { state: "skipped" | "failed"; reason: string }): Promise<void> {
       await db.tx(() =>
         r.state === "ok"
-          ? db.run("UPDATE teams_message_images SET state = 'ok', reason = NULL, content_type = ?, byte_size = ?, bytes = ?, attempts = attempts + 1, fetched_at = ? WHERE id = ?", [r.contentType, r.bytes.length, r.bytes, stamp(), id])
-          : db.run("UPDATE teams_message_images SET state = ?, reason = ?, content_type = NULL, byte_size = NULL, bytes = NULL, attempts = attempts + 1, fetched_at = ? WHERE id = ?", [r.state, r.reason.slice(0, 40), stamp(), id]),
+          ? db.run("UPDATE teams_message_images SET state = 'ok', reason = NULL, content_type = ?, byte_size = ?, attempts = 0, fetched_at = ? WHERE id = ?", [r.contentType, r.byteSize, stamp(), id])
+          : db.run("UPDATE teams_message_images SET state = ?, reason = ?, attempts = attempts + 1, fetched_at = ? WHERE id = ?", [r.state, r.reason.slice(0, 40), stamp(), id]),
       );
+    },
+    /** CV-4: the AI's description of an image (cut to 120 characters); shown only to members of its chat. */
+    async setImageDescription(id: number, description: string): Promise<void> {
+      const d = description.replace(/\s+/g, " ").trim().slice(0, 120);
+      if (!d) return;
+      await db.tx(() => db.run("UPDATE teams_message_images SET description = ?, described_at = ? WHERE id = ?", [d, stamp(), id]));
     },
 
     // ---- requests ----
@@ -492,6 +487,16 @@ function viewerOf(store: BaseStore, userId: string) {
     async image(id: number): Promise<MessageImage | null> {
       const i = await store.image(id);
       return i && (await chat(i.chatId)) ? i : null;
+    },
+    /** CV-4: where to read an image in Teams, only when I'm in its chat now. */
+    async imageSource(id: number): Promise<{ chatId: string; messageId: string; hostedId: string } | null> {
+      const src = await store.imageSource(id);
+      return src && (await chat(src.chatId)) ? src : null;
+    },
+    /** CV-4: what a read with my token found (type and size, or why it can't be shown); only for my chats. */
+    async setImage(id: number, r: Parameters<typeof store.setImage>[1]): Promise<void> {
+      const i = await store.image(id);
+      if (i && (await chat(i.chatId))) await store.setImage(id, r);
     },
     /** Delete stored messages of a client's chats I'm in (Requests and promises keep theirs). */
     async purgeClient(clientKey: string): Promise<number> {

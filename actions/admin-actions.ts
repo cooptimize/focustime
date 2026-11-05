@@ -202,7 +202,7 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
         colorFrom: by.get(k) === null ? "suggested" : "admin",
         allowAi: c?.allowAi ?? false,
         groupWithoutAi: c?.groupWithoutAi ?? true,
-        attachmentsAi: false,
+        attachmentsAi: c?.attachmentsAi ?? false,
         openStates: c?.openStates ?? [],
         noBreakdown: c?.noBreakdown ?? [],
         background: c?.background ?? [],

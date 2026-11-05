@@ -4229,7 +4229,12 @@ button.ask-label { cursor: pointer; }
 .tm-thumb img { display: block; max-inline-size: 160px; max-block-size: 120px; inline-size: auto; block-size: auto; object-fit: cover; }
 .tm-thumb:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .tm-image-note { font-size: var(--fs-1); }
-.conv-images { white-space: nowrap; }
+/* CV-4: an image Teams couldn't give us now, and the AI's description under an image. */
+.tm-images li { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; max-inline-size: 200px; }
+.tm-image-gone { display: inline-flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 6px; font-size: var(--fs-1); }
+.tm-image-desc { font-size: var(--fs-1); overflow-wrap: anywhere; }
+/* CV-4: "3 images" stays together; the AI's description after it wraps. */
+.conv-images { overflow-wrap: anywhere; }
 .image-viewer-backdrop { align-items: center; padding: 16px; }
 .image-viewer { display: grid; gap: 8px; max-inline-size: min(1200px, 100%); max-block-size: calc(100dvh - 32px); padding: 10px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); box-shadow: var(--shadow-command); }
 .image-viewer-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: var(--fs-2); }
@@ -4754,6 +4759,16 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .adm-scope .set-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 /* AH-2: in Ahead the pace's ghost past a target is the one muted amber, not red. */
 .ahead .pa-ghost { border: 1.5px dashed var(--ah-attention); border-left: 0; background: none; }
+
+/* CV-4: images from the chat to attach to a new DevOps item: thumbnails with a checkbox each. */
+.dw-attach { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin: 8px 0; min-inline-size: 0; }
+.dw-attach legend { padding: 0 4px; font-weight: 500; }
+.dw-attach ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.dw-attach li { inline-size: 132px; }
+.dw-attach label { display: grid; grid-template-columns: auto 1fr; gap: 4px 6px; align-items: start; cursor: pointer; }
+.dw-attach img, .dw-attach-gone { grid-column: 2; display: block; inline-size: 100%; max-block-size: 90px; object-fit: cover; border: 1px solid var(--border); border-radius: 4px; background: var(--raised); }
+.dw-attach-gone { padding: 8px; font-size: var(--fs-1); }
+.dw-attach-who { grid-column: 1 / -1; font-size: var(--fs-1); overflow-wrap: anywhere; }
 
 /* AH-3: Admin › People's client DevOps identities. */
 .adm-identities .adm-id-client { margin-top: 12px; }

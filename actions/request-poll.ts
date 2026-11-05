@@ -24,7 +24,7 @@ import type { TeamsStore } from "../store/teams-store.ts";
 import type { WorkItem } from "../week/types.ts";
 import { classifyAsk, extractPromise, type AskAiDeps } from "./ask-ai.ts";
 import { mapSeq } from "./seq.ts";
-import { fetchChatImages } from "./chat-images.ts";
+import { imagesForAi } from "./chat-images.ts";
 import { CHAT_DAILY_AI_CALLS, runPipeline } from "./conversations-pipeline.ts";
 import type { ConversationStore } from "../store/conversation-store.ts";
 import { userZone } from "../week/zone.ts";
@@ -67,7 +67,7 @@ export type PollDeps = {
   rules?: () => Promise<PollRules>;
 };
 
-export type CycleResult = { polled: number; messages: number; updated: number; candidates: number; promises: number; failures: number; conversations?: number; unsorted?: number; aiCalls?: number; images?: number; imagesSkipped?: number; imagesFailed?: number };
+export type CycleResult = { polled: number; messages: number; updated: number; candidates: number; promises: number; failures: number; conversations?: number; unsorted?: number; aiCalls?: number; /** CV-4: images sent to the AI, and images in AI batches that weren't (switch off, a limit, unreadable). */ imagesSent?: number; imagesNotSent?: number };
 
 const later = (a: string, b: string) => Date.parse(a) > Date.parse(b);
 const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
@@ -148,9 +148,7 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
         const added = fresh.filter((m) => saved.added.some((a) => a.messageId === m.messageId));
         if (deps.conversations) await conversationsStep(deps, deps.conversations, c, saved.added, { p, home, users, person, out, now });
         else await rules(deps, c, added, { p, uid, home, users, person, out });
-        // CV-2: the images pasted into its messages, with the same token; a failure here never fails the read.
-        const img = await fetchChatImages(deps.teams, p.chatMessages, c.chatId).catch(() => null);
-        if (img) ((out.images = (out.images ?? 0) + img.ok), (out.imagesSkipped = (out.imagesSkipped ?? 0) + img.skipped), (out.imagesFailed = (out.imagesFailed ?? 0) + img.failed));
+        // CV-4: images are no longer fetched here; they are read when someone views one, or for the AI step above.
         const seenAt = read.newest && (!c.seenAt || later(read.newest, c.seenAt)) ? read.newest : undefined;
         await deps.teams.recordPoll(c.chatId, { polledAt: now, fetchedAt: now, ...(seenAt ? { seenAt } : {}), retryAt: null, failures: 0, state: same(uid, c.registeredBy) ? "ok" : "via", note: null, tokenUser: uid });
         tokenUsers.set(p.name, (tokenUsers.get(p.name) ?? 0) + 1);
@@ -173,10 +171,10 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
   deps.log({ source: "plan", op: "requests_poll_candidates", count: out.candidates });
   for (const [name, count] of tokenUsers) deps.log({ source: "plan", op: "requests_poll_token", kind: name, count });
   if (out.failures) deps.log({ source: "plan", op: "requests_poll_failures", count: out.failures });
-  if (out.images || out.imagesSkipped || out.imagesFailed) {
-    deps.log({ source: "plan", op: "chat_images", kind: "ok", count: out.images ?? 0 });
-    deps.log({ source: "plan", op: "chat_images", kind: "skipped", count: out.imagesSkipped ?? 0 });
-    deps.log({ source: "plan", op: "chat_images", kind: "failed", count: out.imagesFailed ?? 0 });
+  // CV-4: images sent to the AI and described, or not sent (switch off, over a limit, unreadable): counts only.
+  if (out.imagesSent || out.imagesNotSent) {
+    deps.log({ source: "plan", op: "chat_images_ai", kind: "sent", count: out.imagesSent ?? 0 });
+    deps.log({ source: "plan", op: "chat_images_ai", kind: "not_sent", count: out.imagesNotSent ?? 0 });
   }
   if (deps.conversations) {
     deps.log({ source: "plan", op: "conversations_new", count: out.conversations ?? 0 });
@@ -201,6 +199,8 @@ async function conversationsStep(
   const r = await runPipeline(
     {
       teams: deps.teams, convs, users: x.users, homeTenant: x.home, now: x.now, clientName: cfg.clientSettings[c.clientKey]?.name ?? c.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, chatCap: cfg.org?.rules.chatAiDailyCap ?? CHAT_DAILY_AI_CALLS, ...groupingRules(cfg, c.clientKey), items,
+      // CV-4: only with the client's "Send attachments to AI" on, read with the same token that read the chat.
+      ...(cfg.org?.clients[c.clientKey]?.attachmentsAi && x.p.chatMessages ? { images: (ids: readonly string[]) => imagesForAi(deps.teams, x.p.chatMessages!, c.chatId, ids) } : {}),
       author: async (uid) => {
         const a = await x.person(uid);
         return a?.config ? { zone: userZone(a.config), promisePhrases: a.config.asks.promisePhrases } : null;
@@ -209,6 +209,8 @@ async function conversationsStep(
     c,
     added,
   );
+  x.out.imagesSent = (x.out.imagesSent ?? 0) + r.imagesSent;
+  x.out.imagesNotSent = (x.out.imagesNotSent ?? 0) + r.imagesNotSent;
   x.out.conversations = (x.out.conversations ?? 0) + r.conversations;
   x.out.unsorted = (x.out.unsorted ?? 0) + r.unsorted;
   x.out.aiCalls = (x.out.aiCalls ?? 0) + r.aiCalls;

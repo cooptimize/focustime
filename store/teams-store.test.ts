@@ -66,30 +66,28 @@ await forEachDriver("the shared Teams store", ({ open }) => {
     expect(await teams.saveMessages([m])).toEqual({ added: [], updated: 0 });
   });
 
-  it("CV-2: an image's stripped bytes round-trip, its rows follow the body, and only a member of the chat reaches it", async () => {
-    const { teams } = await store();
+  it("CV-4: an image row keeps only its type, size and description (never bytes), follows the body, and only a member of the chat reaches it", async () => {
+    const { teams, db } = await store();
     const img = (h: string) => `<img src="https://graph.microsoft.com/v1.0/chats/${CHAT}/messages/1/hostedContents/${h}/$value">`;
     const m = msg({ html: `<p>Look</p>${img("aWQ9MQ==")}${img("aWQ9Mg==")}`, hasImage: true });
     await teams.saveMessages([m]);
     const [a, b] = await teams.images(CHAT, [m.messageId]);
     expect([a!.state, b!.state, a!.position, b!.position]).toEqual(["pending", "pending", 0, 1]);
     expect(await teams.imageSource(a!.id)).toEqual({ chatId: CHAT, messageId: m.messageId, hostedId: "aWQ9MQ==" });
-    const bytes = Uint8Array.from({ length: 70_000 }, (_, i) => (i * 31) % 256);
-    await teams.setImage(a!.id, { state: "ok", contentType: "image/png", bytes });
+    await teams.setImage(a!.id, { state: "ok", contentType: "image/png", byteSize: 70_000 });
     await teams.setImage(b!.id, { state: "skipped", reason: "not a PNG, JPEG or GIF" });
-    const got = await teams.imageBytes(a!.id);
-    expect(got!.contentType).toBe("image/png");
-    expect(Buffer.from(got!.bytes).equals(Buffer.from(bytes))).toBe(true);
-    expect(await teams.imageBytes(b!.id)).toBeNull();
-    expect(await teams.imagesToFetch(CHAT, 10)).toEqual([]);
+    await teams.setImageDescription(a!.id, `  Refresh failed:\n timeout on the sales model ${"x".repeat(200)}`);
+    expect(await teams.image(a!.id)).toMatchObject({ state: "ok", contentType: "image/png", byteSize: 70_000 });
+    expect((await teams.image(a!.id))!.description).toHaveLength(120);
+    expect((await teams.image(a!.id))!.description!.startsWith("Refresh failed: timeout on the sales model")).toBe(true);
+    expect(await db.conn.all("SELECT id FROM teams_message_images WHERE bytes IS NOT NULL", [])).toEqual([]);
     // Only a member of the chat sees it through their view.
     expect(await teams.viewer(ANA).image(a!.id)).toMatchObject({ id: a!.id, byteSize: 70_000 });
     expect(await teams.viewer(CY).image(a!.id)).toBeNull();
     expect(await teams.viewer(CY).images(CHAT, [m.messageId])).toEqual([]);
-    // The second image edited out: its row goes, the first keeps its bytes; the message expiring takes the rest.
+    // The second image edited out: its row goes; the message expiring takes the rest.
     await teams.saveMessages([{ ...m, modifiedAt: "2026-11-20T15:00:00Z", html: `<p>Look</p>${img("aWQ9MQ==")}` }]);
     expect((await teams.images(CHAT, [m.messageId])).map((x) => x.id)).toEqual([a!.id]);
-    expect(await teams.imageBytes(a!.id)).not.toBeNull();
     await teams.expire("2026-12-31T00:00:00Z");
     expect(await teams.image(a!.id)).toBeNull();
   });
@@ -264,6 +262,47 @@ await onSqlServer("migration", () => {
       await seedPerUser((sql, p) => conn.run(sql, p as never));
       await migrateSqlServer(conn);
       await checkMigrated(conn);
+    } finally {
+      await drop();
+    }
+  });
+});
+
+// CV-4: images_no_bytes clears the bytes CV-2 kept (the row, its type and size stay; it goes back to pending) and logs
+// only how many. Seeded on a database migrated up to the migration before it.
+const BEFORE_NO_BYTES = NAMED_MIGRATIONS.filter((m) => m.name < "20261107T1400_images_no_bytes");
+async function seedImages(run: (sql: string, params: unknown[]) => Promise<unknown>) {
+  await run("INSERT INTO teams_message_images (chat_id, message_id, position, hosted_id, state, reason, content_type, byte_size, bytes, attempts, fetched_at, created_at) VALUES (?, '1', 0, 'aWQ9MQ==', 'ok', NULL, 'image/png', 3, ?, 1, '2026-11-06T10:00:00Z', '2026-11-06T10:00:00Z')", [CHAT, Buffer.from([1, 2, 3])]);
+  await run("INSERT INTO teams_message_images (chat_id, message_id, position, hosted_id, state, reason, content_type, byte_size, bytes, attempts, fetched_at, created_at) VALUES (?, '1', 1, 'aWQ9Mg==', 'skipped', 'too big', NULL, NULL, NULL, 1, '2026-11-06T10:00:00Z', '2026-11-06T10:00:00Z')", [CHAT]);
+}
+async function checkNoBytes(conn: Conn, logs: { op?: string; count?: number }[]) {
+  const rows = await conn.all("SELECT position, state, content_type, byte_size, attempts, description, CASE WHEN bytes IS NULL THEN 0 ELSE 1 END AS has_bytes FROM teams_message_images ORDER BY position", []);
+  expect(rows.map((r) => ({ ...r, attempts: Number(r.attempts), byte_size: r.byte_size === null ? null : Number(r.byte_size), has_bytes: Number(r.has_bytes) }))).toEqual([
+    { position: 0, state: "pending", content_type: "image/png", byte_size: 3, attempts: 0, description: null, has_bytes: 0 },
+    { position: 1, state: "skipped", content_type: null, byte_size: null, attempts: 1, description: null, has_bytes: 0 },
+  ]);
+  expect(logs.filter((l) => l.op === "images_bytes_cleared")).toEqual([{ source: "database", op: "images_bytes_cleared", count: 1 }]);
+}
+
+it("CV-4 migration [sqlite]: clears stored image bytes, keeps the rows' metadata, logs the count", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "ft-nobytes-")), "plan.db");
+  const now = () => Temporal.Instant.from(NOW).toZonedDateTimeISO("UTC");
+  const before = openPlanDb({ path, now, named: BEFORE_NO_BYTES });
+  await seedImages((sql, p) => sqliteConn(before).run(sql, p as never));
+  before.close();
+  const logs: { op?: string; count?: number }[] = [];
+  await checkNoBytes(sqliteConn(openPlanDb({ path, now, log: (r) => logs.push(r) })), logs);
+});
+
+await onSqlServer("CV-4 migration", () => {
+  it("clears stored image bytes, keeps the rows' metadata, logs the count", async () => {
+    const { conn, drop } = await emptySqlServer();
+    try {
+      await migrateSqlServer(conn, { named: BEFORE_NO_BYTES });
+      await seedImages((sql, p) => conn.run(sql, p as never));
+      const logs: { op?: string; count?: number }[] = [];
+      await migrateSqlServer(conn, { log: (r) => logs.push(r) });
+      await checkNoBytes(conn, logs);
     } finally {
       await drop();
     }
