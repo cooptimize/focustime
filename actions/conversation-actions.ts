@@ -30,6 +30,7 @@ import { userZone } from "../week/zone.ts";
 import { batchOf, CHAT_DAILY_AI_CALLS, refreshStatus, runPipeline } from "./conversations-pipeline.ts";
 import { backfillPromises } from "./conversation-backfill.ts";
 import { visibleChats, type RequestContext } from "./request-actions.ts";
+import type { ConversationPerson } from "./people-picker.ts";
 import { mapSeq } from "./seq.ts";
 import type { ActionResponse } from "./types.ts";
 
@@ -86,6 +87,40 @@ async function seen(ctx: ConversationContext): Promise<Seen | null> {
   const teams = port.teams.viewer(me);
   const chats = await visibleChats(teams, await ctx.followed().catch(() => null));
   return { teams, convs: store.viewer(me), me, chats, byId: new Map(chats.map((c) => [c.chatId, c])), store };
+}
+
+/**
+ * CV-2: the people of a conversation (or, for a promise with none, the people of its own messages and the one it was
+ * made to) for the PersonPicker, only from a chat I'm in and whose client I follow; null otherwise.
+ */
+export async function conversationPeople(ctx: ConversationContext, q: { conversationId?: number; commitmentId?: number }): Promise<ConversationPerson[] | null> {
+  const v = await seen(ctx);
+  if (!v) return null;
+  const home = await ctx.homeTenant();
+  let conversation: Conversation | null = null;
+  let around: { chatId: string; ids: string[] } | null = null;
+  if (q.commitmentId !== undefined) {
+    const k = await v.convs.commitment(q.commitmentId);
+    if (!k || !v.byId.has(k.chatId)) return null;
+    if (k.conversationId) conversation = await v.convs.conversation(k.conversationId);
+    else {
+      const senders = [];
+      for (const id of k.messageIds) senders.push((await v.teams.message(k.chatId, id))?.senderId ?? null);
+      around = { chatId: k.chatId, ids: [...senders, k.toId].filter((x): x is string => !!x) };
+    }
+  } else if (q.conversationId !== undefined) conversation = await v.convs.conversation(q.conversationId);
+  const chat = v.byId.get(conversation?.chatId ?? around?.chatId ?? "");
+  if (!chat) return null;
+  const member = (id: string) => chat.members?.find((m) => same(m.userId, id));
+  const out: ConversationPerson[] = conversation
+    ? conversation.participants.map((p) => ({ id: p.id, name: p.name, external: home ? p.external : false, email: p.external ? null : (member(p.id)?.email?.toLowerCase() ?? null) }))
+    : (around?.ids ?? []).flatMap((id) => {
+        const m = member(id);
+        if (!m?.displayName) return [];
+        const external = home ? isExternal(m, home) : false;
+        return [{ id, name: m.displayName, external, email: external ? null : (m.email?.toLowerCase() ?? null) }];
+      });
+  return out.filter((p) => !same(p.id, v.me));
 }
 
 /** A client's open items once per list (for Link and "Looks like"); null when DevOps couldn't be read. */

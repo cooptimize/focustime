@@ -197,6 +197,8 @@ export type FollowUpView = {
   clientKey: string | null;
   /** Who it is owed to: the client's name, or what I typed for a manual follow-up. */
   who: string;
+  /** CV-2: the person Who names, when chosen in the PersonPicker; null: a plain name. */
+  whoRef: import("../plan/person-ref.ts").PersonRef | null;
   what: string;
   channel: string | null;
   due: string | null;

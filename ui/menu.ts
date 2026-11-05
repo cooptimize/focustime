@@ -1162,6 +1162,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "followup.snooze":
     case "followup.delete":
     case "followup.people":
+    case "people.picker":
     case "followups.review":
       return { run: env.openFollowUps };
     case "plan.reset": return { run: env.resetPlan };

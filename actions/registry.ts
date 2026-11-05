@@ -226,6 +226,7 @@ export const ACTIONS = [
   { name: "followup.not_needed", title: "Not needed", group: "Follow-ups", target: "follow_up", summary: "Close it quietly; recorded as not needed, not counted as done" },
   { name: "followup.snooze", title: "Snooze a follow-up", group: "Follow-ups", target: "follow_up", summary: "Hide it until a day you choose" },
   { name: "followup.delete", title: "Delete a follow-up", group: "Follow-ups", target: "follow_up", summary: "Only for ones you added; FocusTime's own use Not needed" },
+  { name: "people.picker", title: "Choose a person", group: "Follow-ups", target: "none", summary: "The people of a conversation, the client's Account Workers and everyone at Cooptimize, for Who (read-only)" },
   { name: "followup.people", title: "Suggest who", group: "Follow-ups", target: "none", summary: "Cooptimizers, then people from your meetings with that client (read-only)" },
   { name: "followups.review", title: "Review heads-ups", group: "Follow-ups", target: "none", summary: "Open heads-ups the new rule wouldn't open; nothing is closed for you" },
   { name: "data.export", title: "Export the plan", group: "Settings", target: "none", summary: "Picks, drafts and time entries as JSON in ~/.local/share/focustime/exports" },

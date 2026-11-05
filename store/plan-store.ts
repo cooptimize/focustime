@@ -1293,6 +1293,8 @@ export type FollowUp = {
   clientKey: string | null;
   /** Who it is owed to (a client name, or what I typed). */
   who: string | null;
+  /** CV-2: the person Who names, when chosen in the PersonPicker (null: a plain name). */
+  whoRef: PersonRef | null;
   what: string;
   channel: string | null;
   due: string | null;
@@ -1322,9 +1324,10 @@ export type FollowUp = {
   byHand: boolean;
 };
 import { CLOSE_HOW, type CloseHow, type FollowUpOrigin } from "../plan/types.ts";
+import { refJson, refOf, type PersonRef } from "../plan/person-ref.ts";
 export { CLOSE_HOW, type CloseHow, type FollowUpOrigin };
 export type DraftPatch = { clientKey?: string; parentItemId?: number | null; title?: string; size?: Size; description?: string | null; acceptance?: string | null; startDate?: string | null; targetDate?: string | null };
-export type FollowUpFields = { clientKey: string | null; who: string | null; what: string; channel: string | null; due: IsoDate | null; itemId: number | null };
+export type FollowUpFields = { clientKey: string | null; who: string | null; whoRef: PersonRef | null; what: string; channel: string | null; due: IsoDate | null; itemId: number | null };
 export type NewRuleFollowUp = { kind: string; ruleKey: string; clientKey: string | null; who: string; what: string; itemId?: number | null; refAt?: string | null; draft?: string | null; detail?: { picks?: number[] } | null; origin?: FollowUpOrigin | null };
 export type ResumeNote = { id: number; clientKey: string; date: IsoDate; note: string; updatedAt: string };
 /** Borrowed time (step 7): planned focus that slipped, to be made up on a payback day. */
@@ -1577,6 +1580,7 @@ const toFollowUp = (r: Row): FollowUp => ({
   kind: r.kind as string,
   clientKey: (r.client_key as string | null) ?? null,
   who: (r.who as string | null) ?? null,
+  whoRef: refOf(r.who_ref),
   what: r.what as string,
   channel: (r.channel as string | null) ?? null,
   due: (r.due as string | null) ?? null,
@@ -2025,10 +2029,12 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         if (f.closedAt) throw new PlanError("That follow-up is already closed");
         // Step 15.2: a new client clears the linked item (an item belongs to one client).
         const moved = patch.clientKey !== undefined && patch.clientKey !== f.clientKey && patch.itemId === undefined;
-        const n = { clientKey: f.clientKey, who: f.who, what: f.what, channel: f.channel, due: f.due, itemId: moved ? null : f.itemId, ...patch };
+        // CV-2: new Who text without a person is a plain name; the same text keeps its person.
+        const whoRef = patch.whoRef !== undefined ? patch.whoRef : patch.who !== undefined && patch.who !== f.who ? null : f.whoRef;
+        const n = { clientKey: f.clientKey, who: f.who, what: f.what, channel: f.channel, due: f.due, itemId: moved ? null : f.itemId, ...patch, whoRef };
         if (!n.what.trim()) throw new PlanError("Say what you owe");
         if (n.itemId && !n.clientKey) throw new PlanError("A work item needs the client it belongs to");
-        (await db.run("UPDATE follow_ups SET client_key = ?, who = ?, what = ?, channel = ?, due = ?, item_id = ? WHERE id = ?", n.clientKey, n.who, n.what, n.channel, n.due, n.itemId, id));
+        (await db.run("UPDATE follow_ups SET client_key = ?, who = ?, who_ref = ?, what = ?, channel = ?, due = ?, item_id = ? WHERE id = ?", n.clientKey, n.who, refJson(n.who ? n.whoRef : null), n.what, n.channel, n.due, n.itemId, id));
         return toFollowUp((await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row);
       });
     },
@@ -2088,9 +2094,14 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return toCapture((await db.get("SELECT * FROM captures WHERE id = ?", id)) as Row);
       });
     },
-    async addFollowUp(l: { who: string | null; what: string; due: IsoDate | null; clientKey?: string | null; channel?: string | null; itemId?: number | null }): Promise<FollowUp> {
+    async addFollowUp(l: { who: string | null; whoRef?: PersonRef | null; what: string; due: IsoDate | null; clientKey?: string | null; channel?: string | null; itemId?: number | null; source?: { kind: string; id: number } }): Promise<FollowUp> {
       return tx(async () => {
-        const r = (await db.run("INSERT INTO follow_ups (kind, client_key, who, what, due, channel, item_id, opened_at) VALUES ('manual', ?, ?, ?, ?, ?, ?, ?)", l.clientKey ?? null, l.who || null, l.what, l.due, l.channel ?? null, l.itemId ?? null, stamp()));
+        // CV-2: a promise's follow-up names its commitment (once: a second one, after a reopen, is a plain follow-up).
+        const source = l.source && !(await db.get("SELECT 1 FROM follow_ups WHERE source_kind = ? AND source_id = ?", l.source.kind, l.source.id)) ? l.source : null;
+        const r = (await db.run(
+          "INSERT INTO follow_ups (kind, client_key, who, who_ref, what, due, channel, item_id, source_kind, source_id, opened_at) VALUES ('manual', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          l.clientKey ?? null, l.who || null, refJson(l.who ? (l.whoRef ?? null) : null), l.what, l.due, l.channel ?? null, l.itemId ?? null, source?.kind ?? null, source?.id ?? null, stamp(),
+        ));
         return toFollowUp((await db.get("SELECT * FROM follow_ups WHERE id = ?", r.lastId!)) as Row);
       });
     },

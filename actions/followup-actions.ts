@@ -1,6 +1,7 @@
 // Follow-ups (step 13.5): list, add, edit, Close the loop, Not needed, Snooze, Delete (only mine), Who suggestions and
 // the review of heads-ups under the new rule. All local to the plan store; the only reads elsewhere are Who
 // suggestions (Dataverse teammates and attendees of my own Outlook meetings in a client's domain, never stored).
+import { personRef } from "../plan/person-ref.ts";
 import { mapSeq } from "./seq.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { inviteDomains } from "../config/schema.ts";
@@ -75,6 +76,12 @@ function editable(o: Obj): Partial<FollowUpFields> {
   const out: Partial<FollowUpFields> = {};
   if (o.clientKey !== undefined) out.clientKey = text(o.clientKey, "clientKey", 100, true);
   if (o.who !== undefined) out.who = text(o.who, "who", 100, true);
+  // CV-2: the person chosen in the PersonPicker (null: a plain name); anything that isn't a reference is refused.
+  if (o.whoRef !== undefined) {
+    const r = o.whoRef === null ? null : personRef(o.whoRef);
+    if (o.whoRef !== null && !r) throw new Invalid("whoRef is a person from the picker, or null");
+    out.whoRef = r;
+  }
   if (o.what !== undefined) {
     const w = text(o.what, "what", 200)!;
     if (!w) throw new Invalid("Say what you owe");
@@ -111,14 +118,14 @@ export async function followUpAction(ctx: FollowUpContext, action: FollowUpActio
         return { ok: true, data: { followUps: await mapSeq([...dueOrder(open, today, (f) => f.due, (f) => f.openedAt), ...closed], view), snoozed } };
       }
       case "followup.add": {
-        const o = fields(input, ["what"], ["who", "due", "clientKey", "channel", "itemId"]);
+        const o = fields(input, ["what"], ["who", "whoRef", "due", "clientKey", "channel", "itemId"]);
         const f = editable(o);
         if (f.itemId && !f.clientKey) throw new Invalid("A work item needs the client it belongs to");
-        const added = (await plan.addFollowUp({ who: f.who ?? null, what: f.what!, due: f.due ?? null, clientKey: f.clientKey ?? null, channel: f.channel ?? null, itemId: f.itemId ?? null }));
+        const added = (await plan.addFollowUp({ who: f.who ?? null, whoRef: f.whoRef ?? null, what: f.what!, due: f.due ?? null, clientKey: f.clientKey ?? null, channel: f.channel ?? null, itemId: f.itemId ?? null }));
         return { ok: true, data: { followUp: await view(added) } };
       }
       case "followup.edit": {
-        const o = fields(input, ["id"], ["who", "what", "due", "clientKey", "channel", "itemId"]);
+        const o = fields(input, ["id"], ["who", "whoRef", "what", "due", "clientKey", "channel", "itemId"]);
         return { ok: true, data: { followUp: await view((await plan.editFollowUp(id(o.id), editable(o)))) } };
       }
       case "followup.close": {
