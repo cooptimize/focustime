@@ -21,6 +21,8 @@ import { settingsEdit } from "../config/settings.ts";
 import { createStatusRegistry } from "../actions/status-rows.ts";
 import { devopsStatusSource } from "../actions/devops-poll.ts";
 import { createOrgRuntime } from "../actions/org.ts";
+import { teamStore } from "../store/team-store.ts";
+import { DEMO_PEOPLE } from "../sources/demo/data.ts";
 import { demoAdminCheck } from "../actions/admin.ts";
 import type { AdminOps } from "../actions/admin-actions.ts";
 import { demoDirectory } from "../sources/demo/directory.ts";
@@ -56,6 +58,10 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     return c ? { noBreakdown: c.noBreakdown, background: c.background } : {};
   };
   const dir = demoDirectory();
+  // SW-1: the demo's sends, commitments, priorities and asks, on the same in-memory database (never the real ones). The
+  // demo's teammates count as signed in, except Alex Kim, who shows as not on FocusTime yet.
+  const team = teamStore(shared, instant);
+  const notYet = DEMO_PEOPLE[3]!.aadId.toLowerCase();
   // The demo's clients start on team colors (the ones the demo always had), so a person's own color shows as theirs.
   const ready = (async () => {
     await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients, dir.accounts);
@@ -134,6 +140,8 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     saveSystemUserId: async () => {},
     now: opts.now,
     plan,
+    team,
+    onFocusTime: (id) => id.toLowerCase() !== notYet,
     requests: { teams, refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }) },
     // D522, ADM-1: the demo's person is an admin of the demo only (its own store), so the demo shows the admin console.
     org,
@@ -191,6 +199,7 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
   for (const [clientKey, itemId, tier, est] of list) await run("weekplan.add", { weekStart, clientKey, itemId, tier, ...est });
   await run("weekplan.place", { weekStart, clientKey: "Cooptimize", itemId: 4410, date: weekStart, half: "AM", on: true });
   await run("weekplan.commit", { weekStart });
+  await seedTeam(ctx, weekStart);
   await run("followup.add", { clientKey: "Cooptimize", who: "Jordan Lee", what: "Reply about the proposal timeline", channel: "teams", due: day(-1) });
   await run("followup.add", { clientKey: "Northwind", who: "Dana Morales", what: "Send the export spec for review", channel: "email", due: day(0) });
   await run("followup.add", { clientKey: "Harbor", who: "Chris Park", what: "Confirm the intake form go-live date", channel: "teams", due: day(1) });
@@ -246,4 +255,40 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
     }
   }
   for (const [i, n] of [-21, -14, -7].entries()) await ctx.plan?.recordSnapshots(day(n), history.map(([clientKey, itemId, c]) => ({ clientKey, itemId, done: c[i]![0], open: c[i]![1] })));
+}
+
+/**
+ * SW-1: the demo's team. Priya (a Northwind and Harbor lead) sent Alex a Must and a suggestion; Alex (a Northwind
+ * lead) sent Sam a Must he hasn't answered and one he can't take, and Priya one she scheduled. Teammates' committed
+ * features for the Team view, a Northwind priority, and an Ask to look with Priya's reply. All fictional.
+ */
+async function seedTeam(ctx: ActionContext, weekStart: string): Promise<void> {
+  const team = ctx.team;
+  if (!team) return;
+  const [jordan, priya, sam] = DEMO_PEOPLE;
+  const p = (x: { aadId: string; name: string }) => ({ id: x.aadId.toLowerCase(), name: x.name });
+  const me = { id: DEMO_PERSON.oid, name: DEMO_PERSON.name };
+  const url = (org: string, id: number) => `https://dev.azure.com/${org}/_workitems/edit/${id}`;
+  const item = (clientKey: string, org: string, itemId: number, title: string, itemType = "Feature") => ({ clientKey, itemId, title, itemType, url: url(org, itemId), level: itemType === "Feature" ? ("feature" as const) : ("story" as const), parentId: null, weekStart });
+  await team.addSend({ ...item("Northwind", "northwind-demo", 1140, "Loyalty points"), kind: "must", note: "The client moved this up. Can you start it this week?", askTake: true, from: p(priya!), to: me });
+  await team.addSend({ ...item("Harbor", "harbor-demo", 2220, "Appointment reminders"), kind: "suggested", note: "You built the SMS template, so this may be quick for you.", askTake: false, from: p(priya!), to: me });
+  await team.addSend({ ...item("Northwind", "northwind-demo", 1150, "Store locator"), kind: "must", note: null, askTake: false, from: me, to: p(sam!) });
+  const cant = await team.addSend({ ...item("Northwind", "northwind-demo", 1131, "Invoice PDF totals round wrong", "Bug"), kind: "must", note: "Finance noticed it.", askTake: false, from: me, to: p(sam!) });
+  await team.setSend(cant.id, { state: "cant", reason: "Out Thursday and Friday" });
+  const ok = await team.addSend({ ...item("Northwind", "northwind-demo", 1130, "Fix login timeout on mobile", "User Story"), kind: "suggested", note: null, askTake: false, from: me, to: p(priya!) });
+  await team.setSend(ok.id, { state: "scheduled" });
+  const at = ctx.now();
+  await team.publish(p(priya!).id, weekStart, [
+    { clientKey: "Northwind", itemId: 1110, title: "Order history export", itemType: "Feature", url: url("northwind-demo", 1110), tier: "must", watching: false },
+    { clientKey: "Harbor", itemId: 2220, title: "Appointment reminders", itemType: "Feature", url: url("harbor-demo", 2220), tier: "must", watching: false },
+    { clientKey: "Harbor", itemId: 2210, title: "Patient intake form", itemType: "Feature", url: url("harbor-demo", 2210), tier: "nice", watching: false },
+    { clientKey: "Northwind", itemId: 1140, title: "Loyalty points", itemType: "Feature", url: url("northwind-demo", 1140), tier: "nice", watching: true },
+  ], at);
+  await team.publish(p(jordan!).id, weekStart, [
+    { clientKey: "Atlas", itemId: 3310, title: "Shipment tracking dashboard", itemType: "Feature", url: url("atlas-demo", 3310), tier: "must", watching: false },
+    { clientKey: "Atlas", itemId: 3340, title: "Delivery time estimates", itemType: "Feature", url: url("atlas-demo", 3340), tier: "nice", watching: true },
+  ], at);
+  await team.flag({ clientKey: "Northwind", itemId: 1110, title: "Order history export", itemType: "Feature", url: url("northwind-demo", 1110), note: "The client's top ask for November", flaggedBy: p(priya!) }, at);
+  const look = await team.addLook({ clientKey: "Harbor", weekStart, from: me, to: p(priya!), note: "Is the intake form enough for this week?" }, at);
+  await team.reply(look.id, "Yes. Leave reminders for next week if it gets tight.", at);
 }

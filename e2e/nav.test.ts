@@ -79,7 +79,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     const { page } = await freshPage(h);
     await page.keyboard.press("2");
     await expect(page.locator(".week-head h2").textContent()).resolves.toMatch(/^Week of Nov 2/);
-    await expect(page.locator(".mode-switch .ms-btn").allTextContents()).resolves.toEqual([expect.stringMatching(/^Board/), "Commit"]);
+    await expect(page.locator(".mode-switch .ms-btn").allTextContents()).resolves.toEqual([expect.stringMatching(/^Board/), "Commit", "Team"]);
     await page.keyboard.press("p");
     await expect.poll(() => hash(page)).toBe("#/week/commit");
     await expect.poll(() => page.locator(".planweek h2").first().textContent()).toBe("Plan the week of Nov 9");

@@ -10,7 +10,7 @@ const item = (f: RoadmapRowFacts, id: string) => items(f).find((i) => i.id === i
 
 describe("Roadmap row menu (D282)", () => {
   it("offers open, brief, help, add to this week and the target date, in that order", () => {
-    expect(items(facts()).map((i) => i.label)).toEqual(["Open in browser", "Copy Coop brief", "Needs help from…", "Add to this week's plan", "Set target date"]);
+    expect(items(facts()).map((i) => i.label)).toEqual(["Open in browser", "Copy Coop brief", "Ask to collaborate", "Add to this week's plan", "Set target date"]);
     expect(item(facts({ targetDate: "2026-11-30" }), "target").label).toBe("Change target date");
   });
   it("adds a feature as a nice to have, never an epic, and not twice", () => {

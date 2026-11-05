@@ -7,6 +7,7 @@
 // created and what wasn't, with Retry for the rest. Run never creates anything; nothing reaches DevOps before Create
 // all. With AI off for the client the panel says so; with no write PAT nothing is sent, not even the AI request.
 // Opened by focustime:break-down, DS-1's focustime:draft-stories, and PV-1's focustime:breakdown ({ clientKey, itemId }).
+import { openSend } from "./send-event.ts";
 import { useCallback, useContext, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { breakdownLabel, moveCard, reviewTotal } from "../plan/breakdown.ts";
 import { call } from "./api.ts";
@@ -781,7 +782,11 @@ function PublishStep({ clientKey, draft, previews, failed, parentUrl }: { client
             {created.map((c) =>
               c.status.state === "created" ? (
                 <li key={c.id}>
-                  <TypeIcon clientKey={clientKey} type={draft.storyType} decorative /> {c.status.url ? <a href={c.status.url} target="_blank" rel="noreferrer">#{c.status.itemId}</a> : `#${c.status.itemId}`} {c.title}
+                  <TypeIcon clientKey={clientKey} type={draft.storyType} decorative /> {c.status.url ? <a href={c.status.url} target="_blank" rel="noreferrer">#{c.status.itemId}</a> : `#${c.status.itemId}`} {c.title}{" "}
+                  {/* SW-1: hand one to a teammate's week (it's assigned to you in DevOps until they take it). */}
+                  <button type="button" className="link-btn bd-send" onClick={() => c.status.state === "created" && openSend({ clientKey, itemId: c.status.itemId, level: "story", title: c.title, itemType: draft.storyType, url: c.status.url, parentId: draft.featureId })}>
+                    Send to…
+                  </button>
                 </li>
               ) : null,
             )}

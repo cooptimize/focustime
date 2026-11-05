@@ -8,7 +8,8 @@
 import type { ActionContext } from "../actions/dispatch.ts";
 import { presenceContext, vmContext, expiringFor } from "../actions/dispatch.ts";
 import { syncTeamsStatus, TEAMS_STATUS_KEY } from "../actions/presence-actions.ts";
-import { requestContext } from "../actions/dispatch.ts";
+import { requestContext, teamCtx } from "../actions/dispatch.ts";
+import { teamNotices } from "../actions/team-actions.ts";
 import { visibleChats } from "../actions/request-actions.ts";
 import { urgentRequests } from "../actions/request-actions.ts";
 import { UNMATCHED_DAYS } from "../plan/asks.ts";
@@ -416,6 +417,25 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       if (fresh) await send(notices.datesMoved(`dates_moved:${g[0]!.id}`, first(g[0]!.byName), ids, at.toString()));
     }
   };
+  // SW-1: work sent to me, answers on what I sent, a Must another lead's teammate can't take, asks to look and replies
+  // (the last 3 days; once each through the notifier's own marks).
+  const teamTick = async () => {
+    if (!liveCtx.team) return;
+    const at = instantNow();
+    const thisWeek = mondayOf(at.toZonedDateTimeISO(who.zone).toPlainDate().toString());
+    const c = await configOrNull();
+    const name = (k: string) => c?.clientSettings[k]?.name ?? k;
+    const first = (n: string) => n.split(/\s+/)[0] || "A teammate";
+    for (const n of await teamNotices(teamCtx(liveCtx), thisWeek, at.subtract({ hours: 72 }).toString())) {
+      if (!notifier.allows(n.kind)) continue;
+      const now = at.toString();
+      if (n.kind === "sent_to_you") await send(notices.sentToYou(n.send.id, n.send.to.id, first(n.send.by?.name ?? n.send.from.name), n.send.title, n.send.kind === "must", n.send.weekStart, now));
+      else if (n.kind === "send_answered") await send(notices.sendAnswered(n.send.id, `${n.send.state}:${n.send.updatedAt}`, n.words, n.send.title, n.send.weekStart, now));
+      else if (n.kind === "send_cant_lead") await send(notices.sendCantLead(n.send.id, n.send.updatedAt, first(n.send.to.name), n.send.title, n.send.reason ?? "", now));
+      else if (n.kind === "look_ask") await send(notices.lookAsk(n.look.id, first(n.look.from.name), name(n.look.clientKey), now));
+      else await send(notices.lookReply(n.look.id, first(n.look.to.name), name(n.look.clientKey), n.look.weekStart, now));
+    }
+  };
   const tick = async () => {
     await notifier.refresh().catch(() => null);
     await dayReminders();
@@ -425,6 +445,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     await conversationsTick().catch(() => log({ source: "plan", op: "conversations_tick", kind: "failed" }));
     await takesTick().catch(() => log({ source: "plan", op: "takes_tick", kind: "failed" }));
     await notesTick().catch(() => log({ source: "plan", op: "notes_tick", kind: "failed" }));
+    await teamTick().catch(() => log({ source: "plan", op: "team_tick", kind: "failed" }));
   };
 
   // The focus timer (step 6c): ends sessions on time and warns 5 minutes ahead, window open or not.

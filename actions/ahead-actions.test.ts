@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
-import { createPlanStore, type PlanStore } from "../store/plan-store.ts";
+import { createPlanStore } from "../store/plan-store.ts";
 import { anAheadClient, anAheadItem, anAssignee } from "../test/builders/index.ts";
 import { aheadAction, type AheadContext } from "./ahead-actions.ts";
 import type { AheadClient, AheadLoad } from "./types.ts";

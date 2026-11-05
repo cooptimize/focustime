@@ -142,7 +142,7 @@ const SUMMARY: Record<WriteOp, string> = {
   state: "Change the state of a DevOps item", comment: "Add a comment to a DevOps item", create: "Create a DevOps item", target_date: "Set a target date in DevOps",
   undo_state: "Undo: put the state back", undo_comment: "Undo: delete the comment FocusTime added", undo_create: "Undo: set the created item to Removed", undo_target_date: "Undo: put the target date back",
   description: "Change a DevOps item's description", undo_description: "Undo: put the description back",
-  assign: "Assign a DevOps story to you", undo_assign: "Undo: give the story back to who had it",
+  assign: "Assign a DevOps story or feature to you", undo_assign: "Undo: give it back to who had it",
   fields: "Change dates, size or owner in DevOps", undo_fields: "Undo: put the dates, size and owner back",
 };
 
@@ -469,12 +469,14 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       return { ...base(env), ...none, op: "fields", itemId: item.id, title: item.title, ops: fieldsOps(item.rev, specs, tz), rev: item.rev, before, after, type: item.type, notes };
     }
     case "assign": {
-      // PV-1 (D572): Take one: a teammate's open story (child level in the project's process) assigned to me.
+      // PV-1 (D572): Take one: a teammate's open story (child level in the project's process) assigned to me. SW-1
+      // (D637): also a feature (the feature tier, from backlog levels), for Accept's "Also assign to me in DevOps".
       const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));
       const pc = await writer.processConfig(org, pat, project);
-      if (!levelsFromProcessConfig(pc).levels.child.includes(item.type)) throw new Refused(`#${item.id} is a ${item.type}: Take one is for stories`, 409);
+      const lv = levelsFromProcessConfig(pc);
+      if (!lv.levels.child.includes(item.type) && !lv.tiers.feature.has(item.type)) throw new Refused(`#${item.id} is a ${item.type}: FocusTime assigns only stories and features to you`, 409);
       const states = await writer.states(org, pat, project, item.type);
-      if (!isOpenCategory(states.find((x) => x.name === item.state)?.category)) throw new Refused(`#${item.id} is ${item.state}; FocusTime takes only open stories`, 409);
+      if (!isOpenCategory(states.find((x) => x.name === item.state)?.category)) throw new Refused(`#${item.id} is ${item.state}; FocusTime assigns only open items`, 409);
       const was = item.fields["System.AssignedTo"];
       const wasEmail = identityEmail(was);
       if (wasEmail === env.me.email.toLowerCase()) return `#${item.id} is already assigned to you`;

@@ -29,13 +29,14 @@ export type ActionTarget =
   | "request" // one request in Inbox › Requests
   | "promise" // one promise in Inbox › Promises (AP-2)
   | "conversation" // one conversation in Inbox › Conversations (CV-1)
-  | "commitment"; // one of my promises in Inbox › My promises (CV-1)
+  | "commitment" // one of my promises in Inbox › My promises (CV-1)
+  | "send"; // one send to someone's week (SW-1)
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests" | "Conversations" | "Admin";
+  readonly group: "Week" | "Team" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests" | "Conversations" | "Admin";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -99,6 +100,21 @@ export const ACTIONS = [
   { name: "weekplan.carry_decide", title: "Keep, drop or watch a row", group: "Plan the week", target: "week", summary: "Accept one From last week row: keep it as a must, watch it, or drop it for the week" },
   { name: "weekplan.carry_accept_all", title: "Accept all from last week", group: "Plan the week", target: "week", summary: "Keep every carried must and Needs stories row, and watch every Watching row" },
   { name: "weekplan.watch_checkin", title: "Move or remove a check-in", group: "Plan the week", target: "week", summary: "A Watching row's 30-minute check-in: another half-day, or none (the row stays)" },
+  { name: "send.people", title: "Who can I send this to", group: "Team", target: "item", summary: "The Cooptimizers on this client, who is a lead, who is on FocusTime yet, and whether you can send a Must" },
+  { name: "send.create", title: "Send to…", group: "Team", target: "item", summary: "Send a feature or story to a teammate's week on this client, this week or next: Suggested, or Must from a client lead, with a note" },
+  { name: "send.cancel", title: "Cancel a send", group: "Team", target: "send", summary: "Take back something you sent while it's still waiting" },
+  { name: "send.accept", title: "Accept sent work", group: "Team", target: "send", summary: "Put what a teammate sent on your week as a must (Accept and schedule opens the client's first block)" },
+  { name: "send.pass", title: "Pass to…", group: "Team", target: "send", summary: "Pass sent work to someone else on the client; the original sender stays the sender" },
+  { name: "send.cant", title: "Can't this week", group: "Team", target: "send", summary: "Say you can't take it this week, with a reason; a Must stays open for you and the sender until it's sorted" },
+  { name: "send.withdraw", title: "Withdraw a Must", group: "Team", target: "send", summary: "Take back a Must that couldn't be taken this week" },
+  { name: "send.today", title: "Sent to me", group: "Team", target: "none", summary: "What teammates sent to your week that you haven't answered yet" },
+  { name: "team.commit", title: "From your team", group: "Team", target: "week", summary: "For Commit: what was sent to you and what you sent, client priorities and your asks to leads, per client" },
+  { name: "team.view", title: "Team", group: "Team", target: "week", summary: "Per client you're on: each teammate's committed features, sends and their states, client priorities and watched features. Never day plans, focus, notes or hours" },
+  { name: "priority.flag", title: "Make it a client priority", group: "Team", target: "item", summary: "Client leads: flag a feature as a priority for the client (no person named), with an optional note" },
+  { name: "priority.unflag", title: "Not a client priority", group: "Team", target: "item", summary: "Client leads: take a feature off the client's priorities" },
+  { name: "priority.add_to_week", title: "Add to my week", group: "Team", target: "item", summary: "Put a client priority on your week as a must" },
+  { name: "look.ask", title: "Ask a lead to look", group: "Team", target: "week", summary: "Ask one of a client's leads to look at your committed features for that client, with an optional note" },
+  { name: "look.reply", title: "Reply about a week", group: "Team", target: "week", summary: "As the lead asked: a short note back, shown on their Commit" },
   { name: "weekplan.watch_remove", title: "Stop watching", group: "Plan the week", target: "week", summary: "Take a Watching row off the week, with its check-in" },
   { name: "weekplan.commit", title: "Commit the week", group: "Plan the week", target: "week", summary: "Commit the week's features; it stays editable and can be committed again" },
   { name: "feature.brief", title: "Copy Coop brief", group: "Plan the week", target: "feature", summary: "Markdown for Coop to propose user stories: DevOps fields only" },
@@ -258,7 +274,7 @@ export const ACTIONS = [
   { name: "write.log", title: "Show the write log", group: "Settings", target: "none", summary: "Every external write: what, where, when, the result, the prior values, and Undo" },
   { name: "timebox.resolve", title: "Choose a version", group: "Timebox", target: "timebox", summary: "A timebox changed in FocusTime and in Outlook: keep FocusTime's (then preview the change) or use Outlook's" },
   { name: "outlook.open", title: "Open in Outlook", group: "Calendar", target: "event", summary: "Open an event in Outlook on the web (meetings with others are changed there, never from FocusTime)" },
-  { name: "collab.candidates", title: "Needs help from…", group: "Help", target: "item", summary: "Cooptimizers who could help with an item: on this client that day, on this client, anyone else; PTO shows as away" },
+  { name: "collab.candidates", title: "Ask to collaborate", group: "Help", target: "item", summary: "Cooptimizers who could help with an item: on this client that day, on this client, anyone else; PTO shows as away", aka: ["Needs help from…", "needs help from", "help"] },
   { name: "collab.suggest", title: "Find help session times", group: "Help", target: "item", summary: "Up to 5 times when you and the people you pick are free inside everyone's working hours (free/busy only)" },
   { name: "collab.preview_invite", title: "Preview a help invite", group: "Help", target: "item", summary: "A meeting with the chosen Cooptimizers: preview names everyone who gets the invite; sent only when you confirm" },
   { name: "devops.set_write_pat", title: "Enable DevOps writes for a client", group: "DevOps", target: "none", summary: "Your own DevOps PAT for one client, checked against your DevOps identity there, kept only in the keyring" },

@@ -1,4 +1,4 @@
-// "Needs help from…" (step 13): pick a length and a range, see Cooptimizers ranked by tier (on this client that day,
+// "Ask to collaborate" (step 13): pick a length and a range, see Cooptimizers ranked by tier (on this client that day,
 // on this client, anyone else; PTO only as "away"), choose people or let FocusTime choose the top tier, get up to five
 // times when everyone is free inside their own working hours, then preview the invite. Nothing is sent here: the
 // preview (every attendee named, "they will receive an invite") goes to the write flow, which sends on confirm.
@@ -107,7 +107,7 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
         data-overlay="modal"
         role="dialog"
         aria-modal="true"
-        aria-label={`Needs help from… ${target.title}`}
+        aria-label={`Ask to collaborate ${target.title}`}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
             e.stopPropagation();
@@ -117,7 +117,7 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
         }}
       >
         <div className="cap-dialog-head">
-          <h2>Needs help from…</h2>
+          <h2>Ask to collaborate</h2>
           <span className="muted">
             {clientName}: {subject.title}
           </span>
