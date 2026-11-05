@@ -262,6 +262,19 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       await after.getByText("Rerun the Salesforce data from CRM_Silver").waitFor();
       await after.getByText(/7:30\sPM/).waitFor();
       await shotBoth(page, "today-promise-after-blocks", page.getByRole("main", { name: "Today" }));
+
+      // CV-3b: made a follow-up, its Who is the person it was promised to (Evan), never me.
+      await page.keyboard.press("4");
+      await page.getByRole("tab", { name: /^My promises/ }).click();
+      const card = page.getByRole("main", { name: "My promises" }).getByRole("listitem", { name: "Promise: Rerun the Salesforce data from CRM_Silver" });
+      await card.getByRole("button", { name: "Make it a follow-up" }).click();
+      await card.getByRole("button", { name: "Add follow-up" }).click();
+      await card.getByText("A follow-up now", { exact: false }).waitFor();
+      await page.getByRole("tab", { name: /^Inbox/ }).click();
+      const row = page.locator("li.follow-up").filter({ hasText: "Rerun the Salesforce data from CRM_Silver" }).first();
+      await row.waitFor();
+      expect(await row.locator(".follow-up-who").textContent()).toMatch(/^Evan/);
+      await shotBoth(page, "followup-who-row", row);
       expect(errors).toEqual([]);
     } finally {
       await app.close();

@@ -111,7 +111,8 @@ async function rosterOf(ctx: TeamContext): Promise<Roster> {
   let lv: Levels | null = null;
   let workers: PersonClient[] = [];
   let names = new Map<string, string>();
-  let isClient: (k: string) => boolean = () => true;
+  // CV-3b: clients only via clientAccounts(); without it (no runtime, or it can't be read) nothing is a client.
+  let isClient: (k: string) => boolean = () => false;
   if (org) {
     const [l, pc, dir, accounts] = await Promise.all([org.levels().catch(() => null), org.store.peopleClients().catch(() => []), org.store.directory().catch(() => []), org.clientAccounts().catch(() => null)]);
     lv = l;
@@ -124,7 +125,7 @@ async function rosterOf(ctx: TeamContext): Promise<Roster> {
   const isCoop = (id: string) => (lv ? lv.people.isCooptimizer(id) : true);
   const workerSet = new Map<string, Set<string>>();
   for (const w of workers) if (w.worker !== false) (workerSet.get(w.clientKey) ?? workerSet.set(w.clientKey, new Set()).get(w.clientKey)!).add(canonical(w.personId));
-  const leads = (k: string) => (lv ? lv.clientLeads(k).map((l) => l.personId) : []);
+  const leads = (k: string) => (lv && isClient(k) ? lv.clientLeads(k).map((l) => l.personId) : []);
   const isLead = (id: string, k: string) => !!lv && isClient(k) && lv.isClientLead(id, k);
   const onClient = (id: string, k: string) => isClient(k) && isCoop(id) && (workerSet.get(k)?.has(canonical(id)) || isLead(id, k));
   const members = (k: string) => (isClient(k) ? [...new Set([...(workerSet.get(k) ?? []), ...leads(k)])].filter(isCoop).sort() : []);
@@ -211,12 +212,15 @@ export async function publishWeek(ctx: Pick<TeamContext, "plan" | "team" | "me" 
   if (!plan || !team || !me) return;
   const lv = ctx.org ? await ctx.org.levels().catch(() => null) : null;
   const id = lv ? lv.canonical(me) : low(me);
+  // CV-3b: only clients (clientAccounts()) are published; a prospect on my week stays mine.
+  const accounts = ctx.org ? await ctx.org.clientAccounts().catch(() => null) : null;
+  const isClient = (k: string) => !!accounts?.isClient(k);
   const [week, watches] = await Promise.all([plan.weekPlan(weekStart), plan.weekWatches(weekStart)]);
   const rows = [
     ...week.features.filter((f) => f.level === "feature" && f.itemId > 0).map((f) => ({ clientKey: f.clientKey, itemId: f.itemId, title: f.title, itemType: f.itemType, url: f.url, tier: f.tier, watching: false })),
     ...watches.filter((w) => !week.features.some((f) => f.clientKey === w.clientKey && f.itemId === w.itemId)).map((w) => ({ clientKey: w.clientKey, itemId: w.itemId, title: w.title, itemType: w.itemType, url: w.url, tier: "nice" as const, watching: true })),
   ];
-  await team.publish(id, weekStart, rows, ctx.now());
+  await team.publish(id, weekStart, rows.filter((x) => isClient(x.clientKey)), ctx.now());
 }
 
 /** SW-1: an accepted send for an item I just pinned or planned into a day shows the sender "Scheduled". */
@@ -345,7 +349,7 @@ export async function teamAction(ctx: TeamContext, action: TeamAction, input: un
       }
       case "send.today": {
         fields(input ?? {}, []);
-        const list = (await team.sendsOf(me, weeks)).filter((s) => s.to.id === me && s.state === "waiting");
+        const list = (await team.sendsOf(me, weeks)).filter((s) => s.to.id === me && s.state === "waiting" && r.isClient(s.clientKey));
         return { ok: true, data: { line: todayLine(list), count: list.length, weekStart: list[0]?.weekStart ?? thisWeek } };
       }
       case "team.commit": {
@@ -380,12 +384,13 @@ export async function teamAction(ctx: TeamContext, action: TeamAction, input: un
         const weekStart = o.weekStart === undefined ? thisWeek : monday(o.weekStart);
         const keys = r.myClients();
         const [commits, committed, raw, pri0] = await Promise.all([team.commitments(keys, weekStart), team.committedPeople(weekStart), team.sendsOn(keys, weekStart), team.priorities(keys)]);
+        // keys are clients only (myClients()); looks below are filtered the same way.
         const resolved = await resolvedOf(ctx, cfg, [...raw, ...pri0, ...commits.filter((c) => c.watching)]);
         const sends = await settle(team, raw, resolved);
         const pri = await livePriorities(team, pri0, resolved);
         const onWeek = new Set((await plan.weekPlan(weekStart)).features.map((f) => keyOf(f.clientKey, f.itemId)));
         const since = Temporal.PlainDate.from(weekStart).toZonedDateTime({ timeZone: tz }).toInstant().toString();
-        const looks = (await team.looksOf(me, since)).filter((l) => l.weekStart === weekStart);
+        const looks = (await team.looksOf(me, since)).filter((l) => l.weekStart === weekStart && r.isClient(l.clientKey));
         const clients: TeamClient[] = [];
         for (const k of keys.sort((a, b) => clientName(a).localeCompare(clientName(b)))) {
           const watched = commits.filter((c) => c.clientKey === k && c.watching);
@@ -487,10 +492,13 @@ export async function teamNotices(ctx: Pick<TeamContext, "team" | "org" | "me">,
   const lv = ctx.org ? await ctx.org.levels().catch(() => null) : null;
   if (lv && !lv.people.isCooptimizer(me0)) return [];
   const me = lv ? lv.canonical(me0) : low(me0);
+  // CV-3b: notices for clients only (clientAccounts()).
+  const accounts = ctx.org ? await ctx.org.clientAccounts().catch(() => null) : null;
+  const isClient = (k: string) => !!accounts?.isClient(k);
   const out: TeamNotice[] = [];
   const weeks = sendWeeks(thisWeek);
   for (const s of await team.sendsOf(me, weeks)) {
-    if (s.updatedAt < since) continue;
+    if (s.updatedAt < since || !isClient(s.clientKey)) continue;
     if (s.to.id === me && s.state === "waiting") out.push({ kind: "sent_to_you", send: s });
     else if (s.from.id === me && (s.state === "accepted" || s.state === "scheduled" || s.state === "cant" || (s.state === "waiting" && s.by && s.by.id !== me))) {
       const shown = shownState(s, { resolved: false, thisWeek });
@@ -499,6 +507,7 @@ export async function teamNotices(ctx: Pick<TeamContext, "team" | "org" | "me">,
   }
   if (lv) {
     for (const l of lv.leadsOf(me)) {
+      if (!isClient(l.clientKey)) continue;
       for (const w of weeks) {
         for (const s of await team.sendsOn([l.clientKey], w)) {
           if (s.kind !== "must" || s.state !== "cant" || s.updatedAt < since) continue;
@@ -508,6 +517,7 @@ export async function teamNotices(ctx: Pick<TeamContext, "team" | "org" | "me">,
     }
   }
   for (const a of await team.looksOf(me, since)) {
+    if (!isClient(a.clientKey)) continue;
     if (a.to.id === me && !a.reply) out.push({ kind: "look_ask", look: a });
     if (a.from.id === me && a.reply && a.repliedAt && a.repliedAt >= since) out.push({ kind: "look_reply", look: a });
   }

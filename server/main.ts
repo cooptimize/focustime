@@ -78,6 +78,7 @@ import { createTeamsStore } from "../store/teams-store.ts";
 import { pollCycle, requestsNextDue, type PollDeps, type PollPerson } from "../actions/request-poll.ts";
 import { requestContext, aiFor, escalationHours } from "../actions/dispatch.ts";
 import { createConversationStore } from "../store/conversation-store.ts";
+import { whoRepair, type WhoRepairPerson } from "./who-repair.ts";
 import { upkeep as upkeepConversations } from "../actions/conversation-upkeep.ts";
 import { backfillRequests } from "../actions/conversation-backfill.ts";
 import { weekConfig } from "../config/defaults.ts";
@@ -86,6 +87,7 @@ import { createAdminCheck } from "../actions/admin.ts";
 import { createOrgRuntime } from "../actions/org.ts";
 import { createAdminOps } from "./admin-ops.ts";
 import { createDevOpsPoller, createLimiter, devopsStatusSource, NO_SNAPSHOTS, pollAccounts, type DevOpsPoller } from "../actions/devops-poll.ts";
+import { clientAccountsStatusSource } from "../actions/client-accounts-status.ts";
 import { createStatusRegistry } from "../actions/status-rows.ts";
 import { createDevOpsStore } from "../store/devops-store.ts";
 import { DEFAULT_MINUTES } from "../plan/devops-pace.ts";
@@ -932,6 +934,8 @@ devopsPoller = devopsApp && directorySource
     })
   : null;
 if (devopsPoller) statusRows.register(devopsStatusSource(devopsPoller));
+// CV-3b: whether account types are read (the client rule fails closed until they are), with Refresh.
+statusRows.register(clientAccountsStatusSource({ accounts: () => org.clientAccounts(), refreshedAt: () => adminStore.directoryRefreshedAt(), refresh: () => refreshPeople() }));
 // HK-1: telemetry's own health in Admin › Status: one row, a warning once anything was dropped or refused.
 if (telemetry) statusRows.register(telemetryStatusSource(telemetry));
 
@@ -961,6 +965,24 @@ void orgBootstrap({
   },
 }).then((r) => r.ran && org.invalidate(), () => log({ source: "plan", op: "org_bootstrap", kind: "failed" }));
 
+// CV-3b: the one-time repair of Who (a follow-up's Who that is its owner, a promise or commitment "to" its author).
+void whoRepair({
+  store: adminStore,
+  log,
+  people: async () => {
+    const chats = await teams.chats().catch(() => []);
+    const out: WhoRepairPerson[] = [];
+    for (const u of await accounts.users.all()) {
+      if (u.deletedAt) continue;
+      const inChats = chats.flatMap((c) => c.members ?? []).filter((m) => m.userId?.toLowerCase() === u.id.toLowerCase()).map((m) => m.displayName);
+      const plan = storeOf(u.id, u.timeZone);
+      out.push({ owner: { id: u.id, names: [u.displayName, ...inChats] }, clear: (o) => plan.clearOwnWho(o) });
+    }
+    return out;
+  },
+  commitments: () => conversations.clearSelfTo(),
+}).catch(() => log({ source: "plan", op: "who_repair", kind: "failed" }));
+
 // Everyone who has signed in before gets their background work back (a timer that was running ends on time), all of it
 // run by one scheduler (server/scheduler.ts) that reads what is due from each person's rows. A3, the idle rule: the
 // passes run while someone has used FocusTime in the last 15 minutes; otherwise the scheduler sleeps until the stored
@@ -975,9 +997,17 @@ log({ source: "plan", op: "requests_poll_mode", kind: pollInBackground ? "backgr
 const PEOPLE_EVERY_MS = 24 * 3600_000;
 /** After a failed or impossible read, the next try is an hour on (in memory), so the scheduler can still sleep. */
 let peopleRetryAt: Temporal.Instant | null = null;
+/** CV-3b: no account has a relationship type yet (in memory: one read at start, then after each refresh). */
+const noTypes = async () => !(await adminStore.accounts()).some((a) => a.type !== null);
+let typesMissing: boolean | null = null;
 const peopleDue = async (): Promise<Temporal.Instant> => {
   const at = await adminStore.directoryRefreshedAt();
-  const due = at ? Temporal.Instant.from(at).add({ milliseconds: PEOPLE_EVERY_MS }) : instantNow();
+  if (typesMissing === null) {
+    typesMissing = await noTypes().catch(() => false);
+    if (typesMissing) log({ source: "dataverse", op: "account_types", kind: "missing" });
+  }
+  // CV-3b: account types missing (checked once at start, and after each read) make the read due now.
+  const due = at && !typesMissing ? Temporal.Instant.from(at).add({ milliseconds: PEOPLE_EVERY_MS }) : instantNow();
   return peopleRetryAt && Temporal.Instant.compare(peopleRetryAt, due) > 0 ? peopleRetryAt : due;
 };
 const peopleJob = {
@@ -989,7 +1019,9 @@ const peopleJob = {
       job.set({ outcome: r.ok ? "ok" : "failed", counts: { people: r.people ?? 0 } });
       return r;
     });
-    peopleRetryAt = r.ok ? null : instantNow().add({ hours: 1 });
+    typesMissing = await noTypes().catch(() => typesMissing ?? false);
+    // A read that still brings no types tries again in an hour, never in a loop.
+    peopleRetryAt = r.ok && !typesMissing ? null : instantNow().add({ hours: 1 });
     if (r.ok) await endGuestSessions().catch(() => 0);
     log({ source: "dataverse", op: "people_refresh", kind: r.ok ? "done" : "failed", count: r.people });
   },
