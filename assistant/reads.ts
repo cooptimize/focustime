@@ -5,7 +5,7 @@ import type { ActionName } from "../actions/registry.ts";
 import type { ActionResponse, AheadItem, AheadLoad, WeekLoadData } from "../actions/types.ts";
 import type { CommitData, SendView } from "../plan/team-types.ts";
 import type { ConversationsData } from "../plan/conversation-views.ts";
-import { buildRows, isOpen, tierOf } from "../ui/ahead/model.ts";
+import { buildRows, isOpen, tierOf } from "../plan/ahead-model.ts";
 import { GAP_WORDS } from "../plan/fixnext.ts";
 import type { Pick } from "../plan/types.ts";
 import { hoursOn } from "../week/hours.ts";

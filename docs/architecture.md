@@ -418,6 +418,9 @@ and every write is a proposal the person confirms. The interface: `assistant/typ
   `ui/App.tsx`: Ctrl+J, /, the top bar's Ask, the context (the address, the client in focus, the item, the block).
   `server/app.ts`: the voice route (after the session and CSRF checks; 413 over 2 MB; logs the outcome only) and
   `Permissions-Policy: microphone=(self)`.
+- **Ahead's model.** `plan/ahead-model.ts` (moved from `ui/ahead/model.ts`, which re-exports it): pure, used by the
+  panel's gaps read on the server, where `ui/` isn't shipped. `host/no-ui-import.test.ts` walks the server's imports
+  from `server/main.ts` and fails on any into `ui/`, `e2e/`, `test/` or `docs/`.
 - **Demo.** `sources/demo/assistant.ts`, a scripted provider for the assistant only (`ActionContext.assistantAi`, set in
   `server/demo.ts`).
 - **Tests.** `assistant/service.test.ts` (allowlist, lookups, one client, AI off, the injection refusals, each request
