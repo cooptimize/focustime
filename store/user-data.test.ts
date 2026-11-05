@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { forEachDriver } from "../test/db.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import { createAccountStore } from "./accounts.ts";
+import { BOT_TABLES, createTeamsBotStore } from "./teams-bot-store.ts";
 import { planStoreOn } from "./plan-store.ts";
 import { USER_TABLES } from "./scope.ts";
 import { exportUser, hardDeleteDue, NOT_EXPORTED, recordSoftDelete } from "./user-data.ts";
@@ -48,6 +49,31 @@ describe("export my data (A2)", () => {
 });
 
 describe("delete my data (A2)", () => {
+  it("removes the Teams bot's rows at once (TB-1b), only this person's, and the hard delete takes the rest", async () => {
+    const t = await setup();
+    await t.person("ana");
+    await t.person("ben");
+    for (const id of ["ana", "ben"]) {
+      const bot = createTeamsBotStore({ db: t.db, userId: id, now });
+      await bot.saveChat({ conversationId: `a:${id}`, serviceUrl: "https://smba.trafficmanager.net/amer/", tenantId: "t", botId: "28:bot" });
+      await bot.cardSent(`p-${id}`, "msg-1", now().add({ minutes: 15 }).toString(), "Move a date");
+      await bot.firstSeen(`act-${id}`);
+    }
+    const bot = async (id: string) => {
+      let n = 0;
+      for (const tb of BOT_TABLES) n += Number((await t.db.get(`SELECT COUNT(*) AS n FROM ${tb} WHERE user_id = ?`, [id]))!.n);
+      return n;
+    };
+    expect([await bot("ana"), await bot("ben")]).toEqual([3, 3]);
+    await t.accounts.users.setDeleted("ana", now().toString());
+    await recordSoftDelete(t.db, "ana", now());
+    expect([await bot("ana"), await bot("ben")]).toEqual([0, 3]);
+    expect(Number((await t.db.get("SELECT COUNT(*) AS n FROM captures WHERE user_id = ?", ["ana"]))!.n)).toBe(1);
+    at = at.add({ hours: 24 * 30 });
+    expect(await hardDeleteDue(t.db, now())).toBe(1);
+    expect(await bot("ben")).toBe(3);
+  });
+
   it("soft first (rows kept, a hashed record), then every row removed after 30 days, nobody else's touched", async () => {
     const t = await setup();
     await t.person("ana");

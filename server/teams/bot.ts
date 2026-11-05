@@ -85,7 +85,11 @@ export function createBotCore(d: BotDeps) {
   const background = d.background ?? ((p) => void p.catch(() => undefined));
   const serviceHost = d.serviceHost ?? TEAMS_SERVICE;
   const seen = new Map<string, number>();
-  /** Each person's turns run one at a time, in the order Teams sent them, so replies come back in order. */
+  /**
+   * Each person's turns run one at a time, in the order Teams sent them, so replies come back in order. In memory: the
+   * order holds within one replica (the app runs one; with more, two messages sent close together could be answered
+   * by two replicas at once). Duplicates are caught across replicas by the store (firstSeen).
+   */
   const queues = new Map<string, Promise<void>>();
   const inOrder = (userId: string, job: () => Promise<void>): Promise<void> => {
     const next = (queues.get(userId) ?? Promise.resolve()).then(job, job);
@@ -281,6 +285,8 @@ export function createBotCore(d: BotDeps) {
         else await store.saveChat({ conversationId: to.conversationId, serviceUrl: to.serviceUrl, tenantId: (a.conversation?.tenantId ?? a.channelData?.tenant?.id ?? "").toLowerCase(), botId: a.recipient?.id || "bot" }).catch(() => undefined);
         return d.log({ op: "install", kind: a.action === "remove" ? "removed" : "added" }), null;
       }
+      // TB-1b: the same delivery on another replica (or after this one restarted) is answered once too.
+      if (a.id && !(await store.firstSeen(a.id).catch(() => (d.log({ op: "seen_save", kind: "failed" }), true)))) return d.log({ op: "activity", kind: "duplicate" }), null;
       background(
         inOrder(g.userId, async () => {
           await store.saveChat({ conversationId: to.conversationId, serviceUrl: to.serviceUrl, tenantId: (a.conversation?.tenantId ?? a.channelData?.tenant?.id ?? "").toLowerCase(), botId: a.recipient?.id || "bot" }).catch(() => d.log({ op: "chat_save", kind: "failed" }));

@@ -71,6 +71,7 @@ export async function fill(db: Conn, userId: string): Promise<PlanStore> {
   const bot = createTeamsBotStore({ db, userId, now: () => Temporal.Instant.from(NOW) });
   await bot.saveChat({ conversationId: `a:conv-${tag}`, serviceUrl: "https://smba.trafficmanager.net/amer/", tenantId: "tenant-1", botId: "28:bot" });
   await bot.cardSent(`p-${tag}`, `act-${tag}`, "2026-11-02T14:45:00Z", tag);
+  await bot.firstSeen(`act-in-${tag}`);
   // Only migration 21 writes the dedupe log; a row as it would have left one.
   await db.run("INSERT INTO dedupe_log (user_id, at, table_name, removed_id, kept_id) VALUES (?, ?, 'week_features', 1, 2)", [userId, NOW]);
   // Links within a table: a pick moved to another day (carried_from), and undone writes (undo_of, undone_by).
