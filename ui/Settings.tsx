@@ -36,6 +36,7 @@ import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import type { FeedbackStatus } from "../actions/feedback-types.ts";
 import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, useAdmin } from "./settings/Admin.tsx";
+import { SideMenu, useNarrow } from "./settings/SideMenu.tsx";
 
 export const SETTINGS_SECTIONS = [
   ["you", "You"],
@@ -153,8 +154,9 @@ export function Settings(props: Props) {
     void reload();
   }, [reload, props.section]);
   useEffect(() => {
-    // One scroll for the whole page: a new section starts at its top.
-    headRef.current?.closest(".settings")?.scrollTo({ top: 0 });
+    // A new section starts at its top (the body scrolls on its own beside the menu; on a phone, the page).
+    headRef.current?.closest(".set-body")?.scrollTo?.({ top: 0 });
+    headRef.current?.closest(".settings")?.scrollTo?.({ top: 0 });
     headRef.current?.focus({ preventScroll: true });
   }, [props.section]);
   const saved = useCallback(
@@ -168,34 +170,20 @@ export function Settings(props: Props) {
   const inAdmin = isAdminSection(props.section);
   const title = `${inAdmin ? "Admin › " : ""}${SETTINGS_SECTIONS.find(([id]) => id === props.section)![1]}`;
   const phone = usePhone();
+  const narrow = useNarrow() || phone;
   const admin = useAdmin();
   return (
     <AutoSaveProvider onNotice={props.onNotice}>
       {(leave) => (
-    <main className="settings" aria-label="Settings">
-      <div className="set-side">
-      <nav className="set-nav" aria-label="Settings sections">
-        {SETTINGS_SECTIONS.filter(([id]) => !isAdminSection(id)).map(([id, label]) => (
-          <button key={id} type="button" className="set-tab" aria-current={props.section === id ? "page" : undefined} onClick={() => leave(() => props.onSection(id))}>
-            {label}
-          </button>
-        ))}
-
-        <button type="button" className="set-tab close" onClick={() => leave(props.onClose)} title="Back (Esc)">
-          Back
-        </button>
-      </nav>
-      {admin && (
-        <nav className="set-admin-nav" aria-label="Admin sections">
-          <span className="set-nav-group">Admin</span>
-          {ADMIN_UI_SECTIONS.map(([id, label]) => (
-            <button key={id} type="button" className="set-tab" aria-current={props.section === id ? "page" : undefined} onClick={() => leave(() => props.onSection(id))}>
-              {label}
-            </button>
-          ))}
-        </nav>
-      )}
-      </div>
+    <main className={`settings${narrow ? " narrow" : ""}`} aria-label="Settings">
+      <SideMenu
+        settings={SETTINGS_SECTIONS.filter(([id]) => !isAdminSection(id))}
+        admin={admin ? ADMIN_UI_SECTIONS : null}
+        current={props.section}
+        narrow={narrow}
+        onPick={(id) => leave(() => props.onSection(id as SettingsSectionId))}
+        onBack={() => leave(props.onClose)}
+      />
       <section className="set-body">
         <h2 ref={headRef} tabIndex={-1}>
           {title}
