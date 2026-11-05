@@ -95,6 +95,8 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
   const touched = new Set<number>();
   /** The latest acknowledgement per conversation in this batch (after its last work, it's a wind-down). */
   const acked = new Map<number, string>();
+  /** Acks with no conversation before them yet: placed once this batch's work is (thanks right after a commitment). */
+  const lateAcks: BatchMessage[] = [];
 
   // 1. Rules.
   const work: BatchMessage[] = [];
@@ -110,6 +112,10 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
     if (v?.role === "ack") {
       // Inside a conversation that just had work (the replied one, else the latest within 45 minutes): wind-down.
       const target = (m.replyToId ? placed.get(m.replyToId) : undefined) ?? [...open].filter((c) => !all.find((x) => x.id === c.id)?.closedAt).sort((a, b) => Date.parse(b.lastAt) - Date.parse(a.lastAt)).find((c) => (Date.parse(m.createdAt) - Date.parse(c.lastAt)) / 60_000 <= NEAR_MINUTES)?.id;
+      if (target === undefined && work.length) {
+        lateAcks.push(m);
+        continue;
+      }
       await d.convs.place([{ chatId: chat.chatId, messageId: m.messageId, conversationId: target ?? null, role: target ? "ack" : "chatter", reason: "ack", placedBy: "rule", at: m.createdAt }]);
       if (target !== undefined) {
         acked.set(target, m.createdAt);
@@ -122,6 +128,17 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
     work.push(m);
   }
   if (!work.length) return out;
+  const settleLateAcks = async () => {
+    for (const m of lateAcks) {
+      const prior = work.filter((w) => placed.has(w.messageId) && w.createdAt <= m.createdAt && (Date.parse(m.createdAt) - Date.parse(w.createdAt)) / 60_000 <= NEAR_MINUTES).at(-1);
+      const target = prior ? placed.get(prior.messageId) : undefined;
+      await d.convs.place([{ chatId: chat.chatId, messageId: m.messageId, conversationId: target ?? null, role: target !== undefined ? "ack" : "chatter", reason: "ack", placedBy: "rule", at: m.createdAt }]);
+      if (target !== undefined) {
+        if (!acked.has(target) || acked.get(target)! < m.createdAt) acked.set(target, m.createdAt);
+        out.acks++;
+      } else out.chatter++;
+    }
+  };
 
   // Hints and groups (my promises: one per group), over the batch and the hour before it.
   const before = (await d.teams.messagesBefore(chat.chatId, work[0]!.createdAt, 20)).map((m) => batchOf(m, chat, d.homeTenant)).filter((m) => (Date.parse(work[0]!.createdAt) - Date.parse(m.createdAt)) / 60_000 <= 60);
@@ -181,6 +198,11 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
       }
     }
     out.commitments += await promisesByRule(d, chat, work, groups, placed, [...before, ...work]);
+    await settleLateAcks();
+    for (const [id, at] of acked) {
+      const c = await d.convs.conversation(id);
+      if (c && !c.closedAt && !c.windDown && Date.parse(at) > Date.parse(c.lastWorkAt)) await d.convs.updateConversation(id, { windDown: true, lastAt: Date.parse(at) > Date.parse(c.lastAt) ? at : c.lastAt });
+    }
     for (const id of touched) await refreshStatus(d, id);
     return out;
   }
@@ -212,6 +234,7 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
     touched.add(id);
     out.work++;
   }
+  await settleLateAcks();
   // Per conversation: what the AI says about it, and the facts from its new messages.
   const texts = new Map([...before, ...work].map((m) => [m.messageId, m.text]));
   for (const id of touched) {
@@ -248,7 +271,9 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
         const to = x.toId && !same(x.toId, x.whoId) ? x.toId : answeredBy(x.messageIds, [...before, ...work], x.whoId);
         const toName = to ? (participants.find((p) => same(p.id, to))?.name ?? [...before, ...work].find((m) => same(m.senderId, to))?.senderName ?? null) : null;
         const due = dueOf(x.due, x.zone);
-        await d.convs.addCommitment({ conversationId: id, chatId: chat.chatId, clientKey: chat.clientKey, whoId: x.whoId, whoName: who?.name ?? "Someone", toId: to, toName, what: x.what, ...due, impliesItem: x.impliesItem, messageIds: x.messageIds, reason: null });
+        // When it was said (escalation counts from then, not from when it was read).
+        const said = x.messageIds.map((mid) => [...before, ...work].find((m) => m.messageId === mid)?.createdAt).filter((t): t is string => !!t).sort()[0];
+        await d.convs.addCommitment({ conversationId: id, chatId: chat.chatId, clientKey: chat.clientKey, whoId: x.whoId, whoName: who?.name ?? "Someone", toId: to, toName, what: x.what, ...due, impliesItem: x.impliesItem, messageIds: x.messageIds, reason: null, ...(said ? { createdAt: said } : {}) });
         // A commitment's messages are kept with it (never expire as chatter).
         for (const mid of x.messageIds) if (!placed.has(mid) && byId.has(mid)) await d.convs.place([{ chatId: chat.chatId, messageId: mid, conversationId: id, role: "work", reason: null, placedBy: "ai", at: byId.get(mid)!.createdAt }]);
         out.commitments++;
@@ -288,7 +313,7 @@ async function promisesByRule(d: PipelineDeps, chat: ClientChat, work: readonly 
     await d.convs.addCommitment({
       conversationId: placed.get(m.messageId) ?? null, chatId: chat.chatId, clientKey: chat.clientKey, whoId: user.id, whoName: m.senderName ?? user.name, toId: to,
       toName: to ? (context.find((x) => same(x.senderId, to))?.senderName ?? null) : null, what: promiseWhatWithoutAi(m.text, phrase), ...due, impliesItem: /\b(dev queue|backlog|ticket|bug|story|work item)\b/i.test(m.text),
-      messageIds: groupMs.map((x) => x.messageId), reason: `Says "${phrase}"`,
+      messageIds: groupMs.map((x) => x.messageId), reason: `Says "${phrase}"`, createdAt: groupMs[0]?.createdAt ?? m.createdAt,
     });
     for (const x of groupMs) if (!placed.has(x.messageId) && work.some((w) => w.messageId === x.messageId)) await d.convs.place([{ chatId: chat.chatId, messageId: x.messageId, conversationId: null, role: "work", reason: null, placedBy: "rule", at: x.createdAt }]);
     n++;
