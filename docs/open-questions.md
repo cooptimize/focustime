@@ -217,8 +217,12 @@ What DS-1 learned, and what is still open:
 ## Admin (ADM-1, Nov 4)
 
 - Q-ADM1-1: Plan data retention is shown as a 2-year Rule, but nothing purges yet. A purge job (per person, oldest first, logged as counts) is a later step; which tables it covers and whether people get a notice first is open.
-- Q-ADM1-2: The poll interval and unmatched-message retention in Admin › Conversations are stored and audited, but the poll job and the 14-day purge still use their own constants (the per-chat AI cap is wired). A later step should read them from the org runtime.
-- Q-ADM1-3: Levels come from Dataverse position names (Consultant, Senior Consultant, Lead Consultant). A new position name reads as no level until it is mapped in `levelFromPosition`; should Admin › People offer the mapping?
+- Q-ADM1-2: Resolved by ADM-2 (D582): the poll job and the purge read the Rules each cycle.
+- Q-ADM1-3: Resolved by ADM-2 (D583): Admin › People maps positions to levels.
 - Q-ADM1-4: In the demo, Admin › Clients' process switches change the demo's process view but not the demo week's picks; worth wiring if the demo is used to show them.
 - Q-PV1-1: Take one's quiet note (`story_taken`, D573) is a notifier kind, on by default, but Settings > Notifications lists its kinds by hand and PV-1 didn't edit Settings. Adding it to the Other group is one line for the step that owns Settings.
 - Q-PV1-2: Plan the day doesn't match Week's panel yet: it still offers this week's musts with their stories and Everything else, without grouping my stories under features, Planned elsewhere marks, No stories for you yet or Take one. Matching it means the Add pane using `blockStories` for the block's client, and its rows taking drags onto its blocks with `dropCheck`.
+- Q-ADM2-1: `org.retention_years` is shown in Status as "Not enforced yet". Nothing deletes old data; a delete job (which tables, per person, oldest first, a notice first or not) is a later step.
+- Q-ADM2-2: Guests are told apart from the ID token's `idp` and the UPN today. The `acct` optional claim (0 member, 1 guest) is the documented signal but must be added to the app registration's optional claims (`infra/scripts/`, an Azure change). Worth adding in the next infra step.
+- Q-ADM2-3: The automation flag isn't prefilled for Kat (no migration can read Dataverse, and naming a person in code is ruled out). An admin sets it once in Admin › People after the merge.
+- Q-ADM2-4: Admin deep links (`#/settings/admin-audit`) land on Today: `ui/nav.ts`'s section pattern takes letters only. One character for NV-1, which owns the routes.

@@ -9,7 +9,7 @@
 import type { NamedMigration } from "./named.ts";
 
 export const clientAccounts: NamedMigration = {
-  name: "20261106T0100_client_accounts",
+  name: "20261105T1400_client_accounts",
   sqlite: `CREATE TABLE directory_accounts (
      account_id TEXT NOT NULL PRIMARY KEY,
      client_key TEXT NOT NULL,
