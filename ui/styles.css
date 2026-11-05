@@ -1752,7 +1752,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .wd-actions .commit { background: var(--action); border-color: var(--action); color: var(--on-action); font-weight: 600; }
 .wd-actions .commit:disabled { opacity: 0.7; }
 
-/* ---------- Calendar editing tiers and Needs help from… (step 13) ---------- */
+/* ---------- Calendar editing tiers and Ask to collaborate (step 13) ---------- */
 .tbox { cursor: grab; touch-action: none; }
 .tbox.dragging { cursor: grabbing; z-index: 3; box-shadow: var(--shadow-dialog); }
 .tbox.conflict { border-style: solid; border-color: var(--risk); }
@@ -2181,7 +2181,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .dl-trend { width: auto; }
 }
 
-/* Step 15.2: the shared work item lookup (flex session, follow-up, Needs help from…). */
+/* Step 15.2: the shared work item lookup (flex session, follow-up, Ask to collaborate). */
 .item-lookup { position: relative; display: inline-flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 260px; }
 .item-lookup > input:not([type="hidden"]) { width: 100%; min-width: 0; }
 .item-lookup.linked { padding: 3px 4px 3px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--raised); font-size: var(--fs-3); }

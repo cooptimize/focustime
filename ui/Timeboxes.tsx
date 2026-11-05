@@ -42,7 +42,7 @@ export type TimeboxEnv = {
   open: (t: TimeboxTarget) => void;
   startFocus: (tb: TimeboxView) => void;
   connectWrite: () => void;
-  /** Step 13: "Needs help from…", and the help invites to show on items. */
+  /** Step 13: "Ask to collaborate", and the help invites to show on items. */
   help: (t: HelpTarget) => void;
   invites: readonly InviteView[];
 };
@@ -521,7 +521,7 @@ export function TimeboxDetails({ tb, env, clientName, today, onRemoved }: { tb: 
         </select>
       </label>
       <button type="button" className="mini" onClick={() => env.help({ clientKey: tb.clientKey, title: tb.title, url: tb.url, itemId: tb.itemId, pickId: tb.pickId, timeboxId: tb.id, pinned: tb.date })}>
-        Needs help from…
+        Ask to collaborate
       </button>
       {today && (
         <button type="button" className="mini" onClick={() => env.startFocus(tb)}>

@@ -77,8 +77,8 @@ describe.skipIf(!CHROMIUM)("row menu headers (D459)", () => {
       await expect(page.locator(".popup-menu .menu-item.active").count()).resolves.toBe(1);
       await expect(head(page).evaluate((e) => e.contains(document.activeElement) || e.matches(".active"))).resolves.toBe(false);
     }
-    // The hint on Needs help from… stays short and inside its row.
-    const help = page.locator(".popup-menu .menu-item", { hasText: "Needs help from" });
+    // The hint on Ask to collaborate stays short and inside its row.
+    const help = page.locator(".popup-menu .menu-item", { hasText: "Ask to collaborate" });
     await expect(help.locator(".menu-hint").textContent()).resolves.toBe("who is free");
     await expect(help.evaluate((b) => { const r = b.getBoundingClientRect(); return [...b.children].every((c) => c.getBoundingClientRect().right <= r.right + 1); })).resolves.toBe(true);
     await page.keyboard.press("Escape");

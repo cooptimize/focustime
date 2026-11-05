@@ -1,5 +1,5 @@
 // The shared work item lookup (step 15.2): one control wherever a DevOps item is named (flex session, follow-up,
-// Needs help from…). It searches the chosen client's loaded items by title or #id, this week's priorities and my
+// Ask to collaborate). It searches the chosen client's loaded items by title or #id, this week's priorities and my
 // assigned items first. Enter on a highlighted result links it; Enter otherwise keeps the plain text. A linked item
 // shows its title and link. Changing the client clears the link; with no client it is disabled, with a hint.
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";

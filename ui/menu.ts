@@ -197,7 +197,7 @@ export type MenuEnv = {
   /** Timebox changes that may need an Outlook preview (the same path as the day strip). */
   timeboxChange: (action: string, input: Record<string, unknown>) => void;
   startTimeboxFocus: (tb: TimeboxView) => void;
-  /** "Needs help from…" (the collaboration finder) and the help invites sent (cancel = undo of their write). */
+  /** "Ask to collaborate" (the collaboration finder) and the help invites sent (cancel = undo of their write). */
   openHelp: (t: HelpTarget) => void;
   invites: readonly InviteView[];
   undoWrite: (id: number) => void;
@@ -340,7 +340,7 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
         next: () => lengthStep(`Focus on "${p.title}"`, suggestMinutes(p.size, env.planning.sizes), (m) => env.runTimer("timer.start", { pickId: p.id, minutes: m })),
       },
       { id: "timebox", label: "Timebox", hint: "a free gap in its block", action: "timebox.add", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be timeboxed" } : past ? { disabled: PAST } : {}), next: () => timeboxStep(env, p) },
-      { id: "help", label: "Needs help from…", hint: "who is free", action: "collab.candidates", ...(past ? { disabled: PAST } : {}), run: () => env.openHelp({ clientKey: p.clientKey, title: p.title, url: p.itemUrl, itemId: p.itemId, pickId: p.id, pinned: p.date }) },
+      { id: "help", label: "Ask to collaborate", hint: "who is free", action: "collab.candidates", ...(past ? { disabled: PAST } : {}), run: () => env.openHelp({ clientKey: p.clientKey, title: p.title, url: p.itemUrl, itemId: p.itemId, pickId: p.id, pinned: p.date }) },
       { id: "done", label: p.status === "done" ? "Mark not done" : "Mark done", action: "pick.mark_done", run: () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" }) },
       { id: "makeup", label: "I'll make it up…", hint: "tonight, Friday, another day", action: "pick.make_up", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be made up" } : {}), next: () => makeUpStep(env, p) },
       { id: "drop", label: "Drop", danger: true, action: "pick.remove", ...(past && p.status !== "planned" ? { disabled: "Only a planned pick can be dropped on a past day" } : {}), run: () => env.runPlan("pick.remove", { id: p.id }) },
@@ -487,7 +487,7 @@ export function itemMenu(env: MenuEnv, clientKey: string, item: WorkItem): MenuS
         next: () => addStep(env, clientKey, item),
       },
       { id: "timebox", label: "Timebox…", hint: "start and length on the planned day", action: "timebox.add", run: () => env.openTimebox({ clientKey, itemId: item.id, title: item.title, url: item.url, date: env.planState?.date ?? env.today }) },
-      { id: "help", label: "Needs help from…", hint: "who is free", action: "collab.candidates", run: () => env.openHelp({ clientKey, title: `#${item.id} ${item.title}`, url: item.url, itemId: item.id, pinned: env.planState?.date ?? null }) },
+      { id: "help", label: "Ask to collaborate", hint: "who is free", action: "collab.candidates", run: () => env.openHelp({ clientKey, title: `#${item.id} ${item.title}`, url: item.url, itemId: item.id, pinned: env.planState?.date ?? null }) },
       ...(item.level === "portfolio" && !kids ? [{ id: "draft", label: "Add a draft story", action: "draft.add_story", next: () => draftPrompt(env, clientKey, item) } as MenuItem] : []),
     ],
   };
@@ -619,7 +619,7 @@ export function timeboxMenu(env: MenuEnv, t: TimeboxView): MenuStep {
       { id: "show", label: "Show as", hint: SHOW_AS_LABEL[t.showAs], action: "timebox.update", ...(blocked ? { disabled: blocked } : {}), next: () => ({ title: `Show "${t.title}" as`, items: SHOW_AS_VALUES.map((v) => ({ id: v, label: SHOW_AS_LABEL[v], checked: t.showAs === v, run: () => change({ showAs: v }) })) }) },
       { id: "outlook", label: t.outlook ? "Take off Outlook" : "Put on Outlook", action: "timebox.set_outlook", ...(blocked ? { disabled: blocked } : {}), run: () => env.timeboxChange("timebox.set_outlook", { id: t.id, on: !t.outlook }) },
       { id: "focus", label: "Start focus", action: "timer.start", ...(t.date !== env.today ? { disabled: "Only today's timeboxes" } : {}), run: () => env.startTimeboxFocus(t) },
-      { id: "help", label: "Needs help from…", action: "collab.candidates", run: () => env.openHelp({ clientKey: t.clientKey, title: t.title, url: t.url, itemId: t.itemId, pickId: t.pickId, timeboxId: t.id, pinned: t.date }) },
+      { id: "help", label: "Ask to collaborate", action: "collab.candidates", run: () => env.openHelp({ clientKey: t.clientKey, title: t.title, url: t.url, itemId: t.itemId, pickId: t.pickId, timeboxId: t.id, pinned: t.date }) },
       { id: "open", label: "Open in Outlook", action: "outlook.open", ...(t.onOutlook ? {} : { disabled: "Not on Outlook" }), run: () => env.openOutlook(ev?.[1].webLink ?? outlookDay(t.date)) },
       { id: "remove", label: "Remove", danger: true, action: "timebox.remove", ...(t.onOutlook ? { hint: "and its Outlook event, after a preview" } : {}), run: () => env.timeboxChange("timebox.remove", { id: t.id }) },
     ],
@@ -1128,7 +1128,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       return { run: () => env.openSettings("clients") };
     case "permissions.status": return { run: () => env.openSettings("connections") };
     case "people.photos": return { disabled: "Shown wherever you and Cooptimizers appear" };
-    case "presence.people": return { disabled: "Shown next to Cooptimizers in Needs help from…, Who and Roadmap" };
+    case "presence.people": return { disabled: "Shown next to Cooptimizers in Ask to collaborate, Who and Roadmap" };
     case "presence.log": return { run: () => env.openSettings("data") };
     case "playlist.open": return { run: () => env.openSettings("focus") };
     case "data.export": return { run: env.exportPlan };
@@ -1483,7 +1483,7 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
         next: () => ({ title: `Pin "${f.title}"`, items: f.places.map((p) => ({ id: `pin-${p.date}-${p.half}`, label: p.label, checked: isPinned(p), action: "weekplan.place", run: () => ops.pin(p.date, p.half, !isPinned(p)) })) }),
       },
       { id: "done", label: f.done ? "Mark not done" : "Mark done", action: "weekplan.mark_done", ...(f.past ? closed : f.done === "other" ? { disabled: "Done in DevOps or by a done pick" } : {}), run: () => ops.done(!f.done) },
-      { id: "help", label: "Needs help from…", hint: "who is free", action: "collab.candidates", ...(f.past || f.done ? { disabled: f.past ? "A past week is a review" : "Already done" } : {}), run: ops.help },
+      { id: "help", label: "Ask to collaborate", hint: "who is free", action: "collab.candidates", ...(f.past || f.done ? { disabled: f.past ? "A past week is a review" : "Already done" } : {}), run: ops.help },
       ...(f.level === "feature"
         ? ([
             { id: "target", label: f.targetDate ? "Change target date" : "Set target date", ...writes("target"), action: "devops.preview", ...closed, run: f.canWrite ? ops.targetDate : ops.enableWrites },
@@ -1509,7 +1509,7 @@ export function roadmapRowMenu(f: RoadmapRowFacts, ops: RoadmapRowOps): MenuStep
     items: [
       { id: "open", label: "Open in browser", hint: "O", ...(f.hasLink ? {} : { disabled: "No link for this item" }), run: ops.open },
       { id: "brief", label: "Copy Coop brief", action: "feature.brief", ...(epic ? { disabled: "Briefs are for features" } : { hint: f.open ? `${f.open} open ${f.open === 1 ? "story" : "stories"} already` : "ask Coop for stories" }), run: ops.brief },
-      { id: "help", label: "Needs help from…", hint: "who is free", action: "collab.candidates", run: ops.help },
+      { id: "help", label: "Ask to collaborate", hint: "who is free", action: "collab.candidates", run: ops.help },
       { id: "week", label: "Add to this week's plan", action: "weekplan.add", ...(epic ? { disabled: "Add its features instead" } : f.onWeek ? { disabled: "Already on this week's plan" } : { hint: "as a nice to have" }), run: ops.addToWeek },
       { id: "target", label: f.targetDate ? "Change target date" : "Set target date", action: "devops.preview", ...(f.owned === false ? { disabled: "Only on features and epics assigned to you" } : f.canWrite ? {} : { hint: "Enable DevOps writes first" }), run: f.canWrite ? ops.targetDate : ops.enableWrites },
     ],

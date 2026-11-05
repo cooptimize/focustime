@@ -135,7 +135,7 @@ describe("⋯ menus", () => {
   it("a pick: open in Edge, size, move, start focus, done, drop", async () => {
     const t = env();
     const m = pickMenu(t.e, pick);
-    expect(items(m).map((i) => i.label)).toEqual(["Open in browser", "Set size", "Move", "Start focus", "Timebox", "Needs help from…", "Mark done", "I'll make it up…", "Drop"]);
+    expect(items(m).map((i) => i.label)).toEqual(["Open in browser", "Set size", "Move", "Start focus", "Timebox", "Ask to collaborate", "Mark done", "I'll make it up…", "Drop"]);
     await find(m, "Open in browser").run!();
     await find(find(m, "Set size").next!(), "S · 1h").run!();
     expect(t.calls).toEqual([["link", "internal", pick.itemUrl], ["pick.set_size", { id: 7, size: "S" }]]);
@@ -149,7 +149,7 @@ describe("⋯ menus", () => {
   });
   it("a work item: open, add to the plan (stories only), draft story for an empty feature", () => {
     const story = itemMenu(env().e, "internal", item(1));
-    expect(items(story).map((i) => [i.label, i.disabled ?? ""])).toEqual([["Open in browser", ""], ["Add to the plan", ""], ["Timebox…", ""], ["Needs help from…", ""]]);
+    expect(items(story).map((i) => [i.label, i.disabled ?? ""])).toEqual([["Open in browser", ""], ["Add to the plan", ""], ["Timebox…", ""], ["Ask to collaborate", ""]]);
     const feature = itemMenu(env().e, "internal", item(2, "portfolio"));
     expect(find(feature, "Add to the plan").disabled).toMatch(/above story level/);
     expect(find(feature, "Add a draft story")).toBeTruthy();

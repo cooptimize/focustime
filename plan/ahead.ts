@@ -242,6 +242,6 @@ export const NEXT_WORDS: Record<NextStep, string> = {
   draft_feature: "Draft a feature",
   set_target: "Set target date",
   ask_owner: "Ask owner as a follow-up",
-  help: "Needs help from…",
+  help: "Ask to collaborate",
   plan_weeks: "Plan its weeks",
 };
