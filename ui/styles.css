@@ -4133,7 +4133,7 @@ button.ask-label { cursor: pointer; }
 .adm-confirm p { flex-basis: 100%; margin: 0; }
 .adm-confirm .set-field { flex-basis: 100%; }
 .adm-filter { margin-bottom: 10px; }
-.adm-process h4, .adm-client h4 { margin: 8px 0 4px; font-size: var(--fs-3); font-weight: 600; }
+.adm-process h4, .adm-scope h4, .adm-client h4 { margin: 8px 0 4px; font-size: var(--fs-3); font-weight: 600; }
 .adm-admins li { padding: 6px 10px; }
 .set-pre { white-space: pre-wrap; }
 .set-team-color { flex-basis: 100%; }
@@ -4262,7 +4262,7 @@ button.ask-label { cursor: pointer; }
 .adm-switch { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .adm-process h4 .mini { margin-left: 8px; }
 /* ADM-1: every part of an Admin › Clients card sits inside the card's colored edge, the last one rounding it off. */
-.adm-client > .adm-process, .adm-client > .set-house-style { margin: 0; padding: 10px 16px 12px; border: 1px solid var(--border); border-top: 1px dashed var(--border); border-left: 4px solid var(--c); border-radius: 0; background: var(--surface); }
+.adm-client > .adm-process, .adm-client > .adm-scope, .adm-client > .set-house-style { margin: 0; padding: 10px 16px 12px; border: 1px solid var(--border); border-top: 1px dashed var(--border); border-left: 4px solid var(--c); border-radius: 0; background: var(--surface); }
 .adm-client > :not(:last-child):not(:first-child) { border-radius: 0; border-bottom: 0; }
 .adm-client > :last-child:not(:first-child) { border-radius: 0 0 10px 10px; }
 .adm-client > .set-client:not(:last-child) { border-bottom: 0; border-radius: 10px 10px 0 0; }
@@ -4495,6 +4495,8 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .ah-cell.ah-col-item { white-space: normal; }
 .ah-cell.ah-col-state, .ah-cell.ah-col-start, .ah-cell.ah-col-target, .ah-cell.ah-col-assignee, .ah-cell.ah-col-ready { white-space: nowrap; }
 .ah-col-ready .ah-ready { flex-wrap: nowrap; }
+/* A smaller window: Readiness gives the room back to Item, its two chips wrapping. */
+@media (max-width: 1599.98px) { .ah-grid .w-ready { width: 13em; } .ah-cell.ah-col-ready { white-space: normal; } .ah-col-ready .ah-ready { flex-wrap: wrap; } }
 .ah-cell.ah-pend { background: color-mix(in oklab, var(--selected) 12%, transparent); }
 .ah-cell.ah-conf { box-shadow: inset 0 0 0 2px var(--watch); }
 .ah-cell.ah-abs { color: var(--text-faint); }
@@ -4656,3 +4658,13 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .now-row { list-style: none; }
 :root[data-reduce-motion] .now-line, :root[data-reduce-motion] .now-past { transition: none; }
 @media (prefers-reduced-motion: reduce) { .now-line, .now-past { transition: none; } }
+
+/* AH-2: Admin › Clients' scope picker. */
+.adm-scope { gap: 8px; }
+.adm-scope > p { margin: 0; }
+.adm-scope-modes { display: flex; flex-wrap: wrap; gap: 6px 20px; }
+.adm-scope-mode { display: inline-flex; align-items: center; gap: 6px; }
+.adm-scope-list { max-height: 360px; overflow-y: auto; }
+.adm-scope .set-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+/* AH-2: in Ahead the pace's ghost past a target is the one muted amber, not red. */
+.ahead .pa-ghost { border: 1.5px dashed var(--ah-attention); border-left: 0; background: none; }
