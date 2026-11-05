@@ -1685,6 +1685,40 @@ function ExportMine() {
   );
 }
 
+/** AS-1: the assistant keeps 30 days of what I asked and its answers, for me only (in Export, never shown to admins). */
+function ClearAssistant() {
+  const [asking, setAsking] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  return (
+    <div className="set-field">
+      <span className="set-label">Assistant history</span>
+      {asking ? (
+        <span className="set-inline">
+          <button
+            type="button"
+            className="mini primary"
+            onClick={async () => {
+              try {
+                const r = await call<{ removed: number }>("assistant.clear", { confirm: true });
+                setStatus(r.removed ? `Cleared ${r.removed} ${r.removed === 1 ? "entry" : "entries"}` : "Nothing to clear");
+              } catch (e) {
+                setStatus(e instanceof Error ? e.message : "Couldn't clear it");
+              }
+              setAsking(false);
+            }}
+          >
+            Clear it
+          </button>
+          <button type="button" className="mini" onClick={() => setAsking(false)}>Keep it</button>
+        </span>
+      ) : (
+        <button type="button" className="mini" onClick={() => (setAsking(true), setStatus(null))}>Clear</button>
+      )}
+      <span className="set-hint">{status ?? "What you asked the assistant and its answers, kept 30 days. Only you see it; it is in Export my data."}</span>
+    </div>
+  );
+}
+
 /** A2: Delete my data: signs out and deletes everything kept for this person (kept 30 days, then removed for good). */
 function DeleteMine() {
   const [asking, setAsking] = useState(false);
@@ -1738,6 +1772,7 @@ function DataSection(p: Props & { data: SettingsData }) {
       <TeamsStatusLog tz={userZone(p.data.you)} />
       <div className="set-grid">
         <ExportMine />
+        <ClearAssistant />
         <ResetPlan disabled={!p.data.data.planStore} onDone={p.onSaved} />
         <DeleteMine />
       </div>

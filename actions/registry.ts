@@ -296,7 +296,7 @@ export const ACTIONS = [
   { name: "link.open", title: "Open in browser", group: "Work items", target: "item", summary: "Open a work item in your browser" },
   // AS-1: the assistant. Its reads (assistant.today, lookup.day, items.get) are also on its allowlist; ask, confirm,
   // cancel, history and clear are the panel's own and never reachable from the assistant itself.
-  { name: "assistant.ask", title: "Ask the assistant", group: "Assistant", target: "none", shortcut: "Ctrl+J", summary: "Look something up, move things around, dictate a DevOps update or capture; every change is shown first and runs only when you confirm" },
+  { name: "assistant.ask", title: "Ask the assistant", group: "Assistant", target: "none", shortcut: "Ctrl J", summary: "Look something up, move things around, dictate a DevOps update or capture; every change is shown first and runs only when you confirm" },
   { name: "assistant.confirm", title: "Confirm the assistant's change", group: "Assistant", target: "none", summary: "Checks again (your rights, the client, nothing changed since) and runs the change shown" },
   { name: "assistant.cancel", title: "Cancel the assistant's change", group: "Assistant", target: "none", summary: "Nothing is written" },
   { name: "assistant.history", title: "Assistant history", group: "Assistant", target: "none", summary: "Your last 30 days with the assistant (only you see it)" },

@@ -15,7 +15,7 @@ import { clientsOf, onlyClients } from "./client-accounts.ts";
 import { requestAction, urgentRequests, visibleChats, type RequestContext, type RequestsPort } from "./request-actions.ts";
 import { aiAction, type AiActionName, type AiRuntime } from "./ai-actions.ts";
 import { createAi, type AiService } from "../ai/service.ts";
-import { assistantAction } from "../assistant/actions.ts";
+import { assistantAction, type AssistantGate } from "../assistant/actions.ts";
 import { RUNS as ASSISTANT_RUNS } from "../assistant/allowlist.ts";
 import type { ReadDeps } from "../assistant/reads.ts";
 import { createAssistant, type AssistantService } from "../assistant/service.ts";
@@ -90,7 +90,7 @@ import type { OrgRuntime } from "./org.ts";
 import { aheadIdentities } from "./identities.ts";
 import { clientRules, teamColors } from "../config/org.ts";
 import { GAP_KINDS, TOP_N } from "../plan/fixnext.ts";
-import { DEFAULT_AI_RULES } from "../ai/types.ts";
+import { DEFAULT_AI_RULES, type AiRules } from "../ai/types.ts";
 import { feedbackAction, type FeedbackContext, type FeedbackService } from "./feedback-actions.ts";
 import type { Sender } from "../plan/feedback.ts";
 import { setupAction, type SetupClient } from "./setup-actions.ts";
@@ -106,6 +106,8 @@ export type { ActionResponse, SourceSummary, WeekLoadData };
 export type ActionContext = {
   /** AI-0: the app's AI runtime (settings, provider, the app's spend). Absent: AI isn't available here (demo). */
   ai?: AiRuntime;
+  /** AS-1: the demo's assistant only (a scripted provider and its own rules, server/demo.ts); never set outside the demo. */
+  assistantAi?: { runtime: AiRuntime; rules: AiRules };
   /** Shared polling (D514): the shared Teams store and the poll job's Refresh. Absent: no client chats or Requests. */
   requests?: RequestsPort;
   /** D522: a plain list of admins (Entra object ids), for tests and contexts without `adminOps`. */
@@ -705,7 +707,7 @@ export async function amAdmin(ctx: ActionContext): Promise<boolean> {
 }
 
 /** AI-0: the AI service for this person and request, or null where AI isn't available (demo, no plan store). */
-export async function aiFor(ctx: ActionContext, o: { cap?: "person" | "app" } = {}): Promise<AiService | null> {
+export async function aiFor(ctx: ActionContext, o: { cap?: "person" | "app"; rules?: AiRules } = {}): Promise<AiService | null> {
   const rt = ctx.ai;
   const plan = ctx.plan;
   if (!rt || !plan) return null;
@@ -717,7 +719,7 @@ export async function aiFor(ctx: ActionContext, o: { cap?: "person" | "app" } = 
     provider: rt.provider,
     app: rt.app,
     // ADM-1: the admins' rules only (applied to the config by the org runtime): no per-person switch.
-    rules: async () => (await configured(ctx))?.aiRules ?? DEFAULT_AI_RULES,
+    rules: async () => o.rules ?? (await configured(ctx))?.aiRules ?? DEFAULT_AI_RULES,
     guard: async () => {
       const cfg = await configured(ctx);
       if (!cfg) return { directory: [], homeDomains: [], forbidden: [] };
@@ -736,6 +738,9 @@ export async function aiFor(ctx: ActionContext, o: { cap?: "person" | "app" } = 
  * AS-1: the assistant for this person (the panel's, or TB-1's Teams bot's): their own dispatch, limited to the actions
  * the allowlist names (assistant/allowlist.ts RUNS), their AI service, the guard's directory and their clients only.
  */
+/** AS-1: the assistant's AI: the app's, or in the demo its scripted provider with its own rules. */
+const assistantAiFor = (ctx: ActionContext) => (ctx.assistantAi ? aiFor({ ...ctx, ai: ctx.assistantAi.runtime }, { rules: ctx.assistantAi.rules }) : aiFor(ctx));
+
 export async function assistantFor(ctx: ActionContext, channel: Channel, publicUrl: string | null = null): Promise<{ service: AssistantService; reads: ReadDeps } | null> {
   const plan = ctx.plan;
   if (!plan) return null;
@@ -748,10 +753,33 @@ export async function assistantFor(ctx: ActionContext, channel: Channel, publicU
   const isMine = (k: string) => k === INTERNAL_CLIENT || (keys.has(k) && (ca ? ca.isClient(k) : true));
   const clientName = (k: string) => (k === INTERNAL_CLIENT ? "Internal" : directory.find((c) => c.key === k)?.names[0] ?? cfg.clientSettings[k]?.name ?? k);
   const run = (action: ActionName, input: unknown): Promise<ActionResponse> => (ASSISTANT_RUNS.has(action) ? dispatch(ctx, { action, input }) : Promise.resolve({ ok: false, status: 403, error: "The assistant can't do that" }));
-  const service = createAssistant({ run, plan, ai: await aiFor(ctx), directory, isMine, clientName, now: ctx.now, zone, channel, publicUrl });
+  const service = createAssistant({ run, plan, ai: await assistantAiFor(ctx), directory, isMine, clientName, now: ctx.now, zone, channel, publicUrl });
   const today = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(zone).toPlainDate().toString();
   const link = (href: string, label: string) => ({ label, href: channel === "teams" && publicUrl ? `${publicUrl.replace(/\/$/, "")}/${href}` : href });
   return { service, reads: { run, today, now: ctx.now(), zone, isMine, clientName, link } };
+}
+
+/** AS-1: the client in focus for voice: the screen's client, else the selected item's client (from the directory). */
+function focusOf(directory: Awaited<ReturnType<typeof aiDirectory>>, c: AssistantContext): { focus: string | null; name: string | null } {
+  const focus = c.clientKey && directory.some((d) => d.key === c.clientKey) ? c.clientKey : c.itemId ? (directory.find((d) => d.itemIds.includes(c.itemId!))?.key ?? null) : null;
+  return { focus, name: focus ? (directory.find((d) => d.key === focus)?.names[0] ?? focus) : null };
+}
+
+/**
+ * AS-1: what the panel shows before anything is sent: whether the assistant can answer at all, and whether the mic is
+ * on for what is on screen (the same gate as transcribe). Nothing is sent to a provider to find out.
+ */
+export async function assistantGate(ctx: ActionContext, c: AssistantContext): Promise<AssistantGate> {
+  const cfg = await configured(ctx);
+  const ai = cfg ? await assistantAiFor(ctx) : null;
+  if (!cfg || !ai) return { assistant: "not_set_up", voice: { on: false, message: "Voice isn't set up here" } };
+  const a = await ai.availability("none");
+  const voiceSetUp = !!(await (ctx.assistantAi?.runtime ?? ctx.ai)?.provider())?.transcribe;
+  if (a !== "ok") return { assistant: a === "client_off" ? "ok" : a, voice: { on: false, message: a === "off" ? "Voice is off: AI is off for FocusTime" : "Voice isn't set up here" } };
+  if (!voiceSetUp) return { assistant: "ok", voice: { on: false, message: "Voice isn't set up here" } };
+  const { focus, name } = focusOf(await aiDirectory(ctx, cfg), c);
+  if (focus && (await ai.availability(focus)) === "client_off") return { assistant: "ok", voice: { on: false, message: `Voice is off while ${name} is in focus` } };
+  return { assistant: "ok", voice: { on: true, message: null } };
 }
 
 /**
@@ -765,12 +793,9 @@ export async function assistantTranscribe(ctx: ActionContext, t: { audio: Uint8A
   if (t.audio.length > VOICE_MAX_BYTES) return { ok: false, reason: "too_large", message: "That recording is too large" };
   if (!Number.isFinite(t.seconds) || t.seconds <= 0 || t.seconds > VOICE_MAX_SECONDS + 1) return { ok: false, reason: "too_long", message: `Recordings stop at ${VOICE_MAX_SECONDS} seconds` };
   const cfg = await configured(ctx);
-  const ai = cfg ? await aiFor(ctx) : null;
+  const ai = cfg ? await assistantAiFor(ctx) : null;
   if (!cfg || !ai) return { ok: false, reason: "not_set_up", message: "Voice isn't set up here" };
-  const directory = await aiDirectory(ctx, cfg);
-  const c = t.context ?? {};
-  const focus = c.clientKey && directory.some((d) => d.key === c.clientKey) ? c.clientKey : c.itemId ? (directory.find((d) => d.itemIds.includes(c.itemId!))?.key ?? null) : null;
-  const name = focus ? (directory.find((d) => d.key === focus)?.names[0] ?? focus) : null;
+  const { focus, name } = focusOf(await aiDirectory(ctx, cfg), t.context ?? {});
   const r = await ai.transcribe(t.audio, t.mime, Math.min(t.seconds, VOICE_MAX_SECONDS), focus ?? "none");
   if (r.ok) return { ok: true, text: r.text };
   const k = r.error.kind;
@@ -1631,7 +1656,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "assistant.today":
     case "lookup.day":
     case "items.get":
-      return assistantAction(async () => (await assistantFor(ctx, "panel"))?.service ?? null, async () => (await assistantFor(ctx, "panel"))?.reads ?? null, action, req.input);
+      return assistantAction(async () => (await assistantFor(ctx, "panel"))?.service ?? null, async () => (await assistantFor(ctx, "panel"))?.reads ?? null, action, req.input, (c) => assistantGate(ctx, c));
     case "send.people":
     case "send.create":
     case "send.cancel":

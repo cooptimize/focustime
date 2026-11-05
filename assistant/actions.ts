@@ -27,7 +27,11 @@ export function contextOf(v: unknown): AssistantContext {
   return out;
 }
 
-export async function assistantAction(svc: () => Promise<AssistantService | null>, reads: () => Promise<ReadDeps | null>, action: AssistantAction, input: unknown): Promise<ActionResponse> {
+/** What the panel shows before anything is sent (assistant.history with a context): the assistant's state and the mic's. */
+export type AssistantGate = { assistant: "ok" | "off" | "not_set_up"; voice: { on: boolean; message: string | null } };
+const NO_GATE: AssistantGate = { assistant: "not_set_up", voice: { on: false, message: "Voice isn't set up here" } };
+
+export async function assistantAction(svc: () => Promise<AssistantService | null>, reads: () => Promise<ReadDeps | null>, action: AssistantAction, input: unknown, gate: (c: AssistantContext) => Promise<AssistantGate> = async () => NO_GATE): Promise<ActionResponse> {
   if (action === "assistant.today" || action === "lookup.day" || action === "items.get") {
     const d = await reads();
     if (!d) return bad("The assistant isn't available here", 503);
@@ -68,9 +72,9 @@ export async function assistantAction(svc: () => Promise<AssistantService | null
       return { ok: true, data: await s.cancel(o.proposalId) };
     }
     case "assistant.history": {
-      const o = only(input, ["limit"]);
-      if (!o || (o.limit !== undefined && !posInt(o.limit))) return bad("assistant.history takes { limit? }");
-      return { ok: true, data: { turns: await s.history(typeof o.limit === "number" ? Math.min(o.limit, 200) : 50) } };
+      const o = only(input, ["limit", "context"]);
+      if (!o || (o.limit !== undefined && !posInt(o.limit))) return bad("assistant.history takes { limit?, context? }");
+      return { ok: true, data: { turns: await s.history(typeof o.limit === "number" ? Math.min(o.limit, 200) : 50), gate: await gate(contextOf(o.context)) } };
     }
     case "assistant.clear": {
       const o = only(input, ["confirm"]);
