@@ -1488,7 +1488,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .capture input::placeholder, .cap-dialog input::placeholder { color: var(--text-faint); }
 .cap-box { display: grid; gap: 8px; }
 .cap-input { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
-.cap-input > input { font-size: var(--fs-4) !important; padding: 8px 10px !important; }
+.cap-input > input, .cap-field > textarea { font-size: var(--fs-4) !important; padding: 8px 10px !important; }
 .cap-client { align-self: stretch; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cap-client.none { color: var(--text-muted); border-style: dashed; }
 .cap-choose { margin-top: -2px; }
@@ -2201,8 +2201,8 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .cap-blocked { grid-column: 1 / -1; font-size: var(--fs-2); }
 .cap-box input:focus-visible, .cap-box select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .inbox-capture { padding: 14px 16px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface); display: grid; gap: 10px; }
-.cap-box.large .cap-input > input { font-size: var(--fs-4) !important; padding: 12px 14px !important; border-radius: 10px !important; }
-.cap-box.large .cap-input > input:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+.cap-box.large .cap-input > input, .cap-box.large .cap-field > textarea { font-size: var(--fs-4) !important; padding: 12px 40px 12px 14px !important; border-radius: 10px !important; }
+.cap-box.large .cap-input > input:focus-visible, .cap-box.large .cap-field > textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
 .cap-box.large .cap-client { font-size: var(--fs-3); padding: 4px 12px; }
 
 /* Step 15.3: the draft editor. */
@@ -4658,6 +4658,65 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .now-row { list-style: none; }
 :root[data-reduce-motion] .now-line, :root[data-reduce-motion] .now-past { transition: none; }
 @media (prefers-reduced-motion: reduce) { .now-line, .now-past { transition: none; } }
+
+/* ---- CP-1: Capture to DevOps ---- */
+/* The box is a small textarea that grows to about four lines, then scrolls; ↵ saves from inside it. */
+.cap-field { position: relative; min-width: 0; display: grid; }
+.cap-field > textarea {
+  font: inherit; color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px;
+  padding-right: 40px !important; resize: none; overflow-y: auto; min-height: 0; box-sizing: border-box; width: 100%;
+  line-height: 1.4; max-height: calc(4lh + 18px); field-sizing: content;
+}
+.cap-field > textarea::placeholder { color: var(--text-faint); }
+.cap-field > textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.cap-send {
+  position: absolute; right: 6px; bottom: 6px; min-width: 28px; height: 28px; padding: 0 6px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); font: 600 var(--fs-3)/1 var(--font-ui); cursor: pointer;
+}
+.cap-send:not(:disabled):hover, .cap-send:focus-visible { color: var(--on-action); background: var(--action); border-color: var(--action); }
+.cap-send:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.cap-send:disabled { opacity: 0.5; cursor: default; }
+/* The Saved toast: it names the client, with Undo, for a few seconds. */
+.cap-toast { margin: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--fs-3); padding: 6px 10px; border-radius: 8px; background: var(--sunken); border: 1px solid var(--border); width: fit-content; max-width: 100%; }
+.cap-toast .link-btn { font-weight: 600; }
+/* Drafts to add in DevOps: what each needs next. */
+.dw-draft-state { margin-left: 8px; font-size: var(--fs-2); font-weight: 500; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap; }
+.dw-draft-state.ready { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 50%, var(--border)); }
+.dw-draft-state.needs_parent, .dw-draft-state.writing, .dw-draft-state.no_pat { color: var(--watch); border-color: color-mix(in oklab, var(--watch) 50%, var(--border)); }
+/* The create dialog: the client at the top in its color, my text and the AI version side by side. */
+.create-draft { width: min(1040px, 100%); }
+.cd-client { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-4); font-weight: 600; }
+.cd-client .swatch { width: 12px; height: 12px; border-radius: 3px; background: var(--c, var(--client-none)); flex: none; }
+.dw-client { padding: 6px 10px; border-left: 4px solid var(--c, var(--client-none)); background: color-mix(in oklab, var(--c, var(--client-none)) 10%, var(--surface)); border-radius: 6px; }
+.cd-head { border-bottom: 3px solid var(--c, var(--border)); padding-bottom: 8px; }
+.cd-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.cd-side { display: grid; gap: 8px; align-content: start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--raised); min-width: 0; }
+.cd-side.chosen { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--surface); }
+.cd-side-head { display: flex; align-items: center; gap: 8px; }
+.cd-side-head h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.cd-side-head > :last-child { margin-left: auto; }
+.cd-using { font-size: var(--fs-2); color: var(--accent); font-weight: 500; }
+.cd-side .set-field { display: grid; gap: 4px; }
+.cd-side textarea { font: inherit; font-size: var(--fs-3); color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 8px; resize: vertical; }
+.cd-side textarea:focus-visible, .cd-side input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.cd-read { margin: 0; display: grid; gap: 2px 0; font-size: var(--fs-3); }
+.cd-read dt { font-size: var(--fs-2); color: var(--text-muted); margin-top: 6px; }
+.cd-read dd { margin: 0; overflow-wrap: anywhere; }
+.cd-pre { white-space: pre-line; }
+.cd-type, .cd-ai-note { margin: 0; font-size: var(--fs-2); }
+.cd-parent { display: grid; gap: 4px; }
+.cd-parent .item-lookup:not(.linked) { display: block; }
+.cd-parent .item-lookup input { width: 100%; }
+.cd-why { font-size: var(--fs-2); }
+.cd-nopat { display: grid; gap: 8px; justify-items: start; }
+@media (max-width: 900px) {
+  .cd-sides { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 599.98px) {
+  .cap-send { min-width: var(--tap); height: var(--tap); bottom: 2px; right: 2px; }
+  .cap-field > textarea { padding-right: calc(var(--tap) + 8px) !important; }
+  .cap-toast .link-btn { min-height: var(--tap); }
+}
 
 /* AH-2: Admin › Clients' scope picker. */
 .adm-scope { gap: 8px; }

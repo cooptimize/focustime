@@ -35,7 +35,30 @@ export type PlanContext = {
   now: () => string;
   /** PL-1: which of these DevOps items are resolved, closed or removed ("client\u0000id"); absent: none known. */
   resolved?: (cfg: AppConfig, items: readonly { clientKey: string; itemId: number | null }[]) => Promise<ReadonlySet<string>>;
+  /**
+   * CP-1: the client's open features (or epics) as the capture box and the draft editor offer them (the same read as
+   * capture.features), for a parent the Week hasn't loaded (someone else's feature). Null when DevOps can't say.
+   */
+  openParents?: (clientKey: string, tier: "feature" | "epic") => Promise<readonly number[] | null>;
 };
+
+/**
+ * A draft's parent: an open feature (for a story) or epic (for a draft feature) of the draft's own client, from the
+ * loaded DevOps items or, when the Week hasn't loaded it, the client's open ones as the lookups offer them (CP-1). The
+ * create step checks it again in DevOps. Null when it's fine, else the refusal.
+ */
+async function parentProblem(ctx: PlanContext, cfg: AppConfig, clientKey: string, level: "story" | "feature", parentItemId: number): Promise<ActionResponse | null> {
+  const want = level === "feature" ? "epic" : "feature";
+  const parent = ctx.devops(cfg).lookup(clientKey, parentItemId);
+  if (!parent) {
+    const open = await ctx.openParents?.(clientKey, want).catch(() => null);
+    if (open?.includes(parentItemId)) return null;
+    return bad(`Item ${parentItemId} is not among the loaded DevOps items for ${clientKey}. Refresh and try again`, 409);
+  }
+  if (parent.level !== "portfolio" || (parent.tier ?? "feature") !== want) return bad(level === "feature" ? "A draft feature goes under an epic" : "A draft story goes under a feature", 422);
+  if (!isOpen(parent.stateCategory)) return bad(`#${parentItemId} is ${parent.state}; choose an open one`, 422);
+  return null;
+}
 
 /** Whether a date has working hours or a flex session (D127): the one plannability rule, from the time model. */
 export async function hasHoursOn(plan: PlanStore | undefined, model: TimeModel, date: IsoDate): Promise<boolean> {
@@ -349,6 +372,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         return { ok: true, data: { draft: (await plan.addDraft({ clientKey: key, parentItemId, title, size: sz })) } };
       }
       case "draft.set_parent": {
+        // CP-1: the parent check is shared with draft.update (below).
         // Step 14.5 (D257): a draft needs a parent before it can be created in DevOps. A story goes under an open
         // feature, a draft feature under an open epic, of the draft's own client, from the loaded DevOps items.
         const o = fields(input, ["id", "parentItemId"]);
@@ -357,11 +381,8 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const parentItemId = id(o.parentItemId, "parentItemId");
         const cfg = await ctx.config();
         if (!cfg) return bad("Fix the config first", 409);
-        const parent = ctx.devops(cfg).lookup(draft.clientKey, parentItemId);
-        if (!parent) return bad(`Item ${parentItemId} is not among the loaded DevOps items for ${draft.clientKey}. Refresh and try again`, 409);
-        const want = draft.level === "feature" ? "epic" : "feature";
-        if (parent.level !== "portfolio" || (parent.tier ?? "feature") !== want) return bad(draft.level === "feature" ? "A draft feature goes under an epic" : "A draft story goes under a feature", 422);
-        if (!isOpen(parent.stateCategory)) return bad(`#${parentItemId} is ${parent.state}; choose an open one`, 422);
+        const problem = await parentProblem(ctx, cfg, draft.clientKey, draft.level, parentItemId);
+        if (problem) return problem;
         return { ok: true, data: { draft: (await plan.setDraftParent(draft.id, parentItemId)) } };
       }
       case "draft.update": {
@@ -396,11 +417,8 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
           const key = patch.clientKey ?? draft.clientKey;
           const cfg = await ctx.config();
           if (!cfg) return bad("Fix the config first", 409);
-          const parent = ctx.devops(cfg).lookup(key, parentItemId);
-          if (!parent) return bad(`Item ${parentItemId} is not among the loaded DevOps items for ${key}. Refresh and try again`, 409);
-          const want = draft.level === "feature" ? "epic" : "feature";
-          if (parent.level !== "portfolio" || (parent.tier ?? "feature") !== want) return bad(draft.level === "feature" ? "A draft feature goes under an epic" : "A draft story goes under a feature", 422);
-          if (!isOpen(parent.stateCategory)) return bad(`#${parentItemId} is ${parent.state}; choose an open one`, 422);
+          const problem = await parentProblem(ctx, cfg, key, draft.level, parentItemId);
+          if (problem) return problem;
           patch.parentItemId = parentItemId;
         } else if (o.parentItemId === null) patch.parentItemId = null;
         return { ok: true, data: { draft: (await plan.updateDraft(draft.id, patch)) } };

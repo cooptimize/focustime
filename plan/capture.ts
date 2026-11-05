@@ -63,7 +63,8 @@ export function parseDue(text: string, today: IsoDate): { date: IsoDate; phrase:
   return best ? { date: best.date, phrase: best.phrase } : null;
 }
 
-const squash = (s: string) => s.replace(/\s+([.,;:!?])/g, "$1").replace(/\s{2,}/g, " ").trim();
+// CP-1: a capture can hold line breaks (the box is a textarea); titles and the rest are one line.
+const squash = (s: string) => s.replace(/\s+([.,;:!?])/g, "$1").replace(/\s+/g, " ").trim();
 
 /**
  * The first @tag that names exactly one client (its key or name, any case, or a prefix of three or more letters

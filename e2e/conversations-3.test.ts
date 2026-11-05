@@ -272,7 +272,7 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       await team.store.replaceDirectory([dirPerson(ME, "Sam Tester", 1), dirPerson(EVAN, "Evan Ford", 2), dirPerson(LENA, "Lena Hart", 3)], [], []);
       team.org.invalidate();
       await page.keyboard.press("n");
-      const box = page.locator(".cap-box input[aria-label='Quick capture']");
+      const box = page.locator(".cap-box textarea[aria-label='Quick capture']");
       await box.fill("Told Evan Ford I'd send the October export");
       await page.getByRole("radiogroup", { name: "Save as" }).getByRole("radio", { name: /Follow-up/ }).click();
       const fields = page.getByRole("group", { name: "Follow-up details" });
@@ -282,7 +282,7 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       await fields.getByRole("button", { name: "Link to Evan Ford" }).click();
       await box.focus();
       await page.keyboard.press("Enter");
-      await page.getByText(/Follow-up saved: owed to Evan Ford/).waitFor();
+      await page.getByText(/as a follow-up, owed to Evan Ford/).waitFor();
       const saved = (await ctx.plan!.openFollowUps()).find((f) => /October export/.test(f.what));
       expect(saved?.whoRef).toMatchObject({ kind: "cooptimizer", name: "Evan Ford" });
       expect(errors).toEqual([]);

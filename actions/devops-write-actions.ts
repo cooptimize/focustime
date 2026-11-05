@@ -492,7 +492,10 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const pc = await writer.processConfig(org, pat, project);
       const tiers = portfolioTiers(pc);
       // PV-1: a story may name its type (the parent type's default child in the process model) when the parent takes it.
-      const childType = draft.level === "story" && typeof o.type === "string" && levelsFromProcessConfig(pc).childrenOf(parent.type).includes(o.type) ? o.type : null;
+      // CP-1: so may a feature (the AI version's type, once I accept it): one the parent epic's type takes, at the
+      // feature tier. Anything else is the process default, as before.
+      const takes = typeof o.type === "string" && levelsFromProcessConfig(pc).childrenOf(parent.type).includes(o.type);
+      const childType = takes && (draft.level === "story" || tiers.feature.has(o.type as string)) ? (o.type as string) : null;
       const type = childType ?? (draft.level === "feature" ? defaultType(pc, "feature") : defaultType(pc, "story"));
       if (!type) throw new Refused(`This project's process has no ${draft.level === "feature" ? "feature" : "story"} level`, 409);
       const wantParent = draft.level === "feature" ? tiers.epic : tiers.feature;
