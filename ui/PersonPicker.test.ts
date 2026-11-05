@@ -3,6 +3,8 @@
 import { describe, expect, it } from "vitest";
 import type { PeoplePickerData, PickerPerson } from "../actions/people-picker.ts";
 import { exactMatch, filterGroups } from "./PersonPicker.tsx";
+import { suggest } from "../plan/capture.ts";
+import { aPickerPerson } from "../test/builders/index.ts";
 
 const coop = (name: string, id = name.toLowerCase().replace(/\W/g, "")): PickerPerson => ({ name, ref: { kind: "cooptimizer", id, name }, email: `${id}@contoso.example`, external: false });
 const data: PeoplePickerData = {
@@ -28,5 +30,15 @@ describe("PersonPicker", () => {
     expect(exactMatch(data, "Evan")).toBeNull();
     const twice: PeoplePickerData = { problems: [], groups: [{ key: "everyone", label: "x", people: [coop("Sam Lee", "a"), coop("Sam Lee", "b")] }] };
     expect(exactMatch(twice, "Sam Lee")).toBeNull();
+  });
+});
+
+describe("CV-3: Capture's Who", () => {
+  it("starts from the rules' name as plain text and offers the link only when it matches exactly one person", () => {
+    const people: PeoplePickerData = { problems: [], groups: [{ key: "everyone", label: "Everyone at Cooptimize", people: [aPickerPerson({ name: "Evan Ford" }), aPickerPerson({ name: "Dana Lee" }), aPickerPerson({ name: "Dana Lee" })] }] };
+    const who = (text: string) => suggest(text, null, "2026-11-05", []).who;
+    expect(exactMatch(people, who("Told Evan Ford I'd send the totals"))?.name).toBe("Evan Ford");
+    expect(exactMatch(people, who("Promised Dana Lee the export"))).toBeNull(); // two people with that name: no offer
+    expect(exactMatch(people, who("Owe Sam a call"))).toBeNull();
   });
 });

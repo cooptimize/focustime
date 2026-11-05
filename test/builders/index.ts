@@ -433,3 +433,13 @@ export function aPortfolioItem(o: Partial<import("../../week/types.ts").Portfoli
   const id = o.id ?? next();
   return { id, title: `Feature ${id}`, type: "Feature", state: "Active", stateCategory: "InProgress", tier: "feature", order: id, parentId: null, url: `https://dev.azure.com/contoso/p/_workitems/edit/${id}`, targetDate: null, assignedTo: null, mine: false, why: [], children: [], ...o };
 }
+
+/** CV-3: one person in the PersonPicker, a Cooptimizer by default (their Entra object id as the reference). */
+export function aPickerPerson(o: { name?: string; external?: boolean; id?: string } = {}): import("../../actions/people-picker.ts").PickerPerson {
+  const n = next();
+  const name = o.name ?? `Person ${n}`;
+  const id = o.id ?? `p${n}`;
+  return o.external
+    ? { name, ref: { kind: "external", memberId: id, name }, email: null, external: true }
+    : { name, ref: { kind: "cooptimizer", id, name }, email: `${id}@contoso.example`, external: false };
+}
