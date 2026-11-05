@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { aPto, aWeek } from "../test/builders/index.ts";
-import { agendaNowIndex, nowClock, nowSpot, ownsNow, railAt } from "./nowline.ts";
+import { agendaNowIndex, nowClock, nowSpot, ownsNow, pillSpot, railAt, type Box } from "./nowline.ts";
 
 const NY = "America/New_York";
 const at = (t: string, tz = NY) => Temporal.PlainDateTime.from(t).toZonedDateTime(tz).toInstant().toString();
@@ -54,5 +54,24 @@ describe("now line (UI-B)", () => {
     expect(ownsNow(tue.pm.view, "PM", at("2026-11-03T07:00"))).toBe(false);
     expect(ownsNow(tue.am.view, "AM", at("2026-11-03T14:00"))).toBe(false);
     expect(ownsNow(tue.pm.view, "PM", at("2026-11-03T14:00"))).toBe(true);
+  });
+});
+
+describe("the now pill on a compact rail (HK-3)", () => {
+  // A 200 px rail, 60 px wide; hour labels 14 px tall just under each hour line, at the left.
+  const label = (y: number): Box => ({ top: y + 1, bottom: y + 15, left: 3, right: 17 });
+  const base = { pill: { width: 30, height: 16 }, left: 6, rail: { width: 60, height: 200 } };
+  it("stays on the line away from the marks", () => {
+    expect(pillSpot({ ...base, line: 40, labels: [label(0), label(100)] })).toEqual({ spot: "center", top: 32 });
+  });
+  it("moves just above or below the mark it would cover, whichever is nearer the line", () => {
+    // Just above the 10:00 line: above the label.
+    expect(pillSpot({ ...base, line: 98, labels: [label(0), label(100)] })).toEqual({ spot: "above", top: 84 });
+    // Just after it: below the label.
+    expect(pillSpot({ ...base, line: 110, labels: [label(0), label(100)] })).toEqual({ spot: "below", top: 116 });
+  });
+  it("goes to the rail's right end when neither fits (marks close together on a short card)", () => {
+    const tight = [label(0), label(30), label(60)];
+    expect(pillSpot({ ...base, rail: { width: 60, height: 90 }, line: 33, labels: tight })).toEqual({ spot: "end", top: 25 });
   });
 });

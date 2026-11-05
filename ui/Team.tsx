@@ -125,7 +125,7 @@ export function SendDialog({ target, thisWeek, onClose, onSent }: { target: Send
           <>
             <p className="send-done">{done}</p>
             <div className="wd-actions send-acts">
-              <button type="button" className="primary" autoFocus onClick={onClose}>Close</button>
+              <button type="button" className="primary" autoFocus onClick={onClose}>Done</button>
             </div>
           </>
         ) : !people ? (

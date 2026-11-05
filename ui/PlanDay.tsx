@@ -44,6 +44,8 @@ import { PickRow, PICK_DRAG } from "./PickRow.tsx";
 import { PlanFrame } from "./plan/PlanFrame.tsx";
 import { PlanHeader } from "./plan/PlanHeader.tsx";
 import { UnitCard, PlanLabel } from "./plan/UnitCard.tsx";
+import { CarryCtx, SuggestedCards } from "./Carry.tsx";
+import { carryListed } from "../plan/suggest.ts";
 import { AddPane, AddSection, BoxHint } from "./plan/AddPane.tsx";
 import { moreLabel, moreOpenByDefault, NOTHING_PLANNED, rememberFold, sessionFold } from "./plan/more.ts";
 import { FoldLine } from "./plan/FoldLine.tsx";
@@ -268,6 +270,10 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
     </>
   );
   const plannable = !off && !past;
+  // HK-3: a pick the Board suggests in a block this week is its dashed card there (this day's, or none here when it is
+  // another day's); only picks with no block left this week, or from an earlier week, stay in the list.
+  const carry = useContext(CarryCtx);
+  const listedCarry = carry ? carryListed(state.carryOver, carry.suggested) : state.carryOver;
   const left = off ? (
     <p className="pd-pto full" role="note">
       <strong>Day off</strong> · {off.titles.join(", ")}. Nothing to plan.
@@ -283,7 +289,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
         </p>
       )}
       <OutsideLine label="Before your blocks" events={split.before} tz={tz} />
-      {state.carryOver.length > 0 && selBlock && <CarryOver picks={state.carryOver} date={day.date} to={selBlock.half} act={act} />}
+      {listedCarry.length > 0 && selBlock && <CarryOver picks={listedCarry} date={day.date} to={selBlock.half} act={act} />}
       {blocks.map((b) => (
         <DayBlock key={b.half} b={b} selected={b.half === sel} onSelect={() => setSel(b.half)} overflow={day.kind !== "work" && b.half !== "EVE"} tz={tz} now={now} colors={colors} name={name} act={act} hintPick={hintPick} weekFeatures={state.weekFeatures} whens={whens} />
       ))}
@@ -362,6 +368,8 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
     if (a && c) return Temporal.Instant.compare(Temporal.Instant.from(a), Temporal.Instant.from(c));
     return a ? -1 : c ? 1 : x.position - y.position;
   });
+  const carry = useContext(CarryCtx);
+  const suggestedHere = slot.half !== "EVE" && (carry?.cardsAt(slot.date, slot.half).length ?? 0) > 0;
   const marked = new Set(trim && b.fit.kind === "over" ? trimCandidates(picks, b.fit.by, pv.sizes, { musts: mustPicks(picks, weekFeatures, work), timed: new Set(start.keys()) }) : []);
   const title = focus ? focus.clientName : overflow ? "Catch-up" : slot.half === "EVE" ? (slot.flex.length ? `Flex · ${slot.flex.map((f) => name(f.clientKey)).join(", ")}` : "Evening") : bc.clientKey ? `Open · ${name(bc.clientKey)}` : "Open";
   const note = (focus?.clientKey ?? bc.clientKey) ? pv.resumeNotes?.[(focus?.clientKey ?? bc.clientKey)!] : undefined;
@@ -434,9 +442,10 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
             <PickRow key={p.id} pick={p} density="plan" toggle={(id, d) => void act("pick.mark_done", { id, done: d })} link draggable highlight={marked.has(p.id)} hint={p.id === hintPick} extra={<RowNote p={p} bc={bc.clientKey} name={name} />} badge={dueOf(p, dues)} />
           ))}
         </ul>
-      ) : (
+      ) : suggestedHere ? null : (
         <p className="pd2-empty">{b.ended ? "Nothing planned." : selected ? "Nothing yet. Add from the right." : ""}</p>
       )}
+      {slot.half !== "EVE" && <SuggestedCards date={slot.date} half={slot.half} tabIndex={0} />}
       {trim && marked.size > 0 && <p className="pd2-trim-hint">Highlighted: make one smaller (click its size) or move it with ⋯.</p>}
       {(meetings > 0 || personal > 0 || slot.freeGaps.length > 0) && !slot.off && (
         <div className="pd2-cal">

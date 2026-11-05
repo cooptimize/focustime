@@ -44,7 +44,7 @@ The plan store is SQL Server: Azure SQL in the hosted app, the local container h
 |---|---|
 | `npm run db:up` | Starts the container. The first time it makes the sa password (keyring: `focustime` / `sql-password`, passed to Podman in the environment, never on a command line), the volume, and `focustime_dev`. |
 | `npm run db:migrate [-- --database focustime]` | Creates the database if missing (read committed snapshot on) and brings it to this build's schema. |
-| `npm run db:reset` | Drops and recreates `focustime_dev`. Refuses `focustime`, the service's database. |
+| `npm run db:reset` | Drops, recreates and migrates `focustime_dev`, and nothing else (HK-3): any other name is refused (`focustime`, the service's database, and the tests' `focustime_test_*` too), and so is a reset when `podman port focustime-sqlserver` doesn't show 14330 (another server on that port). See the runbook's "Reset the local dev database". |
 | `npm run db:down` | Stops the container. The data stays in the `focustime-sqlserver` volume. |
 
 Databases: `focustime` is the service's (your plan), `focustime_dev` is for `FOCUSTIME_DB_NAME=focustime_dev npm run dev`,

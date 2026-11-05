@@ -18,8 +18,8 @@ export function useNotices(enabled: boolean) {
   const seen = useRef<Set<number> | null>(null);
   const latest = useRef(list);
   latest.current = list;
-  const refresh = useCallback(async () => {
-    const next = await call<NoticeList>("notices.list", {}).catch(() => null);
+  const refresh = useCallback(async (background = false) => {
+    const next = await call<NoticeList>("notices.list", {}, { background }).catch(() => null);
     if (!next) return;
     // The first look only learns what is there: no toast for what came before this page opened.
     const fresh = seen.current ? next.items.filter((n) => !n.read && !n.closed && !seen.current!.has(n.id)) : [];
@@ -29,11 +29,12 @@ export function useNotices(enabled: boolean) {
   }, []);
   useEffect(() => {
     if (!enabled) return;
-    void refresh();
-    const tick = () => document.visibilityState === "visible" && void refresh();
+    void refresh(true);
+    // HK-3: the poll is a timer's call, never someone using FocusTime.
+    const tick = () => document.visibilityState === "visible" && void refresh(true);
     const id = window.setInterval(tick, POLL_MS);
     document.addEventListener("visibilitychange", tick);
-    const soon = () => window.setTimeout(() => void refresh(), 800);
+    const soon = () => window.setTimeout(() => void refresh(true), 800);
     window.addEventListener(NOTICES_CHANGED, soon);
     return () => {
       window.clearInterval(id);

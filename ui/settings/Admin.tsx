@@ -5,6 +5,7 @@
 // sections carry names, dates, counts and yes or no only.
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { call } from "../api.ts";
+import { useReturnFocus } from "../CloseButton.tsx";
 import { SaveMark, plain, useSaveContext, type FieldStatus } from "./autosave.tsx";
 import { DeliveryChatField, DeliveryChatsProvider } from "./DeliveryChats.tsx";
 import { shortDate } from "../labels.ts";
@@ -467,6 +468,22 @@ function ProcessView({ c, saver, onRefresh, refreshing }: { c: ClientRow; saver:
 
 type AiData = { on: boolean; model: string; personCapUsd: number; appCapUsd: number; provider: string; keyConfigured: boolean; appSpentMicros: number; zero: { person: boolean; app: boolean }; filter: ClientFilterValue; counts: ClientCounts; clients: { key: string; isClient: boolean; whyText: string; allowAi: boolean; groupWithoutAi: boolean; attachmentsAi: boolean }[] };
 
+/** Turning AI off for everyone asks first; focus goes back to the switch when it closes (HK-3). */
+function ConfirmAiOff({ onOff, onCancel }: { onOff: () => void; onCancel: () => void }) {
+  useReturnFocus();
+  return (
+    <div className="adm-confirm" role="alertdialog" aria-label="Turn AI off for everyone">
+      <p>Turn AI off for everyone? Break down, request sorting and promise reading stop until it's on again.</p>
+      <button type="button" className="mini danger" onClick={onOff}>
+        Turn AI off
+      </button>
+      <button type="button" className="mini quiet" autoFocus onClick={onCancel}>
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 function AdminAi() {
   const [filter, setFilter] = useState<ClientFilterValue>("customers");
   const { data, error, load } = useSection<AiData>("ai", { filter });
@@ -482,17 +499,7 @@ function AdminAi() {
           <input type="checkbox" role="switch" checked={saver.shown(o, "ai.on", data.on)} onChange={(e) => (e.target.checked ? void saver.save(o, "ai.on", true, "AI for FocusTime") : setConfirmOff(true))} /> AI on
         </label>
       </AField>
-      {confirmOff && (
-        <div className="adm-confirm" role="alertdialog" aria-label="Turn AI off for everyone">
-          <p>Turn AI off for everyone? Break down, request sorting and promise reading stop until it's on again.</p>
-          <button type="button" className="mini danger" onClick={() => (setConfirmOff(false), void saver.save(o, "ai.on", false, "AI for FocusTime"))}>
-            Turn AI off
-          </button>
-          <button type="button" className="mini quiet" onClick={() => setConfirmOff(false)}>
-            Cancel
-          </button>
-        </div>
-      )}
+      {confirmOff && <ConfirmAiOff onOff={() => (setConfirmOff(false), void saver.save(o, "ai.on", false, "AI for FocusTime"))} onCancel={() => setConfirmOff(false)} />}
       {saver.warning && <p className="set-problem" role="status">{saver.warning}</p>}
       {!data.keyConfigured && <p className="set-problem">AI isn't set up for this FocusTime: there is no OpenAI key ({data.provider}). The switches save, and AI starts once the key is in Key Vault.</p>}
       <div className="set-grid">
@@ -1011,6 +1018,8 @@ function PersonRow({ p, levels, leadsShown, saver, onOverride, onRemove, others 
 }
 
 function RemovePerson({ p, onClose, onDone }: { p: Person; onClose: () => void; onDone: (message: string) => Promise<void> }) {
+  // HK-3: focus goes back to the person's Remove when this closes.
+  useReturnFocus();
   const [typed, setTyped] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1033,7 +1042,7 @@ function RemovePerson({ p, onClose, onDone }: { p: Person; onClose: () => void; 
       </p>
       <label className="set-field">
         <span className="set-label">Type their name to confirm</span>
-        <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={p.name} aria-label="Type their name to confirm" />
+        <input value={typed} autoFocus onChange={(e) => setTyped(e.target.value)} placeholder={p.name} aria-label="Type their name to confirm" />
       </label>
       {err && <p className="field-problem" role="alert">{err}</p>}
       <button type="button" className="mini danger" disabled={busy || typed.trim().toLowerCase() !== p.name.trim().toLowerCase()} onClick={() => void run()}>
@@ -1055,6 +1064,7 @@ type OrgData = {
   neverSuggest: string[];
   feedback: { org: string; project: string; parentId: number; live: boolean } | null;
   retentionYears: number;
+  idleMinutes: number;
   /** AH-3: Fix next looks at the top N of each backlog. */
   fixTopN?: number;
   newPerson: NewPerson;
@@ -1090,7 +1100,10 @@ function AdminOrganization() {
         <AField label="Keep people's data (years)" kind="Rule" s={saver.status(o, "org.retention_years")} retry={() => void saver.save(o, "org.retention_years", data.retentionYears, "Data retention")} hint="Shown to everyone. Deleting older data automatically comes in a later step.">
           <NumInput label="Keep people's data (years)" value={data.retentionYears} min={1} max={10} onSave={(v) => void saver.save(o, "org.retention_years", v, "Data retention")} />
         </AField>
-        <AField label="Fix next looks at the top N of each backlog" kind="Rule" s={saver.status(o, "ahead.fix_top_n")} retry={() => void saver.save(o, "ahead.fix_top_n", data.fixTopN ?? 30, "Fix next top N")} hint="10 to 100, for epics, features and stories each. Ahead's Fix next also shows what's dated in the next 4 weeks and what each person owns or leads.">
+        <AField label="Counts as in use (minutes)" kind="Rule" s={saver.status(o, "org.idle_minutes")} retry={() => void saver.save(o, "org.idle_minutes", data.idleMinutes, "In use")} hint="5 to 60. An open page counts as someone using FocusTime only this long after their last key, click or scroll. Background work waits otherwise.">
+          <NumInput label="Counts as in use (minutes)" value={data.idleMinutes} min={5} max={60} onSave={(v) => void saver.save(o, "org.idle_minutes", v, "In use")} />
+        </AField>
+        <AField label="Fix next looks at the top N of each backlog" kind="Rule" s={saver.status(o, "ahead.fix_top_n")} retry={() => void saver.save(o, "ahead.fix_top_n", data.fixTopN ?? 30, "Fix next top N")} hint="10 to 100, for epics, features and stories each. Ahead's Fix next also shows what's dated in the next 4 weeks and the features and epics each person owns.">
           <NumInput label="Fix next looks at the top N of each backlog" value={data.fixTopN ?? 30} min={10} max={100} onSave={(v) => void saver.save(o, "ahead.fix_top_n", v, "Fix next top N")} />
         </AField>
       </div>

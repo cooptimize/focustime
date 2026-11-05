@@ -103,6 +103,11 @@ export async function startTestApp(o: {
     db,
     browser,
     setClock: (f: () => Temporal.Instant) => void (clock = f),
-    close: () => new Promise<void>((r) => server.close(() => r())),
+    // HK-3: a page's timers keep keep-alive connections open, and close() waits for every one of them: end them too.
+    close: () =>
+      new Promise<void>((r) => {
+        server.close(() => r());
+        server.closeAllConnections();
+      }),
   };
 }
