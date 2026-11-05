@@ -386,6 +386,11 @@ calls the same allowlisted actions as the buttons. The bot never calls an action
 - **Infra and package.** `infra/modules/bot.bicep` (the Azure Bot and its Teams channel) and the identity in
   `infra/main.bicep`; `infra/scripts/bootstrap.sh` registers `Microsoft.BotService`. `scripts/teams-package.ts` (the
   zip), `scripts/teams-icons.ts` (`assets/teams/`). Setup: `docs/setup/teams-bot.md`.
+- **TB-1b.** `server/teams/endorsements.ts`: before the SDK, the token must be Bot Framework's and its signing key must
+  endorse `msteams` (keys fetched and kept a day). `teams_bot_seen` (`store/migrations/20261109T1100_teams_bot_seen.ts`,
+  `firstSeen` in `store/teams-bot-store.ts`): handled activity ids, hashed, a unique insert, a day, so a retry on any
+  replica is answered once; per-person order stays in memory (one replica). `recordSoftDelete` (Delete my data) removes
+  the three bot tables at once. `public/legal.html` and `legal.css`: the privacy and terms page the manifest links to.
 - **Tests.** `server/teams/sdk.test.ts` (real token checks against a local key server; the connector gets the bot's
   token), `server/teams/bot.test.ts` (both drivers), `server/teams/quick.test.ts` (demo week),
   `scripts/teams-package.test.ts`, the guard's, `config/notify.test.ts`; e2e `e2e/teams-bot.test.ts`.
