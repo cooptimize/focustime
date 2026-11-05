@@ -85,6 +85,14 @@ export function createBotCore(d: BotDeps) {
   const background = d.background ?? ((p) => void p.catch(() => undefined));
   const serviceHost = d.serviceHost ?? TEAMS_SERVICE;
   const seen = new Map<string, number>();
+  /** Each person's turns run one at a time, in the order Teams sent them, so replies come back in order. */
+  const queues = new Map<string, Promise<void>>();
+  const inOrder = (userId: string, job: () => Promise<void>): Promise<void> => {
+    const next = (queues.get(userId) ?? Promise.resolve()).then(job, job);
+    queues.set(userId, next);
+    void next.finally(() => queues.get(userId) === next && queues.delete(userId)).catch(() => undefined);
+    return next;
+  };
 
   /** True the first time an activity id is seen in the last 10 minutes. */
   const firstTime = (id: string | undefined) => {
@@ -274,13 +282,13 @@ export function createBotCore(d: BotDeps) {
         return d.log({ op: "install", kind: a.action === "remove" ? "removed" : "added" }), null;
       }
       background(
-        (async () => {
+        inOrder(g.userId, async () => {
           await store.saveChat({ conversationId: to.conversationId, serviceUrl: to.serviceUrl, tenantId: (a.conversation?.tenantId ?? a.channelData?.tenant?.id ?? "").toLowerCase(), botId: a.recipient?.id || "bot" }).catch(() => d.log({ op: "chat_save", kind: "failed" }));
           await turn(a, to, g.userId).catch(async () => {
             d.log({ op: "turn", kind: "error" });
             await say(to, WENT_WRONG).catch(() => undefined);
           });
-        })(),
+        }),
       );
       return null;
     },

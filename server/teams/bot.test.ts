@@ -127,6 +127,16 @@ await forEachDriver("the Teams bot (TB-1)", (d) => {
     expect((await t.store.chat())?.removedAt).not.toBeNull();
   });
 
+  it("answers one person's messages in the order they were sent, even when the first takes longer", async () => {
+    const t = await setup(d, {
+      assistant: { handle: async (i) => (t.calls.handle.push(i.text), await new Promise((r) => setTimeout(r, i.text === "slow one" ? 150 : 0)), { ...handled(), reply: `about ${i.text}` }) },
+    });
+    await t.core.activity(t.msg("slow one"));
+    await t.core.activity(t.msg("fast one"));
+    await t.settle();
+    expect(t.texts().filter((x) => x?.startsWith("about "))).toEqual(["about slow one", "about fast one"]);
+  });
+
   it("answers the quick commands without the assistant", async () => {
     const t = await setup(d, { assistant: null });
     for (const q of ["What's next?", "today", "help", "Open FocusTime", "move my 2pm"]) await t.core.activity(t.msg(q));
