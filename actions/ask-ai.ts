@@ -84,13 +84,16 @@ export async function extractPromise(d: AskAiDeps, cfg: AppConfig, m: StoredMess
   const zone = userZone(cfg);
   const today = localToday(m.createdAt, zone);
   const weekday = Temporal.PlainDate.from(today).toLocaleString("en-US", { weekday: "long" });
-  const names = (chat?.members ?? []).map((x) => x.displayName).filter((n): n is string => !!n);
+  // CV-3b: never my own name. The AI only knows me as "me", so offered my name it can pick it as whom I promised.
+  const author = (m.authorId ?? d.me ?? "").toLowerCase();
+  const mine = (chat?.members ?? []).filter((x) => !!author && x.userId?.toLowerCase() === author).map((x) => x.displayName).filter((n): n is string => !!n);
+  const names = (chat?.members ?? []).filter((x) => !author || x.userId?.toLowerCase() !== author).map((x) => x.displayName).filter((n): n is string => !!n);
   const r = await ai.run<PromiseAnswer>(
     { name: PROMISE_TASK, client: m.clientKey, instructions: PROMISE_INSTRUCTIONS },
     contextText(c, { today: `${today} (${weekday})`, people_in_chat: names }),
     PROMISE_SCHEMA,
   );
   if (!r.ok) return { draft: promiseWithoutAi(m.text), aiStatus: r.error instanceof AiError ? r.error.kind : "provider" };
-  const draft = promiseFrom(r.value, { messageDay: today, offeredIds: before.map((x) => x.messageId), names });
+  const draft = promiseFrom(r.value, { messageDay: today, offeredIds: before.map((x) => x.messageId), names, authorNames: mine });
   return draft ? { draft, aiStatus: "sorted" } : null;
 }

@@ -292,11 +292,14 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
         const who = participants.find((p) => same(p.id, x.whoId)) ?? null;
         const answered = x.toId && !same(x.toId, x.whoId) ? { id: x.toId, name: null } : await whomAnswered(d, chat, x.messageIds, [...before, ...work], x.whoId);
         const to = answered?.id ?? null;
-        const toName = to ? (participants.find((p) => same(p.id, to))?.name ?? answered?.name ?? nameIn(chat, [...before, ...work], to)) : null;
+        const named = to ? (participants.find((p) => same(p.id, to))?.name ?? answered?.name ?? nameIn(chat, [...before, ...work], to)) : null;
+        // CV-3b: never the committer, even under another id with their name (a guest copy of the same person).
+        const self = !!named && !!who?.name && same(named.trim(), who.name.trim());
+        const toName = self ? null : named;
         const due = dueOf(x.due, x.zone);
         // When it was said (escalation counts from then, not from when it was read).
         const said = x.messageIds.map((mid) => [...before, ...work].find((m) => m.messageId === mid)?.createdAt).filter((t): t is string => !!t).sort()[0];
-        await d.convs.addCommitment({ conversationId: id, chatId: chat.chatId, clientKey: chat.clientKey, whoId: x.whoId, whoName: who?.name ?? "Someone", toId: to, toName, what: x.what, ...due, impliesItem: x.impliesItem || impliesItemByRule(x.messageIds.map((mid) => texts.get(mid) ?? "").join("\n")), messageIds: x.messageIds, reason: null, ...(said ? { createdAt: said } : {}) });
+        await d.convs.addCommitment({ conversationId: id, chatId: chat.chatId, clientKey: chat.clientKey, whoId: x.whoId, whoName: who?.name ?? "Someone", toId: self ? null : to, toName, what: x.what, ...due, impliesItem: x.impliesItem || impliesItemByRule(x.messageIds.map((mid) => texts.get(mid) ?? "").join("\n")), messageIds: x.messageIds, reason: null, ...(said ? { createdAt: said } : {}) });
         // A commitment's messages are kept with it (never expire as chatter).
         for (const mid of x.messageIds) if (!placed.has(mid) && byId.has(mid)) await d.convs.place([{ chatId: chat.chatId, messageId: mid, conversationId: id, role: "work", reason: null, placedBy: "ai", at: byId.get(mid)!.createdAt }]);
         out.commitments++;
@@ -431,7 +434,9 @@ async function promisesByRule(d: PipelineDeps, chat: ClientChat, work: readonly 
     const groupMs = context.filter((x) => groups.get(x.messageId) === g && same(x.senderId, user.id));
     if (await sameCommitment(d, chat.chatId, user.id, groupMs.map((x) => x.messageId))) continue;
     const due = dueOf(dueFromText(groupMs.map((x) => x.text).join("\n"), m.createdAt, settings.zone), settings.zone);
-    const to = await whomAnswered(d, chat, groupMs.map((x) => x.messageId), context, user.id);
+    const found = await whomAnswered(d, chat, groupMs.map((x) => x.messageId), context, user.id);
+    // CV-3b: never the committer by name either.
+    const to = found && !same((found.name ?? nameIn(chat, context, found.id))?.trim(), (m.senderName ?? user.name).trim()) ? found : null;
     await d.convs.addCommitment({
       conversationId: placed.get(m.messageId) ?? null, chatId: chat.chatId, clientKey: chat.clientKey, whoId: user.id, whoName: m.senderName ?? user.name, toId: to?.id ?? null,
       toName: to ? (to.name ?? nameIn(chat, context, to.id)) : null, what: promiseWhatWithoutAi(m.text, phrase), ...due, impliesItem: impliesItemByRule(groupMs.map((x) => x.text).join("\n")),

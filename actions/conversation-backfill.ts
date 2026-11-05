@@ -112,9 +112,12 @@ export async function backfillPromises(o: { plan: PlanStore; teams: TeamsStore; 
         if (best.followUpId !== null || best.itemId !== null) k = await o.convs.updateCommitment(k.id, { ...(best.followUpId !== null ? { followUpId: best.followUpId } : {}), ...(best.itemId !== null ? { itemId: best.itemId, itemUrl: best.itemUrl, itemTitle: best.itemTitle } : {}) });
       }
       // A follow-up made from it gets the right Who (the person I answered, never me).
-      if (best.followUpId !== null && to?.name) {
+      // CV-3b: with no one found, a Who that is me is cleared (never left as me).
+      if (best.followUpId !== null) {
         const f = await o.plan.getFollowUp(best.followUpId);
-        if (f && !f.closedAt && (!f.who || same(f.who, o.meName))) await o.plan.editFollowUp(f.id, { who: to.name });
+        const isMe = !!f && (same(f.who, o.meName) || (f.whoRef?.kind === "cooptimizer" && same(f.whoRef.id, o.me)));
+        if (f && !f.closedAt && to?.name && (!f.who || isMe)) await o.plan.editFollowUp(f.id, { who: to.name, whoRef: null });
+        else if (f && !f.closedAt && isMe) await o.plan.editFollowUp(f.id, { who: null, whoRef: null });
       }
       for (const x of xs) await o.plan.markPromiseMoved(x.p.chatId, x.p.messageId, k.id);
       moved += xs.length;
@@ -134,5 +137,12 @@ async function toOf(teams: TeamsStore, chat: ClientChat, ms: readonly (Awaited<R
     const at = m?.mentions.find((x) => !same(x.id, me));
     if (at?.name) return { id: at.id ?? null, name: at.name };
   }
-  return null;
+  // CV-3b: else the last other person who wrote in the hour before (the asker), as the pipeline does; never me.
+  const first = ms.map((m) => m?.createdAt).filter((t): t is string => !!t).sort()[0];
+  if (!first) return null;
+  const prior = (await teams.messagesBefore(chat.chatId, first, 20).catch(() => []))
+    .filter((x) => x.senderId && !same(x.senderId, me) && Date.parse(x.createdAt) < Date.parse(first) && (Date.parse(first) - Date.parse(x.createdAt)) / 60_000 <= 60)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .at(-1);
+  return prior?.senderId ? { id: prior.senderId, name: prior.senderName ?? chat.members?.find((x) => same(x.userId, prior.senderId))?.displayName ?? "Someone" } : null;
 }

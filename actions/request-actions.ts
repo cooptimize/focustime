@@ -22,6 +22,7 @@ import { localToday } from "../week/dates.ts";
 import { userZone } from "../week/zone.ts";
 import type { CycleResult } from "./request-poll.ts";
 import { mapSeq } from "./seq.ts";
+import { whoNotOwner } from "../plan/follow-who.ts";
 import type { ActionResponse } from "./types.ts";
 
 export type { ContextMessage, PromisesData, PromiseView, RequestChatStatus, RequestsData, RequestView } from "../plan/asks.ts";
@@ -398,7 +399,15 @@ export async function requestAction(ctx: RequestContext, action: RequestAction, 
         if (p.status !== "open") return bad("This promise is already handled", 409);
         const text = (v: unknown, n: string, max: number) => (v === undefined || v === null ? undefined : typeof v === "string" && v.trim().length <= max ? v.trim() : (() => { throw new PlanError(`${n} is text of at most ${max} characters`); })());
         const what = text(o.what, "what", 200) || p.what;
-        const who = text(o.who, "who", 200) ?? p.toWhom;
+        // CV-3b: never me; fall back to whom it was promised, then the person whose message it answers, then no one.
+        const meId = await ctx.me();
+        const sv = await seen(ctx);
+        const chat = sv?.byId.get(p.chatId) ?? null;
+        const users: FocusUser[] = (await ctx.requests?.users?.().catch(() => [])) ?? [];
+        const owner = { id: meId, names: [...users.filter((u) => !!meId && u.id.toLowerCase() === meId.toLowerCase()).map((u) => u.name), ...(chat?.members ?? []).filter((m) => !!meId && m.userId?.toLowerCase() === meId.toLowerCase()).map((m) => m.displayName)] };
+        const answered = p.answers && sv && chat ? await sv.teams.message(p.chatId, p.answers).catch(() => null) : null;
+        const asker = p.toWhom ? { who: p.toWhom, whoRef: null } : answered?.senderName ? { who: answered.senderName, whoRef: null } : null;
+        const who = whoNotOwner({ who: text(o.who, "who", 200) || p.toWhom, whoRef: null }, asker, owner).who;
         const due = o.due === undefined ? p.due : o.due === null || o.due === "" ? null : typeof o.due === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.due) ? o.due : null;
         if (o.due !== undefined && o.due !== null && o.due !== "" && !due) return bad("due is a date like 2026-11-06");
         const f = await plan.addFollowUp({ who: who || null, what, due, clientKey: p.clientKey, channel: "teams" });

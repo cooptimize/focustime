@@ -7,6 +7,7 @@
 // after thanks only suggests "Looks wrapped up. Resolve?". The DevOps draft for a commitment is made when its
 // committer opens it (their own cap); creating and commenting go through the write framework. Chat text goes only to
 // that client's cards, never a log or an error (ids and counts only, and not even ids in logs).
+import { whoNotOwner } from "../plan/follow-who.ts";
 import { groupingRules } from "./conversations-pipeline.ts";
 import { likelyItems } from "../plan/promise-items.ts";
 import { typeChoices } from "./work-item-types.ts";
@@ -770,8 +771,12 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const due = o.due === undefined ? (k.dueDate ?? k.onToday) : o.due === null || o.due === "" ? null : typeof o.due === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.due) ? o.due : null;
         if (o.due !== undefined && o.due !== null && o.due !== "" && !due) return bad("due is a date like 2026-11-06");
         // CV-2: the person from the picker; given no Who, the one the promise was made to. It names its promise (amber past due).
-        const ref = o.who === undefined ? (whoRef ?? toRefOf(k, v.byId.get(k.chatId), await ctx.homeTenant())) : whoRef;
-        const f = await ctx.plan.addFollowUp({ who: who || null, whoRef: who ? ref : null, what, due, clientKey: k.clientKey, channel: "teams", source: { kind: "promise", id: k.id } });
+        const toRef = toRefOf(k, v.byId.get(k.chatId), await ctx.homeTenant());
+        const ref = o.who === undefined ? (whoRef ?? toRef) : whoRef;
+        // CV-3b: never the promise's owner (me): fall back to whom it was made to, then no one.
+        const owner = { id: v.me, names: [k.whoName, v.byId.get(k.chatId)?.members?.find((m) => same(m.userId, v.me))?.displayName] };
+        const kept = whoNotOwner({ who: who || null, whoRef: who ? ref : null }, k.toName ? { who: k.toName, whoRef: toRef } : null, owner);
+        const f = await ctx.plan.addFollowUp({ who: kept.who, whoRef: kept.who ? kept.whoRef : null, what, due, clientKey: k.clientKey, channel: "teams", source: { kind: "promise", id: k.id } });
         await v.convs.updateCommitment(k.id, { state: "followup", followUpId: f.id });
         ctx.log({ source: "plan", op: "promise_resolved", kind: "followup" });
         return { ok: true, data: { ...(await myPromises(ctx, cfg)), followUpId: f.id } };

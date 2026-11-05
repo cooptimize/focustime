@@ -13,7 +13,8 @@ const ADDED = "00000000-0000-4000-8000-0000000000c3";
 describe("isClientLead", () => {
   it("reads the client's leads and overrides; an admin who isn't one is not a lead", async () => {
     const store = createAdminStore(sqliteDb().conn, () => Temporal.Instant.from("2026-11-05T15:00:00Z"));
-    await store.replaceDirectory([], [{ clientKey: "contoso", personId: OWNER, source: "owner" }], []);
+    // CV-3b: a customer account (the rule fails closed: with no account read, an owned account isn't a client).
+    await store.replaceDirectory([], [{ clientKey: "contoso", personId: OWNER, source: "owner" }], [], [anAccount({ clientKey: "contoso" })]);
     await store.setOverride({ personId: ADDED, personName: "Added Lead", kind: "lead_add", clientKey: "contoso", actor: { id: ADMIN, name: "An admin" } });
     const org = createOrgRuntime({ store, bootstrap: { model: "m", appCapUsd: 100, inviteDomains: [], feedback: null }, holdMs: 0 });
     expect(await isClientLead(org, OWNER, "contoso")).toBe(true);

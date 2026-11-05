@@ -237,7 +237,7 @@ export type PromiseDraft = { what: string; due: string | null; toWhom: string | 
  * The answer as a promise, or null when it isn't one. The due date must be a real date from the message's day to 90
  * days after it (else none), the answered message one of the offered ids (else none), the names ones from the chat.
  */
-export function promiseFrom(a: PromiseAnswer, o: { messageDay: string; offeredIds: readonly string[]; names: readonly string[] }): PromiseDraft | null {
+export function promiseFrom(a: PromiseAnswer, o: { messageDay: string; offeredIds: readonly string[]; names: readonly string[]; authorNames?: readonly string[] }): PromiseDraft | null {
   if (!a.is_promise) return null;
   const what = title80(a.what);
   if (!what) return null;
@@ -251,11 +251,14 @@ export function promiseFrom(a: PromiseAnswer, o: { messageDay: string; offeredId
       due = null;
     }
   }
-  const known = o.names.map((n) => n.toLowerCase());
+  // CV-3b: never the author (whoever wrote the promise isn't whom it was made to), even when the name is in the chat.
+  const author = (o.authorNames ?? []).map((n) => n.toLowerCase());
+  const isAuthor = (n: string) => author.some((k) => k === n.toLowerCase() || (k.split(/\s+/)[0] === n.toLowerCase() && !o.names.some((x) => x.toLowerCase() !== k && x.toLowerCase().split(/\s+/)[0] === n.toLowerCase())));
+  const known = o.names.map((n) => n.toLowerCase()).filter((k) => !author.includes(k));
   const who = (a.to_whom ?? "")
     .split(/,|\band\b/)
     .map((n) => n.trim())
-    .filter((n) => n && known.some((k) => k === n.toLowerCase() || k.split(/\s+/)[0] === n.toLowerCase()));
+    .filter((n) => n && !isAuthor(n) && known.some((k) => k === n.toLowerCase() || k.split(/\s+/)[0] === n.toLowerCase()));
   return {
     what,
     due,
