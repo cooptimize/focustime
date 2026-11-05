@@ -418,15 +418,27 @@ export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, 
   // Clients with nothing here but a lead to ask: one quiet line at the foot, not a section each.
   const askOnly = past ? [] : (t.data?.clients ?? []).filter((c) => !clients.includes(c) && c.leads.length);
   const waiting = clients.reduce((n, c) => n + c.incoming.filter((s) => !s.conflict).length, 0);
+  const answer = clients.reduce((n, c) => n + c.incoming.length, 0);
+  // Open by itself only while something waits on me (or a Must I couldn't take); otherwise one line, like From last week.
+  const [open, setOpen] = useState<boolean | null>(null);
+  const shown = open ?? answer > 0;
   if (!clients.length && !askOnly.length) return t.error ? <p className="error-line" role="alert">{t.error}</p> : null;
+  const count = (n: number, one: string, many = `${one}s`) => (n ? [`${n} ${n === 1 ? one : many}`] : []);
+  const sum = (f: (c: CommitClient) => number) => clients.reduce((n, c) => n + f(c), 0);
+  const folded = [...count(sum((c) => c.priorities.length), "priority", "priorities"), ...count(sum((c) => c.sent.length), "sent", "sent"), ...count(sum((c) => c.looks.filter((l) => l.reply).length), "reply", "replies")].join(" · ") || "Ask a lead to look";
   return (
     <section className="carry team-group" aria-label="From your team">
       <header className="carry-head">
         <h2 className="section-label">From your team</h2>
-        {waiting > 0 ? <span className="muted">{waiting} to answer · nothing counts on your week until you accept</span> : <span className="muted">nothing waiting for you</span>}
+        {answer === 0 && (
+          <button type="button" className="link-btn carry-fold" aria-expanded={shown} onClick={() => setOpen(!shown)} title={shown ? "Hide these rows" : "Show priorities, what you sent and Ask to look"}>
+            {folded}
+          </button>
+        )}
+        {waiting > 0 && <span className="muted">{waiting} to answer · nothing counts on your week until you accept</span>}
       </header>
       {t.error && <p className="error-line" role="alert">{t.error}</p>}
-      {clients.map((c) => (
+      {shown && clients.map((c) => (
         <div key={c.clientKey} className="carry-client" style={{ "--c": clientColor(c.clientKey, colors) } as CSSProperties}>
           <h3 className="carry-client-name">
             <span className="swatch" aria-hidden="true" />
@@ -459,7 +471,7 @@ export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, 
           {!past && <AskToLook c={c} weekStart={weekStart} act={act} />}
         </div>
       ))}
-      {askOnly.length > 0 && (
+      {shown && askOnly.length > 0 && (
         <div className="look-others">
           <span className="muted">Ask a lead to look at your week:</span>
           {askOnly.map((c) => (

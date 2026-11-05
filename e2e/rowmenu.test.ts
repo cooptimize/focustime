@@ -88,7 +88,7 @@ describe.skipIf(!CHROMIUM)("row menu headers (D459)", () => {
     const feature = harbor.locator(".pw-row").first();
     const story = feature.locator(".pw-nested > li").first();
     await story.locator(":scope > .pl-title").hover();
-    await expect(feature.locator(":scope > .pl-hover").evaluate((e) => getComputedStyle(e).opacity)).resolves.toBe("0");
+    await expect.poll(() => feature.locator(":scope > .pl-hover").evaluate((e) => getComputedStyle(e).opacity)).toBe("0");
     await expect.poll(() => story.locator(":scope > .pl-hover").evaluate((e) => getComputedStyle(e).opacity)).toBe("1");
     const s = await headerOf(page, story, ":scope > .pl-hover button.more", ":scope > .pl-title");
     expect(s.got).toContain(s.want.slice(0, 24));
