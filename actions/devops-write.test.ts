@@ -1038,3 +1038,50 @@ describe("CV-4: a conversation's images attached to the item it creates", () => 
     expect(s.dv.writes().filter((w) => w.method === "DELETE")).toEqual([]);
   });
 });
+
+describe("AS-1: description_edit (a dictated description, which may rewrite it)", () => {
+  let s: S;
+  beforeEach(async () => {
+    s = setup();
+    await s.enable();
+    s.dv.touch(437, { "System.Description": "<div>Old scope: import only.</div>" });
+  });
+  it("preview shows the whole text before and after; confirm tests /rev, replaces it, reads back and keeps the old text in the audit log", async () => {
+    const p = await s.preview({ kind: "description_edit", itemId: 437, after: "New scope: import and export.\nBoth formats." });
+    expect(p.summary).toBe("Change a DevOps item's description");
+    expect(p.fields).toContainEqual(expect.objectContaining({ label: "Description", before: "Old scope: import only.", after: "New scope: import and export.\nBoth formats." }));
+    expect(p.notes.join(" ")).toContain("The old text is kept in the audit log, and Undo puts it back");
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(true);
+    const [w] = patches(s);
+    expect(w!.body[0]).toMatchObject({ op: "test", path: "/rev" });
+    expect(String(s.dv.items.get(437)!.fields["System.Description"])).toContain("New scope: import and export.");
+    expect(String(s.dv.items.get(437)!.fields["System.Description"])).not.toContain("Old scope");
+    expect(r.entry).toMatchObject({ op: "description", status: "confirmed", before: { Description: "<div>Old scope: import only.</div>" } });
+  });
+  it("undo puts the old text back; undo is refused once the description changed in DevOps since", async () => {
+    const r = await s.write({ kind: "description_edit", itemId: 437, after: "Rewritten." });
+    const u = await s.write({ kind: "undo", writeId: r.entry.id });
+    expect(u.confirmed).toBe(true);
+    expect(String(s.dv.items.get(437)!.fields["System.Description"])).toContain("Old scope: import only.");
+    const r2 = await s.write({ kind: "description_edit", itemId: 437, after: "Second rewrite." });
+    s.dv.touch(437, { "System.Description": "<div>Someone else's text</div>" });
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "undo", writeId: r2.entry.id } })).toMatchObject({ status: 409, code: "changed" });
+  });
+  it("only on items the shared canEdit allows: a teammate's feature (not under my epic) is refused before anything is written", async () => {
+    s.dv.add(602, { "System.WorkItemType": "Feature", "System.Title": "Lee's feature", "System.State": "Active", "System.AssignedTo": { uniqueName: "lee@cooptimize.example" } });
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "description_edit", itemId: 602, after: "Mine now" } })).toMatchObject({ status: 409 });
+    expect(patches(s)).toEqual([]);
+  });
+  it("written only at the revision read: a change in DevOps between preview and confirm writes nothing", async () => {
+    const p = await s.preview({ kind: "description_edit", itemId: 437, after: "Rewritten." });
+    s.dv.touch(437, { "System.Title": "Renamed meanwhile" });
+    const r = await s.confirm(p).catch((e: Error) => e);
+    expect(r instanceof Error ? "refused" : (r as DevOpsResult).confirmed).not.toBe(true);
+    expect(String(s.dv.items.get(437)!.fields["System.Description"])).toContain("Old scope");
+  });
+  it("an empty text or the same text: nothing to write", async () => {
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "description_edit", itemId: 437, after: "  " } })).toMatchObject({ status: 400 });
+    expect(await s.run("devops.preview", { clientKey: COOP, change: { kind: "description_edit", itemId: 437, after: "Old scope: import only." } })).toMatchObject({ nothing: "#437 already has that description" });
+  });
+});
