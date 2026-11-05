@@ -35,6 +35,7 @@ import { NOTICES_CHANGED } from "./Notices.tsx";
 import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import type { FeedbackStatus } from "../actions/feedback-types.ts";
+import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, useAdmin } from "./settings/Admin.tsx";
 
 export const SETTINGS_SECTIONS = [
   ["you", "You"],
@@ -52,6 +53,8 @@ export const SETTINGS_SECTIONS = [
   ["data", "Data"],
   ["setup", "Setup"],
   ["about", "About"],
+  // ADM-1: Admin, shown only to FocusTime admins (the server checks every admin action again).
+  ...ADMIN_UI_SECTIONS,
 ] as const;
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number][0];
 
@@ -145,9 +148,10 @@ export function Settings(props: Props) {
       setError(e instanceof Error ? e.message : "Settings could not load");
     }
   }, []);
+  // Each section reads fresh data, so team values an admin just changed (here or elsewhere) show.
   useEffect(() => {
     void reload();
-  }, [reload]);
+  }, [reload, props.section]);
   useEffect(() => {
     // One scroll for the whole page: a new section starts at its top.
     headRef.current?.closest(".settings")?.scrollTo({ top: 0 });
@@ -161,29 +165,45 @@ export function Settings(props: Props) {
     [props.onSaved], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const title = SETTINGS_SECTIONS.find(([id]) => id === props.section)![1];
+  const inAdmin = isAdminSection(props.section);
+  const title = `${inAdmin ? "Admin › " : ""}${SETTINGS_SECTIONS.find(([id]) => id === props.section)![1]}`;
   const phone = usePhone();
+  const admin = useAdmin();
   return (
     <AutoSaveProvider onNotice={props.onNotice}>
       {(leave) => (
     <main className="settings" aria-label="Settings">
+      <div className="set-side">
       <nav className="set-nav" aria-label="Settings sections">
-        {SETTINGS_SECTIONS.map(([id, label]) => (
+        {SETTINGS_SECTIONS.filter(([id]) => !isAdminSection(id)).map(([id, label]) => (
           <button key={id} type="button" className="set-tab" aria-current={props.section === id ? "page" : undefined} onClick={() => leave(() => props.onSection(id))}>
             {label}
           </button>
         ))}
+
         <button type="button" className="set-tab close" onClick={() => leave(props.onClose)} title="Back (Esc)">
           Back
         </button>
       </nav>
+      {admin && (
+        <nav className="set-admin-nav" aria-label="Admin sections">
+          <span className="set-nav-group">Admin</span>
+          {ADMIN_UI_SECTIONS.map(([id, label]) => (
+            <button key={id} type="button" className="set-tab" aria-current={props.section === id ? "page" : undefined} onClick={() => leave(() => props.onSection(id))}>
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
+      </div>
       <section className="set-body">
         <h2 ref={headRef} tabIndex={-1}>
           {title}
         </h2>
-        {data && props.section !== "about" && props.section !== "setup" && <p className="muted set-path">Changes save as you make them, to {data.configPath}</p>}
+        {inAdmin && <p className="muted set-path">Team settings for everyone in FocusTime. Changes save as you make them and are logged in Admin › Audit.</p>}
+        {data && !inAdmin && props.section !== "about" && props.section !== "setup" && <p className="muted set-path">Changes save as you make them, to {data.configPath}</p>}
         {error && <p className="field-problem">{error}</p>}
-        {data && data.problems.length > 0 && props.section !== "connections" && props.section !== "data" && (
+        {data && !inAdmin && data.problems.length > 0 && props.section !== "connections" && props.section !== "data" && (
           <div className="config-banner" role="alert">
             <strong>{data.fromFile ? "The config file has problems, so only Connections and Data work here until it is fixed by hand." : "Your saved settings have problems, so only Connections and Data work here. Ask your FocusTime admin."}</strong>
             <ul>
@@ -195,7 +215,9 @@ export function Settings(props: Props) {
             </ul>
           </div>
         )}
-        {data && (phone && PHONE_READ_ONLY.has(props.section) ? (
+        {inAdmin ? (
+          <AdminSection id={props.section as Parameters<typeof AdminSection>[0]["id"]} admin={admin} />
+        ) : data && (phone && PHONE_READ_ONLY.has(props.section) ? (
           <PhoneReadOnly>
             <SectionBody {...props} data={data} onSavedData={saved} reload={reload} />
           </PhoneReadOnly>
@@ -212,6 +234,9 @@ export function Settings(props: Props) {
 function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void; reload: () => Promise<void> }) {
   const d = p.data;
   switch (p.section) {
+    default:
+      // ADM-1: the Admin sections render on their own (AdminSection).
+      return null;
     case "setup":
       return <SetupSection {...p} />;
     case "you":
@@ -236,6 +261,7 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
     case "planning":
       return (
         <>
+          <GuidanceForm {...p} />
           <PlanningForm {...p} />
           <TimeboxForm {...p} />
           <CollabForm {...p} />
@@ -554,6 +580,53 @@ function PlanningForm(p: FormProps) {
   );
 }
 
+/**
+ * ADM-1: guidance with a team default by level (Admin › Organization): your own choice over it, and Reset to team
+ * default. Levels change emphasis only: none of these ever blocks anything.
+ */
+function GuidanceForm(p: FormProps) {
+  const org = p.data.org;
+  const mine = p.data.guidance;
+  const a = useAutoSave<{ draftStories: boolean | null; readinessNudges: boolean | null; planShare: number | null }>({
+    section: "guidance",
+    initial: { draftStories: mine.draftStories ?? null, readinessNudges: mine.readinessNudges ?? null, planShare: mine.planShare ?? null },
+    payload: (v) => v,
+    onSaved: p.onSavedData,
+    label: (k) => (k === "draftStories" ? "Draft stories offered" : k === "readinessNudges" ? "Readiness nudges" : "Plan up to"),
+  });
+  if (!org) return null;
+  const team = org.levelGuidance;
+  const level = org.levelName ? `${org.levelName}${org.levelSource === "override" ? " (set by an admin)" : ""}` : "No level from Dataverse yet";
+  const reset = (k: "draftStories" | "readinessNudges" | "planShare") =>
+    a.v[k] !== null && (
+      <button type="button" className="link-btn" onClick={() => a.change(k, null)}>
+        Reset to team default
+      </button>
+    );
+  const onOff = (b: boolean) => (b ? "on" : "off");
+  return (
+    <div className="set-form set-guidance">
+      <h3>Guidance</h3>
+      <div className="set-grid">
+        <ReadOnly label="Your level" value={level} where="From your position in Dataverse. It changes suggestions only, never what you can do." />
+        <AutoField a={a} k="planShare" label="Plan up to (% of free time)" hint={<>Moves Plan the week's amber over line; it never blocks. Team default for your level: {team.planShare}%. {reset("planShare")}</>}>
+          <input type="number" min={50} max={100} step={5} value={a.v.planShare ?? team.planShare} onChange={(e) => a.set("planShare", Number(e.target.value))} {...a.text("planShare")} />
+        </AutoField>
+        <AutoField a={a} k="draftStories" label="Draft stories" hint={<>Team default: {onOff(team.draftStories)}. {reset("draftStories")}</>}>
+          <label className="set-check">
+            <input type="checkbox" checked={a.v.draftStories ?? team.draftStories} onChange={(e) => a.change("draftStories", e.target.checked)} /> Offer Draft stories on features that need stories
+          </label>
+        </AutoField>
+        <AutoField a={a} k="readinessNudges" label="Readiness nudges" hint={<>The ⚑ flags in Plan ahead. Team default: {onOff(team.readinessNudges)}. {reset("readinessNudges")}</>}>
+          <label className="set-check">
+            <input type="checkbox" checked={a.v.readinessNudges ?? team.readinessNudges} onChange={(e) => a.change("readinessNudges", e.target.checked)} /> Show readiness nudges
+          </label>
+        </AutoField>
+      </div>
+    </div>
+  );
+}
+
 /** Step 17: when the Plan ahead rituals come next. Their switches are in Settings > Notifications. */
 function AheadRituals() {
   const today = Temporal.Now.plainDateISO().toString();
@@ -641,7 +714,8 @@ function CollabForm(p: FormProps) {
         <AutoField a={a} k="daysAhead" label="Days to search" hint="Workdays from today, for items not pinned to a day.">
           <input type="number" min={1} max={10} step={1} value={a.v.daysAhead} onChange={(e) => a.set("daysAhead", Number(e.target.value))} {...a.text("daysAhead")} />
         </AutoField>
-        <AutoField a={a} k="exclude" label="People to exclude" hint="Never suggested as helpers or as Who. By name or email.">
+        {p.data.org && <ReadOnly label="Never suggested, for everyone" value={p.data.org.rules.neverSuggest.join(", ") || "Nobody"} where={ADMIN} />}
+        <AutoField a={a} k="exclude" label={p.data.org ? "People I exclude" : "People to exclude"} hint="Never suggested as helpers or as Who. By name or email.">
           <ul className="set-list">
             {a.v.exclude.map((x, i) => (
               <li key={`${x}:${i}`}>
@@ -835,10 +909,12 @@ function RoadmapForm(p: FormProps) {
 const phrases = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
 function AsksForm(p: FormProps) {
   const s = p.data.asks;
+  // ADM-1: the team's lists are a Default an admin sets; a person adds their own on top and never removes the team's.
+  const team = p.data.org?.phrases.team ?? null;
   const a = useAutoSave({
     section: "asks",
     initial: { requestPhrases: s.requestPhrases.join(", "), ackPhrases: s.ackPhrases.join(", "), promisePhrases: (s.promisePhrases ?? []).join(", ") },
-    payload: (v) => ({ pollMinutes: s.pollMinutes, requestPhrases: phrases(v.requestPhrases), ackPhrases: phrases(v.ackPhrases), promisePhrases: phrases(v.promisePhrases) }),
+    payload: (v) => ({ requestPhrases: phrases(v.requestPhrases), ackPhrases: phrases(v.ackPhrases), promisePhrases: phrases(v.promisePhrases) }),
     onSaved: p.onSavedData,
     label: (k) => (k === "requestPhrases" ? "Request phrases" : k === "promisePhrases" ? "Promise phrases" : "Acknowledgements"),
   });
@@ -848,16 +924,23 @@ function AsksForm(p: FormProps) {
         <strong>Requests</strong> <span className="muted">· the phrases · Inbox › Requests</span>
       </summary>
       <p className="muted">
-        Each client chat registered below is read every 5 minutes in working hours, once for everyone who follows the client. A new message from someone outside Cooptimize becomes a request when it mentions a Cooptimizer, has a question mark, uses a request phrase, or has an attachment. One that is only an acknowledgement isn't. The request phrases used are those of the person whose sign-in read the chat. Your own messages with one of your promise phrases become your promises. With Allow AI on for a client (and Use AI), AI sorts these; without it, the rules alone decide.
+        Each client chat registered below is read every {p.data.org?.rules.pollMinutes ?? 5} minutes in working hours, once for everyone who follows the client. A new message from someone outside Cooptimize becomes a request when it mentions a Cooptimizer, has a question mark, uses a request phrase, or has an attachment. One that is only an acknowledgement isn't. The request phrases used are the team's plus those of the person whose sign-in read the chat. Your own messages with one of the promise phrases become your promises. When a FocusTime admin allows AI for a client, AI sorts these; otherwise the rules alone decide.
       </p>
+      {team && (
+        <div className="set-grid">
+          <ReadOnly label="Team request phrases" value={team.request.join(", ") || "None"} where={ADMIN} />
+          <ReadOnly label="Team acknowledgements" value={team.ack.join(", ") || "None"} where={ADMIN} />
+          <ReadOnly label="Team promise phrases" value={team.promise.join(", ") || "None"} where={ADMIN} />
+        </div>
+      )}
       <div className="set-grid">
-        <AutoField a={a} k="requestPhrases" label="Request phrases" hint="Commas between them. Whole words, any case.">
+        <AutoField a={a} k="requestPhrases" label={team ? "My request phrases" : "Request phrases"} hint={team ? "Added on top of the team's. Commas between them." : "Commas between them. Whole words, any case."}>
           <input type="text" value={a.v.requestPhrases} onChange={(e) => a.set("requestPhrases", e.target.value)} {...a.text("requestPhrases")} />
         </AutoField>
-        <AutoField a={a} k="ackPhrases" label="Acknowledgements" hint="A message that is only these (and emoji) is not a request.">
+        <AutoField a={a} k="ackPhrases" label={team ? "My acknowledgements" : "Acknowledgements"} hint="A message that is only these (and emoji) is not a request.">
           <input type="text" value={a.v.ackPhrases} onChange={(e) => a.set("ackPhrases", e.target.value)} {...a.text("ackPhrases")} />
         </AutoField>
-        <AutoField a={a} k="promisePhrases" label="Promise phrases" hint="In your own messages: commas between them. Inbox › Promises.">
+        <AutoField a={a} k="promisePhrases" label={team ? "My promise phrases" : "Promise phrases"} hint="In your own messages: commas between them. Inbox › Promises.">
           <input type="text" value={a.v.promisePhrases} onChange={(e) => a.set("promisePhrases", e.target.value)} {...a.text("promisePhrases")} />
         </AutoField>
       </div>
@@ -1076,73 +1159,35 @@ function ClientCard({ c, d, p }: { c: SettingsClient; d: SettingsData; p: { onSa
     <div className="set-client-wrap" style={{ "--c": c.setting.color ? (c.setting.color.startsWith("#") ? c.setting.color : `var(--client-${c.setting.color})`) : "var(--client-none)" } as CSSProperties}>
       <ClientForm client={c} data={d} onSavedData={p.onSavedData} />
       {c.devops ? <WriteAccess client={c} onDone={p.reload} /> : d.dataverseReached && <p className="muted set-client-note">No DevOps set up for {c.setting.name ?? c.dataverseName ?? c.key} in Dataverse, so there is nothing to write to. Change it in Dataverse.</p>}
-      <DeliveryChatField clientKey={c.key} clientName={c.setting.name ?? c.dataverseName ?? c.key} />
-      <AllowAi c={c} d={d} onSavedData={p.onSavedData} />
+      <DeliveryChatField clientKey={c.key} clientName={c.setting.name ?? c.dataverseName ?? c.key} readOnly />
+      <AllowAi c={c} d={d} />
       {c.devops && <HouseStyleField clientKey={c.key} name={c.setting.name ?? c.dataverseName ?? c.key} />}
     </div>
   );
 }
 
-/** AI-0: Allow AI for one client, off by default; a request about this client runs only with this and Use AI on. */
-function AllowAi({ c, d, onSavedData }: { c: SettingsClient; d: SettingsData; onSavedData: (d: SettingsData) => void }) {
+/** ADM-1: whether AI may be used for this client: an admin's Rule (Admin › AI), shown read-only. */
+function AllowAi({ c, d }: { c: SettingsClient; d: SettingsData }) {
   const name = c.setting.name ?? c.dataverseName ?? c.key;
-  const a = useAutoSave({
-    section: "ai",
-    initial: { on: d.ai.allowedClients.includes(c.key) },
-    payload: (v) => ({ allow: { client: c.key, on: v.on } }),
-    onSaved: onSavedData,
-    label: () => `${name}: Allow AI`,
-  });
+  const allowed = d.aiRules.allowedClients.includes(c.key);
   return (
     <div className="set-form set-allow-ai">
-      <AutoField a={a} k="on" label="Allow AI" hint={d.ai.use ? "Lets AI requests about this client send its data, one client at a time. Off by default." : "Off by default. Also needs Use AI on in Settings › AI."}>
-        <label className="set-check">
-          <input type="checkbox" role="switch" checked={a.v.on} onChange={(e) => a.change("on", e.target.checked)} /> Allow AI for {name}
-        </label>
-      </AutoField>
+      <ReadOnly label="AI for this client" value={!d.aiRules.on ? "Off for FocusTime" : allowed ? `Allowed for ${name}` : `Not allowed for ${name}`} where={ADMIN} />
     </div>
   );
 }
 
-type HouseStyleData = { clientKey: string; text: string; computed: string | null; computedAt: string | null; learned: boolean; edited: string | null; read?: boolean | null };
+type HouseStyleData = { clientKey: string; text: string; computed: string | null; computedAt: string | null; learned: boolean; edited: string | null; team?: string | null; read?: boolean | null };
 
-/** DS-1: the client's house style for Draft stories: learned from its own features each week, or your own words. */
+/** DS-1, ADM-1: the client's house style for Draft stories. The team's (a Rule, Admin › Clients) when set, else learned. */
 function HouseStyleField({ clientKey, name }: { clientKey: string; name: string }) {
   const [h, setH] = useState<HouseStyleData | null>(null);
-  const [draft, setDraft] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   useEffect(() => void call<HouseStyleData>("stories.house_style", { clientKey }).then(setH, () => setH(null)), [clientKey]);
-  const run = async (input: Record<string, unknown>, action = "stories.house_style_save", done = "Saved") => {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const r = await call<HouseStyleData>(action, { clientKey, ...input });
-      setH(r);
-      setDraft(null);
-      setMsg(action === "stories.house_style" && r.read === false ? "DevOps couldn't be read now; the style is unchanged" : done);
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Not saved");
-    } finally {
-      setBusy(false);
-    }
-  };
   if (!h) return null;
-  const value = draft ?? h.text;
+  const where = h.team ? ADMIN : h.learned ? `Learned from ${name}'s own features each week. A FocusTime admin can set the team's in Admin › Clients.` : "The default: too few features with stories to learn from yet.";
   return (
     <div className="set-form set-house-style">
-      <label className="set-field">
-        <span className="set-label">House style for Draft stories</span>
-        <textarea aria-label={`${name}: house style`} rows={3} maxLength={1200} value={value} onChange={(e) => setDraft(e.target.value)} onBlur={() => draft !== null && draft.trim() !== h.text && !busy && void run({ text: draft })} />
-        <span className="set-hint">
-          {h.edited ? "Your words, saved when you leave the box and used until you go back to the learned style." : h.learned ? `Learned from ${name}'s own features${h.computedAt ? `, ${new Date(h.computedAt).toLocaleDateString([], { month: "short", day: "numeric" })}` : ""}; learned again each week.` : "The default: too few features with stories to learn from yet."} Sent with every Draft stories request for {name}.
-        </span>
-      </label>
-      <div className="set-row-actions">
-        {h.edited && <button type="button" className="mini" disabled={busy} onClick={() => void run({ text: null }, undefined, "Back to the learned style")}>Use the learned style</button>}
-        <button type="button" className="mini" disabled={busy} onClick={() => void run({ recompute: true }, "stories.house_style", "Learned again")}>Learn again now</button>
-        {msg && <span className="set-hint" role="status">{msg}</span>}
-      </div>
+      <ReadOnly label="House style for Draft stories" value={<span className="set-pre">{h.text}</span>} where={where} />
     </div>
   );
 }
@@ -1154,16 +1199,17 @@ function AiForm(p: FormProps) {
   const s = p.data.ai;
   const a = useAutoSave({
     section: "ai",
-    initial: { use: s.use, monthlyCapUsd: s.monthlyCapUsd, draftMonths: s.draftMonths ?? 12 },
+    initial: { draftMonths: s.draftMonths ?? 12 },
     payload: (v) => v,
     onSaved: p.onSavedData,
-    label: (k) => (k === "use" ? "Use AI" : k === "draftMonths" ? "Draft stories looks back" : "Monthly limit"),
+    label: () => "Draft stories looks back",
   });
   const [st, setSt] = useState<AiView | null>(null);
   const [testing, setTesting] = useState(false);
   const [test, setTest] = useState<AiTestResult | null>(null);
   const load = useCallback(() => call<AiView | null>("ai.status", {}).then(setSt, () => setSt(null)), []);
-  useEffect(() => void load(), [load, p.data.ai.use, p.data.ai.monthlyCapUsd]);
+  const rules = p.data.aiRules;
+  useEffect(() => void load(), [load, rules.on, rules.personCapUsd]);
   const nameOf = (k: string | null) => (k ? (p.data.clients.find((c) => c.key === k)?.setting.name ?? k) : "None");
   const runTest = async () => {
     setTesting(true);
@@ -1180,11 +1226,15 @@ function AiForm(p: FormProps) {
   const notSetUp = st !== null && !st.setUp;
   return (
     <div className="set-form set-ai">
-      <AutoField a={a} k="use" label="Use AI" hint="Off by default. Each client also needs Allow AI on, in Settings › Clients.">
-        <label className="set-check">
-          <input type="checkbox" role="switch" checked={a.v.use} onChange={(e) => a.change("use", e.target.checked)} /> Use AI
-        </label>
-      </AutoField>
+      <div className="set-grid">
+        <ReadOnly label="AI for FocusTime" value={rules.on ? "On" : "Off"} where={ADMIN} />
+        <ReadOnly
+          label="Allowed for"
+          value={rules.allowedClients.length ? rules.allowedClients.map((k) => nameOf(k)).join(", ") : "No clients yet"}
+          where={ADMIN}
+        />
+        <ReadOnly label="Your monthly limit" value={rules.personCapUsd === 0 ? "AI budget is set to $0" : `$${rules.personCapUsd}`} where={ADMIN} />
+      </div>
       {(st === null || notSetUp) && (
         <p className="set-problem" role="status">
           AI isn't set up for this FocusTime yet{st?.provider === "off" ? ": it's turned off" : ""}. Everything else works without it.
@@ -1193,13 +1243,10 @@ function AiForm(p: FormProps) {
       <div className="set-ai-month">
         <span className="set-ai-label">This month</span>
         <strong>
-          {st ? st.spentText : "$0"} of {st ? st.capText : `$${s.monthlyCapUsd}`}
+          {st ? st.spentText : "$0"} of {st ? st.capText : `$${rules.personCapUsd}`}
         </strong>
-        {st?.appReached && <span className="field-problem">FocusTime's AI budget for everyone is used up until next month.</span>}
+        {st?.zeroBudget ? <span className="field-problem">AI budget is set to $0</span> : st?.appReached && <span className="field-problem">FocusTime's AI budget for everyone is used up until next month.</span>}
       </div>
-      <AutoField a={a} k="monthlyCapUsd" label="Monthly limit (US dollars)" hint="AI stops for you when you reach it, until next month. 0 to 1000.">
-        <input type="number" min={0} max={1000} step={1} value={a.v.monthlyCapUsd} onChange={(e) => a.set("monthlyCapUsd", Number(e.target.value))} {...a.text("monthlyCapUsd")} />
-      </AutoField>
       <AutoField a={a} k="draftMonths" label="Draft stories looks back (months)" hint="Examples come from the same client's features changed in this many months, 1 to 36.">
         <input type="number" min={1} max={36} step={1} value={a.v.draftMonths} onChange={(e) => a.set("draftMonths", Number(e.target.value))} {...a.text("draftMonths")} />
       </AutoField>
@@ -1213,7 +1260,7 @@ function AiForm(p: FormProps) {
       <details className="set-ai-sent">
         <summary>What is sent</summary>
         <p className="muted">
-          Only what a task needs, about one client at a time, and only for clients with Allow AI on. Before anything goes, FocusTime checks it: another client's name, project or work item, anything that looks like a key, token or password, your VM, or an email address from outside Cooptimize stops the request. The AI service is asked not to keep requests, and FocusTime's log keeps only the counts and the cost below, never the text.
+          Only what a task needs, about one client at a time, and only for clients a FocusTime admin allowed. Before anything goes, FocusTime checks it: another client's name, project or work item, anything that looks like a key, token or password, your VM, or an email address from outside Cooptimize stops the request. The AI service is asked not to keep requests, and FocusTime's log keeps only the counts and the cost below, never the text.
         </p>
       </details>
       <h3 className="set-ai-h">Last 20 requests</h3>
@@ -1255,12 +1302,16 @@ function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; 
   const reached = data.dataverseReached;
   const a = useAutoSave({
     section: "client",
-    initial: { name: c.setting.name ?? "", color: c.setting.color ?? "", open: c.setting.openStates.join(", "), keep: c.setting.follow },
-    payload: (v) => ({ key: c.key, name: v.name, color: v.color, openStates: v.open.split(",").map((x) => x.trim()).filter(Boolean), follow: v.keep }),
+    initial: { name: c.setting.name ?? "", color: c.setting.color ?? "", keep: c.setting.follow },
+    payload: (v) => ({ key: c.key, name: v.name, color: v.color, follow: v.keep }),
     onSaved: onSavedData,
-    label: (k) => `${c.setting.name ?? c.key}: ${k === "name" ? "Shown as" : k === "color" ? "Color" : k === "open" ? "States treated as open" : "Keep following"}`,
+    label: (k) => `${c.setting.name ?? c.key}: ${k === "name" ? "Shown as" : k === "color" ? "Color" : "Keep following"}`,
   });
-  const color = a.v.color;
+  // ADM-1: the team color (a Default set by an admin) unless you pick your own; Reset to team color clears yours.
+  const team = c.teamColor ?? "";
+  const color = a.v.color || team;
+  const own = !!a.v.color && a.v.color !== team;
+  const openStates = data.org?.clients[c.key]?.openStates ?? c.setting.openStates;
   return (
     <div className="set-form set-client" style={{ "--c": color ? (color.startsWith("#") ? color : `var(--client-${color})`) : "var(--client-none)" } as CSSProperties}>
       <h3>
@@ -1281,6 +1332,22 @@ function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; 
             </label>
           ))}
           {color.startsWith("#") && <span className="set-hint">Custom color {color} (pick a palette color to use theme-aware colors)</span>}
+          <span className="set-hint set-team-color">
+            {own ? (
+              <>
+                Your own color.{team ? " " : ""}
+                {team && (
+                  <button type="button" className="link-btn" onClick={() => a.change("color", "")}>
+                    Reset to team color
+                  </button>
+                )}
+              </>
+            ) : team ? (
+              "The team color, set by your FocusTime admin. Pick another to use your own."
+            ) : (
+              "No team color yet."
+            )}
+          </span>
           <SaveMark s={a.status("color")} retry={() => a.commit("color")} />
         </fieldset>
         <AutoField a={a} k="keep" label="Followed" hint={followText(c.follow, data.planning.followGraceDays)}>
@@ -1288,9 +1355,7 @@ function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; 
             <input type="checkbox" checked={a.v.keep} onChange={(e) => a.change("keep", e.target.checked)} disabled={c.follow?.why === "internal" || c.follow?.why === "standing"} /> Keep following
           </label>
         </AutoField>
-        <AutoField a={a} k="open" label="States treated as open" hint="Done states this client still works in, like Resolved.">
-          <input value={a.v.open} placeholder="none" onChange={(e) => a.set("open", e.target.value)} {...a.text("open")} />
-        </AutoField>
+        <ReadOnly label="States treated as open" value={openStates.join(", ") || "None"} where={ADMIN} />
       </div>
     </div>
   );

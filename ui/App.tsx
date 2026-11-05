@@ -67,6 +67,7 @@ import { FeedbackDialog } from "./Feedback.tsx";
 import { DraftStoriesHost } from "./DraftStoriesSheet.tsx";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
+import { useAdmin } from "./settings/Admin.tsx";
 import { clientColor, SampleSources, weekLabel } from "./labels.ts";
 import { useLayout, usePhone } from "./viewport.ts";
 import { BottomBar, InstallHowTo, PhoneReadOnly, type BottomTab } from "./Phone.tsx";
@@ -168,6 +169,8 @@ export function App() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   /** U3: where the detail panel opened (the features list, a follow-up or a pick), or the block itself. */
   const [panelFocus, setPanelFocus] = useState<PanelFocus | null>(null);
+  // ADM-1: whether the signed-in person is a FocusTime admin (Admin in ⋯ and the Settings sidebar).
+  const isAdmin = useAdmin();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
   /**
@@ -1260,6 +1263,7 @@ export function App() {
       addWork,
       planFeature: (date: IsoDate, half: Half, itemId: number) => addWork(date, half, itemId),
       demo: data.demo,
+      admin: isAdmin === true,
       asksOpen,
       setDemo: (on: boolean) => void switchDemo(on),
       exportPlan: () =>
@@ -1781,6 +1785,7 @@ export function App() {
               { id: "roadmap", label: "Roadmap", run: () => openTab("roadmap") },
               ...(data.timer ? [{ id: "focus", label: "Focus screen", run: () => setView("focus") }] : [{ id: "focus", label: "Start focus", run: () => setTimerMenuAt(phoneMoreAt) }]),
               { id: "settings", label: "Settings", run: () => setSettingsAt("you") },
+              ...(isAdmin ? [{ id: "admin", label: "Admin", run: () => setSettingsAt("admin-clients") }] : []),
               { id: "guide", label: "Guide", run: () => openGuide() },
               ...installItem,
               { id: "about", label: "About", run: () => setAboutOpen(true) },
@@ -1805,6 +1810,8 @@ export function App() {
               { id: "guide", label: "Guide", hint: "?", run: () => openGuide() },
               { id: "keys", label: "Keyboard shortcuts", run: () => setKeysOpen(true) },
               { id: "feedback", label: "Send feedback", run: () => setFeedbackOpen(true) },
+              // ADM-1: only for FocusTime admins (the server checks every admin action again).
+              ...(isAdmin ? [{ id: "admin", label: "Admin", run: () => setSettingsAt("admin-clients") }] : []),
               ...installItem,
               { id: "about", label: "About", run: () => setAboutOpen(true) },
             ],
