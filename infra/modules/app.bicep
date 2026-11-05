@@ -24,6 +24,9 @@ param registryName string
 param registryLoginServer string
 @description('A5: resource id of the user-assigned identity that pulls from a shared registry; empty: the system identity (own registry).')
 param pullIdentityId string = ''
+@description('TB-1: the bot\'s user-assigned identity (resource id) and its client id, the bot\'s Microsoft App ID.')
+param botIdentityId string
+param botAppId string
 param vaultName string
 @description('The vault URI (a parameter so the secret references can be computed at the start).')
 param vaultUri string
@@ -114,6 +117,8 @@ var settings = [
   { name: 'FOCUSTIME_FEEDBACK_LIVE', value: feedbackLive ? 'true' : 'false' }
   // CV-1: shared polling of registered client chats (docs/azure/runbook.md, "Conversations").
   { name: 'FOCUSTIME_REQUESTS_POLL', value: requestsPoll }
+  // TB-1: the bot's Microsoft App ID (the bot identity's client id); replies are sent with that identity's token.
+  { name: 'FOCUSTIME_BOT_APP_ID', value: botAppId }
 ]
 var image = empty(imageDigest) ? '${registryLoginServer}/focustime:${imageTag}' : '${registryLoginServer}/focustime@${imageDigest}'
 
@@ -126,7 +131,10 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
   name: appName
   location: location
   tags: tags
-  identity: ownRegistry ? { type: 'SystemAssigned' } : { type: 'SystemAssigned,UserAssigned', userAssignedIdentities: { '${pullIdentityId}': {} } }
+  identity: {
+    type: 'SystemAssigned,UserAssigned'
+    userAssignedIdentities: ownRegistry ? { '${botIdentityId}': {} } : { '${pullIdentityId}': {}, '${botIdentityId}': {} }
+  }
   properties: {
     environmentId: environment.id
     workloadProfileName: 'Consumption'

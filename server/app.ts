@@ -14,7 +14,7 @@ import type { ServedImage } from "../actions/chat-images.ts";
 import type { Logger } from "../log/logger.ts";
 import type { AccountStore, Session } from "../store/accounts.ts";
 import { DEMO_SESSION_MS, SESSION_MAX_MS } from "../store/accounts.ts";
-import { checkRequest, REOPEN_PATH } from "./guard.ts";
+import { checkRequest, REOPEN_PATH, TEAMS_BOT_PATH } from "./guard.ts";
 import { AUTH_COOKIE, authCookie, clearAuthCookie, clearSessionCookies, CSRF_HEADER, readCookie, SESSION_COOKIE, sessionCookies } from "./auth/cookies.ts";
 import { CONSENTS, SignInError, type Consent, type SignedIn, type SignInTokens } from "./auth/entra.ts";
 
@@ -73,6 +73,8 @@ export type AppOptions = {
    * reach this.
    */
   onUse?: (s: Session) => number | null;
+  /** TB-1: the Teams bot's endpoint (server/teams/sdk.ts); absent where the bot isn't set up (it answers 404). */
+  teams?: ((req: IncomingMessage, res: ServerResponse) => Promise<void>) | null;
 };
 
 /** HK-3: the header a page call carries: "active" only for real use (ui/activity.ts). */
@@ -93,6 +95,7 @@ export type RequestRecord = { method: string; route: string; status: number; dur
 /** A request's route as a fixed name (telemetry never sees the path itself). */
 export function routeClass(path: string): string {
   if (path === "/api/action") return "/api/action";
+  if (path === TEAMS_BOT_PATH) return TEAMS_BOT_PATH;
   if (path.startsWith("/api/")) return path.replace(/[^a-z/-]/gi, "").slice(0, 40);
   if (path.startsWith("/auth/")) return path.split("/").slice(0, 4).join("/").replace(/[^a-z/-]/gi, "");
   if (path.startsWith("/assets/")) return "/assets";
@@ -208,6 +211,12 @@ export function createApp(opts: AppOptions) {
       return res.end("Forbidden");
     }
     if (g.action === "redirect") return redirect(res, g.location);
+
+    // TB-1: the Teams bot. Its token is checked by the Teams SDK; no session or cookie plays any part.
+    if (url.pathname === TEAMS_BOT_PATH) {
+      if (!opts.teams) return json(res, 404, { error: "Not set up" });
+      return opts.teams(req, res);
+    }
 
     const cookieHeader = header("cookie");
     const session = () => opts.accounts.sessions.resolve(readCookie(cookieHeader, SESSION_COOKIE));

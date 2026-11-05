@@ -178,7 +178,7 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
     }
     case "notify": {
       // Step 15.5: Settings > Notifications. Written as given; parseConfig checks each value.
-      only(v, ["kinds", "quiet", "quietPto", "pushDetails", "asksThroughFocus"], "notify");
+      only(v, ["kinds", "quiet", "quietPto", "pushDetails", "asksThroughFocus", "teamsMessages"], "notify");
       const values: [string, TomlValue][] = [];
       if (v.kinds !== undefined) {
         const k = obj(v.kinds, "notify");
@@ -197,6 +197,10 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       if (v.pushDetails !== undefined) {
         if (typeof v.pushDetails !== "boolean") throw new SettingsInputError("notify.push_details", "Must be true or false");
         values.push(["push_details", v.pushDetails]);
+      }
+      if (v.teamsMessages !== undefined) {
+        if (typeof v.teamsMessages !== "boolean") throw new SettingsInputError("notify.teams_messages", "Must be true or false");
+        values.push(["teams_messages", v.teamsMessages]);
       }
       if (v.asksThroughFocus !== undefined) {
         if (typeof v.asksThroughFocus !== "boolean") throw new SettingsInputError("notify.asks_through_focus", "Must be true or false");

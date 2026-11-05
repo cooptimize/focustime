@@ -22,6 +22,14 @@ describe("[notify]", () => {
     expect(text).toContain("[notify]");
   });
 
+  it("TB-1: Let FocusTime message me in Teams is off unless the person turns it on", () => {
+    const p = parseConfig(TOML);
+    expect(p.ok && p.config.notify.teamsMessages).toBe(false);
+    const q = parseConfig(settingsEdit("notify", { teamsMessages: true })(TOML));
+    expect(q.ok && q.config.notify.teamsMessages).toBe(true);
+    expect(() => settingsEdit("notify", { teamsMessages: "yes" })).toThrow();
+  });
+
   it("refuses unknown kinds and bad values, per field", () => {
     expect(() => settingsEdit("notify", { kinds: { pager: true } })).toThrow();
     const bad = parseConfig(TOML + '\n[notify]\nquiet = "sometimes"\ncheckin = "yes"\n');

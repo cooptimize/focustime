@@ -7,6 +7,15 @@ const check = (over: Partial<RequestFacts>) => checkRequest({ ...base, ...over }
 const api = { method: "POST", path: "/api/action", origin: "http://localhost:5317", secFetchSite: "same-origin" };
 
 describe("request guard", () => {
+  it("TB-1: lets Teams POST to the bot endpoint on the public host only, with no Origin; nothing else there", () => {
+    expect(check({ method: "POST", path: "/teams/messages" })).toEqual({ action: "allow" });
+    expect(check({ method: "GET", path: "/teams/messages" })).toMatchObject({ action: "deny", status: 403 });
+    expect(check({ method: "POST", path: "/teams/messages", origin: "http://localhost:5317" })).toMatchObject({ action: "deny", status: 403 });
+    expect(check({ method: "POST", path: "/teams/messages", origin: "https://evil.example" })).toMatchObject({ action: "deny", status: 403 });
+    expect(check({ method: "POST", path: "/teams/messages", host: "evil.example:5317" })).toMatchObject({ action: "deny", status: 403 });
+    expect(check({ method: "POST", path: "/teams/messages/x" })).toMatchObject({ action: "deny", status: 403 });
+  });
+
   it("allows a page load on the public host", () => {
     expect(check({})).toEqual({ action: "allow" });
     expect(check({ path: "/assets/app.js" })).toEqual({ action: "allow" });

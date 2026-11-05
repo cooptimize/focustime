@@ -16,6 +16,11 @@ export type RequestFacts = {
 export type GuardResult = { action: "allow" } | { action: "deny"; status: 403; reason: string } | { action: "redirect"; location: string };
 
 export const REOPEN_PATH = "/api/reopen";
+/**
+ * TB-1: the Teams bot's messaging endpoint. Teams' service calls it (no Origin, no cookies); its own signed token is
+ * the check (server/teams/sdk.ts), so here it is POST only, on FocusTime's public host like everything else.
+ */
+export const TEAMS_BOT_PATH = "/teams/messages";
 
 /** The developer loop's other loopback name for the same port (redirected to the public URL). */
 function loopbackAlias(publicUrl: URL): string | null {
@@ -31,6 +36,7 @@ export function checkRequest(req: RequestFacts, opts: { publicUrl: string }): Gu
     if (isGet && host === loopbackAlias(pub) && !req.path.startsWith("/api/")) return { action: "redirect", location: `${pub.origin}${req.path}${req.search}` };
     return { action: "deny", status: 403, reason: "Host not allowed" };
   }
+  if (req.path === TEAMS_BOT_PATH) return req.method === "POST" && req.origin === undefined ? { action: "allow" } : { action: "deny", status: 403, reason: "Not a Teams call" };
   if (req.origin !== undefined && req.origin !== pub.origin) return { action: "deny", status: 403, reason: "Origin not allowed" };
   const site = req.secFetchSite;
   if (req.path.startsWith("/api/") || (req.path.startsWith("/auth/") && !isGet)) {
