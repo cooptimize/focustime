@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { LogRecord } from "../../log/logger.ts";
 import { CLIENT_TENANT, HOME_TENANT } from "../../test/builders/index.ts";
 import { HttpError } from "../calendar/http.ts";
-import { chatOf, createChatsClient, memberOf, messageOf, retryAfterOf } from "./chats.ts";
+import { chatOf, createChatsClient, memberOf, messageOf, reactionsOf, retryAfterOf } from "./chats.ts";
 
 const member = (o: Record<string, unknown> = {}) => ({ "@odata.type": "#microsoft.graph.aadUserConversationMember", id: "m1", roles: [], displayName: "Dana Client", userId: "00000000-0000-4000-8000-000000000001", email: "dana@fabrikam.example", tenantId: CLIENT_TENANT, visibleHistoryStartDateTime: "0001-01-01T00:00:00Z", ...o });
 
@@ -51,10 +51,11 @@ const gmsg = (o: Record<string, unknown> = {}) => ({
 });
 
 describe("Graph chat messages (AP-1)", () => {
-  it("keeps only the shared store's fields (D514): the sender's name and the raw body, no reactions, subjects or URLs", () => {
+  it("keeps only the shared store's fields (D514): the sender's name and the raw body, reactions as counts only (CV-2), no subjects or URLs", () => {
     const m = messageOf(gmsg({ mentions: [{ id: 0, mentionText: "Ana", mentioned: { user: { id: "00000000-0000-4000-8000-0000000000a1", displayName: "Ana Registrar" } } }] }), CHAT, "fabrikam")!;
-    expect(Object.keys(m).sort()).toEqual(["authorId", "authorName", "authorTenant", "chatId", "clientKey", "createdAt", "hasFile", "hasImage", "html", "mentionedUserIds", "mentions", "messageId", "modifiedAt", "replyToId", "text"]);
+    expect(Object.keys(m).sort()).toEqual(["authorId", "authorName", "authorTenant", "chatId", "clientKey", "createdAt", "hasFile", "hasImage", "html", "mentionedUserIds", "mentions", "messageId", "modifiedAt", "reactions", "replyToId", "text"]);
     expect(m.text).toBe("Can you check the totals?\nThanks & regards");
+    expect(m.reactions).toEqual([{ emoji: "👍", count: 1 }]);
     expect(m).toMatchObject({ authorName: "Dana Client", html: "<p>Can you <b>check</b> the totals?</p><p>Thanks &amp; regards</p>", mentions: [{ id: "00000000-0000-4000-8000-0000000000a1", name: "Ana Registrar" }] });
     expect(JSON.stringify(m)).not.toContain("Someone");
     expect(JSON.stringify(m)).not.toContain("like");
@@ -75,6 +76,17 @@ describe("Graph chat messages (AP-1)", () => {
     ["a quoted reply", { attachments: [{ contentType: "messageReference" }] }, false, false],
   ])("%s", (_why, o, image, file) => {
     expect(messageOf(gmsg(o), CHAT, "fabrikam")).toMatchObject({ hasImage: image, hasFile: file });
+  });
+
+  it("CV-2: counts reactions per emoji, never who gave them; custom ones are left out", () => {
+    const user = (n: string) => ({ user: { id: `id-${n}`, displayName: `Person ${n}` } });
+    const r = reactionsOf([
+      { reactionType: "like", user: user("a") }, { reactionType: "Like", user: user("b") }, { reactionType: "😂", user: user("c") }, { reactionType: "heart", user: user("d") },
+      { reactionType: "custom", reactionContentUrl: "https://graph.microsoft.com/x", user: user("e") }, { reactionType: "somethingNew", user: user("f") }, { nope: 1 },
+    ]);
+    expect(r).toEqual([{ emoji: "👍", count: 2 }, { emoji: "😂", count: 1 }, { emoji: "❤️", count: 1 }]);
+    expect(JSON.stringify(r)).not.toMatch(/Person|id-|graph/);
+    expect(reactionsOf(undefined)).toEqual([]);
   });
 
   it("reads the mentioned user ids", () => {

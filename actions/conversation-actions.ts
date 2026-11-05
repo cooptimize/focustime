@@ -339,6 +339,37 @@ async function draftFor(ctx: ConversationContext, v: Seen, cfg: AppConfig, c: Co
   return { draft: final, notSorted };
 }
 
+/** CV-2: Show messages loads this many at a time (the latest first). */
+export const MESSAGE_PAGE = 20;
+
+/**
+ * CV-2: one message as Show messages renders it, like Teams: who (a short alias per list for grouping, the email only
+ * for a Cooptimizer's photo), mine on the other side, the sanitized body, the quoted message (its author and first
+ * line, from the store by replyToId whatever its age, else "Quoted an earlier message"), and the reactions as counts.
+ */
+async function messageView(m: import("../plan/requests.ts").TeamsMessage, x: { chat: ClientChat; home: string | null; me: string; teams: TeamsView; aliases: Map<string, string> }): Promise<ConversationMessage> {
+  const b = batchOf(m, x.chat, x.home);
+  const mine = same(m.senderId, x.me);
+  const key = (m.senderId ?? "?").toLowerCase();
+  if (!x.aliases.has(key)) x.aliases.set(key, `p${x.aliases.size + 1}`);
+  const member = x.chat.members?.find((y) => same(y.userId, m.senderId));
+  const byAt: { name: string | null }[] = [];
+  m.mentions.forEach((y, i) => (byAt[y.at ?? i] = { name: y.name }));
+  let quote: ConversationMessage["quote"] = null;
+  if (m.replyToId) {
+    const q = await x.teams.message(m.chatId, m.replyToId);
+    if (q) {
+      const qb = batchOf(q, x.chat, x.home);
+      quote = { author: same(q.senderId, x.me) ? "You" : (qb.senderName ?? (qb.external ? "Someone outside Cooptimize" : "Someone at Cooptimize")), text: oneLine(q.text.split("\n").find((l) => l.trim()) ?? (q.hasImage ? "Image" : ""), 140) };
+    } else quote = { author: null, text: null };
+  }
+  return {
+    messageId: m.messageId, author: mine ? "You" : (b.senderName ?? (b.external ? "Someone outside Cooptimize" : "Someone at Cooptimize")), authorKey: x.aliases.get(key)!, name: b.senderName ?? "Someone",
+    email: !b.external && member?.email ? member.email.toLowerCase() : null, external: x.home ? b.external : false, mine, at: m.createdAt,
+    html: sanitizeMessageHtml(m.html ?? m.text, { contentType: m.html ? "html" : "text", mentions: byAt }), text: m.text, quote, reactions: m.reactions ?? [],
+  };
+}
+
 /** CV-2: the merged conversation's title and summary: AI (my own cap, that client only), else the two joined. */
 async function mergeSummary(ctx: ConversationContext, v: Seen, cfg: AppConfig, into: Conversation, from: Conversation): Promise<{ title: string; summary: string }> {
   const ai = ctx.ai ? await ctx.ai().catch(() => null) : null;
@@ -437,22 +468,25 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         if (v?.chats.length && ctx.requests) await ctx.requests.refresh(v.chats.map((c) => c.chatId));
         return respond();
       case "conversations.messages": {
-        const o = only(input, ["id"]);
+        // CV-2: as Teams shows them, the latest MESSAGE_PAGE first and "Show earlier" for the page before `before`.
+        const o = only(input, ["id"], ["before"]);
         const c = o && (await conv(o.id));
-        if (!c || !v) return bad("No such conversation", 404);
+        if (!o || !c || !v) return bad("No such conversation", 404);
+        if (o.before !== undefined && (typeof o.before !== "string" || !MESSAGE_ID.test(o.before))) return bad("before is a message id");
         const chat = v.byId.get(c.chatId)!;
         const home = await ctx.homeTenant();
+        const places = (await v.convs.placesIn([c.id])).filter((x) => x.role === "work");
+        const end = typeof o.before === "string" ? places.findIndex((p) => p.messageId === o.before) : places.length;
+        const page = places.slice(Math.max(0, (end < 0 ? places.length : end) - MESSAGE_PAGE), end < 0 ? places.length : end);
         const out: ConversationMessage[] = [];
-        for (const p of (await v.convs.placesIn([c.id])).filter((x) => x.role === "work")) {
+        const aliases = new Map<string, string>();
+        for (const p of page) {
           const m = await v.teams.message(p.chatId, p.messageId);
           if (!m) continue;
-          const b = batchOf(m, chat, home);
-          const byAt: { name: string | null }[] = [];
-          m.mentions.forEach((x, i) => (byAt[x.at ?? i] = { name: x.name }));
-          out.push({ messageId: m.messageId, author: same(m.senderId, v.me) ? "You" : (b.senderName ?? (b.external ? "Someone outside Cooptimize" : "Someone at Cooptimize")), external: home ? b.external : false, mine: same(m.senderId, v.me), at: m.createdAt, html: sanitizeMessageHtml(m.html ?? m.text, { contentType: m.html ? "html" : "text", mentions: byAt }), text: m.text });
+          out.push(await messageView(m, { chat, home, me: v.me, teams: v.teams, aliases }));
         }
-        if (ctx.plan) await ctx.plan.seeConversation(c.id, c.version);
-        return { ok: true, data: { messages: out, chatLink: teamsLink(chat) } };
+        if (ctx.plan && o.before === undefined) await ctx.plan.seeConversation(c.id, c.version);
+        return { ok: true, data: { messages: out, chatLink: teamsLink(chat), earlier: page.length ? (places.indexOf(page[0]!) > 0 ? page[0]!.messageId : null) : null, total: places.length } };
       }
       case "conversations.seen": {
         const o = only(input, ["id"]);

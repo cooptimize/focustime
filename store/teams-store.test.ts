@@ -177,7 +177,8 @@ await forEachDriver("the shared Teams store", ({ open }) => {
 });
 
 // The migration: per-user rows from before shared polling, for two people on one chat.
-const BEFORE = NAMED_MIGRATIONS.filter((m) => m.name !== "20261104T2100_shared_requests");
+// Everything before the shared store (a later one may change its tables, as CV-2 adds teams_messages.reactions_json).
+const BEFORE = NAMED_MIGRATIONS.filter((m) => m.name < "20261104T2100_shared_requests");
 async function seedPerUser(run: (sql: string, params: unknown[]) => Promise<unknown>) {
   for (const [who, created] of [[ANA, "2026-11-02T10:00:00Z"], [BEN, "2026-11-03T10:00:00Z"]] as const) {
     // Ana registered it first but never had its members cached; Ben's row has them.

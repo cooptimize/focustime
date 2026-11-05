@@ -82,7 +82,7 @@ const waitNote = (e: unknown) =>
 const toShared = (m: GraphMessage, fetchedAt: string): TeamsMessage => ({
   chatId: m.chatId, messageId: m.messageId, clientKey: m.clientKey, senderId: m.authorId, senderName: m.authorName ?? null, senderTenant: m.authorTenant,
   createdAt: m.createdAt, modifiedAt: m.modifiedAt, html: m.html ?? null, text: m.text, hasImage: m.hasImage, hasFile: m.hasFile, replyToId: m.replyToId,
-  mentions: m.mentions ?? m.mentionedUserIds.map((id) => ({ id, name: null })), fetchedAt,
+  mentions: m.mentions ?? m.mentionedUserIds.map((id) => ({ id, name: null })), reactions: m.reactions ?? [], fetchedAt,
 });
 
 /** People for one cycle: each built once, then dropped with the cycle (their tokens with them). */

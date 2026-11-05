@@ -7,7 +7,7 @@
 import type { AskRule, AskStatus } from "../plan/asks.ts";
 import type { AskSort, NotSorted } from "../plan/asks-ai.ts";
 import type { ChatKind, ChatMember } from "../plan/chats.ts";
-import { isMember, type ClientChat, type Mention, type PollState, type Request, type TeamsMessage } from "../plan/requests.ts";
+import { isMember, type ClientChat, type Mention, type PollState, type Reaction, type Request, type TeamsMessage } from "../plan/requests.ts";
 import { PlanError } from "./plan-store.ts";
 import type { Conn, Param, Row } from "./sql/conn.ts";
 
@@ -44,6 +44,12 @@ const toChat = (r: Row): ClientChat => ({
   readOn: r.read_on === undefined || r.read_on === null ? true : !!r.read_on,
 });
 
+/** CV-2: reactions as stored (null when none): at most 12, each emoji at most 16 characters. */
+const reactionsJson = (rs: readonly Reaction[] | undefined): string | null => {
+  const list = (rs ?? []).filter((x) => x.emoji && x.count > 0).slice(0, 12).map((x) => ({ emoji: x.emoji.slice(0, 16), count: Math.min(9999, Math.round(x.count)) }));
+  return list.length ? JSON.stringify(list) : null;
+};
+
 const toMessage = (r: Row): TeamsMessage => ({
   chatId: r.chat_id as string,
   messageId: r.message_id as string,
@@ -59,6 +65,7 @@ const toMessage = (r: Row): TeamsMessage => ({
   hasFile: !!r.has_file,
   replyToId: (r.reply_to_id as string | null) ?? null,
   mentions: json<Mention[]>(r.mentions_json, []),
+  reactions: json<Reaction[]>(r.reactions_json, []),
   fetchedAt: instant(r.fetched_at)!,
 });
 
@@ -211,14 +218,14 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
           const r = await db.get("SELECT modified_at FROM teams_messages WHERE chat_id = ? AND message_id = ?", [m.chatId, m.messageId]);
           if (!r) {
             await db.run(
-              "INSERT INTO teams_messages (chat_id, message_id, client_key, sender_id, sender_name, sender_tenant, created_at, modified_at, body_html, body_text, has_image, has_file, reply_to_id, mentions_json, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-              [m.chatId, m.messageId, m.clientKey, m.senderId, m.senderName?.slice(0, 200) ?? null, m.senderTenant, m.createdAt, m.modifiedAt, m.html, m.text, m.hasImage ? 1 : 0, m.hasFile ? 1 : 0, m.replyToId, m.mentions.length ? JSON.stringify(m.mentions) : null, m.fetchedAt],
+              "INSERT INTO teams_messages (chat_id, message_id, client_key, sender_id, sender_name, sender_tenant, created_at, modified_at, body_html, body_text, has_image, has_file, reply_to_id, mentions_json, reactions_json, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              [m.chatId, m.messageId, m.clientKey, m.senderId, m.senderName?.slice(0, 200) ?? null, m.senderTenant, m.createdAt, m.modifiedAt, m.html, m.text, m.hasImage ? 1 : 0, m.hasFile ? 1 : 0, m.replyToId, m.mentions.length ? JSON.stringify(m.mentions) : null, reactionsJson(m.reactions), m.fetchedAt],
             );
             added.push(m);
           } else if (Date.parse(m.modifiedAt) > Date.parse(instant(r.modified_at)!)) {
             await db.run(
-              "UPDATE teams_messages SET modified_at = ?, body_html = ?, body_text = ?, has_image = ?, has_file = ?, mentions_json = ?, fetched_at = ? WHERE chat_id = ? AND message_id = ?",
-              [m.modifiedAt, m.html, m.text, m.hasImage ? 1 : 0, m.hasFile ? 1 : 0, m.mentions.length ? JSON.stringify(m.mentions) : null, m.fetchedAt, m.chatId, m.messageId],
+              "UPDATE teams_messages SET modified_at = ?, body_html = ?, body_text = ?, has_image = ?, has_file = ?, mentions_json = ?, reactions_json = ?, fetched_at = ? WHERE chat_id = ? AND message_id = ?",
+              [m.modifiedAt, m.html, m.text, m.hasImage ? 1 : 0, m.hasFile ? 1 : 0, m.mentions.length ? JSON.stringify(m.mentions) : null, reactionsJson(m.reactions), m.fetchedAt, m.chatId, m.messageId],
             );
             updated++;
           }

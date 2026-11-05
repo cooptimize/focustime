@@ -4176,6 +4176,30 @@ button.ask-label { cursor: pointer; }
 .conv-merge-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .conv-merge-list .mini { inline-size: 100%; text-align: start; white-space: normal; }
 .conv-link-note { margin: 8px 0 0; padding: 6px 10px; border-radius: 6px; background: var(--surface); font-size: var(--fs-2); color: var(--text-muted); }
+/* CV-2: Show messages like Teams (ui/MessageThread.tsx). */
+.tm-thread { display: grid; gap: 8px; min-width: 0; }
+.tm-earlier { justify-self: center; }
+.tm-groups { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; min-width: 0; }
+.tm-group { display: flex; align-items: flex-start; gap: 8px; min-width: 0; max-inline-size: min(100%, 720px); }
+.tm-group .avatar { margin: 2px 0 0; }
+.tm-group.mine { justify-self: end; flex-direction: row-reverse; }
+.tm-stack { display: grid; gap: 4px; min-width: 0; }
+.tm-group.mine .tm-stack { justify-items: end; }
+.tm-head { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: var(--fs-2); }
+.tm-name { font-weight: 600; }
+.tm-bubble { display: grid; gap: 4px; padding: 6px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); min-width: 0; max-inline-size: 100%; }
+.tm-group.mine .tm-bubble { background: var(--selected); border-color: transparent; }
+.tm-bubble .conv-msg-body p:last-child { margin-bottom: 0; }
+.tm-bubble .conv-msg-body pre, .tm-bubble .conv-msg-body code { font-family: ui-monospace, monospace; font-size: var(--fs-2); }
+.tm-bubble .conv-msg-body pre { margin: 4px 0; padding: 6px 8px; border-radius: 6px; background: var(--raised); overflow-x: auto; white-space: pre; }
+.tm-bubble .conv-msg-body ul, .tm-bubble .conv-msg-body ol { margin: 2px 0 4px; padding-inline-start: 20px; }
+.tm-bubble .conv-msg-body .mention { padding: 0 4px; border-radius: 4px; background: var(--raised); }
+.tm-quote { margin: 0; padding: 4px 8px; border-inline-start: 3px solid var(--border-strong); border-radius: 4px; background: var(--raised); display: grid; gap: 1px; font-size: var(--fs-2); min-width: 0; }
+.tm-quote-who { font-weight: 600; }
+.tm-quote-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-reactions { margin: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.tm-reaction { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--border); background: var(--raised); font-size: var(--fs-1); line-height: 1.6; }
+.tm-reaction-n { color: var(--text-muted); }
 .conv-unsorted, .conv-hidden { margin: 8px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; font-size: var(--fs-2); color: var(--text-muted); }
 .conv-chatter { margin: 12px 0 0; font-size: var(--fs-2); }
 .conv-chatter ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }

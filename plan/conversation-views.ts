@@ -61,7 +61,27 @@ export type ConversationsData = {
   selected?: { id: number; found: boolean; where: "needs" | "teammates" | "closed" | null };
 };
 
-export type ConversationMessage = { messageId: string; author: string; external: boolean; mine: boolean; at: string; html: string; text: string };
+/**
+ * One message under Show messages (CV-2: rendered like Teams). `authorKey` groups consecutive messages (an alias for
+ * this list, never an id); `email` only for a Cooptimizer, for their photo; `quote` the message it replies to (null
+ * fields: "Quoted an earlier message"); `reactions` as counts, never who.
+ */
+export type ConversationMessage = {
+  messageId: string;
+  author: string;
+  authorKey: string;
+  name: string;
+  email: string | null;
+  external: boolean;
+  mine: boolean;
+  at: string;
+  html: string;
+  text: string;
+  quote: { author: string | null; text: string | null } | null;
+  reactions: { emoji: string; count: number }[];
+};
+/** A page of Show messages: the latest first; `earlier` is the message id to ask "Show earlier" from (null: none). */
+export type ConversationMessages = { messages: ConversationMessage[]; chatLink: string; earlier: string | null; total: number };
 
 /** One of my promises (my own commitment), as My promises and Today show it. */
 export type PromiseCard = {

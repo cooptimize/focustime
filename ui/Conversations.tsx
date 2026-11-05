@@ -4,13 +4,15 @@
 // title, client and chat, who's in it, last activity, a 2 to 4 line summary, one status (New, In discussion, <Name>
 // committed, Tracked #id, Resolved, Closed; amber Waiting on <Name>), "Updated" when it changed since I looked, and
 // one primary action (Create item, Link, Resolve, Take it over) with the rest under ⋯. Show messages renders the
-// messages as Teams showed them (sanitized on the server; mentions as chips, images as "Image attached"), collapsed by
-// height without cutting a table row. Keys: J and K move, Enter the primary action, X messages, R resolve. Nothing is
+// messages like Teams (CV-2, ui/MessageThread.tsx): grouped by person with avatars, mine on the other side, quotes,
+// reactions, the latest 20 with Show earlier. Merge into… (or Select several) moves one topic into another, with Undo. Keys: J and K move, Enter the primary action, X messages, R resolve. Nothing is
 // posted in Teams. Chat text shows only on its own client's card.
 import { TypeIcon } from "./TypeIcon.tsx";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
-import type { ConversationCard, ConversationMessage, ConversationsData } from "../plan/conversation-views.ts";
+import type { ConversationCard, ConversationMessage, ConversationMessages, ConversationsData } from "../plan/conversation-views.ts";
+import { MessageThread } from "./MessageThread.tsx";
+import { usePhotos } from "./Presence.tsx";
 import type { ItemDraft } from "../plan/conversations.ts";
 import { pathOfAction } from "../plan/conversation-draft.ts";
 import { userZone } from "../week/zone.ts";
@@ -716,55 +718,36 @@ export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<Con
   );
 }
 
-/** The collapsed height of the messages; the cut lands after a whole message, paragraph or table row, never inside one. */
-const COLLAPSED_PX = 320;
-export function cutHeight(container: HTMLElement, limit = COLLAPSED_PX): number | null {
-  if (container.scrollHeight <= limit + 24) return null;
-  const top = container.getBoundingClientRect().top;
-  let best = 0;
-  for (const el of container.querySelectorAll<HTMLElement>(".conv-msg, .conv-msg-body > *, tr")) {
-    if (el.tagName === "TABLE" || el.closest("table") && el.tagName !== "TR") continue;
-    const bottom = el.getBoundingClientRect().bottom - top;
-    if (bottom <= limit && bottom > best) best = bottom;
-  }
-  return best > 0 ? Math.ceil(best) : limit;
-}
-
+/** CV-2: Show messages: the latest page, rendered like Teams (ui/MessageThread.tsx), with Show earlier. */
 function Messages({ c, tz }: { c: ConversationCard; tz: string }) {
   const [ms, setMs] = useState<ConversationMessage[] | string | null>(null);
-  const [all, setAll] = useState(false);
-  const [cut, setCut] = useState<number | null>(null);
-  const box = useRef<HTMLOListElement>(null);
+  const [earlier, setEarlier] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   useEffect(() => {
     let live = true;
-    void call<{ messages: ConversationMessage[] }>("conversations.messages", { id: c.id }).then((r) => live && setMs(r.messages), (e) => live && setMs(errText(e)));
+    void call<ConversationMessages>("conversations.messages", { id: c.id }).then((r) => live && (setMs(r.messages), setEarlier(r.earlier)), (e) => live && setMs(errText(e)));
     return () => void (live = false);
   }, [c.id]);
-  useLayoutEffect(() => {
-    if (box.current && Array.isArray(ms)) setCut(cutHeight(box.current));
-  }, [ms]);
+  const emails = useMemo(() => (Array.isArray(ms) ? [...new Set(ms.map((m) => m.email).filter((e): e is string => !!e))] : []), [ms]);
+  const photos = usePhotos({ emails });
   if (ms === null) return <p className="muted">Loading…</p>;
   if (typeof ms === "string") return <p className="set-problem">{ms}</p>;
+  const more = async () => {
+    if (!earlier) return;
+    setLoading(true);
+    try {
+      const r = await call<ConversationMessages>("conversations.messages", { id: c.id, before: earlier });
+      setMs((cur) => [...r.messages, ...(Array.isArray(cur) ? cur : [])]);
+      setEarlier(r.earlier);
+    } catch (e) {
+      setMs(errText(e));
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <div className="conv-messages" onClick={(e) => e.stopPropagation()}>
-      <ol ref={box} className="conv-msgs" aria-label="The messages" style={cut && !all ? { maxHeight: cut, overflow: "hidden" } : undefined}>
-        {ms.map((m) => (
-          <li key={m.messageId} className={`conv-msg${m.mine ? " mine" : ""}`}>
-            <span className="ask-ctx-who">
-              {m.author}
-              {m.external && <span className="ask-ext">External</span>}
-              <span className="muted"> · {whenText(m.at, tz)}</span>
-            </span>
-            {/* Sanitized on the server (plan/sanitize.ts): allowlisted tags, links only, mentions and images replaced. */}
-            <div className="conv-msg-body" dangerouslySetInnerHTML={{ __html: m.html }} />
-          </li>
-        ))}
-      </ol>
-      {cut && (
-        <button type="button" className="mini quiet" aria-expanded={all} onClick={() => setAll((v) => !v)}>
-          {all ? "Show less" : "Show all"}
-        </button>
-      )}
+      <MessageThread messages={ms} tz={tz} photoFor={(e) => photos.photoFor(e)} earlier={!!earlier} loadingEarlier={loading} onEarlier={() => void more()} />
     </div>
   );
 }

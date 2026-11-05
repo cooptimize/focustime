@@ -39,7 +39,25 @@ export type ChatMessagesClient = {
  * A message as read: the fields the rules use, plus what the shared store keeps (the raw body, the sender's name, the
  * mentions with names, Graph's lastModifiedDateTime). The last three are optional for the older per-person path.
  */
-export type GraphMessage = IncomingMessage & { modifiedAt: string; html?: string | null; authorName?: string | null; mentions?: { id: string; name: string | null; at?: number }[] };
+export type GraphMessage = IncomingMessage & { modifiedAt: string; html?: string | null; authorName?: string | null; mentions?: { id: string; name: string | null; at?: number }[]; reactions?: { emoji: string; count: number }[] };
+
+/** CV-2: Graph's older named reactions as the emoji Teams shows. */
+const NAMED_REACTION: Record<string, string> = { like: "👍", heart: "❤️", laugh: "😆", surprised: "😮", sad: "😢", angry: "😡" };
+/**
+ * CV-2: a message's reactions as counts per emoji, never who reacted (the user is never read). A unicode reactionType
+ * is kept as it is; the named ones become their emoji; custom ones (a hosted picture) are left out.
+ */
+export function reactionsOf(v: unknown): { emoji: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const x of Array.isArray(v) ? v : []) {
+    const t = str(obj(x)?.reactionType, 32);
+    if (!t) continue;
+    const named = NAMED_REACTION[t.toLowerCase()];
+    const emoji = named ?? (t.toLowerCase() === "custom" || /^[\p{L}\p{N}_ -]+$/u.test(t) ? null : t);
+    if (emoji) counts.set(emoji, (counts.get(emoji) ?? 0) + 1);
+  }
+  return [...counts].map(([emoji, count]) => ({ emoji, count })).sort((a, b) => b.count - a.count).slice(0, 12);
+}
 
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : null);
@@ -128,6 +146,7 @@ export function messageOf(v: unknown, chatId: string, clientKey: string): GraphM
     html: (isHtml ? html : escText(html)).slice(0, 64_000) || null,
     authorName: str(user?.displayName, 200),
     mentions,
+    reactions: reactionsOf(m.reactions),
   };
 }
 

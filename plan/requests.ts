@@ -17,6 +17,8 @@ export const MEMBERS_STALE_MS = 24 * 3600_000;
 
 /** A person a message @mentions: their Entra id, name, and the at tag's id in the body (CV-1; absent on older rows). */
 export type Mention = { id: string; name: string | null; at?: number };
+/** CV-2: one reaction under a message: the emoji and how many gave it (never who). */
+export type Reaction = { emoji: string; count: number };
 
 /** One Teams message as stored once for everyone (teams_messages). `html` is the raw body, `text` the plain text. */
 export type TeamsMessage = {
@@ -35,6 +37,8 @@ export type TeamsMessage = {
   hasFile: boolean;
   replyToId: string | null;
   mentions: Mention[];
+  /** CV-2: as Graph had them at the last read (absent: none, or read before CV-2). */
+  reactions?: Reaction[];
   fetchedAt: string;
 };
 
