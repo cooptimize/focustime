@@ -262,7 +262,7 @@ export type ClientKeyName = keyof typeof CLIENT_SPECS;
 /** Guidance by level (scope "level:<level>"). Each person may override any of these for themselves. */
 export type Guidance = { draftStories: boolean; readinessNudges: boolean; planShare: number };
 export const LEVEL_SPECS = {
-  draft_stories: { kind: "level", area: "levels", label: "Draft stories offered", builtin: true, parse: bool },
+  draft_stories: { kind: "level", area: "levels", label: "Break down offered", builtin: true, parse: bool },
   readiness_nudges: { kind: "level", area: "levels", label: "Readiness nudges in Plan ahead", builtin: true, parse: bool },
   // "plan_share": the share of a client's free time Plan the week plans up to before the amber over line. Named so a
   // later per-client "Keep open" share can join it (planned up to = free × plan share × (1 − keep open)).

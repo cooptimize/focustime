@@ -327,7 +327,7 @@ function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: Clie
       <DeliveryChatField clientKey={c.key} clientName={c.key} />
       <ProcessView c={c} saver={saver} onRefresh={onRefresh} refreshing={refreshing} />
       <div className="set-form set-house-style">
-        <AField label="House style for Draft stories" kind="Rule" s={saver.status(scope, "house_style")} retry={() => void saver.save(scope, "house_style", c.houseStyle, `${c.key}: house style`)} hint="Sent with every Draft stories request for this client. Empty goes back to the style learned from its own features.">
+        <AField label="House style for Break down" kind="Rule" s={saver.status(scope, "house_style")} retry={() => void saver.save(scope, "house_style", c.houseStyle, `${c.key}: house style`)} hint="Sent with every Break down request for this client. Empty goes back to the style learned from its own features.">
           <textarea
             aria-label={`${c.key}: house style`}
             rows={3}
@@ -458,7 +458,7 @@ function AdminAi() {
       </AField>
       {confirmOff && (
         <div className="adm-confirm" role="alertdialog" aria-label="Turn AI off for everyone">
-          <p>Turn AI off for everyone? Draft stories, request sorting and promise reading stop until it's on again.</p>
+          <p>Turn AI off for everyone? Break down, request sorting and promise reading stop until it's on again.</p>
           <button type="button" className="mini danger" onClick={() => (setConfirmOff(false), void saver.save(o, "ai.on", false, "AI for FocusTime"))}>
             Turn AI off
           </button>
@@ -1006,7 +1006,7 @@ function AdminOrganization() {
           <tr>
             <th scope="col">Level</th>
             <th scope="col">Plan up to (% of free time) <Kind kind="Default by level" /></th>
-            <th scope="col">Draft stories offered</th>
+            <th scope="col">Break down offered</th>
             <th scope="col">Readiness nudges</th>
           </tr>
         </thead>
@@ -1021,8 +1021,8 @@ function AdminOrganization() {
                   <SaveMark s={saver.status(scope, "plan_share")} retry={() => void saver.save(scope, "plan_share", g.planShare, "Plan up to")} />
                 </td>
                 <td>
-                  <input type="checkbox" aria-label={`${data.levelNames[lv]}: Draft stories offered`} checked={saver.shown(scope, "draft_stories", g.draftStories)} onChange={(e) => void saver.save(scope, "draft_stories", e.target.checked, `${data.levelNames[lv]}: Draft stories`)} />
-                  <SaveMark s={saver.status(scope, "draft_stories")} retry={() => void saver.save(scope, "draft_stories", g.draftStories, "Draft stories")} />
+                  <input type="checkbox" aria-label={`${data.levelNames[lv]}: Break down offered`} checked={saver.shown(scope, "draft_stories", g.draftStories)} onChange={(e) => void saver.save(scope, "draft_stories", e.target.checked, `${data.levelNames[lv]}: Break down`)} />
+                  <SaveMark s={saver.status(scope, "draft_stories")} retry={() => void saver.save(scope, "draft_stories", g.draftStories, "Break down")} />
                 </td>
                 <td>
                   <input type="checkbox" aria-label={`${data.levelNames[lv]}: readiness nudges`} checked={saver.shown(scope, "readiness_nudges", g.readinessNudges)} onChange={(e) => void saver.save(scope, "readiness_nudges", e.target.checked, `${data.levelNames[lv]}: readiness nudges`)} />
