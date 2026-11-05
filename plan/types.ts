@@ -37,6 +37,10 @@ export type Pick = {
   notes: string | null;
   /** Step 13.5: the follow-up this pick is for (an intention pick). */
   followUpId: number | null;
+  /** PL-1: the pick's own minutes instead of its size (a Watching check-in's 30). Absent: its size. */
+  minutes?: number | null;
+  /** PL-1: read models only. Its DevOps item is resolved, closed or removed: counts zero minutes and shows as done. */
+  resolved?: boolean;
   position: number;
   createdAt: ZonedStamp;
   updatedAt: ZonedStamp;
@@ -79,6 +83,11 @@ export type PlanWeek = Record<IsoDate, { committedAt: ZonedStamp | null; closedO
 export const SIZE_MINUTES: Readonly<Record<Size, number>> = STORY_MINUTES;
 /** A pick's minutes by its size: 2h when unsized (Timebox my day, fit and budgets alike). */
 export const sizeMinutes = (size: Size | null | undefined, sizes: Readonly<Record<Size, number>> = SIZE_MINUTES) => (size ? sizes[size] : UNSIZED_MINUTES);
+/**
+ * PL-1: the minutes a pick needs: zero when its DevOps item is resolved, closed or removed (it shows as done), its own
+ * minutes when it has them (a Watching check-in's 30), else its size (unsized as M, as before).
+ */
+export const pickNeed = (p: { size: string | null; minutes?: number | null; resolved?: boolean }, sizes: Readonly<Record<string, number>>): number => (p.resolved ? 0 : (p.minutes ?? sizes[p.size ?? "M"] ?? 0));
 export const SIZES: readonly Size[] = ["S", "M", "L"];
 export const DEFAULT_SIZE: Size = "M";
 
@@ -111,6 +120,23 @@ export type WeekFeature = {
   createdAt: ZonedStamp;
   updatedAt: ZonedStamp;
 };
+
+/** PL-1: a feature I'm keeping moving this week without doing its stories, with its check-in reservation. */
+export type WeekWatch = {
+  weekStart: IsoDate;
+  clientKey: string;
+  itemId: number;
+  title: string;
+  itemType: string | null;
+  url: string | null;
+  why: "owner" | "lead" | "chosen";
+  /** The check-in's half-day and minutes; minutes null: removed (the row stays). */
+  checkin: { date: IsoDate; half: "AM" | "PM"; minutes: number } | null;
+  /** The pick it became once that day was planned or opened; null before. */
+  checkinPickId: number | null;
+};
+/** PL-1: a decision on a "From last week" row. */
+export type CarryDecisionRow = { clientKey: string; itemId: number; kind: string; decision: "kept" | "dropped" | "watching"; decidedAt: ZonedStamp };
 
 export type WeekPlanRecord = { weekStart: IsoDate; committedAt: ZonedStamp | null; /** The latest change to the plan or its features. */ updatedAt: ZonedStamp | null; features: WeekFeature[] };
 

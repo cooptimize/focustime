@@ -198,6 +198,13 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
     [3330, "User Story", "New", null, "Rate table import", ME],
     [3340, "Feature", "New", null, "Delivery time estimates", ME, "2026-12-17"],
     [3341, "User Story", "New", 3340, "Estimate from carrier history", ME],
+    // PL-1: one I own with only teammates' stories (Watching), and one resolved last week (Finished last week).
+    [3350, "Feature", "Active", null, "Carrier rate alerts", ME],
+    [3351, "User Story", "Active", 3350, "Rate change feed", "Sam Ortiz"],
+    [3352, "User Story", "New", 3350, "Alert settings page", "Sam Ortiz"],
+    [3353, "User Story", "New", 3350, "Weekly rate digest", "Priya Shah"],
+    [3360, "Feature", "Resolved", null, "Carrier contact list", ME],
+    [3361, "User Story", "Closed", 3360, "Import carrier contacts", ME],
   ],
 };
 
@@ -212,7 +219,7 @@ const UNSIZED = new Set([1113, 2213]);
 const client = (k: DemoClientKey) => DEMO_CLIENTS.find((c) => c.key === k)!;
 const urlOf = (k: DemoClientKey, id: number) => `https://dev.azure.com/${client(k).org}/${encodeURIComponent(client(k).project)}/_workitems/edit/${id}`;
 const isPortfolio = (t: string) => t === "Feature" || t === "Epic";
-const category = (s: string) => (s === "New" ? "Proposed" : s === "Closed" ? "Completed" : "InProgress");
+const category = (s: string) => (s === "New" ? "Proposed" : s === "Closed" ? "Completed" : s === "Resolved" ? "Resolved" : "InProgress");
 
 function item(k: DemoClientKey, r: Raw, order: number): WorkItem {
   const [id, type, state, parent, title, who, target] = r;

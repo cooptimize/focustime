@@ -87,6 +87,16 @@ export function createDemoSources(now: () => string, processOverrides: (clientKe
     // DS-1: the demo has no AI, so Draft stories never reads; these say so if anything asks.
     featureSignals: async () => ({ ok: false, message: "Break down isn't available in the demo" }),
     exemplarPool: async () => ({ ok: true, value: [] }),
+    // PL-1: last week's features by id (any state), their states for resolved musts, and this week's state changes:
+    // Atlas's stories haven't moved (its Watching row turns amber from Wednesday); the others' have.
+    featureTrees: async (clients, ids) => clients.filter((c) => isDemoClient(c.clientKey)).map((c) => ({ clientKey: c.clientKey, items: demoPortfolio(c.clientKey as never, now()).items.filter((i) => (ids[c.clientKey] ?? []).includes(i.id)) })),
+    itemStates: async (clients, ids) =>
+      clients.filter((c) => isDemoClient(c.clientKey)).map((c) => {
+        const p = demoPortfolio(c.clientKey as never, now()).items;
+        const all = [...p.map((i) => [i.id, i.stateCategory] as const), ...p.flatMap((i) => i.children.map((x) => [x.id, x.stateCategory] as const))];
+        return { clientKey: c.clientKey, states: Object.fromEntries(all.filter(([id]) => (ids[c.clientKey] ?? []).includes(id))) };
+      }),
+    stateChanges: async (clientKey) => ({ known: true, itemIds: clientKey === "Atlas" || !isDemoClient(clientKey) ? [] : demoPortfolio(clientKey, now()).items.flatMap((i) => i.children.filter((x) => x.open).map((x) => x.id)) }),
     processModels: async (keys) => Promise.all(keys.map(async (clientKey) => (isDemoClient(clientKey) ? { clientKey, ok: true as const, model: demoProcess(clientKey, await processOverrides(clientKey)) } : { clientKey, ok: false as const, message: "Not a demo client" }))),
   };
   return { dataverse, outlook, google, devops };

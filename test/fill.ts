@@ -56,6 +56,10 @@ export async function fill(db: Conn, userId: string): Promise<PlanStore> {
   await plan.seeConversation(1, 1);
   (await plan.addNotice({ key: `n-${tag}`, kind: "followups", title: tag, body: tag, route: "inbox" }));
   (await plan.setRoadmapDates("cooptimize", 7001, { start: "2026-11-02", end: "2026-11-20" }));
+  // PL-1: a carry decision, a Watching row with its check-in, and a pick with its own minutes.
+  await plan.decideCarry(MON, "cooptimize", 7001, "carry", "kept");
+  await plan.addWatch({ weekStart: MON, clientKey: "cooptimize", itemId: 7002, title: tag, itemType: "Feature", url: null, why: "owner", checkin: { date: MON, half: "AM", minutes: 30 } });
+  (await plan.addPick({ date: MON, half: "AM", clientKey: "cooptimize", kind: "intention", title: `${tag} check-in`, size: "S", minutes: 30 }));
   (await plan.logTeamsStatus({ op: "set", status: "Busy", minutes: 25, result: "done", message: null }));
   await createUserSettings({ db, userId, app: { dataverse: null, entra: null, google: null }, person: () => ({ email: `${tag}@example.com`, upn: `${tag}@example.com`, timeZone: null }), setZone: () => {}, defaultZone: DEMO_TZ, now: () => Temporal.Instant.from(NOW) }).seed(starterToml(DEMO_TZ));
   await createUserSecrets({ db, userId, keys: KEYS, now: () => Temporal.Instant.from(NOW) }).set("devops-write-pat:cooptimize", `pat-${tag}`);
