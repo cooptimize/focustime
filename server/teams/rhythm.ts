@@ -168,16 +168,19 @@ export function createRhythm(d: RhythmDeps) {
   const picksOn = (w: WeekLoadData, date: string) => (w.plan?.[date]?.picks ?? []).filter((p) => p.status === "planned" || p.status === "done" || p.status === "moved");
 
   /**
-   * Promises and sends to me. IB-1's read model (inbox.list rows: title, kind, due, sendState) once it carries them;
-   * until then the week's own lists (follow-ups and chat promises on week.load, sends from team.commit).
+   * Promises and sends to me. IB-1's read model (inbox.list `items`: key, kind, clientKey, at, title, who, due, done,
+   * sendState) once its items carry titles; until then (slice 1 has no titles) the week's own lists (follow-ups and
+   * chat promises on week.load, sends from team.commit).
    */
   async function inbox(userId: string, w: WeekLoadData | null, today: string): Promise<Inbox> {
-    const r = dataOf<{ rows?: { key: string; kind: string; clientKey: string | null; title?: string; due?: string | null; done?: boolean; sendState?: string; at: string; who?: string | null }[] }>(await d.run(userId, "inbox.list", {}).catch(() => ({ ok: false, error: "", status: 500 }) as ActionResponse));
+    type Item = { key: string; kind: string; clientKey: string | null; at: string; title?: string | null; who?: string | null; due?: string | null; done?: boolean; sendState?: string };
+    const r = dataOf<{ items?: Item[] }>(await d.run(userId, "inbox.list", {}).catch(() => ({ ok: false, error: "", status: 500 }) as ActionResponse));
     const name = w ? names(w) : (k: string) => k;
-    if (r?.rows) {
+    const mine = (r?.items ?? []).filter((x) => x.kind === "promise" || x.kind === "send");
+    if (mine.length && mine.every((x) => typeof x.title === "string" && x.title)) {
       return {
-        promises: r.rows.filter((x) => x.kind === "promise" && x.title).map((x) => ({ key: x.key, title: x.title!, clientName: x.clientKey ? name(x.clientKey) : null, due: x.due ?? null, done: !!x.done })),
-        sends: r.rows.filter((x) => x.kind === "send" && x.title).map((x) => ({ key: x.key, title: x.title!, clientName: x.clientKey ? name(x.clientKey) : null, waiting: x.sendState === "waiting" && !x.done, at: x.at, from: x.who ?? null })),
+        promises: mine.filter((x) => x.kind === "promise").map((x) => ({ key: x.key, title: x.title!, clientName: x.clientKey ? name(x.clientKey) : null, due: x.due ?? null, done: !!x.done })),
+        sends: mine.filter((x) => x.kind === "send").map((x) => ({ key: x.key, title: x.title!, clientName: x.clientKey ? name(x.clientKey) : null, waiting: x.sendState === "waiting" && !x.done, at: x.at, from: x.who ?? null })),
       };
     }
     const promises: Inbox["promises"][number][] = [];

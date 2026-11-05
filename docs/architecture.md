@@ -420,7 +420,7 @@ The bot can come to the person: a morning brief, a midday check-in, a close out 
 - **Engine.** `server/teams/rhythm.ts` `createRhythm`: `tick` runs first in each person's slow tick
   (`server/ticks.ts`, the notifier's facts), claims each due occasion in `teams_rhythm` (`store/teams-rhythm-store.ts`,
   `store/migrations/20261111T0900_teams_rhythm.ts`) and sends its card; a claim is never sent twice (failed and lost
-  rows stay). Data comes only through dispatch: `week.load`, `inbox.list` (IB-1's rows, or `week.load`'s lists and
+  rows stay). Data comes only through dispatch: `week.load`, `inbox.list` (IB-1's `items` once they carry titles, else `week.load`'s lists and
   `team.commit` before IB-1), the day's Outlook meetings. `tap` handles the cards' buttons: Done and Undo run
   `pick.mark_done`; moves, Confirm today and Close out go through the assistant's `propose()` and its confirm
   (claimed once in `teams_bot_cards`). `capture` and `closeoutReply` serve the bot's messages; `test` sends one kind now.
