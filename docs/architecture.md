@@ -356,7 +356,7 @@ One job reads each registered client chat for everyone; Asks are now Requests. D
 
 ## UI-8: the Nov 5 bug round (outside Inbox)
 
-- **Friday with the panel open.** `WeekGrid`'s `panelOpen` (from `App.tsx`: Week's detail panel is open) adds `with-panel` to `.grid`, which pads the panel's width (`--dp-w` on `:root`, 440 px, 560 px from 3000 px; `.detail-panel` uses it too). Under 1600 px the day headers drop the date and Today pill while it's open; a later `@container (max-width: 230px)` rule removes a hidden rail's margin.
+- **Friday with the panel open.** `WeekGrid`'s `panelOpen` (from `App.tsx`: Week's detail panel is open) adds `with-panel` to `.grid`, which pads the panel's width (`--dp-w` on `:root`, 440 px, 560 px from 3000 px; `.detail-panel` uses it too). Under 1600 px the day headers drop the date and Today pill while it's open; a later `@container (max-width: 230px)` rule removes a hidden rail's margin. `useDropTarget` in `ui/WeekStories.tsx` handles dragenter like dragover (`enterOrOver`).
 - **Dialog headers.** `.command-menu` is `overflow: clip` with its head and foot `flex: none` and the rest scrolling. `ui/Feedback.tsx`: ‹ Back (`menu-back`) in the header on the preview and error, Esc closes. The Guide's `.guide-top .guide-wrap` doesn't wrap; `.guide-chapters` wraps inside.
 - **Feedback audit.** `FeedbackService.target()`; `feedback.send` logs a `feedback` op (`FEEDBACK_LOG_KEY` in `plan/devopswrite.ts`) with `logDevopsWrite` before the create and settles it after; `devops.log` lists it without Undo or Retry, `devops.retry` and the undo preview refuse it, `undoTops` skips it.
 - **Break down in DevOps health.** `ReadyRow` in `ui/PlanWeek.tsx` renders `BreakDownButton` on "Feature with no stories".

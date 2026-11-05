@@ -233,16 +233,20 @@ export function useDropTarget(at: { date: IsoDate; half: Half } | null): { props
   const d = dnd.dragging;
   const c = d ? dnd.check(d, block) : null;
   const over = dnd.hover === key;
+  const enterOrOver = (e: React.DragEvent<HTMLElement>) => {
+    if (!d) return;
+    if (c?.ok) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = d.pickId !== undefined ? "move" : "copy";
+    } else e.dataTransfer.dropEffect = "none";
+    if (!over) dnd.setHover(key);
+  };
   const props: HTMLAttributes<HTMLElement> & { "data-drop": string } = {
     "data-drop": key,
-    onDragOver: (e) => {
-      if (!d) return;
-      if (c?.ok) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = d.pickId !== undefined ? "move" : "copy";
-      } else e.dataTransfer.dropEffect = "none";
-      if (!over) dnd.setHover(key);
-    },
+    onDragOver: (e) => enterOrOver(e),
+    // UI-8: dragenter too (HTML5 wants both). A pointer that ends its move on a dragenter (into a child of the block)
+    // with no dragover after it left the block unmarked: no fit tip, and the drop target never knew it was under it.
+    onDragEnter: (e) => enterOrOver(e),
     onDragLeave: (e) => {
       if (over && !(e.currentTarget as Node).contains(e.relatedTarget as Node | null)) dnd.setHover(null);
     },
