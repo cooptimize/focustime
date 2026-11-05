@@ -4682,10 +4682,10 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .suggested-card[draggable="true"] { cursor: grab; }
 .suggested-card .sc-open { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 3px 6px; border: 1px dashed var(--c, var(--border-strong)); border-radius: 6px; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-2); text-align: left; cursor: pointer; }
 .suggested-card .sc-open:hover, .suggested-card .sc-open:focus-visible { color: var(--text); border-style: solid; }
-.suggested-card .sc-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggested-card .sc-title { flex: 1 1 auto; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
 .suggested-card .sc-from { flex: none; color: var(--text-faint); }
 .checklist .pick-origin { display: flex; align-items: center; gap: 6px; min-width: 0; opacity: 0.55; font-size: var(--fs-2); padding-left: 21px; }
-.pick-origin .po-title { flex: 1 1 auto; min-width: 4em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-origin .po-title { flex: 1 1 auto; min-width: 4em; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
 .pick-origin .po-note { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); white-space: nowrap; }
 .carry-summary { margin: 0 24px 10px; padding: 6px 12px; border: 1px dashed var(--border-strong); border-radius: 10px; display: grid; gap: 6px; font-size: var(--fs-3); }
 .carry-summary .cs-line { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
@@ -4985,3 +4985,4 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .grid.medium .day-head { min-width: 0; overflow: hidden; container-type: inline-size; }
 @container (max-width: 17em) { .day-head .date { display: none; } }
 @container (max-width: 12em) { .day-head .today-pill { display: none; } }
+.grid.tier-mini .suggested-card .sc-open { flex-wrap: wrap; }
