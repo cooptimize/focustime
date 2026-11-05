@@ -6,7 +6,8 @@ import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types
 import type { PtoDay } from "../week/pto.ts";
 import type { Pick } from "../plan/types.ts";
 import type { FollowUpView } from "../actions/types.ts";
-import { wasDueNow, weekDueBadges } from "../plan/due.ts";
+import { wasDueText, weekDueBadges } from "../plan/due.ts";
+import { homeRail, railMarks, type RailSpan } from "../plan/rail-promises.ts";
 import { canAddWork, planButton } from "../plan/days.ts";
 import { checkinMenu, dayMenu, eventMenu, slotMenu } from "./menu.ts";
 import { MenuRow, useMenu } from "./Menus.tsx";
@@ -36,7 +37,7 @@ export type Selection = { dayIndex: number; half: Half };
 export type PanelFocus = { kind: "features" } | { kind: "followup"; id: number } | { kind: "pick"; id: number };
 
 /** Step 15.1 (D276): the layout, for the time rail on each compact card (U3: always on, the one home for meetings). */
-const RulerCtx = createContext<{ layout: Layout; promises: readonly DayPromise[]; onPromise?: (() => void) | undefined }>({ layout: "wide", promises: [] });
+const RulerCtx = createContext<{ layout: Layout; promises: readonly DayPromise[]; onPromise?: (() => void) | undefined; today: string; now: string; home: RailSpan | null }>({ layout: "wide", promises: [], today: "", now: "", home: null });
 
 type Props = {
   week: Week;
@@ -66,8 +67,15 @@ type Props = {
 };
 
 export function WeekGrid(props: Props) {
+  // CV-3: today's rails, for promises overdue from an earlier day (or with no time): drawn at "now" on today's block.
+  const day = props.week.days.find((d) => d.date === props.today);
+  const rails = day ? cardHalves(day).flatMap((h) => {
+    const sl = slotOf(day, h)!;
+    return sl.off ? [] : [{ key: `${day.date}|${h}`, start: sl.view.start, end: sl.view.end }];
+  }) : [];
+  const home = homeRail(rails, props.now);
   return (
-    <RulerCtx.Provider value={{ layout: props.layout, promises: props.promises ?? [], onPromise: props.onPromise }}>
+    <RulerCtx.Provider value={{ layout: props.layout, promises: props.promises ?? [], onPromise: props.onPromise, today: props.today, now: props.now, home }}>
       <Grid {...props} />
     </RulerCtx.Provider>
   );
@@ -534,7 +542,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
         {compact ? (
           <>
             {body}
-            {ruler && <Ruler slot={slot} tz={tz} label={`${dayLabel} ${eve ? "evening" : slot.half}`} />}
+            {ruler && <Ruler slot={slot} half={eve ? "EVE" : slot.half} tz={tz} label={`${dayLabel} ${eve ? "evening" : slot.half}`} />}
           </>
         ) : (
           <>
@@ -678,7 +686,7 @@ function Timeline({ slot, tz, showGaps, minFocusWindow, earlier }: { slot: Slot;
  * free stretches, meetings, personal events and unavailable time, and timed picks as bands in client color. A pick
  * band opens the time editor; an event opens its menu. The list on the left is unchanged.
  */
-function Ruler({ slot, tz, label }: { slot: Slot; tz: string; label: string }) {
+function Ruler({ slot, half, tz, label }: { slot: Slot; half: string; tz: string; label: string }) {
   // U5.1 (D407): the rail covers the Timelines range (slot.view: business hours, 12 hours or 24 hours), with the time
   // outside working windows shaded, as the wide timeline does.
   const bounds = { start: slot.view.start, end: slot.view.end };
@@ -711,30 +719,33 @@ function Ruler({ slot, tz, label }: { slot: Slot; tz: string; label: string }) {
         return at && <RulerEvent key={placed.event.id} e={placed.event} tz={tz} style={{ top: pct(at.top), height: `max(${pct(at.height)}, 6px)`, left: `calc(${pct(lane / lanes)} + 2px)`, width: `calc(${pct(1 / lanes)} - 4px)` }} />;
       })}
       <TimeboxBands slot={slot} pos={pos} bounds={bounds} />
-      <RulerPromises bounds={bounds} tz={tz} />
+      <RulerPromises rail={{ key: `${slot.date}|${half}`, ...bounds }} tz={tz} />
       </div>
     </div>
   );
 }
 
-/** CV-1: a promise due inside the rail's range, as a thin mark at its time; overdue in amber, never red. */
-function RulerPromises({ bounds, tz }: { bounds: { start: string; end: string }; tz: string }) {
-  const { promises, onPromise } = useContext(RulerCtx);
-  const span = Math.max(1, ms(bounds.end) - ms(bounds.start));
-  const here = promises.filter((p) => p.dueAt && ms(p.dueAt) >= ms(bounds.start) && ms(p.dueAt) < ms(bounds.end));
-  return here.map((p) => {
-    const time = Temporal.Instant.from(p.dueAt!).toZonedDateTimeISO(tz).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
+/**
+ * CV-1: a promise due inside the rail's range, as a thin mark at its time. CV-3: past its due it is amber with a visible
+ * "was due …" label; one overdue from an earlier day (or with no time) is drawn once at "now" on today's block. Never red.
+ */
+function RulerPromises({ rail, tz }: { rail: RailSpan; tz: string }) {
+  const { promises, onPromise, today, now, home } = useContext(RulerCtx);
+  const span = Math.max(1, ms(rail.end) - ms(rail.start));
+  return railMarks(promises, rail, { today, now, home }).map(({ p, at }) => {
+    const time = p.dueAt ? Temporal.Instant.from(p.dueAt).toZonedDateTimeISO(tz).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" }) : null;
+    const was = p.overdue ? wasDueText(p, today, tz).replace(/^Was/, "was") : null;
     return (
       <button
         key={`promise-${p.id}`}
         type="button"
         className={`r-promise${p.overdue ? " overdue" : ""}`}
-        style={{ top: pct((ms(p.dueAt!) - ms(bounds.start)) / span) }}
-        title={`Promise · ${p.overdue ? wasDueNow(p, tz).replace(/^Was/, "was") : time} · ${p.what}${p.toName ? ` · to ${p.toName}` : ""}`}
-        aria-label={`${p.overdue ? `Promise, ${wasDueNow(p, tz).replace(/^Was/, "was")}` : `Promise at ${time}`}: ${p.what}`}
+        style={{ top: pct((ms(at) - ms(rail.start)) / span) }}
+        title={`Promise · ${was ?? time} · ${p.what}${p.toName ? ` · to ${p.toName}` : ""}`}
+        aria-label={`${was ? `Promise, ${was}` : `Promise at ${time}`}: ${p.what}`}
         onClick={(e) => (e.stopPropagation(), onPromise?.())}
       >
-        <span>{p.what}</span>
+        <span>{was ? `${was} · ${p.what}` : p.what}</span>
       </button>
     );
   });
