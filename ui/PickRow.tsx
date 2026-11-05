@@ -5,7 +5,7 @@
 // U4: density "plan" is Plan the day's row: a drag handle, no checkbox (ticking is Today's job; a done pick shows a ✓
 // and is struck), the title, a due badge, the size chip always (planning is where sizes live), + time and ⋯ on hover.
 import { ResolvedMark, TypeIcon } from "./TypeIcon.tsx";
-import { useContext, type DragEvent, type ReactNode } from "react";
+import { useContext, type DragEvent, type HTMLAttributes, type ReactNode } from "react";
 import type { Pick } from "../plan/types.ts";
 import { SizeChip } from "./plan/Estimate.tsx";
 import { focusLabel } from "../plan/focus.ts";
@@ -49,9 +49,13 @@ type Props = {
   badge?: ReactNode;
   /** U2: always-visible buttons on the right (Start focus, the timer, one suggested move). */
   actions?: ReactNode;
+  /** PV-1: the item's type icon before the title (Week's cards and the Week panel). */
+  typeIcon?: boolean;
+  /** PV-1: Week's drag and drop (drag to another block, long-press on touch) instead of `draggable`. */
+  dragProps?: HTMLAttributes<HTMLLIElement> | undefined;
 };
 
-export function PickRow({ pick, toggle, link = false, canTick = true, timeEditable = true, hint = false, highlight = false, extra, readOnly = false, draggable = false, tabIndex, className = "", density = "default", next = false, badge, actions }: Props) {
+export function PickRow({ pick, toggle, link = false, canTick = true, timeEditable = true, hint = false, highlight = false, extra, readOnly = false, draggable = false, tabIndex, className = "", density = "default", next = false, badge, actions, typeIcon = false, dragProps }: Props) {
   const today = density === "today";
   const week = density === "week";
   const planD = density === "plan";
@@ -86,8 +90,9 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
         hover={<>{!timed && <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}{menu.button(`More for ${pick.title}`)}</>} />
     );
   return (
-    <li data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""}${today ? " dens-today" : ""}${week ? " dens-week" : ""}${next ? " next" : ""} ${className}`} onContextMenu={menu.onContextMenu} draggable={draggable} onDragStart={draggable ? onDrag : undefined} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
+    <li data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""}${today ? " dens-today" : ""}${week ? " dens-week" : ""}${next ? " next" : ""} ${className}`} onContextMenu={menu.onContextMenu} {...(dragProps ?? { draggable, onDragStart: draggable ? onDrag : undefined })} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
       <input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} disabled={!canTick || pick.status === "dropped"} onChange={(e) => toggle(pick.id, e.target.checked)} onClick={stop} onDoubleClick={stop} aria-label={`Done: ${pick.title}`} />
+      {typeIcon && pick.itemType && <TypeIcon clientKey={pick.clientKey} type={pick.itemType} />}
       <span className="pr-title" title={pick.title}>
         {link && pick.itemUrl ? (
           <WorkLink clientKey={pick.clientKey} url={pick.itemUrl} className={today ? "pr-link pr-cue" : undefined} title={today ? `${pick.title}\nOpen #${pick.itemId ?? ""} in DevOps` : undefined}>

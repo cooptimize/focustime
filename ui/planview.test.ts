@@ -17,9 +17,11 @@ const pick = (over: Partial<Pick> & { size?: Size } = {}): Pick => ({ id: nextId
 const plan = (picks: Pick[], committed = true): PlanWeek => ({ "2026-11-02": { committedAt: committed ? "2026-11-02T08:10:00-05:00[America/New_York]" : null, picks } });
 
 describe("a card's plan (step 6.1)", () => {
-  it("before commit: no picks, every item, not collapsed (the step 6 card)", () => {
-    const cp = cardPlan(plan([pick({ itemId: 2 })], false), slot, "Adatum", ITEMS, NOW);
-    expect(cp).toEqual({ picks: [], fit: null, items: ITEMS, collapsed: false });
+  it("PV-1: before commit the card shows its picks and their fit too (stories are dragged onto Week first)", () => {
+    const cp = cardPlan(plan([pick({ itemId: 2, size: "M" })], false), slot, "Adatum", ITEMS, NOW);
+    expect(cp.picks.map((p) => p.itemId)).toEqual([2]);
+    expect(cp.fit).toEqual({ kind: "fits", spare: 90 });
+    expect(cardPlan(plan([], false), slot, "Adatum", ITEMS, NOW)).toEqual({ picks: [], fit: null, items: ITEMS, collapsed: false });
     expect(cardPlan(null, slot, "Adatum", ITEMS, NOW).collapsed).toBe(false);
   });
 
