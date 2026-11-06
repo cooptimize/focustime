@@ -26,6 +26,9 @@ import type { OutActivity, Sender } from "./bot.ts";
 import { Blocked, BLOCKED_KEY, createRhythm, pacedSender, type Takeover } from "./rhythm.ts";
 import type { StatusLoad } from "../../plan/status-types.ts";
 import { aStatusLoad } from "../../test/builders/index.ts";
+import { Pat } from "../../sources/devops/pat.ts";
+import { fakeDevOpsWrite, WRITE_PAT } from "../../sources/devops/write-fakes.ts";
+import { createDevOpsWriter } from "../../sources/devops/write.ts";
 
 const NY = "America/New_York";
 const URL_ = "https://ft-dev-app.example.azurecontainerapps.io";
@@ -36,7 +39,7 @@ const BASE = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'
 const ON = `\n[notify]\nteams_messages = true\nteams_brief = true\nteams_checkin = true\nteams_closeout = true\nteams_nudges = true\n`;
 const local = (t: string) => Temporal.ZonedDateTime.from(`${MON}T${t}[${NY}]`).toInstant();
 
-async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/conn.ts").Conn }> }, o: { toml?: string; takeovers?: Takeover[]; send?: Sender["send"]; status?: () => StatusLoad } = {}) {
+async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/conn.ts").Conn }> }, o: { toml?: string; takeovers?: Takeover[]; send?: Sender["send"]; status?: () => StatusLoad; /** PK-1: a fake DevOps with my write PAT for Adatum. */ devops?: ReturnType<typeof fakeDevOpsWrite> } = {}) {
   const db = await d.open();
   await addUsers(db.conn, ANA);
   let now = local("09:05");
@@ -44,10 +47,14 @@ async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/co
   const dir = mkdtempSync(join(tmpdir(), "ft-rhythm-"));
   const dv = fakeFetch("ok");
   const plan = createPlanStore({ path: ":memory:", now: () => now.toZonedDateTimeISO(NY) });
-  const devops = { load: async () => [], lookup: () => null, orgOf: () => "contoso", last: () => null } as unknown as DevOpsSource;
+  const devops = { load: async () => [], lookup: () => null, orgOf: () => "contoso", last: () => null, forget: () => {} } as unknown as DevOpsSource;
   const ctx: ActionContext = {
     loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(toml) }),
-    makeDataverse: (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, snapshots: createSnapshotStore(dir), log: () => {} }),
+    makeDataverse: (cfg, tz) => {
+      const src = createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, snapshots: createSnapshotStore(dir), log: () => {} });
+      // PK-1: Adatum's DevOps (a fake org) with my identity, for the write PAT check and the state write.
+      return o.devops ? { ...src, devopsTargets: async (keys: string[]) => ({ ok: true as const, targets: keys.map((k) => ({ accountId: "a", clientKey: k, clientName: k, org: "cooptimize", project: "P", projectName: "P", email: "avery@cooptimize.example", pat: null })) }) } : src;
+    },
     makeOutlook: () => {
       throw new Error("n/a");
     },
@@ -59,6 +66,7 @@ async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/co
     writeConfig: async (edit) => ((toml = edit(toml)), { ok: true, parsed: parseConfig(toml) } as never),
     now: () => now.toString(),
     plan,
+    ...(o.devops ? { devopsWriter: createDevOpsWriter({ fetch: o.devops.fetch, log: () => {} }), writePats: { get: async () => new Pat(WRITE_PAT), set: async () => {}, clear: async () => {} }, sleep: async () => {} } : {}),
   };
   const runs: string[] = [];
   let confirms = 0;
@@ -114,6 +122,10 @@ async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/co
     expect(t).not.toBeNull();
     return JSON.stringify((await rhythm.tap(ANA, t!)).value);
   };
+  if (o.devops) {
+    const r = await dispatch(ctx, { action: "devops.set_write_pat", input: { clientKey: "Adatum", pat: WRITE_PAT } });
+    expect(r.ok).toBe(true);
+  }
   return { confirms: () => confirms, db, plan, rhythm, deps, sent, updates, logs, runs, blocked, facts, add, cardsSent, tap, at: (t: string) => void (now = local(t)), atOn: (date: string, t: string) => void (now = Temporal.ZonedDateTime.from(`${date}T${t}[${NY}]`).toInstant()), setToml: (t: string) => void (toml = BASE + t), rhythmStore: deps.store(ANA) };
 }
 
@@ -203,6 +215,45 @@ await forEachDriver("the bot's rhythm in Teams (TB-2)", (d) => {
     // A second tap on the same Confirm runs nothing again.
     await t.tap(occ, "confirm", { proposalId: row.proposal.proposalId });
     expect(t.confirms()).toBe(1);
+  });
+
+  it("PK-1: Done on a check-in card offers the item's DevOps done state; a double tap on Confirm writes once; Undo offers the write's undo", async () => {
+    const dv = fakeDevOpsWrite({ now: () => MON });
+    dv.add(500, { "System.WorkItemType": "User Story", "System.Title": "Import mapping", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
+    const t = await setup(d, { devops: dv });
+    const a = await t.add({ kind: "item", itemId: 500, title: "Import mapping", itemType: "User Story" });
+    t.at("12:10");
+    await t.rhythm.tick(ANA, await t.facts());
+    const occ = `checkin:${MON}`;
+    let card = await t.tap(occ, "done", { pickId: a.id });
+    expect((await t.plan.getPick(a.id))?.status).toBe("done");
+    expect(card).toContain("Set #500 to Closed");
+    expect(card).toContain("Confirm");
+    const patches = () => dv.seen.filter((x) => x.method === "PATCH").length;
+    expect(patches()).toBe(0);
+    const row = (await t.rhythmStore.get(occ))!.model as { proposal: { proposalId: string } };
+    card = await t.tap(occ, "confirm", { proposalId: row.proposal.proposalId });
+    await t.tap(occ, "confirm", { proposalId: row.proposal.proposalId });
+    expect(t.confirms()).toBe(1);
+    expect(patches()).toBe(1);
+    expect(dv.items.get(500)!.fields["System.State"]).toBe("Closed");
+    card = await t.tap(occ, "undone", { pickId: a.id });
+    expect(card).toContain("Put #500 back to Active");
+    expect(patches()).toBe(1);
+    expect(t.logs.map((l) => JSON.stringify(l)).join()).not.toContain("Import mapping");
+  });
+
+  it("PK-1: with Never ask, Done on the card offers nothing", async () => {
+    const dv = fakeDevOpsWrite({ now: () => MON });
+    dv.add(500, { "System.WorkItemType": "User Story", "System.Title": "Import mapping", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
+    const t = await setup(d, { devops: dv, toml: `${ON}\n[plan]\ndevops_on_done = "never"\n` });
+    const a = await t.add({ kind: "item", itemId: 500, title: "Import mapping", itemType: "User Story" });
+    t.at("12:10");
+    await t.rhythm.tick(ANA, await t.facts());
+    const card = await t.tap(`checkin:${MON}`, "done", { pickId: a.id });
+    expect((await t.plan.getPick(a.id))?.status).toBe("done");
+    expect(card).not.toContain("Set #500");
+expect(t.logs.map((l) => JSON.stringify(l)).join()).not.toContain("Import mapping");
   });
 
   it("close out in my words: one proposal shows done, moved on and closed out; one Confirm does all of it", async () => {

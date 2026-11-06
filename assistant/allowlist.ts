@@ -38,6 +38,10 @@ export const TOOLS = {
   // TB-2: several picks at once (Check-in's Move the rest, a Teams card's choices), and Close out in one confirm.
   move_picks: { kind: "proposal", actions: ["pick.move"], spec: { name: "move_picks", description: "Propose moving several of my picks, each to a day and half.", parameters: obj({ moves: { type: "array", minItems: 1, maxItems: 12, items: obj({ pickId: id("The pick's id, from a read"), date: date("The day to move it to"), half }) } }) } },
   close_day: { kind: "proposal", actions: ["pick.mark_done", "pick.move", "closeout.commit"], spec: { name: "close_day", description: "Propose closing out a day: mark the picks I name done, move the unfinished ones into their client's next block (or the unfinished list when there is none), and mark the day closed out.", parameters: obj({ date: date("The day, YYYY-MM-DD"), donePickIds: { type: "array", maxItems: 30, items: id("A pick's id, from a read") } }) } },
+  // PK-1: a to-do checked off on a Teams card offers its DevOps item's done state, and Undo offers that write's undo.
+  // From buttons only (BUTTON_ONLY): never offered to the model.
+  item_done: { kind: "proposal", actions: ["devops.done_offer", "devops.preview", "devops.confirm"], spec: { name: "item_done", description: "Propose setting a checked-off pick's DevOps item to its done state.", parameters: obj({ pickId: id("The pick's id, from a read"), state: sn("One of the item's done states, or null for its completed state") }) } },
+  item_undo: { kind: "proposal", actions: ["devops.undo_offer", "devops.preview", "devops.confirm"], spec: { name: "item_undo", description: "Propose undoing the state change FocusTime made to an unchecked pick's DevOps item.", parameters: obj({ pickId: id("The pick's id, from a read") }) } },
   capture: { kind: "proposal", actions: ["capture.add", "capture.route", "draft.prepare"], spec: { name: "capture", description: "Propose capturing a line to sort later, or as a draft story for the client.", parameters: obj({ text: s("What to capture, in my words"), as: { type: "string", enum: ["sort_later", "draft_story"] } }) } },
   // ---- Not yet ----
   close_loop: { kind: "stub", actions: [], spec: { name: "close_loop", description: "Close a loop (a follow-up or promise). Not available yet.", parameters: obj({}) } },
@@ -48,14 +52,17 @@ export const TOOL_NAMES = Object.keys(TOOLS) as ToolName[];
 export const isTool = (n: string): n is ToolName => Object.hasOwn(TOOLS, n);
 /** Proposal tools that change DevOps items or the change set: their item must come from my words, the screen or a read. */
 export const ITEM_TOOLS: readonly ToolName[] = ["add_must", "ahead_change", "send", "comment", "description"];
-export const PICK_TOOLS: readonly ToolName[] = ["move_pick", "drop_pick", "keep_pick"];
+export const PICK_TOOLS: readonly ToolName[] = ["move_pick", "drop_pick", "keep_pick", "item_done", "item_undo"];
+/** PK-1: tools only a button proposes (propose()), never given to the model. */
+export const BUTTON_ONLY: readonly ToolName[] = ["item_done", "item_undo"];
 /** TB-2: tools whose arguments carry several pick ids (each must come from a read, like PICK_TOOLS' one). */
 export const PICKS_TOOLS: readonly ToolName[] = ["move_picks", "close_day"];
 /**
- * TB-2: the proposals a button may ask for with propose() (no AI call): FocusTime's plan only, never DevOps. The
- * preview, the 15 minutes and every confirm check are the same as a proposal the model made.
+ * TB-2: the proposals a button may ask for with propose() (no AI call): FocusTime's plan, and (PK-1) a checked-off
+ * to-do's DevOps state and its undo, the same write the app's offer makes. The preview, the 15 minutes and every
+ * confirm check are the same as a proposal the model made.
  */
-export const PROPOSE_TOOLS = ["move_pick", "keep_pick", "drop_pick", "confirm_day", "move_picks", "close_day"] as const satisfies readonly ToolName[];
+export const PROPOSE_TOOLS = ["move_pick", "keep_pick", "drop_pick", "confirm_day", "move_picks", "close_day", "item_done", "item_undo"] as const satisfies readonly ToolName[];
 export type ProposeTool = (typeof PROPOSE_TOOLS)[number];
 
 /** Never reachable from the assistant, whatever the model asks (checked by the test against the list above). */
