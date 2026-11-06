@@ -540,7 +540,7 @@ Checking a to-do done offers its DevOps item's done state as a proposal; nothing
   (kept in the log entry's `pickIds`); a batch's state refusals land per line. `[plan] devops_on_done` ("ask" or
   "never", `config/schema.ts`, `config/settings.ts`).
 - **UI.** `ui/DoneOffer.tsx`: `useDoneOfferFlow` (owned by `ui/App.tsx`, `DoneOfferCtx`): after a tick on Today, the
-  Board (`App.toggle`) or Plan today and a past day's review (`ui/PlanDay.tsx`), one card with the write's preview,
+  Board (`App.toggle`), the focus timer's Done (`runTimer`) or Plan today and a past day's review (`ui/PlanDay.tsx`), one card with the write's preview,
   Confirm and Not now; Undo after a write; unchecking offers that write's undo (the write framework's dialog).
   `DoneBatch`: Close out's "N to-dos done today; set their items to Closed?" (`ui/Today.tsx` › CloseOutPanel), per
   client in tens, a result per item with Retry. Settings › Planning: When I check off a to-do. Styles: the PK-1 block.

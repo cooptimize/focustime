@@ -456,9 +456,14 @@ export function App() {
   const reloadRef = useRef<() => void>(() => {});
   const openFocusRef = useRef<() => void>(() => {});
   /** Timer actions (step 6c): the server keeps the state; reload to show it. */
+  // PK-1: the focus timer's Done ticks its to-do; the offer follows (the refs are set once the week is loaded).
+  const timerPickRef = useRef<number | null>(null);
+  const tickedRef = useRef<((pickId: number, done: boolean) => void) | null>(null);
   const runTimer = useCallback(async (action: string, input: Record<string, unknown> = {}): Promise<boolean> => {
     try {
+      const donePick = action === "timer.done" ? timerPickRef.current : null;
       const r = await call<{ notice?: string }>(action, input);
+      if (donePick !== null) tickedRef.current?.(donePick, true);
       if (r?.notice) setNotice(r.notice);
       // Step 10: starting focus (or the next pick) switches to the focus screen, from wherever it was started.
       if ((action === "timer.start" && input.kind !== "break") || action === "timer.next") openFocusRef.current();
@@ -522,6 +527,8 @@ export function App() {
   // PK-1: a to-do checked off offers its DevOps item's done state (never automatically); unchecked, the Undo.
   const doneOffer = useDoneOfferFlow({ allowed: data?.devopsWrite ?? [], ask: (data?.planning.devopsOnDone ?? "ask") === "ask", onDone: reloadQuiet });
   const { ticked } = doneOffer.env;
+  tickedRef.current = ticked;
+  timerPickRef.current = data?.timer?.pickId ?? null;
   const connectWrite = useCallback(async () => {
     setNotice("Signing in to Microsoft to allow calendar changes");
     try {

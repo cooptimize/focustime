@@ -12,7 +12,10 @@ import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 
 /** What a place that ticks a to-do tells the offer: which to-do, and done or not. */
-export type DoneOfferEnv = { ticked: (pickId: number, done: boolean, clientKey: string, itemId: number | null) => void };
+export type DoneOfferEnv = {
+  /** A to-do ticked or unticked. Its client and item when the caller knows them (a known "no item" asks nothing); the server checks the rest. */
+  ticked: (pickId: number, done: boolean, clientKey?: string | null, itemId?: number | null) => void;
+};
 export const DoneOfferCtx = createContext<DoneOfferEnv>({ ticked: () => {} });
 export const useDoneOffer = () => useContext(DoneOfferCtx);
 
@@ -30,8 +33,8 @@ export function useDoneOfferFlow(o: { allowed: readonly string[]; ask: boolean; 
   opts.current = o;
   const previewFor = useCallback(async (offer: DoneOffer, state: string) => (await call<{ preview?: DevOpsPreview; nothing?: string }>("devops.preview", { clientKey: offer.clientKey, change: { kind: "state", itemId: offer.itemId, state, pickId: offer.pickId, ...(offer.followUpId !== null ? { followUpId: offer.followUpId } : {}) } })).preview ?? null, []);
   const ticked = useCallback(
-    (pickId: number, done: boolean, clientKey: string, itemId: number | null) => {
-      if (!opts.current.ask || itemId === null || !opts.current.allowed.includes(clientKey)) return;
+    (pickId: number, done: boolean, clientKey?: string | null, itemId?: number | null) => {
+      if (!opts.current.ask || itemId === null || (clientKey && !opts.current.allowed.includes(clientKey))) return;
       const n = ++seq.current;
       void (async () => {
         try {
