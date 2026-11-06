@@ -98,7 +98,8 @@ describe("chat images and the AI (CV-4)", () => {
     const [row] = await w.teams.images(CHAT.chatId, [m.messageId]);
     expect(row!.description).not.toMatch(/dana@|hunter2|\n/);
     expect(row!.description!.length).toBeLessThanOrEqual(120);
-    expect(row!.description!.startsWith("Login screen for [email address] with [hidden]")).toBe(true);
+    // HK-4: the service redacts the answer first, so the spans read "[removed]" (CV-4's own scrub is the backstop).
+    expect(row!.description!.startsWith("Login screen for [removed] with [removed]")).toBe(true);
   });
 
   it("a request that fails stores no description", async () => {

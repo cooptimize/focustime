@@ -36,7 +36,7 @@ export const MODEL_PRICES: Record<string, { inputPerMillion: number; cachedInput
 
 const CLIENT = "contoso";
 const NOW = "2026-11-06T15:00:00Z";
-const ZONE = "America/New_York";
+const ZONE = "UTC";
 
 /** One eval case: the task, its input and schema, and what a good answer must do. */
 export type EvalCase = { task: string; id: string; instructions: string; input: string; schema: JsonSchema; check: (v: never) => boolean; tools?: { specs: ToolSpec[]; outputs: Record<string, string> } };
