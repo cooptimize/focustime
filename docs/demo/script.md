@@ -24,7 +24,7 @@ and nothing leaves FocusTime. `e2e/demo-script.test.ts` walks these same steps i
 - [ ] Walk every step below once, then Reset demo, then walk Today again: it looks as it did the first time.
 - [ ] **Eyeball every screen for a colleague's or a client's real name.** `e2e/demo-names.test.ts` checks the
       names guard's list, but a name that isn't on that list only a person can spot.
-- [ ] Friday differs from Monday. Friday is the catch-up day (no blocks), and the unfinished picks show as
+- [ ] Friday differs from Monday. Friday is the catch-up day (no blocks), and the unfinished to-dos show as
       suggested cards in each client's next block instead of Monday's "From last week" list. Dates like "was due Wed"
       move with the day. The script below is written for Monday Nov 9; the e2e and its screenshots run on Monday Nov 2,
   so their dates are a week earlier.
@@ -47,15 +47,15 @@ Each step: **Click** what to do · **Say** one line · **Expect** what appears �
 - **Click**: **Plan today** (or P). Pick the Northwind block, then drag **Filter orders by date range** from
   "Add to Northwind afternoon" onto it. Then **Confirm today**.
 - **Say**: "Planning is dragging this week's stories into today's real free time. From last week sits at the top."
-- **Expect**: the pick lands in Northwind's block with its size and the fit ("Fits · 30m spare"). From last week
-  lists three unfinished picks.
+- **Expect**: the to-do lands in Northwind's block with its size and the fit ("Fits · 30m spare"). From last week
+  lists three unfinished to-dos.
 - **If not**: use the row's **+** instead of dragging.
 
 ### 3. Week (1.5 min)
 
 - **Click**: **Week**.
 - **Say**: "The week is half-day blocks with meetings on the rail. Risk always says why."
-- **Expect**: "From last week · 2 to plan · 3 unfinished picks from last week". Wednesday afternoon "At risk · Out:
+- **Expect**: "From last week · 2 to plan · 3 unfinished to-dos from last week". Wednesday afternoon "At risk · Out:
   school event 1:30". Thursday is a hatched **PTO** day, Friday a dashed **Catch-up** column. (Neither is ever today:
   on a Wednesday the afternoon out is Tuesday's, and on a Thursday Friday is the PTO day.) The now line sits on
   today with its time.

@@ -36,7 +36,7 @@ export function NowStrip({ strip, onSelect, onStartFocus = null, borrowed = null
         </span>
       )}
       {onStartFocus && (
-        <button type="button" className="mini now-start" onClick={onStartFocus} title="Start focus on the next planned pick">
+        <button type="button" className="mini now-start" onClick={onStartFocus} title="Start focus on the next planned to-do">
           Start focus
         </button>
       )}
@@ -78,7 +78,7 @@ function StripLine({ strip: s, onSelect }: { strip: Strip; onSelect: () => void 
   if (s.picks)
     parts.push(
       <span key="picks" className={s.draft ? "now-draft" : undefined}>
-        {s.draft ? `${s.picks.total} ${s.picks.total === 1 ? "pick" : "picks"}, press Done to keep the plan` : `${s.picks.done} of ${s.picks.total} picks done`}
+        {s.draft ? `${s.picks.total} ${s.picks.total === 1 ? "to-do" : "to-dos"}, press Done to keep the plan` : `${s.picks.done} of ${s.picks.total} to-dos done`}
       </span>,
     );
   if (s.nextPick)

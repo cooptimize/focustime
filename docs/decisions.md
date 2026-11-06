@@ -811,7 +811,7 @@ Earlier decisions (D01–D20) live in Discovery Brief v0.3 in the claude.ai Proj
 
 ## CV-5
 
-Numbered at merge.
+D776 to D790 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -833,7 +833,7 @@ Numbered at merge.
 
 ## UI-8
 
-Numbered at merge.
+D791 to D795 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -845,7 +845,7 @@ Numbered at merge.
 
 ## IB-1
 
-Numbered at merge.
+D796 to D819 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -876,7 +876,7 @@ Numbered at merge.
 
 ## FB-1
 
-Numbered at merge.
+D820 to D825 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -889,7 +889,7 @@ Numbered at merge.
 
 ## DM-1
 
-Numbered at merge.
+D826 to D836 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -907,7 +907,7 @@ Numbered at merge.
 
 ## TB-2
 
-Numbered at merge.
+D837 to D849 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -927,7 +927,7 @@ Numbered at merge.
 
 ## WK-1
 
-Numbered at merge.
+D850 to D858 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -943,7 +943,7 @@ Numbered at merge.
 
 ## SR-1
 
-Numbered at merge.
+D859 to D870 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -977,7 +977,7 @@ Quick fixes from the Nov 5 call (numbered with DX-1).
 
 ## DX-1
 
-Numbered at merge. Counts-only diagnostics for QF-1's two open questions (Q-QF1-1, Q-QF1-3).
+D871 to D876 (numbered after merge, in TD-1). Counts-only diagnostics for QF-1's two open questions (Q-QF1-1, Q-QF1-3).
 
 | # | Status | Decision |
 |---|---|---|
@@ -991,7 +991,7 @@ Numbered at merge. Counts-only diagnostics for QF-1's two open questions (Q-QF1-
 
 ## PK-1
 
-Numbered at merge. Checking off a to-do offers the DevOps update (decisions by the product owner, Nov 6).
+D877 to D887 (numbered after merge, in TD-1). Checking off a to-do offers the DevOps update (decisions by the product owner, Nov 6).
 
 | # | Status | Decision |
 |---|---|---|
@@ -1006,6 +1006,18 @@ Numbered at merge. Checking off a to-do offers the DevOps update (decisions by t
 | D885 | Done | PK-1 (extends TB-2's propose(), as the product owner decided): Done on a check-in or close out card offers the same proposal in the card through `propose("item_done", { pickId })`, and Undo offers `item_undo`, only when no other proposal is open there. Confirm is claimed once (a double tap writes once) and re-checks the offer and a fresh preview. Both tools are button only (`BUTTON_ONLY`): never in the model's intent enum, tool list or allowed list. Teams offers the Completed state; the preview notes that Resolved is set in FocusTime. |
 | D886 | Done | PK-1: the demo's writes stay simulated (the session's in-memory DevOps); the `todo-done` seed puts a done to-do whose item is still open (Harbor #2211) on the last workday, so Close out of that day asks. Today stays unplanned for the demo script; once planned, a tick offers the same. The seed's open item adds the rule's Update DevOps follow-up to the demo (4 to 5). |
 | D887 | Done | PK-1: words. Everything new people read says "to-do" (TD-1); code names stay `pick`. The Teams cards' existing "picks" wording is TD-1's to change. |
+
+## TD-1
+
+Numbered at merge. "Pick" reads awkwardly; the product owner renamed it (Nov 6).
+
+| # | Status | Decision |
+|---|---|---|
+| new | Done | TD-1: a planned piece of work on a half-day block is a "to-do" (plural "to-dos") in everything people read: the app's labels, counts, empty states, tooltips, aria-labels, errors, Settings, the command menu, the Guide, notifications, the Teams cards and quick replies, the Teams app's command list, the assistant's tool descriptions and previews, the demo's scripted replies and docs, the legal page and the app manifest. Labels only: code names (`pick.*` actions, `move_pick` and the other assistant tool names, types, CSS classes, `data-pick`), tables and columns, stored values (`paid_by = 'picks'`, the close note "Done as a pick", a follow-up's close reason) and URLs stay. "Pick" meaning choose ("Pick a day after today", "the people you pick", "picks it up") stays. |
+| new | Done | TD-1: the command menu finds every to-do command by "to-do", "todo" and the old "pick" (`filterCommands` treats pick, picks, todo and todos as to-do), so no `aka` per command. |
+| new | Done | TD-1: the assistant's fixed instructions say "a to-do is a planned piece of work on a half-day block (code name pick)", that people may say pick or to-do and both mean the same, and that replies call it a to-do. The tool names keep pick; their descriptions say to-do. |
+| new | Done | TD-1: a guard (`scripts/words-guard.ts`, run by `npm run guards` and CI) fails on "pick" in the to-do sense in string literals and JSX text of the app's code (not tests or fakes), the demo docs and the public pages. It skips code tokens (`pick.move`, `kind: "pick"`, class names, `Pick<>`), SQL, comments, and "pick" as choose (followed by a, the, another, from, who, up and similar, or after you, can, may, to), with a short list of one-off phrases. A noun before it ("a pick", "today's picks", "3 picks") makes it the to-do sense whatever follows. |
+| new | Done | TD-1: the Guide answers "Where did picks go?" beside QF-1's renames. |
 
 ## BH-1
 

@@ -132,7 +132,7 @@ export async function timeAction(ctx: TimeContext, action: TimeAction, input: un
         const s = span(o.start, o.end);
         // Q34 (step 6c): overlapping working hours is allowed; only the part outside them counts as flex (week/build.ts).
         const overlapMinutes = hoursOn(cfg.week.hours, d).segments.reduce((n, w) => n + Math.max(0, Math.min(toMin(s.end), toMin(w.end)) - Math.max(toMin(s.start), toMin(w.start))), 0);
-        if (overlapMinutes >= toMin(s.end) - toMin(s.start)) return bad("That is all inside working hours, so it isn't flex time. Add a pick to that block instead", 422);
+        if (overlapMinutes >= toMin(s.end) - toMin(s.start)) return bad("That is all inside working hours, so it isn't flex time. Add a to-do to that block instead", 422);
         const clientKey = text(o.clientKey, "clientKey", 100);
         const itemId = o.itemId === undefined || o.itemId === null ? null : id(o.itemId, "itemId");
         let item: { title: string; url: string } | null = null;

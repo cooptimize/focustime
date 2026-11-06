@@ -135,7 +135,7 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
         }
         // Step 12: from a timebox. Its pick when it has one; the length defaults to the timebox's.
         if (o.timeboxId !== undefined) {
-          if (kind !== "focus" || o.pickId !== undefined) throw new Invalid("A timebox starts focus on its own pick");
+          if (kind !== "focus" || o.pickId !== undefined) throw new Invalid("A timebox starts focus on its own to-do");
           if (typeof o.timeboxId !== "number" || !Number.isInteger(o.timeboxId)) throw new Invalid("timeboxId must be a number");
           const tb = (await plan.timebox(o.timeboxId));
           if (!tb || tb.removedAt) return bad("No such timebox", 404);
@@ -146,11 +146,11 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
           return respond(started, await openList());
         }
         if (o.pickId !== undefined) {
-          if (kind !== "focus") throw new Invalid("A break isn't for a pick");
+          if (kind !== "focus") throw new Invalid("A break isn't for a to-do");
           if (typeof o.pickId !== "number" || !Number.isInteger(o.pickId)) throw new Invalid("pickId must be a number");
           const p = (await plan.getPick(o.pickId));
-          if (!p) return bad(`No pick ${o.pickId}`, 404);
-          if (p.status !== "planned") return bad("Only a planned pick can be timeboxed", 409);
+          if (!p) return bad(`No to-do ${o.pickId}`, 404);
+          if (p.status !== "planned") return bad("Only a planned to-do can be timeboxed", 409);
           await finish();
           const started = (await startFor(p, minutes));
           return respond(started, await openList());
@@ -190,7 +190,7 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
         // Next pick keeps deep focus as it was.
         deep = !!s.deep;
         const next = (await nextPick(plan, today, s.pickId));
-        return next ? respond((await startFor(next))) : respond(null, { notice: "No planned picks left today" });
+        return next ? respond((await startFor(next))) : respond(null, { notice: "No planned to-dos left today" });
       }
       case "timer.deep": {
         // Step 16.3: switch the running focus session between deep (Do not disturb) and plain (Busy).

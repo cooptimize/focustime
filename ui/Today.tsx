@@ -325,7 +325,7 @@ export function Today(props: Props) {
   const boxedIds = new Set(data.timeboxes.filter((t) => t.date === date && !t.removedAt).map((t) => t.pickId));
   const unboxed = picks.filter((p) => p.status === "planned" && !boxedIds.has(p.id)).length;
   const timeboxOffer = mode === "now" && !past && workday && !ptoDay && unboxed > 0 && data.timeboxSettings.enabled !== false && props.onTimebox ? (
-    <button type="button" className="mini today-timebox" onClick={() => props.onTimebox!(date)} title="Give every planned pick a time in its block's free time">
+    <button type="button" className="mini today-timebox" onClick={() => props.onTimebox!(date)} title="Give every planned to-do a time in its block's free time">
       {committed ? "Timebox my day" : "Confirm and timebox"}
     </button>
   ) : null;
@@ -841,7 +841,7 @@ function BlockCard(b: BlockProps) {
                     <button type="button" className="next-count" onClick={b.props.onFocusScreen} title="Back to the focus screen">
                       {t.ended ? "Time's up" : countdown(timerLeft(t, b.nowMs))}
                     </button>
-                    <button type="button" className="mini" onClick={() => b.props.onTimer("timer.done")} title="End the session and tick the pick done">
+                    <button type="button" className="mini" onClick={() => b.props.onTimer("timer.done")} title="End the session and tick the to-do done">
                       Done
                     </button>
                     <button type="button" className="mini" onClick={() => b.props.onTimer("timer.extend")} title="Add 15 minutes">
@@ -849,7 +849,7 @@ function BlockCard(b: BlockProps) {
                     </button>
                   </span>
                 ) : t ? undefined : (
-                  <button type="button" className="start-focus" onClick={() => b.props.onStart(r.pick)} title="Start focus on this pick">
+                  <button type="button" className="start-focus" onClick={() => b.props.onStart(r.pick)} title="Start focus on this to-do">
                     Start focus
                   </button>
                 ),
@@ -1316,7 +1316,7 @@ function DayTimeline({ day, blocks, data, picks, now, nowMs, events, onNotice }:
     const id = Number(e.dataTransfer.getData(PICK_DRAG));
     const p = picks.find((x) => x.id === id);
     if (!p || !env) return;
-    if (p.half !== slot.half) return onNotice(`That gap is in the ${halfName(slot.half).toLowerCase()} block. Move the pick there first`);
+    if (p.half !== slot.half) return onNotice(`That gap is in the ${halfName(slot.half).toLowerCase()} block. Move the to-do there first`);
     const c = timeChoices(slot, data.timeboxes, p, data.planning.sizes, now, data.planning.minSizes ?? DEFAULT_MIN_SIZES).find((x) => x.kind === "gap" && ms(x.gapStart) === ms(gap.start));
     if (!c) return onNotice(`That gap is too short for "${p.title}"`);
     env.timeboxChange("timebox.add", { pickId: p.id, date: day.date, start: c.start, end: c.end });
@@ -1402,7 +1402,7 @@ export function FlowHint() {
   return (
     <aside className="flow-hint" aria-label="How FocusTime fits together">
       <p>
-        <strong>Week</strong> is each client's musts and nice to haves, from DevOps. <strong>Day</strong> is for stories: what you pick for each block. <strong>Focus</strong> is one story at a time.
+        <strong>Week</strong> is each client's musts and nice to haves, from DevOps. <strong>Day</strong> is for stories: the to-dos you plan for each block. <strong>Focus</strong> is one story at a time.
       </p>
       <button type="button" className="mini" onClick={dismiss}>Got it</button>
     </aside>

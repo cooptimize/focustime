@@ -93,18 +93,18 @@ try {
   await shot("plan-day-done", "Done commits the day (Plan ✓ on the switch) and offers Timebox my day");
   await ok("Timebox my day", () => page.locator(".pd2 .pd-committed button, .pd2 button").filter({ hasText: /^Timebox my day$/ }).first().click());
   await page.waitForTimeout(900);
-  await shot("timebox-my-day", "Timebox my day: each pick placed into a free gap, shown first");
+  await shot("timebox-my-day", "Timebox my day: each to-do placed into a free gap, shown first");
   await ok("apply timeboxes", () => page.locator(".timebox-myday button.commit, [aria-label='Timebox my day'] button.commit").first().click());
   await page.waitForTimeout(1200);
-  await shot("plan-day-timed", "Picks now have times on their rows");
+  await shot("plan-day-timed", "To-dos now have times on their rows");
 
   await ok("Done again: back to Now", () => page.locator(".pd2-head .done-btn").click());
   await ok("Today › Now", () => at("#/today"));
   await page.waitForTimeout(1000);
-  await shot("today-planned", "Today › Now: the planned picks, one large Start focus, Plan ✓");
+  await shot("today-planned", "Today › Now: the planned to-dos, one large Start focus, Plan ✓");
   await ok("Start focus", () => page.locator(".today-start").first().click());
   await page.waitForTimeout(1200);
-  await shot("focus", "The focus screen: countdown, the one pick, next meeting; the Focus button carries the timer");
+  await shot("focus", "The focus screen: countdown, the one to-do, next meeting; the Focus button carries the timer");
   await ok("stop focus", () => page.getByRole("button", { name: /^Stop/ }).first().click());
   await page.waitForTimeout(800);
   await page.keyboard.press("Escape");
@@ -113,7 +113,7 @@ try {
   await page.keyboard.press("e");
   await ok("Today › Close out", () => at("#/today/closeout"));
   await page.waitForTimeout(1200);
-  await shot("close-out", "Today › Close out: picks done or not, where you left off, open follow-ups");
+  await shot("close-out", "Today › Close out: to-dos done or not, where you left off, open follow-ups");
   const row = page.locator(".follow-up-list li").first();
   await row.scrollIntoViewIfNeeded();
   await ok("Close the loop", () => row.getByRole("button", { name: "Close the loop" }).first().click());

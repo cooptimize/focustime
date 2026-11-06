@@ -258,7 +258,7 @@ function ptoReason(env: MenuEnv, date: IsoDate): string | undefined {
   return d?.pto ? `PTO day (${d.pto.titles.join(", ")})` : undefined;
 }
 
-const PAST = "Past day: its picks can only be ticked done or dropped";
+const PAST = "Past day: its to-dos can only be ticked done or dropped";
 const isPast = (env: MenuEnv, date: IsoDate) => date < env.today;
 /** Why a day can't take new picks or changes: PTO, or past. */
 const closedReason = (env: MenuEnv, date: IsoDate) => ptoReason(env, date) ?? (isPast(env, date) ? PAST : undefined);
@@ -335,20 +335,20 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
     items: [
       { id: "open", label: "Open in browser", action: "link.open", ...(p.itemUrl ? {} : { disabled: p.kind === "intention" ? "An intention has no work item" : "A draft story isn't in DevOps yet" }), run: () => { if (p.itemUrl) env.openLink(p.clientKey, p.itemUrl); } },
       { id: "size", label: "Set size", hint: p.size ?? "Size?", action: "pick.set_size", ...(past ? { disabled: PAST } : {}), next: () => sizeStep(env, p) },
-      { id: "move", label: "Move", hint: past ? "to today or later" : "AM, PM, another day, Friday", action: "pick.move", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be moved", expected: true } : {}), next: () => moveStep(env, p) },
+      { id: "move", label: "Move", hint: past ? "to today or later" : "AM, PM, another day, Friday", action: "pick.move", ...(p.status !== "planned" ? { disabled: "Only a planned to-do can be moved", expected: true } : {}), next: () => moveStep(env, p) },
       {
         id: "focus",
         label: env.timer?.pickId === p.id ? "Focus timer running" : "Start focus",
         hint: `${suggestMinutes(p.size, env.planning.sizes)} min`,
         action: "timer.start",
-        ...(p.status !== "planned" ? { disabled: "Only a planned pick can be timeboxed" } : p.date !== env.today ? { disabled: "Only today's picks" } : env.timer?.pickId === p.id ? { disabled: "Already timing this pick" } : {}),
+        ...(p.status !== "planned" ? { disabled: "Only a planned to-do can be timeboxed" } : p.date !== env.today ? { disabled: "Only today's to-dos" } : env.timer?.pickId === p.id ? { disabled: "Already timing this to-do" } : {}),
         next: () => lengthStep(`Focus on "${p.title}"`, suggestMinutes(p.size, env.planning.sizes), (m) => env.runTimer("timer.start", { pickId: p.id, minutes: m })),
       },
-      { id: "timebox", label: "Timebox", hint: "a free gap in its block", action: "timebox.add", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be timeboxed" } : past ? { disabled: PAST } : {}), next: () => timeboxStep(env, p) },
+      { id: "timebox", label: "Timebox", hint: "a free gap in its block", action: "timebox.add", ...(p.status !== "planned" ? { disabled: "Only a planned to-do can be timeboxed" } : past ? { disabled: PAST } : {}), next: () => timeboxStep(env, p) },
       { id: "help", label: "Ask to collaborate", hint: "who is free", action: "collab.candidates", ...(past ? { disabled: PAST } : {}), run: () => env.openHelp({ clientKey: p.clientKey, title: p.title, url: p.itemUrl, itemId: p.itemId, pickId: p.id, pinned: p.date }) },
       { id: "done", label: p.status === "done" ? "Mark not done" : "Mark done", action: "pick.mark_done", run: () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" }) },
-      { id: "makeup", label: "I'll make it up…", hint: "tonight, Friday, another day", action: "pick.make_up", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be made up" } : {}), next: () => makeUpStep(env, p) },
-      { id: "drop", label: "Drop", danger: true, action: "pick.remove", ...(past && p.status !== "planned" ? { disabled: "Only a planned pick can be dropped on a past day" } : {}), run: () => env.runPlan("pick.remove", { id: p.id }) },
+      { id: "makeup", label: "I'll make it up…", hint: "tonight, Friday, another day", action: "pick.make_up", ...(p.status !== "planned" ? { disabled: "Only a planned to-do can be made up" } : {}), next: () => makeUpStep(env, p) },
+      { id: "drop", label: "Drop", danger: true, action: "pick.remove", ...(past && p.status !== "planned" ? { disabled: "Only a planned to-do can be dropped on a past day" } : {}), run: () => env.runPlan("pick.remove", { id: p.id }) },
     ],
   };
 }
@@ -388,7 +388,7 @@ export function borrowStep(env: MenuEnv, list: readonly BorrowedView[]): MenuSte
       ? sorted.map((b) => ({
           id: `b${b.id}`,
           label: `${b.minutes} min · ${b.title}`,
-          hint: b.paidAt ? (b.paidBy === "picks" ? "paid: pick done" : "paid") : `make up ${when(b)} · mark paid`,
+          hint: b.paidAt ? (b.paidBy === "picks" ? "paid: to-do done" : "paid") : `make up ${when(b)} · mark paid`,
           action: "borrow.pay",
           ...(b.paidAt ? { disabled: "Already paid" } : {}),
           run: () => env.runFollowUps("borrow.pay", { id: b.id }),
@@ -751,7 +751,7 @@ export function timeStep(env: MenuEnv, p: Pick): MenuStep {
       { id: "outlook", label: "Put on Outlook", checked: t.outlook, hint: t.outlook ? "on: a Busy event only you are on" : "after a preview", action: "timebox.set_outlook", ...(blocked ? { disabled: blocked } : {}), run: () => env.timeboxChange("timebox.set_outlook", { id: t.id, on: !t.outlook }) },
       ...(t.outlook ? [{ id: "show", label: "Show as", hint: SHOW_AS_LABEL[t.showAs], action: "timebox.update", ...(blocked ? { disabled: blocked } : {}), next: () => ({ title: `Show "${p.title}" as`, items: SHOW_AS_VALUES.map((v) => ({ id: v, label: SHOW_AS_LABEL[v], checked: t.showAs === v, run: () => change({ showAs: v }) })) }) } satisfies MenuItem] : []),
       { id: "focus", label: "Start focus", action: "timer.start", ...(t.date !== env.today ? { disabled: "Only today's timeboxes" } : {}), run: () => env.startTimeboxFocus(t) },
-      { id: "remove", label: "Remove time", danger: true, action: "timebox.remove", hint: t.onOutlook ? "and its Outlook event, after a preview" : "the pick stays planned", run: () => env.timeboxChange("timebox.remove", { id: t.id }) },
+      { id: "remove", label: "Remove time", danger: true, action: "timebox.remove", hint: t.onOutlook ? "and its Outlook event, after a preview" : "the to-do stays planned", run: () => env.timeboxChange("timebox.remove", { id: t.id }) },
     ],
   };
 }
@@ -914,7 +914,7 @@ function picksInScope(env: MenuEnv): Pick[] {
 function choosePick(env: MenuEnv, title: string, then: (p: Pick) => MenuItem["run"] | MenuStep): MenuStep {
   const picks = picksInScope(env);
   const day = env.planState?.date ?? env.selection.date;
-  if (!picks.length) return { title, items: [{ id: "none", label: `No picks on ${dayName(day)}`, disabled: "Plan the day first, or select a day with picks" }] };
+  if (!picks.length) return { title, items: [{ id: "none", label: `No to-dos on ${dayName(day)}`, disabled: "Plan the day first, or select a day with to-dos" }] };
   return {
     title,
     items: picks.map((p) => {
@@ -993,7 +993,7 @@ export function timerStep(env: MenuEnv): MenuStep {
         // Step 16.3: deep focus sets Teams to Do not disturb (plain focus: Busy). On the next pick when there is one.
         { id: "deep", label: "Deep focus", hint: "Teams: Do not disturb", action: "timer.start", next: () => lengthStep("Deep focus for", nx ? suggestMinutes(nx.size, p.sizes) : p.focusMinutes, (m) => env.runTimer("timer.start", { minutes: m, deep: true, ...(nx ? { pickId: nx.id } : {}) })) },
         { id: "break", label: "Break", hint: p.breakMinutes ? `${p.breakMinutes} min` : "off", action: "timer.start", ...(p.breakMinutes ? {} : { disabled: "Breaks are set to 0 minutes in Settings > Planning" }), run: () => env.runTimer("timer.start", { kind: "break" }) },
-        { id: "pick", label: nx ? "Another pick…" : "Timebox a pick…", action: "timer.start", next: () => choosePick(env, "Focus on which pick?", (pk) => () => env.runTimer("timer.start", { pickId: pk.id })) },
+        { id: "pick", label: nx ? "Another to-do…" : "Timebox a to-do…", action: "timer.start", next: () => choosePick(env, "Focus on which to-do?", (pk) => () => env.runTimer("timer.start", { pickId: pk.id })) },
       ],
     };
   }
@@ -1003,8 +1003,8 @@ export function timerStep(env: MenuEnv): MenuStep {
       ...(t.ended ? [] : [t.running ? { id: "pause", label: "Pause", action: "timer.pause", run: () => env.runTimer("timer.pause") } : { id: "resume", label: "Resume", action: "timer.resume", run: () => env.runTimer("timer.resume") }]),
       { id: "extend", label: "+15 min", action: "timer.extend", run: () => env.runTimer("timer.extend") },
       ...(t.kind === "focus" && !t.ended ? [{ id: "deep", label: "Deep focus", hint: "Teams: Do not disturb", checked: t.deep, action: "timer.deep", run: () => env.runTimer("timer.deep", { on: !t.deep }) } as MenuItem] : []),
-      { id: "done", label: t.pickId ? "Done (tick the pick)" : "Done", action: "timer.done", run: () => env.runTimer("timer.done") },
-      { id: "next", label: "Next pick", action: "timer.next", run: () => env.runTimer("timer.next") },
+      { id: "done", label: t.pickId ? "Done (tick the to-do)" : "Done", action: "timer.done", run: () => env.runTimer("timer.done") },
+      { id: "next", label: "Next to-do", action: "timer.next", run: () => env.runTimer("timer.next") },
       { id: "stop", label: "Stop", danger: true, action: "timer.stop", run: () => env.runTimer("timer.stop") },
     ],
   };
@@ -1031,12 +1031,12 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "planday.carry": return { run: () => env.setView("week") };
     case "planday.commit": return env.planState ? { run: env.commitPlan } : { disabled: "Open Plan the day first" };
     case "pick.add": return { next: () => chooseItem(env, "Add which work item?", isPickable, (k, i) => addStep(env, k, i)) };
-    case "pick.set_size": return { next: () => choosePick(env, "Set the size of which pick?", (p) => sizeStep(env, p)) };
-    case "pick.move": return { next: () => choosePick(env, "Move which pick?", (p) => moveStep(env, p)) };
-    case "pick.mark_done": return { next: () => choosePick(env, "Mark which pick done or not done?", (p) => () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" })) };
-    case "pick.remove": return { next: () => choosePick(env, "Drop which pick?", (p) => () => env.runPlan("pick.remove", { id: p.id })) };
+    case "pick.set_size": return { next: () => choosePick(env, "Set the size of which to-do?", (p) => sizeStep(env, p)) };
+    case "pick.move": return { next: () => choosePick(env, "Move which to-do?", (p) => moveStep(env, p)) };
+    case "pick.mark_done": return { next: () => choosePick(env, "Mark which to-do done or not done?", (p) => () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" })) };
+    case "pick.remove": return { next: () => choosePick(env, "Drop which to-do?", (p) => () => env.runPlan("pick.remove", { id: p.id })) };
     case "pick.uncarry":
-    case "pick.undrop": return { disabled: "Use Undo right after Keep, Move or Drop on a suggested pick" };
+    case "pick.undrop": return { disabled: "Use Undo right after Keep, Move or Drop on a suggested to-do" };
     case "planday.carry_hint": return { run: () => env.setView("week") };
     case "draft.add_story": return { next: () => chooseItem(env, "Draft a story under which epic or feature?", (i) => i.level === "portfolio", (k, i) => draftPrompt(env, k, i)) };
     case "draft.set_parent": return { run: () => env.setView("capture") };
@@ -1203,7 +1203,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "closeout.load": return { run: () => env.openCloseOut() };
     case "checkin.done": return { run: env.openCheckIn };
     case "closeout.commit": return env.closeOutDate ? { run: env.commitCloseOut } : { disabled: "Open Close out first" };
-    case "pick.make_up": return { next: () => choosePick(env, "Make up which pick?", (p) => makeUpStep(env, p)) };
+    case "pick.make_up": return { next: () => choosePick(env, "Make up which to-do?", (p) => makeUpStep(env, p)) };
     case "note.set": return { run: () => env.openCloseOut() };
     // Step 15.3: the capture box is the one way to add something new; this opens it with Follow-up chosen.
     case "followup.add": return { run: () => env.openCapture("follow_up") };
@@ -1305,8 +1305,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "collab.candidates":
     case "collab.suggest":
     case "collab.preview_invite":
-      return { next: () => choosePick(env, "Help on which pick?", (p) => () => env.openHelp({ clientKey: p.clientKey, title: p.title, url: p.itemUrl, itemId: p.itemId, pickId: p.id, pinned: p.date })) };
-    case "timebox.add": return { next: () => choosePick(env, "Timebox which pick?", (p) => () => env.openTimebox({ pickId: p.id, date: p.date })) };
+      return { next: () => choosePick(env, "Help on which to-do?", (p) => () => env.openHelp({ clientKey: p.clientKey, title: p.title, url: p.itemUrl, itemId: p.itemId, pickId: p.id, pinned: p.date })) };
+    case "timebox.add": return { next: () => choosePick(env, "Timebox which to-do?", (p) => () => env.openTimebox({ pickId: p.id, date: p.date })) };
     // QF-1: Timebox my day from anywhere: the default day (today, or the next workday), confirmed first when it isn't.
     case "timebox.add_many": return { run: () => (env.timeboxDay ? env.timeboxDay(env.planTarget.date) : env.openPlanDay()) };
     // Moving, resizing, removing and Outlook previews happen on the day's timeline in Plan the day.
@@ -1458,12 +1458,15 @@ export function commandList(env: MenuEnv): MenuItem[] {
 }
 
 /** Search: every word must appear in the label, group or hint, any order, any case. */
+/** TD-1: a to-do was called a pick; the old word (and "todo" without the hyphen) still finds it. */
+const SAME_WORD: Record<string, string> = { pick: "to-do", picks: "to-do", todo: "to-do", todos: "to-do" };
+
 export function filterCommands(items: MenuItem[], query: string): MenuItem[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) return items;
   const found = items.filter((i) => {
     const text = `${i.label} ${i.group ?? ""} ${i.hint ?? ""} ${i.action ?? ""} ${i.aka?.join(" ") ?? ""}`.toLowerCase();
-    return words.every((w) => text.includes(w));
+    return words.every((w) => text.includes(w) || (SAME_WORD[w] !== undefined && text.includes(SAME_WORD[w])));
   });
   // A label that starts with what was typed comes first ("plan a day" finds "Plan a day…" before "Plan the day").
   const typed = words.join(" ");
@@ -1572,7 +1575,7 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
         ...(f.past ? closed : !f.places.length ? { disabled: "No blocks for this client this week" } : {}),
         next: () => ({ title: `Pin "${f.title}"`, items: f.places.map((p) => ({ id: `pin-${p.date}-${p.half}`, label: p.label, checked: isPinned(p), action: "weekplan.place", run: () => ops.pin(p.date, p.half, !isPinned(p)) })) }),
       },
-      { id: "done", label: f.done ? "Mark not done" : "Mark done", action: "weekplan.mark_done", ...(f.past ? closed : f.done === "other" ? { disabled: "Done in DevOps or by a done pick" } : {}), run: () => ops.done(!f.done) },
+      { id: "done", label: f.done ? "Mark not done" : "Mark done", action: "weekplan.mark_done", ...(f.past ? closed : f.done === "other" ? { disabled: "Done in DevOps or by a done to-do" } : {}), run: () => ops.done(!f.done) },
       { id: "help", label: "Ask to collaborate", hint: "who is free", action: "collab.candidates", ...(f.past || f.done ? { disabled: f.past ? "A past week is a review" : "Already done" } : {}), run: ops.help },
       ...(ops.send ? [{ id: "send", label: "Send to…", hint: "a teammate's week", action: "send.create", ...(f.done ? { disabled: "Already done" } : {}), run: ops.send } as MenuItem] : []),
       ...(f.level === "feature"

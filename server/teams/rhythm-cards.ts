@@ -107,7 +107,7 @@ export function briefCard(m: BriefModel, publicUrl: string): Card {
     if (b.meetings.length > MAX.meetings) body.push(muted(`${b.meetings.length - MAX.meetings} more meetings`));
     if (!b.picks.length) body.push(muted("Nothing planned"));
     for (const p of b.picks.slice(0, MAX.picks)) body.push(pickLine(p, [], m, true));
-    if (b.picks.length > MAX.picks) body.push(muted(`${b.picks.length - MAX.picks} more picks`));
+    if (b.picks.length > MAX.picks) body.push(muted(`${b.picks.length - MAX.picks} more to-dos`));
   }
   if (m.more) body.push(muted(`${m.more} more block${m.more === 1 ? "" : "s"} in Today`));
   if (m.promises.length) {
@@ -132,7 +132,7 @@ export function briefCard(m: BriefModel, publicUrl: string): Card {
       actions.push({
         type: "Action.ShowCard",
         title: "Move…",
-        card: card([choices("movePick", "Which pick", open.map((p) => ({ value: String(p.id), label: p.title.slice(0, 80) }))), choices("moveTo", "To", m.destinations)], [exec("Show the move", tapOn(m, "move"))]),
+        card: card([choices("movePick", "Which to-do", open.map((p) => ({ value: String(p.id), label: p.title.slice(0, 80) }))), choices("moveTo", "To", m.destinations)], [exec("Show the move", tapOn(m, "move"))]),
       });
   }
   actions.push(openUrl({ label: ROUTE.brief[1], url: abs(publicUrl, ROUTE.brief[0]) }));
@@ -140,7 +140,7 @@ export function briefCard(m: BriefModel, publicUrl: string): Card {
 }
 
 export function checkinCard(m: CheckinModel, publicUrl: string): Card {
-  const body: unknown[] = [header("checkin", m.dateLabel, m.test), muted("This morning's picks. Tap Done for what's finished.")];
+  const body: unknown[] = [header("checkin", m.dateLabel, m.test), muted("This morning's to-dos. Tap Done for what's finished.")];
   if (!m.picks.length) body.push(text("Nothing was planned this morning.", { spacing: "Small" }));
   const settled = openProposal(m);
   for (const p of m.picks.slice(0, 10)) body.push(pickLine(p, ["done", "not_yet"], m, settled));

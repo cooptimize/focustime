@@ -223,7 +223,7 @@ const shortDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US
 export const notices = {
   planDay: (date: string, at: string): Notice => ({ kind: "plan_day", key: `plan_day:${date}`, title: "Plan the day", body: "Today isn't planned yet.\nClick to plan the day.", buttons: [open("Plan the day")], route: "planday", at, ref: date }),
   checkin: (date: string, at: string): Notice => ({ kind: "checkin", key: `checkin:${date}`, title: "Check-in", body: "Midday check-in: what still fits this afternoon.\nClick to check in.", buttons: [open("Check in")], route: "checkin", at, ref: date }),
-  closeout: (date: string, at: string): Notice => ({ kind: "closeout", key: `closeout:${date}`, title: "Close out", body: "Time to close out the day: picks, resume notes and promises.\nClick to close out.", buttons: [open("Close out")], route: "closeout", at, ref: date }),
+  closeout: (date: string, at: string): Notice => ({ kind: "closeout", key: `closeout:${date}`, title: "Close out", body: "Time to close out the day: to-dos, resume notes and promises.\nClick to close out.", buttons: [open("Close out")], route: "closeout", at, ref: date }),
   /** Monday for this week (Plan the week), Thursday and Friday for next week (Look ahead). */
   week: (weekStart: string, thisWeek: boolean, at: string): Notice => ({
     kind: thisWeek ? "plan_week" : "look_ahead",
@@ -242,8 +242,8 @@ export const notices = {
     kind: "timer",
     key: `timer:${startedAt}`,
     title: breakOver ? "Break over" : "Focus session done",
-    body: `${label}\nClick for Done, +15 min or Next pick.`,
-    buttons: [{ key: "done", label: "Done" }, { key: "extend", label: "+15 min" }, { key: "next", label: "Next pick" }],
+    body: `${label}\nClick for Done, +15 min or Next to-do.`,
+    buttons: [{ key: "done", label: "Done" }, { key: "extend", label: "+15 min" }, { key: "next", label: "Next to-do" }],
     route: "focus",
     at,
     ref: startedAt,

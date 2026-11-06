@@ -427,10 +427,10 @@ function ProcessView({ c, saver, onRefresh, refreshing }: { c: ClientRow; saver:
                       <td>
                         {portfolio ? (
                           <label className="adm-switch">
-                            <input type="checkbox" role="switch" checked={needs} aria-label={`${c.key}: ${t.name} needs breakdown`} onChange={(e) => saveNb(toggled(noBreakdown, t.name, !e.target.checked))} /> {needs ? "Yes" : "No: can be picked"}
+                            <input type="checkbox" role="switch" checked={needs} aria-label={`${c.key}: ${t.name} needs breakdown`} onChange={(e) => saveNb(toggled(noBreakdown, t.name, !e.target.checked))} /> {needs ? "Yes" : "No: can be a to-do"}
                           </label>
                         ) : (
-                          <span className="muted">Picked directly</span>
+                          <span className="muted">A to-do directly</span>
                         )}
                       </td>
                       <td>
@@ -451,7 +451,7 @@ function ProcessView({ c, saver, onRefresh, refreshing }: { c: ClientRow; saver:
         <>
           <p className="muted">The process couldn't be read: {p.message}. The Rules can still be set by type name.</p>
           <div className="set-grid">
-            <AField label="Types that don't need breakdown" kind="Rule" s={saver.status(scope, "no_breakdown")} retry={() => saveNb(noBreakdown)} hint="Parent or top types that can be picked directly. Commas between them.">
+            <AField label="Types that don't need breakdown" kind="Rule" s={saver.status(scope, "no_breakdown")} retry={() => saveNb(noBreakdown)} hint="Parent or top types that can be a to-do directly. Commas between them.">
               <ListInput label={`${c.key}: types that don't need breakdown`} value={noBreakdown} onSave={saveNb} />
             </AField>
             <AField label="Background types" kind="Rule" s={saver.status(scope, "background")} retry={() => saveBg(background)} hint="Types that don't count against hours. Commas between them.">

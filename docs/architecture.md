@@ -566,6 +566,18 @@ Checking a to-do done offers its DevOps item's done state as a proposal; nothing
 - **Tests.** `actions/done-offer.test.ts`, the PK-1 parts of `assistant/service.test.ts` and
   `server/teams/rhythm.test.ts`; e2e `e2e/pk1.test.ts`; card previews in `scripts/teams-card-previews.ts`.
 
+## TD-1: "pick" reads "to-do" (Nov 6)
+
+Labels only: what people read says to-do; code names, tables, stored values and URLs keep pick.
+
+- **Guard.** `scripts/words-guard.ts` (`wordsScanned`, `wordsHits`, `saysPick`), run by `scripts/guards.ts` as the
+  words guard: string literals and JSX text in the app's code, the demo docs and the public pages, with code tokens,
+  SQL and "pick" as choose left alone.
+- **Command menu.** `filterCommands` in `ui/menu.ts` treats pick, picks, todo and todos as to-do.
+- **Assistant.** The glossary line in `assistant/service.ts`'s intent and answer instructions.
+- **Tests.** `scripts/words-guard.test.ts`, the words case in `scripts/guards.test.ts`, `ui/td1-names.test.ts`, the
+  TD-1 case in `assistant/service.test.ts`.
+
 ## BH-1: Ahead › Backlog, stale items, bulk date pushes (Nov 6)
 
 - **Pure.** `plan/backlog.ts`: `backlogGroups` and `backlogOf` (each client's open items at one tier, in scope, by `AheadItem.order` or by target date without an order field; the rank before the owner and Stale filters, which reuse `filterRows`), `isStale`, `ageDays`, `ageText`, `lastText`, `bulkDecide` (per item: the change to stage or the reason it's skipped), `bulkSummary`, `nextMonday`, `DEFAULT_AHEAD` and `AheadSettings`.

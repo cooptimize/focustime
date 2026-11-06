@@ -49,6 +49,14 @@ describe("one guard script (HK-1)", () => {
     expect(r.stderr).not.toContain(client);
   });
 
+  it("fails on pick in the to-do sense in text people read (TD-1)", () => {
+    const d = repo();
+    writeFileSync(join(d, "ui/words.ts"), 'export const a = "Move pick";\nexport const b = { kind: "pick", action: "pick.move" };\n');
+    const r = cli(d);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/1 words hit.*\n\s+ui\/words\.ts:1/);
+  });
+
   it("fails on a type name used as code in ui/, tracked or not", () => {
     const d = repo();
     writeFileSync(join(d, "ui/kind.ts"), 'export const isFeature = (t: { type: string }) => t.type === "Feature";\n');

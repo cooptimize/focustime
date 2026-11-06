@@ -80,13 +80,13 @@ export function FocusScreen({ t, nowMs, pick, client, color, event, onTimer, onS
         </p>
       )}
       <div className="focus-actions">
-        <button ref={main} type="button" className="focus-btn primary" onClick={() => onTimer("timer.done")} title={pick ? "End the session and tick the pick done" : "End the session"}>
+        <button ref={main} type="button" className="focus-btn primary" onClick={() => onTimer("timer.done")} title={pick ? "End the session and tick the to-do done" : "End the session"}>
           {pick ? "Done" : "Finish"}
         </button>
         <button type="button" className="focus-btn" onClick={() => onTimer("timer.extend")} title="Add 15 minutes">
           +15
         </button>
-        <button type="button" className="focus-btn" onClick={() => onTimer("timer.stop")} title="Stop without ticking the pick">
+        <button type="button" className="focus-btn" onClick={() => onTimer("timer.stop")} title="Stop without ticking the to-do">
           Stop
         </button>
       </div>

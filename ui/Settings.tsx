@@ -534,12 +534,12 @@ function PlanningForm(p: FormProps) {
   );
   return (
     <div className="set-form">
-      <h3>Picks</h3>
+      <h3>To-dos</h3>
       <div className="set-grid">
-        {num("minS", "Shortest useful time, S (minutes)", "The least Timebox my day gives an S pick (S is 1h, M 2h, L 4h).")}
+        {num("minS", "Shortest useful time, S (minutes)", "The least Timebox my day gives an S to-do (S is 1h, M 2h, L 4h).")}
         {num("minM", "Shortest useful time, M (minutes)", "The same for M.")}
         {num("minL", "Shortest useful time, L (minutes)", "The same for L.")}
-        {num("carryDays", "Carry-over (days back)", "Unfinished picks offered again. 0 turns it off.", 1, 30)}
+        {num("carryDays", "Carry-over (days back)", "Unfinished to-dos offered again. 0 turns it off.", 1, 30)}
         {num("reminderOffsetMinutes", "Reminder (minutes after the day starts)", "Only when today isn't confirmed.", 5, 240)}
       </div>
       <AutoField a={a} k="devopsOnDone" label="When I check off a to-do" hint="Asking shows its DevOps item's done state to confirm, only for items you can change. Nothing is written without Confirm.">
@@ -575,7 +575,7 @@ function PlanningForm(p: FormProps) {
       <AheadRituals />
       <h3>Focus timer</h3>
       <div className="set-grid">
-        {num("focusMinutes", "Focus length (minutes)", "The default for a plain timer. A pick suggests its size instead.", 5, 240)}
+        {num("focusMinutes", "Focus length (minutes)", "The default for a plain timer. A to-do suggests its size instead.", 5, 240)}
         {num("breakMinutes", "Break length (minutes)", "Offered when a session ends. 0 for none.", 5, 60)}
         <AutoField a={a} k="endSound" label="End sound" hint="With the notification when a session ends.">
           <label className="set-check">

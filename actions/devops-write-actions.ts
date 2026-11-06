@@ -451,7 +451,7 @@ function hold(h: HeldIn, env: Env): DevOpsPreview {
   const fieldsRows = labels.map((l) => row(l, h.op === "create" ? null : shown(h.before[l]), shown(h.after[l])));
   const links = h.op === "create" && h.parentId ? [`Adds a parent link to #${h.parentId}, which shows the new item as its child`] : h.op === "undo_create" && h.parentId ? ["The parent link stays; the item shows as Removed under it"] : [];
   const notes: string[] = [];
-  if (h.op === "undo_create" && h.draftId) notes.push("The draft comes back in FocusTime, with its picks.");
+  if (h.op === "undo_create" && h.draftId) notes.push("The draft comes back in FocusTime, with its to-dos.");
   if (h.op === "undo_state" && h.commentId) notes.push("The comment added with that change is deleted too.");
   if (h.followUpId) notes.push("Closes the follow-up once DevOps shows the change.");
   if (h.ask) notes.push(h.op === "undo_create" ? "The request opens again in Inbox › Requests, for everyone on the chat." : "Resolves the request for everyone on the chat once DevOps shows the new item. Nothing is posted in Teams.");

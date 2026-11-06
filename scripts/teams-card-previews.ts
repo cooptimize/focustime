@@ -36,12 +36,12 @@ const nudges = { kind: "nudges" as const, occasion: "nudges:2026-11-05T19", item
 ] };
 const rhythmCards: [string, Card][] = [
   ["brief", briefCard(brief, URL_)],
-  ["brief-proposal", briefCard({ ...brief, proposal: ip({ title: "Confirm Thursday, Nov 5", changes: [{ field: "Plan", before: "Draft", after: "Confirmed, 3 picks" }] }) }, URL_)],
-  ["brief-done", briefCard({ ...brief, committed: true, proposal: ip({ title: "Confirm Thursday, Nov 5", changes: [{ field: "Plan", before: "Draft", after: "Confirmed, 3 picks" }], state: "done", message: "Thursday is confirmed." }) }, URL_)],
+  ["brief-proposal", briefCard({ ...brief, proposal: ip({ title: "Confirm Thursday, Nov 5", changes: [{ field: "Plan", before: "Draft", after: "Confirmed, 3 to-dos" }] }) }, URL_)],
+  ["brief-done", briefCard({ ...brief, committed: true, proposal: ip({ title: "Confirm Thursday, Nov 5", changes: [{ field: "Plan", before: "Draft", after: "Confirmed, 3 to-dos" }], state: "done", message: "Thursday is confirmed." }) }, URL_)],
   ["checkin", checkinCard(checkin, URL_)],
   ["checkin-ticked", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), pk(2, "Review the export mapping", "Northwind", "not_yet"), checkPicks[2]!] }, URL_)],
-  ["checkin-proposal", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), checkPicks[1]!, checkPicks[2]!], proposal: ip({ title: "Move 2 picks", changes: [{ field: "Review the export mapping", before: "Thu, Nov 5 morning", after: "Thu, Nov 5 afternoon" }, { field: "Write the onboarding note", before: "Thu, Nov 5 afternoon", after: "Mon, Nov 9 morning" }] }) }, URL_)],
-  ["checkin-moved", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), pk(2, "Review the export mapping", "Northwind", "moved", "This afternoon"), pk(3, "Write the onboarding note", "Internal", "moved", "Mon, Nov 9 morning")], proposal: ip({ title: "Move 2 picks", state: "done", message: "Moved 2 picks." }) }, URL_)],
+  ["checkin-proposal", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), checkPicks[1]!, checkPicks[2]!], proposal: ip({ title: "Move 2 to-dos", changes: [{ field: "Review the export mapping", before: "Thu, Nov 5 morning", after: "Thu, Nov 5 afternoon" }, { field: "Write the onboarding note", before: "Thu, Nov 5 afternoon", after: "Mon, Nov 9 morning" }] }) }, URL_)],
+  ["checkin-moved", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), pk(2, "Review the export mapping", "Northwind", "moved", "This afternoon"), pk(3, "Write the onboarding note", "Internal", "moved", "Mon, Nov 9 morning")], proposal: ip({ title: "Move 2 to-dos", state: "done", message: "Moved 2 to-dos." }) }, URL_)],
   // PK-1: Done on a to-do with a DevOps item offers its done state; Confirm writes it; Undo offers the write's undo.
   ["checkin-devops-offer", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), checkPicks[1]!, checkPicks[2]!], proposal: ip({ title: "Set #4211 to Closed", whoSees: "Visible to everyone with access to the Portal project in DevOps. People following the item may get a notification from DevOps.", changes: [{ field: "State", before: "Active", after: "Closed" }], note: "Closes the follow-up once DevOps shows the change. Written only if the item is still at revision 12; if anyone changed it since, nothing is written. To set it to Resolved instead, do it in FocusTime." }) }, URL_)],
   ["checkin-devops-done", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), checkPicks[1]!, checkPicks[2]!], proposal: ip({ title: "Set #4211 to Closed", changes: [{ field: "State", before: "Active", after: "Closed" }], state: "done", message: "#4211 is Closed in DevOps" }) }, URL_)],
@@ -67,7 +67,7 @@ const cards: [string, Card][] = [
   ["cancelled", cancelledCard(proposal.title)],
   ["working", workingCard(proposal.title)],
   ["today", resultCard({ title: "Today", lines: ["Morning 08:00–12:00: Northwind", "  • Fix the login timeout", "  ✓ Review the export", "Afternoon 13:00–17:00: Internal", "  • Write the onboarding note"], links: [{ label: "Open Today", url: `${URL_}/#/today` }] }, URL_)],
-  ["next", resultCard({ title: "Northwind until 12:00", lines: ["Next pick: Fix the login timeout", "Next meeting: Standup at 10:30", "1 of 3 picks done"], links: [{ label: "Open Today", url: `${URL_}/#/today` }] }, URL_)],
+  ["next", resultCard({ title: "Northwind until 12:00", lines: ["Next to-do: Fix the login timeout", "Next meeting: Standup at 10:30", "1 of 3 to-dos done"], links: [{ label: "Open Today", url: `${URL_}/#/today` }] }, URL_)],
   ["help", helpCard(URL_)],
 ];
 

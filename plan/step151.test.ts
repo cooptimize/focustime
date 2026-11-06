@@ -71,8 +71,8 @@ describe("shortest useful time (D273)", () => {
 describe("didn't fit, said plainly (D274)", () => {
   it("names each pick with its size", () => {
     expect(didntFitText([])).toBe("");
-    expect(didntFitText([{ title: "Export spec draft", size: "M" }])).toBe("1 pick didn't fit: Export spec draft (M).");
-    expect(didntFitText([{ title: "Export spec draft", size: "M" }, { title: "Delay alerts", size: "S" }])).toBe("2 picks didn't fit: Export spec draft (M), Delay alerts (S).");
+    expect(didntFitText([{ title: "Export spec draft", size: "M" }])).toBe("1 to-do didn't fit: Export spec draft (M).");
+    expect(didntFitText([{ title: "Export spec draft", size: "M" }, { title: "Delay alerts", size: "S" }])).toBe("2 to-dos didn't fit: Export spec draft (M), Delay alerts (S).");
   });
   it("makes a pick one size smaller, and S has nothing smaller", () => {
     expect(smallerSize("L")).toBe("M");
@@ -80,11 +80,11 @@ describe("didn't fit, said plainly (D274)", () => {
     expect(smallerSize("S")).toBeNull();
   });
   it("clears the 'no time yet' offer once the summary is shown, and says so when everything fit", () => {
-    expect(offerAfterTimebox({ placed: 3, unplaced: [] })).toEqual({ offer: false, summary: null, notice: "Timeboxed 3 picks" });
+    expect(offerAfterTimebox({ placed: 3, unplaced: [] })).toEqual({ offer: false, summary: null, notice: "Timeboxed 3 to-dos" });
     expect(offerAfterTimebox({ placed: 1, unplaced: [{ pickId: 2, title: "Delay alerts", size: "S" }] })).toEqual({
       offer: false,
-      summary: { text: "1 pick didn't fit: Delay alerts (S).", picks: [{ pickId: 2, title: "Delay alerts", size: "S" }] },
-      notice: "Timeboxed 1 pick",
+      summary: { text: "1 to-do didn't fit: Delay alerts (S).", picks: [{ pickId: 2, title: "Delay alerts", size: "S" }] },
+      notice: "Timeboxed 1 to-do",
     });
     expect(offerAfterTimebox({ placed: 0, unplaced: [{ pickId: 2, title: "Delay alerts", size: "S" }] }).notice).toBeNull();
   });

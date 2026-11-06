@@ -66,8 +66,8 @@ export function helpCard(publicUrl: string): Card {
       title("FocusTime in Teams"),
       text("Ask me about your day or week in your own words. Anything that changes something shows a preview first, and nothing happens until you confirm."),
       { type: "FactSet", facts: [
-        { title: "what's next", value: "Your next pick and meeting" },
-        { title: "today", value: "Today's blocks and picks" },
+        { title: "what's next", value: "Your next to-do and meeting" },
+        { title: "today", value: "Today's blocks and to-dos" },
         { title: "open FocusTime", value: "A link to the app" },
         { title: "help", value: "This list" },
       ] },
