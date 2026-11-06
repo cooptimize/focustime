@@ -111,11 +111,11 @@ export function demoAssistantProvider(): AiProvider {
           const m: ToolCall = { callId: "demo_move", name: "move_pick", arguments: JSON.stringify({ pickId, ...moveTarget(said, today) }) };
           return { ok: true, text: "", model: "demo assistant", usage: usage(c, ""), calls: [m], items: [{ type: "function_call", call_id: m.callId, name: m.name, arguments: m.arguments }] };
         }
-        return text(c, { reply: "I couldn't find that pick on today's plan. Name the pick as it reads, and its client." });
+        return text(c, { reply: "I couldn't find that to-do on today's plan. Name the to-do as it reads, and its client." });
       }
       const moved = c.rounds?.some((r) => r.items.some((i) => (i as { name?: string }).name === "move_pick"));
       const cannot = c.rounds?.flatMap((r) => r.outputs).map((o) => (JSON.parse(o.output) as { cannot?: string }).cannot).find(Boolean);
-      return text(c, { reply: cannot ? `I couldn't: ${cannot}.` : (REPLY[moved ? "move_pick" : (calls[0]?.name ?? "")] ?? "In the demo I can show what's next, an item (#id), gaps, sends, moving a pick, a comment on an item, confirming today and a capture.") });
+      return text(c, { reply: cannot ? `I couldn't: ${cannot}.` : (REPLY[moved ? "move_pick" : (calls[0]?.name ?? "")] ?? "In the demo I can show what's next, an item (#id), gaps, sends, moving a to-do, a comment on an item, confirming today and a capture.") });
     },
     // DM-1: the script's dictated comment (sources/demo/ai.ts answers transcriptions; this is kept for its tests).
     async transcribe() {

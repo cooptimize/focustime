@@ -73,10 +73,10 @@ export function nextCard(f: TodayFacts, publicUrl: string): AssistantCard {
   if (s.kind === "pto") lines.push(s.next ? `PTO today. Back on ${s.next}.` : "PTO today.");
   else if (s.kind === "off") lines.push(s.next ? `No work today. Next workday: ${s.next}.` : "No work today.");
   else {
-    if (s.nextPick) lines.push(`Next pick: ${s.nextPick}${s.draft ? " (not committed yet)" : ""}`);
+    if (s.nextPick) lines.push(`Next to-do: ${s.nextPick}${s.draft ? " (not committed yet)" : ""}`);
     else lines.push(f.committed ? "Nothing left planned today." : "Today isn't planned yet.");
     if (s.event) lines.push(s.event.now ? `In ${s.event.title} until ${s.event.at}` : `Next meeting: ${s.event.title} at ${s.event.at}`);
-    if (s.picks) lines.push(`${s.picks.done} of ${s.picks.total} picks done`);
+    if (s.picks) lines.push(`${s.picks.done} of ${s.picks.total} to-dos done`);
     if (s.overBy) lines.push(`About ${Math.round(s.overBy / 60)}h more planned than fits in this block`);
   }
   return { title: s.title || "What's next", lines, links: [link(publicUrl, "#/today", "Open Today")] };

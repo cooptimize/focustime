@@ -1191,7 +1191,7 @@ export function App() {
           const d = days[sel.dayIndex];
           const sl = d ? slotOf(d, sel.half) : undefined;
           if (!d || !sl) return;
-          if (!canAddWork({ date: d.date, today: data.planDay.date, pto: !!d.pto, off: sl.off })) return setNotice(d.date < data.planDay.date ? "That day is past: its picks can only be ticked done or dropped" : d.pto ? "That's a PTO day" : "That block has no working hours");
+          if (!canAddWork({ date: d.date, today: data.planDay.date, pto: !!d.pto, off: sl.off })) return setNotice(d.date < data.planDay.date ? "That day is past: its to-dos can only be ticked done or dropped" : d.pto ? "That's a PTO day" : "That block has no working hours");
           return addWork(d.date, sel.half);
         }
         case "r":
@@ -1600,7 +1600,7 @@ export function App() {
                 const r = e.currentTarget.getBoundingClientRect();
                 setTimerMenuAt({ x: r.right, y: r.bottom + 4 });
               }}
-              title="Start focus: the next pick, or a plain timer (F)"
+              title="Start focus: the next to-do, or a plain timer (F)"
               aria-haspopup="menu"
             >
               Focus <kbd>F</kbd>
@@ -2050,7 +2050,7 @@ export function App() {
       />
       {tbTarget && (() => {
         const pick = "pickId" in tbTarget ? Object.values(data.plan ?? {}).flatMap((d) => d.picks).concat(pd?.picks ?? []).find((p) => p.id === tbTarget.pickId) : null;
-        return <TimeboxDialog target={tbTarget} env={tbEnv} title={pick ? pick.title : "title" in tbTarget ? tbTarget.title : "Pick"} defaultMinutes={pick ? data.planning.sizes[pick.size ?? "M"] : 60} onClose={() => setTbTarget(null)} />;
+        return <TimeboxDialog target={tbTarget} env={tbEnv} title={pick ? pick.title : "title" in tbTarget ? tbTarget.title : "To-do"} defaultMinutes={pick ? data.planning.sizes[pick.size ?? "M"] : 60} onClose={() => setTbTarget(null)} />;
       })()}
       {helpTarget && (
         <HelpFinder

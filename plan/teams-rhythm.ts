@@ -37,9 +37,9 @@ export const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export const TEAMS_KIND_LABEL: Record<TeamsKind, string> = { brief: "Morning brief", checkin: "Midday check-in", closeout: "Close out", nudges: "Nudges", status: "Status report" };
 export const TEAMS_KIND_HINT: Record<TeamsKind, string> = {
-  brief: "Today's blocks, meetings, picks, promises due and work sent to you, with Confirm today.",
-  checkin: "This morning's picks with Done and Not yet, and Move the rest.",
-  closeout: "What got done today: tick picks or tell me, then one Confirm closes the day.",
+  brief: "Today's blocks, meetings, to-dos, promises due and work sent to you, with Confirm today.",
+  checkin: "This morning's to-dos with Done and Not yet, and Move the rest.",
+  closeout: "What got done today: tick to-dos or tell me, then one Confirm closes the day.",
   nudges: "A promise due tonight that's still open, work sent to you waiting over half a day, and someone taking over an item assigned to you. At most one message an hour.",
   status: "Friday afternoon, when some of your features have no update yet for Monday's report, with the list and Open Status. Sunday evening too when you turn it on under Monday's status report.",
 };

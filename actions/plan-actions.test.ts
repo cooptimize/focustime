@@ -366,7 +366,7 @@ describe("Plan any day", () => {
         await t.fail("planday.commit", { date: MON }),
         await t.fail("pick.move", { id: b!.id, date: MON, half: "PM" }),
       ];
-      for (const r of refused) expect(r).toMatchObject({ status: 409, error: expect.stringMatching(/^Mon, Nov 2 is past\. Its picks can only be ticked done or dropped/) });
+      for (const r of refused) expect(r).toMatchObject({ status: 409, error: expect.stringMatching(/^Mon, Nov 2 is past\. Its to-dos can only be ticked done or dropped/) });
       const done = await t.run<{ pick: Pick }>("pick.mark_done", { id: a!.id, done: true });
       expect(done.pick.status).toBe("done");
       expect((await t.run<{ pick: Pick }>("pick.mark_done", { id: a!.id, done: false })).pick.status).toBe("planned");
@@ -531,7 +531,7 @@ describe("drafts: choose a parent, and delete (step 14.5, D257)", () => {
     await t.run("pick.add", { date: D, half: "AM", clientKey: "Adatum", draftId: b.id });
     await t.run("draft.remove", { id: a.id });
     expect((await t.plan.getDraft(a.id))).toBeNull();
-    expect((await t.fail("draft.remove", { id: b.id })).error).toMatch(/drop the pick/i);
+    expect((await t.fail("draft.remove", { id: b.id })).error).toMatch(/drop the to-do/i);
     expect((await t.plan.getDraft(b.id))).not.toBeNull();
   });
 });

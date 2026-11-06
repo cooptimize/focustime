@@ -565,3 +565,15 @@ Checking a to-do done offers its DevOps item's done state as a proposal; nothing
 - **Demo.** `sources/demo/seeds/todo-done.ts` (Harbor #2211 done on the last workday, still open in DevOps).
 - **Tests.** `actions/done-offer.test.ts`, the PK-1 parts of `assistant/service.test.ts` and
   `server/teams/rhythm.test.ts`; e2e `e2e/pk1.test.ts`; card previews in `scripts/teams-card-previews.ts`.
+
+## TD-1: "pick" reads "to-do" (Nov 6)
+
+Labels only: what people read says to-do; code names, tables, stored values and URLs keep pick.
+
+- **Guard.** `scripts/words-guard.ts` (`wordsScanned`, `wordsHits`, `saysPick`), run by `scripts/guards.ts` as the
+  words guard: string literals and JSX text in the app's code, the demo docs and the public pages, with code tokens,
+  SQL and "pick" as choose left alone.
+- **Command menu.** `filterCommands` in `ui/menu.ts` treats pick, picks, todo and todos as to-do.
+- **Assistant.** The glossary line in `assistant/service.ts`'s intent and answer instructions.
+- **Tests.** `scripts/words-guard.test.ts`, the words case in `scripts/guards.test.ts`, `ui/td1-names.test.ts`, the
+  TD-1 case in `assistant/service.test.ts`.

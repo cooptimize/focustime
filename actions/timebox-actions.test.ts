@@ -57,7 +57,7 @@ describe("timeboxes (local)", () => {
     const r = await t.run<{ timebox: { clientKey: string; title: string; url: string; outlook: boolean } }>("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T10:00:00-05:00`, pickId: p.id });
     expect(r.timebox).toMatchObject({ clientKey: "Adatum", title: "Import mapping", url: p.itemUrl, outlook: false });
     expect((await t.fail("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T09:05:00-05:00`, pickId: p.id })).error).toMatch(/at least 15/);
-    expect((await t.fail("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T10:00:00-05:00`, pickId: p.id, title: "x" })).error).toMatch(/from the pick/);
+    expect((await t.fail("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T10:00:00-05:00`, pickId: p.id, title: "x" })).error).toMatch(/from the to-do/);
     expect((await t.fail("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T10:00:00-05:00`, clientKey: "Adatum", title: "x", url: "https://evil.example/" })).error).toMatch(/DevOps link/);
   });
 

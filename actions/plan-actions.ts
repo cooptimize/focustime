@@ -109,7 +109,7 @@ async function ptoRefusal(ctx: PlanContext, d: IsoDate): Promise<string | null> 
   return !r.ok && r.kind === "pto" ? r.reason : null;
 }
 
-const pastReason = (d: IsoDate) => `${dayLabel(d)} is past. Its picks can only be ticked done or dropped`;
+const pastReason = (d: IsoDate) => `${dayLabel(d)} is past. Its to-dos can only be ticked done or dropped`;
 
 /** Refuses changes to a past day (anything but done and drop), with the reason; null when allowed. */
 async function pastRefusal(ctx: PlanContext, d: IsoDate): Promise<string | null> {
@@ -311,7 +311,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
       case "pick.remove": {
         const pid = id(fields(input, ["id"]).id);
         const before = (await plan.getPick(pid));
-        if (!before) return bad(`No pick ${pid}`, 404);
+        if (!before) return bad(`No to-do ${pid}`, 404);
         // On a past day nothing is deleted: the pick is kept as dropped, so the record of the day stays.
         const r = (await pastRefusal(ctx, before.date)) ? { result: "dropped" as const, pick: (await plan.drop(pid)) } : (await plan.removePick(pid));
         return { ok: true, data: { result: r.result, state: await state(ctx, plan, before.date) } };
@@ -321,7 +321,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const pid = id(o.id);
         const sz = size(o.size);
         const before = (await plan.getPick(pid));
-        if (!before) return bad(`No pick ${pid}`, 404);
+        if (!before) return bad(`No to-do ${pid}`, 404);
         const past = await pastRefusal(ctx, before.date);
         if (past) return bad(past, 409);
         const pick = (await plan.setSize(pid, sz));
@@ -331,7 +331,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const o = fields(input, ["id", "date", "half"], ["anyway"]);
         const pid = id(o.id);
         const before = (await plan.getPick(pid));
-        if (!before) return bad(`No pick ${pid}`, 404);
+        if (!before) return bad(`No to-do ${pid}`, 404);
         const to = date(o.date);
         if (o.anyway !== undefined && typeof o.anyway !== "boolean") throw new Invalid("anyway must be true or false");
         const h = half(o.half);
@@ -368,7 +368,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const parent = dv.lookup(key, parentItemId);
         if (!parent) return bad(`Item ${parentItemId} is not among the loaded DevOps items for ${key}. Refresh and try again`, 409);
         // BD-1: from the process model: a draft goes under a type that needs breaking down (an override can turn it off).
-        if (parent.level !== "portfolio" || !typeNeedsBreakdown(dv.last(key)?.types, parent.type)) return bad("Draft items go under an item that needs breaking down; this item can be picked directly", 422);
+        if (parent.level !== "portfolio" || !typeNeedsBreakdown(dv.last(key)?.types, parent.type)) return bad("Draft items go under an item that needs breaking down; this item can be a to-do directly", 422);
         return { ok: true, data: { draft: (await plan.addDraft({ clientKey: key, parentItemId, title, size: sz })) } };
       }
       case "draft.set_parent": {

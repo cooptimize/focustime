@@ -90,7 +90,7 @@ export async function checkDayReminder(d: DayReminderDeps): Promise<boolean> {
   return true;
 }
 
-export const CLOSEOUT_MESSAGE = "Time to close out the day: picks, resume notes and follow-ups. Open FocusTime and press E.";
+export const CLOSEOUT_MESSAGE = "Time to close out the day: to-dos, resume notes and follow-ups. Open FocusTime and press E.";
 export const CHECKIN_MESSAGE = "Midday check-in: what still fits this afternoon. Open FocusTime and press M.";
 
 /**

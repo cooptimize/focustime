@@ -60,7 +60,7 @@ describe("focus timer on the server (step 6c)", () => {
     t.answer("next");
     expect(await checkTimer(t.deps)).toBe("ended");
     await flush();
-    expect(t.sent[0]).toMatchObject({ title: "Focus session done", body: "Write the summary\nClick for Done, +15 min or Next pick.", actions: [{ key: "done" }, { key: "extend" }, { key: "next" }] });
+    expect(t.sent[0]).toMatchObject({ title: "Focus session done", body: "Write the summary\nClick for Done, +15 min or Next to-do.", actions: [{ key: "done" }, { key: "extend" }, { key: "next" }] });
     expect(t.acted).toEqual(["timer.next"]);
     expect((await t.plan.focusedSeconds([a.id]))).toEqual({ [a.id]: 1500 });
     // Next pick: the next planned pick, suggested from its size (S = 60 min).
