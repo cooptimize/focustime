@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Meetings } from "./meetings/Meetings.tsx";
 import { addWeeks, mondayOf } from "../week/dates.ts";
 import { hidePersonal, personalCount } from "../week/personal.ts";
 import type { Half, IsoDate } from "../week/types.ts";
@@ -223,6 +224,8 @@ export function App() {
   const focusOpen = loc.overlay?.kind === "focus";
   /** G1: the Guide (#/guide), over the current place like Settings. */
   const guideAt = loc.overlay?.kind === "guide" ? loc.overlay : null;
+  // MC-1: Client calls over the place (#/meetings and #/meetings/<occurrence>).
+  const meetingAt = loc.overlay?.kind === "meeting" ? loc.overlay : null;
   const base: "today" | "week" = nav.tab === "week" ? "week" : "today";
   const followUpsOpen = nav.tab === "inbox";
   /** IB-1: the Inbox's item open in the detail pane (the command menu's Inbox keys run only there). */
@@ -1154,7 +1157,7 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (base !== "week" || (nav.tab === "week" && (nav.mode === "team" || nav.mode === "status")) || focusOpen || guideAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (base !== "week" || (nav.tab === "week" && (nav.mode === "team" || nav.mode === "status")) || focusOpen || guideAt || meetingAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
       const days = data.week.days;
@@ -1204,7 +1207,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, guideAt, base, captureOpen, layout, nav]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, guideAt, meetingAt, base, captureOpen, layout, nav]);
 
   // QF-1: [ and ] on Today step a day back or ahead (never while typing; Week keeps them for its weeks).
   useEffect(() => {
@@ -1706,6 +1709,8 @@ export function App() {
         />
       ) : guideAt ? (
         <Guide chapter={guideAt.chapter} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} />
+      ) : meetingAt ? (
+        <Meetings occurrence={meetingAt.occurrence} colors={data.clients} onOpen={(id) => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: id } }))} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} />
       ) : focusOpen ? (
         <FocusScreen
           t={data.timer}
@@ -1957,7 +1962,7 @@ export function App() {
       )}
       {phone && (
         <BottomBar
-          current={settingsAt !== null || guideAt || focusOpen ? null : nav.tab}
+          current={settingsAt !== null || guideAt || meetingAt || focusOpen ? null : nav.tab}
           inboxCount={inboxCount}
           onTab={(t: BottomTab) => {
             // The bar stays on screen under Capture: a tab closes it and goes there.

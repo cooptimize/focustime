@@ -1,0 +1,493 @@
+// MC-1: meeting capture's actions. Registering a client's weekly call (Admin › Clients › <client> › Meetings, an
+// admin), the calls I review or attend, uploading a transcript for a dated occurrence (a reviewer), "No transcript
+// this week", and the review: one screen per occurrence where a reviewer ticks, edits or skips each proposal and one
+// Confirm makes them through the existing writes: a gap becomes my draft and then the existing DevOps create, a
+// comment the existing DevOps comment (both with the write framework's preview, read back, audit log and undo), a
+// commitment a shared commitment that shows in the committer's own Promises (a Cooptimizer's) or my Waiting on (the
+// client's). Nothing writes without Confirm; nobody's plan but my own is written.
+//
+// Transcript text never goes to a log or an error message; logs carry ids-free counts and outcomes only.
+import type { ClientEntry } from "../ai/guard.ts";
+import type { AiService } from "../ai/service.ts";
+import { AI_MESSAGES } from "../ai/types.ts";
+import type { AppConfig } from "../config/schema.ts";
+import type { LogRecord } from "../log/logger.ts";
+import { attendeeIds, canConfirm, defaultReviewers, detectSource, MEETING_ROLES, nudgesFor, proposalOrder, ROLE_LABEL, type MeetingRole, type MeetingSeries, type Occurrence, type ProposalBody, type TranscriptSource } from "../plan/meetings.ts";
+import { levelOfType, type ProcessModel } from "../plan/process.ts";
+import { TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
+import type { MeetingsClient, SeriesCandidate } from "../sources/graph/meetings.ts";
+import { MEETING_CHAT, type ConversationStore } from "../store/conversation-store.ts";
+import type { MeetingStore } from "../store/meeting-store.ts";
+import type { PlanStore } from "../store/plan-store.ts";
+import { PlanError } from "../store/plan-store.ts";
+import type { WorkItem } from "../week/types.ts";
+import { userZone } from "../week/zone.ts";
+import { capturePass } from "./meeting-capture.ts";
+import { readTranscriptFile } from "./transcript-file.ts";
+import type { OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
+export type { MeetingNudgeView, OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
+import type { ActionResponse } from "./types.ts";
+
+export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.prepare", "meeting.confirm", "meeting.rerun"] as const;
+export type MeetingAction = (typeof MEETING_ACTIONS)[number];
+
+/** A FocusTime user as registration matches them: id, name and every address that is them. */
+export type MeetingUser = { id: string; name: string; emails: string[] };
+
+/** What one client's AI pass needs besides the transcript (null when that client can't be read now). */
+export type CaptureContext = { clientName: string; internal: boolean; items: WorkItem[]; model: ProcessModel | null; directory: ClientEntry[] };
+
+export type MeetingContext = {
+  meetings: MeetingStore | undefined;
+  conversations: ConversationStore | undefined;
+  plan: PlanStore | undefined;
+  me: () => Promise<string | null>;
+  isAdmin: () => Promise<boolean>;
+  config: () => Promise<AppConfig | null>;
+  now: () => string;
+  homeDomains: () => Promise<string[]>;
+  /** My Graph meetings client (my calendar; the meetings token), or null when I'm not signed in with Microsoft. */
+  graph: (cfg: AppConfig) => MeetingsClient | null;
+  users: () => Promise<MeetingUser[]>;
+  /** The client's leads' user ids (Dataverse's with admins' overrides). */
+  leads: (clientKey: string) => Promise<string[]>;
+  capture: (cfg: AppConfig, clientKey: string) => Promise<CaptureContext | null>;
+  /** The meeting AI: my switches, the app's cap (a background pass, like the conversations pipeline). */
+  ai: () => Promise<AiService | null>;
+  /** The DevOps write framework, as the app's buttons call it (devops.preview, devops.confirm). */
+  devops: (action: "devops.preview" | "devops.confirm", input: unknown) => Promise<ActionResponse>;
+  /** Whether I have a checked write PAT for the client. */
+  canWrite: (clientKey: string) => Promise<boolean>;
+  log: (r: LogRecord) => void;
+};
+
+class Invalid extends Error {}
+const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
+const obj = (input: unknown, required: readonly string[], optional: readonly string[] = []): Record<string, unknown> => {
+  const o = input === undefined || input === null ? {} : input;
+  if (typeof o !== "object" || Array.isArray(o)) throw new Invalid("Expected an object");
+  const r = o as Record<string, unknown>;
+  const extra = Object.keys(r).find((k) => !required.includes(k) && !optional.includes(k));
+  if (extra) throw new Invalid(`Unknown field ${extra}`);
+  const missing = required.find((k) => r[k] === undefined);
+  if (missing) throw new Invalid(`${missing} is required`);
+  return r;
+};
+const text = (v: unknown, name: string, max: number, optional = false): string | null => {
+  if (v === undefined || v === null) {
+    if (optional) return null;
+    throw new Invalid(`${name} is required`);
+  }
+  if (typeof v !== "string" || !v.trim() || v.length > max) throw new Invalid(`${name} must be text up to ${max} characters`);
+  return v.trim();
+};
+const id = (v: unknown, name: string): number => {
+  if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0) throw new Invalid(`${name} must be an id`);
+  return v;
+};
+const ids = (v: unknown, name: string, max = 100): number[] => {
+  if (v === undefined) return [];
+  if (!Array.isArray(v) || v.length > max) throw new Invalid(`${name} must be up to ${max} ids`);
+  return v.map((x) => id(x, name));
+};
+const JOIN_URL = /^https:\/\/teams\.microsoft\.com\/l\/meetup-join\/[^\s]{10,3900}$/;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+const lower = (s: string) => s.toLowerCase();
+
+const WEEKDAYS = ["", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays", "Sundays"];
+function whenOf(s: Pick<MeetingSeries, "weekday" | "start" | "minutes" | "interval">): string {
+  const [h, m] = s.start.split(":").map(Number);
+  const t = (mins: number) => {
+    const hh = Math.floor(mins / 60) % 24;
+    return `${hh % 12 || 12}:${String(mins % 60).padStart(2, "0")} ${hh < 12 ? "AM" : "PM"}`;
+  };
+  const start = h! * 60 + m!;
+  return `${s.interval > 1 ? `Every ${s.interval} weeks on ${WEEKDAYS[s.weekday]}` : WEEKDAYS[s.weekday]} ${t(start)} to ${t(start + s.minutes)}`;
+}
+
+function viewOf(s: MeetingSeries, cfg: AppConfig, users: readonly MeetingUser[], me: string): SeriesView {
+  const name = (uid: string) => users.find((u) => lower(u.id) === lower(uid))?.name ?? "A former teammate";
+  return {
+    id: s.id, clientKey: s.clientKey, clientName: cfg.clientSettings[s.clientKey]?.name ?? s.clientKey, name: s.name, role: s.role, roleLabel: ROLE_LABEL[s.role], source: s.source, detected: s.detected, organizer: s.organizer,
+    when: whenOf(s), weekday: s.weekday, start: s.start, minutes: s.minutes, zone: s.zone, reviewers: s.reviewers.map((r) => ({ id: r, name: name(r) })), attendees: s.attendees.length,
+    mine: { review: s.reviewers.some((r) => lower(r) === lower(me)), attend: s.attendees.some((a) => lower(a) === lower(me)) },
+  };
+}
+
+const aiMessage = (o: string | null) => (!o || o === "done" ? null : o === "no_ai" ? "AI isn't on for this client, so nothing was proposed. A FocusTime admin allows it in Admin › AI." : (AI_MESSAGES as Record<string, string>)[o] ?? "The AI pass didn't finish");
+
+export async function meetingAction(ctx: MeetingContext, action: MeetingAction, input: unknown): Promise<ActionResponse> {
+  try {
+    const store = ctx.meetings;
+    const me = await ctx.me();
+    if (!store || !me) return bad("Meetings aren't available here", 503);
+    const cfg = await ctx.config();
+    if (!cfg) return bad("Fix the config first", 409);
+    switch (action) {
+      case "meeting.list": {
+        // Admin › Clients › <client> › Meetings: the client's registered calls (admins only; no transcripts here).
+        const o = obj(input, ["clientKey"]);
+        if (!(await ctx.isAdmin())) return bad("Only FocusTime admins register meetings", 403);
+        const users = await ctx.users();
+        // The reviewer picker's people: FocusTime users by name (ids for the picker, never an address).
+        return { ok: true, data: { meetings: (await store.seriesOf(text(o.clientKey, "clientKey", 100)!)).map((s) => viewOf(s, cfg, users, me)), people: users.map((u) => ({ id: u.id.toLowerCase(), name: u.name })).sort((a, b) => a.name.localeCompare(b.name)) } };
+      }
+      case "meeting.candidates": {
+        // My recurring online meetings with people from outside Cooptimize, the client's name first.
+        const o = obj(input, ["clientKey"]);
+        if (!(await ctx.isAdmin())) return bad("Only FocusTime admins register meetings", 403);
+        const g = ctx.graph(cfg);
+        if (!g) return bad("Sign in with Microsoft to see your calendar's meetings", 409);
+        const k = text(o.clientKey, "clientKey", 100)!;
+        const names = [k, cfg.clientSettings[k]?.name ?? ""].filter(Boolean).map(lower);
+        const zone = userZone(cfg);
+        const all = await g.seriesOnMyCalendar(zone);
+        const taken = new Set((await store.allSeries()).map((s) => s.eventId).filter(Boolean));
+        const home = await ctx.homeDomains();
+        const rows = all
+          .filter((c) => !taken.has(c.eventId))
+          .map((c) => ({ eventId: c.eventId, subject: c.subject, organizerName: c.organizerName, organizer: detectSource(c.organizerEmail, home).organizer, when: whenOf({ ...c }), outside: c.outside, match: names.some((n) => lower(c.subject).includes(n)) }))
+          .sort((a, b) => Number(b.match) - Number(a.match) || a.subject.localeCompare(b.subject));
+        return { ok: true, data: { candidates: rows } };
+      }
+      case "meeting.register": return await register(ctx, store, cfg, me, input);
+      case "meeting.update": {
+        const o = obj(input, ["seriesId"], ["name", "role", "reviewers", "source"]);
+        if (!(await ctx.isAdmin())) return bad("Only FocusTime admins change registered meetings", 403);
+        const s = await store.series(id(o.seriesId, "seriesId"));
+        if (!s || s.removedAt) return bad("No such meeting", 404);
+        const users = await ctx.users();
+        const reviewers = o.reviewers === undefined ? undefined : reviewerIds(o.reviewers, users);
+        const role = o.role === undefined ? undefined : roleOf(o.role);
+        const source = o.source === undefined ? undefined : sourceOf(o.source);
+        // A client-hosted meeting is never read from Graph, whatever the override says (D: Upload only).
+        if (source === "automatic" && s.organizer === "other") return bad("This meeting is organized outside Cooptimize, so its transcript can only be uploaded", 409);
+        const next = await store.updateSeries(s.id, { ...(o.name !== undefined ? { name: text(o.name, "name", 200)! } : {}), ...(role ? { role } : {}), ...(reviewers ? { reviewers } : {}), ...(source ? { source } : {}) });
+        return { ok: true, data: { meeting: viewOf(next, cfg, users, me) } };
+      }
+      case "meeting.remove": {
+        const o = obj(input, ["seriesId"]);
+        if (!(await ctx.isAdmin())) return bad("Only FocusTime admins change registered meetings", 403);
+        await store.removeSeries(id(o.seriesId, "seriesId"));
+        ctx.log({ source: "plan", op: "meeting_removed" });
+        return { ok: true, data: { removed: true } };
+      }
+      case "meeting.mine": {
+        // The calls I review or attend, with their last 5 weeks of occurrences (Week's call marker, the review list).
+        obj(input, [], []);
+        const users = await ctx.users();
+        const mine = await store.viewer(me).series();
+        const from = Temporal.Instant.from(ctx.now()).subtract({ hours: 24 * 35 }).toZonedDateTimeISO("UTC").toPlainDate().toString();
+        const occs = await store.recentOccurrences(mine.map((s) => s.id), from);
+        const counts = new Map<number, { all: number; open: number }>();
+        for (const o of occs) {
+          const ps = await store.proposals(o.id);
+          counts.set(o.id, { all: ps.length, open: ps.filter((p) => p.state === "open").length });
+        }
+        // The nudges (in-app and the Teams kind): ready to review, or a transcript to upload; once each by key.
+        const nudges = nudgesFor(me, mine, occs).map((n) => ({ ...n, clientName: cfg.clientSettings[n.clientKey]?.name ?? n.clientKey, dateLabel: Temporal.PlainDate.from(n.date).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" }) }));
+        return { ok: true, data: { meetings: mine.map((s) => viewOf(s, cfg, users, me)), occurrences: occs.map((o) => occView(o, counts.get(o.id))), nudges } };
+      }
+      case "meeting.review": return await review(ctx, store, cfg, me, input);
+      case "meeting.edit": {
+        // Edit or skip one proposal (a reviewer); a decided one stays as it is.
+        const o = obj(input, ["proposalId"], ["skip", "title", "description", "parentId", "type", "what", "due", "text"]);
+        const p = await store.proposal(id(o.proposalId, "proposalId"));
+        if (!p) return bad("No such proposal", 404);
+        if (p.state === "confirmed") return bad("That one is already done", 409);
+        if (o.skip !== undefined) {
+          if (typeof o.skip !== "boolean") throw new Invalid("skip must be true or false");
+          const next = await store.viewer(me).updateProposal(p.id, { state: o.skip ? "skipped" : "open", decidedBy: o.skip ? me : null, decidedAt: o.skip ? ctx.now() : null });
+          return { ok: true, data: { proposal: next } };
+        }
+        const body = edited(p.body, o);
+        return { ok: true, data: { proposal: await store.viewer(me).updateProposal(p.id, { body }) } };
+      }
+      case "meeting.no_transcript": {
+        const o = obj(input, ["occurrenceId"]);
+        const occ = await store.viewer(me).updateOccurrence(id(o.occurrenceId, "occurrenceId"), { state: "no_transcript", dismissedBy: me, nextCheckAt: null });
+        ctx.log({ source: "plan", op: "meeting_no_transcript" });
+        return { ok: true, data: { occurrence: occView(occ) } };
+      }
+      case "meeting.rerun": {
+        // Run the AI pass again on the stored transcript (a reviewer; e.g. after AI was allowed for the client).
+        const o = obj(input, ["occurrenceId"]);
+        const { o: occ, series } = await store.viewer(me).reviewer(id(o.occurrenceId, "occurrenceId"));
+        const lines = await store.transcript(occ.id);
+        if (!lines) return bad("There's no transcript for this meeting any more", 409);
+        const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log }, series, occ, lines);
+        return { ok: true, data: r };
+      }
+      case "meeting.prepare": return await prepare(ctx, store, cfg, me, input);
+      case "meeting.confirm": return await confirm(ctx, store, me, input);
+    }
+  } catch (e) {
+    if (e instanceof Invalid) return bad(e.message);
+    if (e instanceof TranscriptError) return bad(e.message, 422);
+    if (e instanceof PlanError) return bad(e.message, /No such/.test(e.message) ? 404 : 403);
+    throw e;
+  }
+}
+
+const occView = (o: Occurrence, c?: { all: number; open: number }): OccurrenceView => ({ id: o.id, seriesId: o.seriesId, date: o.date, startAt: o.startAt, endAt: o.endAt, state: o.state, transcriptFrom: o.transcriptFrom, proposals: c?.all ?? 0, open: c?.open ?? 0, aiOutcome: o.aiOutcome, aiMessage: aiMessage(o.aiOutcome) });
+
+const roleOf = (v: unknown): MeetingRole => {
+  if (!MEETING_ROLES.includes(v as MeetingRole)) throw new Invalid("role must be status or planning");
+  return v as MeetingRole;
+};
+const sourceOf = (v: unknown): TranscriptSource => {
+  if (v !== "automatic" && v !== "upload") throw new Invalid("source must be automatic or upload");
+  return v;
+};
+function reviewerIds(v: unknown, users: readonly MeetingUser[]): string[] {
+  if (!Array.isArray(v) || v.length === 0 || v.length > 20) throw new Invalid("reviewers must be 1 to 20 FocusTime users");
+  return v.map((x) => {
+    const u = typeof x === "string" ? users.find((y) => lower(y.id) === lower(x)) : undefined;
+    if (!u) throw new Invalid("reviewers must be FocusTime users");
+    return lower(u.id);
+  });
+}
+
+async function register(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, input: unknown): Promise<ActionResponse> {
+  const o = obj(input, ["clientKey", "role"], ["eventId", "joinUrl", "name", "reviewers", "source", "weekday", "start", "minutes"]);
+  if (!(await ctx.isAdmin())) return bad("Only FocusTime admins register meetings", 403);
+  const clientKey = text(o.clientKey, "clientKey", 100)!;
+  if (!cfg.clientSettings[clientKey]) return bad("That isn't one of FocusTime's clients", 404);
+  const role = roleOf(o.role);
+  if ((o.eventId === undefined) === (o.joinUrl === undefined)) throw new Invalid("Pick a meeting from your calendar or paste its Teams join link");
+  const g = ctx.graph(cfg);
+  const zone = userZone(cfg);
+  const home = await ctx.homeDomains();
+  let c: SeriesCandidate | null = null;
+  let joinUrl: string;
+  if (o.eventId !== undefined) {
+    if (!g) return bad("Sign in with Microsoft to see your calendar's meetings", 409);
+    c = await g.series(text(o.eventId, "eventId", 1000)!, zone);
+    if (!c) return bad("That meeting isn't a weekly Teams meeting on your calendar", 404);
+    joinUrl = c.joinUrl;
+  } else {
+    joinUrl = text(o.joinUrl, "joinUrl", 4000)!;
+    if (!JOIN_URL.test(joinUrl)) throw new Invalid("Paste the meeting's Teams join link (https://teams.microsoft.com/l/meetup-join/…)");
+    // Only what my own calendar shows of it: its event in the next 5 weeks, if it's there.
+    c = g ? await g.seriesByJoinUrl(joinUrl, zone, ctx.now()).catch(() => null) : null;
+  }
+  if ((await store.allSeries()).some((s) => s.joinUrl === joinUrl)) return bad("That meeting is already registered", 409);
+  // The pattern: from the calendar, else typed in (a pasted link with no event on my calendar).
+  const weekday = c?.weekday ?? (typeof o.weekday === "number" && Number.isInteger(o.weekday) && o.weekday >= 1 && o.weekday <= 5 ? o.weekday : null);
+  const start = c?.start ?? (typeof o.start === "string" && TIME.test(o.start) ? o.start : null);
+  const minutes = c?.minutes ?? (typeof o.minutes === "number" && Number.isInteger(o.minutes) && o.minutes >= 15 && o.minutes <= 240 ? o.minutes : null);
+  if (weekday === null || start === null || minutes === null) return bad("That link isn't on your calendar in the next 5 weeks. Give its weekday, start time and length", 422);
+  const detected = detectSource(c?.organizerEmail ?? null, home);
+  const source = o.source === undefined ? detected.source : sourceOf(o.source);
+  if (source === "automatic" && detected.organizer !== "home") return bad("Only meetings organized in Cooptimize's tenant can be read automatically. Use Upload for this one", 409);
+  const users = await ctx.users();
+  const reviewers = o.reviewers === undefined ? defaultReviewers(me, await ctx.leads(clientKey).catch(() => [])).filter((r) => users.some((u) => lower(u.id) === r)) : reviewerIds(o.reviewers, users);
+  const attendees = attendeeIds((c?.homeAttendees ?? []).map((email) => ({ email })), users);
+  const s = await store.addSeries({
+    clientKey, name: text(o.name, "name", 200, true) ?? c?.subject ?? `${cfg.clientSettings[clientKey]?.name ?? clientKey} weekly call`, role, source, detected: detected.source, organizer: detected.organizer,
+    joinUrl, eventId: c?.eventId ?? null, registrantId: me, weekday, start, minutes, zone: c?.zone ?? zone, interval: c?.interval ?? 1, reviewers, attendees,
+  });
+  ctx.log({ source: "plan", op: "meeting_registered", kind: source });
+  return { ok: true, data: { meeting: viewOf(s, cfg, users, me) } };
+}
+
+function edited(b: ProposalBody, o: Record<string, unknown>): ProposalBody {
+  if (b.kind === "gap") {
+    const parentId = o.parentId === undefined ? b.parentId : o.parentId === null ? null : id(o.parentId, "parentId");
+    return { ...b, ...(o.title !== undefined ? { title: text(o.title, "title", 200)! } : {}), ...(o.description !== undefined ? { description: text(o.description, "description", 2000, true) ?? "" } : {}), ...(o.type !== undefined ? { type: text(o.type, "type", 100)! } : {}), parentId, parentTitle: parentId === b.parentId ? b.parentTitle : null };
+  }
+  if (b.kind === "commitment") {
+    const due = o.due === undefined ? b.due : o.due === null ? null : typeof o.due === "string" && DATE.test(o.due) ? o.due : (() => { throw new Invalid("due must be a date"); })();
+    return { ...b, ...(o.what !== undefined ? { what: text(o.what, "what", 200)! } : {}), due };
+  }
+  return { ...b, ...(o.text !== undefined ? { text: text(o.text, "text", 2000)! } : {}) };
+}
+
+/** The review screen: the call, the occurrence, its proposals in order with quotes, and what I may do. */
+async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, input: unknown): Promise<ActionResponse> {
+  const o = obj(input, ["occurrenceId"]);
+  const v = store.viewer(me);
+  const r = await v.occurrence(id(o.occurrenceId, "occurrenceId"));
+  if (!r) return bad("No such meeting", 404);
+  const ps = (await v.proposals(r.o.id)).sort(proposalOrder);
+  const lines = await store.transcript(r.o.id);
+  const users = await ctx.users();
+  const reviewer = canConfirm(r.series, me);
+  return {
+    ok: true,
+    data: {
+      meeting: viewOf(r.series, cfg, users, me),
+      occurrence: occView(r.o, { all: ps.length, open: ps.filter((p) => p.state === "open").length }),
+      proposals: ps,
+      transcript: lines ? { lines: lines.length, speakers: [...new Set(lines.map((l) => l.speaker))].length } : null,
+      canConfirm: reviewer,
+      canWrite: reviewer ? await ctx.canWrite(r.series.clientKey).catch(() => false) : false,
+    },
+  };
+}
+
+/** The changes a Confirm would make, previewed through the DevOps write framework (a reviewer). */
+async function prepare(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, input: unknown): Promise<ActionResponse> {
+  const o = obj(input, ["occurrenceId", "keep"]);
+  const { o: occ, series } = await store.viewer(me).reviewer(id(o.occurrenceId, "occurrenceId"));
+  const keep = new Set(ids(o.keep, "keep"));
+  const ps = (await store.proposals(occ.id)).filter((p) => p.state === "open" || p.state === "failed");
+  const kept = ps.filter((p) => keep.has(p.id));
+  if (!kept.length) return bad("Tick at least one proposal, or skip them all", 409);
+  const writes = kept.filter((p) => p.kind !== "commitment");
+  if (writes.length && !(await ctx.canWrite(series.clientKey).catch(() => false))) return bad("Enable DevOps writes for this client in Settings › Clients first", 409);
+  const plan = ctx.plan;
+  const changes: Record<string, unknown>[] = [];
+  const draftOnly: { proposalId: number; title: string; message: string }[] = [];
+  const cap = writes.length ? await ctx.capture(cfg, series.clientKey).catch(() => null) : null;
+  for (const p of writes) {
+    const b = p.body;
+    if (b.kind === "comment") changes.push({ kind: "comment", itemId: b.itemId, text: b.text, key: `p${p.id}` });
+    else if (b.kind === "gap") {
+      if (!plan) return bad("The plan store isn't available", 503);
+      // My own draft (the existing draft and create path), with the meeting's description; reused on a retry.
+      const level = cap?.model ? (levelOfType(cap.model, b.type) === "parent" || levelOfType(cap.model, b.type) === "top" ? "feature" : "story") : "story";
+      let draftId = p.result?.draftId ?? null;
+      if (!draftId || !(await plan.getDraft(draftId))) {
+        const d = await plan.addDraft({ clientKey: series.clientKey, parentItemId: b.parentId, title: b.title, size: "M", level });
+        await plan.updateDraft(d.id, { description: b.description || null });
+        draftId = d.id;
+        await store.updateProposal(p.id, { result: { draftId } });
+      }
+      if (b.parentId === null) draftOnly.push({ proposalId: p.id, title: b.title, message: "Saved as your draft: put it under a feature or epic in Inbox › Captures and drafts, then create it" });
+      else changes.push({ kind: "create", draftId, type: b.type, key: `p${p.id}` });
+    }
+  }
+  let previews: unknown[] = [];
+  let refused: unknown[] = [];
+  let nothing: unknown[] = [];
+  for (let i = 0; i < changes.length; i += 10) {
+    const r = await ctx.devops("devops.preview", { clientKey: series.clientKey, changes: changes.slice(i, i + 10) });
+    if (!r.ok) return r;
+    const d = r.data as { previews: unknown[]; refused: unknown[]; nothing: unknown[] };
+    previews = [...previews, ...d.previews];
+    refused = [...refused, ...d.refused];
+    nothing = [...nothing, ...d.nothing];
+  }
+  const commitments = kept.flatMap((p) => (p.body.kind === "commitment" ? [{ proposalId: p.id, who: p.body.who, side: p.body.side, what: p.body.what, due: p.body.due, shows: p.body.side === "cooptimize" ? `In ${p.body.who === "" ? "their" : `${p.body.who.split(/\s+/)[0]}'s`} Promises, for them to keep or dismiss` : "In your Waiting on" }] : []));
+  return { ok: true, data: { previews, refused, nothing, draftOnly, commitments, skip: ps.filter((p) => !keep.has(p.id)).map((p) => p.id) } };
+}
+
+/** One Confirm: the previewed DevOps writes, the shared commitments, and the rest skipped. */
+async function confirm(ctx: MeetingContext, store: MeetingStore, me: string, input: unknown): Promise<ActionResponse> {
+  const o = obj(input, ["occurrenceId", "keep"], ["previews"]);
+  const { o: occ, series } = await store.viewer(me).reviewer(id(o.occurrenceId, "occurrenceId"));
+  const keep = new Set(ids(o.keep, "keep"));
+  const pairs = o.previews === undefined ? [] : Array.isArray(o.previews) && o.previews.length <= 50 ? o.previews.map((x) => {
+    const r = obj(x, ["proposalId", "previewId"]);
+    return { proposalId: id(r.proposalId, "proposalId"), previewId: text(r.previewId, "previewId", 100)! };
+  }) : (() => { throw new Invalid("previews must be up to 50 pairs"); })();
+  const ps = (await store.proposals(occ.id)).filter((p) => p.state === "open" || p.state === "failed");
+  const at = ctx.now();
+  const results: { proposalId: number; ok: boolean; message: string }[] = [];
+  // DevOps writes first, through the framework (read back, audit log, undo).
+  for (let i = 0; i < pairs.length; i += 10) {
+    const batch = pairs.slice(i, i + 10).filter((x) => keep.has(x.proposalId) && ps.some((p) => p.id === x.proposalId));
+    if (!batch.length) continue;
+    const r = await ctx.devops("devops.confirm", { previewIds: batch.map((x) => x.previewId) });
+    const rs = r.ok ? ((r.data as { results: ({ entry: { id: number }; confirmed: boolean; message: string; itemId?: number | null } | { error: string })[] }).results) : batch.map(() => ({ error: r.ok ? "" : r.error }));
+    for (const [j, x] of batch.entries()) {
+      const p = ps.find((y) => y.id === x.proposalId)!;
+      const res = rs[j];
+      if (res && "entry" in res && res.confirmed) {
+        await store.updateProposal(p.id, { state: "confirmed", result: { ...p.result, writeId: res.entry.id, ...(res.itemId ? { itemId: res.itemId } : {}), message: res.message }, decidedBy: me, decidedAt: at });
+        results.push({ proposalId: p.id, ok: true, message: res.message });
+      } else {
+        const message = res && "error" in res ? res.error : res && "message" in res ? res.message : "That change didn't go through";
+        await store.updateProposal(p.id, { state: "failed", result: { ...p.result, message }, decidedBy: me, decidedAt: at });
+        results.push({ proposalId: p.id, ok: false, message });
+      }
+    }
+  }
+  for (const p of ps) {
+    if (!keep.has(p.id)) {
+      await store.updateProposal(p.id, { state: "skipped", decidedBy: me, decidedAt: at });
+      continue;
+    }
+    const b = p.body;
+    if (b.kind === "commitment") {
+      if (!ctx.conversations) {
+        results.push({ proposalId: p.id, ok: false, message: "Promises aren't available here" });
+        continue;
+      }
+      // Shared, like CV-1's: a Cooptimizer's shows in their own Promises; the client's is my Waiting on. Nobody's plan.
+      const k = await ctx.conversations.addCommitment({
+        conversationId: null, chatId: `${MEETING_CHAT}${series.id}`, clientKey: series.clientKey, whoId: b.side === "cooptimize" ? b.whoId : null, whoName: b.who, toId: b.side === "client" ? me : null, toName: b.side === "client" ? null : b.toName,
+        what: b.what, dueAt: null, dueDate: b.due, impliesItem: false, messageIds: [], reason: `From ${series.name}, ${occ.date}`, closeHow: null, closeNote: null,
+      });
+      await store.updateProposal(p.id, { state: "confirmed", result: { commitmentId: k.id }, decidedBy: me, decidedAt: at });
+      results.push({ proposalId: p.id, ok: true, message: b.side === "cooptimize" ? `A promise for ${b.who}` : `Waiting on ${b.who}` });
+    } else if (b.kind === "gap" && b.parentId === null && p.result?.draftId) {
+      await store.updateProposal(p.id, { state: "confirmed", decidedBy: me, decidedAt: at });
+      results.push({ proposalId: p.id, ok: true, message: "Saved as your draft" });
+    }
+  }
+  const left = (await store.proposals(occ.id)).filter((p) => p.state === "open" || p.state === "failed").length;
+  if (!left) await store.updateOccurrence(occ.id, { state: "reviewed", reviewedBy: me });
+  ctx.log({ source: "plan", op: "meeting_confirmed", count: results.filter((r) => r.ok).length, kind: results.some((r) => !r.ok) ? "partial" : "ok" });
+  return { ok: true, data: { results, left } };
+}
+
+// ---- The AI pass, shared by uploads and the poll job ----
+
+export type PassDeps = {
+  store: MeetingStore;
+  ai: () => Promise<AiService | null>;
+  capture: (clientKey: string) => Promise<CaptureContext | null>;
+  users: () => Promise<MeetingUser[]>;
+  log: (r: LogRecord) => void;
+};
+
+/** Runs the AI pass on a stored transcript and records its proposals and outcome; the occurrence becomes ready. */
+export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrence, lines: readonly TranscriptLine[]): Promise<{ outcome: string; proposals: number }> {
+  const ai = await d.ai().catch(() => null);
+  const cap = await d.capture(series.clientKey).catch(() => null);
+  let outcome = "done";
+  let n = 0;
+  if (!ai) outcome = "not_set_up";
+  else if (!cap) outcome = "provider";
+  else {
+    const users = await d.users().catch((): MeetingUser[] => []);
+    const cooptimizers = series.attendees.flatMap((a) => users.filter((u) => lower(u.id) === lower(a)).map((u) => ({ id: lower(u.id), name: u.name })));
+    const r = await capturePass(ai, { clientKey: series.clientKey, clientName: cap.clientName, internal: cap.internal, meeting: { name: series.name, role: series.role, date: occ.date }, cooptimizers, items: cap.items, model: cap.model, directory: cap.directory, lines });
+    if (r.ok) {
+      n = (await d.store.replaceProposals(occ.id, r.proposals)).filter((p) => p.state === "open").length;
+      d.log({ source: "ai", op: "meeting_capture", count: n, kind: `windows:${r.windows} masked_client:${r.masked.client} masked_email:${r.masked.email} dropped:${r.dropped}` });
+    } else outcome = r.kind === "client_off" || r.kind === "off" ? "no_ai" : r.kind;
+  }
+  await d.store.updateOccurrence(occ.id, { state: "ready", aiOutcome: outcome, nextCheckAt: null });
+  if (outcome !== "done") d.log({ source: "ai", op: "meeting_capture", kind: outcome });
+  return { outcome, proposals: n };
+}
+
+/** An uploaded transcript for a series' dated occurrence (a reviewer): parsed, stored, then the AI pass. */
+export async function uploadTranscript(ctx: MeetingContext, q: { seriesId: number; date: string; name: string; bytes: Uint8Array }): Promise<ActionResponse> {
+  const store = ctx.meetings;
+  const me = await ctx.me();
+  const cfg = await ctx.config();
+  if (!store || !me || !cfg) return bad("Meetings aren't available here", 503);
+  if (!DATE.test(q.date)) return bad("Pick the meeting's date", 400);
+  const v = store.viewer(me);
+  const series = await v.seriesById(q.seriesId);
+  if (!series) return bad("No such meeting", 404);
+  if (!canConfirm(series, me)) return bad("Only this meeting's reviewers can upload its transcript", 403);
+  let lines: TranscriptLine[];
+  try {
+    lines = readTranscriptFile(q.name, q.bytes).lines;
+  } catch (e) {
+    if (e instanceof TranscriptError) return bad(e.message, 422);
+    throw e;
+  }
+  const start = Temporal.PlainDate.from(q.date).toZonedDateTime({ timeZone: series.zone, plainTime: Temporal.PlainTime.from(series.start) });
+  const occ = await v.ensureOccurrence(series.id, q.date, start.toInstant().toString(), start.add({ minutes: series.minutes }).toInstant().toString());
+  await v.saveTranscript(occ.id, lines);
+  ctx.log({ source: "plan", op: "meeting_upload", count: lines.length });
+  const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log }, series, (await store.occurrence(occ.id))!, lines);
+  return { ok: true, data: { occurrenceId: occ.id, lines: lines.length, ...r } };
+}

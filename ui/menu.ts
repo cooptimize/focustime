@@ -1289,6 +1289,21 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "items.get":
       return env.openAssistant ? { run: () => env.openAssistant!() } : { disabled: "The assistant isn't available here" };
     case "assistant.clear": return { run: () => env.openSettings("data") };
+    // MC-1: registering is in Admin › Clients (admins); the review opens on my client calls.
+    case "meeting.list":
+    case "meeting.candidates":
+    case "meeting.register":
+    case "meeting.update":
+    case "meeting.remove":
+      return { run: () => env.openSettings("admin-clients") };
+    case "meeting.mine":
+    case "meeting.review":
+    case "meeting.edit":
+    case "meeting.no_transcript":
+    case "meeting.prepare":
+    case "meeting.confirm":
+    case "meeting.rerun":
+      return { run: () => env.setView("meetings") };
     case "weekplan.proposal":
     case "weekplan.carry_decide":
     case "weekplan.carry_accept_all":

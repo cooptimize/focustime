@@ -23,7 +23,6 @@ import type { ReadDeps } from "../assistant/reads.ts";
 import { createAssistant, type AssistantService } from "../assistant/service.ts";
 import { VOICE_MAX_BYTES, VOICE_MAX_SECONDS, type AssistantContext, type Channel, type TranscribeResult } from "../assistant/types.ts";
 import type { ClientEntry } from "../ai/guard.ts";
-import { inviteDomains } from "../config/schema.ts";
 import type { ChosenVm } from "./account-types.ts";
 import type { Logger } from "../log/logger.ts";
 import type { PhotoCache } from "../host/types.ts";
@@ -104,6 +103,12 @@ import type { FeedbackWriteTarget } from "./devops-write-actions.ts";
 import type { Sender } from "../plan/feedback.ts";
 import { setupAction, type SetupClient } from "./setup-actions.ts";
 import { noticeAction, type PushPort } from "./notice-actions.ts";
+import { meetingAction, type CaptureContext as MeetingCaptureContext, type MeetingAction, type MeetingContext, type MeetingUser } from "./meeting-actions.ts";
+import type { MeetingStore } from "../store/meeting-store.ts";
+import { MEETING_CHAT } from "../store/conversation-store.ts";
+import type { MeetingSeries } from "../plan/meetings.ts";
+import type { ClientChat } from "../plan/requests.ts";
+import { inviteDomains } from "../config/schema.ts";
 
 /** The plan store marker for the first launch (step 17.5). */
 const FIRST_LAUNCH_MARK = "first_launch";
@@ -170,6 +175,8 @@ export type ActionContext = {
   devopsStored?: (clientKey: string, value: { id: number; fields: Record<string, unknown> }) => Promise<void>;
   /** SW-1: sends, week commitments, client priorities and Ask to look (app tables). Absent: none of it here. */
   team?: import("../store/team-store.ts").TeamStore;
+  /** MC-1: the registered client calls (app tables) and the FocusTime users they name. Absent: no meeting capture here. */
+  meetings?: MeetingsPort;
   /** SW-1: whether a person has signed in to FocusTime (can receive sends). Absent: their entry has a sign-in. */
   onFocusTime?: (personId: string) => boolean;
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
@@ -1024,6 +1031,72 @@ async function sharedFor(ctx: ActionContext, port: RequestsPort) {
 }
 
 /** Requests: the shared store and Refresh, who I am and my clients, their open DevOps items and write access. */
+/**
+ * MC-1: what the meeting job needs from one person, built from their own context: their Graph meetings client (behind
+ * the registered-meeting gate), their AI on the app's background tier (Flex, AI-F1; the person's switches and caps),
+ * and the client's capture context. Null when their settings can't be read.
+ */
+export async function meetingPerson(ctx: ActionContext): Promise<{ graph: import("../sources/graph/meetings.ts").MeetingsClient | null; ai: () => Promise<AiService | null>; capture: (clientKey: string) => Promise<MeetingCaptureContext | null> } | null> {
+  const cfg = await configured(ctx);
+  if (!cfg) return null;
+  return { graph: ctx.account?.(cfg)?.meetings ?? null, ai: () => aiFor(ctx), capture: (k) => meetingCapture(ctx, cfg, k) };
+}
+
+/** MC-1: a registered call as the pseudo chat its shared commitments belong to (`meeting:<series id>`; no link, never polled). */
+export function meetingChatsOf(series: readonly MeetingSeries[]): ClientChat[] {
+  return series.map((s) => ({
+    chatId: `${MEETING_CHAT}${s.id}`, clientKey: s.clientKey, kind: "delivery", displayName: s.name, webUrl: null, position: 0, members: null, membersFetchedAt: null,
+    registeredBy: s.registrantId, registeredAt: s.createdAt, readOn: false, readSince: s.createdAt, seenAt: null, polledAt: null, fetchedAt: null, retryAt: null, failures: 0, pollState: null, pollNote: null, tokenUser: null,
+  }));
+}
+
+/** MC-1: the meeting store and the FocusTime users (id, name, every address that is them) for registration. */
+export type MeetingsPort = { store: MeetingStore; users: () => Promise<MeetingUser[]> };
+
+/**
+ * MC-1: one client's AI pass context: its name, whether it is Cooptimize Internal (GD-1), its open DevOps items in
+ * scope (what was read last, else this client alone), its process and the guard's directory. Null when DevOps
+ * couldn't be read for it.
+ */
+export async function meetingCapture(ctx: ActionContext, cfg: AppConfig, clientKey: string): Promise<MeetingCaptureContext | null> {
+  const rc = await requestContext(ctx);
+  const items = await rc.openItems(cfg, clientKey);
+  if (!items) return null;
+  const internal = await isInternalKey(ctx.org, clientKey);
+  const model = (await ctx.makeDevOps(cfg.dataverse, userZone(cfg)).processModels([clientKey]).catch(() => []))[0];
+  return { clientName: cfg.clientSettings[clientKey]?.name ?? clientKey, internal, items, model: model?.ok ? model.model : null, directory: await aiDirectory(ctx, cfg) };
+}
+
+/**
+ * MC-1: the meeting actions' context. The person's own Graph meetings client (behind the registered-meeting gate), AI
+ * (an upload or Propose again is a button a person waits on: standard; the poll job's passes use Flex, AI-F1), and
+ * the DevOps writes exactly as the app's buttons call them.
+ */
+export async function meetingContext(ctx: ActionContext): Promise<MeetingContext> {
+  const rc = await requestContext(ctx);
+  return {
+    meetings: ctx.meetings?.store,
+    conversations: ctx.requests?.conversations,
+    plan: ctx.plan,
+    me: rc.me,
+    isAdmin: () => amAdmin(ctx),
+    config: () => configured(ctx),
+    now: ctx.now,
+    homeDomains: async () => {
+      const cfg = await configured(ctx);
+      return cfg ? inviteDomains(cfg) : [];
+    },
+    graph: (cfg) => ctx.account?.(cfg)?.meetings ?? null,
+    users: async () => (ctx.meetings ? ctx.meetings.users() : []),
+    leads: async (clientKey) => ((await ctx.org?.clientLeads(clientKey).catch(() => [])) ?? []).map((l) => l.personId),
+    capture: (cfg, clientKey) => meetingCapture(ctx, cfg, clientKey),
+    ai: () => aiFor(ctx, { waiting: true }),
+    devops: (action, input) => dispatch(ctx, { action, input }),
+    canWrite: async (clientKey) => (await rc.writeClients()).includes(clientKey),
+    log: ctx.log ?? (() => {}),
+  };
+}
+
 export async function requestContext(ctx: ActionContext): Promise<RequestContext> {
   const chats = await chatContext(ctx);
   return {
@@ -1097,6 +1170,8 @@ export async function conversationContext(ctx: ActionContext): Promise<Conversat
     ...rc,
     ...(port?.conversations ? { conversations: port.conversations } : {}),
     isLead: async (clientKey) => isClientLead(ctx.org, await rc.me(), clientKey),
+    // MC-1: the registered calls I review or attend, as the chats my promises and Waiting on from a call belong to.
+    ...(ctx.meetings ? { meetingChats: async () => meetingChatsOf(await ctx.meetings!.store.viewer((await rc.me()) ?? "").series().catch(() => [])) } : {}),
     isAdmin: () => amAdmin(ctx),
     users: async () => (port?.users ? port.users() : []),
     // AI-F1: Sort unsorted, a button a person waits on: the pipeline's cap, on standard (the poll's own runs use Flex).
@@ -1322,7 +1397,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     }
     case "teams.test": {
       const i = req.input as { kind?: unknown } | null;
-      if (!i || typeof i !== "object" || Object.keys(i).some((k) => k !== "kind") || !(TEAMS_KINDS as readonly unknown[]).includes(i.kind)) return bad("teams.test takes { kind: brief, checkin, closeout, nudges or status }");
+      if (!i || typeof i !== "object" || Object.keys(i).some((k) => k !== "kind") || !(TEAMS_KINDS as readonly unknown[]).includes(i.kind)) return bad("teams.test takes { kind: brief, checkin, closeout, nudges, status or meetings }");
       if (!ctx.teams) return { ok: false, status: 503, error: "FocusTime in Teams isn't set up here" };
       const r = await ctx.teams.test(i.kind as TeamsKind);
       return r.ok ? { ok: true, data: { sent: i.kind } } : { ok: false, status: 409, error: r.message };
@@ -1861,6 +1936,19 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
         action,
         req.input,
       );
+    case "meeting.list":
+    case "meeting.candidates":
+    case "meeting.register":
+    case "meeting.update":
+    case "meeting.remove":
+    case "meeting.mine":
+    case "meeting.review":
+    case "meeting.edit":
+    case "meeting.no_transcript":
+    case "meeting.prepare":
+    case "meeting.confirm":
+    case "meeting.rerun":
+      return meetingAction(await meetingContext(ctx), action as MeetingAction, req.input);
     default: {
       const unhandled: never = action;
       return bad(`unknown action ${String(unhandled)}`);

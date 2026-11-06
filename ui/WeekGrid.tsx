@@ -1,4 +1,5 @@
 import { createContext, Fragment, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { callMarks, callsIn, MeetingCalls, useCallMarks, useMine } from "./meetings/calls.ts";
 import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
 import { worstSeverity } from "../week/risks.ts";
@@ -86,9 +87,13 @@ export function WeekGrid(props: Props) {
     return sl.off ? [] : [{ key: `${day.date}|${h}`, start: sl.view.start, end: sl.view.end }];
   }) : [];
   const home = homeRail(rails, props.now);
+  // MC-1: the registered client calls I review or attend, marked on the card they start in.
+  const mine = useMine();
   return (
     <RulerCtx.Provider value={{ layout: props.layout, promises: props.promises ?? [], onPromise: props.onPromise, today: props.today, now: props.now, home }}>
-      <Grid {...props} />
+      <MeetingCalls.Provider value={callMarks(mine)}>
+        <Grid {...props} />
+      </MeetingCalls.Provider>
     </RulerCtx.Provider>
   );
 }
@@ -508,6 +513,8 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   const pill = status.kind === "at_risk" ? <>At risk{status.short ? <span className="pill-reason"> · {status.short}</span> : null}</> : status.label;
   // PV-1: a drop target for stories dragged from the panel or another block (not the evening).
   const drop = useDropTarget(eve ? null : { date: slot.date, half: slot.half });
+  // MC-1: a registered call starting in this card's hours: its name and what it needs, opening its review.
+  const calls = callsIn(useCallMarks(), slot.start, slot.end);
 
   // U3: one line for the client's features this week: "3 features · 1 needs stories", opening the panel there.
   const feats = !eve && (slot.half === "AM" || slot.half === "PM") ? clientFeatures(plan.weekFeatures ?? [], mondayOf(slot.date), primary?.clientKey ?? null) : [];
@@ -557,6 +564,16 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
             <button key={f.id} type="button" className="due-open" tabIndex={selected ? 0 : -1} onClick={(e) => (e.stopPropagation(), onOpen({ kind: "followup", id: f.id }))} title={`Promise${f.hasWho ? ` to ${f.who}` : ""}: ${f.what}`}>
               <DueBadge l={f} />
             </button>
+          ))}
+        </div>
+      )}
+      {calls.length > 0 && (
+        <div className="card-calls">
+          {calls.map((c) => (
+            <a key={c.occurrenceId} href={`#/meetings/${c.occurrenceId}`} className={`call-mark${c.needsMe ? " needs" : ""}`} tabIndex={selected ? 0 : -1} onClick={(e) => e.stopPropagation()} title={`${c.name}: ${c.label}`}>
+              <span className="call-name">{c.role}</span>
+              <span className="call-what">· {c.label}</span>
+            </a>
           ))}
         </div>
       )}

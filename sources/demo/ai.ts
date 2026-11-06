@@ -3,6 +3,7 @@
 // provider isn't there, is off, is slow (about 6 seconds) or answers with something that doesn't fit the schema, a
 // stored sample answer for the same task is used instead, so the demo never stalls. The guard runs before this
 // provider is ever called (ai/service.ts), so a refused request is refused and never gets a sample.
+import { demoMeetingAnswer } from "./meetings.ts";
 import type { AiProvider, ProviderCall, ProviderReply, TranscribeReply } from "../../ai/types.ts";
 import { costMicros, micros, type Prices } from "../../ai/cost.ts";
 import { sampleOf, validate } from "../../ai/schema.ts";
@@ -116,6 +117,8 @@ async function samples(c: ProviderCall, script: AiProvider): Promise<ProviderRep
       return reply(conversationDraft(c));
     case "conversations_comment":
       return reply({ lines: conversationComment(c) });
+    case "meeting_capture":
+      return reply(demoMeetingAnswer(c.input));
     case "status_draft":
       return reply({ drafts: statusDraft(c.input) });
     case "conversations_merge_summary": {

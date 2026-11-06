@@ -9,7 +9,9 @@ import { extname, join, normalize, sep } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import { currentOperation, newOperation, noteCurrent, runInOperation, type Operation } from "../log/operation.ts";
 import { isActionName } from "../actions/registry.ts";
-import { assistantTranscribe, chatImage, dispatch, type ActionContext } from "../actions/dispatch.ts";
+import { assistantTranscribe, chatImage, dispatch, meetingContext, type ActionContext } from "../actions/dispatch.ts";
+import { uploadTranscript } from "../actions/meeting-actions.ts";
+import { MAX_UPLOAD_BYTES } from "../actions/transcript-file.ts";
 import { VOICE_MAX_BYTES } from "../assistant/types.ts";
 import type { ServedImage } from "../actions/chat-images.ts";
 import type { Logger } from "../log/logger.ts";
@@ -145,6 +147,9 @@ function baseHeaders(res: ServerResponse, csp: boolean, https: boolean) {
 
 /** AS-1: the panel's push-to-talk endpoint (raw audio body, ?seconds=&client=&item=). */
 export const ASSISTANT_VOICE_PATH = "/api/assistant/transcribe";
+
+/** MC-1: a reviewer's transcript upload (raw .vtt or .docx body, ?series=&date=&name=), 5 MB at most. */
+export const MEETING_UPLOAD_PATH = "/api/meetings/upload";
 
 /** AS-1: a raw body as bytes, refused past `limit` (the recording stays in this memory only). */
 async function readBytes(req: IncomingMessage, limit: number): Promise<Buffer> {
@@ -403,6 +408,29 @@ export function createApp(opts: AppOptions) {
         audio.fill(0);
         opts.log({ source: "server", op: "transcribe", status: r.ok ? 200 : 422, kind: r.ok ? "ok" : r.reason });
         return json(res, 200, r);
+      }
+      if (url.pathname === MEETING_UPLOAD_PATH) {
+        // MC-1: the file is read into memory, parsed into lines and stored for 30 days; the bytes are dropped. Never
+        // logged: only the outcome's status.
+        if (used) opts.onUse?.(s);
+        const q = url.searchParams;
+        let bytes: Buffer;
+        try {
+          bytes = await readBytes(req, MAX_UPLOAD_BYTES);
+        } catch {
+          return json(res, 413, { ok: false, status: 413, error: "That file is over 5 MB" });
+        }
+        const series = Number(q.get("series"));
+        const out = Number.isSafeInteger(series) && series > 0
+          ? await uploadTranscript(await meetingContext(await opts.ctx(s)), { seriesId: series, date: q.get("date") ?? "", name: (q.get("name") ?? "").slice(0, 200), bytes: new Uint8Array(bytes) }).catch((e: unknown) => {
+              opts.onError?.(e, "meeting_upload");
+              return { ok: false as const, status: 500, error: "The transcript couldn't be saved. Try again" };
+            })
+          : { ok: false as const, status: 400, error: "Pick the meeting first" };
+        bytes.fill(0);
+        const status = out.ok ? 200 : out.status;
+        opts.log({ source: "server", op: "meeting_upload", status });
+        return json(res, status, out);
       }
       // The view the launcher or a clicked notification asked for, taken once.
       if (url.pathname === "/api/open-request") return json(res, 200, { view: (await opts.takeOpenRequest?.(s).catch(() => null)) ?? null });

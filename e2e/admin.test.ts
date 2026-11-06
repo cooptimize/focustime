@@ -177,7 +177,7 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await tiers.getByRole("switch", { name: "Use Flex for Sorting requests" }).uncheck();
       await expect.poll(async () => (await team.org.rules()).ai.standardTasks).toEqual(["asks.classify"]);
       await tiers.getByRole("row", { name: /Break down/ }).getByText("Standard", { exact: true }).waitFor();
-      expect(await tiers.getByRole("switch").count()).toBe(3);
+      expect(await tiers.getByRole("switch").count()).toBe(4);
       await shotBoth(page, "admin-ai-tiers", tiers);
       // Turning AI off for everyone asks first; Cancel keeps it on.
       await body.getByRole("switch", { name: "AI on" }).click();

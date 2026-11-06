@@ -30,13 +30,14 @@ export type ActionTarget =
   | "promise" // one promise in Inbox › Promises (AP-2)
   | "conversation" // one conversation in Inbox › Conversations (CV-1)
   | "commitment" // one of my promises in Inbox › My promises (CV-1)
-  | "send"; // one send to someone's week (SW-1)
+  | "send" // one send to someone's week (SW-1)
+  | "meeting"; // one registered client call or one of its dated occurrences (MC-1)
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Team" | "Plan the week" | "Plan the day" | "Close out" | "To-dos" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Promises" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests" | "Conversations" | "Inbox" | "Admin" | "Assistant";
+  readonly group: "Week" | "Team" | "Plan the week" | "Plan the day" | "Close out" | "To-dos" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Promises" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests" | "Conversations" | "Inbox" | "Admin" | "Assistant" | "Meetings";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -316,6 +317,19 @@ export const ACTIONS = [
   // PK-1: read only. What a checked-off to-do may offer in DevOps (Set #id to its done state), and the Undo when it's unchecked.
   { name: "devops.done_offer", title: "Offer to update DevOps for a to-do", group: "DevOps", target: "pick", summary: "For to-dos checked done: which items could be set to their done state (only ones you can change, not done already; read-only)" },
   { name: "devops.undo_offer", title: "Offer to undo a to-do's DevOps update", group: "DevOps", target: "pick", summary: "For a to-do unchecked: the state change its offer made, if it's still the newest change on the item (read-only)" },
+  // MC-1: meeting capture. Registering is Admin's; the review is the call's reviewers' (attendees may look, not confirm).
+  { name: "meeting.list", title: "A client's registered meetings", group: "Meetings", target: "none", summary: "Admin › Clients › <client> › Meetings: the client's weekly calls FocusTime reads (admins only)" },
+  { name: "meeting.candidates", title: "Find a meeting to register", group: "Meetings", target: "none", summary: "Recurring Teams meetings on your calendar with people from outside Cooptimize, the client's name first (admins only)" },
+  { name: "meeting.register", title: "Register a client meeting", group: "Meetings", target: "none", summary: "A recurring call FocusTime reads after each occurrence: from your calendar or a pasted Teams join link, with its reviewers (admins only)" },
+  { name: "meeting.update", title: "Change a registered meeting", group: "Meetings", target: "meeting", summary: "Its name, role, reviewers, or Automatic or Upload (admins only)" },
+  { name: "meeting.remove", title: "Stop reading a meeting", group: "Meetings", target: "meeting", summary: "FocusTime stops reading it; its stored transcripts go at 30 days as usual (admins only)" },
+  { name: "meeting.mine", title: "My client calls", group: "Meetings", target: "none", summary: "The registered calls you review or attend, with their recent occurrences" },
+  { name: "meeting.review", title: "Review a call", aka: ["update the plan", "meeting capture"], group: "Meetings", target: "meeting", summary: "Update <client>'s plan from one call: each proposal with the words it came from; reviewers tick, edit or skip, then Confirm" },
+  { name: "meeting.edit", title: "Change a proposal", group: "Meetings", target: "meeting", summary: "Tick, untick, skip or edit one proposal before Confirm (reviewers only); nothing is written" },
+  { name: "meeting.no_transcript", title: "No transcript this week", group: "Meetings", target: "meeting", summary: "Dismisses the upload nudge for that occurrence (reviewers only)" },
+  { name: "meeting.prepare", title: "Preview a call's changes", group: "Meetings", target: "meeting", summary: "The DevOps creates and comments for the ticked proposals, in the usual preview, before anything is written" },
+  { name: "meeting.confirm", title: "Confirm a call's changes", group: "Meetings", target: "meeting", summary: "Writes the previewed changes through the usual writes (read back, logged, Undo), adds the promises and Waiting on, and skips the rest" },
+  { name: "meeting.rerun", title: "Propose again", group: "Meetings", target: "meeting", summary: "Runs the AI pass again on the stored transcript (reviewers only, while it's kept)" },
   { name: "link.open", title: "Open in browser", group: "Work items", target: "item", summary: "Open a work item in your browser" },
   // AS-1: the assistant. Its reads (assistant.today, lookup.day, items.get) are also on its allowlist; ask, confirm,
   // cancel, history and clear are the panel's own and never reachable from the assistant itself.

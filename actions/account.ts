@@ -5,6 +5,7 @@
 // my_systemuserid stay as the fallback while signed out. The launch token and Host/Origin checks still apply.
 import type { ParseResult } from "../config/schema.ts";
 import { workEmail, type IdClaims } from "../sources/oauth/idtoken.ts";
+import type { MeetingsClient } from "../sources/graph/meetings.ts";
 import { AuthFailure, type ConnectOptions, type ConnectResult, type ScopeProbe, type TokenKind, type WriteAccess } from "../sources/oauth/oauth.ts";
 import type { ChatMessagesClient, ChatsClient } from "../sources/graph/chats.ts";
 import type { PlanStore } from "../store/plan-store.ts";
@@ -32,6 +33,8 @@ export type MicrosoftAccount = {
   chats?: ChatsClient;
   /** AP-1: a registered chat's new messages (Chat.Read, allowed by each person), on their own token. Absent: not available here. */
   chatMessages?: ChatMessagesClient;
+  /** MC-1: registered meetings' series, instances and transcripts, behind the registered-meeting gate. Absent: not available here. */
+  meetings?: MeetingsClient;
   /** T-2: whether a token for one scope set can be had, for Settings > Connections. Absent: can't tell here. */
   probe?: (kind: TokenKind) => Promise<ScopeProbe>;
   /** Forgets the refresh token and anything in memory; the calendar cache too. */

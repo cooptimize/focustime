@@ -47,7 +47,7 @@ ARM_API="797f4846-ba00-4fd7-ba43-dac1f8f63013"
 # gives each user's time zone (section 6). Presence.Read.All and ProfilePhoto.Read.All are the tenant-wide reads.
 # Chat.ReadBasic (T-2): names and members of the person's own Teams chats for delivery chats, never messages; a user can
 # consent to it, and the grant below allows it for the tenant.
-GRAPH_SCOPES=(openid profile email offline_access User.Read Calendars.ReadWrite MailboxSettings.Read Presence.ReadWrite Presence.Read.All ProfilePhoto.Read.All Chat.ReadBasic)
+GRAPH_SCOPES=(openid profile email offline_access User.Read Calendars.ReadWrite MailboxSettings.Read Presence.ReadWrite Presence.Read.All ProfilePhoto.Read.All Chat.ReadBasic OnlineMeetings.Read OnlineMeetingTranscript.Read.All)
 ARM_SCOPES=(user_impersonation)
 
 DEV_URL="" PROD_URL="" VAULT="" ROTATE=0 DRY=0 LOCAL=0 PORT=5317 CLAIMS_ONLY=0

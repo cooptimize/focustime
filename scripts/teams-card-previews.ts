@@ -3,13 +3,13 @@
 // Teams' light and dark colors, about as wide as a 1:1 chat's card. The cards are the bot's real ones
 // (server/teams/cards.ts), so a change there shows up here.
 // TB-2 adds the rhythm's cards (brief, check-in, close out, nudges, capture), each before and after a tap.
-// SR-1 adds the status report nudge.
+// SR-1 adds the status report nudge. MC-1 adds client calls to review.
 // PK-1 adds Done's follow-up (Set #id to its done state) and Undo's (put it back), on the check-in and close out cards.
 // Usage: node scripts/teams-card-previews.ts <outDir>
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright-core";
 import { CHROMIUM } from "../e2e/harness.ts";
-import { briefCard, captureCard, checkinCard, closeoutCard, nudgeCard, statusCard, type InlineProposal, type PickRow } from "../server/teams/rhythm-cards.ts";
+import { briefCard, captureCard, checkinCard, closeoutCard, meetingsCard, nudgeCard, statusCard, type InlineProposal, type PickRow } from "../server/teams/rhythm-cards.ts";
 import { cancelledCard, doneCard, expiredCard, failedCard, helpCard, proposalCard, resultCard, workingCard, type Card } from "../server/teams/cards.ts";
 
 const out = process.argv[2] ?? "screenshots/teams";
@@ -52,6 +52,8 @@ const rhythmCards: [string, Card][] = [
   ["nudges", nudgeCard(nudges, URL_)],
   // SR-1: Monday's status report, Friday afternoon.
   ["status", statusCard({ kind: "status", occasion: "status_report:2026-11-06", reportLabel: "for Monday, Nov 9", line: "3 features have no update yet for Monday's report", clients: [{ name: "Northwind", features: [{ title: "Supplier onboarding", url: "https://dev.azure.com/northwind-demo/Portal/_workitems/edit/1120" }] }, { name: "Atlas", features: [{ title: "Shipment tracking dashboard", url: "https://dev.azure.com/atlas-demo/Ops/_workitems/edit/3310" }] }, { name: "Cooptimize", features: [{ title: "Internal reporting refresh", url: null }] }], more: 0 }, URL_)],
+  // MC-1: client calls to review (a new TB-2 kind, off by default): proposals ready, a transcript to upload.
+  ["meetings", meetingsCard({ kind: "meetings", occasion: "meetings:1", items: [{ clientName: "Northwind", meeting: "Northwind weekly status call", dateLabel: "Wed, Nov 4", upload: false, route: "#/meetings/12" }, { clientName: "Harbor", meeting: "Harbor planning", dateLabel: "Tue, Nov 3", upload: true, route: "#/meetings/9" }] }, URL_)],
   ["capture", captureCard({ id: 7, text: "Call Dana about the March export" }, URL_)],
   ["capture-undone", captureCard({ id: 7, text: "Call Dana about the March export", undone: true }, URL_)],
   ["brief-test", briefCard({ ...brief, test: true }, URL_)],

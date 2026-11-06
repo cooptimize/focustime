@@ -214,8 +214,8 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       if (v.teams !== undefined) {
         // TB-2: Settings › Notifications › In Teams. parseConfig checks the times and the minutes.
         const t = obj(v.teams, "notify.teams");
-        only(t, ["brief", "checkin", "closeout", "nudges", "status", "friday", "briefAt", "checkinAt", "closeoutMinutes"], "notify.teams");
-        for (const k of ["brief", "checkin", "closeout", "nudges", "status", "friday"] as const) {
+        only(t, ["brief", "checkin", "closeout", "nudges", "status", "meetings", "friday", "briefAt", "checkinAt", "closeoutMinutes"], "notify.teams");
+        for (const k of ["brief", "checkin", "closeout", "nudges", "status", "meetings", "friday"] as const) {
           if (t[k] === undefined) continue;
           if (typeof t[k] !== "boolean") throw new SettingsInputError(`notify.teams_${k}`, "Must be true or false");
           values.push([`teams_${k}`, t[k] as boolean]);
