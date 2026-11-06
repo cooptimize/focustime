@@ -24,7 +24,7 @@ import { navOf, type Nav } from "../nav.ts";
 import { usePhone } from "../viewport.ts";
 import { chatterRows, entryOf, useInboxData, type ChatterRow, type Entry } from "./data.ts";
 import { ChatterDetail, Detail } from "./Detail.tsx";
-import { actsFor, ItemActions, ITEM_KEYS, type Act, type FormId } from "./ItemActions.tsx";
+import { actsFor, ItemActions, ITEM_KEYS, notWorkUndo, type Act, type FormId } from "./ItemActions.tsx";
 import { flatOrder, GROUPS, groupRows, inView, rowSub, rowTag, summaryLine, viewLabel, VIEWS, clientCounts, type Group } from "./model.ts";
 
 /** The letters the Inbox's items answer to (ItemActions' keys). */
@@ -306,7 +306,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
       {view === "chatter" ? (
         <ChatterList rows={chatter} tz={tz} open={openChatter?.key ?? null} onOpen={setChatterKey} colors={data.clients} phone={phone} />
       ) : (
-        <ListGroups groups={groups} openKey={openKey} onOpen={open} today={today} tz={tz} colors={data.clients} phone={phone} group={prefs.group} reasons={view === "needs_you"} live={view === "in_progress" ? liveState : null} />
+        <ListGroups groups={groups} openKey={openKey} onOpen={open} today={today} tz={tz} colors={data.clients} phone={phone} group={prefs.group} reasons={view === "needs_you"} live={view === "in_progress" ? liveState : null} onNotWork={view === "done" ? undefined : (id) => void run("conversations.not_work", { id }, "Moved to Chatter for everyone on the chat", notWorkUndo(id))} />
       )}
       {view !== "chatter" && showSnoozed && snoozed.length > 0 && (
         <ListGroups groups={[{ id: "snoozed", label: "Snoozed", clientKey: null, rows: snoozed }]} openKey={openKey} onOpen={open} today={today} tz={tz} colors={data.clients} phone={phone} group="kind" reasons={false} live={null} />
@@ -532,7 +532,8 @@ function RefreshChats({ run }: { run: (a: string, i: Record<string, unknown>, no
   );
 }
 
-function ListGroups({ groups, openKey, onOpen, today, tz, colors, phone, group, reasons, live }: { groups: ReturnType<typeof groupRows>; openKey: string | null; onOpen: (k: string) => void; today: string; tz: string; colors: Record<string, string>; phone: boolean; group: Group; reasons: boolean; live: ReadonlyMap<string, { id: number; state: string | null; closed: boolean }> | null }): ReactNode {
+function ListGroups({ groups, openKey, onOpen, today, tz, colors, phone, group, reasons, live, onNotWork }: { groups: ReturnType<typeof groupRows>; openKey: string | null; onOpen: (k: string) => void; today: string; tz: string; colors: Record<string, string>; phone: boolean; group: Group; reasons: boolean; live: ReadonlyMap<string, { id: number; state: string | null; closed: boolean }> | null; /** QF-1: a conversation row's ⋯ › Not work-related. */ onNotWork?: ((id: number) => void) | undefined }): ReactNode {
+  const [menuFor, setMenuFor] = useState<string | null>(null);
   return (
     <>
       {groups.map((g) => (
@@ -561,6 +562,20 @@ function ListGroups({ groups, openKey, onOpen, today, tz, colors, phone, group, 
                     </span>
                     {!phone && tag && <span className={`ib-tag tone-${tag.tone}`}>{tag.text}</span>}
                   </button>
+                  {onNotWork && r.kind === "conversation" && !r.done && (
+                    <span className="fu-more ib-row-more">
+                      <button type="button" className="ib-act quiet" aria-haspopup="menu" aria-expanded={menuFor === r.key} aria-label={`More for ${r.title}`} onClick={() => setMenuFor((k) => (k === r.key ? null : r.key))}>
+                        ⋯
+                      </button>
+                      {menuFor === r.key && (
+                        <span className="fu-menu" role="menu" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setMenuFor(null))}>
+                          <button type="button" role="menuitem" onClick={() => (setMenuFor(null), onNotWork(Number(r.key.slice(1))))}>
+                            Not work-related
+                          </button>
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </li>
               );
             })}

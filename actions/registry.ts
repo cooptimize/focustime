@@ -218,6 +218,8 @@ export const ACTIONS = [
   { name: "conversations.messages", title: "Show a conversation's messages", group: "Conversations", target: "conversation", summary: "The messages a conversation is made of, as Teams showed them" },
   { name: "conversations.seen", title: "Mark a conversation seen", group: "Conversations", target: "conversation", summary: "Clears its Updated marker for you" },
   { name: "conversations.resolve", title: "Resolve a conversation", group: "Conversations", target: "conversation", shortcut: "R", summary: "Resolved for everyone on the chat, with your name; a new work message opens it again" },
+  { name: "conversations.not_work", aka: ["chatter", "not work related", "social"], title: "Not work-related", group: "Conversations", target: "conversation", summary: "Its messages move to Chatter and it closes for everyone on the chat, with Undo; FocusTime learns nothing from it" },
+  { name: "conversations.not_work_undo", title: "Undo Not work-related", group: "Conversations", target: "conversation", summary: "Its messages come back from Chatter and it opens again" },
   { name: "conversations.not_request", title: "Not a request", group: "Conversations", target: "conversation", summary: "Closed for everyone on the chat, with your name and an optional reason; you can open it again" },
   { name: "conversations.reopen", title: "Open a conversation again", group: "Conversations", target: "conversation", summary: "Opens a resolved or closed conversation again" },
   { name: "conversations.hide", title: "Hide a conversation for me", group: "Conversations", target: "conversation", summary: "Hides it from your Conversations only; nobody else's changes" },

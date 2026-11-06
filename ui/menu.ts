@@ -1088,6 +1088,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "conversations.seen":
     case "conversations.resolve":
     case "conversations.not_request":
+    case "conversations.not_work":
+    case "conversations.not_work_undo":
     case "conversations.reopen":
     case "conversations.hide":
     case "conversations.move":
