@@ -595,7 +595,7 @@ App settings, the same for everyone; the defaults are in `server/appconfig.ts` (
 | `FOCUSTIME_AI_APP_CAP_USD` | `100` |
 | `FOCUSTIME_AI_PROVIDER` | `off` turns AI off for everyone (Settings › AI says it isn't set up) |
 
-Change the prices whenever the model changes: they are only used to estimate cost and enforce the caps. Since ADM-1 the model, each person's cap (default 10 USD) and the app's cap are set by an admin in Admin › AI; `FOCUSTIME_AI_MODEL` and `FOCUSTIME_AI_APP_CAP_USD` are only their starting values, and AI is on or off for FocusTime there too.
+Prices checked again on 2026-11-06 (HK-4): unchanged, and `gpt-6-luna` is still the cheapest current model; the model comparison is `node scripts/ai-eval.ts --live` (needs the key in the keyring, see docs/azure/ai-eval-results.md). Change the prices whenever the model changes: they are only used to estimate cost and enforce the caps. Since ADM-1 the model, each person's cap (default 10 USD) and the app's cap are set by an admin in Admin › AI; `FOCUSTIME_AI_MODEL` and `FOCUSTIME_AI_APP_CAP_USD` are only their starting values, and AI is on or off for FocusTime there too.
 
 ### What "AI isn't set up" means
 

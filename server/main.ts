@@ -42,6 +42,7 @@ import { createPeople } from "./people.ts";
 import { copiesOwnerSecrets, copyOwnerSecrets, OWNER_SECRETS_MARK, writePatAccount } from "./owner-secrets.ts";
 import { personTicks, type PersonTicks } from "./ticks.ts";
 import { createScheduler } from "./scheduler.ts";
+import { retentionJob } from "./retention-job.ts";
 import { wakeStoreOn } from "../store/wake-store.ts";
 import { cancelShutdownRestores } from "../store/vm-restores.ts";
 import { keepRoute, takeRoute } from "./open-route.ts";
@@ -1200,9 +1201,12 @@ const peopleJob = {
   },
   wake: peopleDue,
 };
+// HK-4: the retention purge, once a UTC day for everyone (claimed, so one replica runs it), counts only.
+const retention = retentionJob({ db, now: instantNow, log, expireChats: (olderThan) => teams.expire(olderThan), chatRetentionDays: async () => (await pollDeps.rules!()).retentionDays });
 const scheduler = createScheduler({
   jobs: [
     peopleJob,
+    retention,
     ...(devopsPoller ? [{ name: "devops_poll", run: async () => void (await devopsPoller!.tick()), wake: () => devopsPoller!.wake() }] : []),
     ...(pollInBackground
       ? [{

@@ -112,6 +112,41 @@ describe("guards in the service", () => {
     expect(s.records).toContainEqual(expect.objectContaining({ op: "guard", kind: "draft_title:output:client_name" }));
   });
 
+  // HK-4: per-span redaction. A batch with one secret-shaped item keeps every other item and blanks only the span.
+  const BATCH: JsonSchema = { type: "object", properties: { items: { type: "array", items: { type: "object", properties: { ref: { type: "string" }, summary: { type: "string" } }, required: ["ref", "summary"], additionalProperties: false } } }, required: ["items"], additionalProperties: false };
+  it("a batch answer with one secret-shaped item and one outside address: only those spans become [removed], every item is kept", async () => {
+    const key = `sk-${"Ab3".repeat(10)}`;
+    const answer = { items: [
+      { ref: "m1", summary: "Export fails on the March report" },
+      { ref: "m2", summary: `Screenshot shows the key ${key} in the config` },
+      { ref: "m3", summary: "Ask pat@outside.example and ana@cooptimize.example about it" },
+    ] };
+    const s = setup({ replies: [JSON.stringify(answer)] });
+    const r = await s.ai.run<typeof answer>(TASK, INPUT, BATCH);
+    expect(r.ok && r.value.items).toEqual([
+      { ref: "m1", summary: "Export fails on the March report" },
+      { ref: "m2", summary: "Screenshot shows the key [removed] in the config" },
+      { ref: "m3", summary: "Ask [removed] and ana@cooptimize.example about it" },
+    ]);
+    expect(s.log).toEqual([expect.objectContaining({ outcome: "ok", detail: null })]);
+    // Logged as a count and a kind only, never the text.
+    expect(s.records).toContainEqual({ source: "ai", op: "redact", kind: "draft_title:secret", count: 1 });
+    expect(s.records).toContainEqual({ source: "ai", op: "redact", kind: "draft_title:email", count: 1 });
+    expect(JSON.stringify(s.records)).not.toContain(key);
+    expect(JSON.stringify(s.records)).not.toContain("outside.example");
+  });
+  it("redaction never stands in for the client rule: another client named anywhere still refuses the whole answer", async () => {
+    const s = setup({ replies: [JSON.stringify({ items: [{ ref: "m1", summary: "Fine" }, { ref: "m2", summary: `Same as Northwind Traders, key sk-${"Ab3".repeat(10)}` }] })] });
+    const r = await s.ai.run(TASK, INPUT, BATCH);
+    expect(r.ok ? null : r.error.kind).toBe("refused_client");
+  });
+  it("a span whose replacement breaks the schema (an enum) makes the answer unusable rather than wrong", async () => {
+    const ENUM: JsonSchema = { type: "object", properties: { who: { type: "string", enum: ["pat@outside.example", "nobody"] } }, required: ["who"], additionalProperties: false };
+    const s = setup({ replies: [JSON.stringify({ who: "pat@outside.example" })] });
+    const r = await s.ai.run(TASK, INPUT, ENUM);
+    expect(r.ok ? null : r.error.kind).toBe("invalid_output");
+  });
+
   it("Internal: a request and an answer naming two clients are sent and accepted", async () => {
     const s = setup({ internal: "coop", person: { allowedClients: ["coop"] }, replies: [JSON.stringify({ title: "Northwind Traders and fabrikam exports", urgency: "now" })] });
     const r = await s.ai.run({ ...TASK, client: "coop" }, `${INPUT} for Northwind Traders, item 5150, and fabrikam`, SCHEMA);

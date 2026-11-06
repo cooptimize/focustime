@@ -587,3 +587,23 @@ Labels only: what people read says to-do; code names, tables, stored values and 
 - **UI.** `ui/ahead/Backlog.tsx` (client columns, rows, the selection toolbar, the result line with Why items were skipped, Plan it with its Undo toast), `BacklogFilters` in `ui/ahead/Ahead.tsx` (clients, Level, Owner with Everything in scope, Stale), `ui/nav.ts` (`backlog` mode, `#/ahead/backlog`, the `backlog` view), the `view.backlog` command, `.bl-*` styles.
 - **Demo.** Five stale stories in `sources/demo/data.ts` (`STALE`).
 - **Tests.** `plan/backlog.test.ts`, the BH-1 parts of `actions/ahead-actions.test.ts`, `actions/devops-write.test.ts` and `config/notify.test.ts`; e2e `e2e/backlog.test.ts`.
+
+## HK-4: retention, redaction and the model check (Nov 6)
+
+- **Retention.** `store/retention.ts` `RETENTION_RULES` is the one list of what FocusTime deletes by age, for everyone
+  at once (no statement names a person): `assistant_turns` 30 days; `assistant_proposals` 30 days, or a day after it
+  settles or expires; `teams_bot_seen` a day; `teams_bot_cards` a week after it settles or expires; `teams_rhythm` 30
+  days; `devops_takes` and `devops_notes` 14 days; `devops_changes` 30 days; `delivery_snapshots` 120 days;
+  `job_claims` 30 days. `server/retention-job.ts` runs them once a UTC day as a scheduler job (claimed in
+  `job_claims`, `store/migrations/20261114T0900_job_claims.ts`), then expires stored chat messages past the Rule
+  `conv.retention_days` (`teams.expire`, which keeps a Request's, a promise's and a conversation's messages). Counts
+  per rule in the log (`retention_purge <rule>`). Kept elsewhere, unchanged: sessions and sign-in requests (the
+  hourly maintenance), the soft and hard delete (`store/user-data.ts`), AP-1's `chat_messages` and `asks` (each
+  person's daily `asks_cleanup` in `server/ticks.ts`). Many of these are also trimmed where they are written; the
+  purge covers the quiet days. Tests: `store/retention.test.ts` (both drivers, two schedulers on one database).
+- **Redaction.** `ai/guard.ts` `redact` and `redactValue`: secret shapes, the VM and outside email addresses in an AI
+  answer's strings become "[removed]"; `ai/service.ts` applies it after the client check in `run` and `runTools`.
+- **Model check.** `scripts/ai-eval.ts` (`node scripts/ai-eval.ts [--live] [--models a,b@flex] [--runs n] [--out f]`),
+  results in `docs/azure/ai-eval-results.md`; `scripts/ai-eval.test.ts` keeps the harness working. The assistant's
+  intent and answer instructions and schemas are exported from `assistant/service.ts` for it.
+- **Cleanup list.** `docs/azure/cleanup-list.md`.

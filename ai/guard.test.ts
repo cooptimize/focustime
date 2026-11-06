@@ -3,7 +3,7 @@
 // task's own client, and ordinary text, pass. Fake values are built here at run time (nothing secret-shaped in the repo).
 import { describe, expect, it } from "vitest";
 import { aClientEntry } from "../test/builders/index.ts";
-import { guard, otherClientMatch, type GuardInput } from "./guard.ts";
+import { guard, otherClientMatch, redact, redactValue, type GuardInput } from "./guard.ts";
 
 const directory = [
   aClientEntry({ key: "fabrikam", names: ["Fabrikam Inc"], projects: ["Fabrikam Portal"], itemIds: [4101, 4102] }),
@@ -139,5 +139,23 @@ describe("which client matched (for the log's client ref and the DevOps preview)
   it("the task's own client matches its entry whatever the case of its key (no false match on its own name)", () => {
     expect(guard("Northwind Traders asked about NW Ops #5150", g("northwind"))).toBeNull();
     expect(guard("Fabrikam Inc asked", g("FABRIKAM"))).toBeNull();
+  });
+});
+
+describe("redact (HK-4)", () => {
+  const g = { homeDomains: ["cooptimize.example"], forbidden: ["vm-contoso-dev"] };
+  it("replaces only the spans and keeps the rest, with kinds and rules but never the text", () => {
+    const pat = "a".repeat(20) + "b2c3d4e5f6g7".repeat(2) + "h".repeat(8);
+    const r = redact(`see ${pat}, token: Bearer ${"x".repeat(20)} on vm-contoso-dev, mail jo@else.example or me@cooptimize.example`, g);
+    expect(r.text).toBe("see [removed], token: [removed] on [removed], mail [removed] or me@cooptimize.example");
+    expect(r.removed.map((x) => x.rule).sort()).toEqual(["bearer_token", "devops_pat", "external_email", "vm"]);
+  });
+  it("clean text comes back unchanged", () => {
+    expect(redact("Export fails on 2026-11-06 at 10:30, item #5150", g)).toEqual({ text: "Export fails on 2026-11-06 at 10:30, item #5150", removed: [] });
+  });
+  it("redactValue walks arrays and objects; keys are never touched", () => {
+    const r = redactValue({ items: [{ note: "ok" }, { note: "jo@else.example" }], n: 3 }, g);
+    expect(r.value).toEqual({ items: [{ note: "ok" }, { note: "[removed]" }], n: 3 });
+    expect(r.removed).toEqual([{ kind: "email", rule: "external_email" }]);
   });
 });
