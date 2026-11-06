@@ -53,7 +53,7 @@ export function AssigneePicker({ clientKey, me, current, onPick, onCancel }: { c
       <div className="person-picker-pop" role="presentation" onMouseDown={(e) => e.preventDefault()}>
         <ul id={listId} role="listbox" aria-label="Choose who it's assigned to">
           {choices.map((c, i) => (
-            <li key={c.key} id={`${listId}-${i}`} role="option" aria-selected={i === active} className={`person-picker-option${i === active ? " active" : ""}`} onMouseEnter={() => setActive(i)} onClick={() => pick(c)}>
+            <li key={c.key} id={`${listId}-${i}`} role="option" aria-selected={i === active} className={`person-picker-option${i === active ? " active" : ""}`} onMouseEnter={() => setActive(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => pick(c)}>
               {c.key !== "nobody" && <Avatar name={c.label} photo={photos.photoFor(c.email)} size={22} />}
               <span className="person-picker-name">{c.label}</span>
             </li>

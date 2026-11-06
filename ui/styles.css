@@ -4555,6 +4555,10 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .ah-cell.ah-pend { background: color-mix(in oklab, var(--selected) 12%, transparent); }
 .ah-cell.ah-conf { box-shadow: inset 0 0 0 2px var(--watch); }
 .ah-cell.ah-abs { color: var(--text-faint); }
+/* QF-1: a cell I can change: one click opens its picker; hover shows it can be changed. */
+.ah-cell.ah-edit { cursor: pointer; }
+.ah-cell.ah-edit:hover { box-shadow: inset 0 -2px 0 var(--selected); }
+.ah-cell.ah-edit:hover::after { content: "▾"; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: var(--fs-1); pointer-events: none; }
 .ah-dot { position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--selected); }
 .ah-cell.ah-conf .ah-dot { background: var(--watch); }
 .ah-item { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }

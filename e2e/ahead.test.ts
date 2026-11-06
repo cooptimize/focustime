@@ -113,6 +113,45 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await page.close();
   }, T);
 
+  it("QF-1: one click opens each picker (start, target, assigned to, size) and stages a change; hover marks the cells I can change", async () => {
+    const { page } = await open("#/ahead");
+    await page.getByRole("button", { name: "Northwind Foods", exact: true }).click();
+    const story = row(page, "Export button on the order page");
+    const staged = (cell: ReturnType<Page["locator"]>) => expect.poll(() => cell.getAttribute("class")).toContain("ah-pend");
+    // Size: a click, a number, Keep.
+    const size = story.locator(".ah-col-size");
+    await expect(size.getAttribute("class")).resolves.toContain("ah-edit");
+    await size.click();
+    await page.getByRole("spinbutton", { name: "Story Points" }).fill("8");
+    await story.getByRole("button", { name: "Keep" }).click();
+    await staged(size);
+    // Assigned to: a click opens the people picker; a mouse pick lands (the picker used to close on its own blur first).
+    const who = story.locator(".ah-col-assignee");
+    await who.click();
+    await page.getByRole("option", { name: /Priya Shah/ }).click();
+    await staged(who);
+    await expect(who.textContent()).resolves.toContain("Priya Shah");
+    // Target, then start on a feature that has one: a date and its half-day.
+    const target = story.locator(".ah-col-target");
+    await target.click();
+    await target.locator("input[type=date]").fill("2026-11-20");
+    await story.getByRole("button", { name: "Keep" }).click();
+    await staged(target);
+    const title = await page.locator(".ah-row.tier-feature:not(.ro)", { has: page.locator(".ah-col-start.ah-edit") }).first().locator(".ah-title a").first().textContent();
+    const feature = row(page, title!.trim());
+    const start = feature.locator(".ah-col-start");
+    await start.click();
+    await start.locator("input[type=date]").fill("2026-11-09");
+    await feature.getByRole("button", { name: "Keep" }).click();
+    await staged(start);
+    await expect.poll(() => page.locator(".ah-pending").textContent()).toMatch(/\d+ changes to save/);
+    // State isn't a field Ahead changes (AH-1's fields write): no picker, no hover mark.
+    await expect(story.locator(".ah-col-state").getAttribute("class")).resolves.not.toContain("ah-edit");
+    await story.locator(".ah-col-state").click();
+    await expect(page.locator(".ah-editor").count()).resolves.toBe(0);
+    await page.close();
+  }, T);
+
   it("the review: grouped by item, before → after, a conflict with Keep mine or Take theirs, Remove, Discard all with a confirm", async () => {
     const { page, errors } = await sameSessionFresh();
     // A second change on one item (its size, beside the conflicting target), so a card holds two rows.
