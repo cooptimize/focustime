@@ -276,6 +276,6 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
 
 /** The last day before `today` with the demo's working hours (Monday to Thursday) that isn't PTO. */
 function lastWorkday(today: Temporal.PlainDate): string {
-  for (let d = today.subtract({ days: 1 }); ; d = d.subtract({ days: 1 })) if (d.dayOfWeek <= 4 && !demoPto(d.toString(), d.toString()).length) return d.toString();
+  for (let d = today.subtract({ days: 1 }); ; d = d.subtract({ days: 1 })) if (d.dayOfWeek <= 4 && !demoPto(d.toString(), d.toString(), today.toString()).length) return d.toString();
 }
 

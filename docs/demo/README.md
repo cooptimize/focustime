@@ -13,7 +13,7 @@ Nothing else that runs imports from there (`host/no-demo-leak.test.ts`).
 | Part | File | What it does |
 |---|---|---|
 | The context | `server/demo.ts` | One `ActionContext` per demo session: an in-memory plan store, the demo's team settings (an admin console of its own), its sources, writers and AI, then the seeds |
-| The data | `sources/demo/data.ts` | Clients, work items, meetings, personal events, PTO (every Thursday), people. Dates are relative to the current week, so the story is the same any week |
+| The data | `sources/demo/data.ts` | Clients, work items, meetings, personal events, PTO (every Thursday, or Friday when the demo opens on a Thursday: never today; QF-1), people. Dates are relative to the current week, so the story is the same any week |
 | DevOps | `sources/demo/devops.ts` | The session's own DevOps in memory. The app's real DevOps writer is given its `fetch`, so a state change, comment, create, Ahead save, Take one, description edit or Break down runs through the real preview, `test /rev`, read back, audit log and undo. Any other org throws before a request |
 | Outlook | `sources/demo/outlook.ts` | The session's own calendar in memory, behind the real Graph writer: timeboxes on Outlook, help invites, my own events, RSVPs. Only `graph.microsoft.com/v1.0/me/...` is answered |
 | AI | `sources/demo/ai.ts` | Real AI on demo data when the app has it: the team's AI for FocusTime on, under the app's monthly cap, and the session under about 1 USD. Otherwise, or after about 6 seconds, or when an answer doesn't fit its schema, a stored sample for the same task. The guard runs first, so a refused request is refused and never gets a sample |

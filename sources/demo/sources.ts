@@ -10,7 +10,7 @@ import type { CalEvent, ClientWork, SourceId, SourceResult } from "../../week/ty
 import { createGraphWriter, type GraphWriter } from "../graph/write.ts";
 import type { DemoOutlook } from "./outlook.ts";
 import { demoDirectory } from "./directory.ts";
-import { DEMO_CLIENTS, DEMO_ME, DEMO_PEOPLE, demoGoogle, demoOutlook, demoPatterns, demoPortfolio, demoProcess, demoPto, demoWork, demoWorkItem, isDemoClient, demoAheadClient, type DemoClientKey } from "./data.ts";
+import { DEMO_CLIENTS, DEMO_ME, DEMO_TZ, DEMO_PEOPLE, demoGoogle, demoOutlook, demoPatterns, demoPortfolio, demoProcess, demoPto, demoWork, demoWorkItem, isDemoClient, demoAheadClient, type DemoClientKey } from "./data.ts";
 import { itemUrlOf, type DemoDevOps } from "./devops.ts";
 import { demoKatSent } from "./seeds/status.ts";
 import { typeOf } from "../../plan/process.ts";
@@ -20,6 +20,8 @@ const NO = "Demo data: nothing leaves FocusTime";
 /** `processOverrides`: the demo team's process Rules (ADM-1), applied to the demo's process models. */
 /** `scope` (AH-2): the demo team's scope per client (Admin › Clients in the demo) and its Cooptimizers. */
 export function createDemoSources(world: DemoDevOps, cal: DemoOutlook, now: () => string, processOverrides: (clientKey: string) => Promise<ProcessOverrides> = async () => ({}), scope: (clientKey: string) => Promise<ScopeDeps | null> = async () => null) {
+  // QF-1: the demo's own today (its PTO day and afternoon out are never this day).
+  const demoToday = () => Temporal.Instant.from(now()).toZonedDateTimeISO(DEMO_TZ).toPlainDate().toString();
   const ok = <T>(source: SourceId, items: T[]): SourceResult<T> => ({ source, status: "ok", fetchedAt: now(), fromCache: false, items });
   const dataverse: DataverseSource = {
     load: async () => ok("dataverse", demoPatterns()),
@@ -29,7 +31,7 @@ export function createDemoSources(world: DemoDevOps, cal: DemoOutlook, now: () =
     devopsTargets: async (keys: string[]) => ({ ok: true, targets: DEMO_CLIENTS.filter((c) => keys.includes(c.key)).map((c) => ({ accountId: `demo-${c.key}`, clientKey: c.key, clientName: c.name, org: c.org, project: c.project, projectName: c.project, email: "you@example.com", pat: null })) }),
     accountTargets: async () => ({ ok: true, targets: [] }),
     myClients: async () => DEMO_CLIENTS.map((c) => ({ clientKey: c.key, clientName: c.key === "Cooptimize" ? c.name : c.key, devops: true, devopsEmail: "you@example.com" })),
-    pto: async (from: string, to: string) => ok("pto", demoPto(from, to)),
+    pto: async (from: string, to: string) => ok("pto", demoPto(from, to, demoToday())),
     teammates: async () => ({ ok: true, people: DEMO_PEOPLE }),
     clientTeam: async () => ({ ok: true, accountId: null, patterns: [], workers: [] }),
     teamPto: async () => ({ ok: true, away: [] }),
@@ -57,7 +59,7 @@ export function createDemoSources(world: DemoDevOps, cal: DemoOutlook, now: () =
     return [...demoOutlook(monday).map(answered), ...cal.ownEvents().filter(inWeek)];
   };
   const outlook = { ...calendar("outlook", weekEvents), write: { access: async () => ({ status: "write" as const }), writer } };
-  const google = calendar("google", demoGoogle);
+  const google = calendar("google", (monday) => demoGoogle(monday, demoToday()));
   const last = new Map<string, ClientWork>();
   const work = (k: DemoClientKey) => demoWork(world, k, now());
   const portfolio = (k: DemoClientKey) => demoPortfolio(world, k, now());
