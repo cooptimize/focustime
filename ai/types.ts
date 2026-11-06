@@ -3,6 +3,8 @@
 // checks the switches, the guards and the budget, calls the provider, validates the answer and logs the request
 // without its text. Callers never talk to a provider directly.
 
+import type { AiTier } from "./tiers.ts";
+
 /** The JSON Schema subset FocusTime uses: what OpenAI's strict structured outputs accept, and what ai/schema.ts checks. */
 export type JsonSchema = {
   type?: JsonType | JsonType[];
@@ -81,7 +83,7 @@ export const AI_MESSAGES: Record<AiErrorKind, string> = {
 
 export type Usage = { inputTokens: number; cachedTokens: number; outputTokens: number };
 
-export type AiOk<T> = { ok: true; value: T; usage: Usage; costUsd: number; latencyMs: number; model: string };
+export type AiOk<T> = { ok: true; value: T; usage: Usage; costUsd: number; latencyMs: number; model: string; /** AI-F1: the tier that answered. */ tier?: AiTier };
 export type AiFail = { ok: false; error: AiError };
 export type AiResult<T> = AiOk<T> | AiFail;
 
@@ -90,6 +92,8 @@ export type ProviderReply =
   | {
       ok: true;
       text: string;
+      /** AI-F1: the tier that served it, from the response's service_tier (absent: the one asked for). */
+      tier?: AiTier;
       usage: Usage;
       model: string;
       /** AS-1: the function calls the model made instead of answering (the tools of the call only). */
@@ -119,6 +123,8 @@ export type ProviderCall = {
   allowedTools?: string[];
   /** AS-1: earlier rounds of this request, in order. */
   rounds?: ToolRound[];
+  /** AI-F1: "flex" sends service_tier flex; absent: the project's default (standard). */
+  serviceTier?: "flex";
 };
 
 /** AS-1: one recording to transcribe (held in memory only; never stored or logged). */
@@ -139,7 +145,7 @@ export const DEFAULT_AI_PERSON: AiPersonSettings = { use: false, monthlyCapUsd: 
  * ADM-1: AI is an admin decision only. A request runs only when `on` (global, also the emergency off) and, for a
  * client, that client is in `allowedClients`; "none" tasks need only `on`. Caps and the model are the admins' too.
  */
-export type AiRules = { on: boolean; allowedClients: readonly string[]; personCapUsd: number; appCapUsd?: number; model?: string };
+export type AiRules = { on: boolean; allowedClients: readonly string[]; personCapUsd: number; appCapUsd?: number; model?: string; /** AI-F1: background tasks an admin switched back to standard. */ standardTasks?: readonly string[] };
 export const DEFAULT_AI_RULES: AiRules = { on: false, allowedClients: [], personCapUsd: 10 };
 
 /** The outcomes the log keeps (D497). */
@@ -161,6 +167,8 @@ export type AiLogEntry = {
   detail: string | null;
   /** CV-1: whose cap the request counted against: the person's own, or the app's (the shared conversations pipeline). */
   cap?: "person" | "app";
+  /** AI-F1: the tier actually used (and priced): flex, or standard (also after a fallback). Older rows: standard. */
+  tier?: AiTier;
 };
 
 /** What Settings › AI reads: setup, the switch, the month's spend against the cap, the last 20 requests. */

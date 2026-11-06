@@ -1009,7 +1009,7 @@ D877 to D887 (numbered after merge, in TD-1). Checking off a to-do offers the De
 
 ## TD-1
 
-D888 to D892 (numbered in HK-5). "Pick" reads awkwardly; the product owner renamed it (Nov 6).
+Numbered D888 to D892 by AI-F1. "Pick" reads awkwardly; the product owner renamed it (Nov 6).
 
 | # | Status | Decision |
 |---|---|---|
@@ -1020,6 +1020,8 @@ D888 to D892 (numbered in HK-5). "Pick" reads awkwardly; the product owner renam
 | D892 | Done | TD-1: the Guide answers "Where did picks go?" beside QF-1's renames. |
 
 ## BH-1
+
+Numbered D893 to D900 by AI-F1.
 
 | # | Status | Decision |
 |---|---|---|
@@ -1034,7 +1036,7 @@ D888 to D892 (numbered in HK-5). "Pick" reads awkwardly; the product owner renam
 
 ## HK-4
 
-Housekeeping: the model check, per-span redaction in AI answers, the retention purge, the cleanup list. D901 to D910 (numbered in HK-5).
+Housekeeping: the model check, per-span redaction in AI answers, the retention purge, the cleanup list. Numbered D901 to D910 by AI-F1.
 
 | # | Status | Decision |
 |---|---|---|
@@ -1046,8 +1048,23 @@ Housekeeping: the model check, per-span redaction in AI answers, the retention p
 | D906 | Done | HK-4: the cleanup list (`docs/azure/cleanup-list.md`) is read only: nothing is dropped (D468). Each item has evidence (no live reads or writes, a fresh database's counts) and a two-step plan: stop using it in a release, drop it in a later one with a `safe-drop` comment and the product owner's OK |
 | D907 | Done | HK-4: numbering. HK-4 had numbered the merged steps' decisions still marked "new" (CV-5, UI-8, IB-1, FB-1, DM-1, TB-2, WK-1, SR-1, DX-1, PK-1) as D776 to D887; TD-1 numbered the same rows on main first, with the same numbers. On the merge main's numbers and text were kept for every numbered decision (TD-1's to-do wording included); nothing was renumbered, no number appears twice and none was lost. HK-4's own decisions stay unnumbered |
 | D908 | Done | HK-4 (the product owner, Nov 6): `gpt-6-luna` stays the default (`gpt-6.1-luna` doesn't exist). The live eval is skipped: the OpenAI key isn't copied down from Key Vault to a developer machine for it. `scripts/ai-eval.ts` and its dry-run results stay, so a later check can run it with a keyring key (Q-HK4-1) |
-| D909 | Approved follow-up | HK-4 (the product owner, Nov 6; Q-HK4-2): Flex (`service_tier: "flex"`, half price, slower, an unbilled 429 when capacity is short) is approved in principle for background AI work only: conversation sorting (`conversations.update`), promise extraction (`promises.extract`) and image descriptions. Never for interactive work: the assistant, drafts and Break down. Not built in HK-4; a later step adds it with a fallback to the standard tier on the 429 |
+| D909 | Done | HK-4 (the product owner, Nov 6; Q-HK4-2): Flex (`service_tier: "flex"`, half price, slower, an unbilled 429 when capacity is short) is approved in principle for background AI work only: conversation sorting (`conversations.update`), promise extraction (`promises.extract`) and image descriptions. Never for interactive work: the assistant, drafts and Break down. Not built in HK-4; a later step adds it with a fallback to the standard tier on the 429. Built in AI-F1 (below). |
 | D910 | Open | HK-4 (the product owner, Nov 6; Q-HK4-3): AP-1's rules pass in the poll is not changed here. The product owner decides after the Diagnostics counts; it stays item 5 of the cleanup list |
+
+## AI-F1
+
+Flex processing for background AI work. D911 to D918 (numbered in HK-5).
+
+| # | Status | Decision |
+|---|---|---|
+| D911 | Done | AI-F1 (builds D909, Q-HK4-2): every AI task's processing tier is declared in one place, `ai/tiers.ts`. Flex (`service_tier: "flex"`, OpenAI's Flex processing: Batch prices, half of standard for `gpt-6-luna`, slower, beta, an unbilled 429 "Resource Unavailable" when capacity is short; developers.openai.com/api/docs/guides/flex-processing, /pricing and /models/gpt-6-luna, read Nov 6) only for the background tasks nobody waits on: `conversations.update` (the shared poll's sorting, with the chat images' descriptions in the same request), `promises.extract` and `asks.classify` (the request poll). Everything else is standard, and so is any task the table doesn't name (a new one): the assistant (`assistant.intent`, `assistant.answer`, push-to-talk, which Flex doesn't take), Break down (`stories.draft`), Status drafts, conversation drafts and merges, capture drafts (`capture.prepare`), Test AI. Brain dump has no AI task yet; MC-1 hadn't merged, so its transcript pass gets its tier when it does |
+| D912 | Done | AI-F1: `conversations.comment` (the follow-through comment, written on the upkeep tick) stays standard: nobody waits on it, but it is a draft a person reads, and the product owner's list didn't name it. One line in `ai/tiers.ts` moves it (open question Q-AIF1-1) |
+| D913 | Done | AI-F1: a person waiting runs a background task on standard. Sort again (`requests.sort_again`, `asks.classify`) and Sort unsorted (`conversations.sort_unsorted`, the pipeline) are buttons whose answer the person waits for, so `aiFor(ctx, { waiting: true })` holds them at standard; the polls' own runs use Flex |
+| D914 | Done | AI-F1: Flex retries and the fallback. A Flex call has its own timeout (`flex_timeout_ms`, 120 s: Flex is slower; the docs' SDK example allows 15 minutes, but a poll cycle can't wait that long). A 429 that isn't billing (or a 5xx) retries on Flex with exponential backoff from `flex` base (2 s, doubling) and up to 50% jitter, or the Retry-After when longer, until `flex_max_tries` (3, the first included) or `flex_max_wait_ms` (90 s from the first try, waits counted) would pass; then the call runs once on standard with the standard path's one retry, as the docs advise ("set service_tier to auto in the retried request, or remove the service_tier parameter"). A timeout or a 400 (a model without Flex, the beta's limited availability) falls back at once. Quota, any other error, a refusal or a cut-short answer aren't capacity: they stand, one attempt as before. Configurable in `[ai]` (`flex_max_tries`, `flex_max_wait_ms`, `flex_timeout_ms`) and `FOCUSTIME_AI_FLEX_*` |
+| D915 | Done | AI-F1: counts only. Application Insights gets `ai/tier` (`<task>:<tier>`, count the Flex retries) and `ai/flex_fallback` (`<task>:limit`, `:timeout` or `:provider`, count the Flex tries); never text |
+| D916 | Done | AI-F1: cost at the tier actually used. The prices table gets Flex prices (`DEFAULT_AI.flexPrices`, 0.05 / 0.005 cached / 0.25 USD per million for `gpt-6-luna`; `[ai] flex_*_usd_per_million`, `FOCUSTIME_AI_FLEX_*_USD_PER_MILLION`; half of the standard prices when unset). The tier used is the response's `service_tier` ("flex", or anything else as standard; the asked-for tier when absent), so a Flex request OpenAI served on another tier, or a fallback, is priced and logged as standard. Flex 429s aren't billed and add no cost. The person's and the app's caps sum the logged cost, so they count the half price. The eval (`scripts/ai-eval.ts`) still picks its tier itself with `@flex` and holds the app's table at standard |
+| D917 | Done | AI-F1: the request logs keep the tier: a `tier` column ("standard" or "flex", standard for older rows) on `ai_requests` and `app_ai_requests` (migration `20261115T0900_ai_tier`, adds only). Settings › AI's last 20 requests show "· Flex" after the cost. Not in Export (the AI log never was) |
+| D918 | Done | AI-F1: Admin › AI › Processing tier lists every task with its tier. A background task has a switch (Flex, or Standard); every other task reads "Standard" with no switch. The switches are one Rule, `ai.standard_tasks` (the background tasks an admin put back on standard, audited like every Admin change); a stored name no build declares is dropped when read, so an older or newer build can read it. An admin can only move a background task back to standard, never an interactive one to Flex |
 
 ## HK-5
 
