@@ -100,7 +100,7 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
     }
     case "planning": {
       // WT-1, ADM-1: which types need breakdown or count hours are Rules per client in Admin › Clients now.
-      const keys = ["minSizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound", "followGraceDays", "closeoutReminderMinutes", "checkinReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"];
+      const keys = ["minSizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound", "followGraceDays", "closeoutReminderMinutes", "checkinReminderMinutes", "devopsOnDone", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"];
       only(v, keys, "plan");
       // Each value is written as given; parseConfig checks ranges per field (plan.min_m etc.). Sizes are fixed (E2).
       const values: [string, TomlValue][] = [];
@@ -116,6 +116,11 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       if (v.endSound !== undefined) {
         if (typeof v.endSound !== "boolean") throw new SettingsInputError("plan.end_sound", "Must be true or false");
         values.push(["end_sound", v.endSound]);
+      }
+      // PK-1: when I check off a to-do, ask to update DevOps ("ask", the default) or never ask.
+      if (v.devopsOnDone !== undefined) {
+        if (v.devopsOnDone !== "ask" && v.devopsOnDone !== "never") throw new SettingsInputError("plan.devops_on_done", 'Must be "ask" or "never"');
+        values.push(["devops_on_done", v.devopsOnDone]);
       }
       return (text) => values.reduce((t, [k, val]) => setValue(t, "plan", k, val), text);
     }

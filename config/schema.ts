@@ -140,6 +140,8 @@ export type PlanConfig = {
   breakMinutes: number;
   /** Play a sound when a focus session ends (default off). */
   endSound: boolean;
+  /** PK-1: when I check off a to-do with a DevOps item, ask to update DevOps ("ask", the default) or never ask. */
+  devopsOnDone: "ask" | "never";
   /** Days a client stays followed (DevOps, Open half-days) after its last Focus Time pattern ends (step 6d). */
   followGraceDays: number;
   /** The Close out reminder: minutes before the end of the working day (step 7). */
@@ -152,8 +154,8 @@ export type PlanConfig = {
   weekNudgeMon: string;
 };
 
-export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes" | "backgroundTypes"> = { sizes: { S: 60, M: 120, L: 240 }, minSizes: { S: 30, M: 60, L: 90 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false, followGraceDays: 14, closeoutReminderMinutes: 15, checkinReminderMinutes: 0, weekNudgeThu: "14:00", weekNudgeFri: "09:00", weekNudgeMon: "08:30" };
-const PLAN_KEYS = ["pickable_portfolio_types", "background_types", "size_s", "size_m", "size_l", "min_s", "min_m", "min_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound", "follow_grace_days", "closeout_reminder_minutes", "checkin_reminder_minutes", "week_nudge_thu", "week_nudge_fri", "week_nudge_mon"];
+export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes" | "backgroundTypes"> = { sizes: { S: 60, M: 120, L: 240 }, minSizes: { S: 30, M: 60, L: 90 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false, devopsOnDone: "ask", followGraceDays: 14, closeoutReminderMinutes: 15, checkinReminderMinutes: 0, weekNudgeThu: "14:00", weekNudgeFri: "09:00", weekNudgeMon: "08:30" };
+const PLAN_KEYS = ["pickable_portfolio_types", "background_types", "size_s", "size_m", "size_l", "min_s", "min_m", "min_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound", "devops_on_done", "follow_grace_days", "closeout_reminder_minutes", "checkin_reminder_minutes", "week_nudge_thu", "week_nudge_fri", "week_nudge_mon"];
 
 export type FieldError = { field: string; message: string };
 /** `legacyDayShape`: the file still has the old [day_shape] section (read as hours; migrated on load, D124). */
@@ -407,6 +409,10 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
     if (t?.end_sound !== undefined) {
       if (typeof t.end_sound !== "boolean") err("plan.end_sound", "Must be true or false");
       else planOpts.endSound = t.end_sound;
+    }
+    if (t?.devops_on_done !== undefined) {
+      if (t.devops_on_done !== "ask" && t.devops_on_done !== "never") err("plan.devops_on_done", 'Must be "ask" or "never"');
+      else planOpts.devopsOnDone = t.devops_on_done;
     }
     const list = t?.pickable_portfolio_types;
     if (list !== undefined && !Array.isArray(list)) err("plan.pickable_portfolio_types", 'Must be a list of work item type names, e.g. ["Recurring"]');

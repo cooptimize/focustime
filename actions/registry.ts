@@ -311,6 +311,9 @@ export const ACTIONS = [
   { name: "devops.confirm", title: "Confirm a DevOps change", group: "DevOps", target: "devops", summary: "Write the previewed change (only if the item didn't change since), read it back, log it" },
   { name: "devops.retry", title: "Retry a DevOps change", group: "DevOps", target: "write", summary: "Check and try again; never writes twice" },
   { name: "devops.log", title: "Show the DevOps write log", group: "DevOps", target: "none", summary: "Every DevOps write: what, where, when, the result, the prior values, and Undo" },
+  // PK-1: read only. What a checked-off to-do may offer in DevOps (Set #id to its done state), and the Undo when it's unchecked.
+  { name: "devops.done_offer", title: "Offer to update DevOps for a to-do", group: "DevOps", target: "pick", summary: "For to-dos checked done: which items could be set to their done state (only ones you can change, not done already; read-only)" },
+  { name: "devops.undo_offer", title: "Offer to undo a to-do's DevOps update", group: "DevOps", target: "pick", summary: "For a to-do unchecked: the state change its offer made, if it's still the newest change on the item (read-only)" },
   { name: "link.open", title: "Open in browser", group: "Work items", target: "item", summary: "Open a work item in your browser" },
   // AS-1: the assistant. Its reads (assistant.today, lookup.day, items.get) are also on its allowlist; ask, confirm,
   // cancel, history and clear are the panel's own and never reachable from the assistant itself.

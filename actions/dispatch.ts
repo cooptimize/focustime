@@ -1258,6 +1258,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "devops.confirm":
     case "devops.retry":
     case "devops.log":
+    case "devops.done_offer":
+    case "devops.undo_offer":
       return devopsWriteAction(await devopsWriteContext(ctx), action, req.input);
     case "stories.status":
     case "stories.prepare":
