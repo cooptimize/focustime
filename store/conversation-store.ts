@@ -509,17 +509,24 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
 type BaseStore = ReturnType<typeof baseStore>;
 const noConversation = () => new PlanError("No such conversation");
 
-export function createConversationStore(db: Conn, now: () => Temporal.Instant, teams: TeamsStore) {
+/** MC-1: commitments from a registered meeting live in a "chat" of their own, `meeting:<series id>` (no Teams chat). */
+export const MEETING_CHAT = "meeting:";
+export const isMeetingChat = (chatId: string) => chatId.startsWith(MEETING_CHAT);
+/** MC-1: whether a person may see a meeting "chat" (a reviewer or attendee of that series); none without the meeting store. */
+export type MeetingMember = (chatId: string, userId: string) => Promise<boolean>;
+
+export function createConversationStore(db: Conn, now: () => Temporal.Instant, teams: TeamsStore, meetingMember?: MeetingMember) {
   const store = baseStore(db, now);
-  return { ...store, viewer: (userId: string) => viewerOf(store, teams, userId) };
+  return { ...store, viewer: (userId: string) => viewerOf(store, teams, userId, meetingMember) };
 }
 
 /**
  * One person's way into the shared conversations (D521): only chats they are a member of now, by the cached member
  * list. Anything else reads as missing or is refused as "No such conversation".
  */
-function viewerOf(store: BaseStore, teams: TeamsStore, userId: string) {
+function viewerOf(store: BaseStore, teams: TeamsStore, userId: string, meetingMember?: MeetingMember) {
   const member = async (chatId: string) => {
+    if (isMeetingChat(chatId)) return meetingMember ? meetingMember(chatId, userId).catch(() => false) : false;
     const c = await teams.chat(chatId);
     return !!c && isMember(c, userId);
   };
@@ -589,15 +596,19 @@ function viewerOf(store: BaseStore, teams: TeamsStore, userId: string) {
       for (const id of ids) if (await this.conversation(id)) ok.push(id);
       return store.commitmentsIn(ok);
     },
+    // MC-1: a meeting commitment made by me (or to me, Waiting on) stays mine to keep or dismiss even after I'm no
+    // longer on the call's invite: these queries already return only my own.
     async commitmentsBy(chatIds: readonly string[]): Promise<Commitment[]> {
-      return store.commitmentsBy(userId, await chatsSeen(chatIds));
+      return store.commitmentsBy(userId, [...(await chatsSeen(chatIds.filter((c) => !isMeetingChat(c)))), ...chatIds.filter(isMeetingChat)]);
     },
     async commitmentsTo(chatIds: readonly string[]): Promise<Commitment[]> {
-      return store.commitmentsTo(userId, await chatsSeen(chatIds));
+      return store.commitmentsTo(userId, [...(await chatsSeen(chatIds.filter((c) => !isMeetingChat(c)))), ...chatIds.filter(isMeetingChat)]);
     },
     async commitment(id: number): Promise<Commitment | null> {
       const c = await store.commitment(id);
-      return c && (await member(c.chatId)) ? c : null;
+      if (!c) return null;
+      if (isMeetingChat(c.chatId) && ((!!c.whoId && c.whoId.toLowerCase() === userId.toLowerCase()) || (!!c.toId && c.toId.toLowerCase() === userId.toLowerCase()))) return c;
+      return (await member(c.chatId)) ? c : null;
     },
     async updateCommitment(id: number, p: CommitmentPatch): Promise<Commitment> {
       if (!(await this.commitment(id))) throw new PlanError("No such commitment");

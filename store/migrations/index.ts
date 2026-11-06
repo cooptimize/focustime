@@ -33,6 +33,7 @@ import { teamsRhythm } from "./20261111T0900_teams_rhythm.ts";
 import { commitmentClose } from "./20261112T0900_commitment_close.ts";
 import { chatSocial } from "./20261113T0900_chat_social.ts";
 import { jobClaims } from "./20261114T0900_job_claims.ts";
+import { meetings } from "./20261115T0900_meetings.ts";
 import type { NamedMigration } from "./named.ts";
 
-export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll, clientAccounts, weekCarry, conversationMerges, messageReactions, messageImages, followUpWhoRef, teamSends, aheadChanges, draftAi, imagesNoBytes, clientLogins, teamsBot, assistant, teamsBotSeen, inboxMarks, teamsRhythm, commitmentClose, chatSocial, jobClaims];
+export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll, clientAccounts, weekCarry, conversationMerges, messageReactions, messageImages, followUpWhoRef, teamSends, aheadChanges, draftAi, imagesNoBytes, clientLogins, teamsBot, assistant, teamsBotSeen, inboxMarks, teamsRhythm, commitmentClose, chatSocial, jobClaims, meetings];

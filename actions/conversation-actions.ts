@@ -27,7 +27,7 @@ import type { ClientChat, FocusUser } from "../plan/requests.ts";
 import { hostedImageIds, sanitizeMessageHtml } from "../plan/sanitize.ts";
 import type { MessageImage } from "../store/teams-store.ts";
 import { joinedSummary, MERGE_INSTRUCTIONS, MERGE_SCHEMA, MERGE_TASK, mergeFrom, mergeInput, type MergeAnswer } from "../plan/conversation-merge.ts";
-import type { ConversationStore, ConversationView } from "../store/conversation-store.ts";
+import { isMeetingChat, type ConversationStore, type ConversationView } from "../store/conversation-store.ts";
 import { PlanError } from "../store/plan-store.ts";
 import { itemKey, type InboxFacts } from "../plan/inbox-items.ts";
 import type { TeamsView } from "../store/teams-store.ts";
@@ -81,6 +81,11 @@ export type ConversationContext = RequestContext & {
   searchItems?: (cfg: AppConfig, clientKey: string, query: string) => Promise<WorkItem[] | null>;
   /** CV-5: linked items as the store has them now, in any state (state, assignee, last change); null when it can't say. */
   linkedItems?: (cfg: AppConfig, clientKey: string, ids: readonly number[]) => Promise<WorkItem[] | null>;
+  /**
+   * MC-1: the registered meetings' "chats" (`meeting:<series id>`, one per active series, named for the call) where
+   * promises and Waiting on from a meeting live. Never polled, never a Teams chat; only my own commitments show.
+   */
+  meetingChats?: () => Promise<ClientChat[]>;
 };
 
 /** Closed ones stay visible this long by default; the live value is the Rule conv.closed_shown_days (D604). */
@@ -103,7 +108,8 @@ const MESSAGE_ID = /^[0-9A-Za-z._-]{1,100}$/;
 const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
 const first = (n: string | null | undefined) => (n ?? "").split(/\s+/)[0] || "Someone";
 
-export type Seen = { teams: TeamsView; convs: ConversationView; me: string; chats: ClientChat[]; byId: Map<string, ClientChat>; store: ConversationStore };
+/** `promiseChatIds`: the chats my promises and Waiting on come from: my registered chats plus MC-1's meeting chats. */
+export type Seen = { teams: TeamsView; convs: ConversationView; me: string; chats: ClientChat[]; byId: Map<string, ClientChat>; store: ConversationStore; promiseChatIds: string[] };
 export async function seen(ctx: ConversationContext): Promise<Seen | null> {
   const port = ctx.requests;
   const store = ctx.conversations;
@@ -111,7 +117,8 @@ export async function seen(ctx: ConversationContext): Promise<Seen | null> {
   if (!port || !store || !me) return null;
   const teams = port.teams.viewer(me);
   const chats = await visibleChats(teams, await ctx.followed().catch(() => null));
-  return { teams, convs: store.viewer(me), me, chats, byId: new Map(chats.map((c) => [c.chatId, c])), store };
+  const meetings = ctx.meetingChats ? await ctx.meetingChats().catch((): ClientChat[] => []) : [];
+  return { teams, convs: store.viewer(me), me, chats, byId: new Map([...chats, ...meetings].map((c) => [c.chatId, c])), store, promiseChatIds: [...chats, ...meetings].map((c) => c.chatId) };
 }
 
 /**
@@ -202,7 +209,7 @@ async function createdHere(ctx: ConversationContext, itemId: number, o: { conver
 const KEPT_MOVED = "cv5_kept_reopened";
 async function reopenKept(ctx: ConversationContext, cfg: AppConfig, v: Seen): Promise<void> {
   if (!ctx.plan || !ctx.linkedItems || (await ctx.plan.accountState<boolean>(KEPT_MOVED))) return;
-  const kept = (await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))).filter((k) => (k.state === "linked" || k.state === "created") && k.itemId && same(k.whoId, v.me));
+  const kept = (await v.convs.commitmentsBy(v.promiseChatIds)).filter((k) => (k.state === "linked" || k.state === "created") && k.itemId && same(k.whoId, v.me));
   const by = new Map<string, Commitment[]>();
   for (const k of kept) by.set(k.clientKey, [...(by.get(k.clientKey) ?? []), k]);
   let reopened = 0;
@@ -351,7 +358,7 @@ async function list(ctx: ConversationContext, cfg: AppConfig, select: number | n
   // IB-1 slice 3: the Chatter pane's chat facts (name, Teams link, Social) and whether I may mark a Social chat.
   out.chats = v.chats.map((c) => ({ chatId: c.chatId, name: c.displayName, link: teamsLink(c), social: !!c.social }));
   out.admin = (await ctx.isAdmin?.().catch(() => false)) ?? false;
-  out.myPromisesOpen = (await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))).filter((k) => k.state === "open").length;
+  out.myPromisesOpen = (await v.convs.commitmentsBy(v.promiseChatIds)).filter((k) => k.state === "open").length;
   out.pollMinutes = cfg.org?.rules.pollMinutes ?? 5;
   // CV-2: a deep link (#/inbox/conversation/<id>): the one to select, following a merge to where it went now.
   if (select !== null) {
@@ -375,7 +382,7 @@ async function counts(ctx: ConversationContext, cfg: AppConfig): Promise<{ needs
   const all = (await v.convs.conversations(v.chats.map((c) => c.chatId))).filter((c) => !c.closedAt || now - Date.parse(c.closedAt) < closedShownMs(cfg));
   let needsYou = 0;
   for (const card of await cards(ctx, v, cfg, all)) if (!card.hidden && (await viewOf(ctx, v.me, card, all.find((c) => c.id === card.id)!)) === "needs") needsYou++;
-  const myPromisesOpen = (await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))).filter((k) => k.state === "open").length;
+  const myPromisesOpen = (await v.convs.commitmentsBy(v.promiseChatIds)).filter((k) => k.state === "open").length;
   return { needsYou, myPromisesOpen };
 }
 
@@ -417,7 +424,7 @@ export async function inboxFacts(ctx: ConversationContext, cfg: AppConfig): Prom
   const owned = new Map(all.map((c) => [c.id, same(c.ownerId, v.me)]));
   const ownedIds = all.filter((c) => same(c.ownerId, v.me)).map((c) => c.id);
   const theirs = new Map<number, Awaited<ReturnType<typeof v.convs.commitmentsIn>>[number]>();
-  for (const k of [...(await v.convs.commitmentsTo(v.chats.map((c) => c.chatId))), ...(await v.convs.commitmentsIn(ownedIds))]) theirs.set(k.id, k);
+  for (const k of [...(await v.convs.commitmentsTo(v.promiseChatIds)), ...(await v.convs.commitmentsIn(ownedIds))]) theirs.set(k.id, k);
   for (const k of theirs.values()) {
     if (k.state !== "open" || same(k.whoId, v.me) || !(same(k.toId, v.me) || (k.conversationId !== null && owned.get(k.conversationId)))) continue;
     out.push({
@@ -426,7 +433,7 @@ export async function inboxFacts(ctx: ConversationContext, cfg: AppConfig): Prom
       title: k.what, who: k.whoName, where: v.byId.get(k.chatId)?.displayName ?? null, itemId: k.itemId,
     });
   }
-  for (const k of await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))) {
+  for (const k of await v.convs.commitmentsBy(v.promiseChatIds)) {
     // A promise made into a follow-up before IB-1 shows once, as that follow-up (f<id>).
     if (k.state === "followup" && k.followUpId !== null) continue;
     const done = k.state === "done" || k.state === "not_needed";
@@ -455,7 +462,7 @@ async function promiseCards(ctx: ConversationContext, v: Seen, cfg: AppConfig): 
   const home = await ctx.homeTenant();
   const zone = userZone(cfg);
   const today = localToday(now, zone);
-  const mine = (await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))).filter((k) => !["done", "not_needed"].includes(k.state) || (k.updatedAt && Date.parse(now) - Date.parse(k.updatedAt) < DONE_SHOWN_MS));
+  const mine = (await v.convs.commitmentsBy(v.promiseChatIds)).filter((k) => !["done", "not_needed"].includes(k.state) || (k.updatedAt && Date.parse(now) - Date.parse(k.updatedAt) < DONE_SHOWN_MS));
   const convIds = [...new Set(mine.map((k) => k.conversationId).filter((x): x is number => x !== null))];
   const convs = new Map((await v.convs.conversations(v.chats.map((c) => c.chatId))).filter((c) => convIds.includes(c.id)).map((c) => [c.id, c]));
   const suggestions = (await v.convs.suggestionsIn(convIds)).filter((s) => s.state === "open" && same(s.forUser, v.me));
@@ -485,7 +492,7 @@ async function promiseCards(ctx: ConversationContext, v: Seen, cfg: AppConfig): 
       item: withLive(k.itemId ? { id: k.itemId, title: k.itemTitle, url: k.itemUrl } : null, k.itemId ? live.get(`${k.clientKey}:${k.itemId}`) : undefined), needsItem, draft: k.draft, likely,
       suggestions: suggestions.filter((s) => s.conversationId === k.conversationId).map((s) => ({ id: s.id, kind: s.kind, itemId: s.itemId, body: s.body, internal: s.internal, fromInternalChat: chat?.kind === "delivery", mine: true })),
       waitingDays: k.state === "open" && k.impliesItem && !k.itemId && k.escalatedAt ? daysWaiting(k.escalatedAt, now) : null, reason: k.reason, messages: msgs,
-      link: k.messageIds[0] ? messageLink(k.chatId, k.messageIds[0]) : chat ? teamsLink(chat) : "", createdAt: k.createdAt,
+      link: isMeetingChat(k.chatId) ? (chat?.webUrl ?? "") : k.messageIds[0] ? messageLink(k.chatId, k.messageIds[0]) : chat ? teamsLink(chat) : "", createdAt: k.createdAt,
     };
   });
 }
@@ -521,7 +528,7 @@ export async function dayPromises(ctx: ConversationContext, cfg: AppConfig): Pro
   if (!v) return [];
   const now = ctx.now();
   const today = localToday(now, userZone(cfg));
-  const mine = (await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))).filter((k) => k.state === "open" && (k.dueDate || k.onToday));
+  const mine = (await v.convs.commitmentsBy(v.promiseChatIds)).filter((k) => k.state === "open" && (k.dueDate || k.onToday));
   return mine.map((k) => {
     const day = k.dueDate ?? k.onToday!;
     return { id: k.id, what: k.what, toName: k.toName, clientKey: k.clientKey, clientName: cfg.clientSettings[k.clientKey]?.name ?? k.clientKey, dueAt: k.dueAt, dueDate: day, overdue: k.dueAt ? Date.parse(k.dueAt) < Date.parse(now) : day < today };
