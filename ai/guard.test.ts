@@ -143,10 +143,10 @@ describe("which client matched (for the log's client ref and the DevOps preview)
 });
 
 describe("redact (HK-4)", () => {
-  const g = { homeDomains: ["cooptimize.example"], forbidden: ["vm-tanner-dev"] };
+  const g = { homeDomains: ["cooptimize.example"], forbidden: ["vm-contoso-dev"] };
   it("replaces only the spans and keeps the rest, with kinds and rules but never the text", () => {
     const pat = "a".repeat(20) + "b2c3d4e5f6g7".repeat(2) + "h".repeat(8);
-    const r = redact(`see ${pat}, token: Bearer ${"x".repeat(20)} on vm-tanner-dev, mail jo@else.example or me@cooptimize.example`, g);
+    const r = redact(`see ${pat}, token: Bearer ${"x".repeat(20)} on vm-contoso-dev, mail jo@else.example or me@cooptimize.example`, g);
     expect(r.text).toBe("see [removed], token: [removed] on [removed], mail [removed] or me@cooptimize.example");
     expect(r.removed.map((x) => x.rule).sort()).toEqual(["bearer_token", "devops_pat", "external_email", "vm"]);
   });
