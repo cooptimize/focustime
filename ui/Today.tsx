@@ -459,7 +459,7 @@ function Attention({ noDue = false, promises = [], soon = [], onPromises, data, 
         {dueCount > 0 && (
           <button type="button" className="att-chip due" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
             <span className="att-tag">
-              {[due.length ? `${due.length} follow-up${due.length === 1 ? "" : "s"}` : "", promises.length ? `${promises.length} promise${promises.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ")} due
+              {[due.length ? `${due.length} promise${due.length === 1 ? "" : "s"}` : "", promises.length ? `${promises.length} promise${promises.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ")} due
             </span>
             {names.length > 0 && <span className="att-names">{names.join(" · ")}</span>}
             <span aria-hidden="true">{open ? "⌃" : "›"}</span>
@@ -560,7 +560,7 @@ export function UrgentStrip({ sources, now, today, tz, onAsks, onPromises, onAsk
 const MOMENTS = {
   plan: { title: "Plan today", body: "Today isn't planned yet. Put this week's stories into today's blocks.", button: "Plan today" },
   checkin: { title: "Midday check-in", body: "What still fits this afternoon, with one suggested move each.", button: "Check in" },
-  closeout: { title: "Close out", body: "What got done, where you left off, DevOps updates and follow-ups.", button: "Close out" },
+  closeout: { title: "Close out", body: "What got done, where you left off, DevOps updates and promises.", button: "Close out" },
 } as const;
 
 /** NV-1: the card for the moment of the day. Plan today opens Week's Board on today; the others open their flow here. Done is one small line, reopenable. */
@@ -1079,8 +1079,8 @@ function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onError, onD
           </section>
         )}
         {dueBy.length > 0 && (
-          <section className="cp-section" aria-label="Follow-ups due">
-            <h3>Follow-ups due</h3>
+          <section className="cp-section" aria-label="Promises due">
+            <h3>Promises due</h3>
             <ul className="follow-up-list compact">
               {dueBy.map((l) => (
                 <FollowUpRow key={l.id} l={l} timeZone={tz} today={st.today} clients={clients} onChanged={rowDone} compact />

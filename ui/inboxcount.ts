@@ -1,6 +1,5 @@
-// The Inbox's counts. IB-1: the nav badge is inbox.count's Needs you (one rule on the server for conversations,
-// promises and sends). Until IB-1's new Inbox replaces the mode switch, its Conversations and Promises tab counts still
-// come from the count-only conversations.count.
+// The Inbox's count. IB-1: the nav badge is inbox.count's Needs you (one rule on the server for conversations,
+// promises and sends), the same number as the rail's Needs you and its header.
 import { useEffect, useState } from "react";
 import { call } from "./api.ts";
 
@@ -24,26 +23,6 @@ export function useInboxCount(version: number, reloaded: unknown): number | null
     };
   }, [version, reloaded]);
   return count;
-}
-
-/**
- * Needs you and my open promises (the Inbox's tab counts), read with the count-only call. Conversations and My promises
- * set them too when they load their lists. A failed read keeps the last numbers.
- */
-export function useConversationCount(version: number): [number | null, (n: number) => void, number | null, (n: number) => void] {
-  const [count, setCount] = useState<number | null>(null);
-  const [promises, setPromises] = useState<number | null>(null);
-  useEffect(() => {
-    let live = true;
-    const read = () => void call<{ needsYou: number; myPromisesOpen: number }>("conversations.count", {}, { background: true }).then((d) => live && (setCount(d.needsYou), setPromises(d.myPromisesOpen)), () => undefined);
-    read();
-    const id = setInterval(() => !document.hidden && read(), INBOX_COUNT_MS);
-    return () => {
-      live = false;
-      clearInterval(id);
-    };
-  }, [version]);
-  return [count, setCount, promises, setPromises];
 }
 
 /**

@@ -1010,7 +1010,7 @@ function NotifyForm(p: FormProps) {
       </div>
       <h3>On your devices</h3>
       <PushDevices />
-      <AutoField a={a} k="pushDetails" label="Show details in notifications" hint="Off: a push says only what kind of thing it is (Follow-ups due). On: client names and work item titles too, on the lock screen.">
+      <AutoField a={a} k="pushDetails" label="Show details in notifications" hint="Off: a push says only what kind of thing it is (Promises due). On: client names and work item titles too, on the lock screen.">
         <label className="set-check">
           <input type="checkbox" checked={a.v.pushDetails} onChange={(e) => a.change("pushDetails", e.target.checked)} /> Show details
         </label>
@@ -1772,7 +1772,7 @@ function ExportMine() {
       >
         Download JSON
       </button>
-      <span className="set-hint">{status ?? "Your plans, follow-ups, captures, logs and settings. Never a password or token."}</span>
+      <span className="set-hint">{status ?? "Your plans, promises, captures, logs and settings. Never a password or token."}</span>
     </div>
   );
 }

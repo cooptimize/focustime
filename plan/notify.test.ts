@@ -72,7 +72,7 @@ describe("collapse", () => {
     const list = [notices.checkin("2026-11-02", at), notices.vmOff("2026-11-02", "vm-demo", at), notices.followUps("2026-11-02", [{ id: 4, what: "Send the spec", overdue: false }], at)!];
     const one = collapse(list, at)!;
     expect(one).toMatchObject({ kind: "held", title: "While you were focused (3)", buttons: [], route: "today" });
-    expect(one.body.split("\n")).toEqual(["Check-in · Your VM is off · Follow-up due", "Click to open Today."]);
+    expect(one.body.split("\n")).toEqual(["Check-in · Your VM is off · Promise due", "Click to open Today."]);
   });
   it("lists four and says how many more; one shared view opens that view", () => {
     const list = ["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06"].map((d) => notices.checkin(d, at));

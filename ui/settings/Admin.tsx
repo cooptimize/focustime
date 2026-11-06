@@ -1200,7 +1200,7 @@ type StatusData = {
   groups?: StatusGroup[];
 };
 const ROLE_WORDS: Record<string, string> = { work: "work", chatter: "chatter", ack: "short replies", unsorted: "unsorted" };
-const COMMIT_WORDS: Record<string, string> = { open: "open", followup: "follow-ups", linked: "linked", created: "item created", done: "done", not_needed: "not needed" };
+const COMMIT_WORDS: Record<string, string> = { open: "open", followup: "promises", linked: "linked", created: "item created", done: "done", not_needed: "not needed" };
 const countLine = (m: Record<string, number>, words: Record<string, string>) => Object.entries(m).map(([k, n]) => `${n} ${words[k] ?? k}`).join(" · ");
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "never");
 const POLL_WORDS: Record<string, string> = { ok: "OK", via: "Read with another follower's sign-in", reconnect: "Needs reconnecting", retry: "Retrying" };

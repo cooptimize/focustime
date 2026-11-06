@@ -3,7 +3,7 @@
 // entry points, and notification and command routes.
 import { describe, expect, it } from "vitest";
 import { notices, parseRoute, type Notice } from "../plan/notify.ts";
-import { afterDone, focusOf, hashOf, HOME, inboxModeOf, inboxNav, isPlanning, MODE_NAMES, MODES, modeNav, navOf, nextInboxMode, parseHash, planDayNav, planDayTitle, planWeekOf, planWeekTitle, routeLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type Nav, type ViewName } from "./nav.ts";
+import { afterDone, focusOf, hashOf, HOME, isPlanning, MODE_NAMES, MODES, modeNav, navOf, parseHash, planDayNav, planDayTitle, planWeekOf, planWeekTitle, routeLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type Nav, type ViewName } from "./nav.ts";
 
 const loc = (nav: Nav): Loc => ({ nav, overlay: null });
 
@@ -14,7 +14,7 @@ describe("tabs and modes", () => {
     expect(MODES.today).toEqual([]);
     expect(MODES.week).toEqual(["board", "commit", "team"]);
     expect(MODES.ahead).toEqual(["grid", "gantt", "fix"]);
-    expect(MODES.inbox).toEqual(["conversations", "promises", "captures"]);
+    expect(MODES.inbox).toEqual([]);
   });
 
   it("SW-1: Week › Team has its own address, with or without a week, and a notification opens it", () => {
@@ -56,7 +56,6 @@ describe("tabs and modes", () => {
   it("each mode on a switch opens its place", () => {
     for (const tab of ["week", "ahead"] as const) for (const m of MODES[tab]) expect(modeNav(tab, m)).toMatchObject({ tab, mode: m });
     // UI-7: the Inbox's modes are its flags (their addresses are unchanged).
-    expect(MODES.inbox.map((m) => hashOf(loc(modeNav("inbox", m))))).toEqual(["#/inbox/conversations", "#/inbox/my-promises", "#/inbox/captures"]);
   });
 
   it("the focused day is the Board's (Commit has none)", () => {
@@ -85,9 +84,9 @@ describe("addresses", () => {
     [loc(navOf.ahead("fix")), "#/ahead/fix"],
     [loc(navOf.aheadItem(437)), "#/ahead/item/437"],
     [loc(navOf.inbox()), "#/inbox"],
-    [loc(navOf.inbox(12)), "#/inbox/12"],
-    [loc(navOf.conversations()), "#/inbox/conversations"],
-    [loc(navOf.myPromises()), "#/inbox/my-promises"],
+    [loc(navOf.inbox(12)), "#/inbox/item/f12"],
+    [loc(navOf.conversations()), "#/inbox/needs-you"],
+    [loc(navOf.myPromises()), "#/inbox/promises"],
     [{ nav: navOf.today(), overlay: { kind: "focus" } }, "#/focus"],
     [{ nav: navOf.today(), overlay: { kind: "settings", section: "notifications" } }, "#/settings/notifications"],
   ];
@@ -108,11 +107,14 @@ describe("addresses", () => {
     ["#/roadmap", loc(navOf.ahead()), "#/ahead"],
     ["#/roadmap/ahead", loc(navOf.ahead("gantt")), "#/ahead/gantt"],
     ["#/ahead/plan", loc(navOf.ahead("gantt")), "#/ahead/gantt"],
-    ["#/conversations", loc(navOf.conversations()), "#/inbox/conversations"],
-    ["#/my-promises", loc(navOf.myPromises()), "#/inbox/my-promises"],
-    ["#/inbox/requests", loc(navOf.conversations()), "#/inbox/conversations"],
-    ["#/inbox/asks", loc(navOf.conversations()), "#/inbox/conversations"],
-    ["#/inbox/promises", loc(navOf.myPromises()), "#/inbox/my-promises"],
+    ["#/conversations", loc(navOf.conversations()), "#/inbox/needs-you"],
+    ["#/my-promises", loc(navOf.myPromises()), "#/inbox/promises"],
+    ["#/inbox/requests", loc(navOf.conversations()), "#/inbox/needs-you"],
+    ["#/inbox/asks", loc(navOf.conversations()), "#/inbox/needs-you"],
+    ["#/inbox/my-promises", loc(navOf.myPromises()), "#/inbox/promises"],
+    ["#/inbox/conversation/12", loc(navOf.inboxItem("v12")), "#/inbox/item/v12"],
+    ["#/inbox/promise/7", loc(navOf.inboxItem("c7")), "#/inbox/item/c7"],
+    ["#/inbox/12", loc(navOf.inboxItem("f12")), "#/inbox/item/f12"],
   ];
   it("each older address redirects to its new home, keeping the date, block and week", () => {
     for (const [old, l, now] of redirects) {
@@ -153,7 +155,7 @@ describe("entry points", () => {
     expect(viewName(loc(navOf.ahead()))).toBe("Ahead › Grid");
     expect(viewName(loc(navOf.ahead("gantt")))).toBe("Ahead › Gantt");
     expect(viewName(loc(navOf.ahead("fix")))).toBe("Ahead › Fix next");
-    expect(viewName(loc(navOf.conversations()))).toBe("Inbox › Conversations");
+    expect(viewName(loc(navOf.conversations()))).toBe("Inbox › Needs you");
   });
 });
 
@@ -170,7 +172,7 @@ describe("notification routes (all kinds of step 15.5)", () => {
     ["meeting", notices.meeting(["10:00 Standup"], ["k"], at), { nav: navOf.today(), overlay: { kind: "focus" } }, false],
     ["vm", notices.vmOff("2026-11-02", "vm-demo", at), loc(navOf.today()), true],
     ["followups (one)", notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }], at)!, loc(navOf.inbox(7)), false],
-    ["followups (several)", notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }, { id: 8, what: "B", overdue: true }], at)!, loc(navOf.captures()), false],
+    ["followups (several)", notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }, { id: 8, what: "B", overdue: true }], at)!, loc(navOf.myPromises()), false],
     ["expiry", notices.expiry("2026-11-02", [{ text: "x", section: "clients" }], at)!, { nav: navOf.today(), overlay: { kind: "settings", section: "clients" } }, false],
     // Both Plan ahead rituals open Ahead › Gantt (AH-1).
     ["plan_ahead", notices.planAhead("plan_ahead:2026-11-05", at), loc(navOf.ahead("gantt")), false],
@@ -188,9 +190,9 @@ describe("notification routes (all kinds of step 15.5)", () => {
 describe("command menu views", () => {
   it("every view a command opens is a tab and mode, a flow, or an overlay", () => {
     const want: Partial<Record<ViewName, string>> = {
-      today: "#/today", week: "#/week", inbox: "#/inbox", follow_ups: "#/inbox/captures", capture: "#/inbox/captures", roadmap: "#/ahead", ahead: "#/ahead/gantt",
+      today: "#/today", week: "#/week", inbox: "#/inbox", follow_ups: "#/inbox/promises", capture: "#/inbox/captures", roadmap: "#/ahead", ahead: "#/ahead/gantt",
       planday: "#/week/day", planweek: "#/week/commit", commit: "#/week/commit", checkin: "#/today/checkin", closeout: "#/today/closeout", focus: "#/focus", settings: "#/settings/you",
-      conversations: "#/inbox/conversations", requests: "#/inbox/conversations", my_promises: "#/inbox/my-promises",
+      conversations: "#/inbox/needs-you", requests: "#/inbox/needs-you", my_promises: "#/inbox/promises",
     };
     for (const [v, h] of Object.entries(want)) {
       const r = viewNav(v as ViewName);
@@ -199,32 +201,37 @@ describe("command menu views", () => {
   });
 });
 
-describe("Inbox's modes (UI-7)", () => {
-  it("Conversations · Promises · Captures, with their addresses; old ones still land", () => {
-    expect(MODES.inbox.map((m) => MODE_NAMES[m])).toEqual(["Conversations", "Promises", "Captures"]);
-    expect(hashOf(loc(navOf.captures()))).toBe("#/inbox/captures");
-    expect(parseHash("#/inbox/captures")?.nav).toEqual(navOf.captures());
-    for (const [h, m] of [["#/inbox/conversations", "conversations"], ["#/conversations", "conversations"], ["#/inbox/requests", "conversations"], ["#/inbox/my-promises", "promises"], ["#/promises", "promises"], ["#/inbox/conversation/12", "conversations"], ["#/inbox/promise/7", "promises"], ["#/inbox/42", "captures"]] as const) {
-      const n = parseHash(h)!.nav;
-      expect(n.tab === "inbox" && inboxModeOf(n, "captures" === m ? "conversations" : "captures"), h).toBe(m);
+describe("Inbox views and items (IB-1)", () => {
+  it("one list with views: no modes; each view and item has an address that reads back", () => {
+    expect(MODES.inbox).toEqual([]);
+    for (const v of ["needs_you", "promises", "waiting", "in_progress", "captures", "teammates", "done", "chatter"] as const) {
+      const l = loc(navOf.inboxView(v));
+      expect(parseHash(hashOf(l))).toEqual(l);
     }
-    const one = parseHash("#/inbox/conversation/12")!.nav;
-    expect(one.tab === "inbox" && one.select).toBe(12);
+    expect(hashOf(loc(navOf.inboxView("needs_you")))).toBe("#/inbox/needs-you");
+    for (const k of ["v12", "c7", "f42", "s3", "k9", "d5"]) expect(parseHash(`#/inbox/item/${k}`)?.nav).toEqual(navOf.inboxItem(k));
+    expect(parseHash("#/inbox/item/x1")).toBeNull();
+    expect(parseHash("#/inbox/item/v0")).toBeNull();
   });
-  it("the bare Inbox opens the remembered mode, Conversations the first time; a follow-up always Captures", () => {
-    const bare = parseHash("#/inbox")!.nav as Extract<Nav, { tab: "inbox" }>;
-    expect(inboxModeOf(bare, null)).toBe("conversations");
-    expect(inboxModeOf(bare, "promises")).toBe("promises");
-    expect(inboxModeOf(navOf.inbox(5) as Extract<Nav, { tab: "inbox" }>, "promises")).toBe("captures");
-    expect(routeLoc({ view: "followup", id: 5 }).loc.nav).toEqual(navOf.inbox(5));
-    expect(routeLoc({ view: "inbox" }).loc.nav).toEqual(navOf.captures());
+  it("old links open the right item or view (they still land)", () => {
+    expect(parseHash("#/inbox/conversation/12")?.nav).toEqual(navOf.inboxItem("v12"));
+    expect(parseHash("#/inbox/promise/7")?.nav).toEqual(navOf.inboxItem("c7"));
+    expect(parseHash("#/inbox/42")?.nav).toEqual(navOf.inboxItem("f42"));
+    expect(hashOf(loc(navOf.inbox(42)))).toBe("#/inbox/item/f42");
+    for (const [h, v] of [["#/inbox/conversations", "needs_you"], ["#/conversations", "needs_you"], ["#/inbox/requests", "needs_you"], ["#/inbox/my-promises", "promises"], ["#/promises", "promises"], ["#/my-promises", "promises"], ["#/inbox/captures", "captures"]] as const) {
+      const n = parseHash(h)!.nav;
+      expect(n.tab === "inbox" && n.view, h).toBe(v);
+    }
+  });
+  it("the bare Inbox is the view I last used; notifications and commands land on Promises and Captures", () => {
+    expect(parseHash("#/inbox")!.nav).toEqual({ tab: "inbox", view: null, item: null });
+    expect(routeLoc({ view: "followup", id: 5 }).loc.nav).toEqual(navOf.inboxItem("f5"));
+    expect(routeLoc({ view: "inbox" }).loc.nav).toEqual(navOf.myPromises());
     expect(viewNav("capture").nav).toEqual(navOf.captures());
+    expect(viewNav("follow_ups").nav).toEqual(navOf.myPromises());
     expect(viewNav("inbox").nav).toEqual(navOf.inbox());
-  });
-  it("P steps through the three modes; each mode's place", () => {
-    expect([nextInboxMode("conversations"), nextInboxMode("promises"), nextInboxMode("captures")]).toEqual(["promises", "captures", "conversations"]);
-    expect(inboxNav("promises")).toEqual(navOf.myPromises());
-    expect(viewName(loc(navOf.captures()))).toBe("Inbox › Captures");
+    expect(viewName(loc(navOf.captures()))).toBe("Inbox › Captures and drafts");
     expect(viewName(loc(navOf.myPromises()))).toBe("Inbox › Promises");
+    expect(toggleP(navOf.myPromises())).toEqual(navOf.myPromises());
   });
 });

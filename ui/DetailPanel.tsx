@@ -225,8 +225,8 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
         )}
 
         {followUps.length > 0 && (
-          <section className="dp-section" aria-label="Follow-ups">
-            <h3>Follow-ups</h3>
+          <section className="dp-section" aria-label="Promises">
+            <h3>Promises</h3>
             <ul className="dp-fus">
               {followUps.map((f) => (
                 <FollowUpRow key={f.id} l={f} timeZone={tz} today={data.planDay.date} clients={captureClients(data)} onChanged={(m) => (m && onNotice?.(m), onChanged())} compact />

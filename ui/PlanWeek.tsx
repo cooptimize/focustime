@@ -357,7 +357,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
       {offer ? (
         <p className="co-notice pw-offer" role="status">
           #{offer.itemId} is out of the musts. Let {nameOf(offer.clientKey)} know?{" "}
-          <button type="button" className="mini" onClick={() => void act("weekplan.headsup", offer, `Follow-up opened: heads-up to ${nameOf(offer.clientKey)}`).then(() => setOffer(null))}>Open a heads-up follow-up</button>{" "}
+          <button type="button" className="mini" onClick={() => void act("weekplan.headsup", offer, `Promise opened: heads-up to ${nameOf(offer.clientKey)}`).then(() => setOffer(null))}>Open a heads-up promise</button>{" "}
           <button type="button" className="mini quiet" onClick={() => setOffer(null)}>Not needed</button>
         </p>
       ) : (
@@ -445,7 +445,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
                     <ReadyRow key={`${f.kind}:${f.clientKey}:${f.itemId ?? f.pickId ?? ""}`} f={f} clientName={nameOf(f.clientKey)} tz={tz} drafts={f.itemId ? st.drafts.filter((d) => d.clientKey === f.clientKey && d.parentItemId === f.itemId) : []}
                       onBrief={() => void copyBrief(f.clientKey, f.itemId!)}
                       onMark={(on) => void act("feature.mark_breakdown", { clientKey: f.clientKey, itemId: f.itemId, on }, on ? `#${f.itemId} marked as being broken down` : undefined)}
-                      onAsk={() => void act("followup.ask_priorities", { weekStart, clientKey: f.clientKey }, `Follow-up opened: ask ${nameOf(f.clientKey)} about priorities`)}
+                      onAsk={() => void act("followup.ask_priorities", { weekStart, clientKey: f.clientKey }, `Promise opened: ask ${nameOf(f.clientKey)} about priorities`)}
                       onDraft={() => void act("draft.add_story", { clientKey: f.clientKey, parentItemId: null, title: f.title, size: f.size ?? "M" }, `Draft story saved: ${f.title}. Add it in DevOps when you can`)}
                       onDraftFeature={(title) => act("draft.add_feature", { clientKey: f.clientKey, parentItemId: f.itemId, title }, `Draft feature saved under #${f.itemId}: ${title}. Add it in DevOps when you can`).then((r) => r !== null)}
                       onCaptures={onCaptures} />
@@ -784,7 +784,7 @@ function ReadyRow({ f, clientName, tz, drafts, onBrief, onMark, onAsk, onDraft, 
         )}
         {f.kind === "intention_not_in_devops" && <button type="button" className="mini" onClick={onDraft}>Make it a draft story</button>}
         {f.kind === "captures_to_sort" && <button type="button" className="mini" onClick={onCaptures}>Sort captures</button>}
-        {f.kind === "block_needs_work" && (f.followUpId ? <span className="muted">Follow-up open: ask about priorities (L)</span> : <button type="button" className="mini" onClick={onAsk}>Create follow-up: ask about priorities</button>)}
+        {f.kind === "block_needs_work" && (f.followUpId ? <span className="muted">Promise open: ask about priorities (L)</span> : <button type="button" className="mini" onClick={onAsk}>Create a promise: ask about priorities</button>)}
         {f.kind === "needs_features" &&
           (drafting ? (
             <form className="pw-draft-feature" onSubmit={(e) => { e.preventDefault(); if (title.trim()) void onDraftFeature(title.trim()).then((ok) => ok && (setDrafting(false), setTitle(""))); }}>

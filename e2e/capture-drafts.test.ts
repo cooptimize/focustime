@@ -22,6 +22,12 @@ async function drafts(page: Page) {
   return (await api<{ drafts: { id: number; title: string; level: string; size: string; parentItemId: number | null; targetDate?: string | null; description?: string | null; acceptance?: string | null }[] }>(page, "capture.load", {})).data.drafts;
 }
 
+/** IB-1: a draft is a row in Captures and drafts; Edit draft in its detail pane opens the draft editor. */
+async function openDraft(page: Page, title: string): Promise<void> {
+  await page.locator(".ib-row", { hasText: title }).first().click();
+  await page.locator(".ib-pane").getByRole("button", { name: "Edit draft" }).click();
+}
+
 describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo mode)", () => {
   beforeAll(async () => {
     h = await startDemo();
@@ -31,10 +37,10 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
   it("Inbox: a prominent box, no explainer (U5: the kind chips say it), and no separate Add a follow-up button", async () => {
     const { page, errors } = await freshPage(h);
     await openCaptures(page);
-    await page.locator(".inbox .cap-box").waitFor();
+    await page.locator(".ib-capture .cap-box").waitFor();
     await expect(page.locator(".inbox-explainer").count()).resolves.toBe(0);
-    await expect(page.locator(".inbox .cap-box.large").count()).resolves.toBe(1);
-    await expect(page.getByRole("button", { name: "Add a follow-up" }).count()).resolves.toBe(0);
+    await expect(page.locator(".ib-capture .cap-box.large").count()).resolves.toBe(1);
+    await expect(page.getByRole("button", { name: "Add a promise" }).count()).resolves.toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -44,8 +50,8 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await openCaptures(page);
     await expect(checked(page)).resolves.toContain("Sort later");
     await box(page).fill("told Dana I'd send the export by Friday");
-    await expect.poll(() => checked(page)).toContain("Follow-up");
-    await expect(kindChip(page, "Follow-up").locator(".cap-suggested").count()).resolves.toBe(1);
+    await expect.poll(() => checked(page)).toContain("Promise");
+    await expect(kindChip(page, "Promise").locator(".cap-suggested").count()).resolves.toBe(1);
     await box(page).press("Tab");
     await expect(checked(page)).resolves.toContain("Draft story");
     await expect(page.locator(".cap-box .cap-box-fields[aria-label='Draft story details']").count()).resolves.toBe(1);
@@ -62,7 +68,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await openCaptures(page);
     await chooseClient(page, "Northwind");
     await box(page).fill("told Dana I'd send the export by Friday");
-    await expect.poll(() => checked(page)).toContain("Follow-up");
+    await expect.poll(() => checked(page)).toContain("Promise");
     const f = page.locator(".cap-box .cap-box-fields");
     await expect(f.getByLabel("Who").inputValue()).resolves.toBe("Dana");
     await expect(f.getByLabel("Due").inputValue()).resolves.toBe("2026-11-06");
@@ -73,9 +79,13 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await look.press("Enter");
     await expect(f.locator(".item-lookup.linked").count()).resolves.toBe(1);
     await box(page).press("Enter");
-    const row = page.locator(".follow-up", { hasText: /send the export/i });
+    // IB-1: it's a promise now, a row in the list; its detail pane shows the linked item.
+    const row = page.locator(".ib-row", { has: page.locator(".ib-row-title", { hasText: /^send the export$/i }) });
+    await page.evaluate(() => (location.hash = "#/inbox/promises"));
     await expect.poll(() => row.count()).toBe(1);
-    await expect.poll(() => row.locator(".follow-up-item a").count()).toBe(1);
+    await row.click();
+    await expect.poll(() => page.locator(".ib-pane section[aria-label='Linked DevOps item'] a").count()).toBe(1);
+    await openCaptures(page);
     await expect(box(page).inputValue()).resolves.toBe("");
     await expect(checked(page)).resolves.toContain("Sort later");
     expect(errors).toEqual([]);
@@ -117,16 +127,16 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await box(page).fill("pallet labels look odd");
     await expect(checked(page)).resolves.toContain("Sort later");
     await box(page).press("Enter");
-    await expect.poll(() => page.locator(".cap-item", { hasText: "pallet labels look odd" }).locator(".cap-tag", { hasText: "To sort" }).count()).toBe(1);
+    await expect.poll(() => page.locator(".ib-row", { hasText: "pallet labels look odd" }).locator(".ib-tag", { hasText: "To sort" }).count()).toBe(1);
     await page.close();
   }, T);
 
   it("Ctrl+K Add a follow-up opens the capture box with Follow-up chosen; Close out is the panel, with no capture box (U2)", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("Control+k");
-    await page.keyboard.type("Add a follow-up");
-    await page.getByRole("menuitem", { name: /Add a follow-up/ }).first().click();
-    await expect.poll(() => page.locator(".cap-dialog .cap-box-kinds [role=radio][aria-checked=true]").textContent()).toContain("Follow-up");
+    await page.keyboard.type("Add a promise");
+    await page.getByRole("menuitem", { name: "Add a promise", exact: true }).click();
+    await expect.poll(() => page.locator(".cap-dialog .cap-box-kinds [role=radio][aria-checked=true]").textContent()).toContain("Promise");
     await page.keyboard.press("Escape");
     await page.keyboard.press("Control+k");
     await page.keyboard.type("Close out");
@@ -140,7 +150,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     const { page, errors } = await freshPage(h);
     await api(page, "draft.add_story", { clientKey: "Northwind", parentItemId: null, title: "Editor draft", size: "M" });
     await openCaptures(page);
-    await page.locator(".dw-drafts-section .draft-title", { hasText: "Editor draft" }).click();
+    await openDraft(page, "Editor draft");
     const ed = page.locator(".draft-editor");
     await ed.getByLabel("Title").fill("Editor draft, edited");
     await ed.getByLabel("Description").fill("Line one\nLine two");
@@ -158,7 +168,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     expect(d).toMatchObject({ description: "Line one\nLine two", acceptance: "Given a file, it imports", size: "S" });
     expect(d.parentItemId).not.toBeNull();
     // Reopened, it shows the saved values.
-    await page.locator(".dw-drafts-section .draft-title", { hasText: "Editor draft, edited" }).click();
+    await openDraft(page, "Editor draft, edited");
     await expect(ed.getByLabel("Description").inputValue()).resolves.toBe("Line one\nLine two");
     await expect(ed.locator(".item-lookup.linked").count()).resolves.toBe(1);
     await ed.getByRole("button", { name: "Delete" }).click();
@@ -171,7 +181,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     const { page } = await freshPage(h);
     const r = await api<{ draft: { id: number } }>(page, "draft.add_story", { clientKey: "Northwind", parentItemId: null, title: "Plan-it draft", size: "M" });
     await openCaptures(page);
-    await page.locator(".dw-drafts-section .draft-title", { hasText: "Plan-it draft" }).click();
+    await openDraft(page, "Plan-it draft");
     await page.locator(".draft-editor").getByRole("button", { name: "Plan it" }).click();
     const first = page.locator(".popup-menu [role=menuitem]:not([aria-disabled=true]):not([disabled])").first();
     await expect.poll(() => page.locator(".popup-menu").count()).toBe(1);

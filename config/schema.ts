@@ -93,8 +93,13 @@ export const TEXT_SIZES = ["default", "large", "larger"] as const;
 export type TextSize = (typeof TEXT_SIZES)[number];
 /** reduceMotion (step 17.5): no sweep, unroll, hop or bob; the still pose shows and open and close cut straight to the result. */
 /** showPersonal (U5.1, D408): personal (Google) events shown on Week and Today; hidden ones still count in risk and free time. */
-export type UiConfig = { theme: Theme; viewRange: ViewRange; showTimelines: boolean; reduceMotion: boolean; textSize: TextSize; showPersonal: boolean };
-export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business", showTimelines: true, reduceMotion: false, textSize: "default", showPersonal: true };
+/** IB-1: the Inbox's remembered view, clients (none: all) and grouping. */
+export const INBOX_VIEW_NAMES = ["needs_you", "promises", "waiting", "in_progress", "captures", "teammates", "done", "chatter"] as const;
+export const INBOX_GROUPS = ["client", "due", "kind"] as const;
+export type InboxPrefs = { view: (typeof INBOX_VIEW_NAMES)[number]; clients: string[]; group: (typeof INBOX_GROUPS)[number] };
+export const DEFAULT_INBOX: InboxPrefs = { view: "needs_you", clients: [], group: "client" };
+export type UiConfig = { theme: Theme; viewRange: ViewRange; showTimelines: boolean; reduceMotion: boolean; textSize: TextSize; showPersonal: boolean; inbox: InboxPrefs };
+export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business", showTimelines: true, reduceMotion: false, textSize: "default", showPersonal: true, inbox: DEFAULT_INBOX };
 
 /** The style guide's client palette (tokens --client-<slot> in every theme). */
 export const CLIENT_SLOTS = ["teal", "violet", "ochre", "blue", "rose", "earth", "green", "slate"] as const;
@@ -424,10 +429,10 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
   for (const k of ["edge", "chromium"] as const) if (raw[k] !== undefined && !isTable(raw[k])) err(k, `Must be a [${k}] table`);
 
   // [ui] (optional): theme
-  const ui: UiConfig = { ...DEFAULT_UI };
+  const ui: UiConfig = { ...DEFAULT_UI, inbox: { ...DEFAULT_INBOX, clients: [] } };
   if (raw.ui !== undefined) {
     const t = isTable(raw.ui) ? raw.ui : (err("ui", "Must be a [ui] table"), null);
-    if (t) for (const k of Object.keys(t)) if (!["theme", "view_range", "show_timelines", "reduce_motion", "text_size", "show_personal"].includes(k)) err(`ui.${k}`, "Unknown field");
+    if (t) for (const k of Object.keys(t)) if (!["theme", "view_range", "show_timelines", "reduce_motion", "text_size", "show_personal", "inbox_view", "inbox_clients", "inbox_group"].includes(k)) err(`ui.${k}`, "Unknown field");
     const rm = t?.reduce_motion;
     if (rm !== undefined) {
       if (typeof rm !== "boolean") err("ui.reduce_motion", "Must be true or false");
@@ -437,6 +442,22 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
     if (ts !== undefined) {
       if (typeof ts !== "string" || !(TEXT_SIZES as readonly string[]).includes(ts)) err("ui.text_size", `Must be one of ${TEXT_SIZES.map((x) => `"${x}"`).join(", ")}`);
       else ui.textSize = ts as TextSize;
+    }
+    // IB-1: the Inbox's view, clients and grouping, remembered per person.
+    const iv = t?.inbox_view;
+    if (iv !== undefined) {
+      if (typeof iv !== "string" || !(INBOX_VIEW_NAMES as readonly string[]).includes(iv)) err("ui.inbox_view", `Must be one of ${INBOX_VIEW_NAMES.map((x) => `"${x}"`).join(", ")}`);
+      else ui.inbox.view = iv as InboxPrefs["view"];
+    }
+    const ic = t?.inbox_clients;
+    if (ic !== undefined) {
+      if (!Array.isArray(ic) || ic.length > 50 || ic.some((x) => typeof x !== "string" || !x || x.length > 100)) err("ui.inbox_clients", "Must be a list of client keys");
+      else ui.inbox.clients = [...new Set(ic as string[])];
+    }
+    const ig = t?.inbox_group;
+    if (ig !== undefined) {
+      if (typeof ig !== "string" || !(INBOX_GROUPS as readonly string[]).includes(ig)) err("ui.inbox_group", `Must be one of ${INBOX_GROUPS.map((x) => `"${x}"`).join(", ")}`);
+      else ui.inbox.group = ig as InboxPrefs["group"];
     }
     const sp = t?.show_personal;
     if (sp !== undefined) {

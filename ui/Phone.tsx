@@ -175,8 +175,8 @@ export function PhoneFollowUps({ data, date, onChanged }: { data: WeekLoadData; 
   const tz = userZone(data);
   const clients = captureClients(data);
   return (
-    <section className="phone-due" aria-label="Follow-ups due">
-      <h2 className="section-label">Follow-ups due</h2>
+    <section className="phone-due" aria-label="Promises due">
+      <h2 className="section-label">Promises due</h2>
       {due.map((l) => (
         <FollowUpRow key={l.id} l={l} timeZone={tz} today={date} clients={clients} onChanged={onChanged} compact />
       ))}

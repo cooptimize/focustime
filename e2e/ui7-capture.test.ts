@@ -3,7 +3,7 @@
 // size Larger and the phone (390 wide, a 17px root font as on iPhone) with nothing running off the page.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
-import { CHROMIUM, freshPage, openApp, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, openApp, startDemo, type Harness, openCaptures } from "./harness.ts";
 import { SHOTS } from "./shots.ts";
 
 const LINES = "Follow up with the data team about the export\nCheck the mapping for the two date fields\nAsk whether the nightly run can move earlier\nThen update the story with what we agreed\nAnd one more line so it scrolls";
@@ -43,26 +43,25 @@ describe.skipIf(!CHROMIUM)("Capture's save button (UI-7)", () => {
   it("↵ beside the box at 1920 and Larger; Enter and ↵ both save", async () => {
     const { page, errors } = await freshPage(h);
     await openApp(page, h);
-    await page.keyboard.press("4");
-    await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Captures/ }).click();
-    await checkLayout(page, ".inbox");
-    if (SHOTS) await page.locator(".inbox .cap-box").screenshot({ path: `${SHOTS}/ui7-capture-1920.png` });
+    await openCaptures(page);
+    await checkLayout(page, ".ib");
+    if (SHOTS) await page.locator(".ib-capture .cap-box").screenshot({ path: `${SHOTS}/ui7-capture-1920.png` });
     await page.evaluate(() => document.documentElement.setAttribute("data-text-size", "larger"));
     await page.waitForTimeout(150);
-    await checkLayout(page, ".inbox");
-    if (SHOTS) await page.locator(".inbox .cap-box").screenshot({ path: `${SHOTS}/ui7-capture-larger.png` });
+    await checkLayout(page, ".ib");
+    if (SHOTS) await page.locator(".ib-capture .cap-box").screenshot({ path: `${SHOTS}/ui7-capture-larger.png` });
     await page.evaluate(() => document.documentElement.removeAttribute("data-text-size"));
 
-    const box = page.locator(".inbox .cap-box textarea[aria-label='Quick capture']");
+    const box = page.locator(".ib-capture .cap-box textarea[aria-label='Quick capture']");
     await box.fill("ui7 saved by the button");
-    await page.locator(".inbox .cap-box .cap-send").click();
-    await page.locator(".inbox .cap-toast").waitFor();
+    await page.locator(".ib-capture .cap-box .cap-send").click();
+    await page.locator(".ib-capture .cap-toast").waitFor();
     await expect.poll(() => box.inputValue()).toBe("");
     await box.fill("ui7 saved by Enter");
     await box.press("Enter");
     await expect.poll(() => box.inputValue()).toBe("");
-    await expect.poll(() => page.locator(".inbox").getByText("ui7 saved by Enter").count()).toBeGreaterThan(0);
-    await expect.poll(() => page.locator(".inbox").getByText("ui7 saved by the button").count()).toBeGreaterThan(0);
+    await expect.poll(() => page.locator(".ib").getByText("ui7 saved by Enter").count()).toBeGreaterThan(0);
+    await expect.poll(() => page.locator(".ib").getByText("ui7 saved by the button").count()).toBeGreaterThan(0);
     expect(errors).toEqual([]);
   }, 120_000);
 

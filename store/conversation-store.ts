@@ -88,6 +88,8 @@ const toCommitment = (r: Row): Commitment => ({
   takenAt: instant(r.taken_at),
   reason: (r.reason as string | null) ?? null,
   draft: json<Commitment["draft"]>(r.draft_json, null),
+  closeHow: (r.close_how as Commitment["closeHow"] | undefined) ?? null,
+  closeNote: (r.close_note as string | null | undefined) ?? null,
   createdAt: instant(r.created_at)!,
   updatedAt: instant(r.updated_at)!,
 });
@@ -155,7 +157,7 @@ export type ConversationPatch = Partial<{
 }>;
 
 export type NewCommitment = Omit<Commitment, "id" | "createdAt" | "updatedAt" | "followUpId" | "itemId" | "itemUrl" | "itemTitle" | "onToday" | "remindedAt" | "escalatedAt" | "takenBy" | "takenFrom" | "takenAt" | "state" | "draft"> & { state?: CommitmentState; fromPromise?: string | null; createdAt?: string };
-export type CommitmentPatch = Partial<Pick<Commitment, "what" | "dueAt" | "dueDate" | "toId" | "toName" | "impliesItem" | "state" | "followUpId" | "itemId" | "itemUrl" | "itemTitle" | "onToday" | "remindedAt" | "escalatedAt" | "takenBy" | "takenFrom" | "takenAt" | "whoId" | "whoName" | "reason" | "messageIds" | "conversationId" | "draft">>;
+export type CommitmentPatch = Partial<Pick<Commitment, "what" | "dueAt" | "dueDate" | "toId" | "toName" | "impliesItem" | "state" | "followUpId" | "itemId" | "itemUrl" | "itemTitle" | "onToday" | "remindedAt" | "escalatedAt" | "takenBy" | "takenFrom" | "takenAt" | "whoId" | "whoName" | "reason" | "messageIds" | "conversationId" | "draft" | "closeHow" | "closeNote">>;
 
 /** What ADM-1's Admin › Status shows (counts only, never text or ids). */
 export type ConversationCounts = {
@@ -396,7 +398,7 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         const cols: Record<keyof CommitmentPatch, string> = {
           what: "what", dueAt: "due_at", dueDate: "due_date", toId: "to_id", toName: "to_name", impliesItem: "implies_item", state: "state", followUpId: "follow_up_id", itemId: "item_id",
           itemUrl: "item_url", itemTitle: "item_title", onToday: "on_today", remindedAt: "reminded_at", escalatedAt: "escalated_at", takenBy: "taken_by", takenFrom: "taken_from", takenAt: "taken_at", whoId: "who_id", whoName: "who_name",
-          reason: "reason", messageIds: "message_ids_json", conversationId: "conversation_id", draft: "draft_json",
+          reason: "reason", messageIds: "message_ids_json", conversationId: "conversation_id", draft: "draft_json", closeHow: "close_how", closeNote: "close_note",
         };
         const sets: string[] = [];
         const params: Param[] = [];

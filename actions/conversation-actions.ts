@@ -8,6 +8,7 @@
 // committer opens it (their own cap); creating and commenting go through the write framework. Chat text goes only to
 // that client's cards, never a log or an error (ids and counts only, and not even ids in logs).
 import { whoNotOwner } from "../plan/follow-who.ts";
+import { CLOSE_HOW, type CloseHow } from "../plan/types.ts";
 import { groupingRules } from "./conversations-pipeline.ts";
 import { likelyItems } from "../plan/promise-items.ts";
 import { typeChoices } from "./work-item-types.ts";
@@ -46,6 +47,8 @@ export const CONVERSATION_ACTIONS = [
   "conversations.list", "conversations.count", "conversations.refresh", "conversations.messages", "conversations.seen", "conversations.resolve", "conversations.not_request", "conversations.reopen",
   "conversations.hide", "conversations.move", "conversations.this_is_work", "conversations.link", "conversations.take_over", "conversations.sort_unsorted", "conversations.search",
   "conversations.draft", "my_promises.list", "my_promises.today", "my_promises.followup", "my_promises.link", "my_promises.done", "my_promises.not_needed", "my_promises.reopen",
+  // IB-1: a promise is never read-only: its due, whom it is to, and Close the loop.
+  "my_promises.due", "my_promises.who", "my_promises.close",
   "suggestions.skip", "conversations.merge", "conversations.unmerge", "my_promises.start_draft",
   "my_promises.search",
   // CV-5: Link to item over the client's items in scope, and its undo.
@@ -379,7 +382,13 @@ export async function inboxFacts(ctx: ConversationContext, cfg: AppConfig): Prom
   for (const card of await cards(ctx, v, cfg, all)) {
     if (card.hidden) continue;
     const view = await viewOf(ctx, v.me, card, all.find((c) => c.id === card.id)!);
-    out.push({ key: itemKey("conversation", card.id), kind: "conversation", clientKey: card.clientKey, at: card.lastAt, done: view === "closed", conversationView: view });
+    // Who it is with: someone in it who isn't me.
+    const asker = card.participants.find((p) => !p.me)?.name ?? null;
+    out.push({
+      key: itemKey("conversation", card.id), kind: "conversation", clientKey: card.clientKey, at: card.lastAt, done: view === "closed", conversationView: view,
+      title: card.title, who: asker, where: card.chatName, itemId: card.item?.id ?? null, mentionsMe: card.mentionsMe,
+      workRequest: !card.item && card.primary === "create",
+    });
   }
   for (const k of await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))) {
     // A promise made into a follow-up before IB-1 shows once, as that follow-up (f<id>).
@@ -388,7 +397,8 @@ export async function inboxFacts(ctx: ConversationContext, cfg: AppConfig): Prom
     if (done && (!k.updatedAt || now - Date.parse(k.updatedAt) >= DONE_SHOWN_MS)) continue;
     out.push({
       key: itemKey("chatPromise", k.id), kind: "promise", clientKey: k.clientKey, at: k.updatedAt ?? k.createdAt, done,
-      due: k.dueDate, linked: k.itemId !== null, onWeek: !!k.onToday,
+      due: k.dueDate ?? (k.dueAt ? localToday(k.dueAt, userZone(cfg)) : null), dueAt: k.dueAt, linked: k.itemId !== null, onWeek: !!k.onToday,
+      title: k.what, who: k.toName, where: v.byId.get(k.chatId)?.displayName ?? null, itemId: k.itemId,
     });
   }
   return out;
@@ -932,6 +942,49 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         ctx.log({ source: "plan", op: "promise_resolved", kind: "followup" });
         return { ok: true, data: { ...(await myPromises(ctx, cfg)), followUpId: f.id } };
       }
+      case "my_promises.due": {
+        // IB-1: a promise is never read-only. Its due day (or none), wherever it stands: open, linked or created.
+        const o = only(input, ["id", "due"]);
+        const k = o && (await mine(o.id));
+        if (!o || !k) return bad("my_promises.due takes { id, due }");
+        const due = o.due === null || o.due === "" ? null : typeof o.due === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.due) && Temporal.PlainDate.from(o.due) ? o.due : undefined;
+        if (due === undefined) return bad("due is a date like 2026-11-06, or null");
+        if (k.state === "done" || k.state === "not_needed") return bad("This promise is closed. Open it again first", 409);
+        // A stated time was for the old day; the new due is a day.
+        await v.convs.updateCommitment(k.id, { dueDate: due, dueAt: null });
+        ctx.log({ source: "plan", op: "promise_due" });
+        return promisesNow();
+      }
+      case "my_promises.who": {
+        // IB-1: whom the promise is to (a person from the picker, or a name, or nobody); never me.
+        const o = only(input, ["id", "who"], ["whoRef"]);
+        const k = o && (await mine(o.id));
+        if (!o || !k || (o.who !== null && (typeof o.who !== "string" || o.who.trim().length > 200))) return bad("my_promises.who takes { id, who, whoRef? }");
+        const whoRef = o.whoRef === undefined || o.whoRef === null ? null : personRef(o.whoRef);
+        if (o.whoRef !== undefined && o.whoRef !== null && !whoRef) return bad("whoRef is a person from the picker, or null");
+        if (k.state === "done" || k.state === "not_needed") return bad("This promise is closed. Open it again first", 409);
+        const name = typeof o.who === "string" && o.who.trim() ? o.who.trim() : null;
+        const owner = { id: v.me, names: [k.whoName, v.byId.get(k.chatId)?.members?.find((m) => same(m.userId, v.me))?.displayName] };
+        const kept = whoNotOwner({ who: name, whoRef: name ? whoRef : null }, null, owner);
+        const toId = kept.whoRef?.kind === "cooptimizer" ? kept.whoRef.id : kept.whoRef?.kind === "external" ? kept.whoRef.memberId : null;
+        await v.convs.updateCommitment(k.id, { toName: kept.who, toId });
+        ctx.log({ source: "plan", op: "promise_who" });
+        return promisesNow();
+      }
+      case "my_promises.close": {
+        // IB-1: Close the loop on a chat promise: done, with how I told them (optional) and a note. Nothing is sent.
+        const o = only(input, ["id"], ["how", "note"]);
+        const k = o && (await mine(o.id));
+        if (!o || !k) return bad("my_promises.close takes { id, how?, note? }");
+        const how = o.how === undefined || o.how === null ? null : (CLOSE_HOW as readonly unknown[]).includes(o.how) ? (o.how as CloseHow) : undefined;
+        const note = o.note === undefined || o.note === null || o.note === "" ? null : typeof o.note === "string" && o.note.trim().length <= 500 ? o.note.trim() : undefined;
+        if (how === undefined || note === undefined) return bad("how is teams, email, devops or call; note is text of at most 500 characters");
+        if (k.state === "done" || k.state === "not_needed") return bad("This promise is already closed", 409);
+        await v.convs.updateCommitment(k.id, { state: "done", closeHow: how, closeNote: note });
+        if (k.conversationId !== null) await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, k.conversationId);
+        ctx.log({ source: "plan", op: "promise_resolved", kind: "closed" });
+        return promisesNow();
+      }
       case "my_promises.search": {
         // CV-3 (Q-CV2-4): likely items for Link existing…, with or without a conversation, by rules only. The words
         // come from the promise and its messages, and its conversation's messages or else the ones just before it in
@@ -1013,7 +1066,7 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         if (!k) return bad("No such promise", 404);
         if (k.state === "created") return bad(`#${k.itemId} was created in DevOps. Undo it from Settings > Data > Audit log`, 409);
         if (k.state === "followup") return bad("This promise is a follow-up now: change it in the Inbox", 409);
-        await v.convs.updateCommitment(k.id, { state: "open", ...(k.state === "linked" ? { itemId: null, itemUrl: null, itemTitle: null } : {}) });
+        await v.convs.updateCommitment(k.id, { state: "open", closeHow: null, closeNote: null, ...(k.state === "linked" ? { itemId: null, itemUrl: null, itemTitle: null } : {}) });
         if (k.conversationId !== null) await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, k.conversationId);
         return promisesNow();
       }

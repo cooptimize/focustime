@@ -84,3 +84,55 @@ describe("the migration's data step", () => {
     expect(marks.get(`f${open.id}`)?.seenAt).toBeTruthy();
   });
 });
+
+describe("slice 2: rows, Hide for me, and promises never read-only", () => {
+  it("each row carries what the list shows: title, who, where, due and late; never message text", async () => {
+    const { w, plan, run } = await setup();
+    const f = await plan.addFollowUp({ who: "Lena", what: "Send the mapping notes", due: "2026-11-01", clientKey: "contoso" });
+    await w.run(CHAT, [await w.say(CHAT, SAM, "2026-11-04T21:00:00Z", "I'll send the totals next week")]);
+    const k = (await w.convs.commitmentsInChat(CHAT.chatId))[0]!;
+    const list = await run<InboxListData>("inbox.list");
+    expect(list.items.find((i) => i.key === `f${f.id}`)).toMatchObject({ title: "Send the mapping notes", who: "Lena", due: "2026-11-01", late: true, done: false });
+    const c = list.items.find((i) => i.key === `c${k.id}`)!;
+    expect(c).toMatchObject({ kind: "promise", title: k.what, where: CHAT.displayName, late: false });
+    // Only what a row shows: no summary, messages or anyone's email.
+    const allowed = new Set(["key", "kind", "clientKey", "at", "views", "title", "who", "where", "due", "dueAt", "itemId", "late", "done", "sendState", "conversationView", "mentionsMe", "workRequest", "must", "weekStart", "snoozedUntil"]);
+    for (const i of list.items) for (const k of Object.keys(i)) expect(allowed.has(k), k).toBe(true);
+  });
+
+  it("Hide for me takes an item out of every view and the count, and back again; a conversation keeps its own Hide", async () => {
+    const { plan, run } = await setup();
+    const f = await plan.addFollowUp({ who: null, what: "Overdue one", due: "2026-11-01", clientKey: "contoso" });
+    const before = await run<{ needsYou: number }>("inbox.count");
+    expect(await run("inbox.hide", { key: `f${f.id}`, hidden: true })).toEqual({ hidden: true });
+    let list = await run<InboxListData>("inbox.list");
+    expect(list.items.find((i) => i.key === `f${f.id}`)?.views).toEqual([]);
+    expect((await run<{ needsYou: number }>("inbox.count")).needsYou).toBe(before.needsYou - 1);
+    await run("inbox.hide", { key: `f${f.id}`, hidden: false });
+    list = await run<InboxListData>("inbox.list");
+    expect(list.items.find((i) => i.key === `f${f.id}`)?.views).toContain("needs_you");
+    await expect(run("inbox.hide", { key: "v1", hidden: true })).rejects.toThrow(/conversations.hide/);
+    await expect(run("inbox.hide", { key: "f999999", hidden: true })).rejects.toThrow(/404/);
+  });
+
+  it("a linked chat promise keeps due, who and Close the loop (how and note kept); Open again clears them", async () => {
+    const { w, sam, run } = await setup();
+    await w.run(CHAT, [await w.say(CHAT, SAM, "2026-11-04T21:00:00Z", "I'll send the totals next week")]);
+    const k = (await w.convs.commitmentsInChat(CHAT.chatId))[0]!;
+    await w.convs.updateCommitment(k.id, { itemId: 4417, itemUrl: "https://dev.azure.com/contoso/p/_workitems/edit/4417", itemTitle: "Totals" });
+    await sam.run("my_promises.due", { id: k.id, due: "2026-11-03" });
+    expect(await w.convs.commitment(k.id)).toMatchObject({ dueDate: "2026-11-03", dueAt: null, itemId: 4417 });
+    expect((await run<InboxListData>("inbox.list")).items.find((i) => i.key === `c${k.id}`)).toMatchObject({ late: true, itemId: 4417 });
+    await sam.run("my_promises.who", { id: k.id, who: "Lena Hart" });
+    expect((await w.convs.commitment(k.id))?.toName).toBe("Lena Hart");
+    // Never me: naming myself leaves it to nobody.
+    await sam.run("my_promises.who", { id: k.id, who: SAM.displayName });
+    expect((await w.convs.commitment(k.id))?.toName).toBeNull();
+    expect((await sam.fail("my_promises.due", { id: k.id, due: "soon" })).status).toBe(400);
+    await sam.run("my_promises.close", { id: k.id, how: "teams", note: "Sent the totals" });
+    expect(await w.convs.commitment(k.id)).toMatchObject({ state: "done", closeHow: "teams", closeNote: "Sent the totals" });
+    expect((await sam.fail("my_promises.close", { id: k.id })).status).toBe(409);
+    await sam.run("my_promises.reopen", { id: k.id });
+    expect(await w.convs.commitment(k.id)).toMatchObject({ state: "open", closeHow: null, closeNote: null });
+  });
+});

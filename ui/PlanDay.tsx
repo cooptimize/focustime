@@ -573,10 +573,10 @@ function AddPaneDay({ slot, picks, overflow, state, picked, here, clients, color
               !work && <p className="muted pd-note">DevOps isn't loaded for this client right now.</p>
             )}
             {s!.followUps.length > 0 && (
-              <AddSection className="pd2-sec" label="Follow-ups">
+              <AddSection className="pd2-sec" label="Promises">
                 <ul className="pd2-list">
                   {s!.followUps.map((f) => (
-                    <AddRow key={f.id} k={`f${f.id}`} drag={{ clientKey, title: f.what, input: { followUpId: f.id } }} onAdd={() => add({ followUpId: f.id })} label={`Add follow-up: ${f.what}`}>
+                    <AddRow key={f.id} k={`f${f.id}`} drag={{ clientKey, title: f.what, input: { followUpId: f.id } }} onAdd={() => add({ followUpId: f.id })} label={`Add promise: ${f.what}`}>
                       <span className="pr-title">{f.hasWho ? `${f.who}: ` : ""}{f.what}</span>
                       <DueBadge l={f} />
                     </AddRow>

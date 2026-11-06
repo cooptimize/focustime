@@ -24,7 +24,7 @@ describe("capture box keys (CP-1)", () => {
   it("the toast names the client the capture went to", () => {
     expect(savedText("draft", "Northwind")).toBe("Saved to Northwind as a draft story");
     expect(savedText("draft_feature", "Northwind")).toBe("Saved to Northwind as a draft feature");
-    expect(savedText("follow_up", "Northwind", ", owed to Dana")).toBe("Saved to Northwind as a follow-up, owed to Dana");
+    expect(savedText("follow_up", "Northwind", ", owed to Dana")).toBe("Saved to Northwind as a promise, owed to Dana");
     expect(savedText("later", null)).toBe("Saved to Captures");
     expect(savedText("later", "Northwind")).toBe("Saved to Northwind");
   });

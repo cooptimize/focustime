@@ -66,7 +66,7 @@ describe.skipIf(!CHROMIUM)("Plan the day's right pane (fix/planday-pane)", () =>
     await page.evaluate(() => (location.hash = "#/today/plan/2026-11-09"));
     await page.waitForSelector(".pd2-left");
     await selectBlock(page, "Northwind");
-    expect(await page.locator('.pd2-right section[aria-label^="This week"], .pd2-right section[aria-label="Follow-ups"]').count()).toBe(0);
+    expect(await page.locator('.pd2-right section[aria-label^="This week"], .pd2-right section[aria-label="Promises"]').count()).toBe(0);
     expect(await fold(page).getAttribute("aria-expanded")).toBe("true");
     const line = page.locator(".pd2-right .pd2-none");
     expect(await line.textContent()).toBe("Nothing planned for Northwind this week. Pick from DevOps, or plan the week first.");
