@@ -8,7 +8,7 @@
 // UI-8: UI-3's header on every screen: ‹ Back at the top left on the preview and the error (back to the text), the ×
 // at the top right always, Esc closes. The header never scrolls away; only the body scrolls.
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { aboutLine, type Build } from "./About.tsx";
 import { ActionRefusal, call } from "./api.ts";
 import { FEEDBACK_KINDS, KIND_LABEL, type FeedbackKind, type Where } from "../plan/feedback.ts";
@@ -45,7 +45,9 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
       .then((r) => (r.ok ? (r.json() as Promise<Build>) : Promise.reject(new Error("version"))))
       .then((b) => setVersion(aboutLine(b, zone)), () => setVersion(""));
   }, [zone]);
-  useEffect(() => {
+  // HK-5: before paint, so the step's button has focus the moment it shows. After paint (useEffect), the text box the
+  // preview replaced was already gone and focus sat on the page, so a quick Ctrl+Enter never reached the dialog.
+  useLayoutEffect(() => {
     if (step.kind !== "write") primary.current?.focus();
     else box.current?.focus();
   }, [step.kind]);
