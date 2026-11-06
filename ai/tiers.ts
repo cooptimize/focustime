@@ -7,9 +7,10 @@ export type AiTier = "standard" | "flex";
 
 /**
  * The background tasks: each runs from the shared poll or a scheduled job, never while a person waits for it.
- * conversations.update carries the chat images' descriptions in the same request (CV-4).
+ * conversations.update carries the chat images' descriptions in the same request (CV-4). MC-1's meeting.capture
+ * runs after a call (the poll job, or an upload) and its proposals wait for a reviewer: background.
  */
-export const FLEX_TASKS = ["conversations.update", "promises.extract", "asks.classify"] as const;
+export const FLEX_TASKS = ["conversations.update", "promises.extract", "asks.classify", "meeting.capture"] as const;
 export type FlexTask = (typeof FLEX_TASKS)[number];
 
 /**

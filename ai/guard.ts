@@ -114,6 +114,50 @@ export function clientsNamed(text: string, directory: readonly ClientEntry[], is
   return out;
 }
 
+/** MC-1: what takes another client's name, project or item id in a transcript, and a spoken email address. */
+export const ANOTHER_CLIENT = "[another client]";
+export const MASKED_EMAIL = "[email]";
+
+/**
+ * MC-1: a meeting transcript is masked before the guard sees it (the product owner, Nov 6): another client's names,
+ * nicknames, DevOps projects and known item ids become "[another client]", and every email address "[email]". A
+ * Cooptimize Internal meeting (GD-1) keeps client names; its emails are still masked. The guard then runs as always on
+ * the masked text, so anything left (a secret, the VM) still refuses the request. Counts only, never the text.
+ */
+export function maskTranscript(text: string, client: string, directory: readonly ClientEntry[], o: { internal?: boolean } = {}): { text: string; masked: { client: number; email: number } } {
+  let clientHits = 0;
+  let emailHits = 0;
+  let out = text.replace(EMAIL, () => {
+    emailHits++;
+    return MASKED_EMAIL;
+  });
+  if (!o.internal) {
+    const own = (k: string) => k.trim().toLowerCase() === client.trim().toLowerCase();
+    const mine = directory.filter((c) => own(c.key));
+    const ownWords = new Set([...mine.flatMap((c) => [...c.names, ...c.projects]), client].map((w) => w.trim().toLowerCase()));
+    const ownIds = new Set(mine.flatMap((c) => c.itemIds));
+    // Longest first, so "Fab Labs" goes before "Fab".
+    const words = [...new Set(directory.filter((c) => !own(c.key)).flatMap((c) => [c.key, ...c.names, ...c.projects]).map((w) => w.trim()))]
+      .filter((w) => w.length >= 3 && !ownWords.has(w.toLowerCase()))
+      .sort((a, b) => b.length - a.length);
+    for (const w of words) {
+      const re = new RegExp(`(^|[^\\p{L}\\p{N}])${esc(w).replace(/\s+/g, "\\s+")}(?=$|[^\\p{L}\\p{N}])`, "giu");
+      out = out.replace(re, (_m, pre: string) => {
+        clientHits++;
+        return `${pre}${ANOTHER_CLIENT}`;
+      });
+    }
+    const theirIds = new Set(directory.filter((c) => !own(c.key)).flatMap((c) => c.itemIds).filter((id) => !ownIds.has(id)));
+    if (theirIds.size)
+      out = out.replace(/(?<![\w.,$€£/:-])#?(\d{3,})(?![\w%]|[.,/:-]\d)/g, (m, d: string) => {
+        if (!theirIds.has(Number(d))) return m;
+        clientHits++;
+        return ANOTHER_CLIENT;
+      });
+  }
+  return { text: out, masked: { client: clientHits, email: emailHits } };
+}
+
 /** HK-4: what an answer redaction replaced: the kind and the rule, never the text. */
 export type Redaction = { kind: "secret" | "email"; rule: string };
 /** HK-4: the words that take a redacted span's place. */

@@ -46,6 +46,16 @@ export const RETENTION_RULES: readonly RetentionRule[] = [
     source: "step 16.2",
     run: del("DELETE FROM delivery_snapshots WHERE date < ?", (n) => n.toZonedDateTimeISO("UTC").toPlainDate().subtract({ days: 120 }).toString()),
   },
+  // MC-1: raw transcripts are client data, kept 30 days; their proposals' quotes go with them. Proposals and what was
+  // confirmed stay (the product owner, Nov 6).
+  { name: "meeting_transcripts", table: "meeting_transcripts", keep: "30 days", source: "MC-1", run: del("DELETE FROM meeting_transcripts WHERE created_at < ?", (n) => ago(n, days(30))) },
+  {
+    name: "meeting_quotes",
+    table: "meeting_proposals",
+    keep: "quotes 30 days; the proposal stays",
+    source: "MC-1",
+    run: del("UPDATE meeting_proposals SET quotes_json = NULL WHERE quotes_json IS NOT NULL AND created_at < ?", (n) => ago(n, days(30))),
+  },
   { name: "job_claims", table: "job_claims", keep: `${CLAIM_DAYS} days`, source: "HK-4", run: del("DELETE FROM job_claims WHERE claimed_at < ?", (n) => ago(n, days(CLAIM_DAYS))) },
 ];
 

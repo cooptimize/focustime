@@ -8,6 +8,7 @@ import { call } from "../api.ts";
 import { useReturnFocus } from "../CloseButton.tsx";
 import { SaveMark, plain, useSaveContext, type FieldStatus } from "./autosave.tsx";
 import { DeliveryChatField, DeliveryChatsProvider } from "./DeliveryChats.tsx";
+import { MeetingsField } from "./AdminMeetings.tsx";
 import { shortDate } from "../labels.ts";
 import { TypeIcon } from "../TypeIcon.tsx";
 import { STATUS_WORD, type ConversationStatus } from "../../plan/conversations.ts";
@@ -330,6 +331,7 @@ function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: Clie
         </div>
       </div>
       <DeliveryChatField clientKey={c.key} clientName={c.key} />
+      {c.isClient && <MeetingsField clientKey={c.key} clientName={c.key} />}
       <ProcessView c={c} saver={saver} onRefresh={onRefresh} refreshing={refreshing} />
       {c.scope && <ScopeField clientKey={c.key} project={c.process.ok ? c.process.project : null} s={c.scope} save={(v) => saver.save(scope, "devops_scope", v, `${c.key}: Cooptimize's work`)} status={saver.status(scope, "devops_scope")} retry={() => void saver.save(scope, "devops_scope", c.scope?.rule ?? undefined, `${c.key}: Cooptimize's work`)} />}
       {c.isClient && <FixGapsField c={c} saver={saver} />}

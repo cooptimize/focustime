@@ -126,7 +126,7 @@ describe("admin actions", () => {
     type Row = { name: string; background: boolean; tier: string };
     const tasks = async () => ((await s.run(s.admin, "admin.load", { section: "ai" })) as { data: { tasks: Row[] } }).data.tasks;
     const before = await tasks();
-    expect(before.filter((t) => t.background).map((t) => [t.name, t.tier])).toEqual([["conversations.update", "flex"], ["promises.extract", "flex"], ["asks.classify", "flex"]]);
+    expect(before.filter((t) => t.background).map((t) => [t.name, t.tier])).toEqual([["conversations.update", "flex"], ["promises.extract", "flex"], ["asks.classify", "flex"], ["meeting.capture", "flex"]]);
     expect(before.filter((t) => !t.background).every((t) => t.tier === "standard")).toBe(true);
     expect(await s.run(s.admin, "admin.set", { scope: "org", key: "ai.standard_tasks", value: ["asks.classify"] })).toMatchObject({ ok: true, data: { old: null } });
     expect((await tasks()).find((t) => t.name === "asks.classify")?.tier).toBe("standard");

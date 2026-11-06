@@ -50,7 +50,8 @@ export type Nav =
   | { tab: "inbox"; view: InboxView | null; item: string | null };
 
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
-export type Overlay = { kind: "focus" } | { kind: "settings"; section: string } | { kind: "guide"; chapter: string | null } | null;
+/** MC-1: a call's review over the place (`occurrence` null: my calls, the ones I review or attend). */
+export type Overlay = { kind: "focus" } | { kind: "settings"; section: string } | { kind: "guide"; chapter: string | null } | { kind: "meeting"; occurrence: number | null } | null;
 export type Loc = { nav: Nav; overlay: Overlay };
 
 export const navOf = {
@@ -156,6 +157,7 @@ export function hashOf(l: Loc): string {
   if (l.overlay?.kind === "focus") return "#/focus";
   if (l.overlay?.kind === "settings") return `#/settings/${l.overlay.section}`;
   if (l.overlay?.kind === "guide") return l.overlay.chapter ? `#/guide/${l.overlay.chapter}` : "#/guide";
+  if (l.overlay?.kind === "meeting") return l.overlay.occurrence ? `#/meetings/${l.overlay.occurrence}` : "#/meetings";
   const n = l.nav;
   if (n.tab === "today") return ["#/today", n.flow, n.flow === "closeout" || n.flow === null ? n.date : null].filter(Boolean).join("/");
   if (n.tab === "week") {
@@ -202,6 +204,9 @@ export function parseHash(hash: string): Loc | null {
       return a !== undefined && SECTION.test(a) && b === undefined ? { nav: navOf.today(), overlay: { kind: "settings", section: a } } : a === undefined ? { nav: navOf.today(), overlay: { kind: "settings", section: "you" } } : null;
     case "guide":
       return b !== undefined ? null : a === undefined ? { nav: navOf.today(), overlay: { kind: "guide", chapter: null } } : SECTION.test(a) ? { nav: navOf.today(), overlay: { kind: "guide", chapter: a } } : null;
+    // MC-1: #/meetings (my calls) and #/meetings/<occurrence> (Update <client>'s plan from one call), over Week.
+    case "meetings":
+      return b !== undefined ? null : a === undefined ? { nav: navOf.week(), overlay: { kind: "meeting", occurrence: null } } : ID.test(a) ? { nav: navOf.week(), overlay: { kind: "meeting", occurrence: Number(a) } } : null;
     case "today": {
       if (a === undefined) return plain(navOf.today());
       if (a === "checkin") return b === undefined ? plain(navOf.today("checkin")) : null;
@@ -286,11 +291,12 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
     case "planweek": return plain(navOf.week("commit", r.weekStart));
     case "followup": return plain(navOf.inbox(r.id));
     case "settings": return { loc: { nav: navOf.today(), overlay: { kind: "settings", section: r.section } }, vmMenu: false };
+    case "meeting": return { loc: { nav: navOf.week(), overlay: { kind: "meeting", occurrence: r.id } }, vmMenu: false };
   }
 }
 
 /** The command menu's views (and older names kept for commands and tests) as places. */
-export type ViewName = "today" | "week" | "inbox" | "conversations" | "my_promises" | "requests" | "asks" | "promises" | "roadmap" | "ahead" | "gaps" | "backlog" | "focus" | "capture" | "planday" | "planweek" | "commit" | "team" | "status" | "settings" | "follow_ups" | "checkin" | "closeout";
+export type ViewName = "today" | "week" | "inbox" | "conversations" | "my_promises" | "requests" | "asks" | "promises" | "roadmap" | "ahead" | "gaps" | "backlog" | "focus" | "capture" | "planday" | "planweek" | "commit" | "team" | "status" | "settings" | "follow_ups" | "checkin" | "closeout" | "meetings";
 export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
   switch (v) {
     case "today": return { nav: navOf.today(), overlay: null };
@@ -318,6 +324,7 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
     case "closeout": return { nav: navOf.today("closeout"), overlay: null };
     case "focus": return { nav: null, overlay: { kind: "focus" } };
     case "settings": return { nav: null, overlay: { kind: "settings", section: "you" } };
+    case "meetings": return { nav: null, overlay: { kind: "meeting", occurrence: null } };
   }
 }
 
@@ -364,5 +371,5 @@ export function viewName(loc: Loc): string {
     : n.tab === "ahead" ? `${TAB_NAMES.ahead} › ${MODE_NAMES[n.mode]}`
     : n.view ? `${TAB_NAMES.inbox} › ${INBOX_VIEW_NAMES[n.view]}` : TAB_NAMES.inbox;
   const o = loc.overlay;
-  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
+  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "meeting" ? "Client calls" : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
 }

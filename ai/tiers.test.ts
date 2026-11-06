@@ -49,7 +49,7 @@ describe("the tier table", () => {
     expect(tierFor("meetings.new_task")).toBe("standard");
   });
   it("the background tasks are exactly the approved ones", () => {
-    expect([...FLEX_TASKS].sort()).toEqual(["asks.classify", "conversations.update", "promises.extract"]);
+    expect([...FLEX_TASKS].sort()).toEqual(["asks.classify", "conversations.update", "meeting.capture", "promises.extract"]);
   });
 });
 

@@ -39,7 +39,7 @@ const BASE = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'
 const ON = `\n[notify]\nteams_messages = true\nteams_brief = true\nteams_checkin = true\nteams_closeout = true\nteams_nudges = true\n`;
 const local = (t: string) => Temporal.ZonedDateTime.from(`${MON}T${t}[${NY}]`).toInstant();
 
-async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/conn.ts").Conn }> }, o: { toml?: string; takeovers?: Takeover[]; send?: Sender["send"]; status?: () => StatusLoad; /** PK-1: a fake DevOps with my write PAT for Adatum. */ devops?: ReturnType<typeof fakeDevOpsWrite> } = {}) {
+async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/conn.ts").Conn }> }, o: { toml?: string; takeovers?: Takeover[]; send?: Sender["send"]; status?: () => StatusLoad; /** MC-1: meeting.mine's answer. */ meetings?: () => unknown; /** PK-1: a fake DevOps with my write PAT for Adatum. */ devops?: ReturnType<typeof fakeDevOpsWrite> } = {}) {
   const db = await d.open();
   await addUsers(db.conn, ANA);
   let now = local("09:05");
@@ -70,7 +70,7 @@ async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/co
   };
   const runs: string[] = [];
   let confirms = 0;
-  const run = async (_u: string, action: string, input: unknown) => (runs.push(action), action === "status.load" && o.status ? { ok: true as const, data: o.status() } : dispatch(ctx, { action: action as ActionName, input }));
+  const run = async (_u: string, action: string, input: unknown) => (runs.push(action), action === "status.load" && o.status ? { ok: true as const, data: o.status() } : action === "meeting.mine" && o.meetings ? { ok: true as const, data: o.meetings() } : dispatch(ctx, { action: action as ActionName, input }));
   const svc = async () => (await assistantFor(ctx, "teams", URL_))!.service;
   const hub: Pick<Assistant, "handle" | "confirm" | "cancel" | "propose"> = {
     handle: async (i) => (await svc()).handle(i.text, i.context ?? {}),
@@ -384,6 +384,37 @@ expect(t.logs.map((l) => JSON.stringify(l)).join()).not.toContain("Import mappin
     await t.rhythm.tick(ANA, await t.facts({ inHours: false }));
     expect(t.cardsSent()[0]).toContain("2 features have no update yet");
   });
+
+  // MC-1: client calls to review, its own switch (off by default), once per occurrence, never during focus or quiet hours.
+  it("sends a client call to review once, only with its switch on, never during focus or outside hours", async () => {
+    const nudge = (id: number, kind: "review" | "upload") => ({ key: `meeting_${kind}:${id}`, kind, occurrenceId: id, seriesId: 1, clientKey: "Adatum", meeting: "Adatum weekly status call", date: MON, clientName: "Adatum", dateLabel: "Mon, Nov 2" });
+    let nudges = [nudge(7, "review")];
+    const t = await setup(d, { toml: "\n[notify]\nteams_messages = true\n", meetings: () => ({ meetings: [], occurrences: [], nudges }) });
+    t.at("11:00");
+    await t.rhythm.tick(ANA, await t.facts());
+    expect(t.sent).toHaveLength(0);
+    expect(t.runs).not.toContain("meeting.mine");
+    t.setToml("\n[notify]\nteams_messages = true\nteams_meetings = true\n");
+    await t.rhythm.tick(ANA, await t.facts({ focusRunning: true }));
+    await t.rhythm.tick(ANA, await t.facts({ inHours: false }));
+    expect(t.sent).toHaveLength(0);
+    await t.rhythm.tick(ANA, await t.facts());
+    expect(t.cardsSent()).toHaveLength(1);
+    expect(t.cardsSent()[0]).toContain("FocusTime · Client calls");
+    expect(t.cardsSent()[0]).toContain("Update Adatum's plan");
+    expect(t.cardsSent()[0]).toContain(`${URL_}/#/meetings/7`);
+    // The same occurrence again, 20 minutes on: nothing new. Its upload nudge for another occurrence: one more card.
+    t.at("11:20");
+    await t.rhythm.tick(ANA, await t.facts());
+    expect(t.sent).toHaveLength(1);
+    nudges = [nudge(7, "review"), nudge(8, "upload")];
+    t.at("11:40");
+    await t.rhythm.tick(ANA, await t.facts());
+    expect(t.cardsSent()).toHaveLength(2);
+    expect(t.cardsSent()[1]).toContain("Upload Adatum's transcript");
+    expect(t.cardsSent()[1]).not.toContain("Update Adatum's plan");
+    expect(JSON.stringify(t.logs)).not.toContain("Adatum weekly");
+  });
 });
 
 it("pacing: retries 429, 412, 502 and 504 with backoff (or Retry-After), at most 3 times; a blocked chat is Blocked", async () => {
@@ -407,5 +438,4 @@ it("pacing: retries 429, 412, 502 and 504 with backoff (or Retry-After), at most
   expect(n).toBe(4);
   const blocked = pacedSender({ send: async () => Promise.reject({ response: { status: 403, data: { error: { subCode: "MessageWritesBlocked" } } } }), update: async () => {} }, { sleep: async () => {} });
   await expect(blocked.send({ conversationId: "a", serviceUrl: "https://x" }, { type: "typing" })).rejects.toBeInstanceOf(Blocked);
-
 });

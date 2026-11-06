@@ -46,6 +46,7 @@ starts the same.
 | `status.ts` | SR-1 | Kat's sends last Monday; this week's comments on two features (mine, a teammate's, a Coop update), last week's, and the story changes behind the drafts |
 | `inbox.ts` | IB-1 | Empty: IB-1's own demo data goes here |
 | `assistant.ts` | AS-2 | Empty: AS-2's own demo data goes here |
+| `meetings.ts` | MC-1 | Northwind's weekly status call (Upload; reviewers me and Priya) on the last workday's weekday, with a short fictional transcript uploaded for it: six proposals (a gap, three commitments, two comments) to review |
 
 ### Adding demo data for a feature
 

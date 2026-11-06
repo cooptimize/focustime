@@ -2,7 +2,7 @@
 // admin must. Settings > Connections lists them with their state for the signed-in person. Keep this list in step with
 // infra/scripts/app-registration.sh (GRAPH_SCOPES and the Azure Service Management scope) and sources/oauth/oauth.ts.
 /** The sign-in's token kinds (sources/oauth/oauth.ts TokenKind), repeated here so plan/ stays pure. */
-export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats" | "messages";
+export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings";
 
 export type Permission = {
   scope: string;
@@ -28,6 +28,8 @@ export const PERMISSIONS: readonly Permission[] = [
   { scope: "ProfilePhoto.Read.All", api: "Microsoft Graph", why: "Profile photos", admin: true, kind: "photo" },
   { scope: "Chat.ReadBasic", api: "Microsoft Graph", why: "Delivery chats: chat names and members, never messages", admin: false, kind: "chats" },
   { scope: "Chat.Read", api: "Microsoft Graph", why: "Requests: new messages in the client chats registered in FocusTime, read for everyone on them who follows the client; read only, never posts", admin: false, kind: "messages", later: "Settings > Clients: Add a chat to allow it" },
+  { scope: "OnlineMeetings.Read", api: "Microsoft Graph", why: "Meeting capture: finds a client call registered in FocusTime from its join link; never any other meeting", admin: true, kind: "meetings" },
+  { scope: "OnlineMeetingTranscript.Read.All", api: "Microsoft Graph", why: "Meeting capture: the transcript of a registered client call organized at Cooptimize, for its reviewers; read only, kept 30 days", admin: true, kind: "meetings" },
   { scope: "user_impersonation", api: "Azure Service Management", why: "Your VM, with your own Azure access", admin: false, kind: "arm" },
 ];
 

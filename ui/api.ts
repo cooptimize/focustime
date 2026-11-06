@@ -222,3 +222,10 @@ export async function takeOpenRequest(): Promise<string | null> {
     return null;
   }
 }
+
+/** MC-1: a reviewer's transcript upload (.vtt or .docx), raw, for one meeting's dated occurrence. */
+export async function uploadMeetingTranscript<T>(seriesId: number, date: string, file: File): Promise<T> {
+  const q = new URLSearchParams({ series: String(seriesId), date, name: file.name.slice(0, 200) });
+  const res = await fetch(`/api/meetings/upload?${q}`, { method: "POST", credentials: "same-origin", headers: { "content-type": file.type || "application/octet-stream", "x-csrf": csrfToken() }, body: file });
+  return readResponse<T>(res);
+}

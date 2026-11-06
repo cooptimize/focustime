@@ -767,3 +767,31 @@ Revises step 16.4's estimating (section 43) and D334, D339. Decisions D438 to D4
 - The feature's other open DevOps stories are one muted line, "5 more stories · 2 assigned to others"; it opens the feature panel (each story with state and owner).
 - Storage: `week_features.blocks` takes halves (SQLite migration 27 rebuilds the table, SQL Server migration 29 makes it decimal(3,1)); whole blocks stay valid, nothing converted. Export schema 27; 26 still reads.
 - Plan the day unchanged.
+
+## 48. MC-1: meeting capture, slice 1 (authorized Nov 6)
+
+A client's registered weekly call becomes proposals its reviewers confirm. Decisions under "MC-1" (unnumbered until
+merge); setup in `docs/setup/meeting-capture.md`; files in `docs/architecture.md` (MC-1).
+
+- **New source scope:** Graph, delegated, `OnlineMeetings.Read` and `OnlineMeetingTranscript.Read.All` (admin
+  consented), a person's own token (the registrant's, then the other reviewers'). Read only, and only for registered
+  meetings and meetings FocusTime scheduled. No app-only permission, access policy or change notifications.
+- **No new external write.** Confirm runs the existing writes: the step 14 create (`proposal_create`) for a gap and
+  the step 14 comment for a decision or status, each through the write framework (preview, confirm, `test /rev`, read
+  back, audit log, undo); a commitment is a CV-1 shared commitment (the person's own Promises, or my Waiting on).
+- **Registration (admins):** Admin › Clients › <client> › Meetings. From my calendar or a pasted Teams link; name,
+  role (Weekly status call, Planning), reviewers (the registrant and the client's leads by default), transcript source
+  (Automatic for a Cooptimize organizer, Upload otherwise; detected, with an override to Upload). A client-hosted call
+  keeps only calendar fields.
+- **After each occurrence:** an Automatic call's transcript is polled for 12 hours, then its reviewers are asked to
+  upload; an Upload call asks at once. Upload a transcript (.vtt or .docx) is always open to reviewers. "No
+  transcript this week" dismisses. One AI request (`meeting.capture`, Flex for the poll, standard for an upload),
+  one client, masked first.
+- **Review:** "Update <client>'s plan · <meeting> <date>": tick, edit or skip each proposal with its quotes, then one
+  Confirm with every write's preview. Reviewers confirm; attendees look.
+- **Week:** the call on its client's card for its half-day, with what it needs from me; ⋯ › Client calls.
+- **Nudges:** in the app (`meeting_review`, on by default) and in Teams (TB-2 kind Client calls to review, off by
+  default), once per occurrence.
+- **Retention:** transcripts and quotes 30 days; proposals and results kept; reviewers and attendees only.
+- **Store:** one migration, `20261116T0900_meetings` (four app tables; adds only). Not in Export.
+- **Rollback:** revert the PR and redeploy; the tables stay unused (an older build ignores them).

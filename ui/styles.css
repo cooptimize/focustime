@@ -5345,3 +5345,82 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   .bl-client { padding: 8px 10px 6px; }
   .bl-bulk .mini { min-height: var(--tap); }
 }
+
+/* ---------- MC-1: client calls (the review over the page, Week's call marker, Admin › Clients › Meetings) ---------- */
+.mtg-view { flex: 1; overflow: auto; padding: 8px 24px 32px; display: grid; align-content: start; gap: 12px; }
+.mtg-view .page-head { flex-wrap: wrap; row-gap: 4px; }
+.mtg-view > * { max-width: 1100px; }
+.mtg-intro { margin: 0; font-size: var(--fs-2); max-width: 70em; }
+.mtg-series, .mtg-group, .mtg-upload, .mtg-done { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--c, var(--border-strong)); border-radius: 10px; background: var(--surface); }
+.mtg-series-head { display: grid; gap: 2px; }
+.mtg-series-head h3, .mtg-group h3, .mtg-upload h3, .mtg-done h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.mtg-series-head .swatch { background: var(--c, var(--border-strong)); }
+.mtg-series-head .muted { font-size: var(--fs-2); }
+.mtg-occs { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.mtg-occs li { display: flex; align-items: center; gap: 12px; padding: 4px 0; border-top: 1px solid var(--border); }
+.mtg-occs li:first-child { border-top: 0; }
+.mtg-occs li.needs .mtg-state { color: var(--text); font-weight: 600; }
+.mtg-date { min-width: 8em; font-variant-numeric: tabular-nums; }
+.mtg-state { flex: 1; color: var(--text-muted); }
+.mtg-prop { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px 10px; align-items: start; padding: 8px 0; border-top: 1px solid var(--border); }
+.mtg-group h3 + .mtg-prop { border-top: 0; }
+.mtg-prop.skipped { opacity: 0.6; }
+.mtg-prop.confirmed .mtg-state-line { color: var(--ok); }
+.mtg-prop-body { display: grid; gap: 4px; min-width: 0; }
+.mtg-prop-body input, .mtg-prop-body textarea { width: 100%; box-sizing: border-box; min-width: 0; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; resize: vertical; }
+.mtg-tick { padding-top: 4px; }
+.mtg-main { margin: 0; font-weight: 500; }
+.mtg-where, .mtg-desc, .mtg-report, .mtg-state-line { margin: 0; font-size: var(--fs-2); }
+.mtg-report { color: var(--accent); font-weight: 500; }
+.mtg-state-line.problem { color: var(--risk); }
+.mtg-quotes { display: grid; gap: 4px; }
+.mtg-quotes blockquote { margin: 0; padding: 4px 10px; border-left: 2px solid var(--border-strong); background: var(--sunken); border-radius: 0 6px 6px 0; font-size: var(--fs-2); color: var(--text-muted); overflow-wrap: anywhere; }
+.mtg-who { color: var(--text); font-weight: 500; }
+.mtg-quote-gone { margin: 0; font-size: var(--fs-1); }
+.mtg-bar { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 0 10px var(--bg); }
+.mtg-bar-actions, .mtg-upload-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.mtg-upload p { margin: 0; font-size: var(--fs-2); }
+.file-button { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
+.file-button input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.mtg-done ul { margin: 0; padding-left: 18px; font-size: var(--fs-2); }
+.mtg-done li.problem { color: var(--risk); }
+.mtg-confirm { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: color-mix(in oklab, var(--bg) 55%, transparent); }
+.mtg-confirm-box { width: min(640px, 100%); max-height: calc(100dvh - 32px); overflow: auto; display: grid; gap: 10px; padding: 16px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface); }
+.mtg-confirm-box h3 { margin: 0; font-size: var(--fs-4); }
+.mtg-confirm-box h4 { margin: 0 0 4px; font-size: var(--fs-2); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.mtg-confirm-box ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: var(--fs-2); }
+.mtg-confirm-box li.problem { color: var(--risk); }
+.mtg-fields { display: grid; gap: 2px; }
+.mtg-field { display: block; font-size: var(--fs-1); overflow-wrap: anywhere; }
+.mtg-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+/* Week: a registered call on the card it starts in. */
+.card-calls { display: flex; flex-wrap: wrap; gap: 4px; }
+.call-mark { display: inline-flex; gap: 0.3em; max-width: 100%; min-width: 0; padding: 1px 8px; border: 1px solid var(--border); border-radius: 99px; font-size: var(--fs-1); color: var(--text-muted); text-decoration: none; white-space: nowrap; }
+.call-mark .call-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.call-mark.needs { border-color: color-mix(in oklab, var(--accent) 55%, var(--border)); color: var(--accent); font-weight: 600; }
+.call-mark:hover { color: var(--text); }
+/* Admin › Clients › Meetings. */
+.mtg-card-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.mtg-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; }
+.mtg-card-grid label, .mtg-link label { display: grid; gap: 2px; align-content: start; }
+.mtg-card-grid select { justify-self: start; max-width: 100%; }
+.mtg-admin > .mini, .mtg-card > .mini { justify-self: start; }
+.mtg-reviewers { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.mtg-reviewers .set-hint { flex-basis: 100%; }
+.mtg-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.mtg-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px solid var(--border); border-radius: 99px; font-size: var(--fs-2); }
+.chip-x { border: 0; background: none; padding: 0 2px; color: var(--text-faint); cursor: pointer; font: inherit; }
+.chip-x:hover { color: var(--text); }
+.mtg-register { gap: 8px; }
+.mtg-cands { display: grid; gap: 4px; max-height: 260px; overflow: auto; }
+.mtg-cand { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 8px; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+.mtg-cand .muted { grid-column: 2; font-size: var(--fs-1); }
+.mtg-cand.match .mtg-cand-name { font-weight: 600; }
+.mtg-link input { width: 100%; }
+.mtg-pattern { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+@media (max-width: 700px) {
+  .mtg-view { padding: 8px 16px 24px; }
+  .mtg-prop { grid-template-columns: auto minmax(0, 1fr); }
+  .mtg-prop > .mini { grid-column: 2; justify-self: start; }
+  .mtg-date { min-width: 6em; }
+}

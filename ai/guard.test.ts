@@ -159,3 +159,22 @@ describe("redact (HK-4)", () => {
     expect(r.removed).toEqual([{ kind: "email", rule: "external_email" }]);
   });
 });
+
+describe("maskTranscript (MC-1)", () => {
+  const dir = [
+    { key: "contoso", names: ["Contoso"], projects: ["Rates"], itemIds: [1201] },
+    { key: "fabrikam", names: ["Fabrikam", "Fab Labs"], projects: ["Orion"], itemIds: [4410] },
+  ];
+  it("masks another client's names, nicknames, projects and items, and every email, before the guard", async () => {
+    const { guard, maskTranscript } = await import("./guard.ts");
+    const said = "Like we did for Fab Labs on Orion (#4410), ping dana@fabrikam.example. Our #1201 for Contoso stays.";
+    const r = maskTranscript(said, "contoso", dir);
+    expect(r.text).toBe("Like we did for [another client] on [another client] ([another client]), ping [email]. Our #1201 for Contoso stays.");
+    expect(r.masked).toEqual({ client: 3, email: 1 });
+    expect(guard(r.text, { client: "contoso", directory: dir, homeDomains: ["cooptimize.example"], forbidden: [] })).toBeNull();
+  });
+  it("keeps client names in an Internal meeting but still masks emails", async () => {
+    const { maskTranscript } = await import("./guard.ts");
+    expect(maskTranscript("Fabrikam asked a@b.example", "internal", dir, { internal: true })).toEqual({ text: "Fabrikam asked [email]", masked: { client: 0, email: 1 } });
+  });
+});
