@@ -265,7 +265,7 @@ export const ACTIONS = [
   { name: "presence.log", title: "Show the Teams status log", group: "Focus", target: "none", summary: "Every time focus set or cleared your Teams status" },
   { name: "playlist.open", title: "Open a focus playlist", group: "Focus", target: "none", summary: "One of your saved Spotify or YouTube playlists (Settings > Focus)" },
   { name: "media.status", title: "Check media control", group: "Focus", target: "none", summary: "Whether music can be paused and resumed, and whether the Spotify app is there; read-only" },
-  { name: "capture.add", title: "Quick capture", group: "Capture", target: "none", shortcut: "N", summary: "One line, saved at once (works offline); sort it into a promise, a draft story or a draft feature" },
+  { name: "capture.add", aka: ["decide later", "sort later"], title: "Quick capture", group: "Capture", target: "none", shortcut: "N", summary: "One line, saved at once (works offline); sort it into a promise, a draft story or a draft feature" },
   { name: "capture.load", title: "Show captures", group: "Capture", target: "none", summary: "The captures to sort into promises, draft stories and draft features" },
   { name: "capture.route", title: "Sort a capture", group: "Capture", target: "capture", summary: "Make it a promise, a draft story or a draft feature, or dismiss it (rules suggest one)" },
   { name: "capture.undo", title: "Undo a capture", group: "Capture", target: "capture", summary: "Right after a save: remove the capture and the follow-up or draft it made, if nothing else happened to it" },

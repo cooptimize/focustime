@@ -125,7 +125,7 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, breakDown, color, focusItem: item, error: setError } : null;
   const anyFilter = f.clients.length || f.epic || f.gaps || f.from || f.to || f.q.trim();
   const visible = shown.reduce((k, g) => k + g.rows.filter((r) => !r.context).length, 0);
-  const title = mode === "fix" ? "Fix next" : mode === "gantt" ? "Gantt" : "Grid";
+  const title = mode === "fix" ? "Gaps" : mode === "gantt" ? "Gantt" : "Grid";
 
   return (
     <main className={`roadmap ahead ahead-${mode}`} aria-label={`Ahead: ${title}`}>

@@ -116,7 +116,7 @@ function storedLoc(): Loc | null {
 const TAB_TITLES: Record<Tab, string> = {
   today: "Today: what's next, what's urgent and the day's blocks",
   week: "The week: the Board (Plan today) and Plan (each client's features)",
-  ahead: "Features, epics and stories ahead: Grid, Gantt and Fix next",
+  ahead: "Features, epics and stories ahead: Grid, Gantt and Gaps",
   inbox: "What needs you: promises, conversations, sends, captures and drafts",
 };
 

@@ -19,7 +19,7 @@ export type WeekMode = "board" | "commit" | "team" | "status";
 /** AH-1 (D653): Ahead is one model in three modes: Grid (was Roadmap), Gantt (was Plan ahead) and Fix next. */
 export type AheadMode = "grid" | "gantt" | "fix";
 
-export const MODE_NAMES = { board: "Board", commit: "Plan", team: "Team", status: "Status", grid: "Grid", gantt: "Gantt", fix: "Fix next" } as const;
+export const MODE_NAMES = { board: "Board", commit: "Plan", team: "Team", status: "Status", grid: "Grid", gantt: "Gantt", fix: "Gaps" } as const;
 export type ModeName = keyof typeof MODE_NAMES;
 /** Each tab's modes, in switch order (Today has none, so no switch). IB-1: the Inbox has views in its rail, not modes. */
 export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: ["board", "commit", "team", "status"], ahead: ["grid", "gantt", "fix"], inbox: [] };
@@ -218,7 +218,7 @@ export function parseHash(hash: string): Loc | null {
     case "ahead":
       if (a === "item") return c === undefined && b !== undefined && ID.test(b) ? plain(navOf.aheadItem(Number(b))) : null;
       // AH-1: #/ahead/plan (Plan ahead before AH-1) lands on the Gantt.
-      return b !== undefined ? null : a === undefined ? plain(navOf.ahead()) : a === "gantt" || a === "plan" ? plain(navOf.ahead("gantt")) : a === "fix" ? plain(navOf.ahead("fix")) : null;
+      return b !== undefined ? null : a === undefined ? plain(navOf.ahead()) : a === "gantt" || a === "plan" ? plain(navOf.ahead("gantt")) : a === "fix" || a === "gaps" ? plain(navOf.ahead("fix")) : null;
     // Before NV-1: Roadmap and Roadmap › Plan ahead.
     case "roadmap":
       return b !== undefined ? null : a === undefined ? plain(navOf.ahead()) : a === "ahead" ? plain(navOf.ahead("gantt")) : null;
@@ -285,7 +285,7 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
 }
 
 /** The command menu's views (and older names kept for commands and tests) as places. */
-export type ViewName = "today" | "week" | "inbox" | "conversations" | "my_promises" | "requests" | "asks" | "promises" | "roadmap" | "ahead" | "focus" | "capture" | "planday" | "planweek" | "commit" | "team" | "status" | "settings" | "follow_ups" | "checkin" | "closeout";
+export type ViewName = "today" | "week" | "inbox" | "conversations" | "my_promises" | "requests" | "asks" | "promises" | "roadmap" | "ahead" | "gaps" | "focus" | "capture" | "planday" | "planweek" | "commit" | "team" | "status" | "settings" | "follow_ups" | "checkin" | "closeout";
 export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
   switch (v) {
     case "today": return { nav: navOf.today(), overlay: null };
@@ -300,6 +300,8 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
     case "my_promises": return { nav: navOf.myPromises(), overlay: null };
     case "roadmap": return { nav: navOf.ahead(), overlay: null };
     case "ahead": return { nav: navOf.ahead("gantt"), overlay: null };
+    // QF-1: Fix next is called Gaps (the mode's code name stays "fix").
+    case "gaps": return { nav: navOf.ahead("fix"), overlay: null };
     case "planday": return { nav: navOf.planDay(), overlay: null };
     case "planweek":
     case "commit": return { nav: navOf.week("commit"), overlay: null };

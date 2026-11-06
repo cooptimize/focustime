@@ -1404,6 +1404,7 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "view.planday_date", action: "view.planday_date", group: "Views", label: "Plan a day…", next: () => planDateStep(env) },
     { id: "view.planweek", action: "view.planweek", aka: ["commit"], group: "Views", label: "Week › Plan: plan the week (each client's features)", hint: "W", run: () => env.openPlanWeek() },
     { id: "view.ahead", action: "view.ahead", group: "Views", label: "Ahead › Plan ahead", run: () => env.setView("ahead") },
+    { id: "view.gaps", action: "view.gaps", aka: ["fix next"], group: "Views", label: "Ahead › Gaps: items missing stories, dates, an owner or a size", run: () => env.setView("gaps") },
     { id: "view.capture", action: "view.capture", group: "Views", label: "Captures to sort (Inbox)", run: env.openCaptures },
     { id: "view.checkin", action: "view.checkin", group: "Views", label: "Today › Midday check-in", hint: "M", run: env.openCheckIn },
     { id: "view.closeout", action: "view.closeout", group: "Views", label: "Today › Close out", hint: "E", run: () => env.openCloseOut() },

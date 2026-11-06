@@ -293,7 +293,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     const head = await page.locator(".follow-ups-head h2").textContent();
     const n = Number(/(\d+) things? to fix/.exec(head ?? "")?.[1]);
     expect(n).toBeGreaterThan(0);
-    await expect(page.getByRole("navigation", { name: "Ahead modes" }).getByRole("button", { name: /Fix next/ }).textContent()).resolves.toBe(`Fix next · ${n}`);
+    await expect(page.getByRole("navigation", { name: "Ahead modes" }).getByRole("button", { name: /Gaps/ }).textContent()).resolves.toBe(`Gaps · ${n}`);
     // One row per item (AH-1 listed an item once per gap).
     const ids = await page.locator(".ah-fx-row:not(.ctx) .ah-id").allTextContents();
     expect(new Set(ids).size).toBe(ids.length);
