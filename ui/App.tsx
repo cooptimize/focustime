@@ -37,7 +37,7 @@ import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
 import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { MustsSummary, TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
-import { afterDone, defaultNav, focusOf, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, planDayNav, planWeekOf, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
+import { stepWeekday, afterDone, defaultNav, focusOf, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, planDayNav, planWeekOf, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
 import { ModeArea, ModeSwitch } from "./ModeSwitch.tsx";
 import { dayModeStatus, momentCard, weekModeStatus } from "../plan/modes.ts";
 import { FocusScreen, SoundControl } from "./FocusScreen.tsx";
@@ -116,7 +116,7 @@ function storedLoc(): Loc | null {
 const TAB_TITLES: Record<Tab, string> = {
   today: "Today: what's next, what's urgent and the day's blocks",
   week: "The week: the Board (Plan today) and Plan (each client's features)",
-  ahead: "Features, epics and stories ahead: Grid, Gantt and Fix next",
+  ahead: "Features, epics and stories ahead: Grid, Gantt and Gaps",
   inbox: "What needs you: promises, conversations, sends, captures and drafts",
 };
 
@@ -316,7 +316,7 @@ export function App() {
   const [justCommitted, setJustCommitted] = useState(false);
   useEffect(() => setJustCommitted(false), [pd?.date]);
   // Step 13.6: "+ Add work" and A open Plan the day on one block's picker.
-  const [pdStart, setPdStart] = useState<{ half: Half; n: number; focus?: number | null } | null>(null);
+  const [pdStart, setPdStart] = useState<{ half: Half; n: number; focus?: number | null; timebox?: boolean } | null>(null);
   const [pdError, setPdError] = useState<string | null>(null);
   const cellRefs = useRef(new Map<string, HTMLDivElement>());
   // The week the window is on (or moving to), and a counter so a slow older response never overwrites a newer one.
@@ -326,6 +326,8 @@ export function App() {
   const needsYouCount = useInboxCount(captureVersion, data);
   /** Close out's day (Today › Close out), and Plan the week's week (Week › Plan the week: next week unless asked). */
   const closeOutAt: IsoDate | null = nav.tab === "today" && nav.flow === "closeout" && data ? (nav.date ?? data.planDay.date) : null;
+  /** QF-1: the day Today shows (#/today/<date>); null is today. */
+  const todayAt: IsoDate | null = nav.tab === "today" && !nav.flow && data && nav.date && nav.date !== data.planDay.date ? nav.date : null;
   const planWeekAt: IsoDate | null = nav.tab === "week" && nav.mode === "commit" && data ? planWeekOf(nav.week, mondayOf(data.planDay.date)) : null;
 
   // Theme: the config's value once loaded; a change applies at once and is saved, and reverts if saving fails.
@@ -674,6 +676,27 @@ export function App() {
   );
 
   /**
+   * QF-1: Timebox my day from Today or the Board's day menu: confirms the day first when it isn't ("Confirm and
+   * timebox"), then opens Plan today on it with the same Timebox my day preview (and its one Outlook preview).
+   */
+  const timeboxDay = useCallback(
+    async (date: IsoDate) => {
+      if (!data || !data.planDay.available) return void setNotice("The local plan store isn't available, so planning is off");
+      try {
+        if (!data.plan?.[date]?.committedAt) await planAction("planday.commit", { date });
+        await showPlanDay(await planAction("planday.start", { date }));
+        reloadQuiet();
+        const d = data.week.days.find((x) => x.date === date);
+        setPdStart((s) => ({ half: d ? cardHalves(d)[0]! : "AM", n: (s?.n ?? 0) + 1, focus: null, timebox: true }));
+        goNav(planDayNav(date));
+      } catch (e) {
+        setNotice(e instanceof Error ? e.message : "Couldn't open Timebox my day");
+      }
+    },
+    [data, showPlanDay, reloadQuiet, goNav],
+  );
+
+  /**
    * ← → in Plan the day: the previous or next day that can be planned. Days without working hours and known PTO
    * are skipped here; a PTO day only the server knows of is skipped too (it refuses with 422), up to a few times.
    */
@@ -747,7 +770,7 @@ export function App() {
 
   // The week each place shows: Week its week (this week by default), Plan the week its week, Today and Check-in today's.
   // A focused day loads its own week (showPlanDay).
-  const wantWeek = !data ? null : nav.tab === "week" ? (planDayFocus ? null : (planWeekAt ?? nav.week ?? data.today.weekStart)) : nav.tab === "today" && !loc.overlay ? data.today.weekStart : null;
+  const wantWeek = !data ? null : nav.tab === "week" ? (planDayFocus ? null : (planWeekAt ?? nav.week ?? data.today.weekStart)) : nav.tab === "today" && !loc.overlay ? (todayAt ? mondayOf(todayAt) : data.today.weekStart) : null;
   useEffect(() => {
     if (!data || !wantWeek || wantWeek === weekRef.current) return;
     void load({ weekStart: wantWeek }, { selectToday: wantWeek === data.today.weekStart });
@@ -1166,6 +1189,20 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, guideAt, base, captureOpen, layout, nav]);
 
+  // QF-1: [ and ] on Today step a day back or ahead (never while typing; Week keeps them for its weeks).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (base !== "today" || nav.tab !== "today" || nav.flow || loc.overlay || cmdOpen || keysOpen || captureOpen || settingsAt !== null || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (e.key !== "[" && e.key !== "]") return;
+      if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
+      e.preventDefault();
+      const next = stepWeekday(todayAt ?? data.planDay.date, e.key === "]" ? 1 : -1);
+      goNav(navOf.todayOn(next === data.planDay.date ? null : next));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [base, nav, loc.overlay, cmdOpen, keysOpen, captureOpen, settingsAt, data, todayAt, goNav]);
+
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
   const weekItems = useMemo(() => (data?.weekFeatures ?? []).filter((f) => f.weekStart === data?.weekStart).map((f) => ({ clientKey: f.clientKey, itemId: f.itemId })), [data?.weekFeatures, data?.weekStart]);
 
@@ -1194,6 +1231,7 @@ export function App() {
       calendars: { outlook: cal("outlook"), google: cal("google") },
       runPlan,
       openPlanDay: (d) => void openPlanDay(d),
+      ...(data.timeboxSettings.enabled !== false ? { timeboxDay: (d: IsoDate) => void timeboxDay(d) } : {}),
       commitPlan: () => void commit(),
       openDetails: (date, half) => {
         const i = data.week.days.findIndex((x) => x.date === date);
@@ -1322,7 +1360,7 @@ export function App() {
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, openGuide, pd, pdHalf, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, togglePlanning, connectWrite, addWork, goNav, asksOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, openGuide, pd, pdHalf, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, togglePlanning, connectWrite, addWork, timeboxDay, goNav, asksOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // AS-1: what the assistant hears about the screen: its address, the client and item in focus, the selected block and
   // today. Nothing else on screen is sent; the server reads what a question needs.
@@ -1754,6 +1792,10 @@ export function App() {
         )
       ) : base === "today" ? (
         <Today
+          viewDate={todayAt}
+          onDay={(d) => goNav(navOf.todayOn(d && d !== data.planDay.date ? d : null))}
+          onTimebox={(d) => void timeboxDay(d)}
+          onCloseOutOn={(d) => goNav(navOf.today("closeout", d))}
           data={shownData ?? data}
           strip={strip}
           target={target}

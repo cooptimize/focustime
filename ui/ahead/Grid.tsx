@@ -172,16 +172,19 @@ function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, mo
     const field = EDIT[col];
     const pending = col === "dates" ? (r.pending.start ?? r.pending.target) : field ? r.pending[field] : undefined;
     const conf = col === "dates" ? r.pending.start?.theirs !== undefined || r.pending.target?.theirs !== undefined : pending?.theirs !== undefined;
+    // QF-1: one click opens the picker (double-click and Enter still do); a cell I can change says so on hover.
+    const editable = !!field && canChange && can(col);
     return (
       <td
         ref={(el) => reg(col, el)}
         role="gridcell"
         tabIndex={tab(col)}
         aria-label={o.label}
-        className={`ah-cell ah-col-${col}${pending ? " ah-pend" : ""}${conf ? " ah-conf" : ""}${field && !can(col) ? " ah-abs" : ""}`}
+        className={`ah-cell ah-col-${col}${pending ? " ah-pend" : ""}${conf ? " ah-conf" : ""}${field && !can(col) ? " ah-abs" : ""}${editable && editing !== col ? " ah-edit" : ""}`}
         onFocus={() => setFocus({ key: r.key, col })}
         onKeyDown={keys(col)}
-        onDoubleClick={() => field && canChange && can(col) && edit(col)}
+        onClick={(e) => editable && editing !== col && !(e.target as HTMLElement).closest("a, button, input, select, [role=listbox]") && edit(col)}
+        onDoubleClick={() => editable && edit(col)}
       >
         {editing === col && col === "dates" ? <DatesEditor r={r} done={() => (edit(null), move(0, 0))} /> : editing === col && field ? <Editor r={r} field={field} done={() => (edit(null), move(0, 0))} /> : body}
         {pending && editing !== col && <span className="ah-dot" title={conf ? "Changed in DevOps too: see the review" : "Pending: not in DevOps until you save"} aria-hidden="true" />}

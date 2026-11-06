@@ -19,7 +19,7 @@ export type WeekMode = "board" | "commit" | "team" | "status";
 /** AH-1 (D653): Ahead is one model in three modes: Grid (was Roadmap), Gantt (was Plan ahead) and Fix next. */
 export type AheadMode = "grid" | "gantt" | "fix";
 
-export const MODE_NAMES = { board: "Board", commit: "Plan", team: "Team", status: "Status", grid: "Grid", gantt: "Gantt", fix: "Fix next" } as const;
+export const MODE_NAMES = { board: "Board", commit: "Plan", team: "Team", status: "Status", grid: "Grid", gantt: "Gantt", fix: "Gaps" } as const;
 export type ModeName = keyof typeof MODE_NAMES;
 /** Each tab's modes, in switch order (Today has none, so no switch). IB-1: the Inbox has views in its rail, not modes. */
 export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: ["board", "commit", "team", "status"], ahead: ["grid", "gantt", "fix"], inbox: [] };
@@ -34,7 +34,8 @@ const ITEM_KEY = /^[vcfskd][1-9]\d{0,9}$/;
 export type DayFocus = { date: IsoDate | null; half: Half | null };
 
 /**
- * One place. Today's `flow` is a card's flow open over the page (`date`: Close out's day, null for today). Week's
+ * One place. Today's `flow` is a card's flow open over the page (`date`: Close out's day, null for today); with no
+ * flow, `date` is the day Today shows (QF-1, #/today/<date>; null: today). Week's
  * `week` is its Monday (null: this week for the Board, next week for Commit); `focus` is the day the Board is
  * focused on (Board only).
  */
@@ -53,7 +54,9 @@ export type Overlay = { kind: "focus" } | { kind: "settings"; section: string } 
 export type Loc = { nav: Nav; overlay: Overlay };
 
 export const navOf = {
-  today: (flow: TodayFlow | null = null, date: IsoDate | null = null): Nav => ({ tab: "today", flow, date: flow === "closeout" ? date : null }),
+  today: (flow: TodayFlow | null = null, date: IsoDate | null = null): Nav => ({ tab: "today", flow, date: flow === "closeout" || flow === null ? date : null }),
+  /** QF-1: Today showing one day (null: today). */
+  todayOn: (date: IsoDate | null): Nav => ({ tab: "today", flow: null, date }),
   week: (mode: WeekMode = "board", week: IsoDate | null = null): Nav => ({ tab: "week", mode, week, focus: null }),
   /** NV-1: Plan the day is the Board focused on that day (null: today or the next workday). */
   planDay: (date: IsoDate | null = null, half: Half | null = null): Nav => ({ tab: "week", mode: "board", week: null, focus: { date, half: date ? half : null } }),
@@ -154,7 +157,7 @@ export function hashOf(l: Loc): string {
   if (l.overlay?.kind === "settings") return `#/settings/${l.overlay.section}`;
   if (l.overlay?.kind === "guide") return l.overlay.chapter ? `#/guide/${l.overlay.chapter}` : "#/guide";
   const n = l.nav;
-  if (n.tab === "today") return ["#/today", n.flow, n.flow === "closeout" ? n.date : null].filter(Boolean).join("/");
+  if (n.tab === "today") return ["#/today", n.flow, n.flow === "closeout" || n.flow === null ? n.date : null].filter(Boolean).join("/");
   if (n.tab === "week") {
     if (n.mode === "commit") return ["#/week/commit", n.week].filter(Boolean).join("/");
     // SW-1: the client team view.
@@ -205,6 +208,8 @@ export function parseHash(hash: string): Loc | null {
       if (a === "closeout") return c !== undefined ? null : b === undefined ? plain(navOf.today("closeout")) : validDate(b) ? plain(navOf.today("closeout", b)) : null;
       // Before NV-1: Today › Plan.
       if (a === "plan") return day(b, c);
+      // QF-1: Today on one day.
+      if (validDate(a) && b === undefined) return plain(navOf.todayOn(a));
       return null;
     }
     case "week": {
@@ -218,7 +223,7 @@ export function parseHash(hash: string): Loc | null {
     case "ahead":
       if (a === "item") return c === undefined && b !== undefined && ID.test(b) ? plain(navOf.aheadItem(Number(b))) : null;
       // AH-1: #/ahead/plan (Plan ahead before AH-1) lands on the Gantt.
-      return b !== undefined ? null : a === undefined ? plain(navOf.ahead()) : a === "gantt" || a === "plan" ? plain(navOf.ahead("gantt")) : a === "fix" ? plain(navOf.ahead("fix")) : null;
+      return b !== undefined ? null : a === undefined ? plain(navOf.ahead()) : a === "gantt" || a === "plan" ? plain(navOf.ahead("gantt")) : a === "fix" || a === "gaps" ? plain(navOf.ahead("fix")) : null;
     // Before NV-1: Roadmap and Roadmap › Plan ahead.
     case "roadmap":
       return b !== undefined ? null : a === undefined ? plain(navOf.ahead()) : a === "ahead" ? plain(navOf.ahead("gantt")) : null;
@@ -285,7 +290,7 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
 }
 
 /** The command menu's views (and older names kept for commands and tests) as places. */
-export type ViewName = "today" | "week" | "inbox" | "conversations" | "my_promises" | "requests" | "asks" | "promises" | "roadmap" | "ahead" | "focus" | "capture" | "planday" | "planweek" | "commit" | "team" | "status" | "settings" | "follow_ups" | "checkin" | "closeout";
+export type ViewName = "today" | "week" | "inbox" | "conversations" | "my_promises" | "requests" | "asks" | "promises" | "roadmap" | "ahead" | "gaps" | "focus" | "capture" | "planday" | "planweek" | "commit" | "team" | "status" | "settings" | "follow_ups" | "checkin" | "closeout";
 export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
   switch (v) {
     case "today": return { nav: navOf.today(), overlay: null };
@@ -300,6 +305,8 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
     case "my_promises": return { nav: navOf.myPromises(), overlay: null };
     case "roadmap": return { nav: navOf.ahead(), overlay: null };
     case "ahead": return { nav: navOf.ahead("gantt"), overlay: null };
+    // QF-1: Fix next is called Gaps (the mode's code name stays "fix").
+    case "gaps": return { nav: navOf.ahead("fix"), overlay: null };
     case "planday": return { nav: navOf.planDay(), overlay: null };
     case "planweek":
     case "commit": return { nav: navOf.week("commit"), overlay: null };
@@ -310,6 +317,13 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
     case "focus": return { nav: null, overlay: { kind: "focus" } };
     case "settings": return { nav: null, overlay: { kind: "settings", section: "you" } };
   }
+}
+
+/** QF-1: Today's ‹ › and [ ]: the weekday before or after (Saturday and Sunday are stepped over). */
+export function stepWeekday(date: IsoDate, dir: 1 | -1): IsoDate {
+  let d = Temporal.PlainDate.from(date).add({ days: dir });
+  while (d.dayOfWeek > 5) d = d.add({ days: dir });
+  return d.toString();
 }
 
 /** The day header's Plan / Planned ✓ chip in Week, and "+ Add work" on a block: the Board focused on that day (and block). */

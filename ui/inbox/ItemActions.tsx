@@ -9,7 +9,7 @@ import type { Entry } from "./data.ts";
 export type FormId = "close" | "due" | "who" | "link" | "draft" | "not_request" | "sort" | "edit" | "merge" | "snooze";
 export type ActId =
   | "create" | "close" | "due" | "who" | "week" | "hide" | "not_needed" | "done" | "link" | "unlink" | "resolve" | "take_over" | "reopen"
-  | "teams" | "not_request" | "sort" | "dismiss" | "edit" | "delete" | "merge" | "prepare" | "snooze" | "wake" | "cancel";
+  | "teams" | "not_request" | "not_work" | "sort" | "dismiss" | "edit" | "delete" | "merge" | "prepare" | "snooze" | "wake" | "cancel";
 
 /** One action: its words, its key (shown on the button, run by the same key), and whether it's the one primary. */
 export type Act = { id: ActId; label: string; key?: string; primary?: boolean; more?: boolean; href?: string; run: () => void };
@@ -41,6 +41,9 @@ export const ITEM_KEYS: readonly { key: string; act: ActId | "next" | "prev" | "
 ];
 const KEY_OF: Partial<Record<ActId, string>> = Object.fromEntries(ITEM_KEYS.filter((k) => k.key.length === 1).map((k) => [k.act, k.key]));
 const act = (id: ActId, label: string, run: () => void, o: Partial<Act> = {}): Act => ({ id, label, run, ...(KEY_OF[id] ? { key: KEY_OF[id] } : {}), ...o });
+
+/** QF-1: Not work-related's Undo (its messages back from Chatter, the conversation open again). */
+export const notWorkUndo = (id: number) => ({ action: "conversations.not_work_undo", input: { id } });
 
 /** The actions for one item, primary first. Empty while its source is still loading. */
 export function actsFor(e: Entry, env: ActEnv): Act[] {
@@ -77,6 +80,8 @@ function baseActs(e: Entry, env: ActEnv): Act[] {
       if (open && !c.item && c.primary !== "link") out.push(act("link", "Link to item", () => env.form("link")));
       out.push(act("teams", "Open in Teams", () => {}, { href: c.link }));
       if (open && c.primary !== "resolve" && c.primary !== "mark_done") out.push(act("done", "Resolve", resolve, { more: true }));
+      // QF-1: one click, with Undo: its messages go to Chatter and it closes for everyone; nothing is learned.
+      if (open) out.push(act("not_work", "Not work-related", () => void env.run("conversations.not_work", { id: c.id }, "Moved to Chatter for everyone on the chat", notWorkUndo(c.id))));
       if (open) out.push(act("not_needed", "Not a request", () => env.form("not_request"), { more: true }));
       if (open && (env.canMerge ?? false)) out.push(act("merge", "Merge into…", () => env.form("merge"), { more: true }));
       if (c.item) out.push(act("unlink", `Unlink #${c.item.id}`, () => void env.run("conversations.unlink", { id: c.id }, "Unlinked"), { more: true }));

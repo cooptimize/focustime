@@ -58,7 +58,7 @@ export function ScopeField({ clientKey, project, s, save, status, retry }: { cli
         </span>
       </h4>
       <p className="muted">
-        Ahead, Fix next and Week's lists show only these items of {name}, plus anything assigned to the person. Now: {s.words}
+        Ahead, Gaps and Week's lists show only these items of {name}, plus anything assigned to the person. Now: {s.words}
         {rule === null ? " (until an admin sets it)" : ""}.{counts ? ` Automatic: ${of(counts.automatic, counts.total)} open items.` : ""}
       </p>
       {!s.polled && <p className="muted">DevOps isn't read centrally here, so there are no counts.</p>}

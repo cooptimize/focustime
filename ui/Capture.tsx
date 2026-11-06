@@ -186,7 +186,8 @@ export function useClientFeatures(client: string | null, on: boolean): CaptureFe
 
 const NO_POOL = { items: [], children: [] };
 const BOX_KINDS: readonly BoxKind[] = ["later", "follow_up", "draft", "draft_feature"];
-const BOX_NAME: Record<BoxKind, string> = { later: "Sort later", ...KIND_NAME };
+/** QF-1: Sort later is called Decide later (the kind stays "later"). */
+export const BOX_NAME: Record<BoxKind, string> = { later: "Decide later", ...KIND_NAME };
 
 /**
  * The capture box (step 15.3: the one way to add something new). Enter saves at once; Shift+Enter is a new line (CP-1:

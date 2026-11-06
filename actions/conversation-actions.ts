@@ -44,7 +44,7 @@ import type { ActionResponse } from "./types.ts";
 export type { ConversationCard, ConversationMessage, ConversationsData, DayPromise, MyPromisesData, PromiseCard } from "../plan/conversation-views.ts";
 
 export const CONVERSATION_ACTIONS = [
-  "conversations.list", "conversations.count", "conversations.refresh", "conversations.messages", "conversations.seen", "conversations.resolve", "conversations.not_request", "conversations.reopen",
+  "conversations.list", "conversations.count", "conversations.refresh", "conversations.messages", "conversations.seen", "conversations.resolve", "conversations.not_request", "conversations.not_work", "conversations.not_work_undo", "conversations.reopen",
   "conversations.hide", "conversations.move", "conversations.this_is_work", "conversations.link", "conversations.take_over", "conversations.sort_unsorted", "conversations.search",
   "conversations.draft", "my_promises.list", "my_promises.today", "my_promises.followup", "my_promises.link", "my_promises.done", "my_promises.not_needed", "my_promises.reopen",
   // IB-1: a promise is never read-only: its due, whom it is to, and Close the loop.
@@ -55,6 +55,9 @@ export const CONVERSATION_ACTIONS = [
   "conversations.search_items", "conversations.unlink", "my_promises.unlink",
 ] as const;
 export type ConversationAction = (typeof CONVERSATION_ACTIONS)[number];
+/** QF-1: the close reason of Not work-related, and the mark on its messages' places (so Undo finds them). */
+export const NOT_WORK = "Not work-related";
+const NOT_WORK_PLACE = "not_work:";
 
 export type ConversationContext = RequestContext & {
   conversations?: ConversationStore | undefined;
@@ -385,7 +388,8 @@ export async function inboxFacts(ctx: ConversationContext, cfg: AppConfig): Prom
   const now = Date.parse(ctx.now());
   const all = (await v.convs.conversations(v.chats.map((c) => c.chatId))).filter((c) => !c.closedAt || now - Date.parse(c.closedAt) < closedShownMs(cfg));
   const out: InboxFacts[] = [];
-  for (const card of await cards(ctx, v, cfg, all)) {
+  // QF-1: a conversation marked not work-related lives in Chatter (its messages), not in Done.
+  for (const card of await cards(ctx, v, cfg, all.filter((c) => !(c.closedAt && c.closeReason === NOT_WORK)))) {
     if (card.hidden) continue;
     const view = await viewOf(ctx, v.me, card, all.find((c) => c.id === card.id)!);
     // Who it is with: someone in it who isn't me.
@@ -738,6 +742,30 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const reason = typeof o.reason === "string" && o.reason.trim() ? o.reason.trim() : null;
         await v.convs.updateConversation(c.id, { status, closed: { by: v.me, at: stamp, reason }, windDown: false, changeNote: status === "resolved" ? "Resolved" : "Marked not a request" }, { bump: true });
         ctx.log({ source: "plan", op: "conversation_closed", kind: status });
+        return respond();
+      }
+      case "conversations.not_work": {
+        // QF-1: Not work-related: one click moves its messages to Chatter and closes it for everyone on the chat. The
+        // places remember the conversation (reason not_work:<id>) only so Undo can put them back; nothing is learned.
+        const o = only(input, ["id"]);
+        const c = o && (await conv(o.id));
+        if (!c || !v) return bad("No such conversation", 404);
+        if (c.closedAt && c.closeReason === NOT_WORK) return respond();
+        const work = (await v.convs.placesIn([c.id])).filter((p) => p.role === "work");
+        await v.convs.place(work.map((p) => ({ chatId: p.chatId, messageId: p.messageId, conversationId: null, role: "chatter" as const, reason: `${NOT_WORK_PLACE}${c.id}`, placedBy: "person" as const, at: p.at })));
+        await v.convs.updateConversation(c.id, { status: "closed", closed: { by: v.me, at: stamp, reason: NOT_WORK }, windDown: false, changeNote: "Marked not work-related" }, { bump: true });
+        ctx.log({ source: "plan", op: "conversation_not_work", count: work.length });
+        return respond();
+      }
+      case "conversations.not_work_undo": {
+        const o = only(input, ["id"]);
+        const c = o && (await conv(o.id));
+        if (!c || !v) return bad("No such conversation", 404);
+        const moved = (await v.convs.placesByRole([c.chatId], "chatter")).filter((p) => p.reason === `${NOT_WORK_PLACE}${c.id}`);
+        await v.convs.place(moved.map((p) => ({ chatId: p.chatId, messageId: p.messageId, conversationId: c.id, role: "work" as const, reason: null, placedBy: "person" as const, at: p.at })));
+        if (c.closedAt && c.closeReason === NOT_WORK) await v.convs.updateConversation(c.id, { closed: null, status: "new", changeNote: "Back from Chatter" }, { bump: true });
+        await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, c.id);
+        ctx.log({ source: "plan", op: "conversation_not_work_undone", count: moved.length });
         return respond();
       }
       case "conversations.reopen": {

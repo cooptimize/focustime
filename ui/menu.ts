@@ -110,6 +110,8 @@ export type MenuEnv = {
   calendars: { outlook: boolean; google: boolean };
   runPlan: (action: string, input: Record<string, unknown>) => Promise<boolean>;
   openPlanDay: (date?: IsoDate) => void;
+  /** QF-1: Timebox my day on a date (confirming the day first when it isn't). */
+  timeboxDay?: (date: IsoDate) => void;
   commitPlan: () => void;
   openDetails: (date: IsoDate, half: Half) => void;
   openLink: (clientKey: string, url: string) => void;
@@ -772,12 +774,20 @@ export function dayMenu(env: MenuEnv, date: IsoDate): MenuStep {
     title: dayName(date),
     items: [
       { id: "plan", label: isPast(env, date) && !refused ? "Plan this day (past: done and drop only)" : "Plan this day", action: "planday.start", ...(refused ? { disabled: refused } : {}), run: () => env.openPlanDay(date) },
+      ...(env.timeboxDay ? [timeboxItem(env, date, refused)] : []),
       { id: "am", label: "Details of AM", action: "ui.details", run: () => env.openDetails(date, "AM") },
       { id: "pm", label: "Details of PM", action: "ui.details", run: () => env.openDetails(date, "PM") },
       ...(day?.eve ? [{ id: "eve", label: "Details of the evening", action: "ui.details", run: () => env.openDetails(date, "EVE") } as MenuItem] : []),
       ...timeItems(env, date),
     ],
   };
+}
+
+/** QF-1: the day menu's Timebox my day, or Confirm and timebox while the day isn't confirmed. */
+function timeboxItem(env: MenuEnv, date: IsoDate, refused: string | undefined): MenuItem {
+  const committed = !!env.planWeek?.[date]?.committedAt;
+  const why = refused ?? (isPast(env, date) ? "That day is past" : undefined);
+  return { id: "timebox", label: committed ? "Timebox my day" : "Confirm and timebox", action: "timebox.add_many", ...(why ? { disabled: why } : { run: () => env.timeboxDay!(date) }) };
 }
 
 // ---------- time model (step 6b) ----------
@@ -1088,6 +1098,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "conversations.seen":
     case "conversations.resolve":
     case "conversations.not_request":
+    case "conversations.not_work":
+    case "conversations.not_work_undo":
     case "conversations.reopen":
     case "conversations.hide":
     case "conversations.move":
@@ -1292,8 +1304,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "collab.preview_invite":
       return { next: () => choosePick(env, "Help on which pick?", (p) => () => env.openHelp({ clientKey: p.clientKey, title: p.title, url: p.itemUrl, itemId: p.itemId, pickId: p.id, pinned: p.date })) };
     case "timebox.add": return { next: () => choosePick(env, "Timebox which pick?", (p) => () => env.openTimebox({ pickId: p.id, date: p.date })) };
-    // Step 13.6: Timebox my day is in Plan the day once it is committed.
-    case "timebox.add_many": return { run: () => env.openPlanDay() };
+    // QF-1: Timebox my day from anywhere: the default day (today, or the next workday), confirmed first when it isn't.
+    case "timebox.add_many": return { run: () => (env.timeboxDay ? env.timeboxDay(env.planTarget.date) : env.openPlanDay()) };
     // Moving, resizing, removing and Outlook previews happen on the day's timeline in Plan the day.
     case "timebox.update":
     case "timebox.remove":
@@ -1404,6 +1416,7 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "view.planday_date", action: "view.planday_date", group: "Views", label: "Plan a day…", next: () => planDateStep(env) },
     { id: "view.planweek", action: "view.planweek", aka: ["commit"], group: "Views", label: "Week › Plan: plan the week (each client's features)", hint: "W", run: () => env.openPlanWeek() },
     { id: "view.ahead", action: "view.ahead", group: "Views", label: "Ahead › Plan ahead", run: () => env.setView("ahead") },
+    { id: "view.gaps", action: "view.gaps", aka: ["fix next"], group: "Views", label: "Ahead › Gaps: items missing stories, dates, an owner or a size", run: () => env.setView("gaps") },
     { id: "view.capture", action: "view.capture", group: "Views", label: "Captures to sort (Inbox)", run: env.openCaptures },
     { id: "view.checkin", action: "view.checkin", group: "Views", label: "Today › Midday check-in", hint: "M", run: env.openCheckIn },
     { id: "view.closeout", action: "view.closeout", group: "Views", label: "Today › Close out", hint: "E", run: () => env.openCloseOut() },

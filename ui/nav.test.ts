@@ -160,7 +160,7 @@ describe("entry points", () => {
     expect(viewName(loc(navOf.week("commit")))).toBe("Week › Plan");
     expect(viewName(loc(navOf.ahead()))).toBe("Ahead › Grid");
     expect(viewName(loc(navOf.ahead("gantt")))).toBe("Ahead › Gantt");
-    expect(viewName(loc(navOf.ahead("fix")))).toBe("Ahead › Fix next");
+    expect(viewName(loc(navOf.ahead("fix")))).toBe("Ahead › Gaps");
     expect(viewName(loc(navOf.conversations()))).toBe("Inbox › Needs you");
   });
 });

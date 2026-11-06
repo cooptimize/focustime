@@ -353,11 +353,11 @@ function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: Clie
 function FixGapsField({ c, saver }: { c: ClientRow; saver: Saver }) {
   const scope = `client:${c.key}`;
   const on = saver.shown(scope, "fix_gaps", c.fixGaps ?? [...GAP_KINDS]);
-  const save = (v: GapKind[]) => void saver.save(scope, "fix_gaps", GAP_KINDS.filter((k) => v.includes(k)), `${c.key}: gaps Fix next counts`);
+  const save = (v: GapKind[]) => void saver.save(scope, "fix_gaps", GAP_KINDS.filter((k) => v.includes(k)), `${c.key}: what Gaps counts`);
   return (
     <div className="set-form adm-fixgaps">
-      <AField label="Gaps Fix next counts" kind="Rule" s={saver.status(scope, "fix_gaps")} retry={() => save(on)} hint="Ahead's Fix next and Readiness show only these for this client. Turn off Unsized for a client that doesn't size in DevOps.">
-        <span className="adm-switches" role="group" aria-label={`${c.key}: gaps Fix next counts`}>
+      <AField label="What Gaps counts" kind="Rule" s={saver.status(scope, "fix_gaps")} retry={() => save(on)} hint="Ahead's Gaps and Readiness show only these for this client. Turn off Unsized for a client that doesn't size in DevOps.">
+        <span className="adm-switches" role="group" aria-label={`${c.key}: what Gaps counts`}>
           {GAP_KINDS.map((k) => (
             <label key={k} className="adm-switch">
               <input type="checkbox" role="switch" checked={on.includes(k)} aria-label={`${c.key}: count ${GAP_WORDS[k]}`} onChange={(e) => save(e.target.checked ? [...on, k] : on.filter((x) => x !== k))} /> {GAP_WORDS[k]}
@@ -1068,7 +1068,7 @@ type OrgData = {
   feedback: { org: string; project: string; parentId: number } | null;
   retentionYears: number;
   idleMinutes: number;
-  /** AH-3: Fix next looks at the top N of each backlog. */
+  /** AH-3: Gaps looks at the top N of each backlog. */
   fixTopN?: number;
   newPerson: NewPerson;
   inviteFromBootstrap: boolean;
@@ -1106,8 +1106,8 @@ function AdminOrganization() {
         <AField label="Counts as in use (minutes)" kind="Rule" s={saver.status(o, "org.idle_minutes")} retry={() => void saver.save(o, "org.idle_minutes", data.idleMinutes, "In use")} hint="5 to 60. An open page counts as someone using FocusTime only this long after their last key, click or scroll. Background work waits otherwise.">
           <NumInput label="Counts as in use (minutes)" value={data.idleMinutes} min={5} max={60} onSave={(v) => void saver.save(o, "org.idle_minutes", v, "In use")} />
         </AField>
-        <AField label="Fix next looks at the top N of each backlog" kind="Rule" s={saver.status(o, "ahead.fix_top_n")} retry={() => void saver.save(o, "ahead.fix_top_n", data.fixTopN ?? 30, "Fix next top N")} hint="10 to 100, for epics, features and stories each. Ahead's Fix next also shows what's dated in the next 4 weeks and the features and epics each person owns.">
-          <NumInput label="Fix next looks at the top N of each backlog" value={data.fixTopN ?? 30} min={10} max={100} onSave={(v) => void saver.save(o, "ahead.fix_top_n", v, "Fix next top N")} />
+        <AField label="Gaps looks at the top N of each backlog" kind="Rule" s={saver.status(o, "ahead.fix_top_n")} retry={() => void saver.save(o, "ahead.fix_top_n", data.fixTopN ?? 30, "Gaps top N")} hint="10 to 100, for epics, features and stories each. Ahead's Gaps also shows what's dated in the next 4 weeks and the features and epics each person owns.">
+          <NumInput label="Gaps looks at the top N of each backlog" value={data.fixTopN ?? 30} min={10} max={100} onSave={(v) => void saver.save(o, "ahead.fix_top_n", v, "Gaps top N")} />
         </AField>
       </div>
       <h3>Send feedback</h3>

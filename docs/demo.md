@@ -6,7 +6,7 @@ The demo is signed in as a fictional person (Alex Rivera) with a fictional VM: t
 
 ## Before you start
 1. Turn on demo mode: my initials (top right) > Settings > Display > "Show demo data", or Ctrl+K > "Demo mode". The top bar shows **Demo data**.
-2. Everything you see is fictional: Northwind Foods, Harbor Health, Atlas Freight and Cooptimize (internal), with made-up people, DevOps items, meetings and a Thursday day off, generated for the current week. Nothing is fetched and nothing leaves FocusTime: links, export, sign-ins and every external write are refused with "Demo data: nothing leaves FocusTime in demo mode".
+2. Everything you see is fictional: Northwind Foods, Harbor Health, Atlas Freight and Cooptimize (internal), with made-up people, DevOps items, meetings and a Thursday day off (Friday when today is Thursday), generated for the current week. Nothing is fetched and nothing leaves FocusTime: links, export, sign-ins and every external write are refused with "Demo data: nothing leaves FocusTime in demo mode".
 3. Changes you make during the demo (picks, timeboxes, closed follow-ups) go to an in-memory store. Turning demo mode off throws them away and brings back your real data untouched. Turning it off and on again starts a fresh demo.
 
 To run the script yourself against a running FocusTime: `node scripts/demo-walkthrough.mjs docs/demo dark --now 2026-11-02T09:30:00-05:00` (it turns demo mode on first and stops if the "Demo data" tag is missing; `--runtime <dir>` points it at a throwaway server's launch link).

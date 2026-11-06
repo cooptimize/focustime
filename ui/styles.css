@@ -4555,6 +4555,10 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .ah-cell.ah-pend { background: color-mix(in oklab, var(--selected) 12%, transparent); }
 .ah-cell.ah-conf { box-shadow: inset 0 0 0 2px var(--watch); }
 .ah-cell.ah-abs { color: var(--text-faint); }
+/* QF-1: a cell I can change: one click opens its picker; hover shows it can be changed. */
+.ah-cell.ah-edit { cursor: pointer; }
+.ah-cell.ah-edit:hover { box-shadow: inset 0 -2px 0 var(--selected); }
+.ah-cell.ah-edit:hover::after { content: "▾"; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: var(--fs-1); pointer-events: none; }
 .ah-dot { position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--selected); }
 .ah-cell.ah-conf .ah-dot { background: var(--watch); }
 .ah-item { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
@@ -4948,6 +4952,12 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .ib-group-head .muted { font-weight: 400; }
 .ib-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .ib-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+/* QF-1: a conversation row's ⋯ (Not work-related), over the row's right edge; shown on hover, focus or open. */
+.ib-rows > li { position: relative; }
+.ib-row-more { position: absolute; right: 6px; top: 6px; opacity: 0; }
+.ib-rows > li:hover .ib-row-more, .ib-row-more:focus-within, .ib-row-more:has([aria-expanded="true"]) { opacity: 1; }
+.ib-row-more .ib-act { background: var(--surface); }
+@media (hover: none) { .ib-row-more { opacity: 1; position: static; align-self: center; } .ib-rows > li { display: flex; } }
 .ib-row:hover { background: var(--raised); }
 .ib-row.open { background: var(--raised); border-color: var(--border-strong); box-shadow: inset 3px 0 0 var(--accent); }
 .ib-icon { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; background: var(--raised); color: var(--text-muted); font-size: var(--fs-2); }
@@ -5228,3 +5238,13 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   .status-view .ph-title { row-gap: 2px; }
   .st-bar { top: 0; }
 }
+
+/* QF-1: Today on any day (‹ › and Back to today), a PTO day, a PTO half muted, and Timebox my day beside the plan. */
+.today-step { align-items: center; }
+.today-step .today-back { font-size: var(--fs-2); font-weight: 500; margin-left: 6px; }
+.today-pto { margin: 0 0 12px; padding: 10px 14px; border-radius: 8px; background: var(--raised); color: var(--text); font-size: var(--fs-3); }
+.today-pto strong { font-weight: 600; }
+.today-other { margin: 0 0 10px; font-size: var(--fs-3); }
+.today-tools { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+.today-block.pto-half { border-left-style: dashed; background: var(--raised); opacity: 0.75; }
+.today-block.pto-half .status-pill { color: var(--text-muted); }

@@ -203,7 +203,8 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       // DV-1: one row per client; Check now reads DevOps once for it, and a refused token says so in plain words.
       const adatumRow = body.locator(".adm-status-group tr", { hasText: "Adatum" });
       await adatumRow.getByRole("button", { name: "Check now" }).click();
-      await adatumRow.getByText(/every minute/).waitFor();
+      // The cadence follows the real clock (working hours or not), so either wording passes (QF-1: it failed by day).
+      await adatumRow.getByText(/every (minute|\d+ minutes)/).waitFor();
       await body.locator(".adm-status-group tr", { hasText: "Fabrikam" }).getByRole("button", { name: "Check now" }).click();
       await body.locator(".adm-status-group tr", { hasText: "Fabrikam" }).getByText("Token not valid").waitFor();
       expect(devops.fake.calls.filter((c) => c.org === "Adatum" && c.op === "wiql").length).toBeGreaterThan(0);

@@ -78,7 +78,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
       await check("Ahead › Gantt");
       await go(page, "#/ahead/fix");
       await page.locator(".ah-fx-row").first().waitFor({ timeout: 30_000 });
-      await check("Ahead › Fix next");
+      await check("Ahead › Gaps");
       await go(page, "#/inbox/promises");
       await page.locator(".ib-row").first().waitFor();
       await check("Inbox");

@@ -48,7 +48,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
   it("the rules highlight a chip while typing; Tab and a click change it; Sort later is the default", async () => {
     const { page } = await freshPage(h);
     await openCaptures(page);
-    await expect(checked(page)).resolves.toContain("Sort later");
+    await expect(checked(page)).resolves.toContain("Decide later");
     await box(page).fill("told Dana I'd send the export by Friday");
     await expect.poll(() => checked(page)).toContain("Promise");
     await expect(kindChip(page, "Promise").locator(".cap-suggested").count()).resolves.toBe(1);
@@ -87,7 +87,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await expect.poll(() => page.locator(".ib-pane section[aria-label='Linked DevOps item'] a").count()).toBe(1);
     await openCaptures(page);
     await expect(box(page).inputValue()).resolves.toBe("");
-    await expect(checked(page)).resolves.toContain("Sort later");
+    await expect(checked(page)).resolves.toContain("Decide later");
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -125,7 +125,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await box(page).press("Enter");
     await expect.poll(async () => (await drafts(page)).find((d) => d.title.toLowerCase() === "carrier rate cards")).toMatchObject({ level: "feature", targetDate: "2026-11-27" });
     await box(page).fill("pallet labels look odd");
-    await expect(checked(page)).resolves.toContain("Sort later");
+    await expect(checked(page)).resolves.toContain("Decide later");
     await box(page).press("Enter");
     await expect.poll(() => page.locator(".ib-row", { hasText: "pallet labels look odd" }).locator(".ib-tag", { hasText: "To sort" }).count()).toBe(1);
     await page.close();
