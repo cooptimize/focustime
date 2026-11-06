@@ -770,8 +770,7 @@ Revises step 16.4's estimating (section 43) and D334, D339. Decisions D438 to D4
 
 ## 48. MC-1: meeting capture, slice 1 (authorized Nov 6)
 
-A client's registered weekly call becomes proposals its reviewers confirm. Decisions under "MC-1" (unnumbered until
-merge); setup in `docs/setup/meeting-capture.md`; files in `docs/architecture.md` (MC-1).
+A client's registered weekly call becomes proposals its reviewers confirm. Decisions D919 to D931 (under "MC-1"); setup in `docs/setup/meeting-capture.md`; files in `docs/architecture.md` (MC-1).
 
 - **New source scope:** Graph, delegated, `OnlineMeetings.Read` and `OnlineMeetingTranscript.Read.All` (admin
   consented), a person's own token (the registrant's, then the other reviewers'). Read only, and only for registered
