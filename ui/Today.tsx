@@ -31,6 +31,9 @@ import { causeLines } from "./status.ts";
 import { NOTICE_EVENT, WorkLink } from "./WorkLink.tsx";
 import { weekMusts } from "./WeekMusts.tsx";
 import { mondayOf } from "../week/dates.ts";
+import { stepWeekday } from "./nav.ts";
+import { nextWorkingDay, todayShape } from "../plan/todayday.ts";
+import { hoursOn } from "../week/hours.ts";
 import { dayCalendar, placePromises, splitByBlocks, type DayEvent } from "../plan/todaycal.ts";
 import type { DayPromise } from "../plan/conversation-views.ts";
 import { AllDayRow, DayEventRow, OutsideLine, PromiseRow } from "./DayCalendar.tsx";
@@ -67,6 +70,14 @@ import { openCoopBrief } from "./menu.ts";
 export type TodayMode = "now" | "checkin" | "closeout";
 
 type Props = {
+  /** QF-1: the day shown (#/today/<date>); null is today. Another day is read-only (Close out and Plan link out). */
+  viewDate?: IsoDate | null;
+  /** QF-1: ‹ › and Back to today (null: today). */
+  onDay?: (date: IsoDate | null) => void;
+  /** QF-1: Timebox my day (Confirm and timebox while the day isn't confirmed). */
+  onTimebox?: (date: IsoDate) => void;
+  /** QF-1: a past day's Close out. */
+  onCloseOutOn?: (date: IsoDate) => void;
   data: WeekLoadData;
   strip: NowStrip | null;
   /** The next day to plan (today, or the next workday). */
@@ -131,14 +142,14 @@ const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
 const cap = (s: string) => `${s[0]!.toUpperCase()}${s.slice(1)}`;
 const live = (p: Pick) => p.status === "planned" || p.status === "done";
 
-/** The day's slots that have a focus block, an Open half-day or an evening slot. */
-function slotsOf(day: Day): Slot[] {
-  return [day.am, day.pm, ...(day.eve ? [day.eve] : [])].filter((s) => !s.off && (s.focus.length > 0 || s.open || s.half === "EVE"));
-}
 
 export function Today(props: Props) {
   const { data, target, now, nowMs, mode, wide, switcher } = props;
-  const date = data.planDay.date;
+  const realToday = data.planDay.date;
+  const date = props.viewDate ?? realToday;
+  // QF-1: today, or another day shown read-only (a past day's Close out, a later day's Plan link out).
+  const isToday = date === realToday;
+  const past = date < realToday;
   const tz = userZone(data);
   // P1: on the phone, Now leads with one card (the block under way, its next pick, Start focus or the timer).
   const phone = usePhone();
@@ -148,16 +159,19 @@ export function Today(props: Props) {
   const picks = useMemo(() => plan?.picks ?? [], [plan]);
   const committed = !!plan?.committedAt;
   const nameOf = clientNames(data);
-  const workday = data.planDay.workday && !!day && !day.pto;
-  const blocks = workday && day ? slotsOf(day) : [];
+  // QF-1 (plan/todayday.ts): a PTO day shows read-only with only the blocks that still hold a pick; nothing nags on it
+  // or on any day but today.
+  const shape = todayShape(day, { date, today: realToday, todayWorkday: data.planDay.workday, picked: new Set(picks.filter(live).map((p) => p.half)) });
+  const { ptoDay, workday, nudges, readOnly } = shape;
+  const blocks = shape.blocks.map((b) => b.slot);
   const cal = day ? dayCalendar(day, now) : null;
   const split = cal ? splitByBlocks(cal.timed, blocks.map((s) => ({ key: s.half, start: s.start, end: s.end }))) : null;
   // CV-1: my promises at their time (before, in a block, after), the rest in the follow-ups row; today only.
-  const spots = placePromises(target.isToday ? (data.promises ?? []) : [], blocks.map((s) => ({ key: s.half, start: s.start, end: s.end })), date);
+  const spots = placePromises(target.isToday && nudges ? (data.promises ?? []) : [], blocks.map((s) => ({ key: s.half, start: s.start, end: s.end })), date);
   const onPromise = props.onPromises ?? props.onInbox;
   // CV-3: the strip's sources, and what the attention line carries: promises due today with no time, until their last
   // 2 working hours (the end of today's last block). The agenda keeps every timed one at its time.
-  const todayPromises = target.isToday ? (data.promises ?? []) : [];
+  const todayPromises = target.isToday && nudges ? (data.promises ?? []) : [];
   const dayEnd = blocks.length ? blocks.map((s) => s.end).sort().at(-1)! : null;
   const clockNow = new Date(nowMs).toISOString();
   const sent = useSentToday(props.sentVersion, !!props.onSent);
@@ -239,7 +253,7 @@ export function Today(props: Props) {
   );
   const ended = (s: Slot) => ms(now) >= ms(s.end);
   const running = data.timer?.pickId ?? null;
-  const nextPick =
+  const nextPick = readOnly ? null :
     (running !== null ? picks.find((p) => p.id === running && p.status === "planned") : null) ??
     blocks
       .filter((s) => !ended(s))
@@ -283,19 +297,45 @@ export function Today(props: Props) {
       <h1>
         Midday check-in <span className="muted">{clock(now, tz)} · {checkLeft(check)}</span>
       </h1>
-    ) : (
+    ) : isToday ? (
       <h1>
         Today <span className="muted">{longDate(date)}</span>
       </h1>
+    ) : (
+      <h1>
+        {Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" })} <span className="muted">{longDate(date).replace(/^\w+,\s*/, "")} · {past ? "past" : "ahead"}</span>
+      </h1>
     );
+  // QF-1: ‹ › (and [ ]) to another day; Back to today when away from it.
+  const dayStep = mode === "now" && props.onDay ? (
+    <span className="pd-step today-step" role="group" aria-label="Day">
+      <button type="button" onClick={() => props.onDay!(stepWeekday(date, -1))} aria-label="Previous day" title="Previous day ([)">‹</button>
+      <button type="button" onClick={() => props.onDay!(stepWeekday(date, 1))} aria-label="Next day" title="Next day (])">›</button>
+      {!isToday && (
+        <button type="button" className="mini today-back" onClick={() => props.onDay!(null)}>
+          Back to today
+        </button>
+      )}
+    </span>
+  ) : null;
+  const nextWorkday = ptoDay ? nextWorkingDay(date, (d) => hoursOn(data.hours, d).segments.length > 0, (d) => data.ptoAhead.includes(d) || !!data.week.days.find((x) => x.date === d)?.pto) : null;
+  const dayWord = isToday ? "today" : Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" });
+  // QF-1: Timebox my day from Today, beside the day's plan (Confirm and timebox while it isn't confirmed).
+  const boxedIds = new Set(data.timeboxes.filter((t) => t.date === date && !t.removedAt).map((t) => t.pickId));
+  const unboxed = picks.filter((p) => p.status === "planned" && !boxedIds.has(p.id)).length;
+  const timeboxOffer = mode === "now" && !past && workday && !ptoDay && unboxed > 0 && data.timeboxSettings.enabled !== false && props.onTimebox ? (
+    <button type="button" className="mini today-timebox" onClick={() => props.onTimebox!(date)} title="Give every planned pick a time in its block's free time">
+      {committed ? "Timebox my day" : "Confirm and timebox"}
+    </button>
+  ) : null;
 
-  const attention = mode === "now" ? <Attention noDue={phone} promises={untimed} onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
+  const attention = mode === "now" && nudges ? <Attention noDue={phone} promises={untimed} onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
   const panelSlot = panel ? blocks.find((s) => s.half === panel.half) ?? null : null;
 
   return (
     <main className={`today-view u2 mode-${mode}${wide ? " wide" : ""}`} aria-label="Today">
       <header className="today-head">
-        <div className="ph-title">{headTitle}</div>
+        <div className="ph-title">{headTitle}{dayStep}</div>
         {wide && attention}
         <MoreButton
           label="View options for Today"
@@ -328,7 +368,7 @@ export function Today(props: Props) {
           onClose={() => setMoreAt(null)}
         />
       )}
-      {mode === "now" && (
+      {mode === "now" && nudges && (
         <PhoneNow
           data={data}
           block={blocks.find((s) => !ended(s)) ?? null}
@@ -341,10 +381,10 @@ export function Today(props: Props) {
           onDone={committed ? (p) => view.toggle(p.id, true) : null}
         />
       )}
-      {mode === "now" && <UrgentStrip sources={urgentSources} now={clockNow} today={date} tz={tz} onAsks={props.onAsks ?? props.onInbox} onPromises={onPromise} onAskFocus={(u) => void startAsk(u)} />}
+      {mode === "now" && nudges && <UrgentStrip sources={urgentSources} now={clockNow} today={date} tz={tz} onAsks={props.onAsks ?? props.onInbox} onPromises={onPromise} onAskFocus={(u) => void startAsk(u)} />}
       {!wide && attention}
-      {mode === "now" && props.moment && <MomentCard m={props.moment} onPlan={() => props.onPlan(date)} onCheckIn={props.onCheckIn} onCloseOut={props.onCloseOut} />}
-      {mode === "now" && props.setupLine && props.onSetup && (
+      {mode === "now" && nudges && props.moment && <MomentCard m={props.moment} onPlan={() => props.onPlan(date)} onCheckIn={props.onCheckIn} onCloseOut={props.onCloseOut} />}
+      {mode === "now" && nudges && props.setupLine && props.onSetup && (
         <p className="setup-line">
           <button type="button" className="link-btn" onClick={() => props.onSetup!(props.setupLine!.step)} title="Finish setting up FocusTime">
             {props.setupLine.text}
@@ -356,20 +396,50 @@ export function Today(props: Props) {
       {offer && <FlexOfferBar offer={offer.offer} clientKey={offer.pick.clientKey} clientName={nameOf(offer.pick.clientKey)} title={offer.pick.title} onDone={(m) => { setOffer(null); setNotice(m); props.onChanged(); }} />}
       {mode === "checkin" && !committed && workday && <p className="co-notice">Today isn't planned yet. Plan (P) to make the most of the afternoon.</p>}
 
-      {!workday ? (
+      {mode === "now" && ptoDay && (
+        <p className="today-pto" role="status">
+          <strong>You're off {dayWord}.</strong>{" "}
+          {picks.some(live) ? "What was planned is below, read only." : "Nothing is planned."}{" "}
+          {nextWorkday && props.onDay && (
+            <button type="button" className="link-btn" onClick={() => props.onDay!(nextWorkday === realToday ? null : nextWorkday)}>
+              {longDate(nextWorkday).replace(/,\s*\d{4}$/, "")}, your next working day
+            </button>
+          )}
+        </p>
+      )}
+      {mode === "now" && !isToday && !ptoDay && day && (
+        <p className="today-other muted">
+          {past ? "A past day, read only." : "A day ahead: its plan so far."}{" "}
+          {past && props.onCloseOutOn ? (
+            <button type="button" className="link-btn" onClick={() => props.onCloseOutOn!(date)}>
+              Close out {dayWord}
+            </button>
+          ) : !past && workday ? (
+            <button type="button" className="link-btn" onClick={() => props.onPlan(date)}>
+              Plan {dayWord}
+            </button>
+          ) : null}
+        </p>
+      )}
+      {!day ? (
+        <p className="muted today-loading">Opening {longDate(date)}…</p>
+      ) : ptoDay && !blocks.length ? null : !workday && !ptoDay ? (
         <p className="today-off">
-          {target.isToday ? "Nothing scheduled today." : `No work today. Next workday is ${longDate(target.date).replace(/,\s*\d{4}$/, "")}.`}{" "}
-          <button type="button" className="link-btn" onClick={() => props.onPlan(target.date)}>
-            Plan {longDate(target.date).replace(/,\s*\d{4}$/, "")}
-          </button>
+          {!isToday ? `Nothing scheduled ${dayWord}.` : target.isToday ? "Nothing scheduled today." : `No work today. Next workday is ${longDate(target.date).replace(/,\s*\d{4}$/, "")}.`}{" "}
+          {(isToday || !past) && (
+            <button type="button" className="link-btn" onClick={() => props.onPlan(target.date)}>
+              Plan {longDate(target.date).replace(/,\s*\d{4}$/, "")}
+            </button>
+          )}
         </p>
       ) : (
         <div className="today-body">
-          {wide && day && mode !== "closeout" && <DayTimeline day={day} blocks={blocks} data={data} picks={picks} now={now} nowMs={nowMs} events={cal?.timed ?? []} onNotice={setNotice} />}
+          {wide && day && mode !== "closeout" && !readOnly && <DayTimeline day={day} blocks={blocks} data={data} picks={picks} now={now} nowMs={nowMs} events={cal?.timed ?? []} onNotice={setNotice} />}
           <div className="today-main">
             {mode !== "checkin" && cal && <AllDayRow events={cal.allDay} />}
             {mode !== "checkin" && split && <OutsideLine label="Before your blocks" events={wide ? [] : split.before} tz={tz} promises={spots.before} onPromise={onPromise} />}
             {mode === "now" && phone && blocks.length > 0 && <h2 className="section-label phone-agenda">Agenda</h2>}
+            {timeboxOffer && <div className="today-tools">{timeboxOffer}</div>}
             <section className={`today-blocks${blocks.length === 1 ? " one" : ""}`} style={{ "--blocks": blocks.length } as CSSProperties} aria-label="Today's blocks">
               {blocks.map((s) => (
                 <BlockCard
@@ -393,7 +463,9 @@ export function Today(props: Props) {
                   later={blocks.filter((b) => b.half !== s.half && !ended(b) && ms(b.start) > ms(s.start)).map((b) => ({ half: b.half, clientKey: b.focus[0]?.clientKey ?? null }))}
                   carryTo={mode === "closeout" ? (st?.carryTo ?? null) : nextDay}
                   selected={panel?.half === s.half && panel.focus?.kind === "pick" ? panel.focus.id : null}
-                  onOpen={mode === "closeout" ? undefined : (focus) => setPanel({ half: s.half, focus: focus ?? null })}
+                  readOnly={readOnly}
+                  planLink={!past && !ptoDay}
+                  onOpen={mode === "closeout" || readOnly ? undefined : (focus) => setPanel({ half: s.half, focus: focus ?? null })}
                   act={act}
                   makeUp={makeUp}
                   props={props}
@@ -401,14 +473,14 @@ export function Today(props: Props) {
               ))}
             </section>
             {mode !== "checkin" && split && <OutsideLine label="After your blocks" events={wide ? [] : split.after} tz={tz} promises={spots.after} onPromise={onPromise} />}
-            {mode === "now" && phone && <PhoneFollowUps data={data} date={date} onChanged={(m) => (m && setNotice(m), props.onChanged())} />}
-            {mode === "now" && !phone && <ThisWeek data={data} blocks={blocks} picks={picks} nameOf={nameOf} />}
+            {mode === "now" && phone && nudges && <PhoneFollowUps data={data} date={date} onChanged={(m) => (m && setNotice(m), props.onChanged())} />}
+            {mode === "now" && !phone && !ptoDay && <ThisWeek data={data} blocks={blocks} picks={picks} nameOf={nameOf} />}
             {mode === "checkin" && <CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} now={now} act={act} onReview={props.onPlanWeek} onAsks={props.onAsks ?? props.onInbox} />}
           </div>
         </div>
       )}
 
-      {panel && panelSlot && day && mode !== "closeout" && (
+      {panel && panelSlot && day && mode !== "closeout" && !readOnly && (
         <DetailPanel data={data} day={day} slot={panelSlot} focus={panel.focus} now={now} onClose={closePanel} onStart={props.onStart} onChanged={props.onChanged} onNotice={setNotice} />
       )}
       {mode === "closeout" && (
@@ -621,6 +693,10 @@ type BlockProps = {
   props: Props;
   /** CV-1: my promises due during this block. */
   promises?: DayPromise[];
+  /** QF-1: another day, or a PTO day: nothing ticks, moves or starts here. */
+  readOnly?: boolean;
+  /** QF-1: "Plan it" on an empty block (not on a past day or PTO). */
+  planLink?: boolean;
 };
 
 /** One block card (density "today"): header with client, time and the one status, then rows, then "Left off". */
@@ -655,9 +731,9 @@ function BlockCard(b: BlockProps) {
       toggle={view.toggle}
       link
       density="today"
-      canTick={committed}
-      timeEditable={committed && !ended}
-      draggable={committed && p.status === "planned"}
+      canTick={committed && !b.readOnly}
+      timeEditable={committed && !ended && !b.readOnly}
+      draggable={committed && p.status === "planned" && !b.readOnly}
       className={b.selected === p.id ? "selected" : ""}
       extra={!committed && p.status === "planned" ? <span className="draft-tag">draft</span> : undefined}
       badge={followUp(p) ? <DueBadge l={followUp(p)!} /> : undefined}
@@ -733,6 +809,21 @@ function BlockCard(b: BlockProps) {
     );
   }
 
+  // QF-1: a PTO half is muted: its picks (read only, to move from Plan today), no status, no risks.
+  if (slot.pto) {
+    return (
+      <article className={`${cls} pto-half`} style={style} aria-label={`${title}, ${slot.half === "AM" ? "morning" : "afternoon"} off`}>
+        <header>
+          <h2>{title}</h2>
+          <span className="tb-when">{slotRange(slot, tz)}</span>
+          <span className="status-pill none">Off this {slot.half === "AM" ? "morning" : slot.half === "PM" ? "afternoon" : "evening"}</span>
+        </header>
+        <ul className="today-picks">{b.picks.filter(live).map((p) => row(p, { canTick: false, timeEditable: false, draggable: false }))}</ul>
+        {!b.picks.some(live) && <p className="tb-empty">Nothing planned. Enjoy it.</p>}
+      </article>
+    );
+  }
+
   // Now.
   const note = client ? data.resumeNotes[client] : undefined;
   // UI-B: the now row in the block under way (or the morning before the day), by the rows' times.
@@ -788,7 +879,7 @@ function BlockCard(b: BlockProps) {
       {!b.picks.some(live) && !ended && (
         <p className="tb-empty">
           Nothing planned.
-          {!b.phone && (
+          {!b.phone && b.planLink !== false && (
             <>
               {" "}
               <button type="button" className="link-btn" onClick={() => b.props.onPlan(slot.date)}>

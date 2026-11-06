@@ -5238,3 +5238,13 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   .status-view .ph-title { row-gap: 2px; }
   .st-bar { top: 0; }
 }
+
+/* QF-1: Today on any day (‹ › and Back to today), a PTO day, a PTO half muted, and Timebox my day beside the plan. */
+.today-step { align-items: center; }
+.today-step .today-back { font-size: var(--fs-2); font-weight: 500; margin-left: 6px; }
+.today-pto { margin: 0 0 12px; padding: 10px 14px; border-radius: 8px; background: var(--raised); color: var(--text); font-size: var(--fs-3); }
+.today-pto strong { font-weight: 600; }
+.today-other { margin: 0 0 10px; font-size: var(--fs-3); }
+.today-tools { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+.today-block.pto-half { border-left-style: dashed; background: var(--raised); opacity: 0.75; }
+.today-block.pto-half .status-pill { color: var(--text-muted); }

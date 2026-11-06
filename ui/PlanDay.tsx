@@ -80,7 +80,7 @@ type Props = {
   /** Step 15.1 (D274): the next day that can be planned, for "Move to <day>" on picks that didn't fit. */
   nextDay?: { date: string; label: string } | null;
   /** "+ Add work" or A on a block, or a card's "This week: <feature>" (focus): open on that block. */
-  start?: { half: Half; n: number; focus?: number | null } | null;
+  start?: { half: Half; n: number; focus?: number | null; /** QF-1: open Timebox my day at once (from Today or the day menu). */ timebox?: boolean } | null;
   /** Step 16.2: Today's mode switch, at the right of this view's header. */
   switcher?: ReactNode;
   /** Today's date, for the title ("Plan today" or "Plan Tuesday, Nov 3"). */
@@ -126,6 +126,10 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
     if (!start) return;
     if (halves.includes(start.half)) setSel(start.half);
     setFocusItem(start.focus ?? null);
+  }, [start?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  // QF-1: asked from Today or the Board's day menu (the day already confirmed): Timebox my day's preview at once.
+  useEffect(() => {
+    if (start?.timebox && !past && !off && timing && state.plan.committedAt) setMyDay(true);
   }, [start?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => onSelectBlock?.(sel), [sel]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onSelectBlock?.(null), []); // eslint-disable-line react-hooks/exhaustive-deps
