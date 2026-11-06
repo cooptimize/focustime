@@ -16,7 +16,7 @@
       "inputTokens": 25,
       "outputTokens": 4,
       "costMicros": 5,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "task": "asks.classify",
