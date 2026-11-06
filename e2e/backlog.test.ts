@@ -67,7 +67,9 @@ describe.skipIf(!CHROMIUM)("Ahead › Backlog (browser, demo mode)", () => {
     await page.keyboard.press("Escape");
     // Plan it: a stale story onto next week's Plan, then Undo.
     await page.getByRole("button", { name: "Dismiss", exact: true }).first().click();
-    await page.getByRole("button", { name: "Clear", exact: true }).click().catch(() => null);
+    // HK-5: after a bulk action only the skipped items stay selected (set in the same render as the result above), and
+    // the bulk bar with Clear shows only while something is. Its click used to wait 30 s for a bar that wasn't there.
+    if (await page.locator(".bl-bulk").count()) await page.getByRole("button", { name: "Clear", exact: true }).click();
     await client(page, "Northwind Foods").getByRole("checkbox", { name: /Points balance page/ }).check();
     await page.getByRole("button", { name: "Plan it" }).click();
     await page.locator(".undo-toast").waitFor();
