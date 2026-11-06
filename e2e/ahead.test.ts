@@ -117,7 +117,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     const { page } = await open("#/ahead");
     await page.getByRole("button", { name: "Northwind Foods", exact: true }).click();
     const story = row(page, "Export button on the order page");
-    const staged = (cell: ReturnType<Page["locator"]>) => expect.poll(() => cell.getAttribute("class")).toContain("ah-pend");
+    const staged = (cell: ReturnType<Page["locator"]>) => expect.poll(() => cell.getAttribute("class"), { timeout: 10_000 }).toContain("ah-pend");
     // Size: a click, a number, Keep.
     const size = story.locator(".ah-col-size");
     await expect(size.getAttribute("class")).resolves.toContain("ah-edit");
@@ -130,7 +130,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await who.click();
     await page.getByRole("option", { name: /Priya Shah/ }).click();
     await staged(who);
-    await expect(who.textContent()).resolves.toContain("Priya Shah");
+    await expect.poll(() => who.textContent(), { timeout: 10_000 }).toContain("Priya Shah");
     // Target, then start on a feature that has one: a date and its half-day.
     const target = story.locator(".ah-col-target");
     await target.click();

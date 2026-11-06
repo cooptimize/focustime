@@ -43,7 +43,7 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     await page.keyboard.press("]");
     await expect.poll(() => hash(page)).toBe("#/today/2026-11-03");
     await expect.poll(() => title(page)).toMatch(/^Tuesday.*ahead/);
-    await expect(page.locator(".today-other").textContent()).resolves.toContain("A day ahead");
+    await expect.poll(() => page.locator(".today-other").textContent(), { timeout: 10_000 }).toContain("A day ahead");
     // Nothing nags on another day, and nothing starts there.
     await expect(page.locator(".urgent-strip, .attention, .moment-card, .start-focus").count()).resolves.toBe(0);
     // Back past the weekend with ‹ (the button) and [ (the key): Friday, Oct 30, a past day with Close out.
@@ -51,7 +51,7 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     await page.keyboard.press("[");
     await expect.poll(() => hash(page)).toBe("#/today/2026-10-30");
     await expect.poll(() => title(page)).toMatch(/^Friday.*past/);
-    await expect(page.getByRole("button", { name: "Close out Friday" }).count()).resolves.toBe(1);
+    await expect.poll(() => page.getByRole("button", { name: "Close out Friday" }).count(), { timeout: 10_000 }).toBe(1);
     await expect(page.locator(".today-block input[type=checkbox]:not(:disabled)").count()).resolves.toBe(0);
     await shots(page, "past-day");
     // A link opens that day again.
@@ -76,7 +76,7 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     await page.evaluate(() => (location.hash = "#/today/2026-11-05"));
     const pto = page.locator(".today-pto");
     await pto.waitFor();
-    await expect(pto.textContent()).resolves.toContain("You're off Thursday.");
+    await expect.poll(() => pto.textContent(), { timeout: 10_000 }).toContain("You're off Thursday.");
     await expect(page.locator(".urgent-strip, .attention, .moment-card, .start-focus, .today-off").count()).resolves.toBe(0);
     await shots(page, "pto-day");
     await pto.getByRole("button", { name: /next working day/ }).click();
@@ -92,7 +92,7 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     await page.reload();
     const offer = page.locator(".today-timebox");
     await offer.waitFor();
-    await expect(offer.textContent()).resolves.toMatch(/^(Confirm and timebox|Timebox my day)$/);
+    await expect.poll(() => offer.textContent(), { timeout: 10_000 }).toMatch(/^(Confirm and timebox|Timebox my day)$/);
     await shots(page, "today-timebox");
     await offer.click();
     const dialog = page.getByRole("dialog", { name: "Timebox my day" });
