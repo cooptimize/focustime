@@ -345,6 +345,12 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
       return (await db.all(`SELECT * FROM conversation_messages WHERE chat_id IN (${list}) AND role = ? ORDER BY at, message_id`, [...params, role])).map(toPlace);
     },
 
+    /** DX-1 Diagnostics: these chats' places from a time on, with who placed each (counts only; never text). */
+    async placesSince(chatIds: readonly string[], since: string): Promise<(MessagePlace & { byUser: string | null })[]> {
+      const [list, params] = inList(chatIds);
+      return (await db.all(`SELECT * FROM conversation_messages WHERE chat_id IN (${list}) AND at >= ? ORDER BY at, message_id`, [...params, since])).map((r) => ({ ...toPlace(r), byUser: (r.placed_by_user as string | null) ?? null }));
+    },
+
     // ---- commitments ----
     commitment: commitmentById,
     async commitmentsIn(conversationIds: readonly number[]): Promise<Commitment[]> {
@@ -543,6 +549,9 @@ function viewerOf(store: BaseStore, teams: TeamsStore, userId: string) {
     },
     async placesByRole(chatIds: readonly string[], role: MessageRole): Promise<MessagePlace[]> {
       return store.placesByRole(await chatsSeen(chatIds), role);
+    },
+    async placesSince(chatIds: readonly string[], since: string): Promise<(MessagePlace & { byUser: string | null })[]> {
+      return store.placesSince(await chatsSeen(chatIds), since);
     },
     async placeOf(chatId: string, messageId: string): Promise<MessagePlace | null> {
       return (await member(chatId)) ? store.placeOf(chatId, messageId) : null;
