@@ -1,17 +1,20 @@
 // Step 15.1 (D276): the compact time ruler on medium cards: when it shows, and where bands sit.
 import { describe, expect, it } from "vitest";
-import { rulerSpan, showRuler } from "./layout.ts";
+import { railFor, rulerSpan } from "./layout.ts";
 
 const slot = (extra: Partial<{ off: boolean; start: string; end: string }> = {}) => ({ off: false, start: "2026-11-02T12:30:00-05:00", end: "2026-11-02T17:00:00-05:00", ...extra });
 
-describe("showRuler", () => {
-  it("always shows on medium cards with working hours (U3: the one home for meetings, no switch)", () => {
-    expect(showRuler("medium", slot())).toBe(true);
+describe("railFor (WK-1: the card draws exactly its tier's element)", () => {
+  it("maps each tier to the rail, the slim ruler or the day strip", () => {
+    expect(railFor("rail", slot())).toBe("rail");
+    expect(railFor("ruler", slot())).toBe("slim");
+    expect(railFor("strip", slot())).toBe("strip");
+    expect(railFor("mini", slot())).toBe("strip");
   });
-  it("hides on blocks with no working hours, and never at wide or narrow widths", () => {
-    expect(showRuler("medium", slot({ off: true }))).toBe(false);
-    expect(showRuler("wide", slot())).toBe(false);
-    expect(showRuler("narrow", slot())).toBe(false);
+  it("draws nothing on blocks with no working hours, on the phone, or outside the medium layout", () => {
+    expect(railFor("rail", slot({ off: true }))).toBe(null);
+    expect(railFor("rail", slot(), true)).toBe(null);
+    expect(railFor(null, slot())).toBe(null);
   });
 });
 
