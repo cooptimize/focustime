@@ -172,6 +172,13 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await body.getByRole("switch", { name: "Allow AI for Adatum" }).check();
       await expect.poll(async () => (await team.org.rules()).ai).toMatchObject({ on: true, allowedClients: ["Adatum"] });
       await shotBoth(page, "admin-ai", body);
+      // AI-F1: background tasks on Flex; an admin puts one back on standard. Interactive tasks have no switch.
+      const tiers = body.locator(".adm-ai-tiers");
+      await tiers.getByRole("switch", { name: "Use Flex for Sorting requests" }).uncheck();
+      await expect.poll(async () => (await team.org.rules()).ai.standardTasks).toEqual(["asks.classify"]);
+      await tiers.getByRole("row", { name: /Break down/ }).getByText("Standard", { exact: true }).waitFor();
+      expect(await tiers.getByRole("switch").count()).toBe(3);
+      await shotBoth(page, "admin-ai-tiers", tiers);
       // Turning AI off for everyone asks first; Cancel keeps it on.
       await body.getByRole("switch", { name: "AI on" }).click();
       await body.getByRole("alertdialog", { name: "Turn AI off for everyone" }).getByRole("button", { name: "Cancel" }).click();

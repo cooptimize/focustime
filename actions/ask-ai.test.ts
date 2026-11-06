@@ -173,19 +173,20 @@ describe("sorting a request (asks.classify)", () => {
   const providerError: SetupOptions = { answer: () => ({ ok: false, kind: "provider", status: 400 }) };
   const unusable: SetupOptions = { answer: () => "{\"kind\":\"maybe\"}" };
   it.each([
-    ["AI off for FocusTime", { person: { on: false } }, "AI is off", false],
-    ["Allow AI off for the client", { person: { allowedClients: [] } }, "AI isn't allowed for Fabrikam", false],
-    ["over budget", { spent: 10_000_000 }, "AI budget reached for this month", false],
-    ["a provider error", providerError, "the AI service couldn't answer", true],
-    ["an unusable answer", unusable, "the AI's answer wasn't usable", true],
-  ] as const)("%s: the card with Not sorted, one attempt only", async (_why, o, reason, called) => {
+    ["AI off for FocusTime", { person: { on: false } }, "AI is off", []],
+    ["Allow AI off for the client", { person: { allowedClients: [] } }, "AI isn't allowed for Fabrikam", []],
+    ["over budget", { spent: 10_000_000 }, "AI budget reached for this month", []],
+    // AI-F1: a 400 on Flex (it may be a model without Flex) gets one try on standard, then stands.
+    ["a provider error", providerError, "the AI service couldn't answer", ["flex", undefined]],
+    ["an unusable answer", unusable, "the AI's answer wasn't usable", ["flex"]],
+  ] as const)("%s: the card with Not sorted, one attempt only", async (_why, o, reason, tiers) => {
     const s = await setup(o as SetupOptions);
     s.say({ chatId: FAB.chatId, text: "Can you add a filter?" });
     await s.poll();
     await s.poll();
     const a = (await s.run("requests.list", {})).requests[0]!;
     expect(a).toMatchObject({ status: "open", matched: "asks a question", sort: null, notSorted: reason });
-    expect(s.calls.length).toBe(called ? 1 : 0);
+    expect(s.calls.map((c) => c.serviceTier)).toEqual(tiers);
   });
 
   it("a guard refusal (another client's name in the request) is Not sorted and nothing is sent", async () => {

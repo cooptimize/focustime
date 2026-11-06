@@ -16,7 +16,7 @@ import { typeOf, type ProcessModel } from "../plan/process.ts";
 import { numbered, quotesOf, windowsOf, type TranscriptLine } from "../plan/transcript.ts";
 import type { IsoDate, WorkItem } from "../week/types.ts";
 
-export const MEETING_CAPTURE_TASK = "meeting_capture";
+export const MEETING_CAPTURE_TASK = "meeting.capture";
 
 export const MEETING_CAPTURE_INSTRUCTIONS = [
   "You read the transcript of a client's weekly status or planning call and propose updates to that client's Azure DevOps plan, for a Cooptimize reviewer to check. Find three kinds of things:",

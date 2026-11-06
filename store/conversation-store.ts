@@ -469,8 +469,8 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
     /** The app's request log for the pipeline (counts, cost and outcome; never text). */
     appAiLog: {
       async add(e: AiLogEntry): Promise<void> {
-        await db.tx(() => db.run("INSERT INTO app_ai_requests (at, task, client_key, model, input_tokens, output_tokens, cost_micros, latency_ms, outcome, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-          [Temporal.Instant.from(e.at).toString(), e.task.slice(0, 64), e.clientKey?.slice(0, 100) ?? null, e.model.slice(0, 100), Math.round(e.inputTokens), Math.round(e.outputTokens), Math.round(e.costMicros), Math.round(e.latencyMs), e.outcome, e.detail?.slice(0, 40) ?? null]));
+        await db.tx(() => db.run("INSERT INTO app_ai_requests (at, task, client_key, model, input_tokens, output_tokens, cost_micros, latency_ms, outcome, detail, tier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [Temporal.Instant.from(e.at).toString(), e.task.slice(0, 64), e.clientKey?.slice(0, 100) ?? null, e.model.slice(0, 100), Math.round(e.inputTokens), Math.round(e.outputTokens), Math.round(e.costMicros), Math.round(e.latencyMs), e.outcome, e.detail?.slice(0, 40) ?? null, e.tier === "flex" ? "flex" : "standard"]));
       },
       async spentMicros(fromIso: string, toIso: string): Promise<number> {
         return Number((await db.get("SELECT COALESCE(SUM(cost_micros), 0) AS n FROM app_ai_requests WHERE at >= ? AND at < ?", [fromIso, toIso]))?.n ?? 0);
@@ -478,7 +478,7 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
       async recent(limit: number): Promise<AiLogEntry[]> {
         const n = Math.max(1, Math.min(limit, 200));
         const rows = await db.all(db.dialect === "sqlserver" ? `SELECT TOP (${n}) * FROM app_ai_requests ORDER BY id DESC` : `SELECT * FROM app_ai_requests ORDER BY id DESC LIMIT ${n}`);
-        return rows.map((r) => ({ at: instant(r.at)!, task: r.task as string, clientKey: (r.client_key as string | null) ?? null, model: r.model as string, inputTokens: Number(r.input_tokens), outputTokens: Number(r.output_tokens), costMicros: Number(r.cost_micros), latencyMs: Number(r.latency_ms), outcome: r.outcome as AiLogEntry["outcome"], detail: (r.detail as string | null) ?? null, cap: "app" as const }));
+        return rows.map((r) => ({ at: instant(r.at)!, task: r.task as string, clientKey: (r.client_key as string | null) ?? null, model: r.model as string, inputTokens: Number(r.input_tokens), outputTokens: Number(r.output_tokens), costMicros: Number(r.cost_micros), latencyMs: Number(r.latency_ms), outcome: r.outcome as AiLogEntry["outcome"], detail: (r.detail as string | null) ?? null, cap: "app" as const, tier: r.tier === "flex" ? "flex" as const : "standard" as const }));
       },
     },
 

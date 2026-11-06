@@ -107,6 +107,8 @@ export function openAiProvider(o: OpenAiOptions): AiProvider {
             }
           : {}),
         store: false,
+        // AI-F1: Flex processing (flex-processing guide, Nov 6): only when the service asks for it; never "auto".
+        ...(c.serviceTier === "flex" ? { service_tier: "flex" } : {}),
         max_output_tokens: c.maxOutputTokens,
         ...(c.reasoningEffort ? { reasoning: { effort: c.reasoningEffort } } : {}),
         text: { format: { type: "json_schema", name: c.schemaName, schema: c.schema, strict: true } },
@@ -146,13 +148,15 @@ export function openAiProvider(o: OpenAiOptions): AiProvider {
       const usage = usageOf(json);
       if (json.status === "incomplete") return { ok: false, kind: "incomplete", usage };
       const model = typeof json.model === "string" ? json.model : c.model;
+      // AI-F1: the tier that served it, when the response says (service_tier); else the one asked for.
+      const tier = json.service_tier === "flex" ? "flex" as const : typeof json.service_tier === "string" ? "standard" as const : c.serviceTier === "flex" ? "flex" as const : "standard" as const;
       // AS-1: function calls (only for a call that offered tools): the arguments are JSON text, parsed by the service.
       const output = Array.isArray(json.output) ? (json.output as Record<string, unknown>[]) : [];
       const calls = c.tools?.length ? output.filter((i) => i?.type === "function_call" && typeof i.call_id === "string" && typeof i.name === "string" && typeof i.arguments === "string").map((i) => ({ callId: i.call_id as string, name: i.name as string, arguments: i.arguments as string })) : [];
-      if (calls.length) return { ok: true, text: "", usage, model, calls, items: output.filter((i) => i?.type === "function_call" || i?.type === "reasoning") };
+      if (calls.length) return { ok: true, text: "", usage, model, tier, calls, items: output.filter((i) => i?.type === "function_call" || i?.type === "reasoning") };
       const out = outputOf(json);
       if ("refusal" in out) return { ok: false, kind: "refusal", usage };
-      return { ok: true, text: out.text, usage, model };
+      return { ok: true, text: out.text, usage, model, tier };
     },
   };
 }

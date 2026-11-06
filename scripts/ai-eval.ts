@@ -110,7 +110,7 @@ function keyringKey(): Promise<string | null> {
   return new Promise((resolve) => execFile("secret-tool", ["lookup", "service", "focustime", "account", "openai-api-key"], { timeout: 5_000, encoding: "utf8" }, (e, out) => resolve(e || !out ? null : out.replace(/\n$/, ""))));
 }
 
-/** "@flex": the same model with service_tier flex, added to the request body (the app itself never sends it). */
+/** "@flex": the same model with service_tier flex, added to the request body for every task (AI-F1: the app itself sends it only for its background tasks). */
 function providerFor(model: string, live: boolean, key: () => Promise<string | null>): AiProvider {
   if (!live) return stubProvider({ respond: (c) => stubAnswer(c) });
   const flex = model.endsWith("@flex");
@@ -150,7 +150,10 @@ export async function runEval(o: { models: string[]; live: boolean; runs: number
     const provider = providerFor(model, o.live, o.key ?? keyringKey);
     const ai = createAi({
       provider: async () => provider,
-      app: { ...DEFAULT_AI, provider: o.live ? "openai" : "stub", model: model.replace(/@flex$/, ""), prices, timeoutMs: model.endsWith("@flex") ? 120_000 : 60_000 },
+      // AI-F1: the eval picks the tier itself (by "@flex"), so the app's own tier table is held at standard and every
+      // request is priced at this model's row.
+      app: { ...DEFAULT_AI, provider: o.live ? "openai" : "stub", model: model.replace(/@flex$/, ""), prices, flexPrices: prices, timeoutMs: model.endsWith("@flex") ? 120_000 : 60_000 },
+      waiting: true,
       rules: async () => ({ on: true, allowedClients: [CLIENT], personCapUsd: 50, appCapUsd: 50 }),
       guard: async () => ({ directory: [{ key: CLIENT, names: ["Contoso"], projects: ["Contoso Billing"], itemIds: [501, 502, 611, 612] }, { key: "fabrikam", names: ["Fabrikam"], projects: ["Fabrikam Portal"], itemIds: [4101] }], homeDomains: ["cooptimize.example"], forbidden: [] }),
       log: { add: async (e) => void log.push(e), spentMicros: async () => 0, recent: async () => [] },

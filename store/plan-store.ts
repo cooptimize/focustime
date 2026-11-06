@@ -1494,6 +1494,7 @@ const toAiRequest = (r: Row): AiLogEntry => ({
   outcome: r.outcome as AiOutcome,
   detail: (r.detail as string | null) ?? null,
   cap: r.cap === "app" ? "app" : "person",
+  tier: r.tier === "flex" ? "flex" : "standard",
 });
 
 const toAsk = (r: Row): Ask => ({
@@ -3082,8 +3083,8 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     /** AI-0: one AI request in the person's log: counts, cost and outcome, never the prompt or the answer. */
     async addAiRequest(e: AiLogEntry): Promise<void> {
       await tx(async () => {
-        await db.run("INSERT INTO ai_requests (at, task, client_key, model, input_tokens, output_tokens, cost_micros, latency_ms, outcome, detail, cap) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-          Temporal.Instant.from(e.at).toString(), e.task.slice(0, 64), e.clientKey ? e.clientKey.slice(0, 100) : null, e.model.slice(0, 100), Math.max(0, Math.round(e.inputTokens)), Math.max(0, Math.round(e.outputTokens)), Math.max(0, Math.round(e.costMicros)), Math.max(0, Math.round(e.latencyMs)), e.outcome, e.detail ? e.detail.slice(0, 40) : null, e.cap === "app" ? "app" : "person");
+        await db.run("INSERT INTO ai_requests (at, task, client_key, model, input_tokens, output_tokens, cost_micros, latency_ms, outcome, detail, cap, tier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          Temporal.Instant.from(e.at).toString(), e.task.slice(0, 64), e.clientKey ? e.clientKey.slice(0, 100) : null, e.model.slice(0, 100), Math.max(0, Math.round(e.inputTokens)), Math.max(0, Math.round(e.outputTokens)), Math.max(0, Math.round(e.costMicros)), Math.max(0, Math.round(e.latencyMs)), e.outcome, e.detail ? e.detail.slice(0, 40) : null, e.cap === "app" ? "app" : "person", e.tier === "flex" ? "flex" : "standard");
       });
     },
     /** AI-0: the estimated cost of the person's requests in [from, to), in millionths of a dollar. */
