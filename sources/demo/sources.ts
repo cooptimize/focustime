@@ -12,6 +12,7 @@ import type { DemoOutlook } from "./outlook.ts";
 import { demoDirectory } from "./directory.ts";
 import { DEMO_CLIENTS, DEMO_ME, DEMO_PEOPLE, demoGoogle, demoOutlook, demoPatterns, demoPortfolio, demoProcess, demoPto, demoWork, demoWorkItem, isDemoClient, demoAheadClient, type DemoClientKey } from "./data.ts";
 import { itemUrlOf, type DemoDevOps } from "./devops.ts";
+import { demoKatSent } from "./seeds/status.ts";
 import { typeOf } from "../../plan/process.ts";
 
 const NO = "Demo data: nothing leaves FocusTime";
@@ -34,6 +35,8 @@ export function createDemoSources(world: DemoDevOps, cal: DemoOutlook, now: () =
     teamPto: async () => ({ ok: true, away: [] }),
     // ADM-1: fictional levels and client leads (Admin › People in the demo).
     directory: async () => ({ ok: true, read: demoDirectory() }),
+    // SR-1: Kat sent each demo client's report last Monday a few minutes after 7:00 AM ET (seeds/status.ts).
+    statusSent: async (keys: string[]) => ({ ok: true, sent: Object.fromEntries(keys.map((k) => [k, isDemoClient(k) ? demoKatSent(now(), k) : null])) }),
   };
   const calendar = (id: "outlook" | "google", events: (monday: string) => CalEvent[]): CalendarSource => ({
     id,
@@ -131,6 +134,10 @@ export function createDemoSources(world: DemoDevOps, cal: DemoOutlook, now: () =
       const words = q.split(/\s+/).filter(Boolean);
       return r.items.filter((i) => i.inScope && i.stateCategory !== "Completed" && i.stateCategory !== "Removed").filter((i) => !q || String(i.id) === q || words.every((w) => i.title.toLowerCase().includes(w))).sort((a, b) => b.changedAt.localeCompare(a.changedAt)).slice(0, limit);
     },
+    // SR-1: Status reads the demo's feature comments (seeded by seeds/status.ts, and any the demo's writes add) and
+    // its activity log (the seeded story changes, mine or a teammate's).
+    featureComments: async (clientKey, ids) => (isDemoClient(clientKey) ? { ok: true, comments: Object.fromEntries(ids.filter((id) => world.item(id)?.clientKey === clientKey).map((id) => [id, world.reportComments(id)])), failed: [] } : { ok: false, message: "Not a demo client" }),
+    activity: async (clientKey, since) => ({ known: true, rows: isDemoClient(clientKey) ? world.activity(clientKey).filter((r) => Temporal.Instant.compare(Temporal.Instant.from(r.changedAt), Temporal.Instant.from(since)) >= 0) : [] }),
     processModels: async (keys) => Promise.all(keys.map(async (clientKey) => (isDemoClient(clientKey) ? { clientKey, ok: true as const, model: demoProcess(clientKey, await processOverrides(clientKey)) } : { clientKey, ok: false as const, message: "Not a demo client" }))),
   };
   return { dataverse, outlook, google, devops };

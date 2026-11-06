@@ -37,7 +37,7 @@ export type DemoItem = {
   iteration: string;
   relations: { rel: string; url: string; attributes?: unknown }[];
 };
-type DemoComment = { id: number; text: string; isDeleted: boolean; createdBy: string; createdDate: string };
+type DemoComment = { id: number; text: string; isDeleted: boolean; createdBy: string; createdDate: string; /** SR-1 */ createdByName?: string; modifiedDate?: string };
 
 export const STATES: Record<string, { name: string; category: string }[]> = Object.fromEntries(
   ["Epic", "Feature", "User Story", "Task", "Bug"].map((t) => [t, [{ name: "New", category: "Proposed" }, { name: "Active", category: "InProgress" }, { name: "Resolved", category: "Resolved" }, { name: "Closed", category: "Completed" }, { name: "Removed", category: "Removed" }]]),
@@ -85,6 +85,8 @@ export type DemoDevOps = ReturnType<typeof createDemoDevOps>;
 export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, string>; now: () => string }) {
   const items = new Map<number, DemoItem>(o.items.map((i) => [i.id, { ...i, relations: [...i.relations] }]));
   const comments = new Map<number, DemoComment[]>();
+  /** SR-1: the demo's change log of story states and comments (seeded), mine or a teammate's; never who beyond that. */
+  const activityRows: { clientKey: DemoClientKey; itemId: number; kind: "state" | "comments"; oldValue: string | null; newValue: string | null; changedAt: string; mine: boolean }[] = [];
   const attachments = new Set<string>();
   let nextId = 5100;
   let nextComment = 7000;
@@ -229,7 +231,7 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
       const id = Number(m[1]);
       if (!items.has(id)) return json({ message: "TF401232: Work item does not exist" }, 404);
       const list = comments.get(id) ?? comments.set(id, []).get(id)!;
-      const cv = (c: DemoComment) => ({ workItemId: id, id: c.id, version: 1, text: c.text, isDeleted: c.isDeleted, createdBy: { uniqueName: c.createdBy }, createdDate: c.createdDate });
+      const cv = (c: DemoComment) => ({ workItemId: id, id: c.id, version: 1, text: c.text, isDeleted: c.isDeleted, createdBy: { uniqueName: c.createdBy, displayName: c.createdByName ?? c.createdBy }, createdDate: c.createdDate, modifiedDate: c.modifiedDate ?? c.createdDate });
       if (!m[2] && method === "POST") {
         const c = { id: nextComment++, text: String((body as { text?: unknown }).text ?? ""), isDeleted: false, createdBy: ME_EMAIL, createdDate: o.now() };
         list.push(c);
@@ -240,6 +242,14 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
       if (!c) return json({ message: "not found" }, 404);
       if (method === "DELETE") {
         c.isDeleted = true;
+        return json(cv(c));
+      }
+      // SR-1: an edit of my own comment (the demo's DevOps refuses anyone else's, as DevOps's UI does).
+      if (method === "PATCH") {
+        if (c.isDeleted) return json({ message: "not found" }, 404);
+        if (c.createdBy.toLowerCase() !== ME_EMAIL.toLowerCase()) return json({ message: "Only the author can edit this comment" }, 403);
+        c.text = String((body as { text?: unknown }).text ?? "");
+        c.modifiedDate = o.now();
         return json(cv(c));
       }
       if (c.isDeleted && url.searchParams.get("includeDeleted") !== "true") return json({ message: "not found" }, 404);
@@ -261,6 +271,15 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
       const i = items.get(id);
       return i ? plain(i.acceptance) : null;
     },
+    /** SR-1: its comments as Status reads them (author, created and modified), newest first. */
+    reportComments: (id: number) => (comments.get(id) ?? []).filter((c) => !c.isDeleted).map((c) => ({ id: c.id, text: c.text, authorName: c.createdByName ?? (c.createdBy.toLowerCase() === ME_EMAIL ? ME_NAME : nameOf(c.createdBy) ?? "Someone"), authorUnique: c.createdBy, createdAt: c.createdDate, modifiedAt: c.modifiedDate ?? c.createdDate })).reverse(),
+    /** SR-1 (seeds/status.ts): a comment someone wrote earlier, as DevOps would hold it. */
+    seedComment: (id: number, c: { text: string; by: string; byName: string; at: string }) => {
+      const list = comments.get(id) ?? comments.set(id, []).get(id)!;
+      list.push({ id: nextComment++, text: c.text, isDeleted: false, createdBy: c.by, createdByName: c.byName, createdDate: c.at, modifiedDate: c.at });
+    },
+    activity: (k: DemoClientKey) => activityRows.filter((r) => r.clientKey === k).map(({ clientKey: _k, ...r }) => r),
+    seedActivity: (r: (typeof activityRows)[number]) => void activityRows.push(r),
     /** Its comments, newest first, as plain text. */
     comments: (id: number) => (comments.get(id) ?? []).filter((c) => !c.isDeleted).map((c) => ({ at: c.createdDate, text: plain(c.text) })).reverse(),
     seen,

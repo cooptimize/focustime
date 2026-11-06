@@ -19,6 +19,7 @@ import { DevOpsWriteCtx, useDevOpsWriteFlow } from "./DevOpsWrite.tsx";
 import { TimeboxCtx, TimeboxDialog, timeboxChange as tbChange, useWriteFlow, type TimeboxEnv } from "./Timeboxes.tsx";
 import { HelpFinder } from "./HelpFinder.tsx";
 import { SendHost, TeamView } from "./Team.tsx";
+import { StatusView } from "./Status.tsx";
 import type { HelpTarget } from "./menu.ts";
 import type { TimeboxTarget } from "./menu.ts";
 import type { WriteState } from "../actions/types.ts";
@@ -1113,7 +1114,7 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (base !== "week" || (nav.tab === "week" && nav.mode === "team") || focusOpen || guideAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (base !== "week" || (nav.tab === "week" && (nav.mode === "team" || nav.mode === "status")) || focusOpen || guideAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
       const days = data.week.days;
@@ -1421,7 +1422,7 @@ export function App() {
         tab="week"
         current={nav.tab === "week" ? nav.mode : "board"}
         status={{ board: dayStatus.plan === "due" ? "due" : null, commit: weekModeStatus(!!data.weekCommitted[weekToPlan], data.weekNudge.badge, weekToPlan) }}
-        onMode={(m: ModeName) => goNav(m === "board" ? navOf.week("board") : m === "team" ? navOf.week("team") : navOf.week("commit"))}
+        onMode={(m: ModeName) => goNav(m === "board" ? navOf.week("board") : m === "team" ? navOf.week("team") : m === "status" ? navOf.week("status") : navOf.week("commit"))}
       />
     ),
     ahead: <ModeSwitch tab="ahead" current={nav.tab === "ahead" ? nav.mode : "grid"} status={{ gantt: data.aheadDue.length ? "due" : null }} onMode={(m: ModeName) => goNav(modeNav("ahead", m))} />,
@@ -1683,6 +1684,9 @@ export function App() {
         />
       ) : planWeekAt !== null ? (
         <PhoneGate phone={phone} onBack={leavePlanning} backLabel="Back to Week"><PlanWeek openClient={planWeekClient} onOpenClientSeen={clearPlanWeekClient} switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} onOpenDay={(d, h) => goNav(navOf.planDay(d, h))} /></PhoneGate>
+      ) : nav.tab === "week" && nav.mode === "status" ? (
+        // SR-1: Week › Status; Preview only on the phone (writing is for a wider screen).
+        <StatusView switcher={switches.week} colors={data.clients} readOnly={phone} version={planWeekVersion} onChanged={reloadQuiet} />
       ) : nav.tab === "week" && nav.mode === "team" ? (
         // SW-1: Week › Team, read-only on the phone (allowed there, no gate).
         <TeamView switcher={switches.week} weekStart={nav.week ?? data.today.weekStart} thisWeek={data.today.weekStart} colors={data.clients} readOnly={phone} onWeek={(w) => goNav(navOf.week("team", w))} version={planWeekVersion} onChanged={reloadQuiet} />
@@ -1888,7 +1892,7 @@ export function App() {
         onDisconnect={(src) => void disconnect(src)}
       />
 
-      {detailsOpen && base === "week" && !planWeekAt && !pd && !(nav.tab === "week" && nav.mode === "team") && (
+      {detailsOpen && base === "week" && !planWeekAt && !pd && !(nav.tab === "week" && (nav.mode === "team" || nav.mode === "status")) && (
         <DetailPanel variant="week" data={data} day={day} slot={slot} focus={panelFocus} now={now ?? new Date(clock).toISOString()} onClose={() => (setDetailsOpen(false), setPanelFocus(null), cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true }))} onStart={startFocus} onChanged={reloadQuiet} onNotice={setNotice} />
       )}
       {phone && (

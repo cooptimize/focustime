@@ -76,6 +76,8 @@ import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-
 import { markScheduled, publishWeek, sendFacts, teamAction, type TeamAction, type TeamContext } from "./team-actions.ts";
 import { inboxAction } from "./inbox-actions.ts";
 import { snoozeDayOf } from "../plan/inbox-items.ts";
+import { statusAction, type StatusAction, type StatusContext } from "./status-actions.ts";
+import { reportWindow } from "../plan/status-report.ts";
 import { carryAction, idsByClient, markResolved, planBitsFor, resolvedKeys, type CarryContext } from "./carry-actions.ts";
 import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
 import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
@@ -851,6 +853,11 @@ async function devopsWriteContext(ctx: ActionContext): Promise<DevOpsWriteContex
     },
     // CV-4: a conversation's images, read from Teams with my own token when I create the item (never stored).
     ...(ctx.requests ? { chatImages: async () => (await accountOf(ctx))?.chatMessages ?? null } : {}),
+    // SR-1: a comment edit only inside the client's status report window (Kat's last send, else Monday 7:00 AM ET).
+    reportSince: async (cfg, clientKey) => {
+      const r = await katSentFor(ctx, cfg, [clientKey]).catch(() => null);
+      return reportWindow(r?.ok ? (r.sent[clientKey] ?? null) : null, Temporal.Instant.from(ctx.now())).since;
+    },
   };
 }
 
@@ -1309,7 +1316,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     }
     case "teams.test": {
       const i = req.input as { kind?: unknown } | null;
-      if (!i || typeof i !== "object" || Object.keys(i).some((k) => k !== "kind") || !(TEAMS_KINDS as readonly unknown[]).includes(i.kind)) return bad("teams.test takes { kind: brief, checkin, closeout or nudges }");
+      if (!i || typeof i !== "object" || Object.keys(i).some((k) => k !== "kind") || !(TEAMS_KINDS as readonly unknown[]).includes(i.kind)) return bad("teams.test takes { kind: brief, checkin, closeout, nudges or status }");
       if (!ctx.teams) return { ok: false, status: 503, error: "FocusTime in Teams isn't set up here" };
       const r = await ctx.teams.test(i.kind as TeamsKind);
       return r.ok ? { ok: true, data: { sent: i.kind } } : { ok: false, status: 409, error: r.message };
@@ -1790,6 +1797,9 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "lookup.day":
     case "items.get":
       return assistantAction(async () => (await assistantFor(ctx, "panel"))?.service ?? null, async () => (await assistantFor(ctx, "panel"))?.reads ?? null, action, req.input, (c) => assistantGate(ctx, c));
+    case "status.load":
+    case "status.draft":
+      return statusAction(await statusCtx(ctx), action satisfies StatusAction, req.input);
     case "send.people":
     case "send.create":
     case "send.cancel":
@@ -1877,6 +1887,34 @@ async function afterPlanChange(ctx: ActionContext, action: string, input: unknow
 }
 
 /** PL-1: the "From last week" proposal and Watching rows' context. */
+/** SR-1: Status's reads: Ahead's items and identities, Kat's last send, the comments, the change log, AI. */
+async function statusCtx(ctx: ActionContext): Promise<StatusContext> {
+  const ahead = await aheadContext(ctx);
+  let ids: Promise<import("./ahead-actions.ts").AheadIdentities | null> | null = null;
+  return {
+    plan: ctx.plan,
+    config: () => configured(ctx),
+    clients: (cfg, weekStart) => aheadClients(ctx, cfg, weekStart, false),
+    devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
+    katSent: (cfg, keys) => katSentFor(ctx, cfg, keys),
+    myEmails: async (k) => {
+      ids ??= ahead.identities ? ahead.identities().catch(() => null) : Promise.resolve(null);
+      const ix = await ids;
+      const writes = (await ctx.plan?.devopsIdentities().catch(() => []))?.filter((w) => w.clientKey === k).map((w) => w.email) ?? [];
+      return [...new Set([...(ix ? ix.mine(k) : []), ...writes].map((e) => e.toLowerCase()))];
+    },
+    canWrite: ahead.canWrite,
+    ai: () => aiFor(ctx),
+    now: ctx.now,
+  };
+}
+
+/** SR-1: Kat's last send per client, from Dataverse (a source without the read: unknown, the Monday 7:00 fallback). */
+async function katSentFor(ctx: ActionContext, cfg: AppConfig, keys: string[]) {
+  const dv = ctx.makeDataverse(cfg.dataverse, userZone(cfg));
+  return dv.statusSent ? dv.statusSent(keys) : { ok: false as const, message: "Kat's last send can't be read here" };
+}
+
 function carryCtx(ctx: ActionContext): CarryContext {
   return {
     plan: ctx.plan,

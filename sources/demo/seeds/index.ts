@@ -9,6 +9,7 @@ import { followupsSeed } from "./followups.ts";
 import { historySeed } from "./history.ts";
 import { inboxSeed } from "./inbox.ts";
 import { noticesSeed } from "./notices.ts";
+import { statusSeed } from "./status.ts";
 import { teamSeed } from "./team.ts";
 import type { DemoSeed } from "./types.ts";
 import { unfinishedSeed } from "./unfinished.ts";
@@ -28,4 +29,5 @@ export const DEMO_SEEDS: readonly DemoSeed[] = [
   conversationsSeed,
   inboxSeed,
   assistantSeed,
+  statusSeed,
 ];

@@ -5,7 +5,7 @@ import { Pat } from "./pat.ts";
 import { fakePat } from "./test-fakes.ts";
 
 export type FakeItem = { id: number; rev: number; fields: Record<string, unknown>; relations: { rel: string; url: string; attributes?: unknown }[] };
-export type FakeComment = { id: number; text: string; isDeleted: boolean; createdBy: string; createdDate: string };
+export type FakeComment = { id: number; text: string; isDeleted: boolean; createdBy: string; createdDate: string; /** SR-1 */ createdByName?: string; modifiedDate?: string };
 export type Seen = { method: string; url: string; authorization: string | null; contentType: string | null; body: unknown };
 
 /** The PAT each fake identity uses (Basic base64(":" + PAT)). */
@@ -173,7 +173,7 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
     if (m) {
       const id = Number(m[1]);
       const list = comments.get(id) ?? comments.set(id, []).get(id)!;
-      const cv = (c: FakeComment) => ({ workItemId: id, id: c.id, version: 1, text: c.text, isDeleted: c.isDeleted, createdBy: { uniqueName: c.createdBy }, createdDate: c.createdDate });
+      const cv = (c: FakeComment) => ({ workItemId: id, id: c.id, version: 1, text: c.text, isDeleted: c.isDeleted, createdBy: { uniqueName: c.createdBy, displayName: c.createdByName ?? c.createdBy }, createdDate: c.createdDate, modifiedDate: c.modifiedDate ?? c.createdDate });
       if (!m[2] && method === "POST") {
         const c = { id: nextComment++, text: String(body.text), isDeleted: false, createdBy: who.email, createdDate: clock() };
         list.push(c);
@@ -184,6 +184,14 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
       if (!c) return json({ message: "not found" }, 404);
       if (method === "DELETE") {
         c.isDeleted = true;
+        return answer(json(cv(c)));
+      }
+      // SR-1: an edit (DevOps itself lets only the author edit in its UI; the fake refuses anyone else too).
+      if (method === "PATCH") {
+        if (c.isDeleted) return json({ message: "not found" }, 404);
+        if (c.createdBy.toLowerCase() !== who.email.toLowerCase()) return json({ message: "TF401409: Only the author can edit this comment" }, 403);
+        c.text = String(body.text);
+        c.modifiedDate = clock();
         return answer(json(cv(c)));
       }
       if (c.isDeleted && url.searchParams.get("includeDeleted") !== "true") return json({ message: "not found" }, 404);

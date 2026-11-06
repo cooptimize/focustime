@@ -63,7 +63,7 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await expect.poll(() => hash(page)).toBe("#/week/day/2026-11-02");
     await expect.poll(() => tab(page).textContent()).toMatch(/^Week/);
     const modes = page.getByRole("navigation", { name: "Week modes" });
-    expect(await modes.getByRole("button").allTextContents()).toEqual(["Board", "Plan", "Team"]);
+    expect(await modes.getByRole("button").allTextContents()).toEqual(["Board", "Plan", "Team", "Status"]);
     expect(await page.locator(".pd2-title").textContent()).toContain("Plan today");
     // Each piece of Plan the day, reachable here:
     // 1. the day's blocks with their fit, and the day's free time;

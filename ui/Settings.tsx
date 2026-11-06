@@ -21,6 +21,7 @@ import { shortDate } from "./labels.ts";
 import { BINAURAL, MAX_PLAYLISTS, playlistLink, SOUND_NAMES, SOUNDS, type Playlist, type SoundKind } from "../plan/focussound.ts";
 import { sound } from "./sound.ts";
 import { KIND_HINT, KIND_LABEL, RITUAL_KINDS, type NotifyKind, type QuietMode } from "../plan/notify.ts";
+import { DEFAULT_STATUS_TIMES, type StatusTimes } from "../plan/status-report.ts";
 import { CLOSEOUT_MINUTES, DEFAULT_TEAMS_RHYTHM, HM, TEAMS_KIND_HINT, TEAMS_KIND_LABEL, TEAMS_KINDS, type TeamsKind, type TeamsRhythm } from "../plan/teams-rhythm.ts";
 import { nextRituals } from "../plan/rituals.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
@@ -943,10 +944,10 @@ function NotifyForm(p: FormProps) {
   const n = p.data.notify;
   const a = useAutoSave({
     section: "notify",
-    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false, teamsMessages: n.teamsMessages ?? false, teams: { ...DEFAULT_TEAMS_RHYTHM, ...(n.teams ?? {}) } as TeamsRhythm },
+    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false, teamsMessages: n.teamsMessages ?? false, teams: { ...DEFAULT_TEAMS_RHYTHM, ...(n.teams ?? {}) } as TeamsRhythm, status: { ...DEFAULT_STATUS_TIMES, ...(n.status ?? {}) } as StatusTimes },
     payload: (v) => v,
     onSaved: p.onSavedData,
-    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent requests during focus" : k === "teamsMessages" ? "Messages in Teams" : k === "teams" ? "Teams messages" : "Quiet on PTO days"),
+    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent requests during focus" : k === "teamsMessages" ? "Messages in Teams" : k === "teams" ? "Teams messages" : k === "status" ? "Status report times" : "Quiet on PTO days"),
   });
   const [test, setTest] = useState<string | null>(null);
   const group = (title: string, list: readonly NotifyKind[]) => (
@@ -969,8 +970,18 @@ function NotifyForm(p: FormProps) {
         {group("While you focus", ["timer", "meeting"])}
         {group("Other", ["vm", "followups", "expiry", "asks"])}
         {group("Client chats", ["commitment_item", "taken_over"])}
+        {group("Monday's status report", ["status_report"])}
       </div>
       <SaveMark s={a.status("kinds")} retry={() => a.commit("kinds")} />
+      <AutoField a={a} k="status" label="Status report times" hint="Friday at this time, or an hour before your day ends if that comes first. Sunday only when you turn it on. These times hold in Teams too.">
+        <span className="set-teams-time">
+          <input type="time" aria-label="Friday at" value={a.v.status.fridayAt} onChange={(e) => HM.test(e.target.value) && a.set("status", { ...a.v.status, fridayAt: e.target.value })} onBlur={() => a.commit("status")} />
+          <label className="set-check">
+            <input type="checkbox" checked={a.v.status.sunday} onChange={(e) => a.change("status", { ...a.v.status, sunday: e.target.checked })} /> Also Sunday evening at
+          </label>
+          <input type="time" aria-label="Sunday at" disabled={!a.v.status.sunday} value={a.v.status.sundayAt} onChange={(e) => HM.test(e.target.value) && a.set("status", { ...a.v.status, sundayAt: e.target.value })} onBlur={() => a.commit("status")} />
+        </span>
+      </AutoField>
       <AutoField a={a} k="asksThroughFocus" label="Urgent requests during focus" hint="Off: an urgent request waits until the focus session ends, with the others.">
         <label className="set-check">
           <input type="checkbox" checked={a.v.asksThroughFocus} onChange={(e) => a.change("asksThroughFocus", e.target.checked)} /> Let urgent asks through

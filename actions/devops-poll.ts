@@ -497,6 +497,14 @@ export function createDevOpsPoller(d: PollerDeps) {
       const ids = new Set((await d.store.changes(key, since)).filter((x) => x.kind === "state").map((x) => x.itemId));
       return { known: true, itemIds: [...ids].sort((a, b) => a - b) };
     },
+    async activity(key, since, emails) {
+      const c = await stateOf(key);
+      const known = !!c.row.loadedAt && Temporal.Instant.compare(Temporal.Instant.from(c.row.loadedAt), Temporal.Instant.from(since)) <= 0;
+      const me = new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean));
+      // SR-1: the change log's uniqueName is compared here and goes no further (D591's narrow use: matching me).
+      const rows = (await d.store.changes(key, since)).flatMap((x) => (x.kind === "state" || x.kind === "comments" ? [{ itemId: x.itemId, kind: x.kind, oldValue: x.oldValue, newValue: x.newValue, changedAt: x.changedAt, mine: !!x.byUnique && me.has(x.byUnique.trim().toLowerCase()) }] : []));
+      return { known, rows };
+    },
     async stored(key, v) {
       // AH-1 (D660): a write's read-back goes straight in, with its change log entries, so every screen shows it now.
       const c = await stateOf(key);

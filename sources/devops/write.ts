@@ -18,7 +18,7 @@ export class WriteFailure extends Error {
   }
 }
 
-export type Comment = { id: number; text: string; isDeleted: boolean; createdBy: string | null; createdDate: string | null };
+export type Comment = { id: number; text: string; isDeleted: boolean; createdBy: string | null; createdDate: string | null; /** SR-1: when it was last edited (DevOps's modifiedDate), or null. */ modifiedDate?: string | null };
 
 export function createDevOpsWriter(d: { fetch: typeof fetch; log: Logger; timeoutMs?: number }) {
   const timeoutMs = d.timeoutMs ?? 20_000;
@@ -100,6 +100,10 @@ export function createDevOpsWriter(d: { fetch: typeof fetch; log: Logger; timeou
     async getComment(org: string, pat: Pat, project: string, id: number, commentId: number): Promise<Comment> {
       return comment(await req<RawComment>(org, pat, "comment_get", "GET", `${p(project)}/_apis/wit/workItems/${id}/comments/${commentId}?includeDeleted=true`, COMMENTS_API));
     },
+    /** SR-1: my own comment's new text (PATCH comments/{id}, 7.1-preview.4; checked on Learn Nov 5). Never someone else's: the caller checks the author first. */
+    async updateComment(org: string, pat: Pat, project: string, id: number, commentId: number, text: string): Promise<Comment> {
+      return comment(await req<RawComment>(org, pat, "comment_update", "PATCH", `${p(project)}/_apis/wit/workItems/${id}/comments/${commentId}`, COMMENTS_API, { text }));
+    },
     async comments(org: string, pat: Pat, project: string, id: number): Promise<Comment[]> {
       const r = await req<{ comments?: RawComment[] }>(org, pat, "comment_list", "GET", `${p(project)}/_apis/wit/workItems/${id}/comments?$top=200&order=desc`, COMMENTS_API);
       return (r.comments ?? []).map(comment);
@@ -130,7 +134,7 @@ async function safeMessage(res: Response): Promise<string | null> {
 }
 
 type RawItem = { id?: unknown; rev?: unknown; fields?: Record<string, unknown>; relations?: { rel?: unknown; url?: unknown; attributes?: unknown }[]; commentVersionRef?: { commentId?: unknown } };
-type RawComment = { id?: unknown; commentId?: unknown; text?: unknown; isDeleted?: unknown; createdBy?: { uniqueName?: unknown }; createdDate?: unknown };
+type RawComment = { id?: unknown; commentId?: unknown; text?: unknown; isDeleted?: unknown; createdBy?: { uniqueName?: unknown }; createdDate?: unknown; modifiedDate?: unknown };
 
 function snapshot(r: RawItem): ItemSnapshot {
   if (typeof r.id !== "number" || typeof r.rev !== "number") throw new WriteFailure("error", "DevOps answered without the item");
@@ -144,5 +148,5 @@ function snapshot(r: RawItem): ItemSnapshot {
 function comment(r: RawComment): Comment {
   const id = typeof r.id === "number" ? r.id : typeof r.commentId === "number" ? r.commentId : null;
   if (id === null) throw new WriteFailure("error", "DevOps answered without the comment");
-  return { id, text: typeof r.text === "string" ? r.text : "", isDeleted: r.isDeleted === true, createdBy: typeof r.createdBy?.uniqueName === "string" ? r.createdBy.uniqueName : null, createdDate: typeof r.createdDate === "string" ? r.createdDate : null };
+  return { id, text: typeof r.text === "string" ? r.text : "", isDeleted: r.isDeleted === true, createdBy: typeof r.createdBy?.uniqueName === "string" ? r.createdBy.uniqueName : null, createdDate: typeof r.createdDate === "string" ? r.createdDate : null, modifiedDate: typeof r.modifiedDate === "string" ? r.modifiedDate : null };
 }

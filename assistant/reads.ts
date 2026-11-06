@@ -8,6 +8,7 @@ import type { ConversationsData } from "../plan/conversation-views.ts";
 import { buildRows, isOpen, tierOf } from "../plan/ahead-model.ts";
 import { GAP_WORDS } from "../plan/fixnext.ts";
 import type { Pick } from "../plan/types.ts";
+import type { StatusLoad } from "../plan/status-types.ts";
 import { hoursOn } from "../week/hours.ts";
 import type { BlockCard, Card, ItemCard, Link, PickCard, PromiseCard, SendCard } from "./types.ts";
 
@@ -186,4 +187,22 @@ export async function sendsRead(d: ReadDeps, client: string | null): Promise<Rea
   const cards: Card[] = list.slice(0, 12).map((s) => sendCard(d, s));
   if (!cards.length) cards.push({ kind: "note", text: "No sends this week or next.", link: d.link("#/week/commit", "Open Plan") });
   return { cards, facts: list.slice(0, 12).map((s) => ({ title: { quoted: s.title }, from: s.from.name, to: s.to.name, kind: s.kind, week: s.weekStart, state: s.words || s.state })), itemIds: list.map((s) => s.itemId), pickIds: [] };
+}
+
+/**
+ * SR-1: Monday's status report. Opens Week › Status ("write my status updates"); for one client it also gives the
+ * features with their ids and how many updates each has this window, so "add an update to <feature>: …" can propose
+ * that comment. Titles go to the model only for that client, quoted.
+ */
+export async function statusRead(d: ReadDeps, client: string | null): Promise<ReadResult> {
+  const l = await data<StatusLoad>(d.run("status.load", {}));
+  if (typeof l === "string") return fail(l);
+  const clients = l.clients.filter((c) => d.isMine(c.clientKey) && (client === null || c.clientKey === client));
+  const features = clients.flatMap((c) => [...c.features, ...c.also].map((f) => ({ c, f })));
+  const without = clients.flatMap((c) => c.features).filter((f) => f.thisWeek !== null && f.thisWeek.length === 0).length;
+  const shown = clients.reduce((n, c) => n + c.features.length, 0);
+  const text = shown ? `${l.title}: ${shown} feature${shown === 1 ? "" : "s"}, ${without} without an update yet.` : `${l.title}: no features this week.`;
+  const cards: Card[] = [{ kind: "note", text, link: d.link("#/week/status", "Open Status") }];
+  const facts = client ? features.map(({ f }) => ({ id: f.id, title: { quoted: f.title }, updatesThisWeek: f.thisWeek?.length ?? null, canComment: clients[0]?.canWrite ?? false })) : { features: shown, without };
+  return { cards, facts, itemIds: client ? features.map(({ f }) => f.id) : [], pickIds: [] };
 }

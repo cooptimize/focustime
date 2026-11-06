@@ -107,9 +107,12 @@ describe.each(ZONES)("the week in $zone", ({ zone, std, dst }) => {
 const ZONE_NAME = /["'`[](?:Africa|America|Antarctica|Asia|Atlantic|Australia|Europe|Indian|Pacific|Etc)\/[A-Za-z_+-]+/;
 /** A read of the setting that skips userZone. */
 const DIRECT_READ = /\b(?:hours|week)\??\.timeZone\b/;
-/** Files allowed to name zones: the Windows-to-IANA map, demo and style guide sample data, and test support. */
+/**
+ * Files allowed to name zones: the Windows-to-IANA map, demo and style guide sample data, and test support; and SR-1's
+ * status report, whose send time (Monday 7:00 AM Eastern, Kat's) is a fact of the report, not anyone's own zone.
+ */
 const MAY_NAME_ZONES = (f: string) =>
-  f === "plan/timezones.ts" || f === "sources/demo/data.ts" || f === "ui/StyleGuide.tsx" || f.startsWith("fixtures/") || f.startsWith("test/") || f === "week/test-helpers.ts";
+  f === "plan/timezones.ts" || f === "plan/status-report.ts" || f === "sources/demo/data.ts" || f === "ui/StyleGuide.tsx" || f.startsWith("fixtures/") || f.startsWith("test/") || f === "week/test-helpers.ts";
 const SOURCE = /\.(ts|tsx|mjs|js)$/;
 const TEST = /\.test\.tsx?$|(^|\/)test-[\w-]+\.ts$|^e2e\//;
 

@@ -263,6 +263,7 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
     teams, conversations, team,
   };
   const session = demoSessionOf(ctx);
+  if (session) env.devops = session.devops;
   session?.ai.hold(true);
   try {
     for (const s of DEMO_SEEDS) await s.seed(env).catch((e: unknown) => {
