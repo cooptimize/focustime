@@ -162,6 +162,8 @@ export type SettingsData = {
   vm: { startWithoutAsking: boolean };
   /** Settings > Roadmap (step 17): state thresholds. */
   roadmap: AppConfig["roadmap"];
+  /** BH-1: Settings › Ahead: when an item is stale. */
+  ahead: import("../plan/backlog.ts").AheadSettings;
   /** AP-1: how often chats are read for asks, and the phrase lists the rules use. */
   asks: AppConfig["asks"];
   /** AI-0: the person's [ai] (only draftMonths is theirs since ADM-1). */
@@ -559,6 +561,8 @@ export type AheadLoad = {
     mine?: string[];
     /** AH-3: the gaps this client counts (the Rule fix_gaps). */
     fixGaps: import("../plan/fixnext.ts").GapKind[];
+    /** BH-1: the change log's last change per item (30 days at most), only when asked for (Backlog). */
+    last?: Record<number, import("../plan/backlog.ts").LastChange>;
   })[];
   /** AH-3: Fix next looks at the top N of each backlog (the Rule ahead.fix_top_n). */
   fixTopN: number;
@@ -566,4 +570,6 @@ export type AheadLoad = {
   halves: { clientKey: string; itemId: number; field: "start" | "target"; day: string; half: "AM" | "PM" }[];
   /** I'm flagged as an automation account (nothing is editable). */
   automation: boolean;
+  /** BH-1: Settings › Ahead: an open item with no change for this many weeks is stale. Missing before BH-1. */
+  staleWeeks?: number;
 };

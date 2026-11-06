@@ -497,6 +497,12 @@ export function createDevOpsPoller(d: PollerDeps) {
       const ids = new Set((await d.store.changes(key, since)).filter((x) => x.kind === "state").map((x) => x.itemId));
       return { known: true, itemIds: [...ids].sort((a, b) => a - b) };
     },
+    async lastChanges(key, since) {
+      // BH-1: the newest row per item wins; the changer stays in the store.
+      const out: Record<number, { kind: import("../plan/backlog.ts").LastChangeKind; at: string }> = {};
+      for (const x of await d.store.changes(key, since)) if (!out[x.itemId] || out[x.itemId]!.at <= x.changedAt) out[x.itemId] = { kind: x.kind, at: x.changedAt };
+      return out;
+    },
     async activity(key, since, emails) {
       const c = await stateOf(key);
       const known = !!c.row.loadedAt && Temporal.Instant.compare(Temporal.Instant.from(c.row.loadedAt), Temporal.Instant.from(since)) <= 0;

@@ -67,7 +67,7 @@ describe("[focus] config", () => {
     expect(base.ok && base.config.focus).toEqual(DEFAULT_FOCUS);
     const ok = parseConfig(`${BASE}\n[focus]\nsound = "rain"\nvolume = 55\nfade_seconds = 8\non_break = "chime"\npause_media = true\nteams_status = false\nplain_focus_status = "none"\nplaylists = [{ name = "Deep work", url = "https://open.spotify.com/playlist/abc123" }]\n`);
     expect(ok.ok && ok.config.focus).toEqual({ sound: "rain", volume: 55, fadeSeconds: 8, onBreak: "chime", pauseMedia: true, playlists: [lists[0]], teamsStatus: false, plainFocusStatus: "none" });
-    const bad = parseConfig(`${BASE}\n[focus]\nsound = "techno"\nvolume = 101\non_break = "bell"\nteams_status = "yes"\nplain_focus_status = "dnd"\nplaylists = [{ name = "X", url = "https://example.com/x" }, { name = "", url = "https://youtu.be/abc" }]\nextra = 1\n`);
+    const bad = parseConfig(`${BASE}\n[focus]\nsound = "techno"\nvolume = 101\non_break = "bell"\nteams_status = "yes"\nplain_focus_status = "dnd"\nplaylists = [{ name = "X", url = "https://example.com/x" }, { name = "", url = "https://youtu.be/abc" }]\nextra = 1\n`, { strict: true });
     expect(bad.ok ? [] : bad.errors.map((e) => e.field).sort()).toEqual(["focus.extra", "focus.on_break", "focus.plain_focus_status", "focus.playlists[0].url", "focus.playlists[1].name", "focus.sound", "focus.teams_status", "focus.volume"]);
   });
   it("Settings > Focus writes the table and keeps the rest of the file", () => {

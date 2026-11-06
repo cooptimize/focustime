@@ -2,6 +2,7 @@
 import { parse, TomlError } from "smol-toml";
 import type { MainHalf, StandingBlock, WeekConfig, WorkWeekday } from "../week/types.ts";
 import { DEFAULT_THRESHOLDS, type RoadmapThresholds } from "../plan/roadmap.ts";
+import { DEFAULT_AHEAD, type AheadSettings } from "../plan/backlog.ts";
 import { DEFAULT_ASK_SETTINGS, type AskSettings } from "../plan/asks.ts";
 import { DEFAULT_AI_PERSON, DEFAULT_AI_RULES, type AiPersonSettings, type AiRules } from "../ai/types.ts";
 import type { Guidance, OrgView } from "./org-apply.ts";
@@ -55,6 +56,8 @@ export type AppConfig = {
   notify: NotifySettings;
   /** Step 17: Settings > Roadmap thresholds (whole numbers). */
   roadmap: RoadmapThresholds;
+  /** BH-1: Settings › Ahead: an open item with no change for this many weeks is stale. Absent: the default (6). */
+  ahead?: AheadSettings;
   /** AP-1: Asks: how often delivery chats are read in working hours, and the phrase lists the rules use. */
   asks: AskSettings;
   /** AI-0: the person's [ai] values. Since ADM-1 only draft_months is theirs; the rest is read for the one-time migration. */
@@ -159,7 +162,12 @@ const PLAN_KEYS = ["pickable_portfolio_types", "background_types", "size_s", "si
 
 export type FieldError = { field: string; message: string };
 /** `legacyDayShape`: the file still has the old [day_shape] section (read as hours; migrated on load, D124). */
-export type ParseResult = { ok: true; config: AppConfig; legacyDayShape?: boolean } | { ok: false; errors: FieldError[] };
+/**
+ * BH-1 (forward-compatible settings): `ignored` lists the unknown sections and keys the text has (a newer FocusTime's
+ * settings, read by an older build after a rollback). They are skipped when reading and stay in the text, so saving
+ * keeps them untouched.
+ */
+export type ParseResult = { ok: true; config: AppConfig; legacyDayShape?: boolean; ignored?: string[] } | { ok: false; errors: FieldError[] };
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -171,7 +179,8 @@ type Table = Record<string, unknown>;
 const isTable = (v: unknown): v is Table => typeof v === "object" && v !== null && !Array.isArray(v) && !(v instanceof Date);
 
 /** defaultZone: the zone for someone whose settings don't name one (the host clock's); the neutral zone without it. */
-export type ParseOptions = { defaultZone?: string };
+/** `strict`: unknown sections and keys are errors (tests of the schema itself); by default they are ignored. */
+export type ParseOptions = { defaultZone?: string; strict?: boolean };
 
 export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult {
   let raw: Table;
@@ -183,7 +192,10 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
   }
 
   const errors: FieldError[] = [];
-  const err = (field: string, message: string) => errors.push({ field, message });
+  const ignored: string[] = [];
+  // BH-1: an unknown section or key is a newer build's setting: skipped, never an error, so a rollback can't break
+  // anyone's settings. [secrets]' own refusal (no secrets in settings) has its own words and stays an error.
+  const err = (field: string, message: string) => (!opts.strict && (message === "Unknown section" || message === "Unknown field") ? ignored.push(field) : errors.push({ field, message }));
 
   const section = (name: string, keys: string[]): Table | null => {
     const v = raw[name];
@@ -222,7 +234,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
 
   // Section and key names are unchanged by the rename (R1), so existing config files keep working.
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap", "asks", "ai", "guidance", "keep_open"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap", "ahead", "asks", "ai", "guidance", "keep_open"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -675,6 +687,20 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
     }
   }
 
+  // [ahead] (optional, BH-1): stale_weeks (1 to 26)
+  const ahead: AheadSettings = { ...DEFAULT_AHEAD };
+  if (raw.ahead !== undefined) {
+    const t = isTable(raw.ahead) ? raw.ahead : (err("ahead", "Must be an [ahead] table"), null);
+    if (t) {
+      for (const k of Object.keys(t)) if (k !== "stale_weeks") err(`ahead.${k}`, "Unknown field");
+      const sw = t.stale_weeks;
+      if (sw !== undefined) {
+        if (typeof sw !== "number" || !Number.isInteger(sw) || sw < 1 || sw > 26) err("ahead.stale_weeks", "Must be a whole number from 1 to 26");
+        else ahead.staleWeeks = sw;
+      }
+    }
+  }
+
   // [asks] (optional, AP-1): poll_minutes (1 to 60), request_phrases and ack_phrases (lists of up to 50 phrases), and
   // (AP-2) promise_phrases: commitment phrasing in my own messages
   const asks: AskSettings = { ...DEFAULT_ASK_SETTINGS, requestPhrases: [...DEFAULT_ASK_SETTINGS.requestPhrases], ackPhrases: [...DEFAULT_ASK_SETTINGS.ackPhrases], promisePhrases: [...DEFAULT_ASK_SETTINGS.promisePhrases] };
@@ -786,6 +812,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
   return {
     ok: true,
     ...(raw.hours === undefined && raw.day_shape !== undefined ? { legacyDayShape: true } : {}),
+    ...(ignored.length ? { ignored } : {}),
     config: {
       dataverse: { environmentUrl: envUrl.replace(/\/+$/, ""), tenantId, clientId, myEmail, mySystemUserId: sysId === "" ? null : sysId },
       outlook,
@@ -806,6 +833,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
       azure,
       notify,
       roadmap,
+      ahead,
       asks,
       ai,
       aiRules: { ...DEFAULT_AI_RULES, allowedClients: [] },

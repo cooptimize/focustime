@@ -1725,6 +1725,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       return draftAiAction(prepareContext(ctx), action, req.input);
     case "ahead.load":
     case "ahead.stage":
+    case "ahead.stage_bulk":
     case "ahead.unstage":
     case "ahead.discard":
     case "ahead.resolve":

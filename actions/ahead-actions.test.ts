@@ -154,3 +154,39 @@ describe("AH-2: Show the whole project", () => {
     await expect(s.fail("ahead.set_filters", { filters: { whole: "yes" } })).resolves.toMatchObject({ status: 400 });
   });
 });
+
+describe("BH-1: ahead.stage_bulk and Backlog's reads", () => {
+  it("push by 2 weeks stages one change per item I may change; the rest are skipped with a reason", async () => {
+    const s = setup();
+    s.setItem(120, { target: "2026-12-01" });
+    const r = await s.run<{ staged: unknown[]; skipped: { itemId: number; reason: string }[] }>("ahead.stage_bulk", { items: [110, 120, 111, 999].map((itemId) => ({ clientKey: "Northwind", itemId })), op: { kind: "push", weeks: 2 } });
+    expect(r.staged).toEqual([{ clientKey: "Northwind", itemId: 110 }]);
+    expect(r.skipped).toEqual([
+      { clientKey: "Northwind", itemId: 120, reason: "Only Northwind Foods's leads and the owner can change this." },
+      { clientKey: "Northwind", itemId: 111, reason: "Only Northwind Foods's leads and the owner can change this." },
+      { clientKey: "Northwind", itemId: 999, reason: "#999 isn't in Northwind Foods's DevOps items here" },
+    ]);
+    expect(await s.plan.aheadChanges()).toEqual([expect.objectContaining({ itemId: 110, field: "target", value: "2026-12-18", baseValue: "2026-12-04", half: "PM" })]);
+    // Pushing again goes on from my pending date; the base stays what DevOps had.
+    await s.run("ahead.stage_bulk", { items: [{ clientKey: "Northwind", itemId: 110 }], op: { kind: "push", weeks: 4 } });
+    expect(await s.plan.aheadChanges()).toEqual([expect.objectContaining({ itemId: 110, value: "2027-01-15", baseValue: "2026-12-04" })]);
+  });
+  it("a lead: set a target where there's none, a chosen date, assign to me; a story's type has no target date here", async () => {
+    const s = setup({ lead: true });
+    const set = await s.run<{ staged: { itemId: number }[]; skipped: { itemId: number; reason: string }[] }>("ahead.stage_bulk", { items: [110, 120, 111].map((itemId) => ({ clientKey: "Northwind", itemId })), op: { kind: "set_missing", date: "2027-02-05" } });
+    expect(set.staged.map((x) => x.itemId)).toEqual([120]);
+    expect(set.skipped.map((x) => [x.itemId, x.reason])).toEqual([[110, "Already has a target date (Dec 4)"], [111, "User Story has no target date in Portal's process"]]);
+    const me = await s.run<{ staged: { itemId: number }[]; skipped: { itemId: number; reason: string }[] }>("ahead.stage_bulk", { items: [100, 120].map((itemId) => ({ clientKey: "Northwind", itemId })), op: { kind: "assign_me" } });
+    expect([me.staged.map((x) => x.itemId), me.skipped.map((x) => x.reason)]).toEqual([[120], ["Already yours"]]);
+    expect((await s.plan.aheadChanges()).find((x) => x.field === "assignee")).toMatchObject({ itemId: 120, value: { email: ME } });
+    await s.run("ahead.stage_bulk", { items: [{ clientKey: "Northwind", itemId: 110 }], op: { kind: "move", date: "2027-03-05" } });
+    expect((await s.plan.aheadChanges()).find((x) => x.itemId === 110)).toMatchObject({ value: "2027-03-05" });
+  });
+  it("refuses a bad op or list; ahead.load says the stale weeks and, when asked, the change log's last change", async () => {
+    const s = setup();
+    for (const op of [{ kind: "push", weeks: 3 }, { kind: "move", date: "2027-02-30" }, { kind: "assign_me", x: 1 }, { kind: "delete" }]) await expect(s.fail("ahead.stage_bulk", { items: [{ clientKey: "Northwind", itemId: 110 }], op })).resolves.toMatchObject({ status: 400 });
+    await expect(s.fail("ahead.stage_bulk", { items: [], op: { kind: "assign_me" } })).resolves.toMatchObject({ status: 400 });
+    const l = await load(s);
+    expect([l.staleWeeks, l.clients[0]!.last]).toEqual([6, undefined]);
+  });
+});

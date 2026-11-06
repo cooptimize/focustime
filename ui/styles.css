@@ -5303,3 +5303,45 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   .done-offer .mini, .done-batch .mini { min-height: var(--tap); }
 }
 .app.phone .done-offer { bottom: calc(var(--bb-h) + 8px); }
+
+/* BH-1: Ahead › Backlog. Clients side by side (as many columns as fit, each at least ~34 rem), stacked on narrow
+   screens; each row two lines: rank, type, title and gap dots, then one quiet meta line. Stale is the muted amber of
+   Ahead's attention, never red. The selection toolbar sticks to the top of the list while rows are selected. */
+.bl-box { display: flex; flex-direction: column; gap: 10px; }
+.bl-clients { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 34rem), 1fr)); gap: 16px; align-items: start; }
+.bl-client { min-width: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 10px 12px 8px; }
+.bl-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0 0 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.bl-head h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.bl-head .dl-swatch { background: var(--c); }
+.bl-counts { margin-left: auto; font-size: var(--fs-2); }
+.bl-stale-count { color: var(--text); }
+.bl-note { margin: 4px 0; font-size: var(--fs-2); }
+.bl-list { list-style: none; margin: 0; padding: 0; }
+.bl-row { display: grid; grid-template-columns: auto 2.2em auto minmax(0, 1fr) auto; grid-template-areas: "pick rank icon title gaps" ". . . meta meta"; align-items: center; column-gap: 8px; row-gap: 2px; padding: 6px 4px; border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent); }
+.bl-row:last-child { border-bottom: 0; }
+.bl-row > input[type="checkbox"] { grid-area: pick; margin: 0; }
+.bl-row .bl-rank { grid-area: rank; text-align: right; color: var(--text-muted); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
+.bl-row > .type-icon, .bl-row > svg { grid-area: icon; }
+.bl-title { grid-area: title; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.bl-id { font-size: var(--fs-2); }
+.bl-row .ah-ready { grid-area: gaps; }
+.bl-meta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; font-size: var(--fs-2); color: var(--text-muted); position: relative; }
+.bl-meta > span:not(.muted):not(.bl-stale):not(.ah-dot) { color: var(--text); }
+.bl-meta .ah-dot { position: static; }
+.bl-stale { display: inline-flex; align-items: center; gap: 5px; color: var(--text); }
+.bl-stale::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ah-attention); }
+.bl-row.stale .bl-rank { color: var(--text); }
+.bl-row.sel { background: color-mix(in oklab, var(--selected) 9%, transparent); }
+.bl-more { margin: 6px 0 2px 4px; }
+.bl-bulk { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; border: 1px solid var(--selected); border-radius: 8px; background: color-mix(in oklab, var(--selected) 8%, var(--raised)); box-shadow: var(--shadow-pop); }
+.bl-bulk-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.bl-bulk-date { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; flex-basis: 100%; }
+.bl-bulk-date label { display: inline-flex; align-items: center; gap: 6px; }
+.bl-result { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--raised); font-size: var(--fs-3); }
+.bl-result details { flex-basis: 100%; }
+.bl-result ul { margin: 4px 0 0; padding-left: 18px; }
+.bl-result > button { margin-left: auto; }
+@media (max-width: 599.98px) {
+  .bl-client { padding: 8px 10px 6px; }
+  .bl-bulk .mini { min-height: var(--tap); }
+}

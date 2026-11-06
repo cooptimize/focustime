@@ -17,7 +17,7 @@ export function currentList(text: string, section: string, key: string): string[
   }
 }
 
-export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap", "asks", "ai", "guidance", "keep_open"] as const;
+export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap", "ahead", "asks", "ai", "guidance", "keep_open"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export class SettingsInputError extends Error {
@@ -244,6 +244,13 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       if (v.stalledDays !== undefined) values.push(["stalled_days", int(v.stalledDays, "roadmap.stalled_days")]);
       if (v.watchWeeks !== undefined) values.push(["watch_weeks", int(v.watchWeeks, "roadmap.watch_weeks")]);
       return (text) => values.reduce((t, [k, val], i) => setValue(t, "roadmap", k, val, i === 0 ? "Roadmap states (step 17): Stalled after this many days without a story change; Watch when the forecast lands within this many weeks of the target date." : undefined), text);
+    }
+    case "ahead": {
+      // BH-1: Settings › Ahead. Written as given; parseConfig checks the range.
+      only(v, ["staleWeeks"], "ahead");
+      const values: [string, number][] = [];
+      if (v.staleWeeks !== undefined) values.push(["stale_weeks", int(v.staleWeeks, "ahead.stale_weeks")]);
+      return (text) => values.reduce((t, [k, val], i) => setValue(t, "ahead", k, val, i === 0 ? "Ahead (BH-1): an open item with no change in DevOps for this many weeks is stale in Backlog." : undefined), text);
     }
     case "asks": {
       // AP-1: Settings > Clients > Asks. ADM-1: these are the person's own phrases, added on top of the team's (they
