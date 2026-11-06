@@ -538,6 +538,55 @@ describe("propose from a button (TB-2): no AI call, the same preview and confirm
     expect(s.writes()).toEqual([{ action: "pick.move", input: { id: a.id, date: TODAY, half: "PM" } }, { action: "pick.move", input: { id: b.id, date: "2026-11-06", half: "AM" } }]);
   });
 
+  it("PK-1 item_done: the offer, then the state write's preview; Confirm checks the offer again and writes once", async () => {
+    const offers: unknown[] = [];
+    const offerFor = (pickId: number) => ({ pickId, clientKey: FAB, clientName: "Fabrikam", itemId: 4418, title: "CSV export", type: "User Story", state: "Active", choices: ["Closed", "Resolved"] });
+    let done = true;
+    const s = setup({ handlers: { "devops.done_offer": (i) => (offers.push(i), { ok: true, data: { offers: done ? [offerFor((i as { pickIds: number[] }).pickIds[0]!)] : [], off: false } }) } });
+    const a = await s.plan.addPick({ date: TODAY, half: "AM", clientKey: FAB, kind: "item", itemId: 4418, title: "CSV export", size: "S" });
+    const r = (await s.a.propose("item_done", { pickId: a.id, state: null })) as { ok: true; proposal: { id: number; title: string; preview: { notes: string[] } } };
+    expect(r.proposal.title).toBe("Set #4418 to Closed");
+    expect(r.proposal.preview.notes).toContain("To set it to Resolved instead, do it in FocusTime.");
+    expect(s.ran.find((x) => x.action === "devops.preview")!.input).toEqual({ clientKey: FAB, change: { kind: "state", itemId: 4418, state: "Closed", pickId: a.id } });
+    expect(s.ran.some((x) => x.action === "devops.confirm")).toBe(false);
+    expect(s.calls).toEqual([]);
+    const c = await s.a.confirm(r.proposal.id);
+    expect(c.ok).toBe(true);
+    expect(s.ran.filter((x) => x.action === "devops.confirm")).toHaveLength(1);
+    expect(offers).toHaveLength(2);
+    // A second tap: the proposal is gone, nothing more is written.
+    expect(await s.a.confirm(r.proposal.id)).toMatchObject({ ok: false, reason: "gone" });
+    // Unchecked (or done in DevOps) since the card: no offer, so the proposal can't be made or confirmed.
+    const r2 = (await s.a.propose("item_done", { pickId: a.id, state: null })) as { ok: true; proposal: { id: number } };
+    done = false;
+    expect(await s.a.confirm(r2.proposal.id)).toMatchObject({ ok: false });
+    expect(await s.a.propose("item_done", { pickId: a.id, state: null })).toMatchObject({ ok: false, message: "Nothing to set in DevOps for #4418" });
+    expect(s.ran.filter((x) => x.action === "devops.confirm")).toHaveLength(1);
+  });
+
+  it("PK-1 item_undo: the write's own undo, only while devops.undo_offer offers it", async () => {
+    let offer: unknown = { pickId: 0, writeId: 77, clientKey: FAB, clientName: "Fabrikam", itemId: 4418, title: "CSV export", before: "Active", after: "Closed" };
+    const s = setup({ handlers: { "devops.undo_offer": () => ({ ok: true, data: { offer } }) } });
+    const a = await s.plan.addPick({ date: TODAY, half: "AM", clientKey: FAB, kind: "item", itemId: 4418, title: "CSV export", size: "S" });
+    const r = (await s.a.propose("item_undo", { pickId: a.id })) as { ok: true; proposal: { id: number; title: string } };
+    expect(r.proposal.title).toBe("Put #4418 back to Active");
+    expect(s.ran.find((x) => x.action === "devops.preview")!.input).toEqual({ clientKey: FAB, change: { kind: "undo", writeId: 77 } });
+    offer = null;
+    expect(await s.a.propose("item_undo", { pickId: a.id })).toMatchObject({ ok: false, message: "Nothing to undo in DevOps for that to-do" });
+  });
+
+  it("PK-1: item_done and item_undo are never given to the model", async () => {
+    const s = setup();
+    s.script(["today"], say("Here you go."));
+    await s.a.handle("set my story to done");
+    const sent = JSON.stringify(s.calls);
+    // The intent round (its enum) and the answer round (its tools) both went out, without them.
+    expect(s.calls).toHaveLength(2);
+    expect(sent).toContain("move_pick");
+    expect(sent).not.toContain("item_done");
+    expect(sent).not.toContain("item_undo");
+  });
+
   it("only the plan's own tools can be proposed from a button; never another client's or someone else's pick", async () => {
     const s = setup({ mine: [FAB] });
     const nw = await s.plan.addPick({ date: TODAY, half: "AM", clientKey: NW, kind: "intention", title: "Ledger", size: "M" });

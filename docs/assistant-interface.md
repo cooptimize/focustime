@@ -46,9 +46,9 @@ a secret, an outside address), `which_client` (two clients named; nothing sent).
 ## Proposals from a button (TB-2)
 
 `propose({ person, tool, args })` makes a proposal without an AI call, for a front end's own button (the Teams
-rhythm's Confirm today, Move…, Move the rest and Close out). Only FocusTime's plan tools (`PROPOSE_TOOLS` in
-`assistant/allowlist.ts`): `move_pick`, `keep_pick`, `drop_pick`, `confirm_day`, `move_picks`, `close_day`; anything
-else returns `{ ok: false, message }`. The args are the tool's own, as the model would give them. The proposal is built,
+rhythm's Confirm today, Move…, Move the rest and Close out, and PK-1's Done and Undo). Only `PROPOSE_TOOLS` in
+`assistant/allowlist.ts`: FocusTime's plan tools `move_pick`, `keep_pick`, `drop_pick`, `confirm_day`, `move_picks`,
+`close_day`, and PK-1's `item_done` and `item_undo`; anything else returns `{ ok: false, message }`. The args are the tool's own, as the model would give them. The proposal is built,
 stored, expires and is confirmed exactly like a typed request's, with the same checks (the person's own picks, the
 allowlist, a fresh preview). It returns `{ ok: true, proposal }` or `{ ok: false, message }`.
 
@@ -57,6 +57,11 @@ allowlist, a fresh preview). It returns `{ ok: true, proposal }` or `{ ok: false
   pick moved to its client's next block this week (UI-B's `nextBlockFor`) or left on the unfinished list when there's
   none, then the day closed out (`closeout.commit`). The preview shows every step; a move that fails is skipped and
   named, and the proposal fails if the close out does.
+- `item_done { pickId, state }` (PK-1, button only): a to-do checked done; its DevOps item set to `state` (one of its
+  type's done states, or null for the Completed one) through the existing state write, only when `devops.done_offer`
+  offers it (my write PAT, the shared canEdit, not done or removed already). The write names the pick, so Undo finds it.
+- `item_undo { pickId }` (PK-1, button only): a to-do unchecked after `item_done` wrote; that write's own undo, while it
+  is still the newest write on the item (`devops.undo_offer`).
 
 ## Cards
 
@@ -77,6 +82,9 @@ sent only by a `handle` call.
 own small types and reaches it through `teamsAssistant()` in `server/teams/assistant.ts`.
 
 ## Changes
+
+- Nov 6 (PK-1): additions only. The tools `item_done` and `item_undo`, in `PROPOSE_TOOLS` and `BUTTON_ONLY`: never
+  given to the model (not in the intent enum, the tool list or the allowed list). `ProposeInput["tool"]` adds both.
 
 - Nov 5 (TB-2): additions only. `propose(tool, args)` (above), and the tools `move_picks` and `close_day`, which the
   model may also propose from a typed request. `RUNS` adds `pick.mark_done` and `closeout.commit`; `NEVER` adds

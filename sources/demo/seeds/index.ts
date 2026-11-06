@@ -11,6 +11,7 @@ import { inboxSeed } from "./inbox.ts";
 import { noticesSeed } from "./notices.ts";
 import { statusSeed } from "./status.ts";
 import { teamSeed } from "./team.ts";
+import { todoDoneSeed } from "./todo-done.ts";
 import type { DemoSeed } from "./types.ts";
 import { unfinishedSeed } from "./unfinished.ts";
 import { weekPlanSeed } from "./week-plan.ts";
@@ -23,6 +24,7 @@ export const DEMO_SEEDS: readonly DemoSeed[] = [
   followupsSeed,
   capturesSeed,
   unfinishedSeed,
+  todoDoneSeed,
   aheadSeed,
   noticesSeed,
   historySeed,

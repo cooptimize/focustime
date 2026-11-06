@@ -16,6 +16,7 @@ import { mustsDone, sourceLines } from "./brand/opening.ts";
 import type { Theme } from "../config/schema.ts";
 import { NOTICE_EVENT, openChecked, openWorkItem, type Opened } from "./WorkLink.tsx";
 import { DevOpsWriteCtx, useDevOpsWriteFlow } from "./DevOpsWrite.tsx";
+import { DoneOfferCtx, useDoneOfferFlow } from "./DoneOffer.tsx";
 import { TimeboxCtx, TimeboxDialog, timeboxChange as tbChange, useWriteFlow, type TimeboxEnv } from "./Timeboxes.tsx";
 import { HelpFinder } from "./HelpFinder.tsx";
 import { SendHost, TeamView } from "./Team.tsx";
@@ -455,9 +456,14 @@ export function App() {
   const reloadRef = useRef<() => void>(() => {});
   const openFocusRef = useRef<() => void>(() => {});
   /** Timer actions (step 6c): the server keeps the state; reload to show it. */
+  // PK-1: the focus timer's Done ticks its to-do; the offer follows (the refs are set once the week is loaded).
+  const timerPickRef = useRef<number | null>(null);
+  const tickedRef = useRef<((pickId: number, done: boolean) => void) | null>(null);
   const runTimer = useCallback(async (action: string, input: Record<string, unknown> = {}): Promise<boolean> => {
     try {
+      const donePick = action === "timer.done" ? timerPickRef.current : null;
       const r = await call<{ notice?: string }>(action, input);
+      if (donePick !== null) tickedRef.current?.(donePick, true);
       if (r?.notice) setNotice(r.notice);
       // Step 10: starting focus (or the next pick) switches to the focus screen, from wherever it was started.
       if ((action === "timer.start" && input.kind !== "break") || action === "timer.next") openFocusRef.current();
@@ -518,6 +524,11 @@ export function App() {
     openSettings: () => openSettingsRef.current?.("clients"),
     client: { name: (k) => (data ? captureClients(data).find((c) => c.clientKey === k)?.clientName : undefined) ?? k, color: (k) => (data ? clientColor(k, data.clients) : undefined) },
   });
+  // PK-1: a to-do checked off offers its DevOps item's done state (never automatically); unchecked, the Undo.
+  const doneOffer = useDoneOfferFlow({ allowed: data?.devopsWrite ?? [], ask: (data?.planning.devopsOnDone ?? "ask") === "ask", onDone: reloadQuiet });
+  const { ticked } = doneOffer.env;
+  tickedRef.current = ticked;
+  timerPickRef.current = data?.timer?.pickId ?? null;
   const connectWrite = useCallback(async () => {
     setNotice("Signing in to Microsoft to allow calendar changes");
     try {
@@ -819,9 +830,15 @@ export function App() {
         const plan = Object.fromEntries(Object.entries(prev.data.plan).map(([d, v]) => [d, { ...v, picks: v.picks.map((p) => (p.id === id ? { ...p, status: done ? ("done" as const) : ("planned" as const) } : p)) }]));
         return { ...prev, data: { ...prev.data, plan } };
       });
-      planAction("pick.mark_done", { id, done }).catch(reloadQuiet);
+      planAction("pick.mark_done", { id, done })
+        .then((r) => {
+          // PK-1: the store's own pick (client and item) for the offer.
+          const p = (r as { pick?: { clientKey: string; itemId: number | null } } | undefined)?.pick;
+          if (p) ticked(id, done, p.clientKey, p.itemId);
+        })
+        .catch(reloadQuiet);
     },
-    [reloadQuiet],
+    [reloadQuiet, ticked],
   );
 
   const connect = useCallback(
@@ -1500,6 +1517,7 @@ export function App() {
     <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, minSizes: data.planning.minSizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures, timeboxes: data.timeboxes, followUps: data.followUps, today: data.planDay.date, checkins: data.checkins ?? [] }}>
     <TimeboxCtx.Provider value={tbEnv}>
     <DevOpsWriteCtx.Provider value={devopsWrites.env}>
+    <DoneOfferCtx.Provider value={doneOffer.env}>
     <MenuHost env={env}>
     <VmProvider onSettings={() => setSettingsAt("you")}>
     <DraftEditorCtx.Provider value={setDraftEdit}>
@@ -2046,6 +2064,7 @@ export function App() {
       )}
       {writes.dialog}
       {devopsWrites.dialog}
+      {doneOffer.card}
       <SendHost thisWeek={data.today.weekStart} onSent={() => setPlanWeekVersion((v) => v + 1)} />
       <BreakDownHost onDone={() => (setPlanWeekVersion((v) => v + 1), reloadQuiet())} />
       <CoopBriefHost />
@@ -2074,6 +2093,7 @@ export function App() {
     </DraftEditorCtx.Provider>
     </VmProvider>
     </MenuHost>
+    </DoneOfferCtx.Provider>
     </DevOpsWriteCtx.Provider>
     </TimeboxCtx.Provider>
     </PlanCtx.Provider>

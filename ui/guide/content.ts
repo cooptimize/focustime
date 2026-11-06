@@ -129,7 +129,7 @@ export const RHYTHM = {
       name: "Now",
       when: "All day",
       keys: [{ command: "view.today" }, { command: "timer.start" }],
-      what: ["Today shows each block's meetings and stories in time order.", "The next story has the one Start focus button.", "Focus sets Teams to Busy and counts the time.", "Tick stories off as you finish them."],
+      what: ["Today shows each block's meetings and stories in time order.", "The next story has the one Start focus button.", "Focus sets Teams to Busy and counts the time.", "Tick stories off as you finish them. FocusTime asks whether to set the DevOps item done too: Confirm writes it, Not now leaves DevOps alone."],
       lit: [{ half: "AM", day: 0 }],
       mini: {
         kind: "now",
@@ -157,7 +157,7 @@ export const RHYTHM = {
       name: "Close out",
       when: "End of day · 3 minutes",
       keys: [{ command: "closeout.load" }],
-      what: ["At the end of the day Today shows a Close out card. Write one line per client on where you left off.", "Mark finished stories done in DevOps.", "Close the loop on promises that are due.", "Done. Today shows a small Closed out line you can reopen, and the week folds back up until tomorrow."],
+      what: ["At the end of the day Today shows a Close out card. Write one line per client on where you left off.", "Set the day's finished to-dos done in DevOps: one question, a box per item, one Confirm.", "Close the loop on promises that are due.", "Done. Today shows a small Closed out line you can reopen, and the week folds back up until tomorrow."],
       lit: [{ half: "AM", day: 0 }, { half: "PM", day: 0 }],
       mini: { kind: "close", title: "Close out", meta: "4 done · 3h 10m focused", noteLabel: "Where you left off", note: "Chart renders; next, the client filter.", devops: "#4411 still Active in DevOps", devopsAction: "Mark done", overdue: "Overdue", overdueText: "Reply to Jordan" },
     },
@@ -206,7 +206,7 @@ export const DEVOPS = {
     { level: "Parent", icon: "icon_trophy", text: "Features, and any type at the same level. Go on a week as a must or nice to have." },
     { level: "Needs stories", text: "A feature with no stories can't go on a day yet. {b:Break down} or send a {b:Coop brief}. An admin can turn this off for a type that's worked directly.", flag: true },
     { level: "Child", icon: "icon_book", text: "Stories, and bugs and tasks where the team tracks them. Go on a day, get a size, get done." },
-    { level: "Done", text: "Tick it, then {b:Mark done in DevOps} from Close out. Resolved in DevOps means no hours left; it drops off planning lists." },
+    { level: "Done", text: "Tick it and FocusTime offers to set its item done in DevOps ({b:Confirm} or {b:Not now}); Close out asks once for the day's. Resolved in DevOps means no hours left; it drops off planning lists." },
   ] as { level: string; icon?: string; text: string; flag?: boolean }[],
   /** WT-1: the icons that stand for work item types, drawn in each project's own colors. */
   icons: {
@@ -338,6 +338,7 @@ export const TEAM = {
     { q: "What is a client priority?", a: "A feature a client's lead flags as the client's top ask, with an optional note. Everyone on the client sees it at the top of Plan with Add to my week. A lead can unflag it any time, and it drops off once DevOps resolves it." },
     { q: "What does Week › Team show?", a: "For each client you're on: what each person planned this week (their features, must or nice to have, and the ones they're watching with whether they moved), the client's priorities and what was sent. Someone who hasn't confirmed yet shows Not confirmed yet. It never shows hours, estimates, day plans, picks, pins, notes or focus: those stay with each person. Account Workers and the client's leads see it; on a phone it is read-only." },
     { q: "How do I ask a lead to look at my week?", a: "In Week › Plan, Ask <lead> to look on the client, with an optional note. The lead gets a notification and sees it at the foot of their Team view, where they can reply. The reply shows on your Plan under the client." },
+    { q: "Does checking off a to-do change DevOps?", a: "Not by itself. When you check off a to-do that has a DevOps item, on Today, the Board or Plan today, FocusTime asks \"Set #1234 to Closed?\" with the change shown before and after. The state comes from the item's own process: its done state, and Resolved too where the process has one. Confirm writes it as you; Not now leaves DevOps alone. It only asks for items you can change that aren't done already, and only for clients where you've turned on DevOps writes. Uncheck it soon after and FocusTime offers to undo that change too. Close out asks once for the day's done to-dos, with a box per item and one Confirm. Settings › Planning › When I check off a to-do: Never ask turns it off." },
     { q: "Where did Fix next and Sort later go?", a: "Renamed, nothing else changed. Ahead's Fix next is now Gaps (Grid · Gantt · Gaps), and the capture box's Sort later is now Decide later. Typing fix next or sort later in the command menu still finds them." },
     { q: "Where did Needs help from… go?", a: "It's now Ask to collaborate, in the same places. It still finds teammates who are free and sends a help invite after a preview. Typing needs help in the command menu still finds it." },
   ],
@@ -353,7 +354,7 @@ export const TEAMS_BOT = {
   items: [
     { q: "How do I start?", a: "Add FocusTime from Apps in Teams and send it any message, like \"what's next\". It answers only you, only in that 1:1 chat. Help lists what it understands; what's next and today work even without AI." },
     { q: "Can FocusTime message me first?", a: "Only if you ask it to. Settings › Notifications › In Teams: turn on Let FocusTime message me in Teams, then tick what you want: Morning brief, Midday check-in, Close out, Nudges. All are off until you turn them on. They come only in your own chat with FocusTime, never on weekends or PTO days, never in quiet hours, and wait while focus runs. Friday only with Also on Fridays. Send me a test now sends one at once so you can see it." },
-    { q: "What's in each one?", a: "The morning brief (at the start of your day, or a time you set): today's blocks, meetings, picks, promises due and work sent to you, with Confirm today and Move…. The midday check-in (12:00 unless you change it): this morning's picks with Done and Not yet, and Move the rest. Close out (30 minutes before your day ends unless you change it): today's picks; tick what got done or just tell it. Nudges: a promise due tonight that's still open, work sent to you waiting over half a day, or someone taking over an item assigned to you, together in one message, at most one an hour." },
+    { q: "What's in each one?", a: "The morning brief (at the start of your day, or a time you set): today's blocks, meetings, picks, promises due and work sent to you, with Confirm today and Move…. The midday check-in (12:00 unless you change it): this morning's picks with Done and Not yet, and Move the rest. Done on a to-do with a DevOps item asks, in the card, whether to set it done in DevOps too; nothing is written until you Confirm. Close out (30 minutes before your day ends unless you change it): today's picks; tick what got done or just tell it. Nudges: a promise due tonight that's still open, work sent to you waiting over half a day, or someone taking over an item assigned to you, together in one message, at most one an hour." },
     { q: "Does tapping a button change things right away?", a: "Done and Not yet on a pick change only your own plan, at once, exactly like the buttons in the app, with Undo on the card. Anything bigger (moving picks, confirming today, closing out the day) shows the change first, with Confirm and Cancel, and nothing happens until you Confirm. Nothing in DevOps, Outlook or anywhere outside FocusTime changes without a Confirm." },
     { q: "Can I just tell it what I got done?", a: "Yes. While today's Close out is waiting, reply in your own words: \"all but the export\", \"1 and 3\", \"fixed the login timeout\". The card above fills in what it understood: the picks done, where the rest move (each to its client's next block, or the unfinished list when there's none this week) and the day closed out. One Confirm does all of it. FocusTime matches your words to the picks itself; no AI reads them." },
     { q: "How do I capture something from Teams?", a: "Start the message with capture: (or c:), for example \"capture: call Dana about the export\". It goes to Inbox › Captures exactly as typed, to sort later, with Undo on the reply. Anything else you write goes to the assistant." },

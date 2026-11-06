@@ -1331,6 +1331,10 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "devops.retry":
     case "devops.log":
       return { run: () => env.openSettings("data") };
+    // PK-1: offered after a tick, never run from the menu.
+    case "devops.done_offer":
+    case "devops.undo_offer":
+      return { disabled: "Check off a to-do with a DevOps item" };
     // Step 15.4: who's signed in and my VM live in Settings > You; the VM chip has the changes.
     case "auth.status":
     case "auth.sign_in":

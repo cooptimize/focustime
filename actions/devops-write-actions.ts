@@ -12,7 +12,7 @@ import { teamsLink } from "../plan/chats.ts";
 import type { ConversationView } from "../store/conversation-store.ts";
 import { readBack, type Sleep } from "./readback.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, assigneeEmail, assigneeText, assignOps, completedState, createOps, descriptionOps, textToHtml, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, stackKey, editedComment, validOrg, VISIBILITY, FIELD_LABEL, fieldRefsOf, fieldsOps, type FieldSpec, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
+import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, assigneeEmail, assigneeText, assignOps, alreadyDone, completedState, createOps, doneChoices, descriptionOps, textToHtml, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, stackKey, editedComment, validOrg, VISIBILITY, FIELD_LABEL, fieldRefsOf, fieldsOps, type FieldSpec, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
 import { dateOnly, detectTargetField, detectTypeSizeField, fieldNames, htmlToText, identityEmail, identityName, TYPE_SIZE_FIELDS, workItemUrl } from "../sources/devops/normalize.ts";
 import type { TakesStore } from "../store/devops-takes.ts";
 import { otherClientMatch, type ClientEntry } from "../ai/guard.ts";
@@ -39,8 +39,10 @@ import { readImage, type ReadImage } from "./chat-images.ts";
 import { chatImageSrc } from "../plan/conversation-views.ts";
 export type { DevOpsPreview, DevOpsResult };
 
-export const DEVOPS_WRITE_ACTIONS = ["devops.set_write_pat", "devops.clear_write_pat", "devops.write_status", "devops.states", "devops.preview", "devops.confirm", "devops.retry", "devops.log"] as const;
+export const DEVOPS_WRITE_ACTIONS = ["devops.set_write_pat", "devops.clear_write_pat", "devops.write_status", "devops.states", "devops.preview", "devops.confirm", "devops.retry", "devops.log", "devops.done_offer", "devops.undo_offer"] as const;
 export type DevOpsWriteAction = (typeof DEVOPS_WRITE_ACTIONS)[number];
+export type { DoneOffer, UndoOffer } from "./types.ts";
+import type { DoneOffer, UndoOffer } from "./types.ts";
 
 /** The keyring for write PATs (secrets/keyring.ts). A PAT only ever comes back wrapped. */
 export type WritePats = { get: (clientKey: string) => Promise<Pat>; set: (clientKey: string, value: string) => Promise<void>; clear: (clientKey: string) => Promise<void> };
@@ -81,7 +83,7 @@ export type DevOpsWriteContext = {
 };
 
 /** Batch previews where one refused change doesn't stop the rest: AH-1's change set, SR-1's Push all lines. */
-const PER_ITEM = new Set(["fields", "comment", "comment_edit"]);
+const PER_ITEM = new Set(["fields", "comment", "comment_edit", "state"]);
 /** CV-4: images attached to one item at most, and the largest one (as read from Teams, after stripping). */
 export const ATTACH_LIMIT = 10;
 /** One image the create preview offers: from a message being included, with who sent it and when. */
@@ -294,6 +296,56 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       // UI-8: Send feedback's creates are listed with neither Undo nor Retry (F1 never deletes and never resends on its own).
       return { ok: true, data: { entries: log.map((e) => (e.op === "feedback" ? { ...e, undoable: false, retryable: false } : { ...e, undoable: !!e.itemId && tops.get(stackKey(e)) === e.id && !e.op.startsWith("undo_"), retryable: e.status === "unconfirmed" || e.status === "failed" || e.status === "pending" })) } };
     }
+    case "devops.done_offer": {
+      // PK-1: read only. For to-dos just checked done: which items to offer "Set #id to <done state>?" for. Only a
+      // to-do with a DevOps item, with my write PAT for its client, whose item isn't done or removed already and that
+      // the shared canEdit lets me change; the choices come from its type's states (Completed, then Resolved).
+      const o = fields(input, ["pickIds"]);
+      if (!Array.isArray(o.pickIds) || o.pickIds.length === 0 || o.pickIds.length > 30) throw new Invalid("pickIds needs 1 to 30 to-dos");
+      const ids = [...new Set(o.pickIds.map((x) => posId(x, "pickIds")))];
+      if (cfg.plan.devopsOnDone === "never") return { ok: true, data: { offers: [], off: true } };
+      const picks = (await Promise.all(ids.map((i) => plan.getPick(i)))).filter((p): p is NonNullable<typeof p> => !!p && p.kind === "item" && p.itemId !== null && p.status === "done");
+      const offers: DoneOffer[] = [];
+      // The rule's "Update DevOps #id" follow-up for a to-do done here: the write closes it once DevOps shows the change.
+      const owed = picks.length ? (await plan.openFollowUps()).filter((f) => f.kind === "devops_update") : [];
+      const byClient = new Map<string, typeof picks>();
+      for (const p of picks) byClient.set(p.clientKey, [...(byClient.get(p.clientKey) ?? []), p]);
+      for (const [clientKey, list] of byClient) {
+        // No write PAT, or DevOps not set up for the client: no offer (the client stays read-only, as everywhere).
+        const env = await envOf(clientKey).catch(() => null);
+        if (!env) continue;
+        const memo = new Map<string, Promise<unknown>>();
+        for (const p of list) {
+          try {
+            const item = await env.writer.item(env.org, env.pat, env.project, p.itemId!);
+            const states = await env.writer.states(env.org, env.pat, env.project, item.type);
+            const choices = doneChoices(states);
+            if (!choices.length || alreadyDone(states, item.state)) continue;
+            if (!(await rightsOn(env, item, memo)).ok) continue;
+            const followUpId = owed.find((f) => f.ruleKey === `devops_update:${p.id}` || (f.clientKey === clientKey && f.itemId === item.id))?.id ?? null;
+            offers.push({ pickId: p.id, clientKey, clientName: env.clientName, itemId: item.id, title: item.title, type: item.type, state: item.state, choices, followUpId });
+          } catch {
+            // An item DevOps can't read now gets no offer; the tick itself stands.
+          }
+        }
+      }
+      return { ok: true, data: { offers, off: false } };
+    }
+    case "devops.undo_offer": {
+      // PK-1: read only. A to-do unchecked: the state write its offer made, while it is still the newest write on
+      // the item (the undo stack's top) and confirmed, from the last 12 hours. Undo itself is the write's own undo.
+      const o = fields(input, ["pickId"]);
+      const pickId = posId(o.pickId, "pickId");
+      const p = await plan.getPick(pickId);
+      if (!p || p.itemId === null) return { ok: true, data: { offer: null } };
+      const log = await plan.devopsWriteLog(200);
+      const tops = undoTops(log);
+      const since = Temporal.Instant.from(ctx.now()).subtract({ hours: 12 });
+      const e = log.find((x) => x.op === "state" && x.itemId === p.itemId && x.clientKey === p.clientKey && x.pickIds.includes(pickId));
+      if (!e || e.status !== "confirmed" || e.undoneBy !== null || tops.get(stackKey(e)) !== e.id || Temporal.Instant.compare(Temporal.Instant.from(e.at), since) < 0) return { ok: true, data: { offer: null } };
+      const offer: UndoOffer = { pickId, writeId: e.id, clientKey: e.clientKey, clientName: clientName(e.clientKey), itemId: e.itemId, title: e.title, before: e.before.State ?? null, after: e.after.State ?? null };
+      return { ok: true, data: { offer } };
+    }
     case "devops.preview": {
       const o = fields(input, ["clientKey"], ["change", "changes"]);
       const clientKey = str(o.clientKey, "clientKey", 100)!;
@@ -491,7 +543,7 @@ async function linkComment(env: Env, o: Record<string, unknown>): Promise<HeldIn
 
 /** One change → what to hold, or a reason there is nothing to do. Reads the item now (fresh rev). */
 async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Promise<unknown>> = new Map()): Promise<HeldIn | string> {
-  const o = fields(c, ["kind"], ["key", "itemId", "commentId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images", "assign"]);
+  const o = fields(c, ["kind"], ["key", "itemId", "commentId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images", "assign", "pickId"]);
   const { writer, org, pat, project, plan } = env;
   switch (o.kind) {
     case "state": {
@@ -502,8 +554,14 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const comment = str(o.comment, "comment", 4000, true);
       const followUpId = o.followUpId === undefined || o.followUpId === null ? null : posId(o.followUpId, "followUpId");
       if (followUpId !== null && !(await plan.getFollowUp(followUpId))) throw new PlanError("No such follow-up");
+      // PK-1: a to-do's offer names its pick, so unchecking it later finds this write for Undo.
+      const pickId = o.pickId === undefined || o.pickId === null ? null : posId(o.pickId, "pickId");
+      if (pickId !== null) {
+        const p = await plan.getPick(pickId);
+        if (!p || p.itemId !== item.id || p.clientKey !== env.clientKey) throw new PlanError("That to-do isn't for this item");
+      }
       if (state === item.state && !comment) return `#${item.id} is already ${state}`;
-      return { ...base(env), ...none, op: "state", itemId: item.id, title: item.title, ops: stateOps(item.rev, state, comment), rev: item.rev, before: { State: item.state, ...(comment ? { Comment: null } : {}) }, after: { State: state, ...(comment ? { Comment: comment } : {}) }, followUpId, type: item.type };
+      return { ...base(env), ...none, ...(pickId !== null ? { pickIds: [pickId] } : {}), op: "state", itemId: item.id, title: item.title, ops: stateOps(item.rev, state, comment), rev: item.rev, before: { State: item.state, ...(comment ? { Comment: null } : {}) }, after: { State: state, ...(comment ? { Comment: comment } : {}) }, followUpId, type: item.type };
     }
     case "comment": {
       const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));

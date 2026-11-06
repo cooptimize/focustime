@@ -4,6 +4,7 @@
 // (server/teams/cards.ts), so a change there shows up here.
 // TB-2 adds the rhythm's cards (brief, check-in, close out, nudges, capture), each before and after a tap.
 // SR-1 adds the status report nudge.
+// PK-1 adds Done's follow-up (Set #id to its done state) and Undo's (put it back), on the check-in and close out cards.
 // Usage: node scripts/teams-card-previews.ts <outDir>
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright-core";
@@ -41,6 +42,10 @@ const rhythmCards: [string, Card][] = [
   ["checkin-ticked", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), pk(2, "Review the export mapping", "Northwind", "not_yet"), checkPicks[2]!] }, URL_)],
   ["checkin-proposal", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), checkPicks[1]!, checkPicks[2]!], proposal: ip({ title: "Move 2 picks", changes: [{ field: "Review the export mapping", before: "Thu, Nov 5 morning", after: "Thu, Nov 5 afternoon" }, { field: "Write the onboarding note", before: "Thu, Nov 5 afternoon", after: "Mon, Nov 9 morning" }] }) }, URL_)],
   ["checkin-moved", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), pk(2, "Review the export mapping", "Northwind", "moved", "This afternoon"), pk(3, "Write the onboarding note", "Internal", "moved", "Mon, Nov 9 morning")], proposal: ip({ title: "Move 2 picks", state: "done", message: "Moved 2 picks." }) }, URL_)],
+  // PK-1: Done on a to-do with a DevOps item offers its done state; Confirm writes it; Undo offers the write's undo.
+  ["checkin-devops-offer", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), checkPicks[1]!, checkPicks[2]!], proposal: ip({ title: "Set #4211 to Closed", whoSees: "Visible to everyone with access to the Portal project in DevOps. People following the item may get a notification from DevOps.", changes: [{ field: "State", before: "Active", after: "Closed" }], note: "Closes the follow-up once DevOps shows the change. Written only if the item is still at revision 12; if anyone changed it since, nothing is written. To set it to Resolved instead, do it in FocusTime." }) }, URL_)],
+  ["checkin-devops-done", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), checkPicks[1]!, checkPicks[2]!], proposal: ip({ title: "Set #4211 to Closed", changes: [{ field: "State", before: "Active", after: "Closed" }], state: "done", message: "#4211 is Closed in DevOps" }) }, URL_)],
+  ["closeout-devops-undo", closeoutCard({ ...closeout, proposal: ip({ title: "Put #4211 back to Active", whoSees: "Visible to everyone with access to the Portal project in DevOps.", changes: [{ field: "State", before: "Closed", after: "Active" }] }) }, URL_)],
   ["closeout", closeoutCard(closeout, URL_)],
   ["closeout-proposal", closeoutCard({ ...closeout, proposal: ip({}) }, URL_)],
   ["closeout-done", closeoutCard({ ...closeout, closed: true, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), pk(2, "Review the export mapping", "Northwind", "done"), pk(3, "Write the onboarding note", "Internal", "moved", "Mon, Nov 9 morning")], proposal: ip({ state: "done", message: "Day closed out." }) }, URL_)],

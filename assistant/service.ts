@@ -12,14 +12,14 @@
 //   4. confirm() re-checks everything (mine, open, not expired, still allowlisted, the client still mine and the
 //      proposal's own, nothing changed since: a fresh preview) and then dispatches the same action the button does.
 import type { ActionName } from "../actions/registry.ts";
-import type { ActionResponse, DevOpsPreview, DevOpsResult } from "../actions/types.ts";
+import type { ActionResponse, DevOpsPreview, DevOpsResult, DoneOffer, UndoOffer } from "../actions/types.ts";
 import { clientsNamed, type ClientEntry } from "../ai/guard.ts";
 import type { AiService } from "../ai/service.ts";
 import { NO_CLIENT, type AiErrorKind, type JsonSchema } from "../ai/types.ts";
 import type { AssistantProposalRow, PlanStore } from "../store/plan-store.ts";
 import type { Pick } from "../plan/types.ts";
 import type { PickerPersonView } from "../plan/team-types.ts";
-import { ITEM_TOOLS, PICKS_TOOLS, PICK_TOOLS, PROPOSE_TOOLS, TOOLS, TOOL_NAMES, isTool, type ToolName } from "./allowlist.ts";
+import { BUTTON_ONLY, ITEM_TOOLS, PICKS_TOOLS, PICK_TOOLS, PROPOSE_TOOLS, TOOLS, TOOL_NAMES, isTool, type ToolName } from "./allowlist.ts";
 import type { WeekLoadData } from "../actions/types.ts";
 import { nextBlockFor, type BlockAt } from "../plan/suggest.ts";
 import { commitmentsRead, dayRead, findItem, gapsRead, itemCard, itemRead, sendsRead, statusRead, todayRead, type FoundItem, type ReadDeps, type ReadResult } from "./reads.ts";
@@ -56,7 +56,7 @@ const ANSWER_INSTRUCTIONS = `You are FocusTime's assistant. Answer the person's 
 - If a tool says "shown", the person sees those cards: refer to them briefly, don't repeat them.
 - No em dashes. No markdown.`;
 
-const INTENT_SCHEMA: JsonSchema = { type: "object", properties: { tools: { type: "array", maxItems: 4, items: { type: "string", enum: [...TOOL_NAMES, "none"] } } }, required: ["tools"], additionalProperties: false };
+const INTENT_SCHEMA: JsonSchema = { type: "object", properties: { tools: { type: "array", maxItems: 4, items: { type: "string", enum: [...TOOL_NAMES.filter((t) => !BUTTON_ONLY.includes(t)), "none"] } } }, required: ["tools"], additionalProperties: false };
 const ANSWER_SCHEMA: JsonSchema = { type: "object", properties: { reply: { type: "string" } }, required: ["reply"], additionalProperties: false };
 
 /** Plain words for every status but ok. */
@@ -140,13 +140,13 @@ export function createAssistant(env: AssistantEnv) {
     if (asked.length === 1 && asked[0] === "close_loop") return finish(turnId, "ok", "Closing loops from the assistant is coming with LP-1. For now, close it from the Inbox.", [], [], [link("#/inbox", "Open the Inbox")]);
 
     // Reads are always allowed; a proposal only when the intent round named it from my words.
-    const allowed = TOOL_NAMES.filter((t) => TOOLS[t].kind === "read" || asked.includes(t));
+    const allowed = TOOL_NAMES.filter((t) => !BUTTON_ONLY.includes(t) && (TOOLS[t].kind === "read" || asked.includes(t)));
     const known = { items: new Set<number>([...idsIn(text), ...(context.itemId ? [context.itemId] : [])]), picks: new Set<number>() };
     const cards: Card[] = [];
     const proposals: Proposal[] = [];
     const exec = executor({ turnId, text, client, cards, proposals, known, context });
     const answer = await env.ai.runTools<{ reply: string }>({ name: "assistant.answer", client: aiClient, instructions: ANSWER_INSTRUCTIONS }, input, ANSWER_SCHEMA, {
-      tools: TOOL_NAMES.map((t) => TOOLS[t].spec),
+      tools: TOOL_NAMES.filter((t) => !BUTTON_ONLY.includes(t)).map((t) => TOOLS[t].spec),
       allowed,
       execute: exec,
       maxRounds: 4,
@@ -366,6 +366,40 @@ export function createAssistant(env: AssistantEnv) {
           view: base("devops.confirm", f.clientKey, tool === "comment" ? `Comment on #${f.item.id}` : `New description for #${f.item.id}`, view, p.visibility, tool === "comment" ? ["text"] : ["after"]),
           held: { tool, args, run: { action: "devops.confirm", input: { clientKey: f.clientKey, change } } },
           snapshot: { rows: p.fields.map((r) => [r.label, r.before]) },
+        };
+      }
+      case "item_done": {
+        // PK-1: the app's offer (devops.done_offer: an item I can change, not done yet, with my write PAT), then the
+        // existing state write's preview. Confirm builds it again, so a to-do unchecked since or an item done since stops it.
+        const p = await pickOf(Number(args.pickId));
+        const r = await env.run("devops.done_offer", { pickIds: [p.id] });
+        if (!r.ok) throw new Refusal(r.error);
+        const offer = (r.data as { offers: DoneOffer[] }).offers[0];
+        if (!offer) throw new Refusal(p.itemId === null ? "That to-do has no DevOps item" : `Nothing to set in DevOps for #${p.itemId}`);
+        const state = typeof args.state === "string" && offer.choices.includes(args.state) ? args.state : offer.choices[0]!;
+        const change = { kind: "state", itemId: offer.itemId, state, pickId: p.id, ...(offer.followUpId !== null ? { followUpId: offer.followUpId } : {}) };
+        const pv = await devopsPreview(offer.clientKey, change);
+        const view = fromDevOps(pv);
+        if (offer.choices.length > 1) view.notes.push(`To set it to ${offer.choices.filter((c) => c !== state).join(" or ")} instead, do it in FocusTime.`);
+        return {
+          view: base("devops.confirm", offer.clientKey, `Set #${offer.itemId} to ${state}`, view, pv.visibility),
+          held: { tool, args: { pickId: p.id, state, itemId: offer.itemId }, run: { action: "devops.confirm", input: { clientKey: offer.clientKey, change } } },
+          snapshot: { rows: pv.fields.map((x) => [x.label, x.before]) },
+        };
+      }
+      case "item_undo": {
+        // PK-1: unchecked after its offer wrote: that write's own undo (refused when the item changed since).
+        const p = await pickOf(Number(args.pickId));
+        const r = await env.run("devops.undo_offer", { pickId: p.id });
+        if (!r.ok) throw new Refusal(r.error);
+        const u = (r.data as { offer: UndoOffer | null }).offer;
+        if (!u) throw new Refusal("Nothing to undo in DevOps for that to-do");
+        const change = { kind: "undo", writeId: u.writeId };
+        const pv = await devopsPreview(u.clientKey, change);
+        return {
+          view: base("devops.confirm", u.clientKey, `Put #${u.itemId} back to ${u.before ?? "its state"}`, fromDevOps(pv), pv.visibility),
+          held: { tool, args: { pickId: p.id, itemId: u.itemId }, run: { action: "devops.confirm", input: { clientKey: u.clientKey, change } } },
+          snapshot: { rows: pv.fields.map((x) => [x.label, x.before]) },
         };
       }
       case "capture": {

@@ -39,6 +39,7 @@ starts the same.
 | `followups.ts` | DM-1 | Four follow-ups (overdue, today, tomorrow, Thursday) and a resume note |
 | `captures.ts` | DM-1 (CP-1) | A capture to sort, and a draft story with its AI-prepared version |
 | `unfinished.ts` | DM-1 (UI-B) | Unfinished picks from earlier days (from the last workday on a Monday) |
+| `todo-done.ts` | PK-1 | A to-do checked off on the last workday whose DevOps item is still open (Harbor #2211), so Close out of that day asks to set it done in DevOps |
 | `ahead.ts` | DM-1 (AH-1) | Three staged Ahead changes, one a conflict |
 | `notices.ts`, `history.ts` | DM-1 | Notes and past days |
 | `conversations.ts` | DM-1 (CV-1, CV-5) | Four registered chats; a conversation that needs me, my late promise, my promise due Friday, one tracked as #2211, one a teammate handles, chatter |

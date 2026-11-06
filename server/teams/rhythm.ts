@@ -430,6 +430,18 @@ export function createRhythm(d: RhythmDeps) {
     return { ...m, notice: null, proposal: inline(r.proposal) };
   }
 
+  /** PK-1: the DevOps follow-up to a Done or Undo tap, through propose(); quiet when there's nothing to offer. */
+  async function offerDevOps(userId: string, m: Exclude<RhythmModel, NudgeModel | StatusModel>, tool: "item_done" | "item_undo", pickId: number): Promise<Exclude<RhythmModel, NudgeModel | StatusModel>> {
+    const c = await d.config(userId).catch(() => null);
+    if (!d.assistant || (tool === "item_done" && c?.plan.devopsOnDone === "never")) return m;
+    const r = await d.assistant.propose({ person: { userId }, tool, args: tool === "item_done" ? { pickId, state: null } : { pickId } });
+    if (!r.ok) return m;
+    const row = await d.store(userId).get(m.occasion);
+    await d.botStore(userId).cardSent(r.proposal.id, row?.activityId ?? null, r.proposal.expiresAt, r.proposal.title);
+    log({ op: "rhythm_tap", kind: tool });
+    return { ...m, notice: null, proposal: inline(r.proposal) };
+  }
+
   /** Where "moveTo" sends a pick: a half-day, or the pick's client's next block after today (UI-B's rule). */
   async function target(userId: string, m: { date: string }, pick: { clientKey: string }, moveTo: string): Promise<{ date: string; half: "AM" | "PM" } | null> {
     const hit = /^(\d{4}-\d{2}-\d{2}):(AM|PM)$/.exec(moveTo);
@@ -484,6 +496,9 @@ export function createRhythm(d: RhythmDeps) {
         if (r.ok) setPick(p.id, t.op === "done" ? "done" : "open");
         m = { ...m, notice: r.ok ? null : r.error };
         log({ op: "rhythm_tap", kind: r.ok ? t.op : `${t.op}_refused` });
+        // PK-1: on a check-in or close out card, Done offers the item's DevOps done state and Undo that write's undo,
+        // as a proposal in the card (only when none is open there; nothing to offer leaves the card as it is).
+        if (r.ok && m.kind !== "brief" && m.proposal?.state !== "open") m = await offerDevOps(userId, m, t.op === "done" ? "item_done" : "item_undo", p.id);
         break;
       }
       case "not_yet": {

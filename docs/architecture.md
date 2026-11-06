@@ -541,3 +541,27 @@ A preview of Monday's status report and an easy way to edit the comments that fe
   read-only Data, since it only reads); the command "Diagnostics" (`ui/menu.ts`) opens it. Retry extraction runs
   `conversations.sort_unsorted`.
 - **Tests.** `plan/diagnostics.test.ts`, `actions/diagnostics.test.ts`; e2e `e2e/diagnostics.test.ts`.
+
+## PK-1: checking off a to-do offers the DevOps update (Nov 6)
+
+Checking a to-do done offers its DevOps item's done state as a proposal; nothing is written without Confirm.
+
+- **Rules.** `plan/devopswrite.ts`: `doneChoices` (the type's Completed state, then its Resolved one, from the process
+  model's categories) and `alreadyDone` (Resolved, Completed or Removed).
+- **Actions.** `actions/devops-write-actions.ts`: `devops.done_offer` (read only: per checked-off to-do with a DevOps
+  item, my write PAT for its client, not done already, `rightsOn` → the shared `canEdit`; with the rule's open
+  "Update DevOps" follow-up so the write closes it) and `devops.undo_offer` (the state write that named the to-do,
+  while it is the undo stack's top, confirmed, within 12 hours). The `state` change takes an optional `pickId`
+  (kept in the log entry's `pickIds`); a batch's state refusals land per line. `[plan] devops_on_done` ("ask" or
+  "never", `config/schema.ts`, `config/settings.ts`).
+- **UI.** `ui/DoneOffer.tsx`: `useDoneOfferFlow` (owned by `ui/App.tsx`, `DoneOfferCtx`): after a tick on Today, the
+  Board (`App.toggle`), the focus timer's Done (`runTimer`) or Plan today and a past day's review (`ui/PlanDay.tsx`), one card with the write's preview,
+  Confirm and Not now; Undo after a write; unchecking offers that write's undo (the write framework's dialog).
+  `DoneBatch`: Close out's "N to-dos done today; set their items to Closed?" (`ui/Today.tsx` › CloseOutPanel), per
+  client in tens, a result per item with Retry. Settings › Planning: When I check off a to-do. Styles: the PK-1 block.
+- **Teams.** `item_done` and `item_undo` in `assistant/allowlist.ts` (`PROPOSE_TOOLS` and `BUTTON_ONLY`: never given
+  to the model), built in `assistant/service.ts`; `offerDevOps` in `server/teams/rhythm.ts` after Done and Undo on a
+  check-in or close out card.
+- **Demo.** `sources/demo/seeds/todo-done.ts` (Harbor #2211 done on the last workday, still open in DevOps).
+- **Tests.** `actions/done-offer.test.ts`, the PK-1 parts of `assistant/service.test.ts` and
+  `server/teams/rhythm.test.ts`; e2e `e2e/pk1.test.ts`; card previews in `scripts/teams-card-previews.ts`.
