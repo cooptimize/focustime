@@ -59,11 +59,13 @@ export function labelHere(placed: Pick<PlacedEvent, "continuesBefore" | "event">
 }
 
 /**
- * Step 15.1 (D276), U3 (D384): the time rail shows on medium-width cards whenever the block has working hours (it is
- * the one home for meetings on Week, so it has no switch). Wide cards have the full timeline; narrow ones never show it.
+ * Step 15.1 (D276), U3 (D384), WK-1: what a compact Week card draws for its hours, by the Board's tier: the rail with
+ * titles, the slim ruler, or the day strip (strip and mini). Nothing on a block with no working hours, on the phone,
+ * or outside the medium layout (tier null: the wide timeline, the one-day view); the now line then sits at the top.
  */
-export function showRuler(layout: "wide" | "medium" | "narrow", slot: { off: boolean }): boolean {
-  return layout === "medium" && !slot.off;
+export function railFor(tier: "rail" | "ruler" | "strip" | "mini" | null, slot: { off: boolean }, phone = false): "rail" | "slim" | "strip" | null {
+  if (!tier || phone || slot.off) return null;
+  return tier === "rail" ? "rail" : tier === "ruler" ? "slim" : "strip";
 }
 
 /** A band's place on the ruler, as fractions of the block's working hours (slot.start to slot.end); null outside them. */

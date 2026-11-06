@@ -24,8 +24,8 @@ describe("chooseLayout", () => {
     expect(chooseLayout(MIN_WIDTH.medium)).toBe("medium");
     const column = (w: number) => (w - SIZES.chromePx) / SIZES.shares;
     expect(column(MIN_WIDTH.wide)).toBeGreaterThanOrEqual(SIZES.railPx + SIZES.minTimelinePx);
-    // Medium: Friday keeps its minimum, Mon–Thu share the rest.
-    expect((MIN_WIDTH.medium - SIZES.chromePx - SIZES.minFridayCardPx) / 4).toBeGreaterThanOrEqual(SIZES.minCardPx);
+    // WK-1: the whole week from 1024 px; below that, one day at a time (the phone from 600 px down).
+    expect(MIN_WIDTH.medium).toBe(1024);
   });
 
   it("stacks the single day as a card once rail and timeline no longer fit side by side", () => {

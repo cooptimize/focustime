@@ -99,3 +99,16 @@ export function NowRow({ label }: { label: string }) {
     </li>
   );
 }
+
+/**
+ * WK-1: on the day strip (the strip and mini tiers), a short upright tick at a fraction of the block's hours with the
+ * time beside it, kept inside the strip.
+ */
+export function NowTick({ at, label, onClick }: { at: number; label: string; onClick?: () => void }) {
+  return (
+    <div className="now-line now-tick" style={{ "--at": pct(at) } as CSSProperties} role="presentation">
+      <span className="nt-mark" aria-hidden="true" />
+      <Time label={label} onClick={onClick} />
+    </div>
+  );
+}
