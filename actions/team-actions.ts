@@ -545,5 +545,15 @@ export async function sendFacts(ctx: TeamContext): Promise<import("../plan/inbox
     if (sendState === "done" && now - Date.parse(s.updatedAt) >= 24 * 3600_000) continue;
     out.push({ key: `s${s.id}`, kind: "send", clientKey: s.clientKey, at: s.updatedAt, done: sendState === "done", sendState, title: `#${s.itemId} ${s.title}`, who: s.from.name, where: s.weekStart > today ? "next week" : "this week", itemId: s.itemId, must: s.kind === "must", weekStart: s.weekStart });
   }
+  // Slice 3, Waiting on: my sends still waiting for an answer, and my Ask to look no lead has replied to.
+  for (const s of await team.sendsOf(me, sendWeeks(mondayOf(today)))) {
+    if (s.from.id !== me || s.to.id === me || s.state !== "waiting" || !r.isClient(s.clientKey)) continue;
+    out.push({ key: `s${s.id}`, kind: "sent", clientKey: s.clientKey, at: s.createdAt ?? s.updatedAt, done: false, waitingOn: true, sendState: "waiting", title: `#${s.itemId} ${s.title}`, who: s.to.name, where: s.weekStart > today ? "next week" : "this week", itemId: s.itemId, must: s.kind === "must", weekStart: s.weekStart });
+  }
+  const since = Temporal.PlainDate.from(mondayOf(today)).subtract({ days: 14 }).toZonedDateTime({ timeZone: userZone(cfg) }).toInstant().toString();
+  for (const a of await team.looksOf(me, since)) {
+    if (a.from.id !== me || a.reply || !r.isClient(a.clientKey)) continue;
+    out.push({ key: `a${a.id}`, kind: "ask", clientKey: a.clientKey, at: a.createdAt, done: false, waitingOn: true, title: `Look at my week of ${Temporal.PlainDate.from(a.weekStart).toLocaleString("en-US", { month: "short", day: "numeric" })}`, who: a.to.name, where: a.weekStart > today ? "next week" : "this week", weekStart: a.weekStart });
+  }
   return out;
 }

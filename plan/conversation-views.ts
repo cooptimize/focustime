@@ -66,11 +66,15 @@ export type ConversationsData = {
   closed: ConversationCard[];
   hiddenCount: number;
   /** Messages waiting for AI, by reason ("AI budget is set to $0"). */
-  unsorted: { count: number; reasons: { text: string; count: number }[] };
+  /** IB-1 slice 3: each reason as its line (unsortedLine) with how many messages it holds. */
+  unsorted: { count: number; reasons: { text: string; count: number; does?: "retry" | "switch" | "held"; fix?: string | null }[] };
   /** Per client: "Filtered as chatter (N)", newest first. */
   chatter: { clientKey: string; clientName: string; messages: FilteredMessage[] }[];
   myPromisesOpen: number;
   lastPoll: string | null;
+  /** IB-1 slice 3: the registered chats I see (for the Chatter pane), and whether I'm a FocusTime admin. */
+  chats?: { chatId: string; name: string; link: string; social: boolean }[];
+  admin?: boolean;
   /** ADM-2 (D604): the Rule, for "every N minutes in working hours". */
   pollMinutes?: number;
   writeClients: string[];

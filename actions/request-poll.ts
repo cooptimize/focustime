@@ -25,7 +25,7 @@ import type { WorkItem } from "../week/types.ts";
 import { classifyAsk, extractPromise, type AskAiDeps } from "./ask-ai.ts";
 import { mapSeq } from "./seq.ts";
 import { imagesForAi } from "./chat-images.ts";
-import { CHAT_DAILY_AI_CALLS, legacyRefused, runPipeline } from "./conversations-pipeline.ts";
+import { CHAT_DAILY_AI_CALLS, legacyRefused, parkedBySwitch, runPipeline } from "./conversations-pipeline.ts";
 import type { ConversationStore } from "../store/conversation-store.ts";
 import { userZone } from "../week/zone.ts";
 
@@ -197,9 +197,12 @@ async function conversationsStep(
   // GD-1: messages refused before GD-1 for naming another client (every Internal chat's were) are tried once more,
   // as their own batch so they never hold back new ones; any still refused keep the new reason and aren't tried again.
   const retry = await legacyRefused(convs, deps.teams, c.chatId);
-  if (!added.length && !retry.length) return;
-  const items = await x.p.openItems(cfg, c.clientKey).catch(() => null);
   const ai = x.p.pipelineAi ? await x.p.pipelineAi().catch(() => null) : null;
+  // IB-1 slice 3: messages a switch held back are sorted once it passes; nothing to press.
+  const available = !!ai && (await ai.availability(c.clientKey).catch(() => "off")) === "ok";
+  const parked = await parkedBySwitch(convs, deps.teams, c.chatId, { available, withNew: added.length > 0 });
+  if (!added.length && !retry.length && !parked.length) return;
+  const items = await x.p.openItems(cfg, c.clientKey).catch(() => null);
   const run = (batch: readonly TeamsMessage[]) => runPipeline(
     {
       teams: deps.teams, convs, users: x.users, homeTenant: x.home, now: x.now, clientName: cfg.clientSettings[c.clientKey]?.name ?? c.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, chatCap: cfg.org?.rules.chatAiDailyCap ?? CHAT_DAILY_AI_CALLS, ...groupingRules(cfg, c.clientKey), items,
@@ -213,7 +216,7 @@ async function conversationsStep(
     c,
     batch,
   );
-  for (const batch of [added, retry]) {
+  for (const batch of [added, retry, parked]) {
     if (!batch.length) continue;
     const r = await run(batch);
     x.out.imagesSent = (x.out.imagesSent ?? 0) + r.imagesSent;

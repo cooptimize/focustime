@@ -95,6 +95,26 @@ const firstName = (n: string) => n.split(/\s+/)[0] ?? n;
  * GD-1: a chat's messages refused before GD-1 for naming another client (every Cooptimize Internal chat's were), to be
  * tried once more as their own batch. A retry that is refused again stores the new reason, so it is never tried again.
  */
+/**
+ * IB-1 slice 3: a chat's messages left unsorted by a switch, to sort once the switch passes. Off, Allow AI and the key
+ * are tried whenever the client's AI is available now; a budget only along with new messages in the chat (a cap is
+ * only known by trying, so it is never tried on its own). Guard holds and transient reasons are never picked here.
+ */
+export const SWITCH_REASONS = ["off", "client_off", "not_set_up"] as const;
+export const BUDGET_REASONS = ["zero_budget", "over_budget"] as const;
+export async function parkedBySwitch(
+  convs: Pick<ConversationStore, "placesByRole">, teams: Pick<TeamsStore, "message">, chatId: string, o: { available: boolean; withNew: boolean },
+): Promise<TeamsMessage[]> {
+  if (!o.available) return [];
+  const pick = new Set<string>([...SWITCH_REASONS, ...(o.withNew ? BUDGET_REASONS : [])]);
+  const out: TeamsMessage[] = [];
+  for (const p of (await convs.placesByRole([chatId], "unsorted")).filter((x) => x.reason !== null && pick.has(x.reason))) {
+    const m = await teams.message(p.chatId, p.messageId);
+    if (m) out.push(m);
+  }
+  return out;
+}
+
 export async function legacyRefused(convs: Pick<ConversationStore, "placesByRole">, teams: Pick<TeamsStore, "message">, chatId: string): Promise<TeamsMessage[]> {
   const places = (await convs.placesByRole([chatId], "unsorted")).filter((p) => p.reason === LEGACY_CLIENT_REFUSED);
   const out: TeamsMessage[] = [];
@@ -188,6 +208,14 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
     for (const id of touched) await refreshStatus(d, id);
     return out;
   };
+
+  // IB-1: a Social chat (an admin's switch) skips the AI pass entirely: what the rules didn't place is chatter.
+  if (chat.social) {
+    const rest = work.filter((m) => !placed.has(m.messageId));
+    if (rest.length) await d.convs.place(rest.map((m) => ({ chatId: chat.chatId, messageId: m.messageId, conversationId: null, role: "chatter" as const, reason: "social", placedBy: "rule" as const, at: m.createdAt })));
+    out.chatter += rest.length;
+    return finishByRules();
+  }
 
   // 2a. CV-3: AI off for this client (AI for FocusTime, Allow AI, or no provider key) with the Rule on: conversations
   // by rules only, decided before any AI call (none is counted). Caps and provider errors aren't "off": they wait.

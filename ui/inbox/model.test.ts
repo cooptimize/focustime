@@ -108,3 +108,24 @@ describe("the command menu's Inbox keys", () => {
     expect(ASK_KEYS.map((k) => [k.hint, k.act])).toEqual(ITEM_KEYS.map((k) => [k.key, k.act]));
   });
 });
+
+describe("slice 3: what I wait on, and Snooze", () => {
+  it("Waiting on rows say who and never offer Close the loop or a primary", () => {
+    expect(rowTag(row({ key: "s9", kind: "sent", views: ["waiting"] }), TODAY)?.text).toBe("No answer yet");
+    expect(rowTag(row({ key: "a9", kind: "ask", views: ["waiting"] }), TODAY)?.text).toBe("No reply yet");
+    for (const [key, kind, expected] of [["c9", "commitment", "take_over"], ["s9", "sent", "cancel"], ["a9", "ask", "week"]] as const) {
+      const acts = actsFor({ kind: "waiting", row: row({ key, kind, views: ["waiting"], who: "Lena Hart" }) }, env());
+      expect(acts.map((a) => a.id), kind).toEqual([expected, "hide", "snooze"]);
+      expect(acts.some((a) => a.primary), kind).toBe(false);
+    }
+  });
+  it("every open item snoozes; a snoozed one wakes; a done one does neither", () => {
+    const ids = (r: Partial<InboxItemView>) => actsFor({ kind: "chatPromise", row: row({ key: "c7", ...r }), promise: promise() }, env()).map((a) => a.id);
+    expect(ids({})).toContain("snooze");
+    expect(ids({ snoozedUntil: "2026-11-06T15:00:00Z" })).toContain("wake");
+    expect(ids({ snoozedUntil: "2026-11-06T15:00:00Z" })).not.toContain("snooze");
+    const e = env();
+    actsFor({ kind: "chatPromise", row: row({ key: "c7" }), promise: promise() }, e).find((a) => a.id === "snooze")!.run();
+    expect(e.calls).toEqual(["form:snooze"]);
+  });
+});

@@ -25,8 +25,8 @@ export const GROUPS: readonly { id: Group; label: string }[] = [
   { id: "kind", label: "Kind" },
 ];
 
-export const KIND_LABEL: Record<InboxItemView["kind"], string> = { conversation: "Conversations", promise: "Promises", send: "Sent to you", capture: "Captures", draft: "Drafts" };
-export const KIND_WORD: Record<InboxItemView["kind"], string> = { conversation: "Conversation", promise: "Promise", send: "Sent to you", capture: "Capture", draft: "Draft" };
+export const KIND_LABEL: Record<InboxItemView["kind"], string> = { conversation: "Conversations", promise: "Promises", send: "Sent to you", capture: "Captures", draft: "Drafts", commitment: "Promised to you", sent: "You sent", ask: "Your asks to look" };
+export const KIND_WORD: Record<InboxItemView["kind"], string> = { conversation: "Conversation", promise: "Promise", send: "Sent to you", capture: "Capture", draft: "Draft", commitment: "Promised to you", sent: "You sent", ask: "Ask to look" };
 
 /** Items in a view, for the chosen clients (none chosen: all). */
 export function inView(items: readonly InboxItemView[], view: InboxView, clients: readonly string[]): InboxItemView[] {
@@ -138,6 +138,13 @@ export function rowTag(i: InboxItemView, today: string): { text: string; tone: T
       return { text: "To sort", tone: "plain" };
     case "draft":
       return { text: "Review draft", tone: "plain" };
+    case "commitment":
+      if (i.late && i.due) return { text: lateText(i.due, today), tone: "soon" };
+      return i.due ? { text: dueWords(i.due, today), tone: "plain" } : { text: "Waiting", tone: "plain" };
+    case "sent":
+      return { text: "No answer yet", tone: "plain" };
+    case "ask":
+      return { text: "No reply yet", tone: "plain" };
   }
 }
 
@@ -154,6 +161,12 @@ export function rowSub(i: InboxItemView): string {
       return "Your capture";
     case "draft":
       return i.where ?? "Draft";
+    case "commitment":
+      return [i.who ? `${i.who} promised it` : null, i.where].filter(Boolean).join(" · ");
+    case "sent":
+      return [i.who ? `To ${i.who}` : null, i.where].filter(Boolean).join(" · ");
+    case "ask":
+      return [i.who ? `Asked ${i.who} to look` : "Asked a lead to look", i.where].filter(Boolean).join(" · ");
   }
 }
 

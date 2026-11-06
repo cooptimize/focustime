@@ -21,7 +21,7 @@ import { CHAT_ID, isExternal, teamsLink } from "../plan/chats.ts";
 import { DRAFT_INSTRUCTIONS, DRAFT_SCHEMA, DRAFT_TASK, draftFrom, draftInput, emptyDraft, type DraftAnswer } from "../plan/conversation-draft.ts";
 import { isClosed } from "../plan/process.ts";
 import { chatImageSrc, type CardCommitment, type CardItem, type CardSuggestion, type ConversationCard, type ConversationMessage, type ConversationsData, type DayPromise, type MessageImageView, type MyPromisesData, type Primary, type PromiseCard } from "../plan/conversation-views.ts";
-import { daysWaiting, oneLine, statusLine, unsortedText, type Commitment, type Conversation, type ItemDraft } from "../plan/conversations.ts";
+import { daysWaiting, oneLine, statusLine, unsortedLine, unsortedText, type Commitment, type UnsortedLine, type Conversation, type ItemDraft } from "../plan/conversations.ts";
 import type { ClientChat, FocusUser } from "../plan/requests.ts";
 import { hostedImageIds, sanitizeMessageHtml } from "../plan/sanitize.ts";
 import type { MessageImage } from "../store/teams-store.ts";
@@ -60,6 +60,8 @@ export type ConversationContext = RequestContext & {
   conversations?: ConversationStore | undefined;
   /** Whether I lead this client: Dataverse's leads with admins' overrides (actions/client-lead.ts, ADM-1). */
   isLead: (clientKey: string) => Promise<boolean>;
+  /** IB-1: whether I'm a FocusTime admin (Mark as a Social chat). */
+  isAdmin?: () => Promise<boolean>;
   /** The FocusTime users (for Sort unsorted's own promises). */
   users: () => Promise<FocusUser[]>;
   /** The pipeline's AI for Sort unsorted: my switches, the app's cap. */
@@ -323,12 +325,13 @@ async function list(ctx: ConversationContext, cfg: AppConfig, select: number | n
   // In progress: a closed item (Mark done) first, then the latest.
   out.inProgress.sort((a, b) => Number(!!b.item?.closed) - Number(!!a.item?.closed) || Date.parse(b.lastAt) - Date.parse(a.lastAt));
   const unsorted = await v.convs.placesByRole(v.chats.map((c) => c.chatId), "unsorted");
-  const reasons = new Map<string, number>();
+  const reasons = new Map<string, { line: UnsortedLine; count: number }>();
   for (const p of unsorted) {
-    const t = unsortedText(p.reason, cfg.clientSettings[v.byId.get(p.chatId)?.clientKey ?? ""]?.name ?? "this client");
-    reasons.set(t, (reasons.get(t) ?? 0) + 1);
+    const line = unsortedLine(p.reason, cfg.clientSettings[v.byId.get(p.chatId)?.clientKey ?? ""]?.name ?? "this client");
+    const r = reasons.get(line.text);
+    reasons.set(line.text, { line, count: (r?.count ?? 0) + 1 });
   }
-  out.unsorted = { count: unsorted.length, reasons: [...reasons].map(([text, count]) => ({ text, count })) };
+  out.unsorted = { count: unsorted.length, reasons: [...reasons.values()].map(({ line, count }) => ({ text: line.text, count, does: line.does, fix: line.fix })) };
   const chatter = await v.convs.placesByRole(v.chats.map((c) => c.chatId), "chatter");
   const home = await ctx.homeTenant();
   const byClient = new Map<string, ConversationsData["chatter"][number]>();
@@ -341,6 +344,9 @@ async function list(ctx: ConversationContext, cfg: AppConfig, select: number | n
     byClient.set(chat.clientKey, g);
   }
   out.chatter = [...byClient.values()];
+  // IB-1 slice 3: the Chatter pane's chat facts (name, Teams link, Social) and whether I may mark a Social chat.
+  out.chats = v.chats.map((c) => ({ chatId: c.chatId, name: c.displayName, link: teamsLink(c), social: !!c.social }));
+  out.admin = (await ctx.isAdmin?.().catch(() => false)) ?? false;
   out.myPromisesOpen = (await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))).filter((k) => k.state === "open").length;
   out.pollMinutes = cfg.org?.rules.pollMinutes ?? 5;
   // CV-2: a deep link (#/inbox/conversation/<id>): the one to select, following a merge to where it went now.
@@ -384,10 +390,35 @@ export async function inboxFacts(ctx: ConversationContext, cfg: AppConfig): Prom
     const view = await viewOf(ctx, v.me, card, all.find((c) => c.id === card.id)!);
     // Who it is with: someone in it who isn't me.
     const asker = card.participants.find((p) => !p.me)?.name ?? null;
+    const c = all.find((x) => x.id === card.id)!;
+    const workRequest = !card.item && card.primary === "create";
+    // Slice 3: why it needs me, from CV-1's own facts (the order viewOf checks them in).
+    const needsWhy = view !== "needs" ? null
+      : card.mentionsMe ? "mention"
+      : card.commitments.some((k) => k.mine && k.state === "open") ? "committed"
+      : card.suggestions.some((x) => x.mine) ? "suggestion"
+      : same(c.ownerId, v.me) ? "owner"
+      : card.unclaimed ? "unclaimed"
+      : card.windDown ? "wrapped"
+      : workRequest ? "work"
+      : "new";
     out.push({
       key: itemKey("conversation", card.id), kind: "conversation", clientKey: card.clientKey, at: card.lastAt, done: view === "closed", conversationView: view,
       title: card.title, who: asker, where: card.chatName, itemId: card.item?.id ?? null, mentionsMe: card.mentionsMe,
-      workRequest: !card.item && card.primary === "create",
+      workRequest, needsWhy,
+    });
+  }
+  // Slice 3, Waiting on: someone else's open commitment made to me, or in a conversation I own.
+  const owned = new Map(all.map((c) => [c.id, same(c.ownerId, v.me)]));
+  const ownedIds = all.filter((c) => same(c.ownerId, v.me)).map((c) => c.id);
+  const theirs = new Map<number, Awaited<ReturnType<typeof v.convs.commitmentsIn>>[number]>();
+  for (const k of [...(await v.convs.commitmentsTo(v.chats.map((c) => c.chatId))), ...(await v.convs.commitmentsIn(ownedIds))]) theirs.set(k.id, k);
+  for (const k of theirs.values()) {
+    if (k.state !== "open" || same(k.whoId, v.me) || !(same(k.toId, v.me) || (k.conversationId !== null && owned.get(k.conversationId)))) continue;
+    out.push({
+      key: itemKey("chatPromise", k.id), kind: "commitment", clientKey: k.clientKey, at: k.updatedAt ?? k.createdAt, done: false, waitingOn: true,
+      due: k.dueDate ?? (k.dueAt ? localToday(k.dueAt, userZone(cfg)) : null), dueAt: k.dueAt,
+      title: k.what, who: k.whoName, where: v.byId.get(k.chatId)?.displayName ?? null, itemId: k.itemId,
     });
   }
   for (const k of await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))) {
@@ -398,7 +429,7 @@ export async function inboxFacts(ctx: ConversationContext, cfg: AppConfig): Prom
     out.push({
       key: itemKey("chatPromise", k.id), kind: "promise", clientKey: k.clientKey, at: k.updatedAt ?? k.createdAt, done,
       due: k.dueDate ?? (k.dueAt ? localToday(k.dueAt, userZone(cfg)) : null), dueAt: k.dueAt, linked: k.itemId !== null, onWeek: !!k.onToday,
-      title: k.what, who: k.toName, where: v.byId.get(k.chatId)?.displayName ?? null, itemId: k.itemId,
+      title: k.what, who: k.toName, where: v.byId.get(k.chatId)?.displayName ?? null, itemId: k.itemId, fromChat: true,
     });
   }
   return out;
@@ -821,7 +852,8 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const users = await ctx.users();
         let sorted = 0;
         for (const chat of v.chats) {
-          const waiting = await v.convs.placesByRole([chat.chatId], "unsorted");
+          // IB-1 slice 3: Sort again never overrides the guard: messages it held back stay held.
+          const waiting = (await v.convs.placesByRole([chat.chatId], "unsorted")).filter((p) => unsortedLine(p.reason, "").does !== "held");
           if (!waiting.length) continue;
           const ms = (await mapSeq(waiting, (p) => v.teams.message(p.chatId, p.messageId))).filter((m): m is NonNullable<typeof m> => !!m);
           const r = await runPipeline({

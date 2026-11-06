@@ -7,7 +7,7 @@ import { aClientChat, aClientEntry, aChatMember, aCommitmentAnswer, aConversatio
 import { BLAKE, CHAT, allianceAnswer, EVAN, LENA, SAM, world, ZONE } from "../test/conversations.ts";
 import type { TeamsMessage } from "../plan/requests.ts";
 import { CLIENT_REFUSED, LEGACY_CLIENT_REFUSED, statusLine, unsortedText } from "../plan/conversations.ts";
-import { legacyRefused } from "./conversations-pipeline.ts";
+import { legacyRefused, parkedBySwitch } from "./conversations-pipeline.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
 
 
@@ -282,5 +282,41 @@ describe("Cooptimize Internal and the client rule", () => {
     expect(await w.run(CHAT, client)).toMatchObject({ aiOutcome: CLIENT_REFUSED, unsorted: 1 });
     // Refused again: kept under the new reason, never tried again.
     expect(await legacyRefused(w.convs, w.teams, CHAT.chatId)).toEqual([]);
+  });
+
+  it("IB-1: messages a switch held back are picked once AI is available (a budget only with new messages); guard holds never", async () => {
+    const w = world({ directory });
+    const ms = await Promise.all(["off", "client_off", "over_budget", CLIENT_REFUSED, "rate_limited"].map((_, i) => w.say(CHAT, BLAKE, `2026-11-04T15:0${i}:00Z`, `Message ${i}`)));
+    const reasons = ["off", "client_off", "over_budget", CLIENT_REFUSED, "rate_limited"];
+    await w.convs.place(ms.map((m, i) => ({ chatId: m.chatId, messageId: m.messageId, conversationId: null, role: "unsorted" as const, reason: reasons[i]!, placedBy: "rule" as const, at: m.createdAt })));
+    const ids = async (o: { available: boolean; withNew: boolean }) => (await parkedBySwitch(w.convs, w.teams, CHAT.chatId, o)).map((m) => m.messageId);
+    expect(await ids({ available: false, withNew: true })).toEqual([]);
+    expect(await ids({ available: true, withNew: false })).toEqual([ms[0]!.messageId, ms[1]!.messageId]);
+    expect(await ids({ available: true, withNew: true })).toEqual([ms[0]!.messageId, ms[1]!.messageId, ms[2]!.messageId]);
+  });
+
+  it("IB-1: the unsorted line in plain words; Sort again only for what passes on its own; holds have no button", async () => {
+    const { unsortedLine } = await import("../plan/conversations.ts");
+    for (const k of ["rate_limited", "timeout", "quota", "invalid_output", "unknown_ref", "chat_cap"]) expect(unsortedLine(k, "Contoso").does, k).toBe("retry");
+    for (const k of ["off", "client_off", "not_set_up", "zero_budget", "over_budget"]) {
+      const l = unsortedLine(k, "Contoso");
+      expect(l.does, k).toBe("switch");
+      expect(l.fix, k).toMatch(/FocusTime admin/);
+    }
+    expect(unsortedLine("client_off", "Contoso")).toMatchObject({ text: "AI isn't allowed for Contoso", fix: expect.stringContaining("Admin › AI") });
+    expect(unsortedLine(CLIENT_REFUSED, "Contoso")).toEqual({ text: "held back: it mentions another client", does: "held", fix: null });
+    expect(unsortedLine("refused_secret", "Contoso")).toMatchObject({ does: "held", text: expect.stringMatching(/^held back: it contains something that looks like a key/) });
+    expect(unsortedLine("refused_email", "Contoso")).toMatchObject({ does: "held", text: "held back: it contains an email address" });
+    for (const k of ["off", CLIENT_REFUSED, "rate_limited"]) expect(unsortedLine(k, "Contoso").text, k).not.toMatch(/\u2014/);
+  });
+
+  it("IB-1: a Social chat skips the AI pass entirely: its messages are chatter, nothing is sent", async () => {
+    const w = world({ directory });
+    const social = { ...CHAT, social: true };
+    const m = await w.say(CHAT, BLAKE, "2026-11-04T15:00:00Z", "Can someone look at the export totals before Friday?");
+    const r = await w.run(social, [m]);
+    expect(w.calls).toHaveLength(0);
+    expect(r).toMatchObject({ chatter: 1, conversations: 0 });
+    expect((await w.convs.placesByRole([CHAT.chatId], "chatter")).map((p) => p.reason)).toEqual(["social"]);
   });
 });

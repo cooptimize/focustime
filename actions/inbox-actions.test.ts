@@ -5,18 +5,20 @@ import { describe, expect, it } from "vitest";
 import { inboxMarks } from "../store/migrations/20261110T0900_inbox_marks.ts";
 import { planStoreOn } from "../store/plan-store.ts";
 import { cfg, people } from "../test/conversation-people.ts";
-import { CHAT, SAM, world, ZONE } from "../test/conversations.ts";
+import { CHAT, LENA, SAM, world, ZONE } from "../test/conversations.ts";
+import { snoozeDayOf } from "../plan/inbox-items.ts";
+import type { TimeModel } from "../week/hours.ts";
 import { inboxFacts } from "./conversation-actions.ts";
 import { inboxAction, type InboxAction, type InboxListData } from "./inbox-actions.ts";
-import type { InboxFacts } from "../plan/inbox-items.ts";
+import type { InboxFacts, SnoozeDay } from "../plan/inbox-items.ts";
 
-async function setup(o: { sends?: InboxFacts[] } = {}) {
+async function setup(o: { sends?: InboxFacts[]; day?: SnoozeDay } = {}) {
   const w = world({ allowed: [] });
   const { as } = await people(w);
   const sam = as(SAM);
   const plan = planStoreOn(w.conn, { now: () => Temporal.Instant.from(w.now()).toZonedDateTimeISO(ZONE), userId: SAM.userId! });
   const run = async <T>(action: InboxAction, input: unknown = {}): Promise<T> => {
-    const r = await inboxAction({ plan, config: async () => cfg, now: w.now, conversations: (c) => inboxFacts(sam.ctx, c), sends: async () => o.sends ?? [] }, action, input);
+    const r = await inboxAction({ plan, config: async () => cfg, now: w.now, conversations: (c) => inboxFacts(sam.ctx, c), sends: async () => o.sends ?? [], snoozeDay: async () => o.day ?? null }, action, input);
     if (!r.ok) throw new Error(`${r.status} ${r.error}`);
     return r.data as T;
   };
@@ -96,7 +98,7 @@ describe("slice 2: rows, Hide for me, and promises never read-only", () => {
     const c = list.items.find((i) => i.key === `c${k.id}`)!;
     expect(c).toMatchObject({ kind: "promise", title: k.what, where: CHAT.displayName, late: false });
     // Only what a row shows: no summary, messages or anyone's email.
-    const allowed = new Set(["key", "kind", "clientKey", "at", "views", "title", "who", "where", "due", "dueAt", "itemId", "late", "done", "sendState", "conversationView", "mentionsMe", "workRequest", "must", "weekStart", "snoozedUntil"]);
+    const allowed = new Set(["key", "kind", "clientKey", "at", "views", "title", "who", "where", "due", "dueAt", "itemId", "late", "done", "sendState", "conversationView", "mentionsMe", "workRequest", "must", "weekStart", "snoozedUntil", "reason"]);
     for (const i of list.items) for (const k of Object.keys(i)) expect(allowed.has(k), k).toBe(true);
   });
 
@@ -134,5 +136,57 @@ describe("slice 2: rows, Hide for me, and promises never read-only", () => {
     expect((await sam.fail("my_promises.close", { id: k.id })).status).toBe(409);
     await sam.run("my_promises.reopen", { id: k.id });
     expect(await w.convs.commitment(k.id)).toMatchObject({ state: "open", closeHow: null, closeNote: null });
+  });
+});
+
+describe("slice 3: Waiting on, reasons and Snooze", () => {
+  it("someone else's open commitment to me is Waiting on, never Needs you; it goes when they're done", async () => {
+    const { w, run } = await setup();
+    await w.run(CHAT, [await w.say(CHAT, LENA, "2026-11-04T21:00:00Z", "I'll send the October totals tomorrow")]);
+    const k = (await w.convs.commitmentsInChat(CHAT.chatId)).find((x) => x.whoName === LENA.displayName)!;
+    let row = (await run<InboxListData>("inbox.list")).items.find((i) => i.key === `c${k.id}`);
+    expect(row).toBeUndefined();
+    await w.convs.updateCommitment(k.id, { toId: SAM.userId!, toName: SAM.displayName });
+    row = (await run<InboxListData>("inbox.list")).items.find((i) => i.key === `c${k.id}`);
+    expect(row).toMatchObject({ kind: "commitment", who: LENA.displayName, views: ["waiting"], reason: null });
+    await w.convs.updateCommitment(k.id, { state: "done" });
+    expect((await run<InboxListData>("inbox.list")).items.find((i) => i.key === `c${k.id}`)).toBeUndefined();
+  });
+
+  it("each Needs you row says why", async () => {
+    const { plan, run } = await setup();
+    const f = await plan.addFollowUp({ who: "Lena", what: "Send the mapping notes", due: "2026-11-01", clientKey: "contoso" });
+    const row = (await run<InboxListData>("inbox.list")).items.find((i) => i.key === `f${f.id}`)!;
+    expect(row.reason).toMatch(/^You (added|promised) it, \d+ days late$/);
+  });
+
+  it("Snooze takes it out of every view and the count until then, never changes its due, and null wakes it", async () => {
+    const nine = [{ start: "09:00", end: "17:00" }];
+    const model = { timeZone: ZONE, weekdays: { mon: nine, tue: nine, wed: nine, thu: nine, fri: nine, sat: [], sun: [] }, lunch: null, overrides: [] } as unknown as TimeModel;
+    const { plan, run } = await setup({ day: snoozeDayOf(model, new Set()) });
+    const f = await plan.addFollowUp({ who: null, what: "Overdue one", due: "2026-11-01", clientKey: "contoso" });
+    const before = (await run<{ needsYou: number }>("inbox.count")).needsYou;
+    const r = await run<{ snoozedUntil: string }>("inbox.snooze", { key: `f${f.id}`, until: "tomorrow" });
+    expect(r.snoozedUntil).toBe("2026-11-05T15:00:00Z");
+    const list = await run<InboxListData>("inbox.list");
+    expect(list.items.find((i) => i.key === `f${f.id}`)).toMatchObject({ views: [], due: "2026-11-01", snoozedUntil: r.snoozedUntil });
+    expect(list.needsYou).toBe(before - 1);
+    expect((await plan.openFollowUps()).find((x) => x.id === f.id)?.due).toBe("2026-11-01");
+    await run("inbox.snooze", { key: `f${f.id}`, until: null });
+    expect((await run<InboxListData>("inbox.list")).items.find((i) => i.key === `f${f.id}`)?.views).toContain("needs_you");
+    await expect(run("inbox.snooze", { key: `f${f.id}`, until: "2026-10-01" })).rejects.toThrow(/after today/);
+    await expect(run("inbox.snooze", { key: `f${f.id}`, until: "soon" })).rejects.toThrow(/400/);
+    await expect(run("inbox.snooze", { key: "f999999", until: "tomorrow" })).rejects.toThrow(/404/);
+  });
+
+  it("a former follow-up's own snooze date gives way to the Inbox's", async () => {
+    const nine = [{ start: "09:00", end: "17:00" }];
+    const model = { timeZone: ZONE, weekdays: { mon: nine, tue: nine, wed: nine, thu: nine, fri: nine, sat: [], sun: [] }, lunch: null, overrides: [] } as unknown as TimeModel;
+    const { plan, run } = await setup({ day: snoozeDayOf(model, new Set()) });
+    const f = await plan.addFollowUp({ who: null, what: "Overdue one", due: "2026-11-01", clientKey: "contoso" });
+    await plan.snoozeFollowUp(f.id, "2026-11-20");
+    await run("inbox.snooze", { key: `f${f.id}`, until: null });
+    expect((await plan.openFollowUps()).find((x) => x.id === f.id)?.snoozedUntil).toBeNull();
+    expect((await run<InboxListData>("inbox.list")).items.find((i) => i.key === `f${f.id}`)?.views).toContain("needs_you");
   });
 });

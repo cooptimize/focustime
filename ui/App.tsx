@@ -1688,7 +1688,7 @@ export function App() {
         <TeamView switcher={switches.week} weekStart={nav.week ?? data.today.weekStart} thisWeek={data.today.weekStart} colors={data.clients} readOnly={phone} onWeek={(w) => goNav(navOf.week("team", w))} version={planWeekVersion} onChanged={reloadQuiet} />
       ) : followUpsOpen ? (
         <div className="inbox-page">
-          {nav.tab === "inbox" && <InboxPage nav={nav} data={data} version={captureVersion} onNav={goNav} onChanged={reloadQuiet} />}
+          {nav.tab === "inbox" && <InboxPage nav={nav} data={data} version={captureVersion} onNav={goNav} onChanged={reloadQuiet} onFeedback={() => setFeedbackOpen(true)} />}
         </div>
       ) : roadmapOpen ? (
         nav.tab === "ahead" ? (

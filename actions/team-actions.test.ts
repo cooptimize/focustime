@@ -14,7 +14,7 @@ import { sqliteConn } from "../store/sql/sqlite.ts";
 import { teamStore } from "../store/team-store.ts";
 import { aClient, aDirectoryPerson, aFocusBlock, anAccount, aWeek, ZONE } from "../test/builders/index.ts";
 import type { CommitData, SendView, TeamData } from "./team-actions.ts";
-import { markScheduled, publishWeek, teamAction, teamNotices, type TeamAction, type TeamContext } from "./team-actions.ts";
+import { markScheduled, publishWeek, sendFacts, teamAction, teamNotices, type TeamAction, type TeamContext } from "./team-actions.ts";
 import type { OrgRuntime } from "./org.ts";
 
 const THIS_WEEK = "2026-11-02";
@@ -318,5 +318,21 @@ describe("Ask <lead> to look (SW-1)", () => {
     const c = (await t.as(dana).run<CommitData>("team.commit", { weekStart: NEXT_WEEK })).clients.find((x) => x.clientKey === ADATUM)!;
     expect(c.looks).toEqual([expect.objectContaining({ to: { id: id(lead), name: "Lee Lead" }, reply: "Looks right. Drop the date filter if the export slips." })]);
     expect(c.leads.map((l) => l.name).sort()).toEqual(["Lee Lead", "Lou Lead"]);
+  });
+});
+
+describe("Waiting on in the Inbox (IB-1 slice 3)", () => {
+  it("my sends still waiting and my unanswered Ask to look; answered ones leave", async () => {
+    const t = world();
+    const s = await sendTo(t.as(sam), dana);
+    const a = (await t.as(sam).run<{ look: { id: number } }>("look.ask", { clientKey: ADATUM, weekStart: NEXT_WEEK, toId: lead.personId, note: "Too much?" })).look;
+    let mine = (await sendFacts(t.as(sam).ctx)).filter((f) => f.waitingOn);
+    expect(mine.map((f) => [f.key, f.kind, f.who])).toEqual([[`s${s.id}`, "sent", "Dana Reyes"], [`a${a.id}`, "ask", "Lee Lead"]]);
+    // Dana sees it as a send to answer, never as something she waits on.
+    expect((await sendFacts(t.as(dana).ctx)).map((f) => [f.key, f.kind])).toEqual([[`s${s.id}`, "send"]]);
+    await t.as(dana).run("send.accept", { id: s.id });
+    await t.as(lead).run("look.reply", { id: a.id, reply: "Fine" });
+    mine = (await sendFacts(t.as(sam).ctx)).filter((f) => f.waitingOn);
+    expect(mine).toEqual([]);
   });
 });

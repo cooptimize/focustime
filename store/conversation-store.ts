@@ -354,6 +354,11 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
     async commitmentsInChat(chatId: string): Promise<Commitment[]> {
       return (await db.all("SELECT * FROM commitments WHERE chat_id = ? ORDER BY created_at, id", [chatId])).map(toCommitment);
     },
+    /** IB-1 Waiting on: commitments made to one person in these chats (the caller decides which chats they see). */
+    async commitmentsTo(toId: string, chatIds: readonly string[]): Promise<Commitment[]> {
+      const [list, params] = inList(chatIds);
+      return (await db.all(`SELECT * FROM commitments WHERE LOWER(to_id) = ? AND chat_id IN (${list}) ORDER BY created_at DESC, id DESC`, [toId.toLowerCase(), ...params])).map(toCommitment);
+    },
     /** One person's commitments in these chats (My promises; the caller decides which chats they see). */
     async commitmentsBy(whoId: string, chatIds: readonly string[]): Promise<Commitment[]> {
       const [list, params] = inList(chatIds);
@@ -577,6 +582,9 @@ function viewerOf(store: BaseStore, teams: TeamsStore, userId: string) {
     },
     async commitmentsBy(chatIds: readonly string[]): Promise<Commitment[]> {
       return store.commitmentsBy(userId, await chatsSeen(chatIds));
+    },
+    async commitmentsTo(chatIds: readonly string[]): Promise<Commitment[]> {
+      return store.commitmentsTo(userId, await chatsSeen(chatIds));
     },
     async commitment(id: number): Promise<Commitment | null> {
       const c = await store.commitment(id);

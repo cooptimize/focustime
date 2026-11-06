@@ -7,8 +7,14 @@
 // `f<id>` a promise I added or a rule opened (follow_ups, called follow-ups before IB-1), `v<id>` a conversation,
 // `s<id>` a send to me, `k<id>` a capture, `d<id>` a draft story or feature to add in DevOps.
 import type { IsoDate } from "../week/types.ts";
+import { hoursOn, type TimeModel } from "../week/hours.ts";
 
-export const INBOX_KINDS = ["conversation", "promise", "send", "capture", "draft"] as const;
+/**
+ * Slice 3 adds what I wait on, as their own kinds so nothing reads them as mine to answer: `commitment` someone else's
+ * open commitment made to me or in a conversation I own (`c<id>`, the shared commitments table), `sent` a send of mine
+ * still waiting for its answer (`s<id>`), `ask` my Ask to look that no lead has answered (`a<id>`).
+ */
+export const INBOX_KINDS = ["conversation", "promise", "send", "capture", "draft", "commitment", "sent", "ask"] as const;
 export type InboxKind = (typeof INBOX_KINDS)[number];
 
 export const INBOX_VIEWS = ["needs_you", "promises", "waiting", "in_progress", "captures", "teammates", "done", "chatter"] as const;
@@ -17,13 +23,13 @@ export type InboxView = (typeof INBOX_VIEWS)[number];
 /** The one lifecycle: New, Needs you, In progress (an item linked or on my week), Waiting on someone, Done. */
 export type Lifecycle = "new" | "needs_you" | "in_progress" | "waiting" | "teammates" | "open" | "done";
 
-const PREFIX = { conversation: "v", chatPromise: "c", followUp: "f", send: "s", capture: "k", draft: "d" } as const;
+const PREFIX = { conversation: "v", chatPromise: "c", followUp: "f", send: "s", capture: "k", draft: "d", look: "a" } as const;
 export type KeySource = keyof typeof PREFIX;
 export const itemKey = (source: KeySource, id: number) => `${PREFIX[source]}${id}`;
 
 /** A key back to its source and id; null for anything that isn't one. */
 export function parseKey(key: string): { source: KeySource; id: number } | null {
-  const m = /^([vcfskd])([1-9]\d{0,9})$/.exec(key);
+  const m = /^([vcfskda])([1-9]\d{0,9})$/.exec(key);
   if (!m) return null;
   const source = (Object.keys(PREFIX) as KeySource[]).find((s) => PREFIX[s] === m[1])!;
   return { source, id: Number(m[2]) };
@@ -67,11 +73,14 @@ export type InboxFacts = {
   must?: boolean;
   /** Send: the week it's for. */
   weekStart?: IsoDate;
+  /** Slice 3, for the Needs you reason: a conversation's own why (CV-1's facts), and whether a promise came from a chat. */
+  needsWhy?: "mention" | "work" | "committed" | "owner" | "unclaimed" | "suggestion" | "wrapped" | "new" | null;
+  fromChat?: boolean;
 };
 
 /** Late: a promise past its due (the instant when one was stated, else the day before today). */
 export function isLate(f: Pick<InboxFacts, "kind" | "done" | "due" | "dueAt">, today: IsoDate, now: string): boolean {
-  if (f.kind !== "promise" || f.done) return false;
+  if ((f.kind !== "promise" && f.kind !== "commitment") || f.done) return false;
   if (f.dueAt) return Date.parse(f.dueAt) < Date.parse(now);
   return !!f.due && f.due < today;
 }
@@ -106,6 +115,10 @@ export function lifecycleOf(f: InboxFacts, m: Mark | undefined, today: IsoDate):
     case "capture":
     case "draft":
       return "open";
+    case "commitment":
+    case "sent":
+    case "ask":
+      return "waiting";
   }
 }
 
@@ -154,6 +167,8 @@ export function needsYouCount(items: readonly { facts: InboxFacts; mark?: Mark |
 /** One row of the Inbox: what the list shows, the views it's in, and whether it's late. Never message text. */
 export type InboxItemView = {
   key: string;
+  /** Slice 3: why it needs me, in a few plain words (Needs you only; null elsewhere). */
+  reason?: string | null;
   kind: InboxFacts["kind"];
   clientKey: string | null;
   at: string;
@@ -174,4 +189,120 @@ export type InboxItemView = {
   weekStart?: IsoDate;
   snoozedUntil: string | null;
 };
-export type InboxListData = { today: IsoDate; items: InboxItemView[]; counts: Record<InboxView, number>; needsYou: number };
+export type InboxListData = {
+  today: IsoDate;
+  items: InboxItemView[];
+  counts: Record<InboxView, number>;
+  needsYou: number;
+  /** Slice 3: the Snooze choices to offer now (Later today only with an hour or more of my day left). */
+  snoozeChoices?: ("later" | "tomorrow" | "next_week")[];
+};
+
+// ---- Slice 3: why it needs me ----
+
+const first = (name: string | null | undefined) => (name ?? "").trim().split(/\s+/)[0] || null;
+const WEEKDAY = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/** A due day in words from today: today, tomorrow, the weekday within a week, else "Nov 20". */
+export function dueDay(due: IsoDate, today: IsoDate): string {
+  const d = Temporal.PlainDate.from(due);
+  const days = Temporal.PlainDate.from(today).until(d).days;
+  if (days === 0) return "today";
+  if (days === 1) return "tomorrow";
+  if (days > 1 && days < 7) return WEEKDAY[d.dayOfWeek]!;
+  return d.toLocaleString("en-US", { month: "short", day: "numeric" });
+}
+const lateWords = (due: IsoDate, today: IsoDate) => {
+  const n = Temporal.PlainDate.from(due).until(Temporal.PlainDate.from(today)).days;
+  return n <= 0 ? "late" : `${n} ${n === 1 ? "day" : "days"} late`;
+};
+
+/**
+ * Why an item is in Needs you, from fields it already has, never from message text: "Joel asked you by name",
+ * "You promised it, due Fri", "Josh sent it as a Must", "Work request, no item yet". Null when it isn't in Needs you.
+ */
+export function reasonOf(f: InboxFacts, m: Mark | undefined, today: IsoDate, now: string): string | null {
+  if (!needsYou(f, m, today, now)) return null;
+  const who = first(f.who);
+  switch (f.kind) {
+    case "conversation":
+      switch (f.needsWhy ?? (f.mentionsMe ? "mention" : f.workRequest ? "work" : null)) {
+        case "mention": return who ? `${who} asked you by name` : "You were asked by name";
+        case "work": return "Work request, no item yet";
+        case "committed": return "You committed to something in it";
+        case "owner": return "It's yours: you own it";
+        case "unclaimed": return "Nobody has claimed it, and you lead the client";
+        case "suggestion": return "A suggested change waits for you";
+        case "wrapped": return "Looks wrapped up. Resolve?";
+        case "new": return "New, and nobody has picked it up";
+        default: return "It needs you";
+      }
+    case "promise": {
+      const said = f.byMe ? "You added it" : "You promised it";
+      if (isLate(f, today, now)) return `${said}, ${f.due ? lateWords(f.due, today) : "late"}`;
+      if (f.due) return `${said}, due ${dueDay(f.due, today)}`;
+      return f.fromChat ? "You promised it in a chat, with no due day" : `${said}, with no due day`;
+    }
+    case "send":
+      return f.must ? `${who ?? "A lead"} sent it as a Must` : `${who ?? "Someone"} suggested it for ${f.where ?? "your week"}`;
+    default:
+      return null;
+  }
+}
+
+// ---- Slice 3: snooze ----
+
+export type SnoozeChoice = "later" | "tomorrow" | "next_week";
+/** My days for snoozing, in my zone: a date's working span (null on a day off) and whether it's a PTO day. */
+export type SnoozeDay = {
+  zone: string;
+  hours: (d: IsoDate) => { start: string; end: string } | null;
+  pto: (d: IsoDate) => boolean;
+};
+/** A SnoozeDay from my working hours (week/hours.ts) and my PTO dates. */
+export function snoozeDayOf(model: TimeModel, ptoDays: ReadonlySet<string>): SnoozeDay {
+  return {
+    zone: model.timeZone,
+    hours: (d) => {
+      const h = hoursOn(model, d);
+      const last = h.segments[h.segments.length - 1];
+      return h.main && last ? { start: h.main.start, end: last.end } : null;
+    },
+    pto: (d) => ptoDays.has(d),
+  };
+}
+const workday = (day: SnoozeDay, d: IsoDate) => !!day.hours(d) && !day.pto(d);
+const DEFAULT_START = "09:00";
+const at = (d: IsoDate, hhmm: string, zone: string) => Temporal.PlainDate.from(d).toZonedDateTime({ timeZone: zone, plainTime: Temporal.PlainTime.from(hhmm) }).toInstant();
+const startOf = (day: SnoozeDay, d: IsoDate) => at(d, day.hours(d)?.start ?? DEFAULT_START, day.zone);
+const LATER_MS = 3 * 3600_000;
+const LATER_MIN_LEFT_MS = 3600_000;
+
+/** The choices to offer now: Later today only on a workday with an hour or more of my day left. */
+export function snoozeChoices(now: string, day: SnoozeDay): SnoozeChoice[] {
+  const today = Temporal.Instant.from(now).toZonedDateTimeISO(day.zone).toPlainDate().toString();
+  const h = workday(day, today) ? day.hours(today) : null;
+  const left = h ? at(today, h.end, day.zone).epochMilliseconds - Date.parse(now) : 0;
+  return [...(left >= LATER_MIN_LEFT_MS ? (["later"] as const) : []), "tomorrow", "next_week"];
+}
+
+/**
+ * When a snooze ends: Later today is 3 hours, never past my end of day; Tomorrow is the start of my next workday
+ * (skipping days off and PTO); Next week is Monday's start; a date is that day's start. Never changes a due date.
+ * Null when Later today isn't offered now.
+ */
+export function snoozeUntil(choice: SnoozeChoice | IsoDate, now: string, day: SnoozeDay): string | null {
+  const today = Temporal.Instant.from(now).toZonedDateTimeISO(day.zone).toPlainDate();
+  if (choice === "later") {
+    if (!snoozeChoices(now, day).includes("later")) return null;
+    const end = at(today.toString(), day.hours(today.toString())!.end, day.zone).epochMilliseconds;
+    return new Date(Math.min(Date.parse(now) + LATER_MS, end)).toISOString();
+  }
+  if (choice === "tomorrow") {
+    let d = today.add({ days: 1 });
+    for (let i = 0; i < 60 && !workday(day, d.toString()); i++) d = d.add({ days: 1 });
+    return startOf(day, d.toString()).toString();
+  }
+  if (choice === "next_week") return startOf(day, today.add({ days: 8 - today.dayOfWeek }).toString()).toString();
+  return startOf(day, choice).toString();
+}
