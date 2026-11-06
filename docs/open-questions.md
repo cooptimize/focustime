@@ -289,3 +289,9 @@ What DS-1 learned, and what is still open:
 - Q-CV4-1: Drop `teams_message_images.bytes` (and the unused `failed` attempts) in a release after CV-4 has been in prod, with a `safe-drop` comment (D468); `store/images-bytes.test.ts` guards it until then.
 - Q-CV4-2: An image read for the AI or a create is a second Graph read when someone also views it. Fine at today's volume; revisit if Graph throttles hostedContents.
 - Q-CV4-3: gpt-6-luna's image token multiplier isn't in OpenAI's images-vision table as read on Nov 5 (gpt-6-astra and gpt-5.6-luna are 1.2); the cost figures assume 1.2. Check the request log's input tokens after the first week with the switch on.
+
+## Quick fixes from the call with Josh (QF-1, Nov 6)
+
+- Q-QF1-1: The CSC conversation's "Tanner committed" has no promise. The code turns an "I will" reply into my promise in both paths (`actions/promise-reply.test.ts`), so the real commitment row most likely carries a `who_id` other than my sign-in id for the same name. Check with counts only: open commitments in conversations with status committed whose `who_id` isn't any FocusTime user's id, and how many share a `who_name` with one. If confirmed, the fix is mapping a person's other Teams ids to their user (like AH-3's client logins), not matching by name.
+- Q-QF1-2: Ahead's State column stays read only: State isn't in AH-1's `fields` write. A State picker in Grid would add State to that write (the hard rule) or use the step 14 `state` write in the change set. Authorize either, or leave it.
+- Q-QF1-3: Why the one Cooptimize item slipped past the chatter filter isn't known from the code: rules mark only GIFs, stickers, emoji, empty messages and short acks as chatter; any message with words goes to the AI, whose call it is. Its message place (role, placed by, reason) would say which; counts only.
