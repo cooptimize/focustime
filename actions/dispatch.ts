@@ -726,7 +726,7 @@ export async function amAdmin(ctx: ActionContext): Promise<boolean> {
 }
 
 /** AI-0: the AI service for this person and request, or null where AI isn't available (demo, no plan store). */
-export async function aiFor(ctx: ActionContext, o: { cap?: "person" | "app"; rules?: AiRules } = {}): Promise<AiService | null> {
+export async function aiFor(ctx: ActionContext, o: { cap?: "person" | "app"; rules?: AiRules; /** AI-F1: a person waits on it: standard tier. */ waiting?: boolean } = {}): Promise<AiService | null> {
   const rt = ctx.ai;
   const plan = ctx.plan;
   if (!rt || !plan) return null;
@@ -735,6 +735,7 @@ export async function aiFor(ctx: ActionContext, o: { cap?: "person" | "app"; rul
   if (o.cap === "app" && !appLog) return null;
   return createAi({
     ...(o.cap === "app" ? { cap: "app" as const } : {}),
+    ...(o.waiting ? { waiting: true } : {}),
     provider: rt.provider,
     app: rt.app,
     // ADM-1: the admins' rules only (applied to the config by the org runtime): no per-person switch.
@@ -1044,7 +1045,8 @@ export async function requestContext(ctx: ActionContext): Promise<RequestContext
     now: ctx.now,
     log: ctx.log ?? (() => {}),
     // AP-2: the AI service (its switches, guards, budget and log), and a linked item's done state from the last read.
-    ai: () => aiFor(ctx),
+    // AI-F1: only Sort again uses it, a button a person waits on: standard, never Flex.
+    ai: () => aiFor(ctx, { waiting: true }),
     itemDone: (cfg, clientKey, itemId) => {
       const w = ctx.makeDevOps(cfg.dataverse, userZone(cfg)).last(clientKey);
       const hit = w ? [...w.items, ...w.children, ...(w.watched ?? [])].find((i) => i.id === itemId) : undefined;
@@ -1097,7 +1099,8 @@ export async function conversationContext(ctx: ActionContext): Promise<Conversat
     isLead: async (clientKey) => isClientLead(ctx.org, await rc.me(), clientKey),
     isAdmin: () => amAdmin(ctx),
     users: async () => (port?.users ? port.users() : []),
-    pipelineAi: () => aiFor(ctx, { cap: "app" }),
+    // AI-F1: Sort unsorted, a button a person waits on: the pipeline's cap, on standard (the poll's own runs use Flex).
+    pipelineAi: () => aiFor(ctx, { cap: "app", waiting: true }),
     devopsEmail: async (clientKey) => (await ctx.plan?.devopsIdentities().catch(() => []))?.find((i) => i.clientKey === clientKey)?.email ?? null,
     processModel: async (cfg, clientKey) => {
       const r = (await ctx.makeDevOps(cfg.dataverse, userZone(cfg)).processModels([clientKey]))[0];

@@ -121,6 +121,18 @@ describe("admin actions", () => {
     expect((await s.store.auditList({})).map((e) => [e.actorName, e.setting, e.oldValue, e.newValue])[0]).toEqual(["Ada Admin", "client:fabrikam/attachments_ai", null, "true"]);
   });
 
+  it("AI-F1: Admin › AI shows each task's tier; an admin puts a background task back on standard, audited", async () => {
+    const s = await setup();
+    type Row = { name: string; background: boolean; tier: string };
+    const tasks = async () => ((await s.run(s.admin, "admin.load", { section: "ai" })) as { data: { tasks: Row[] } }).data.tasks;
+    const before = await tasks();
+    expect(before.filter((t) => t.background).map((t) => [t.name, t.tier])).toEqual([["conversations.update", "flex"], ["promises.extract", "flex"], ["asks.classify", "flex"]]);
+    expect(before.filter((t) => !t.background).every((t) => t.tier === "standard")).toBe(true);
+    expect(await s.run(s.admin, "admin.set", { scope: "org", key: "ai.standard_tasks", value: ["asks.classify"] })).toMatchObject({ ok: true, data: { old: null } });
+    expect((await tasks()).find((t) => t.name === "asks.classify")?.tier).toBe("standard");
+    expect((await s.store.auditList({ area: "ai" })).map((e) => e.setting)[0]).toBe("org/ai.standard_tasks");
+  });
+
   it("CV-3: Group messages without AI is a client Rule, on by default, saved and audited like Allow AI", async () => {
     const s = await setup();
     const ai = async () => ((await s.run(s.admin, "admin.load", { section: "ai" })) as { data: { clients: { key: string; groupWithoutAi: boolean }[] } }).data.clients;

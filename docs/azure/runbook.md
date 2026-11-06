@@ -528,7 +528,7 @@ The poller sorts every message that passes the rules into conversations with one
 
 **Without AI** (off, no key, a 0 USD cap, a cap reached, a provider failure) the rules still run: messages wait as **unsorted** with the reason (for example "AI budget is set to $0") and Inbox › Conversations shows **Sort unsorted (N)**. It sorts them the same way (app cap) once AI is back. Nothing retries on its own beyond the next poll.
 
-**What it costs (estimate, gpt-6-luna list prices on 2026-11-04):** one call is about 2,000 to 5,000 input tokens (instructions, schema, the batch, open conversation summaries, up to 50 open items) and 300 to 800 output tokens, so about 0.0005 to 0.0009 USD.
+**What it costs (estimate, gpt-6-luna list prices on 2026-11-04):** one call is about 2,000 to 5,000 input tokens (instructions, schema, the batch, open conversation summaries, up to 50 open items) and 300 to 800 output tokens, so about 0.0005 to 0.0009 USD at standard prices. Since AI-F1 these calls run on Flex at half that (about 0.00025 to 0.00045 USD), except Sort unsorted and a fallback, which are standard; the table's costs halve too.
 
 | Day | Calls | Cost |
 |---|---|---|
@@ -593,7 +593,11 @@ App settings, the same for everyone; the defaults are in `server/appconfig.ts` (
 | `FOCUSTIME_AI_MAX_OUTPUT_TOKENS` | `default=4000,test_ai=1000` |
 | `FOCUSTIME_AI_INPUT_USD_PER_MILLION`, `..._CACHED_INPUT_...`, `..._OUTPUT_...` | from the pricing page for the model |
 | `FOCUSTIME_AI_APP_CAP_USD` | `100` |
+| `FOCUSTIME_AI_FLEX_INPUT_USD_PER_MILLION`, `..._FLEX_CACHED_INPUT_...`, `..._FLEX_OUTPUT_...` | the model's Flex (Batch) prices; half of the standard ones when unset |
+| `FOCUSTIME_AI_FLEX_MAX_TRIES`, `FOCUSTIME_AI_FLEX_MAX_WAIT_MS`, `FOCUSTIME_AI_FLEX_TIMEOUT_MS` | `3`, `90000`, `120000`: Flex tries before falling back to standard, the time limit for them, a Flex call's timeout |
 | `FOCUSTIME_AI_PROVIDER` | `off` turns AI off for everyone (Settings › AI says it isn't set up) |
+
+**Flex (AI-F1).** The background tasks (conversation sorting with image descriptions, promise extraction, sorting requests) run on OpenAI's Flex tier: 0.05 / 0.005 cached / 0.25 USD per million for `gpt-6-luna` on 2026-11-06, half the standard prices, slower, and now and then a 429 that isn't billed. FocusTime retries a busy Flex call with backoff and then sends it on standard, so nothing waits long; Application Insights counts `ai/flex_fallback` by task. Everything a person waits on (the assistant, drafts, Break down, Status drafts, capture drafts, Sort again and Sort unsorted) is always standard. To put a background task back on standard: Admin › AI › Processing tier. If the model is changed to one without Flex, its 400 falls back to standard by itself; set that model's Flex prices (or let them default to half) when it has them.
 
 Prices checked again on 2026-11-06 (HK-4): unchanged, and `gpt-6-luna` is still the cheapest current model; the model comparison is `node scripts/ai-eval.ts --live` (needs the key in the keyring, see docs/azure/ai-eval-results.md). Change the prices whenever the model changes: they are only used to estimate cost and enforce the caps. Since ADM-1 the model, each person's cap (default 10 USD) and the app's cap are set by an admin in Admin › AI; `FOCUSTIME_AI_MODEL` and `FOCUSTIME_AI_APP_CAP_USD` are only their starting values, and AI is on or off for FocusTime there too.
 
@@ -618,7 +622,7 @@ Only ask candidates (messages the AP-1 rules picked out) and the person's own me
 | 3 of my own messages with a promise phrase | 3 `promises.extract` | about 0.002 USD |
 | Together | 13 | under 0.01 USD a day, about 0.20 USD a month |
 
-That is about 2% of the 10 USD monthly default per person. A provider that fails costs one request per ask: nothing retries on its own (Sort again is by hand). Settings › AI shows the real month to date; Application Insights has the counts by task (`asks.classify`, `promises.extract`), never text.
+That is about 2% of the 10 USD monthly default per person, and since AI-F1 both tasks run on Flex at half that (about 0.10 USD a month; Sort again is standard). A provider that fails costs one request per ask: nothing retries on its own (Sort again is by hand). Settings › AI shows the real month to date; Application Insights has the counts by task (`asks.classify`, `promises.extract`), never text.
 
 ### Turning sorting off
 

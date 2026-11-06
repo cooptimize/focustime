@@ -466,7 +466,8 @@ function ProcessView({ c, saver, onRefresh, refreshing }: { c: ClientRow; saver:
 
 // ---------- AI ----------
 
-type AiData = { on: boolean; model: string; personCapUsd: number; appCapUsd: number; provider: string; keyConfigured: boolean; appSpentMicros: number; zero: { person: boolean; app: boolean }; filter: ClientFilterValue; counts: ClientCounts; clients: { key: string; isClient: boolean; whyText: string; allowAi: boolean; groupWithoutAi: boolean; attachmentsAi: boolean }[] };
+type AiTaskRow = { name: string; label: string; background: boolean; tier: "standard" | "flex" };
+type AiData = { tasks: AiTaskRow[]; standardTasks: string[]; on: boolean; model: string; personCapUsd: number; appCapUsd: number; provider: string; keyConfigured: boolean; appSpentMicros: number; zero: { person: boolean; app: boolean }; filter: ClientFilterValue; counts: ClientCounts; clients: { key: string; isClient: boolean; whyText: string; allowAi: boolean; groupWithoutAi: boolean; attachmentsAi: boolean }[] };
 
 /** Turning AI off for everyone asks first; focus goes back to the switch when it closes (HK-3). */
 function ConfirmAiOff({ onOff, onCancel }: { onOff: () => void; onCancel: () => void }) {
@@ -481,6 +482,54 @@ function ConfirmAiOff({ onOff, onCancel }: { onOff: () => void; onCancel: () => 
         Cancel
       </button>
     </div>
+  );
+}
+
+/**
+ * AI-F1: each task's tier. Background tasks (nobody waits on them) run on Flex, half price and slower, and fall back to
+ * standard when Flex is busy; an admin can put one back on standard. Interactive tasks are always standard.
+ */
+function AiTiers({ data, saver }: { data: AiData; saver: Saver }) {
+  const o = "org";
+  const key = "ai.standard_tasks";
+  const shown: string[] = saver.shown(o, key, data.standardTasks);
+  const set = (t: AiTaskRow, flex: boolean) => {
+    const next = flex ? shown.filter((n) => n !== t.name) : [...new Set([...shown, t.name])].sort();
+    void saver.save(o, key, next, `${t.label}: ${flex ? "Flex" : "Standard"}`);
+  };
+  return (
+    <>
+      <h3>Processing tier</h3>
+      <p className="set-hint">Background work nobody waits on uses Flex: half the price, slower, and it switches to standard by itself when Flex is busy. Everything else, and anything a person is waiting on (Sort again, Sort unsorted), is always standard.</p>
+      <SaveMark s={saver.status(o, key)} retry={() => void saver.save(o, key, shown, "Processing tier")} />
+      <table className="adm-table adm-ai-tiers">
+        <thead>
+          <tr>
+            <th scope="col">Task</th>
+            <th scope="col">Tier <Kind kind="Rule" /></th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.tasks.map((t) => {
+            const flex = t.background && !shown.includes(t.name);
+            return (
+              <tr key={t.name}>
+                <th scope="row">{t.label}</th>
+                <td>
+                  {t.background ? (
+                    <label className="set-check">
+                      <input type="checkbox" role="switch" checked={flex} aria-label={`Use Flex for ${t.label}`} onChange={(e) => set(t, e.target.checked)} /> {flex ? "Flex" : "Standard"}
+                    </label>
+                  ) : (
+                    <span className="muted">Standard</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </>
   );
 }
 
@@ -513,6 +562,7 @@ function AdminAi() {
           <NumInput label="Monthly cap for everyone" value={data.appCapUsd} min={0} max={10000} onSave={(v) => void saver.save(o, "ai.app_cap_usd", v, "Cap for everyone")} />
         </AField>
       </div>
+      <AiTiers data={data} saver={saver} />
       <h3>Per client</h3>
       <p className="set-hint">Send attachments to AI: images pasted into the client's chats go to the AI to be described, with Allow AI on. The AI safety check reads text only and can't inspect images, so turning this on is the consent. Images are never kept in FocusTime.</p>
       <div className="set-row-actions">

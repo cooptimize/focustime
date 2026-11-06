@@ -78,7 +78,7 @@ export function applyOrg(cfg: AppConfig, rules: OrgRules, who: PersonOrg): AppCo
     ...cfg,
     clients,
     clientSettings,
-    aiRules: { on: rules.ai.on, allowedClients: rules.ai.allowedClients, personCapUsd: rules.ai.personCapUsd, appCapUsd: rules.ai.appCapUsd, model: rules.ai.model },
+    aiRules: { on: rules.ai.on, allowedClients: rules.ai.allowedClients, personCapUsd: rules.ai.personCapUsd, appCapUsd: rules.ai.appCapUsd, model: rules.ai.model, standardTasks: rules.ai.standardTasks },
     asks: {
       ...cfg.asks,
       pollMinutes: conv.pollMinutes,

@@ -7,6 +7,7 @@
 // and "level:<consultant|senior|lead>". A read resolves: personal override, then the level default, then the org
 // default, then the built-in default (resolve()). Every key has a spec here (its kind, area, words, validation and
 // built-in value); an admin write is refused for a key that has none. Nothing secret is ever an org setting.
+import { FLEX_TASKS } from "../ai/tiers.ts";
 import { DEFAULT_ACK_PHRASES, DEFAULT_PROMISE_PHRASES, DEFAULT_REQUEST_PHRASES } from "../plan/asks.ts";
 import { WEEKDAY_KEYS, parseSpan, type WeekdayKey } from "../week/hours.ts";
 import { CLIENT_SLOTS } from "./schema.ts";
@@ -83,6 +84,11 @@ const domains = (v: unknown): string[] => {
   if (bad) throw new OrgInputError(`${bad} isn't a domain name like example.com`);
   return d;
 };
+/**
+ * AI-F1: the background tasks an admin switched back to standard. Only names FLEX_TASKS declares are kept, so a
+ * stored name a newer or older build doesn't know is ignored rather than making the whole value unreadable.
+ */
+const standardTasks = (v: unknown): string[] => list(20, 64)(v).filter((x) => (FLEX_TASKS as readonly string[]).includes(x)).sort();
 const orNull = <T>(p: (v: unknown) => T) => (v: unknown): T | null => (v === null ? null : p(v));
 
 /** FB-1: where Send feedback goes. A stored `live` (UI-8's switch) is read and ignored. */
@@ -219,6 +225,7 @@ export const ORG_SPECS = {
   } },
   "ai.person_cap_usd": { kind: "rule", area: "ai", label: "Monthly cap per person (US dollars)", builtin: 10, parse: usd },
   "ai.app_cap_usd": { kind: "rule", area: "ai", label: "Monthly cap for everyone (US dollars)", builtin: 100, parse: usd },
+  "ai.standard_tasks": { kind: "rule", area: "ai", label: "Background tasks on standard", builtin: [] as string[], parse: standardTasks },
   "conv.request_phrases": { kind: "default", area: "conversations", label: "Request phrases", builtin: [...DEFAULT_REQUEST_PHRASES], parse: list(50, 60, true) },
   "conv.ack_phrases": { kind: "default", area: "conversations", label: "Thanks and short replies", builtin: [...DEFAULT_ACK_PHRASES], parse: list(50, 60, true) },
   "conv.promise_phrases": { kind: "default", area: "conversations", label: "Commitment phrases", builtin: [...DEFAULT_PROMISE_PHRASES], parse: list(50, 60, true) },
@@ -328,7 +335,7 @@ export type OrgBootstrap = { model: string; appCapUsd: number; inviteDomains: re
 
 /** Every org value resolved: stored, else bootstrap, else built-in. */
 export type OrgRules = {
-  ai: { on: boolean; model: string; personCapUsd: number; appCapUsd: number; allowedClients: string[] };
+  ai: { on: boolean; model: string; personCapUsd: number; appCapUsd: number; allowedClients: string[]; /** AI-F1 */ standardTasks: string[] };
   conversations: { pollMinutes: number; retentionDays: number; closedShownDays: number; chatAiDailyCap: number; requestPhrases: string[]; ackPhrases: string[]; promisePhrases: string[] };
   organization: { inviteDomains: string[]; neverSuggest: string[]; feedback: FeedbackRule | null; retentionYears: number; newPerson: NewPersonDefaults; positionLevels: PositionLevels; /** HK-3. */ idleMinutes: number };
   /** DV-1: the central DevOps poller's Rule. */
@@ -401,6 +408,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
       model: o("ai.model", boot.model) || boot.model,
       personCapUsd: o("ai.person_cap_usd"),
       appCapUsd: o("ai.app_cap_usd", boot.appCapUsd),
+      standardTasks: o("ai.standard_tasks"),
       allowedClients: Object.entries(clients).filter(([, c]) => c.allowAi).map(([k]) => k).sort(),
     },
     conversations: { pollMinutes: o("conv.poll_minutes"), retentionDays: o("conv.retention_days"), closedShownDays: o("conv.closed_shown_days"), chatAiDailyCap: o("conv.chat_ai_daily_cap"), requestPhrases: o("conv.request_phrases"), ackPhrases: o("conv.ack_phrases"), promisePhrases: o("conv.promise_phrases") },

@@ -1,13 +1,15 @@
 // AI-0: the AI service, one per person per request: run(task, input, schema) gives a validated value or a typed error.
 // In order: the admins' switches (AI for FocusTime, and Allow AI for the task's client; ADM-1: no per-person switch), a provider with a key, the guards (ai/guard.ts),
 // the month's budget (the person's and the app's), then one provider call, one retry on a transient error (Retry-After
-// on 429), and the schema check (no retry). Every attempt that got past the switches is logged without its text
+// on 429; AI-F1: a background task on Flex retries with backoff, then falls back to standard), and the schema
+// check (no retry). Every attempt that got past the switches is logged without its text
 // (ai_requests: task, client, model, tokens, cost, latency, outcome), and its cost is added to the app's month.
 export { DEFAULT_AI_PERSON, DEFAULT_AI_RULES, type AiPersonSettings, type AiRules } from "./types.ts";
 import type { Logger } from "../log/logger.ts";
 import { costMicros, micros, monthBounds, monthOf, type Prices } from "./cost.ts";
 import { guard, otherClientMatch, redactValue, type GuardHit, type GuardInput, type Redaction } from "./guard.ts";
 import { strictProblems, validate } from "./schema.ts";
+import { DEFAULT_FLEX, tierFor, type AiTier, type FlexSettings } from "./tiers.ts";
 import { AI_MESSAGES, AiError, NO_CLIENT, type ProviderCall, type ToolRound, type ToolSpec, type AiImageInput, type AiFail, type AiRules, type AiStatus, type AiErrorKind, type AiLogEntry, type AiOutcome, type AiProvider, type AiResult, type JsonSchema, type ProviderReply, type Usage } from "./types.ts";
 
 /** App-level settings (server/appconfig.ts [ai], FOCUSTIME_AI_*): the same for everyone, never per person. */
@@ -21,6 +23,10 @@ export type AiAppSettings = {
   /** Most output tokens per task (reasoning included), by task name, with a default. */
   maxOutputTokens: { default: number } & Record<string, number>;
   prices: Prices;
+  /** AI-F1: prices on the Flex tier (Batch rates, half of standard for gpt-6-luna, Nov 6). Absent: half of `prices`. */
+  flexPrices?: Prices;
+  /** AI-F1: flex retries and the fallback to standard. */
+  flex?: FlexSettings;
   /** The whole app's monthly spend cap, in US dollars. */
   appCapUsd: number;
   /** AS-1: speech to text: the model and its price per minute of audio (gpt-transcribe, $0.0045, Nov 5). */
@@ -58,6 +64,8 @@ export type AiDeps = {
    * app's request log; the switches are still a person's (Use AI and the client's Allow AI).
    */
   cap?: "person" | "app";
+  /** AI-F1: a person is waiting on this request (a button): background tasks run on standard too. */
+  waiting?: boolean;
 };
 
 export type AiTaskSpec = { name: string; client: string; instructions: string };
@@ -71,6 +79,12 @@ export const MAX_RETRY_WAIT_MS = 20_000;
 /** Backoff before the one retry when the provider gave no Retry-After: about a second, with jitter. */
 export const BASE_BACKOFF_MS = 1_000;
 
+/** AI-F1: Flex prices when none are configured: half of standard (OpenAI bills Flex at Batch rates). */
+export const halfPrices = (p: Prices): Prices => ({ inputPerMillion: p.inputPerMillion / 2, cachedInputPerMillion: p.cachedInputPerMillion / 2, outputPerMillion: p.outputPerMillion / 2 });
+
+/** AI-F1: what one provider call at a tier came to: the reply, every attempt's usage, the tier that answered, and counts. */
+type Attempt = { reply: ProviderReply; spent: Usage; tier: AiTier; flexTries: number; fellBack: boolean };
+
 const fail = (kind: AiErrorKind): { ok: false; error: AiError } => ({ ok: false, error: new AiError(kind, AI_MESSAGES[kind]) });
 /** GD-1: an answer naming another client was sent and paid for, but is never shown. */
 const OUTPUT_REFUSED = "The AI's answer mentions another client, so nothing is shown";
@@ -82,10 +96,13 @@ export function createAi(d: AiDeps) {
   const logger = d.logger ?? (() => {});
   const scope = d.cap ?? "person";
 
-  async function record(task: AiTaskSpec, outcome: AiOutcome, detail: AiErrorKind | null, usage: Usage, latencyMs: number, model: string): Promise<number> {
-    const cost = costMicros(usage, d.app.prices);
+  const flexCfg = d.app.flex ?? DEFAULT_FLEX;
+  const flexPrices = d.app.flexPrices ?? halfPrices(d.app.prices);
+
+  async function record(task: AiTaskSpec, outcome: AiOutcome, detail: AiErrorKind | null, usage: Usage, latencyMs: number, model: string, tier: AiTier = "standard"): Promise<number> {
+    const cost = costMicros(usage, tier === "flex" ? flexPrices : d.app.prices);
     const at = d.now();
-    await d.log.add({ at, task: task.name, clientKey: task.client === NO_CLIENT ? null : task.client, model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, costMicros: cost, latencyMs: Math.round(latencyMs), outcome, detail, cap: scope });
+    await d.log.add({ at, task: task.name, clientKey: task.client === NO_CLIENT ? null : task.client, model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, costMicros: cost, latencyMs: Math.round(latencyMs), outcome, detail, cap: scope, tier });
     if (cost > 0) await d.appSpend.add(monthOf(at), cost);
     // App Insights: counts and outcomes only, and whose cap it counted against.
     logger({ source: "ai", op: "request", kind: scope === "app" ? `${task.name}:${outcome}:app` : `${task.name}:${outcome}`, ...(detail ? { status: detail } : {}), durationMs: latencyMs, count: usage.inputTokens + usage.outputTokens });
@@ -109,6 +126,67 @@ export function createAi(d: AiDeps) {
   /** GD-1: which rule refused, and for a client rule the matched entry as its one-way ref (never the text). */
   function refusedLine(task: AiTaskSpec, hit: GuardHit, side: "input" | "output") {
     logger({ source: "ai", op: "guard", kind: `${task.name}:${side}:${hit.rule}`, status: hit.kind, ...(hit.entry ? { client: hit.entry } : {}) });
+  }
+
+  /** The one retry on a transient error (Retry-After on 429, else about a second with jitter), on standard. */
+  async function standardCall(provider: AiProvider, call: ProviderCall): Promise<{ reply: ProviderReply; spent: Usage }> {
+    let reply = await provider.call(call);
+    let spent: Usage = reply.usage ?? ZERO;
+    if (!reply.ok && (reply.kind === "rate_limited" || reply.kind === "unavailable")) {
+      const wait = reply.retryAfterMs ?? Math.round(BASE_BACKOFF_MS * (1 + random() * 0.5));
+      if (wait <= MAX_RETRY_WAIT_MS) {
+        await sleep(wait);
+        reply = await provider.call(call);
+        if (reply.usage) spent = add(spent, reply.usage);
+      }
+    }
+    return { reply, spent };
+  }
+
+  /**
+   * AI-F1: one call at the task's tier. Standard: as before. Flex: service_tier flex with its own timeout; a 429 or a
+   * 5xx retries with exponential backoff and jitter (Retry-After when longer), up to flex's tries and time limit; then,
+   * or at once on a timeout or a 400 (a model without Flex), the call runs on standard. Quota, another error, a refusal
+   * or a cut-short answer aren't capacity: no fallback. Logged as counts: the tier, the flex tries, a fallback.
+   */
+  async function attempt(provider: AiProvider, call: ProviderCall, task: AiTaskSpec, tier: AiTier): Promise<Attempt> {
+    if (tier === "standard") return { ...(await standardCall(provider, call)), tier: "standard", flexTries: 0, fellBack: false };
+    const flexCall: ProviderCall = { ...call, serviceTier: "flex", timeoutMs: Math.max(call.timeoutMs, flexCfg.timeoutMs) };
+    const began = Date.now();
+    let spent: Usage = ZERO;
+    let tries = 0;
+    let reason = "";
+    for (;;) {
+      tries++;
+      const reply = await provider.call(flexCall);
+      if (reply.usage) spent = add(spent, reply.usage);
+      if (reply.ok || reply.kind === "quota" || reply.kind === "refusal" || reply.kind === "incomplete") {
+        const used: AiTier = reply.ok ? (reply.tier ?? "flex") : "flex";
+        logger({ source: "ai", op: "tier", kind: `${task.name}:${used}`, count: tries - 1 });
+        return { reply, spent, tier: used, flexTries: tries, fellBack: false };
+      }
+      const capacity = reply.kind === "rate_limited" || reply.kind === "unavailable";
+      if (!capacity) {
+        // A 400 may be a model without Flex, and a timeout may just be Flex's slowness: standard answers both. Any other
+        // error would fail the same way on standard, so it stands (one attempt, as before).
+        if (reply.kind === "timeout" || (reply.kind === "provider" && reply.status === 400)) {
+          reason = reply.kind;
+          break;
+        }
+        logger({ source: "ai", op: "tier", kind: `${task.name}:flex`, count: tries - 1 });
+        return { reply, spent, tier: "flex", flexTries: tries, fellBack: false };
+      }
+      const backoff = Math.round(flexCfg.baseBackoffMs * 2 ** (tries - 1) * (1 + random() * 0.5));
+      const wait = Math.max(backoff, reply.retryAfterMs ?? 0);
+      if (tries >= flexCfg.maxTries || Date.now() - began + wait > flexCfg.maxWaitMs) {
+        reason = "limit";
+        break;
+      }
+      await sleep(wait);
+    }
+    logger({ source: "ai", op: "flex_fallback", kind: `${task.name}:${reason}`, count: tries });
+    const std = await standardCall(provider, call);
+    return { reply: std.reply, spent: add(spent, std.spent), tier: "standard", flexTries: tries, fellBack: true };
   }
 
   /**
@@ -158,7 +236,7 @@ export function createAi(d: AiDeps) {
       return fail("over_budget");
     }
 
-    const call = {
+    const call: ProviderCall = {
       model,
       instructions: task.instructions,
       input,
@@ -171,20 +249,12 @@ export function createAi(d: AiDeps) {
       ...(o.images?.length ? { images: [...o.images] } : {}),
     };
     const started = Date.now();
-    let reply: ProviderReply = await provider.call(call);
-    let spent: Usage = reply.usage ?? ZERO;
-    if (!reply.ok && (reply.kind === "rate_limited" || reply.kind === "unavailable")) {
-      const wait = reply.retryAfterMs ?? Math.round(BASE_BACKOFF_MS * (1 + random() * 0.5));
-      if (wait <= MAX_RETRY_WAIT_MS) {
-        await sleep(wait);
-        reply = await provider.call(call);
-        if (reply.usage) spent = add(spent, reply.usage);
-      }
-    }
+    const tier = tierFor(task.name, { standardTasks: me.standardTasks ?? [], waiting: d.waiting ?? false });
+    const { reply, spent, tier: used } = await attempt(provider, call, task, tier);
     const latency = Date.now() - started;
     if (!reply.ok) {
       const kind: AiErrorKind = reply.kind === "unavailable" ? "provider" : reply.kind === "refusal" || reply.kind === "incomplete" ? "invalid_output" : reply.kind;
-      await record(task, kind === "invalid_output" ? "invalid" : "provider_error", kind, spent, latency, model);
+      await record(task, kind === "invalid_output" ? "invalid" : "provider_error", kind, spent, latency, model, used);
       return fail(kind);
     }
     let value: unknown;
@@ -194,25 +264,25 @@ export function createAi(d: AiDeps) {
       value = undefined;
     }
     if (value === undefined || validate(value, schema).length) {
-      await record(task, "invalid", "invalid_output", spent, latency, reply.model);
+      await record(task, "invalid", "invalid_output", spent, latency, reply.model, used);
       return fail("invalid_output");
     }
     // GD-1: the answer may not name another client either (Internal may): refused whole, as before.
     const named = g.internal ? null : otherClientMatch(reply.text, g.client, g.directory);
     if (named) {
       refusedLine(task, { kind: "refused_client", rule: named.rule, entry: named.key }, "output");
-      await record(task, "refused", "refused_client", spent, latency, reply.model);
+      await record(task, "refused", "refused_client", spent, latency, reply.model, used);
       return { ok: false, error: new AiError("refused_client", OUTPUT_REFUSED) };
     }
     // HK-4: a secret shape or an outside email address in an answer (it can only come from an image) is replaced by
     // "[removed]" where it stands; the rest of the answer, every other item of a batch included, is kept.
     const clean = redactAnswer(task, value, schema, g);
     if (!clean.ok) {
-      await record(task, "invalid", "invalid_output", spent, latency, reply.model);
+      await record(task, "invalid", "invalid_output", spent, latency, reply.model, used);
       return fail("invalid_output");
     }
-    const cost = await record(task, "ok", null, spent, latency, reply.model);
-    return { ok: true, value: clean.value as T, usage: spent, costUsd: cost / 1_000_000, latencyMs: latency, model: reply.model };
+    const cost = await record(task, "ok", null, spent, latency, reply.model, used);
+    return { ok: true, value: clean.value as T, usage: spent, costUsd: cost / 1_000_000, latencyMs: latency, model: reply.model, tier: used };
   }
 
   /**
@@ -267,26 +337,21 @@ export function createAi(d: AiDeps) {
         tools: o.tools, allowedTools: last ? [] : [...allowed], rounds: [...rounds],
       };
       const started = Date.now();
-      let reply: ProviderReply = await provider.call(call);
-      let used: Usage = reply.usage ?? ZERO;
-      if (!reply.ok && (reply.kind === "rate_limited" || reply.kind === "unavailable")) {
-        const wait = reply.retryAfterMs ?? Math.round(BASE_BACKOFF_MS * (1 + random() * 0.5));
-        if (wait <= MAX_RETRY_WAIT_MS) {
-          await sleep(wait);
-          reply = await provider.call(call);
-          if (reply.usage) used = add(used, reply.usage);
-        }
-      }
+      // AI-F1: tool requests are the assistant's (a person waits): standard unless a task is ever declared flex.
+      const at = await attempt(provider, call, task, tierFor(task.name, { standardTasks: me.standardTasks ?? [], waiting: d.waiting ?? false }));
+      const reply = at.reply;
+      const used = at.spent;
+      const t = at.tier;
       const ms = Date.now() - started;
       latency += ms;
       spent = add(spent, used);
       if (!reply.ok) {
         const kind: AiErrorKind = reply.kind === "unavailable" ? "provider" : reply.kind === "refusal" || reply.kind === "incomplete" ? "invalid_output" : reply.kind;
-        cost += await record(task, kind === "invalid_output" ? "invalid" : "provider_error", kind, used, ms, model);
+        cost += await record(task, kind === "invalid_output" ? "invalid" : "provider_error", kind, used, ms, model, t);
         return { ...fail(kind), refused, calls: ran };
       }
       if (reply.calls?.length) {
-        cost += await record(task, "ok", null, used, ms, reply.model);
+        cost += await record(task, "ok", null, used, ms, reply.model, t);
         const outputs: { callId: string; output: string }[] = [];
         for (const c of reply.calls.slice(0, 8)) {
           const spec = byName.get(c.name);
@@ -318,17 +383,17 @@ export function createAi(d: AiDeps) {
         value = undefined;
       }
       if (value === undefined || validate(value, schema).length) {
-        cost += await record(task, "invalid", "invalid_output", used, ms, reply.model);
+        cost += await record(task, "invalid", "invalid_output", used, ms, reply.model, t);
         return { ...fail("invalid_output"), refused, calls: ran };
       }
       // HK-4: the same span redaction as run() (the input side was guarded each round).
       const clean = redactAnswer(task, value, schema, g);
       if (!clean.ok) {
-        cost += await record(task, "invalid", "invalid_output", used, ms, reply.model);
+        cost += await record(task, "invalid", "invalid_output", used, ms, reply.model, t);
         return { ...fail("invalid_output"), refused, calls: ran };
       }
-      cost += await record(task, "ok", null, used, ms, reply.model);
-      return { ok: true, value: clean.value as T, usage: spent, costUsd: cost / 1_000_000, latencyMs: latency, model: reply.model, refused, calls: ran };
+      cost += await record(task, "ok", null, used, ms, reply.model, t);
+      return { ok: true, value: clean.value as T, usage: spent, costUsd: cost / 1_000_000, latencyMs: latency, model: reply.model, tier: t, refused, calls: ran };
     }
     return { ...fail("invalid_output"), refused, calls: ran };
   }
@@ -358,7 +423,7 @@ export function createAi(d: AiDeps) {
     // Billed by the second of audio (rounded up), at the minute price.
     const cost = r.ok ? Math.round((Math.ceil(Math.max(1, seconds)) / 60) * t.perMinuteUsd * 1_000_000) : 0;
     const at = d.now();
-    await d.log.add({ at, task: task.name, clientKey: client === NO_CLIENT ? null : client, model: t.model, inputTokens: 0, outputTokens: 0, costMicros: cost, latencyMs: ms, outcome: r.ok ? "ok" : "provider_error", detail: r.ok ? null : r.kind, cap: scope });
+    await d.log.add({ at, task: task.name, clientKey: client === NO_CLIENT ? null : client, model: t.model, inputTokens: 0, outputTokens: 0, costMicros: cost, latencyMs: ms, outcome: r.ok ? "ok" : "provider_error", detail: r.ok ? null : r.kind, cap: scope, tier: "standard" });
     if (cost > 0) await d.appSpend.add(monthOf(at), cost);
     logger({ source: "ai", op: "request", kind: `${task.name}:${r.ok ? "ok" : "provider_error"}`, durationMs: ms });
     if (!r.ok) return fail(r.kind === "unavailable" || r.kind === "format" ? "provider" : r.kind);
