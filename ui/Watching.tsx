@@ -239,7 +239,7 @@ function WatchRow({ w, act, color, client, days }: { w: WatchView; act: (action:
       <span className="carry-acts">
         {w.checkin && at ? (
           <>
-            <span className={`checkin-chip inline${w.pick ? " real" : ""}`} title={w.pick ? "A pick on that day" : "Reserved; it becomes a pick when that day is planned"}>
+            <span className={`checkin-chip inline${w.pick ? " real" : ""}`} title={w.pick ? "A to-do on that day" : "Reserved; it becomes a to-do when that day is planned"}>
               <EyeIcon />
               <span className="cc-word">Check-in</span>
               <span className="cc-min">

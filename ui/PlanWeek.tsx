@@ -70,7 +70,7 @@ const stamp = (s: string, tz: string) => {
   const z = Temporal.ZonedDateTime.from(s).withTimeZone(tz);
   return `${z.toPlainDate().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })}, ${z.toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}`;
 };
-const DONE_WORD: Record<DoneBy, string> = { devops: "Done in DevOps", resolved: "Resolved in DevOps", local: "Done", pick: "Done (picked and ticked)" };
+const DONE_WORD: Record<DoneBy, string> = { devops: "Done in DevOps", resolved: "Resolved in DevOps", local: "Done", pick: "Done (ticked as a to-do)" };
 const TONE: Record<ClientBudget["status"], FitTone> = { over: "over", all: "all", free: "fits", none: "fits" };
 
 /** Where a client's item can be pinned: its own blocks, or an Open half-day. */

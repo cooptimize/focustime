@@ -214,7 +214,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
       summary={off ? "Day off" : past ? "Tick what got done, or drop the rest" : <Headline h={dayHeadline(blocks.filter((b) => !b.slot.off))} />}
       secondary={
         !past && !off && committed && timing && unboxed > 0 ? (
-          <button type="button" className="pd2-secondary" onClick={() => setMyDay(true)} title="Give every planned pick a time in its block's free time">
+          <button type="button" className="pd2-secondary" onClick={() => setMyDay(true)} title="Give every planned to-do a time in its block's free time">
             Timebox my day
           </button>
         ) : null
@@ -226,7 +226,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
   const notices = (
     <>
         {didntFit && !past && (
-          <div className="pd-didnt-fit" role="status" aria-label="Picks that didn't fit">
+          <div className="pd-didnt-fit" role="status" aria-label="To-dos that didn't fit">
             <p>
               <strong>{didntFit.text}</strong>
             </p>
@@ -263,7 +263,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
         {justCommitted && !didntFit && !past && timing && unboxed > 0 && !off && (
           <div className="pd-committed" role="status">
             <p>
-              <strong>Planned.</strong> {unboxed} pick{unboxed === 1 ? " has" : "s have"} no time yet.
+              <strong>Planned.</strong> {unboxed} to-do{unboxed === 1 ? " has" : "s have"} no time yet.
             </p>
             <button type="button" className="primary" onClick={() => (onCommitSeen?.(), setMyDay(true))}>
               Timebox my day
@@ -432,7 +432,7 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
             {fw.kind === "over" && (
               <>
                 {" · "}
-                <button type="button" className="link-btn" aria-pressed={trim} onClick={(e) => (e.stopPropagation(), setTrim((t) => !t))} title="Show picks you could shrink or move">
+                <button type="button" className="link-btn" aria-pressed={trim} onClick={(e) => (e.stopPropagation(), setTrim((t) => !t))} title="Show to-dos you could shrink or move">
                   Trim
                 </button>
               </>
@@ -1048,10 +1048,10 @@ function TimeboxMyDay({ day, picks, weekFeatures, now, tz, onClose, onRan }: { d
       >
         <div className="cap-dialog-head">
           <h2>Timebox my day</h2>
-          <span className="muted">{longDate(day.date)} · musts first, then larger picks, each in its own block</span>
+          <span className="muted">{longDate(day.date)} · musts first, then larger to-dos, each in its own block</span>
           <CloseButton onClose={onClose} disabled={busy} />
         </div>
-        {plan.placed.length === 0 && plan.unplaced.length === 0 && <p className="muted">Every planned pick already has a timebox.</p>}
+        {plan.placed.length === 0 && plan.unplaced.length === 0 && <p className="muted">Every planned to-do already has a timebox.</p>}
         {halvesShown.map((h) => (
           <MyDayBlock key={h} slot={slotOf(day, h)!} placed={plan.placed.filter((p) => p.half === h)} unplaced={plan.unplaced.filter((u) => u.half === h)} outlook={outlook} setOutlook={(id, v) => setOutlook((o) => ({ ...o, [id]: v }))} now={isTodayIn(day.date, now, tz) ? now : undefined} tz={tz} colors={env.colors} />
         ))}
@@ -1077,7 +1077,7 @@ function TimeboxMyDay({ day, picks, weekFeatures, now, tz, onClose, onRan }: { d
         )}
         <div className="wd-actions">
           <button ref={first} type="button" className="commit" disabled={busy || (plan.placed.length === 0 && plan.unplaced.length === 0)} onClick={() => void apply()}>
-            {busy ? "Saving…" : plan.placed.length === 0 ? "OK" : `Timebox ${plan.placed.length} pick${plan.placed.length === 1 ? "" : "s"}`}
+            {busy ? "Saving…" : plan.placed.length === 0 ? "OK" : `Timebox ${plan.placed.length} to-do${plan.placed.length === 1 ? "" : "s"}`}
           </button>
           <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>
             Cancel

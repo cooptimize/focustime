@@ -49,8 +49,8 @@ export function teamsManifest(o: { env: Env; botId: string; url: string; version
           {
             scopes: ["personal"],
             commands: [
-              { title: "what's next", description: "Your next pick and meeting" },
-              { title: "today", description: "Today's blocks and picks" },
+              { title: "what's next", description: "Your next to-do and meeting" },
+              { title: "today", description: "Today's blocks and to-dos" },
               { title: "help", description: "What I can do" },
               { title: "open FocusTime", description: "A link to the app" },
             ],

@@ -2,7 +2,7 @@
   "id": "/",
   "name": "FocusTime",
   "short_name": "FocusTime",
-  "description": "Your week of focus blocks, today's picks and the focus timer.",
+  "description": "Your week of focus blocks, today's to-dos and the focus timer.",
   "start_url": "/#/today",
   "scope": "/",
   "display": "standalone",

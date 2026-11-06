@@ -141,9 +141,9 @@ function readTokens(): { layer: string; tokens: Token[] }[] {
 /** The U3 type scale (D385), as docs/design/style-guide.md section 4 lists it. */
 const TYPE_SCALE: [string, number, string, boolean][] = [
   ["--fs-4", 600, "Page and panel titles", false],
-  ["--fs-3", 600, "Client names, the next pick", false],
+  ["--fs-3", 600, "Client names, the next to-do", false],
   ["--fs-3", 500, "Buttons and chips", false],
-  ["--fs-3", 400, "Body: picks, rows, follow-ups", false],
+  ["--fs-3", 400, "Body: to-dos, rows, follow-ups", false],
   ["--fs-2", 500, "Pills and badges", false],
   ["--fs-2", 400, "Meta: times, counts, status bar", false],
   ["--fs-1", 500, "Rail labels and hour marks", false],
@@ -279,7 +279,7 @@ export function StyleGuide() {
         </div>
         <div className="sg-row">
           <ul className="popup-menu sg-static menu-list" role="menu" aria-label="Sample menu">
-            <li className="menu-group">Pick</li>
+            <li className="menu-group">To-do</li>
             <li role="menuitem" className="menu-item active">
               <span className="menu-label">Mark done</span>
               <span className="menu-hint">

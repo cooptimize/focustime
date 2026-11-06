@@ -187,7 +187,7 @@ await forEachDriver("the Teams bot (TB-1)", (d) => {
     for (const q of ["What's next?", "today", "help", "Open FocusTime", "move my 2pm"]) await t.core.activity(t.msg(q));
     await t.settle();
     const out = t.texts();
-    expect(out[0]).toContain("Next pick: Fix the login timeout");
+    expect(out[0]).toContain("Next to-do: Fix the login timeout");
     expect(out[0]).toContain("Next meeting: Standup at 10:30");
     expect(out[1]).toContain("Morning 08:00–12:00: Northwind");
     expect(out[1]).toContain("✓ Review the export");

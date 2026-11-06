@@ -214,7 +214,7 @@ export function detectFollowUps(i: DetectInput): Detected {
     const pickId = Number(l.ruleKey?.split(":")[1]);
     const p = Number.isInteger(pickId) ? i.pick(pickId) : null;
     if (p && p.status !== "done") {
-      out.close.push({ id: l.id, note: "The pick is no longer marked done" });
+      out.close.push({ id: l.id, note: "The to-do is no longer marked done" });
       continue;
     }
     const w = freshWork(l.clientKey);

@@ -259,10 +259,10 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
       let tb: Timebox;
       if (pickId !== null) {
         // From a pick: its client, title and link; nothing else is taken from the input.
-        if (o.clientKey !== undefined || o.title !== undefined || o.itemId !== undefined || o.url !== undefined) throw new Invalid("a pick's timebox takes its client, title and link from the pick");
+        if (o.clientKey !== undefined || o.title !== undefined || o.itemId !== undefined || o.url !== undefined) throw new Invalid("a to-do's timebox takes its client, title and link from the to-do");
         const pick = (await plan.getPick(pickId));
-        if (!pick) throw new PlanError(`No pick ${pickId}`);
-        if (pick.date !== date) throw new Invalid("A pick's timebox is on the pick's day");
+        if (!pick) throw new PlanError(`No to-do ${pickId}`);
+        if (pick.date !== date) throw new Invalid("A to-do's timebox is on the to-do's day");
         tb = (await plan.addTimebox({ date, clientKey: pick.clientKey, pickId, itemId: pick.itemId, title: pick.title, url: pick.itemUrl, start, end, outlook }));
       } else {
         // A must or nice to have for the day, or plain client time.
@@ -287,8 +287,8 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
         if (p) throw new Invalid(p);
         if (it.outlook !== undefined && typeof it.outlook !== "boolean") throw new Invalid("outlook must be true or false");
         const pick = (await plan.getPick(pickId));
-        if (!pick) throw new PlanError(`No pick ${pickId}`);
-        if (pick.date !== date) throw new Invalid("A pick's timebox is on the pick's day");
+        if (!pick) throw new PlanError(`No to-do ${pickId}`);
+        if (pick.date !== date) throw new Invalid("A to-do's timebox is on the to-do's day");
         if (pick.status !== "planned") throw new PlanError(`"${pick.title}" isn't planned`);
         if (boxed.has(pickId) || seen.has(pickId)) throw new PlanError(`"${pick.title}" is already timeboxed`);
         seen.add(pickId);

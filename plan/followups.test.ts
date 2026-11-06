@@ -72,7 +72,7 @@ describe("follow-up rule: pick done, DevOps not updated (step 7)", () => {
     expect(detectFollowUps(input({ picks: [done], work: [work([item({ changedAt: "2026-11-02T19:00:00Z" })])], followUps: open })).close).toEqual([]);
   });
   it("closes when the pick is no longer ticked done", () => {
-    expect(detectFollowUps(input({ picks: [pick({ status: "planned" })], followUps: [followUp({})] })).close).toEqual([{ id: 1, note: "The pick is no longer marked done" }]);
+    expect(detectFollowUps(input({ picks: [pick({ status: "planned" })], followUps: [followUp({})] })).close).toEqual([{ id: 1, note: "The to-do is no longer marked done" }]);
   });
 });
 

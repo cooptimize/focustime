@@ -1,0 +1,38 @@
+// TD-1: the words guard finds "pick" in the to-do sense in text people read, and leaves code names and "pick" as
+// choose alone.
+import { describe, expect, it } from "vitest";
+import { saysPick, wordsHits, wordsScanned } from "./words-guard.ts";
+
+describe("saysPick", () => {
+  it("the to-do sense", () => {
+    for (const t of ["Move pick", "Unfinished picks", "Only a planned pick can be moved", "3 of 5 picks done", "Next pick", "Picks", "Which pick?", "Keep an unfinished pick from an earlier day", "Give every planned pick a time", "Today's blocks and picks", "Parent types that are picked directly"]) expect(saysPick(t), t).toBe(true);
+  });
+  it("pick as choose, and the rename's own words", () => {
+    for (const t of ["Pick a day after today", "pick another conversation to merge into", "type a name and pick from the list", "the people you pick", "FocusTime picks the best-placed person", "nobody has picked it up", "Leave each client ready to pick up again", "up and down pick the half-day", "Sign in with Microsoft to pick a chat", "a to-do (code name pick)", "People may say pick or to-do", "SELECT id FROM picks WHERE id = ?"]) expect(saysPick(t), t).toBe(false);
+  });
+});
+
+describe("wordsHits", () => {
+  const ts = (src: string) => wordsHits("ui/x.ts", src);
+  it("finds strings, template parts and the plural ternary", () => {
+    expect(ts('const a = "Drop pick";\nconst b = `${n} picks done`;\nconst c = n === 1 ? "pick" : "picks";\n')).toEqual([1, 2, 3]);
+  });
+  it("leaves code names, kinds, class names, comments and Pick<>", () => {
+    expect(ts('run("pick.move");\nconst k = { kind: "pick" };\nconst c = "today-picks now-pick";\n// a pick in a comment\ntype P = Pick<A, "b">;\nconst s = "[data-pick]";\nconst x = pick?.title;\n')).toEqual([]);
+  });
+  it("finds JSX text and attributes in .tsx", () => {
+    const src = '<h3>Picks</h3>\n<span title="Start focus on this pick">x</span>\n<p>{n} pick{n === 1 ? " has" : "s have"} no time</p>\n<li className="menu-group">To-do</li>\n';
+    expect(wordsHits("ui/x.tsx", src)).toEqual([1, 2, 3]);
+  });
+  it("a quote in a regex or an apostrophe doesn't throw the lines off", () => {
+    expect(ts('const r = /["\']/;\nconst a = "fine";\nconst b = "Move pick";\n')).toEqual([3]);
+    expect(wordsHits("ui/x.tsx", "<p>Don't stop</p>\n<p>Next pick</p>\n")).toEqual([2]);
+  });
+  it("the demo docs line by line", () => {
+    expect(wordsHits("docs/demo/script.md", "- Pick the Northwind block\n- the pick lands in the block\n")).toEqual([2]);
+  });
+  it("scans the app's text, not tests, fakes, migrations or SQL files", () => {
+    for (const f of ["ui/Today.tsx", "server/teams/cards.ts", "store/plan-store.ts", "docs/demo/script.md", "public/manifest.webmanifest", "scripts/teams-package.ts"]) expect(wordsScanned(f), f).toBe(true);
+    for (const f of ["ui/Today.test.tsx", "host/fakes.ts", "store/sql/baseline.ts", "store/migrations/20261106T0900_week_carry.ts", "docs/decisions.md", "e2e/today.test.ts"]) expect(wordsScanned(f), f).toBe(false);
+  });
+});

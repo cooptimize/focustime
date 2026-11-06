@@ -811,7 +811,7 @@ Earlier decisions (D01–D20) live in Discovery Brief v0.3 in the claude.ai Proj
 
 ## CV-5
 
-Numbered by HK-4.
+D776 to D790 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -833,7 +833,7 @@ Numbered by HK-4.
 
 ## UI-8
 
-Numbered by HK-4.
+D791 to D795 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -845,7 +845,7 @@ Numbered by HK-4.
 
 ## IB-1
 
-Numbered by HK-4.
+D796 to D819 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -876,7 +876,7 @@ Numbered by HK-4.
 
 ## FB-1
 
-Numbered by HK-4.
+D820 to D825 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -889,7 +889,7 @@ Numbered by HK-4.
 
 ## DM-1
 
-Numbered by HK-4.
+D826 to D836 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -907,7 +907,7 @@ Numbered by HK-4.
 
 ## TB-2
 
-Numbered by HK-4.
+D837 to D849 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -927,7 +927,7 @@ Numbered by HK-4.
 
 ## WK-1
 
-Numbered by HK-4.
+D850 to D858 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -943,7 +943,7 @@ Numbered by HK-4.
 
 ## SR-1
 
-Numbered by HK-4.
+D859 to D870 (numbered after merge, in TD-1).
 
 | # | Status | Decision |
 |---|---|---|
@@ -977,7 +977,7 @@ Quick fixes from the Nov 5 call (numbered with DX-1).
 
 ## DX-1
 
-Numbered by HK-4. Counts-only diagnostics for QF-1's two open questions (Q-QF1-1, Q-QF1-3).
+D871 to D876 (numbered after merge, in TD-1). Counts-only diagnostics for QF-1's two open questions (Q-QF1-1, Q-QF1-3).
 
 | # | Status | Decision |
 |---|---|---|
@@ -991,7 +991,7 @@ Numbered by HK-4. Counts-only diagnostics for QF-1's two open questions (Q-QF1-1
 
 ## PK-1
 
-Numbered by HK-4. Checking off a to-do offers the DevOps update (decisions by the product owner, Nov 6).
+D877 to D887 (numbered after merge, in TD-1). Checking off a to-do offers the DevOps update (decisions by the product owner, Nov 6).
 
 | # | Status | Decision |
 |---|---|---|
@@ -1007,6 +1007,18 @@ Numbered by HK-4. Checking off a to-do offers the DevOps update (decisions by th
 | D886 | Done | PK-1: the demo's writes stay simulated (the session's in-memory DevOps); the `todo-done` seed puts a done to-do whose item is still open (Harbor #2211) on the last workday, so Close out of that day asks. Today stays unplanned for the demo script; once planned, a tick offers the same. The seed's open item adds the rule's Update DevOps follow-up to the demo (4 to 5). |
 | D887 | Done | PK-1: words. Everything new people read says "to-do" (TD-1); code names stay `pick`. The Teams cards' existing "picks" wording is TD-1's to change. |
 
+## TD-1
+
+Numbered at merge. "Pick" reads awkwardly; the product owner renamed it (Nov 6).
+
+| # | Status | Decision |
+|---|---|---|
+| new | Done | TD-1: a planned piece of work on a half-day block is a "to-do" (plural "to-dos") in everything people read: the app's labels, counts, empty states, tooltips, aria-labels, errors, Settings, the command menu, the Guide, notifications, the Teams cards and quick replies, the Teams app's command list, the assistant's tool descriptions and previews, the demo's scripted replies and docs, the legal page and the app manifest. Labels only: code names (`pick.*` actions, `move_pick` and the other assistant tool names, types, CSS classes, `data-pick`), tables and columns, stored values (`paid_by = 'picks'`, the close note "Done as a pick", a follow-up's close reason) and URLs stay. "Pick" meaning choose ("Pick a day after today", "the people you pick", "picks it up") stays. |
+| new | Done | TD-1: the command menu finds every to-do command by "to-do", "todo" and the old "pick" (`filterCommands` treats pick, picks, todo and todos as to-do), so no `aka` per command. |
+| new | Done | TD-1: the assistant's fixed instructions say "a to-do is a planned piece of work on a half-day block (code name pick)", that people may say pick or to-do and both mean the same, and that replies call it a to-do. The tool names keep pick; their descriptions say to-do. |
+| new | Done | TD-1: a guard (`scripts/words-guard.ts`, run by `npm run guards` and CI) fails on "pick" in the to-do sense in string literals and JSX text of the app's code (not tests or fakes), the demo docs and the public pages. It skips code tokens (`pick.move`, `kind: "pick"`, class names, `Pick<>`), SQL, comments, and "pick" as choose (followed by a, the, another, from, who, up and similar, or after you, can, may, to), with a short list of one-off phrases. A noun before it ("a pick", "today's picks", "3 picks") makes it the to-do sense whatever follows. |
+| new | Done | TD-1: the Guide answers "Where did picks go?" beside QF-1's renames. |
+
 ## HK-4
 
 Housekeeping: the model check, per-span redaction in AI answers, the retention purge, the cleanup list. Numbered at merge.
@@ -1019,4 +1031,7 @@ Housekeeping: the model check, per-span redaction in AI answers, the retention p
 | new | Done | HK-4: the retention purge (`store/retention.ts`, `server/retention-job.ts`): one app job on the scheduler, once a UTC day for everyone, claimed with a unique insert in `job_claims` (a new app table: job, period, claimed and done times, counts as numbers), so two replicas or a restart run it once; a run that fails gives back its claim and tries again in an hour. Rules, each by age only and never by person: assistant turns after 30 days and proposals after 30 days or a day after they settle or expire (D758), Teams activity ids after a day (D764), Teams cards a week after they settle or expire (their sweep was never called before), the Teams rhythm after 30 days, Take one and Ahead notes after 14 days, the DevOps change log after 30 days, delivery snapshots after 120 days, its own claims after 30 days, and stored chat messages past the Rule `conv.retention_days` (the shared poll's expire, which otherwise ran only after a poll, so never where polling is on demand). Logged as counts per rule. Delete my data, Clear and the hard delete are unchanged |
 | new | Done | HK-4: the purge's wake is the next UTC midnight once the day is done, held in memory, so a sleeping server reads nothing for it before then (D431); like the daily people refresh, it wakes the database at most once a day |
 | new | Done | HK-4: the cleanup list (`docs/azure/cleanup-list.md`) is read only: nothing is dropped (D468). Each item has evidence (no live reads or writes, a fresh database's counts) and a two-step plan: stop using it in a release, drop it in a later one with a `safe-drop` comment and the product owner's OK |
-| new | Done | HK-4: numbering. The merged steps' decisions still marked "new" (CV-5, UI-8, IB-1, FB-1, DM-1, TB-2, WK-1, SR-1, DX-1, PK-1) are D776 to D887, in file order, continuing from QF-1's D775 |
+| new | Done | HK-4: numbering. HK-4 had numbered the merged steps' decisions still marked "new" (CV-5, UI-8, IB-1, FB-1, DM-1, TB-2, WK-1, SR-1, DX-1, PK-1) as D776 to D887; TD-1 numbered the same rows on main first, with the same numbers. On the merge main's numbers and text were kept for every numbered decision (TD-1's to-do wording included); nothing was renumbered, no number appears twice and none was lost. HK-4's own decisions stay unnumbered |
+| new | Done | HK-4 (the product owner, Nov 6): `gpt-6-luna` stays the default (`gpt-6.1-luna` doesn't exist). The live eval is skipped: the OpenAI key isn't copied down from Key Vault to a developer machine for it. `scripts/ai-eval.ts` and its dry-run results stay, so a later check can run it with a keyring key (Q-HK4-1) |
+| new | Approved follow-up | HK-4 (the product owner, Nov 6; Q-HK4-2): Flex (`service_tier: "flex"`, half price, slower, an unbilled 429 when capacity is short) is approved in principle for background AI work only: conversation sorting (`conversations.update`), promise extraction (`promises.extract`) and image descriptions. Never for interactive work: the assistant, drafts and Break down. Not built in HK-4; a later step adds it with a fallback to the standard tier on the 429 |
+| new | Open | HK-4 (the product owner, Nov 6; Q-HK4-3): AP-1's rules pass in the poll is not changed here. The product owner decides after the Diagnostics counts; it stays item 5 of the cleanup list |

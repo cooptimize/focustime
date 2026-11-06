@@ -1720,7 +1720,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
   };
   const mustPick = async (id: number): Promise<Pick> => {
     const p = (await getPick(id));
-    if (!p) throw new PlanError(`No pick ${id}`);
+    if (!p) throw new PlanError(`No to-do ${id}`);
     return p;
   };
   const nextPosition = async (date: IsoDate, half: Half): Promise<number> =>
@@ -1778,9 +1778,9 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async uncarry(id: number): Promise<Pick> {
       return tx(async () => {
         const p = await mustPick(id);
-        if (p.status !== "planned" || p.carriedFrom === null) throw new PlanError("Only a planned pick that was carried can be put back");
+        if (p.status !== "planned" || p.carriedFrom === null) throw new PlanError("Only a planned to-do that was carried can be put back");
         const origin = await mustPick(p.carriedFrom);
-        if (origin.status !== "moved") throw new PlanError("The pick it came from has changed since");
+        if (origin.status !== "moved") throw new PlanError("The to-do it came from has changed since");
         const used =
           (await db.get("SELECT 1 FROM picks WHERE carried_from = ?", id)) ||
           (await db.get("SELECT 1 FROM focus_log WHERE pick_id = ?", id)) ||
@@ -1796,7 +1796,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async undrop(id: number): Promise<Pick> {
       return tx(async () => {
         const p = await mustPick(id);
-        if (p.status !== "dropped") throw new PlanError("Only a dropped pick can be put back");
+        if (p.status !== "dropped") throw new PlanError("Only a dropped to-do can be put back");
         await db.run("UPDATE picks SET status = 'planned', updated_at = ? WHERE id = ?", stamp(), id);
         return mustPick(id);
       });
@@ -1805,7 +1805,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async drop(id: number): Promise<Pick> {
       return tx(async () => {
         const p = (await mustPick(id));
-        if (p.status !== "planned") throw new PlanError("Only a planned pick can be dropped");
+        if (p.status !== "planned") throw new PlanError("Only a planned to-do can be dropped");
         (await db.run("UPDATE picks SET status = 'dropped', updated_at = ? WHERE id = ?", stamp(), id));
         return (await mustPick(id));
       });
@@ -1821,7 +1821,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async move(id: number, date: IsoDate, half: Half): Promise<Pick> {
       return tx(async () => {
         const p = (await mustPick(id));
-        if (p.status !== "planned") throw new PlanError("Only a planned pick can be moved");
+        if (p.status !== "planned") throw new PlanError("Only a planned to-do can be moved");
         if (p.date === date) {
           if (p.half === half) return p;
           (await db.run("UPDATE picks SET half = ?, position = ?, updated_at = ? WHERE id = ?", half, (await nextPosition(date, half)), stamp(), id));
@@ -1847,7 +1847,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async setDone(id: number, done: boolean): Promise<Pick> {
       return tx(async () => {
         const p = (await mustPick(id));
-        if (p.status !== "planned" && p.status !== "done") throw new PlanError("Only a planned or done pick can be ticked");
+        if (p.status !== "planned" && p.status !== "done") throw new PlanError("Only a planned or done to-do can be ticked");
         (await db.run("UPDATE picks SET status = ?, updated_at = ? WHERE id = ?", done ? "done" : "planned", stamp(), id));
         // Step 13.5: ticking a follow-up pick done closes the loop.
         const fu = ((await db.get("SELECT follow_up_id FROM picks WHERE id = ?", id)) as Row).follow_up_id as number | null;
@@ -1882,7 +1882,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         const d = toDraft(r);
         const moved = patch.clientKey !== undefined && patch.clientKey !== d.clientKey;
         if (moved && ((await db.get("SELECT COUNT(*) AS n FROM picks WHERE draft_id = ? AND status IN ('planned','done')", id)) as { n: number }).n > 0)
-          throw new PlanError("A pick uses this draft. Drop the pick first, then change the client");
+          throw new PlanError("A to-do uses this draft. Drop the to-do first, then change the client");
         const n = { ...d, parentItemId: moved && patch.parentItemId === undefined ? null : d.parentItemId, ...patch };
         (await db.run("UPDATE draft_stories SET client_key = ?, parent_item_id = ?, title = ?, size = ?, description = ?, acceptance = ?, start_date = ?, target_date = ?, updated_at = ? WHERE id = ?", n.clientKey, n.parentItemId, n.title, n.size, n.description ?? null, n.acceptance ?? null, n.startDate ?? null, n.targetDate ?? null, stamp(), id));
         if (moved) (await db.run("UPDATE picks SET client_key = ? WHERE draft_id = ?", n.clientKey, id));
@@ -1912,7 +1912,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         if (!d) throw new PlanError("No such draft");
         if (d.devops_id != null) throw new PlanError("That draft is already in DevOps");
         const used = (await db.get("SELECT COUNT(*) AS n FROM picks WHERE draft_id = ?", id)) as { n: number };
-        if (used.n > 0) throw new PlanError("A pick uses this draft. Drop the pick first, then delete the draft");
+        if (used.n > 0) throw new PlanError("A to-do uses this draft. Drop the to-do first, then delete the draft");
         (await db.run("DELETE FROM draft_stories WHERE id = ?", id));
       });
     },
@@ -2281,8 +2281,8 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async makeUp(id: number, to: { date: IsoDate; half: Half }, b: { minutes: number; payback: Borrowed["payback"] }): Promise<{ pick: Pick; borrowed: Borrowed }> {
       return tx(async () => {
         const p = (await mustPick(id));
-        if (p.status !== "planned") throw new PlanError("Only a planned pick can be made up");
-        if (p.date === to.date && p.half === to.half) throw new PlanError("That is where the pick already is");
+        if (p.status !== "planned") throw new PlanError("Only a planned to-do can be made up");
+        if (p.date === to.date && p.half === to.half) throw new PlanError("That is where the to-do already is");
         let moved: Pick;
         if (p.date === to.date) {
           (await db.run("UPDATE picks SET half = ?, position = ?, updated_at = ? WHERE id = ?", to.half, (await nextPosition(to.date, to.half)), stamp(), id));

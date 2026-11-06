@@ -25,7 +25,7 @@ describe.skipIf(!CHROMIUM)("Unfinished picks suggested in the next block (UI-B)"
     await summary.waitFor({ timeout: 30_000 });
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/board-first-1920.png` });
     // Thursday is PTO and Friday catch-up: only Northwind (Wed PM) has a block left; the rest are in the list.
-    await expect(summary.locator(".cs-line").textContent()).resolves.toContain("1 unfinished pick suggested in your next blocks");
+    await expect(summary.locator(".cs-line").textContent()).resolves.toContain("1 unfinished to-do suggested in your next blocks");
     await expect(summary.locator(".cs-hint").count()).resolves.toBe(1);
     await expect(summary.getByText("Unfinished from earlier days (3)").count()).resolves.toBe(1);
 

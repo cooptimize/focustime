@@ -161,7 +161,7 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
                     canTick={committed || slot.date < data.planDay.date}
                     extra={
                       onStart && isToday && committed && p.id === firstPlanned && !timer ? (
-                        <button type="button" className="mini dp-start" onClick={() => onStart(p)} title="Start focus on this pick">
+                        <button type="button" className="mini dp-start" onClick={() => onStart(p)} title="Start focus on this to-do">
                           Start focus
                         </button>
                       ) : undefined

@@ -18,7 +18,7 @@ export function FromLastWeek({ version, colors, nameOf, weekStart, week, today, 
   if (!rows && !picks.length && !p?.watching.length) return null;
   const unfinished = picks.length > 0 && (
     <div className="flw-picks">
-      <FoldLine className="flw-fold" open={open} onToggle={() => setOpen((o) => !o)} label={`${picks.length} unfinished ${picks.length === 1 ? "pick" : "picks"} from last week`} title="Drag one onto a block, or use Move to…" />
+      <FoldLine className="flw-fold" open={open} onToggle={() => setOpen((o) => !o)} label={`${picks.length} unfinished ${picks.length === 1 ? "to-do" : "to-dos"} from last week`} title="Drag one onto a block, or use Move to…" />
       {open && <Grouped picks={picks} colors={colors} nameOf={nameOf} row={(pk) => <ListRow pick={pk} />} />}
     </div>
   );

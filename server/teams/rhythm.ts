@@ -514,7 +514,7 @@ export function createRhythm(d: RhythmDeps) {
         const plan = await d.plan(userId);
         const full = p ? await plan?.getPick(p.id).catch(() => null) : null;
         const to = full && t.moveTo ? await target(userId, m, full, t.moveTo) : null;
-        m = !full ? { ...m, notice: "Choose a pick to move" } : !to ? { ...m, notice: "There's no block left for it this week. Choose a day." } : await propose(userId, m, "move_pick", { pickId: full.id, date: to.date, half: to.half });
+        m = !full ? { ...m, notice: "Choose a to-do to move" } : !to ? { ...m, notice: "There's no block left for it this week. Choose a day." } : await propose(userId, m, "move_pick", { pickId: full.id, date: to.date, half: to.half });
         break;
       }
       case "move_rest": {
@@ -556,11 +556,11 @@ export function createRhythm(d: RhythmDeps) {
 
   /** Close out in my words: the picks they name (no AI), then one close_day proposal for the whole day. */
   async function closeoutFromWords(userId: string, m: CloseoutModel, words: string): Promise<CloseoutModel> {
-    if (!words.trim()) return { ...m, notice: "Tell me what got done, or tick the picks above" };
+    if (!words.trim()) return { ...m, notice: "Tell me what got done, or tick the to-dos above" };
     const ids = doneFromWords(words, m.picks);
     const open = new Set(m.picks.filter((p) => p.state !== "done" && p.state !== "moved").map((p) => p.id));
     const next = (await propose(userId, m, "close_day", { date: m.date, donePickIds: ids.filter((id) => open.has(id)) })) as CloseoutModel;
-    return ids.length || !next.proposal ? next : { ...next, notice: "I couldn't match that to a pick, so nothing is marked done. Tick them above, or confirm to move them on." };
+    return ids.length || !next.proposal ? next : { ...next, notice: "I couldn't match that to a to-do, so nothing is marked done. Tick them above, or confirm to move them on." };
   }
 
   return {
