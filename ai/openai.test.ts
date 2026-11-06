@@ -54,7 +54,7 @@ describe("the request", () => {
   it("Responses API, strict JSON schema, store false, max output tokens, reasoning effort; the key only in Authorization", async () => {
     const { f, seen } = fake(json(anOpenAiResponse({ reply: "ok" })));
     const r = await openAiProvider({ key: async () => KEY, fetch: f }).call(CALL);
-    expect(r).toEqual({ ok: true, text: '{"reply":"ok"}', model: "test-model", usage: { inputTokens: 100, cachedTokens: 0, outputTokens: 20 } });
+    expect(r).toEqual({ ok: true, text: '{"reply":"ok"}', model: "test-model", tier: "standard", usage: { inputTokens: 100, cachedTokens: 0, outputTokens: 20 } });
     expect(seen[0]!.url).toBe("https://api.openai.com/v1/responses");
     const body = JSON.parse(String(seen[0]!.init.body));
     expect(body).toEqual({
@@ -69,6 +69,20 @@ describe("the request", () => {
     const headers = seen[0]!.init.headers as Record<string, string>;
     expect(headers.authorization).toBe(`Bearer ${KEY}`);
     expect(String(seen[0]!.init.body)).not.toContain(KEY);
+  });
+  it("AI-F1: service_tier flex only when asked; the tier served is read from the response", async () => {
+    const { f, seen } = fake(json({ ...anOpenAiResponse({ reply: "ok" }), service_tier: "flex" }), json({ ...anOpenAiResponse({ reply: "ok" }), service_tier: "default" }), json(anOpenAiResponse({ reply: "ok" })));
+    const p = openAiProvider({ key: async () => KEY, fetch: f });
+    expect(await p.call({ ...CALL, serviceTier: "flex" })).toMatchObject({ ok: true, tier: "flex" });
+    expect(JSON.parse(String(seen[0]!.init.body)).service_tier).toBe("flex");
+    // Asked for flex, served on the default tier: priced as standard.
+    expect(await p.call({ ...CALL, serviceTier: "flex" })).toMatchObject({ ok: true, tier: "standard" });
+    expect(await p.call(CALL)).toMatchObject({ ok: true, tier: "standard" });
+    expect(JSON.parse(String(seen[2]!.init.body))).not.toHaveProperty("service_tier");
+  });
+  it("AI-F1: Flex's 429 Resource Unavailable is capacity (rate_limited), not quota", async () => {
+    const { f } = fake(json({ error: { message: "Resource Unavailable", type: "requests", code: null } }, 429));
+    expect(await openAiProvider({ key: async () => KEY, fetch: f }).call({ ...CALL, serviceTier: "flex" })).toMatchObject({ ok: false, kind: "rate_limited", status: 429 });
   });
   it("no reasoning field when the effort is the model's default", async () => {
     const { f, seen } = fake(json(anOpenAiResponse({ reply: "ok" })));

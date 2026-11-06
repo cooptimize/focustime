@@ -4,6 +4,7 @@
 // picks, follow-ups, captures, focus sessions, write PATs, AI request content or chat messages: a person's health is
 // names, dates and yes or no (AdminOps.people), and the store has no read for anything else. Every change is audited
 // (store/admin-store.ts) with who, when, what, old and new value; secrets are never settings.
+import { FLEX_TASKS, STANDARD_TASKS, isFlexTask, tierFor, type AiTier } from "../ai/tiers.ts";
 import { GAP_KINDS } from "../plan/fixnext.ts";
 import { emailOfRef, identitiesView } from "./identities.ts";
 import type { Assignee } from "../plan/identities.ts";
@@ -335,6 +336,26 @@ async function peopleSection(ops: AdminOps, meId: string) {
   };
 }
 
+/** AI-F1: every AI task with its tier for Admin › AI: background ones (flex unless switched back) first, plain names. */
+const TASK_LABELS: Record<string, string> = {
+  "conversations.update": "Sorting client chats into conversations (with image descriptions)",
+  "promises.extract": "Reading promises from chat messages",
+  "asks.classify": "Sorting requests",
+  "assistant.intent": "Assistant: understanding the request",
+  "assistant.answer": "Assistant: the answer",
+  "assistant_transcribe": "Assistant: push-to-talk",
+  "stories.draft": "Break down",
+  "status_draft": "Status drafts",
+  "conversations.draft_item": "Draft a DevOps item from a conversation",
+  "conversations.merge_summary": "Merging conversations",
+  "conversations.comment": "Follow-through comments",
+  "capture.prepare": "Capture drafts",
+  "test_ai": "Test AI",
+};
+export function aiTasks(standard: readonly string[]): { name: string; label: string; background: boolean; tier: AiTier }[] {
+  return [...FLEX_TASKS, ...STANDARD_TASKS].map((name) => ({ name, label: TASK_LABELS[name] ?? name, background: isFlexTask(name), tier: tierFor(name, { standardTasks: standard }) }));
+}
+
 const specList = (specs: Record<string, { kind: keyof typeof KIND_NAMES; label: string; area: AdminArea }>) => Object.entries(specs).map(([key, s]) => ({ key, label: s.label, kind: s.kind, kindName: KIND_NAMES[s.kind], area: s.area }));
 
 async function section(ops: AdminOps, s: AdminSection, meId: string, input: Record<string, unknown>, process?: AdminContext["process"], today?: AdminContext["today"]): Promise<unknown> {
@@ -344,7 +365,7 @@ async function section(ops: AdminOps, s: AdminSection, meId: string, input: Reco
       return clientsSection(ops, rules, process, input.refresh === true, input.filter === "all");
     case "ai": {
       const [setup, spent, clients] = await Promise.all([ops.aiSetUp(), ops.appSpentMicros(), clientsSection(ops, rules, undefined, false, input.filter === "all")]);
-      return { ...rules.ai, ...setup, appSpentMicros: spent, zero: { person: rules.ai.personCapUsd === 0, app: rules.ai.appCapUsd === 0 }, filter: clients.filter, counts: clients.counts, clients: clients.clients.map((c) => ({ key: c.key, isClient: c.isClient, whyText: c.whyText, allowAi: c.allowAi, groupWithoutAi: c.groupWithoutAi, attachmentsAi: c.attachmentsAi })), keys: specList({ "ai.on": ORG_SPECS["ai.on"], "ai.model": ORG_SPECS["ai.model"], "ai.person_cap_usd": ORG_SPECS["ai.person_cap_usd"], "ai.app_cap_usd": ORG_SPECS["ai.app_cap_usd"] }) };
+      return { ...rules.ai, ...setup, appSpentMicros: spent, tasks: aiTasks(rules.ai.standardTasks), zero: { person: rules.ai.personCapUsd === 0, app: rules.ai.appCapUsd === 0 }, filter: clients.filter, counts: clients.counts, clients: clients.clients.map((c) => ({ key: c.key, isClient: c.isClient, whyText: c.whyText, allowAi: c.allowAi, groupWithoutAi: c.groupWithoutAi, attachmentsAi: c.attachmentsAi })), keys: specList({ "ai.on": ORG_SPECS["ai.on"], "ai.model": ORG_SPECS["ai.model"], "ai.person_cap_usd": ORG_SPECS["ai.person_cap_usd"], "ai.app_cap_usd": ORG_SPECS["ai.app_cap_usd"], "ai.standard_tasks": ORG_SPECS["ai.standard_tasks"] }) };
     }
     case "conversations":
       // CV-1 lists the settings it needs; they are hosted here as they appear (read through the settings reader).

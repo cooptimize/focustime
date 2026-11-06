@@ -25,7 +25,7 @@ export function stubProvider(o: StubOptions = {}): AiProvider {
     async call(c) {
       const r = o.respond ? await o.respond(c) : JSON.stringify(sampleOf(c.schema));
       if (typeof r !== "string") return r;
-      return { ok: true, text: r, model: `${c.model} (stub)`, usage: { inputTokens: tokens(c.instructions) + tokens(c.input) + (c.images?.length ?? 0) * STUB_IMAGE_TOKENS, cachedTokens: 0, outputTokens: tokens(r) } };
+      return { ok: true, text: r, model: `${c.model} (stub)`, tier: c.serviceTier === "flex" ? "flex" : "standard", usage: { inputTokens: tokens(c.instructions) + tokens(c.input) + (c.images?.length ?? 0) * STUB_IMAGE_TOKENS, cachedTokens: 0, outputTokens: tokens(r) } };
     },
     async transcribe(t) {
       return o.transcript ? o.transcript(t) : { ok: true, text: "What's next today?" };

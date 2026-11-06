@@ -1,6 +1,7 @@
 // App-level settings (A2): the same for everyone using one FocusTime, never per person. They come from environment
 // variables, over a small app config the host may have (local: ~/.config/focustime/app.toml). Per-person settings are
 // rows in the plan store (store/settings.ts). Nothing here is secret: the client secrets live in the host's secret store.
+import { DEFAULT_FLEX } from "../ai/tiers.ts";
 import { parse } from "smol-toml";
 
 import type { DatabaseSettings } from "../store/sql/sqlserver.ts";
@@ -47,6 +48,9 @@ export const DEFAULT_AI: AppSettings["ai"] = {
   timeoutMs: 30_000,
   maxOutputTokens: { default: 4000, test_ai: 1000, asks_classify: 2000, promises_extract: 1200, capture_prepare: 1200 },
   prices: { inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5 },
+  // AI-F1: Flex (Batch) prices for the same model (developers.openai.com/api/docs/pricing, Nov 6), and its retries.
+  flexPrices: { inputPerMillion: 0.05, cachedInputPerMillion: 0.005, outputPerMillion: 0.25 },
+  flex: { ...DEFAULT_FLEX },
   appCapUsd: 100,
   // AS-1: the assistant's voice (speech-to-text guide and pricing, Nov 5).
   transcribe: { model: "gpt-transcribe", perMinuteUsd: 0.0045 },
@@ -98,6 +102,12 @@ export const APP_ENV = {
   aiCachedPrice: "FOCUSTIME_AI_CACHED_INPUT_USD_PER_MILLION",
   aiOutputPrice: "FOCUSTIME_AI_OUTPUT_USD_PER_MILLION",
   aiAppCap: "FOCUSTIME_AI_APP_CAP_USD",
+  aiFlexInputPrice: "FOCUSTIME_AI_FLEX_INPUT_USD_PER_MILLION",
+  aiFlexCachedPrice: "FOCUSTIME_AI_FLEX_CACHED_INPUT_USD_PER_MILLION",
+  aiFlexOutputPrice: "FOCUSTIME_AI_FLEX_OUTPUT_USD_PER_MILLION",
+  aiFlexTries: "FOCUSTIME_AI_FLEX_MAX_TRIES",
+  aiFlexWait: "FOCUSTIME_AI_FLEX_MAX_WAIT_MS",
+  aiFlexTimeout: "FOCUSTIME_AI_FLEX_TIMEOUT_MS",
 } as const;
 
 type Table = Record<string, unknown>;
@@ -196,10 +206,11 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
 /**
  * [ai] (and FOCUSTIME_AI_*), AI-0: provider ("openai", "stub" or "off"), model, reasoning_effort ("" for the model's
  * default), timeout_ms, max_output_tokens (a table by task name with a default; env: "default=4000,test_ai=1000"),
- * input_usd_per_million, cached_input_usd_per_million, output_usd_per_million, app_cap_usd.
+ * input_usd_per_million, cached_input_usd_per_million, output_usd_per_million, app_cap_usd. AI-F1: the same three
+ * prices with flex_ in front (the Flex tier's), flex_max_tries (1 to 10), flex_max_wait_ms and flex_timeout_ms.
  */
 function readAi(t: Table, env: Record<string, string | undefined>, errors: string[]): AppSettings["ai"] {
-  const out: AppSettings["ai"] = { ...DEFAULT_AI, maxOutputTokens: { ...DEFAULT_AI.maxOutputTokens }, prices: { ...DEFAULT_AI.prices } };
+  const out: AppSettings["ai"] = { ...DEFAULT_AI, maxOutputTokens: { ...DEFAULT_AI.maxOutputTokens }, prices: { ...DEFAULT_AI.prices }, flexPrices: { ...DEFAULT_AI.flexPrices! }, flex: { ...DEFAULT_AI.flex! } };
   const pick = (envName: string, from: unknown): unknown => {
     const e = env[envName];
     return e !== undefined && e !== "" ? e.trim() : from;
@@ -244,6 +255,16 @@ function readAi(t: Table, env: Record<string, string | undefined>, errors: strin
     const n = num(envName, t[key], key, 0, 1000);
     if (n !== undefined) out.prices[field] = n;
   }
+  for (const [key, envName, field] of [["flex_input_usd_per_million", APP_ENV.aiFlexInputPrice, "inputPerMillion"], ["flex_cached_input_usd_per_million", APP_ENV.aiFlexCachedPrice, "cachedInputPerMillion"], ["flex_output_usd_per_million", APP_ENV.aiFlexOutputPrice, "outputPerMillion"]] as const) {
+    const n = num(envName, t[key], key, 0, 1000);
+    if (n !== undefined) out.flexPrices![field] = n;
+  }
+  const tries = num(APP_ENV.aiFlexTries, t.flex_max_tries, "flex_max_tries", 1, 10);
+  if (tries !== undefined) out.flex!.maxTries = Math.round(tries);
+  const wait = num(APP_ENV.aiFlexWait, t.flex_max_wait_ms, "flex_max_wait_ms", 0, 900_000);
+  if (wait !== undefined) out.flex!.maxWaitMs = Math.round(wait);
+  const flexTimeout = num(APP_ENV.aiFlexTimeout, t.flex_timeout_ms, "flex_timeout_ms", 1000, 900_000);
+  if (flexTimeout !== undefined) out.flex!.timeoutMs = Math.round(flexTimeout);
   const cap = num(APP_ENV.aiAppCap, t.app_cap_usd, "app_cap_usd", 0, 100_000);
   if (cap !== undefined) out.appCapUsd = cap;
   return out;

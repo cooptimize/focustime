@@ -13,7 +13,7 @@ import { planStoreOn } from "./plan-store.ts";
 
 const NOW = "2026-11-04T15:00:00Z";
 const now = () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York");
-const entry = (o: Partial<AiLogEntry> = {}): AiLogEntry => ({ at: NOW, task: "test_ai", clientKey: null, model: "test-model", inputTokens: 100, outputTokens: 20, costMicros: 140, latencyMs: 900, outcome: "ok", detail: null, cap: "person", ...o });
+const entry = (o: Partial<AiLogEntry> = {}): AiLogEntry => ({ at: NOW, task: "test_ai", clientKey: null, model: "test-model", inputTokens: 100, outputTokens: 20, costMicros: 140, latencyMs: 900, outcome: "ok", detail: null, cap: "person", tier: "standard", ...o });
 
 await forEachDriver("AI log and spend (AI-0)", ({ open }) => {
   async function setup() {
@@ -33,9 +33,15 @@ await forEachDriver("AI log and spend (AI-0)", ({ open }) => {
     const recent = await ana.aiRequests(2);
     expect(recent).toEqual([entry({ at: "2026-11-04T14:00:00Z", task: "draft_title", clientKey: "fabrikam", outcome: "refused", detail: "refused_client", inputTokens: 0, outputTokens: 0, costMicros: 0, latencyMs: 0 }), entry({ at: "2026-11-01T00:00:00Z" })]);
     const cols = Object.keys((await db.get("SELECT * FROM ai_requests")) as object).sort();
-    expect(cols).toEqual(["at", "cap", "client_key", "cost_micros", "detail", "id", "input_tokens", "latency_ms", "model", "outcome", "output_tokens", "task", "user_id"]);
+    expect(cols).toEqual(["at", "cap", "client_key", "cost_micros", "detail", "id", "input_tokens", "latency_ms", "model", "outcome", "output_tokens", "task", "tier", "user_id"]);
   });
 
+  it("AI-F1: the tier each request used is kept, in the person's log and the app's; older rows read as standard", async () => {
+    const { ana } = await setup();
+    await ana.addAiRequest(entry({ task: "promises.extract", tier: "flex" }));
+    await ana.addAiRequest(entry({ task: "stories.draft" }));
+    expect((await ana.aiRequests(5)).map((e) => [e.task, e.tier])).toEqual([["stories.draft", "standard"], ["promises.extract", "flex"]]);
+  });
   it("AP-2, the guard's item map: ids per client, only new ones added, one person's only, kept after a restart", async () => {
     const { db, ana, ben } = await setup();
     expect(await ana.rememberItemClient("fabrikam", [4101, 4102, 4101])).toBe(2);

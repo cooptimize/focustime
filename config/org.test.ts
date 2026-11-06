@@ -63,6 +63,12 @@ describe("Rules: the team's value replaces the person's", () => {
     const c = applyOrg(old, r, { level: null, levelSource: null });
     expect(c.aiRules).toMatchObject({ on: false, allowedClients: ["contoso"], personCapUsd: 10, appCapUsd: 100, model: "test-model" });
   });
+  it("AI-F1: background tasks an admin put back on standard reach the AI rules; names no build knows are dropped", () => {
+    const r = resolveRules([row("org", "ai.standard_tasks", ["promises.extract", "stories.draft", "gone.task"])], BOOT);
+    expect(r.ai.standardTasks).toEqual(["promises.extract"]);
+    expect(applyOrg(cfgOf(starter()), r, { level: null, levelSource: null }).aiRules.standardTasks).toEqual(["promises.extract"]);
+    expect(resolveRules([], BOOT).ai.standardTasks).toEqual([]);
+  });
   it("invite domains: the bootstrap until an admin sets them", () => {
     expect(resolveRules([], BOOT).organization.inviteDomains).toEqual(["cooptimize.example"]);
     expect(resolveRules([row("org", "org.invite_domains", ["contoso.example"])], BOOT).organization.inviteDomains).toEqual(["contoso.example"]);

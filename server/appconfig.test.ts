@@ -55,14 +55,22 @@ describe("[ai] app settings (AI-0)", () => {
   const read = (env: Record<string, string>, text: string | null = null) => readAppSettings(env, text, "http://localhost:4319");
   it("defaults: the host chooses the provider; the model, limits and prices from DEFAULT_AI", () => {
     const r = read({});
-    expect(r.ok && r.settings.ai).toEqual({ provider: null, model: "gpt-6-luna", reasoningEffort: "low", timeoutMs: 30_000, maxOutputTokens: { default: 4000, test_ai: 1000, asks_classify: 2000, promises_extract: 1200, capture_prepare: 1200 }, prices: { inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5 }, appCapUsd: 100, transcribe: { model: "gpt-transcribe", perMinuteUsd: 0.0045 } });
+    expect(r.ok && r.settings.ai).toEqual({ provider: null, model: "gpt-6-luna", reasoningEffort: "low", timeoutMs: 30_000, maxOutputTokens: { default: 4000, test_ai: 1000, asks_classify: 2000, promises_extract: 1200, capture_prepare: 1200 }, prices: { inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5 }, flexPrices: { inputPerMillion: 0.05, cachedInputPerMillion: 0.005, outputPerMillion: 0.25 }, flex: { maxTries: 3, maxWaitMs: 90_000, timeoutMs: 120_000, baseBackoffMs: 2_000 }, appCapUsd: 100, transcribe: { model: "gpt-transcribe", perMinuteUsd: 0.0045 } });
   });
   it("the app config's [ai], then the environment over it", () => {
     const text = `[ai]\nprovider = "openai"\nmodel = "gpt-5-mini"\nreasoning_effort = ""\ntimeout_ms = 60000\napp_cap_usd = 50\ninput_usd_per_million = 0.25\noutput_usd_per_million = 2\n[ai.max_output_tokens]\ndefault = 2000\nclassify_ask = 800\n`;
     const r = read({ FOCUSTIME_AI_APP_CAP_USD: "75", FOCUSTIME_AI_MAX_OUTPUT_TOKENS: "default=3000,test_ai=500" }, text);
-    expect(r.ok && r.settings.ai).toEqual({ provider: "openai", model: "gpt-5-mini", reasoningEffort: null, timeoutMs: 60_000, maxOutputTokens: { default: 3000, test_ai: 500, asks_classify: 2000, promises_extract: 1200, capture_prepare: 1200 }, prices: { inputPerMillion: 0.25, cachedInputPerMillion: 0.01, outputPerMillion: 2 }, appCapUsd: 75, transcribe: { model: "gpt-transcribe", perMinuteUsd: 0.0045 } });
+    expect(r.ok && r.settings.ai).toEqual({ provider: "openai", model: "gpt-5-mini", reasoningEffort: null, timeoutMs: 60_000, maxOutputTokens: { default: 3000, test_ai: 500, asks_classify: 2000, promises_extract: 1200, capture_prepare: 1200 }, prices: { inputPerMillion: 0.25, cachedInputPerMillion: 0.01, outputPerMillion: 2 }, flexPrices: { inputPerMillion: 0.05, cachedInputPerMillion: 0.005, outputPerMillion: 0.25 }, flex: { maxTries: 3, maxWaitMs: 90_000, timeoutMs: 120_000, baseBackoffMs: 2_000 }, appCapUsd: 75, transcribe: { model: "gpt-transcribe", perMinuteUsd: 0.0045 } });
+  });
+  it("AI-F1: Flex prices and its retries from [ai] flex_*, then the environment", () => {
+    const text = `[ai]\nflex_input_usd_per_million = 0.06\nflex_output_usd_per_million = 0.3\nflex_max_tries = 5\nflex_max_wait_ms = 30000\n`;
+    const r = read({ FOCUSTIME_AI_FLEX_TIMEOUT_MS: "200000", FOCUSTIME_AI_FLEX_CACHED_INPUT_USD_PER_MILLION: "0.006" }, text);
+    expect(r.ok && r.settings.ai.flexPrices).toEqual({ inputPerMillion: 0.06, cachedInputPerMillion: 0.006, outputPerMillion: 0.3 });
+    expect(r.ok && r.settings.ai.flex).toEqual({ maxTries: 5, maxWaitMs: 30_000, timeoutMs: 200_000, baseBackoffMs: 2_000 });
   });
   it.each([
+    [{ FOCUSTIME_AI_FLEX_MAX_TRIES: "0" }],
+    [{ FOCUSTIME_AI_FLEX_OUTPUT_USD_PER_MILLION: "-1" }],
     [{ FOCUSTIME_AI_PROVIDER: "azure" }],
     [{ FOCUSTIME_AI_MODEL: "gpt 5" }],
     [{ FOCUSTIME_AI_TIMEOUT_MS: "10" }],
