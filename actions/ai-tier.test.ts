@@ -4,8 +4,7 @@ import { expect, it } from "vitest";
 import { stubProvider } from "../ai/stub.ts";
 import type { ProviderCall } from "../ai/types.ts";
 import { anAiApp, anAiRules } from "../test/builders/index.ts";
-import { aiFor } from "./dispatch.ts";
-import type { ActionContext } from "./types.ts";
+import { aiFor, type ActionContext } from "./dispatch.ts";
 
 it("a person waiting: standard; the poll's own run: Flex", async () => {
   const calls: ProviderCall[] = [];
