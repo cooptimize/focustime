@@ -49,7 +49,7 @@ describe("[roadmap] (step 17)", () => {
   it("refuses fractions, out of range values and unknown fields", () => {
     expect(() => settingsEdit("roadmap", { stalledDays: 1.5 })).toThrow();
     expect(() => settingsEdit("roadmap", { pace: 2 })).toThrow();
-    const bad = parseConfig(TOML + "\n[roadmap]\nstalled_days = 2\nwatch_weeks = 9\nother = 1\n");
+    const bad = parseConfig(TOML + "\n[roadmap]\nstalled_days = 2\nwatch_weeks = 9\nother = 1\n", { strict: true });
     expect(bad.ok).toBe(false);
     if (!bad.ok) expect(bad.errors.map((e) => e.field).sort()).toEqual(["roadmap.other", "roadmap.stalled_days", "roadmap.watch_weeks"]);
   });

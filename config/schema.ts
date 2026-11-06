@@ -162,7 +162,12 @@ const PLAN_KEYS = ["pickable_portfolio_types", "background_types", "size_s", "si
 
 export type FieldError = { field: string; message: string };
 /** `legacyDayShape`: the file still has the old [day_shape] section (read as hours; migrated on load, D124). */
-export type ParseResult = { ok: true; config: AppConfig; legacyDayShape?: boolean } | { ok: false; errors: FieldError[] };
+/**
+ * BH-1 (forward-compatible settings): `ignored` lists the unknown sections and keys the text has (a newer FocusTime's
+ * settings, read by an older build after a rollback). They are skipped when reading and stay in the text, so saving
+ * keeps them untouched.
+ */
+export type ParseResult = { ok: true; config: AppConfig; legacyDayShape?: boolean; ignored?: string[] } | { ok: false; errors: FieldError[] };
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -174,7 +179,8 @@ type Table = Record<string, unknown>;
 const isTable = (v: unknown): v is Table => typeof v === "object" && v !== null && !Array.isArray(v) && !(v instanceof Date);
 
 /** defaultZone: the zone for someone whose settings don't name one (the host clock's); the neutral zone without it. */
-export type ParseOptions = { defaultZone?: string };
+/** `strict`: unknown sections and keys are errors (tests of the schema itself); by default they are ignored. */
+export type ParseOptions = { defaultZone?: string; strict?: boolean };
 
 export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult {
   let raw: Table;
@@ -186,7 +192,10 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
   }
 
   const errors: FieldError[] = [];
-  const err = (field: string, message: string) => errors.push({ field, message });
+  const ignored: string[] = [];
+  // BH-1: an unknown section or key is a newer build's setting: skipped, never an error, so a rollback can't break
+  // anyone's settings. [secrets]' own refusal (no secrets in settings) has its own words and stays an error.
+  const err = (field: string, message: string) => (!opts.strict && (message === "Unknown section" || message === "Unknown field") ? ignored.push(field) : errors.push({ field, message }));
 
   const section = (name: string, keys: string[]): Table | null => {
     const v = raw[name];
@@ -803,6 +812,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
   return {
     ok: true,
     ...(raw.hours === undefined && raw.day_shape !== undefined ? { legacyDayShape: true } : {}),
+    ...(ignored.length ? { ignored } : {}),
     config: {
       dataverse: { environmentUrl: envUrl.replace(/\/+$/, ""), tenantId, clientId, myEmail, mySystemUserId: sysId === "" ? null : sysId },
       outlook,

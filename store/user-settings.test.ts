@@ -87,6 +87,41 @@ await forEachDriver("a person's settings in the store (A2)", ({ open }) => {
     expect((await ana.load()).parsed.ok && ((await ana.load()).parsed as { config: { ui: { theme: string } } }).config.ui.theme).toBe("neutral");
   });
 
+  // BH-1 (Q-BH1-1): settings a newer FocusTime saved (after a rollback, this build is the older one).
+  const NEWER = `\n# Saved by a newer FocusTime\n[future_feature]\nmode = "bright"\nlimits = [1, 2]\n\n[[future_feature.rule]]\nname = "a"\n`;
+  const withNewer = (text: string) => `${text.replace("[ui]", '[ui]\nfuture_density = "airy"')}${NEWER}`;
+
+  it("loads settings with an unknown section and key: ignored when reading, listed, nothing refused", async () => {
+    const t = await setup(open);
+    const ana = t.make("ana");
+    await ana.seed(withNewer(STARTER_TOML));
+    const { parsed } = await ana.load();
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.ignored).toEqual(["future_feature", "ui.future_density"]);
+    expect(parsed.config.ui.theme).toBe("cooptimize-dark");
+  });
+
+  it("a Settings save keeps unknown sections and keys untouched, in its own section and in others", async () => {
+    const t = await setup(open);
+    const ana = t.make("ana");
+    await ana.seed(withNewer(STARTER_TOML));
+    const before = await ana.text();
+    const section = (text: string, name: string) => splitSettings(text).find((r) => r.section === name)?.body;
+    // An edit of the section that holds the unknown key, then of another section.
+    expect((await ana.write(settingsEdit("display", { theme: "neutral", viewRange: "business", showTimelines: false }))).ok).toBe(true);
+    expect((await ana.write(settingsEdit("ahead", { staleWeeks: 9 }))).ok).toBe(true);
+    const after = await ana.text();
+    expect(section(after, "future_feature")).toBe(section(before, "future_feature"));
+    expect(section(after, "future_feature")).toContain('[[future_feature.rule]]\nname = "a"');
+    expect(section(after, "ui")).toContain('future_density = "airy"');
+    const { parsed } = await ana.load();
+    expect(parsed.ok && [parsed.config.ui.theme, parsed.config.ahead?.staleWeeks, parsed.ignored]).toEqual(["neutral", 9, ["future_feature", "ui.future_density"]]);
+    // The stored rows themselves keep it (what an older or newer build reads next).
+    const rows = (await t.db.all("SELECT section, body FROM user_settings WHERE user_id = ?", ["ana"])) as { section: string; body: string }[];
+    expect(rows.find((r) => r.section === "future_feature")?.body).toContain('mode = "bright"');
+  });
+
   it("invite domains are the app's: set by the admin, never kept in a person's rows (fix/settings-autosave)", async () => {
     const t = await setup(open, { ...APP, inviteDomains: ["contoso.example", "fabrikam.example"] });
     const ana = t.make("ana");
