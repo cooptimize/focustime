@@ -5260,6 +5260,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .do-error, .db-fail { color: var(--risk); }
 .do-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .do-acts .mini { margin-left: 0; }
+.do-choices .chip-btn[aria-checked="true"] { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, var(--surface)); color: var(--text); }
 .set-radios { display: flex; flex-wrap: wrap; gap: 6px 16px; }
 .done-batch { display: grid; gap: 8px; margin-bottom: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: var(--fs-3); }
 .done-batch p { margin: 0; }

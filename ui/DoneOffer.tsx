@@ -219,7 +219,9 @@ export function DoneBatch({ offers, dayWords, onDone }: { offers: DoneOffer[]; d
   return (
     <div className="done-batch" role="group" aria-label="Set items to done in DevOps">
       <p className="db-ask">
-        {n} {n === 1 ? "to-do" : "to-dos"} done {dayWords}; set {n === 1 ? "its item" : "their items"} to {states.length === 1 ? states[0] : "done"}?
+        {done === n
+          ? `${n} ${n === 1 ? "to-do" : "to-dos"} done ${dayWords}; ${n === 1 ? "its item is" : "their items are"} set in DevOps.`
+          : `${n} ${n === 1 ? "to-do" : "to-dos"} done ${dayWords}; set ${n === 1 ? "its item" : "their items"} to ${states.length === 1 ? states[0] : "done"}?`}
       </p>
       <ul className="db-rows">
         {rows.map((r) => (
@@ -256,10 +258,12 @@ export function DoneBatch({ offers, dayWords, onDone }: { offers: DoneOffer[]; d
         ))}
       </ul>
       <p className="db-foot">
-        <button type="button" className="mini primary" disabled={busy || !todo.length} onClick={() => void write(todo)}>
-          {busy ? "Writing…" : todo.length ? `Confirm ${todo.length}` : done === n ? "All set" : "Confirm"}
-        </button>
-        <span className="muted">Written as you, each only if the item hasn't changed in DevOps since. Undo is in Settings › Data.</span>
+        {done < n && (
+          <button type="button" className="mini primary" disabled={busy || !todo.length} onClick={() => void write(todo)}>
+            {busy ? "Writing…" : `Confirm ${todo.length || ""}`.trim()}
+          </button>
+        )}
+        <span className="muted">{done < n ? "Written as you, each only if the item hasn't changed in DevOps since. " : ""}Undo is in Settings › Data.</span>
       </p>
     </div>
   );
