@@ -162,6 +162,8 @@ export type DeliveryChatView = {
   registeredBy: string | null;
   /** D523: whether it is read for requests (an admin's switch per chat). */
   readOn: boolean;
+  /** IB-1: a Social chat (an admin's switch): never sent to AI, everything in it is chatter. */
+  social: boolean;
   /** Shared polling: the last poll, the last fetch, "Polling via <name>" or "Needs reconnecting". */
   poll: import("./asks.ts").RequestChatStatus;
 };

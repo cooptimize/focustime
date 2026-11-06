@@ -100,6 +100,20 @@ describe("client chat actions (T-2, shared polling)", () => {
     expect(r.ok ? null : r.status).toBe(403);
   });
 
+  it("IB-1: an admin marks a chat a Social chat (logged with who); anyone else can't", async () => {
+    const { ctx, teams } = await setup();
+    data(await chatAction(ctx, "chats.add", { clientKey: "northwind", chatId: "19:northwind@thread.v2" }));
+    const on = data(await chatAction(ctx, "chats.social", { chatId: "19:northwind@thread.v2", on: true }));
+    expect(on.chats[0]?.social).toBe(true);
+    expect((await teams.chat("19:northwind@thread.v2"))?.social).toBe(true);
+    expect((await teams.changes()).map((c) => c.change)).toEqual(["added", "kind"]);
+    expect((await chatAction(ctx, "chats.social", { chatId: "19:northwind@thread.v2" })).ok).toBe(false);
+    const other = await setup({}, { admin: false });
+    await other.teams.addChat({ chatId: "19:northwind@thread.v2", clientKey: "northwind", kind: "customer", displayName: "Northwind chat", webUrl: null, members: [ana()], by: ANA });
+    const r = await chatAction(other.ctx, "chats.social", { chatId: "19:northwind@thread.v2", on: true });
+    expect(r.ok ? null : r.status).toBe(403);
+  });
+
   it("a chat already on another client is refused", async () => {
     const { ctx } = await setup();
     data(await chatAction(ctx, "chats.add", { clientKey: "northwind", kind: "customer", chatId: "19:northwind@thread.v2" }));

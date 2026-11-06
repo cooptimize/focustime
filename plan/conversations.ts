@@ -724,6 +724,35 @@ export const LEGACY_CLIENT_REFUSED = "refused_client";
 
 /** Why messages wait unsorted, in a few plain words (no ids, nothing from a message). A $0 cap isn't "reached". */
 export type UnsortedReason = AiErrorKind | "chat_cap" | "unknown_ref" | "zero_budget";
+/**
+ * IB-1 slice 3, the retry rule: what the unsorted line says for a reason and what can be done. `retry` only for what
+ * passes on its own (busy, timed out, out of credit, an unusable answer, the chat's daily cap, a service error);
+ * `switch` names who fixes it and where, with no button; `held` is the guard holding a message back: no button and no
+ * override, only Send feedback.
+ */
+export type UnsortedLine = { text: string; does: "retry" | "switch" | "held"; fix: string | null };
+export function unsortedLine(k: string | null, clientName: string): UnsortedLine {
+  const admin = (what: string) => `A FocusTime admin ${what} in Admin › AI.`;
+  switch (k) {
+    case "off": return { text: "AI for FocusTime is off", does: "switch", fix: `${admin("turns it on")} They're sorted once it's on.` };
+    case "client_off": return { text: `AI isn't allowed for ${clientName}`, does: "switch", fix: `${admin(`allows it for ${clientName}`)} They're sorted once it's allowed.` };
+    case "not_set_up": return { text: "AI isn't set up", does: "switch", fix: "A FocusTime admin adds the AI key. They're sorted once it's set up." };
+    case "zero_budget": return { text: "the AI budget is $0", does: "switch", fix: `${admin("sets the budget")} They're sorted with the chat's next messages.` };
+    case "over_budget": return { text: "this month's AI budget is used up", does: "switch", fix: `${admin("can raise it")} They're sorted with the chat's next messages.` };
+    case "refused_client":
+    case CLIENT_REFUSED: return { text: "held back: it mentions another client", does: "held", fix: null };
+    case "refused_secret": return { text: "held back: it contains something that looks like a key or secret", does: "held", fix: null };
+    case "refused_email": return { text: "held back: it contains an email address", does: "held", fix: null };
+    case "chat_cap": return { text: "this chat reached its AI limit for today", does: "retry", fix: null };
+    case "invalid_output":
+    case "unknown_ref": return { text: "the AI's answer wasn't usable", does: "retry", fix: null };
+    case "rate_limited": return { text: "the AI service was busy", does: "retry", fix: null };
+    case "quota": return { text: "the AI service is out of credit", does: "retry", fix: null };
+    case "timeout": return { text: "the AI service didn't answer in time", does: "retry", fix: null };
+    default: return { text: "the AI service couldn't answer", does: "retry", fix: null };
+  }
+}
+
 export function unsortedText(k: string | null, clientName: string): string {
   switch (k) {
     case "off": return "AI is off";

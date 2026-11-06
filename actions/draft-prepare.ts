@@ -29,7 +29,18 @@ export type PrepareContext = {
   /** The client's own past items for examples, or null. */
   pool: (cfg: AppConfig, clientKey: string) => Promise<ExemplarCandidate[] | null>;
   now: () => string;
+  /** IB-1: whether a client key is Cooptimize Internal (clientAccounts' why "internal"). */
+  isInternal?: (clientKey: string) => Promise<boolean>;
 };
+
+/**
+ * IB-1 slice 3: a draft's refusal for naming another client, as stored before IB-1 (AI_MESSAGES.refused_client) and
+ * from now on. Before GD-1 that refusal caught every Cooptimize Internal draft, so an Internal draft still carrying
+ * the old note is prepared once more under the current guard; refused again, it takes the new note and stays.
+ */
+export const LEGACY_DRAFT_REFUSED = "Not sent: it mentions another client";
+export const DRAFT_HELD = "Held back: it mentions another client";
+const stale = async (ctx: PrepareContext, d: DraftStory) => d.ai?.state === "failed" && d.ai.note === LEGACY_DRAFT_REFUSED && !!(await ctx.isInternal?.(d.clientKey).catch(() => false));
 
 
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
@@ -52,11 +63,14 @@ export async function draftAiAction(ctx: PrepareContext, action: DraftAiAction, 
     if (!draft) return bad("No such draft", 404);
     const canWrite = (await ctx.writeClients()).includes(draft.clientKey);
     const view = async (d: DraftStory): Promise<ActionResponse> => ({ ok: true, data: { draft: d, canWrite, aiOn: await aiOn(ctx, d.clientKey), now: ctx.now() } satisfies DraftAiView });
-    if (action === "draft.get" || draft.devopsId) return view(draft);
+    if (draft.devopsId) return view(draft);
     // No write PAT: nothing is sent. The row says to add one.
     if (!canWrite) return view(draft);
     const cur = draft.ai;
     const writing = cur?.state === "writing" && !!cur.ranAt && Temporal.Instant.from(cur.ranAt).add({ milliseconds: WRITING_MS }).epochMilliseconds > Temporal.Instant.from(ctx.now()).epochMilliseconds;
+    // IB-1: an Internal draft refused before GD-1 is checked once more under the current guard (on any read of it).
+    if (!writing && (await stale(ctx, draft))) return view(await prepare(ctx, plan, draft));
+    if (action === "draft.get") return view(draft);
     // Once per draft (Prepare again only on request), and never twice at once.
     if (writing || (cur && cur.state !== "writing" && o.again !== true)) return view(draft);
     return view(await prepare(ctx, plan, draft));
@@ -104,7 +118,7 @@ async function prepare(ctx: PrepareContext, plan: PlanStore, draft: DraftStory):
     const clientName = cfg.clientSettings[draft.clientKey]?.name ?? draft.clientKey;
     const ids = candidates.map((c) => c.id);
     const r = await ai.run<PrepareAnswer>({ name: PREPARE_TASK, client: draft.clientKey, instructions: PREPARE_INSTRUCTIONS }, prepareInput({ level, clientName, note, title: draft.title, types, candidates, examples, style }), prepareSchema(types, ids));
-    if (!r.ok) return plan.setDraftAi(draft.id, plain(OFF_KINDS.has(r.error.kind) ? "off" : "failed", r.error.message, ranAt));
+    if (!r.ok) return plan.setDraftAi(draft.id, plain(OFF_KINDS.has(r.error.kind) ? "off" : "failed", r.error.kind === "refused_client" ? DRAFT_HELD : r.error.message, ranAt));
     const made = toDraftAi(r.value, { level, types, candidateIds: ids, hasParent: draft.parentItemId !== null, ranAt });
     if ("problem" in made) return plan.setDraftAi(draft.id, plain("failed", "The AI's answer wasn't usable", ranAt));
     return plan.setDraftAi(draft.id, made);

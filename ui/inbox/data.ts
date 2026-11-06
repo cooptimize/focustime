@@ -14,6 +14,8 @@ export type Entry =
   | { kind: "chatPromise"; row: InboxItemView; promise: PromiseCard | null }
   | { kind: "followUp"; row: InboxItemView; followUp: FollowUpView | null }
   | { kind: "send"; row: InboxItemView }
+  /** Slice 3: what I wait on (someone's commitment to me, my send, my Ask to look); the row is all there is. */
+  | { kind: "waiting"; row: InboxItemView }
   | { kind: "capture"; row: InboxItemView; capture: Capture | null }
   | { kind: "draft"; row: InboxItemView; draft: DraftStory | null };
 
@@ -61,6 +63,7 @@ export function useInboxData(version: number | string): InboxSources & { reload:
 /** A row with what its source says about it (null while the source is loading or couldn't be read). */
 export function entryOf(row: InboxItemView, s: InboxSources): Entry {
   const id = Number(row.key.slice(1));
+  if (row.kind === "commitment" || row.kind === "sent" || row.kind === "ask") return { kind: "waiting", row };
   const convs = s.convs ? [...s.convs.needsYou, ...s.convs.inProgress, ...s.convs.teammates, ...s.convs.closed] : [];
   switch (row.key[0]) {
     case "v":

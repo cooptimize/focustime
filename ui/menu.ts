@@ -1037,6 +1037,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ui.set_text_size": return { next: () => ({ title: "Text size", items: TEXT_SIZES.map((s) => ({ id: s, label: TEXT_SIZE_NAMES[s], checked: env.textSize === s, action: "ui.set_text_size", run: () => env.saveTextSize(s) })) }) };
     case "ui.set_inbox":
     case "inbox.hide":
+    case "inbox.snooze":
       return { run: () => env.setView("inbox") };
     case "ui.set_show_personal": return { run: () => env.saveShowPersonal(!env.showPersonal) };
     case "ui.first_launch": return { disabled: "Runs on its own the first time FocusTime opens" };
@@ -1067,6 +1068,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "chats.remove":
     case "chats.kind":
     case "chats.reading":
+    case "chats.social":
     case "chats.refresh": return { run: () => env.openSettings("clients") };
     // Requests are worked in Inbox › Requests; registering chats and deleting stored messages in Settings > Clients.
     case "requests.list":

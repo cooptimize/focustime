@@ -43,6 +43,7 @@ const toChat = (r: Row): ClientChat => ({
   pollNote: (r.poll_note as string | null) ?? null,
   tokenUser: (r.token_user as string | null) ?? null,
   readOn: r.read_on === undefined || r.read_on === null ? true : !!r.read_on,
+  social: !!r.social,
 });
 
 /** CV-2: reactions as stored (null when none): at most 12, each emoji at most 16 characters. */
@@ -186,6 +187,16 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         if (on) await db.run("UPDATE client_chats SET read_on = 1, read_since = ?, seen_at = NULL, retry_at = NULL, failures = 0, poll_state = NULL, poll_note = NULL, updated_at = ? WHERE chat_id = ?", [t, t, chatId]);
         else await db.run("UPDATE client_chats SET read_on = 0, updated_at = ? WHERE chat_id = ?", [t, chatId]);
         await log(by, c.clientKey, chatId, on ? "reading_on" : "reading_off");
+      });
+    },
+    /** IB-1: an admin's Social chat switch. Logged with who as a label change (the log's changes are fixed). */
+    async setSocial(chatId: string, on: boolean, by: string): Promise<void> {
+      await db.tx(async () => {
+        const c = await store.chat(chatId);
+        if (!c) throw new PlanError("That chat isn't registered");
+        if (!!c.social === on) return;
+        await db.run("UPDATE client_chats SET social = ?, updated_at = ? WHERE chat_id = ?", [on ? 1 : 0, stamp(), chatId]);
+        await log(by, c.clientKey, chatId, "kind");
       });
     },
     /** Forgets a registered chat with its Requests and stored messages (a promise's message stays with the promise). */
@@ -478,6 +489,10 @@ function viewerOf(store: BaseStore, userId: string) {
     async setReading(chatId: string, on: boolean): Promise<void> {
       if (!(await chat(chatId))) throw new PlanError("That chat isn't registered");
       await store.setReading(chatId, on, userId);
+    },
+    async setSocial(chatId: string, on: boolean): Promise<void> {
+      if (!(await chat(chatId))) throw new PlanError("That chat isn't registered");
+      await store.setSocial(chatId, on, userId);
     },
     /** CV-2: the images of messages in a chat I'm in. */
     async images(chatId: string, messageIds: readonly string[]): Promise<MessageImage[]> {

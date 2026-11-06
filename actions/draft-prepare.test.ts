@@ -11,7 +11,7 @@ import { prepareAgain, type PrepareAnswer } from "../plan/capture-prepare.ts";
 import { buildProcessModel } from "../plan/process.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import { aClientProcess, anAiApp, anExemplarCandidate, withTeam } from "../test/builders/index.ts";
-import { draftAiAction, type DraftAiView, type PrepareContext } from "./draft-prepare.ts";
+import { DRAFT_HELD, draftAiAction, LEGACY_DRAFT_REFUSED, type DraftAiView, type PrepareContext } from "./draft-prepare.ts";
 import type { CaptureFeatures } from "./types.ts";
 import { isInternalKey } from "./client-accounts.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
@@ -58,6 +58,7 @@ function setup(o: { client?: string; allowed?: string[]; on?: boolean; write?: s
     writeClients: async () => o.write ?? [K],
     features: async (_c, k) => (reads.push(`features:${k}`), features[k]!),
     model: async (_c, k) => (reads.push(`model:${k}`), buildProcessModel(aClientProcess())),
+    isInternal: async (k) => isInternalKey(null, k),
     pool: async (_c, k) => (reads.push(`pool:${k}`), k === K ? [anExemplarCandidate({ id: 301 }), anExemplarCandidate({ id: 302 }), anExemplarCandidate({ id: 303 })] : [anExemplarCandidate({ id: 902, title: "Fabrikam secret plan" })]),
     now: () => now,
   };
@@ -238,5 +239,30 @@ describe("Prepare again (UI-7)", () => {
     // Never before a first prepare ran (the preview runs that one), and never once in DevOps.
     expect(prepareAgain({ ...w.draft, ai: null }, { ...w, canWrite: true, aiOn: true })).toBe("hidden");
     expect(prepareAgain({ ...v.draft, devopsId: 55 }, { ...v, aiOn: true })).toBe("hidden");
+  });
+});
+
+describe("a refusal from before GD-1 (IB-1 slice 3)", () => {
+  const legacy = { state: "failed" as const, title: null, description: null, acceptance: null, type: null, parentId: null, parentReason: null, note: LEGACY_DRAFT_REFUSED, ranAt: "2026-10-30T15:00:00Z" };
+  it("an Internal draft naming a client, refused before GD-1, is checked once more and prepared", async () => {
+    const t = setup({ client: INTERNAL_CLIENT, answer: () => ({ title: "Compare the Contoso export", description: "Contoso ERP exports differently.", acceptance_criteria: "- Compared", type: "User Story", parent_id: 437, parent_reason: "Export work" }) });
+    const id = await t.capture("check how Contoso exports invoices");
+    await t.plan.setDraftAi(id, legacy);
+    const v = await t.run("draft.get", { id });
+    expect(t.calls).toHaveLength(1);
+    expect(v.draft.ai).toMatchObject({ state: "ready", title: "Compare the Contoso export" });
+    await t.run("draft.get", { id });
+    expect(t.calls).toHaveLength(1);
+  });
+  it("a client draft that really names another client stays refused: never re-sent, and a new refusal says Held back", async () => {
+    const t = setup();
+    const id = await t.capture("same as the Fabrikam export");
+    await t.plan.setDraftAi(id, legacy);
+    expect((await t.run("draft.get", { id })).draft.ai?.note).toBe(LEGACY_DRAFT_REFUSED);
+    await t.run("draft.prepare", { id });
+    expect(t.calls).toHaveLength(0);
+    const v = await t.run("draft.prepare", { id, again: true });
+    expect(t.calls).toHaveLength(0);
+    expect(v.draft.ai).toMatchObject({ state: "failed", note: DRAFT_HELD });
   });
 });

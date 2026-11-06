@@ -59,6 +59,8 @@ export type ClientChat = {
   registeredAt: string;
   /** D523: whether the job reads it (an admin's switch, per chat). Off: registered, never polled. */
   readOn: boolean;
+  /** IB-1: an admin marked it a Social chat: its messages skip the AI pass and are filed as chatter. */
+  social?: boolean;
   /** Nothing created before this is read (no backfill). */
   readSince: string;
   /** The newest lastModifiedDateTime stored: the next read asks for messages changed after it. */
