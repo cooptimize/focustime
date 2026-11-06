@@ -175,3 +175,18 @@ describe("PK-1 Confirm and Undo", () => {
     expect((await s.run<{ offer: UndoOffer | null }>("devops.undo_offer", { pickId: await s.todo(500, false) })).offer).toBeNull();
   });
 });
+
+describe("PK-1 and the rule's Update DevOps follow-up", () => {
+  it("the offer names it, and Confirm closes it once DevOps shows the change", async () => {
+    const s = setup();
+    await s.enable();
+    const id = await s.todo(500);
+    const f = await s.plan.openRuleFollowUp({ kind: "devops_update", clientKey: COOP, who: COOP, what: "Update DevOps #500: Import mapping", itemId: 500, ruleKey: `devops_update:${id}` });
+    const [o] = (await s.offers([id])).offers;
+    expect(o!.followUpId).toBe(f!.id);
+    const p = (await s.run<{ preview: DevOpsPreview }>("devops.preview", { clientKey: COOP, change: { kind: "state", itemId: 500, state: "Closed", pickId: id, followUpId: o!.followUpId } })).preview;
+    expect(p.notes).toContain("Closes the follow-up once DevOps shows the change.");
+    await s.run("devops.confirm", { previewId: p.previewId });
+    expect((await s.plan.getFollowUp(f!.id))!.closedAt).not.toBeNull();
+  });
+});

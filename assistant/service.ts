@@ -377,7 +377,7 @@ export function createAssistant(env: AssistantEnv) {
         const offer = (r.data as { offers: DoneOffer[] }).offers[0];
         if (!offer) throw new Refusal(p.itemId === null ? "That to-do has no DevOps item" : `Nothing to set in DevOps for #${p.itemId}`);
         const state = typeof args.state === "string" && offer.choices.includes(args.state) ? args.state : offer.choices[0]!;
-        const change = { kind: "state", itemId: offer.itemId, state, pickId: p.id };
+        const change = { kind: "state", itemId: offer.itemId, state, pickId: p.id, ...(offer.followUpId !== null ? { followUpId: offer.followUpId } : {}) };
         const pv = await devopsPreview(offer.clientKey, change);
         const view = fromDevOps(pv);
         if (offer.choices.length > 1) view.notes.push(`To set it to ${offer.choices.filter((c) => c !== state).join(" or ")} instead, do it in FocusTime.`);

@@ -28,7 +28,7 @@ export function useDoneOfferFlow(o: { allowed: readonly string[]; ask: boolean; 
   // Read at tick time, so `ticked` stays the same function across renders.
   const opts = useRef(o);
   opts.current = o;
-  const previewFor = useCallback(async (offer: DoneOffer, state: string) => (await call<{ preview?: DevOpsPreview; nothing?: string }>("devops.preview", { clientKey: offer.clientKey, change: { kind: "state", itemId: offer.itemId, state, pickId: offer.pickId } })).preview ?? null, []);
+  const previewFor = useCallback(async (offer: DoneOffer, state: string) => (await call<{ preview?: DevOpsPreview; nothing?: string }>("devops.preview", { clientKey: offer.clientKey, change: { kind: "state", itemId: offer.itemId, state, pickId: offer.pickId, ...(offer.followUpId !== null ? { followUpId: offer.followUpId } : {}) } })).preview ?? null, []);
   const ticked = useCallback(
     (pickId: number, done: boolean, clientKey: string, itemId: number | null) => {
       if (!opts.current.ask || itemId === null || !opts.current.allowed.includes(clientKey)) return;
@@ -183,7 +183,7 @@ export function DoneBatch({ offers, dayWords, onDone }: { offers: DoneOffer[]; d
       for (let i = 0; i < all.length; i += 10) {
         const chunk = all.slice(i, i + 10);
         try {
-          const pv = await call<{ previews: DevOpsPreview[]; nothing: string[]; refused?: { itemId: number | null; error: string; key?: string }[] }>("devops.preview", { clientKey, changes: chunk.map((r) => ({ kind: "state", itemId: r.offer.itemId, state: r.state, pickId: r.offer.pickId, key: String(r.offer.pickId) })) });
+          const pv = await call<{ previews: DevOpsPreview[]; nothing: string[]; refused?: { itemId: number | null; error: string; key?: string }[] }>("devops.preview", { clientKey, changes: chunk.map((r) => ({ kind: "state", itemId: r.offer.itemId, state: r.state, pickId: r.offer.pickId, ...(r.offer.followUpId !== null ? { followUpId: r.offer.followUpId } : {}), key: String(r.offer.pickId) })) });
           for (const x of pv.refused ?? []) if (x.key) set(Number(x.key), (r) => ({ ...r, result: { ok: false, message: x.error, entryId: null } }));
           const keyed = pv.previews.filter((p) => p.key);
           for (const r of chunk) if (!keyed.some((p) => p.key === String(r.offer.pickId)) && !(pv.refused ?? []).some((x) => x.key === String(r.offer.pickId))) set(r.offer.pickId, (x) => ({ ...x, result: { ok: true, message: `Already ${r.state}` } }));

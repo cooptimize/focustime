@@ -50,7 +50,8 @@ describe("demo mode (D272)", () => {
     expect(w.week.days.find((d) => d.weekday === "Thu")?.pto).not.toBeNull();
     expect((w.devops ?? []).map((c) => c.clientKey).sort()).toEqual(["Atlas", "Cooptimize", "Harbor", "Northwind"]);
     expect(w.weekFeatures.filter((f) => f.tier === "must").length).toBe(11);
-    expect(w.followUps.length).toBe(4);
+    // PK-1: the last workday's done to-do with its item still open adds the rule's Update DevOps #2211.
+    expect(w.followUps.length).toBe(5);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

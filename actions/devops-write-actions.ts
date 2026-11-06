@@ -306,6 +306,8 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       if (cfg.plan.devopsOnDone === "never") return { ok: true, data: { offers: [], off: true } };
       const picks = (await Promise.all(ids.map((i) => plan.getPick(i)))).filter((p): p is NonNullable<typeof p> => !!p && p.kind === "item" && p.itemId !== null && p.status === "done");
       const offers: DoneOffer[] = [];
+      // The rule's "Update DevOps #id" follow-up for a to-do done here: the write closes it once DevOps shows the change.
+      const owed = picks.length ? (await plan.openFollowUps()).filter((f) => f.kind === "devops_update") : [];
       const byClient = new Map<string, typeof picks>();
       for (const p of picks) byClient.set(p.clientKey, [...(byClient.get(p.clientKey) ?? []), p]);
       for (const [clientKey, list] of byClient) {
@@ -320,7 +322,8 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
             const choices = doneChoices(states);
             if (!choices.length || alreadyDone(states, item.state)) continue;
             if (!(await rightsOn(env, item, memo)).ok) continue;
-            offers.push({ pickId: p.id, clientKey, clientName: env.clientName, itemId: item.id, title: item.title, type: item.type, state: item.state, choices });
+            const followUpId = owed.find((f) => f.ruleKey === `devops_update:${p.id}` || (f.clientKey === clientKey && f.itemId === item.id))?.id ?? null;
+            offers.push({ pickId: p.id, clientKey, clientName: env.clientName, itemId: item.id, title: item.title, type: item.type, state: item.state, choices, followUpId });
           } catch {
             // An item DevOps can't read now gets no offer; the tick itself stands.
           }
