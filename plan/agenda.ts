@@ -134,7 +134,7 @@ export function planMyDay(picks: readonly Pick[], blocks: Partial<Record<Half, S
 /** What didn't fit, said plainly (D274): "2 picks didn't fit: Export spec draft (M), Delay alerts (S)." */
 export function didntFitText(picks: readonly { title: string; size: Size | null }[]): string {
   if (!picks.length) return "";
-  return `${picks.length} ${picks.length === 1 ? "pick" : "picks"} didn't fit: ${picks.map((p) => `${p.title} (${p.size ?? "not sized, 2h"})`).join(", ")}.`;
+  return `${picks.length} ${picks.length === 1 ? "to-do" : "to-dos"} didn't fit: ${picks.map((p) => `${p.title} (${p.size ?? "not sized, 2h"})`).join(", ")}.`;
 }
 
 /** One size smaller, for "Make smaller"; S has nothing smaller. An unsized pick counts as M, so S. */
@@ -153,6 +153,6 @@ export function offerAfterTimebox(r: { placed: number; unplaced: readonly DidntF
   return {
     offer: false,
     summary: picks.length ? { text: didntFitText(picks), picks } : null,
-    notice: r.placed ? `Timeboxed ${r.placed} ${r.placed === 1 ? "pick" : "picks"}` : null,
+    notice: r.placed ? `Timeboxed ${r.placed} ${r.placed === 1 ? "to-do" : "to-dos"}` : null,
   };
 }

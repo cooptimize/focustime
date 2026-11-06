@@ -59,7 +59,7 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     // 3. Week: From last week (Monday), the at-risk Wednesday afternoon (Out), Thursday's PTO, Friday's catch-up, the now line.
     await go(page, "#/week");
     await page.locator("section.carry-summary, .from-last-week").first().waitFor({ timeout: 30_000 });
-    await page.getByText(/unfinished picks? from last week/).first().waitFor();
+    await page.getByText(/unfinished to-dos? from last week/).first().waitFor();
     await page.getByText("At risk · Out: school event 1:30").first().waitFor();
     await page.locator(".day .now-line").first().waitFor();
     await shot(page, "week");

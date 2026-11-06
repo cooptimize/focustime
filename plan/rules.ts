@@ -86,7 +86,7 @@ export function unpickableReason(item: { level: WorkItem["level"]; type: string;
   if (item.level === "story" && isResolved(item.stateCategory)) return `It's ${item.state || "resolved"} in DevOps, so there are no hours left on it`;
   if (item.level === "story") return null;
   if (item.level === "portfolio") return `${item.type} is above story level. Pick one of its child items, or add a draft story if it has none`;
-  return `${item.type} is not on the story, task or bug backlog, so it can't be picked`;
+  return `${item.type} is not on the story, task or bug backlog, so it can't be a to-do`;
 }
 
 /**

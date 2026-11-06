@@ -15,7 +15,7 @@ export function blockStatus(fit: Fit | null, risks: readonly Risk[]): BlockStatu
   const atRisk = risks.find((r) => r.severity === "at_risk");
   if (atRisk) return { kind: "at_risk", label: "At risk", detail: atRisk.reason, short: atRisk.short ?? null };
   const w = fitWords(fit);
-  if (w.kind === "over") return { kind: "too_much", label: w.text, detail: "More planned than the block's free time. Shrink or move a pick" };
+  if (w.kind === "over") return { kind: "too_much", label: w.text, detail: "More planned than the block's free time. Shrink or move a to-do" };
   if (w.kind === "fits") return { kind: "tight", label: w.text, detail: null };
   if (w.kind === "room") return { kind: "fits", label: w.text, detail: null };
   return { kind: "none", label: "", detail: null };

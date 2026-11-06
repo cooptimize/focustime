@@ -321,6 +321,32 @@ describe("move things around: proposals, written only on confirm", () => {
       if (tool === "ahead_change") expect(s.ran.some((x) => x.action.startsWith("devops."))).toBe(false);
     });
   }
+  it("TD-1: \"move my Wednesday picks\" and \"move my Wednesday to-dos\" are the same request", async () => {
+    const WED = "2026-11-11", THU = "2026-11-12";
+    const run = async (words: string) => {
+      const s = setup();
+      const a = await s.plan.addPick({ date: WED, half: "AM", clientKey: FAB, kind: "intention", title: "Export spec", size: "M" });
+      const b = await s.plan.addPick({ date: WED, half: "PM", clientKey: FAB, kind: "intention", title: "Invoice totals", size: "S" });
+      s.script(["day", "move_picks"], call(["day", { date: WED }]), call(["move_picks", { moves: [{ pickId: a.id, date: THU, half: "AM" }, { pickId: b.id, date: THU, half: "PM" }] }]), say("Here's the change to confirm."));
+      const r = await s.a.handle(words);
+      const intent = s.calls.find((c) => c.schemaName === "assistant_intent")!;
+      return { r, s, intent, ids: [a.id, b.id] };
+    };
+    const picks = await run("Move my Wednesday picks to Thursday");
+    const todos = await run("Move my Wednesday to-dos to Thursday");
+    // The model is told both words mean the same, and that replies say to-do.
+    expect(picks.intent.instructions).toBe(todos.intent.instructions);
+    expect(picks.intent.instructions).toMatch(/to-do is a planned piece of work on a half-day block \(code name pick\)\. People may say pick or to-do/);
+    expect(picks.s.calls.at(-1)!.instructions).toMatch(/Call it a to-do in replies/);
+    // The same proposal, worded with to-do, and the same writes on Confirm.
+    const view = (x: typeof picks) => x.r.proposals.map((p) => ({ action: p.action, title: p.title, preview: p.preview }));
+    expect(view(picks)).toEqual(view(todos));
+    expect(picks.r.proposals[0]).toMatchObject({ action: "pick.move", title: "Move 2 to-dos" });
+    for (const x of [picks, todos]) {
+      expect((await x.s.a.confirm(x.r.proposals[0]!.id)).ok).toBe(true);
+      expect(x.s.writes()).toEqual([{ action: "pick.move", input: { id: x.ids[0], date: THU, half: "AM" } }, { action: "pick.move", input: { id: x.ids[1], date: THU, half: "PM" } }]);
+    }
+  });
   it("keep an unfinished pick from yesterday: it moves to today", async () => {
     const s = setup();
     const p = await s.plan.addPick({ date: "2026-11-04", half: "PM", clientKey: FAB, kind: "intention", title: "Old one", size: "S" });
@@ -498,7 +524,7 @@ describe("propose from a button (TB-2): no AI call, the same preview and confirm
     const p = (r as { proposal: { id: number; preview: { rows: { label: string; before: string | null; after: string | null }[]; notes: string[] }; action: string } }).proposal;
     expect(p.action).toBe("closeout.commit");
     expect(p.preview.rows.map((x) => [x.label, x.after])).toEqual([["Export spec", "Done"], ["Invoice totals", "Moves to Fri, Nov 6 afternoon"], ["Ledger check", "Unfinished list"], ["The day", "Closed out"]]);
-    expect(p.preview.notes[0]).toContain("One pick has no block left");
+    expect(p.preview.notes[0]).toContain("One to-do has no block left");
     expect(s.calls).toEqual([]);
     expect(s.writes()).toEqual([]);
     const done = await s.a.confirm(p.id);
@@ -531,7 +557,7 @@ describe("propose from a button (TB-2): no AI call, the same preview and confirm
     const a = await s.plan.addPick({ date: TODAY, half: "AM", clientKey: FAB, kind: "intention", title: "Export spec", size: "M" });
     const b = await s.plan.addPick({ date: TODAY, half: "AM", clientKey: FAB, kind: "intention", title: "Invoice totals", size: "S" });
     const r = (await s.a.propose("move_picks", { moves: [{ pickId: a.id, date: TODAY, half: "PM" }, { pickId: b.id, date: "2026-11-06", half: "AM" }] })) as { ok: true; proposal: { id: number; title: string; preview: { rows: { after: string | null }[] } } };
-    expect(r.proposal.title).toBe("Move 2 picks");
+    expect(r.proposal.title).toBe("Move 2 to-dos");
     expect(r.proposal.preview.rows.map((x) => x.after)).toEqual(["Thu, Nov 5 afternoon", "Fri, Nov 6 morning"]);
     expect(s.writes()).toEqual([]);
     expect((await s.a.confirm(r.proposal.id)).ok).toBe(true);
@@ -591,7 +617,7 @@ describe("propose from a button (TB-2): no AI call, the same preview and confirm
     const s = setup({ mine: [FAB] });
     const nw = await s.plan.addPick({ date: TODAY, half: "AM", clientKey: NW, kind: "intention", title: "Ledger", size: "M" });
     for (const t of ["comment", "description", "send", "ahead_change", "capture", "nope"]) expect(await s.a.propose(t, { itemId: 4417, text: "x" })).toMatchObject({ ok: false, message: "That can't be proposed from a button" });
-    expect(await s.a.propose("move_picks", { moves: [{ pickId: nw.id, date: TODAY, half: "PM" }] })).toMatchObject({ ok: false, message: "That pick isn't one of yours here" });
+    expect(await s.a.propose("move_picks", { moves: [{ pickId: nw.id, date: TODAY, half: "PM" }] })).toMatchObject({ ok: false, message: "That to-do isn't one of yours here" });
     expect(s.calls).toEqual([]);
   });
 });

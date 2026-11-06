@@ -245,22 +245,22 @@ describe("focus timer menus (step 6c)", () => {
     await items(lengths)[0]!.run!();
     expect(t.calls).toEqual([["timer.start", { pickId: 7, minutes: 120 }]]);
     // Not today: not offered.
-    expect(find(pickMenu(t.e, { ...pick, date: "2026-11-05" }), "Start focus").disabled).toBe("Only today's picks");
+    expect(find(pickMenu(t.e, { ...pick, date: "2026-11-05" }), "Start focus").disabled).toBe("Only today's to-dos");
   });
 
   it("F offers focus, break and a pick with no timer; controls when one runs; Done/+15/Next when it ended", () => {
     const none = timerStep(env().e);
-    expect(items(none).map((i) => i.label)).toEqual(["Focus", "Deep focus", "Break", "Timebox a pick…"]);
+    expect(items(none).map((i) => i.label)).toEqual(["Focus", "Deep focus", "Break", "Timebox a to-do…"]);
     const running = timerStep(env({ timer: { kind: "focus", pickId: 7, label: "Story", plannedMinutes: 25, remainingMs: 60_000, running: true, ended: false, endsAt: null, deep: false } }).e);
-    expect(items(running).map((i) => i.label)).toEqual(["Pause", "+15 min", "Deep focus", "Done (tick the pick)", "Next pick", "Stop"]);
+    expect(items(running).map((i) => i.label)).toEqual(["Pause", "+15 min", "Deep focus", "Done (tick the to-do)", "Next to-do", "Stop"]);
     const ended = timerStep(env({ timer: { kind: "focus", pickId: null, label: "Focus", plannedMinutes: 25, remainingMs: 0, running: false, ended: true, endsAt: null, deep: false } }).e);
-    expect(items(ended).map((i) => i.label)).toEqual(["+15 min", "Done", "Next pick", "Stop"]);
+    expect(items(ended).map((i) => i.label)).toEqual(["+15 min", "Done", "Next to-do", "Stop"]);
   });
 
   it("the Focus button suggests the next pick first, then a plain timer (step 15.2)", async () => {
     const t = env({ focusNext: pick });
     const step = timerStep(t.e);
-    expect(items(step).map((i) => i.label)).toEqual([`Start focus: ${pick.title}`, "Plain timer", "Deep focus", "Break", "Another pick…"]);
+    expect(items(step).map((i) => i.label)).toEqual([`Start focus: ${pick.title}`, "Plain timer", "Deep focus", "Break", "Another to-do…"]);
     await items(step)[0]!.run!();
     expect(t.calls).toEqual([["timer.start", { pickId: pick.id }]]);
   });
@@ -407,7 +407,7 @@ describe("one row per pick: + time and the time editor (step 14.5, D259)", () =>
   it("Remove time removes the timebox; the pick stays planned", async () => {
     const { e, calls } = env({ timeboxes: [own()] });
     const r = find(timeStep(e, pick), "Remove time");
-    expect(r.hint).toBe("the pick stays planned");
+    expect(r.hint).toBe("the to-do stays planned");
     await r.run!();
     expect(calls.at(-1)).toEqual(["timebox.remove", { id: 5 }]);
   });

@@ -169,8 +169,8 @@ export async function closeoutAction(ctx: CloseoutContext, action: CloseoutActio
         if (typeof o.when !== "string" || !(PAYBACKS as readonly string[]).includes(o.when)) throw new Invalid("when must be tonight, friday or day");
         const when = o.when as Payback;
         const p = (await plan.getPick(pid));
-        if (!p) return bad(`No pick ${pid}`, 404);
-        if (p.status !== "planned") return bad("Only a planned pick can be made up", 409);
+        if (!p) return bad(`No to-do ${pid}`, 404);
+        if (p.status !== "planned") return bad("Only a planned to-do can be made up", 409);
         const chosen = { ...(o.date !== undefined ? { date: date(o.date) } : {}), ...(o.half !== undefined ? { half: half(o.half) } : {}) };
         const slot = paybackSlot(when, today, chosen);
         if (typeof slot === "string") return bad(slot, 422);

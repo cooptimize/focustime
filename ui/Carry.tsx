@@ -107,7 +107,7 @@ export function CarryProvider({ active, version, week, now, onChanged, children 
             onChanged();
           }
         : null;
-      note(`Kept ${copies.length} ${copies.length === 1 ? "pick" : "picks"} in your next blocks${failed ? `; ${failed} couldn't be kept` : ""}`, undo);
+      note(`Kept ${copies.length} ${copies.length === 1 ? "to-do" : "to-dos"} in your next blocks${failed ? `; ${failed} couldn't be kept` : ""}`, undo);
     },
     drop: async (p) => {
       try {
@@ -215,11 +215,11 @@ export function CarrySummary({ colors, nameOf }: { colors: Record<string, string
   const { cards, earlierDays } = c.plan;
   if (!cards.length && !earlierDays.length) return null;
   return (
-    <section className="carry-summary" aria-label="Unfinished picks">
+    <section className="carry-summary" aria-label="Unfinished to-dos">
       {cards.length > 0 && (
         <div className="cs-line">
           <span className="cs-text">
-            {cards.length} unfinished {cards.length === 1 ? "pick" : "picks"} suggested in your next blocks
+            {cards.length} unfinished {cards.length === 1 ? "to-do" : "to-dos"} suggested in your next blocks
           </span>
           <span className="cs-sep" aria-hidden="true">·</span>
           <button type="button" className="link-btn" onClick={() => void c.keepAll()} title="Keep every suggestion in the block it's in">

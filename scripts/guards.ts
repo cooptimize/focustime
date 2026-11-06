@@ -3,17 +3,19 @@
 // --exclude-standard`), read from the working tree. Before HK-1 the client-name guard read only tracked files and ran
 // only inside the full test suite, so a new file or the inner loop (`vitest related`) never saw it.
 //
-// Two guards:
+// Three guards:
 // - names (A1, D418): no real client, project, person or company address, and no desktop or workstation name, outside
 //   the history (docs/decisions.md, docs/azure/) and, for desktop words, the developer loop's README. Case-insensitive.
 //   The words are base64 so this file never matches its own search.
 // - process names (WT-1): no hard-coded work item type, state or category name acting as code in ui/, actions/ or
 //   plan/ outside plan/process.ts. Case-sensitive (it matches code, not prose).
+// - words (TD-1): no "pick" in the to-do sense in text people read (scripts/words-guard.ts); "pick" is only the code name.
 //
 // Usage: node scripts/guards.ts [--root <dir>]; exits 1 and lists file:line for each hit.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { wordsHits, wordsScanned } from "./words-guard.ts";
 
 const word = (b64: string) => Buffer.from(b64, "base64").toString("utf8");
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -66,7 +68,7 @@ export function guardFiles(root: string): string[] {
   return [...new Set(out.split("\0"))].filter((f) => f && TEXT.test(f) && f !== "package-lock.json" && !f.startsWith("node_modules/")).sort();
 }
 
-export type Hit = { guard: "names" | "desktop" | "process"; at: string };
+export type Hit = { guard: "names" | "desktop" | "process" | "words"; at: string };
 
 export function runGuards(root: string): { files: number; hits: Hit[] } {
   const files = guardFiles(root);
@@ -81,7 +83,9 @@ export function runGuards(root: string): { files: number; hits: Hit[] } {
     const history = HISTORY(f);
     const desktopOk = history || f === "system/README.md";
     const proc = processScanned(f);
-    text.split("\n").forEach((line, i) => {
+    const lines = text.split("\n");
+    if (wordsScanned(f)) for (const n of wordsHits(f, text)) hits.push({ guard: "words", at: `${f}:${n}: ${lines[n - 1]!.trim().slice(0, 120)}` });
+    lines.forEach((line, i) => {
       const at = `${f}:${i + 1}`;
       if (!history && realRe.test(line)) hits.push({ guard: "names", at });
       if (!desktopOk && desktopRe.test(line)) hits.push({ guard: "desktop", at });
@@ -95,6 +99,7 @@ const WHY: Record<Hit["guard"], string> = {
   names: "a real client, project, person or company address (use fictional names: contoso, fabrikam, @example)",
   desktop: "a desktop or workstation name (only the history and system/README.md may name it)",
   process: "a work item type, state or category name used as code (decide through plan/process.ts)",
+  words: 'text people read says "pick" for a planned piece of work: say "to-do" (TD-1; code names keep pick)',
 };
 
 if (import.meta.main) {
@@ -104,7 +109,7 @@ if (import.meta.main) {
   if (!hits.length) {
     console.log(`guards: ${files} files, no hits`);
   } else {
-    for (const g of ["names", "desktop", "process"] as const) {
+    for (const g of ["names", "desktop", "process", "words"] as const) {
       const mine = hits.filter((h) => h.guard === g);
       if (!mine.length) continue;
       console.error(`guards: ${mine.length} ${g} hit(s): ${WHY[g]}`);

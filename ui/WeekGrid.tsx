@@ -773,7 +773,7 @@ function CheckinChips({ date, half, tabIndex }: { date: IsoDate; half: "AM" | "P
   return (
     <ul className="checkin-chips" aria-label="Check-ins">
       {here.map((c) => (
-        <MenuRow key={`${c.clientKey}:${c.itemId}`} build={(env) => checkinMenu(env, c)} label={`More for the check-in on ${c.title}`} className="checkin-chip" title={`Watching ${c.title}: a ${c.minutes}-minute check-in. It becomes a pick when this day is planned`}>
+        <MenuRow key={`${c.clientKey}:${c.itemId}`} build={(env) => checkinMenu(env, c)} label={`More for the check-in on ${c.title}`} className="checkin-chip" title={`Watching ${c.title}: a ${c.minutes}-minute check-in. It becomes a to-do when this day is planned`}>
           <EyeIcon />
           <span className="cc-word">Check-in</span>
           <span className="cc-title" tabIndex={tabIndex}>{c.title}</span>

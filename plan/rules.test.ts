@@ -138,7 +138,7 @@ describe("story-level enforcement", () => {
   it("explains why epics, features and off-backlog types can't be picked", () => {
     expect(unpickableReason(item(1, "User Story", "story"))).toBeNull();
     expect(unpickableReason(item(2, "Feature", "portfolio"))).toMatch(/Pick one of its child items, or add a draft story/);
-    expect(unpickableReason(item(3, "Review", "other"))).toMatch(/can't be picked/);
+    expect(unpickableReason(item(3, "Review", "other"))).toMatch(/can't be a to-do/);
   });
   it("offers story-level children, down two levels; none means Needs breakdown", () => {
     const children = [item(11, "User Story", "story", 10), item(12, "Feature", "portfolio", 10), item(13, "Bug", "story", 12), item(14, "Task", "story", 99)];
