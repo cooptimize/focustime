@@ -6,7 +6,10 @@
 // focus) and routes clicks. The slow pass is every 30 s (so day rollover is handled while running for days), the fast
 // one every 5 s.
 import type { ActionContext } from "../actions/dispatch.ts";
-import { presenceContext, vmContext, expiringFor } from "../actions/dispatch.ts";
+import { dispatch, presenceContext, vmContext, expiringFor } from "../actions/dispatch.ts";
+import { withoutUpdate } from "../actions/status-actions.ts";
+import { nextStatusNudge, nudgeLine, statusNudgeDue } from "../plan/status-report.ts";
+import type { StatusLoad } from "../plan/status-types.ts";
 import { syncTeamsStatus, TEAMS_STATUS_KEY } from "../actions/presence-actions.ts";
 import { requestContext, teamCtx } from "../actions/dispatch.ts";
 import { teamNotices } from "../actions/team-actions.ts";
@@ -35,7 +38,7 @@ import { nextWake } from "../plan/wake.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import type { PushControl } from "./push.ts";
 import { localToday, mondayOf } from "../week/dates.ts";
-import { hoursOn } from "../week/hours.ts";
+import { dayEndOf, hoursOn } from "../week/hours.ts";
 import { userZone } from "../week/zone.ts";
 import { checkDayReminder, checkinReminderDue, checkReminder, checkWeekNudges, closeoutReminderDue } from "./notify.ts";
 import { calendarRefreshDue, checkTimer, TIMER_BUTTONS } from "./timer.ts";
@@ -301,6 +304,25 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     } catch {
       log({ source: "plan", op: "ahead_nudge", kind: "failed" });
     }
+    await statusNudge(c).catch(() => log({ source: "plan", op: "status_nudge", kind: "failed" }));
+  };
+  // SR-1: Monday's status report, Friday afternoon (and Sunday evening when turned on), once per occasion, when some
+  // feature has no update yet. Status is read at most every 30 minutes inside the window; a source that can't be read
+  // tries again later, and nothing missing marks the day done.
+  let statusChecked = 0;
+  const statusNudge = async (c: AppConfig) => {
+    if (!c.notify.kinds.status_report) return;
+    const z = zonedNow(userZone(c));
+    const date = z.toPlainDate().toString();
+    const due = statusNudgeDue({ localDate: date, localTime: z.toPlainTime().toString({ smallestUnit: "minute" }), s: { ...c.notify.status, friday: true }, dayEnd: dayEndOf(c.week.hours, date), pto: await ptoOff(date).catch(() => true), without: 1 });
+    if (!due || (await store.marked("status_notice", date)) || Date.now() - statusChecked < 30 * 60_000) return;
+    statusChecked = Date.now();
+    const r = await dispatch(liveCtx, { action: "status.load", input: {} });
+    const w = r.ok ? withoutUpdate(r.data as StatusLoad) : null;
+    if (!w) return void log({ source: "plan", op: "status_nudge", kind: "unavailable" });
+    if (!(await store.markOnce("status_notice", date))) return;
+    if (w.without) await send(notices.statusReport(due.occasion, nudgeLine(w.without), instantNow().toString()));
+    else log({ source: "plan", op: "status_nudge", kind: "skipped" });
   };
   // Once a workday from work start (working hours, not PTO): follow-ups due or overdue, and expiring secrets.
   const workdayNotices = async () => {
@@ -531,7 +553,15 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       warnPoints: points,
       pending,
     });
-    return teamsAt && Temporal.Instant.compare(teamsAt, base) < 0 ? teamsAt : base;
+    // SR-1: the status nudge's Friday and Sunday times (Sunday evening is outside the hours the base counts).
+    let statusAt: Temporal.Instant | null = null;
+    if (c?.notify.kinds.status_report) {
+      const z = zonedNow(userZone(c));
+      const today = z.toPlainDate().toString();
+      const doneToday = await store.marked("status_notice", today);
+      statusAt = nextStatusNudge(z, { ...c.notify.status, friday: true }, (x) => dayEndOf(c.week.hours, x), (o) => doneToday && o === `status_report:${today}`);
+    }
+    return [teamsAt, statusAt].filter((x): x is Temporal.Instant => !!x).reduce((a, b) => (Temporal.Instant.compare(a, b) <= 0 ? a : b), base);
   };
   return { fast, slow: tick, wake, settled };
 }

@@ -8,13 +8,19 @@ import { afterDone, focusOf, hashOf, HOME, isPlanning, MODE_NAMES, MODES, modeNa
 const loc = (nav: Nav): Loc => ({ nav, overlay: null });
 
 describe("tabs and modes", () => {
-  it("four tabs in order, Roadmap now named Ahead; Week has Board, Commit and Team, Ahead Grid, Gantt and Fix next, Today and the Inbox none", () => {
+  it("four tabs in order, Roadmap now named Ahead; Week has Board, Commit, Team and Status (SR-1), Ahead Grid, Gantt and Fix next, Today and the Inbox none", () => {
     expect(TABS).toEqual(["today", "week", "ahead", "inbox"]);
     expect(TABS.map((t) => TAB_NAMES[t])).toEqual(["Today", "Week", "Ahead", "Inbox"]);
     expect(MODES.today).toEqual([]);
-    expect(MODES.week).toEqual(["board", "commit", "team"]);
+    expect(MODES.week).toEqual(["board", "commit", "team", "status"]);
     expect(MODES.ahead).toEqual(["grid", "gantt", "fix"]);
     expect(MODES.inbox).toEqual([]);
+  });
+
+  it("SR-1: Week › Status has its own address and comes back from it", () => {
+    expect(hashOf({ nav: navOf.week("status"), overlay: null })).toBe("#/week/status");
+    expect(parseHash("#/week/status")).toEqual({ nav: navOf.week("status"), overlay: null });
+    expect(parseHash("#/week/status/2026-11-02")).toBeNull();
   });
 
   it("SW-1: Week › Team has its own address, with or without a week, and a notification opens it", () => {

@@ -461,6 +461,36 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     }
   }
 
+  /**
+   * SR-1: when Kat last sent each client's status report (accounts.coop_statuslastsenton), read with the app's own
+   * Dataverse access; only that column with the key columns. Null for a client with none, and `ok: false` when the
+   * column can't be read (missing, renamed, no access): Status then counts from Monday 7:00 AM ET and says so.
+   */
+  async function statusSent(clientKeys: string[]): Promise<{ ok: true; sent: Record<string, string | null> } | { ok: false; message: string }> {
+    try {
+      const sent: Record<string, string | null> = {};
+      if (!clientKeys.length) return { ok: true, sent };
+      const q = (v: string) => `'${v.replace(/'/g, "''")}'`;
+      for (let i = 0; i < clientKeys.length; i += 40) {
+        const keys = clientKeys.slice(i, i + 40);
+        const keyFilter = keys.flatMap((k) => [`coop_reportingnickname eq ${q(k)}`, `name eq ${q(k)}`]).join(" or ");
+        const rows = await getAll<AccountRow & { coop_statuslastsenton?: string | null }>("status_sent", `accounts?$select=accountid,name,coop_reportingnickname,coop_statuslastsenton&$filter=${encodeURIComponent(`statecode eq 0 and (${keyFilter})`)}`);
+        for (const row of rows) {
+          const key = clientKeyOf(row);
+          if (!key || !keys.includes(key)) continue;
+          const v = typeof row.coop_statuslastsenton === "string" && row.coop_statuslastsenton ? row.coop_statuslastsenton : null;
+          // Two accounts with one name: no watermark (the fallback), never a guess.
+          sent[key] = key in sent ? null : v;
+        }
+      }
+      for (const k of clientKeys) if (!(k in sent)) sent[k] = null;
+      return { ok: true, sent };
+    } catch (e) {
+      const f = e instanceof SourceFailure ? e : null;
+      return { ok: false, message: f?.schema === "column" ? "Kat's last send (coop_statuslastsenton) isn't in Dataverse's accounts" : f?.status === "auth_required" ? "Dataverse access denied" : f?.status === "unreachable" ? "Dataverse unreachable" : "Dataverse read failed" };
+    }
+  }
+
   async function myClients(): Promise<MyClient[] | null> {
     const t = Date.now();
     if (myClientsMemo && t - myClientsMemo.at < 5 * 60_000) return myClientsMemo.clients;
@@ -713,7 +743,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     }
   }
 
-  return { load, following, resolveUserId, devopsTargets, accountTargets, myClients, pto, teammates, clientTeam, teamPto, directory };
+  return { load, following, resolveUserId, devopsTargets, accountTargets, statusSent, myClients, pto, teammates, clientTeam, teamPto, directory };
 }
 
 export type TeamFailure = { ok: false; message: string };

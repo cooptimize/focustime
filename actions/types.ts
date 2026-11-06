@@ -367,6 +367,8 @@ export type ReviewData = { headsUps: { id: number; what: string; reason: string 
 export type DevOpsPreview = {
   previewId: string; expiresAt: string; op: import("../plan/devopswrite.ts").WriteOp; summary: string; system: "DevOps"; org: string; project: string; item: string; identity: string;
   fields: import("../plan/devopswrite.ts").Row[]; links: string[]; notes: string[]; visibility: string; undo: boolean;
+  /** SR-1: the caller's key for this change in a batch (Push all's line), echoed back. */
+  key?: string;
   /** CV-4: a create from a conversation: its images offered as attachments (FocusTime's own address), each ticked or not. */
   attachments?: { id: number; src: string; sender: string; at: string; description: string | null; ticked: boolean }[];
 };

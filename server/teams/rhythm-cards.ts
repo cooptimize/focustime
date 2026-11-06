@@ -27,7 +27,9 @@ export type BriefModel = Base & { kind: "brief"; blocks: BriefBlock[]; promises:
 export type CheckinModel = Base & { kind: "checkin"; picks: PickRow[]; destinations: Choice[] };
 export type CloseoutModel = Base & { kind: "closeout"; picks: PickRow[]; closed: boolean };
 export type NudgeModel = { kind: "nudges"; occasion: string; items: Nudge[]; test?: boolean };
-export type RhythmModel = BriefModel | CheckinModel | CloseoutModel | NudgeModel;
+/** SR-1: Monday's status report, the features with no update yet (titles of my own clients' features, to me only). */
+export type StatusModel = { kind: "status"; occasion: string; line: string; reportLabel: string; clients: { name: string; features: { title: string; url: string | null }[] }[]; more: number; test?: boolean };
+export type RhythmModel = BriefModel | CheckinModel | CloseoutModel | NudgeModel | StatusModel;
 
 export type RhythmOp = "done" | "undone" | "not_yet" | "confirm_today" | "move" | "move_rest" | "close_out" | "closeout_text" | "confirm" | "cancel";
 export const RHYTHM_OPS: readonly RhythmOp[] = ["done", "undone", "not_yet", "confirm_today", "move", "move_rest", "close_out", "closeout_text", "confirm", "cancel"];
@@ -41,8 +43,9 @@ const ROUTE: Record<RhythmModel["kind"], [string, string]> = {
   checkin: ["#/today/checkin", "Open Check-in"],
   closeout: ["#/today", "Open Close out"],
   nudges: ["#/inbox", "Open the Inbox"],
+  status: ["#/week/status", "Open Status"],
 };
-const NAME: Record<RhythmModel["kind"], string> = { brief: "Morning brief", checkin: "Midday check-in", closeout: "Close out", nudges: "Nudges" };
+const NAME: Record<RhythmModel["kind"], string> = { brief: "Morning brief", checkin: "Midday check-in", closeout: "Close out", nudges: "Nudges", status: "Status report" };
 
 const abs = (publicUrl: string, route: string) => `${publicUrl.replace(/\/+$/, "")}/${route}`;
 const exec = (label: string, data: RhythmTap | CaptureTap, style?: "positive" | "destructive") => ({ type: "Action.Execute", title: label, verb: data.ft, data, ...(style ? { style } : {}), fallback: { type: "Action.Submit", title: label, data } });
@@ -181,6 +184,19 @@ export function nudgeCard(m: NudgeModel, publicUrl: string): Card {
   return card(body, [openUrl({ label: ROUTE.nudges[1], url: abs(publicUrl, ROUTE.nudges[0]) })]);
 }
 
+/** SR-1: "3 features have no update yet for Monday's report", each by client, linked to DevOps; Open Status. */
+export function statusCard(m: StatusModel, publicUrl: string): Card {
+  const body: unknown[] = [header("status", m.reportLabel, m.test), text(`${m.line}.`, { spacing: "Small" })];
+  for (const c of m.clients) {
+    body.push(text(c.name, { weight: "Bolder", spacing: "Medium" }));
+    for (const f of c.features) body.push(text(`• ${f.url ? `[${f.title}](${f.url})` : f.title}`, { spacing: "Small" }));
+  }
+  if (m.more) body.push(muted(`and ${m.more} more`));
+  body.push(muted("Kat sends the report Monday 7:00 AM. Add a line in Status and push it to DevOps."));
+  body.push(footer(publicUrl));
+  return card(body, [openUrl({ label: ROUTE.status[1], url: abs(publicUrl, ROUTE.status[0]) })]);
+}
+
 export function rhythmCard(m: RhythmModel, publicUrl: string): Card {
   switch (m.kind) {
     case "brief":
@@ -191,6 +207,8 @@ export function rhythmCard(m: RhythmModel, publicUrl: string): Card {
       return closeoutCard(m, publicUrl);
     case "nudges":
       return nudgeCard(m, publicUrl);
+    case "status":
+      return statusCard(m, publicUrl);
   }
 }
 

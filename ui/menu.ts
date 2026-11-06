@@ -1260,6 +1260,10 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "team.view":
     case "look.reply":
       return { run: () => env.setView("team") };
+    // SR-1: Status opens Week › Status; its drafts start from there.
+    case "status.load":
+    case "status.draft":
+      return { run: () => env.setView("status") };
     // AS-1: everything the assistant does starts in its panel.
     case "assistant.ask":
     case "assistant.confirm":

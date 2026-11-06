@@ -36,6 +36,8 @@ export function demoAi(o: { real?: RealAi | null; timeoutMs?: number; sessionCap
   /** While seeding: samples only (never a real call), so every run starts the same. */
   let held = false;
   const log: DemoAiLog = { real: 0, samples: 0, lastReason: null };
+  /** SR-1 tests: sees each request's input after the guards (what a provider would get). */
+  let spy: ((input: string) => void) | null = null;
   const sample = (c: ProviderCall, why: string): Promise<ProviderReply> => {
     log.samples++;
     log.lastReason = why;
@@ -52,6 +54,7 @@ export function demoAi(o: { real?: RealAi | null; timeoutMs?: number; sessionCap
   const provider: AiProvider = {
     name: "stub",
     async call(c) {
+      spy?.(c.input);
       const p = await realNow();
       if (typeof p === "string") return sample(c, p);
       const r = await within(p.call(c).catch((): ProviderReply => ({ ok: false, kind: "provider", status: 0 }) as ProviderReply), timeoutMs);
@@ -84,7 +87,7 @@ export function demoAi(o: { real?: RealAi | null; timeoutMs?: number; sessionCap
       return { ok: true, text: DEMO_TRANSCRIPT };
     },
   };
-  return { provider, log, hold: (on: boolean) => void (held = on), real: () => !!o.real };
+  return { provider, log, hold: (on: boolean) => void (held = on), real: () => !!o.real, spy: (f: ((input: string) => void) | null) => void (spy = f) };
 }
 
 // ---------- the samples, one per task (the schema's name), shaped like a good answer for the demo's data ----------
@@ -113,6 +116,8 @@ async function samples(c: ProviderCall, script: AiProvider): Promise<ProviderRep
       return reply(conversationDraft(c));
     case "conversations_comment":
       return reply({ lines: conversationComment(c) });
+    case "status_draft":
+      return reply({ drafts: statusDraft(c.input) });
     case "conversations_merge_summary": {
       const i = JSON.parse(c.input) as { into?: { title?: string; summary?: string } };
       return reply({ title: i.into?.title ?? "Merged conversation", summary: i.into?.summary ?? "Two threads about the same question, now one." });
@@ -186,4 +191,30 @@ function conversationDraft(c: ProviderCall) {
 function conversationComment(c: ProviderCall): string[] {
   const i = JSON.parse(c.input) as { conversation?: { title?: string; summary?: string } };
   return (i.conversation?.summary ?? "Discussed with the client in Teams.").split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 3);
+}
+
+/**
+ * SR-1: a status line per feature from its facts (the input lists "Feature #id: title" and "- fact: ..." lines): the
+ * newest state change and what's done, in plain words; no facts, no line.
+ */
+function statusDraft(input: string): { itemId: number; text: string }[] {
+  const out: { itemId: number; text: string }[] = [];
+  let cur: { itemId: number; facts: string[] } | null = null;
+  const flush = () => {
+    if (!cur) return;
+    const done = cur.facts.filter((f) => /→ (Resolved|Closed|Done)/.test(f)).map((f) => f.replace(/^#\d+ /, "").replace(/:.*$/, ""));
+    const moving = cur.facts.filter((f) => /→ Active/.test(f)).map((f) => f.replace(/^#\d+ /, "").replace(/:.*$/, ""));
+    const picks = cur.facts.filter((f) => f.startsWith("Done in FocusTime: ")).map((f) => f.replace(/^Done in FocusTime: #\d+ /, ""));
+    const parts = [...(done.length ? [`Finished ${done.join(" and ")}`] : []), ...(picks.length && !done.length ? [`Worked through ${picks.join(" and ")}`] : []), ...(moving.length ? [`started on ${moving.join(" and ")}`] : [])];
+    out.push({ itemId: cur.itemId, text: parts.length ? `${sentence(parts.join("; "))}.` : "" });
+  };
+  for (const line of input.split("\n")) {
+    const m = /^Feature #(\d+): /.exec(line);
+    if (m) {
+      flush();
+      cur = { itemId: Number(m[1]), facts: [] };
+    } else if (cur && line.startsWith("- fact: ")) cur.facts.push(line.slice(8));
+  }
+  flush();
+  return out;
 }

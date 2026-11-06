@@ -74,6 +74,22 @@ export function parseComments(body: unknown): RawComment[] {
     .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 }
 
+/**
+ * SR-1: a comments page for Status: id, text, author (display name, and the uniqueName only to know whether it was me),
+ * created and modified. Deleted ones are left out.
+ */
+export function parseReportComments(body: unknown): import("../../plan/status-report.ts").RawReportComment[] {
+  type Id = { displayName?: unknown; uniqueName?: unknown } | undefined;
+  const list = (body as { comments?: { id?: unknown; commentId?: unknown; text?: unknown; isDeleted?: unknown; createdBy?: Id; createdDate?: unknown; modifiedDate?: unknown }[] } | null)?.comments;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((c) => {
+    const id = typeof c?.id === "number" ? c.id : typeof c?.commentId === "number" ? c.commentId : null;
+    if (!c || id === null || c.isDeleted === true || typeof c.text !== "string" || typeof c.createdDate !== "string") return [];
+    const name = typeof c.createdBy?.displayName === "string" && c.createdBy.displayName.trim() ? c.createdBy.displayName.trim() : "Someone";
+    return [{ id, text: c.text, authorName: name, authorUnique: typeof c.createdBy?.uniqueName === "string" ? c.createdBy.uniqueName : null, createdAt: c.createdDate, modifiedAt: typeof c.modifiedDate === "string" ? c.modifiedDate : null }];
+  });
+}
+
 /** The pool's candidates: each feature with the stories under it (only features that have any are useful). */
 export function poolCandidates(features: readonly Raw[], stories: readonly Raw[], sizeField: string | null): ExemplarCandidate[] {
   const by = new Map<number, ExemplarCandidate["stories"]>();

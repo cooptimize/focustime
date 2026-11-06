@@ -11,7 +11,7 @@ import { ACTION_NAMES } from "../actions/registry.ts";
 import type { ActionResponse } from "../actions/types.ts";
 import { createPlanStore, openPlanDb, planStoreOn } from "../store/plan-store.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
-import { aClientEntry, anAheadClient, anAheadItem, anAheadLoad, anAiApp, anAiRules, anAssignee } from "../test/builders/index.ts";
+import { aStatusLoad, aClientEntry, anAheadClient, anAheadItem, anAheadLoad, anAiApp, anAiRules, anAssignee } from "../test/builders/index.ts";
 import { NEVER, RUNS, TOOLS, TOOL_NAMES } from "./allowlist.ts";
 import { createAssistant, type AssistantEnv } from "./service.ts";
 import type { ConfirmResult } from "./types.ts";
@@ -124,7 +124,7 @@ function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnTyp
     script: (tools: string[], ...replies: Reply[]) => ((intent = tools), (answers = replies)),
     setNow: (t: string) => void (now = t),
     setDescription: (d: string) => void (description = d),
-    writes: () => ran.filter((r) => !["week.load", "ahead.load", "conversations.list", "team.commit", "send.people", "send.today", "devops.preview"].includes(r.action)),
+    writes: () => ran.filter((r) => !["week.load", "ahead.load", "conversations.list", "team.commit", "send.people", "send.today", "devops.preview", "status.load"].includes(r.action)),
   };
 }
 
@@ -361,6 +361,27 @@ describe("sends follow SW-1's rules", () => {
     const r = await s.a.handle("Send #4417 to Morgan");
     expect(r.proposals).toEqual([]);
     expect(JSON.stringify(s.calls.at(-1)!.rounds)).toContain("Nobody called Morgan is on Fabrikam");
+  });
+});
+
+describe("SR-1: the status report", () => {
+  const load = aStatusLoad({ clientKey: FAB, clientName: "Fabrikam", updates: [0, 1], ids: [4417, 4500] });
+  it("\"write my status updates\" opens Week › Status, with the count, and proposes nothing", async () => {
+    const s = setup({ handlers: { "status.load": () => ({ ok: true, data: load }) } });
+    s.script(["status"], call(["status", {}]), say("Here's your status report."));
+    const r = await s.a.handle("Write my status updates");
+    expect(r.cards).toEqual([{ kind: "note", text: "Status report · for Monday, Nov 9: 2 features, 1 without an update yet.", link: expect.objectContaining({ href: "#/week/status" }) }]);
+    expect(r.proposals).toEqual([]);
+    expect(s.writes()).toEqual([]);
+  });
+  it("\"add an update to <feature>: …\" finds the feature in Status and proposes that comment, written only on confirm", async () => {
+    const s = setup({ handlers: { "status.load": () => ({ ok: true, data: load }) } });
+    s.script(["status", "comment"], call(["status", {}]), call(["comment", { itemId: 4417, text: "Invoice export works for March." }]), say("Here's the change to confirm."));
+    const r = await s.a.handle("Fabrikam: add an update to Feature 4417: invoice export works for March");
+    expect(r.proposals[0]).toMatchObject({ action: "devops.confirm", preview: { rows: [{ label: "Comment", after: "Invoice export works for March." }] } });
+    expect(s.ran.filter((x) => x.action === "devops.confirm")).toEqual([]);
+    expect((await s.a.confirm(r.proposals[0]!.id)).ok).toBe(true);
+    expect(s.ran.filter((x) => x.action === "devops.confirm")).toHaveLength(1);
   });
 });
 

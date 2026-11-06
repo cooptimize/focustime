@@ -31,6 +31,8 @@ export type DemoSeedEnv = {
   teams: TeamsStore;
   conversations: ConversationStore;
   team: TeamStore;
+  /** SR-1: the session's in-memory DevOps, for what only someone else writes there (a teammate's comment, the change log). */
+  devops?: import("../devops.ts").DemoDevOps;
 };
 
 export type DemoSeed = {

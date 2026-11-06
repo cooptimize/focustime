@@ -496,3 +496,33 @@ The demo, how it's seeded, reset and checked: `docs/demo/README.md`; the script:
 - **Preflight.** `scripts/demo-check.ts` (`npm run demo:check`).
 - **Tests.** `test/no-outbound.ts` (and its test), `server/demo-writes.test.ts`, `e2e/demo-script.test.ts`,
   `e2e/demo-reset.test.ts`, `e2e/demo-check.test.ts`, `e2e/demo-names.test.ts`.
+
+## SR-1: Week › Status, Monday's status report (Nov 5)
+
+A preview of Monday's status report and an easy way to edit the comments that feed it. Kat still sends the report.
+
+- **Rules.** `plan/status-report.ts` (pure): Kat's run times (`lastKatRun`, `nextKatRun`), the window
+  (`reportWindow` from `coop_statuslastsenton`, the Monday 7:00 AM ET fallback), `sortComments` (this week and last,
+  mine, teammate or Coop, editable), `selectFeatures` (planned or touched, and Also assigned to you), `backlog`,
+  `hintLines`, `reportCounts`, `countLine`, the nudge (`statusNudgeDue`, `nextStatusNudge`, `nudgeLine`). The UI's
+  types are in `plan/status-types.ts`.
+- **Actions.** `actions/status-actions.ts`: `status.load` (per client: Ahead's items, DV-1's activity, the week plan,
+  picks, close-out notes, captures, then the comments) and `status.draft` (one AI call per client, `status_draft`);
+  `withoutUpdate` and `statusWithout` for the nudge. Wired in `actions/dispatch.ts` (`statusCtx`, `katSentFor`, and
+  `reportSince` for the write framework).
+- **Writes.** `comment_edit` and `undo_comment_edit` in `actions/devops-write-actions.ts` (preview, read back, undo),
+  `updateComment` in `sources/devops/write.ts`, `stackKey` and `editedComment` in `plan/devopswrite.ts`. Batch
+  refusals land per line (`key` echoed back) for `fields`, `comment` and `comment_edit`.
+- **Sources.** `sources/dataverse/source.ts` `statusSent`; `sources/devops/source.ts` `featureComments` and
+  `activity` (from the poller's change log, `actions/devops-poll.ts`); `parseReportComments` in `signals.ts`.
+- **UI.** `ui/Status.tsx` (Edit and Preview, lines, Draft, Push all with per-line results, Retry and Undo), the fourth
+  Week mode in `ui/nav.ts` and `ui/App.tsx`, styles in `ui/styles.css` (SR-1 block).
+- **Nudges.** `status_report` in `plan/notify.ts` (its own gate rule outside working hours), `statusNudge` in
+  `server/ticks.ts` (and its wake); Teams kind `status` in `plan/teams-rhythm.ts`, `statusTick` and `statusModel`
+  in `server/teams/rhythm.ts`, `statusCard` in `server/teams/rhythm-cards.ts`. Settings › Notifications: Monday's
+  status report and its times; In Teams: Status report.
+- **Assistant.** The `status` read in `assistant/allowlist.ts`, `statusRead` in `assistant/reads.ts`.
+- **Demo.** `sources/demo/seeds/status.ts` (Kat's sends, this week's and last week's comments, story activity);
+  the demo DevOps edits and reads comments in memory; the demo AI's `status_draft` sample.
+- **Tests.** `plan/status-report.test.ts`, `server/demo-status.test.ts`, the SR-1 parts of
+  `server/teams/rhythm.test.ts`, `assistant/service.test.ts` and `ui/nav.test.ts`; e2e `e2e/status.test.ts`.

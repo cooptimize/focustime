@@ -4,9 +4,10 @@
 import { hoursOn, type TimeModel } from "../week/hours.ts";
 import { userZone } from "../week/zone.ts";
 import { DEFAULT_TEAMS_RHYTHM, type TeamsRhythm } from "./teams-rhythm.ts";
+import { DEFAULT_STATUS_TIMES, type StatusTimes } from "./status-report.ts";
 
 /** Every kind of notification FocusTime sends. Each has its own switch in Settings > Notifications, except the test. */
-export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "commitment_item", "taken_over", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "look_ask", "look_reply", "assigned", "dates_moved"] as const;
+export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "commitment_item", "taken_over", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "look_ask", "look_reply", "assigned", "dates_moved", "status_report"] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 export type AnyKind = NotifyKind | "test" | "held";
 
@@ -34,6 +35,7 @@ export const KIND_LABEL: Record<NotifyKind, string> = {
   look_reply: "A lead's reply about your week",
   assigned: "Someone assigned you an item",
   dates_moved: "Someone moved your dates",
+  status_report: "Monday's status report",
 };
 export const KIND_HINT: Record<NotifyKind, string> = {
   plan_day: "At the start of a workday when the day isn't planned yet.",
@@ -59,6 +61,7 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   look_reply: "When a lead you asked replies about your week.",
   assigned: "When a teammate assigns you a DevOps item from Ahead in FocusTime.",
   dates_moved: "When a teammate moves the dates of a DevOps item you own from Ahead in FocusTime, once per save.",
+  status_report: "Friday afternoon (and Sunday evening if you like) when some of your features have no update yet for Monday's report. Off until you turn it on.",
 };
 /** PV-1: quiet kinds go to the in-app list only, never to push. */
 export const QUIET_KINDS: ReadonlySet<AnyKind> = new Set<AnyKind>(["story_taken", "send_cant_lead", "assigned", "dates_moved"]);
@@ -73,27 +76,30 @@ export type QuietMode = "outside_hours" | "off";
  * it may send (brief, check-in, close out, nudges, each off by default) and their times; nothing is sent unless both
  * this switch and the kind's are on.
  */
-export type NotifySettings = { kinds: Record<NotifyKind, boolean>; quiet: QuietMode; quietPto: boolean; pushDetails: boolean; asksThroughFocus: boolean; teamsMessages: boolean; teams: TeamsRhythm };
+export type NotifySettings = { kinds: Record<NotifyKind, boolean>; quiet: QuietMode; quietPto: boolean; pushDetails: boolean; asksThroughFocus: boolean; teamsMessages: boolean; teams: TeamsRhythm; status: StatusTimes };
+/** SR-1: kinds that start off (every other kind starts on). */
+export const OFF_BY_DEFAULT: readonly NotifyKind[] = ["status_report"];
 export const DEFAULT_NOTIFY: NotifySettings = {
-  kinds: Object.fromEntries(NOTIFY_KINDS.map((k) => [k, true])) as Record<NotifyKind, boolean>,
+  kinds: Object.fromEntries(NOTIFY_KINDS.map((k) => [k, !OFF_BY_DEFAULT.includes(k)])) as Record<NotifyKind, boolean>,
   quiet: "outside_hours",
   quietPto: true,
   pushDetails: false,
   asksThroughFocus: false,
   teamsMessages: false,
   teams: DEFAULT_TEAMS_RHYTHM,
+  status: DEFAULT_STATUS_TIMES,
 };
 
 /** Where clicking a notification opens FocusTime. */
 export type Route =
-  | { view: "today" | "planday" | "checkin" | "closeout" | "focus" | "vm" | "inbox" | "ahead" | "asks" | "requests" | "conversations" | "my_promises" | "week" | "team" }
+  | { view: "today" | "planday" | "checkin" | "closeout" | "focus" | "vm" | "inbox" | "ahead" | "asks" | "requests" | "conversations" | "my_promises" | "week" | "team" | "status" }
   | { view: "planweek"; weekStart: string }
   | { view: "followup"; id: number }
   | { view: "aheaditem"; id: number }
   | { view: "settings"; section: string };
 
 // "asks": notifications sent before the rename to Requests still open the tab.
-const SIMPLE = new Set(["today", "planday", "checkin", "closeout", "focus", "vm", "inbox", "ahead", "asks", "requests", "conversations", "my_promises", "week", "team"]);
+const SIMPLE = new Set(["today", "planday", "checkin", "closeout", "focus", "vm", "inbox", "ahead", "asks", "requests", "conversations", "my_promises", "week", "team", "status"]);
 const SECTION = /^[a-z]{2,20}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -161,7 +167,8 @@ export function gate(kind: AnyKind, f: GateFacts): Gate {
   if (!f.settings.kinds[kind]) return "off";
   if (kind === "timer" || kind === "meeting") return "send";
   if (f.settings.quietPto && f.pto) return "quiet";
-  if (f.settings.quiet === "outside_hours" && !f.inHours) return "quiet";
+  // SR-1: the status nudge keeps to its own times (Friday before my day ends, Sunday evening only when I asked for it).
+  if (f.settings.quiet === "outside_hours" && !f.inHours && kind !== "status_report") return "quiet";
   // AP-2: an urgent ask waits for the session to end, unless I let urgent asks through.
   if (f.focusRunning) return kind === "asks" && f.settings.asksThroughFocus ? "send" : "hold";
   return "send";
@@ -278,6 +285,8 @@ export const notices = {
   // AH-1 (D664): quiet, in-app only; ids and a first name, never a title.
   assigned: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "assigned", key, title: itemIds.length === 1 ? `${byName} assigned you #${itemIds[0]}` : `${byName} assigned you ${itemIds.length} items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to open it in Ahead.`, buttons: [open("Open Ahead")], route: `aheaditem:${itemIds[0]}`, at }),
   datesMoved: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "dates_moved", key, title: itemIds.length === 1 ? `${byName} moved the dates of #${itemIds[0]}` : `${byName} moved the dates of ${itemIds.length} of your items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to see them in Ahead.`, buttons: [open("Open Ahead")], route: `aheaditem:${itemIds[0]}`, at }),
+  /** SR-1: Friday afternoon or Sunday evening, once per occasion, when features have no update yet. */
+  statusReport: (occasion: string, line: string, at: string): Notice => ({ kind: "status_report", key: occasion, title: "Monday's status report", body: `${line}.\nClick to open Week › Status.`, buttons: [open("Open Status")], route: "status", at, ref: occasion }),
   takenOver: (id: number, byName: string, what: string, at: string): Notice => ({ kind: "taken_over", key: `taken_over:${id}`, title: `${byName} took it over`, body: `${what}\nNothing more for you to do.`, buttons: [open("Open Conversations")], route: "conversations", at }),
   expiry: (date: string, lines: { text: string; section: string }[], at: string): Notice | null =>
     lines.length

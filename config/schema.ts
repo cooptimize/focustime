@@ -9,7 +9,7 @@ import { DEFAULT_NOTIFY, NOTIFY_KINDS, type NotifyKind, type NotifySettings } fr
 import { CLOSEOUT_MINUTES, HM, type TeamsRhythm } from "../plan/teams-rhythm.ts";
 
 /** TB-2: the In Teams switches as [notify] keys. */
-const TEAMS_SWITCH: Record<string, keyof Pick<TeamsRhythm, "brief" | "checkin" | "closeout" | "nudges" | "friday">> = { teams_brief: "brief", teams_checkin: "checkin", teams_closeout: "closeout", teams_nudges: "nudges", teams_friday: "friday" };
+const TEAMS_SWITCH: Record<string, keyof Pick<TeamsRhythm, "brief" | "checkin" | "closeout" | "nudges" | "status" | "friday">> = { teams_brief: "brief", teams_checkin: "checkin", teams_closeout: "closeout", teams_nudges: "nudges", teams_status: "status", teams_friday: "friday" };
 import { DEFAULT_FOCUS, MAX_PLAYLISTS, playlistLink, SOUNDS, type FocusSettings, type SoundKind } from "../plan/focussound.ts";
 import { parseSpan, VIEW_RANGES, WEEKDAY_KEYS, type DayOverride, type Span, type TimeModel, type ViewRange, type WeekdayKey } from "../week/hours.ts";
 import { NEUTRAL_ZONE } from "../week/zone.ts";
@@ -602,7 +602,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
   }
 
   // [notify] (optional, step 15.5): one switch per kind, quiet hours (outside working hours, PTO days)
-  const notify: NotifySettings = { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds }, teams: { ...DEFAULT_NOTIFY.teams } };
+  const notify: NotifySettings = { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds }, teams: { ...DEFAULT_NOTIFY.teams }, status: { ...DEFAULT_NOTIFY.status } };
   if (raw.notify !== undefined) {
     const t = isTable(raw.notify) ? raw.notify : (err("notify", "Must be a [notify] table"), null);
     if (t) {
@@ -635,6 +635,13 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
         } else if (k === "teams_checkin_at") {
           if (typeof t.teams_checkin_at !== "string" || !HM.test(t.teams_checkin_at)) err("notify.teams_checkin_at", 'Must be a time like "12:00"');
           else notify.teams.checkinAt = t.teams_checkin_at;
+        } else if (k === "status_sunday") {
+          // SR-1: the status nudge's Sunday evening option and its times.
+          if (typeof t.status_sunday !== "boolean") err("notify.status_sunday", "Must be true or false");
+          else notify.status.sunday = t.status_sunday;
+        } else if (k === "status_friday_at" || k === "status_sunday_at") {
+          if (typeof t[k] !== "string" || !HM.test(t[k] as string)) err(`notify.${k}`, 'Must be a time like "15:00"');
+          else notify.status[k === "status_friday_at" ? "fridayAt" : "sundayAt"] = t[k] as string;
         } else if (k === "teams_closeout_minutes") {
           const v = t.teams_closeout_minutes;
           if (typeof v !== "number" || !Number.isInteger(v) || v < CLOSEOUT_MINUTES.min || v > CLOSEOUT_MINUTES.max) err("notify.teams_closeout_minutes", `Must be a whole number from ${CLOSEOUT_MINUTES.min} to ${CLOSEOUT_MINUTES.max}`);

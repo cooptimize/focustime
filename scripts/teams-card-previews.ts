@@ -3,11 +3,12 @@
 // Teams' light and dark colors, about as wide as a 1:1 chat's card. The cards are the bot's real ones
 // (server/teams/cards.ts), so a change there shows up here.
 // TB-2 adds the rhythm's cards (brief, check-in, close out, nudges, capture), each before and after a tap.
+// SR-1 adds the status report nudge.
 // Usage: node scripts/teams-card-previews.ts <outDir>
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright-core";
 import { CHROMIUM } from "../e2e/harness.ts";
-import { briefCard, captureCard, checkinCard, closeoutCard, nudgeCard, type InlineProposal, type PickRow } from "../server/teams/rhythm-cards.ts";
+import { briefCard, captureCard, checkinCard, closeoutCard, nudgeCard, statusCard, type InlineProposal, type PickRow } from "../server/teams/rhythm-cards.ts";
 import { cancelledCard, doneCard, expiredCard, failedCard, helpCard, proposalCard, resultCard, workingCard, type Card } from "../server/teams/cards.ts";
 
 const out = process.argv[2] ?? "screenshots/teams";
@@ -44,6 +45,8 @@ const rhythmCards: [string, Card][] = [
   ["closeout-proposal", closeoutCard({ ...closeout, proposal: ip({}) }, URL_)],
   ["closeout-done", closeoutCard({ ...closeout, closed: true, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), pk(2, "Review the export mapping", "Northwind", "done"), pk(3, "Write the onboarding note", "Internal", "moved", "Mon, Nov 9 morning")], proposal: ip({ state: "done", message: "Day closed out." }) }, URL_)],
   ["nudges", nudgeCard(nudges, URL_)],
+  // SR-1: Monday's status report, Friday afternoon.
+  ["status", statusCard({ kind: "status", occasion: "status_report:2026-11-06", reportLabel: "for Monday, Nov 9", line: "3 features have no update yet for Monday's report", clients: [{ name: "Northwind", features: [{ title: "Supplier onboarding", url: "https://dev.azure.com/northwind-demo/Portal/_workitems/edit/1120" }] }, { name: "Atlas", features: [{ title: "Shipment tracking dashboard", url: "https://dev.azure.com/atlas-demo/Ops/_workitems/edit/3310" }] }, { name: "Cooptimize", features: [{ title: "Internal reporting refresh", url: null }] }], more: 0 }, URL_)],
   ["capture", captureCard({ id: 7, text: "Call Dana about the March export" }, URL_)],
   ["capture-undone", captureCard({ id: 7, text: "Call Dana about the March export", undone: true }, URL_)],
   ["brief-test", briefCard({ ...brief, test: true }, URL_)],

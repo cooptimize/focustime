@@ -159,7 +159,7 @@ function useModalFocus<T extends HTMLElement>() {
   }, []);
   return first;
 }
-function Modal({ label, busy, onClose, children, wide }: { label: string; busy?: boolean; onClose: () => void; children: ReactNode; wide?: boolean }) {
+export function Modal({ label, busy, onClose, children, wide }: { label: string; busy?: boolean; onClose: () => void; children: ReactNode; wide?: boolean }) {
   return (
     <div className="cap-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div

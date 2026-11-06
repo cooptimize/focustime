@@ -120,10 +120,12 @@ describe("pure request shapes", () => {
     expect(onOrg("https://x@dev.azure.com/cooptimize/", "cooptimize")).toBe(false);
     expect(onOrg("http://dev.azure.com/cooptimize/", "cooptimize")).toBe(false);
   });
-  it("undo is a stack per item", () => {
-    const e = (id: number, op: DevOpsWriteEntry["op"], undoneBy: number | null = null) => ({ id, op, org: "o", itemId: 9, status: "confirmed", undoneBy }) as DevOpsWriteEntry;
+  it("undo is a stack per item; SR-1: each new comment and each edited comment is its own stack", () => {
+    const e = (id: number, op: DevOpsWriteEntry["op"], undoneBy: number | null = null, commentId?: number) => ({ id, op, org: "o", itemId: 9, status: "confirmed", undoneBy, ops: commentId ? { text: "x", commentId } : null }) as DevOpsWriteEntry;
     expect(undoTops([e(3, "state"), e(2, "comment"), e(1, "create")]).get("o#9")).toBe(3);
-    expect(undoTops([e(4, "undo_state"), e(3, "state", 4), e(2, "comment"), e(1, "create")]).get("o#9")).toBe(2);
+    expect(undoTops([e(4, "undo_state"), e(3, "state", 4), e(2, "comment"), e(1, "create")]).get("o#9")).toBe(1);
+    const t = undoTops([e(7, "comment_edit", null, 50), e(6, "comment_edit", null, 50), e(5, "comment_edit", null, 51), e(4, "comment"), e(3, "comment"), e(2, "state")]);
+    expect([t.get("o#9#c50"), t.get("o#9#c51"), t.get("o#9#new4"), t.get("o#9#new3"), t.get("o#9")]).toEqual([7, 5, 4, 3, 2]);
   });
 });
 

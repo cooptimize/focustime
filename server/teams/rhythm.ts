@@ -10,6 +10,9 @@
 // typed with capture.add, with Undo. Sends are paced (10 a second for the app, 3 retries with backoff and jitter); a
 // 403 MessageWritesBlocked turns Teams messages off for the person. Nothing here logs text, people or chat ids.
 import type { ActionResponse, WeekLoadData } from "../../actions/types.ts";
+import { withoutUpdate } from "../../actions/status-actions.ts";
+import { nextStatusNudge, nudgeLine, statusNudgeDue } from "../../plan/status-report.ts";
+import type { StatusLoad } from "../../plan/status-types.ts";
 import type { AppConfig } from "../../config/schema.ts";
 import type { LogRecord } from "../../log/logger.ts";
 import { nextBlockFor } from "../../plan/suggest.ts";
@@ -24,7 +27,7 @@ import { userZone } from "../../week/zone.ts";
 import type { AssistantService, ConfirmResult, Proposal } from "./assistant.ts";
 import type { Address, InvokeBody, OutActivity, Sender } from "./bot.ts";
 import { attach, CARD_TYPE, type Card } from "./cards.ts";
-import { captureCard, rhythmCard, rhythmTapOf, type BriefModel, type CaptureTap, type CheckinModel, type Choice, type CloseoutModel, type InlineProposal, type NudgeModel, type PickRow, type RhythmModel, type RhythmTap } from "./rhythm-cards.ts";
+import { captureCard, rhythmCard, rhythmTapOf, type BriefModel, type CaptureTap, type CheckinModel, type Choice, type CloseoutModel, type InlineProposal, type NudgeModel, type PickRow, type RhythmModel, type RhythmTap, type StatusModel } from "./rhythm-cards.ts";
 
 /** The facts a person's pass already has (the notifier's gate facts and their settings). */
 export type PassFacts = { config: AppConfig; inHours: boolean; pto: boolean; focusRunning: boolean };
@@ -152,6 +155,7 @@ type Inbox = { promises: NudgeFacts["promises"]; sends: NudgeFacts["sends"] };
 
 export function createRhythm(d: RhythmDeps) {
   const lastNudgeCheck = new Map<string, number>();
+  const lastStatusCheck = new Map<string, number>();
   const lastSweep = new Map<string, number>();
   const log = d.log;
 
@@ -282,7 +286,7 @@ export function createRhythm(d: RhythmDeps) {
     const c = f.config;
     if (!c.notify.teamsMessages) return;
     const s = c.notify.teams;
-    if (!s.brief && !s.checkin && !s.closeout && !s.nudges) return;
+    if (!s.brief && !s.checkin && !s.closeout && !s.nudges && !s.status) return;
     const to = await address(userId);
     if (!to) return;
     const store = d.store(userId);
@@ -314,6 +318,7 @@ export function createRhythm(d: RhythmDeps) {
       }
       if (!(await deliver(userId, to, model, x.kind))) return;
     }
+    if (s.status && !f.focusRunning) await statusTick(userId, to, c, f, now, sent);
     if (!s.nudges || !rhythmDay(now.toPlainDate().toString(), s, f.pto) || quietNow || f.focusRunning) return;
     if ((lastNudgeCheck.get(userId) ?? 0) > t.epochMilliseconds - NUDGE_CHECK_MINUTES * 60_000) return;
     lastNudgeCheck.set(userId, t.epochMilliseconds);
@@ -321,6 +326,44 @@ export function createRhythm(d: RhythmDeps) {
     const fresh = nudges(await nudgeFacts(userId, c)).filter((n) => !sent.has(`nudge:${n.key}`));
     if (!fresh.length) return;
     await sendNudges(userId, to, fresh, nudgeOccasion(t));
+  }
+
+  /** SR-1: Monday's status report as a model: the features with no update yet, by client; null when unreadable. */
+  async function statusModel(userId: string, occasion: string, test: boolean): Promise<StatusModel | null> {
+    const l = dataOf<StatusLoad>(await d.run(userId, "status.load", {}).catch(() => ({ ok: false, error: "", status: 500 }) as ActionResponse));
+    const w = l ? withoutUpdate(l) : null;
+    if (!l || !w) return null;
+    const MAX_ROWS = 8;
+    let left = MAX_ROWS;
+    const clients = w.clients.map((c) => {
+      const features = c.features.slice(0, Math.max(0, left));
+      left -= features.length;
+      return { name: c.name, features };
+    }).filter((c) => c.features.length);
+    return { kind: "status", occasion, test, line: w.without ? nudgeLine(w.without) : "Every feature has an update for Monday's report", reportLabel: l.title.replace(/^Status report · /, ""), clients, more: Math.max(0, w.without - MAX_ROWS) };
+  }
+
+  /**
+   * SR-1: Friday afternoon (and Sunday evening when turned on), once per occasion, when some feature has no update
+   * yet. Its own times keep it out of quiet hours; never on a PTO day or during focus (it waits). Status is read at
+   * most every 30 minutes inside the window; nothing to say settles the day's occasion as skipped.
+   */
+  async function statusTick(userId: string, to: Address, c: AppConfig, f: PassFacts, now: Temporal.ZonedDateTime, sent: ReadonlySet<string>): Promise<void> {
+    const date = now.toPlainDate().toString();
+    const due = statusNudgeDue({ localDate: date, localTime: now.toPlainTime().toString({ smallestUnit: "minute" }), s: { ...c.notify.status, friday: true }, dayEnd: dayEndOf(c.week.hours, date), pto: f.pto, without: 1 });
+    if (!due || sent.has(due.occasion)) return;
+    const t = now.epochMilliseconds;
+    if ((lastStatusCheck.get(userId) ?? 0) > t - 30 * 60_000) return;
+    lastStatusCheck.set(userId, t);
+    const model = await statusModel(userId, due.occasion, false).catch(() => null);
+    if (!model) return void log({ op: "rhythm", kind: "status_unavailable" });
+    const store = d.store(userId);
+    if (!(await store.claim(due.occasion, "status"))) return;
+    if (!model.clients.length) {
+      await store.settle(due.occasion, "skipped");
+      return void log({ op: "rhythm", kind: "status_skipped" });
+    }
+    await deliver(userId, to, model, "status");
   }
 
   async function sendNudges(userId: string, to: Address, fresh: readonly Nudge[], occasion: string): Promise<void> {
@@ -341,11 +384,12 @@ export function createRhythm(d: RhythmDeps) {
   async function wake(userId: string, c: AppConfig | null): Promise<Temporal.Instant | null> {
     if (!c?.notify.teamsMessages) return null;
     const s = c.notify.teams;
-    if (!s.brief && !s.checkin && !s.closeout && !s.nudges) return null;
+    if (!s.brief && !s.checkin && !s.closeout && !s.nudges && !s.status) return null;
     const t = d.now();
     const sent = await d.store(userId).occasions(t.subtract({ hours: 24 * 9 }).toString()).catch(() => new Set<string>());
+    const st = s.status ? nextStatusNudge(t.toZonedDateTimeISO(userZone(c)), { ...c.notify.status, friday: true }, (x) => dayEndOf(c.week.hours, x), (o) => sent.has(o)) : null;
     const w = nextRhythmWake({ now: t.toZonedDateTimeISO(userZone(c)), model: c.week.hours, master: true, settings: s }, sent, s.nudges && hoursOn(c.week.hours, t.toZonedDateTimeISO(userZone(c)).toPlainDate().toString()).segments.length ? NUDGE_CHECK_MINUTES : null);
-    return w;
+    return st && (!w || Temporal.Instant.compare(st, w) < 0) ? st : w;
   }
 
   // ---- Taps ----
@@ -355,7 +399,7 @@ export function createRhythm(d: RhythmDeps) {
 
   /** After a confirm: the picks', the day's and the plan's state as the store has them now. */
   async function refreshed<M extends RhythmModel>(userId: string, m: M): Promise<M> {
-    if (m.kind === "nudges") return m;
+    if (m.kind === "nudges" || m.kind === "status") return m;
     const plan = await d.plan(userId);
     if (!plan) return m;
     const fix = async (rows: PickRow[]) =>
@@ -376,7 +420,7 @@ export function createRhythm(d: RhythmDeps) {
     return { ...m, picks: await fix(m.picks), closed: !!day?.closedOutAt } as M;
   }
 
-  async function propose(userId: string, m: Exclude<RhythmModel, NudgeModel>, tool: Parameters<AssistantService["propose"]>[0]["tool"], args: Record<string, unknown>): Promise<Exclude<RhythmModel, NudgeModel>> {
+  async function propose(userId: string, m: Exclude<RhythmModel, NudgeModel | StatusModel>, tool: Parameters<AssistantService["propose"]>[0]["tool"], args: Record<string, unknown>): Promise<Exclude<RhythmModel, NudgeModel | StatusModel>> {
     if (!d.assistant) return { ...m, notice: "That isn't available right now. Open FocusTime to do it there." };
     const r = await d.assistant.propose({ person: { userId }, tool, args });
     if (!r.ok) return { ...m, notice: r.message, proposal: null };
@@ -395,7 +439,7 @@ export function createRhythm(d: RhythmDeps) {
     return w ? nextBlockFor(w.week.days.filter((x) => x.date > m.date), pick.clientKey, d.now().toString()) : null;
   }
 
-  async function confirmInline(userId: string, m: Exclude<RhythmModel, NudgeModel>, proposalId: string): Promise<Exclude<RhythmModel, NudgeModel>> {
+  async function confirmInline(userId: string, m: Exclude<RhythmModel, NudgeModel | StatusModel>, proposalId: string): Promise<Exclude<RhythmModel, NudgeModel | StatusModel>> {
     const p = m.proposal;
     if (!p || p.proposalId !== proposalId || p.state !== "open" || !d.assistant) return m;
     const bot = d.botStore(userId);
@@ -423,7 +467,7 @@ export function createRhythm(d: RhythmDeps) {
     const row = await store.get(t.occasion);
     if (!row?.model) return { model: null, card: null };
     let m = row.model as RhythmModel;
-    if (m.kind === "nudges") return { model: m, card: rhythmCard(m, d.publicUrl) };
+    if (m.kind === "nudges" || m.kind === "status") return { model: m, card: rhythmCard(m, d.publicUrl) };
     const allPicks = m.kind === "brief" ? m.blocks.flatMap((b) => b.picks) : m.picks;
     const onCard = (id: number | undefined) => (id ? allPicks.find((p) => p.id === id) : undefined);
     const setPick = (id: number, state: PickRow["state"]) => {
@@ -561,7 +605,8 @@ export function createRhythm(d: RhythmDeps) {
       if (kind === "nudges") {
         const items = nudges(await nudgeFacts(userId, c)).slice(0, NUDGE_MAX);
         model = { kind: "nudges", occasion, test: true, items: items.length ? items : [{ key: "sample", kind: "promise_tonight", title: "Sample: send Dana the export notes", clientName: null, line: "Due tonight, still open (a sample: nothing is due)", route: "#/inbox/my-promises" }] };
-      } else model = await modelFor(kind, userId, occasion, today, true).catch(() => null);
+      } else if (kind === "status") model = await statusModel(userId, occasion, true).catch(() => null);
+      else model = await modelFor(kind, userId, occasion, today, true).catch(() => null);
       if (!model) {
         await store.settle(occasion, "failed");
         return { ok: false, message: "I couldn't read your week just now. Open FocusTime to see what's wrong." };

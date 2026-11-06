@@ -3,6 +3,7 @@
 // wrapped in Pat, and are used only to build the Authorization header right at the request. They are
 // never logged, cached, returned or put in a message. Only the normalized items are cached.
 import { createHash } from "node:crypto";
+import type { RawReportComment } from "../../plan/status-report.ts";
 import type { SnapshotStore } from "../../host/types.ts";
 import type { Logger } from "../../log/logger.ts";
 import type { ClientPortfolio, ClientWork, ClientWorkStatus, FailureCause, PortfolioItem, WorkItem } from "../../week/types.ts";
@@ -13,7 +14,7 @@ import { Pat } from "./pat.ts";
 import { scopeCounts, scopeOf, type DevOpsScope, type ProjectAreas, type ScopeCounts, type ScopeItem, type ScopeResult } from "../../plan/devops-scope.ts";
 import type { DevOpsTarget, TargetsResult } from "./types.ts";
 import type { ExemplarCandidate, FeatureSignals } from "../../plan/stories.ts";
-import { CHILD_FIELDS, childrenWiql, COMMENTS_API, COMMENTS_TOP, EPIC_FIELDS, FEATURE_FIELDS, parseChild, parseComments, parseEpic, parseFeature, POOL_FEATURE_FIELDS, POOL_FEATURES, poolCandidates, poolStoriesWiql, poolStoryFields, poolWiql } from "./signals.ts";
+import { CHILD_FIELDS, childrenWiql, COMMENTS_API, COMMENTS_TOP, EPIC_FIELDS, FEATURE_FIELDS, parseChild, parseComments, parseReportComments, parseEpic, parseFeature, POOL_FEATURE_FIELDS, POOL_FEATURES, poolCandidates, poolStoriesWiql, poolStoryFields, poolWiql } from "./signals.ts";
 
 export const API_VERSION = "7.1";
 const BATCH_MAX = 200; // documented maximum ids per workitemsbatch call
@@ -103,7 +104,14 @@ export type CentralReads = {
   stored?(clientKey: string, value: RawValue): Promise<void>;
   /** PL-1: items whose state changed since an instant (the change log), and whether the log covers that span. */
   stateChanges?(clientKey: string, since: string): Promise<{ known: boolean; itemIds: number[] }>;
+  /**
+   * SR-1: state and comment changes since an instant, each with whether one of `emails` made it (the change log's
+   * uniqueName is compared here and never returned), and whether the log covers that span.
+   */
+  activity?(clientKey: string, since: string, emails: readonly string[]): Promise<{ known: boolean; rows: Activity[] }>;
 };
+/** SR-1: one change log row as Status uses it: never who made it, only whether it was me. */
+export type Activity = { itemId: number; kind: "state" | "comments"; oldValue: string | null; newValue: string | null; changedAt: string; mine: boolean };
 
 /** The fields a project has for Plan the week, cached an hour. */
 export type FieldSet = {
@@ -792,6 +800,44 @@ export function createDevOpsSource(d: DevOpsDeps) {
     }
   }
 
+  /**
+   * SR-1: each feature's comments for Status (one call a feature, newest first, up to 200), with the company read PAT
+   * through the client's limiter, read when Status asks and never stored or logged (counts only). A feature that
+   * can't be read is left out of `comments` and listed in `failed`.
+   */
+  async function featureComments(clientKey: string, ids: readonly number[]): Promise<{ ok: true; comments: Record<number, RawReportComment[]>; failed: number[] } | { ok: false; message: string }> {
+    const want = [...new Set(ids.filter((id) => Number.isSafeInteger(id) && id > 0))].slice(0, 60);
+    try {
+      const on = await onDemand(clientKey);
+      if (typeof on === "string") return { ok: false, message: on };
+      const p = encodeURIComponent(on.project);
+      const comments: Record<number, RawReportComment[]> = {};
+      const failed: number[] = [];
+      // A few at a time: the limiter paces the org; a feature that fails doesn't stop the rest.
+      for (let i = 0; i < want.length; i += 4) {
+        await Promise.all(want.slice(i, i + 4).map(async (id) => {
+          try {
+            comments[id] = parseReportComments(await call<unknown>(on.ctx, "comments", `${p}/_apis/wit/workItems/${id}/comments?$top=200&order=desc&api-version=${COMMENTS_API}`));
+          } catch {
+            failed.push(id);
+          }
+        }));
+      }
+      log("status_comments", { count: Object.values(comments).reduce((n, l) => n + l.length, 0), ...(failed.length ? { kind: `failed ${failed.length}` } : {}) });
+      return { ok: true, comments, failed };
+    } catch (e) {
+      return { ok: false, message: plainFailure(e, "Reading the comments") };
+    }
+  }
+
+  /** SR-1: the change log's state and comment changes since an instant, with only whether each was mine. */
+  async function activity(clientKey: string, since: string, emails: readonly string[]): Promise<{ known: boolean; rows: Activity[] }> {
+    if (!d.central?.activity) return { known: false, rows: [] };
+    const targets = await viewerTargets([clientKey], false);
+    if (!targets.ok || precheck({ clientKey, clientName: clientKey }, targets.targets.find((t) => t.clientKey === clientKey), { pat: false })) return { known: false, rows: [] };
+    return d.central.activity(clientKey, since, emails).catch(() => ({ known: false, rows: [] }));
+  }
+
   /** DS-1: the example pool, a client's own project only, kept in memory for an hour per client and look-back. */
   const poolMemory = new Map<string, { at: number; pool: ExemplarCandidate[] }>();
   async function exemplarPool(clientKey: string, o: { months: number }): Promise<SignalsResult<ExemplarCandidate[]>> {
@@ -1302,13 +1348,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
     },
   };
 
-  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, aheadItems, linkedItems, searchItems, internal };
+  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, aheadItems, linkedItems, searchItems, featureComments, activity, internal };
 }
 
 /** What screens use (the same interface whether it reads DevOps or the central store). */
 type FullSource = ReturnType<typeof createDevOpsSource>;
 /** PL-1's by-id reads are optional: a source without them (a stub, an older adapter) means "DevOps can't say". */
-type PlanReads = "featureTrees" | "itemStates" | "stateChanges" | "aheadItems" | "linkedItems" | "searchItems";
+type PlanReads = "featureTrees" | "itemStates" | "stateChanges" | "aheadItems" | "linkedItems" | "searchItems" | "featureComments" | "activity";
 export type DevOpsSource = Omit<FullSource, "internal" | PlanReads> & Partial<Pick<FullSource, PlanReads>>;
 /** DV-1: what the central poller uses of an app-level source. */
 export type DevOpsInternal = ReturnType<typeof createDevOpsSource>["internal"];

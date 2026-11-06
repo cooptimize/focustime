@@ -473,3 +473,34 @@ export function anAheadClient(o: Partial<AheadClient> = {}): AheadClient {
 export function anAheadLoad(clients: (AheadClient & Partial<AheadLoad["clients"][number]>)[], o: Partial<Omit<AheadLoad, "clients">> = {}): AheadLoad {
   return { today: "2026-11-02", clients: clients.map((c) => ({ lead: false, editable: [], note: `Only ${c.clientName}'s leads and the owner can change this.`, canWrite: true, hints: {}, fixGaps: ["needs_stories", "no_dates", "unassigned", "unsized"], ...c })), changes: [], halves: [], automation: false, fixTopN: 30, ...o };
 }
+
+/** SR-1: an item of a client's store as Status selects from it: an open feature, unassigned, in backlog order by id. */
+export function aReportItem(o: Partial<import("../../plan/status-report.ts").ReportItem> = {}): import("../../plan/status-report.ts").ReportItem {
+  const id = o.id ?? next();
+  const level = o.level ?? "parent";
+  return { id, title: level === "parent" ? `Feature ${id}` : `Story ${id}`, type: level === "parent" ? "Feature" : "User Story", state: "Active", stateCategory: "InProgress", level, parentId: null, assigneeEmail: null, url: `https://dev.azure.com/contoso/p/_workitems/edit/${id}`, order: id, ...o };
+}
+
+/** SR-1: a feature comment as DevOps returns it, by a teammate at Monday noon UTC unless given. */
+export function aReportComment(o: Partial<import("../../plan/status-report.ts").RawReportComment> = {}): import("../../plan/status-report.ts").RawReportComment {
+  const id = o.id ?? next();
+  return { id, text: `Update ${id}`, authorName: "Dana Teammate", authorUnique: "dana@contoso.example", createdAt: "2026-11-02T17:00:00Z", modifiedAt: null, ...o };
+}
+
+/** SR-1: what status.load answers for one client, with features that have `updates[i]` comments this week each. */
+export function aStatusLoad(o: { clientKey?: string; clientName?: string; updates?: number[]; ids?: number[] } = {}): import("../../plan/status-types.ts").StatusLoad {
+  const updates = o.updates ?? [0, 1, 0];
+  const features = updates.map((n, i) => {
+    const id = o.ids?.[i] ?? next();
+    return { id, title: `Feature ${id}`, type: "Feature", state: "Active", url: `https://dev.azure.com/contoso/p/_workitems/edit/${id}`, why: "planned" as const, thisWeek: Array.from({ length: n }, (_, j) => ({ id: id * 10 + j, text: `Update ${j}`, author: "Dana Teammate", at: "2026-11-03T15:00:00Z", who: "teammate" as const, editable: false })), lastWeek: [], hints: [], order: i };
+  });
+  const without = updates.filter((n) => n === 0).length;
+  return {
+    reportDate: "2026-11-09",
+    title: "Status report · for Monday, Nov 9",
+    sends: "Kat sends it Monday 7:00 AM",
+    counts: { features: updates.length, withUpdate: updates.length - without, without },
+    countLine: `${updates.length} features`,
+    clients: [{ clientKey: o.clientKey ?? "Contoso", clientName: o.clientName ?? "Contoso", status: "ok", window: { since: "2026-11-02T12:04:00Z", source: "kat", katSentAt: "2026-11-02T12:04:00Z", prevSince: "2026-10-26T12:04:00Z", note: null }, canWrite: true, ai: "off", aiNote: null, features: features.map(({ order: _o, ...f }) => f), also: [] }],
+  };
+}

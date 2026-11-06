@@ -36,8 +36,8 @@ export function onOrg(url: string, org: string): boolean {
 export const itemApiUrl = (org: string, id: number) => `${orgBase(org)}/_apis/wit/workItems/${id}`;
 
 export type PatchOp = { op: "add" | "replace" | "remove" | "test"; path: string; value?: unknown };
-export type ChangeKind = "state" | "comment" | "create" | "target_date" | "description" | "assign" | "fields";
-export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description" | "undo_assign" | "undo_fields" | "feedback";
+export type ChangeKind = "state" | "comment" | "create" | "target_date" | "description" | "assign" | "fields" | "comment_edit";
+export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description" | "undo_assign" | "undo_fields" | "undo_comment_edit" | "feedback";
 /** UI-8: the audit log's client key for Send feedback's creates (F1): never a client, so no client's undo or retry reaches it. */
 export const FEEDBACK_LOG_KEY = "FocusTime feedback";
 
@@ -147,7 +147,7 @@ export function changedSince(loaded: Record<string, string | null>, now: Record<
 export type DevOpsWriteStatus = "pending" | "confirmed" | "unconfirmed" | "failed" | "refused";
 export type DevOpsWriteEntry = {
   id: number; at: string; clientKey: string; org: string; project: string; op: WriteOp; itemId: number | null; parentId: number | null; title: string;
-  identity: string; before: Record<string, string | null>; after: Record<string, string | null>; ops: PatchOp[] | { text: string } | null;
+  identity: string; before: Record<string, string | null>; after: Record<string, string | null>; ops: PatchOp[] | { text: string; /** SR-1: the comment an edit changes. */ commentId?: number } | null;
   revBefore: number | null; revAfter: number | null; commentId: number | null; draftId: number | null; pickIds: number[]; followUpId: number | null;
   status: DevOpsWriteStatus; message: string | null; undoOf: number | null; undoneBy: number | null; attempts: number; updatedAt: string;
   /** AP-1: the ask a create came from (its chat and message), so a retry never makes a second item. */
@@ -158,14 +158,29 @@ export type DevOpsWriteEntry = {
 /** The undo each write has; null when it has none (an undo, or not confirmed). */
 export function undoKind(e: Pick<DevOpsWriteEntry, "op" | "status" | "undoneBy" | "itemId">): WriteOp | null {
   if (e.status !== "confirmed" || e.undoneBy !== null || e.itemId === null) return null;
-  return e.op === "state" ? "undo_state" : e.op === "comment" ? "undo_comment" : e.op === "create" ? "undo_create" : e.op === "target_date" ? "undo_target_date" : e.op === "description" ? "undo_description" : e.op === "assign" ? "undo_assign" : null;
+  return e.op === "state" ? "undo_state" : e.op === "comment" ? "undo_comment" : e.op === "comment_edit" ? "undo_comment_edit" : e.op === "create" ? "undo_create" : e.op === "target_date" ? "undo_target_date" : e.op === "description" ? "undo_description" : e.op === "assign" ? "undo_assign" : null;
+}
+/**
+ * SR-1: comments don't stack with an item's other writes. Each new comment is its own stack (undo deletes only it),
+ * and edits stack per comment (the newest edit of a comment is undone first). Everything else stacks per item.
+ */
+export function stackKey(e: Pick<DevOpsWriteEntry, "org" | "itemId" | "op" | "id" | "ops">): string {
+  const base = `${e.org.toLowerCase()}#${e.itemId}`;
+  if (e.op === "comment" || e.op === "undo_comment") return `${base}#new${e.id}`;
+  if (e.op === "comment_edit" || e.op === "undo_comment_edit") return `${base}#c${editedComment(e.ops) ?? 0}`;
+  return base;
+}
+/** SR-1: an edit's comment id, kept in its ops (never in the comment_id column: an older build would read that as a comment to delete). */
+export function editedComment(ops: DevOpsWriteEntry["ops"] | undefined): number | null {
+  const c = ops && !Array.isArray(ops) ? (ops as { commentId?: unknown }).commentId : null;
+  return typeof c === "number" && Number.isSafeInteger(c) && c > 0 ? c : null;
 }
 /** Undo is a stack per item: the newest confirmed write that isn't an undo and isn't undone. `log` newest first. */
 export function undoTops(log: readonly DevOpsWriteEntry[]): Map<string, number> {
   const out = new Map<string, number>();
   for (const e of log) {
     if (e.itemId === null) continue;
-    const k = `${e.org.toLowerCase()}#${e.itemId}`;
+    const k = stackKey(e);
     if (out.has(k) || e.op.startsWith("undo_") || e.op === "feedback" || e.status !== "confirmed") continue;
     if (e.undoneBy === null) out.set(k, e.id);
   }

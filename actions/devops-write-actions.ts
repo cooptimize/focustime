@@ -12,10 +12,11 @@ import { teamsLink } from "../plan/chats.ts";
 import type { ConversationView } from "../store/conversation-store.ts";
 import { readBack, type Sleep } from "./readback.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, assigneeEmail, assigneeText, assignOps, completedState, createOps, descriptionOps, textToHtml, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, FIELD_LABEL, fieldRefsOf, fieldsOps, type FieldSpec, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
+import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, assigneeEmail, assigneeText, assignOps, completedState, createOps, descriptionOps, textToHtml, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, stackKey, editedComment, validOrg, VISIBILITY, FIELD_LABEL, fieldRefsOf, fieldsOps, type FieldSpec, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
 import { dateOnly, detectTargetField, detectTypeSizeField, fieldNames, htmlToText, identityEmail, identityName, TYPE_SIZE_FIELDS, workItemUrl } from "../sources/devops/normalize.ts";
 import type { TakesStore } from "../store/devops-takes.ts";
 import { otherClientMatch, type ClientEntry } from "../ai/guard.ts";
+import { isCoopComment } from "../plan/status-report.ts";
 import { breakdownChildTypes, ladderFromProcessConfig, levelsFromProcessConfig } from "../plan/process.ts";
 import { canEdit, rungOf, sameValue, valueText, type ChangeField, type ChangeValue, type EditRight, type StagedChange } from "../plan/ahead-edit.ts";
 import type { NotesStore } from "../store/devops-notes.ts";
@@ -72,8 +73,15 @@ export type DevOpsWriteContext = {
   notes?: NotesStore | undefined;
   /** CV-4: my own Chat.Read reader, for a conversation's images when I create its item (read then, never stored). */
   chatImages?: (() => Promise<ChatMessagesClient | null>) | undefined;
+  /**
+   * SR-1: the start of a client's status report window (Kat's last send, or Monday 7:00 AM ET). A comment_edit is
+   * refused for a comment counted before it. Absent: comment edits aren't available here.
+   */
+  reportSince?: ((cfg: AppConfig, clientKey: string) => Promise<string>) | undefined;
 };
 
+/** Batch previews where one refused change doesn't stop the rest: AH-1's change set, SR-1's Push all lines. */
+const PER_ITEM = new Set(["fields", "comment", "comment_edit"]);
 /** CV-4: images attached to one item at most, and the largest one (as read from Teams, after stripping). */
 export const ATTACH_LIMIT = 10;
 /** One image the create preview offers: from a message being included, with who sent it and when. */
@@ -115,7 +123,7 @@ export type ConversationsPort = {
 export const PREVIEW_MS = 5 * 60_000;
 type Held = {
   id: string; expiresAt: number; clientKey: string; org: string; project: string; projectName: string; op: WriteOp; itemId: number | null; parentId: number | null; title: string;
-  identity: string; ops: PatchOp[] | { text: string } | null; rev: number | null; before: Record<string, string | null>; after: Record<string, string | null>;
+  identity: string; ops: PatchOp[] | { text: string; commentId?: number } | null; rev: number | null; before: Record<string, string | null>; after: Record<string, string | null>;
   draftId: number | null; followUpId: number | null; undoOf: number | null; commentId: number | null; pickIds: number[]; type: string | null; field: string | null;
   /** The Request a create comes from (stored as "ask" in the write log). */
   ask: { chatId: string; messageId: string } | null;
@@ -168,6 +176,7 @@ const SUMMARY: Record<WriteOp, string> = {
   assign: "Assign a DevOps story or feature to you", undo_assign: "Undo: give it back to who had it",
   fields: "Change dates, size or owner in DevOps", undo_fields: "Undo: put the dates, size and owner back",
   feedback: "Send feedback to the FocusTime backlog",
+  comment_edit: "Edit your comment on a DevOps item", undo_comment_edit: "Undo: put your comment's earlier text back",
 };
 
 export async function devopsWriteAction(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
@@ -191,7 +200,7 @@ class Refused extends Error {
   }
 }
 
-type Env = { cfg: AppConfig; clientKey: string; org: string; project: string; projectName: string; pat: Pat; me: DevOpsIdentityRow; writer: DevOpsWriter; plan: PlanStore; requests: DevOpsWriteContext["requests"]; conversations: DevOpsWriteContext["conversations"]; ahead: AheadPort | undefined; clientName: string };
+type Env = { reportSince: DevOpsWriteContext["reportSince"]; cfg: AppConfig; clientKey: string; org: string; project: string; projectName: string; pat: Pat; me: DevOpsIdentityRow; writer: DevOpsWriter; plan: PlanStore; requests: DevOpsWriteContext["requests"]; conversations: DevOpsWriteContext["conversations"]; ahead: AheadPort | undefined; clientName: string };
 
 /** The client's org and project (never its company PAT) and my write PAT, checked to belong together. */
 async function envFor(ctx: DevOpsWriteContext, plan: PlanStore, cfg: AppConfig, clientKey: string): Promise<Env> {
@@ -212,7 +221,7 @@ async function envFor(ctx: DevOpsWriteContext, plan: PlanStore, cfg: AppConfig, 
   } catch {
     throw new Refused(NO_PAT(clientName(clientKey)), 409, "no_write_pat");
   }
-  return { cfg, clientKey, org: target.org, project: target.project, projectName: target.projectName ?? target.project, pat, me, writer: ctx.writer, plan, requests: ctx.requests, conversations: ctx.conversations, ahead: ctx.ahead, clientName: clientName(clientKey) };
+  return { reportSince: ctx.reportSince, cfg, clientKey, org: target.org, project: target.project, projectName: target.projectName ?? target.project, pat, me, writer: ctx.writer, plan, requests: ctx.requests, conversations: ctx.conversations, ahead: ctx.ahead, clientName: clientName(clientKey) };
 }
 
 async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
@@ -283,7 +292,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       const log = (await plan.devopsWriteLog(200));
       const tops = undoTops(log);
       // UI-8: Send feedback's creates are listed with neither Undo nor Retry (F1 never deletes and never resends on its own).
-      return { ok: true, data: { entries: log.map((e) => (e.op === "feedback" ? { ...e, undoable: false, retryable: false } : { ...e, undoable: !!e.itemId && tops.get(`${e.org.toLowerCase()}#${e.itemId}`) === e.id && !e.op.startsWith("undo_"), retryable: e.status === "unconfirmed" || e.status === "failed" || e.status === "pending" })) } };
+      return { ok: true, data: { entries: log.map((e) => (e.op === "feedback" ? { ...e, undoable: false, retryable: false } : { ...e, undoable: !!e.itemId && tops.get(stackKey(e)) === e.id && !e.op.startsWith("undo_"), retryable: e.status === "unconfirmed" || e.status === "failed" || e.status === "pending" })) } };
     }
     case "devops.preview": {
       const o = fields(input, ["clientKey"], ["change", "changes"]);
@@ -298,22 +307,27 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       // DS-1: a batch reads the same parent and process once.
       const memo = new Map<string, Promise<unknown>>();
       // AH-1: a change set's items are previewed one by one; one that's refused (a conflict, no right) doesn't stop the rest.
-      const refused: { itemId: number | null; error: string; code: string | null }[] = [];
+      const refused: { itemId: number | null; error: string; code: string | null; key?: string }[] = [];
       for (const c of list) {
         let h: HeldIn | string;
         try {
           h = await previewOne(env, c, tz, memo);
+          // SR-1: GD-1's refusal of one line is that line's, like any other refusal in a batch.
+          if (typeof h !== "string" && o.changes !== undefined && PER_ITEM.has(h.op)) await checkBoundary(ctx, env, h);
         } catch (e) {
-          if (o.changes !== undefined && e instanceof Refused && (c as { kind?: unknown })?.kind === "fields") {
-            refused.push({ itemId: typeof (c as { itemId?: unknown }).itemId === "number" ? ((c as { itemId: number }).itemId) : null, error: e.message, code: e.code ?? null });
+          if (o.changes !== undefined && (e instanceof Refused || e instanceof WriteFailure || e instanceof Invalid) && PER_ITEM.has(String((c as { kind?: unknown })?.kind))) {
+            // SR-1: Push all's lines carry a key back, so each refusal lands on its own line.
+            const k = (c as { key?: unknown }).key;
+            refused.push({ itemId: typeof (c as { itemId?: unknown }).itemId === "number" ? ((c as { itemId: number }).itemId) : null, error: e.message, code: e instanceof Refused ? (e.code ?? null) : e instanceof WriteFailure ? e.kind : null, ...(typeof k === "string" ? { key: k } : {}) });
             continue;
           }
           throw e;
         }
+        const key = typeof (c as { key?: unknown })?.key === "string" ? ((c as { key: string }).key) : null;
         if (typeof h === "string") nothing.push(h);
         else {
-          await checkBoundary(ctx, env, h);
-          previews.push(hold(h, env));
+          if (!(o.changes !== undefined && PER_ITEM.has(h.op))) await checkBoundary(ctx, env, h);
+          previews.push(key ? { ...hold(h, env), key } : hold(h, env));
         }
       }
       return { ok: true, data: o.changes !== undefined ? { previews, nothing, refused } : previews[0] ? { preview: previews[0] } : { nothing: nothing[0] ?? "Nothing to change" } };
@@ -477,7 +491,7 @@ async function linkComment(env: Env, o: Record<string, unknown>): Promise<HeldIn
 
 /** One change → what to hold, or a reason there is nothing to do. Reads the item now (fresh rev). */
 async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Promise<unknown>> = new Map()): Promise<HeldIn | string> {
-  const o = fields(c, ["kind"], ["itemId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images", "assign"]);
+  const o = fields(c, ["kind"], ["key", "itemId", "commentId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images", "assign"]);
   const { writer, org, pat, project, plan } = env;
   switch (o.kind) {
     case "state": {
@@ -495,6 +509,24 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));
       const text = str(o.text, "text", 4000)!;
       return { ...base(env), ...none, op: "comment", itemId: item.id, title: item.title, ops: { text }, rev: null, before: { Comment: null }, after: { Comment: text }, type: item.type };
+    }
+    case "comment_edit": {
+      // SR-1: my own comment, inside this client's status report window, the full text before and after; DevOps keeps
+      // no history of a comment's text, so the old text is kept in the audit log and Undo puts it back.
+      if (!env.reportSince) throw new Refused("Editing comments isn't available here", 409);
+      const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));
+      const commentId = posId(o.commentId, "commentId");
+      const text = str(o.text, "text", 4000)!;
+      const cm = await writer.getComment(org, pat, project, item.id, commentId);
+      if (cm.isDeleted) throw new Refused("That comment was deleted in DevOps", 409, "changed");
+      if (!cm.createdBy || cm.createdBy.toLowerCase() !== env.me.email.toLowerCase()) throw new Refused("Only your own comments can be edited. DevOps doesn't let anyone change someone else's", 409);
+      if (isCoopComment(cm.text)) throw new Refused("Coop's comments aren't edited from FocusTime", 409);
+      const since = await env.reportSince(env.cfg, env.clientKey);
+      const counted = cm.modifiedDate || cm.createdDate;
+      if (!counted || Temporal.Instant.compare(Temporal.Instant.from(counted), Temporal.Instant.from(since)) < 0) throw new Refused("Only comments in this week's status report can be edited here", 409);
+      const was = htmlToText(cm.text).trim() || cm.text.trim();
+      if (sameText(cm.text, text)) return "That comment already says that";
+      return { ...base(env), ...none, op: "comment_edit", itemId: item.id, title: item.title, ops: { text, commentId }, rev: null, before: { Comment: was }, after: { Comment: text }, type: item.type };
     }
     case "target_date": {
       const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));
@@ -859,7 +891,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       if (entry.status !== "confirmed" || entry.itemId === null) throw new Refused("Only a confirmed change can be undone", 409);
       if (entry.op.startsWith("undo_")) throw new Refused("An undo isn't undone again: make the change again instead", 409);
       if (entry.undoneBy !== null) throw new Refused("Already undone", 409);
-      if (undoTops((await plan.devopsWriteLog(1000))).get(`${entry.org.toLowerCase()}#${entry.itemId}`) !== entry.id) throw new Refused("Undo the newer change to this item first", 409);
+      if (undoTops((await plan.devopsWriteLog(1000))).get(stackKey(entry)) !== entry.id) throw new Refused(entry.op === "comment_edit" ? "Undo the newer edit of this comment first" : "Undo the newer change to this item first", 409);
       const item = await writer.item(org, pat, project, entry.itemId);
       const u = { ...base(env), ...none, itemId: item.id, title: item.title, undoOf: entry.id, type: item.type, parentId: entry.parentId };
       if (entry.op === "state") {
@@ -912,6 +944,14 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
         if (htmlToText(curHtml).trim() !== htmlToText(entry.after.Description ?? "").trim()) throw new Refused(`DevOps shows another description on #${item.id} now. Undo would overwrite it`, 409, "changed");
         return { ...u, op: "undo_description", ops: descriptionOps(item.rev, field, entry.before.Description ?? ""), rev: item.rev, before: { Description: curHtml }, after: { Description: entry.before.Description ?? null }, field };
       }
+      if (entry.op === "comment_edit") {
+        const cid = editedComment(entry.ops);
+        if (cid === null) throw new Refused("The comment's id wasn't recorded, so the edit can't be undone from here", 409);
+        const cm = await writer.getComment(org, pat, project, item.id, cid);
+        if (cm.isDeleted) throw new Refused("That comment was deleted in DevOps", 409, "changed");
+        if (!sameText(cm.text, entry.after.Comment ?? "")) throw new Refused("The comment changed in DevOps since FocusTime's edit. Undo would overwrite that; change it in DevOps", 409, "changed");
+        return { ...u, op: "undo_comment_edit", ops: { text: entry.before.Comment ?? "", commentId: cid }, rev: null, before: { Comment: entry.after.Comment ?? null }, after: { Comment: entry.before.Comment ?? null } };
+      }
       if (entry.op === "comment") {
         if (entry.commentId === null) throw new Refused("The comment's id wasn't recorded, so it can't be deleted from here", 409);
         const cm = await writer.getComment(org, pat, project, item.id, entry.commentId);
@@ -936,7 +976,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       };
     }
     default:
-      throw new Invalid("kind must be state, comment, create, request_create, proposal_create, conversation_create, conversation_comment, description_update, description_edit, target_date, assign, fields or undo");
+      throw new Invalid("kind must be state, comment, comment_edit, create, request_create, proposal_create, conversation_create, conversation_comment, description_update, description_edit, target_date, assign, fields or undo");
   }
 }
 
@@ -1088,6 +1128,18 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       forget();
       if (entry.conv?.suggestionId && ctx.conversations) await ctx.conversations.posted(entry.conv.suggestionId, entry.id).catch(() => {});
       return settle("confirmed", posted ? "Already in DevOps (found on retry)" : "Comment added in DevOps", { commentId: made.id });
+    }
+    if (entry.op === "comment_edit" || entry.op === "undo_comment_edit") {
+      const { text, commentId } = entry.ops as { text: string; commentId: number };
+      const now = await writer.getComment(org, pat, project, entry.itemId!, commentId);
+      if (now.isDeleted) return settle("refused", "That comment was deleted in DevOps, so it wasn't changed");
+      // A retry that finds the text already there adopts it rather than writing again.
+      if (!sameText(now.text, text)) await writer.updateComment(org, pat, project, entry.itemId!, commentId, text);
+      const back = await again(() => writer.getComment(org, pat, project, entry.itemId!, commentId));
+      if (back.isDeleted || !sameText(back.text, text)) return settle("unconfirmed", "DevOps didn't show the new text yet. Retry checks first");
+      if (entry.op === "undo_comment_edit") await plan.markDevopsUndone(entry.undoOf!, entry.id);
+      forget();
+      return settle("confirmed", entry.op === "undo_comment_edit" ? "Comment put back in DevOps" : "Comment edited in DevOps");
     }
     if (entry.op === "undo_comment") {
       const before = await writer.getComment(org, pat, project, entry.itemId!, entry.commentId!);

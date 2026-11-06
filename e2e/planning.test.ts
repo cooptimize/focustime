@@ -182,7 +182,8 @@ describe.skipIf(!CHROMIUM)("Plan the week and Plan the day (U4)", () => {
     await go(page, "#/week/plan/2026-11-09", ".pw-client");
     expect(await uiWords(page)).toBeLessThan(120);
     await go(page, `#/today/plan/${D}/AM`, ".pd2-left");
-    expect(await uiWords(page)).toBeLessThan(100);
+    // 101: SR-1's fourth Week mode (Status) in the mode switch.
+    expect(await uiWords(page)).toBeLessThan(101);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

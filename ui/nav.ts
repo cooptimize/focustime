@@ -14,14 +14,15 @@ export const TODAY_FLOWS = ["checkin", "closeout"] as const;
 export type TodayFlow = (typeof TODAY_FLOWS)[number];
 export const FLOW_NAMES: Record<TodayFlow, string> = { checkin: "Midday check-in", closeout: "Close out" };
 /** NV-1: Week's Board (stories onto blocks; a day focused is Plan the day) and Commit (Plan the week). */
-export type WeekMode = "board" | "commit" | "team";
+/** SR-1: Status, the preview of Monday's status report and the feature updates that feed it. */
+export type WeekMode = "board" | "commit" | "team" | "status";
 /** AH-1 (D653): Ahead is one model in three modes: Grid (was Roadmap), Gantt (was Plan ahead) and Fix next. */
 export type AheadMode = "grid" | "gantt" | "fix";
 
-export const MODE_NAMES = { board: "Board", commit: "Plan", team: "Team", grid: "Grid", gantt: "Gantt", fix: "Fix next" } as const;
+export const MODE_NAMES = { board: "Board", commit: "Plan", team: "Team", status: "Status", grid: "Grid", gantt: "Gantt", fix: "Fix next" } as const;
 export type ModeName = keyof typeof MODE_NAMES;
 /** Each tab's modes, in switch order (Today has none, so no switch). IB-1: the Inbox has views in its rail, not modes. */
-export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: ["board", "commit", "team"], ahead: ["grid", "gantt", "fix"], inbox: [] };
+export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: ["board", "commit", "team", "status"], ahead: ["grid", "gantt", "fix"], inbox: [] };
 
 /** IB-1: the Inbox's views in its address (#/inbox/needs-you …). */
 export const INBOX_VIEW_SLUGS: Record<InboxView, string> = { needs_you: "needs-you", promises: "promises", waiting: "waiting", in_progress: "in-progress", captures: "captures", teammates: "teammates", done: "done", chatter: "chatter" };
@@ -158,6 +159,8 @@ export function hashOf(l: Loc): string {
     if (n.mode === "commit") return ["#/week/commit", n.week].filter(Boolean).join("/");
     // SW-1: the client team view.
     if (n.mode === "team") return ["#/week/team", n.week].filter(Boolean).join("/");
+    // SR-1: always this week's report (the one Kat sends next Monday).
+    if (n.mode === "status") return "#/week/status";
     if (n.focus) return ["#/week/day", n.focus.date, n.focus.date ? n.focus.half : null].filter(Boolean).join("/");
     return ["#/week", n.week].filter(Boolean).join("/");
   }
@@ -209,6 +212,7 @@ export function parseHash(hash: string): Loc | null {
       if (a === "day") return day(b, c);
       if (a === "commit" || a === "plan") return week("commit", b, c);
       if (a === "team") return week("team", b, c);
+      if (a === "status") return b === undefined ? plain(navOf.week("status")) : null;
       return b === undefined && validDate(a) ? plain(navOf.week("board", a)) : null;
     }
     case "ahead":
@@ -273,6 +277,7 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
     case "ahead": return plain(navOf.ahead("gantt"));
     case "aheaditem": return plain(navOf.aheadItem(r.id));
     case "team": return plain(navOf.week("team"));
+    case "status": return plain(navOf.week("status"));
     case "planweek": return plain(navOf.week("commit", r.weekStart));
     case "followup": return plain(navOf.inbox(r.id));
     case "settings": return { loc: { nav: navOf.today(), overlay: { kind: "settings", section: r.section } }, vmMenu: false };
@@ -280,7 +285,7 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
 }
 
 /** The command menu's views (and older names kept for commands and tests) as places. */
-export type ViewName = "today" | "week" | "inbox" | "conversations" | "my_promises" | "requests" | "asks" | "promises" | "roadmap" | "ahead" | "focus" | "capture" | "planday" | "planweek" | "commit" | "team" | "settings" | "follow_ups" | "checkin" | "closeout";
+export type ViewName = "today" | "week" | "inbox" | "conversations" | "my_promises" | "requests" | "asks" | "promises" | "roadmap" | "ahead" | "focus" | "capture" | "planday" | "planweek" | "commit" | "team" | "status" | "settings" | "follow_ups" | "checkin" | "closeout";
 export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
   switch (v) {
     case "today": return { nav: navOf.today(), overlay: null };
@@ -299,6 +304,7 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
     case "planweek":
     case "commit": return { nav: navOf.week("commit"), overlay: null };
     case "team": return { nav: navOf.week("team"), overlay: null };
+    case "status": return { nav: navOf.week("status"), overlay: null };
     case "checkin": return { nav: navOf.today("checkin"), overlay: null };
     case "closeout": return { nav: navOf.today("closeout"), overlay: null };
     case "focus": return { nav: null, overlay: { kind: "focus" } };
@@ -338,7 +344,7 @@ export function viewName(loc: Loc): string {
   const n = loc.nav;
   const place =
     n.tab === "today" ? (n.flow ? `${TAB_NAMES.today} › ${FLOW_NAMES[n.flow]}` : TAB_NAMES.today)
-    : n.tab === "week" ? (n.mode === "commit" ? `${TAB_NAMES.week} › ${MODE_NAMES.commit}` : n.mode === "team" ? `${TAB_NAMES.week} › Team` : n.focus ? `${TAB_NAMES.week} › Plan ${n.focus.date ?? "today"}` : TAB_NAMES.week)
+    : n.tab === "week" ? (n.mode === "commit" ? `${TAB_NAMES.week} › ${MODE_NAMES.commit}` : n.mode === "team" ? `${TAB_NAMES.week} › Team` : n.mode === "status" ? `${TAB_NAMES.week} › Status` : n.focus ? `${TAB_NAMES.week} › Plan ${n.focus.date ?? "today"}` : TAB_NAMES.week)
     : n.tab === "ahead" ? `${TAB_NAMES.ahead} › ${MODE_NAMES[n.mode]}`
     : n.view ? `${TAB_NAMES.inbox} › ${INBOX_VIEW_NAMES[n.view]}` : TAB_NAMES.inbox;
   const o = loc.overlay;

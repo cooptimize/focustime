@@ -110,7 +110,8 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     await expect(page.locator(".half.card", { hasText: "Northwind" }).first().locator(".card-feats").textContent()).resolves.toMatch(/\d+ features? · 1 needs stories/);
     // 121: SW-1 adds Team to the mode switch (Board · Commit · Team); 122: UI-B's now line adds its time ("9:30");
     // 145: DM-1's story (From last week's unfinished picks, the late promise, the Out event's risk on Wednesday).
-    expect(await uiWords(page)).toBeLessThan(145);
+    // 146: SR-1's fourth Week mode (Status) in the mode switch.
+    expect(await uiWords(page)).toBeLessThan(146);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

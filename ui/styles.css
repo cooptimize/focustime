@@ -5153,3 +5153,78 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 /* On a narrow PTO column the hatched cell already says PTO. */
 @container (max-width: 9em) { .day-head .pto-pill { display: none; } }
 .grid.tier-mini .suggested-card .sc-open { flex-wrap: wrap; }
+/* SR-1: Week › Status, the preview of Monday's status report and the boxes that feed it. */
+.status-view { flex: 1; overflow: auto; padding: 8px 24px 32px; display: grid; align-content: start; gap: 12px; }
+.status-view .page-head { flex-wrap: wrap; row-gap: 4px; }
+.st-sends { font-size: var(--fs-2); }
+.st-intro { margin: 0; font-size: var(--fs-2); max-width: 70em; }
+.st-toggle { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 9px; background: var(--sunken); }
+.st-toggle .ms-btn { display: inline-flex; align-items: center; padding: 4px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-3); font-weight: 500; cursor: pointer; }
+.st-toggle .ms-btn[aria-pressed="true"] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 0 0 1px var(--border-strong); }
+.st-bar { position: sticky; top: -8px; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.st-count { margin: 0; font-weight: 600; font-size: var(--fs-3); }
+.st-push { display: inline-flex; align-items: center; gap: 10px; font-size: var(--fs-2); }
+.st-client { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--c, var(--border-strong)); border-radius: 10px; background: var(--surface); max-width: 1100px; }
+.st-client-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.st-client-head h3 { margin: 0; }
+.st-sent, .st-note { margin: 0; font-size: var(--fs-2); }
+.st-features { display: grid; gap: 4px; }
+.st-feature { display: grid; gap: 6px; padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; }
+.st-feature + .st-feature { border-top-color: var(--border); border-top-left-radius: 0; border-top-right-radius: 0; }
+.st-feature.st-empty { background: color-mix(in oklab, var(--watch) 7%, transparent); border-color: color-mix(in oklab, var(--watch) 30%, transparent); }
+.st-feature-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; }
+.st-feature h4 { margin: 0; font-size: var(--fs-3); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.st-title { color: var(--text); }
+.st-meta { font-size: var(--fs-2); }
+.st-badge { padding: 0 8px; border-radius: 999px; border: 1px solid color-mix(in oklab, var(--watch) 55%, transparent); color: var(--watch); font-size: var(--fs-2); font-weight: 500; white-space: nowrap; }
+.st-has { color: var(--ok); font-size: var(--fs-2); font-weight: 500; white-space: nowrap; }
+.st-comments { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.st-comment { display: grid; gap: 2px; padding: 4px 8px; border-left: 2px solid var(--border-strong); font-size: var(--fs-3); }
+.st-comment.who-mine { border-left-color: var(--accent); }
+.st-comment.who-coop { border-left-style: dashed; }
+.st-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.st-by { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; font-size: var(--fs-2); }
+.st-author { color: var(--text-muted); font-weight: 500; }
+.st-by .link-btn { font-size: var(--fs-2); }
+.st-new { display: grid; gap: 6px; }
+.st-adds { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.st-box { display: grid; gap: 2px; }
+.st-box textarea { width: 100%; min-height: 3.2em; resize: vertical; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; font-size: var(--fs-3); box-sizing: border-box; }
+.st-box textarea:focus { outline: 2px solid var(--focus); outline-offset: 0; }
+.st-box.st-suggested textarea { border-style: dashed; border-color: var(--accent); }
+.st-box.st-editing textarea { border-color: var(--accent); }
+.st-box-foot { display: flex; justify-content: space-between; gap: 8px; font-size: var(--fs-2); }
+.st-box-foot .link-btn { font-size: var(--fs-2); }
+.st-hints { font-size: var(--fs-2); color: var(--text-muted); }
+.st-hints-head { margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-1); }
+.st-hints ul, .st-last ul { margin: 2px 0 0; padding-left: 18px; display: grid; gap: 2px; }
+.st-hints summary, .st-last summary, .st-also > summary { cursor: pointer; color: var(--text-muted); font-size: var(--fs-2); }
+.st-last { font-size: var(--fs-2); }
+.st-also { padding-top: 4px; }
+.st-also > summary { font-weight: 600; }
+/* Preview: as the email reads. */
+.st-email .st-feature { padding: 4px 2px; border: 0; background: none; }
+.st-email .st-feature + .st-feature { border-top: 0; }
+.st-email h4 .st-title { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.st-bullets { margin: 2px 0 0; padding-left: 20px; display: grid; gap: 2px; font-size: var(--fs-3); }
+.st-bullets .st-pending { font-style: italic; color: var(--text-muted); }
+.st-none { margin: 0; font-size: var(--fs-3); color: var(--watch); }
+.st-line { margin: 0; }
+/* Pushed just now, and the Push all preview. */
+.st-pushed { padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); max-width: 1100px; }
+.st-pushed-head { display: flex; justify-content: space-between; align-items: baseline; }
+.st-pushed-head h3 { margin: 0; font-size: var(--fs-3); }
+.st-pushed ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.st-pushed li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: var(--fs-2); }
+.st-pushed-what { flex: 1 1 20em; min-width: 0; overflow-wrap: anywhere; }
+.st-push-client { display: grid; gap: 6px; }
+.st-push-client h3 { margin: 4px 0 0; font-size: var(--fs-3); }
+.st-push-client h4 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.st-preview-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-3); }
+.st-refused { border-left: 3px solid var(--risk); }
+@media (max-width: 700px) {
+  .status-view { padding: 8px 16px 24px; }
+  .app.phone .status-view .page-head { grid-template-columns: minmax(0, 1fr); padding: 4px 0; }
+  .status-view .ph-title { row-gap: 2px; }
+  .st-bar { top: 0; }
+}
