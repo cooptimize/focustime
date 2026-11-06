@@ -106,7 +106,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
   it("an edited field saves when Settings closes with it focused", async () => {
     const { page } = await freshPage(h);
     await openSettings(page);
-    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Roadmap" }).click();
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Ahead" }).click();
     const input = page.locator(".set-field", { hasText: "Stalled after" }).locator("input");
     await input.waitFor();
     const before = (await load(page)).roadmap.stalledDays;

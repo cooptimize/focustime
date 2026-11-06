@@ -109,6 +109,8 @@ export type CentralReads = {
    * uniqueName is compared here and never returned), and whether the log covers that span.
    */
   activity?(clientKey: string, since: string, emails: readonly string[]): Promise<{ known: boolean; rows: Activity[] }>;
+  /** BH-1: the newest change log row per item since an instant (what changed and when; never who). */
+  lastChanges?(clientKey: string, since: string): Promise<Record<number, import("../../plan/backlog.ts").LastChange>>;
 };
 /** SR-1: one change log row as Status uses it: never who made it, only whether it was me. */
 export type Activity = { itemId: number; kind: "state" | "comments"; oldValue: string | null; newValue: string | null; changedAt: string; mine: boolean };
@@ -1248,6 +1250,15 @@ export function createDevOpsSource(d: DevOpsDeps) {
    * PL-1: the items whose state changed since an instant, per the change log; `known` false while the store's change
    * log doesn't cover the whole span yet (the first load came after it, just after DV-1) or DevOps can't say.
    */
+  /** BH-1: Backlog's Last change: what the change log says each item's last change was, in its 30 days. */
+  async function lastChanges(clientKey: string): Promise<Record<number, import("../../plan/backlog.ts").LastChange> | null> {
+    if (!d.central?.lastChanges) return null;
+    const targets = await viewerTargets([clientKey], false);
+    if (!targets.ok || precheck({ clientKey, clientName: clientKey }, targets.targets.find((t) => t.clientKey === clientKey), { pat: false })) return null;
+    const since = now().subtract({ hours: 24 * 30 }).toString();
+    return d.central.lastChanges(clientKey, since).catch(() => null);
+  }
+
   async function stateChanges(clientKey: string, since: string): Promise<{ known: boolean; itemIds: number[] }> {
     if (!d.central?.stateChanges) return { known: false, itemIds: [] };
     const targets = await viewerTargets([clientKey], false);
@@ -1348,13 +1359,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
     },
   };
 
-  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, aheadItems, linkedItems, searchItems, featureComments, activity, internal };
+  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, lastChanges, aheadItems, linkedItems, searchItems, featureComments, activity, internal };
 }
 
 /** What screens use (the same interface whether it reads DevOps or the central store). */
 type FullSource = ReturnType<typeof createDevOpsSource>;
 /** PL-1's by-id reads are optional: a source without them (a stub, an older adapter) means "DevOps can't say". */
-type PlanReads = "featureTrees" | "itemStates" | "stateChanges" | "aheadItems" | "linkedItems" | "searchItems" | "featureComments" | "activity";
+type PlanReads = "featureTrees" | "itemStates" | "stateChanges" | "lastChanges" | "aheadItems" | "linkedItems" | "searchItems" | "featureComments" | "activity";
 export type DevOpsSource = Omit<FullSource, "internal" | PlanReads> & Partial<Pick<FullSource, PlanReads>>;
 /** DV-1: what the central poller uses of an app-level source. */
 export type DevOpsInternal = ReturnType<typeof createDevOpsSource>["internal"];

@@ -54,3 +54,16 @@ describe("[roadmap] (step 17)", () => {
     if (!bad.ok) expect(bad.errors.map((e) => e.field).sort()).toEqual(["roadmap.other", "roadmap.stalled_days", "roadmap.watch_weeks"]);
   });
 });
+
+describe("[ahead] (BH-1)", () => {
+  it("stale after 6 weeks by default; Settings writes the person's own weeks; out of range refused", () => {
+    const p = parseConfig(TOML);
+    expect(p.ok && p.config.ahead).toEqual({ staleWeeks: 6 });
+    const q = parseConfig(settingsEdit("ahead", { staleWeeks: 10 })(TOML));
+    expect(q.ok && q.config.ahead).toEqual({ staleWeeks: 10 });
+    expect(() => settingsEdit("ahead", { staleWeeks: 2.5 })).toThrow();
+    expect(() => settingsEdit("ahead", { other: 1 })).toThrow();
+    const bad = parseConfig(TOML + "\n[ahead]\nstale_weeks = 30\n");
+    expect(!bad.ok && bad.errors.map((e) => e.field)).toEqual(["ahead.stale_weeks"]);
+  });
+});

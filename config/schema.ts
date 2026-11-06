@@ -2,6 +2,7 @@
 import { parse, TomlError } from "smol-toml";
 import type { MainHalf, StandingBlock, WeekConfig, WorkWeekday } from "../week/types.ts";
 import { DEFAULT_THRESHOLDS, type RoadmapThresholds } from "../plan/roadmap.ts";
+import { DEFAULT_AHEAD, type AheadSettings } from "../plan/backlog.ts";
 import { DEFAULT_ASK_SETTINGS, type AskSettings } from "../plan/asks.ts";
 import { DEFAULT_AI_PERSON, DEFAULT_AI_RULES, type AiPersonSettings, type AiRules } from "../ai/types.ts";
 import type { Guidance, OrgView } from "./org-apply.ts";
@@ -55,6 +56,8 @@ export type AppConfig = {
   notify: NotifySettings;
   /** Step 17: Settings > Roadmap thresholds (whole numbers). */
   roadmap: RoadmapThresholds;
+  /** BH-1: Settings › Ahead: an open item with no change for this many weeks is stale. Absent: the default (6). */
+  ahead?: AheadSettings;
   /** AP-1: Asks: how often delivery chats are read in working hours, and the phrase lists the rules use. */
   asks: AskSettings;
   /** AI-0: the person's [ai] values. Since ADM-1 only draft_months is theirs; the rest is read for the one-time migration. */
@@ -222,7 +225,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
 
   // Section and key names are unchanged by the rename (R1), so existing config files keep working.
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap", "asks", "ai", "guidance", "keep_open"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap", "ahead", "asks", "ai", "guidance", "keep_open"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -675,6 +678,20 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
     }
   }
 
+  // [ahead] (optional, BH-1): stale_weeks (1 to 26)
+  const ahead: AheadSettings = { ...DEFAULT_AHEAD };
+  if (raw.ahead !== undefined) {
+    const t = isTable(raw.ahead) ? raw.ahead : (err("ahead", "Must be an [ahead] table"), null);
+    if (t) {
+      for (const k of Object.keys(t)) if (k !== "stale_weeks") err(`ahead.${k}`, "Unknown field");
+      const sw = t.stale_weeks;
+      if (sw !== undefined) {
+        if (typeof sw !== "number" || !Number.isInteger(sw) || sw < 1 || sw > 26) err("ahead.stale_weeks", "Must be a whole number from 1 to 26");
+        else ahead.staleWeeks = sw;
+      }
+    }
+  }
+
   // [asks] (optional, AP-1): poll_minutes (1 to 60), request_phrases and ack_phrases (lists of up to 50 phrases), and
   // (AP-2) promise_phrases: commitment phrasing in my own messages
   const asks: AskSettings = { ...DEFAULT_ASK_SETTINGS, requestPhrases: [...DEFAULT_ASK_SETTINGS.requestPhrases], ackPhrases: [...DEFAULT_ASK_SETTINGS.ackPhrases], promisePhrases: [...DEFAULT_ASK_SETTINGS.promisePhrases] };
@@ -806,6 +823,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
       azure,
       notify,
       roadmap,
+      ahead,
       asks,
       ai,
       aiRules: { ...DEFAULT_AI_RULES, allowedClients: [] },

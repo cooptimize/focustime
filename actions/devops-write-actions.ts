@@ -659,6 +659,12 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
           if (v && v.email.toLowerCase() !== env.me.email.toLowerCase()) notes.push(`${v.name} gets a notice in FocusTime with a link to it.`);
         }
       }
+      // BH-1: a bulk change can touch items that aren't mine: the preview says whose each one is.
+      const owner = identityEmail(item.fields["System.AssignedTo"]);
+      if (specs.length && right.why !== "owner" && owner && owner.toLowerCase() !== env.me.email.toLowerCase() && !staged.some((x) => x.field === "assignee")) {
+        const moved = staged.some((x) => x.field === "start" || x.field === "target");
+        notes.unshift(`Assigned to ${identityName(item.fields["System.AssignedTo"]) ?? owner}, not you.${moved ? " They get a quiet note in FocusTime that the dates moved." : ""}`);
+      }
       if (!specs.length) {
         for (const x of staged) await port.landed(env.clientKey, itemId, x.field);
         return `#${itemId} already has those values`;

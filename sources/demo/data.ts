@@ -225,6 +225,8 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
 
 /** Step 16 (Roadmap): stories with no change in a while, and stories with no size yet. Step 17: Atlas's dashboard is stalled. */
 const QUIET = new Set([4412, 1112, 3311, 3312]);
+/** BH-1: open stories at the bottom of their backlogs that nobody has touched in two months (stale in Backlog). */
+const STALE = new Set([1142, 2230, 3330, 3353, 4434]);
 /** Step 17: a story blocked by a tag (Harbor's intake form reads Blocked). */
 const BLOCKED = new Set([2212, 3341]);
 /** Step 17: DevOps Start Date on some features (the demo process has the field); the rest are estimated in Plan ahead. */
@@ -255,7 +257,7 @@ export function demoItems(): DemoItem[] {
       const [id, type, state, parent, title, who, target] = r;
       out.push({
         clientKey: c.key, id, rev: 3 + (id % 7), type, state, parent, title, who, whoEmail: emailOf(who), target: target ?? null, start: START[id] ?? null,
-        size: isPortfolio(type) || UNSIZED.has(id) ? null : 3, changedAt: QUIET.has(id) ? "2026-10-09T15:00:00Z" : "2026-10-30T15:00:00Z", order: n + 1, blocked: BLOCKED.has(id),
+        size: isPortfolio(type) || UNSIZED.has(id) ? null : 3, changedAt: STALE.has(id) ? "2026-09-04T15:00:00Z" : QUIET.has(id) ? "2026-10-09T15:00:00Z" : "2026-10-30T15:00:00Z", order: n + 1, blocked: BLOCKED.has(id),
         description: DESCRIPTIONS[id] ?? "<div>A fictional work item for the FocusTime demo.</div>", acceptance: ACCEPTANCE[id] ?? "", projectOnly, createdBy: null, area: c.key !== "Northwind" ? c.project : projectOnly ? `${c.project}\\Finance` : `${c.project}\\Web`, iteration: `${c.project}\\Sprint 23`, relations: [],
       });
     });

@@ -49,7 +49,7 @@ export const SETTINGS_SECTIONS = [
   ["planning", "Planning"],
   ["focus", "Focus"],
   ["notifications", "Notifications"],
-  ["roadmap", "Roadmap"],
+  ["roadmap", "Ahead"],
   ["risk", "Risk rules"],
   ["clients", "Clients"],
   ["ai", "AI"],
@@ -893,14 +893,18 @@ function VmStartForm(p: FormProps) {
   );
 }
 
-/** Settings > Roadmap (step 17): when a row reads Stalled or Watch. Whole numbers. */
+/** Settings > Ahead (was Roadmap, step 17): when a row reads Stalled or Watch, and (BH-1) when Backlog calls an item stale. Whole numbers. */
 function RoadmapForm(p: FormProps) {
   const r = p.data.roadmap;
   const a = useAutoSave({ section: "roadmap", initial: { stalledDays: r.stalledDays, watchWeeks: r.watchWeeks }, payload: (v) => v, onSaved: p.onSavedData, label: (k) => (k === "stalledDays" ? "Stalled after" : "Watch within") });
+  const b = useAutoSave({ section: "ahead", initial: { staleWeeks: p.data.ahead?.staleWeeks ?? 6 }, payload: (v) => v, onSaved: p.onSavedData, label: () => "Stale after" });
   return (
     <div className="set-form">
-      <p className="muted">When a Roadmap row reads Stalled or Watch.</p>
+      <p className="muted">When Backlog calls an item stale, and when a feature or epic reads Stalled or Watch.</p>
       <div className="set-grid">
+        <AutoField a={b} k="staleWeeks" label="Stale after (weeks)" hint="Open items with no change in DevOps for this long. 1 to 26.">
+          <input type="number" min={1} max={26} step={1} value={b.v.staleWeeks} onChange={(e) => b.set("staleWeeks", Math.round(Number(e.target.value)))} {...b.text("staleWeeks")} />
+        </AutoField>
         <AutoField a={a} k="stalledDays" label="Stalled after (days)" hint="Days with no story change. 3 to 60.">
           <input type="number" min={3} max={60} step={1} value={a.v.stalledDays} onChange={(e) => a.set("stalledDays", Math.round(Number(e.target.value)))} {...a.text("stalledDays")} />
         </AutoField>

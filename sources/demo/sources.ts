@@ -139,6 +139,13 @@ export function createDemoSources(world: DemoDevOps, cal: DemoOutlook, now: () =
     // SR-1: Status reads the demo's feature comments (seeded by seeds/status.ts, and any the demo's writes add) and
     // its activity log (the seeded story changes, mine or a teammate's).
     featureComments: async (clientKey, ids) => (isDemoClient(clientKey) ? { ok: true, comments: Object.fromEntries(ids.filter((id) => world.item(id)?.clientKey === clientKey).map((id) => [id, world.reportComments(id)])), failed: [] } : { ok: false, message: "Not a demo client" }),
+    // BH-1: the demo's change log is its seeded activity (state and comment changes).
+    lastChanges: async (clientKey) => {
+      if (!isDemoClient(clientKey)) return null;
+      const out: Record<number, { kind: "state" | "comments"; at: string }> = {};
+      for (const r of world.activity(clientKey)) if (!out[r.itemId] || out[r.itemId]!.at <= r.changedAt) out[r.itemId] = { kind: r.kind, at: r.changedAt };
+      return out;
+    },
     activity: async (clientKey, since) => ({ known: true, rows: isDemoClient(clientKey) ? world.activity(clientKey).filter((r) => Temporal.Instant.compare(Temporal.Instant.from(r.changedAt), Temporal.Instant.from(since)) >= 0) : [] }),
     processModels: async (keys) => Promise.all(keys.map(async (clientKey) => (isDemoClient(clientKey) ? { clientKey, ok: true as const, model: demoProcess(clientKey, await processOverrides(clientKey)) } : { clientKey, ok: false as const, message: "Not a demo client" }))),
   };
