@@ -75,6 +75,7 @@ import { CHECKIN_DONE_MARK } from "./closeout-actions.ts";
 import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
 import { markScheduled, publishWeek, sendFacts, teamAction, type TeamAction, type TeamContext } from "./team-actions.ts";
 import { inboxAction } from "./inbox-actions.ts";
+import { diagnosticsAction } from "./diagnostics.ts";
 import { snoozeDayOf } from "../plan/inbox-items.ts";
 import { statusAction, type StatusAction, type StatusContext } from "./status-actions.ts";
 import { reportWindow } from "../plan/status-report.ts";
@@ -1660,6 +1661,9 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
         action,
         req.input,
       );
+    // DX-1: Settings › Data › Diagnostics, counts only, my own chats only (read-only).
+    case "diagnostics.check":
+      return diagnosticsAction(await conversationContext(ctx), action, req.input);
     case "people.picker":
       return pickerAction(ctx, req.input);
     case "ai.status":

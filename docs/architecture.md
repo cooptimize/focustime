@@ -527,6 +527,21 @@ A preview of Monday's status report and an easy way to edit the comments that fe
 - **Tests.** `plan/status-report.test.ts`, `server/demo-status.test.ts`, the SR-1 parts of
   `server/teams/rhythm.test.ts`, `assistant/service.test.ts` and `ui/nav.test.ts`; e2e `e2e/status.test.ts`.
 
+## DX-1: Diagnostics, counts only (Nov 6)
+
+- **Pure.** `plan/diagnostics.ts`: the promise reasons (`promiseReason`: shown, someone else, no open commitment, no
+  person id, my name under another id, a namesake user, filtered), the extraction reasons for my promise-sounding
+  messages (`extractionReason`, `extractionRetry`), chatter kinds and per-chat outcomes (`chatterKind`, `chatOutcomes`),
+  and the copy text (`diagnosticsText`: counts only, chats numbered). `IS_WORK_PLACE` marks This is work's place.
+- **Action.** `actions/diagnostics.ts`: `diagnostics.check` (read-only, `{}`), through `conversationContext` in
+  `actions/dispatch.ts`: my chats (`seen`), my conversations and commitments through the viewer, the Inbox's own facts
+  and marks (`inboxFacts`, `viewsOf`), my messages from `messagesBefore` (text in memory only, for `promisePhrase`), the
+  places of the window from `placesSince` (new in `store/conversation-store.ts`, with who placed each).
+- **UI.** `ui/settings/Diagnostics.tsx` (`DiagnosticsPanel`, at the foot of Settings › Data; on the phone outside the
+  read-only Data, since it only reads); the command "Diagnostics" (`ui/menu.ts`) opens it. Retry extraction runs
+  `conversations.sort_unsorted`.
+- **Tests.** `plan/diagnostics.test.ts`, `actions/diagnostics.test.ts`; e2e `e2e/diagnostics.test.ts`.
+
 ## PK-1: checking off a to-do offers the DevOps update (Nov 6)
 
 Checking a to-do done offers its DevOps item's done state as a proposal; nothing is written without Confirm.

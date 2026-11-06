@@ -40,6 +40,7 @@ import { WRITES_HREF, type FeedbackStatus } from "../actions/feedback-types.ts";
 import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, useAdmin } from "./settings/Admin.tsx";
 import { SideMenu, useNarrow } from "./settings/SideMenu.tsx";
 import { DemoSection } from "./settings/Demo.tsx";
+import { DiagnosticsPanel } from "./settings/Diagnostics.tsx";
 
 export const SETTINGS_SECTIONS = [
   ["you", "You"],
@@ -211,9 +212,13 @@ export function Settings(props: Props) {
         {inAdmin ? (
           <AdminSection id={props.section as Parameters<typeof AdminSection>[0]["id"]} admin={admin} />
         ) : data && (phone && PHONE_READ_ONLY.has(props.section) ? (
-          <PhoneReadOnly>
-            <SectionBody {...props} data={data} onSavedData={saved} reload={reload} />
-          </PhoneReadOnly>
+          <>
+            <PhoneReadOnly>
+              <SectionBody {...props} data={data} onSavedData={saved} reload={reload} />
+            </PhoneReadOnly>
+            {/* DX-1: Diagnostics only reads, so it runs on the phone too, outside the read-only Data. */}
+            {props.section === "data" && <DiagnosticsPanel />}
+          </>
         ) : (
           <SectionBody {...props} data={data} onSavedData={saved} reload={reload} />
         ))}
@@ -1878,6 +1883,7 @@ function DeleteMine() {
 }
 
 function DataSection(p: Props & { data: SettingsData }) {
+  const phone = usePhone();
   return (
     <div className="set-form">
       <WriteLog />
@@ -1890,6 +1896,7 @@ function DataSection(p: Props & { data: SettingsData }) {
         <ResetPlan disabled={!p.data.data.planStore} onDone={p.onSaved} />
         <DeleteMine />
       </div>
+      {!phone && <DiagnosticsPanel />}
     </div>
   );
 }

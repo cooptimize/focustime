@@ -9,6 +9,7 @@
 // that client's cards, never a log or an error (ids and counts only, and not even ids in logs).
 import { whoNotOwner } from "../plan/follow-who.ts";
 import { CLOSE_HOW, type CloseHow } from "../plan/types.ts";
+import { IS_WORK_PLACE } from "../plan/diagnostics.ts";
 import { groupingRules } from "./conversations-pipeline.ts";
 import { likelyItems } from "../plan/promise-items.ts";
 import { typeChoices } from "./work-item-types.ts";
@@ -102,8 +103,8 @@ const MESSAGE_ID = /^[0-9A-Za-z._-]{1,100}$/;
 const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
 const first = (n: string | null | undefined) => (n ?? "").split(/\s+/)[0] || "Someone";
 
-type Seen = { teams: TeamsView; convs: ConversationView; me: string; chats: ClientChat[]; byId: Map<string, ClientChat>; store: ConversationStore };
-async function seen(ctx: ConversationContext): Promise<Seen | null> {
+export type Seen = { teams: TeamsView; convs: ConversationView; me: string; chats: ClientChat[]; byId: Map<string, ClientChat>; store: ConversationStore };
+export async function seen(ctx: ConversationContext): Promise<Seen | null> {
   const port = ctx.requests;
   const store = ctx.conversations;
   const me = await ctx.me();
@@ -807,7 +808,8 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
           const created = await v.convs.addConversation({ chatId: o.chatId, clientKey: chat.clientKey, title: askTitle(m.text), summary: oneLine(m.text, 300), participants: b.senderId ? [{ id: b.senderId, name: b.senderName ?? "Someone", external: b.external }] : [], firstAt: m.createdAt, lastAt: m.createdAt, lastWorkAt: m.createdAt, changeNote: action === "conversations.this_is_work" ? "Pulled back in as work" : "Split from another conversation" });
           to = created.id;
         }
-        await v.convs.place([{ chatId: o.chatId, messageId: o.messageId, conversationId: to, role: "work", reason: null, placedBy: "person", at: m.createdAt }]);
+        // DX-1: This is work marks its place, so Diagnostics counts it apart from Move and Split.
+        await v.convs.place([{ chatId: o.chatId, messageId: o.messageId, conversationId: to, role: "work", reason: action === "conversations.this_is_work" ? IS_WORK_PLACE : null, placedBy: "person", at: m.createdAt }]);
         const deps = { convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() };
         await v.convs.updateConversation(to, { changeNote: "A message was moved here" }, { bump: true });
         await refreshStatus(deps, to);

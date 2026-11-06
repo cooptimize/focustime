@@ -1172,6 +1172,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "data.export": return { run: env.exportPlan };
     case "data.export_mine": return { run: () => env.openSettings("data") };
     case "data.delete_mine": return { run: () => env.openSettings("data") };
+    case "diagnostics.check": return { run: () => (env.openSettings("data"), void setTimeout(() => document.getElementById("diagnostics")?.scrollIntoView({ block: "start" }), 300)) };
     case "hours.set_day": return { next: () => chooseDay(env, "Working hours for which day?", (d) => hoursForm(env, d)) };
     case "hours.clear_day": {
       const days = env.week.days.filter((d) => d.hours.overridden);

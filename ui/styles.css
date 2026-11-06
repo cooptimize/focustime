@@ -5249,6 +5249,30 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .today-block.pto-half { border-left-style: dashed; background: var(--raised); opacity: 0.75; }
 .today-block.pto-half .status-pill { color: var(--text-muted); }
 
+/* DX-1: Settings › Data › Diagnostics (counts only). */
+.dx { margin-top: 16px; }
+.dx h4 { margin: 12px 0 4px; font-size: var(--fs-3); font-weight: 600; }
+.dx-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.dx-line { margin: 4px 0; }
+.dx-table .num { text-align: right; white-space: nowrap; }
+.dx-table td:first-child { min-width: 16em; }
+.dx-table td:last-child { min-width: 15em; }
+.dx-counts { list-style: none; margin: 4px 0 8px; padding: 0; max-width: 46em; }
+.dx-counts li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.dx-counts .dx-counts-head { font-weight: 600; color: var(--text-muted); }
+.dx-counts .num { font-variant-numeric: tabular-nums; }
+.dx-counts li.dx-gap { color: var(--watch); font-weight: 500; }
+.dx-chat-list { display: none; list-style: none; margin: 4px 0; padding: 0; gap: 8px; }
+.dx-chat-list li { border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+.dx-chat-list p { margin: 2px 0; }
+.app.phone .dx-chat-list { display: grid; }
+.app.phone .dx-chat-table { display: none; }
+.dx-rows { margin: 4px 0 8px; padding-left: 18px; display: grid; gap: 4px; }
+.dx-rows .mini { margin-left: 8px; }
+.dx-client { font-weight: 600; }
+.dx-scroll { max-width: 100%; overflow-x: auto; }
+.dx-copy { width: 100%; box-sizing: border-box; margin-top: 8px; font-family: var(--font-mono); font-size: var(--fs-1); color: var(--text-muted); background: transparent; }
+
 /* ---- PK-1: checking off a to-do offers the DevOps update (one card), and Close out asks once for the day ---- */
 .done-offer { position: fixed; z-index: 71; left: 50%; bottom: 44px; transform: translateX(-50%); width: min(400px, calc(100vw - 32px)); display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow-pop); font-size: var(--fs-3); }
 .done-offer p { margin: 0; }
