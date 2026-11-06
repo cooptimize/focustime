@@ -116,7 +116,12 @@ function providerFor(model: string, live: boolean, key: () => Promise<string | n
   const flex = model.endsWith("@flex");
   return openAiProvider({
     key,
-    fetch: flex ? (async (url: RequestInfo | URL, init?: RequestInit) => fetch(url, { ...init, body: typeof init?.body === "string" ? JSON.stringify({ ...JSON.parse(init.body), service_tier: "flex" }) : init?.body })) as typeof fetch : fetch,
+    fetch: flex
+      ? (((url: RequestInfo | URL, init?: RequestInit) => {
+          const body = init?.body;
+          return fetch(url, typeof body === "string" ? { ...init, body: JSON.stringify({ ...JSON.parse(body), service_tier: "flex" }) } : init);
+        }) as typeof fetch)
+      : fetch,
   });
 }
 
