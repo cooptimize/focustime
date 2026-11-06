@@ -341,6 +341,7 @@ const TASK_LABELS: Record<string, string> = {
   "conversations.update": "Sorting client chats into conversations (with image descriptions)",
   "promises.extract": "Reading promises from chat messages",
   "asks.classify": "Sorting requests",
+  "meeting.capture": "Proposals from client call transcripts",
   "assistant.intent": "Assistant: understanding the request",
   "assistant.answer": "Assistant: the answer",
   "assistant_transcribe": "Assistant: push-to-talk",

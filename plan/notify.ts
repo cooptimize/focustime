@@ -7,7 +7,7 @@ import { DEFAULT_TEAMS_RHYTHM, type TeamsRhythm } from "./teams-rhythm.ts";
 import { DEFAULT_STATUS_TIMES, type StatusTimes } from "./status-report.ts";
 
 /** Every kind of notification FocusTime sends. Each has its own switch in Settings > Notifications, except the test. */
-export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "commitment_item", "taken_over", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "look_ask", "look_reply", "assigned", "dates_moved", "status_report"] as const;
+export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "commitment_item", "taken_over", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "look_ask", "look_reply", "assigned", "dates_moved", "status_report", "meeting_review"] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 export type AnyKind = NotifyKind | "test" | "held";
 
@@ -36,6 +36,7 @@ export const KIND_LABEL: Record<NotifyKind, string> = {
   assigned: "Someone assigned you an item",
   dates_moved: "Someone moved your dates",
   status_report: "Monday's status report",
+  meeting_review: "Client calls to review",
 };
 export const KIND_HINT: Record<NotifyKind, string> = {
   plan_day: "At the start of a workday when the day isn't planned yet.",
@@ -62,6 +63,7 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   assigned: "When a teammate assigns you a DevOps item from Ahead in FocusTime.",
   dates_moved: "When a teammate moves the dates of a DevOps item you own from Ahead in FocusTime, once per save.",
   status_report: "Friday afternoon (and Sunday evening if you like) when some of your features have no update yet for Monday's report. Off until you turn it on.",
+  meeting_review: "After a client call you review, once: its proposals are ready, or its transcript needs uploading.",
 };
 /** PV-1: quiet kinds go to the in-app list only, never to push. */
 export const QUIET_KINDS: ReadonlySet<AnyKind> = new Set<AnyKind>(["story_taken", "send_cant_lead", "assigned", "dates_moved"]);
@@ -96,7 +98,9 @@ export type Route =
   | { view: "planweek"; weekStart: string }
   | { view: "followup"; id: number }
   | { view: "aheaditem"; id: number }
-  | { view: "settings"; section: string };
+  | { view: "settings"; section: string }
+  /** MC-1: one call's review (#/meetings/<occurrence>). */
+  | { view: "meeting"; id: number };
 
 // "asks": notifications sent before the rename to Requests still open the tab.
 const SIMPLE = new Set(["today", "planday", "checkin", "closeout", "focus", "vm", "inbox", "ahead", "asks", "requests", "conversations", "my_promises", "week", "team", "status"]);
@@ -109,6 +113,7 @@ export function routeText(r: Route): string {
   if (r.view === "followup") return `followup:${r.id}`;
   if (r.view === "aheaditem") return `aheaditem:${r.id}`;
   if (r.view === "settings") return `settings:${r.section}`;
+  if (r.view === "meeting") return `meeting:${r.id}`;
   return r.view;
 }
 
@@ -122,6 +127,7 @@ export function parseRoute(s: unknown): Route | null {
   if (view === "followup" && /^[1-9]\d{0,9}$/.test(arg)) return { view, id: Number(arg) };
   if (view === "aheaditem" && /^[1-9]\d{0,9}$/.test(arg)) return { view, id: Number(arg) };
   if (view === "settings" && SECTION.test(arg)) return { view, section: arg };
+  if (view === "meeting" && /^[1-9]\d{0,9}$/.test(arg)) return { view, id: Number(arg) };
   return null;
 }
 
@@ -287,6 +293,16 @@ export const notices = {
   datesMoved: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "dates_moved", key, title: itemIds.length === 1 ? `${byName} moved the dates of #${itemIds[0]}` : `${byName} moved the dates of ${itemIds.length} of your items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to see them in Ahead.`, buttons: [open("Open Ahead")], route: `aheaditem:${itemIds[0]}`, at }),
   /** SR-1: Friday afternoon or Sunday evening, once per occasion, when features have no update yet. */
   statusReport: (occasion: string, line: string, at: string): Notice => ({ kind: "status_report", key: occasion, title: "Monday's status report", body: `${line}.\nClick to open Week › Status.`, buttons: [open("Open Status")], route: "status", at, ref: occasion }),
+  /** MC-1: a call I review, once per occurrence: proposals ready, or a transcript to upload. The call's name, never its words. */
+  meetingReview: (key: string, occurrenceId: number, upload: boolean, clientName: string, meeting: string, dateLabel: string, at: string): Notice => ({
+    kind: "meeting_review",
+    key,
+    title: upload ? `Upload ${clientName}'s transcript` : `Update ${clientName}'s plan`,
+    body: `${meeting} · ${dateLabel}\n${upload ? "No transcript came through. Upload it, or say there isn't one this week." : "Proposals from the call are ready to review."}`,
+    buttons: [open(upload ? "Upload" : "Review")],
+    route: `meeting:${occurrenceId}`,
+    at,
+  }),
   takenOver: (id: number, byName: string, what: string, at: string): Notice => ({ kind: "taken_over", key: `taken_over:${id}`, title: `${byName} took it over`, body: `${what}\nNothing more for you to do.`, buttons: [open("Open Conversations")], route: "conversations", at }),
   expiry: (date: string, lines: { text: string; section: string }[], at: string): Notice | null =>
     lines.length

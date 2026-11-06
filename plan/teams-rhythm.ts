@@ -12,8 +12,8 @@ import type { IsoDate } from "../week/types.ts";
 export const RHYTHM_KINDS = ["brief", "checkin", "closeout"] as const;
 export type RhythmKind = (typeof RHYTHM_KINDS)[number];
 /** Everything Settings › Notifications › In Teams switches: the three rhythm cards and the nudges. */
-export type TeamsKind = RhythmKind | "nudges" | "status";
-export const TEAMS_KINDS: readonly TeamsKind[] = ["brief", "checkin", "closeout", "nudges", "status"];
+export type TeamsKind = RhythmKind | "nudges" | "status" | "meetings";
+export const TEAMS_KINDS: readonly TeamsKind[] = ["brief", "checkin", "closeout", "nudges", "status", "meetings"];
 
 /**
  * Settings › Notifications › In Teams, under "Let FocusTime message me in Teams" (`teamsMessages`). All off by
@@ -26,22 +26,25 @@ export type TeamsRhythm = {
   nudges: boolean;
   /** SR-1: Monday's status report, Friday afternoon (and Sunday evening with Settings' Sunday option), its own card. */
   status: boolean;
+  /** MC-1: a client call I review, once per occurrence: its proposals are ready, or its transcript needs uploading. */
+  meetings: boolean;
   briefAt: string | null;
   checkinAt: string;
   closeoutMinutes: number;
   friday: boolean;
 };
-export const DEFAULT_TEAMS_RHYTHM: TeamsRhythm = { brief: false, checkin: false, closeout: false, nudges: false, status: false, briefAt: null, checkinAt: "12:00", closeoutMinutes: 30, friday: false };
+export const DEFAULT_TEAMS_RHYTHM: TeamsRhythm = { brief: false, checkin: false, closeout: false, nudges: false, status: false, meetings: false, briefAt: null, checkinAt: "12:00", closeoutMinutes: 30, friday: false };
 export const CLOSEOUT_MINUTES = { min: 5, max: 120 } as const;
 export const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-export const TEAMS_KIND_LABEL: Record<TeamsKind, string> = { brief: "Morning brief", checkin: "Midday check-in", closeout: "Close out", nudges: "Nudges", status: "Status report" };
+export const TEAMS_KIND_LABEL: Record<TeamsKind, string> = { brief: "Morning brief", checkin: "Midday check-in", closeout: "Close out", nudges: "Nudges", status: "Status report", meetings: "Client calls to review" };
 export const TEAMS_KIND_HINT: Record<TeamsKind, string> = {
   brief: "Today's blocks, meetings, to-dos, promises due and work sent to you, with Confirm today.",
   checkin: "This morning's to-dos with Done and Not yet, and Move the rest.",
   closeout: "What got done today: tick to-dos or tell me, then one Confirm closes the day.",
   nudges: "A promise due tonight that's still open, work sent to you waiting over half a day, and someone taking over an item assigned to you. At most one message an hour.",
   status: "Friday afternoon, when some of your features have no update yet for Monday's report, with the list and Open Status. Sunday evening too when you turn it on under Monday's status report.",
+  meetings: "After a client call you review, once: Update the plan when its proposals are ready, or Upload its transcript when none came through. Inside your working hours.",
 };
 
 const toMin = (hm: string) => (hm === "24:00" ? 1440 : Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5)));

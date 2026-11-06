@@ -12,7 +12,7 @@ import type { AiService } from "../ai/service.ts";
 import { AI_MESSAGES } from "../ai/types.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
-import { attendeeIds, canConfirm, defaultReviewers, detectSource, MEETING_ROLES, proposalOrder, ROLE_LABEL, type MeetingRole, type MeetingSeries, type Occurrence, type ProposalBody, type TranscriptSource } from "../plan/meetings.ts";
+import { attendeeIds, canConfirm, defaultReviewers, detectSource, MEETING_ROLES, nudgesFor, proposalOrder, ROLE_LABEL, type MeetingRole, type MeetingSeries, type Occurrence, type ProposalBody, type TranscriptSource } from "../plan/meetings.ts";
 import { levelOfType, type ProcessModel } from "../plan/process.ts";
 import { TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
 import type { MeetingsClient, SeriesCandidate } from "../sources/graph/meetings.ts";
@@ -24,6 +24,8 @@ import type { WorkItem } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
 import { capturePass } from "./meeting-capture.ts";
 import { readTranscriptFile } from "./transcript-file.ts";
+import type { OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
+export type { MeetingNudgeView, OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
 import type { ActionResponse } from "./types.ts";
 
 export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.prepare", "meeting.confirm", "meeting.rerun"] as const;
@@ -93,27 +95,6 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const lower = (s: string) => s.toLowerCase();
 
-/** A series as Admin and the review show it: never the join link, the event id or the online meeting id. */
-export type SeriesView = {
-  id: number;
-  clientKey: string;
-  clientName: string;
-  name: string;
-  role: MeetingRole;
-  roleLabel: string;
-  source: TranscriptSource;
-  detected: TranscriptSource;
-  organizer: MeetingSeries["organizer"];
-  when: string;
-  weekday: number;
-  start: string;
-  minutes: number;
-  zone: string;
-  reviewers: { id: string; name: string }[];
-  attendees: number;
-  mine: { review: boolean; attend: boolean };
-};
-
 const WEEKDAYS = ["", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays", "Sundays"];
 function whenOf(s: Pick<MeetingSeries, "weekday" | "start" | "minutes" | "interval">): string {
   const [h, m] = s.start.split(":").map(Number);
@@ -134,7 +115,6 @@ function viewOf(s: MeetingSeries, cfg: AppConfig, users: readonly MeetingUser[],
   };
 }
 
-export type OccurrenceView = { id: number; seriesId: number; date: string; startAt: string; endAt: string; state: Occurrence["state"]; transcriptFrom: TranscriptSource | null; proposals: number; open: number; aiOutcome: string | null; aiMessage: string | null };
 const aiMessage = (o: string | null) => (!o || o === "done" ? null : o === "no_ai" ? "AI isn't on for this client, so nothing was proposed. A FocusTime admin allows it in Admin › AI." : (AI_MESSAGES as Record<string, string>)[o] ?? "The AI pass didn't finish");
 
 export async function meetingAction(ctx: MeetingContext, action: MeetingAction, input: unknown): Promise<ActionResponse> {
@@ -150,7 +130,8 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         const o = obj(input, ["clientKey"]);
         if (!(await ctx.isAdmin())) return bad("Only FocusTime admins register meetings", 403);
         const users = await ctx.users();
-        return { ok: true, data: { meetings: (await store.seriesOf(text(o.clientKey, "clientKey", 100)!)).map((s) => viewOf(s, cfg, users, me)) } };
+        // The reviewer picker's people: FocusTime users by name (ids for the picker, never an address).
+        return { ok: true, data: { meetings: (await store.seriesOf(text(o.clientKey, "clientKey", 100)!)).map((s) => viewOf(s, cfg, users, me)), people: users.map((u) => ({ id: u.id.toLowerCase(), name: u.name })).sort((a, b) => a.name.localeCompare(b.name)) } };
       }
       case "meeting.candidates": {
         // My recurring online meetings with people from outside Cooptimize, the client's name first.
@@ -204,7 +185,9 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
           const ps = await store.proposals(o.id);
           counts.set(o.id, { all: ps.length, open: ps.filter((p) => p.state === "open").length });
         }
-        return { ok: true, data: { meetings: mine.map((s) => viewOf(s, cfg, users, me)), occurrences: occs.map((o) => occView(o, counts.get(o.id))) } };
+        // The nudges (in-app and the Teams kind): ready to review, or a transcript to upload; once each by key.
+        const nudges = nudgesFor(me, mine, occs).map((n) => ({ ...n, clientName: cfg.clientSettings[n.clientKey]?.name ?? n.clientKey, dateLabel: Temporal.PlainDate.from(n.date).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" }) }));
+        return { ok: true, data: { meetings: mine.map((s) => viewOf(s, cfg, users, me)), occurrences: occs.map((o) => occView(o, counts.get(o.id))), nudges } };
       }
       case "meeting.review": return await review(ctx, store, cfg, me, input);
       case "meeting.edit": {

@@ -13,6 +13,7 @@ import type { StatusLoad } from "../plan/status-types.ts";
 import { syncTeamsStatus, TEAMS_STATUS_KEY } from "../actions/presence-actions.ts";
 import { requestContext, teamCtx } from "../actions/dispatch.ts";
 import { teamNotices } from "../actions/team-actions.ts";
+import type { MeetingNudgeView } from "../actions/meeting-actions.ts";
 import { myLinkedLogins } from "../actions/identities.ts";
 import { storedIdentity } from "../actions/account.ts";
 import { visibleChats } from "../actions/request-actions.ts";
@@ -463,6 +464,15 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       else await send(notices.lookReply(n.look.id, first(n.look.to.name), name(n.look.clientKey), n.look.weekStart, now));
     }
   };
+  // MC-1: a call I review, once per occurrence: its proposals are ready, or its transcript needs uploading.
+  const meetingsTick = async () => {
+    if (!liveCtx.meetings || !notifier.allows("meeting_review")) return;
+    const r = await dispatch(liveCtx, { action: "meeting.mine", input: {} });
+    if (!r.ok) return;
+    const at = instantNow().toString();
+    for (const n of (r.data as { nudges: MeetingNudgeView[] }).nudges)
+      if (await store.markOnce(`${n.key}_notice`, n.date)) await send(notices.meetingReview(n.key, n.occurrenceId, n.kind === "upload", n.clientName, n.meeting, n.dateLabel, at));
+  };
   // TB-2: the rhythm in Teams, through the same gate facts (quiet hours, PTO, focus) as every notification.
   const teamsTick = async (f: Awaited<ReturnType<typeof notifier.refresh>> | null) => {
     if (!d.teams || !f) return;
@@ -481,6 +491,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     await takesTick().catch(() => log({ source: "plan", op: "takes_tick", kind: "failed" }));
     await notesTick().catch(() => log({ source: "plan", op: "notes_tick", kind: "failed" }));
     await teamTick().catch(() => log({ source: "plan", op: "team_tick", kind: "failed" }));
+    await meetingsTick().catch(() => log({ source: "plan", op: "meetings_tick", kind: "failed" }));
   };
 
   // The focus timer (step 6c): ends sessions on time and warns 5 minutes ahead, window open or not.

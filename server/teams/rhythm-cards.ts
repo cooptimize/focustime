@@ -29,7 +29,9 @@ export type CloseoutModel = Base & { kind: "closeout"; picks: PickRow[]; closed:
 export type NudgeModel = { kind: "nudges"; occasion: string; items: Nudge[]; test?: boolean };
 /** SR-1: Monday's status report, the features with no update yet (titles of my own clients' features, to me only). */
 export type StatusModel = { kind: "status"; occasion: string; line: string; reportLabel: string; clients: { name: string; features: { title: string; url: string | null }[] }[]; more: number; test?: boolean };
-export type RhythmModel = BriefModel | CheckinModel | CloseoutModel | NudgeModel | StatusModel;
+/** MC-1: client calls I review: Update the plan (proposals ready) or Upload the transcript, each with its review link. */
+export type MeetingsModel = { kind: "meetings"; occasion: string; items: { clientName: string; meeting: string; dateLabel: string; upload: boolean; route: string }[]; test?: boolean };
+export type RhythmModel = BriefModel | CheckinModel | CloseoutModel | NudgeModel | StatusModel | MeetingsModel;
 
 export type RhythmOp = "done" | "undone" | "not_yet" | "confirm_today" | "move" | "move_rest" | "close_out" | "closeout_text" | "confirm" | "cancel";
 export const RHYTHM_OPS: readonly RhythmOp[] = ["done", "undone", "not_yet", "confirm_today", "move", "move_rest", "close_out", "closeout_text", "confirm", "cancel"];
@@ -44,8 +46,9 @@ const ROUTE: Record<RhythmModel["kind"], [string, string]> = {
   closeout: ["#/today", "Open Close out"],
   nudges: ["#/inbox", "Open the Inbox"],
   status: ["#/week/status", "Open Status"],
+  meetings: ["#/meetings", "Open client calls"],
 };
-const NAME: Record<RhythmModel["kind"], string> = { brief: "Morning brief", checkin: "Midday check-in", closeout: "Close out", nudges: "Nudges", status: "Status report" };
+const NAME: Record<RhythmModel["kind"], string> = { brief: "Morning brief", checkin: "Midday check-in", closeout: "Close out", nudges: "Nudges", status: "Status report", meetings: "Client calls" };
 
 const abs = (publicUrl: string, route: string) => `${publicUrl.replace(/\/+$/, "")}/${route}`;
 const exec = (label: string, data: RhythmTap | CaptureTap, style?: "positive" | "destructive") => ({ type: "Action.Execute", title: label, verb: data.ft, data, ...(style ? { style } : {}), fallback: { type: "Action.Submit", title: label, data } });
@@ -197,6 +200,19 @@ export function statusCard(m: StatusModel, publicUrl: string): Card {
   return card(body, [openUrl({ label: ROUTE.status[1], url: abs(publicUrl, ROUTE.status[0]) })]);
 }
 
+/** MC-1: "Update Contoso's plan · Contoso sync · Tue, Nov 10", a button each; the call's name, never its words. */
+export function meetingsCard(m: MeetingsModel, publicUrl: string): Card {
+  const body: unknown[] = [header("meetings", null, m.test)];
+  for (const i of m.items) {
+    body.push(text(`[${i.upload ? `Upload ${i.clientName}'s transcript` : `Update ${i.clientName}'s plan`}](${abs(publicUrl, i.route)})`, { spacing: "Medium" }));
+    body.push(muted(`${i.meeting} · ${i.dateLabel} · ${i.upload ? "no transcript came through; upload it, or say there isn't one this week" : "proposals from the call are ready"}`));
+  }
+  body.push(muted("Nothing changes until a reviewer confirms in FocusTime."));
+  body.push(footer(publicUrl));
+  const first = m.items.length === 1 ? m.items[0]! : null;
+  return card(body, [openUrl({ label: first ? (first.upload ? "Upload" : "Review") : ROUTE.meetings[1], url: abs(publicUrl, first ? first.route : ROUTE.meetings[0]) })]);
+}
+
 export function rhythmCard(m: RhythmModel, publicUrl: string): Card {
   switch (m.kind) {
     case "brief":
@@ -209,6 +225,8 @@ export function rhythmCard(m: RhythmModel, publicUrl: string): Card {
       return nudgeCard(m, publicUrl);
     case "status":
       return statusCard(m, publicUrl);
+    case "meetings":
+      return meetingsCard(m, publicUrl);
   }
 }
 

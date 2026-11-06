@@ -29,7 +29,7 @@ export type OAuthProvider = {
    * email), so a refresh returns an ID token with who signed in; "arm" is Azure Resource Manager (user_impersonation).
    * One token request covers one resource, so each set names one resource plus OpenID scopes.
    */
-  kinds?: Partial<Record<"id" | "arm" | "presence" | "photo" | "chats" | "messages", string>>;
+  kinds?: Partial<Record<"id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings", string>>;
   clientSecretAccount?: AppSecretAccount;
   refreshAccount: RefreshTokenAccount;
 };
@@ -49,6 +49,12 @@ export const CHATS_SCOPE = "https://graph.microsoft.com/Chat.ReadBasic";
  * (D490): each person allows it themselves the first time they switch Read for asks on (an incremental consent).
  */
 export const CHAT_READ_SCOPE = "https://graph.microsoft.com/Chat.Read";
+/**
+ * MC-1: a registered meeting's transcript (OnlineMeetings.Read finds the meeting from its join link,
+ * OnlineMeetingTranscript.Read.All reads its transcript). Delegated, admin consented for the tenant; read only for
+ * meetings registered in Admin › Clients › Meetings (sources/graph/meetings.ts refuses any other).
+ */
+export const MEETINGS_SCOPE = "https://graph.microsoft.com/OnlineMeetings.Read https://graph.microsoft.com/OnlineMeetingTranscript.Read.All";
 
 /**
  * `calendars`: the Graph calendar scope reads ask for. The old desktop registration has Calendars.ReadBasic; the A2
@@ -67,7 +73,7 @@ export function microsoftProvider(cfg: OutlookConfig, o: { calendars?: "Calendar
     clientId: cfg.clientId,
     scope: `offline_access ${read}`,
     writeScope: "offline_access https://graph.microsoft.com/Calendars.ReadWrite",
-    kinds: { id: `${OIDC} offline_access ${read}`, arm: `offline_access ${ARM_SCOPE}`, presence: `offline_access ${PRESENCE_SCOPE}`, photo: `offline_access ${PHOTO_SCOPE}`, chats: `offline_access ${CHATS_SCOPE}`, messages: `offline_access ${CHAT_READ_SCOPE}` },
+    kinds: { id: `${OIDC} offline_access ${read}`, arm: `offline_access ${ARM_SCOPE}`, presence: `offline_access ${PRESENCE_SCOPE}`, photo: `offline_access ${PHOTO_SCOPE}`, chats: `offline_access ${CHATS_SCOPE}`, messages: `offline_access ${CHAT_READ_SCOPE}`, meetings: `offline_access ${MEETINGS_SCOPE}` },
     redirectHost: "localhost",
     extraAuthParams: { response_mode: "query", prompt: "select_account" },
     scopeOnTokenRequests: true,
@@ -148,7 +154,7 @@ export type ConnectOptions = {
 export type ScopeProbe = { kind: TokenKind; state: "granted" | "consent" | "signed_out" | "unavailable"; granted: string[] };
 /** Whether this sign-in can write (step 12): "write" only when a write token was granted with the write scope. */
 export type WriteAccess = { status: "write" } | { status: "read_only" | "not_connected" | "unavailable"; message: string };
-export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats" | "messages";
+export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings";
 
 const DONE_PAGE = (ok: boolean) => `<!doctype html><meta charset="utf-8"><title>FocusTime</title>
 <body style="font:16px system-ui;padding:40px;max-width:560px">
@@ -162,7 +168,7 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
   const access = new Map<TokenKind, { token: string; expiresAt: number; scope: string }>();
   // Who signed in, from the last ID token (memory only; the caller keeps what it needs).
   let lastIdentity: IdClaims | null = null;
-  const scopeOf = (k: TokenKind) => (k === "write" && p.writeScope ? p.writeScope : (k === "id" || k === "arm" || k === "presence" || k === "photo" || k === "chats" || k === "messages") && p.kinds?.[k] ? p.kinds[k]! : p.scope);
+  const scopeOf = (k: TokenKind) => (k === "write" && p.writeScope ? p.writeScope : (k === "id" || k === "arm" || k === "presence" || k === "photo" || k === "chats" || k === "messages" || k === "meetings") && p.kinds?.[k] ? p.kinds[k]! : p.scope);
   const log = (op: string, extra: { status?: number; kind?: string; durationMs?: number } = {}) => deps.log({ source: p.source, op, ...extra });
 
   const secretAccount = deps.clientSecretAccount ?? p.clientSecretAccount;

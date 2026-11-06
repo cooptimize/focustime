@@ -17,6 +17,8 @@ import { createDemoOutlook, type DemoOutlook } from "../sources/demo/outlook.ts"
 import { DEMO_SEEDS, type DemoSeedEnv } from "../sources/demo/seeds/index.ts";
 import { demoDevOpsPeople, demoItems, demoPto } from "../sources/demo/data.ts";
 import { createConversationStore } from "../store/conversation-store.ts";
+import { createMeetingStore } from "../store/meeting-store.ts";
+import { canView } from "../plan/meetings.ts";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { AiRuntime } from "../actions/ai-actions.ts";
@@ -80,7 +82,12 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   const shared = sqliteConn(openPlanDb({ path: ":memory:", now: () => instant().toZonedDateTimeISO(DEMO_TZ) }));
   const teams = createTeamsStore(shared, instant);
   // DM-1: the demo's conversations, commitments and suggestions, beside its chats (the seeds write them).
-  const conversations = createConversationStore(shared, instant, teams);
+  // MC-1: the demo's registered client call, beside its chats (in memory; nothing is read from Teams or Graph).
+  const meetingStore = createMeetingStore(shared, instant);
+  const conversations = createConversationStore(shared, instant, teams, async (chatId, userId) => {
+    const s = await meetingStore.series(Number(chatId.slice("meeting:".length)));
+    return !!s && !s.removedAt && canView(s, userId);
+  });
   // ADM-1: the demo's own team settings, people and audit, on the same in-memory database (never the real ones). The
   // demo's person is an admin inside their own demo and nowhere else.
   const adminStore = createAdminStore(shared, instant);
@@ -207,6 +214,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     plan,
     team,
     onFocusTime: (id) => id.toLowerCase() !== notYet,
+    meetings: { store: meetingStore, users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, emails: [DEMO_PERSON.email] }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, emails: [p.email] }))] },
     requests: { teams, conversations, users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, deleted: false }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, deleted: false }))], refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }) },
     // DM-1: the app's own DevOps writer on the session's in-memory DevOps, with a demo write identity per client (set
     // by seedDemo): never a real PAT, and the demo's fetch answers only the demo's fictional orgs.

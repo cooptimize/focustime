@@ -141,7 +141,7 @@ export async function chatAction(ctx: ChatContext, action: ChatAction, input: un
     const me = await storedIdentity(ctx.plan);
     const probe = ctx.account?.probe;
     if (!me || !probe) return { ok: true, data: { signedIn: false, rows: permissionRows([], false) } satisfies PermissionsData };
-    const probes = await mapSeq(["read", "presence", "photo", "chats", "messages", "arm"] as const, (k) => probe(k));
+    const probes = await mapSeq(["read", "presence", "photo", "chats", "messages", "meetings", "arm"] as const, (k) => probe(k));
     return { ok: true, data: { signedIn: true, rows: permissionRows(probes, true) } satisfies PermissionsData };
   }
   const teams = ctx.teams;

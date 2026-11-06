@@ -608,3 +608,37 @@ Labels only: what people read says to-do; code names, tables, stored values and 
   results in `docs/azure/ai-eval-results.md`; `scripts/ai-eval.test.ts` keeps the harness working. The assistant's
   intent and answer instructions and schemas are exported from `assistant/service.ts` for it.
 - **Cleanup list.** `docs/azure/cleanup-list.md`.
+
+## MC-1: meeting capture (Nov 6)
+
+A client's registered weekly call becomes proposals its reviewers confirm. Setup in `docs/setup/meeting-capture.md`.
+
+- **Pure.** `plan/meetings.ts`: the series and occurrence model, `mayRead` and `graphReadable` (only a registered
+  call, or one FocusTime scheduled), `detectSource`, `defaultReviewers`, `attendeeIds`, the weekly pattern
+  (`occurrencesBetween`), the poll schedule (`nextCheck`), the proposal bodies, `inKatsReport`, `nudgesFor`. `plan/transcript.ts`: `parseVtt` and the lines
+  model. `plan/meeting-views.ts`: the UI's types. `ai/guard.ts` `maskTranscript` (other clients and spoken emails,
+  counted).
+- **Store.** `store/migrations/20261116T0900_meetings.ts` (app tables `meeting_series`, `meeting_occurrences`,
+  `meeting_transcripts`, `meeting_proposals`; adds only). `store/meeting-store.ts`: `registered`, the viewer (reviewers
+  and attendees only), occurrences, transcripts, proposals. `store/retention.ts`: transcripts and quotes at 30 days.
+- **Source.** `sources/graph/meetings.ts`: the registrant's calendar (series, instances, organizer, attendees),
+  the online meeting from its join link, its transcripts as text/vtt; the registry gate before every request. Token
+  kind `meetings` in `sources/oauth/oauth.ts` (`MEETINGS_SCOPE`), two rows in `plan/permissions.ts`.
+- **Actions.** `actions/meeting-actions.ts`: `meeting.list`, `candidates`, `register`, `update`, `remove` (admins),
+  `mine`, `review`, `edit`, `no_transcript`, `prepare`, `confirm`, `rerun`, and `uploadTranscript`.
+  `actions/meeting-capture.ts`: the AI pass (`meeting.capture`, Flex in `ai/tiers.ts`). `actions/transcript-file.ts`:
+  .vtt and .docx to lines in memory. Wired in `actions/dispatch.ts` (`meetingContext`, `meetingPerson`,
+  `meetingChatsOf`); confirm calls `devops.preview` and `devops.confirm` and CV-1's commitments (`meeting:<series>`).
+- **Server.** `server/meeting-job.ts` (the scheduler job: occurrences, due transcripts, tokens in order, the AI pass;
+  its wake); `POST /api/meetings/upload` in `server/app.ts` (raw bytes, 5 MB, CSRF); `meetingsTick` in
+  `server/ticks.ts` (the in-app nudge, `meeting_review` in `plan/notify.ts`); the Teams kind `meetings` in
+  `plan/teams-rhythm.ts`, `server/teams/rhythm.ts` and `meetingsCard` in `server/teams/rhythm-cards.ts`.
+- **UI.** `ui/meetings/Meetings.tsx` (Client calls, the review screen, Confirm, Upload a transcript),
+  `ui/meetings/calls.ts` (the Week card's call marks, `meeting.mine` every 5 minutes), `ui/WeekGrid.tsx` (the mark),
+  `ui/settings/AdminMeetings.tsx` (Admin › Clients › Meetings), `#/meetings[/<id>]` in `ui/nav.ts`, styles in
+  `ui/styles.css` (MC-1 block).
+- **Demo.** `sources/demo/meetings.ts` (Northwind's call, its transcript, the AI sample), `sources/demo/seeds/meetings.ts`.
+- **Tests.** `plan/meetings.test.ts`, `plan/transcript.test.ts`, `actions/transcript-file.test.ts`,
+  `actions/meeting-actions.test.ts`, `actions/meeting-capture.test.ts`, `sources/graph/meetings.test.ts`,
+  `server/meeting-job.test.ts`, `store/meeting-store.test.ts`, `server/demo-meetings.test.ts`, the MC-1 parts of
+  `server/teams/rhythm.test.ts` and `store/isolation.test.ts`; e2e `e2e/meetings.test.ts`.

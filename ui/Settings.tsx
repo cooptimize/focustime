@@ -991,6 +991,7 @@ function NotifyForm(p: FormProps) {
         {group("Other", ["vm", "followups", "expiry", "asks"])}
         {group("Client chats", ["commitment_item", "taken_over"])}
         {group("Monday's status report", ["status_report"])}
+        {group("Client calls", ["meeting_review"])}
       </div>
       <SaveMark s={a.status("kinds")} retry={() => a.commit("kinds")} />
       <AutoField a={a} k="status" label="Status report times" hint="Friday at this time, or an hour before your day ends if that comes first. Sunday only when you turn it on. These times hold in Teams too.">

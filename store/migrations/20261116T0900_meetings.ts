@@ -12,7 +12,7 @@
 import type { NamedMigration } from "./named.ts";
 
 export const meetings: NamedMigration = {
-  name: "20261115T0900_meetings",
+  name: "20261116T0900_meetings",
   sqlite: `CREATE TABLE meeting_series (
      id INTEGER PRIMARY KEY AUTOINCREMENT,
      client_key TEXT NOT NULL,

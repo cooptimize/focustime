@@ -76,7 +76,7 @@ import type { ActionContext } from "../actions/dispatch.ts";
 import { userZone } from "../week/zone.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { pollCycle, requestsNextDue, type PollDeps, type PollPerson } from "../actions/request-poll.ts";
-import { requestContext, aiFor, escalationHours, dispatch } from "../actions/dispatch.ts";
+import { requestContext, aiFor, escalationHours, dispatch, meetingPerson } from "../actions/dispatch.ts";
 import type { WeekLoadData } from "../actions/types.ts";
 import { createTeamsEndpoint } from "./teams/sdk.ts";
 import { BLOCKED_KEY, createRhythm, pacedSender, type Rhythm, type Takeover } from "./teams/rhythm.ts";
@@ -88,6 +88,12 @@ import { todayFacts } from "./teams/quick.ts";
 import { teamsAssistant } from "./teams/assistant.ts";
 import { createTeamsBotStore } from "../store/teams-bot-store.ts";
 import { createConversationStore } from "../store/conversation-store.ts";
+import { createMeetingStore } from "../store/meeting-store.ts";
+import { createMeetingsClient, type MeetingsClient } from "../sources/graph/meetings.ts";
+import { canView, graphReadable } from "../plan/meetings.ts";
+import { meetingJob } from "./meeting-job.ts";
+import { inviteDomains } from "../config/schema.ts";
+import type { MeetingUser } from "../actions/meeting-actions.ts";
 import { whoRepair, type WhoRepairPerson } from "./who-repair.ts";
 import { upkeep as upkeepConversations } from "../actions/conversation-upkeep.ts";
 import { backfillRequests } from "../actions/conversation-backfill.ts";
@@ -235,6 +241,7 @@ const presenceClients = new WeakMap<object, PresenceClient>();
 const photoClients = new WeakMap<object, PhotoClient>();
 const chatsClients = new WeakMap<object, ChatsClient>();
 const messageClients = new WeakMap<object, ChatMessagesClient>();
+const meetingClients = new WeakMap<object, MeetingsClient>();
 const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null => {
   if (!cfg.outlook) return null;
   const src = outlookFor(who)(cfg.outlook, userZone(cfg));
@@ -250,7 +257,22 @@ const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null =>
   // AP-1: a registered chat's messages on their own token (Chat.Read, which each person allows when switching Asks on).
   let chatMessages = messageClients.get(src);
   if (!chatMessages) messageClients.set(src, (chatMessages = createChatsClient({ fetch, token: () => src.auth.accessToken("messages"), invalidate: () => src.auth.invalidate(), log })));
+  // MC-1: registered meetings only: the calendar token for the series and its instances, the meetings token
+  // (OnlineMeetings.Read, OnlineMeetingTranscript.Read.All) for the transcript, which the gate allows only for a
+  // registered, Automatic call organized at Cooptimize (checked before every request).
+  let meetings = meetingClients.get(src);
+  if (!meetings)
+    meetingClients.set(src, (meetings = createMeetingsClient({
+      fetch,
+      calendarToken: () => src.auth.accessToken("read"),
+      meetingsToken: () => src.auth.accessToken("meetings"),
+      invalidate: () => src.auth.invalidate(),
+      gate: { allowed: async (q) => { const s = await meetingStore.registered(q).catch(() => null); return !!s && graphReadable(s); } },
+      homeDomains: inviteDomains(cfg),
+      log,
+    })));
   return {
+    meetings,
     presence,
     photos,
     chats,
@@ -376,7 +398,14 @@ const pollDeps: PollDeps = {
   },
 };
 // CV-1: conversations, commitments and suggestions, shared like the chats (D521's viewer gates every read).
-const conversations = createConversationStore(db, instantNow, teams);
+// MC-1: the registered client calls (app tables). A call's shared commitments live in conversations under the pseudo
+// chat meeting:<series>, seen only by its reviewers and attendees.
+const meetingStore = createMeetingStore(db, instantNow);
+const meetingUsers = async (): Promise<MeetingUser[]> => (await accounts.users.all()).filter((u) => !u.deletedAt).map((u) => ({ id: u.id, name: u.displayName || u.upn, emails: [u.email, u.upn].filter((e): e is string => !!e) }));
+const conversations = createConversationStore(db, instantNow, teams, async (chatId, userId) => {
+  const s = await meetingStore.series(Number(chatId.slice("meeting:".length)));
+  return !!s && !s.removedAt && canView(s, userId);
+});
 // PV-1: Take one's notices to the previous assignee (an app table).
 const takes = takesStore(db, instantNow);
 const devopsNotes = notesStore(db, instantNow);
@@ -895,6 +924,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     devopsNotes,
     devopsStored: async (k, v) => devopsPoller?.reads.stored?.(k, v),
     team,
+    meetings: { store: meetingStore, users: meetingUsers },
     account: accountFor(who),
     photoCache: host.photos,
     push,
@@ -1203,10 +1233,20 @@ const peopleJob = {
 };
 // HK-4: the retention purge, once a UTC day for everyone (claimed, so one replica runs it), counts only.
 const retention = retentionJob({ db, now: instantNow, log, expireChats: (olderThan) => teams.expire(olderThan), chatRetentionDays: async () => (await pollDeps.rules!()).retentionDays });
+// MC-1: registered client calls: occurrences laid out from the registrant's calendar, transcripts looked for after
+// each one with a reviewer's own delegated token, then the AI pass (Flex). Its wake is the next check or call end.
+const meetings = meetingJob({
+  store: meetingStore,
+  now: instantNow,
+  log,
+  users: meetingUsers,
+  person: async (uid) => ((await accounts.users.get(uid))?.deletedAt === null ? meetingPerson(await runtimeFor(uid)) : null),
+});
 const scheduler = createScheduler({
   jobs: [
     peopleJob,
     retention,
+    { name: meetings.name, run: () => jobs("meeting_capture", {}, () => meetings.run()), wake: meetings.wake },
     ...(devopsPoller ? [{ name: "devops_poll", run: async () => void (await devopsPoller!.tick()), wake: () => devopsPoller!.wake() }] : []),
     ...(pollInBackground
       ? [{

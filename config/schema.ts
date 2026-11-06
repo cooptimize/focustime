@@ -10,7 +10,7 @@ import { DEFAULT_NOTIFY, NOTIFY_KINDS, type NotifyKind, type NotifySettings } fr
 import { CLOSEOUT_MINUTES, HM, type TeamsRhythm } from "../plan/teams-rhythm.ts";
 
 /** TB-2: the In Teams switches as [notify] keys. */
-const TEAMS_SWITCH: Record<string, keyof Pick<TeamsRhythm, "brief" | "checkin" | "closeout" | "nudges" | "status" | "friday">> = { teams_brief: "brief", teams_checkin: "checkin", teams_closeout: "closeout", teams_nudges: "nudges", teams_status: "status", teams_friday: "friday" };
+const TEAMS_SWITCH: Record<string, keyof Pick<TeamsRhythm, "brief" | "checkin" | "closeout" | "nudges" | "status" | "meetings" | "friday">> = { teams_brief: "brief", teams_checkin: "checkin", teams_closeout: "closeout", teams_nudges: "nudges", teams_status: "status", teams_meetings: "meetings", teams_friday: "friday" };
 import { DEFAULT_FOCUS, MAX_PLAYLISTS, playlistLink, SOUNDS, type FocusSettings, type SoundKind } from "../plan/focussound.ts";
 import { parseSpan, VIEW_RANGES, WEEKDAY_KEYS, type DayOverride, type Span, type TimeModel, type ViewRange, type WeekdayKey } from "../week/hours.ts";
 import { NEUTRAL_ZONE } from "../week/zone.ts";
