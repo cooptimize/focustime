@@ -97,8 +97,12 @@ describe("parseConfig", () => {
     expect(fields(valid.replace(/^tenant_id = .*$/m, ""))).toContain("dataverse.tenant_id");
   });
 
-  it("rejects unknown fields so typos are caught", () => {
-    expect(fields(valid.replace("[risk]", "[risk]\nmeeting_wach_minutes = 3"))).toContain("risk.meeting_wach_minutes");
+  it("BH-1: unknown fields and sections (a newer build's) are ignored and listed, not errors; strict still refuses them", () => {
+    const text = valid.replace("[risk]", "[risk]\nmeeting_wach_minutes = 3") + "\n[future]\nsetting = 1\n";
+    const r = parseConfig(text);
+    expect(r.ok && r.ignored).toEqual(["future", "risk.meeting_wach_minutes"]);
+    const strict = parseConfig(text, { strict: true });
+    expect(strict.ok ? [] : strict.errors.map((e) => e.field)).toEqual(["future", "risk.meeting_wach_minutes"]);
   });
 
   it("reports TOML syntax errors with a line", () => {
@@ -187,7 +191,7 @@ describe("[plan] pickable portfolio types (Q20)", () => {
   it("names bad values and unknown fields", () => {
     expect(fields(`${valid}\n[plan]\npickable_portfolio_types = "Recurring"\n`)).toEqual(["plan.pickable_portfolio_types"]);
     expect(fields(`${valid}\n[plan]\npickable_portfolio_types = ["", 3]\n`)).toEqual(["plan.pickable_portfolio_types[0]", "plan.pickable_portfolio_types[1]"]);
-    expect(fields(`${valid}\n[plan]\ntypes = []\n`)).toEqual(["plan.types"]);
+    expect(parseConfig(`${valid}\n[plan]\ntypes = []\n`, { strict: true }).ok).toBe(false);
     // PK-1: When I check off a to-do is "ask" or "never".
     expect(fields(`${valid}\n[plan]\ndevops_on_done = "always"\n`)).toEqual(["plan.devops_on_done"]);
   });
@@ -334,7 +338,7 @@ describe("[asks] (AP-1)", () => {
     ["poll_minutes = 0", false],
     ["poll_minutes = 61", false],
     ["ack_phrases = \"thanks\"", false],
-    ["colour = 1", false],
+    ["colour = 1", true],
   ])("%s", (toml, ok) => {
     const r = parse(toml);
     expect(r.ok).toBe(ok);
@@ -353,7 +357,7 @@ describe("[ai] (AI-0)", () => {
     ["monthly_cap_usd = -1", false],
     ["monthly_cap_usd = 1001", false],
     ["allowed_clients = \"fabrikam\"", false],
-    ["model = \"x\"", false],
+    ["model = \"x\"", true],
   ])("%s", (toml, ok) => {
     const r = parseConfig(`${valid}\n[ai]\n${toml}\n`);
     expect(r.ok).toBe(ok);

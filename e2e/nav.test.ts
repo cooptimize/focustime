@@ -119,7 +119,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
   it("Ahead: Grid · Gantt · Fix next; the ⋯ menu has Commands, the Guide, the keys, Send feedback and About; the initials menu has Settings", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("3");
-    await expect.poll(() => page.locator(".mode-switch .ms-btn").allTextContents()).toEqual(["Grid", "Gantt", "Gaps · 7"]);
+    await expect.poll(() => page.locator(".mode-switch .ms-btn").allTextContents()).toEqual(["Grid", "Gantt", "Gaps · 7", "Backlog"]);
     await page.keyboard.press("p");
     await expect.poll(() => hash(page)).toBe("#/ahead/gantt");
     await page.locator(".ahead .pa-grid").waitFor();

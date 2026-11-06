@@ -10,8 +10,8 @@ import { TEAM } from "./guide/content.ts";
 const commands = (ACTIONS as readonly ActionSpec[]).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}) }));
 
 describe("QF-1 names", () => {
-  it("Ahead's modes read Grid · Gantt · Gaps; the code name and address stay fix", () => {
-    expect(MODES.ahead.map((m) => MODE_NAMES[m])).toEqual(["Grid", "Gantt", "Gaps"]);
+  it("Ahead's modes read Grid · Gantt · Gaps (BH-1: · Backlog); the code name and address stay fix", () => {
+    expect(MODES.ahead.map((m) => MODE_NAMES[m])).toEqual(["Grid", "Gantt", "Gaps", "Backlog"]);
     expect(hashOf({ nav: navOf.ahead("fix"), overlay: null })).toBe("#/ahead/fix");
     expect(parseHash("#/ahead/gaps")?.nav).toEqual(navOf.ahead("fix"));
   });

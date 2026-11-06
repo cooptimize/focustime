@@ -14,8 +14,9 @@ import type { IsoDate } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
 import type { ActionResponse, AheadClient, AheadItem, AheadLoad } from "./types.ts";
 import { GAP_KINDS, TOP_N, type GapKind } from "../plan/fixnext.ts";
+import { bulkDecide, DEFAULT_AHEAD, type BulkOp } from "../plan/backlog.ts";
 
-export const AHEAD_ACTIONS = ["ahead.load", "ahead.stage", "ahead.unstage", "ahead.discard", "ahead.resolve", "ahead.filters", "ahead.set_filters"] as const;
+export const AHEAD_ACTIONS = ["ahead.load", "ahead.stage", "ahead.stage_bulk", "ahead.unstage", "ahead.discard", "ahead.resolve", "ahead.filters", "ahead.set_filters"] as const;
 export type AheadAction = (typeof AHEAD_ACTIONS)[number];
 
 export type AheadContext = {
@@ -23,7 +24,7 @@ export type AheadContext = {
   config: () => Promise<AppConfig | null>;
   /** The clients this person sees (followed, clients only via clientAccounts(), with DevOps), as Roadmap reads them. */
   clients: (cfg: AppConfig, weekStart: IsoDate, refresh: boolean) => Promise<ClientRef[]>;
-  devops: (cfg: AppConfig) => Pick<DevOpsSource, "aheadItems">;
+  devops: (cfg: AppConfig) => Pick<DevOpsSource, "aheadItems" | "lastChanges">;
   /** isClientLead over clientAccounts() for me (Internal like any client). */
   isLead: (clientKey: string) => Promise<boolean>;
   /** An admin flagged me as an automation account. */
@@ -112,7 +113,7 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
   let held: Promise<AheadIdentities | null> | null = null;
   const idx = () => (held ??= ctx.identities ? ctx.identities().catch(() => null) : Promise.resolve(null));
   /** One client's items (the store read is cheap). */
-  const oneClient = async (clientKey: string): Promise<AheadClient | null> => {
+  const oneClient = async (clientKey: string): Promise<(AheadClient & { mine: string[] }) | null> => {
     const ref = (await ctx.clients(cfg, mondayOf(today), false)).find((c) => c.clientKey === clientKey);
     if (!ref) return null;
     // AH-2: any item of the project (an item shown with "Show the whole project" can be changed too; rights still decide).
@@ -121,8 +122,8 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
   };
 
   if (action === "ahead.load") {
-    const o = obj(input, ["refresh"]);
-    if (!o || (o.refresh !== undefined && typeof o.refresh !== "boolean")) return bad("ahead.load takes { refresh? }");
+    const o = obj(input, ["refresh", "lastChanges"]);
+    if (!o || (o.refresh !== undefined && typeof o.refresh !== "boolean") || (o.lastChanges !== undefined && typeof o.lastChanges !== "boolean")) return bad("ahead.load takes { refresh?, lastChanges? }");
     const refs = await ctx.clients(cfg, mondayOf(today), o.refresh === true);
     const read = ctx.devops(cfg).aheadItems;
     // AH-2: "Show the whole project" is remembered with my filters; without it, only Cooptimize's scope (and my items).
@@ -136,12 +137,90 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
       const c = withIdentities(raw, ix);
       const lead = await ctx.isLead(c.clientKey).catch(() => false);
       const rights = rightsOf(c, { lead, automation });
-      out.push({ ...c, lead, editable: [...rights].filter(([, r]) => r.ok).map(([id]) => id), note: automation ? "Automation accounts don't change DevOps from FocusTime." : `Only ${c.clientName}'s leads and the owner can change this.`, canWrite: await ctx.canWrite(c.clientKey).catch(() => false), hints: hints.get(c.clientKey) ?? {}, fixGaps: fr.gaps(c.clientKey) });
+      // BH-1: Backlog asks for what the change log says each item's last change was (30 days at most).
+      const last = o.lastChanges === true && c.status === "ok" ? await ctx.devops(cfg).lastChanges?.(c.clientKey).catch(() => null) : null;
+      out.push({ ...c, ...(last ? { last } : {}), lead, editable: [...rights].filter(([, r]) => r.ok).map(([id]) => id), note: automation ? "Automation accounts don't change DevOps from FocusTime." : `Only ${c.clientName}'s leads and the owner can change this.`, canWrite: await ctx.canWrite(c.clientKey).catch(() => false), hints: hints.get(c.clientKey) ?? {}, fixGaps: fr.gaps(c.clientKey) });
     }
     await moveOldDrags(plan, out);
     await reconcile(plan, out);
     const halves = await keptHalves(plan, out);
-    return { ok: true, data: { today, clients: out, changes: await plan.aheadChanges(), halves, automation, fixTopN: fr.topN } satisfies AheadLoad };
+    return { ok: true, data: { today, clients: out, changes: await plan.aheadChanges(), halves, automation, fixTopN: fr.topN, staleWeeks: cfg.ahead?.staleWeeks ?? DEFAULT_AHEAD.staleWeeks } satisfies AheadLoad };
+  }
+
+  /** One change into my change set, after the same checks every edit has (rights, the field, whom I may assign). */
+  const stageOne = async (c: AheadClient, item: AheadItem, field: ChangeField, raw: ChangeValue, halfIn: DayHalf | null, lead: boolean): Promise<string | null> => {
+    let value = raw;
+    const right = rightsOf(c, { lead, automation }).get(item.id)!;
+    if (!right.ok) return right.note;
+    if (!hasField(c, item.type, field)) return `${field === "size" ? "A size" : field === "start" ? "A start date" : "A target date"} isn't in ${c.project ?? c.clientName}'s process for ${item.type}`;
+    if (field === "assignee" && value && typeof value === "object" && !(await ctx.assignable(c.clientKey, value.email).catch(() => false))) return `Only Cooptimizers on ${c.clientName} can be assigned here`;
+    // AH-3: a person who signs in to this client's DevOps with a client login is assigned as that login.
+    if (field === "assignee" && value && typeof value === "object") {
+      const ix = await idx();
+      if (ix) value = { email: ix.writeAs(c.clientKey, value.email).toLowerCase(), name: ix.personOf(c.clientKey, value.email)?.name ?? value.name };
+    }
+    const half: DayHalf | null = field === "start" || field === "target" ? (value === null ? null : (halfIn ?? (field === "start" ? "AM" : "PM"))) : null;
+    const existing = (await plan.aheadChanges()).find((x) => x.clientKey === c.clientKey && x.itemId === item.id && x.field === field);
+    const baseValue = existing ? existing.baseValue : currentValue(item, field);
+    const baseRev = existing ? existing.baseRev : item.rev;
+    if (sameValue(field, value, baseValue) && existing?.theirs === undefined) {
+      // Back to what DevOps has: no change. A different half on the same day is FocusTime's alone.
+      await plan.removeAheadChanges(c.clientKey, item.id, field);
+      if ((field === "start" || field === "target") && typeof value === "string") await plan.setAheadHalf(c.clientKey, item.id, field, value, half);
+    } else await plan.stageAheadChange({ clientKey: c.clientKey, itemId: item.id, field, value, half, baseRev, baseValue });
+    return null;
+  };
+
+  if (action === "ahead.stage_bulk") {
+    // BH-1: one bulk action from Backlog on the selected rows, one staged change per item, the rest skipped with why.
+    const o = obj(input, ["items", "op"]);
+    const op = o ? checkBulkOp(o.op) : null;
+    const list = o && Array.isArray(o.items) && o.items.length > 0 && o.items.length <= 200 ? (o.items as unknown[]) : null;
+    const keys = list?.every((x) => !!x && typeof x === "object" && !Array.isArray(x) && Object.keys(x).every((k) => k === "clientKey" || k === "itemId") && isKey((x as Obj).clientKey) && isId((x as Obj).itemId)) ? (list as { clientKey: string; itemId: number }[]) : null;
+    if (!op || !keys) return bad("ahead.stage_bulk takes { items: [{ clientKey, itemId }] (1 to 200), op: { kind: push, weeks: 2 | 4 } | { kind: move | set_missing, date } | { kind: assign_me } }");
+    const staged: { clientKey: string; itemId: number }[] = [];
+    const skipped: { clientKey: string; itemId: number; reason: string }[] = [];
+    for (const clientKey of [...new Set(keys.map((k) => k.clientKey))]) {
+      const ids = [...new Set(keys.filter((k) => k.clientKey === clientKey).map((k) => k.itemId))];
+      const c = await oneClient(clientKey);
+      if (!c) {
+        for (const itemId of ids) skipped.push({ clientKey, itemId, reason: "That client isn't one you see in Ahead" });
+        continue;
+      }
+      const lead = await ctx.isLead(clientKey).catch(() => false);
+      const rights = rightsOf(c, { lead, automation });
+      const pending = (await plan.aheadChanges()).filter((x) => x.clientKey === clientKey);
+      const meEmail = c.me ?? c.mine[0] ?? null;
+      const mine = new Set(c.mine);
+      for (const itemId of ids) {
+        const item = c.items.find((i) => i.id === itemId);
+        if (!item) {
+          skipped.push({ clientKey, itemId, reason: `#${itemId} isn't in ${c.clientName}'s DevOps items here` });
+          continue;
+        }
+        const p = (f: ChangeField) => pending.find((x) => x.itemId === itemId && x.field === f);
+        const pt = p("target"), pa = p("assignee");
+        const target = pt ? (pt.value as string | null) : item.target;
+        const assignee = pa ? (pa.value as { email: string } | null)?.email ?? null : item.assignee?.email ?? null;
+        const right = rights.get(itemId)!;
+        const d = bulkDecide({ id: itemId, type: item.type, editable: right.ok, note: right.ok ? "" : right.note, hasTarget: hasField(c, item.type, "target"), target, mine: !!assignee && mine.has(assignee.toLowerCase()) }, op, c.project ?? c.clientName);
+        if (!d.ok) {
+          skipped.push({ clientKey, itemId, reason: d.reason });
+          continue;
+        }
+        if (d.step.field === "assignee" && !meEmail) {
+          skipped.push({ clientKey, itemId, reason: `FocusTime doesn't know your DevOps identity on ${c.clientName}` });
+          continue;
+        }
+        const ix = await idx();
+        const value: ChangeValue = d.step.field === "target" ? d.step.value : { email: meEmail!.toLowerCase(), name: ix?.personOf(clientKey, meEmail!)?.name ?? "Me" };
+        const half = d.step.field === "target" ? (pt?.half ?? null) : null;
+        const why = await stageOne(c, item, d.step.field, value, half, lead);
+        if (why) skipped.push({ clientKey, itemId, reason: why });
+        else staged.push({ clientKey, itemId });
+      }
+    }
+    return { ok: true, data: { changes: await plan.aheadChanges(), staged, skipped } };
   }
 
   if (action === "ahead.stage") {
@@ -162,21 +241,8 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     const right = rightsOf(c, { lead, automation }).get(item.id)!;
     if (!right.ok) return bad(right.note, 403);
     if (!hasField(c, item.type, o.field)) return bad(`${o.field === "size" ? "A size" : o.field === "start" ? "A start date" : "A target date"} isn't in ${c.project ?? c.clientName}'s process for ${item.type}`, 409);
-    if (o.field === "assignee" && value && typeof value === "object" && !(await ctx.assignable(c.clientKey, value.email).catch(() => false))) return bad(`Only Cooptimizers on ${c.clientName} can be assigned here`, 403);
-    // AH-3: a person who signs in to this client's DevOps with a client login is assigned as that login.
-    if (o.field === "assignee" && value && typeof value === "object") {
-      const ix = await idx();
-      if (ix) value = { email: ix.writeAs(c.clientKey, value.email).toLowerCase(), name: ix.personOf(c.clientKey, value.email)?.name ?? value.name };
-    }
-    const half: DayHalf | null = o.field === "start" || o.field === "target" ? (value === null ? null : ((o.half as DayHalf | undefined) ?? (o.field === "start" ? "AM" : "PM"))) : null;
-    const existing = (await plan.aheadChanges()).find((x) => x.clientKey === c.clientKey && x.itemId === item.id && x.field === o.field);
-    const baseValue = existing ? existing.baseValue : currentValue(item, o.field);
-    const baseRev = existing ? existing.baseRev : item.rev;
-    if (sameValue(o.field, value, baseValue) && existing?.theirs === undefined) {
-      // Back to what DevOps has: no change. A different half on the same day is FocusTime's alone.
-      await plan.removeAheadChanges(c.clientKey, item.id, o.field);
-      if ((o.field === "start" || o.field === "target") && typeof value === "string") await plan.setAheadHalf(c.clientKey, item.id, o.field, value, half);
-    } else await plan.stageAheadChange({ clientKey: c.clientKey, itemId: item.id, field: o.field, value, half, baseRev, baseValue });
+    const why = await stageOne(c, item, o.field, value, (o.half as DayHalf | undefined) ?? null, lead);
+    if (why) return bad(why, 403);
     return { ok: true, data: { changes: await plan.aheadChanges() } };
   }
 
@@ -284,7 +350,7 @@ export type { AheadFilters, AheadOwner };
 export function checkFilters(v: unknown): AheadFilters | null {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
   const o = v as Obj;
-  if (Object.keys(o).some((k) => !["owner", "clients", "epic", "gaps", "from", "to", "q", "states", "whole"].includes(k))) return null;
+  if (Object.keys(o).some((k) => !["owner", "clients", "epic", "gaps", "from", "to", "q", "states", "whole", "tier", "stale"].includes(k))) return null;
   const date = (x: unknown) => (x === null || x === undefined ? null : typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x) ? x : undefined);
   const owner: Record<string, AheadOwner> = {};
   if (o.owner !== undefined) {
@@ -301,8 +367,32 @@ export function checkFilters(v: unknown): AheadFilters | null {
   if (o.epic !== undefined && o.epic !== null && (typeof o.epic !== "string" || o.epic.length > 120)) return null;
   if (o.gaps !== undefined && typeof o.gaps !== "boolean") return null;
   if (o.whole !== undefined && typeof o.whole !== "boolean") return null;
+  // BH-1: Backlog's tier and Stale filter.
+  if (o.tier !== undefined && o.tier !== "epic" && o.tier !== "feature" && o.tier !== "story") return null;
+  if (o.stale !== undefined && typeof o.stale !== "boolean") return null;
   if (o.q !== undefined && (typeof o.q !== "string" || o.q.length > 200)) return null;
-  return { owner, clients, epic: (o.epic as string | null | undefined) ?? null, gaps: o.gaps === true, from, to, q: (o.q as string | undefined) ?? "", states, ...(o.whole === true ? { whole: true } : {}) };
+  return { owner, clients, epic: (o.epic as string | null | undefined) ?? null, gaps: o.gaps === true, from, to, q: (o.q as string | undefined) ?? "", states, ...(o.whole === true ? { whole: true } : {}), ...(o.tier !== undefined ? { tier: o.tier as "epic" | "feature" | "story" } : {}), ...(o.stale === true ? { stale: true } : {}) };
+}
+
+/** BH-1: a bulk action as Backlog sends it. */
+export function checkBulkOp(v: unknown): BulkOp | null {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
+  const o = v as Obj;
+  const date = (x: unknown) => {
+    if (typeof x !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(x)) return null;
+    try {
+      return Temporal.PlainDate.from(x, { overflow: "reject" }).toString();
+    } catch {
+      return null;
+    }
+  };
+  if (o.kind === "push" && Object.keys(o).every((k) => k === "kind" || k === "weeks") && (o.weeks === 2 || o.weeks === 4)) return { kind: "push", weeks: o.weeks };
+  if ((o.kind === "move" || o.kind === "set_missing") && Object.keys(o).every((k) => k === "kind" || k === "date")) {
+    const d = date(o.date);
+    return d ? { kind: o.kind, date: d } : null;
+  }
+  if (o.kind === "assign_me" && Object.keys(o).length === 1) return { kind: "assign_me" };
+  return null;
 }
 
 export { byItem };

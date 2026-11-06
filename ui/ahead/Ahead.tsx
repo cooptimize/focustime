@@ -22,6 +22,8 @@ import { buildRows, DEFAULT_FILTERS, epicsOf, fixGroups, groups, ownerOf, type G
 import { Grid } from "./Grid.tsx";
 import { Gantt } from "./Gantt.tsx";
 import { FixNext } from "./FixNext.tsx";
+import { Backlog } from "./Backlog.tsx";
+import { backlogGroups, DEFAULT_AHEAD } from "../../plan/backlog.ts";
 import { gridLayout, useWindowScale } from "./layout.ts";
 import type { ModeName } from "../nav.ts";
 
@@ -36,6 +38,8 @@ export type AheadEnv = {
   readOnly: boolean;
   stage: (r: Row, field: ChangeField, value: ChangeValue, half?: DayHalf | null) => Promise<boolean>;
   unstage: (r: Row, field?: ChangeField) => Promise<void>;
+  /** BH-1: my change set after a bulk action staged it on the server. */
+  setChanges: (changes: StagedChange[]) => void;
   /** Break down's side panel for a feature or epic (Coop brief one click away there). */
   breakDown: (r: Row) => void;
   color: (clientKey: string) => string;
@@ -59,10 +63,13 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   const head = useRef<HTMLHeadingElement>(null);
   const dw = useDevOpsWrite();
 
+  // BH-1: only Backlog asks for the change log's last change per item.
+  const wantLast = useRef(mode === "backlog");
+  wantLast.current = wantLast.current || mode === "backlog";
   const reload = useCallback(async (refresh = false) => {
     setBusy(true);
     try {
-      const l = await call<AheadLoad>("ahead.load", refresh ? { refresh: true } : {});
+      const l = await call<AheadLoad>("ahead.load", { ...(refresh ? { refresh: true } : {}), ...(wantLast.current ? { lastChanges: true } : {}) });
       setLoad(l);
       setError(null);
       void call<RoadmapState>("roadmap.load", refresh ? { refresh: true } : {}).then(
@@ -80,6 +87,13 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
     call<{ filters: AheadFilters | null }>("ahead.filters", {}).then((r) => setFiltersRaw({ ...DEFAULT_FILTERS, ...(r.filters ?? {}) }), () => setFiltersRaw(DEFAULT_FILTERS));
   }, []);
   useEffect(() => head.current?.focus(), [mode]);
+  const askedLast = useRef(mode === "backlog");
+  useEffect(() => {
+    if (mode === "backlog" && !askedLast.current) {
+      askedLast.current = true;
+      void reload();
+    }
+  }, [mode, reload]);
 
   const setFilters = (f: AheadFilters) => {
     setFiltersRaw(f);
@@ -119,13 +133,16 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   // AH-3: Fix next for every client, whatever the filters (it has none): ranked by each client's backlog.
   const fix = useMemo(() => (load ? fixGroups(load, { readOnly, skipped }) : []), [load, skipped, readOnly]);
   const fixN = fixCount(fix.map((x) => x.group));
+  const tier = f.tier ?? "story";
+  const backlog = useMemo(() => (load && mode === "backlog" ? backlogGroups(load, f, { staleWeeks: load.staleWeeks ?? DEFAULT_AHEAD.staleWeeks, last: Object.fromEntries(load.clients.flatMap((c) => (c.last ? [[c.clientKey, c.last] as const] : []))) }) : []), [load, f, mode]);
 
   const n = load?.changes.length ?? 0;
   const color = (k: string) => clientColor(k, data.clients);
-  const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, breakDown, color, focusItem: item, error: setError } : null;
+  const setChanges = (changes: StagedChange[]) => setLoad((l) => (l ? { ...l, changes } : l));
+  const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, setChanges, breakDown, color, focusItem: item, error: setError } : null;
   const anyFilter = f.clients.length || f.epic || f.gaps || f.from || f.to || f.q.trim();
-  const visible = shown.reduce((k, g) => k + g.rows.filter((r) => !r.context).length, 0);
-  const title = mode === "fix" ? "Gaps" : mode === "gantt" ? "Gantt" : "Grid";
+  const visible = mode === "backlog" ? backlog.reduce((k, g) => k + g.rows.length, 0) : shown.reduce((k, g) => k + g.rows.filter((r) => !r.context).length, 0);
+  const title = mode === "fix" ? "Gaps" : mode === "gantt" ? "Gantt" : mode === "backlog" ? "Backlog" : "Grid";
 
   return (
     <main className={`roadmap ahead ahead-${mode}`} aria-label={`Ahead: ${title}`}>
@@ -148,7 +165,8 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
         </div>
       )}
       {readOnly && load && <p className="muted ah-ro-note">Read only on a phone. Open FocusTime on a computer to change dates, sizes or owners.</p>}
-      {load && filters && mode !== "fix" && <Filters load={load} f={f} set={setFilters} setWhole={(w) => void setWhole(w)} color={color} anyFilter={!!anyFilter} />}
+      {load && filters && mode !== "fix" && mode !== "backlog" && <Filters load={load} f={f} set={setFilters} setWhole={(w) => void setWhole(w)} color={color} anyFilter={!!anyFilter} />}
+      {load && filters && mode === "backlog" && <BacklogFilters load={load} f={f} set={setFilters} color={color} />}
       {load && <ScopeNote load={load} whole={!!f.whole} />}
       {error && <p className="error" role="alert">{error}</p>}
       {!load && !error && <p className="muted">Reading DevOps…</p>}
@@ -157,9 +175,10 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
           <div className={`ah-body lay-${layout}`}>
             <div className="ah-main">
               {load && !load.clients.length && <p className="muted">No followed clients with DevOps this week.</p>}
-              {load && load.clients.length > 0 && mode !== "fix" && visible === 0 && <p className="muted">{anyFilter ? "Nothing matches these filters." : "Nothing here for you yet. Try Owner: All."}</p>}
+              {load && load.clients.length > 0 && mode !== "fix" && mode !== "backlog" && visible === 0 && <p className="muted">{anyFilter ? "Nothing matches these filters." : "Nothing here for you yet. Try Owner: All."}</p>}
               {mode === "grid" && <Grid groups={shown} layout={layout} />}
               {mode === "gantt" && <Gantt data={data} groups={shown} onChanged={onChanged} />}
+              {mode === "backlog" && <Backlog groups={backlog} tier={tier} onChanged={onChanged} />}
               {mode === "fix" && <FixNext groups={fix} skip={(k) => setSkipped((s) => new Set(s).add(k))} dots={layout === "cards" || layout === "dots"} />}
             </div>
           </div>
@@ -191,6 +210,48 @@ function ScopeNote({ load, whole }: { load: AheadLoad; whole: boolean }) {
           {c.clientName}: {c.scope!.problem}.
         </p>
       ))}
+    </div>
+  );
+}
+
+/**
+ * BH-1: Backlog's filters: the clients (as everywhere in Ahead), the owner (Mine, Contributing, Everything in scope;
+ * remembered per client with Grid's), the tier and Stale. Saved with Ahead's other filters.
+ */
+function BacklogFilters({ load, f, set, color }: { load: AheadLoad; f: AheadFilters; set: (f: AheadFilters) => void; color: (k: string) => string }) {
+  const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+  const shownClients = load.clients.filter((c) => !f.clients.length || f.clients.includes(c.clientKey));
+  const owners = new Set(shownClients.map((c) => ownerOf(f, c)));
+  const owner: AheadOwner | null = owners.size === 1 ? [...owners][0]! : null;
+  const setOwner = (o: AheadOwner) => set({ ...f, owner: { ...f.owner, ...Object.fromEntries(shownClients.map((c) => [c.clientKey, o])) } });
+  const tier = f.tier ?? "story";
+  return (
+    <div className="rm-filters ah-filters bl-filters">
+      <span className="rm-chips" role="group" aria-label="Clients">
+        {load.clients.map((c) => (
+          <button key={c.clientKey} type="button" className="rm-chip" style={{ "--c": color(c.clientKey) } as CSSProperties} aria-pressed={f.clients.includes(c.clientKey)} onClick={() => set({ ...f, clients: toggle(f.clients, c.clientKey) })}>
+            <span className="dl-swatch" aria-hidden="true" />
+            {c.clientName}
+          </button>
+        ))}
+      </span>
+      <span className="rm-seg" role="group" aria-label="Level">
+        {(["story", "feature", "epic"] as const).map((t) => (
+          <button key={t} type="button" aria-pressed={tier === t} onClick={() => set({ ...f, tier: t })}>
+            {t === "story" ? "Stories" : t === "feature" ? "Features" : "Epics"}
+          </button>
+        ))}
+      </span>
+      <span className="rm-seg" role="group" aria-label="Owner" title="Mine: assigned to you and what's under your features and epics. Contributing: the features and epics your stories are under. Remembered per client.">
+        {(["mine", "contributing", "all"] as const).map((o) => (
+          <button key={o} type="button" aria-pressed={owner === o} onClick={() => setOwner(o)}>
+            {o === "mine" ? "Mine" : o === "contributing" ? "Contributing" : "Everything in scope"}
+          </button>
+        ))}
+      </span>
+      <button type="button" className="rm-chip" aria-pressed={!!f.stale} onClick={() => set({ ...f, stale: !f.stale })} title={`Only open items with no change in DevOps for ${load.staleWeeks ?? DEFAULT_AHEAD.staleWeeks} weeks or more (Settings › Ahead)`}>
+        Stale
+      </button>
     </div>
   );
 }

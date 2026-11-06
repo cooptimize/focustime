@@ -13,7 +13,7 @@ describe("tabs and modes", () => {
     expect(TABS.map((t) => TAB_NAMES[t])).toEqual(["Today", "Week", "Ahead", "Inbox"]);
     expect(MODES.today).toEqual([]);
     expect(MODES.week).toEqual(["board", "commit", "team", "status"]);
-    expect(MODES.ahead).toEqual(["grid", "gantt", "fix"]);
+    expect(MODES.ahead).toEqual(["grid", "gantt", "fix", "backlog"]);
     expect(MODES.inbox).toEqual([]);
   });
 
@@ -87,6 +87,7 @@ describe("addresses", () => {
     [loc(navOf.week("commit", "2026-11-09")), "#/week/commit/2026-11-09"],
     [loc(navOf.ahead()), "#/ahead"],
     [loc(navOf.ahead("gantt")), "#/ahead/gantt"],
+    [loc(navOf.ahead("backlog")), "#/ahead/backlog"],
     [loc(navOf.ahead("fix")), "#/ahead/fix"],
     [loc(navOf.aheadItem(437)), "#/ahead/item/437"],
     [loc(navOf.inbox()), "#/inbox"],

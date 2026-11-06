@@ -915,6 +915,23 @@ describe("AH-1: Ahead's change set as one fields write per item (D657 to D660)",
     expect(patches(s).filter((w) => w.url.includes("/437"))).toHaveLength(2);
     expect(await s.plan.aheadChanges()).toEqual([]);
   });
+  it("BH-1: a bulk push is one patch per item; the preview names a teammate's assignee; undo puts each date back", async () => {
+    // What ahead.stage_bulk stages for "Push target date by 2 weeks" on my feature and Dana's.
+    s.dv.touch(437, { "Microsoft.VSTS.Scheduling.TargetDate": "2026-11-20T05:00:00Z" });
+    s.dv.touch(601, { "Microsoft.VSTS.Scheduling.TargetDate": "2026-11-27T05:00:00Z" });
+    await stage(437, "target", "2026-12-04", "2026-11-20", "PM", s.dv.items.get(437)!.rev);
+    await stage(601, "target", "2026-12-11", "2026-11-27", "PM", s.dv.items.get(601)!.rev);
+    const r = await s.run<{ previews: DevOpsPreview[] }>("devops.preview", { clientKey: COOP, changes: [{ kind: "fields", itemId: 437 }, { kind: "fields", itemId: 601 }] });
+    const [mine, danas] = r.previews;
+    expect(mine!.notes.join(" ")).not.toContain("not you");
+    expect(danas!.notes[0]).toBe("Assigned to dana@cooptimize.example, not you. They get a quiet note in FocusTime that the dates moved.");
+    const done = [await s.confirm(mine!), await s.confirm(danas!)];
+    expect(done.map((d) => d.confirmed)).toEqual([true, true]);
+    expect(patches(s).map((w) => w.url.match(/workitems\/(\d+)/i)![1])).toEqual(["437", "601"]);
+    expect(await s.plan.aheadChanges()).toEqual([]);
+    for (const d of done) expect((await s.write({ kind: "undo", writeId: d.entry.id })).confirmed).toBe(true);
+    expect([s.dv.items.get(437)!.fields["Microsoft.VSTS.Scheduling.TargetDate"], s.dv.items.get(601)!.fields["Microsoft.VSTS.Scheduling.TargetDate"]]).toEqual(["2026-11-20T05:00:00Z", "2026-11-27T05:00:00Z"]);
+  });
   it("dates moved on a teammate's item: the owner gets a note", async () => {
     await stage(601, "start", "2026-11-23");
     await s.write({ kind: "fields", itemId: 601 });
