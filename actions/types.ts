@@ -373,6 +373,10 @@ export type DevOpsPreview = {
   attachments?: { id: number; src: string; sender: string; at: string; description: string | null; ticked: boolean }[];
 };
 export type DevOpsResult = { entry: import("../plan/devopswrite.ts").DevOpsWriteEntry; confirmed: boolean; message: string; changed?: { field: string; was: string | null; now: string | null }[]; itemId?: number | null; url?: string | null };
+/** PK-1: one checked-off to-do whose DevOps item FocusTime may offer to set done: its current state and the done choices (Completed first, then Resolved). */
+export type DoneOffer = { pickId: number; clientKey: string; clientName: string; itemId: number; title: string; type: string; state: string; choices: string[] };
+/** PK-1: the state write a to-do's offer made, offered for Undo when the to-do is unchecked. */
+export type UndoOffer = { pickId: number; writeId: number; clientKey: string; clientName: string; itemId: number | null; title: string; before: string | null; after: string | null };
 export type DevOpsLogView = { entries: (import("../plan/devopswrite.ts").DevOpsWriteEntry & { undoable: boolean; retryable: boolean })[] };
 
 /** Step 17: one story (or an epic's feature) under a Roadmap row, grouped by state. */

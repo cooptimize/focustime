@@ -491,7 +491,7 @@ function StandingForm(p: FormProps) {
 const PLANNING_LABELS: Record<string, string> = {
   minS: "Shortest useful time, S", minM: "Shortest useful time, M", minL: "Shortest useful time, L", carryDays: "Carry-over",
   reminderOffsetMinutes: "Reminder", checkinReminderMinutes: "Check-in reminder", closeoutReminderMinutes: "Close out reminder", weekNudgeThu: "Thursday nudge",
-  weekNudgeFri: "Friday nudge", weekNudgeMon: "Monday nudge", followGraceDays: "Keep following", focusMinutes: "Focus length", breakMinutes: "Break length", endSound: "End sound",
+  weekNudgeFri: "Friday nudge", weekNudgeMon: "Monday nudge", followGraceDays: "Keep following", focusMinutes: "Focus length", breakMinutes: "Break length", endSound: "End sound", devopsOnDone: "When I check off a to-do",
 };
 
 function PlanningForm(p: FormProps) {
@@ -500,7 +500,7 @@ function PlanningForm(p: FormProps) {
     section: "planning",
     initial: {
       minS: pl.minSizes.S, minM: pl.minSizes.M, minL: pl.minSizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes,
-      focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes,
+      focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, devopsOnDone: pl.devopsOnDone, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes,
       checkinReminderMinutes: pl.checkinReminderMinutes, weekNudgeThu: pl.weekNudgeThu, weekNudgeFri: pl.weekNudgeFri, weekNudgeMon: pl.weekNudgeMon,
     },
     payload: (v) => ({
@@ -510,6 +510,7 @@ function PlanningForm(p: FormProps) {
       focusMinutes: v.focusMinutes,
       breakMinutes: v.breakMinutes,
       endSound: v.endSound,
+      devopsOnDone: v.devopsOnDone,
       followGraceDays: v.followGraceDays,
       closeoutReminderMinutes: v.closeoutReminderMinutes,
       checkinReminderMinutes: v.checkinReminderMinutes,
@@ -536,6 +537,16 @@ function PlanningForm(p: FormProps) {
         {num("carryDays", "Carry-over (days back)", "Unfinished picks offered again. 0 turns it off.", 1, 30)}
         {num("reminderOffsetMinutes", "Reminder (minutes after the day starts)", "Only when today isn't confirmed.", 5, 240)}
       </div>
+      <AutoField a={a} k="devopsOnDone" label="When I check off a to-do" hint="Asking shows its DevOps item's done state to confirm, only for items you can change. Nothing is written without Confirm.">
+        <div className="set-radios" role="radiogroup" aria-label="When I check off a to-do">
+          <label className="set-check">
+            <input type="radio" name="devops-on-done" checked={a.v.devopsOnDone === "ask"} onChange={() => a.change("devopsOnDone", "ask")} /> Ask to update DevOps
+          </label>
+          <label className="set-check">
+            <input type="radio" name="devops-on-done" checked={a.v.devopsOnDone === "never"} onChange={() => a.change("devopsOnDone", "never")} /> Never ask
+          </label>
+        </div>
+      </AutoField>
       <h3>Check-in and Close out</h3>
       <div className="set-grid">
         {num("checkinReminderMinutes", "Check-in reminder (minutes after lunch)", "On a confirmed day. 0 is the end of lunch.", 5, 120)}

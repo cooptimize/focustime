@@ -12,6 +12,7 @@ import { planDayTitle } from "./nav.ts";
 import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
 import { DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps } from "./DevOpsWrite.tsx";
+import { useDoneOffer } from "./DoneOffer.tsx";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { blockClient, isPickable } from "../plan/rules.ts";
 import { dayCalendar, splitByBlocks, type DayEventWhen } from "../plan/todaycal.ts";
@@ -352,6 +353,7 @@ type BlockView = { half: Half; slot: Slot; picks: Pick[]; fit: ReturnType<typeof
 /** One block in the left pane: name, time, one fit line, its picks as rows. Click selects it; drop a pick to move it here. */
 function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act, hintPick, weekFeatures, whens }: { whens: ReadonlyMap<string, DayEventWhen>; b: BlockView; selected: boolean; onSelect: () => void; overflow: boolean; tz: string; now: string; colors: Record<string, string>; name: (k: string | null) => string; act: PlanDayAct; hintPick: number | null; weekFeatures: PlanDayState["weekFeatures"] }) {
   const menus = useContext(MenuCtx);
+  const doneOffer = useDoneOffer();
   const { slot, picks } = b;
   const pv = useContext(PlanCtx);
   const work = useContext(DevOpsWork);
@@ -443,7 +445,7 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
       {ordered.length > 0 ? (
         <ul className="pd2-picks">
           {ordered.map((p) => (
-            <PickRow key={p.id} pick={p} density="plan" toggle={(id, d) => void act("pick.mark_done", { id, done: d })} link draggable highlight={marked.has(p.id)} hint={p.id === hintPick} extra={<RowNote p={p} bc={bc.clientKey} name={name} />} badge={dueOf(p, dues)} />
+            <PickRow key={p.id} pick={p} density="plan" toggle={(id, d) => void Promise.resolve(act("pick.mark_done", { id, done: d })).then((ok) => ok !== false && doneOffer.ticked(id, d, p.clientKey, p.itemId))} link draggable highlight={marked.has(p.id)} hint={p.id === hintPick} extra={<RowNote p={p} bc={bc.clientKey} name={name} />} badge={dueOf(p, dues)} />
           ))}
         </ul>
       ) : suggestedHere ? null : (
@@ -869,6 +871,7 @@ function CarryOver({ picks, date, to, act }: { picks: Pick[]; date: string; to: 
 
 /** A past day: its picks per block, tick done or drop. No sizes, moves, candidates or commit (server enforces it too). */
 function PastDay({ halves, picks, act }: { halves: Half[]; picks: Pick[]; act: PlanDayAct }) {
+  const doneOffer = useDoneOffer();
   return (
     <>
       {halves.map((half) => {
@@ -883,7 +886,7 @@ function PastDay({ halves, picks, act }: { halves: Half[]; picks: Pick[]; act: P
             ) : (
               <ul className="pd2-picks">
                 {mine.map((p) => (
-                  <PickRow key={p.id} pick={p} toggle={(id, d) => void act("pick.mark_done", { id, done: d })} readOnly extra={p.status === "dropped" ? <span className="pr-note">dropped</span> : <span className="pr-note">{p.clientKey}</span>} />
+                  <PickRow key={p.id} pick={p} toggle={(id, d) => void Promise.resolve(act("pick.mark_done", { id, done: d })).then((ok) => ok !== false && doneOffer.ticked(id, d, p.clientKey, p.itemId))} readOnly extra={p.status === "dropped" ? <span className="pr-note">dropped</span> : <span className="pr-note">{p.clientKey}</span>} />
                 ))}
               </ul>
             )}

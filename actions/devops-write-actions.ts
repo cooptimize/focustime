@@ -41,10 +41,8 @@ export type { DevOpsPreview, DevOpsResult };
 
 export const DEVOPS_WRITE_ACTIONS = ["devops.set_write_pat", "devops.clear_write_pat", "devops.write_status", "devops.states", "devops.preview", "devops.confirm", "devops.retry", "devops.log", "devops.done_offer", "devops.undo_offer"] as const;
 export type DevOpsWriteAction = (typeof DEVOPS_WRITE_ACTIONS)[number];
-/** PK-1: one checked-off to-do whose DevOps item FocusTime may offer to set done: its current state and the done choices. */
-export type DoneOffer = { pickId: number; clientKey: string; clientName: string; itemId: number; title: string; type: string; state: string; choices: string[] };
-/** PK-1: the state write a to-do's offer made, offered for Undo when the to-do is unchecked. */
-export type UndoOffer = { pickId: number; writeId: number; clientKey: string; clientName: string; itemId: number | null; title: string; before: string | null; after: string | null };
+export type { DoneOffer, UndoOffer } from "./types.ts";
+import type { DoneOffer, UndoOffer } from "./types.ts";
 
 /** The keyring for write PATs (secrets/keyring.ts). A PAT only ever comes back wrapped. */
 export type WritePats = { get: (clientKey: string) => Promise<Pat>; set: (clientKey: string, value: string) => Promise<void>; clear: (clientKey: string) => Promise<void> };
@@ -342,7 +340,8 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       const since = Temporal.Instant.from(ctx.now()).subtract({ hours: 12 });
       const e = log.find((x) => x.op === "state" && x.itemId === p.itemId && x.clientKey === p.clientKey && x.pickIds.includes(pickId));
       if (!e || e.status !== "confirmed" || e.undoneBy !== null || tops.get(stackKey(e)) !== e.id || Temporal.Instant.compare(Temporal.Instant.from(e.at), since) < 0) return { ok: true, data: { offer: null } };
-      return { ok: true, data: { offer: { pickId, writeId: e.id, clientKey: e.clientKey, clientName: clientName(e.clientKey), itemId: e.itemId, title: e.title, before: e.before.State ?? null, after: e.after.State ?? null } } };
+      const offer: UndoOffer = { pickId, writeId: e.id, clientKey: e.clientKey, clientName: clientName(e.clientKey), itemId: e.itemId, title: e.title, before: e.before.State ?? null, after: e.after.State ?? null };
+      return { ok: true, data: { offer } };
     }
     case "devops.preview": {
       const o = fields(input, ["clientKey"], ["change", "changes"]);

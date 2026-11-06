@@ -53,7 +53,7 @@ function setup(o: { toml?: string; pat?: boolean } = {}) {
   };
   const todo = async (itemId: number | null, done = true) => {
     await plan.start("2026-11-02");
-    const p = await plan.addPick({ date: "2026-11-02", half: "AM", clientKey: COOP, kind: itemId === null ? "intention" : "item", itemId, title: `#${itemId ?? "none"}`, itemType: "User Story", size: "S" });
+    const p = await plan.addPick({ date: "2026-11-02", half: "AM", clientKey: COOP, ...(itemId === null ? { kind: "intention" as const } : { kind: "item" as const, itemId }), title: `#${itemId ?? "none"}`, itemType: "User Story", size: "S" });
     if (done) await plan.setDone(p.id, true);
     return p.id;
   };

@@ -5248,3 +5248,33 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .today-tools { display: flex; justify-content: flex-end; margin: 0 0 8px; }
 .today-block.pto-half { border-left-style: dashed; background: var(--raised); opacity: 0.75; }
 .today-block.pto-half .status-pill { color: var(--text-muted); }
+
+/* ---- PK-1: checking off a to-do offers the DevOps update (one card), and Close out asks once for the day ---- */
+.done-offer { position: fixed; z-index: 71; left: 50%; bottom: 44px; transform: translateX(-50%); width: min(400px, calc(100vw - 32px)); display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow-pop); font-size: var(--fs-3); }
+.done-offer p { margin: 0; }
+.do-title { font-weight: 600; }
+.do-item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.do-preview { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; font-size: var(--fs-2); color: var(--text-muted); }
+.do-preview dt { color: var(--text-faint); }
+.do-preview dd { margin: 0; }
+.do-error, .db-fail { color: var(--risk); }
+.do-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.do-acts .mini { margin-left: 0; }
+.set-radios { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.done-batch { display: grid; gap: 8px; margin-bottom: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: var(--fs-3); }
+.done-batch p { margin: 0; }
+.db-ask { font-weight: 500; }
+.db-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.db-rows li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.db-check { display: inline-flex; align-items: center; gap: 8px; flex: 1 1 220px; min-width: 0; }
+.db-what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-state { font-size: var(--fs-2); }
+.db-ok { font-size: var(--fs-2); color: var(--text-muted); }
+.db-fail { font-size: var(--fs-2); display: inline-flex; align-items: center; gap: 6px; }
+.db-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--fs-2); }
+.db-foot .mini { margin-left: 0; }
+@media (max-width: 599.98px) {
+  .done-offer { left: 16px; right: 16px; width: auto; transform: none; bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .done-offer .mini, .done-batch .mini { min-height: var(--tap); }
+}
+.app.phone .done-offer { bottom: calc(var(--bb-h) + 8px); }

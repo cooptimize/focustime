@@ -15,7 +15,7 @@ import { ModeArea } from "./ModeSwitch.tsx";
 import type React from "react";
 import { DueBadge, Fading, FollowUpRow } from "./FollowUps.tsx";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
-import type { CloseOutState, FollowUpView, UrgentAsk, WeekLoadData } from "../actions/types.ts";
+import type { CloseOutState, DoneOffer, FollowUpView, UrgentAsk, WeekLoadData } from "../actions/types.ts";
 import { blockStatus } from "../plan/blockstatus.ts";
 import type { NowStrip } from "../plan/now.ts";
 import { aboutHours, planFit } from "../plan/fit.ts";
@@ -47,6 +47,7 @@ import { formatDuration } from "../week/format.ts";
 import { call, planAction } from "./api.ts";
 import { captureClients } from "./Capture.tsx";
 import { DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
+import { DoneBatch } from "./DoneOffer.tsx";
 import { DevOpsWork } from "./work.ts";
 import { dayName, FlexOfferBar, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
 import { spanText } from "./menu.ts";
@@ -1067,6 +1068,19 @@ function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onError, onD
   const [extra, setExtra] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
   const work = useContext(DevOpsWork);
+  const devopsWrite = useDevOpsWrite();
+  // PK-1: the day's done to-dos whose items could be set done in DevOps (one ask, one Confirm). Null while loading or
+  // when "never ask" is set (then the per-item Mark done in DevOps rows stay, as before).
+  const [doneOffers, setDoneOffers] = useState<DoneOffer[] | null>(null);
+  const doneKey = st ? st.picks.filter((p) => p.status === "done" && p.itemId !== null && devopsWrite?.can(p.clientKey)).map((p) => p.id).slice(0, 30).join(",") : "";
+  useEffect(() => {
+    if (!doneKey) return void setDoneOffers([]);
+    let live = true;
+    call<{ offers: DoneOffer[]; off: boolean }>("devops.done_offer", { pickIds: doneKey.split(",").map(Number) })
+      .then((r) => live && setDoneOffers(r.off ? null : r.offers))
+      .catch(() => live && setDoneOffers(null));
+    return () => void (live = false);
+  }, [doneKey, devopsWrite?.version]);
   useEffect(() => setExtra([]), [date]);
   useEffect(() => head.current?.focus(), [date]);
   const tz = userZone(data);
@@ -1095,7 +1109,9 @@ function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onError, onD
     const others = data.planClients.filter((c) => !worked.includes(c.clientKey));
     const stillOpen = (clientKey: string, id: number) => !!work.get(clientKey)?.items.some((i) => i.id === id);
     const followUpFor = (id: number) => st.followUps.find((f) => f.kind === "devops_update" && f.itemId === id && !f.closedAt)?.id ?? null;
-    const owedDone = st.picks.filter((p) => p.status === "done" && p.itemId !== null && stillOpen(p.clientKey, p.itemId));
+    // PK-1: with the offer on, the batch below asks for these; "never ask" keeps the rows of Mark done in DevOps.
+    const owedDone = doneOffers === null ? st.picks.filter((p) => p.status === "done" && p.itemId !== null && stillOpen(p.clientKey, p.itemId)) : [];
+    const batch = doneOffers ?? [];
     const owedComment = st.picks.filter((p) => p.status === "planned" && p.itemId !== null && (st.focused[p.id] ?? 0) >= 60);
     const dueBy = st.followUps.filter((l) => l.due !== null && l.due <= date);
     const more = st.followUps.length - dueBy.length;
@@ -1146,9 +1162,10 @@ function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onError, onD
               </button>
             ))}
         </section>
-        {(owedDone.length > 0 || owedComment.length > 0) && (
+        {(owedDone.length > 0 || owedComment.length > 0 || batch.length > 0) && (
           <section className="cp-section" aria-label="DevOps updates owed">
             <h3>DevOps updates owed</h3>
+            {batch.length > 0 && <DoneBatch offers={batch} dayWords={date === st.today ? "today" : `on ${Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" })}`} onDone={rowDone} />}
             <ul className="cp-owed">
               {owedDone.map((p) => (
                 <li key={p.id}>
