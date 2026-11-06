@@ -286,6 +286,7 @@ export const ACTIONS = [
   { name: "followups.review", title: "Review heads-ups", group: "Promises", target: "none", summary: "Open heads-ups the new rule wouldn't open; nothing is closed for you" },
   { name: "data.export", title: "Export the plan", group: "Settings", target: "none", summary: "Picks, drafts and time entries as JSON in ~/.local/share/focustime/exports" },
   { name: "data.export_mine", title: "Export my data", group: "Settings", target: "none", summary: "Everything FocusTime keeps for you (plans, follow-ups, logs, settings) as one JSON file; never a password or token" },
+  { name: "diagnostics.check", title: "Diagnostics", aka: ["missing promise", "chatter filter"], group: "Settings", target: "none", summary: "Counts only, for your own chats: why a conversation showing <Name> committed has no promise of yours, and where your chats' messages were sorted (read-only)" },
   { name: "data.delete_mine", title: "Delete my data", group: "Settings", target: "none", summary: "Signs you out and deletes everything FocusTime keeps for you, for good after 30 days; asks you to confirm" },
   { name: "auth.connect_outlook_write", title: "Reconnect Outlook with calendar changes", group: "Sources", target: "none", summary: "Sign in again and allow FocusTime to create and change its own Outlook events (timeboxes)" },
   { name: "timebox.add", title: "Timebox…", group: "Timebox", target: "pick", summary: "Give a pick or item a start and length on the day's timeline (local; Outlook optional)" },
