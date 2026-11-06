@@ -6,7 +6,7 @@
 export { DEFAULT_AI_PERSON, DEFAULT_AI_RULES, type AiPersonSettings, type AiRules } from "./types.ts";
 import type { Logger } from "../log/logger.ts";
 import { costMicros, micros, monthBounds, monthOf, type Prices } from "./cost.ts";
-import { guard, otherClientMatch, type GuardHit, type GuardInput } from "./guard.ts";
+import { guard, otherClientMatch, redactValue, type GuardHit, type GuardInput, type Redaction } from "./guard.ts";
 import { strictProblems, validate } from "./schema.ts";
 import { AI_MESSAGES, AiError, NO_CLIENT, type ProviderCall, type ToolRound, type ToolSpec, type AiImageInput, type AiFail, type AiRules, type AiStatus, type AiErrorKind, type AiLogEntry, type AiOutcome, type AiProvider, type AiResult, type JsonSchema, type ProviderReply, type Usage } from "./types.ts";
 
@@ -90,6 +90,20 @@ export function createAi(d: AiDeps) {
     // App Insights: counts and outcomes only, and whose cap it counted against.
     logger({ source: "ai", op: "request", kind: scope === "app" ? `${task.name}:${outcome}:app` : `${task.name}:${outcome}`, ...(detail ? { status: detail } : {}), durationMs: latencyMs, count: usage.inputTokens + usage.outputTokens });
     return cost;
+  }
+
+  /**
+   * HK-4: an answer's secret-shaped spans and outside email addresses become "[removed]"; logged as a count per kind,
+   * never the text. A replacement that no longer fits the schema (an enum, a pattern) makes the answer unusable.
+   */
+  function redactAnswer(task: AiTaskSpec, value: unknown, schema: JsonSchema, g: Pick<GuardInput, "homeDomains" | "forbidden">): { ok: true; value: unknown } | { ok: false } {
+    const r = redactValue(value, g);
+    if (!r.removed.length) return { ok: true, value };
+    for (const kind of ["secret", "email"] as const) {
+      const n = r.removed.filter((x: Redaction) => x.kind === kind).length;
+      if (n) logger({ source: "ai", op: "redact", kind: `${task.name}:${kind}`, count: n });
+    }
+    return validate(r.value, schema).length ? { ok: false } : { ok: true, value: r.value };
   }
 
   /** GD-1: which rule refused, and for a client rule the matched entry as its one-way ref (never the text). */
@@ -183,16 +197,22 @@ export function createAi(d: AiDeps) {
       await record(task, "invalid", "invalid_output", spent, latency, reply.model);
       return fail("invalid_output");
     }
-    // GD-1: the answer may not name another client either (Internal may). Only the client rule: an email address or a
-    // secret shape in an answer can only come from an image, and CV-4 scrubs those from what it keeps.
+    // GD-1: the answer may not name another client either (Internal may): refused whole, as before.
     const named = g.internal ? null : otherClientMatch(reply.text, g.client, g.directory);
     if (named) {
       refusedLine(task, { kind: "refused_client", rule: named.rule, entry: named.key }, "output");
       await record(task, "refused", "refused_client", spent, latency, reply.model);
       return { ok: false, error: new AiError("refused_client", OUTPUT_REFUSED) };
     }
+    // HK-4: a secret shape or an outside email address in an answer (it can only come from an image) is replaced by
+    // "[removed]" where it stands; the rest of the answer, every other item of a batch included, is kept.
+    const clean = redactAnswer(task, value, schema, g);
+    if (!clean.ok) {
+      await record(task, "invalid", "invalid_output", spent, latency, reply.model);
+      return fail("invalid_output");
+    }
     const cost = await record(task, "ok", null, spent, latency, reply.model);
-    return { ok: true, value: value as T, usage: spent, costUsd: cost / 1_000_000, latencyMs: latency, model: reply.model };
+    return { ok: true, value: clean.value as T, usage: spent, costUsd: cost / 1_000_000, latencyMs: latency, model: reply.model };
   }
 
   /**
@@ -301,8 +321,14 @@ export function createAi(d: AiDeps) {
         cost += await record(task, "invalid", "invalid_output", used, ms, reply.model);
         return { ...fail("invalid_output"), refused, calls: ran };
       }
+      // HK-4: the same span redaction as run() (the input side was guarded each round).
+      const clean = redactAnswer(task, value, schema, g);
+      if (!clean.ok) {
+        cost += await record(task, "invalid", "invalid_output", used, ms, reply.model);
+        return { ...fail("invalid_output"), refused, calls: ran };
+      }
       cost += await record(task, "ok", null, used, ms, reply.model);
-      return { ok: true, value: value as T, usage: spent, costUsd: cost / 1_000_000, latencyMs: latency, model: reply.model, refused, calls: ran };
+      return { ok: true, value: clean.value as T, usage: spent, costUsd: cost / 1_000_000, latencyMs: latency, model: reply.model, refused, calls: ran };
     }
     return { ...fail("invalid_output"), refused, calls: ran };
   }

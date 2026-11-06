@@ -113,3 +113,60 @@ export function clientsNamed(text: string, directory: readonly ClientEntry[], is
   }
   return out;
 }
+
+/** HK-4: what an answer redaction replaced: the kind and the rule, never the text. */
+export type Redaction = { kind: "secret" | "email"; rule: string };
+/** HK-4: the words that take a redacted span's place. */
+export const REMOVED = "[removed]";
+
+/**
+ * HK-4: an AI answer's text with each secret-shaped span (SECRET_SHAPES, the VM's name and resource id) and each email
+ * address outside Cooptimize replaced by "[removed]", keeping the rest. Unlike guard(), which refuses a request, this
+ * keeps a batch answer usable when one item quotes something from an image (CV-4). The client rule isn't here: an
+ * answer naming another client is still refused whole (GD-1). Returns what was replaced, by kind, never the text.
+ */
+export function redact(text: string, g: Pick<GuardInput, "homeDomains" | "forbidden">): { text: string; removed: Redaction[] } {
+  const removed: Redaction[] = [];
+  let out = text;
+  for (const [rule, re] of SECRET_SHAPES) {
+    // A shape that starts with a boundary group, (^|[^…]), keeps the character before the span.
+    const lead = re.source.startsWith("(^|");
+    const all = new RegExp(re.source, re.flags.includes("g") ? re.flags : `${re.flags}g`);
+    out = out.replace(all, (_m: string, g1: unknown) => {
+      removed.push({ kind: "secret", rule });
+      return `${lead && typeof g1 === "string" ? g1 : ""}${REMOVED}`;
+    });
+  }
+  for (const f of g.forbidden) {
+    if (f.trim().length < 3) continue;
+    const re = new RegExp(`(^|[^\\p{L}\\p{N}])${esc(f.trim()).replace(/\s+/g, "\\s+")}(?=$|[^\\p{L}\\p{N}])`, "giu");
+    out = out.replace(re, (_m: string, g1: string) => {
+      removed.push({ kind: "secret", rule: "vm" });
+      return `${g1}${REMOVED}`;
+    });
+  }
+  const home = g.homeDomains.map((d) => d.toLowerCase());
+  out = out.replace(EMAIL, (m: string, domain: string) => {
+    const d = domain.toLowerCase();
+    if (home.some((h) => d === h || d.endsWith(`.${h}`))) return m;
+    removed.push({ kind: "email", rule: "external_email" });
+    return REMOVED;
+  });
+  return { text: out, removed };
+}
+
+/** HK-4: redact() over every string in a parsed answer (object keys are the schema's, never redacted). */
+export function redactValue<T>(value: T, g: Pick<GuardInput, "homeDomains" | "forbidden">): { value: T; removed: Redaction[] } {
+  const removed: Redaction[] = [];
+  const walk = (v: unknown): unknown => {
+    if (typeof v === "string") {
+      const r = redact(v, g);
+      removed.push(...r.removed);
+      return r.text;
+    }
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]));
+    return v;
+  };
+  return { value: walk(value) as T, removed };
+}
