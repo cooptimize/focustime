@@ -50,31 +50,31 @@ describe("week.load with DevOps", () => {
     const keys = weekClients(d.week).map((c) => c.clientKey);
     expect(keys).toContain("Cooptimize");
     // This week's clients first, then the other followed clients with DevOps set up (step 6d): T&W has focus time
-    // starting next week; HM Electronics has DevOps but no focus time, so it isn't followed.
+    // starting next week; Litware Electronics has DevOps but no focus time, so it isn't followed.
     expect(d.devops!.map((c) => c.clientKey)).toEqual([...keys, "T&W"]);
     expect(d.planClients.map((c) => c.clientKey)).toEqual([...keys, "Adatum", "T&W"].filter((k, i, a) => a.indexOf(k) === i));
   });
 
   it("a client that isn't followed gets no PAT read and no DevOps call (step 6d)", async () => {
-    const { c, ado, dv } = ctx({ contoso: "agile", cooptimize: "agile", hme: "agile" });
+    const { c, ado, dv } = ctx({ contoso: "agile", cooptimize: "agile", litware: "agile" });
     const d = await load(c);
-    expect(d.devops!.some((x) => x.clientKey === "HM Electronics")).toBe(false);
-    expect(ado.calls.some((x) => x.url.includes("dev.azure.com/hme/"))).toBe(false);
+    expect(d.devops!.some((x) => x.clientKey === "Litware Electronics")).toBe(false);
+    expect(ado.calls.some((x) => x.url.includes("dev.azure.com/litware/"))).toBe(false);
     // T&W is followed (its focus time starts next week): checked, though its fixture has no DevOps email.
     expect(d.devops!.find((x) => x.clientKey === "T&W")?.status).toBe("identity_missing");
     // The PAT query names only followed clients.
     const patReads = dv.calls.filter((x) => x.url.includes("coop_devopstoken")).map((x) => decodeURIComponent(x.url));
     expect(patReads.length).toBeGreaterThan(0);
-    for (const u of patReads) expect(u).not.toContain("HM Electronics");
+    for (const u of patReads) expect(u).not.toContain("Litware Electronics");
   });
 
   it("Keep following brings a client back", async () => {
-    const kept = text.replace('"T&W" = "#1f9e8f"', '"T&W" = "#1f9e8f"\n"HM Electronics" = { follow = true }');
-    const { c, ado } = ctx({ contoso: "agile", cooptimize: "agile", hme: "agile" }, { text: kept });
+    const kept = text.replace('"T&W" = "#1f9e8f"', '"T&W" = "#1f9e8f"\n"Litware Electronics" = { follow = true }');
+    const { c, ado } = ctx({ contoso: "agile", cooptimize: "agile", litware: "agile" }, { text: kept });
     const d = await load(c);
-    expect(d.devops!.map((x) => x.clientKey)).toContain("HM Electronics");
-    expect(d.planClients.map((x) => x.clientKey)).toContain("HM Electronics");
-    expect(ado.calls.some((x) => x.url.includes("dev.azure.com/hme/"))).toBe(true);
+    expect(d.devops!.map((x) => x.clientKey)).toContain("Litware Electronics");
+    expect(d.planClients.map((x) => x.clientKey)).toContain("Litware Electronics");
+    expect(ado.calls.some((x) => x.url.includes("dev.azure.com/litware/"))).toBe(true);
   });
 
   it("Adatum shows its own items; clients without DevOps settings say why and show none", async () => {

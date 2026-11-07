@@ -48,7 +48,8 @@ import type { TimerView } from "../actions/types.ts";
 import { soundStep, type SoundKind } from "../plan/focussound.ts";
 import { focusPick } from "../plan/today.ts";
 import { InboxPage } from "./inbox/InboxPage.tsx";
-import { useInboxCount } from "./inboxcount.ts";
+import { useInboxToday } from "./inboxcount.ts";
+import { railItems } from "../plan/inbox-items.ts";
 import { Ahead } from "./ahead/Ahead.tsx";
 import { Today } from "./Today.tsx";
 import type { DraftStory, Pick } from "../plan/types.ts";
@@ -332,7 +333,9 @@ export function App() {
   const weekRef = useRef<string | undefined>(undefined);
   const seq = useRef(0);
   const data = state.kind === "ready" ? state.data : null;
-  const needsYouCount = useInboxCount(captureVersion, data);
+  // IB-1 slice 4: the badge, Today's urgent strip and Week's rail read the same rows (inbox.today).
+  const inboxToday = useInboxToday(captureVersion, data);
+  const needsYouCount = inboxToday?.needsYou ?? null;
   /** Close out's day (Today › Close out), and Plan the week's week (Week › Plan the week: next week unless asked). */
   const closeOutAt: IsoDate | null = nav.tab === "today" && nav.flow === "closeout" && data ? (nav.date ?? data.planDay.date) : null;
   /** QF-1: the day Today shows (#/today/<date>); null is today. */
@@ -1870,8 +1873,10 @@ export function App() {
           onTimer={(a) => void runTimer(a)}
           onPlan={(d) => openPlanDay(d)}
           onPlanWeek={() => openPlanWeek(data.today.weekStart)}
-          onSent={(w) => goNav(navOf.week("commit", w))}
-          sentVersion={`${planWeekVersion}:${captureVersion}`}
+          inbox={inboxToday?.items ?? null}
+          needsYou={needsYouCount}
+          onItem={(key) => goNav(navOf.inboxItem(key))}
+          onNeedsYou={() => goNav(navOf.inboxView("needs_you"))}
           switcher={switches.today}
           onInbox={() => setView("follow_ups")}
           onAsks={(id) => (id ? goNav(navOf.conversation(id)) : setView("conversations"))}
@@ -1948,8 +1953,8 @@ export function App() {
         layout={layout}
         compact={compact}
         onPlanDay={(d) => goNav(planDayNav(d))}
-        promises={data.promises}
-        onPromise={() => setView("my_promises")}
+        promises={railItems(inboxToday?.items ?? [])}
+        onPromise={(key) => goNav(navOf.inboxItem(key))}
         onAddWork={addWork}
         onAddHours={() => {
           setDetailsOpen(false);

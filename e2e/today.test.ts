@@ -79,7 +79,9 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     for (const r of risks) expect(r).toMatch(/^At risk · \S/);
     expect(risks.join(" ")).toContain("Dentist 12:00");
     // 81: UI-B's now line adds its time ("9:30"); 95: DM-1's late promise in the urgent strip; 98: QF-1's Timebox my day beside the plan.
-    expect(await uiWords(page)).toBeLessThanOrEqual(98);
+    // 113: IB-1 slice 4's strip reads the Inbox, capped at 3 lines (two late promises and Priya's Must on the demo day)
+    // plus "N more in Inbox"; before, it was the late promise and SW-1's one sends line.
+    expect(await uiWords(page)).toBeLessThanOrEqual(113);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

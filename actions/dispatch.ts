@@ -1724,6 +1724,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "my_promises.close":
     case "suggestions.skip":
     case "conversations.merge":
+    case "conversations.merge_preview":
     case "conversations.unmerge":
     case "my_promises.start_draft":
     case "conversations.search_items":
@@ -1732,6 +1733,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       return conversationAction(await conversationContext(ctx), action, req.input);
     case "inbox.list":
     case "inbox.count":
+    case "inbox.today":
     case "inbox.seen":
     case "inbox.hide":
     case "inbox.snooze":
@@ -1742,6 +1744,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
           now: ctx.now,
           conversations: async (cfg) => (ctx.requests?.conversations ? inboxFacts(await conversationContext(ctx), cfg) : []),
           sends: () => (ctx.team ? sendFacts(teamCtx(ctx)) : Promise.resolve([])),
+          urgent: async (cfg) => (await urgentFor(ctx, ctx.now(), userZone(cfg), (k) => cfg.clientSettings[k]?.name ?? k)).urgent,
           snoozeDay: async () => {
             const h = await escalationHours(ctx);
             return h ? snoozeDayOf(h.hours, h.ptoDays) : null;

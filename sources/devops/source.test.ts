@@ -196,8 +196,8 @@ describe("setup problems are stated, never guessed", () => {
   });
 
   it("no Account Worker for the client", async () => {
-    const r = await setup({}, []).src.load([ref("HME")]);
-    expect(byKey(r, "HME")).toMatchObject({ status: "not_set_up", message: "No Account Worker for HME in Dataverse" });
+    const r = await setup({}, []).src.load([ref("Litware")]);
+    expect(byKey(r, "Litware")).toMatchObject({ status: "not_set_up", message: "No Account Worker for Litware in Dataverse" });
   });
 
   it("missing org, project or PAT is named", async () => {
