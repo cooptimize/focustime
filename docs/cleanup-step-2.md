@@ -1,4 +1,4 @@
-# Cleanup step 2: what can be dropped (needs Tanner's OK)
+# Cleanup step 2: what can be dropped (needs the product owner's OK)
 
 CL-1 (Nov 7) stopped using these; nothing here is dropped yet. Migrations only add (D468), so each drop ships in its
 own new timestamped migration with a `safe-drop: <reason>` comment, in a release **after** the one that stops naming
@@ -51,7 +51,7 @@ Not on the list yet:
 ```ts
 // 2026MMDDTHHMM_cleanup_drops.ts
 // safe-drop: CL-1 stopped using these (Nov 7) and release 2a took the four user tables out of USER_TABLES;
-// no revision that can still be rolled back to names them. Tanner's OK: <date>.
+// no revision that can still be rolled back to names them. the product owner's OK: <date>.
 import type { NamedMigration } from "./named.ts";
 
 export const cleanupDrops: NamedMigration = {
