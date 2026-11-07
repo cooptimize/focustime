@@ -56,7 +56,7 @@ describe.skipIf(!CHROMIUM || !SHOTS)("MB-1 screenshots", () => {
       await planMonday(page);
       await at(page, "#/week");
       await shot(page, `phone${w}-week-board`);
-      // UI-9's late chip on the chips line of the phone card (Mon AM has the Cooptimize promise I added, late).
+      // UI-9's late chip on the chips line of the phone card, beside its status (Mon AM has the Cooptimize promise I added, late).
       const late = page.locator('main.grid .half[aria-label^="Mon Nov 2 AM,"]');
       if (await late.locator(".late-chip").count()) await late.screenshot({ path: `${SHOTS}/${TAG}-phone${w}-week-late-chip.png` });
       const cardFold = page.locator(".card-agenda-fold").first();

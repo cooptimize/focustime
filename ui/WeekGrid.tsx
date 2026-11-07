@@ -567,6 +567,9 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   const label = `${dayLabel} ${eve ? "evening" : slot.half}, ${name}${sev ? `, ${sev === "at_risk" ? "at risk" : "watch"}` : ""}`;
   const menu = useMenu((env) => slotMenu(env, slot.date, slot.half, primary?.clientKey ?? null, primary?.clientName ?? null));
   const status = blockStatus(cp.fit, slot.risks);
+  // MB-1b (Q-MB1-7): on the phone a card with no status pill shows the late chip at the end of its title line, so the
+  // chip adds no line; beside a status pill it stays on the chips line.
+  const chipInHead = phone && status.kind === "none" && !!lateChip;
   // WK-1: the reason is its own span, so mini cards can show "At risk" alone (the reason stays in the title and the panel).
   const pill = status.kind === "at_risk" ? <>At risk{status.short ? <span className="pill-reason"> · {status.short}</span> : null}</> : status.label;
   // PV-1: a drop target for stories dragged from the panel or another block (not the evening).
@@ -608,11 +611,12 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
           )}
         </span>
         <CardWhen slot={slot} tz={tz} />
+        {chipInHead && lateChip}
         <span className="card-more">{menu.button(`Actions for ${dayLabel} ${slot.half}`)}</span>
       </div>
       {rail === "strip" && <DayStrip slot={slot} tz={tz} label={`${dayLabel} ${eve ? "evening" : slot.half}`} now={railNow} />}
       {drop.tip}
-      {(status.kind !== "none" || lateChip) && (
+      {(status.kind !== "none" || (lateChip && !chipInHead)) && (
         <div className="card-status">
           {status.kind !== "none" && (
             <span className={`status-pill ${status.kind}`} id={reasonsId} title={status.detail ?? undefined}>
@@ -620,7 +624,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
             </span>
           )}
           {/* MB-1: on the phone too the chip sits on the card's chips line, beside the status pill. */}
-          {lateChip}
+          {!chipInHead && lateChip}
         </div>
       )}
       {slot.focus.slice(1).map((b) => (

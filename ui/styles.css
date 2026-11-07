@@ -5386,6 +5386,12 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .late-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .app.phone .card-status:has(.late-chip) { overflow: visible; }
 .app.phone .card-status button.late-chip { min-height: 0; }
+/* MB-1b: with no status pill the chip ends the title line: one line, the client's name shortens first, the head lets
+   the chip's tap area out, and the card is no taller than with no chip. */
+.app.phone .card-head:has(> .late-chip) { flex-wrap: nowrap; overflow: visible; }
+.app.phone .card-head:has(> .late-chip) .card-client { flex: 0 1 auto; min-width: 0; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app.phone .card-head:has(> .late-chip) .card-when { flex: none; white-space: nowrap; }
+.app.phone .card-head > button.late-chip { min-height: 0; }
 .app.phone .late-chip::after { content: ""; position: absolute; inset: -13px -8px; }
 /* UI-9: Promises narrowed to late ones from a Week card's chip. */
 .ib-late-line { margin: 0; display: inline-flex; align-items: baseline; gap: 8px; color: var(--watch); font-size: var(--fs-2); font-weight: 600; }
@@ -5427,6 +5433,8 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   .ph-status-list .error .dot, .ph-status-list .signin .dot { background: var(--risk); }
   .ph-src-name { font-weight: 600; }
   .ph-status-list .state { font-size: var(--fs-2); color: var(--text-muted); }
+  /* MB-1b: a row wraps (the desktop .source is nowrap): the DevOps line's clients go onto as many lines as they need. */
+  .ph-status-list li { white-space: normal; }
   .ph-src-detail { grid-column: 2 / -1; font-size: var(--fs-2); overflow-wrap: anywhere; }
   .ph-status-problems li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; border-left: 3px solid var(--risk); border-radius: 8px; background: var(--sunken); }
   .ph-status-extra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
