@@ -4,13 +4,14 @@
 // (server/teams/cards.ts), so a change there shows up here.
 // TB-2 adds the rhythm's cards (brief, check-in, close out, nudges, capture), each before and after a tap.
 // SR-1 adds the status report nudge. MC-1 adds client calls to review.
+// AS-2 adds the question with choices (and after a tap), a move across clients with Undo, and a compound update.
 // PK-1 adds Done's follow-up (Set #id to its done state) and Undo's (put it back), on the check-in and close out cards.
 // Usage: node scripts/teams-card-previews.ts <outDir>
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright-core";
 import { CHROMIUM } from "../e2e/harness.ts";
 import { briefCard, captureCard, checkinCard, closeoutCard, meetingsCard, nudgeCard, statusCard, type InlineProposal, type PickRow } from "../server/teams/rhythm-cards.ts";
-import { cancelledCard, doneCard, expiredCard, failedCard, helpCard, proposalCard, resultCard, workingCard, type Card } from "../server/teams/cards.ts";
+import { answeredCard, cancelledCard, doneCard, expiredCard, failedCard, helpCard, proposalCard, questionCard, resultCard, undoneCard, workingCard, type Card } from "../server/teams/cards.ts";
 
 const out = process.argv[2] ?? "screenshots/teams";
 mkdirSync(out, { recursive: true });
@@ -71,6 +72,15 @@ const cards: [string, Card][] = [
   ["today", resultCard({ title: "Today", lines: ["Morning 08:00–12:00: Northwind", "  • Fix the login timeout", "  ✓ Review the export", "Afternoon 13:00–17:00: Internal", "  • Write the onboarding note"], links: [{ label: "Open Today", url: `${URL_}/#/today` }] }, URL_)],
   ["next", resultCard({ title: "Northwind until 12:00", lines: ["Next to-do: Fix the login timeout", "Next meeting: Standup at 10:30", "1 of 3 to-dos done"], links: [{ label: "Open Today", url: `${URL_}/#/today` }] }, URL_)],
   ["help", helpCard(URL_)],
+  // AS-2.
+  ["as2-question", questionCard({ text: "Which to-dos on Thu, Nov 5?", choices: [{ label: "Thu, Nov 5 AM · Northwind · 2 to-dos", value: "b1" }, { label: "Thu, Nov 5 PM · Harbor · 1 to-do", value: "b2" }, { label: "All 3", value: "all" }], expiresAt: "2026-11-05T15:10:00Z" }, "q41")],
+  ["as2-answered", answeredCard("Which to-dos on Thu, Nov 5?", "All 3")],
+  ["as2-move", proposalCard({ id: "12", title: "Move 3 to-dos to Fri, Nov 6", whoSees: "Only you", changes: [{ field: "Harbor · Validate date of birth", before: "Thu, Nov 5 afternoon", after: "Fri, Nov 6 morning" }, { field: "Northwind · Fix the login timeout", before: "Thu, Nov 5 morning", after: "Fri, Nov 6 morning" }, { field: "Northwind · Review the export mapping", before: "Thu, Nov 5 morning", after: "Fri, Nov 6 morning" }], note: "Friday is your catch-up day", expiresAt: "2026-11-05T15:15:00Z" })],
+  ["as2-move-done", doneCard({ title: "Move 3 to-dos to Fri, Nov 6", message: "Moved 3 to-dos.", undo: { label: "Undo", proposalId: "12" }, links: [{ label: "Open Week", url: `${URL_}/#/week` }] }, URL_)],
+  ["as2-move-undone", undoneCard("Move 3 to-dos to Fri, Nov 6", "Put 3 to-dos back.")],
+  ["as2-compound", proposalCard({ id: "13", title: "Update #4211: done and a comment", whoSees: "Visible to everyone with access to the Portal project in DevOps. People following the item may get a notification from DevOps.", changes: [{ field: "State", before: "Active", after: "Closed" }, { field: "Comment", before: "", after: "The stored procedure has the requested fields." }], expiresAt: "2026-11-05T15:15:00Z" })],
+  ["as2-compound-done", doneCard({ title: "Update #4211: done and a comment", message: "Done: state and comment", undo: { label: "Undo in FocusTime", url: `${URL_}/#/settings/data` }, parts: [{ label: "State", ok: true, message: "#4211 is Closed in DevOps" }, { label: "Comment", ok: true, message: "Comment added in DevOps" }] }, URL_)],
+  ["as2-compound-partly", doneCard({ title: "Update #4211: done and a comment", message: "State done. Comment didn't go", undo: { label: "Undo in FocusTime", url: `${URL_}/#/settings/data` }, parts: [{ label: "State", ok: true, message: "#4211 is Closed in DevOps" }, { label: "Comment", ok: false, message: "Someone changed the item since. Ask again for a fresh preview." }] }, URL_)],
 ];
 
 const THEMES = {

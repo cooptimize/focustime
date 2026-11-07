@@ -241,7 +241,10 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await expect.poll(() => page.locator(".pd2-weekstrip").count()).toBe(0);
     const date = key.slice(0, 10);
     const half = key.slice(10);
-    await expect.poll(async () => (await api<{ picks: { title: string; half: string }[] }>(page, "planday.start", { date })).data.picks?.some((p) => p.title === title && p.half === half) ?? false).toBe(true);
+    // Read from the week (the target may be Friday's catch-up, which has no hours to plan the day on; AS-2's seed
+    // already has Export orders to CSV on Wednesday afternoon).
+    const monday = Temporal.PlainDate.from(date).subtract({ days: Temporal.PlainDate.from(date).dayOfWeek - 1 }).toString();
+    await expect.poll(async () => (await api<{ plan: Record<string, { picks: { title: string; half: string; date: string }[] }> }>(page, "week.load", { weekStart: monday })).data.plan?.[date]?.picks.some((p) => p.title === title && p.half === half) ?? false).toBe(true);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

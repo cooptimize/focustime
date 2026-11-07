@@ -691,7 +691,7 @@ function WeekDropStrip({ drag, planDate, colors, name, act, onDone }: { drag: Ad
                   key={k}
                   className={`pd2-weekcard${t.disabled ? " disabled" : ""}${over === k ? " drop" : ""}${t.otherClient ? " other" : ""}`}
                   style={{ "--c": clientColor(o ?? undefined, colors) } as CSSProperties}
-                  title={t.disabled ?? (t.otherClient ? `${name(t.otherClient)}'s block: asks first` : `Add to ${halfLabel(t.half)}`)}
+                  title={t.disabled ?? (t.otherClient ? `${name(t.otherClient)}'s block: asks first` : `Add to ${halfLabel(t.half)}${t.note ? ` · ${t.note}` : ""}`)}
                   aria-disabled={!!t.disabled}
                   data-drop={k}
                   onDragOver={(e) => !t.disabled && e.dataTransfer.types.includes(ADD_DRAG) && (e.preventDefault(), setOver(k))}

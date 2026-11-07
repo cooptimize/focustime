@@ -59,7 +59,9 @@ export function doneCard(p: { title: string; message: string; undo?: { label: st
   const links = ownLinks([...(p.undo?.url ? [{ label: p.undo.label, url: p.undo.url }] : []), ...(p.links ?? [])], publicUrl);
   const parts = (p.parts ?? []).map((x) => text(`${x.ok ? "✓" : "✗"} ${x.label}: ${x.message}`, { spacing: "Small", ...(x.ok ? {} : { color: "Attention" }) }));
   const undo = p.undo?.proposalId ? [tap("undo", p.undo.label, p.undo.proposalId)] : [];
-  return card([text(`Done: ${p.title}`, { weight: "Bolder", color: "Good" }), ...(parts.length ? parts : [text(p.message, { spacing: "Small" })])], [...undo, ...links.map(openUrl)]);
+  // AS-2: a compound update with a part that didn't go says so in its title; each part has its own line.
+  const partly = (p.parts ?? []).some((x) => !x.ok);
+  return card([text(`${partly ? "Partly done" : "Done"}: ${p.title}`, { weight: "Bolder", color: partly ? "Warning" : "Good" }), ...(parts.length ? parts : [text(p.message, { spacing: "Small" })])], [...undo, ...links.map(openUrl)]);
 }
 
 /** AS-2: the assistant's question, one button per choice (at most 6), and "or just type it". */
