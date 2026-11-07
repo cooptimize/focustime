@@ -5810,3 +5810,4 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .pa-rollup-line::before, .pa-rollup-line::after { content: ""; position: absolute; bottom: 0; width: 2px; height: 6px; background: inherit; }
 .pa-rollup-line::before { left: 0; }
 .pa-rollup-line::after { right: 0; }
+.ah-gantt .pa-bar.early .pa-inner { padding-left: 18px; }

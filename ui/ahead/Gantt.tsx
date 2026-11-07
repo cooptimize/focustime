@@ -550,7 +550,8 @@ function GanttRow({ node, open, kids, bar: b, sum, callouts, env, freeze, runFix
     : shownBar
       ? `${r.item.title}: ${estStart ? "start estimated, " : ""}${estEnd ? "end estimated, " : ""}${dayHalf(shownBar.start)} to ${dayHalf(shownBar.end)}${b?.target ? `, target ${monthDay(b.target)}` : ""}${rm ? `. ${STATE_WORDS[rm.status.state]}` : ""}${under}${note}`
       : "";
-  const inner = live ? "" : planned.total > 0 ? aboutText(planned.total) : (sum?.count ?? "");
+  // Inside the bar when it fits: a roll-up's count, else the planned hours, else what's under a collapsed row.
+  const inner = live ? "" : summary ? summary.count : planned.total > 0 ? aboutText(planned.total) : (sum?.count ?? "");
   const showInner = !!inner && w >= 84;
   const markerX = inRange ? Math.min(x0 + w, scale.width - (capR ? 18 : 0)) + 6 : before ? 20 : after ? Math.max(4, scale.width - 46) : 6;
 
