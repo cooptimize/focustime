@@ -448,6 +448,15 @@ The bot can come to the person: a morning brief, a midday check-in, a close out 
   to an open Close out card; then the assistant. A rhythm tap is recognized before TB-1's confirm and cancel.
 - **Assistant.** `propose(tool, args)` and the tools `move_picks` and `close_day` (`assistant/service.ts`,
   `assistant/allowlist.ts`, `docs/assistant-interface.md`).
+- **AS-2.** `assistant/resolve.ts` (pure: my words against my to-dos, items and features across my clients; never
+  guesses between two), questions with choices (`assistant_turns.pending_json`, migration
+  `20261117T0900_assistant_pending`; `assistantQuestion` and `closeAssistantQuestion` in `store/plan-store.ts`),
+  `move_plan` (server-built, across clients, the Board's `dropCheck` per target) with `undo`, `item_update`
+  (state, comment and target in one card; `devops.done_offer`'s item mode). The day notes are shared:
+  `placeNote`/`overNote` in `plan/days.ts`, used by `plan/weekdrop.ts`, `pick.move` and `pick.add`. Teams: the
+  `questionCard` and `answer` verb, the done card's Undo (`server/teams/cards.ts`, `server/teams/bot.ts`). The panel:
+  chips and per-part results in `ui/Assistant.tsx`. Tests: `assistant/resolve.test.ts`, the AS-2 block of
+  `assistant/service.test.ts`, `server/teams/bot.test.ts`, the demo script e2e.
 - **Settings.** Settings › Notifications › In Teams: the status line (hosted only, blocked, no chat yet), the master
   switch, What FocusTime sends (each kind, its time, Send me a test now, Also on Fridays). Actions `teams.status` and
   `teams.test` (`actions/dispatch.ts`, wired by `server/main.ts` only where the bot runs).

@@ -112,7 +112,7 @@ type Moved = { fromId: number; newId: number; from: { date: string; half: string
 
 /**
  * AS-2: the question the assistant waits on (kept on its turn, assistant_turns.pending_json). Each choice says what it
- * answers: a client, an item, or the to-dos of a move. `match` holds the words that pick it ("csc", "#4417", "wed pm").
+ * answers: a client, an item, or the to-dos of a move. `match` holds the words that pick it ("northwind", "#4417", "wed pm").
  */
 type PendingChoice = Choice & { match: string[]; client?: string; itemId?: number; pickIds?: number[] };
 type Pending = {
@@ -201,7 +201,7 @@ export function createAssistant(env: AssistantEnv) {
   }
 
   /**
-   * AS-2: does my message answer the open question? A tapped choice, its number or words ("the first", "CSC",
+   * AS-2: does my message answer the open question? A tapped choice, its number or words ("the first", "Northwind",
    * "Wed PM", "#4417", "all of them"), or words the resolver matches inside the question's choices.
    */
   async function answerOf(p: Pending, text: string, answer: string | undefined): Promise<{ kind: "choice"; choice: PendingChoice } | { kind: "picks"; pickIds: number[] } | { kind: "none" }> {
