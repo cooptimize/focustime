@@ -1673,6 +1673,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "admin.audit":
     case "admin.status_action":
     case "admin.identity":
+    case "admin.invited":
       return adminAction(
         {
           ops: ctx.adminOps ?? null,
@@ -1688,6 +1689,10 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
           today: async () => {
             const cfg = await configured(ctx);
             return localToday(ctx.now(), cfg ? userZone(cfg) : "UTC");
+          },
+          zone: async () => {
+            const cfg = await configured(ctx);
+            return cfg ? userZone(cfg) : "UTC";
           },
         },
         action as AdminAction,

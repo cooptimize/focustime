@@ -26,6 +26,10 @@ export type OverrideKind = "level" | "lead_add" | "lead_remove";
 export type PersonOverride = { personId: string; kind: OverrideKind; clientKey: string; value: string | null; byId: string | null; byName: string; at: string };
 /** AH-3: a person's DevOps email on one client, from their Account Worker (Dataverse). */
 export type DirectoryIdentity = { personId: string; clientKey: string; email: string };
+/** IN-1: how an admin sent an invite: opened in Teams or Outlook, the mail app, or copied. */
+export type InviteVia = "teams" | "outlook" | "email" | "copy";
+export const INVITE_VIA = ["teams", "outlook", "email", "copy"] as const;
+const INVITE_VIA_WORDS: Record<InviteVia, string> = { teams: "opened in Teams", outlook: "opened in Outlook", email: "opened in the mail app", copy: "copied" };
 export type SeenAdmin = { personId: string; isAdmin: boolean; via: AdminVia | null; checkedAt: string };
 
 const iso = (v: unknown): string => (v instanceof Date ? v.toISOString() : typeof v === "string" ? Temporal.Instant.from(v).toString() : "");
@@ -234,7 +238,26 @@ export function createAdminStore(db: Conn, now: () => Temporal.Instant) {
       await db.tx(async () => {
         await db.run("DELETE FROM people_overrides WHERE person_id = ?", [id]);
         await db.run("DELETE FROM admin_seen WHERE person_id = ?", [id]);
+        await db.run("DELETE FROM people_invites WHERE person_id = ?", [id]);
       });
+    },
+
+    // ---- IN-1: invites an admin opened or copied (FocusTime sends nothing) ----
+    /** Each person's latest invite (replacing the one before), the same moment for all of them, and one audit row naming who and how. */
+    async recordInvites(people: readonly { id: string; name: string }[], via: InviteVia, actor: Actor): Promise<string> {
+      const at = stamp();
+      await db.tx(async () => {
+        for (const p of people) await db.run("DELETE FROM people_invites WHERE person_id = ?", [p.id.toLowerCase()]);
+        for (const p of people) await db.run("INSERT INTO people_invites (person_id, at, by_id, by_name, via) VALUES (?, ?, ?, ?, ?)", [p.id.toLowerCase(), at, actor.id, actor.name.slice(0, 200), via]);
+        await audit(actor, { area: "people", target: people.map((p) => p.name).join(", ").slice(0, 200), setting: "invite", oldValue: null, newValue: null, note: `${INVITE_VIA_WORDS[via]}, ${people.length === 1 ? "1 person" : `${people.length} people`}` });
+      });
+      return at;
+    },
+    /** Each person's latest invite: when and by whom. */
+    async latestInvites(): Promise<Map<string, { at: string; byName: string; via: InviteVia }>> {
+      const out = new Map<string, { at: string; byName: string; via: InviteVia }>();
+      for (const r of (await db.all("SELECT person_id, at, by_name, via FROM people_invites")) as Row[]) out.set(r.person_id as string, { at: iso(r.at), byName: r.by_name as string, via: r.via as InviteVia });
+      return out;
     },
   };
 }

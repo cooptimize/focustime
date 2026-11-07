@@ -87,6 +87,8 @@ import { createBotCore } from "./teams/bot.ts";
 import { todayFacts } from "./teams/quick.ts";
 import { teamsAssistant } from "./teams/assistant.ts";
 import { createTeamsBotStore } from "../store/teams-bot-store.ts";
+import { TEAMS_APP_IDS } from "./teams/app-ids.ts";
+import { teamsAppLink } from "../plan/invite.ts";
 import { createConversationStore } from "../store/conversation-store.ts";
 import { createMeetingStore } from "../store/meeting-store.ts";
 import { createMeetingsClient, type MeetingsClient } from "../sources/graph/meetings.ts";
@@ -632,7 +634,7 @@ const demoRealAi: DemoRealAi = {
 };
 /** A demo session's context, seeded. Reset demo (DM-1) builds a new one the same way and puts it in place. */
 const buildDemo = async (userId: string): Promise<ActionContext> => {
-  const ctx = createDemoContext({ now: () => instantNow().toString(), demo: { on: true, set: async () => {}, reset: () => resetDemo(userId) }, feedbackParent: demoFeedbackParent, realAi: demoRealAi });
+  const ctx = createDemoContext({ now: () => instantNow().toString(), demo: { on: true, set: async () => {}, reset: () => resetDemo(userId) }, feedbackParent: demoFeedbackParent, realAi: demoRealAi, publicUrl: app.publicUrl });
   ctx.env = "demo";
   await seedDemo(ctx);
   return ctx;
@@ -1051,6 +1053,16 @@ const adminOps = createAdminOps({
   tenantId: app.entra?.tenantId ?? null,
   users: () => accounts.users.all(),
   personStore: storeOf,
+  // IN-1: Who's set up. The Teams app is known only where the bot runs (its 1:1 chat row, not removed); the invite links
+  // to the app in Teams only there, by this environment's fixed app id.
+  teamsApp: teamsBot
+    ? async (id) => {
+        const chat = await createTeamsBotStore({ db, userId: id, now: instantNow }).chat();
+        return !!chat && !chat.removedAt;
+      }
+    : null,
+  lastSeen: () => accounts.sessions.lastSeenByUser(),
+  invite: { appUrl: `${app.publicUrl}/`, teamsAppLink: teamsBot && (build.env === "dev" || build.env === "prod") ? teamsAppLink(TEAMS_APP_IDS[build.env]) : null },
   hasSecret: (id, account) => secretsFor(id).has(account),
   chats: () => teams.chats(),
   conversationCounts: (day) => conversations.counts(day),

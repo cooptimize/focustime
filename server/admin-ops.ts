@@ -25,6 +25,12 @@ export type AdminOpsDeps = {
   users: () => Promise<UserRow[]>;
   /** Only what Admin › People shows from a person's store: Setup's progress and which clients have a DevOps identity. */
   personStore: (userId: string, zone: string | null) => { setupState(): Promise<SetupState>; devopsIdentities(): Promise<{ clientKey: string }[]> };
+  /** IN-1: whether a person has the FocusTime app in Teams (a 1:1 chat with the bot, not removed); null: unknown here. */
+  teamsApp?: ((userId: string) => Promise<boolean>) | null;
+  /** IN-1: each person's latest request in a live session. */
+  lastSeen?: () => Promise<Map<string, string>>;
+  /** IN-1: the app's public URL and the Teams app's link (null where the Teams app isn't set up). */
+  invite?: { appUrl: string; teamsAppLink: string | null };
   /** Whether a secret is there (never its value). */
   hasSecret: (userId: string, account: UserSecretAccount) => Promise<boolean>;
   chats: () => Promise<ClientChat[]>;
@@ -68,20 +74,25 @@ export function createAdminOps(d: AdminOpsDeps): AdminOps {
     groupId: d.groupId,
     breakGlass: d.breakGlass,
     tenantId: d.tenantId,
+    ...(d.invite ? { invite: d.invite } : {}),
     async people() {
       const out: PersonHealth[] = [];
+      const seen = d.lastSeen ? await d.lastSeen().catch(() => new Map<string, string>()) : new Map<string, string>();
       for (const u of await d.users()) {
         if (u.deletedAt) continue;
         const store = d.personStore(u.id, u.timeZone);
-        const [st, ids, ms, gs] = await Promise.all([
+        const [st, ids, ms, gs, teams] = await Promise.all([
           store.setupState().catch((): SetupState => ({})),
           store.devopsIdentities().catch(() => []),
           d.hasSecret(u.id, "outlook-refresh-token").catch(() => false),
           d.hasSecret(u.id, "google-refresh-token").catch(() => false),
+          d.teamsApp ? d.teamsApp(u.id).catch(() => null) : Promise.resolve(null),
         ]);
         let writes = 0;
         for (const i of ids) if (await d.hasSecret(u.id, writePat(i.clientKey)).catch(() => false)) writes++;
-        out.push({ id: u.id, name: u.displayName || u.upn, email: u.email ?? u.upn, lastSignInAt: u.lastSignInAt, setup: setupWord(st), sources: { microsoft: ms, google: gs, devopsWrites: writes } });
+        const s = seen.get(u.id);
+        const lastActiveAt = s && s > u.lastSignInAt ? s : u.lastSignInAt;
+        out.push({ id: u.id, name: u.displayName || u.upn, email: u.email ?? u.upn, lastSignInAt: u.lastSignInAt, setup: setupWord(st), sources: { microsoft: ms, google: gs, devopsWrites: writes }, teamsApp: teams, lastActiveAt });
       }
       return out;
     },

@@ -108,6 +108,11 @@ export function createAccountStore(db: Conn, now: () => Temporal.Instant) {
       }
       return s;
     },
+    /** IN-1: each person's latest request in a live session (Admin › People shows it as a day; no session, no entry). */
+    async lastSeenByUser(): Promise<Map<string, string>> {
+      const rows = (await db.all("SELECT user_id, MAX(last_seen_at) AS seen FROM sessions WHERE demo = 0 GROUP BY user_id")) as Row[];
+      return new Map(rows.map((r) => [String(r.user_id), String(r.seen)]));
+    },
     async end(cookie: string | undefined): Promise<void> {
       if (cookie) (await db.run("DELETE FROM sessions WHERE id = ?", [sha256(cookie)]));
     },

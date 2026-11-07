@@ -9,9 +9,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { crc32 } from "node:zlib";
+import { TEAMS_APP_IDS } from "../server/teams/app-ids.ts";
 
-/** Each environment's Teams app id: fixed, so an upload replaces the app instead of adding another. */
-export const TEAMS_APP_IDS = { dev: "6f84bb2c-364d-4d76-8a62-153904d0551a", prod: "6e436eed-8f64-43ec-805a-6e68b7e70a5c" } as const;
+/** Each environment's Teams app id: fixed, so an upload replaces the app instead of adding another (server/teams/app-ids.ts). */
+export { TEAMS_APP_IDS };
 export type Env = keyof typeof TEAMS_APP_IDS;
 /** TB-1b: the privacy and terms page the app serves (public/legal.html), without signing in. */
 export const LEGAL_PATH = "/legal.html";

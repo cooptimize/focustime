@@ -17,6 +17,7 @@ import type { StatusGroup } from "../../actions/status-rows.ts";
 import { StatusRows } from "./StatusRows.tsx";
 import { ScopeField, type ClientScopeRow } from "./AdminScope.tsx";
 import { GAP_KINDS, GAP_WORDS, type GapKind } from "../../plan/fixnext.ts";
+import { WhoSetUp } from "./WhoSetUp.tsx";
 
 export const ADMIN_UI_SECTIONS = [
   ["admin-clients", "Clients"],
@@ -749,6 +750,7 @@ function AdminPeople() {
           </li>
         ))}
       </ul>
+      <WhoSetUp />
       <h3>People</h3>
       <div className="set-row-actions">
         <button type="button" className="mini" disabled={busy} onClick={() => void refresh()}>
