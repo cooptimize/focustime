@@ -17,13 +17,16 @@ describe("dropCheck (PV-1)", () => {
     // A 2h meeting and 1h already planned leave about 1h: the 2h story is 1h over, amber.
     const week = aWeek({ events: [aMeeting({ start: "2026-11-03T09:00", end: "2026-11-03T11:00" })] });
     const picks = [aPick({ date: "2026-11-03", half: "AM", itemId: 7, size: "S" })];
-    expect(dropCheck(base({ slot: week.days[1]!.am, picks }))).toEqual({ ok: true, text: "2h over", over: true });
+    expect(dropCheck(base({ slot: week.days[1]!.am, picks }))).toEqual({ ok: true, text: "Over your Tuesday AM hours by 2h", over: true });
   });
 
-  it("refuses PTO, past half-days and a block that already has the story", () => {
-    expect(dropCheck(base({ ptoDay: true }))).toEqual({ ok: false, why: "PTO" });
+  it("AS-2: a PTO day takes it with a note (supersedes PV-1's refusal)", () => {
+    expect(dropCheck(base({ ptoDay: true }))).toEqual({ ok: true, text: "You're on PTO that day", over: false });
     const week = aWeek({ pto: [aPto({ date: "2026-11-03" })] });
-    expect(dropCheck(base({ slot: week.days[1]!.am }))).toEqual({ ok: false, why: "PTO" });
+    expect(dropCheck(base({ slot: week.days[1]!.am }))).toEqual({ ok: true, text: "You're on PTO that day", over: false });
+  });
+
+  it("refuses past half-days and a block that already has the story", () => {
     expect(dropCheck(base({ today: "2026-11-04" }))).toEqual({ ok: false, why: "Already over" });
     expect(dropCheck(base({ now: "2026-11-03T18:00:00Z" }))).toEqual({ ok: false, why: "Already over" });
     const picks = [aPick({ id: 5, date: "2026-11-03", half: "AM", itemId: 100 })];
@@ -35,9 +38,13 @@ describe("dropCheck (PV-1)", () => {
     expect(dropCheck(base({ slot: { ...slot, focus: [{ clientKey: "adatum", clientName: "Adatum" }] } })).ok).toBe(true);
   });
 
-  it("takes catch-up work on a day with no hours, without a fit", () => {
+  it("takes catch-up work on a day with no hours, without a fit (AS-2: a note, never a refusal)", () => {
     const fri = aWeek().days[4]!;
-    expect(dropCheck(base({ slot: fri.am, catchUp: true }))).toEqual({ ok: true, text: "Catch-up, no set hours", over: false });
-    expect(dropCheck(base({ slot: fri.am }))).toEqual({ ok: false, why: "No working hours" });
+    expect(dropCheck(base({ slot: fri.am, catchUp: true }))).toEqual({ ok: true, text: "Friday is your catch-up day", over: false });
+    expect(dropCheck(base({ slot: fri.am }))).toEqual({ ok: true, text: "Friday is your catch-up day", over: false });
+    const sat = { ...fri.am, date: "2026-11-07", start: "2026-11-07T14:00:00Z", end: "2026-11-07T17:00:00Z" };
+    expect(dropCheck(base({ slot: sat, catchUp: true }))).toEqual({ ok: true, text: "Saturday isn't a working day: this is flex time", over: false });
+    const wed = { ...aWeek().days[2]!.am, off: true };
+    expect(dropCheck(base({ slot: wed }))).toEqual({ ok: true, text: "Wednesday has no working hours: this is flex time", over: false });
   });
 });

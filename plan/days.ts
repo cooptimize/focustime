@@ -74,3 +74,22 @@ export function planButton(d: { date: IsoDate; today: IsoDate; pto: boolean; has
 
 /** "+ Add work" on a block card and key A (step 13.6, D241): today or later, not PTO, with working time. */
 export const canAddWork = (b: { date: IsoDate; today: IsoDate; pto: boolean; off: boolean }) => b.date >= b.today && !b.pto && !b.off;
+
+/**
+ * AS-2: a to-do may go on any day that hasn't ended. A weekend, Friday's catch-up, a day without working hours and a
+ * PTO day all take it, with a short note instead of a refusal (the Board's drop tip, pick.move's answer and the
+ * assistant's preview say the same thing). Null: a normal working day.
+ */
+export function placeNote(date: IsoDate, o: { pto: boolean; hasHours: boolean }): string | null {
+  const d = Temporal.PlainDate.from(date);
+  const name = d.toLocaleString("en-US", { weekday: "long" });
+  if (o.pto) return "You're on PTO that day";
+  if (o.hasHours) return null;
+  if (d.dayOfWeek >= 6) return `${name} isn't a working day: this is flex time`;
+  if (d.dayOfWeek === 5) return "Friday is your catch-up day";
+  return `${name} has no working hours: this is flex time`;
+}
+
+/** AS-2: "Over your Wednesday PM hours by 1h", the over-capacity note (never a refusal). */
+export const overNote = (date: IsoDate, half: "AM" | "PM" | "EVE", over: string) =>
+  `Over your ${Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" })} ${half === "EVE" ? "evening" : half} hours by ${over}`;

@@ -162,17 +162,26 @@ describe("Plan the day actions", () => {
     expect((await t.run<PlanDayState>("planday.start", { date: D })).carryOver).toEqual([]);
   });
 
-  it("moving a pick to a weekend day with no working hours asks first; Move anyway moves it (step 13.5)", async () => {
+  it("AS-2: a move to Saturday succeeds with its note (no Add hours prompt); a day with hours has none", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
     const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
-    const r = await t.fail("pick.move", { id: pick.id, date: "2026-11-07", half: "AM" });
-    expect(r).toMatchObject({ status: 409, code: "no_hours", error: "Saturday has no working hours. Add hours for that day?" });
-    expect((await t.plan.getPick(pick.id))!.date).toBe(D);
-    const sat = (await t.run<{ pick: Pick }>("pick.move", { id: pick.id, date: "2026-11-07", half: "AM", anyway: true })).pick;
-    expect(sat.date).toBe("2026-11-07");
-    // A day with hours never asks.
-    expect((await t.run<{ pick: Pick }>("pick.move", { id: sat.id, date: "2026-11-04", half: "PM" })).pick.date).toBe("2026-11-04");
+    const sat = await t.run<{ pick: Pick; note: string | null }>("pick.move", { id: pick.id, date: "2026-11-07", half: "AM" });
+    expect(sat.pick.date).toBe("2026-11-07");
+    expect(sat.note).toBe("Saturday isn't a working day: this is flex time");
+    const back = await t.run<{ pick: Pick; note: string | null }>("pick.move", { id: sat.pick.id, date: "2026-11-04", half: "PM" });
+    expect(back).toMatchObject({ pick: { date: "2026-11-04" }, note: null });
+  });
+
+  it("AS-2: a move into the past or into a half of today that has ended is refused; nothing moves", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: "2026-11-04", half: "PM", clientKey: "Adatum", itemId: 101 });
+    expect((await t.fail("pick.move", { id: pick.id, date: "2026-10-30", half: "AM" })).status).toBe(409);
+    t.at("2026-11-03T22:00:00Z"); // Tuesday 5 PM in New York: both halves of Tuesday are over
+    const r = await t.fail("pick.move", { id: pick.id, date: "2026-11-03", half: "PM" });
+    expect(r).toMatchObject({ status: 409, error: "This afternoon has already ended. Move it to a later block" });
+    expect((await t.plan.getPick(pick.id))!).toMatchObject({ date: "2026-11-04", half: "PM", status: "planned" });
   });
 
   it("moving a pick to Friday never asks: it is catch-up work on the overflow day (step 13.6, Q78, D238)", async () => {
@@ -265,14 +274,14 @@ describe("PTO and Plan the day (step 6)", () => {
     expect(wed.planDay).toMatchObject({ date: "2026-11-04", workday: true });
   });
 
-  it("picks are refused on a PTO day, by add or by move; other days still take them", async () => {
+  it("AS-2 (supersedes the PTO refusal): add and move onto a PTO day succeed with the note", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
-    const r = await t.fail("pick.add", { date: "2026-11-05", half: "AM", clientKey: "Adatum", intention: "x" });
-    expect(r).toMatchObject({ status: 422 });
-    expect(r.ok ? "" : r.error).toBe("Thu, Nov 5 is a PTO day (Watch Kids). Nothing can be planned on it");
+    const added = await t.run<{ pick: Pick; note: string | null }>("pick.add", { date: "2026-11-05", half: "AM", clientKey: "Adatum", intention: "x" });
+    expect(added.note).toBe("You're on PTO that day");
     const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: "2026-11-03", half: "AM", clientKey: "Adatum", intention: "fine on a normal day" });
-    expect((await t.fail("pick.move", { id: pick.id, date: "2026-11-05", half: "PM" })).status).toBe(422);
+    const moved = await t.run<{ pick: Pick; note: string | null }>("pick.move", { id: pick.id, date: "2026-11-05", half: "PM" });
+    expect(moved).toMatchObject({ pick: { date: "2026-11-05", half: "PM" }, note: "You're on PTO that day" });
   });
 
   it("when PTO can't be read the week still loads and picks still work", async () => {

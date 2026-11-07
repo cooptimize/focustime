@@ -4,13 +4,13 @@ import { markResolved, materializeCheckins } from "./carry-actions.ts";
 import { isOpen, typeNeedsBreakdown } from "../plan/process.ts";
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { carryTarget, dayLabel, dayRule, SCAN_DAYS, upcomingStart, type DayRule, type HasHours } from "../plan/days.ts";
+import { carryTarget, dayLabel, dayRule, placeNote, SCAN_DAYS, upcomingStart, type DayRule, type HasHours } from "../plan/days.ts";
 import { alreadyPlanned } from "../plan/dup.ts";
 import { sessionEnd, unpickableReason } from "../plan/rules.ts";
 import { DEFAULT_SIZE, SIZES, type Pick as PlanPick, type PlanDayState, type Size } from "../plan/types.ts";
 import { PlanError, type DraftPatch, type NewPick, type PlanStore } from "../store/plan-store.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
-import { dayEndOf, hoursOn, noHoursPrompt, type TimeModel } from "../week/hours.ts";
+import { dayEndOf, hoursOn, nominalHours, type TimeModel } from "../week/hours.ts";
 import type { PtoDay } from "../week/pto.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
@@ -102,11 +102,23 @@ async function ruleFor(ctx: PlanContext, d: IsoDate): Promise<DayRule> {
   return dayRule(d, today, await ptoOf(ctx, cfg, d), await hasHours(d));
 }
 
-/** Refuses a full PTO day with a plain reason; null when the day can take picks. */
-async function ptoRefusal(ctx: PlanContext, d: IsoDate): Promise<string | null> {
-  const { cfg, today, hasHours } = await clock(ctx);
-  const r = dayRule(d, today, await ptoOf(ctx, cfg, d), await hasHours(d));
-  return !r.ok && r.kind === "pto" ? r.reason : null;
+/**
+ * AS-2 (supersedes PV-1's PTO refusal and step 13.5's "Add hours for that day?"): where a to-do may go. The day never
+ * refuses it; the only refusal is a time that has ended (a day before today, or today's half once it is over). The
+ * note says what kind of day it is (placeNote, the same words as the Board's drop tip).
+ */
+async function placeAt(ctx: PlanContext, d: IsoDate, h: Half): Promise<{ ended: string | null; note: string | null }> {
+  const { cfg, today, model, hasHours } = await clock(ctx);
+  if (d < today) return { ended: `${pastReason(d)}. Move it to today or a later day`, note: null };
+  if (d === today) {
+    const day = hoursOn(model, d);
+    const span = h === "AM" ? (day.am ?? nominalHours(model).am) : h === "PM" ? (day.pm ?? nominalHours(model).pm) : null;
+    const end = span?.end ?? "24:00";
+    const nowHm = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(userZone(model)).toPlainTime().toString({ smallestUnit: "minute" });
+    if (end !== "24:00" && nowHm >= end) return { ended: `${h === "AM" ? "This morning" : "This afternoon"} has already ended. Move it to a later block`, note: null };
+  }
+  const pto = await ptoOf(ctx, cfg, d);
+  return { ended: null, note: placeNote(d, { pto: !!pto, hasHours: await hasHours(d) }) };
 }
 
 const pastReason = (d: IsoDate) => `${dayLabel(d)} is past. Its to-dos can only be ticked done or dropped`;
@@ -273,10 +285,11 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const base = { date: date(o.date), half: half(o.half), clientKey: clientKey(o.clientKey), size: o.size === undefined && o.followUpId !== undefined ? ("S" as const) : size(o.size) };
         const given = ["itemId", "intention", "draftId", "followUpId"].filter((k) => o[k] !== undefined);
         if (given.length !== 1) throw new Invalid("give exactly one of itemId, intention, draftId or followUpId");
-        const off = await ptoRefusal(ctx, base.date);
-        if (off) return bad(off, 422);
+        // AS-2: a PTO day takes it too, with a note; a past day still refuses.
         const past = await pastRefusal(ctx, base.date);
         if (past) return bad(past, 409);
+        const clk = await clock(ctx);
+        const note = placeNote(base.date, { pto: !!(await ptoOf(ctx, clk.cfg, base.date)), hasHours: await clk.hasHours(base.date) });
         let p: NewPick;
         if (o.itemId !== undefined) {
           const itemId = id(o.itemId, "itemId");
@@ -306,7 +319,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
           p = { ...base, kind: "intention", title: text(o.intention, "intention") };
         }
         const pick = (await plan.addPick(p));
-        return { ok: true, data: { pick, state: await state(ctx, plan, pick.date) } };
+        return { ok: true, data: { pick, state: await state(ctx, plan, pick.date), note } };
       }
       case "pick.remove": {
         const pid = id(fields(input, ["id"]).id);
@@ -335,19 +348,14 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const to = date(o.date);
         if (o.anyway !== undefined && typeof o.anyway !== "boolean") throw new Invalid("anyway must be true or false");
         const h = half(o.half);
-        const off = await ptoRefusal(ctx, to);
-        if (off) return bad(off, 422);
-        // Into a past day never; out of a past day only forward to today or later (that is carrying it).
-        const past = await pastRefusal(ctx, to);
-        if (past) return bad(`${past}. Move it to today or a later day`, 409);
-        // Step 13.5: a day with no working hours asks first (Add hours, or Move anyway).
-        const cfgNow = await ctx.config().catch(() => null);
-        const ask = o.anyway === true || !cfgNow ? null : noHoursPrompt(cfgNow.week.hours, to, Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(userZone(cfgNow)).toPlainDate().toString());
-        if (ask) return { ok: false, status: 409, error: ask, code: "no_hours" };
+        // AS-2: into a time that has ended never (out of a past day only forward: that is carrying it). Any other day
+        // takes it, with a note: PTO, a weekend, Friday's catch-up, no working hours. `anyway` is still accepted.
+        const at = await placeAt(ctx, to, h);
+        if (at.ended) return bad(at.ended, 409);
         // Step 15.1 (D277): never two copies of one item in a block.
         if (alreadyPlanned((await plan.picksFor(to)), before, to, h, pid)) return { ok: false, status: 409, error: "Already planned here", code: "duplicate" };
         const pick = (await plan.move(pid, to, h));
-        return { ok: true, data: { pick, state: await state(ctx, plan, before.date) } };
+        return { ok: true, data: { pick, state: await state(ctx, plan, before.date), note: at.note } };
       }
       case "pick.mark_done": {
         const o = fields(input, ["id", "done"]);
