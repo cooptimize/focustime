@@ -312,6 +312,12 @@ What DS-1 learned, and what is still open:
 
 - Q-ST1-1: `usePhone` and `useNarrow` read `innerWidth`, which a phone widens when a page is wider than the screen; ST-1 fixed the pages that did that (CSS only), but any new wide element on a phone page can bring back the "Maximum update depth exceeded" loop. Read the device width instead (`screen.width` or `visualViewport`), or keep fixing pages and rely on the width checks in the e2e tests? Proposal: read `visualViewport.width` in a follow-up with its own test on iPhone conditions.
 
+## Late chip (UI-9, Nov 7)
+
+- Q-UI9-1: On a desktop card with the timeline shown, the rail draws carried late promises on the block under way whatever its client (CV-3), while the chip (with no rail) puts each on its own client's block. Should the rail follow the chip's client rule too, so the two never disagree? A small change to `railMarks`' home rail; not done here, since the brief said not to invent a rule for the timeline.
+- Q-UI9-2: A late promise whose client has no block today (or one with no client) shows on no Week card, only in Today's strip and the Inbox (and, for one I added, as U3's due badge on the day's first block). Is that enough, or should the day header carry a "N late" for those?
+- Q-UI9-3: The wide layout's hour timeline (3840) and strip or mini cards never marked late promises; they now get the chip because they draw no rail. Confirm that's wanted on the wide layout, where the timeline is "shown".
+
 ## Invite to FocusTime (IN-1, Nov 7)
 
 - Q-IN1-1: Teams app added is known only from the bot's 1:1 chat (a person who installed the app but never opened its chat, or whose install event didn't arrive, reads No). Knowing it for certain needs Graph's installed apps for a user (`TeamsAppInstallation.ReadForUser.All`), a new permission, so IN-1 doesn't. Worth it?

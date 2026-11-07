@@ -5,7 +5,7 @@
 import { useDeveloperLoop } from "./appenv.ts";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { Avatar, forgetPhotos, usePhotos, usePresence } from "./Presence.tsx";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AuthStatus, AzureWriteEntry, Person, TeamsStatusEntry, VmPreview, VmPreviewOp, VmStatus } from "../actions/account-types.ts";
 import type { PhotosData, TeamsStatusView } from "../actions/types.ts";
 import { ActionRefusal, call, endSession, SessionError, setSignInShowing, signInWithMicrosoft, startDemo } from "./api.ts";
@@ -13,8 +13,9 @@ import { MenuCtx } from "./Menus.tsx";
 import type { MenuItem, MenuStep } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 import { BentMark } from "./brand/Brand.tsx";
-import { Guide, TourLink } from "./guide/Guide.tsx";
-import { TOUR } from "./guide/content.ts";
+import { TourLink } from "./guide/TourLink.tsx";
+/** UI-5: the Guide loads only when opened. */
+const Guide = lazy(() => import("./guide/Guide.tsx"));
 import { parseHash } from "./nav.ts";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
@@ -110,7 +111,12 @@ export function SignInScreen({ message: first }: { message: string | null }) {
     setSignInShowing(true);
     return () => setSignInShowing(false);
   }, []);
-  if (guide !== undefined) return <Guide standalone chapter={guide} closeLabel={TOUR.signIn} onClose={() => setGuide(false)} />;
+  if (guide !== undefined)
+    return (
+      <Suspense fallback={<div className="center-note"><p>Loading…</p></div>}>
+        <Guide standalone chapter={guide} onClose={() => setGuide(false)} onSection={(id) => void (location.hash = `#/guide/${id}`)} />
+      </Suspense>
+    );
   return (
     <main className="signin-page">
       <div className="signin-card">

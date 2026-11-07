@@ -133,7 +133,7 @@ export function PhoneNow({ data, block, pick, nowMs, nameOf, onStart, onTimer, o
   const running = t && (!pick || t.pickId === pick.id);
   const title = client ? nameOf(client) : block?.open ? "Open" : "Focus";
   return (
-    <section className="phone-now" aria-label="Now" style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties}>
+    <section className="phone-now" data-tour="today-next" aria-label="Now" style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties}>
       <header>
         <span className="pn-tag">{running ? "Focusing" : "Now"}</span>
         <h2>{title}</h2>

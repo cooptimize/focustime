@@ -29,7 +29,7 @@ function FixRowView({ r, entry, depth, skip, dots }: { r: Row; entry: FixEntry |
     else setOpen("size");
   };
   return (
-    <li className={`ah-fx-row${entry ? "" : " ctx"}`} style={{ "--ah-depth": depth } as CSSProperties} aria-label={entry ? `${r.item.title}: ${entry.gaps.map((g) => GAP_WORDS[g]).join(", ")}` : undefined}>
+    <li data-tour={entry ? "ah-fix-row" : undefined} className={`ah-fx-row${entry ? "" : " ctx"}`} style={{ "--ah-depth": depth } as CSSProperties} aria-label={entry ? `${r.item.title}: ${entry.gaps.map((g) => GAP_WORDS[g]).join(", ")}` : undefined}>
       <span className="ah-fx-item">
         <TypeIcon clientKey={r.clientKey} type={r.item.type} className="ah-type-icon" />
         <span className="ah-title" title={`${r.item.type} #${r.item.id}: ${r.item.title}`}>

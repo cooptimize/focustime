@@ -317,7 +317,7 @@ export function Today(props: Props) {
     );
   // QF-1: ‹ › (and [ ]) to another day; Back to today when away from it.
   const dayStep = mode === "now" && props.onDay ? (
-    <span className="pd-step today-step" role="group" aria-label="Day">
+    <span className="pd-step today-step" data-tour="today-days" role="group" aria-label="Day">
       <button type="button" onClick={() => props.onDay!(stepWeekday(date, -1))} aria-label="Previous day" title="Previous day ([)">‹</button>
       <button type="button" onClick={() => props.onDay!(stepWeekday(date, 1))} aria-label="Next day" title="Next day (])">›</button>
       {!isToday && (
@@ -449,7 +449,7 @@ export function Today(props: Props) {
             {mode !== "checkin" && split && <OutsideLine label="Before your blocks" events={wide ? [] : split.before} tz={tz} promises={spots.before} onPromise={onPromise} />}
             {mode === "now" && phone && blocks.length > 0 && <h2 className="section-label phone-agenda">Agenda</h2>}
             {timeboxOffer && <div className="today-tools">{timeboxOffer}</div>}
-            <section className={`today-blocks${blocks.length === 1 ? " one" : ""}`} style={{ "--blocks": blocks.length } as CSSProperties} aria-label="Today's blocks">
+            <section data-tour="today-blocks" className={`today-blocks${blocks.length === 1 ? " one" : ""}`} style={{ "--blocks": blocks.length } as CSSProperties} aria-label="Today's blocks">
               {blocks.map((s) => (
                 <BlockCard
                   key={s.half}
@@ -614,7 +614,7 @@ export function UrgentStrip({ sources, now, today, tz, clientName, onItem, needs
   if (!lines.length) return null;
   const more = moreInInbox(lines, needsYou);
   return (
-    <section className="urgent-strip" aria-label="Urgent">
+    <section className="urgent-strip" data-tour="today-urgent" aria-label="Urgent">
       <ul>
         {lines.map((l) => {
           const v = stripLine(l, { today, tz, clientName });
@@ -677,7 +677,7 @@ export function MomentCard({ m, onPlan, onCheckIn, onCloseOut }: { m: Moment; on
       </p>
     );
   return (
-    <section className={`moment-card moment-${m.kind}`} aria-label={t.title}>
+    <section className={`moment-card moment-${m.kind}`} data-tour="today-moment" aria-label={t.title}>
       <div className="mc-text">
         <h2>{t.title}</h2>
         <p>{t.body}</p>

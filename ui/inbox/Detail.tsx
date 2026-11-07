@@ -536,7 +536,7 @@ export function ChatterDetail({ row, tz, color, onWork, chat, admin, onSocial }:
       <p className="ib-summary">
         {row.messages.length} {row.messages.length === 1 ? "message" : "messages"} filtered as chatter. No question for you, no ask, no promise. They never count toward Needs you.
       </p>
-      <div className="ib-acts" role="group" aria-label={`Actions for ${row.title}`}>
+      <div className="ib-acts" data-tour="ib-acts" role="group" aria-label={`Actions for ${row.title}`}>
         {chat?.link && (
           <a className="ib-act" href={chat.link} target="_blank" rel="noopener noreferrer">
             Open in Teams

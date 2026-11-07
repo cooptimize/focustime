@@ -50,7 +50,7 @@ FocusTime's own rules (the brief sets none):
 
 **Poses:** `still` (stands upright); `idle` (sways about 1.5 degrees over 6 s, its light breathes over 3 s); `bob` (settles in and bobs once in 0.7 s, then idles).
 
-**Where Lumen may appear:** the loader, the opening and Close out's reverse, the sign-in screen (BentMark), About (the lockup), the Guide's footer (still, 22 px, G1), three empty states (Inbox empty and Close out with no open follow-ups use the idle pose, one plain line and one action), and three fun moments: the first launch ever (once, a plan store marker), Close out with all of today's musts done, and a calendar reconnected in Settings > Connections.
+**Where Lumen may appear:** the loader, the opening and Close out's reverse, the sign-in screen (BentMark), About (the lockup), the Guide's footer (still, 22 px, G1), the Guide's Start here (the unroll) and the last card of a Guide tour ("You're set", idle, 26 px; UI-5), three empty states (Inbox empty and Close out with no open follow-ups use the idle pose, one plain line and one action), and three fun moments: the first launch ever (once, a plan store marker), Close out with all of today's musts done, and a calendar reconnected in Settings > Connections.
 
 **Never:** in Week, Plan the week, Today › Now, Plan the day, Check-in, Roadmap or Plan ahead, on any card, or for inline waits (a spinner word or nothing). Never tilted at rest (it stands upright), never with a face, never speaking.
 

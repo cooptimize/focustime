@@ -14,6 +14,8 @@ const KEEP: Record<string, RegExp> = {
   "plan/timebox.ts": /^const LEGACY_BODY_TAG = "Timebox planned in Coopilot\.";$/,
   "plan/devopswrite.ts": /^export const REMOVED_COMMENT = "Removed by Coopilot: undo of an item created from Coopilot\.";$/,
   // The Entra and Dataverse registrations keep their display names (R1): the starter config names them as they are.
+  // UI-5: the Guide's Renamed table names the old name once.
+  "ui/guide/content.ts": /^\["Coopilot", "FocusTime"\],$/,
   "config/starter.ts": /^# .*"Coopilot (Dataverse Reader|Desktop)"/,
 };
 /** The rename itself: it has to name the old folders and keyring service. */
