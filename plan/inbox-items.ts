@@ -289,13 +289,14 @@ export function todayLines(rows: readonly InboxItemView[], o: { today: IsoDate; 
 }
 
 /** One promise on Week's rail (plan/rail-promises.ts places it): the Inbox row's key, what, to whom and when. */
-export type RailItem = { key: string; what: string; toName: string | null; dueAt: string | null; dueDate: string; overdue: boolean };
+/** UI-9: `clientKey`, so a Week card counts only its own client's late promises. */
+export type RailItem = { key: string; what: string; toName: string | null; clientKey: string | null; dueAt: string | null; dueDate: string; overdue: boolean };
 
 /** Week's rail: my open promises that have a time or are late, awake (not snoozed or hidden), as the Inbox has them. */
 export function railItems(rows: readonly InboxItemView[]): RailItem[] {
   return rows
     .filter((r) => r.kind === "promise" && !r.done && r.views.length > 0 && (!!r.dueAt || r.late))
-    .map((r) => ({ key: r.key, what: r.title, toName: r.who, dueAt: r.dueAt, dueDate: r.due ?? "", overdue: r.late }));
+    .map((r) => ({ key: r.key, what: r.title, toName: r.who, clientKey: r.clientKey, dueAt: r.dueAt, dueDate: r.due ?? "", overdue: r.late }));
 }
 
 /** What `inbox.today` returns: the badge's number and the rows Today's strip and Week's rail read. */
