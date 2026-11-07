@@ -71,7 +71,7 @@ describe("UI-9: late promises counted on a card with no rail", () => {
       aDayPromise({ id: 3, clientKey: "contoso", dueAt: "2026-11-05T15:00:00Z", dueDate: TODAY, overdue: true }), // this morning, Contoso's AM
       aDayPromise({ id: 4, clientKey: "fabrikam", dueAt: "2026-11-05T15:00:00Z", dueDate: TODAY, overdue: true }), // this morning, but AM is Contoso's
       aDayPromise({ id: 5, clientKey: "contoso", dueAt: "2026-11-05T21:00:00Z", dueDate: TODAY, overdue: false }), // not late
-      aDayPromise({ id: 6, clientKey: null, dueAt: null, dueDate: "2026-11-04", overdue: true }), // no client: no card
+      { ...aDayPromise({ id: 6, dueAt: null, dueDate: "2026-11-04", overdue: true }), clientKey: null }, // no client: no card
     ];
     expect(keys(lateOnCards(ps, rails, { today: TODAY, now }))).toEqual({ [AM.key]: [1, 3], [PM.key]: [2] });
   });

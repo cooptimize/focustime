@@ -5547,3 +5547,14 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .panel-shell.phone .ps-body table { display: block; max-width: 100%; overflow-x: auto; }
 .panel-shell.phone .ps-body table :is(th, td) { overflow-wrap: normal; min-width: 4.5em; }
 .panel-shell.phone .ps-body { overflow-wrap: anywhere; }
+/* UI-9: a card's "N late" chip when it draws no rail: the urgent strip's promise colour (amber, never red). On the
+   phone it sits in the header; its tap target reaches 44px by an invisible margin, so the card is no taller. */
+.late-chip { flex: none; position: relative; display: inline-flex; align-items: center; margin-left: 6px; padding: 0 7px; border: 1px solid color-mix(in oklab, var(--watch) 45%, var(--border)); border-left: 3px solid var(--watch); border-radius: 6px; background: color-mix(in oklab, var(--watch) 14%, var(--surface)); color: var(--watch); font: inherit; font-size: var(--fs-2); font-weight: 600; line-height: calc(18px * var(--text-scale)); white-space: nowrap; cursor: pointer; }
+.card-status .late-chip:first-child { margin-left: 0; }
+.late-chip:hover { background: color-mix(in oklab, var(--watch) 22%, var(--surface)); }
+.late-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.app.phone .card-head:has(.late-chip) { overflow: visible; }
+.app.phone .card-head button.late-chip { min-height: 0; margin-left: auto; margin-right: 6px; }
+.app.phone .late-chip::after { content: ""; position: absolute; inset: -13px -8px; }
+/* UI-9: Promises narrowed to late ones from a Week card's chip. */
+.ib-late-line { margin: 0; display: inline-flex; align-items: baseline; gap: 8px; color: var(--watch); font-size: var(--fs-2); font-weight: 600; }
