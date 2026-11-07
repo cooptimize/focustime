@@ -90,7 +90,7 @@ export const DEFAULT_TIMEBOX: TimeboxSettings = { outlookDefault: false, confirm
 export const THEMES = ["cooptimize-dark", "cooptimize-light", "neutral"] as const;
 export type Theme = (typeof THEMES)[number];
 export const THEME_NAMES: Record<Theme, string> = { "cooptimize-dark": "Cooptimize Dark", "cooptimize-light": "Cooptimize Light", neutral: "Neutral" };
-/** showTimelines (step 15.1, D276): the compact time ruler on medium-width cards. */
+/** showTimelines (step 15.1, D276; read and ignored from U3; WK-2): the Board's Timeline toggle, the hour rail beside each card's to-dos. */
 /** Text size (U5, D401): three presets off one base, not a slider. Default is 11/12/13/15 px, Large 13/14/15/17, Larger 15/16/17/19. */
 export const TEXT_SIZES = ["default", "large", "larger"] as const;
 export type TextSize = (typeof TEXT_SIZES)[number];

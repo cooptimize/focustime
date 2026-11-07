@@ -7,6 +7,9 @@
 // - mini   (130 to 170): the strip, the header stacked, the status pill without its reason
 // When even mini doesn't fit with all five days open, the week folds: the selected day and its neighbours stay open
 // and the others become narrow strips (their AM and PM halves still drop targets).
+// WK-2 (supersedes WK-1's single tier): the Mon–Thu tier still decides the fold, but each open column then takes the
+// tier of its own width (its share of the row), so Friday, a PTO day and a folded week's open days drop to ruler,
+// strip or mini on their own instead of drawing a rail they have no room for.
 
 export type Tier = "rail" | "ruler" | "strip" | "mini";
 
@@ -39,6 +42,8 @@ export type Fit = {
   tracks: string;
   /** The rail tier's rail width: what the column leaves after about 200 px of text (scaled), 140 to 186 px. */
   railPx: number;
+  /** WK-2: per day, the tier and rail width from that column's own width (a folded day keeps the working tier). */
+  days: { tier: Tier; railPx: number }[];
 };
 
 const railWidth = (col: number, scale: number) => Math.round(Math.min(186, Math.max(140, col - 200 * scale)));
@@ -56,7 +61,10 @@ export function weekFit({ contentPx, gapPx, scale = 1, shares, selected }: { con
   const all = free / Math.max(0.0001, sum(shares));
   const t = tierFor(all, scale);
   const track = (s: number) => `minmax(0, ${s}fr)`;
-  if (t !== "fold" || n <= 1) return { tier: t === "fold" ? "mini" : t, open: shares.map(() => true), col: all, tracks: shares.map(track).join(" "), railPx: railWidth(all, scale) };
+  if (t !== "fold" || n <= 1) {
+    const tier = t === "fold" ? "mini" : t;
+    return { tier, open: shares.map(() => true), col: all, tracks: shares.map(track).join(" "), railPx: railWidth(all, scale), days: perDay(shares, all, scale, tier) };
+  }
 
   // Fold: a window of FOLD_OPEN days around the selected one (kept inside the week), shrunk only while the open
   // columns are still under mini.
@@ -72,8 +80,23 @@ export function weekFit({ contentPx, gapPx, scale = 1, shares, selected }: { con
     col = Math.max(0, free - strip * (n - size)) / Math.max(0.0001, openShares);
     if (tierFor(col, scale) !== "fold" || size === 1) break;
   }
-  const tier = tierFor(col, scale);
-  return { tier: tier === "fold" ? "mini" : tier, open, col, tracks: shares.map((s, i) => (open[i] ? track(s) : `${Math.round(strip)}px`)).join(" "), railPx: railWidth(col, scale) };
+  const t2 = tierFor(col, scale);
+  const tier = t2 === "fold" ? "mini" : t2;
+  return { tier, open, col, tracks: shares.map((s, i) => (open[i] ? track(s) : `${Math.round(strip)}px`)).join(" "), railPx: railWidth(col, scale), days: perDay(shares, col, scale, tier) };
+}
+
+/**
+ * WK-2: each column's own tier, from its own width (its share of one Mon–Thu share), never a wider tier than the
+ * working days' and never below mini (a column that open is still drawn as mini).
+ */
+function perDay(shares: readonly number[], col: number, scale: number, working: Tier): { tier: Tier; railPx: number }[] {
+  const order: Tier[] = ["rail", "ruler", "strip", "mini"];
+  return shares.map((s) => {
+    const w = col * Math.min(1, s);
+    const own = tierFor(w, scale);
+    const t = own === "fold" ? "mini" : own;
+    return { tier: order[Math.max(order.indexOf(t), order.indexOf(working))]!, railPx: railWidth(w, scale) };
+  });
 }
 
 /** A day's share of the week: working days 1, Friday, weekend days and PTO days 0.6, the day being planned 2.6. */

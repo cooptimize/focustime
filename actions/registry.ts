@@ -162,6 +162,7 @@ export const ACTIONS = [
   { name: "ui.set_text_size", title: "Text size", group: "Display", target: "none", shortcut: "Ctrl +", summary: "Default, Large or Larger for all text; saved in config" },
   { name: "ui.set_view_range", title: "Timelines", group: "Display", target: "range", shortcut: "V", summary: "The hours Week's rails and timelines show: business hours, 12 hours or 24 hours, for now; Settings > Display sets the default" },
   { name: "ui.set_inbox", title: "Inbox view, clients and grouping", group: "Display", target: "none", summary: "The Inbox's view, the clients it shows and how it groups them; remembered for you" },
+  { name: "ui.set_show_timelines", title: "Timeline", group: "Display", target: "none", shortcut: "B", summary: "Show or hide the hour rail beside each card's to-dos on Week's Board; hidden, cards use their full width and list their meetings; saved for you" },
   { name: "ui.set_show_personal", title: "Personal events", group: "Display", target: "none", shortcut: "G", summary: "Show or hide personal events on Week and Today; they still count in risk and free time; saved in config" },
   { name: "hours.set_day", title: "Set working hours for a day", group: "Time", target: "day", summary: "Other hours for one day, a split day or a lunch change" },
   { name: "hours.clear_day", title: "Use usual hours for a day", group: "Time", target: "day", summary: "Remove a day's own working hours" },

@@ -40,7 +40,7 @@ import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { MustsSummary, TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
 import { stepWeekday, afterDone, defaultNav, focusOf, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, planDayNav, planWeekOf, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
-import { ModeArea, ModeSwitch } from "./ModeSwitch.tsx";
+import { ModeArea, ModeSwitch, TimelineToggle } from "./ModeSwitch.tsx";
 import { dayModeStatus, momentCard, weekModeStatus } from "../plan/modes.ts";
 import { FocusScreen, SoundControl } from "./FocusScreen.tsx";
 import { sound } from "./sound.ts";
@@ -433,6 +433,25 @@ export function App() {
     }
   }, []);
   const shownData = useMemo(() => (data && !showPersonal ? { ...data, week: hidePersonal(data.week) } : data), [data, showPersonal]);
+  /**
+   * WK-2: the Board's Timeline toggle (its header button, B, Week's ⋯, the command). Hidden, every card uses its full
+   * width for its to-dos and lists its meetings; remembered per person in [ui] show_timelines.
+   */
+  const [showTimelines, setShowTimelines] = useState(true);
+  const showTimelinesRef = useRef(showTimelines);
+  showTimelinesRef.current = showTimelines;
+  useEffect(() => {
+    if (data) setShowTimelines(data.ui.showTimelines ?? true);
+  }, [data?.ui.showTimelines]); // eslint-disable-line react-hooks/exhaustive-deps
+  const saveShowTimelines = useCallback(async (show: boolean) => {
+    setShowTimelines(show);
+    try {
+      await call("ui.set_show_timelines", { show });
+    } catch (e) {
+      setShowTimelines(!show);
+      setNotice(`Not saved: ${e instanceof Error ? e.message : "unknown error"}`);
+    }
+  }, []);
   // Ctrl+plus, Ctrl+minus, Ctrl+0: step the text size, only when no text field has focus and no dialog is on top
   // (then the browser's own zoom keys do what they always do).
   useEffect(() => {
@@ -1128,6 +1147,10 @@ export function App() {
         // U5.1 (D408): show or hide personal events on Week and Today (saved in config).
         e.preventDefault();
         void saveShowPersonal(!showPersonalRef.current);
+      } else if ((k === "b" || k === "B") && free && settingsAt === null && !loc.overlay && nav.tab === "week" && nav.mode === "board" && !isPlanning(nav) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        // WK-2: show or hide the Board's timeline (saved for the person).
+        e.preventDefault();
+        void saveShowTimelines(!showTimelinesRef.current);
       } else if ((k === "l" || k === "L") && free && settingsAt === null) {
         e.preventDefault();
         openTab("inbox");
@@ -1287,6 +1310,8 @@ export function App() {
       textSize,
       showPersonal,
       saveShowPersonal: (show) => void saveShowPersonal(show),
+      showTimelines,
+      saveShowTimelines: (show) => void saveShowTimelines(show),
       saveTextSize: (s) => void saveTextSize(s),
       hours: data.hours,
       runTime,
@@ -1897,6 +1922,7 @@ export function App() {
                   {target.isToday ? "Plan today" : "Plan the next workday"}
                 </button>
               )}
+              <TimelineToggle shown={showTimelines} onToggle={() => void saveShowTimelines(!showTimelines)} />
               {switches.week}
             </ModeArea>
           </header>
@@ -1922,6 +1948,7 @@ export function App() {
           setSettingsAt("hours");
         }}
         panelOpen={detailsOpen && !planWeekAt && !pd}
+        timeline={showTimelines}
         onSelect={(s) => setSel(s)}
         onOpen={(s, focus) => {
           setSel(s);
@@ -2040,6 +2067,8 @@ export function App() {
               // U5.1 (D407): Timelines, the hours the rails and timelines show (V cycles them).
               ...VIEW_RANGES.map((r) => ({ id: `range-${r}`, label: VIEW_RANGE_NAMES[r], group: "Timelines", checked: data.week.range.mode === r, ...(data.week.range.mode === r ? {} : { hint: "V" }), run: () => void setViewRange(r) })),
               { id: "personal", label: "Personal events", group: "Show", checked: showPersonal, hint: "G", run: () => void saveShowPersonal(!showPersonal) },
+              // WK-2: the Board's timeline, the same toggle as the button beside the modes.
+              { id: "timeline", label: "Timeline", group: "Show", checked: showTimelines, hint: "B", run: () => void saveShowTimelines(!showTimelines) },
             ],
           }}
           onClose={() => setWeekMoreAt(null)}
