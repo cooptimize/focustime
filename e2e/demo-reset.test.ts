@@ -70,7 +70,7 @@ describe.skipIf(!CHROMIUM)("Reset demo (DM-1)", () => {
     await page.keyboard.type("Reset demo");
     await page.keyboard.press("Enter");
     await page.getByRole("button", { name: "Reset demo" }).waitFor({ timeout: 10_000 });
-    await expect(page.evaluate(() => location.hash)).resolves.toBe("#/settings/demo");
+    await expect(page.evaluate(() => location.hash)).resolves.toBe("#/settings/data/demo-reset");
     await page.close();
   }, T);
 });

@@ -195,6 +195,19 @@ export async function openSettings(page: Page): Promise<void> {
   await page.getByRole("menuitem", { name: /^Settings/ }).click();
 }
 
+/** ST-1: a Settings section from the rail, by its id (ui/settings/registry.ts); waits for its header. */
+export async function settingsSection(page: Page, id: string): Promise<void> {
+  await page.locator(`.ps-rail [data-settings-section="${id}"]`).first().click();
+  await page.locator(`.ps-rail [data-settings-section="${id}"][aria-current="page"]`).first().waitFor();
+}
+
+/** ST-1: one client's own page in Settings › Clients (from its row). */
+export async function settingsClient(page: Page, name: string): Promise<void> {
+  await settingsSection(page, "clients");
+  await page.locator(".set-client-row", { hasText: name }).first().click();
+  await page.locator(".ps-head h2", { hasText: name }).waitFor();
+}
+
 /** U6: Plan the week has one client open at a time; open this one (its line's name) and return its card. */
 export async function weekClient(page: Page, name: string) {
   const card = page.locator(`.pw-client[aria-label="${name}"]`);

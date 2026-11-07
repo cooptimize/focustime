@@ -80,14 +80,40 @@ function Next() {
   return <div className="ti-next">{X.next.label}</div>;
 }
 
-const DRAW: Record<IllustrationId, () => React.JSX.Element> = { "pw-grid": Grid, "pw-carry": Carry, "pw-card": Card, "pw-add": Add, "pw-next": Next };
+/** The other tours' drawings: one small card each (content.ts TOUR_EXAMPLES.cards). */
+function SmallCard({ id }: { id: string }) {
+  const c = X.cards[id]!;
+  return (
+    <div className="ti-card" style={tint(c.color)}>
+      <div className="ti-card-head">
+        <b>{c.head}</b>
+        {c.meta && <span className="ti-hint">{c.meta}</span>}
+      </div>
+      {c.rows.map(([a, b]) => (
+        <div key={a} className="ti-must">
+          <span className="ti-title">{a}</span>
+          {b && <span className="ti-chip">{b}</span>}
+        </div>
+      ))}
+      <div className="ti-acts">
+        {c.actions.map((a) => (
+          <span key={a} className="ti-btn">
+            {a}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const DRAW: Partial<Record<IllustrationId, () => React.JSX.Element>> = { "pw-grid": Grid, "pw-carry": Carry, "pw-card": Card, "pw-add": Add, "pw-next": Next };
 
 /** One example drawing, labeled as such for sight and screen readers. */
 export function Illustration({ id }: { id: IllustrationId }) {
   const D = DRAW[id];
   return (
     <figure className="ti-figure" aria-label={TOUR_UI.example}>
-      <D />
+      {D ? <D /> : <SmallCard id={id} />}
       <figcaption className="guide-example">{TOUR_UI.example}</figcaption>
     </figure>
   );

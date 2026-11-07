@@ -23,7 +23,7 @@ export function FromLastWeek({ version, colors, nameOf, weekStart, week, today, 
     </div>
   );
   return (
-    <section className="from-last-week" aria-label="From last week">
+    <section className="from-last-week" data-tour="wk-carry" aria-label="From last week">
       {p ? (
         <ProposalSection data={p} act={proposal.act} onRefresh={onChanged} colors={colors}>
           {proposal.error && <p className="error-line" role="alert">{proposal.error}</p>}

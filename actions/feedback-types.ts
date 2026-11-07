@@ -9,7 +9,7 @@ export type FeedbackSetup =
   | { state: "not_set_up"; reason: string };
 
 /** Where "Turn on DevOps writes" goes. */
-export const WRITES_HREF = "#/settings/clients";
+export const WRITES_HREF = "#/settings/devops/devops-write";
 
 /** The setup in one line, the same in Settings and the dialog. */
 export function setupLine(s: FeedbackSetup): string {

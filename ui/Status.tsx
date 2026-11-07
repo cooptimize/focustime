@@ -212,7 +212,7 @@ export function StatusView({ switcher, colors, readOnly, version, onChanged }: {
         </div>
         <ModeArea>
           {!readOnly && (
-            <span className="st-toggle" role="group" aria-label="Show">
+            <span className="st-toggle" data-tour="st-toggle" role="group" aria-label="Show">
               <button type="button" className="ms-btn" aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>Edit</button>
               <button type="button" className="ms-btn" aria-pressed={mode === "preview"} onClick={() => setMode("preview")}>Preview</button>
             </span>
@@ -229,7 +229,7 @@ export function StatusView({ switcher, colors, readOnly, version, onChanged }: {
           <div className="st-bar">
             <p className="st-count" role="status">{counts!.line}</p>
             {!readOnly && (
-              <span className="st-push">
+              <span className="st-push" data-tour="st-push">
                 {ready.length > 0 && <span className="muted">{ready.length === 1 ? "1 line to push" : `${ready.length} lines to push`}</span>}
                 <button type="button" className="commit" disabled={!ready.length || !!push} onClick={() => void startPush()}>Push all</button>
               </span>
@@ -285,7 +285,7 @@ function ClientSection({ c, color, mode, lines, drafting, draftNote, onAdd, onEd
       {sent && <p className="muted st-sent">{sent}</p>}
       {c.status !== "ok" ? <p className="set-problem">{c.message}</p> : c.message && <p className="set-problem">{c.message}</p>}
       {draftNote && <p className="muted st-note" role="status">{draftNote}</p>}
-      {mode === "edit" && !c.canWrite && c.features.length > 0 && <p className="muted st-note">Read only: add your DevOps write access for {c.clientName} in <a href="#/settings/clients">Settings › Clients</a> to write here.</p>}
+      {mode === "edit" && !c.canWrite && c.features.length > 0 && <p className="muted st-note">Read only: add your DevOps write access for {c.clientName} in <a href="#/settings/devops/devops-write">Settings › DevOps</a> to write here.</p>}
       {c.status === "ok" && !c.features.length && <p className="muted">Nothing planned or worked on for {c.clientName} this week.</p>}
       <div className="st-features">
         {c.features.map((f) => (
@@ -376,8 +376,8 @@ function FeatureBlock({ c, f, mode, lines, drafting, onAdd, onEdit, onChange, on
             <LineBox key={l.key} line={l} label={`New line for ${f.title}`} onChange={onChange} onRemove={onRemove} removeLabel="Remove" />
           ))}
           <span className="st-adds">
-            <button type="button" className="mini" onClick={() => onAdd(c, f)}>+ Add a line</button>
-            {onDraft && c.ai === "ok" && <button type="button" className="mini quiet" disabled={drafting} onClick={onDraft}>{drafting ? "Drafting…" : "Draft"}</button>}
+            <button type="button" className="mini" data-tour="st-add" onClick={() => onAdd(c, f)}>+ Add a line</button>
+            {onDraft && c.ai === "ok" && <button type="button" className="mini quiet" data-tour="st-draft" disabled={drafting} onClick={onDraft}>{drafting ? "Drafting…" : "Draft"}</button>}
           </span>
         </div>
       )}

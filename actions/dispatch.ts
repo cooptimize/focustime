@@ -37,6 +37,7 @@ import { calendarNotSetUp } from "../sources/not-set-up.ts";
 import { buildWeek } from "../week/build.ts";
 import { followedKeys } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
+import { guideAction } from "./guide-actions.ts";
 import { defaultWeekStart, localToday, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
 import { hoursOn, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
@@ -159,8 +160,7 @@ export type ActionContext = {
   writeConfig?: (edit: (text: string) => string) => Promise<WriteResult>;
   /** The host's links (A1): open a link in the person's browser (link.open, outlook.open). Absent: links don't open. */
   links?: HostLinks;
-  /** Settings (step 6b): secret presence and app secret writes, plan export. */
-  secrets?: SettingsContext["secrets"];
+  /** Settings (step 6b): plan export. App secrets are never set from Settings (ST-1). */
   exportPlan?: (json: string) => Promise<string>;
   /** A2: the signed-in person's own data: everything as JSON (no secrets), and the delete (signs them out). */
   myData?: { export: () => Promise<Record<string, unknown>>; remove: () => Promise<{ hardDeleteOn: string }> };
@@ -203,7 +203,7 @@ export type ActionContext = {
  * opening links still are.
  */
 export const DEMO_REFUSED: readonly ActionName[] = [
-  "link.open", "outlook.open", "playlist.open", "data.export", "secret.set",
+  "link.open", "outlook.open", "playlist.open", "data.export",
   "auth.connect_microsoft", "auth.connect_google", "auth.connect_outlook_write", "auth.disconnect",
   "devops.set_write_pat", "devops.clear_write_pat",
   "auth.sign_in", "auth.sign_out", "push.subscribe",
@@ -1521,6 +1521,38 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
         req.input ?? {},
       );
     }
+    case "guide.checklist":
+      // UI-5: read only, states and counts only (actions/guide-actions.ts).
+      return guideAction(
+        {
+          demo: !!ctx.demo?.on,
+          facts: async () => {
+            const plan = ctx.plan;
+            if (!plan) return null;
+            const cfg = await configured(ctx);
+            const today = localToday(ctx.now(), cfg ? userZone(cfg) : "UTC");
+            const mon = mondayOf(today);
+            const next = Temporal.PlainDate.from(mon).add({ days: 7 }).toString();
+            const [setup, ids, push, thisWeek, nextWeek, days] = await Promise.all([
+              plan.setupState(),
+              plan.devopsIdentities(),
+              ctx.push?.status().catch(() => null) ?? Promise.resolve(null),
+              plan.weekPlan(mon),
+              plan.weekPlan(next),
+              plan.dayPlansBetween(today, today),
+            ]);
+            return {
+              setup,
+              writeClients: ids.length,
+              devices: push?.devices.length ?? 0,
+              teamsMessages: !!cfg?.notify.teamsMessages,
+              weekConfirmed: !!(thisWeek.committedAt || nextWeek.committedAt),
+              todayConfirmed: !!days[0]?.committedAt,
+            };
+          },
+        },
+        req.input,
+      );
     case "ui.tour_offer": {
       // G1: the tour link shows on a person's first Today until they open the Guide from it or dismiss it; then
       // never again, on any device (a plan store marker, per user). {} asks; { done: true } records it.
@@ -1603,7 +1635,6 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     }
     case "settings.load":
     case "settings.save":
-    case "secret.set":
     case "data.export":
       return settingsAction(
         settingsCtx(raw, ctx),
@@ -1726,6 +1757,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "my_promises.close":
     case "suggestions.skip":
     case "conversations.merge":
+    case "conversations.merge_preview":
     case "conversations.unmerge":
     case "my_promises.start_draft":
     case "conversations.search_items":
@@ -1734,6 +1766,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       return conversationAction(await conversationContext(ctx), action, req.input);
     case "inbox.list":
     case "inbox.count":
+    case "inbox.today":
     case "inbox.seen":
     case "inbox.hide":
     case "inbox.snooze":
@@ -1744,6 +1777,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
           now: ctx.now,
           conversations: async (cfg) => (ctx.requests?.conversations ? inboxFacts(await conversationContext(ctx), cfg) : []),
           sends: () => (ctx.team ? sendFacts(teamCtx(ctx)) : Promise.resolve([])),
+          urgent: async (cfg) => (await urgentFor(ctx, ctx.now(), userZone(cfg), (k) => cfg.clientSettings[k]?.name ?? k)).urgent,
           snoozeDay: async () => {
             const h = await escalationHours(ctx);
             return h ? snoozeDayOf(h.hours, h.ptoDays) : null;
@@ -2085,7 +2119,6 @@ function settingsCtx(raw: ActionContext, ctx: ActionContext): SettingsContext {
     ...(ctx.org ? { org: ctx.org } : {}),
     ...(ctx.writeConfig ? { writeConfig: ctx.writeConfig } : {}),
     ...(ctx.plan ? { plan: ctx.plan } : {}),
-    ...(ctx.secrets ? { secrets: ctx.secrets } : {}),
     ...(ctx.exportPlan ? { exportPlan: ctx.exportPlan } : {}),
   };
 }

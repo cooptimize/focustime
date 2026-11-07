@@ -1,6 +1,8 @@
-// The Inbox's count. IB-1: the nav badge is inbox.count's Needs you (one rule on the server for conversations,
-// promises and sends), the same number as the rail's Needs you and its header.
+// The Inbox's count. IB-1: the nav badge is the server's Needs you (one rule on the server for conversations,
+// promises and sends), the same number as the rail's Needs you and its header. Slice 4: one read (inbox.today) gives
+// the badge and the rows Today's urgent strip and Week's rail show, so they can never disagree.
 import { useEffect, useState } from "react";
+import type { InboxTodayData } from "../plan/inbox-items.ts";
 import { call } from "./api.ts";
 
 export const INBOX_COUNT_MS = 5 * 60_000;
@@ -10,11 +12,11 @@ export const INBOX_COUNT_MS = 5 * 60_000;
  * Needs you view and its header. Read on load, after every reload of the week (a follow-up closed on Today counts at
  * once), after Inbox changes and every 5 minutes; a failed read keeps the last number.
  */
-export function useInboxCount(version: number, reloaded: unknown): number | null {
-  const [count, setCount] = useState<number | null>(null);
+export function useInboxToday(version: number, reloaded: unknown): InboxTodayData | null {
+  const [count, setCount] = useState<InboxTodayData | null>(null);
   useEffect(() => {
     let live = true;
-    const read = () => void call<{ needsYou: number }>("inbox.count", {}, { background: true }).then((d) => live && setCount(d.needsYou), () => undefined);
+    const read = () => void call<InboxTodayData>("inbox.today", {}, { background: true }).then((d) => live && setCount(d), () => undefined);
     read();
     const id = setInterval(() => !document.hidden && read(), INBOX_COUNT_MS);
     return () => {

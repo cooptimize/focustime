@@ -48,8 +48,7 @@ export function StartHere({ onTour }: { /** Null signed out: no screens to show.
     <div className="gs">
       <div className="gs-hero">
         <div>
-          <div className="guide-eyebrow">{START.eyebrow}</div>
-          <h1 tabIndex={-1}>{START.title}</h1>
+          <p className="gs-title">{START.title}</p>
           <ul className="gs-why">
             {START.why.map((w) => (
               <li key={w}>{w}</li>
@@ -61,7 +60,7 @@ export function StartHere({ onTour }: { /** Null signed out: no screens to show.
         </div>
       </div>
 
-      <h2 className="gs-h">{START.day.title}</h2>
+      <h3 className="gs-h">{START.day.title}</h3>
       <ol className="gs-day">
         {START.day.steps.map((s, n) => (
           <li key={s.name} style={{ ["--i" as string]: n }}>
@@ -75,7 +74,7 @@ export function StartHere({ onTour }: { /** Null signed out: no screens to show.
         ))}
       </ol>
 
-      <h2 className="gs-h">{START.week.title}</h2>
+      <h3 className="gs-h">{START.week.title}</h3>
       <ol className="gs-week">
         {START.week.steps.map((s, n) => {
           const tour = s.tour ? tourById(s.tour) : undefined;
@@ -92,16 +91,14 @@ export function StartHere({ onTour }: { /** Null signed out: no screens to show.
                   </button>
                 ) : tour ? (
                   <span className="muted">{START.signedOut}</span>
-                ) : (
-                  <span className="faint">{START.soon}</span>
-                )}
+                ) : null}
               </span>
             </li>
           );
         })}
       </ol>
 
-      <h2 className="gs-h">{START.promises.title}</h2>
+      <h3 className="gs-h">{START.promises.title}</h3>
       <div className="gs-promises">
         {START.promises.items.map((x, n) => (
           <div key={x.name} className="gs-promise">

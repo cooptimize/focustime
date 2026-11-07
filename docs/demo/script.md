@@ -37,9 +37,10 @@ Each step: **Click** what to do · **Say** one line · **Expect** what appears �
 
 - **Click**: nothing. You open on Today.
 - **Say**: "Today is one screen: what's next, what's urgent, and the one thing to do now."
-- **Expect**: the Now card, a promise "was due Wed, Nov 4 · Send Marcus the updated export spec" in the urgent
-  strip, "2 items sent to your week", two follow-ups due, the **Plan today** card, the Cooptimize and Northwind
-  blocks with "At risk · Dentist 12:00".
+- **Expect**: the Now card; the urgent strip's three most urgent lines: the two late promises ("was due Wed, Nov 4 ·
+  Send Marcus the updated export spec" first) and Priya's Must (**Sent to you · Must**), then "… more in Inbox"
+  (the rest of Needs you); each line opens its item in the Inbox; the **Plan today** card; the Cooptimize and Northwind blocks with "At risk ·
+  Dentist 12:00".
 - **If not**: Settings › Demo › Reset demo, which brings you back to Today.
 
 ### 2. Plan today (1.5 min)
@@ -79,21 +80,27 @@ Each step: **Click** what to do · **Say** one line · **Expect** what appears �
 - **If not**: with real AI the cards differ in wording and number, which is fine. If it's slow, the stored sample
   answers after about 6 seconds.
 
-### 6. Inbox: a conversation that needs you (2 min)
+### 6. Inbox: what needs you (2 min)
 
-- **Click**: **Inbox** › Conversations. On **Delivery fee missing from the order export**, click **Create DevOps
-  item**, then **Preview in DevOps**, then **Create in DevOps**.
-- **Say**: "Client chats become conversations with a status. One needs me, so I turn it into a DevOps item."
-- **Expect**: the form is drafted (title, what's asked, acceptance criteria, parent #1110). The preview shows the
-  messages and who can see it. The card moves to **In progress** with "Tracked #…".
+- **Click**: **Inbox**. It opens on **Needs you**: the rail on the left (clients, then the views with their counts),
+  the list in the middle, the open item on the right. Click **Delivery fee missing from the order export**, then
+  **Create DevOps item**, then **Preview in DevOps**, then **Create in DevOps**.
+- **Say**: "One list of what needs a decision, each with why. Client chats become conversations; this one needs me,
+  so I turn it into a DevOps item."
+- **Expect**: each row says why it needs you ("Priya asked you by name", "Work request, no item yet", "You promised
+  it, … days late", "Priya sent it as a Must"); the Needs you count is the badge's. The form is drafted (title, what's
+  asked, acceptance criteria, parent #1110); the preview shows the messages and who can see it; the item moves to
+  **In progress** with "Tracked #…".
 - **If not**: fill the title by hand ("Add the delivery fee as its own column in the order export").
 
-### 7. Inbox: promises (0.5 min)
+### 7. Inbox: promises, waiting on, done (0.5 min)
 
-- **Click**: **Promises**.
-- **Say**: "What I said I'd do in chat becomes a promise with a due date. This one is late."
-- **Expect**: "Send Marcus the updated export spec · Was due Wed, Nov 4" (amber) and "Confirm the intake form
-  go-live date · Due Fri, Nov 13".
+- **Click**: **Promises** in the rail, then **Waiting on**, then **Done**.
+- **Say**: "What I said I'd do in chat becomes a promise with a due date. This one is late. What others owe me waits
+  in its own view."
+- **Expect**: Promises: "Send Marcus the updated export spec" (amber, late) and "Confirm the intake form go-live date
+  · Due Fri, Nov 13". Waiting on: Priya's "Send Alex three test accounts with points balances" and the send to Sam.
+  Done: "Reminder text wording" (resolved) and "Send Lena the new reminder text" (closed the loop on Teams).
 - **If not**: nothing else needed. Move on.
 
 ### 8. Capture (1 min)

@@ -4,7 +4,7 @@
 // Screenshots at 1920 and Text size Larger when FOCUSTIME_SHOTS is set.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, openSettings, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, openSettings, settingsSection, startDemo, type Harness } from "./harness.ts";
 import { shotBoth } from "./shots.ts";
 
 const T = 90_000;
@@ -36,11 +36,11 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     const { page, errors } = await freshPage(h);
     const sent = saves(page);
     await openSettings(page);
-    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Planning" }).click();
+    await settingsSection(page, "focus");
     const field = page.locator(".set-field", { hasText: "Focus length (minutes)" });
     const input = field.locator("input");
     await input.waitFor();
-    await expect(page.locator(".set-body").getByRole("button", { name: /^Save$/ }).count()).resolves.toBe(0);
+    await expect(page.locator(".ps-body").getByRole("button", { name: /^Save$/ }).count()).resolves.toBe(0);
     const before = (await load(page)).planning.focusMinutes;
 
     // Focus in and out without a change: nothing is sent.
@@ -69,7 +69,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
   it("a refused value: the message under the field, the typed value stays, nothing saved; a network error offers Retry", async () => {
     const { page, errors } = await freshPage(h);
     await openSettings(page);
-    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Risk rules" }).click();
+    await settingsSection(page, "planning");
     const atRisk = page.locator(".set-field", { hasText: "At risk at" });
     const input = atRisk.locator("input");
     await input.waitFor();
@@ -86,9 +86,9 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     await shotBoth(page, "settings-risk-error", atRisk);
 
     // Leaving with that field still wrong doesn't drop it silently: Settings stays and the field is focused.
-    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Planning" }).click();
+    await settingsSection(page, "focus").catch(() => undefined);
     await page.waitForTimeout(400);
-    await expect(page.locator(".set-body h2").textContent()).resolves.toBe("Risk rules");
+    await expect(page.locator(".ps-head h2").textContent()).resolves.toBe("Today and Week");
 
     // A network error: "Couldn't save. Retry", and Retry saves once the network is back.
     await page.route("**/api/action", async (route) => ((route.request().postData() ?? "").includes('"settings.save"') ? route.abort() : route.continue()));
@@ -106,44 +106,44 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
   it("an edited field saves when Settings closes with it focused", async () => {
     const { page } = await freshPage(h);
     await openSettings(page);
-    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Ahead" }).click();
+    await settingsSection(page, "ahead");
     const input = page.locator(".set-field", { hasText: "Stalled after" }).locator("input");
     await input.waitFor();
     const before = (await load(page)).roadmap.stalledDays;
     await input.fill(String(before + 1));
-    // Back with the field still focused.
-    await page.locator(".set-side").getByRole("button", { name: "Back" }).click();
+    // × with the field still focused (ST-1: the one way out at the top right; Esc does the same).
+    await page.locator(".ps-head").getByRole("button", { name: "Close" }).click();
     await page.locator(".settings").waitFor({ state: "detached" });
     await expect.poll(async () => (await load(page)).roadmap.stalledDays).toBe(before + 1);
     await page.close();
   }, T);
 
-  it("the body scrolls on its own beside the menu; the menu stays in view and marks the section shown (ADM-2)", async () => {
+  it("the body scrolls on its own beside the rail; the rail stays in view and marks the section shown (ADM-2, ST-1)", async () => {
     const { page } = await freshPage(h);
     await openSettings(page);
-    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Planning" }).click();
-    await page.locator(".set-field", { hasText: "Focus length" }).waitFor();
+    await settingsSection(page, "planning");
+    await page.locator(".set-field", { hasText: "Carry-over" }).waitFor();
     const layout = await page.evaluate(() => {
-      const body = document.querySelector<HTMLElement>(".set-body")!;
+      const body = document.querySelector<HTMLElement>(".ps-body")!;
       body.scrollTo({ top: body.scrollHeight });
-      const nav = document.querySelector<HTMLElement>(".set-side")!.getBoundingClientRect();
-      return { inner: getComputedStyle(body).overflowY, scrolled: body.scrollTop > 0, page: document.querySelector<HTMLElement>(".settings")!.scrollTop, navTop: nav.top, width: body.querySelector("h2")!.getBoundingClientRect().width };
+      const nav = document.querySelector<HTMLElement>(".ps-side")!.getBoundingClientRect();
+      return { inner: getComputedStyle(body).overflowY, scrolled: body.scrollTop > 0, page: document.querySelector<HTMLElement>(".settings")!.scrollTop, navTop: nav.top, width: body.querySelector(".set-section")!.getBoundingClientRect().width };
     });
     expect(layout).toMatchObject({ inner: "auto", scrolled: true, page: 0 });
     expect(layout.navTop).toBeGreaterThanOrEqual(0);
     expect(layout.width).toBeLessThanOrEqual(1100);
-    await expect(page.locator('.set-tab[aria-current="page"]').textContent()).resolves.toBe("Planning");
+    await expect(page.locator('.ps-rail [aria-current="page"] span').first().textContent()).resolves.toBe("Today and Week");
     await page.close();
   }, T);
 
   it("a DevOps write PAT keeps its one explicit button, Check and save", async () => {
     const { page } = await freshPage(h);
     await openSettings(page);
-    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Clients" }).click();
+    await settingsSection(page, "devops");
     const pat = page.locator("form.devops-write").first();
     await pat.waitFor({ timeout: 20_000 });
     await expect(pat.getByRole("button", { name: "Check and save" }).count()).resolves.toBe(1);
-    await expect(page.locator(".set-body").getByRole("button", { name: /^Save$/ }).count()).resolves.toBe(0);
+    await expect(page.locator(".ps-body").getByRole("button", { name: /^Save$/ }).count()).resolves.toBe(0);
     await shotBoth(page, "settings-clients-pat", pat);
     await page.close();
   }, T);

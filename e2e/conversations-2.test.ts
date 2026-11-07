@@ -213,7 +213,7 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
 
       // Admin › Clients: add both chats to Adatum.
       await openSettings(page);
-      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Clients" }).click();
+      await page.locator('.ps-rail [data-settings-section="admin-clients"]').click();
       const adatum = page.getByRole("group", { name: /^Delivery chats for Adatum/ });
       for (const word of ["alliance", "delivery"]) {
         await adatum.getByRole("button", { name: "Add a chat" }).click();
@@ -276,10 +276,20 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       const refresh = await openInboxItem(page, "Dashboard refresh time");
       await refresh.getByRole("button", { name: "More for Dashboard refresh time" }).click();
       await refresh.getByRole("menuitem", { name: "Merge into…" }).click();
-      const mergeForm = refresh.getByRole("group", { name: "Merge Dashboard refresh time into another conversation" });
-      await mergeForm.getByRole("button", { name: /October totals on the Movement Dashboard/ }).waitFor();
-      await shotAll(page, "cv2-merge", mergeForm);
-      await mergeForm.getByRole("button", { name: /October totals on the Movement Dashboard/ }).click();
+      // IB-1 slice 4: the only other open one is picked, so the pane shows the before → after straight away.
+      const mergeForm = refresh.getByRole("group", { name: "Merge preview" });
+      const before = mergeForm.getByLabel("Before");
+      await before.locator(".mg-side.mg-gone", { hasText: "Dashboard refresh time" }).waitFor();
+      await before.locator(".mg-side:not(.mg-gone)", { hasText: "October totals on the Movement Dashboard" }).waitFor();
+      await mergeForm.getByText(/move into "October totals on the Movement Dashboard"/).waitFor();
+      await mergeForm.getByText("The summary is written again").waitFor();
+      await shotAll(page, "ib1-merge-preview", mergeForm);
+      // Swap turns it round, and back.
+      await mergeForm.getByRole("button", { name: /^Swap: keep "Dashboard refresh time"/ }).click();
+      await before.locator(".mg-side.mg-gone", { hasText: "October totals on the Movement Dashboard" }).waitFor();
+      await mergeForm.getByRole("button", { name: /^Swap: keep "October totals/ }).click();
+      await before.locator(".mg-side.mg-gone", { hasText: "Dashboard refresh time" }).waitFor();
+      await mergeForm.getByRole("button", { name: "Merge", exact: true }).click();
       await main.getByText(/Merged into "October totals on the Movement Dashboard" for everyone on the chat/).waitFor();
       await expect.poll(async () => (await convs.conversations([ALLIANCE])).filter((c) => !c.mergedInto).length).toBe(1);
       await main.getByRole("button", { name: "Undo" }).click();

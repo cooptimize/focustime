@@ -1,4 +1,4 @@
-// G1: the Guide's keys are ui/keys.ts's, its sandbox is the app's own fit math, and its address round-trips.
+// G1, UI-5: the Guide's keys are ui/keys.ts's, its sandbox is the app's own fit math, and its address round-trips.
 import { describe, expect, it } from "vitest";
 import { storyMinutes, type StorySize } from "../../plan/estimate.ts";
 import { blockFitWords } from "../../plan/fit.ts";
@@ -7,6 +7,7 @@ import { KEYS } from "../keys.ts";
 import { hashOf, parseHash } from "../nav.ts";
 import * as C from "./content.ts";
 import { sandbox } from "./sandbox.ts";
+import { CONTENTS, OLD_SECTIONS, sectionFor } from "./sections.ts";
 import { keyRow, keysFor, richParts } from "./shortcuts.ts";
 
 /** Every string in the content, however deep. */
@@ -23,17 +24,16 @@ describe("the Guide's shortcuts are ui/keys.ts's", () => {
   it("the cards say what the keys do (the tabs are 1 2 3 4, capture N or C, midday check-in M, close out E, commit the week W)", () => {
     const shown = Object.fromEntries(C.SHORTCUTS.cards.map((c) => [c.label, keysFor(c.keys, c.all)]));
     expect(shown["Today, Week, Ahead, Inbox"]).toEqual(["1", "2", "3", "4"]);
-    expect(shown["Week: Board or Plan"]).toEqual(["P"]);
+    expect(shown["The tab's planning mode"]).toEqual(["P"]);
     expect(shown["Capture a thought"]).toEqual(["N", "C"]);
     expect(shown["Midday check-in"]).toEqual(["M"]);
     expect(shown["Close out"]).toEqual(["E"]);
-    expect(shown["Plan the week"]).toEqual(["W"]);
+    expect(shown["Week › Plan"]).toEqual(["W"]);
     expect(shown["Every action"]).toEqual(["Ctrl K"]);
     expect(shown["Next or previous client"]).toEqual(["J", "K"]);
     expect(shown["Text size"]).toEqual(KEYS.find((k) => k.command === "ui.set_text_size")!.keys);
   });
-  it("every rhythm step's shortcut and every key in the copy comes from keys.ts", () => {
-    for (const s of C.RHYTHM.steps) expect(() => keysFor(s.keys), s.name).not.toThrow();
+  it("every key in the copy comes from keys.ts", () => {
     const marked = strings(C).filter((t) => t.includes("{key:"));
     expect(marked.length).toBeGreaterThan(2);
     for (const t of marked) expect(() => richParts(t), t).not.toThrow();
@@ -52,7 +52,7 @@ describe("the sizing sandbox uses plan/estimate.ts and plan/fit.ts (E2: hours)",
   const combos: (StorySize | null)[][] = [[]];
   for (let n = 1; n <= 5; n++) for (const c of combos.filter((x) => x.length === n - 1)) for (const s of sizes) if (!c.length || sizes.indexOf(s) >= sizes.indexOf(c.at(-1)!)) combos.push([...c, s]);
 
-  it("its fit words are Plan the day's for every S, M, L and unsized combination", () => {
+  it("its fit words are Plan today's for every S, M, L and unsized combination", () => {
     expect(combos.length).toBeGreaterThan(100);
     for (const c of combos) {
       const minutes = c.reduce((n, s) => n + storyMinutes(s), 0);
@@ -85,13 +85,13 @@ describe("the sizing sandbox uses plan/estimate.ts and plan/fit.ts (E2: hours)",
 
 describe("estimates in the Guide are hours (E2)", () => {
   it("no fractions, decimals or blocks in estimate copy; a block is only named as the calendar unit", () => {
-    const estimates = [C.SIZING.legend, C.SIZING.sub, C.BASICS, C.RHYTHM.steps.map((s) => s.mini)].flatMap(strings);
+    const estimates = [C.SIZING.legend, C.SIZING.sub, C.TRY, C.AREAS].flatMap(strings);
     for (const t of estimates) expect(t, t).not.toMatch(/½|¼|¾|\d[.,]\d|half blocks?\b|\d+ blocks?\b|\bof \d+ blocks?/);
     // "block" appears only where it names the calendar unit (a focus block, half a day), never as an amount.
     for (const t of strings(C).filter((x) => /\bblocks?\b/i.test(x))) expect(t, t).not.toMatch(/\d\s*(½\s*)?blocks?\b|blocks? (free|planned|available)/i);
   });
   it("the new questions are there", () => {
-    const qs = Object.fromEntries(C.QUESTIONS.items.map((x) => [x.q, x.a]));
+    const qs = Object.fromEntries(C.QUESTION_POOL.map((x) => [x.q, x.a]));
     expect(qs["Do I have to size everything?"]).toBe("No. Unsized stories count as 2h so the plan still adds up, and nothing waits on a size. Size them when you know.");
     expect(qs["What's a block, then?"]).toBe("Where you work: a half-day set aside for a client in Focus Time. How much work fits is measured in hours.");
     expect(C.FOOTER).toBe("FocusTime by Cooptimize. Questions or ideas? ⋯ › Send feedback, or message the FocusTime team in Teams.");
@@ -100,9 +100,9 @@ describe("estimates in the Guide are hours (E2)", () => {
 });
 
 describe("the Guide's address", () => {
-  it("#/guide and #/guide/<chapter> open it over Today, and write back the same", () => {
+  it("#/guide and #/guide/<section> open it over Today, and write back the same", () => {
     expect(parseHash("#/guide")).toEqual({ nav: { tab: "today", flow: null, date: null }, overlay: { kind: "guide", chapter: null } });
-    for (const ch of C.CHAPTERS) {
+    for (const ch of [...C.SECTIONS, { id: CONTENTS }]) {
       const l = parseHash(`#/guide/${ch.id}`)!;
       expect(l.overlay).toEqual({ kind: "guide", chapter: ch.id });
       expect(hashOf(l)).toBe(`#/guide/${ch.id}`);
@@ -110,13 +110,22 @@ describe("the Guide's address", () => {
     expect(parseHash("#/guide/keys/x")).toBeNull();
     expect(parseHash("#/guide/K3!")).toBeNull();
   });
+  it("an old G1 chapter opens where its content is now; nothing or something unknown is Start here; contents is the phone's list", () => {
+    for (const [old, now] of Object.entries(OLD_SECTIONS)) {
+      expect(C.SECTIONS.some((s) => s.id === now), old).toBe(true);
+      expect(sectionFor(old)).toBe(now);
+    }
+    expect(sectionFor(null)).toBe("start");
+    expect(sectionFor("nope")).toBe("start");
+    expect(sectionFor(CONTENTS)).toBeNull();
+  });
 });
 
 describe("example data only", () => {
   it("says so on screen", () => {
-    expect(C.HERO.example).toBe("Example data");
-    expect(C.RHYTHM.example).toBe("Example");
+    expect(C.TRY.example).toMatch(/^Example data\. Nothing here is saved or sent\.$/);
     expect(C.SIZING.block.label).toMatch(/example/i);
+    expect(C.TOUR_UI.example).toMatch(/^Example/);
   });
   it("no em dashes in the copy", () => {
     for (const t of strings(C)) expect(t, t).not.toContain("—");

@@ -194,7 +194,7 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
 
       // Admin › Clients: add both chats to Adatum.
       await openSettings(page);
-      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Clients" }).click();
+      await page.locator('.ps-rail [data-settings-section="admin-clients"]').click();
       const adatum = page.getByRole("group", { name: /^Delivery chats for Adatum/ });
       for (const word of ["alliance", "delivery"]) {
         await adatum.getByRole("button", { name: "Add a chat" }).click();
@@ -208,7 +208,7 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
 
       // Admin › AI: the client's Group messages without AI switch, on by default, beside Allow AI (off).
       await openSettings(page);
-      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "AI" }).click();
+      await page.locator('.ps-rail [data-settings-section="admin-ai"]').click();
       const groupSwitch = page.getByRole("switch", { name: "Group messages without AI for Adatum" });
       await expect.poll(() => groupSwitch.isChecked()).toBe(true);
       expect(await page.getByRole("switch", { name: "Allow AI for Adatum" }).isChecked()).toBe(false);
@@ -263,6 +263,11 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       await mark.waitFor();
       expect(await mark.textContent()).toMatch(/^was due Fri, Oct 30 · Send Evan the October export/);
       await shotAll(page, "cv3-board-rail", page.locator(".day.today").first());
+      // IB-1 slice 4: the mark opens that promise in the Inbox's detail pane, then back to the Board.
+      await mark.click();
+      await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/inbox\/item\/c\d+$/);
+      await page.locator(".ib-pane .ib-detail-title", { hasText: "Send Evan the October export" }).waitFor();
+      await page.keyboard.press("2");
 
       // Capture: Who through the PersonPicker, with the link offer for an exact name.
       const dirPerson = (personId: string, name: string, n: number) => aDirectoryPerson({ personId, systemUserId: `d3300000-0000-4000-8000-${String(900 + n).padStart(12, "0")}`, name, email: `${name.split(" ")[0]!.toLowerCase()}@contoso.example` });

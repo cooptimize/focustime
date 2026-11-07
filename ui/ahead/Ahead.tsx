@@ -156,7 +156,7 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
         <ModeArea>{renderSwitch && load && !readOnly ? renderSwitch({ fix: fixN }) : switcher}</ModeArea>
       </div>
       {load && n > 0 && (
-        <div className="ah-pending" role="status">
+        <div className="ah-pending" data-tour="ah-pending" role="status">
           <strong>{pendingText(n)}</strong>
           <span className="muted">{load.changes.some((c) => c.theirs !== undefined) ? "Some changed in DevOps since you started. " : ""}Nothing is written until you save.</span>
           <button type="button" className="primary" onClick={() => setReview(true)} disabled={readOnly}>
@@ -242,14 +242,14 @@ function BacklogFilters({ load, f, set, color }: { load: AheadLoad; f: AheadFilt
           </button>
         ))}
       </span>
-      <span className="rm-seg" role="group" aria-label="Owner" title="Mine: assigned to you and what's under your features and epics. Contributing: the features and epics your stories are under. Remembered per client.">
+      <span className="rm-seg" data-tour="ah-owner" role="group" aria-label="Owner" title="Mine: assigned to you and what's under your features and epics. Contributing: the features and epics your stories are under. Remembered per client.">
         {(["mine", "contributing", "all"] as const).map((o) => (
           <button key={o} type="button" aria-pressed={owner === o} onClick={() => setOwner(o)}>
             {o === "mine" ? "Mine" : o === "contributing" ? "Contributing" : "Everything in scope"}
           </button>
         ))}
       </span>
-      <button type="button" className="rm-chip" aria-pressed={!!f.stale} onClick={() => set({ ...f, stale: !f.stale })} title={`Only open items with no change in DevOps for ${load.staleWeeks ?? DEFAULT_AHEAD.staleWeeks} weeks or more (Settings › Ahead)`}>
+      <button type="button" className="rm-chip" data-tour="ah-stale" aria-pressed={!!f.stale} onClick={() => set({ ...f, stale: !f.stale })} title={`Only open items with no change in DevOps for ${load.staleWeeks ?? DEFAULT_AHEAD.staleWeeks} weeks or more (Settings › Ahead)`}>
         Stale
       </button>
     </div>
@@ -275,7 +275,7 @@ function Filters({ load, f, set, setWhole, color, anyFilter }: { load: AheadLoad
           </button>
         ))}
       </span>
-      <span className="rm-seg" role="group" aria-label="Owner" title="Mine: assigned to you and what's under your features and epics. Contributing: the features and epics your stories are under. Remembered per client.">
+      <span className="rm-seg" data-tour="ah-owner" role="group" aria-label="Owner" title="Mine: assigned to you and what's under your features and epics. Contributing: the features and epics your stories are under. Remembered per client.">
         {(["mine", "contributing", "all"] as const).map((o) => (
           <button key={o} type="button" aria-pressed={owner === o} onClick={() => setOwner(o)}>
             {o === "mine" ? "Mine" : o === "contributing" ? "Contributing" : "All"}

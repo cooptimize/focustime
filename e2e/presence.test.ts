@@ -1,7 +1,7 @@
 // Step 16.3: teammates' presence (demo mode: fictional people and presence, no Graph calls), deep focus and the focus
 // screen's Teams line, Settings > Focus, and the VM notification route opening the header chip's menu.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CHROMIUM, freshPage, openSettings, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, openSettings, startDemo, type Harness, settingsSection } from "./harness.ts";
 
 let h: Harness;
 const T = 90_000;
@@ -49,7 +49,7 @@ describe.skipIf(!CHROMIUM)("Teams presence and status (browser, demo mode)", () 
     await page.locator(".focus-screen").getByRole("button", { name: "Stop", exact: true }).click();
     await page.locator(".today-view").waitFor();
     await openSettings(page);
-    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Data", exact: true }).click();
+    await settingsSection(page, "activity");
     const log = page.locator('[aria-label="Teams status log"]');
     await expect.poll(() => log.textContent(), { timeout: 15_000 }).toMatch(/Cleared \(back to automatic\)/);
     await expect(log.textContent()).resolves.toMatch(/Set Do not disturb/);
@@ -60,7 +60,7 @@ describe.skipIf(!CHROMIUM)("Teams presence and status (browser, demo mode)", () 
   it("Settings > Focus: Teams status on by default, plain focus sets Busy", async () => {
     const { page } = await freshPage(h);
     await openSettings(page);
-    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Focus", exact: true }).click();
+    await settingsSection(page, "focus");
     await expect(page.getByLabel("Set my status while I focus").isChecked()).resolves.toBe(true);
     await expect(page.locator("select", { has: page.locator("option", { hasText: "Leave my status alone" }) }).inputValue()).resolves.toBe("busy");
     await expect.poll(() => page.locator(".set-teams-access").textContent(), { timeout: 10_000 }).toContain("Teams is connected");

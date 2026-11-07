@@ -131,7 +131,7 @@ describe("simulated writes in the demo (DM-1)", () => {
 
   it("secrets, connecting, signing in and export stay refused", async () => {
     const { ctx } = await demo();
-    for (const action of ["devops.set_write_pat", "secret.set", "auth.connect_microsoft", "auth.sign_in", "data.export"] as const) {
+    for (const action of ["devops.set_write_pat", "auth.connect_microsoft", "auth.sign_in", "data.export"] as const) {
       expect(DEMO_REFUSED).toContain(action);
       expect(await dispatch(ctx, { action, input: {} }), action).toMatchObject({ ok: false, status: 403, code: "demo" });
     }

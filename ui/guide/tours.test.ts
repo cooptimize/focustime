@@ -12,12 +12,24 @@ const screens = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (e.name === "guide" ? [] : screens(join(dir, e.name))) : e.name.endsWith(".tsx") ? [readFileSync(join(dir, e.name), "utf8")] : []));
 const source = screens(UI).join("\n");
 /** The data-tour hooks the screens carry: literal ones, and the mode switch's per tab. */
-const hooks = new Set([...source.matchAll(/data-tour="([a-z0-9-]+)"/g)].map((m) => m[1]!).concat([...source.matchAll(/\btour="([a-z0-9-]+)"/g)].map((m) => m[1]!)).concat(["today", "week", "ahead", "inbox"].map((t) => `modes-${t}`)));
+const hooks = new Set([...source.matchAll(/data-tour="([a-z0-9-]+)"/g), ...[...source.matchAll(/data-tour=\{([^}]*)\}/g)].flatMap((e) => [...e[1]!.matchAll(/"([a-z0-9]+-[a-z0-9-]+)"/g)])].map((m) => m[1]!).concat([...source.matchAll(/\btour="([a-z0-9-]+)"/g)].map((m) => m[1]!)).concat(["today", "week", "ahead", "inbox"].map((t) => `modes-${t}`)));
 const strings = (v: unknown): string[] => (typeof v === "string" ? [v] : Array.isArray(v) ? v.flatMap(strings) : v && typeof v === "object" ? Object.values(v).flatMap(strings) : []);
 
 describe("the tours", () => {
-  it("every step points at a data-tour hook on a real screen", () => {
-    for (const t of TOURS) for (const s of t.steps) expect(hooks.has(s.target), `${t.id}: ${s.target}`).toBe(true);
+  it("every step points at a data-tour hook on a real screen, or is its example drawing", () => {
+    for (const t of TOURS)
+      for (const s of t.steps) {
+        if (s.target) expect(hooks.has(s.target), `${t.id}: ${s.target}`).toBe(true);
+        else expect(s.example, `${t.id}: ${s.title}`).toBeTruthy();
+      }
+  });
+  it("every example drawing a step names is drawn", async () => {
+    const { TOUR_EXAMPLES } = await import("./content.ts");
+    const drawn = new Set(["pw-grid", "pw-carry", "pw-card", "pw-add", "pw-next", ...Object.keys(TOUR_EXAMPLES.cards)]);
+    for (const t of TOURS) for (const s of t.steps) if (s.example) expect(drawn.has(s.example), `${t.id}: ${s.example}`).toBe(true);
+  });
+  it("seven tours, as approved", () => {
+    expect(TOURS.map((t) => t.title)).toEqual(["Plan your week", "Your Board and to-dos", "Today, focus and close out", "The Inbox", "Ahead", "The assistant", "Status"]);
   });
   it("each has 4 to 7 steps, a start the address opens, and #/guide/tour/<id> round-trips", () => {
     for (const t of TOURS) {

@@ -92,7 +92,7 @@ describe("demo mode (D272)", () => {
       expect(r, action).toMatchObject({ ok: false, status: 403, code: "demo" });
     }
     // DM-1: writes are simulated in the demo, but secrets, connecting, signing in and export stay refused.
-    expect(DEMO_REFUSED).toEqual(expect.arrayContaining(["devops.set_write_pat", "devops.clear_write_pat", "secret.set", "link.open", "data.export", "auth.sign_in", "auth.connect_microsoft", "auth.connect_google"]));
+    expect(DEMO_REFUSED).toEqual(expect.arrayContaining(["devops.set_write_pat", "devops.clear_write_pat", "link.open", "data.export", "auth.sign_in", "auth.connect_microsoft", "auth.connect_google"]));
     expect(DEMO_REFUSED).not.toContain("write.confirm");
     expect(DEMO_REFUSED).not.toContain("devops.confirm");
     expect(ctx.links).toBeUndefined();

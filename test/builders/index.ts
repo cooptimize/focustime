@@ -423,6 +423,11 @@ export function aDayPromise(o: Partial<import("../../plan/conversation-views.ts"
   return { id: 1, what: "Send the export", toName: "Dana", clientKey: "contoso", clientName: "Contoso", dueAt: null, dueDate: "2026-11-05", overdue: false, ...o };
 }
 
+/** IB-1 slice 4: one Inbox row as inbox.list and inbox.today return it: an open promise in Needs you by default. */
+export function anInboxRow(o: Partial<import("../../plan/inbox-items.ts").InboxItemView> = {}): import("../../plan/inbox-items.ts").InboxItemView {
+  return { key: "c1", kind: "promise", clientKey: "contoso", at: "2026-11-05T14:00:00Z", views: ["needs_you", "promises"], title: "Send the export", who: "Dana", where: null, due: "2026-11-05", dueAt: null, itemId: null, late: false, done: false, snoozedUntil: null, ...o };
+}
+
 /** PL-1: one child of a feature as the DevOps store has it: an open User Story, unassigned. */
 export function aPortfolioChild(o: Partial<import("../../week/types.ts").PortfolioChild> = {}): import("../../week/types.ts").PortfolioChild {
   const id = o.id ?? next();

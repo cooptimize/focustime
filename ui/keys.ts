@@ -142,6 +142,6 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["M"], does: "Today › Midday check-in: today's cards show what still fits, with one suggested move each; again to go back", command: "view.checkin" },
   { keys: ["E"], does: "Today › Close out: its side panel (where you left off, DevOps updates, promises due); again to go back", command: "closeout.load" },
   { keys: [","], does: "Settings (Esc goes back)", command: "settings.load" },
-  { keys: ["?"], does: "The Guide: the basics, the daily rhythm, sizing and every key (not while typing)", command: "ui.guide" },
+  { keys: ["?"], does: "The Guide: start here, your first day, every area, tours and every key (not while typing)", command: "ui.guide" },
   { keys: ["Esc"], does: "Close the menu or dialog on top; in Plan, a focused day or a flow, back without saving" },
 ];

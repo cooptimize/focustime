@@ -6,7 +6,7 @@
 import { refreshStatus } from "../../../actions/conversations-pipeline.ts";
 import type { ChatKind, ChatMember } from "../../../plan/chats.ts";
 import type { Participant } from "../../../plan/conversations.ts";
-import type { TeamsMessage } from "../../../plan/requests.ts";
+import type { Mention, TeamsMessage } from "../../../plan/requests.ts";
 import { demoChats, DEMO_TENANT } from "../chats.ts";
 import { DEMO_PEOPLE } from "../data.ts";
 import type { DemoSeed, DemoSeedEnv } from "./types.ts";
@@ -19,7 +19,8 @@ const REGISTERED: [chatId: string, clientKey: string, kind: ChatKind][] = [
   ["19:demo-atlas-delivery@thread.v2", "Atlas", "delivery"],
 ];
 
-type Line = { id: string; from: ChatMember; minutesAgo: number | { on: string; at: string }; text: string; role?: "work" | "chatter" | "ack"; replyTo?: string };
+/** One demo message (IB-1 slice 4: `mentions` for an @mention, so a conversation asks me by name). Exported for IB-1's seed. */
+export type Line = { id: string; from: ChatMember; minutesAgo: number | { on: string; at: string }; text: string; role?: "work" | "chatter" | "ack"; replyTo?: string; mentions?: Mention[] };
 
 export const conversationsSeed: DemoSeed = {
   name: "conversations",
@@ -83,7 +84,7 @@ export const conversationsSeed: DemoSeed = {
 };
 
 /** One conversation with its messages, as the pipeline would have placed them. The status comes from its own rule. */
-async function thread(e: DemoSeedEnv, chatId: string, clientKey: string, title: string, summary: string, lines: Line[], o: { item?: { id: number; url: string; title: string }; ownerId?: string | null } = {}): Promise<number> {
+export async function thread(e: DemoSeedEnv, chatId: string, clientKey: string, title: string, summary: string, lines: Line[], o: { item?: { id: number; url: string; title: string }; ownerId?: string | null } = {}): Promise<number> {
   const msgs = await save(e, chatId, clientKey, lines);
   const people = new Map<string, Participant>();
   for (const l of lines) if (l.from.userId) people.set(l.from.userId, { id: l.from.userId, name: l.from.displayName ?? "", external: l.from.tenantId !== DEMO_TENANT });
@@ -105,7 +106,7 @@ async function save(e: DemoSeedEnv, chatId: string, clientKey: string, lines: Li
   const msgs = lines.map((l): TeamsMessage => {
     const at = typeof l.minutesAgo === "number" ? e.ago(l.minutesAgo) : Temporal.PlainDateTime.from(`${l.minutesAgo.on}T${l.minutesAgo.at}`).toZonedDateTime(e.zone).toInstant().toString();
     const html = `<p>${l.text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>`;
-    return { chatId, messageId: l.id, clientKey, senderId: l.from.userId, senderName: l.from.displayName, senderTenant: l.from.tenantId, createdAt: at, modifiedAt: at, html, text: l.text, hasImage: false, hasFile: false, replyToId: l.replyTo ?? null, mentions: [], fetchedAt: at };
+    return { chatId, messageId: l.id, clientKey, senderId: l.from.userId, senderName: l.from.displayName, senderTenant: l.from.tenantId, createdAt: at, modifiedAt: at, html, text: l.text, hasImage: false, hasFile: false, replyToId: l.replyTo ?? null, mentions: l.mentions ?? [], fetchedAt: at };
   });
   await e.teams.saveMessages(msgs);
   return msgs;

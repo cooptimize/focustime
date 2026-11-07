@@ -11,7 +11,8 @@ import type { ConversationCard } from "../../plan/conversation-views.ts";
 import { call } from "../api.ts";
 import { SortCapture, captureClients } from "../Capture.tsx";
 import { CloseLoop } from "../CloseLoop.tsx";
-import { ConvLink, DraftItem, LinkedItem, MergeInto, Messages, NotRequest, SuggestionBox } from "../Conversations.tsx";
+import { ConvLink, DraftItem, LinkedItem, Messages, NotRequest, SuggestionBox } from "../Conversations.tsx";
+import { MergePane } from "./MergePane.tsx";
 import { useDevOpsWrite } from "../DevOpsWrite.tsx";
 import { WRITING_POLL_MS } from "../createdraft-ctx.ts";
 import { draftRowState, draftRowText } from "../../plan/capture-prepare.ts";
@@ -176,8 +177,7 @@ function FormArea(p: DetailProps): ReactNode {
   }
   if (form === "merge" && e.kind === "conversation" && e.card && p.merge) {
     const c = e.card;
-    const merge = p.merge;
-    return <MergeInto c={c} others={p.mergeOthers ?? []} tz={p.tz} onPick={(into) => void merge(c.id, into)} onCancel={cancel} />;
+    return <MergePane c={c} others={p.mergeOthers ?? []} tz={p.tz} onMerge={p.merge} onCancel={cancel} />;
   }
   if (form === "sort" && e.kind === "capture" && e.capture)
     return (
@@ -536,7 +536,7 @@ export function ChatterDetail({ row, tz, color, onWork, chat, admin, onSocial }:
       <p className="ib-summary">
         {row.messages.length} {row.messages.length === 1 ? "message" : "messages"} filtered as chatter. No question for you, no ask, no promise. They never count toward Needs you.
       </p>
-      <div className="ib-acts" role="group" aria-label={`Actions for ${row.title}`}>
+      <div className="ib-acts" data-tour="ib-acts" role="group" aria-label={`Actions for ${row.title}`}>
         {chat?.link && (
           <a className="ib-act" href={chat.link} target="_blank" rel="noopener noreferrer">
             Open in Teams

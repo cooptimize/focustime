@@ -40,6 +40,7 @@ import { visibleChats, type RequestContext } from "./request-actions.ts";
 import type { ConversationPerson } from "./people-picker.ts";
 import { personRef, type PersonRef } from "../plan/person-ref.ts";
 import { mapSeq } from "./seq.ts";
+import { mergePreview, type MergeSide } from "../plan/merge-preview.ts";
 import type { ActionResponse } from "./types.ts";
 
 export type { ConversationCard, ConversationMessage, ConversationsData, DayPromise, MyPromisesData, PromiseCard } from "../plan/conversation-views.ts";
@@ -50,7 +51,7 @@ export const CONVERSATION_ACTIONS = [
   "conversations.draft", "my_promises.list", "my_promises.today", "my_promises.followup", "my_promises.link", "my_promises.done", "my_promises.not_needed", "my_promises.reopen",
   // IB-1: a promise is never read-only: its due, whom it is to, and Close the loop.
   "my_promises.due", "my_promises.who", "my_promises.close",
-  "suggestions.skip", "conversations.merge", "conversations.unmerge", "my_promises.start_draft",
+  "suggestions.skip", "conversations.merge", "conversations.unmerge", "conversations.merge_preview", "my_promises.start_draft",
   "my_promises.search",
   // CV-5: Link to item over the client's items in scope, and its undo.
   "conversations.search_items", "conversations.unlink", "my_promises.unlink",
@@ -687,6 +688,21 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, into.id);
         ctx.log({ source: "plan", op: "conversation_merged", count: merges.length });
         return { ok: true as const, data: { ...(await list(ctx, cfg, into.id)), merges } };
+      }
+      case "conversations.merge_preview": {
+        // IB-1 slice 4: the before → after shown in the detail pane before Merge runs. Reads only.
+        const o = only(input, ["id", "into"]);
+        if (!o || !v || !posInt(o.id) || !posInt(o.into)) return bad("conversations.merge_preview takes { id, into }");
+        const from = await conv(o.id);
+        const into = await conv(o.into);
+        if (!from || !into) return bad("No such conversation", 404);
+        if (from.id === into.id) return bad("Pick another conversation to merge into", 409);
+        if (from.chatId !== into.chatId) return bad("Merge only conversations of the same chat", 409);
+        const side = async (c: Conversation): Promise<MergeSide> => ({
+          id: c.id, title: c.title, ...(await v.convs.contents(c.id)), people: c.participants.map((p) => p.name),
+          item: c.itemId ? { id: c.itemId, title: c.itemTitle } : null,
+        });
+        return { ok: true as const, data: mergePreview(await side(from), await side(into)) };
       }
       case "conversations.unmerge": {
         const o = only(input, ["merges"]);

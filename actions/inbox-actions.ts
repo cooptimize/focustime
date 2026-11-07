@@ -4,15 +4,15 @@
 // badge; inbox.list gives every item's key, kind, client and views with the per-view counts, so the badge, the rail
 // and every view header read the same number.
 import type { AppConfig } from "../config/schema.ts";
-import { isLate, itemKey, needsYouCount, parseKey, reasonOf, snoozeChoices, snoozeUntil, viewCounts, viewsOf, type InboxFacts, type InboxItemView, type InboxListData, type Mark, type SnoozeChoice, type SnoozeDay } from "../plan/inbox-items.ts";
-export type { InboxItemView, InboxListData };
+import { forToday, isLate, itemKey, needsYouCount, parseKey, reasonOf, snoozeChoices, snoozeUntil, viewCounts, viewsOf, type InboxFacts, type InboxItemView, type InboxListData, type InboxTodayData, type Mark, type SnoozeChoice, type SnoozeDay } from "../plan/inbox-items.ts";
+export type { InboxItemView, InboxListData, InboxTodayData };
 import type { PlanStore } from "../store/plan-store.ts";
 import { localToday } from "../week/dates.ts";
 import type { IsoDate } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
-import type { ActionResponse } from "./types.ts";
+import type { ActionResponse, UrgentAsk } from "./types.ts";
 
-export const INBOX_ACTIONS = ["inbox.list", "inbox.count", "inbox.seen", "inbox.hide", "inbox.snooze"] as const;
+export const INBOX_ACTIONS = ["inbox.list", "inbox.count", "inbox.today", "inbox.seen", "inbox.hide", "inbox.snooze"] as const;
 export type InboxAction = (typeof INBOX_ACTIONS)[number];
 
 export type InboxContext = {
@@ -25,6 +25,11 @@ export type InboxContext = {
   sends: () => Promise<InboxFacts[]>;
   /** Slice 3: my working hours and PTO days, for Snooze (escalationHours); null when the config can't say. */
   snoozeDay: () => Promise<SnoozeDay | null>;
+  /**
+   * Slice 4: requests the AI sorted as needing someone now, in the chats I see (AP-2's urgent asks), each with the
+   * conversation its message is in. They mark that conversation urgent; absent or failing, none is.
+   */
+  urgent?: (cfg: AppConfig) => Promise<UrgentAsk[]>;
 };
 
 
@@ -54,14 +59,22 @@ async function gather(ctx: InboxContext, cfg: AppConfig, withDone = true): Promi
   const now = ctx.now();
   const zone = userZone(cfg);
   const today = localToday(now, zone);
-  const [convs, sends, promises, captures, drafts, marks] = await Promise.all([
+  const [convs, sends, promises, captures, drafts, marks, urgent] = await Promise.all([
     ctx.conversations(cfg).catch((): InboxFacts[] => []),
     ctx.sends().catch((): InboxFacts[] => []),
     promiseFacts(plan, now, withDone),
     plan.inbox(),
     plan.drafts(),
     plan.inboxMarks(),
+    ctx.urgent ? ctx.urgent(cfg).catch((): UrgentAsk[] => []) : Promise.resolve([] as UrgentAsk[]),
   ]);
+  // Slice 4: a conversation is urgent when it holds an urgent request (the newest one is the one Start focus uses).
+  const urgentIn = new Map<number, UrgentAsk>();
+  for (const u of [...urgent].sort((a, b) => a.at.localeCompare(b.at))) if (u.conversationId) urgentIn.set(u.conversationId, u);
+  for (const c of convs) {
+    const id = c.kind === "conversation" ? Number(c.key.slice(1)) : 0;
+    if (urgentIn.has(id)) c.urgent = urgentIn.get(id)!;
+  }
   const facts: InboxFacts[] = [
     ...convs,
     ...promises.facts,
@@ -90,6 +103,7 @@ export function rowOf(i: { facts: InboxFacts; mark?: Mark | undefined }, today: 
     late: isLate(f, today, now), done: f.done, snoozedUntil: asleep,
     ...(f.sendState ? { sendState: f.sendState } : {}), ...(f.conversationView ? { conversationView: f.conversationView } : {}),
     ...(f.mentionsMe ? { mentionsMe: true } : {}), ...(f.workRequest ? { workRequest: true } : {}), ...(f.must ? { must: true } : {}), ...(f.weekStart ? { weekStart: f.weekStart } : {}),
+    ...(f.urgent ? { urgent: f.urgent } : {}),
   };
 }
 
@@ -105,6 +119,13 @@ export async function inboxAction(ctx: InboxContext, action: InboxAction, input:
       if (Object.keys(o).length) return bad("inbox.count takes {}");
       const g = await gather(ctx, cfg, false);
       return { ok: true, data: { needsYou: needsYouCount(g.items, g.today, g.now) } };
+    }
+    case "inbox.today": {
+      // Slice 4: Today's urgent strip and Week's rail read these rows, and the badge reads `needsYou` from the same gather.
+      if (Object.keys(o).length) return bad("inbox.today takes {}");
+      const g = await gather(ctx, cfg, false);
+      const data: InboxTodayData = { today: g.today, needsYou: needsYouCount(g.items, g.today, g.now), items: g.items.map((i) => rowOf(i, g.today, g.now)).filter(forToday) };
+      return { ok: true, data };
     }
     case "inbox.list": {
       if (Object.keys(o).length) return bad("inbox.list takes {}");

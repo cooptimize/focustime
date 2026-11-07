@@ -29,7 +29,7 @@ import { mondayOf } from "../week/dates.ts";
 import { HalfScope } from "./scope.ts";
 import { interactive } from "./DetailPanel.tsx";
 import { userZone } from "../week/zone.ts";
-import type { DayPromise } from "../plan/conversation-views.ts";
+import type { RailItem } from "../plan/inbox-items.ts";
 import { cardGroups } from "../plan/blockstories.ts";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { pickDragged, useDragSource, useDropTarget } from "./WeekStories.tsx";
@@ -50,7 +50,7 @@ const TierCtx = createContext<Tier | null>(null);
 /** WK-2: the Board's Timeline toggle; hidden, cards draw no rail, strip or hour timeline and list their meetings. */
 const TimelineCtx = createContext(true);
 
-const RulerCtx = createContext<{ layout: Layout; promises: readonly DayPromise[]; onPromise?: (() => void) | undefined; today: string; now: string; home: RailSpan | null }>({ layout: "wide", promises: [], today: "", now: "", home: null });
+const RulerCtx = createContext<{ layout: Layout; promises: readonly RailItem[]; onPromise?: ((key: string) => void) | undefined; today: string; now: string; home: RailSpan | null }>({ layout: "wide", promises: [], today: "", now: "", home: null });
 
 type Props = {
   week: Week;
@@ -74,9 +74,9 @@ type Props = {
   onPlanDay?: ((date: string) => void) | undefined;
   onAddWork?: ((date: string, half: Half) => void) | undefined;
   onAddHours?: ((date: string) => void) | undefined;
-  /** CV-1: my promises with a time, marked on the rail (overdue in amber). */
-  promises?: readonly DayPromise[] | undefined;
-  onPromise?: (() => void) | undefined;
+  /** CV-1: my promises with a time, marked on the rail (overdue in amber). IB-1 slice 4: the Inbox's rows (inbox.today); a click opens that item in the Inbox. */
+  promises?: readonly RailItem[] | undefined;
+  onPromise?: ((key: string) => void) | undefined;
   /** UI-8: the detail panel is open beside the grid; the grid keeps clear of it, so Friday stays visible and droppable. */
   panelOpen?: boolean | undefined;
   /** WK-2: the Timeline toggle (default shown). Hidden, every card is a full-width list with its meetings as lines. */
@@ -658,6 +658,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
     <div
       ref={refFn}
       {...drop.props}
+      data-tour={state === "focus" ? "wk-block" : undefined}
       className={`half ${state}${ptoHalf ? " pto-half" : ""} ${span ? "span-all" : ""} ${sev ?? ""} ${selected ? "selected" : ""} ${compact ? "card" : ""}${ruler ? " has-ruler" : ""}${rail === "slim" ? " slim" : ""}${drop.cls}`}
       style={style}
       tabIndex={selected ? 0 : -1}
@@ -995,13 +996,13 @@ function RulerPromises({ rail, tz }: { rail: RailSpan; tz: string }) {
     const was = p.overdue ? wasDueText(p, today, tz).replace(/^Was/, "was") : null;
     return (
       <button
-        key={`promise-${p.id}`}
+        key={`promise-${p.key}`}
         type="button"
         className={`r-promise${p.overdue ? " overdue" : ""}`}
         style={{ top: pct((ms(at) - ms(rail.start)) / span) }}
         title={`Promise · ${was ?? time} · ${p.what}${p.toName ? ` · to ${p.toName}` : ""}`}
         aria-label={`${was ? `Promise, ${was}` : `Promise at ${time}`}: ${p.what}`}
-        onClick={(e) => (e.stopPropagation(), onPromise?.())}
+        onClick={(e) => (e.stopPropagation(), onPromise?.(p.key))}
       >
         <span>{was ? `${was} · ${p.what}` : p.what}</span>
       </button>

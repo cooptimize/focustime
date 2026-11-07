@@ -6,6 +6,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, sameSession, startDemo, type Harness } from "./harness.ts";
+import { SECTIONS as SETTINGS_SECTIONS } from "../ui/settings/registry.ts";
+const SECTION_IDS = SETTINGS_SECTIONS.map((s) => s.id);
 
 let h: Harness;
 const T = 120_000;
@@ -16,7 +18,8 @@ const go = async (page: Page, hash: string) => {
   await page.evaluate((x) => (location.hash = x), hash);
   await page.waitForTimeout(1000);
 };
-const SECTIONS = ["you", "hours", "standing", "planning", "focus", "notifications", "roadmap", "risk", "clients", "connections", "display", "data", "about"];
+// ST-1: every section in the registry, besides Clients' sub-page (its own address per client).
+const SECTIONS = SECTION_IDS.filter((s) => s !== "client");
 
 /** Every visible text off the scale of the active base (base − 2, − 1, base, + 2 px; 400, 500, 600), and uppercase text
  *  that isn't a section label (the smallest step at 600). The focus countdown is the one display size; the brand

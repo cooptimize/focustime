@@ -149,7 +149,6 @@ export type SettingsData = {
   /** no-demo-leak: why the client list is missing (Dataverse not reached), with where to fix it; null when reached. */
   dataverseProblem?: string | null;
   palette: readonly string[];
-  secrets: { account: AppSecret; label: string; state: SecretPresence; expires: string | null }[];
   display: AppConfig["ui"] | null;
   data: { planStore: boolean };
   /** Settings > Planning > Timeboxes (step 12). */

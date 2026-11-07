@@ -4,7 +4,7 @@
 // (read only there), light and dark.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, openSettings, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, openSettings, startDemo, type Harness, settingsSection } from "./harness.ts";
 import { shotBoth, SHOTS } from "./shots.ts";
 
 let h: Harness;
@@ -108,7 +108,7 @@ describe.skipIf(!CHROMIUM)("Ahead › Backlog (browser, demo mode)", () => {
       // Settings › Ahead: the stale weeks beside the Roadmap thresholds.
       await page.setViewportSize({ width: 1920, height: 1080 });
       await openSettings(page);
-      await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Ahead" }).click();
+      await settingsSection(page, "ahead");
       await page.getByLabel("Stale after (weeks)").waitFor();
       await shotBoth(page, "bh1-settings-ahead-light");
       await page.keyboard.press("Escape");

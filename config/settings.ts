@@ -340,8 +340,3 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
   }
 }
 
-/** The expiry date of an app secret in [secrets] (null removes it). Never the secret itself. */
-export function secretExpiryEdit(account: "dataverse-client-secret" | "google-client-secret", expires: string | null): (text: string) => string {
-  const key = account === "dataverse-client-secret" ? "dataverse_client_secret_expires" : "google_client_secret_expires";
-  return (text) => (expires ? setValue(text, "secrets", key, expires, "Expiry dates of keyring secrets (the secrets themselves are only in the keyring).") : removeValue(text, "secrets", key));
-}

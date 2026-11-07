@@ -50,7 +50,7 @@ export function ModeArea({ children, done, note = null }: { children: React.Reac
 export function TimelineToggle({ shown, onToggle }: { shown: boolean; onToggle: () => void }) {
   const words = shown ? "Hide timeline" : "Show timeline";
   return (
-    <button type="button" className={`tl-toggle${shown ? " on" : ""}`} aria-pressed={shown} onClick={onToggle} title={`${words} (B)`} aria-label={words}>
+    <button type="button" data-tour="wk-timeline" className={`tl-toggle${shown ? " on" : ""}`} aria-pressed={shown} onClick={onToggle} title={`${words} (B)`} aria-label={words}>
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
         <rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="1.3" />
         <line x1="10" y1="2.5" x2="10" y2="13.5" stroke="currentColor" strokeWidth="1.3" />
