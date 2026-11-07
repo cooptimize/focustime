@@ -48,7 +48,6 @@ describe.skipIf(!CHROMIUM || !SHOTS)("AS-2 screenshots", () => {
   for (const scheme of ["light", "dark"] as const) {
     it(`the panel, ${scheme}`, async () => {
       const { page } = await freshPage(h, { width: 1920, height: 1080 });
-      await page.emulateMedia({ colorScheme: scheme });
       await page.route("**/api/action", async (r) => {
         const b = r.request().postDataJSON() as { action?: string; input?: { text?: string } } | null;
         if (b?.action === "assistant.ask" && b.input?.text === "Move some of today's to-dos to tomorrow") return r.fulfill({ json: { ok: true, data: QUESTION } });
@@ -57,6 +56,8 @@ describe.skipIf(!CHROMIUM || !SHOTS)("AS-2 screenshots", () => {
       });
       await page.keyboard.press("Control+j");
       await page.getByTestId("assistant-panel").waitFor();
+      // The default theme is dark; light is Cooptimize light (Settings › Display), set after the page applied its own.
+      await page.evaluate((t) => (document.documentElement.dataset.theme = t), scheme === "light" ? "cooptimize-light" : "cooptimize-dark");
       await ask(page, "Move some of today's to-dos to tomorrow", ".as-chips");
       await shotBoth(page, `as2-question-${scheme}`);
       await page.getByTestId("assistant-panel").locator(".as-chip", { hasText: "All 3" }).click();

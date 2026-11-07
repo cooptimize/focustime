@@ -38,6 +38,8 @@ export function AssistantPanel(props: {
   onOpen: (href: string) => void;
   /** The server clock's lead over this browser's (a pinned clock in the demo and tests): expiry is server time. */
   skewMs?: number;
+  /** AS-2: a confirm or undo changed something: the views behind the panel reload (a moved to-do shows where it went). */
+  onChanged?: () => void;
 }): ReactNode {
   const { phone, context, onClose, onOpen } = props;
   const skew = props.skewMs ?? 0;
@@ -125,7 +127,7 @@ export function AssistantPanel(props: {
           <div key={e.id} className={`as-turn ${e.role}`}>
             {e.text && <p className="as-text">{e.text}</p>}
             {e.cards.map((c, i) => <CardView key={i} card={c} onOpen={open} onAnswer={e === entries.at(-1) && !busy ? (ch) => void send(ch) : null} skew={skew} />)}
-            {e.proposals.map((p) => <ProposalView key={p.id} proposal={p} skew={skew} onChange={replaceProposal} />)}
+            {e.proposals.map((p) => <ProposalView key={p.id} proposal={p} skew={skew} onChange={replaceProposal} {...(props.onChanged ? { onChanged: props.onChanged } : {})} />)}
             {e.links.length > 0 && (
               <p className="as-links">
                 {e.links.map((l) => <button key={l.href} type="button" className="link-btn" onClick={() => open(l.href)}>{l.label}</button>)}
@@ -343,7 +345,8 @@ function CardView({ card, onOpen, onAnswer, skew }: { card: Card; onOpen: (href:
               <button key={c.value} type="button" className="as-chip" disabled={!live} onClick={() => onAnswer?.(c)}>{c.label}</button>
             ))}
           </div>
-          <p className="as-meta">{live ? "Or just type it." : "Ask again to choose."}</p>
+          {/* An older question was answered by what follows it; only the newest one, once expired, says to ask again. */}
+          {live ? <p className="as-meta">Or just type it.</p> : onAnswer ? <p className="as-meta">This question timed out. Ask again to choose.</p> : null}
         </div>
       );
     }
@@ -382,7 +385,7 @@ function CardView({ card, onOpen, onAnswer, skew }: { card: Card; onOpen: (href:
 const LONG = 120;
 const editLabel: Record<string, string> = { text: "Comment", comment: "Comment", after: "Description after", date: "Day", half: "Half" };
 
-function ProposalView({ proposal: p, skew, onChange }: { proposal: Proposal; skew: number; onChange: (p: Proposal) => void }): ReactNode {
+function ProposalView({ proposal: p, skew, onChange, onChanged }: { proposal: Proposal; skew: number; onChange: (p: Proposal) => void; onChanged?: () => void }): ReactNode {
   const writes = useDevOpsWrite();
   const [editing, setEditing] = useState(false);
   const [edits, setEdits] = useState<Record<string, string>>(() => seedEdits(p));
@@ -403,6 +406,7 @@ function ProposalView({ proposal: p, skew, onChange }: { proposal: Proposal; ske
       const r = await call<ConfirmResult>("assistant.confirm", { proposalId: p.id, ...(Object.keys(sent).length ? { edits: sent } : {}) });
       if (r.ok) {
         onChange({ ...p, state: "confirmed" });
+        onChanged?.();
         setOut({ tone: "ok", text: r.message, ...(r.undo?.kind === "devops" && p.clientKey && !r.parts ? { undo: { clientKey: p.clientKey, writeId: r.undo.id } } : {}), ...(r.undo?.kind === "moves" ? { moves: r.undo.id } : {}), ...(r.parts ? { parts: r.parts } : {}) });
         setEditing(false);
       } else if (r.reason === "changed" && r.proposal) {
@@ -424,6 +428,7 @@ function ProposalView({ proposal: p, skew, onChange }: { proposal: Proposal; ske
     try {
       const r = await call<UndoResult>("assistant.undo", { proposalId: id });
       setOut({ tone: r.ok && !r.notBack.length ? "ok" : "warn", text: r.message });
+      if (r.ok) onChanged?.();
     } catch (e) {
       setOut({ tone: "warn", text: (e as Error).message });
     } finally {
@@ -451,7 +456,8 @@ function ProposalView({ proposal: p, skew, onChange }: { proposal: Proposal; ske
         {v.rows.map((r, i) => {
           const long = (r.before?.length ?? 0) > LONG || (r.after?.length ?? 0) > LONG || /\n/.test(`${r.before ?? ""}${r.after ?? ""}`);
           return (
-            <div key={i} className={long ? "as-row-long" : "as-row-short"}>
+            // AS-2: a long label (a move's "Client · To-do") goes above its before → after, so the dates keep their width.
+            <div key={i} className={long || r.label.length > 24 ? "as-row-long" : "as-row-short"}>
               <dt>{r.label}</dt>
               {long ? (
                 <dd>

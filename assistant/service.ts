@@ -793,7 +793,7 @@ export function createAssistant(env: AssistantEnv) {
         }
         if (!steps.length) throw new Refusal(`Say what to change on #${f.item.id}`);
         if (steps.length > 3) throw new Refusal("That's more than three changes: split it into two requests");
-        const preview: PreviewView = { summary: `Update a DevOps item: ${labels.join(", ")}`, system: "DevOps", target: `#${f.item.id} ${f.item.title}`, identity, rows, notes: [...new Set(notes)] };
+        const preview: PreviewView = { summary: `Update a DevOps item (${labels.join(" and ")})`, system: "DevOps", target: `#${f.item.id} ${f.item.title}`, identity, rows, notes: [...new Set(notes)] };
         return {
           view: base(steps[0]!.action, f.clientKey, `Update #${f.item.id}: ${labels.join(" and ")}`, preview, visibility, comment ? ["comment"] : []),
           held: { tool, args: { itemId: f.item.id, done: args.done === true, comment: comment || null, target: typeof args.target === "string" && args.target ? args.target : null }, run: steps[0]!, steps },
