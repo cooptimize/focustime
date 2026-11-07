@@ -335,3 +335,19 @@ What DS-1 learned, and what is still open:
 - Q-IN1-3: Outlook on the web's compose deep link (`/mail/deeplink/compose`) isn't a documented, versioned API; it works today. If Microsoft changes it, "Use my mail app instead" still works. Switch the main button to `mailto:` if it breaks?
 - Q-IN1-4: the brief's tests list was cut off after "Non-admins get 403 from the People and". IN-1 checks 403 on the People section, Who's set up and recording an invite. Anything else meant?
 
+
+## DOC-1
+
+- Q-DOC1-1: the scheduler's comment says a run claims a lease, but `server/scheduler.ts` has no lease: one replica in prod makes this safe today, and `job_claims` stops double runs per job and day. Either add the lease or change the comment before running more than one replica. Noted in docs/technical/operations.md.
+- Q-DOC1-2: "Coopilot" names left in the code on purpose, with where and the risk of renaming each:
+  - `CoopilotId` (`MARKER_PROP`, `sources/graph/write.ts`): the marker on every FocusTime Outlook event. Renaming orphans every existing event (FocusTime would refuse to edit its own). Q98 has the migration path. Keep.
+  - `LEGACY_BODY_TAG` "Timebox planned in Coopilot." (`plan/timebox.ts`): matched on old events' bodies. Removing it stops recognizing them. Keep.
+  - `OLD_KEYRING_SERVICE` "coopilot" and the old folder names (`host/local/keyring-rename.ts`, `host/local/rename.ts`, `server/main.ts`): the one-time move in the developer loop. Low risk to remove once no developer machine has the old entries; removing it early loses their secrets on that machine.
+  - `system/install.sh --remove-coopilot`: removes the old service, launcher and icons. Safe to drop once every developer machine ran it.
+  - "Coopilot Desktop" and "Coopilot Dataverse Reader" (`config/starter.ts` comments, `infra/scripts/admin-group.sh`'s refusal, `actions/account.ts`): the registrations' real display names in Entra and Dataverse (Q97). Renaming them is an admin task outside the code; the script's refusal must follow any rename.
+  - The Guide's Renamed row (`ui/guide/content.ts`): tells people the old name. Keep while anyone remembers it.
+- Q-DOC1-3: `actions/account.ts`'s header comment still describes the desktop sign-in (PKCE over loopback, refresh token in the keyring); the hosted app signs in through Entra OpenID Connect and seals refresh tokens in `user_secrets`. The code wins (docs/technical/security.md); fix the comment with the next change to that file.
+- Q-DOC1-4: the docs are public to anyone who can reach the app's address, though the panel needs a session. If a page ever needs to hold something only Cooptimizers may read, serve the pages from an authenticated route instead of bundling them.
+- Q-DOC1-5: the "Edit on GitHub" link goes to `main`; a page read in an older build may differ from main. The footer's "This build" says which build it is.
+- Q-DOC1-6: the exact Azure CLI text for an unregistered resource provider in operations.md's troubleshooting is marked Not verified.
+- Q-DOC1-7: on a built UI (with the CSP), signing in to the demo logs one "Applying inline style violates ... style-src 'self'" from the main bundle. It happens on main at `13cd461` too, before the docs load; the docs panel adds none. Find the inline style (likely a library setting a style attribute) in a later step.

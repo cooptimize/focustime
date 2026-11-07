@@ -690,3 +690,12 @@ The same settings, shown in a new place; how to add one is `docs/settings.md`, t
   (no app secrets), e2e `e2e/settings-shell.test.ts` (every registry setting, saves, ×/Esc/Back, search, old ids, no
   secret values, phone pages, keyboard and focus) and `e2e/admin-menu.test.ts` (the rail at 1366×768, Admin on a phone).
   Screenshots: `scripts/screenshot-st1.ts <outDir> [sections|all] [desktop|phone|both]` (demo only).
+
+## DOC-1: Technical docs (Nov 7)
+
+The pages are `docs/technical/*.md` (how FocusTime works, for engineers and IT); this file stays the folder-level map.
+
+- **Build.** `scripts/tech-docs.ts`: `TECH_PAGES`, `renderPage` (marked, raw HTML escaped, links and headings to `#/docs/...`, an allowlist check), `techDocsPlugin` for `vite.config.ts` (virtual modules `virtual:tech-docs` and `virtual:tech-docs.css`). `scripts/docs-diagrams.ts` (`npm run docs:diagrams`) draws Mermaid blocks into `docs/technical/diagrams/<hash>.svg`; `--check` lists missing ones.
+- **Panel.** `ui/docs/TechDocs.tsx` (lazy, on `PanelShell`), `ui/docs/pages.ts` (ids and labels for the menus and the address), `ui/docs/docs.css`. `ui/guide/Search.tsx` is the search shared with the Guide. Address `#/docs[/<page>[/<heading>]]` in `ui/nav.ts`; entries in ⋯, the command menu (`docs.access` and "Technical docs: <page>"), the Guide's footer and About.
+- **Access.** `actions/docs-actions.ts` `docs.access`: signed in, not an automation account.
+- **Tests.** `scripts/tech-docs.test.ts` (`npm run docs:check`: the Checked line, links, headings, Graph permissions, diagrams, secret shapes, sanitizing), `ui/docs/docs-nav.test.ts`, e2e `e2e/tech-docs.test.ts`. Screenshots: `scripts/screenshot-doc1.ts` (demo only).
