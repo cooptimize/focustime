@@ -392,7 +392,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
   /** A new person each time (the demo seeds three pending changes per session). */
   const sameSessionFresh = () => open("#/ahead");
 
-  it("Gantt: bars grouped client › epic › feature, a dashed edge where a date is missing, No dates with Set dates, marks on bars", async () => {
+  it("Gantt: bars grouped client › epic › feature, a dashed edge where a date is missing, an item with no dates on its own row, one callout marker per bar", async () => {
     const { page, errors } = await open("#/ahead/gantt");
     await bar(page, "Store locator").waitFor({ timeout: 30_000 });
     // Store locator: a pending start (solid), its target from DevOps.
@@ -400,11 +400,14 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     // Loyalty points has a target and no start: a dashed start edge.
     await expect(bar(page, "Loyalty points").locator(".pa-bar").getAttribute("class")).resolves.toContain("dash-start");
     await expect(bar(page, "Loyalty points").locator(".pa-diamond").count()).resolves.toBe(1);
-    await expect(page.locator(".ah-nodates").first().textContent()).resolves.toContain("No dates");
-    await expect(page.locator(".ah-nodates").first().getByRole("button", { name: "Set dates" }).count()).resolves.toBeGreaterThan(0);
-    await expect(bar(page, "Supplier onboarding").count()).resolves.toBe(0);
-    await expect(page.locator(".ah-marks").count()).resolves.toBeGreaterThan(0);
-    // Stories show in the Grid only.
+    // AH-6: Supplier onboarding has no dates: its own row, no bar, Set dates in its marker's popover.
+    await expect(bar(page, "Supplier onboarding").count()).resolves.toBe(1);
+    await expect(bar(page, "Supplier onboarding").locator(".pa-bar").count()).resolves.toBe(0);
+    await bar(page, "Supplier onboarding").locator(".pa-marker").focus();
+    await page.locator(".pa-pop").getByRole("button", { name: "Set dates" }).waitFor({ timeout: 5_000 });
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".pa-marker").count()).resolves.toBeGreaterThan(0);
+    // Stories are folded away at the default level (Features).
     await expect(page.getByRole("link", { name: "Export orders to CSV", exact: true }).count()).resolves.toBe(0);
     expect(errors).toEqual([]);
     await page.close();

@@ -219,7 +219,10 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     await page.locator(".pa-cap").first().waitFor({ timeout: 20_000 });
     await page.waitForTimeout(600);
     await scan("Plan ahead");
-    await expect(page.locator(".pa-cell .hs-value").first().textContent()).resolves.toMatch(/^(about )?\d+h$/);
+    // AH-6: a feature's hours per week are in its marker's popover.
+    await page.locator(".pa-marker").first().focus();
+    await page.locator(".pa-pop").waitFor();
+    await scan("Plan ahead, a marker's popover");
     expect(errors).toEqual([]);
     await page.close();
   }, T);

@@ -131,7 +131,7 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   const breakDown = (r: Row) => openBreakDown(r.clientKey, { id: r.item.id, title: r.item.title, type: r.item.type, actions: panelActions(r) });
 
   const f = filters ?? DEFAULT_FILTERS;
-  const shown: Group[] = useMemo(() => (load ? groups(load, f, { stories: mode !== "gantt" }) : []), [load, f, mode]);
+  const shown: Group[] = useMemo(() => (load ? groups(load, f, { stories: true }) : []), [load, f, mode]);
   // AH-3: Fix next for every client, whatever the filters (it has none): ranked by each client's backlog.
   const fix = useMemo(() => (load ? fixGroups(load, { readOnly, skipped }) : []), [load, skipped, readOnly]);
   const fixN = fixCount(fix.map((x) => x.group));

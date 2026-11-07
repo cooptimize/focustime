@@ -5688,3 +5688,126 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .date-field-icon { color: var(--text-faint); font-size: var(--fs-1); }
 .bl-bulk-label { display: inline-flex; align-items: center; gap: 6px; }
 .cell-pop.ah-pop-size { width: calc(372px * var(--text-scale, 1)); }
+
+/* AH-6: Ahead › Gantt as a planning layout. One row height for the label and its bar (--gantt-row: two lines of
+   title), the bar centered; indentation by level only (--lvl); status as the bar's look; one callout marker; arrow caps;
+   the header and each client's name sticky inside the Gantt's own scroll box. */
+.ah-gantt-wrap { display: grid; gap: 8px; min-width: 0; }
+.ah-gantt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.ah-levels { display: inline-flex; align-items: center; gap: 8px; }
+.ah-levels-word { font-size: var(--fs-2); }
+.rm-seg button.partly { box-shadow: inset 0 -2px 0 var(--text); }
+.rm-seg .ah-levels-more { padding: 4px 9px; color: var(--text-muted); }
+.ah-grid-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 8px; }
+.pa-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: var(--fs-1); color: var(--text-muted); }
+.pa-legend li { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.pa-legend-swatch { --c: var(--text-muted); position: relative; width: 22px; height: 9px; border-radius: 3px; background: color-mix(in oklab, var(--c) 70%, var(--surface)); border: 1.5px solid var(--c); }
+.pa-legend-swatch.lg-risk { border-color: var(--ah-attention); box-shadow: 0 0 0 1px var(--ah-attention); }
+.pa-legend-swatch.lg-stalled { background: color-mix(in oklab, var(--c) 28%, var(--surface)); border-style: dashed; }
+.pa-legend-swatch.lg-open { border-right-style: dashed; border-right-color: transparent; background: linear-gradient(90deg, color-mix(in oklab, var(--c) 70%, var(--surface)) 55%, transparent); border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.pa-legend-swatch.lg-est { background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--c) 40%, var(--surface)) 0 3px, color-mix(in oklab, var(--c) 14%, var(--surface)) 3px 6px); border-style: dashed; }
+.pa-legend-swatch.lg-sum { border: 0; border-radius: 2px 2px 0 0; background: color-mix(in oklab, var(--c) 48%, var(--surface)); box-shadow: inset 0 -2px 0 var(--c); }
+.pa-legend-swatch.lg-sum::before, .pa-legend-swatch.lg-sum::after { content: ""; position: absolute; top: 100%; width: 2px; height: 3px; background: var(--c); }
+.pa-legend-swatch.lg-sum::before { left: 0; }
+.pa-legend-swatch.lg-sum::after { right: 0; }
+.pa-legend-cap { width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 7px solid var(--text-muted); }
+.pa-legend-diamond { width: 8px; height: 8px; transform: rotate(45deg); background: var(--text); }
+
+.ah-gantt { overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: 8px; }
+.ah-gantt .pa-grid {
+  --gantt-row: calc(var(--fs-3) * 2.6 + 14px);
+  --gantt-head: calc(46px * var(--text-scale));
+  --gantt-client: calc(32px * var(--text-scale));
+  --gantt-step: calc(20px * var(--text-scale));
+  --bar-h: calc(16px * var(--text-scale));
+  position: relative; overflow: visible;
+}
+.ah-gantt .pa-row { position: relative; z-index: 1; }
+.ah-gantt .pa-label { position: sticky; left: 0; z-index: 3; background: var(--bg); }
+.ah-gantt .pa-head { position: sticky; top: 0; z-index: 6; height: var(--gantt-head); min-height: 0; background: var(--bg); }
+.ah-gantt .pa-head .pa-label { z-index: 7; position: sticky; }
+.ah-gantt .pa-client { margin-top: 0; }
+.ah-gantt .pa-client-head { position: sticky; top: var(--gantt-head); z-index: 5; height: var(--gantt-client); min-height: 0; background: var(--bg); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.ah-gantt .pa-client-head .pa-track { background: var(--bg); }
+.ah-gantt .pa-item, .ah-gantt .pa-item .pa-track, .ah-gantt .pa-item .pa-label { height: var(--gantt-row); min-height: 0; }
+.ah-gantt .pa-item .pa-label { padding: 0 10px 0 6px; gap: 4px; outline-offset: -2px; }
+.ah-gantt .pa-item .pa-label:focus-visible { outline: 2px solid var(--selected); }
+.ah-gantt .pa-item:hover .pa-label, .ah-gantt .pa-item:focus-within .pa-label { background: color-mix(in oklab, var(--text) 4%, var(--bg)); }
+.ah-gantt .pa-item:hover .pa-track, .ah-gantt .pa-item:focus-within .pa-track { background: color-mix(in oklab, var(--text) 3%, transparent); }
+.ah-gantt .pa-item { border-bottom: 1px solid color-mix(in oklab, var(--border) 45%, transparent); }
+.ah-gantt .pa-caret { flex: none; width: calc(20px * var(--text-scale)); height: calc(20px * var(--text-scale)); margin: 0; padding: 0; display: inline-grid; place-items: center; }
+.ah-gantt .pa-type { flex: none; margin-right: 2px; }
+.ah-gantt .pa-title { flex: 1; min-width: 0; font-size: var(--fs-3); line-height: 1.3; white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.ah-gantt .pa-title a { color: inherit; text-decoration: none; }
+.ah-gantt .pa-title a:hover { text-decoration: underline; }
+.ah-gantt .pa-item.tier-epic .pa-title { font-weight: 600; }
+.ah-gantt .pa-item.context .pa-title, .ah-gantt .pa-item.closed .pa-title { color: var(--text-muted); }
+.ah-gantt .pa-cap { height: auto; }
+
+/* The backdrop: grid lines, weekends, today, once behind every row. */
+.pa-backdrop { position: absolute; top: 0; bottom: 0; left: var(--label-w); width: var(--tl-w); z-index: 0; pointer-events: none; }
+.pa-backdrop .pa-gridline { top: 0; bottom: 0; }
+.pa-weekend { position: absolute; top: 0; bottom: 0; background: color-mix(in oklab, var(--sunken) 55%, transparent); }
+.pa-today-line { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--selected); opacity: 0.8; }
+.ah-gantt .pa-today { bottom: 0; }
+
+/* Bars: centered, the app's radius, the client's color. */
+.ah-gantt .pa-item .pa-bar { top: 50%; bottom: auto; height: var(--bar-h); margin-top: calc(var(--bar-h) / -2); border-radius: 5px; display: flex; align-items: center; overflow: visible; background: color-mix(in oklab, var(--c) 72%, var(--surface)); border: 1.5px solid var(--c); }
+.ah-gantt .pa-item.tier-epic .pa-bar { height: var(--bar-h); margin-top: calc(var(--bar-h) / -2); }
+.ah-gantt .pa-bar.lk-risk { border-color: var(--ah-attention); box-shadow: 0 0 0 1px var(--ah-attention); }
+.ah-gantt .pa-bar.lk-stalled { background: color-mix(in oklab, var(--c) 26%, var(--surface)); border-style: dashed; border-color: color-mix(in oklab, var(--c) 70%, var(--text-muted)); }
+.ah-gantt .pa-bar.lk-done { background: color-mix(in oklab, var(--c) 30%, var(--surface)); border-color: color-mix(in oklab, var(--c) 50%, var(--surface)); }
+.ah-gantt .pa-bar.est { background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--c) 40%, var(--surface)) 0 4px, color-mix(in oklab, var(--c) 16%, var(--surface)) 4px 8px); border-style: dashed; }
+.ah-gantt .pa-bar.dash-end:not(.est) { border-right: 2px dashed var(--c); border-top-right-radius: 0; border-bottom-right-radius: 0; background: linear-gradient(90deg, color-mix(in oklab, var(--c) 72%, var(--surface)) 0, color-mix(in oklab, var(--c) 72%, var(--surface)) calc(100% - 28px), color-mix(in oklab, var(--c) 18%, var(--surface))); }
+.ah-gantt .pa-bar.dash-start:not(.est) { border-left: 2px dashed var(--c); border-top-left-radius: 0; border-bottom-left-radius: 0; background: linear-gradient(90deg, color-mix(in oklab, var(--c) 18%, var(--surface)), color-mix(in oklab, var(--c) 72%, var(--surface)) 28px); }
+.ah-gantt .pa-bar.rollup { border: 0; border-radius: 2px 2px 0 0; background: color-mix(in oklab, var(--c) 48%, var(--surface)); box-shadow: inset 0 -3px 0 var(--c); cursor: pointer; }
+.ah-gantt .pa-bar.rollup::before, .ah-gantt .pa-bar.rollup::after { content: ""; position: absolute; top: 100%; width: 3px; height: 4px; background: var(--c); }
+.ah-gantt .pa-bar.rollup::before { left: 0; }
+.ah-gantt .pa-bar.rollup::after { right: 0; }
+.ah-gantt .pa-bar.rollup.lk-risk { box-shadow: 0 0 0 1.5px var(--ah-attention); }
+.ah-gantt .pa-bar.early { border-left-width: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.ah-gantt .pa-bar.late { border-right-width: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.ah-gantt .pa-bar.changed { outline: 2px solid var(--selected); outline-offset: 1px; box-shadow: none; }
+.pa-inner { padding: 0 8px; font-size: var(--fs-1); line-height: 1; color: color-mix(in oklab, var(--text) 70%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.ah-gantt .pa-item .pa-diamond { top: 50%; bottom: auto; width: calc(10px * var(--text-scale)); height: calc(10px * var(--text-scale)); margin: calc(-5px * var(--text-scale)) 0 0 calc(-5px * var(--text-scale)); z-index: 2; }
+.ah-gantt .pa-item .pa-ghost { top: 50%; bottom: auto; height: var(--bar-h); margin-top: calc(var(--bar-h) / -2); }
+.ah-gantt .ah-live { top: 2px; z-index: 8; }
+
+/* Arrow caps: the item runs past the timeline's edge; its date in the tooltip. */
+.pa-capmark { position: absolute; top: 50%; z-index: 2; width: 12px; height: 16px; margin-top: -8px; cursor: help; }
+.pa-capmark::before { content: ""; position: absolute; top: 3px; border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+.pa-capmark.before { left: 2px; }
+.pa-capmark.before::before { left: 2px; border-right: 7px solid color-mix(in oklab, var(--c) 80%, var(--text-muted)); }
+.pa-capmark.after { right: 2px; }
+.pa-capmark.after::before { right: 2px; border-left: 7px solid color-mix(in oklab, var(--c) 80%, var(--text-muted)); }
+
+/* The one callout marker at the end of a bar. */
+.pa-marker { position: absolute; top: 50%; z-index: 3; transform: translateY(-50%); display: inline-flex; align-items: center; gap: 2px; height: calc(18px * var(--text-scale)); padding: 0 5px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-1); line-height: 1; cursor: pointer; }
+.pa-marker:hover, .pa-marker:focus-visible, .pa-marker[aria-expanded="true"] { background: var(--raised); border-color: var(--ah-attention); }
+.pa-marker:focus-visible { outline: 2px solid var(--selected); outline-offset: 1px; }
+.pa-marker.hours { color: var(--text-muted); border-color: var(--border); }
+.pa-marker-n { font-weight: 600; }
+.pa-grid.no-callouts .pa-marker { display: none; }
+.pa-pop { width: calc(340px * var(--text-scale, 1)); }
+.pa-pop-ro { margin: 0; font-size: var(--fs-2); }
+.pa-pop-list, .pa-pop-hours ul, .pa-pop-past { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: var(--fs-2); }
+.pa-pop-list li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.pa-pop-list li .mini { flex: none; }
+.pa-pop-text { min-width: 0; }
+.pa-pop-hours { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--border); }
+.pa-pop-sum { margin: 0; font-size: var(--fs-2); font-weight: 600; }
+.pa-pop-hours li, .pa-pop-past li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: calc(24px * var(--text-scale)); }
+.pa-pop-past { padding-top: 8px; border-top: 1px solid var(--border); }
+
+/* The label column's resize handle. */
+.ah-gantt .pa-head .pa-label { overflow: visible; }
+.pa-resize { position: absolute; top: 0; bottom: 0; right: -5px; width: 10px; z-index: 8; cursor: col-resize; touch-action: none; }
+.pa-resize::after { content: ""; position: absolute; top: 8px; bottom: 8px; left: 4px; width: 2px; border-radius: 1px; background: transparent; }
+.pa-resize:hover::after, .pa-resize:focus-visible::after, .pa-resize.on::after { background: var(--selected); }
+.pa-resize:focus-visible { outline: none; }
+.ah-gantt .pa-row { grid-template-columns: var(--label-w) minmax(var(--tl-w), 1fr); }
+.pa-rollup-line { position: absolute; top: calc(50% + var(--bar-h) / 2 + 3px); height: 3px; z-index: 1; background: color-mix(in oklab, var(--c) 60%, var(--text-muted)); border-radius: 1px; pointer-events: auto; cursor: help; }
+.pa-rollup-line::before, .pa-rollup-line::after { content: ""; position: absolute; bottom: 0; width: 2px; height: 6px; background: inherit; }
+.pa-rollup-line::before { left: 0; }
+.pa-rollup-line::after { right: 0; }
+.ah-gantt .pa-bar.early .pa-inner { padding-left: 18px; }
