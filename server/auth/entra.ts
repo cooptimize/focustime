@@ -157,5 +157,3 @@ export function createEntraSignIn(o: EntraOptions) {
 
   return { start, finish, issuer };
 }
-
-export type EntraSignIn = ReturnType<typeof createEntraSignIn>;

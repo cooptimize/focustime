@@ -75,7 +75,6 @@ span.brand-svg > svg { display: block; width: 100%; height: auto; }
 /* Empty states and inline moments: the idle pose, one plain line, one action. */
 .brand-empty { display: flex; align-items: center; gap: 14px; padding: 14px 0; color: var(--text-muted); }
 .brand-empty p { margin: 0; }
-.brand-empty .brand-empty-text { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 
 /* About in Settings. */
 .brand-about { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }

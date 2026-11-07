@@ -9,7 +9,7 @@ import { GAP_KINDS } from "../plan/fixnext.ts";
 import { emailOfRef, identitiesView } from "./identities.ts";
 import type { Assignee } from "../plan/identities.ts";
 import type { StatusGroup, StatusRegistry } from "./status-rows.ts";
-import { clientScope, CLIENT_SPECS, KIND_NAMES, LEVEL_NAMES, LEVEL_SPECS, LEVELS, ORG_SPECS, OrgInputError, specFor, SUGGESTED_SLOTS, type AdminArea, type Guidance, type Level, type OrgRules } from "../config/org.ts";
+import { clientScope, KIND_NAMES, LEVEL_NAMES, LEVEL_SPECS, LEVELS, ORG_SPECS, OrgInputError, specFor, SUGGESTED_SLOTS, type AdminArea, type Guidance, type Level, type OrgRules } from "../config/org.ts";
 import { CLIENT_SLOTS } from "../config/schema.ts";
 import { LEAD_WHY_NAMES, type LeadWhy } from "../plan/levels.ts";
 import { CLIENT_WHY_TEXT } from "../plan/client-accounts.ts";
@@ -629,9 +629,6 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
     }
   }
 }
-
-/** The kinds and labels of every team key, for the Guide and the "Set by your FocusTime admin" lines. */
-export const TEAM_KEYS = { org: specList(ORG_SPECS), client: specList(CLIENT_SPECS), level: specList(LEVEL_SPECS) };
 
 export type { AuditEntry, Guidance };
 export { clientScope };

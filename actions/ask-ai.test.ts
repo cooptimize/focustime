@@ -280,28 +280,25 @@ describe("promises (promises.extract)", () => {
     expect(p).toMatchObject({ what: "Let me check with the team", due: null, toWhom: null, notSorted: "AI isn't allowed for Fabrikam" });
   });
 
-  it("Make it a follow-up: who, what, Teams and the due date prefilled; the promise closes when the follow-up is done", async () => {
+  it("a promise made a follow-up before IB-1 closes when the follow-up is done (CL-1: the action that made one is gone)", async () => {
     const s = await setup({ answer: promiseAnswer({ due_hint: "2026-11-06", to_whom: "Dana" }) });
     const m = s.say({ chatId: FAB.chatId, authorId: ME, authorTenant: HOME_TENANT, text: "I'll send it by Friday" });
     await s.poll();
-    const r = await s.run<PromisesData & { followUpId: number }>("promises.followup", { chatId: FAB.chatId, messageId: m.messageId });
-    const f = (await s.plan.getFollowUp(r.followUpId))!;
-    expect(f).toMatchObject({ who: "Dana", what: "Send the corrected totals", channel: "teams", due: "2026-11-06", clientKey: "fabrikam" });
-    expect(r.promises[0]!.status).toBe("followup");
+    const f = await s.plan.addFollowUp({ who: "Dana", what: "Send the corrected totals", due: "2026-11-06", clientKey: "fabrikam", channel: "teams" });
+    await s.plan.resolvePromise(FAB.chatId, m.messageId, { status: "followup", followUpId: f.id });
+    expect((await s.run<PromisesData>("promises.list", {})).promises[0]!.status).toBe("followup");
     await s.plan.closeFollowUp(f.id, null);
     expect((await s.run<PromisesData>("promises.list", {})).promises[0]!.status).toBe("done");
   });
 
-  it("CV-3b: my own name is never sent as people_in_chat nor kept as to whom; a follow-up's Who is never me", async () => {
+  it("CV-3b: my own name is never sent as people_in_chat nor kept as to whom", async () => {
     const s = await setup({ answer: promiseAnswer({ to_whom: "Sam Tester" }) });
-    const m = s.say({ chatId: FAB.chatId, authorId: ME, authorTenant: HOME_TENANT, text: "I'll rerun the data tonight" });
+    s.say({ chatId: FAB.chatId, authorId: ME, authorTenant: HOME_TENANT, text: "I'll rerun the data tonight" });
     await s.poll();
     const sent = s.calls.map((c) => c.input).join("\n");
     expect(sent).toContain("people_in_chat");
     expect(sent).not.toContain("Sam Tester");
     expect((await s.run<PromisesData>("promises.list", {})).promises[0]!.toWhom).toBeNull();
-    const r = await s.run<PromisesData & { followUpId: number }>("promises.followup", { chatId: FAB.chatId, messageId: m.messageId, who: "Sam Tester" });
-    expect((await s.plan.getFollowUp(r.followUpId))!.who).toBeNull();
   });
 
   it("Link: closes when the item is done in DevOps", async () => {

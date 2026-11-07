@@ -63,6 +63,3 @@ export const inboxSource = (rows: readonly InboxItemView[], o: { today: IsoDate;
 export function untimedDue(promises: readonly DayPromise[], o: { now: string; today: IsoDate; dayEnd: string | null }): DayPromise[] {
   return promises.filter((p) => !p.dueAt && p.dueDate === o.today && !promiseUrgent(p, { now: o.now, today: o.today, dayEnd: o.dayEnd }));
 }
-
-/** SW-1's Today line (send.today: "Lee sent you Order export (Must)", or a count). Since IB-1 slice 4 Today's strip shows each send from the Inbox instead. */
-export type SentToday = { line: string | null; count: number; weekStart: IsoDate };

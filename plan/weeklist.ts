@@ -9,7 +9,6 @@ import type { StorySize } from "./estimate.ts";
 
 export type Tier = "must" | "nice";
 export type ItemLevel = "feature" | "story";
-export const TIER_NAMES: Record<Tier, string> = { must: "Must", nice: "Nice to have" };
 export { MAX_ESTIMATE_HOURS } from "./estimate.ts";
 
 export type Pin = { date: IsoDate; half: "AM" | "PM" };

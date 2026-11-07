@@ -9,9 +9,6 @@ import { useEffect, useState } from "react";
 
 export type GridLayout = "wide" | "dates" | "dots" | "cards";
 
-/** The Item column's minimum at Default text (it scales with the text). */
-export const ITEM_MIN = 320;
-
 export function gridLayout(windowWidth: number, textScale = 1): GridLayout {
   const w = windowWidth / (textScale > 0 ? textScale : 1);
   return w >= 1400 ? "wide" : w >= 1200 ? "dates" : w >= 900 ? "dots" : "cards";

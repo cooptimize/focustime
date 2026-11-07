@@ -83,7 +83,6 @@ export const PICKS_TOOLS: readonly ToolName[] = ["move_picks", "close_day"];
 export const PROPOSE_TOOLS = ["move_pick", "keep_pick", "drop_pick", "confirm_day", "move_picks", "close_day", "item_done", "item_undo", "move_plan"] as const satisfies readonly ToolName[];
 /** AS-2: proposals that move to-dos, undone together (assistant.undo). */
 export const MOVE_TOOLS: readonly ToolName[] = ["move_picks", "move_plan"];
-export type ProposeTool = (typeof PROPOSE_TOOLS)[number];
 
 /** Never reachable from the assistant, whatever the model asks (checked by the test against the list above). */
 export const NEVER: readonly string[] = [

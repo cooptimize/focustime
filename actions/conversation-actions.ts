@@ -48,7 +48,7 @@ export type { ConversationCard, ConversationMessage, ConversationsData, DayPromi
 export const CONVERSATION_ACTIONS = [
   "conversations.list", "conversations.count", "conversations.refresh", "conversations.messages", "conversations.seen", "conversations.resolve", "conversations.not_request", "conversations.not_work", "conversations.not_work_undo", "conversations.reopen",
   "conversations.hide", "conversations.move", "conversations.this_is_work", "conversations.link", "conversations.take_over", "conversations.sort_unsorted", "conversations.search",
-  "conversations.draft", "my_promises.list", "my_promises.today", "my_promises.followup", "my_promises.link", "my_promises.done", "my_promises.not_needed", "my_promises.reopen",
+  "conversations.draft", "my_promises.list", "my_promises.today", "my_promises.link", "my_promises.done", "my_promises.not_needed", "my_promises.reopen",
   // IB-1: a promise is never read-only: its due, whom it is to, and Close the loop.
   "my_promises.due", "my_promises.who", "my_promises.close",
   "suggestions.skip", "conversations.merge", "conversations.unmerge", "conversations.merge_preview", "my_promises.start_draft",
@@ -1002,31 +1002,6 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         ctx.log({ source: "plan", op: "promise_draft_started", count: ms.length });
         return { ok: true, data: { conversationId: c.id } };
       }
-      case "my_promises.followup": {
-        const o = only(input, ["id"], ["who", "whoRef", "what", "due"]);
-        const k = o && (await mine(o.id));
-        if (!o || !k) return bad("my_promises.followup takes { id, who?, whoRef?, what?, due? }");
-        const whoRef = o.whoRef === undefined || o.whoRef === null ? null : personRef(o.whoRef);
-        if (o.whoRef !== undefined && o.whoRef !== null && !whoRef) return bad("whoRef is a person from the picker, or null");
-        if (!ctx.plan) return bad("The plan store isn't available", 503);
-        if (k.state !== "open") return bad("This promise is already handled", 409);
-        const text = (x: unknown, n: string, max: number) => (x === undefined || x === null ? undefined : typeof x === "string" && x.trim().length <= max ? x.trim() : (() => { throw new PlanError(`${n} is text of at most ${max} characters`); })());
-        const what = text(o.what, "what", 200) || k.what;
-        // The person I answered or mentioned, never me.
-        const who = text(o.who, "who", 200) ?? k.toName;
-        const due = o.due === undefined ? (k.dueDate ?? k.onToday) : o.due === null || o.due === "" ? null : typeof o.due === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.due) ? o.due : null;
-        if (o.due !== undefined && o.due !== null && o.due !== "" && !due) return bad("due is a date like 2026-11-06");
-        // CV-2: the person from the picker; given no Who, the one the promise was made to. It names its promise (amber past due).
-        const toRef = toRefOf(k, v.byId.get(k.chatId), await ctx.homeTenant());
-        const ref = o.who === undefined ? (whoRef ?? toRef) : whoRef;
-        // CV-3b: never the promise's owner (me): fall back to whom it was made to, then no one.
-        const owner = { id: v.me, names: [k.whoName, v.byId.get(k.chatId)?.members?.find((m) => same(m.userId, v.me))?.displayName] };
-        const kept = whoNotOwner({ who: who || null, whoRef: who ? ref : null }, k.toName ? { who: k.toName, whoRef: toRef } : null, owner);
-        const f = await ctx.plan.addFollowUp({ who: kept.who, whoRef: kept.who ? kept.whoRef : null, what, due, clientKey: k.clientKey, channel: "teams", source: { kind: "promise", id: k.id } });
-        await v.convs.updateCommitment(k.id, { state: "followup", followUpId: f.id });
-        ctx.log({ source: "plan", op: "promise_resolved", kind: "followup" });
-        return { ok: true, data: { ...(await myPromises(ctx, cfg)), followUpId: f.id } };
-      }
       case "my_promises.due": {
         // IB-1: a promise is never read-only. Its due day (or none), wherever it stands: open, linked or created.
         const o = only(input, ["id", "due"]);
@@ -1162,9 +1137,6 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
     throw e;
   }
 }
-
-/** Whether a person outside Cooptimize: shown as External (by tenant only). */
-export const externalOf = (tenant: string | null, home: string | null) => (home ? isExternal({ tenantId: tenant }, home) : false);
 
 // ---- LP-1: Close the loop's view of a chat promise (mine only, in a chat I'm in) ----
 

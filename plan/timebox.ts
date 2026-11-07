@@ -200,8 +200,3 @@ export type WriteEntry = {
   before: Fields | null; after: Fields | null; localBefore: LocalState | null; localAfter: LocalState | null;
   status: WriteStatus; message: string | null; auto: boolean; undoOf: number | null; undoneBy: number | null; attempts: number; updatedAt: string;
 };
-/** "9:30 to 11:00" in the shown zone. */
-export function timeboxLabel(t: { start: string; end: string }, timeZone: string): string {
-  const f = (s: string) => Temporal.Instant.from(s).toZonedDateTimeISO(timeZone).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
-  return `${f(t.start)} to ${f(t.end)}`;
-}

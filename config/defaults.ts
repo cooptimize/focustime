@@ -14,8 +14,6 @@ export const clients: Record<string, ClientStyle> = {
   internal: { key: "internal", name: "Internal", shortName: "Internal", color: "#4a7fd4" },
 };
 
-export const fallbackClientColor = "#8a8f98";
-
 export const weekConfig: WeekConfig = {
   hours: legacyHours({ start: "09:00", split: "12:00", end: "17:00", timeZone: NEUTRAL_ZONE }),
   thresholds: { meetingWatchMinutes: 90, meetingAtRiskMinutes: 150, minFocusWindowMinutes: 90 },

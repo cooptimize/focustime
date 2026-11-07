@@ -9,7 +9,6 @@
 // Plain words; nothing here reads as anyone checking on anyone.
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import type { SentToday } from "../plan/urgent.ts";
 import type { PeoplePickerData, PickerPerson } from "../actions/people-picker.ts";
 import type { CommitClient, CommitData, LookView, PickerPersonView, PriorityView, SendView, TeamData, TeamPerson } from "../plan/team-types.ts";
 import type { IsoDate } from "../week/types.ts";
@@ -485,19 +484,6 @@ export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, 
       )}
     </section>
   );
-}
-
-/** Today's one line while something waits for me, linking to Commit on its week. */
-/** Today's sends line's data (send.today), refreshed with `version`; Today shows it in the urgent strip (CV-3's sends source). */
-export function useSentToday(version: unknown, on: boolean): SentToday | null {
-  const [d, setD] = useState<SentToday | null>(null);
-  useEffect(() => {
-    if (!on) return setD(null);
-    let live = true;
-    call<SentToday>("send.today", {}).then((x) => live && setD(x), () => live && setD(null));
-    return () => void (live = false);
-  }, [version, on]);
-  return d;
 }
 
 const STATE_WORDS: Record<TeamPerson["state"], string> = { committed: "", draft: "Not confirmed yet", not_on_focustime: "Not on FocusTime yet" };

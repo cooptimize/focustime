@@ -7,18 +7,6 @@ import { call } from "./api.ts";
 import { AlsoComment } from "./Conversations.tsx";
 
 
-/** "Today 7:30 PM", "Thu, Nov 5" or "Thu, Nov 5 9:00 AM", in my zone. */
-export function dueText(p: Pick<PromiseCard, "dueAt" | "dueDate">, today: string, tz: string): string | null {
-  if (p.dueAt) {
-    const z = Temporal.Instant.from(p.dueAt).toZonedDateTimeISO(tz);
-    const time = z.toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
-    const day = z.toPlainDate().toString();
-    return `${day === today ? "Today" : z.toPlainDate().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })} ${time}`;
-  }
-  if (p.dueDate) return p.dueDate === today ? "Today" : Temporal.PlainDate.from(p.dueDate).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
-  return null;
-}
-
 type Hit = { id: number; title: string; type: string; state: string; url: string; reason: string };
 /** CV-3: Link existing… with or without a conversation: likely items first (with why), then whatever is typed. */
 export function PromiseLink({ p, canComment, onPick: pickIt, onCancel }: { p: PromiseCard; canComment: boolean; onPick: (id: number, comment: boolean) => void; onCancel: () => void }) {

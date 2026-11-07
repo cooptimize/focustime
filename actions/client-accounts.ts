@@ -15,11 +15,6 @@ export async function clientsOf(org: OrgRuntime | undefined | null): Promise<Cli
   return org ? org.clientAccounts().catch(() => null) : null;
 }
 
-export async function isClientKey(org: OrgRuntime | undefined | null, key: string): Promise<boolean> {
-  const ca = await clientsOf(org);
-  return ca ? ca.isClient(key) : true;
-}
-
 /**
  * GD-1: whether this key is Cooptimize Internal, by clientAccounts()'s why "internal" (the team's answer; without the
  * team runtime, the same rule over no accounts). The AI guard lets an Internal request name clients.

@@ -242,14 +242,6 @@ async function draft(ctx: StatusContext, input: unknown): Promise<ActionResponse
   return { ok: true, data: { clientKey: r.out.clientKey, ai: "ok", message: null, drafts } };
 }
 
-/** SR-1's nudge: how many shown features have no update yet, per the same read (null when nothing could be read). */
-export async function statusWithout(ctx: StatusContext): Promise<number | null> {
-  const cfg = await ctx.config();
-  if (!cfg) return null;
-  const { load: l } = await readAll(ctx, cfg);
-  return withoutUpdate(l)?.without ?? null;
-}
-
 /**
  * SR-1's nudge: the shown features with nothing in the window yet, per client (a feature whose comments couldn't be
  * read doesn't count either way). Null when no client could be read at all, so a broken source never nudges.

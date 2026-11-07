@@ -106,7 +106,6 @@ export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "busi
 
 /** The style guide's client palette (tokens --client-<slot> in every theme). */
 export const CLIENT_SLOTS = ["teal", "violet", "ochre", "blue", "rose", "earth", "green", "slate"] as const;
-export type ClientSlot = (typeof CLIENT_SLOTS)[number];
 
 export type ClientSetting = {
   /** "#rrggbb" or a palette slot. */

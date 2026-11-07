@@ -316,7 +316,6 @@ export const PERSON_SPECS = {
 
 export type Scope = "org" | `client:${string}` | `level:${Level}` | `person:${string}`;
 export const clientScope = (k: string): Scope => `client:${k}`;
-export const personScope = (id: string): Scope => `person:${id.toLowerCase()}`;
 
 /** The spec for a scope and key, or null (refused). */
 export function specFor(scope: string, key: string): Spec | null {

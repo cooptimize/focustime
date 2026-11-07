@@ -326,7 +326,7 @@ What DS-1 learned, and what is still open:
 - Q-MB1-4: the VM chip moved from the phone header into the status sheet; Today's morning VM prompt still shows. Is the prompt enough on the phone, or should the dot turn amber while the VM is off during working hours?
 - Q-MB1-5: Settings › Data › Diagnostics lists Unsorted reasons as "<reason> <count>" and now reads "held back because they mention another client 20". It is ST-1's screen, so it wasn't changed here; reword to "20 held back because they mention another client"?
 - Q-MB1-6: the phone's to-do sheet shows Done only on a confirmed day (as Today's checkboxes do). On an unconfirmed morning, should the sheet offer Confirm today first?
-- Q-MB1-7: UI-9's late chip on the phone moved from the card header to the card's chips line (the status line) at the MB-1 merge. A card with no status now gets that line for the chip, so it is one line taller there; in the header it never was. Keep it on the chips line, or go back to the header for cards with no status?
+- Q-MB1-7: UI-9's late chip on the phone moved from the card header to the card's chips line (the status line) at the MB-1 merge. A card with no status now gets that line for the chip, so it is one line taller there; in the header it never was. Keep it on the chips line, or go back to the header for cards with no status? Answered in MB-1b: with no status pill it ends the title line (no extra line); beside a pill it stays on the chips line.
 
 ## Invite to FocusTime (IN-1, Nov 7)
 
@@ -352,6 +352,12 @@ What DS-1 learned, and what is still open:
 - Q-DOC1-6: the exact Azure CLI text for an unregistered resource provider in operations.md's troubleshooting is marked Not verified.
 - Q-DOC1-7: on a built UI (with the CSP), signing in to the demo logs one "Applying inline style violates ... style-src 'self'" from the main bundle. It happens on main at `13cd461` too, before the docs load; the docs panel adds none. Find the inline style (likely a library setting a style attribute) in a later step.
 - Q-DOC1-8: `e2e/ui9.test.ts` "keeping or snoozing a promise updates the chip, with no reload" fails now and then in CI: after Done in the Inbox and back to Week, Monday AM's late chip is still there after 20 s. It failed the same way on main (`a6d16c6`) and passes locally. Week's chips come from `inbox.today` (`ui/inboxcount.ts`), read again when the week's data reloads or every 5 minutes; a Done whose week reload doesn't land leaves the chip until then. Look at it in a housekeeping step (re-read `inbox.today` on the Inbox's own changes).
+
+## Cleanup step 1 (CL-1, Nov 7)
+
+- Q-CL1-1: step 2 (`docs/cleanup-step-2.md`) needs the product owner's OK, and a counts-only check of the four user tables and the bytes column on dev and prod first (no existing script reads the hosted databases; CL-1 didn't connect). It is two releases: 2a takes the tables out of `USER_TABLES` and stops the 14-day cleanup, 2b drops.
+- Q-CL1-2: the per-client "Delete stored messages" (`requests.purge`) reaches only the shared `teams_messages` since D519; a person's old `chat_messages` and `asks` rows for that client go only with the 14-day rule, Delete my data, or the drop. Asks keep their message past 14 days. Fine to wait for the drop, or should 2a clear them sooner?
+- Q-CL1-3: can the org bootstrap's reading of a person's old `[ai]` keys go? It needs the `org_bootstrap_v1` mark confirmed on dev and prod (a read of `org_settings`, scope "meta"). Then `use`, `monthly_cap_usd` and `allowed_clients` can leave the settings model, with the loader ignoring them (BH-1).
 
 ## LP-1
 

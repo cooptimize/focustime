@@ -1567,10 +1567,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .cap-complete [aria-selected="true"] button, .cap-complete button:hover { background: var(--selected); }
 .cap-complete .swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
 .cap-saved, .cap-item { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); display: grid; gap: 8px; }
-.cap-text { margin: 0; font-size: var(--fs-3); color: var(--text); overflow-wrap: anywhere; }
 .cap-row { display: flex; align-items: center; gap: 12px; }
-.cap-row .cap-text { flex: 1; min-width: 0; }
-.cap-tag { font-size: var(--fs-2); color: var(--ok); font-weight: 500; margin-right: 6px; }
 .cap-sort { display: grid; gap: 8px; }
 .cap-kinds { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .cap-suggested { margin-left: 6px; font-size: var(--fs-2); color: var(--accent); font-weight: 500; }
@@ -1665,10 +1662,9 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .top-timer-count { color: color-mix(in oklab, var(--c) 30%, var(--text)); }
 .top-timer.ended { border-color: var(--watch); }
 .inbox { flex: 1; overflow: auto; padding: 8px 24px 32px; }
-.inbox .follow-ups-head, .inbox .co-section, .inbox .follow-ups-note, .inbox-list, .inbox-tools { max-width: 1100px; }
+.inbox .follow-ups-head, .inbox .co-section, .inbox .follow-ups-note, .inbox-tools { max-width: 1100px; }
 .inbox .follow-ups-head .top-btn { margin-left: auto; }
 .inbox input:not([type="checkbox"]), .inbox select { font: inherit; font-size: var(--fs-3); color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 5px 8px; min-width: 0; }
-.inbox-list { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 8px; }
 .inbox-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
 .inbox-notes summary { cursor: pointer; display: flex; align-items: baseline; gap: 8px; }
 .inbox-notes summary h3 { display: inline; margin: 0; }
@@ -1735,8 +1731,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pd-breakdown textarea { flex-basis: 100%; font-family: ui-monospace, monospace; font-size: var(--fs-2); }
 
 /* First-run hint (step 10). */
-.flow-hint { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px; background: var(--surface); font-size: var(--fs-3); }
-.flow-hint p { margin: 0; flex: 1; }
 
 /* Step 10 slice 4: the focus screen. Calm: one countdown, one pick, three buttons. */
 .focus-screen { flex: 1; overflow: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 32px 24px; text-align: center; }
@@ -1814,8 +1808,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .wl-table tr { display: grid; gap: 2px; padding: 6px 0; border-bottom: 1px solid var(--border); }
   .wl-table td { border: 0; padding: 0; }
 }
-.ev-list.tb-list li { border-left-color: var(--c); background: color-mix(in oklab, var(--c) 12%, transparent); border-radius: 0 4px 4px 0; }
-.ev-list.tb-list .ev-title { font-weight: 600; }
 .set-write > button { justify-self: start; }
 .wd-actions .commit { background: var(--action); border-color: var(--action); color: var(--on-action); font-weight: 600; }
 .wd-actions .commit:disabled { opacity: 0.7; }
@@ -1835,7 +1827,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .tb-conflict p { margin: 0; }
 .wd-people { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--raised); font-size: var(--fs-3); }
 .wd-people ul { margin: 4px 0 0; padding-left: 18px; }
-.help-chip { font-size: var(--fs-1); font-weight: 600; padding: 0 6px; border-radius: 99px; border: 1px solid var(--accent); color: var(--accent); white-space: nowrap; }
 .help-dialog { width: min(760px, 100%); }
 .help-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-3); }
 .help-label { min-width: 64px; font-weight: 600; }
@@ -2005,8 +1996,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .dw-ok { margin: 0; color: var(--ok); font-weight: 600; }
 .dw-drafts { margin: 0; padding-left: 18px; font-size: var(--fs-3); }
 .dw-hint { font-size: var(--fs-2); }
-.dw-drafts-section .cap-item { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
-.dw-drafts-section .cap-text { flex: 1 1 280px; margin: 0; }
 .dw-log { margin-top: 18px; }
 .pd-committed { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; margin: 8px 0 4px; padding: 8px 12px; border: 1px solid color-mix(in oklab, var(--ok) 45%, var(--border)); border-radius: 10px; background: var(--raised); }
 .pd-committed p { margin: 0; flex: 1 1 260px; font-size: var(--fs-3); }
@@ -5449,6 +5438,12 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .late-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .app.phone .card-status:has(.late-chip) { overflow: visible; }
 .app.phone .card-status button.late-chip { min-height: 0; }
+/* MB-1b: with no status pill the chip ends the title line: one line, the client's name shortens first, the head lets
+   the chip's tap area out, and the card is no taller than with no chip. */
+.app.phone .card-head:has(> .late-chip) { flex-wrap: nowrap; overflow: visible; }
+.app.phone .card-head:has(> .late-chip) .card-client { flex: 0 1 auto; min-width: 0; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app.phone .card-head:has(> .late-chip) .card-when { flex: none; white-space: nowrap; }
+.app.phone .card-head > button.late-chip { min-height: 0; }
 .app.phone .late-chip::after { content: ""; position: absolute; inset: -13px -8px; }
 /* UI-9: Promises narrowed to late ones from a Week card's chip. */
 .ib-late-line { margin: 0; display: inline-flex; align-items: baseline; gap: 8px; color: var(--watch); font-size: var(--fs-2); font-weight: 600; }
@@ -5490,6 +5485,8 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   .ph-status-list .error .dot, .ph-status-list .signin .dot { background: var(--risk); }
   .ph-src-name { font-weight: 600; }
   .ph-status-list .state { font-size: var(--fs-2); color: var(--text-muted); }
+  /* MB-1b: a row wraps (the desktop .source is nowrap): the DevOps line's clients go onto as many lines as they need. */
+  .ph-status-list li { white-space: normal; }
   .ph-src-detail { grid-column: 2 / -1; font-size: var(--fs-2); overflow-wrap: anywhere; }
   .ph-status-problems li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; border-left: 3px solid var(--risk); border-radius: 8px; background: var(--sunken); }
   .ph-status-extra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

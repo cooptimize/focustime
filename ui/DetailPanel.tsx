@@ -9,7 +9,7 @@ import { typeNeedsBreakdown } from "../plan/process.ts";
 import { useCallback, useContext, useEffect, useRef, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import { rankRisks } from "../week/risks.ts";
-import type { Day, IsoDate, Slot } from "../week/types.ts";
+import type { Day, Slot } from "../week/types.ts";
 import type { Pick } from "../plan/types.ts";
 import { mondayOf } from "../week/dates.ts";
 import { captureClients } from "./Capture.tsx";
@@ -348,5 +348,3 @@ export function BreakDown({ clientKey, item }: { clientKey: string; item: { id: 
 export function panelSlot(day: Day, half: "AM" | "PM" | "EVE"): Slot {
   return (half === "AM" ? day.am : half === "PM" ? day.pm : day.eve) ?? day.am;
 }
-
-export type PanelAt = { date: IsoDate; half: "AM" | "PM" | "EVE"; focus: PanelFocus | null };
