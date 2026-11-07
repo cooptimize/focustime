@@ -103,10 +103,6 @@ export function createTeamsBotStore(o: { db: Conn; userId: string; now: () => Te
         for (const t of BOT_TABLES) await db.run(`DELETE FROM ${t}`);
       });
     },
-    /** Settled cards older than a week go (the card in Teams keeps showing its result). */
-    async sweep(before: string): Promise<number> {
-      return db.tx(async () => (await db.run("DELETE FROM teams_bot_cards WHERE updated_at < ? AND state <> 'open' AND state <> 'running'", before)).changes);
-    },
   };
 }
 export type TeamsBotStore = ReturnType<typeof createTeamsBotStore>;
