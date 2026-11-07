@@ -23,7 +23,7 @@ describe("QF-1 names", () => {
   });
   it("the Guide's renamed answer names both", () => {
     const text = JSON.stringify(TEAM);
-    expect(text).toContain("Fix next is now Gaps");
+    expect(text).toContain("Fix next became Gaps, and Gaps is now Readiness");
     expect(text).toContain("Sort later is now Decide later");
   });
 });

@@ -7,7 +7,7 @@ import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import { anAheadClient, anAheadItem, anAssignee } from "../test/builders/index.ts";
-import { aheadAction, type AheadContext } from "./ahead-actions.ts";
+import { aheadAction, checkFilters, type AheadContext } from "./ahead-actions.ts";
 import type { AheadClient, AheadLoad } from "./types.ts";
 
 const NOW = "2026-11-02T14:00:00Z";
@@ -227,5 +227,14 @@ describe("AH-5: State in the change set, and whom I may assign", () => {
     expect((await s.fail("ahead.stage", { clientKey: "Northwind", itemId: 120, field: "assignee", value: { email: "lee@fabrikam.example", name: "Lee" } })).error).toBe("Only people on Northwind Foods's DevOps project can be assigned here");
     const unread = setup({ lead: true });
     expect((await unread.run<{ problem: string | null }>("ahead.people", { clientKey: "Northwind" })).problem).toMatch(/couldn't be read/);
+  });
+});
+
+describe("AH-6: the filter check", () => {
+  it("keeps the Dates quick pick and the readiness kinds, leaves out a key it doesn't know, refuses a wrong value", () => {
+    expect(checkFilters({ range: "next4", kinds: ["unsized", "unsized", "needs_stories"], q: "x" })).toMatchObject({ range: "next4", kinds: ["unsized", "needs_stories"], q: "x" });
+    expect(checkFilters({ q: "x", someday: true })).toEqual(checkFilters({ q: "x" }));
+    expect(checkFilters({ range: "soon" })).toBeNull();
+    expect(checkFilters({ kinds: ["late"] })).toBeNull();
   });
 });
