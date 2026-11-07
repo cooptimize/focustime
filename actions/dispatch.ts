@@ -37,6 +37,7 @@ import { calendarNotSetUp } from "../sources/not-set-up.ts";
 import { buildWeek } from "../week/build.ts";
 import { followedKeys } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
+import { guideAction } from "./guide-actions.ts";
 import { defaultWeekStart, localToday, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
 import { hoursOn, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
@@ -1520,6 +1521,38 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
         req.input ?? {},
       );
     }
+    case "guide.checklist":
+      // UI-5: read only, states and counts only (actions/guide-actions.ts).
+      return guideAction(
+        {
+          demo: !!ctx.demo?.on,
+          facts: async () => {
+            const plan = ctx.plan;
+            if (!plan) return null;
+            const cfg = await configured(ctx);
+            const today = localToday(ctx.now(), cfg ? userZone(cfg) : "UTC");
+            const mon = mondayOf(today);
+            const next = Temporal.PlainDate.from(mon).add({ days: 7 }).toString();
+            const [setup, ids, push, thisWeek, nextWeek, days] = await Promise.all([
+              plan.setupState(),
+              plan.devopsIdentities(),
+              ctx.push?.status().catch(() => null) ?? Promise.resolve(null),
+              plan.weekPlan(mon),
+              plan.weekPlan(next),
+              plan.dayPlansBetween(today, today),
+            ]);
+            return {
+              setup,
+              writeClients: ids.length,
+              devices: push?.devices.length ?? 0,
+              teamsMessages: !!cfg?.notify.teamsMessages,
+              weekConfirmed: !!(thisWeek.committedAt || nextWeek.committedAt),
+              todayConfirmed: !!days[0]?.committedAt,
+            };
+          },
+        },
+        req.input,
+      );
     case "ui.tour_offer": {
       // G1: the tour link shows on a person's first Today until they open the Guide from it or dismiss it; then
       // never again, on any device (a plan store marker, per user). {} asks; { done: true } records it.

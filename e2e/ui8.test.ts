@@ -107,7 +107,7 @@ describe.skipIf(!CHROMIUM)("UI-8 bug round", () => {
     const screens: [string, string][] = [
       ["Notifications", '[role="dialog"][aria-label="Notifications"]'],
       ["Commands", '[role="dialog"][aria-label="Command menu"]'],
-      ["Guide", "main.guide .guide-top .guide-wrap"],
+      ["Guide", "main.guide .ps-head"],
       ["Keyboard shortcuts", '[role="dialog"][aria-label="Keyboard shortcuts"]'],
       ["Send feedback", '[role="dialog"][aria-label="Send feedback"]'],
       ["About", '[role="dialog"][aria-label="About FocusTime"]'],

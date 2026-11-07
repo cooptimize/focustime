@@ -90,7 +90,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
         hover={<>{!timed && <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}{menu.button(`More for ${pick.title}`)}</>} />
     );
   return (
-    <li data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""}${today ? " dens-today" : ""}${week ? " dens-week" : ""}${next ? " next" : ""} ${className}`} onContextMenu={menu.onContextMenu} {...(dragProps ?? { draggable, onDragStart: draggable ? onDrag : undefined })} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
+    <li data-pick={pick.id} data-tour={week ? "wk-todo" : undefined} className={`pick-row ${pick.status}${highlight ? " trim" : ""}${today ? " dens-today" : ""}${week ? " dens-week" : ""}${next ? " next" : ""} ${className}`} onContextMenu={menu.onContextMenu} {...(dragProps ?? { draggable, onDragStart: draggable ? onDrag : undefined })} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
       <input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} disabled={!canTick || pick.status === "dropped"} onChange={(e) => toggle(pick.id, e.target.checked)} onClick={stop} onDoubleClick={stop} aria-label={`Done: ${pick.title}`} />
       {typeIcon && pick.itemType && <TypeIcon clientKey={pick.clientKey} type={pick.itemType} />}
       <span className="pr-title" title={pick.title}>

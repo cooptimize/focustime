@@ -377,7 +377,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   // PL-1: "From last week" at the top of Commit (rows to accept, Watching with check-ins), the same as the Board's.
   // SW-1: "From your team" beside it (sent to me, client priorities, what I sent, Ask <lead> to look).
   const carryTop0 = !past && proposal.data && (
-    <div className="pw-carry">
+    <div className="pw-carry" data-tour="pw-carry">
       <ProposalSection data={proposal.data} act={proposal.act} onRefresh={onChanged} colors={data.clients}>
         {proposal.error && <p className="error-line" role="alert">{proposal.error}</p>}
         <WatchingList watching={proposal.data.watching} act={proposal.act} colors={data.clients} nameOf={nameOf} days={checkinDays(data.week, data.planDay.date)} />
@@ -399,7 +399,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
       <ul className="pl-lines pw-lines" aria-label="Clients this week">
         {lines.map((l, n) =>
           l.clientKey === openK ? (
-            <li key={l.clientKey} className="pw-open-card">
+            <li key={l.clientKey} className="pw-open-card" data-tour="pw-open-card">
               <ClientCard k={l.clientKey} line={l} st={st} past={past} items={items} fit={fits.find((f) => f.clientKey === l.clientKey)} days={days} info={info} nameOf={nameOf} colors={data.clients} friday={friday}
                 folds={folds} toggleFold={toggleFold} ops={ops} weekDrafts={weekDrafts.filter((w) => w.draft.clientKey === l.clientKey)} epics={flags.filter((f) => f.kind === "needs_features" && f.clientKey === l.clientKey && f.itemId !== null)}
                 prevName={n > 0 ? nameOf(keys[n - 1]!) : null} nextName={n < keys.length - 1 ? nameOf(keys[n + 1]!) : null} onPrev={() => go(-1)} onNext={() => go(1)} onFinish={() => void finish()} />
@@ -502,7 +502,7 @@ function WeekCells({ days, fits, items, open, past, colors, dragging, dragOver, 
     }
   };
   return (
-    <div className="pw-grid-wrap">
+    <div className="pw-grid-wrap" data-tour="pw-grid">
       <div className={`pw-grid${dragging ? " dragging" : ""}`} role="group" aria-label="The week's half-days">
         <span className="pw-grid-corner" aria-hidden="true" style={{ gridRow: 1, gridColumn: 1 }} />
         {days.map((d, col) => (
@@ -958,11 +958,11 @@ function ClientCard(p: CardProps) {
         )}
         <span className="pl-spacer" />
         {p.nextName !== null ? (
-          <button type="button" className="pw-next" onClick={p.onNext} title="Next client (J)">
+          <button type="button" className="pw-next" data-tour="pw-next" onClick={p.onNext} title="Next client (J)">
             Next client: <span className="pw-next-name">{p.nextName}</span> ›
           </button>
         ) : (
-          <button type="button" className="pw-next done-btn" onClick={p.onFinish} title={p.past ? "Back to the week" : "Confirm this week's lists, then back to the week"}>
+          <button type="button" className="pw-next done-btn" data-tour="pw-next" onClick={p.onFinish} title={p.past ? "Back to the week" : "Confirm this week's lists, then back to the week"}>
             {finishLabel(p.st.plan, p.past)}
           </button>
         )}
@@ -1028,6 +1028,7 @@ function AddWeek({ k, st, items, work, nameOf, colors, ops, query, setQuery, sea
   return (
     <AddPane
       className="pw-addpane"
+      tour="pw-addpane"
       color={clientColor(k, colors)}
       client={name}
       count={`${rows.length} of yours not on the list`}

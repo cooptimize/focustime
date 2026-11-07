@@ -682,6 +682,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
     <div
       ref={refFn}
       {...drop.props}
+      data-tour={state === "focus" ? "wk-block" : undefined}
       className={`half ${state}${ptoHalf ? " pto-half" : ""} ${span ? "span-all" : ""} ${sev ?? ""} ${selected ? "selected" : ""} ${compact ? "card" : ""}${ruler ? " has-ruler" : ""}${rail === "slim" ? " slim" : ""}${drop.cls}`}
       style={style}
       tabIndex={selected ? 0 : -1}

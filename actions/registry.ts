@@ -158,6 +158,7 @@ export const ACTIONS = [
   { name: "setup.mark", title: "Setup: record a step", group: "Settings", target: "none", summary: "Records a setup step as done or skipped, or closes the flow (the rest is skipped)" },
   { name: "setup.reset", title: "Setup: start over", group: "Settings", target: "none", summary: "Forgets your setup record so the flow shows again (dev and local only)" },
   { name: "ui.tour_offer", title: "Tour link", group: "Display", target: "none", summary: "Whether a person's first Today offers the 2-minute tour; { done: true } once they open it or say Not now; kept per person in the plan store" },
+  { name: "guide.checklist", title: "Your first day", group: "Help", target: "none", summary: "The Guide's first-day checklist: for each of seven checks whether it's done, to do or skipped (read only; never a PAT or token)", aka: ["checklist", "getting started"] },
   { name: "ui.set_reduce_motion", title: "Reduce motion", group: "Display", target: "none", summary: "No opening and closing animation and no moving Lumen; the still pose shows" },
   { name: "ui.set_text_size", title: "Text size", group: "Display", target: "none", shortcut: "Ctrl +", summary: "Default, Large or Larger for all text; saved in config" },
   { name: "ui.set_view_range", title: "Timelines", group: "Display", target: "range", shortcut: "V", summary: "The hours Week's rails and timelines show: business hours, 12 hours or 24 hours, for now; Settings > Display sets the default" },

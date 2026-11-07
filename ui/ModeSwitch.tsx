@@ -10,7 +10,7 @@ export function ModeSwitch({ tab, current, status = {}, counts = {}, badges = {}
   const modes = MODES[tab];
   if (modes.length < 2) return null;
   return (
-    <nav className="mode-switch" aria-label={`${TAB_NAMES[tab]} modes`}>
+    <nav className="mode-switch" aria-label={`${TAB_NAMES[tab]} modes`} data-tour={`modes-${tab}`}>
       {modes.map((m) => {
         const s = status[m] ?? null;
         const n = badges[m] ?? 0;
@@ -34,7 +34,7 @@ export function ModeArea({ children, done, note = null }: { children: React.Reac
     <div className="mode-area">
       {note && <span className="ma-note" role="status">{note}</span>}
       {done && (
-        <button type="button" className="done-btn" disabled={done.disabled} onClick={done.onClick} title={done.title ?? "Save and go back"}>
+        <button type="button" className="done-btn" data-tour="mode-done" disabled={done.disabled} onClick={done.onClick} title={done.title ?? "Save and go back"}>
           {done.label ?? "Done"}
         </button>
       )}
@@ -50,7 +50,7 @@ export function ModeArea({ children, done, note = null }: { children: React.Reac
 export function TimelineToggle({ shown, onToggle }: { shown: boolean; onToggle: () => void }) {
   const words = shown ? "Hide timeline" : "Show timeline";
   return (
-    <button type="button" className={`tl-toggle${shown ? " on" : ""}`} aria-pressed={shown} onClick={onToggle} title={`${words} (B)`} aria-label={words}>
+    <button type="button" data-tour="wk-timeline" className={`tl-toggle${shown ? " on" : ""}`} aria-pressed={shown} onClick={onToggle} title={`${words} (B)`} aria-label={words}>
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
         <rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="1.3" />
         <line x1="10" y1="2.5" x2="10" y2="13.5" stroke="currentColor" strokeWidth="1.3" />
