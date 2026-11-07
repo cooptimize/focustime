@@ -106,12 +106,12 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.close();
   }, T);
 
-  it("+ Add work on a Week card: the Board focused on that day and block", async () => {
+  it("+ Add to-do on a Week card: the Board focused on that day and block", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("2");
     const card = page.locator(".half", { hasText: "Northwind" }).first();
     await card.click({ position: { x: 12, y: 12 } });
-    await card.getByRole("button", { name: "+ Add work" }).click();
+    await card.getByRole("button", { name: "+ Add to-do" }).click();
     await page.locator(".pd2-right .pd2-pane-title", { hasText: "Northwind" }).waitFor();
     expect(await hash(page)).toMatch(/^#\/week\/day\/2026-11-0\d\/(AM|PM)$/);
     await page.close();

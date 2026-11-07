@@ -76,6 +76,44 @@ describe("weekFit", () => {
   });
 });
 
+describe("weekFit per column (WK-2)", () => {
+  const order = ["rail", "ruler", "strip", "mini"];
+  it("gives Friday the tier of its own width, not the working days'", () => {
+    // 1896 with no panel: Mon–Thu about 400 px (rail), Friday about 240 (strip), Dev's cramped case.
+    const f = fit(1896, false);
+    expect(f.tier).toBe("rail");
+    expect(f.days.slice(0, 4).every((d) => d.tier === "rail")).toBe(true);
+    expect(f.days[4]!.tier).toBe(tierFor(f.col * 0.6) as string);
+    expect(f.days[4]!.tier).not.toBe("rail");
+  });
+  it("gives a PTO day and Friday their own tier, never wider than a working day's", () => {
+    for (const w of [2560, 1920, 1600, 1440, 1366, 1280, 1024])
+      for (const panel of [false, true])
+        for (const s of [1, LARGER]) {
+          const f = fit(w, panel, PTO_THU, s);
+          f.days.forEach((d, i) => {
+            if (!f.open[i]) return;
+            const own = tierFor(f.col * Math.min(1, PTO_THU[i]!), s);
+            expect(d.tier).toBe(own === "fold" ? "mini" : own);
+            expect(order.indexOf(d.tier)).toBeGreaterThanOrEqual(order.indexOf(f.tier));
+          });
+        }
+  });
+  it("sizes each column's rail from its own width, 140 to 186 px", () => {
+    const f = fit(2560, false);
+    expect(f.days[0]!.railPx).toBe(186);
+    expect(f.days[4]!.railPx).toBeGreaterThanOrEqual(140);
+    expect(f.days[4]!.railPx).toBeLessThanOrEqual(186);
+    expect(f.days[4]!.railPx).toBeLessThanOrEqual(f.days[0]!.railPx);
+  });
+  it("keeps the open days' tiers when the week folds", () => {
+    const f = fit(1024, true, PLAIN, 1, 4);
+    expect(f.open).toEqual([false, false, true, true, true]);
+    expect(f.days[2]!.tier).toBe(f.tier);
+    expect(order.indexOf(f.days[4]!.tier)).toBeGreaterThanOrEqual(order.indexOf(f.tier));
+  });
+});
+
 describe("dayShare", () => {
   it("gives PTO and Friday the light share and the planned day the wide one", () => {
     expect(dayShare({ kind: "work" }, false)).toBe(1);
