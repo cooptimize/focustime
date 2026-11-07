@@ -187,7 +187,7 @@ Tokens, in every theme (`ui/styles.css`, domain layer):
 
 Neutral uses the dark values in dark mode and the light values in light mode. The brief's full surface and text palette is not applied (Q93).
 
-Components (`ui/brand/`, docs/design/brand.md): `WeekMark` (top bar, about 18 px tall), `BentMark` (sign-in), `Lockup` (About), `Lumen` (`pose` still, idle or bob), `LumenLoading` (the loader), `Unroll` (`direction` open or close), and the overlays `Opening`, `CloseReverse`, `MomentOverlay`, plus `EmptyState` (idle Lumen, one line, one action) and `InlineMoment`. Every mark is decorative (`aria-hidden`); the words beside it carry the meaning.
+Components (`ui/brand/`, docs/design/brand.md): `WeekMark` (top bar, about 18 px tall), `BentMark` (sign-in), `Lockup` (About), `Lumen` (`pose` still, idle or bob), `LumenLoading` (the loader), `Unroll` (`direction` open or close), and the overlays `Opening`, `CloseReverse`, `MomentOverlay`, plus `InlineMoment`. Every mark is decorative (`aria-hidden`); the words beside it carry the meaning.
 
 ## 5. Core components
 

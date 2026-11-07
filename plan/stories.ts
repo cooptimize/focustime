@@ -159,7 +159,6 @@ export function houseStyle(pool: readonly ExemplarCandidate[]): { text: string; 
 /** A computed house style is reused for a week, then computed again (an edited one is kept until reset). */
 export const HOUSE_STYLE_DAYS = 7;
 export const houseStyleStale = (computedAt: string, now: string) => Temporal.Instant.compare(Temporal.Instant.from(computedAt).add({ hours: HOUSE_STYLE_DAYS * 24 }), Temporal.Instant.from(now)) <= 0;
-export const HOUSE_STYLE_MAX = 1_200;
 
 // ---------- the request ----------
 

@@ -1,5 +1,5 @@
 import { formatRange, toZoned } from "../week/format.ts";
-import type { CalEvent, Half, Risk, RiskRule, Slot } from "../week/types.ts";
+import type { CalEvent, Half, RiskRule, Slot } from "../week/types.ts";
 
 // Calm fallbacks for clients without a configured color, picked stably from the key. Domain tokens
 // (ui/styles.css), so a theme can change them; a configured color is used as is.
@@ -22,8 +22,6 @@ export const ruleLabel: Record<RiskRule, string> = {
   no_focus_window: "No focus window",
   double_booked_block: "Double-booked",
 };
-
-export const severityLabel = (r: Risk) => (r.severity === "at_risk" ? "At risk" : "Watch");
 
 export function eventRange(e: CalEvent, tz: string): string {
   if (e.allDay) return "All day";

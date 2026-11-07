@@ -94,6 +94,3 @@ export function applyOrg(cfg: AppConfig, rules: OrgRules, who: PersonOrg): AppCo
     org,
   };
 }
-
-/** The DevOps states a client's items count as open although DevOps files them as done (a Rule). */
-export const openStatesOf = (cfg: AppConfig, clientKey: string): string[] => cfg.org?.clients[clientKey]?.openStates ?? cfg.clientSettings[clientKey]?.openStates ?? [];

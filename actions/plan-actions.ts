@@ -21,7 +21,6 @@ export const PLAN_ACTIONS = ["planday.start", "planday.carry", "planday.commit",
 export const CARRY_HINT = "carry_hint";
 
 export type PlanAction = (typeof PLAN_ACTIONS)[number];
-export const isPlanAction = (a: unknown): a is PlanAction => typeof a === "string" && (PLAN_ACTIONS as readonly string[]).includes(a);
 
 export type PlanContext = {
   plan: PlanStore | undefined;

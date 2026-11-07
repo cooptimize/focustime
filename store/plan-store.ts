@@ -3,9 +3,7 @@
 // Nothing here is ever written to DevOps, Outlook, Google or Dataverse.
 import { isOwner, type Owner } from "../plan/follow-who.ts";
 import type { ChangeField, ChangeValue, DayHalf, StagedChange } from "../plan/ahead-edit.ts";
-import { ASK_STATUSES, type Ask, type AskRule, type AskStatus, type StoredMessage } from "../plan/asks.ts";
-import { PROMISE_STATUSES, type AskSort, type NotSorted, type PromiseDraft, type PromiseStatus, type StoredPromise } from "../plan/asks-ai.ts";
-import { CHAT_ID, CHAT_KINDS, type ChatKind, type ChatMember, type DeliveryChat } from "../plan/chats.ts";
+import { PROMISE_STATUSES, type NotSorted, type PromiseDraft, type PromiseStatus, type StoredPromise } from "../plan/asks-ai.ts";
 import { USER_SCHEMA_VERSION } from "./user-data.ts";
 import type { StoreFiles } from "../host/types.ts";
 import { DatabaseSync } from "node:sqlite";
@@ -1340,8 +1338,6 @@ import type { CarryDecisionRow, WeekFeature, WeekPlanRecord, WeekWatch } from ".
 export type NewWeekFeature = { weekStart: IsoDate; clientKey: string; itemId: number; title: string; itemType: string | null; url: string | null; /** Minutes (whole hours); 0 takes it off. */ estimate: number };
 export type NewWeekItem = Omit<NewWeekFeature, "estimate"> & { level: ItemLevel; tier?: Tier; /** Features: an estimate in minutes (whole hours), or null for 4h. */ estimate?: number | null; size?: StorySize | null; parentId?: number | null };
 
-/** Most hours one feature can take in a week (E2). */
-export const MAX_FEATURE_HOURS = MAX_ESTIMATE_HOURS;
 const ESTIMATE_ERROR = `an estimate must be whole hours, 1 to ${MAX_ESTIMATE_HOURS}`;
 
 export type Borrowed = {
@@ -1460,25 +1456,6 @@ const toDevopsWrite = (r: Row): DevOpsWriteEntry => ({
 const OLD_WRITE_OPS = ["state", "comment", "create", "target_date", "undo_state", "undo_comment", "undo_create", "undo_target_date"] as const;
 export type NewDevOpsWrite = Omit<DevOpsWriteEntry, "id" | "at" | "status" | "message" | "undoneBy" | "attempts" | "updatedAt" | "pickIds"> & { pickIds?: number[] };
 
-/** T-2: a stored client chat (its kind from T-2.1; null on rows from before). */
-const toDeliveryChat = (r: Row): DeliveryChat => ({
-  clientKey: r.client_key as string,
-  chatId: r.chat_id as string,
-  displayName: r.display_name as string,
-  webUrl: (r.web_url as string | null) ?? null,
-  kind: CHAT_KINDS.includes(r.chat_kind as ChatKind) ? (r.chat_kind as ChatKind) : null,
-  members: typeof r.members_json === "string" ? (JSON.parse(r.members_json) as ChatMember[]) : null,
-  membersFetchedAt: (r.members_fetched_at as string | null) ?? null,
-  asks: {
-    on: !!r.asks_on,
-    since: instantText(r.asks_since),
-    seenAt: instantText(r.asks_seen_at),
-    polledAt: instantText(r.asks_polled_at),
-    retryAt: instantText(r.asks_retry_at),
-    failures: (r.asks_failures as number | null) ?? 0,
-    status: (r.asks_status as string | null) ?? null,
-  },
-});
 /** AP-1: an instant column as ISO text with Z (SQLite keeps what was written; SQL Server reads it back). */
 const instantText = (v: unknown): string | null => (typeof v === "string" && v ? Temporal.Instant.from(v).toString() : null);
 /** AI-0: a request log row (never any text but the task's fixed name and the error kind). */
@@ -1497,35 +1474,6 @@ const toAiRequest = (r: Row): AiLogEntry => ({
   tier: r.tier === "flex" ? "flex" : "standard",
 });
 
-const toAsk = (r: Row): Ask => ({
-  chatId: r.chat_id as string,
-  messageId: r.message_id as string,
-  clientKey: r.client_key as string,
-  rule: r.ask_rule as AskRule,
-  ruleDetail: (r.rule_detail as string | null) ?? null,
-  status: r.status as AskStatus,
-  itemId: (r.item_id as number | null) ?? null,
-  itemUrl: (r.item_url as string | null) ?? null,
-  itemTitle: (r.item_title as string | null) ?? null,
-  note: (r.note as string | null) ?? null,
-  writeId: (r.write_id as number | null) ?? null,
-  resolvedAt: instantText(r.resolved_at),
-  createdAt: instantText(r.created_at)!,
-  sortStatus: (r.ai_status as Ask["sortStatus"] | null) ?? null,
-  sort:
-    r.ai_status === "sorted" && r.ai_kind
-      ? {
-          kind: r.ai_kind as AskSort["kind"],
-          urgency: r.ai_urgency as AskSort["urgency"],
-          itemType: (r.ai_item_type as AskSort["itemType"] | null) ?? null,
-          title: (r.ai_title as string | null) ?? "",
-          description: (r.ai_description as string | null) ?? "",
-          likely: r.ai_item_id !== null && r.ai_item_id !== undefined ? { id: Number(r.ai_item_id), confidence: Number(r.ai_item_confidence ?? 0) } : null,
-          reason: (r.ai_reason as string | null) ?? "",
-        }
-      : null,
-  shown: !!r.ai_shown,
-});
 const toPromise = (r: Row): StoredPromise => ({
   chatId: r.chat_id as string,
   messageId: r.message_id as string,
@@ -1545,24 +1493,6 @@ const toPromise = (r: Row): StoredPromise => ({
   resolvedAt: instantText(r.resolved_at),
   createdAt: instantText(r.created_at)!,
 });
-const toMessage = (r: Row): StoredMessage => ({
-  chatId: r.chat_id as string,
-  messageId: r.message_id as string,
-  clientKey: r.client_key as string,
-  authorId: (r.author_id as string | null) ?? null,
-  authorTenant: (r.author_tenant as string | null) ?? null,
-  createdAt: instantText(r.created_at)!,
-  text: r.body_text as string,
-  hasImage: !!r.has_image,
-  hasFile: !!r.has_file,
-  replyToId: (r.reply_to_id as string | null) ?? null,
-});
-const MESSAGE_ID = /^[0-9A-Za-z_\-.:]{1,64}$/;
-const short = (v: string | null | undefined, n: number): string | null => (typeof v === "string" && v ? v.slice(0, n) : null);
-function checkDeliveryChat(clientKey: string, chatId: string): void {
-  if (typeof clientKey !== "string" || !clientKey.trim() || clientKey.length > 100) throw new PlanError("Unknown client");
-  if (!CHAT_ID.test(chatId)) throw new PlanError("Not a Teams chat id");
-}
 
 const toCapture = (r: Row): Capture => ({
   id: r.id as number,
@@ -3013,87 +2943,6 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async resetSetup(): Promise<void> {
       return tx(async () => void (await db.run("DELETE FROM setup_state")));
     },
-    /** T-2: every client chat I registered, by client and in the order they were added. */
-    async deliveryChats(): Promise<DeliveryChat[]> {
-      return ((await db.all("SELECT * FROM delivery_chats ORDER BY client_key, position")) as Row[]).map(toDeliveryChat);
-    },
-    /**
-     * AP-1: registers a chat for a client, labelled with a kind (Delivery team or Customer collaboration). A client can
-     * have several chats; a chat belongs to one client only: one registered for another client is refused. The same
-     * chat for the same client keeps its place and takes the kind given.
-     */
-    async addDeliveryChat(clientKey: string, kind: ChatKind, c: { chatId: string; displayName: string; webUrl: string | null }): Promise<DeliveryChat> {
-      checkDeliveryChat(clientKey, c.chatId);
-      if (!CHAT_KINDS.includes(kind)) throw new PlanError("Not a kind of chat");
-      const name = c.displayName.trim().slice(0, 400) || "Group chat";
-      const webUrl = c.webUrl && /^https:\/\/teams\.microsoft\.com\//.test(c.webUrl) && c.webUrl.length <= 2000 ? c.webUrl : null;
-      return tx(async () => {
-        const had = (await db.get("SELECT * FROM delivery_chats WHERE chat_id = ?", c.chatId)) as Row | undefined;
-        if (had && had.client_key !== clientKey) throw new PlanError("That chat is already registered for another client");
-        const at = stamp();
-        if (had) {
-          if (had.chat_kind !== kind) await db.run("UPDATE delivery_chats SET chat_kind = ?, updated_at = ? WHERE chat_id = ?", kind, at, c.chatId);
-        } else {
-          const last = (await db.get("SELECT MAX(position) AS p FROM delivery_chats WHERE client_key = ?", clientKey)) as Row;
-          await db.run(
-            "INSERT INTO delivery_chats (chat_id, client_key, display_name, web_url, chat_kind, is_primary, position, members_json, members_fetched_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, NULL, NULL, ?, ?)",
-            c.chatId, clientKey, name, webUrl, kind, (last.p === null || last.p === undefined ? -1 : Number(last.p)) + 1, at, at,
-          );
-        }
-        return toDeliveryChat((await db.get("SELECT * FROM delivery_chats WHERE chat_id = ?", c.chatId)) as Row);
-      });
-    },
-    /** AP-1: changes a registered chat's kind label. */
-    async setDeliveryChatKind(chatId: string, kind: ChatKind): Promise<void> {
-      if (!CHAT_ID.test(chatId)) throw new PlanError("Not a Teams chat id");
-      if (!CHAT_KINDS.includes(kind)) throw new PlanError("Not a kind of chat");
-      return tx(async () => {
-        const r = await db.run("UPDATE delivery_chats SET chat_kind = ?, updated_at = ? WHERE chat_id = ?", kind, stamp(), chatId);
-        if (!r.changes) throw new PlanError("That chat isn't registered");
-      });
-    },
-    /** T-2: forgets one client chat. */
-    async removeDeliveryChat(chatId: string): Promise<void> {
-      if (!CHAT_ID.test(chatId)) throw new PlanError("Not a Teams chat id");
-      // AP-1: its stored messages and asks go with it (the DevOps items made from them stay in DevOps).
-      return tx(async () => {
-        await db.run("DELETE FROM asks WHERE chat_id = ?", chatId);
-        await db.run("DELETE FROM promises WHERE chat_id = ?", chatId);
-        await db.run("DELETE FROM chat_messages WHERE chat_id = ?", chatId);
-        await db.run("DELETE FROM delivery_chats WHERE chat_id = ?", chatId);
-      });
-    },
-    /** T-2: the chat's members as just read from Teams (names, addresses, tenants; never messages), and when. */
-    async setDeliveryChatMembers(chatId: string, members: readonly ChatMember[], fetchedAt: string, displayName?: string): Promise<void> {
-      if (!CHAT_ID.test(chatId)) throw new PlanError("Not a Teams chat id");
-      if (members.length > 1000) throw new PlanError("Too many members");
-      const clean = members.map((m) => ({ userId: short(m.userId, 64), displayName: short(m.displayName, 200), email: short(m.email, 320), tenantId: short(m.tenantId, 64), ...(m.guest ? { guest: true } : {}) }));
-      return tx(async () => {
-        const name = displayName?.trim() ? displayName.trim().slice(0, 400) : null;
-        if (name) await db.run("UPDATE delivery_chats SET members_json = ?, members_fetched_at = ?, display_name = ?, updated_at = ? WHERE chat_id = ?", JSON.stringify(clean), fetchedAt, name, stamp(), chatId);
-        else await db.run("UPDATE delivery_chats SET members_json = ?, members_fetched_at = ?, updated_at = ? WHERE chat_id = ?", JSON.stringify(clean), fetchedAt, stamp(), chatId);
-      });
-    },
-    /** AP-1: Read for asks on (from now: no backfill) or off. The chat's stored messages and asks stay. */
-    async setAsksOn(chatId: string, on: boolean, nowIso: string): Promise<void> {
-      if (!CHAT_ID.test(chatId)) throw new PlanError("Not a Teams chat id");
-      const now = Temporal.Instant.from(nowIso).toString();
-      return tx(async () => {
-        const r = on
-          ? await db.run("UPDATE delivery_chats SET asks_on = 1, asks_since = ?, asks_seen_at = ?, asks_polled_at = NULL, asks_retry_at = NULL, asks_failures = 0, asks_status = NULL, updated_at = ? WHERE chat_id = ?", now, now, stamp(), chatId)
-          : await db.run("UPDATE delivery_chats SET asks_on = 0, asks_retry_at = NULL, asks_failures = 0, asks_status = NULL, updated_at = ? WHERE chat_id = ?", stamp(), chatId);
-        if (!r.changes) throw new PlanError("That chat isn't registered");
-      });
-    },
-    /** AP-1: after reading a chat: when, the newest message seen, and a failure's wait and plain status (or none). */
-    async recordAsksRead(chatId: string, r: { polledAt: string; seenAt?: string; retryAt: string | null; failures: number; status: string | null }): Promise<void> {
-      if (!CHAT_ID.test(chatId)) throw new PlanError("Not a Teams chat id");
-      const iso = (x: string) => Temporal.Instant.from(x).toString();
-      return tx(async () => {
-        if (r.seenAt) await db.run("UPDATE delivery_chats SET asks_seen_at = ? WHERE chat_id = ? AND asks_on = 1", iso(r.seenAt), chatId);
-        await db.run("UPDATE delivery_chats SET asks_polled_at = ?, asks_retry_at = ?, asks_failures = ?, asks_status = ? WHERE chat_id = ? AND asks_on = 1", iso(r.polledAt), r.retryAt ? iso(r.retryAt) : null, Math.max(0, Math.min(r.failures, 100)), r.status ? r.status.slice(0, 400) : null, chatId);
-      });
-    },
     /** AI-0: one AI request in the person's log: counts, cost and outcome, never the prompt or the answer. */
     async addAiRequest(e: AiLogEntry): Promise<void> {
       await tx(async () => {
@@ -3199,82 +3048,6 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       }
       return out;
     },
-    /** AP-1: new messages of a chat, only the listed fields; ones already stored are left as they are. How many were new. */
-    async addChatMessages(ms: readonly StoredMessage[]): Promise<number> {
-      return tx(async () => {
-        let added = 0;
-        for (const m of ms) {
-          if (!CHAT_ID.test(m.chatId) || !MESSAGE_ID.test(m.messageId)) throw new PlanError("Not a Teams message");
-          if (await db.get("SELECT 1 AS x FROM chat_messages WHERE chat_id = ? AND message_id = ?", m.chatId, m.messageId)) continue;
-          await db.run("INSERT INTO chat_messages (chat_id, message_id, client_key, author_id, author_tenant, created_at, body_text, has_image, has_file, reply_to_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            m.chatId, m.messageId, m.clientKey, short(m.authorId, 64), short(m.authorTenant, 64), Temporal.Instant.from(m.createdAt).toString(), m.text.slice(0, 28_000), m.hasImage ? 1 : 0, m.hasFile ? 1 : 0, short(m.replyToId, 64));
-          added++;
-        }
-        return added;
-      });
-    },
-    /** AP-1: one stored message, or null. */
-    async chatMessage(chatId: string, messageId: string): Promise<StoredMessage | null> {
-      const r = (await db.get("SELECT * FROM chat_messages WHERE chat_id = ? AND message_id = ?", chatId, messageId)) as Row | undefined;
-      return r ? toMessage(r) : null;
-    },
-    /** AP-1: Show context: up to `n` messages of the same chat before this time, oldest first. */
-    async messagesBefore(chatId: string, beforeIso: string, n: number): Promise<StoredMessage[]> {
-      const rows = (await db.all("SELECT * FROM chat_messages WHERE chat_id = ? AND created_at < ? ORDER BY created_at DESC LIMIT ?", chatId, Temporal.Instant.from(beforeIso).toString(), Math.max(1, Math.min(n, 20)))) as Row[];
-      return rows.map(toMessage).reverse();
-    },
-    /** AP-1: a matched message becomes an open ask (once: a second time changes nothing). */
-    async addAsk(a: { chatId: string; messageId: string; clientKey: string; rule: AskRule; ruleDetail: string | null; at: string }): Promise<boolean> {
-      return tx(async () => {
-        if (await db.get("SELECT 1 AS x FROM asks WHERE chat_id = ? AND message_id = ?", a.chatId, a.messageId)) return false;
-        const now = opts.now().toInstant().toString({ smallestUnit: "second" });
-        await db.run("INSERT INTO asks (chat_id, message_id, client_key, ask_rule, rule_detail, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'open', ?, ?)", a.chatId, a.messageId, a.clientKey, a.rule, a.ruleDetail?.slice(0, 100) ?? null, Temporal.Instant.from(a.at).toString(), now);
-        return true;
-      });
-    },
-    /** AP-1: every ask, newest message first (open ones and resolved ones, for Undo). */
-    async asks(): Promise<Ask[]> {
-      return ((await db.all("SELECT * FROM asks ORDER BY created_at DESC")) as Row[]).map(toAsk);
-    },
-    async ask(chatId: string, messageId: string): Promise<Ask | null> {
-      const r = (await db.get("SELECT * FROM asks WHERE chat_id = ? AND message_id = ?", chatId, messageId)) as Row | undefined;
-      return r ? toAsk(r) : null;
-    },
-    /**
-     * AP-1: how an ask ends (created, linked, handled, dismissed) with the item and note, or back to open (Undo). An
-     * ask already resolved isn't resolved again: open it first.
-     */
-    async resolveAsk(chatId: string, messageId: string, r: { status: AskStatus; itemId?: number | null; itemUrl?: string | null; itemTitle?: string | null; note?: string | null; writeId?: number | null }): Promise<Ask> {
-      if (!ASK_STATUSES.includes(r.status)) throw new PlanError("Not a resolution");
-      return tx(async () => {
-        const had = await this.ask(chatId, messageId);
-        if (!had) throw new PlanError("No such ask");
-        if (r.status !== "open" && had.status !== "open") throw new PlanError(had.status === "created" && had.itemId ? `Already in DevOps as #${had.itemId}` : "This ask is already resolved");
-        const now = opts.now().toInstant().toString({ smallestUnit: "second" });
-        await db.run("UPDATE asks SET status = ?, item_id = ?, item_url = ?, item_title = ?, note = ?, write_id = ?, resolved_at = ?, updated_at = ? WHERE chat_id = ? AND message_id = ?",
-          r.status, r.itemId ?? null, r.itemUrl?.slice(0, 2000) ?? null, r.itemTitle?.slice(0, 400) ?? null, r.note?.slice(0, 1000) ?? null, r.writeId ?? null, r.status === "open" ? null : now, now, chatId, messageId);
-        return (await this.ask(chatId, messageId))!;
-      });
-    },
-    /**
-     * AP-2: the AI's sort of an ask (what the card shows), or why it wasn't sorted (sort null). Sorting again replaces
-     * it; the resolution and "Show it anyway" are left alone.
-     */
-    async setAskSort(chatId: string, messageId: string, status: "sorted" | NotSorted, sort: AskSort | null): Promise<void> {
-      if (status === "sorted" && !sort) throw new PlanError("A sorted ask needs its sort");
-      await tx(async () => {
-        const at = opts.now().toInstant().toString({ smallestUnit: "second" });
-        const v = status === "sorted" ? sort : null;
-        await db.run("UPDATE asks SET ai_status = ?, ai_at = ?, ai_kind = ?, ai_urgency = ?, ai_item_type = ?, ai_title = ?, ai_description = ?, ai_item_id = ?, ai_item_confidence = ?, ai_reason = ?, updated_at = ? WHERE chat_id = ? AND message_id = ?",
-          status.slice(0, 20), at, v?.kind ?? null, v?.urgency ?? null, v?.itemType ?? null, v?.title.slice(0, 200) ?? null, v?.description.slice(0, 2000) ?? null, v?.likely?.id ?? null, v?.likely?.confidence ?? null, v?.reason.slice(0, 400) ?? null, at, chatId, messageId);
-      });
-    },
-    /** AP-2: "Show it anyway" for an ask the AI said needs no action (or back to hidden). */
-    async setAskShown(chatId: string, messageId: string, shown: boolean): Promise<void> {
-      await tx(async () => {
-        await db.run("UPDATE asks SET ai_shown = ?, updated_at = ? WHERE chat_id = ? AND message_id = ?", shown ? 1 : 0, opts.now().toInstant().toString({ smallestUnit: "second" }), chatId, messageId);
-      });
-    },
     /** AP-2: one of my messages the promise rules matched becomes an open promise (once). */
     async addPromise(p: { chatId: string; messageId: string; clientKey: string; phrase: string | null; at: string; draft: PromiseDraft; aiStatus: "sorted" | NotSorted | null }): Promise<boolean> {
       return tx(async () => {
@@ -3319,18 +3092,11 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     },
     /**
      * AP-1, the daily cleanup: messages older than the cutoff that didn't become asks are deleted (asks keep theirs).
-     * With a client key, every stored message and ask of that client goes (the runbook's purge). How many messages went.
+     * CL-1: nothing writes chat_messages or asks any more (messages live once in teams_messages); this keeps the
+     * 14-day rule for the rows still there until a later release drops both tables. How many messages went.
      */
-    async purgeChatText(o: { olderThan?: string; clientKey?: string }): Promise<number> {
+    async purgeChatText(o: { olderThan: string }): Promise<number> {
       return tx(async () => {
-        if (o.clientKey) {
-          const n = ((await db.get("SELECT COUNT(*) AS n FROM chat_messages WHERE client_key = ?", o.clientKey)) as Row).n as number;
-          await db.run("DELETE FROM asks WHERE client_key = ?", o.clientKey);
-          await db.run("DELETE FROM promises WHERE client_key = ?", o.clientKey);
-          await db.run("DELETE FROM chat_messages WHERE client_key = ?", o.clientKey);
-          return Number(n);
-        }
-        if (!o.olderThan) return 0;
         const cut = Temporal.Instant.from(o.olderThan).toString();
         // AP-2: an ask the AI said needs no action, still hidden and open, goes under the same 14-day rule.
         await db.run("DELETE FROM asks WHERE ai_kind = 'none' AND ai_status = 'sorted' AND ai_shown = 0 AND status = 'open' AND created_at < ?", cut);

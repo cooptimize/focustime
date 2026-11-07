@@ -183,11 +183,3 @@ export function summaryLine(rows: readonly InboxItemView[], today: string): { n:
     { n: asked, text: "asked of you", tone: "ask" as const },
   ].filter((x) => x.n > 0);
 }
-
-/**
- * Old Inbox addresses to an item key (they keep working): a conversation (#/inbox/conversation/<id>), a promise found
- * in a chat (#/inbox/promise/<id>) and a follow-up (#/inbox/<id>, now a promise).
- */
-export function keyOfOldLink(kind: "conversation" | "promise" | "followup", id: number): string {
-  return kind === "conversation" ? `v${id}` : kind === "promise" ? `c${id}` : `f${id}`;
-}

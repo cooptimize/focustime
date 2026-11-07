@@ -23,19 +23,7 @@ export type JsonSchema = {
 };
 export type JsonType = "string" | "number" | "integer" | "boolean" | "object" | "array" | "null";
 
-/** "none": an internal-only task that carries no client's data (Test AI, for one). */
-export type AiClient = string | "none";
 export const NO_CLIENT = "none";
-
-export type AiTask = {
-  /** A short fixed name for the log (test_ai, classify_ask, ...). Never the input. */
-  name: string;
-  client: AiClient;
-  /** The system instructions: fixed text written in the code, never anyone's data. */
-  instructions: string;
-  /** What the task is about: the only place data goes. Scanned by the guards. */
-  input: string;
-};
 
 /** Every way a run can fail, each with a plain message the UI can show as is. */
 export type AiErrorKind =

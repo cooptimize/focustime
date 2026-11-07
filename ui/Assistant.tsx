@@ -17,15 +17,6 @@ type Outcome = { tone: "ok" | "warn"; text: string; undo?: { clientKey: string; 
 
 const fromTurn = (t: Turn): Entry => ({ id: `t${t.id}`, role: t.role, text: t.text, cards: t.cards, proposals: t.proposals, links: [] });
 
-/** The top bar's assistant mark on the phone: a speech bubble. */
-export function AssistantMark(): ReactNode {
-  return (
-    <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">
-      <path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5H9l-3.5 3v-3H4A1.5 1.5 0 0 1 2.5 13V6A1.5 1.5 0 0 1 4 4.5z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 export const ASSISTANT_VOICE_PATH = "/api/assistant/transcribe";
 export const COMMANDS_HREF = "#/commands";
 

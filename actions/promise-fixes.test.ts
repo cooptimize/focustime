@@ -96,8 +96,8 @@ describe("Create the DevOps item? for a promise with no conversation", () => {
   });
 });
 
-describe("Make it a follow-up", () => {
-  it("keeps the person it was made to, names the promise, and is amber 'Was due' past its due", async () => {
+describe("a promise's follow-up (made before IB-1; CL-1: the action that made one is gone)", () => {
+  it("names the promise and is amber 'Was due' past its due", async () => {
     const w = world({ allowed: [] });
     const ask = await w.say(CHAT, BLAKE, "2026-11-03T15:00:00Z", "Can you send the totals?");
     await w.run(CHAT, [ask, await w.say(CHAT, SAM, "2026-11-03T15:05:00Z", "I'll send them tomorrow", { replyToId: ask.messageId })]);
@@ -108,8 +108,7 @@ describe("Make it a follow-up", () => {
     const card = (await sam.run<MyPromisesData>("my_promises.list")).promises[0]!;
     expect(card.toRef).toEqual({ kind: "external", memberId: BLAKE.userId!.toLowerCase(), name: "Blake Novak" });
     expect(card.overdue).toBe(true);
-    const r = await sam.run<{ followUpId: number }>("my_promises.followup", { id: k.id, due: "2026-11-04" });
-    const f = (await sam.ctx.plan!.getFollowUp(r.followUpId))!;
+    const f = await sam.ctx.plan!.addFollowUp({ who: "Blake Novak", whoRef: card.toRef, what: k.what, due: "2026-11-04", clientKey: k.clientKey, channel: "teams", source: { kind: "promise", id: k.id } });
     expect(f).toMatchObject({ who: "Blake Novak", whoRef: card.toRef, sourceKind: "promise", sourceId: k.id });
     const v = await followUpView(sam.ctx.plan!, f, "2026-11-05", (x) => x);
     expect(v.dueState).toEqual({ level: "was_due", text: "Was due Wed, Nov 4", days: -1 });

@@ -1698,7 +1698,6 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "promises.list":
     case "promises.resolve":
     case "promises.reopen":
-    case "promises.followup":
     case "promises.link":
       return requestAction(await requestContext(ctx), action, req.input);
     case "admin.status":
@@ -1755,7 +1754,6 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "conversations.draft":
     case "my_promises.list":
     case "my_promises.today":
-    case "my_promises.followup":
     case "my_promises.link":
     case "my_promises.search":
     case "my_promises.done":

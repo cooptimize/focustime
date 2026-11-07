@@ -55,7 +55,6 @@ export type RhythmDeps = {
 };
 
 export const BLOCKED_KEY = "teams_blocked";
-export const BLOCKED_TEXT = "FocusTime can't message you in Teams. Add the app again.";
 
 // ---- Pacing ----
 

@@ -17,7 +17,7 @@ Step 17.5, Nov 2 2026. How the identity in `assets/brand/` is used in FocusTime.
 | `assets/brand/baked/{dark,light}/` | Every SVG with the tokens replaced by literal colors, for places without CSS |
 | `assets/brand/icons/focustime-{16..512}.png`, `mark-week-icon.svg` | The icon set (AM #2F5F8C, brighter than the dark token so it reads on dark panels) |
 | `assets/brand/tools/gen.py`, `outline.mjs`, `bake.py` | Generate, outline the text, bake (see Re-baking) |
-| `ui/brand/` | The components: `Brand.tsx` (WeekMark, BentMark, Lockup, Lumen, LumenLoading, Unroll), `Opening.tsx` (Opening, CloseReverse, MomentOverlay, EmptyState, InlineMoment), `geometry.ts`, `opening.ts`, `motion.ts`, `brand.css` |
+| `ui/brand/` | The components: `Brand.tsx` (WeekMark, BentMark, Lockup, Lumen, LumenLoading, Unroll), `Opening.tsx` (Opening, CloseReverse, MomentOverlay, InlineMoment), `geometry.ts`, `opening.ts`, `motion.ts`, `brand.css` |
 | `system/install-icons.sh` | Installs the icons into the user's hicolor theme, or removes them (`uninstall`) |
 
 The SVGs name their colors `--brand-am`, `--brand-pm`, `--accent`, `--lime`, `--ghost` and `--beam-blend`. In the app, `.brand-svg` maps them to the brand tokens (`--brand-accent`, `--mascot-highlight`, `--brand-ghost`, `--brand-beam-blend`); the asset's own `:root` block is dropped when it is inlined.

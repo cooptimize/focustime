@@ -113,7 +113,6 @@ export class ImageCache {
   }
 }
 const viewCache = new ImageCache();
-export const clearImageCache = () => viewCache.clear();
 
 /** What FocusTime's image endpoint answers: the stripped bytes, or a status with nothing about the image. */
 export type ServedImage = { status: 200; contentType: string; bytes: Uint8Array } | { status: 403 | 404 };

@@ -82,9 +82,6 @@ export function checklistFor(week: PlanWeek | null, date: IsoDate, half: Half): 
   return day.picks.filter((p) => p.half === half && (p.status === "planned" || p.status === "done"));
 }
 
-/** How many work items a card lists before "+N more". */
-export const CARD_ITEMS = 3;
-
 export type CardPlan = {
   /** The block's planned and done picks, committed or not (PV-1). */
   picks: Pick[];

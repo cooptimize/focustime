@@ -109,8 +109,6 @@ export type ChatChange = { at: string; byUser: string; clientKey: string; chatId
 /** CV-2: one image of a stored message. CV-4: FocusTime never keeps its bytes; it is read from Teams when needed. */
 export type MessageImage = { id: number; chatId: string; messageId: string; position: number; state: ImageState; reason: string | null; contentType: string | null; byteSize: number | null; attempts: number; /** CV-4: the AI's short description (at most 120 characters), only for chat members. */ description: string | null };
 export type ImageState = "pending" | "ok" | "skipped" | "failed";
-/** A failed fetch is tried again on later cycles, this many times in all. */
-export const IMAGE_ATTEMPTS = 3;
 const IMAGE_COLS = "id, chat_id, message_id, position, state, reason, content_type, byte_size, attempts, description";
 const toImage = (r: Row): MessageImage => ({
   id: Number(r.id), chatId: r.chat_id as string, messageId: r.message_id as string, position: Number(r.position), state: r.state as ImageState,

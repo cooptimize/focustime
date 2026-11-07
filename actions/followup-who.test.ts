@@ -2,12 +2,10 @@
 // message, my own @mention and me being the last speaker leave it to the asker or empty; a normal promise still gets
 // the right person; the one-time repair clears what was already saved (nothing deleted). Fictional names.
 import { describe, expect, it } from "vitest";
-import type { MyPromisesData } from "../plan/conversation-views.ts";
 import { isOwner, whoNotOwner } from "../plan/follow-who.ts";
 import { promiseFrom } from "../plan/asks-ai.ts";
 import { aChatMember, aClientChat, aPromiseAnswer, aTeamsMessage } from "../test/builders/index.ts";
 import { BLAKE, CHAT, EVAN, SAM, world } from "../test/conversations.ts";
-import { people } from "../test/conversation-people.ts";
 import { addUsers, forEachDriver } from "../test/db.ts";
 import { createAdminStore } from "../store/admin-store.ts";
 import { createConversationStore } from "../store/conversation-store.ts";
@@ -69,27 +67,6 @@ describe("to whom, from the chat (rules)", () => {
     const mine = await w.say(CHAT, SAM, "2026-11-04T21:00:00Z", "I'll send them tomorrow", { replyToId: ask.messageId });
     await w.run(CHAT, [ask, mine]);
     expect((await w.convs.commitmentsInChat(CHAT.chatId))[0]).toMatchObject({ toId: BLAKE.userId, toName: "Blake Novak" });
-  });
-});
-
-describe("Make it a follow-up", () => {
-  it("a Who that is me falls back to whom it was made to, then no one", async () => {
-    const w = world({ allowed: [] });
-    const ask = await w.say(CHAT, BLAKE, "2026-11-04T20:50:00Z", "Can you send the totals?");
-    const mine = await w.say(CHAT, SAM, "2026-11-04T21:00:00Z", "I'll send them tomorrow", { replyToId: ask.messageId });
-    await w.run(CHAT, [ask, mine]);
-    const k = (await w.convs.commitmentsInChat(CHAT.chatId))[0]!;
-    const sam = (await people(w)).as(SAM);
-    const r = await sam.run<{ followUpId: number }>("my_promises.followup", { id: k.id, who: "Sam Tester" });
-    expect((await sam.ctx.plan!.getFollowUp(r.followUpId))!).toMatchObject({ who: "Blake Novak" });
-
-    const solo = await w.say(CHAT, SAM, "2026-11-05T21:00:00Z", "I'll rerun the export tonight");
-    await w.run(CHAT, [solo]);
-    const k2 = (await w.convs.commitmentsInChat(CHAT.chatId)).find((x) => x.messageIds.includes(solo.messageId))!;
-    await w.convs.updateCommitment(k2.id, { toName: "Sam Tester" });
-    const r2 = await sam.run<{ followUpId: number }>("my_promises.followup", { id: k2.id });
-    expect((await sam.ctx.plan!.getFollowUp(r2.followUpId))!).toMatchObject({ who: null, whoRef: null });
-    expect((await sam.run<MyPromisesData>("my_promises.list")).promises.find((p) => p.id === k2.id)?.state).toBe("followup");
   });
 });
 

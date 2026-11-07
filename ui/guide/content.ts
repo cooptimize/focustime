@@ -11,8 +11,6 @@ export type ExampleColor = "blue" | "teal" | "violet" | "ochre";
 /** A key or keys from ui/keys.ts: by the command it mirrors, or by its first key when it has none. */
 export type KeyRef = { command: string } | { key: string };
 
-export const GUIDE_TITLE = "Guide";
-
 // ---------- Pools of questions, placed by area in SECTION_BODY below ----------
 
 /** The sizing try-it, in Week. */

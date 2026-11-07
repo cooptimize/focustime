@@ -1131,9 +1131,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       return { run: () => env.setView("conversations") };
     case "conversations.refresh": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.refresh", {})) };
     case "conversations.sort_unsorted": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.sort_unsorted", {})) };
-    case "my_promises.followup":
-    case "promises.followup":
-      return { disabled: "A promise does this itself now" };
     case "my_promises.list":
     case "my_promises.today":
     case "my_promises.start_draft":
@@ -1493,8 +1490,7 @@ function uiCommands(env: MenuEnv): MenuItem[] {
 /** Every command: window commands, then one per registered action (built from the registry). */
 export function commandList(env: MenuEnv): MenuItem[] {
   // IB-1: Make it a follow-up is gone from the UI (a promise does everything a follow-up did); the old actions stay for now.
-  const NOT_IN_MENU = new Set(["my_promises.followup", "promises.followup"]);
-  const fromRegistry = (ACTIONS as readonly ActionSpec[]).filter((a) => !NOT_IN_MENU.has(a.name)).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
+  const fromRegistry = (ACTIONS as readonly ActionSpec[]).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
   return [...uiCommands(env), ...fromRegistry];
 }
 
