@@ -13,7 +13,7 @@ import type { LogRecord } from "../../log/logger.ts";
 import type { TeamsBotStore } from "../../store/teams-bot-store.ts";
 import { SETTLED } from "../../store/teams-bot-store.ts";
 import { PROPOSAL_MINUTES, type AssistantService, type HandleResult, type Proposal, type TeamsContext } from "./assistant.ts";
-import { attach, cancelledCard, CARD_TYPE, doneCard, expiredCard, failedCard, helpCard, ownLinks, proposalCard, resultCard, tapOf, workingCard, type Card } from "./cards.ts";
+import { answeredCard, answerOf, attach, cancelledCard, CARD_TYPE, doneCard, expiredCard, failedCard, helpCard, ownLinks, proposalCard, questionCard, resultCard, tapOf, undoneCard, workingCard, type AnswerTap, type Card } from "./cards.ts";
 import { gate, refusalText, type GateDeps } from "./gate.ts";
 import { nextCard, quickOf, todayCard, type TodayFacts } from "./quick.ts";
 import { captureText } from "../../plan/teams-rhythm.ts";
@@ -190,8 +190,15 @@ export function createBotCore(d: BotDeps) {
     const links = ownLinks(r.links, d.publicUrl);
     if (links.length && !results.length) results.push(resultCard({ title: "In FocusTime", links }, d.publicUrl));
     if (results.length) await cards(to, results, r.reply || undefined);
-    else if (r.reply) await say(to, r.reply);
+    else if (r.reply && !r.question) await say(to, r.reply);
     const store = d.store(userId);
+    // AS-2: a question: one button per choice. Its row lets a tap answer it once (a second tap gets the same card).
+    if (r.question) {
+      const qid = `q${r.turnId.replace(/\D/g, "").slice(0, 12)}`;
+      await store.cardSent(qid, null, r.question.expiresAt, r.question.text.slice(0, 200));
+      const sent = await cards(to, [questionCard(r.question, qid)]);
+      await store.cardSent(qid, sent.id, r.question.expiresAt, r.question.text.slice(0, 200));
+    }
     for (const p of r.proposals.slice(0, 5)) {
       const expires = expiresOf(p);
       // The row exists before the card does, so a tap can never arrive for a card FocusTime doesn't know.
@@ -207,11 +214,15 @@ export function createBotCore(d: BotDeps) {
     // TB-2: a rhythm card's tap (Done, Not yet, Move…, Confirm inside the card) or a capture's Undo.
     const rt = d.rhythm?.tapOf(a.value);
     if (rt && d.rhythm) return d.rhythm.tap(userId, rt);
+    // AS-2: a choice on a question card answers it, once: the card shows the choice and the answer comes as a reply.
+    const ans = answerOf(a.value);
+    if (ans) return answerTap(ans, userId, to, a);
     const t = tapOf(a.value);
     if (!t) return { statusCode: 400, type: "application/vnd.microsoft.error", value: { code: "BadRequest", message: "Not a FocusTime card" } };
     const store = d.store(userId);
     const row = await store.card(t.proposalId);
     if (!row) return answer(failedCard("this card", "FocusTime doesn't know this card any more. Ask again for a fresh preview."));
+    if (t.ft === "undo") return undoTap(t.proposalId, row.title, row.state, userId);
     const title = row.title;
     if (SETTLED.has(row.state) && row.card) return d.log({ op: "tap", kind: "repeat" }), answer(row.card as Card);
     if (row.state === "running") return d.log({ op: "tap", kind: "in_progress" }), answer(workingCard(title));
@@ -241,7 +252,7 @@ export function createBotCore(d: BotDeps) {
       try {
         const r = await assistant.confirm({ person: { userId }, proposalId: t.proposalId });
         if (r.status === "ok") {
-          const c = doneCard({ title, message: r.message, undo: r.undo ?? null, links: r.links ?? [] }, d.publicUrl);
+          const c = doneCard({ title, message: r.message, undo: r.undo ?? null, links: r.links ?? [], ...(r.parts ? { parts: r.parts } : {}) }, d.publicUrl);
           await store.settle(t.proposalId, "done", c);
           d.log({ op: "tap", kind: "done" });
           return c;
@@ -278,6 +289,56 @@ export function createBotCore(d: BotDeps) {
       );
     d.log({ op: "tap", kind: "slow" });
     return answer(workingCard(title));
+  }
+
+  /** AS-2: a tapped choice: claimed once, the card becomes "You chose …", and the assistant's answer is a new reply. */
+  /**
+   * AS-2: Undo on a done card (the to-dos a confirmed move moved). The done card is settled, so the undo keeps its own
+   * row ("u" and the proposal id): one tap wins, a repeat shows the same result. The service refuses a second undo too.
+   */
+  async function undoTap(proposalId: string, title: string, state: string, userId: string): Promise<InvokeBody> {
+    const answer = (c: Card): InvokeBody => ({ statusCode: 200, type: CARD_TYPE, value: c });
+    if (state !== "done") return answer(failedCard(`Undo ${title}`, "Only a change that went through can be undone"));
+    const store = d.store(userId);
+    const key = `u${proposalId}`.slice(0, 100);
+    const seen = await store.card(key);
+    if (seen && SETTLED.has(seen.state) && seen.card) return d.log({ op: "tap", kind: "repeat" }), answer(seen.card as Card);
+    // Two taps at once may both insert: the second insert fails on the key, and its claim then loses.
+    if (!seen) await store.cardSent(key, null, d.now().add({ hours: 24 }).toString(), `Undo ${title}`).catch(() => undefined);
+    if (!(await store.claim(key))) {
+      const now = await store.card(key);
+      return d.log({ op: "tap", kind: "repeat" }), answer(now?.card ? (now.card as Card) : workingCard(`Undo ${title}`));
+    }
+    const assistant = d.assistant;
+    const r = assistant?.undo ? await assistant.undo({ person: { userId }, proposalId }).catch(() => ({ ok: false, message: WENT_WRONG })) : { ok: false, message: "Undo it in FocusTime" };
+    d.log({ op: "tap", kind: r.ok ? "undone" : "undo_refused" });
+    const c = r.ok ? undoneCard(title, r.message) : failedCard(`Undo ${title}`, r.message);
+    await store.settle(key, r.ok ? "done" : "failed", c);
+    return answer(c);
+  }
+
+  async function answerTap(t: AnswerTap, userId: string, to: Address | null, a: InActivity): Promise<InvokeBody> {
+    const answer = (c: Card): InvokeBody => ({ statusCode: 200, type: CARD_TYPE, value: c });
+    const store = d.store(userId);
+    const row = await store.card(t.questionId);
+    if (!row) return answer(failedCard("this question", "FocusTime doesn't know this question any more. Ask again."));
+    if (SETTLED.has(row.state) && row.card) return d.log({ op: "tap", kind: "repeat" }), answer(row.card as Card);
+    if (!(await store.claim(t.questionId))) {
+      const now = await store.card(t.questionId);
+      return d.log({ op: "tap", kind: "repeat" }), answer(now?.card ? (now.card as Card) : workingCard(row.title));
+    }
+    const chosen = answeredCard(row.title, t.label);
+    await store.settle(t.questionId, "done", chosen);
+    const assistant = d.assistant;
+    if (!assistant || !to) return answer(chosen);
+    background(
+      assistant.handle({ person: { userId }, channel: "teams", text: t.label, answer: t.value, context: context(a) }).then(
+        (r) => reply(to, userId, r),
+        () => say(to, WENT_WRONG).then(() => undefined),
+      ),
+    );
+    d.log({ op: "tap", kind: "answer" });
+    return answer(chosen);
   }
 
   return {

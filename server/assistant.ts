@@ -20,10 +20,11 @@ export function createAssistantHub(o: AssistantHubOptions): Assistant & { forCha
     return a.service;
   };
   const forChannel = (channel: Channel): Assistant => ({
-    handle: async (i) => (await service(i.person, i.channel ?? channel)).handle(i.text, i.context ?? {}),
+    handle: async (i) => (await service(i.person, i.channel ?? channel)).handle(i.text, i.context ?? {}, i.answer),
     confirm: async (i) => (await service(i.person, channel)).confirm(i.proposalId, i.edits ?? {}),
     cancel: async (i) => (await service(i.person, channel)).cancel(i.proposalId),
     propose: async (i) => (await service(i.person, channel)).propose(i.tool, i.args ?? {}),
+    undo: async (i) => (await service(i.person, channel)).undo(i.proposalId),
     transcribe: async (i) => assistantTranscribe(await o.ctxFor(i.person.userId), { audio: i.audio, mime: i.mime, seconds: i.seconds, ...(i.context ? { context: i.context } : {}) }),
     history: async (i) => (await service(i.person, channel)).history(i.limit ?? 50),
     clear: async (i) => (await service(i.person, channel)).clear(),

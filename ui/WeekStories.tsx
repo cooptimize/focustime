@@ -108,12 +108,12 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
           // past: Undo deletes the carried copy and plans the original again.
           const copy = r.pick && r.pick.id !== d.pickId ? r.pick.id : null;
           const back = copy !== null && (!from || from.date < data.planDay.date) ? async () => (await planAction("pick.uncarry", { id: copy }), onChanged()) : from ? async () => (await planAction("pick.move", { id: d.pickId, date: from.date, half: from.half, anyway: true }), onChanged()) : null;
-          note(`Moved to ${b.label}`, back);
+          note(`Moved to ${b.label}${r.note ? ` · ${r.note}` : ""}`, back);
         } else {
           const r = await planAction("pick.add", { date: b.date, half: b.half, clientKey: d.clientKey, itemId: d.itemId, ...(d.size ? { size: d.size } : {}) });
           onChanged();
           const id = r.pick?.id;
-          note(`Added to ${b.label}`, id ? async () => (await planAction("pick.remove", { id }), onChanged()) : null);
+          note(`Added to ${b.label}${r.note ? ` · ${r.note}` : ""}`, id ? async () => (await planAction("pick.remove", { id }), onChanged()) : null);
         }
       } catch (e) {
         note(errText(e));

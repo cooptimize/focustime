@@ -204,7 +204,8 @@ export async function endSession(): Promise<void> {
 }
 export const disconnectSource = (source: "outlook" | "google") => call<{ status: string }>("auth.disconnect", { source });
 
-export type PlanResult = { pick?: Pick; state?: PlanDayState; draft?: DraftStory; result?: string };
+/** AS-2: `note` is pick.move/pick.add's day note ("Friday is your catch-up day"), or null. */
+export type PlanResult = { pick?: Pick; state?: PlanDayState; draft?: DraftStory; result?: string; note?: string | null };
 /** Plan actions (step 5): local only. */
 export const planAction = (action: string, input: unknown) => call<PlanResult & PlanDayState>(action, input);
 

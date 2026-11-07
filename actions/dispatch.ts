@@ -1728,6 +1728,9 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "conversations.merge":
     case "conversations.unmerge":
     case "my_promises.start_draft":
+    case "conversations.search_items":
+    case "conversations.unlink":
+    case "my_promises.unlink":
       return conversationAction(await conversationContext(ctx), action, req.input);
     case "inbox.list":
     case "inbox.count":
@@ -1888,6 +1891,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "assistant.ask":
     case "assistant.confirm":
     case "assistant.cancel":
+    case "assistant.undo":
     case "assistant.history":
     case "assistant.clear":
     case "assistant.today":

@@ -8,9 +8,10 @@ end, with the date.
 
 | Call | Input | Output |
 |---|---|---|
-| `handle` | `{ person, channel, text, context? }` | `{ turnId, status, reply, cards, proposals, links }` |
+| `handle` | `{ person, channel, text, context?, answer? }` | `{ turnId, status, reply, cards, proposals, links }` |
 | `confirm` | `{ person, proposalId, edits? }` | `{ ok: true, result, undo?, message }` or `{ ok: false, reason, message, proposal? }` |
 | `cancel` | `{ person, proposalId }` | `{ ok: true }` |
+| `undo` | `{ person, proposalId }` | `{ ok: true, message, notBack }` or `{ ok: false, message }` (AS-2: a confirmed move) |
 | `transcribe` | `{ person, audio, mime, seconds, context? }` | `{ ok: true, text }` or `{ ok: false, reason, message }` |
 | `history` | `{ person, limit? }` | `Turn[]`, newest last |
 | `clear` | `{ person }` | `{ ok: true, removed }` |
@@ -68,6 +69,41 @@ allowlist, a fresh preview). It returns `{ ok: true, proposal }` or `{ ok: false
 `item`, `block`, `pick`, `send`, `promise` and `note`, each with a `link`. A front end that can't show a card shows
 its title and link.
 
+## Questions with choices (AS-2)
+
+When a choice is missing (which client, which to-dos, which item, which block), `handle` answers with a `question`
+card instead of giving up: `{ kind: "question", text, choices: [{ label, value }], expiresAt }`. The server builds the
+choices from my own data only (client names, dates, blocks and counts, item ids and titles of my own items), never
+from chat text; "or just type it" is always allowed.
+
+- The panel shows the choices as chips on the last answer while it is open; Teams shows one button per choice
+  (`verb: "answer"`, `{ questionId: "q<turn id>", value, label }`), claimed once in `teams_bot_cards`.
+- A tap sends `handle({ text: label, answer: value })`; typed words answer it too (a number, "the second", "all", or
+  words that match one choice). The question is kept on its assistant turn (`assistant_turns.pending_json`) and
+  waits 10 minutes (`QUESTION_MINUTES`). After that, or when my next message clearly asks something new, the request
+  starts fresh.
+- Nothing from any client goes to the AI until a client is chosen. After a question, the reply is never the list
+  of what the assistant can do: it asks again ("I still need to know: …") or says why in one sentence.
+
+## Moves the server builds (AS-2)
+
+`move_plan` takes only what the model read from my words: `fromDate`, `fromHalf`, `toDate`, `toHalf` and `which`
+(`named` or `all`). The server finds the to-dos (`assistant/resolve.ts`: titles, `#ids` and parent features across my
+clients, never guessing between two), checks each target with the Board's own `dropCheck`, and builds one proposal,
+grouped and labelled by client when there are several. A proposal across clients is built by the server, and no
+client's text passes through the AI for it. To-dos that can't move are listed with why; the rest move. `confirm`
+returns `undo: { kind: "moves", id }`; `undo` puts each back (`pick.uncarry` for a copy on another day, `pick.move`
+within the same day) and lists any that can't go back with the reason.
+
+## Compound updates (AS-2)
+
+`item_update` is one card for one item with up to three parts: its done state (from the item's process, through
+`devops.done_offer`'s item mode; never a hard-coded state name), a comment in my words, and a target date (into
+Ahead's change set). Only items `canEdit` allows; GD-1's scan applies to the comment. One Confirm writes each part
+through the write framework (a fresh preview, test /rev, read back, audit log); `confirm` returns
+`parts: [{ label, ok, message, undo? }]`. A part that fails says which and why, and the others stay done, each with
+its own undo in Settings › Data. More than three changes: the assistant asks to split it.
+
 ## Voice
 
 `transcribe` is the panel's. Audio up to 60 seconds and 2 MB, `audio/webm` or `audio/mp4`; never stored or logged.
@@ -97,3 +133,10 @@ own small types and reaches it through `teamsAssistant()` in `server/teams/assis
     This is the panel's action, not part of `Assistant`.
   - Ids are numbers in this interface; TB-1's bot holds them as strings and the adapter converts.
   - A `#/commands` link is the command menu: the panel opens it; Teams shows it as a link into the app.
+
+- Nov 6 (AS-2): additions only. `handle` takes `answer` (a tapped choice's value) and may return a `question` card;
+  `undo` (a confirmed move); `confirm`'s ok result may carry `parts` (a compound update) and `undo.kind: "moves"`.
+  The tools `move_plan`, `item_update`, `inbox`, `link_search`, `unlink`, `link_comment`, `inbox_seen` and `snooze`;
+  every tool has 3 to 5 example phrasings in the fixed instructions, with the glossary. `RUNS` adds `pick.uncarry`,
+  `inbox.list`, `inbox.count`, `inbox.seen`, `inbox.snooze`, `conversations.search_items`, `conversations.unlink`
+  and `my_promises.unlink`. Teams cards add the verbs `answer` and `undo`.

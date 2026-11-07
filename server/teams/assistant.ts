@@ -32,6 +32,9 @@ export type Proposal = {
 
 export type HandleStatus = "ok" | "off" | "client_off" | "refused" | "which_client" | (string & {});
 
+/** AS-2: a question with choices (card buttons in Teams). */
+export type Question = { text: string; choices: readonly { label: string; value: string }[]; expiresAt: string };
+
 export type HandleResult = {
   turnId: string;
   status: HandleStatus;
@@ -39,15 +42,19 @@ export type HandleResult = {
   cards: readonly AssistantCard[];
   proposals: readonly Proposal[];
   links: readonly AssistantLink[];
+  /** AS-2: the assistant asks instead of giving up. */
+  question?: Question | null;
 };
 
 export type ConfirmResult =
-  | { status: "ok"; message: string; undo?: { label: string; url?: string } | null; links?: readonly AssistantLink[] }
+  | { status: "ok"; message: string; undo?: { label: string; url?: string; proposalId?: string } | null; links?: readonly AssistantLink[]; parts?: readonly { label: string; ok: boolean; message: string }[] }
   | { status: "changed"; message: string; proposal: Proposal }
   | { status: "not_allowed" | "expired" | "gone"; message: string };
 
 export type AssistantService = {
-  handle(i: { person: AssistantPerson; channel: "teams"; text: string; context: TeamsContext }): Promise<HandleResult>;
+  handle(i: { person: AssistantPerson; channel: "teams"; text: string; context: TeamsContext; answer?: string }): Promise<HandleResult>;
+  /** AS-2: a confirmed proposal's moved to-dos, back where they were. */
+  undo?(i: { person: AssistantPerson; proposalId: string }): Promise<{ ok: boolean; message: string }>;
   confirm(i: { person: AssistantPerson; proposalId: string; edits?: Record<string, unknown> }): Promise<ConfirmResult>;
   cancel(i: { person: AssistantPerson; proposalId: string }): Promise<void>;
   /** TB-2: a proposal a card's button asks for (no AI): FocusTime's plan tools only (assistant/allowlist.ts PROPOSE_TOOLS). */
@@ -76,6 +83,8 @@ function cardOf(c: AsCard): AssistantCard {
       return { title: c.title, lines: [`${c.clientName} · ${c.from} to ${c.to} · ${c.tier === "must" ? "Must" : "Suggested"} · week of ${c.weekStart} · ${c.state}`], links: links(c.link) };
     case "promise":
       return { title: c.what, lines: [`${c.clientName} · ${c.who}${c.toWhom ? ` to ${c.toWhom}` : ""}${c.due ? ` · due ${c.due}` : ""}`], links: links(c.link) };
+    case "question":
+      return { title: c.text, lines: c.choices.map((x) => x.label) };
   }
 }
 
@@ -88,26 +97,33 @@ function proposalOf(p: AsProposal): Proposal {
  * AS-1: the bot's AssistantService on the real assistant (server/assistant.ts's hub, channel "teams"). Ids are numbers
  * in the service and strings here; a DevOps write's undo is in FocusTime's audit log (Settings › Data).
  */
-export function teamsAssistant(a: Pick<Assistant, "handle" | "confirm" | "cancel" | "propose">, publicUrl: string): AssistantService {
+export function teamsAssistant(a: Pick<Assistant, "handle" | "confirm" | "cancel" | "propose"> & Partial<Pick<Assistant, "undo">>, publicUrl: string): AssistantService {
   const base = publicUrl.replace(/\/$/, "");
   const idOf = (s: string) => (/^\d{1,10}$/.test(s) ? Number(s) : 0);
   return {
     async handle(i) {
-      const r = await a.handle({ person: i.person, channel: "teams", text: i.text, context: { screen: "teams" } });
-      return { turnId: String(r.turnId), status: r.status, reply: r.reply, cards: r.cards.map(cardOf), proposals: r.proposals.map(proposalOf), links: r.links.map((l) => ({ label: l.label, url: l.href })) };
+      const r = await a.handle({ person: i.person, channel: "teams", text: i.text, context: { screen: "teams" }, ...(i.answer ? { answer: i.answer } : {}) });
+      const q = r.cards.find((c) => c.kind === "question");
+      return { turnId: String(r.turnId), status: r.status, reply: r.reply, cards: r.cards.filter((c) => c.kind !== "question").map(cardOf), proposals: r.proposals.map(proposalOf), links: r.links.map((l) => ({ label: l.label, url: l.href })), question: q && q.kind === "question" ? { text: q.text, choices: q.choices, expiresAt: q.expiresAt } : null };
     },
     async confirm(i) {
       const edits = Object.fromEntries(Object.entries(i.edits ?? {}).filter(([, v]) => typeof v === "string")) as Record<string, string>;
       const r = await a.confirm({ person: i.person, proposalId: idOf(i.proposalId), ...(Object.keys(edits).length ? { edits } : {}) });
       if (r.ok) {
         const shown = cardOf(r.result);
-        return { status: "ok", message: r.message, undo: r.undo?.kind === "devops" ? { label: "Undo in FocusTime", url: `${base}/#/settings/data` } : null, links: shown.links ?? [] };
+        const undo = r.undo?.kind === "moves" ? { label: "Undo", proposalId: String(r.undo.id) } : r.undo?.kind === "devops" || r.parts?.some((x) => x.undo) ? { label: "Undo in FocusTime", url: `${base}/#/settings/data` } : null;
+        return { status: "ok", message: r.message, undo, links: shown.links ?? [], ...(r.parts ? { parts: r.parts.map((x) => ({ label: x.label, ok: x.ok, message: x.message })) } : {}) };
       }
       if (r.reason === "changed" && r.proposal) return { status: "changed", message: r.message, proposal: proposalOf(r.proposal) };
       return { status: r.reason === "changed" ? "gone" : r.reason, message: r.message };
     },
     async cancel(i) {
       await a.cancel({ person: i.person, proposalId: idOf(i.proposalId) });
+    },
+    async undo(i) {
+      if (!a.undo) return { ok: false, message: "Undo it in FocusTime" };
+      const r = await a.undo({ person: i.person, proposalId: idOf(i.proposalId) });
+      return { ok: r.ok, message: r.message };
     },
     async propose(i) {
       const r = await a.propose({ person: i.person, tool: i.tool, args: i.args });
