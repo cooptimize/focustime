@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { aDayPromise } from "../test/builders/index.ts";
 import { wasDueText } from "./due.ts";
-import { homeRail, railMarks } from "./rail-promises.ts";
+import { homeRail, lateOnCards, railMarks } from "./rail-promises.ts";
 
 const TZ = "America/Chicago";
 const TODAY = "2026-11-05";
@@ -53,5 +53,31 @@ describe("the Board rail's promises", () => {
   it("labels say when it was due, in words", () => {
     expect(wasDueText(earlier, TODAY, TZ)).toBe("Was due Tue, Nov 3");
     expect(wasDueText(thisMorning, TODAY, TZ)).toBe("Was due 9:00 AM");
+  });
+});
+
+describe("UI-9: late promises counted on a card with no rail", () => {
+  const AM_C = { ...AM, date: TODAY, clients: ["contoso"] };
+  const PM_F = { ...PM, date: TODAY, clients: ["fabrikam"] };
+  const TUE = { ...TUE_PM, date: "2026-11-03", clients: ["contoso"] };
+  const rails = [AM_C, PM_F, TUE];
+  const now = "2026-11-05T19:15:00Z"; // PM under way
+  const keys = (m: Map<string, { id: number }[]>) => Object.fromEntries([...m].map(([k, v]) => [k, v.map((p) => p.id)]));
+
+  it("uses the rail's placement, but only on a card booked for the promise's client", () => {
+    const ps = [
+      aDayPromise({ id: 1, clientKey: "contoso", dueAt: null, dueDate: "2026-11-04", overdue: true }), // carried: Contoso's block today (AM), not the PM under way
+      aDayPromise({ id: 2, clientKey: "fabrikam", dueAt: null, dueDate: "2026-11-04", overdue: true }), // carried: Fabrikam's PM
+      aDayPromise({ id: 3, clientKey: "contoso", dueAt: "2026-11-05T15:00:00Z", dueDate: TODAY, overdue: true }), // this morning, Contoso's AM
+      aDayPromise({ id: 4, clientKey: "fabrikam", dueAt: "2026-11-05T15:00:00Z", dueDate: TODAY, overdue: true }), // this morning, but AM is Contoso's
+      aDayPromise({ id: 5, clientKey: "contoso", dueAt: "2026-11-05T21:00:00Z", dueDate: TODAY, overdue: false }), // not late
+      aDayPromise({ id: 6, clientKey: null, dueAt: null, dueDate: "2026-11-04", overdue: true }), // no client: no card
+    ];
+    expect(keys(lateOnCards(ps, rails, { today: TODAY, now }))).toEqual({ [AM.key]: [1, 3], [PM.key]: [2] });
+  });
+
+  it("a client with no block today has no card for its carried promises", () => {
+    const p = aDayPromise({ id: 7, clientKey: "northwind", dueAt: null, dueDate: "2026-11-04", overdue: true });
+    expect(lateOnCards([p], rails, { today: TODAY, now }).size).toBe(0);
   });
 });
