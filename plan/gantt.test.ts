@@ -70,3 +70,17 @@ describe("AH-2: edgeLabel", () => {
     expect(edgeLabel("after", "2027-03-03", { estimated: true, today })).toBe("ends est. Mar 3, 2027 →");
   });
 });
+
+describe("AH-6: arrow caps and bar treatments", () => {
+  it("cap words, the year only when it isn't this year", async () => {
+    const { capText } = await import("./gantt.ts");
+    expect(capText("ended", "2026-09-30", { estimated: false, today: "2026-11-02" })).toBe("Ended Sep 30");
+    expect(capText("ends", "2030-12-31", { estimated: false, today: "2026-11-02" })).toBe("Ends Dec 31, 2030");
+    expect(capText("ends", "2027-03-04", { estimated: true, today: "2026-11-02" })).toBe("Ends about Mar 4, 2027");
+  });
+  it("treatments from the roadmap state", async () => {
+    const { barTreatment } = await import("./gantt.ts");
+    expect(["on_track", "watch", "at_risk", "blocked", "stalled", "done", undefined].map((s) => barTreatment(s))).toEqual(["ok", "ok", "risk", "risk", "stalled", "done", "ok"]);
+    expect(barTreatment("on_track", true)).toBe("risk");
+  });
+});

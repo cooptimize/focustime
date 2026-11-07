@@ -101,3 +101,24 @@ export function edgeLabel(side: "before" | "after", end: IsoDate, o: { estimated
   const when = `${o.estimated ? "est. " : ""}${date}`;
   return side === "before" ? `← ended ${when}` : `ends ${when} →`;
 }
+
+/**
+ * AH-6: the words on an arrow cap's tooltip, for an item that runs past the timeline's edge: "Ended Sep 30",
+ * "Started Oct 2", "Ends Dec 31, 2030", "Starts about Mar 4". The year only when it isn't this year.
+ */
+export function capText(kind: "ended" | "started" | "ends" | "starts", date: IsoDate, o: { estimated: boolean; today: IsoDate }): string {
+  const d = Temporal.PlainDate.from(date);
+  const sameYear = d.year === Temporal.PlainDate.from(o.today).year;
+  const text = d.toLocaleString("en-US", sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+  const word = { ended: "Ended", started: "Started", ends: "Ends", starts: "Starts" }[kind];
+  return `${word} ${o.estimated ? "about " : ""}${text}`;
+}
+
+/** AH-6: a bar's look from its roadmap state: on track (solid), at risk (an amber edge), stalled (muted, dashed), done. */
+export type BarTreatment = "ok" | "risk" | "stalled" | "done";
+export function barTreatment(state: string | null | undefined, short = false): BarTreatment {
+  if (state === "done") return "done";
+  if (state === "stalled") return "stalled";
+  if (short || state === "at_risk" || state === "blocked") return "risk";
+  return "ok";
+}

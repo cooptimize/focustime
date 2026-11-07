@@ -26,6 +26,9 @@ import { useAhead } from "./Ahead.tsx";
 import { CellEditor } from "./Editors.tsx";
 import { Avatar, usePhotos } from "../Presence.tsx";
 import type { Group, Row } from "./model.ts";
+import { atLevel, isOpenRow, levelNames, setRow } from "../../plan/gantt-tree.ts";
+import { LevelControl } from "./Levels.tsx";
+import { useFold } from "./prefs.ts";
 
 type Col = "item" | "state" | "start" | "target" | "dates" | "assignee" | "size" | "ready";
 /** The columns at each layout, in order. */
@@ -44,7 +47,9 @@ const longDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US"
 export function Grid({ groups, layout = "wide" }: { groups: Group[]; layout?: GridLayout }) {
   const COLS = COLUMNS[layout];
   const a = useAhead();
-  const [closed, setClosed] = useState<Set<string>>(new Set());
+  // AH-6: "Show: Epics · Features · Stories" as in the Gantt (everything open by default, as before), carets on top.
+  const [fold, setFold] = useFold("grid", atLevel("story"));
+  const names = useMemo(() => levelNames(groups), [groups]);
   const [focus, setFocus] = useState<{ key: string; col: Col } | null>(null);
   const [editing, setEditing] = useState<{ key: string; col: Col } | null>(null);
   const cells = useRef(new Map<string, HTMLElement>());
@@ -60,12 +65,12 @@ export function Grid({ groups, layout = "wide" }: { groups: Group[]; layout?: Gr
           continue;
         }
         rows.push(r);
-        if (closed.has(r.key)) hidden.add(r.item.id);
+        if (!isOpenRow(fold, r)) hidden.add(r.item.id);
       }
       out.push({ g, rows });
     }
     return out;
-  }, [groups, closed]);
+  }, [groups, fold]);
   const flat = shown.flatMap((x) => x.rows);
   // AH-5: after a popover closes, focus goes back to its cell; Tab moves to the next editable cell in the row.
   const backTo = (key: string, col: Col) => requestAnimationFrame(() => {
@@ -96,13 +101,12 @@ export function Grid({ groups, layout = "wide" }: { groups: Group[]; layout?: Gr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [a.focusItem, flat.length]);
 
-  const toggle = (k: string) => setClosed((s) => {
-    const n = new Set(s);
-    n.has(k) ? n.delete(k) : n.add(k);
-    return n;
-  });
+  const toggle = (r: Row, open?: boolean) => setFold((f) => setRow(f, r, open ?? !isOpenRow(f, r)));
   return (
     <div className={`ah-grid-box lay-${layout}`}>
+      <div className="ah-grid-bar" role="toolbar" aria-label="Grid view">
+        <LevelControl fold={fold} setFold={setFold} names={names} />
+      </div>
       {shown.map(({ g, rows }) => (
         <section key={g.client.clientKey} className="ah-client" style={{ "--c": a.color(g.client.clientKey) } as CSSProperties} aria-label={g.client.clientName}>
           <h3 className="ah-client-head">
@@ -128,8 +132,8 @@ export function Grid({ groups, layout = "wide" }: { groups: Group[]; layout?: Gr
                     key={r.key}
                     r={r}
                     g={g}
-                    open={!closed.has(r.key)}
-                    toggle={() => toggle(r.key)}
+                    open={isOpenRow(fold, r)}
+                    toggle={(o) => toggle(r, o)}
                     focus={focus}
                     first={flat[0]?.key === r.key}
                     editing={editing?.key === r.key ? editing.col : null}
@@ -154,7 +158,7 @@ export function Grid({ groups, layout = "wide" }: { groups: Group[]; layout?: Gr
 }
 
 function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, backTo, cellOf, move, reg, highlighted, cols, dots }: {
-  r: Row; g: Group; open: boolean; toggle: () => void; focus: { key: string; col: Col } | null; first: boolean; editing: Col | null;
+  r: Row; g: Group; open: boolean; toggle: (open?: boolean) => void; focus: { key: string; col: Col } | null; first: boolean; editing: Col | null;
   setFocus: (f: { key: string; col: Col }) => void; edit: (c: Col | null) => void; backTo: (c: Col) => void; cellOf: (c: Col) => HTMLElement | null; move: (dr: number, dc: number) => void; reg: (c: Col, el: HTMLElement | null) => void; highlighted: boolean;
   cols: readonly Col[]; dots: boolean;
 }) {
@@ -179,6 +183,9 @@ function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, ba
     const field = EDIT[col];
     if (e.key === "ArrowDown") move(1, 0);
     else if (e.key === "ArrowUp") move(-1, 0);
+    // AH-6: on the Item cell, Left collapses and Right expands (then they move between cells as before).
+    else if (e.key === "ArrowRight" && col === "item" && hasKids && !open) toggle(true);
+    else if (e.key === "ArrowLeft" && col === "item" && hasKids && open) toggle(false);
     else if (e.key === "ArrowRight") move(0, 1);
     else if (e.key === "ArrowLeft") move(0, -1);
     else if (e.key === "Enter" && col === "item" && hasKids) toggle();
@@ -250,7 +257,7 @@ function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, ba
                 "item",
                 <span className="ah-item" style={{ paddingInlineStart: `calc(${r.depth} * var(--ah-indent, 18px))` }}>
                   {hasKids ? (
-                    <button type="button" className="rm-expand" tabIndex={-1} aria-expanded={open} aria-label={`${open ? "Hide" : "Show"} what's under ${r.item.title}`} onClick={toggle}>
+                    <button type="button" className="rm-expand" tabIndex={-1} aria-expanded={open} aria-label={`${open ? "Hide" : "Show"} what's under ${r.item.title}`} onClick={() => toggle()}>
                       {open ? "▾" : "▸"}
                     </button>
                   ) : (
