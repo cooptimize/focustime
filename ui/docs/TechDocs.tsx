@@ -11,21 +11,8 @@ import { REPO } from "../About.tsx";
 import { useGuideList } from "../guide/GuideFrame.tsx";
 import { SearchBox, searchEntries, SearchResults } from "../guide/Search.tsx";
 import { PanelShell, type RailGroup } from "../PanelShell.tsx";
-import { DOC_CONTENTS, DOC_PAGES, docPageFor, docPageLabel } from "./pages.ts";
+import { DOC_CONTENTS, DOC_PAGES, DOCS_TEXT, docPageFor, docPageLabel } from "./pages.ts";
 import "./docs.css";
-
-export const DOCS_TEXT = {
-  name: "Technical docs",
-  search: "Search the technical docs",
-  none: (q: string) => `Nothing in the technical docs for "${q}". Try fewer words.`,
-  results: (n: number) => (n === 1 ? "1 result" : `${n} results`),
-  in: (page: string) => `in ${page}`,
-  build: (sha: string) => `This build: ${sha}`,
-  edit: "Edit on GitHub",
-  checking: "Checking your account…",
-  automation: "The technical docs aren't available for automation accounts.",
-  unknown: "The technical docs can't be opened just now: your account couldn't be checked. Try again in a moment.",
-};
 
 type Entry = { page: string; anchor: string | null; title: string; text: string };
 
@@ -88,6 +75,10 @@ export default function TechDocs({
       if (!el) return;
       el.tabIndex = -1;
       el.scrollIntoView?.({ block: "start" });
+      // On a phone the page itself scrolls under the sticky top bar: keep the heading below it.
+      const bar = document.querySelector<HTMLElement>(".topbar")?.getBoundingClientRect().bottom ?? 0;
+      const top = el.getBoundingClientRect().top;
+      if (top < bar + 8) window.scrollBy(0, top - bar - 12);
       el.focus({ preventScroll: true });
     }, 80);
     return () => clearTimeout(t);

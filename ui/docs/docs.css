@@ -38,6 +38,11 @@
 /* Diagrams: drawn at build time, on a light card in every theme (their colors are Mermaid's neutral theme), scaled to fit. */
 .td-diagram { margin: 16px 0; padding: 12px; border-radius: 12px; background: var(--p-white, #fff); border: 1px solid var(--border); max-width: 100%; box-sizing: border-box; }
 .td-diagram svg { display: block; width: 100%; height: auto; max-width: 100%; }
+/* On a narrow screen a diagram keeps a readable size and scrolls inside its card, like a table. */
+@media (max-width: 700px) {
+  .td-diagram { overflow-x: auto; }
+  .td-diagram svg { min-width: 600px; max-width: none; }
+}
 
 .td-footer { margin-top: 40px; padding: 14px 0 64px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--text-faint); font-size: var(--fs-3); }
 .td-footer a { color: var(--accent); }

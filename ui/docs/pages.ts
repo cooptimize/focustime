@@ -12,6 +12,20 @@ export const DOC_PAGES = [
   { id: "development", label: "Development", aka: ["tests", "ci", "worktree", "contributing"] },
 ] as const;
 
+/** The panel's own words. */
+export const DOCS_TEXT = {
+  name: "Technical docs",
+  search: "Search the technical docs",
+  none: (q: string) => `Nothing in the technical docs for "${q}". Try fewer words.`,
+  results: (n: number) => (n === 1 ? "1 result" : `${n} results`),
+  in: (page: string) => `in ${page}`,
+  build: (sha: string) => `This build: ${sha}`,
+  edit: "Edit on GitHub",
+  checking: "Checking your account…",
+  automation: "The technical docs aren't available for automation accounts.",
+  unknown: "The technical docs can't be opened just now: your account couldn't be checked. Try again in a moment.",
+};
+
 export type DocPageId = (typeof DOC_PAGES)[number]["id"];
 /** The phone's list of pages (the panel shell's list page). On a big screen it opens the Overview. */
 export const DOC_CONTENTS = "contents";

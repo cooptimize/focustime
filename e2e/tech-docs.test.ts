@@ -6,8 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { DOC_PAGES } from "../ui/docs/pages.ts";
-import { DOCS_TEXT } from "../ui/docs/TechDocs.tsx";
+import { DOC_PAGES, DOCS_TEXT } from "../ui/docs/pages.ts";
 import { TECH_DOCS_LINK } from "../ui/guide/content.ts";
 
 let h: Harness;
@@ -17,8 +16,8 @@ const noSidewaysScroll = (page: Page) =>
   page.evaluate(() => {
     const b = document.querySelector(".tech-docs .ps-body") as HTMLElement | null;
     const wide = [...document.querySelectorAll(".tech-docs .ps-body *")]
-      // Inside a table or code box that scrolls by itself is fine: the box is what must fit.
-      .filter((e) => !e.closest(".td-scroll, .td-code, .sr-only") && e.getBoundingClientRect().right > innerWidth + 1)
+      // Inside a table, code box or diagram that scrolls by itself is fine: the box is what must fit.
+      .filter((e) => !e.closest(".td-scroll, .td-code, .td-diagram, .sr-only") && e.getBoundingClientRect().right > innerWidth + 1)
       .map((e) => `${e.tagName}.${e.className}`)
       .slice(0, 5);
     return { page: document.documentElement.scrollWidth <= innerWidth, body: !b || b.scrollWidth <= b.clientWidth + 1, wide };
@@ -151,6 +150,11 @@ describe.skipIf(!CHROMIUM)("the Technical docs (DOC-1)", () => {
         await body(page, p.id).waitFor();
         expect(await noSidewaysScroll(page), p.id).toEqual({ page: true, body: true, wide: [] });
       }
+      // A heading deep link lands below the sticky top bar, not under it.
+      await page.evaluate(() => (location.hash = "#/docs/security/secrets"));
+      await expect.poll(() => page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.anchor)).toBe("secrets");
+      const gap = await page.evaluate(() => document.querySelector("[data-anchor='secrets']")!.getBoundingClientRect().top - (document.querySelector(".topbar")?.getBoundingClientRect().bottom ?? 0));
+      expect(gap).toBeGreaterThanOrEqual(0);
       expect(errors).toEqual([]);
       await page.close();
     });
