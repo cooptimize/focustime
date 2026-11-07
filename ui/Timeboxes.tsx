@@ -628,23 +628,6 @@ export function ConflictChoice({ tb, env, clientName }: { tb: TimeboxView; env: 
   );
 }
 
-/** "Help: Tue 1:00 PM with Ana": a help invite on an item (step 13). */
-export function InviteChips({ match }: { match: (i: InviteView) => boolean }): ReactNode {
-  const env = useTimeboxes();
-  if (!env) return null;
-  const list = env.invites.filter((i) => i.status === "sent" && match(i));
-  if (!list.length) return null;
-  return list.map((i) => {
-    const s = Temporal.Instant.from(i.start).toZonedDateTimeISO(env.tz);
-    const day = s.toPlainDate().toLocaleString("en-US", { weekday: "short" });
-    return (
-      <span key={i.uid} className="help-chip" title={`Help session ${range(i, env.tz)} with ${i.names.join(", ")}${i.teams ? " (Teams)" : ""}`}>
-        Help {day} {clock(i.start, env.tz)} · {i.names.join(", ")}
-      </span>
-    );
-  });
-}
-
 // ---------- the week cards ----------
 
 /**
@@ -729,28 +712,6 @@ function Band({ t, env, bounds, pos }: { t: TimeboxView; env: TimeboxEnv; bounds
       {(drag || t.outlook) && <span className="tbox-time">{drag ? range(live, env.tz) : "Outlook"}</span>}
       <span className="tbox-edge" onPointerDown={(ev) => down(ev, "end")} aria-hidden="true" />
     </div>
-  );
-}
-
-/**
- * Compact cards (no timeline): timeboxes without a pick that start in this half-day (week list items, plain client
- * time). A pick's timebox shows on the pick's own row instead (step 14.5, D259).
- */
-export function TimeboxList({ slot }: { slot: Slot }): ReactNode {
-  const env = useTimeboxes();
-  if (!env || !env.settings.enabled) return null;
-  const a = ms(slot.view.start), b = ms(slot.view.end);
-  const here = env.timeboxes.filter((t) => t.pickId === null && t.date === slot.date && !t.removedAt && ms(t.start) >= a && ms(t.start) < b);
-  if (!here.length) return null;
-  return (
-    <ul className="ev-list tb-list" aria-label="Timeboxes">
-      {here.map((t) => (
-        <li key={t.id} style={{ "--c": clientColor(t.clientKey, env.colors) } as CSSProperties} title={`Timebox: ${t.title}\n${range(t, env.tz)}${t.onOutlook ? " · on Outlook" : ""}`}>
-          <span className="ev-time">{clock(t.start, env.tz).replace(/ [AP]M$/, "")}</span>
-          <span className="ev-title">{t.title}</span>
-        </li>
-      ))}
-    </ul>
   );
 }
 

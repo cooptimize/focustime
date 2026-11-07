@@ -167,11 +167,6 @@ export function anAiApp(o: Partial<import("../../ai/service.ts").AiAppSettings> 
   return { provider: "stub", model: "test-model", reasoningEffort: null, timeoutMs: 5_000, maxOutputTokens: { default: 500 }, prices: { inputPerMillion: 1, cachedInputPerMillion: 0.5, outputPerMillion: 2 }, appCapUsd: 100, ...o };
 }
 
-/** A person's AI settings with both switches on for one client. */
-export function anAiPerson(o: Partial<import("../../ai/types.ts").AiPersonSettings> = {}): import("../../ai/types.ts").AiPersonSettings {
-  return { use: true, monthlyCapUsd: 10, allowedClients: ["fabrikam"], ...o };
-}
-
 /** ADM-1: the team's AI rules for tests: AI on for FocusTime and allowed for one client. */
 export function anAiRules(o: Partial<import("../../ai/types.ts").AiRules> = {}): import("../../ai/types.ts").AiRules {
   return { on: true, personCapUsd: 10, allowedClients: ["fabrikam"], ...o };

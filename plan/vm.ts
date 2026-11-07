@@ -66,7 +66,6 @@ export function minutesOf(hhmm: string): number | null {
   const m = /^([01]\d|2[0-3])([0-5]\d)$/.exec(hhmm);
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
-export const hhmmOf = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}${String(min % 60).padStart(2, "0")}`;
 
 /** The schedule from a GET body, or null when it isn't a daily shutdown schedule FocusTime understands. */
 export function shutdownFrom(body: unknown): Shutdown | null {

@@ -1438,31 +1438,3 @@ function DayTimeline({ day, blocks, data, picks, now, nowMs, events, onNotice }:
   );
 }
 
-const HINT_KEY = "focustime.hint.flow";
-/** A first-run hint (step 10), dismissed for good in this browser profile. Storage can fail; the hint then just shows. */
-export function FlowHint() {
-  const [hidden, setHidden] = useState(() => {
-    try {
-      return localStorage.getItem(HINT_KEY) === "dismissed";
-    } catch {
-      return false;
-    }
-  });
-  if (hidden) return null;
-  const dismiss = () => {
-    try {
-      localStorage.setItem(HINT_KEY, "dismissed");
-    } catch {
-      /* shows again next time */
-    }
-    setHidden(true);
-  };
-  return (
-    <aside className="flow-hint" aria-label="How FocusTime fits together">
-      <p>
-        <strong>Week</strong> is each client's musts and nice to haves, from DevOps. <strong>Day</strong> is for stories: the to-dos you plan for each block. <strong>Focus</strong> is one story at a time.
-      </p>
-      <button type="button" className="mini" onClick={dismiss}>Got it</button>
-    </aside>
-  );
-}

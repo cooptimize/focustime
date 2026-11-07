@@ -76,15 +76,6 @@ export async function readResponse<T>(res: Response): Promise<T> {
   throw new SessionError(STALE_MESSAGE);
 }
 
-/** Asks the host to open a fresh window (focustime-open replaces this one). False when it can't. */
-export async function reopenFocusTime(): Promise<boolean> {
-  try {
-    const r = await fetch("/api/reopen", { method: "POST", credentials: "same-origin", headers: postHeaders(), body: "{}" });
-    return r.status === 202;
-  } catch {
-    return false;
-  }
-}
 /** A refusal from an action, with its HTTP status (422: the day can't be planned, 409: not allowed now). */
 export class ActionRefusal extends Error {
   constructor(

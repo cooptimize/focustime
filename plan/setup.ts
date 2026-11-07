@@ -47,7 +47,6 @@ export function todayLine(o: { demo: boolean; state: SetupState }): { text: stri
 
 /** The step after this one, or null after the last (the Done screen). */
 export const nextStep = (s: SetupStep): SetupStep | null => SETUP_STEPS[SETUP_STEPS.indexOf(s) + 1] ?? null;
-export const prevStep = (s: SetupStep): SetupStep | null => SETUP_STEPS[SETUP_STEPS.indexOf(s) - 1] ?? null;
 
 /**
  * Closing the flow skips the rest: the step on screen and every later one without a record become "dismissed"

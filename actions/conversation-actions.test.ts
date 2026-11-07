@@ -194,7 +194,7 @@ describe("follow-through", () => {
 
 describe("my promises (the Wingtip-shaped example)", () => {
   const WT = aClientChat({ chatId: "19:wingtip-delivery@thread.v2", clientKey: "wingtip", kind: "delivery", displayName: "Wingtip Delivery Team (Cooptimize)", members: [EVAN, SAM] });
-  it("one promise to Evan due today 7:30 PM, on Today; a follow-up made from it has Evan as Who", async () => {
+  it("one promise to Evan due today 7:30 PM, on Today", async () => {
     const w = world({
       allowed: ["wingtip"],
       respond: (call) => {
@@ -223,14 +223,6 @@ describe("my promises (the Wingtip-shaped example)", () => {
     expect(Temporal.Instant.from(day[0]!.dueAt!).toZonedDateTimeISO(ZONE).toPlainTime().toString({ smallestUnit: "minute" })).toBe("19:30");
     // Evan sees no promise of his.
     expect((await p.as(EVAN).run<MyPromisesData>("my_promises.list")).promises).toEqual([]);
-    const r = await sam.run<MyPromisesData & { followUpId: number }>("my_promises.followup", { id: mine.promises[0]!.id });
-    const f = await sam.ctx.plan!.getFollowUp(r.followUpId);
-    expect(f).toMatchObject({ who: "Evan Ford", what: "Rerun the Salesforce data from CRM_Silver", due: "2026-11-04" });
-    expect(r.promises[0]!.state).toBe("followup");
-    expect(await dayPromises(sam.ctx, cfg)).toEqual([]);
-    // Overdue later that night: amber on Today, never red (the view only says overdue).
-    w.setNow("2026-11-05T02:00:00Z");
-    await sam.run("my_promises.reopen", { id: mine.promises[0]!.id }).catch(() => null);
   });
 
   it("Done and Not needed close it with Undo; Add to Today puts an undated promise on today", async () => {

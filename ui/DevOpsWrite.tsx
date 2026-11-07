@@ -6,16 +6,13 @@ import { whenText } from "./labels.ts";
 import { CloseButton } from "./CloseButton.tsx";
 import { categoryWord } from "../plan/process.ts";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { draftRowState, draftRowText, prepareAgain } from "../plan/capture-prepare.ts";
-import { CreateDraftCtx, WRITING_POLL_MS } from "./createdraft-ctx.ts";
-import type { DevOpsLogView, DevOpsPreview, DevOpsResult, DraftAiView } from "../actions/types.ts";
+import type { DevOpsLogView, DevOpsPreview, DevOpsResult } from "../actions/types.ts";
 import type { StateInfo } from "../plan/devopswrite.ts";
 import type { DraftStory } from "../plan/types.ts";
 import { parentChoices } from "../plan/devopswrite.ts";
 import { DevOpsWork } from "./work.ts";
 import { ActionRefusal, call } from "./api.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
-import { DraftTitle } from "./DraftEditor.tsx";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
@@ -453,116 +450,6 @@ export function CreateInDevOps({ drafts, label }: { drafts: DraftStory[]; label?
       <button type="button" className="mini quiet" onClick={() => setChoosing(false)}>
         Cancel
       </button>
-    </span>
-  );
-}
-
-/**
- * Drafts not yet in DevOps, per client, each with Create in DevOps (the Inbox). CP-1: each row says what it needs
- * (Ready to create, Needs a parent, AI off: plain draft, AI still writing…, or Add a write PAT for <client>) and keeps
- * my own title; Create in DevOps opens the side by side preview. The list looks again while AI is writing.
- */
-export function DraftsToAdd({ drafts, clientName, onChanged }: { drafts: DraftStory[]; clientName: (k: string) => string; onChanged: () => void }): ReactNode {
-  const env = useDevOpsWrite();
-  const openCreate = useContext(CreateDraftCtx);
-  const now = new Date().toISOString();
-  const states = drafts.map((d) => draftRowState(d, { canWrite: !!env?.can(d.clientKey), now }));
-  const writing = states.includes("writing");
-  useEffect(() => {
-    if (!writing) return;
-    const t = setTimeout(onChanged, WRITING_POLL_MS * 2);
-    return () => clearTimeout(t);
-  }, [writing, onChanged, drafts]);
-  if (!drafts.length) return null;
-  return (
-    <section className="co-section dw-drafts-section" aria-label="Drafts to add in DevOps">
-      <h3>
-        Drafts to add in DevOps <span className="muted">{drafts.length}</span>
-      </h3>
-      <ul className="inbox-list">
-        {drafts.map((d, i) => (
-          <li key={d.id} className="cap-item">
-            <p className="cap-text">
-              <span className="cap-tag">{d.level === "feature" ? "Draft feature" : "Draft story"}</span>
-              <DraftTitle draft={d} />
-              <span className="muted">
-                {" "}
-                · {clientName(d.clientKey)}
-                {d.parentItemId !== null ? ` · under #${d.parentItemId}` : ""}
-              </span>
-              <span className={`dw-draft-state ${states[i]}`} data-state={states[i]} title={d.ai?.note ?? undefined}>
-                {draftRowText(states[i]!, d, clientName(d.clientKey))}
-              </span>
-            </p>
-            {!env ? null : states[i] === "no_pat" ? (
-              <button type="button" className="mini quiet dw-enable" onClick={() => env.enable(d.clientKey)}>Add a write PAT for {clientName(d.clientKey)}</button>
-            ) : openCreate ? (
-              <button type="button" className="mini" onClick={() => openCreate(d.id)}>Create in DevOps</button>
-            ) : (
-              <CreateInDevOps drafts={[d]} />
-            )}
-            <DraftMenu d={d} writing={states[i] === "writing"} onChanged={onChanged} />
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-/**
- * UI-7: a draft row's ⋯: Prepare again (re-runs the AI version with the same caps and rules; shown once a prepare ran,
- * with a write PAT and AI available for the client now; disabled while AI is writing) and Delete (DevOps isn't touched).
- * Opening it reads the draft once for whether AI is available.
- */
-function DraftMenu({ d, writing, onChanged }: { d: DraftStory; writing: boolean; onChanged: () => void }): ReactNode {
-  const [open, setOpen] = useState(false);
-  const [view, setView] = useState<DraftAiView | null>(null);
-  const [running, setRunning] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    let live = true;
-    call<DraftAiView>("draft.get", { id: d.id }).then((v) => live && setView(v), () => live && setView(null));
-    return () => void (live = false);
-  }, [open, d.id, d.ai?.state]);
-  const again = view ? prepareAgain(view.draft, { canWrite: view.canWrite, aiOn: view.aiOn, now: view.now }) : "hidden";
-  const runAgain = async () => {
-    setRunning(true);
-    setOpen(false);
-    // The row shows AI still writing… while it runs, then the new version.
-    const shown = setTimeout(onChanged, 300);
-    try {
-      await call<DraftAiView>("draft.prepare", { id: d.id, again: true });
-    } catch (e) {
-      notify(errText(e));
-    } finally {
-      clearTimeout(shown);
-      setRunning(false);
-      onChanged();
-    }
-  };
-  const remove = async () => {
-    setOpen(false);
-    try {
-      await call("draft.remove", { id: d.id });
-      notify(`Draft deleted: ${d.title}`);
-      onChanged();
-    } catch (e) {
-      notify(errText(e));
-    }
-  };
-  return (
-    <span className="fu-more">
-      <button type="button" className="mini quiet" aria-haspopup="menu" aria-expanded={open} aria-label={`More for: ${d.title}`} onClick={() => setOpen((v) => !v)}>⋯</button>
-      {open && (
-        <span className="fu-menu" role="menu" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setOpen(false))}>
-          {again !== "hidden" && (
-            <button type="button" role="menuitem" disabled={running || writing || again === "writing"} title={running || writing || again === "writing" ? "AI is writing" : "Ask the AI for its version again"} onClick={() => void runAgain()}>
-              Prepare again
-            </button>
-          )}
-          <button type="button" role="menuitem" autoFocus title="Delete this local draft (DevOps isn't touched)" onClick={() => void remove()}>Delete</button>
-        </span>
-      )}
     </span>
   );
 }

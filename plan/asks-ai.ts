@@ -177,7 +177,6 @@ export function notSortedText(k: NotSorted, clientName: string): string {
 }
 
 export const KIND_WORD: Record<AskKind, string> = { bug: "Bug", request: "Request", question: "Question", incident: "Incident", none: "No action" };
-export const URGENCY_WORD: Record<Urgency, string> = { now: "Now", this_week: "This week", backlog: "Backlog" };
 
 /**
  * When an open ask has waited past its urgency: "now" after 2 hours, "this week" at the end of that week's Friday in

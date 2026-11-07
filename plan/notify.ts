@@ -212,9 +212,6 @@ export function collapse(held: readonly Notice[], at: string): Notice | null {
   };
 }
 
-/** The keys a clicked notification marks handled (a collapsed one stands for each it lists). */
-export const handledKeys = (n: Notice, held: readonly Notice[] = []): string[] => (n.kind === "held" ? held.map((h) => h.key) : [n.key]);
-
 /** The page event that opens a route in the window (a hosted version's browser notifications would use it too). */
 export const ROUTE_EVENT = "focustime:open-route";
 
