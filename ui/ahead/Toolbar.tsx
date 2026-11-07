@@ -177,7 +177,7 @@ function DatesButton({ f, set, today }: { f: AheadFilters; set: (f: AheadFilters
       </button>
       {open && (
         <CellPopover anchor={btn.current} title="Dates" sub="items that overlap them" onSave={close} onCancel={close} saveLabel="Done" className="ah-tb-pop">
-          <div className="ah-tb-picks" role="group" aria-label="Quick picks">
+          <div className="ah-tb-picks" role="group" aria-label="Quick dates">
             {RANGES.map((r) => (
               <button key={r} type="button" className="rm-chip" aria-pressed={f.range === r} onClick={() => pick(r)}>
                 {RANGE_WORDS[r]}

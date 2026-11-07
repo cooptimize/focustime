@@ -163,7 +163,7 @@ export function peopleWord(f: AheadFilters, shown: readonly SummaryClient[]): { 
 }
 
 /**
- * "Showing 76 of 132 · Quiddity · Everyone · Next 4 weeks" and a chip for each filter that isn't its default (a client
+ * "Showing 76 of 132 · Northwind Foods · Everyone · Next 4 weeks" and a chip for each filter that isn't its default (a client
  * chosen, People not my default for a client shown, an epic, dates, readiness, Stale, a search).
  */
 export function summary(clients: readonly SummaryClient[], f: AheadFilters, o: { today: string; shown: number; total: number; epicLabel?: string | null }): { text: string; chips: Chip[] } {
