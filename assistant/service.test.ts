@@ -640,32 +640,32 @@ describe("AS-2", () => {
   const twoClients = () =>
     anAheadLoad([
       anAheadClient({ clientKey: FAB, clientName: "Fabrikam", items: [anAheadItem({ id: 4417, title: "Export the invoices", type: "Feature" }), story(4418, "CSV export", 4417), story(4600, "Stored procedure fields for XYZ", 4417)], editable: [4417, 4418, 4600] } as never),
-      anAheadClient({ clientKey: NW, clientName: "Northwind Traders", items: [anAheadItem({ id: 7000, title: "Data Staleness", type: "Feature" }), story(7001, "Flag stale rows", 7000), story(7002, "Stale data banner", 7000), story(7003, "Ledger totals", 5150)], editable: [7000, 7001, 7002, 7003] } as never),
+      anAheadClient({ clientKey: NW, clientName: "Northwind Traders", items: [anAheadItem({ id: 7000, title: "Freshness Alert", type: "Feature" }), story(7001, "Flag late alerts", 7000), story(7002, "Alert banner", 7000), story(7003, "Ledger totals", 5150)], editable: [7000, 7001, 7002, 7003] } as never),
     ]);
   const opts = (o: Parameters<typeof setup>[0] = {}) => setup({ ahead: twoClients(), dirItems: { [FAB]: [4600], [NW]: [7000, 7001, 7002, 7003] }, ...o });
-  const DATA_STALENESS = "on wednesday I wasn't able to work on the user stories under the data staleness feature. can you move those to friday on my board?";
+  const FRESHNESS_ALERT = "on wednesday I wasn't able to work on the user stories under the freshness alert feature. can you move those to friday on my board?";
 
-  it("the original Data Staleness request: the to-dos under that feature move to Friday with one Confirm and one Undo", async () => {
+  it("the original Freshness Alert request: the to-dos under that feature move to Friday with one Confirm and one Undo", async () => {
     const s = opts();
-    const a = await s.plan.addPick({ date: WED, half: "PM", clientKey: NW, kind: "item", itemId: 7001, title: "Flag stale rows", size: "M" });
-    const b = await s.plan.addPick({ date: WED, half: "AM", clientKey: NW, kind: "item", itemId: 7002, title: "Stale data banner", size: "S" });
+    const a = await s.plan.addPick({ date: WED, half: "PM", clientKey: NW, kind: "item", itemId: 7001, title: "Flag late alerts", size: "M" });
+    const b = await s.plan.addPick({ date: WED, half: "AM", clientKey: NW, kind: "item", itemId: 7002, title: "Alert banner", size: "S" });
     const other = await s.plan.addPick({ date: WED, half: "PM", clientKey: FAB, kind: "item", itemId: 4418, title: "CSV export", size: "S" });
     s.script(["move_plan"], call(["move_plan", { fromDate: WED, fromHalf: null, toDate: FRI, toHalf: null, which: "named" }]), say("Here's the move to confirm."));
-    const r = await s.a.handle(DATA_STALENESS);
+    const r = await s.a.handle(FRESHNESS_ALERT);
     expect(r.proposals).toHaveLength(1);
     const p = r.proposals[0]!;
     expect(p).toMatchObject({ action: "pick.move", title: "Move 2 to-dos to Fri, Nov 6", whoSees: "Only you" });
     expect(p.preview.notes).toContain("Friday is your catch-up day");
-    expect(p.preview.rows.map((x) => x.label).sort()).toEqual(["Flag stale rows", "Stale data banner"]);
+    expect(p.preview.rows.map((x) => x.label).sort()).toEqual(["Alert banner", "Flag late alerts"]);
     // The intent round saw only my words: no titles from my store.
     const intent = s.calls.find((c) => c.schemaName === "assistant_intent")!;
-    expect(JSON.stringify(intent)).not.toContain("Flag stale rows");
+    expect(JSON.stringify(intent)).not.toContain("Flag late alerts");
     expect(s.writes()).toEqual([]);
     const c = (await s.a.confirm(p.id)) as Extract<ConfirmResult, { ok: true }>;
     expect(c.ok).toBe(true);
     expect(c.undo).toMatchObject({ kind: "moves" });
     expect(s.writes().map((w) => w.input)).toEqual(expect.arrayContaining([{ id: a.id, date: FRI, half: "AM" }, { id: b.id, date: FRI, half: "AM" }]));
-    expect((await s.plan.picksFor(FRI)).map((x) => x.title).sort()).toEqual(["Flag stale rows", "Stale data banner"]);
+    expect((await s.plan.picksFor(FRI)).map((x) => x.title).sort()).toEqual(["Alert banner", "Flag late alerts"]);
     expect((await s.plan.getPick(other.id))!.status).toBe("planned");
     // One Undo puts both back where they were.
     const u = await s.a.undo(p.id);
@@ -713,19 +713,19 @@ describe("AS-2", () => {
 
   it("matches in two clients ask which client, and nothing from either goes to the AI before I choose", async () => {
     const ahead = twoClients();
-    (ahead.clients[0]!.items as unknown[]).push(anAheadItem({ id: 4700, title: "Data Staleness", type: "Feature" }), story(4701, "Nightly freshness check", 4700));
+    (ahead.clients[0]!.items as unknown[]).push(anAheadItem({ id: 4700, title: "Freshness Alert", type: "Feature" }), story(4701, "Nightly freshness check", 4700));
     const s = opts({ ahead, dirItems: { [FAB]: [4600, 4700, 4701], [NW]: [7000, 7001, 7002, 7003] } });
-    await s.plan.addPick({ date: WED, half: "PM", clientKey: NW, kind: "item", itemId: 7001, title: "Flag stale rows", size: "M" });
+    await s.plan.addPick({ date: WED, half: "PM", clientKey: NW, kind: "item", itemId: 7001, title: "Flag late alerts", size: "M" });
     await s.plan.addPick({ date: WED, half: "PM", clientKey: FAB, kind: "item", itemId: 4701, title: "Nightly freshness check", size: "S" });
     s.script(["move_plan"], call(["move_plan", { fromDate: null, fromHalf: null, toDate: FRI, toHalf: null, which: "named" }]), say("Here's the move."));
-    const q = await s.a.handle("Move the data staleness stories to Friday.");
+    const q = await s.a.handle("Move the freshness alert stories to Friday.");
     expect(s.calls).toEqual([]);
     const card = q.cards.find((c) => c.kind === "question") as Extract<(typeof q.cards)[number], { kind: "question" }>;
     expect(card.choices.map((c) => c.label).sort()).toEqual(["Fabrikam · 1 to-do", "Northwind Traders · 1 to-do"]);
     const nw = card.choices.find((c) => c.label.startsWith("Northwind Traders"))!;
     const r = await s.a.handle("Northwind Traders", {}, nw.value);
     expect(r.proposals[0]).toMatchObject({ title: "Move 1 to-do to Fri, Nov 6", clientKey: NW });
-    expect(r.proposals[0]!.preview.rows.map((x) => x.label)).toEqual(["Flag stale rows"]);
+    expect(r.proposals[0]!.preview.rows.map((x) => x.label)).toEqual(["Flag late alerts"]);
     // The request ran for Northwind only: the other client's titles never reached the model.
     expect(JSON.stringify(s.calls)).not.toContain("Nightly freshness check");
     expect(s.log.every((e) => e.clientKey === NW)).toBe(true);

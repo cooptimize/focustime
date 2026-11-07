@@ -1,5 +1,5 @@
 // AS-2: find what my words point at, on the server, across my own clients: to-dos, DevOps items and features, by
-// title, #id or parent feature ("the stories under the Data Staleness feature" are my to-dos whose item's parent is
+// title, #id or parent feature ("the stories under the Freshness Alert feature" are my to-dos whose item's parent is
 // that feature). The model never sees another client's titles to do this; the server matches and only then, with one
 // client, does that client's request go to the AI. Conservative: a title counts only when it appears whole in my words
 // (two words or more), an item named after "the story for …" only when one item fits, and two that fit equally are
@@ -50,7 +50,7 @@ export function resolve(text: string, clients: readonly ResolveClient[], picks: 
   for (const id of idsIn(text)) for (const x of all.filter((a) => a.item.id === id)) add(itemView(x));
   // 2. Whole titles of my items (features and epics included).
   const titled = all.filter((x) => whole(text, x.item.title));
-  // A longer title wins over one it contains ("Data staleness alerts" over "Data staleness").
+  // A longer title wins over one it contains ("Freshness alert rules" over "Freshness alert").
   for (const x of titled) if (!titled.some((y) => y !== x && norm(y.item.title).includes(norm(x.item.title)) && norm(y.item.title) !== norm(x.item.title))) add(itemView(x));
   // 3. "the story for XYZ": one item whose title has those words; two or more is a question.
   for (const phrase of namedPhrases(text)) {
