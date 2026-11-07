@@ -1,6 +1,6 @@
 # Architecture
 
-For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `feat/ahead-gantt-toolbar` (AH-6) on Nov 7, 2026.
+For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `4d3d536` on Nov 7, 2026.
 
 FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a React app and a JSON action API, keeps its data in one SQL database, and talks to Microsoft Graph, Dataverse, Azure DevOps, Google Calendar, Azure Resource Manager and OpenAI. The per-folder detail is in [docs/architecture.md](../architecture.md); this page is the overview.
 
