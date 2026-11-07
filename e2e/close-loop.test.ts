@@ -4,7 +4,7 @@
 // phone) open it, and the container's scrollWidth equals its clientWidth (and so does the page's) at 1920, 1366, Text
 // size Larger and phone width (390 px, with an iPhone-like 17 px root font). Then close one loop for real.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Page } from "playwright-core";
+import type { Locator, Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
 import { SHOTS, shotBoth } from "./shots.ts";
 
@@ -25,16 +25,31 @@ const overflow = (page: Page, container: string) =>
     return { found: !!el, container: el ? el.scrollWidth - el.clientWidth : -1, page: doc.scrollWidth - doc.clientWidth };
   }, container);
 
+/**
+ * LP-1: Close the loop opens the draft (Send by Teams, Email, Comment or Call, each saying where it goes); IB-1's form
+ * is "Close without sending" from there, unchanged. Checks both show their parts, then returns the old form.
+ */
+async function withoutSending(scope: Locator) {
+  const draft = scope.locator("form.send-loop");
+  await draft.getByRole("radio", { name: /^Teams/ }).waitFor({ timeout: 20_000 });
+  for (const name of ["Teams", "Email", "Comment", "Call"]) expect(await draft.getByRole("radio", { name: new RegExp(`^${name}`) }).isVisible()).toBe(true);
+  await draft.getByRole("button", { name: "Close without sending" }).click();
+  const form = scope.locator("form.close-loop:not(.send-loop)");
+  await form.waitFor();
+  for (const name of ["Teams", "Email", "DevOps", "Call"]) expect(await form.getByRole("button", { name, exact: true }).isVisible()).toBe(true);
+  expect(await form.locator("textarea").isVisible()).toBe(true);
+  return form;
+}
+
 /** Opens Close the loop on the row that says `text` inside `scope`, and checks it shows and nothing overflows. */
 async function openAndCheck(page: Page, scope: string, text: string, container: string) {
   const row = page.locator(`${scope} .follow-up`, { hasText: text }).first();
   await row.waitFor({ timeout: 20_000 });
   await row.getByRole("button", { name: "Close the loop", exact: true }).click();
-  const form = row.locator("form.close-loop");
-  await form.waitFor();
-  // Every channel and the note are visible inside the container.
-  for (const name of ["Teams", "Email", "DevOps", "Call"]) expect(await form.getByRole("button", { name, exact: true }).isVisible()).toBe(true);
-  expect(await form.locator("textarea").isVisible()).toBe(true);
+  // LP-1's draft first, then IB-1's form under Close without sending: neither scrolls sideways.
+  await row.locator("form.send-loop").getByRole("radio", { name: /^Teams/ }).waitFor({ timeout: 20_000 });
+  expect(await overflow(page, container)).toEqual({ found: true, container: 0, page: 0 });
+  const form = await withoutSending(row);
   expect(await overflow(page, container)).toEqual({ found: true, container: 0, page: 0 });
   await form.getByRole("button", { name: "Cancel" }).click();
 }
@@ -47,10 +62,9 @@ async function inboxCheck(page: Page, text: string) {
   await row.click();
   const pane = page.locator(".ib-pane");
   await pane.getByRole("button", { name: /^Close the loop/ }).first().click();
-  const form = pane.locator("form.close-loop");
-  await form.waitFor();
-  for (const name of ["Teams", "Email", "DevOps", "Call"]) expect(await form.getByRole("button", { name, exact: true }).isVisible()).toBe(true);
-  expect(await form.locator("textarea").isVisible()).toBe(true);
+  await pane.locator("form.send-loop").getByRole("radio", { name: /^Teams/ }).waitFor({ timeout: 20_000 });
+  expect(await overflow(page, ".ib-pane")).toEqual({ found: true, container: 0, page: 0 });
+  const form = await withoutSending(pane);
   expect(await overflow(page, ".ib-pane")).toEqual({ found: true, container: 0, page: 0 });
   expect(await overflow(page, "main.ib")).toEqual({ found: true, container: 0, page: 0 });
   return { pane, form };
@@ -109,9 +123,7 @@ describe.skipIf(!CHROMIUM)("IB-1: Close the loop never overflows", () => {
     await page.locator(".ib-row", { hasText: "Send the export spec" }).first().click();
     const sheet = page.locator(".ib-sheet.tall");
     await sheet.getByRole("button", { name: /^Close the loop/ }).first().click();
-    const form = sheet.locator("form.close-loop");
-    await form.waitFor();
-    for (const name of ["Teams", "Email", "DevOps", "Call"]) expect(await form.getByRole("button", { name, exact: true }).isVisible()).toBe(true);
+    await withoutSending(sheet);
     expect(await overflow(page, ".ib-sheet.tall")).toEqual({ found: true, container: 0, page: 0 });
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/ib1-close-loop-phone.png`, fullPage: true });
     await page.close();

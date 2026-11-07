@@ -394,7 +394,9 @@ describe("the web registration's calendar scope (A2)", () => {
     const arm = new Set((/ARM_SCOPES=\(([^)]*)\)/.exec(script)?.[1] ?? "").split(/\s+/).filter(Boolean));
     const web = microsoftProvider({ tenantId: TENANT, clientId: MS_CLIENT }, { calendars: "Calendars.ReadWrite" });
     // AP-1 (D490): Chat.Read isn't on the registration: each person allows it when they switch Read for asks on.
-    const asked = [web.scope, web.writeScope, ...Object.entries(web.kinds ?? {}).filter(([k]) => k !== "messages").map(([, v]) => v)].join(" ").split(" ").filter(Boolean);
+    // LP-1: Close the loop's send, mail and mail_send are asked the same way, per person, when first needed.
+    const incremental = new Set(["messages", "send", "mail", "mail_send"]);
+    const asked = [web.scope, web.writeScope, ...Object.entries(web.kinds ?? {}).filter(([k]) => !incremental.has(k)).map(([, v]) => v)].join(" ").split(" ").filter(Boolean);
     for (const s of asked) {
       const name = s.split("/").pop()!;
       if (s.startsWith("https://management.azure.com/")) expect(arm.has(name), s).toBe(true);

@@ -15,7 +15,8 @@ import { CLOSE_HOW, type CloseHow } from "../plan/types.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
 import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
-import { CloseLoop, HOW_LABEL } from "./CloseLoop.tsx";
+import { HOW_LABEL } from "./CloseLoop.tsx";
+import { SendLoop } from "./SendLoop.tsx";
 export { HOW_LABEL };
 
 const zoned = (iso: string, tz: string) => (iso.includes("[") ? Temporal.ZonedDateTime.from(iso) : Temporal.Instant.from(iso).toZonedDateTimeISO(tz)).withTimeZone(tz);
@@ -159,11 +160,16 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged, compact = 
       {mode === "close" && (
         // IB-1: the shared Close the loop on its own full-width row (never beside the text, so nothing scrolls sideways).
         <div className="follow-up-form-row">
-          <CloseLoop
+          <SendLoop
+            promiseKey={`f${l.id}`}
             who={l.hasWho ? l.who : null}
             initialHow={how}
             compact={compact}
-            onSubmit={async (v) => {
+            onClosed={(m) => {
+              setMode("none");
+              onChanged(m);
+            }}
+            closeWithout={async (v) => {
               const e = await act("followup.close", { id: l.id, note: v.note, ...(v.how ? { how: v.how } : {}) });
               if (!e) {
                 setHow(v.how);

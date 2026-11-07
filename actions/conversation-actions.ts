@@ -1137,3 +1137,49 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
     throw e;
   }
 }
+
+// ---- LP-1: Close the loop's view of a chat promise (mine only, in a chat I'm in) ----
+
+/** One promise as Close the loop needs it; `null` when it isn't mine or its chat isn't one I see. */
+export async function loopChatPromise(ctx: ConversationContext, id: number): Promise<import("./loop-actions.ts").LoopPromise | null> {
+  const v = await seen(ctx);
+  if (!v) return null;
+  const k = await v.convs.commitment(id);
+  if (!k || !v.byId.has(k.chatId) || !same(k.whoId, v.me)) return null;
+  const chat = v.byId.get(k.chatId)!;
+  const cfg = await ctx.config();
+  const c = k.conversationId !== null ? await v.convs.conversation(k.conversationId) : null;
+  const words: string[] = [];
+  for (const mid of k.messageIds.slice(0, 6)) {
+    const m = await v.teams.message(k.chatId, mid);
+    if (m && same(m.senderId, v.me)) words.push(m.text);
+  }
+  const home = await ctx.homeTenant();
+  const toMember = k.toId ? chat.members?.find((m) => same(m.userId, k.toId)) : undefined;
+  const inside = !!toMember && !!home && !toMember.guest && same(toMember.tenantId, home);
+  const whoRef = k.toId && k.toName ? (inside ? { kind: "cooptimizer" as const, id: k.toId.toLowerCase(), name: k.toName } : { kind: "external" as const, memberId: k.toId.toLowerCase(), name: k.toName }) : null;
+  return {
+    key: `c${k.id}`, kind: "chatPromise", id: k.id, clientKey: k.clientKey, clientName: cfg?.clientSettings[k.clientKey]?.name ?? k.clientKey, what: k.what,
+    closed: k.state === "done" || k.state === "not_needed", who: k.toName, whoRef, itemId: k.itemId,
+    chat: { chatId: chat.chatId, name: chat.displayName, members: chat.members ?? [] },
+    conversation: c ? { title: c.title, summary: c.summary } : null, myWords: words.length ? words.join(" ") : null,
+  };
+}
+
+/** LP-1: the registered chat a promise came from (a follow-up made from one names its commitment), if I see it. */
+export async function loopChatOf(ctx: ConversationContext, commitmentId: number): Promise<{ chat: NonNullable<import("./loop-actions.ts").LoopPromise["chat"]>; conversation: { title: string; summary: string } | null } | null> {
+  const v = await seen(ctx);
+  if (!v) return null;
+  const k = await v.convs.commitment(commitmentId);
+  const chat = k ? v.byId.get(k.chatId) : undefined;
+  if (!k || !chat) return null;
+  const c = k.conversationId !== null ? await v.convs.conversation(k.conversationId) : null;
+  return { chat: { chatId: chat.chatId, name: chat.displayName, members: chat.members ?? [] }, conversation: c ? { title: c.title, summary: c.summary } : null };
+}
+
+/** LP-1: my open chat promises (loop.find). */
+export async function loopOpenChatPromises(ctx: ConversationContext): Promise<{ key: string; what: string; who: string | null; clientKey: string }[]> {
+  const v = await seen(ctx);
+  if (!v) return [];
+  return (await v.convs.commitmentsBy(v.promiseChatIds)).filter((k) => !["done", "not_needed", "followup", "created"].includes(k.state) && same(k.whoId, v.me)).map((k) => ({ key: `c${k.id}`, what: k.what, who: k.toName, clientKey: k.clientKey }));
+}

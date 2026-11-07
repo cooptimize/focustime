@@ -4,7 +4,7 @@
 import type { NamedMigration } from "./named.ts";
 
 export const aheadStateChanges: NamedMigration = {
-  name: "20261119T0900_ahead_state_changes",
+  name: "20261119T1000_ahead_state_changes",
   sqlite: `CREATE TABLE ahead_state_changes (
      user_id TEXT NOT NULL,
      client_key TEXT NOT NULL,

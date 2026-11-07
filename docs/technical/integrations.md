@@ -21,6 +21,10 @@ Every outside system is read only, except the named writes listed for each one b
 | `ProfilePhoto.Read.All` | Graph | Yes | Tenant grant | Profile photos of you and the Cooptimizers on screen |
 | `Chat.ReadBasic` | Graph | No | Tenant grant | Names and members of your group chats, to register a client chat; never messages |
 | `Chat.Read` | Graph | No | Each person, when they first need it | New messages in registered client chats, read for everyone on them who follows the client; never posts |
+| `ChatMessage.Send` | Graph | No | Each person, when they first send from Close the loop | LP-1: posting my update, as me, in the client chat a promise came from, or in a 1:1 chat with someone at Cooptimize; only after the preview and Send |
+| `Chat.Create` | Graph | No | With `ChatMessage.Send` | LP-1: starting (or finding) the 1:1 chat with someone at Cooptimize; Graph returns the existing chat when there is one |
+| `Mail.ReadWrite` | Graph | No | Each person, when they first create an email draft | LP-1: creating the Outlook draft of my update in my own mailbox and reading back that one message (draft or sent) |
+| `Mail.Send` | Graph | No | Each person, when they first choose Send now | LP-1: sending that draft from my mailbox when I chose Send now; never any other message |
 | `OnlineMeetings.Read` | Graph | Yes | Tenant grant | Finding a registered client call from its join link |
 | `OnlineMeetingTranscript.Read.All` | Graph | Yes | Tenant grant | The transcript of a registered client call, for its reviewers |
 | `user_impersonation` | Azure Service Management | No | Tenant grant | Your own VM, with your own Azure access |
@@ -28,7 +32,7 @@ Every outside system is read only, except the named writes listed for each one b
 
 **Read.** Your calendar view and free/busy of teammates (`getSchedule`: free or busy and working hours only), mailbox settings, presence (`getPresencesByUserId`), photos, chat names and members, registered chats' messages and their images (on view), registered meetings and their transcripts (`sources/graph/`).
 
-**Written.** Only through the write framework: FocusTime's own events (the marker), the time and show-as of your own events with no other attendees, help invites to Cooptimize addresses, and your accept, tentative or decline on a meeting someone else invited you to (Graph's accept, tentativelyAccept and decline only, never a PATCH, DELETE or cancel of their meeting). Your preferred presence from the focus timer (`setUserPreferredPresence` Busy or DoNotDisturb with an expiry, and `clearUserPreferredPresence`). Never messages, posts, reactions or read marks.
+**Written.** Only through the write framework: FocusTime's own events (the marker), the time and show-as of your own events with no other attendees, help invites to Cooptimize addresses, and your accept, tentative or decline on a meeting someone else invited you to (Graph's accept, tentativelyAccept and decline only, never a PATCH, DELETE or cancel of their meeting). Your preferred presence from the focus timer (`setUserPreferredPresence` Busy or DoNotDisturb with an expiry, and `clearUserPreferredPresence`). LP-1's Close the loop, only after its preview and Send, as me: one Teams message in the chat the promise came from or a 1:1 chat with someone at Cooptimize (`POST /chats`, `POST /chats/{id}/messages`, read back with `Chat.Read` when granted), or one email in my own mailbox (`POST /me/messages` as a draft, `POST /me/messages/{id}/send` only for Send now, read back by its immutable id). Never reactions, read marks, edits or deletes of messages, and never a message the person didn't preview (`sources/graph/send.ts`). Setup and the admin's part: `docs/setup/close-the-loop.md`.
 
 **Failure.** A missing consent shows in Settings › Connections as needs consent or needs an admin, with where to allow it. An expired sign-in shows "Reconnect". A failed calendar read shows the last good data and its age.
 

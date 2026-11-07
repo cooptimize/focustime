@@ -359,6 +359,15 @@ What DS-1 learned, and what is still open:
 - Q-CL1-2: the per-client "Delete stored messages" (`requests.purge`) reaches only the shared `teams_messages` since D519; a person's old `chat_messages` and `asks` rows for that client go only with the 14-day rule, Delete my data, or the drop. Asks keep their message past 14 days. Fine to wait for the drop, or should 2a clear them sooner?
 - Q-CL1-3: can the org bootstrap's reading of a person's old `[ai]` keys go? It needs the `org_bootstrap_v1` mark confirmed on dev and prod (a read of `org_settings`, scope "meta"). Then `use`, `monthly_cap_usd` and `allowed_clients` can leave the settings model, with the loader ignoring them (BH-1).
 
+## LP-1
+
+- Q-LP1-1: the assistant opens the promise's draft but doesn't carry its own words over ("Tell Dana the counts match" opens Dana's promise with FocusTime's draft, not "the counts match"). Prefilling would mean the model's text lands in the draft box; it is still only sent after the preview. Worth it?
+- Q-LP1-2: the Comment channel @mentions the recipient only when they are on the item (assignee, creator or last changer). Mentioning anyone else needs their DevOps identity id, which comes from the identity API on `vssps.dev.azure.com`, a host the PAT rule doesn't allow. Allow that host for this one lookup, or keep the mention where it is known?
+- Q-LP1-3: an email draft waits for "I sent it". FocusTime could notice the draft moved to Sent Items on its own (reading that one message when the promise is opened, or on a schedule), but only with `Mail.ReadWrite` granted. Do that, or keep it a tap?
+- Q-LP1-4: the preview lists outside people by name (the brief's decision 2), which D485 otherwise forbids. Names are shown, not stored. Should the inside people be listed too when the chat is small (it shows only their count now)?
+- Q-LP1-5: Outlook on the web's compose deep link is the fallback for email, as in IN-1 (Q-IN1-3). If it changes, switch to `mailto:`.
+- Q-LP1-6: the brief's IB-1 mockups (docs/ux/ib1) weren't in the repo; LP-1 follows the IB-1 Inbox as built (the detail pane's main button, the phone sheet).
+
 ## Ahead editors (AH-5, Nov 7)
 
 - Q-AH5-1: DevOps itself may email someone assigned an item (per the organization's notification settings), including people outside Cooptimize. FocusTime sends them nothing; is DevOps's own email acceptable, or should the preview warn more strongly?

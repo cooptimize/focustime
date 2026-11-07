@@ -1326,6 +1326,7 @@ export type FollowUp = {
 };
 import { CLOSE_HOW, type CloseHow, type FollowUpOrigin } from "../plan/types.ts";
 import { refJson, refOf, type PersonRef } from "../plan/person-ref.ts";
+import type { LoopChannel, LoopMode, LoopSend, LoopState } from "../plan/loop.ts";
 export { CLOSE_HOW, type CloseHow, type FollowUpOrigin };
 export type DraftPatch = { clientKey?: string; parentItemId?: number | null; title?: string; size?: Size; description?: string | null; acceptance?: string | null; startDate?: string | null; targetDate?: string | null };
 export type FollowUpFields = { clientKey: string | null; who: string | null; whoRef: PersonRef | null; what: string; channel: string | null; due: IsoDate | null; itemId: number | null };
@@ -2009,6 +2010,16 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         if (!r) throw new PlanError(`No follow-up ${id}`);
         if (r.closed_at) throw new PlanError("That follow-up is already closed");
         (await db.run("UPDATE follow_ups SET closed_at = ?, close_note = ?, closed_by = ?, outcome = ?, close_how = ?, snoozed_until = NULL WHERE id = ?", stamp(), note, by, o.outcome ?? "done", o.how ?? null, id));
+        return toFollowUp((await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row);
+      });
+    },
+    /** LP-1: Undo of "Mark this promise kept": open again, only when a send closed it (closed_by me, done). */
+    async reopenFollowUp(id: number): Promise<FollowUp> {
+      return tx(async () => {
+        const r = (await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row | undefined;
+        if (!r) throw new PlanError(`No follow-up ${id}`);
+        if (!r.closed_at) throw new PlanError("That follow-up is already open");
+        (await db.run("UPDATE follow_ups SET closed_at = NULL, close_note = NULL, closed_by = NULL, outcome = NULL, close_how = NULL WHERE id = ?", id));
         return toFollowUp((await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row);
       });
     },
@@ -3026,6 +3037,36 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return newlySeen;
       });
     },
+    // ---- LP-1: Close the loop by sending (loop_sends: each send, also its audit entry) ----
+    async addLoopSend(x: { promiseKey: string; clientKey: string | null; channel: LoopChannel; mode: LoopMode; state: LoopState; destination: string; recipient: string | null; insideCount: number | null; outsideCount: number | null; body: string; link?: string | null; graphRef?: string | null; writeId?: number | null; error?: string | null; sentAt?: string | null }): Promise<LoopSend> {
+      return tx(async () => {
+        const now = stamp();
+        const r = await db.run(
+          "INSERT INTO loop_sends (promise_key, client_key, channel, mode, state, destination, recipient, inside_count, outside_count, body, link, graph_ref, write_id, error, kept, created_at, sent_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
+          x.promiseKey, x.clientKey, x.channel, x.mode, x.state, x.destination.slice(0, 200), x.recipient?.slice(0, 200) ?? null, x.insideCount, x.outsideCount, x.body, x.link ?? null, x.graphRef ?? null, x.writeId ?? null, x.error?.slice(0, 500) ?? null, now, x.sentAt ?? null, now,
+        );
+        return toLoopSend((await db.get("SELECT * FROM loop_sends WHERE id = ?", r.lastId!)) as Row);
+      });
+    },
+    async updateLoopSend(id: number, p: Partial<{ state: LoopState; mode: LoopMode; link: string | null; graphRef: string | null; writeId: number | null; error: string | null; sentAt: string | null; kept: boolean }>): Promise<LoopSend> {
+      return tx(async () => {
+        const had = (await db.get("SELECT * FROM loop_sends WHERE id = ?", id)) as Row | undefined;
+        if (!had) throw new PlanError(`No send ${id}`);
+        const cols: Record<string, unknown> = { state: p.state, mode: p.mode, link: p.link, graph_ref: p.graphRef, write_id: p.writeId, error: p.error === undefined ? undefined : p.error?.slice(0, 500) ?? null, sent_at: p.sentAt, kept: p.kept === undefined ? undefined : p.kept ? 1 : 0 };
+        const set = Object.entries(cols).filter(([, v]) => v !== undefined);
+        if (set.length) await db.run(`UPDATE loop_sends SET ${set.map(([k]) => `${k} = ?`).join(", ")}, updated_at = ? WHERE id = ?`, ...set.map(([, v]) => v as string | number | null), stamp(), id);
+        return toLoopSend((await db.get("SELECT * FROM loop_sends WHERE id = ?", id)) as Row);
+      });
+    },
+    async loopSend(id: number): Promise<LoopSend | null> {
+      const r = (await db.get("SELECT * FROM loop_sends WHERE id = ?", id)) as Row | undefined;
+      return r ? toLoopSend(r) : null;
+    },
+    /** One promise's sends (newest first), or every send (the audit log, newest first, at most `limit`). */
+    async loopSends(promiseKey: string | null, limit = 200): Promise<LoopSend[]> {
+      const rows = (promiseKey === null ? await db.all("SELECT * FROM loop_sends ORDER BY id DESC") : await db.all("SELECT * FROM loop_sends WHERE promise_key = ? ORDER BY id DESC", promiseKey)) as Row[];
+      return rows.slice(0, limit).map(toLoopSend);
+    },
     /** CV-1's migration: a promise moved into the shared commitments (it stops showing here). */
     async markPromiseMoved(chatId: string, messageId: string, commitmentId: number): Promise<void> {
       await tx(async () => void (await db.run("UPDATE promises SET moved_to = ? WHERE chat_id = ? AND message_id = ?", commitmentId, chatId, messageId)));
@@ -3197,6 +3238,16 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
   };
 }
 
+/** LP-1: a loop_sends row. */
+function toLoopSend(r: Row): LoopSend {
+  const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+  return {
+    id: Number(r.id), promiseKey: String(r.promise_key), clientKey: (r.client_key as string | null) ?? null, channel: r.channel as LoopChannel, mode: r.mode as LoopMode, state: r.state as LoopState,
+    destination: String(r.destination), recipient: (r.recipient as string | null) ?? null, insideCount: n(r.inside_count), outsideCount: n(r.outside_count), body: String(r.body),
+    link: (r.link as string | null) ?? null, graphRef: (r.graph_ref as string | null) ?? null, writeId: n(r.write_id), error: (r.error as string | null) ?? null, kept: !!Number(r.kept ?? 0),
+    createdAt: String(r.created_at), sentAt: (r.sent_at as string | null) ?? null, updatedAt: String(r.updated_at),
+  };
+}
 export type PlanStore = ReturnType<typeof planStoreOn>;
 
 /** AS-1: one turn as stored (the service types its cards). */

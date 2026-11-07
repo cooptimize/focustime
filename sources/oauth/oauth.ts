@@ -29,7 +29,7 @@ export type OAuthProvider = {
    * email), so a refresh returns an ID token with who signed in; "arm" is Azure Resource Manager (user_impersonation).
    * One token request covers one resource, so each set names one resource plus OpenID scopes.
    */
-  kinds?: Partial<Record<"id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings", string>>;
+  kinds?: Partial<Record<"id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings" | "send" | "mail" | "mail_send", string>>;
   clientSecretAccount?: AppSecretAccount;
   refreshAccount: RefreshTokenAccount;
 };
@@ -54,6 +54,15 @@ export const CHAT_READ_SCOPE = "https://graph.microsoft.com/Chat.Read";
  * OnlineMeetingTranscript.Read.All reads its transcript). Delegated, admin consented for the tenant; read only for
  * meetings registered in Admin › Clients › Meetings (sources/graph/meetings.ts refuses any other).
  */
+/**
+ * LP-1: Close the loop's sends, each asked for the first time a person sends that way (an incremental consent, as
+ * Chat.Read): Teams (ChatMessage.Send posts as them into a chat they're in; Chat.Create finds or makes the 1:1 chat),
+ * an Outlook draft (Mail.ReadWrite: create it and read it back; never reads other mail) and send now (Mail.Send).
+ * Not on the app registration (infra/scripts/app-registration.sh would drop a later consent; D490).
+ */
+export const SEND_SCOPE = "https://graph.microsoft.com/ChatMessage.Send https://graph.microsoft.com/Chat.Create";
+export const MAIL_SCOPE = "https://graph.microsoft.com/Mail.ReadWrite";
+export const MAIL_SEND_SCOPE = "https://graph.microsoft.com/Mail.Send";
 export const MEETINGS_SCOPE = "https://graph.microsoft.com/OnlineMeetings.Read https://graph.microsoft.com/OnlineMeetingTranscript.Read.All";
 
 /**
@@ -73,7 +82,7 @@ export function microsoftProvider(cfg: OutlookConfig, o: { calendars?: "Calendar
     clientId: cfg.clientId,
     scope: `offline_access ${read}`,
     writeScope: "offline_access https://graph.microsoft.com/Calendars.ReadWrite",
-    kinds: { id: `${OIDC} offline_access ${read}`, arm: `offline_access ${ARM_SCOPE}`, presence: `offline_access ${PRESENCE_SCOPE}`, photo: `offline_access ${PHOTO_SCOPE}`, chats: `offline_access ${CHATS_SCOPE}`, messages: `offline_access ${CHAT_READ_SCOPE}`, meetings: `offline_access ${MEETINGS_SCOPE}` },
+    kinds: { id: `${OIDC} offline_access ${read}`, arm: `offline_access ${ARM_SCOPE}`, presence: `offline_access ${PRESENCE_SCOPE}`, photo: `offline_access ${PHOTO_SCOPE}`, chats: `offline_access ${CHATS_SCOPE}`, messages: `offline_access ${CHAT_READ_SCOPE}`, meetings: `offline_access ${MEETINGS_SCOPE}`, send: `offline_access ${SEND_SCOPE}`, mail: `offline_access ${MAIL_SCOPE}`, mail_send: `offline_access ${MAIL_SEND_SCOPE}` },
     redirectHost: "localhost",
     extraAuthParams: { response_mode: "query", prompt: "select_account" },
     scopeOnTokenRequests: true,
@@ -154,7 +163,7 @@ export type ConnectOptions = {
 export type ScopeProbe = { kind: TokenKind; state: "granted" | "consent" | "signed_out" | "unavailable"; granted: string[] };
 /** Whether this sign-in can write (step 12): "write" only when a write token was granted with the write scope. */
 export type WriteAccess = { status: "write" } | { status: "read_only" | "not_connected" | "unavailable"; message: string };
-export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings";
+export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings" | "send" | "mail" | "mail_send";
 
 const DONE_PAGE = (ok: boolean) => `<!doctype html><meta charset="utf-8"><title>FocusTime</title>
 <body style="font:16px system-ui;padding:40px;max-width:560px">
@@ -168,7 +177,7 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
   const access = new Map<TokenKind, { token: string; expiresAt: number; scope: string }>();
   // Who signed in, from the last ID token (memory only; the caller keeps what it needs).
   let lastIdentity: IdClaims | null = null;
-  const scopeOf = (k: TokenKind) => (k === "write" && p.writeScope ? p.writeScope : (k === "id" || k === "arm" || k === "presence" || k === "photo" || k === "chats" || k === "messages" || k === "meetings") && p.kinds?.[k] ? p.kinds[k]! : p.scope);
+  const scopeOf = (k: TokenKind) => (k === "write" && p.writeScope ? p.writeScope : k !== "read" && k !== "write" && p.kinds?.[k] ? p.kinds[k]! : p.scope);
   const log = (op: string, extra: { status?: number; kind?: string; durationMs?: number } = {}) => deps.log({ source: p.source, op, ...extra });
 
   const secretAccount = deps.clientSecretAccount ?? p.clientSecretAccount;

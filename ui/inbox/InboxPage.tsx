@@ -132,7 +132,9 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
     if (!nav.item || !openRow || openRow.kind !== "promise") return;
     void markSeen([openRow.key], () => changedRef.current());
   }, [nav.item, openRow]);
-  useEffect(() => setForm(null), [openKey]);
+  // LP-1: the assistant's link (#/inbox/item/<key>/loop) opens the promise with its Close the loop draft, once.
+  const loopNav = nav.loop === true;
+  useEffect(() => setForm(loopNav && openRow?.kind === "promise" && openRow.key === openKey ? "close" : null), [openKey, loopNav, openRow?.kind]);
   // Going back to a view's own address (no item) lets the item I had open leave the list.
   useEffect(() => {
     if (!nav.item) setSticky(null);
@@ -383,7 +385,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
       )}
       {entry && (
         <ItemSheet onBack={() => onNav(navOf.inboxView(view))} entry={entry} acts={acts} form={form} title={`Inbox · ${viewLabel(view)}`}>
-          <Detail entry={entry} acts={acts} form={form} setForm={setForm} data={data} tz={tz} today={today} clientName={clientName} run={run} submit={submit} reload={() => void reloadAll()} mergeOthers={mergeOthers} merge={merge} snoozeChoices={src.list?.snoozeChoices} phone />
+          <Detail entry={entry} acts={acts} form={form} setForm={setForm} data={data} tz={tz} today={today} clientName={clientName} run={run} submit={submit} finished={(m) => (setForm(null), setNotice(m), void reloadAll())} reload={() => void reloadAll()} mergeOthers={mergeOthers} merge={merge} snoozeChoices={src.list?.snoozeChoices} phone />
         </ItemSheet>
       )}
       {openChatter && (
@@ -487,7 +489,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
       </section>
       <section className="ib-pane" data-tour="ib-pane" aria-label="Item">
         {entry ? (
-          <Detail entry={entry} acts={acts} form={form} setForm={setForm} data={data} tz={tz} today={today} clientName={clientName} run={run} submit={submit} reload={() => void reloadAll()} mergeOthers={mergeOthers} merge={merge} snoozeChoices={src.list?.snoozeChoices} />
+          <Detail entry={entry} acts={acts} form={form} setForm={setForm} data={data} tz={tz} today={today} clientName={clientName} run={run} submit={submit} finished={(m) => (setForm(null), setNotice(m), void reloadAll())} reload={() => void reloadAll()} mergeOthers={mergeOthers} merge={merge} snoozeChoices={src.list?.snoozeChoices} />
         ) : openChatter ? (
           <ChatterDetail row={openChatter} tz={tz} color={clientColor(openChatter.clientKey, data.clients)} onWork={onWork} chat={src.convs?.chats?.find((c) => c.chatId === openChatter.chatId)} admin={!!src.convs?.admin} onSocial={(on) => onSocial(openChatter.chatId, on)} />
         ) : (

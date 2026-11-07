@@ -571,7 +571,7 @@ async function linkComment(env: Env, o: Record<string, unknown>): Promise<HeldIn
 
 /** One change → what to hold, or a reason there is nothing to do. Reads the item now (fresh rev). */
 async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Promise<unknown>> = new Map()): Promise<HeldIn | string> {
-  const o = fields(c, ["kind"], ["key", "itemId", "commentId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images", "assign", "pickId"]);
+  const o = fields(c, ["kind"], ["key", "itemId", "commentId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images", "assign", "pickId", "mention"]);
   const { writer, org, pat, project, plan } = env;
   switch (o.kind) {
     case "state": {
@@ -594,7 +594,13 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
     case "comment": {
       const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));
       const text = str(o.text, "text", 4000)!;
-      return { ...base(env), ...none, op: "comment", itemId: item.id, title: item.title, ops: { text }, rev: null, before: { Comment: null }, after: { Comment: text }, type: item.type };
+      // LP-1: an @mention of the person a loop is closed with, when they are on this item (its assignee, creator or
+      // last changer), so their DevOps identity id is known; anyone else gets the text alone (DevOps would show a
+      // plain "@name" that notifies nobody).
+      const who = o.mention === undefined || o.mention === null ? null : str(o.mention, "mention", 200);
+      const m = who ? mentionOn(item, who) : null;
+      const posted = m ? `<a href="#" data-vss-mention="version:2.0,${m.id}">@${escHtml(m.name)}</a> ${escHtml(text).replace(/\r?\n/g, "<br>")}` : text;
+      return { ...base(env), ...none, op: "comment", itemId: item.id, title: item.title, ops: { text: posted }, rev: null, before: { Comment: null }, after: { Comment: m ? `@${m.name} ${text}` : text }, type: item.type, ...(who && !m ? { notes: [`${who} isn't on #${item.id} in DevOps, so the comment doesn't @mention them`] } : {}) };
     }
     case "comment_edit": {
       // SR-1: my own comment, inside this client's status report window, the full text before and after; DevOps keeps
@@ -1414,7 +1420,18 @@ async function aheadLanded(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWrite
   void tz;
 }
 
-const sameText = (html: string, text: string) => html.trim() === text.trim() || htmlToText(html).trim() === text.trim();
+const sameText = (html: string, text: string) => html.trim() === text.trim() || htmlToText(html).trim() === text.trim() || (/<[a-z]/i.test(text) && htmlToText(html).trim() === htmlToText(text).trim());
+const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+/** LP-1: a person on this item (assignee, creator, last changer) by their DevOps address: their identity id and name. */
+export function mentionOn(item: { fields: Record<string, unknown> }, email: string): { id: string; name: string } | null {
+  const want = email.trim().toLowerCase();
+  for (const f of ["System.AssignedTo", "System.CreatedBy", "System.ChangedBy"]) {
+    const v = item.fields[f] as { id?: unknown; uniqueName?: unknown; displayName?: unknown } | undefined;
+    if (v && typeof v === "object" && typeof v.id === "string" && /^[0-9a-f-]{36}$/i.test(v.id) && typeof v.uniqueName === "string" && v.uniqueName.trim().toLowerCase() === want)
+      return { id: v.id.toLowerCase(), name: typeof v.displayName === "string" && v.displayName.trim() ? v.displayName.trim() : email };
+  }
+  return null;
+}
 export type { StateInfo };
 
 /** FB-1: where Send feedback creates stories (the org.feedback Rule, bootstrapped from the app config). */

@@ -11,6 +11,7 @@ import type { ChatMessagesClient, ChatsClient } from "../sources/graph/chats.ts"
 import type { PlanStore } from "../store/plan-store.ts";
 import type { PresenceClient } from "../sources/graph/presence.ts";
 import type { PhotoClient } from "../sources/graph/photos.ts";
+import type { SendClient } from "../sources/graph/send.ts";
 import type { ActionResponse } from "./types.ts";
 import type { AuthStatus, Person } from "./account-types.ts";
 
@@ -35,6 +36,8 @@ export type MicrosoftAccount = {
   chatMessages?: ChatMessagesClient;
   /** MC-1: registered meetings' series, instances and transcripts, behind the registered-meeting gate. Absent: not available here. */
   meetings?: MeetingsClient;
+  /** LP-1: Close the loop's sends as me (Teams, Outlook drafts and mail), each on its own consented token. Absent: not available here. */
+  sender?: SendClient;
   /** T-2: whether a token for one scope set can be had, for Settings > Connections. Absent: can't tell here. */
   probe?: (kind: TokenKind) => Promise<ScopeProbe>;
   /** Forgets the refresh token and anything in memory; the calendar cache too. */

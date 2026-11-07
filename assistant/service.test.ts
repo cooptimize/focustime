@@ -374,11 +374,15 @@ describe("move things around: proposals, written only on confirm", () => {
     await new Promise((x) => setTimeout(x, 0));
     expect(s.writes().map((w) => w.action)).toEqual(["capture.add", "capture.route", "draft.prepare"]);
   });
-  it("close the loop says it's coming with LP-1", async () => {
-    const s = setup();
-    s.script(["close_loop"]);
-    const r = await s.a.handle("Close the loop with Dana");
-    expect(r.reply).toContain("coming with LP-1");
+  it("close the loop (LP-1) opens the promise's draft and never sends", async () => {
+    const s = setup({ handlers: { "loop.find": (i) => ({ ok: true, data: { matches: (i as { who?: string }).who === "Dana" ? [{ key: "c31", what: "Send the rerun counts", who: "Dana Reyes", clientKey: FAB, clientName: "Fabrikam", href: "#/inbox/item/c31/loop" }] : [] } }) } });
+    s.script(["close_loop"], call(["close_loop", { who: "Dana", about: "the Salesforce rerun" }]), say("Here's the draft."));
+    const r = await s.a.handle("Close the loop with Dana on the Salesforce rerun");
+    expect(r.cards).toContainEqual(expect.objectContaining({ kind: "note", link: { label: "Open the draft", href: "#/inbox/item/c31/loop" } }));
+    expect(r.proposals).toEqual([]);
+    expect(s.ran.map((x) => x.action)).toContain("loop.find");
+    expect(s.ran.some((x) => x.action.startsWith("loop.") && x.action !== "loop.find")).toBe(false);
+    expect(s.writes().filter((w) => w.action !== "loop.find")).toEqual([]);
   });
 });
 
