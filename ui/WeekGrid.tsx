@@ -8,7 +8,7 @@ import type { PtoDay } from "../week/pto.ts";
 import type { Pick } from "../plan/types.ts";
 import type { FollowUpView } from "../actions/types.ts";
 import { wasDueText, weekDueBadges } from "../plan/due.ts";
-import { homeRail, railMarks, type RailSpan } from "../plan/rail-promises.ts";
+import { homeRail, lateOnCards, railMarks, type CardRail, type RailSpan } from "../plan/rail-promises.ts";
 import { canAddWork, planButton } from "../plan/days.ts";
 import { checkinMenu, dayMenu, eventMenu, slotMenu } from "./menu.ts";
 import { MenuRow, useMenu } from "./Menus.tsx";
@@ -50,7 +50,9 @@ const TierCtx = createContext<Tier | null>(null);
 /** WK-2: the Board's Timeline toggle; hidden, cards draw no rail, strip or hour timeline and list their meetings. */
 const TimelineCtx = createContext(true);
 
-const RulerCtx = createContext<{ layout: Layout; promises: readonly RailItem[]; onPromise?: ((key: string) => void) | undefined; today: string; now: string; home: RailSpan | null }>({ layout: "wide", promises: [], today: "", now: "", home: null });
+/** UI-9: `late` is each card's late promises (by rail key), its chip's count when the card draws no rail; `onLate` opens several. */
+type RulerCtxValue = { layout: Layout; promises: readonly RailItem[]; onPromise?: ((key: string) => void) | undefined; onLate?: ((clientKey: string | null) => void) | undefined; today: string; now: string; home: RailSpan | null; late: ReadonlyMap<string, RailItem[]> };
+const RulerCtx = createContext<RulerCtxValue>({ layout: "wide", promises: [], today: "", now: "", home: null, late: new Map() });
 
 type Props = {
   week: Week;
@@ -77,6 +79,8 @@ type Props = {
   /** CV-1: my promises with a time, marked on the rail (overdue in amber). IB-1 slice 4: the Inbox's rows (inbox.today); a click opens that item in the Inbox. */
   promises?: readonly RailItem[] | undefined;
   onPromise?: ((key: string) => void) | undefined;
+  /** UI-9: a card's "N late" chip with several: the Inbox's Promises, late ones, for that client (null: the card's are several clients'). */
+  onLate?: ((clientKey: string | null) => void) | undefined;
   /** UI-8: the detail panel is open beside the grid; the grid keeps clear of it, so Friday stays visible and droppable. */
   panelOpen?: boolean | undefined;
   /** WK-2: the Timeline toggle (default shown). Hidden, every card is a full-width list with its meetings as lines. */
@@ -91,10 +95,18 @@ export function WeekGrid(props: Props) {
     return sl.off ? [] : [{ key: `${day.date}|${h}`, start: sl.view.start, end: sl.view.end }];
   }) : [];
   const home = homeRail(rails, props.now);
+  // UI-9: each card's late promises, placed as the rail places them but only on a card booked for their client.
+  const cardRails: CardRail[] = props.week.days.flatMap((d) =>
+    d.pto ? [] : cardHalves(d).flatMap((h) => {
+      const sl = slotOf(d, h)!;
+      return sl.off || sl.pto ? [] : [{ key: `${d.date}|${h}`, date: d.date, start: sl.view.start, end: sl.view.end, clients: sl.focus.map((f) => f.clientKey) }];
+    }),
+  );
+  const late = lateOnCards(props.promises ?? [], cardRails, { today: props.today, now: props.now });
   // MC-1: the registered client calls I review or attend, marked on the card they start in.
   const mine = useMine();
   return (
-    <RulerCtx.Provider value={{ layout: props.layout, promises: props.promises ?? [], onPromise: props.onPromise, today: props.today, now: props.now, home }}>
+    <RulerCtx.Provider value={{ layout: props.layout, promises: props.promises ?? [], onPromise: props.onPromise, onLate: props.onLate, today: props.today, now: props.now, home, late }}>
       <MeetingCalls.Provider value={callMarks(mine)}>
         <TimelineCtx.Provider value={props.timeline ?? true}>
           <Grid {...props} />
@@ -527,6 +539,13 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   // WK-2: with no time rail (the phone, or the timeline hidden) the card lists its meetings and events as lines.
   const listEvents = phone || !timeline;
   const ruler = rail === "rail" || rail === "slim";
+  // UI-9: a card with no rail to mark them (the timeline hidden, the phone, a strip or mini card) counts its late
+  // promises in one chip; an overdue due badge for a promise a chip counts is folded into it, so it shows once.
+  const rc = useContext(RulerCtx);
+  const late = ruler ? [] : (rc.late.get(`${slot.date}|${slot.half}`) ?? []);
+  const chipped = ruler ? null : new Set([...rc.late.values()].flat().map((p) => p.key));
+  const badges = chipped ? dueBadges.filter((f) => !(f.due && f.due < (plan.today ?? "") && chipped.has(`f${f.id}`))) : dueBadges;
+  const lateChip = late.length > 0 && <LateChip late={late} tabIndex={selected ? 0 : -1} onPromise={rc.onPromise} onLate={rc.onLate} />;
   const style = { "--c": clientColor(primary?.clientKey, colors), ...(compact && !grow ? {} : { flexGrow: minutesOf(slot) }) } as CSSProperties;
   const state = eve ? "eve" : overflow ? "overflow" : slot.open ? "open" : slot.off ? "off" : "focus";
   const reasonsId = `reasons-${slot.date}-${slot.half}`;
@@ -579,15 +598,20 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
           )}
         </span>
         <CardWhen slot={slot} tz={tz} />
+        {/* UI-9: on the phone the chip sits in the header, so the card is never taller for it. */}
+        {phone && lateChip}
         <span className="card-more">{menu.button(`Actions for ${dayLabel} ${slot.half}`)}</span>
       </div>
       {rail === "strip" && <DayStrip slot={slot} tz={tz} label={`${dayLabel} ${eve ? "evening" : slot.half}`} now={railNow} />}
       {drop.tip}
-      {status.kind !== "none" && (
+      {(status.kind !== "none" || (lateChip && !phone)) && (
         <div className="card-status">
-          <span className={`status-pill ${status.kind}`} id={reasonsId} title={status.detail ?? undefined}>
-            {pill}
-          </span>
+          {status.kind !== "none" && (
+            <span className={`status-pill ${status.kind}`} id={reasonsId} title={status.detail ?? undefined}>
+              {pill}
+            </span>
+          )}
+          {!phone && lateChip}
         </div>
       )}
       {slot.focus.slice(1).map((b) => (
@@ -596,9 +620,9 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
           Also booked: {b.clientName}
         </div>
       ))}
-      {dueBadges.length > 0 && (
+      {badges.length > 0 && (
         <div className="card-due">
-          {dueBadges.map((f) => (
+          {badges.map((f) => (
             <button key={f.id} type="button" className="due-open" tabIndex={selected ? 0 : -1} onClick={(e) => (e.stopPropagation(), onOpen({ kind: "followup", id: f.id }))} title={`Promise${f.hasWho ? ` to ${f.who}` : ""}: ${f.what}`}>
               <DueBadge l={f} />
             </button>
@@ -690,6 +714,29 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
         )}
       </HalfScope.Provider>
     </div>
+  );
+}
+
+/**
+ * UI-9: "1 late" or "N late" on a card with no rail, in the urgent strip's promise colour (amber, never red). One opens
+ * that promise in the Inbox; several open the Inbox's Promises, late ones, for the card's client.
+ */
+function LateChip({ late, tabIndex, onPromise, onLate }: { late: readonly RailItem[]; tabIndex: number; onPromise?: ((key: string) => void) | undefined; onLate?: ((clientKey: string | null) => void) | undefined }) {
+  const n = late.length;
+  const clients = new Set(late.map((p) => p.clientKey));
+  const open = () => (n === 1 ? onPromise?.(late[0]!.key) : onLate?.(clients.size === 1 ? late[0]!.clientKey : null));
+  return (
+    <button
+      type="button"
+      className="late-chip"
+      tabIndex={tabIndex}
+      aria-label={n === 1 ? "1 late promise" : `${n} late promises`}
+      title={n === 1 ? `Late promise: ${late[0]!.what}${late[0]!.toName ? ` · to ${late[0]!.toName}` : ""}` : `${n} late promises: open them in the Inbox`}
+      onClick={(e) => (e.stopPropagation(), open())}
+      onKeyDown={(e) => e.key === "Enter" && e.stopPropagation()}
+    >
+      {n} late
+    </button>
   );
 }
 

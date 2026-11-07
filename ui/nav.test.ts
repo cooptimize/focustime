@@ -224,6 +224,14 @@ describe("Inbox views and items (IB-1)", () => {
     expect(parseHash("#/inbox/item/x1")).toBeNull();
     expect(parseHash("#/inbox/item/v0")).toBeNull();
   });
+  it("UI-9: Promises narrowed to late ones, for one client or any, reads back", () => {
+    for (const c of ["contoso", "Fabrikam Inc", null]) {
+      const l = loc(navOf.inboxLate(c));
+      expect(parseHash(hashOf(l))).toEqual(l);
+    }
+    expect(hashOf(loc(navOf.inboxLate("Fabrikam Inc")))).toBe("#/inbox/promises/late/Fabrikam%20Inc");
+    expect(parseHash("#/inbox/promises/late/%E0")).toBeNull();
+  });
   it("old links open the right item or view (they still land)", () => {
     expect(parseHash("#/inbox/conversation/12")?.nav).toEqual(navOf.inboxItem("v12"));
     expect(parseHash("#/inbox/promise/7")?.nav).toEqual(navOf.inboxItem("c7"));

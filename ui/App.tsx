@@ -1990,6 +1990,7 @@ export function App() {
         onPlanDay={(d) => goNav(planDayNav(d))}
         promises={railItems(inboxToday?.items ?? [])}
         onPromise={(key) => goNav(navOf.inboxItem(key))}
+        onLate={(client) => goNav(navOf.inboxLate(client))}
         onAddWork={addWork}
         onAddHours={() => {
           setDetailsOpen(false);

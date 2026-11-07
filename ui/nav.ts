@@ -48,7 +48,10 @@ export type Nav =
    * IB-1: one list with views. `view` null is the bare #/inbox (the view I last used, Needs you the first time);
    * `item` is the item open in the detail pane (#/inbox/item/<key>), which picks a view it's in when `view` is null.
    */
-  | { tab: "inbox"; view: InboxView | null; item: string | null };
+  | { tab: "inbox"; view: InboxView | null; item: string | null; late?: LateFilter };
+
+/** UI-9: Promises narrowed to late ones (from a Week card's "N late" chip), for one client (null: any), not saved. */
+export type LateFilter = { client: string | null };
 
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
 /** MC-1: a call's review over the place (`occurrence` null: my calls, the ones I review or attend). */
@@ -70,6 +73,8 @@ export const navOf = {
   inbox: (followUp: number | null = null): Nav => ({ tab: "inbox", view: null, item: followUp ? `f${followUp}` : null }),
   /** IB-1: one view of the Inbox (#/inbox/<view>). */
   inboxView: (view: InboxView): Nav => ({ tab: "inbox", view, item: null }),
+  /** UI-9: the Promises view, late ones only, for one client (#/inbox/promises/late/<client>; null: any client). */
+  inboxLate: (client: string | null): Nav => ({ tab: "inbox", view: "promises", item: null, late: { client } }),
   /** IB-1: one item open in the detail pane (#/inbox/item/<key>). */
   inboxItem: (key: string, view: InboxView | null = null): Nav => ({ tab: "inbox", view, item: key }),
   /** Captures and drafts (was Inbox › Captures). */
@@ -176,6 +181,7 @@ export function hashOf(l: Loc): string {
   }
   if (n.tab === "ahead") return n.mode === "gantt" ? "#/ahead/gantt" : n.mode === "fix" ? "#/ahead/fix" : n.mode === "backlog" ? "#/ahead/backlog" : n.item ? `#/ahead/item/${n.item}` : "#/ahead";
   if (n.item) return `#/inbox/item/${n.item}`;
+  if (n.late) return n.late.client ? `#/inbox/promises/late/${encodeURIComponent(n.late.client)}` : "#/inbox/promises/late";
   return n.view ? `#/inbox/${INBOX_VIEW_SLUGS[n.view]}` : "#/inbox";
 }
 
@@ -264,6 +270,16 @@ export function parseHash(hash: string): Loc | null {
       // #/inbox/promise/<id>, #/inbox/<id> (a follow-up, now a promise), and UI-7's modes.
       if (a === "item") return c === undefined && b !== undefined && ITEM_KEY.test(b) ? plain(navOf.inboxItem(b)) : null;
       if (a === "conversation" || a === "promise") return c === undefined && b !== undefined && ID.test(b) ? plain(a === "conversation" ? navOf.conversation(Number(b)) : navOf.promise(Number(b))) : null;
+      // UI-9: #/inbox/promises/late and #/inbox/promises/late/<client>.
+      if (a === "promises" && b === "late") {
+        if (c === undefined) return plain(navOf.inboxLate(null));
+        try {
+          const client = decodeURIComponent(c);
+          return client.length <= 100 && !/[\u0000-\u001f]/.test(client) ? plain(navOf.inboxLate(client)) : null;
+        } catch {
+          return null;
+        }
+      }
       if (b !== undefined) return null;
       if (a === undefined) return plain(navOf.inbox());
       if (a === "conversations" || a === "requests" || a === "asks") return plain(navOf.conversations());

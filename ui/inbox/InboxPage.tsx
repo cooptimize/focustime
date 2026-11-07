@@ -20,7 +20,7 @@ import { markSeen } from "../inboxcount.ts";
 import { globalKeyAllowed, isTypingTarget, topOverlay } from "../keys.ts";
 import { clientColor, whenText } from "../labels.ts";
 import { ASK_KEY_EVENT } from "../menu.ts";
-import { navOf, type Nav } from "../nav.ts";
+import { navOf, type LateFilter, type Nav } from "../nav.ts";
 import { usePhone } from "../viewport.ts";
 import { chatterRows, entryOf, useInboxData, type ChatterRow, type Entry } from "./data.ts";
 import { ChatterDetail, Detail } from "./Detail.tsx";
@@ -66,7 +66,16 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
   const clientName = useCallback((k: string | null) => (k ? (clientList.find((c) => c.clientKey === k)?.clientName ?? k) : "No client"), [clientList]);
 
   // The view, clients and grouping, remembered for me (Settings rows); the address's view wins while it's there.
+  // UI-9: a Week card's "N late" chip opens Promises narrowed to late ones for its client; kept while I open its items,
+  // never saved, and gone once I choose a view or clients myself.
+  const lateKey = nav.late ? `late:${nav.late.client ?? ""}` : null;
+  const [late, setLate] = useState<LateFilter | null>(nav.late ?? null);
+  useEffect(() => {
+    if (nav.late) setLate(nav.late);
+    else if (!nav.item) setLate(null);
+  }, [lateKey, nav.item]);
   const save = useCallback((p: Partial<InboxPrefs>) => {
+    if (p.clients || p.view) setLate(null);
     setPrefs((cur) => ({ ...cur, ...p }));
     void call("ui.set_inbox", p, { background: true }).catch(() => undefined);
   }, []);
@@ -75,17 +84,17 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
     setSticky(null);
     onNav(navOf.inboxView(v));
   };
-  const clients = prefs.clients;
+  const clients = late ? (late.client ? [late.client] : []) : prefs.clients;
 
   const items = src.list?.items ?? [];
   const chatter = useMemo(() => chatterRows(src.convs, clients), [src.convs, clients]);
   const rows = useMemo(() => {
-    const inv = inView(items, view, clients);
+    const inv = inView(items, view, clients).filter((i) => !late || i.late);
     const s = sticky && !inv.some((i) => i.key === sticky) ? items.find((i) => i.key === sticky && !i.snoozedUntil) : undefined;
     const all = s ? [...inv, s] : inv;
     const q = filter.trim().toLowerCase();
     return q ? all.filter((i) => `${i.title} ${i.who ?? ""} ${i.where ?? ""} ${clientName(i.clientKey)}`.toLowerCase().includes(q)) : all;
-  }, [items, view, clients, sticky, filter, clientName]);
+  }, [items, view, clients, sticky, filter, clientName, late]);
   const groups = useMemo(() => groupRows(rows, prefs.group, (k) => clientName(k), today), [rows, prefs.group, clientName, today]);
   // Slice 3: snoozed items are in no view and no count; one folded group at the foot brings them back to look at.
   const [showSnoozed, setShowSnoozed] = useState(false);
@@ -280,8 +289,16 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
   const header = (
     <div className="ib-list-head">
       <h2>
-        {viewLabel(view)} <span className="muted">{viewCount(view)}</span>
+        {viewLabel(view)} <span className="muted">{late ? rows.length : viewCount(view)}</span>
       </h2>
+      {late && (
+        <p className="ib-late-line" role="status">
+          Late{late.client ? ` for ${clientName(late.client)}` : ""}
+          <button type="button" className="link-btn" onClick={() => (setLate(null), onNav(navOf.inboxView(view)))}>
+            Show all
+          </button>
+        </p>
+      )}
       {view === "promises" && (
         <button type="button" className="mini" onClick={() => setAdding((v) => !v)}>
           + New promise
