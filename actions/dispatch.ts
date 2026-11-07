@@ -1562,6 +1562,16 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
       return { ok: true, data: { ui: r.parsed.config.ui } };
     }
+    case "ui.set_show_timelines": {
+      // WK-2: the Board's Timeline toggle (its header button, B, Week's ⋯ and the command). Saved in [ui] show_timelines,
+      // the key U3 left read and ignored, so an older build reads it without complaint.
+      const i = req.input as Record<string, unknown> | null;
+      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "show") || typeof i.show !== "boolean") return bad("input must be { show: boolean }");
+      if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
+      const r = await ctx.writeConfig((text) => setValue(text, "ui", "show_timelines", i.show as boolean, "Display (WK-2): the hour rail beside each card's to-dos on Week's Board."));
+      if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
+      return { ok: true, data: { ui: r.parsed.config.ui } };
+    }
     case "ui.set_inbox": {
       // IB-1: the Inbox's view, clients and grouping, remembered per person ([ui] inbox_view, inbox_clients, inbox_group).
       const i = req.input as Record<string, unknown> | null;

@@ -5432,3 +5432,62 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   .mtg-prop > .mini { grid-column: 2; justify-self: start; }
   .mtg-date { min-width: 6em; }
 }
+
+/* ---------- WK-2: the Timeline toggle and per-column tiers ---------- */
+/* The toggle beside the Board's modes: an icon and "Timeline", pressed while the timeline shows. */
+.tl-toggle { display: inline-flex; align-items: center; gap: 6px; height: calc(28px * var(--text-scale)); padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-2); font-weight: 500; cursor: pointer; white-space: nowrap; }
+.tl-toggle:hover { color: var(--text); border-color: var(--border-strong); }
+.tl-toggle.on { color: var(--text); background: var(--raised); }
+.tl-toggle svg { flex: none; }
+@media (max-width: 1279.98px) { .tl-toggle .tl-word { display: none; } .tl-toggle { padding: 0 7px; } }
+.app.phone .tl-toggle { display: none; }
+
+/* Each column carries its own tier (ui/weekfit.ts days): the mini rules follow the column, not the grid. */
+.day.tier-mini .pill-reason { display: none; }
+.day.tier-mini .card-when { flex-basis: 100%; order: 3; }
+.day.tier-mini .half .card-body { padding: 8px 8px 8px 10px; }
+.day.tier-mini .pick-row.dens-week .size-chip { display: none; }
+.day.tier-mini .day-head .date, .day.tier-mini .day-head .today-pill { display: none; }
+.day.tier-mini .day-head { gap: 4px; }
+.day.tier-mini .day-head .day-plan { padding: 0 6px; }
+.day.tier-mini .suggested-card .sc-open { flex-wrap: wrap; }
+
+/* A card header never cuts a word or a number: the client name keeps its longest word whole unless that word alone is
+   wider than the card; a one-word label (Catch-up, Open, PTO) stays on one line and gives way to its short form on a
+   very narrow card; the time range wraps after its dash, or shows the hours alone. */
+.half.card .card-body { container: cardbody / inline-size; }
+.card-head .card-client { min-width: auto; max-width: 100%; overflow-wrap: break-word; }
+.card-head .card-client.one-word { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-client .cc-short { display: none; }
+.card-head .card-when { flex: 0 1 auto; min-width: auto; max-width: 100%; white-space: normal; overflow-wrap: normal; }
+.card-when .cw-full { overflow-wrap: normal; word-break: keep-all; }
+.card-when .cw-short { display: none; }
+@container cardbody (max-width: 7em) {
+  .card-client .cc-full { display: none; }
+  .card-client .cc-short { display: inline; }
+}
+@container cardbody (max-width: 4.5em) {
+  .card-when .cw-full { display: none; }
+  .card-when .cw-short { display: inline; white-space: nowrap; }
+}
+.whole-label { white-space: nowrap; }
+.half .add-work { white-space: nowrap; }
+
+/* An overdue promise drawn at "now" keeps its label clear of the now line's time at the rail's left. */
+.ruler .r-promise span { max-inline-size: calc(100% - 4.2em); }
+
+/* The timeline hidden: no rail, strip or hour timeline; each card is a full-width list with its meetings as lines. */
+.grid.no-timeline .half.card .card-body { margin-right: 0; }
+.grid.no-timeline .card-events { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 3px; font-size: var(--fs-2); }
+.grid.no-timeline .card-events li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; padding-left: 8px; border-left: 2px solid var(--border-strong); }
+.grid.no-timeline .card-events li.personal { border-left-color: var(--personal, var(--border-strong)); }
+.grid.no-timeline .card-events li.unavailable { border-left-style: dashed; }
+.grid.no-timeline .card-events .ce-time { color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.grid.no-timeline .card-events .ce-title { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: break-word; }
+/* The Board's header keeps clear of the detail panel, as the grid does, so the Timeline toggle and the modes stay in
+   reach with the panel open (the header wraps where it must). */
+.app:not(.narrow):not(.phone):has(main.grid.with-panel) .week-head { padding-right: calc(var(--dp-w) + 24px); }
+/* A narrow card stacks each meeting's time over its title, so the title keeps the card's width. */
+@container cardbody (max-width: 13em) {
+  .grid.no-timeline .card-events li { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}

@@ -143,7 +143,7 @@ describe("⋯ menus", () => {
     await find(find(m, "Set size").next!(), "S · 1h").run!();
     expect(t.calls).toEqual([["link", "internal", pick.itemUrl], ["pick.set_size", { id: 7, size: "S" }]]);
   });
-  it("moving offers the other half, Friday and every other half-day; a PTO day takes it with a note (AS-2, D941)", () => {
+  it("moving offers the other half, Friday and every other half-day; a PTO day takes it with a note (AS-2, D947)", () => {
     const m = find(pickMenu(env().e, pick), "Move").next!();
     expect(items(m)[0]!.label).toBe("To PM the same day");
     expect(items(m)[1]!.label).toBe("To Friday (catch-up)");
@@ -165,7 +165,7 @@ describe("⋯ menus", () => {
     const add = items(find(itemMenu(e, "internal", item(1)), "Add to the plan").next!());
     expect(add.some((i) => i.id.startsWith("add-2026-11-02"))).toBe(false);
     expect(new Set(add.map((i) => i.id)).size).toBe(add.length);
-    // AS-2 (D941): a PTO day takes it, with the note.
+    // AS-2 (D947): a PTO day takes it, with the note.
     expect(add.find((i) => i.id === "add-2026-11-05-AM")).toMatchObject({ hint: "You're on PTO that day" });
     expect(add.find((i) => i.id === "add-2026-11-05-AM")!.disabled).toBeUndefined();
     const first = add.find((i) => !i.disabled)!;
@@ -367,7 +367,7 @@ describe("Timebox a pick into a free gap (step 13.6, D245)", () => {
 describe("+ Add work entry points (step 13.6, D241)", () => {
   it("the block menu and the command menu add work to a block with working time (key A)", async () => {
     const { e, calls } = env({ addWork: (d, h) => calls.push(["addWork", d, h]), selection: { date: "2026-11-04", half: "PM" } });
-    await find(slotMenu(e, "2026-11-04", "AM", "internal", "Internal"), "Add work…").run?.();
+    await find(slotMenu(e, "2026-11-04", "AM", "internal", "Internal"), "Add a to-do…").run?.();
     expect(calls.at(-1)).toEqual(["addWork", "2026-11-04", "AM"]);
     const cmd = commandList(e).find((c) => c.action === "ui.add_work")!;
     expect(cmd.hint).toBe("A");
@@ -376,9 +376,9 @@ describe("+ Add work entry points (step 13.6, D241)", () => {
   });
   it("is disabled on a past day, a PTO day and a block without working hours", () => {
     const { e } = env();
-    expect(find(slotMenu(e, "2026-11-02", "AM", "internal", "Internal"), "Add work…").disabled).toMatch(/Past day/);
-    expect(find(slotMenu(e, "2026-11-05", "AM", "internal", "Internal"), "Add work…").disabled).toMatch(/PTO/);
-    expect(find(slotMenu(e, "2026-11-07", "AM", null, null), "Add work…").disabled).toBe("No working hours in this block");
+    expect(find(slotMenu(e, "2026-11-02", "AM", "internal", "Internal"), "Add a to-do…").disabled).toMatch(/Past day/);
+    expect(find(slotMenu(e, "2026-11-05", "AM", "internal", "Internal"), "Add a to-do…").disabled).toMatch(/PTO/);
+    expect(find(slotMenu(e, "2026-11-07", "AM", null, null), "Add a to-do…").disabled).toBe("No working hours in this block");
   });
 });
 

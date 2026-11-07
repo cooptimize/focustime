@@ -145,6 +145,9 @@ export type MenuEnv = {
   /** U5.1 (D408): personal events shown on Week and Today (G). */
   showPersonal: boolean;
   saveShowPersonal: (show: boolean) => void;
+  /** WK-2: the Board's Timeline toggle (B), the hour rail beside each card's to-dos. */
+  showTimelines: boolean;
+  saveShowTimelines: (show: boolean) => void;
   hours: TimeModel;
   /** Runs a time model action (hours for a day, unavailable time, flex sessions); false with a notice on refusal. */
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
@@ -276,7 +279,7 @@ export function planDayRefusal(env: MenuEnv, date: IsoDate): string | undefined 
 export const halfLabel = (h: Half) => (h === "EVE" ? "Evening" : h);
 
 /** Half-days (and evening slots) of the week on screen with working time, as places to put a pick. */
-/** AS-2 (D941): a move is refused only for a past day; a PTO day takes it, with the note as a hint. */
+/** AS-2 (D947): a move is refused only for a past day; a PTO day takes it, with the note as a hint. */
 function halfDays(env: MenuEnv, skip?: { date: IsoDate; half: Half }): { date: IsoDate; half: Half; label: string; disabled?: string; hint?: string }[] {
   return env.week.days.flatMap((d) =>
     ([d.am, d.pm, ...(d.eve ? [d.eve] : [])] as const)
@@ -649,7 +652,7 @@ export function slotMenu(env: MenuEnv, date: IsoDate, half: Half, clientKey: str
     items: [
       { id: "details", label: "Details", hint: "Enter", action: "ui.details", run: () => env.openDetails(date, half) },
       { id: "plan", label: "Plan this day", action: "planday.start", ...(refused ? { disabled: refused } : {}), run: () => env.openPlanDay(date) },
-      { id: "addwork", label: "Add work…", hint: "A", action: "ui.add_work", ...(addWorkRefusal(env, date, half) ? { disabled: addWorkRefusal(env, date, half)! } : {}), run: () => env.addWork?.(date, half) },
+      { id: "addwork", label: "Add a to-do…", aka: ["Add work"], hint: "A", action: "ui.add_work", ...(addWorkRefusal(env, date, half) ? { disabled: addWorkRefusal(env, date, half)! } : {}), run: () => env.addWork?.(date, half) },
       {
         id: "intention",
         label: "Add an intention",
@@ -1051,6 +1054,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "inbox.snooze":
       return { run: () => env.setView("inbox") };
     case "ui.set_show_personal": return { run: () => env.saveShowPersonal(!env.showPersonal) };
+    case "ui.set_show_timelines": return { run: () => env.saveShowTimelines(!env.showTimelines) };
     case "ui.first_launch": return { disabled: "Runs on its own the first time FocusTime opens" };
     case "ui.tour_offer": return { run: () => env.showGuide() };
     case "setup.load":
@@ -1452,7 +1456,7 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "week.next", action: "week.next", group: "Week", label: "Next week", hint: "]", run: () => env.changeWeek(1) },
     { id: "week.today", action: "week.today", group: "Week", label: "Back to this week", run: env.goToday },
     { id: "ui.details", action: "ui.details", group: "Week", label: "Details of the selected half-day", hint: "Enter", run: () => env.openDetails(env.selection.date, env.selection.half) },
-    { id: "ui.add_work", action: "ui.add_work", group: "Week", label: "Add work to the selected block", hint: "A", ...(addWorkRefusal(env, env.selection.date, env.selection.half) ? { disabled: addWorkRefusal(env, env.selection.date, env.selection.half)! } : { run: () => env.addWork?.(env.selection.date, env.selection.half) }) },
+    { id: "ui.add_work", action: "ui.add_work", group: "Week", label: "Add a to-do to the selected block", aka: ["Add work"], hint: "A", ...(addWorkRefusal(env, env.selection.date, env.selection.half) ? { disabled: addWorkRefusal(env, env.selection.date, env.selection.half)! } : { run: () => env.addWork?.(env.selection.date, env.selection.half) }) },
     { id: "ui.settings", action: "ui.settings", group: "Week", label: "Settings", disabled: soon },
     { id: "ui.region_next", action: "ui.region_next", group: "Keyboard", label: "Next region (top bar, week, panel, status bar)", hint: "F6", run: () => env.moveRegion(1) },
     { id: "ui.region_prev", action: "ui.region_prev", group: "Keyboard", label: "Previous region", hint: "Shift F6", run: () => env.moveRegion(-1) },

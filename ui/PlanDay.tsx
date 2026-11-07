@@ -417,7 +417,7 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
       onDrop={onDrop}
       headClass="pd2-block-head"
       name={
-        <button type="button" className="pd2-block-name" aria-pressed={selected} onClick={onSelect} title={`${halfName(slot.half)}: add work to this block on the right`}>
+        <button type="button" className="pd2-block-name" aria-pressed={selected} onClick={onSelect} title={`${halfName(slot.half)}: add a to-do to this block on the right`}>
           <span className="swatch" />
           <span className="pd2-client">{title}</span>
         </button>

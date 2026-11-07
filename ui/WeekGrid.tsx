@@ -47,6 +47,8 @@ export type PanelFocus = { kind: "features" } | { kind: "followup"; id: number }
 /** Step 15.1 (D276): the layout, for the time rail on each compact card (U3: always on, the one home for meetings). */
 /** WK-1: the Board's tier (weekfit.ts), null outside the medium layout (the wide timeline, the one-day view). */
 const TierCtx = createContext<Tier | null>(null);
+/** WK-2: the Board's Timeline toggle; hidden, cards draw no rail, strip or hour timeline and list their meetings. */
+const TimelineCtx = createContext(true);
 
 const RulerCtx = createContext<{ layout: Layout; promises: readonly DayPromise[]; onPromise?: (() => void) | undefined; today: string; now: string; home: RailSpan | null }>({ layout: "wide", promises: [], today: "", now: "", home: null });
 
@@ -68,7 +70,7 @@ type Props = {
   compact: boolean;
   /** Plan the day: this day's column becomes the planning panel; the rest of the week is dimmed. */
   planDay?: { dayIndex: number; node: ReactNode } | undefined;
-  /** Step 13.6: the day header's Plan button, "+ Add work" on a block and Friday's "Add hours" link. */
+  /** Step 13.6: the day header's Plan button, "+ Add to-do" on a block and Friday's "Add hours" link. */
   onPlanDay?: ((date: string) => void) | undefined;
   onAddWork?: ((date: string, half: Half) => void) | undefined;
   onAddHours?: ((date: string) => void) | undefined;
@@ -77,6 +79,8 @@ type Props = {
   onPromise?: (() => void) | undefined;
   /** UI-8: the detail panel is open beside the grid; the grid keeps clear of it, so Friday stays visible and droppable. */
   panelOpen?: boolean | undefined;
+  /** WK-2: the Timeline toggle (default shown). Hidden, every card is a full-width list with its meetings as lines. */
+  timeline?: boolean | undefined;
 };
 
 export function WeekGrid(props: Props) {
@@ -92,13 +96,17 @@ export function WeekGrid(props: Props) {
   return (
     <RulerCtx.Provider value={{ layout: props.layout, promises: props.promises ?? [], onPromise: props.onPromise, today: props.today, now: props.now, home }}>
       <MeetingCalls.Provider value={callMarks(mine)}>
-        <Grid {...props} />
+        <TimelineCtx.Provider value={props.timeline ?? true}>
+          <Grid {...props} />
+        </TimelineCtx.Provider>
       </MeetingCalls.Provider>
     </RulerCtx.Provider>
   );
 }
 
-function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, onSelect, onOpen, layout, compact, planDay, onPlanDay, onAddWork, onAddHours, panelOpen }: Props) {
+function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, onSelect, onOpen, layout, compact: compactIn, planDay, onPlanDay, onAddWork, onAddHours, panelOpen, timeline = true }: Props) {
+  // WK-2: with the timeline hidden every layout draws compact cards (no hour timeline beside them).
+  const compact = compactIn || !timeline;
   const pv = useContext(PlanCtx);
   const ref = useRef<HTMLElement>(null);
   const box = useGridBox(ref, layout === "medium");
@@ -116,7 +124,7 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
     pv.followUps ?? [],
     pv.today ?? today,
   );
-  const column = (day: Day, i: number) =>
+  const column = (day: Day, i: number, own?: { tier: Tier; railPx: number }) =>
     planDay?.dayIndex === i ? (
       <div key={day.date} className="pd-cell">
         {planDay.node}
@@ -142,6 +150,8 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
       onAddWork={onAddWork}
       onAddHours={onAddHours}
       badges={badges}
+      own={own}
+      grow={!compactIn}
     />
   );
   if (layout === "narrow") {
@@ -150,7 +160,7 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
     const go = (d: number) => onSelect({ dayIndex: Math.max(0, Math.min(week.days.length - 1, d)), half: selection.half });
     return (
       <main
-        className="grid narrow"
+        className={`grid narrow${timeline ? "" : " no-timeline"}`}
         role="group"
         aria-label="Day view. Left and right arrows change the day, up and down pick the half-day, Enter opens details."
         // P1: on a touch screen a sideways swipe changes the day.
@@ -195,18 +205,20 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
   const fit = box && layout === "medium" ? weekFit({ contentPx: box.content, gapPx: box.gap, scale: box.scale, shares, selected: planDay?.dayIndex ?? selection.dayIndex }) : null;
   const tracks = fit?.tracks ?? shares.map((s) => `minmax(0, ${s}fr)`).join(" ");
   const firstOpen = fit ? fit.open.indexOf(true) : 0;
+  // WK-2: each open column draws the tier of its own width (Friday and PTO days too); the grid's class keeps the
+  // working days' tier.
   return (
     <TierCtx.Provider value={layout === "medium" ? fit?.tier ?? "rail" : null}>
       <main
         ref={ref}
-        className={`grid ${layout} ${planDay ? "planning" : ""} ${hasEve ? "has-eve" : ""}${panelOpen ? " with-panel" : ""}${layout === "medium" ? ` tier-${fit?.tier ?? "rail"}` : ""}${fit && fit.open.some((o) => !o) ? " folded" : ""}`}
+        className={`grid ${layout} ${planDay ? "planning" : ""} ${hasEve ? "has-eve" : ""}${panelOpen ? " with-panel" : ""}${layout === "medium" ? ` tier-${fit?.tier ?? "rail"}` : ""}${fit && fit.open.some((o) => !o) ? " folded" : ""}${timeline ? "" : " no-timeline"}`}
         style={{ gridTemplateColumns: tracks, ...(fit ? { "--rail-w": `${fit.railPx}px` } : {}) } as CSSProperties}
         role="group"
         aria-label="Week grid. Arrow keys move between half-days, Enter opens details."
       >
         {week.days.map((d, i) =>
           !fit || fit.open[i] ? (
-            column(d, i)
+            column(d, i, fit?.days[i])
           ) : (
             <FoldedDay key={d.date} day={d} dayIndex={i} tz={userZone(week)} hasEve={hasEve} colors={colors} isToday={d.date === today} now={now} side={i < firstOpen ? "before" : "after"} onSelect={onSelect} />
           ),
@@ -255,7 +267,10 @@ function wholeDay(day: Day): Whole {
   return null;
 }
 
-function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boolean; hasEve: boolean; badges: ReadonlyMap<string, FollowUpView[]> } & Omit<Props, "week" | "today">) {
+function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boolean; hasEve: boolean; badges: ReadonlyMap<string, FollowUpView[]>; own?: { tier: Tier; railPx: number } | undefined; grow?: boolean } & Omit<Props, "week" | "today">) {
+  // WK-2: this column's own tier (from its own width) in the medium layout; the grid's otherwise.
+  const gridTier = useContext(TierCtx);
+  const tier = gridTier && props.own ? props.own.tier : gridTier;
   const { colors, minFocusWindow, compact } = props;
   const { day, dayIndex, tz, isToday } = props;
   const overflow = day.kind === "overflow";
@@ -300,7 +315,12 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
   };
 
   return (
-    <section className={`day ${overflow ? "overflow" : day.kind === "weekend" ? "weekend overflow" : "work"} ${isToday ? "today" : ""} ${day.pto ? "pto-full" : ""}${daySelected ? " sel-day" : ""}`} aria-label={`${dayLabel}${day.pto ? `, ${ptoLabel(day.pto)}` : ""}`}>
+    <TierCtx.Provider value={tier}>
+    <section
+      className={`day ${overflow ? "overflow" : day.kind === "weekend" ? "weekend overflow" : "work"} ${isToday ? "today" : ""} ${day.pto ? "pto-full" : ""}${daySelected ? " sel-day" : ""}${tier ? ` tier-${tier}` : ""}`}
+      style={tier && props.own ? ({ "--rail-w": `${props.own.railPx}px` } as CSSProperties) : undefined}
+      aria-label={`${dayLabel}${day.pto ? `, ${ptoLabel(day.pto)}` : ""}`}
+    >
       <header className="day-head" onContextMenu={menu.onContextMenu}>
         <span className="dow">{day.weekday}</span>
         <span className="date">{shortDate(day.date)}</span>
@@ -359,6 +379,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
               onOpen={(focus) => props.onOpen({ dayIndex, half }, focus)}
               dayLabel={dayLabel}
               compact={compact}
+              grow={!!props.grow}
               now={props.now}
               isToday={isToday}
               dueBadges={props.badges.get(`${day.date}:${half}`) ?? []}
@@ -372,6 +393,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
 
       <OutLine kind="late" items={whole ? [] : day.evening.map((p) => p.event)} tz={tz} />
     </section>
+    </TierCtx.Provider>
   );
 }
 
@@ -467,19 +489,21 @@ type HalfProps = {
   onOpen: (focus?: PanelFocus) => void;
   /** A compact card (the time rail on the right instead of the hour timeline) for the medium layout. */
   compact: boolean;
+  /** WK-2: a card in a layout that sizes cards by their minutes (wide, the one-day timeline), kept with the timeline hidden. */
+  grow: boolean;
   now: string;
   /** Done picks stay visible on today; on other days they collapse to "N done". */
   isToday: boolean;
   /** Follow-ups due this week to badge on this card (U3). */
   dueBadges: readonly FollowUpView[];
-  /** "+ Add work" (step 13.6): opens Plan the day on this block's picker. Absent where work can't be added. */
+  /** "+ Add to-do" (step 13.6; "+ Add work" until WK-2): opens Plan the day on this block's picker. Absent where work can't be added. */
   addWork?: (() => void) | undefined;
   /** UI-B: today's now line on this block's rail; null on other days. */
   railNow: RailNow | null;
 };
 
 
-function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, selected, dayLabel, refFn, onSelect, onOpen, compact, now, isToday, dueBadges, addWork, railNow }: HalfProps) {
+function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, selected, dayLabel, refFn, onSelect, onOpen, compact, grow, now, isToday, dueBadges, addWork, railNow }: HalfProps) {
   const primary = slot.focus[0];
   const sev = worstSeverity(slot.risks);
   const allWork = useContext(DevOpsWork);
@@ -498,14 +522,19 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   const phone = usePhone();
   // WK-1: exactly the tier's element: the rail with titles, a slim ruler, or the day strip (strip and mini).
   const tier = useContext(TierCtx);
-  const rail = compact ? railFor(tier, slot, phone) : null;
+  const timeline = useContext(TimelineCtx);
+  const rail = compact && timeline ? railFor(tier, slot, phone) : null;
+  // WK-2: with no time rail (the phone, or the timeline hidden) the card lists its meetings and events as lines.
+  const listEvents = phone || !timeline;
   const ruler = rail === "rail" || rail === "slim";
-  const style = { "--c": clientColor(primary?.clientKey, colors), ...(compact ? {} : { flexGrow: minutesOf(slot) }) } as CSSProperties;
+  const style = { "--c": clientColor(primary?.clientKey, colors), ...(compact && !grow ? {} : { flexGrow: minutesOf(slot) }) } as CSSProperties;
   const state = eve ? "eve" : overflow ? "overflow" : slot.open ? "open" : slot.off ? "off" : "focus";
   const reasonsId = `reasons-${slot.date}-${slot.half}`;
   // S1 (D453): a PTO half reads PTO (its block, if any, stays in the data, read only).
   const ptoHalf = slot.pto && !eve;
   const name = ptoHalf ? "PTO" : primary ? primary.clientName : eve ? (slot.flex.length ? "Flex" : "Evening") : slot.off ? "No working hours" : overflow ? "Catch-up" : "Open";
+  // WK-2: a one-word label (Catch-up, Open, PTO, Flex) never splits mid-word; a card too narrow for it shows a short form.
+  const short = !primary && !ptoHalf && name === "Catch-up" ? "C-up" : null;
   const label = `${dayLabel} ${eve ? "evening" : slot.half}, ${name}${sev ? `, ${sev === "at_risk" ? "at risk" : "watch"}` : ""}`;
   const menu = useMenu((env) => slotMenu(env, slot.date, slot.half, primary?.clientKey ?? null, primary?.clientName ?? null));
   const status = blockStatus(cp.fit, slot.risks);
@@ -539,8 +568,17 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
       {compact && !rail && railNow?.at != null && <NowEdge label={railNow.label} onClick={railNow.onClick} />}
       <div className="card-head">
         <span className="swatch" aria-hidden="true" />
-        <span className={`card-client${primary ? "" : " open-label"}`} title={name}>{name}</span>
-        <span className="card-when">{shortRange(slot, tz)}</span>
+        <span className={`card-client${primary ? "" : " open-label"}${name.includes(" ") ? "" : " one-word"}`} title={name}>
+          {short ? (
+            <>
+              <span className="cc-full">{name}</span>
+              <span className="cc-short" aria-hidden="true">{short}</span>
+            </>
+          ) : (
+            name
+          )}
+        </span>
+        <CardWhen slot={slot} tz={tz} />
         <span className="card-more">{menu.button(`Actions for ${dayLabel} ${slot.half}`)}</span>
       </div>
       {rail === "strip" && <DayStrip slot={slot} tz={tz} label={`${dayLabel} ${eve ? "evening" : slot.half}`} now={railNow} />}
@@ -578,7 +616,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
         </div>
       )}
       {flexList}
-      {phone && slot.events.length > 0 && (
+      {listEvents && slot.events.length > 0 && (
         <ul className="card-events" aria-label={`Meetings and events, ${dayLabel} ${slot.half}`}>
           {slot.events.map((p) => (
             <li key={p.event.id} className={p.event.isPersonal ? "personal" : p.event.unavailable ? "unavailable" : undefined}>
@@ -597,14 +635,14 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
           type="button"
           className="add-work"
           tabIndex={selected ? 0 : -1}
-          title="Add work to this block (A)"
+          title="Add a to-do to this block (A)"
           onClick={(e) => {
             e.stopPropagation();
             onSelect();
             addWork();
           }}
         >
-          + Add work
+          + Add to-do
         </button>
       )}
       {featLine && (
@@ -651,6 +689,26 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
         )}
       </HalfScope.Provider>
     </div>
+  );
+}
+
+/**
+ * WK-2: a block's time range, never cut inside a number: it may only wrap after the dash, so a narrow card wraps there ("9:00–" over "1:00"); a very narrow one shows the hours alone ("9–1"), with the full range in its
+ * title.
+ */
+function CardWhen({ slot, tz }: { slot: Slot; tz: string }) {
+  const full = shortRange(slot, tz);
+  const [a, b] = full.split("–");
+  if (b === undefined) return <span className="card-when">{full}</span>;
+  const hour = (t: string) => t.replace(/:\d\d/, "");
+  return (
+    <span className="card-when" title={slotRange(slot, tz)}>
+      {/* One text (one word for the reader), with a zero-width break after the dash: it wraps there, never in a number. */}
+      <span className="cw-full">{`${a}–\u200B${b}`}</span>
+      <span className="cw-short" aria-hidden="true">
+        {hour(a!)}–{hour(b)}
+      </span>
+    </span>
   );
 }
 

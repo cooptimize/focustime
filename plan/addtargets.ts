@@ -2,7 +2,7 @@
 // Order: the block selected in Plan the day, this client's blocks on the day being planned, its other blocks, Open
 // half-days (and Friday catch-up), then other clients' blocks last (the menu labels those "Different client" and asks
 // first). Past days and halves with no working time are left out; one that already has the item stays listed but
-// disabled, with the reason. AS-2 (D941): a PTO day and a block with no free time take it, with a note.
+// disabled, with the reason. AS-2 (D947): a PTO day and a block with no free time take it, with a note.
 import type { Half, IsoDate } from "../week/types.ts";
 import type { Pick } from "./types.ts";
 import { alreadyPlanned, type PickRef } from "./dup.ts";
@@ -50,7 +50,7 @@ function groupOf(b: TargetBlock, clientKey: string, planDate: IsoDate): { group:
   return { group: "other", otherClient: owner };
 }
 
-/** AS-2 (D941): the day never refuses; a PTO day or a full block says so. */
+/** AS-2 (D947): the day never refuses; a PTO day or a full block says so. */
 function noteOf(b: TargetBlock): string | undefined {
   if (b.pto) return "You're on PTO that day";
   if (!b.off && b.freeMinutes <= 0) return "No free time left: meetings fill it";

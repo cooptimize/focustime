@@ -102,7 +102,7 @@ export type KeyRow = {
 export const KEYS: readonly KeyRow[] = [
   { keys: ["←", "→", "↑", "↓"], does: "Move between half-days (↓ from the afternoon reaches the evening)" },
   { keys: ["Enter", "Space"], does: "Details of the selected half-day", command: "ui.details" },
-  { keys: ["A"], does: "Add work to the selected block: its DevOps items, an intention or a promise", command: "ui.add_work" },
+  { keys: ["A"], does: "Add a to-do to the selected block: its DevOps items, an intention or a promise", command: "ui.add_work" },
   { keys: ["Tab", "Shift Tab"], does: "Items and menus of the selected half-day, then on to the next part of the window" },
   { keys: ["F6"], does: "Next region: top bar, week, panel, status bar", command: "ui.region_next" },
   { keys: ["Shift F6"], does: "Previous region", command: "ui.region_prev" },
@@ -133,6 +133,7 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["]"], does: "Next week", command: "week.next" },
   { keys: ["R"], does: "Refresh all sources", command: "week.load" },
   { keys: ["V"], does: "Week: Timelines, the hours the rails show (business hours, 12 hours, 24 hours); H also works; also in Week's ⋯", command: "ui.set_view_range" },
+  { keys: ["B"], does: "Week's Board: show or hide the timeline (the hour rail beside each card's to-dos); also beside the modes and in ⋯", command: "ui.set_show_timelines" },
   { keys: ["G"], does: "Week and Today: show or hide personal events (they still count in risk and free time); also in ⋯", command: "ui.set_show_personal" },
   { keys: ["Ctrl K"], does: "Command menu" },
   { keys: ["Ctrl J", "/"], does: "The assistant: ask what's next or about an item, or ask for a change you then confirm (/ when no text field has focus)", command: "assistant.ask" },
