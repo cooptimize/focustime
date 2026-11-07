@@ -14,7 +14,7 @@ Styles go in `ui/guide/guide.css` (loaded with the Guide). Layouts follow the bo
 
 ## A tour
 
-1. On the real screen, add a `data-tour="<hook>"` attribute to each element the tour points at. Attributes only: no behavior change. List new hooks in `docs/decisions.md` (UI-5.4).
+1. On the real screen, add a `data-tour="<hook>"` attribute to each element the tour points at. Attributes only: no behavior change. List new hooks in `docs/decisions.md` (D986).
 2. Add a `Tour` to `TOURS` in `ui/guide/tours.ts`: `id`, `title`, `section` (where Back to the Guide goes), `start` (the `Nav` it opens), 4 to 7 `steps`, `end`. Each step: `target` (the hook), `title`, `text`; optionally `at` (another screen: the tour changes the address there and later steps stay on it), `example` (a drawing in `ui/guide/tour/Illustrations.tsx`, or a small card in `content.ts` `TOUR_EXAMPLES.cards`, shown when the screen has nothing there; a step with no `target` is the drawing only), `emptyWhen` (a selector inside the target that must match, else the drawing shows), and `phone` (other words, or `"skip"`).
 3. Point a Show me at it (an area's `does[].tour`, or Start here's `START.week.steps[].tour`). The command menu offers "Show me: <title>" by itself.
 4. `ui/guide/tours.test.ts` checks every target is a hook on a screen and every drawing exists; `e2e/guide-tour.test.ts` runs every tour at 1920, 1366 and phone with the keyboard only, against a baseline that visits the same screens without the tour: no extra actions, the plan store unchanged.

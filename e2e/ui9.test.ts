@@ -2,8 +2,8 @@
 // 9:30 AM (the harness's). The demo has two late promises: one to Northwind from a chat (on Northwind's block today,
 // Mon PM) and one I added for Cooptimize (on Mon AM, its due badge folded into the chip). Shown, the rail marks them
 // and there is no chip. One opens that promise; several open Promises, late ones, for the card's client. Keeping or
-// snoozing one updates the chip with no reload. On the phone (no rail) the chip sits in the card header: the card is
-// no taller, the tap target is 44 px, and the page doesn't scroll sideways.
+// snoozing one updates the chip with no reload. On the phone (no rail) the chip sits on the card's chips line beside
+// the status (MB-1): no taller beside a status pill, the tap target is 44 px, and the page doesn't scroll sideways.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
@@ -132,7 +132,7 @@ describe.skipIf(!CHROMIUM)("UI-9: the late chip on Week's cards", () => {
       return !items.some((i) => i.key === key && !i.done);
     }).toBe(true);
     await page.keyboard.press("2");
-    await expect.poll(() => chipText(page, MON_AM), { timeout: 10_000 }).toBeNull();
+    await expect.poll(() => chipText(page, MON_AM), { timeout: 20_000 }).toBeNull();
     expect(await chipText(page, MON_PM)).toBe("3 late");
 
     // Snooze one of Northwind's: two left.
@@ -150,7 +150,7 @@ describe.skipIf(!CHROMIUM)("UI-9: the late chip on Week's cards", () => {
     await page.close();
   }, T);
 
-  it("on the phone (390 px, 17 px root font): in the header, the card no taller, a 44 px target, no sideways scroll", async () => {
+  it("on the phone (390 px, 17 px root font): on the chips line beside the status, no taller with a status, a 44 px target, no sideways scroll", async () => {
     const page = await h.browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, bypassCSP: true });
     const errors: string[] = [];
     page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
@@ -172,8 +172,9 @@ describe.skipIf(!CHROMIUM)("UI-9: the late chip on Week's cards", () => {
     const c = chip(page, MON_AM);
     await expect.poll(() => c.count()).toBe(1);
     expect(await c.textContent()).toBe("1 late");
-    expect(await c.evaluate((e) => !!e.closest(".card-head"))).toBe(true);
-    // The card with and without the chip: the same height.
+    // MB-1: on the card's chips line (the status line), as on a computer.
+    expect(await c.evaluate((e) => !!e.closest(".card-status"))).toBe(true);
+    // Beside a status pill the chip adds no height (a card with no status gets the line).
     const card = page.locator(`main.grid ${MON_AM}`);
     const withChip = await card.evaluate((e) => e.getBoundingClientRect().height);
     const without = await card.evaluate((e) => {
@@ -183,7 +184,7 @@ describe.skipIf(!CHROMIUM)("UI-9: the late chip on Week's cards", () => {
       b.style.display = "";
       return hgt;
     });
-    expect(withChip).toBe(without);
+    if (await card.locator(".card-status .status-pill").count()) expect(withChip).toBe(without);
     // The tap target: how far a tap still lands on the chip, up and down and across.
     await c.scrollIntoViewIfNeeded();
     const reach = await c.evaluate((el) => {

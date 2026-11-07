@@ -9,6 +9,7 @@ import type { WeekLoadData } from "../../actions/types.ts";
 import type { InboxPrefs } from "../../config/schema.ts";
 import type { InboxItemView, InboxView } from "../../plan/inbox-items.ts";
 import type { ConversationCard, ConversationsData } from "../../plan/conversation-views.ts";
+import { unsortedSentence } from "../../plan/conversations.ts";
 import { userZone } from "../../week/zone.ts";
 import { call } from "../api.ts";
 import { CaptureBox, captureClients } from "../Capture.tsx";
@@ -512,7 +513,7 @@ function Unsorted({ u, sort, onFeedback }: { u: ConversationsData["unsorted"]; s
       <ul className="ib-unsorted">
         {u.reasons.map((r) => (
           <li key={r.text} className={`does-${r.does ?? "retry"}`}>
-            <span>{`${n(r.count)}: ${r.text}.`}</span>
+            <span>{unsortedSentence(r.count, r)}</span>
             {r.fix && <span className="muted"> {r.fix}</span>}
           </li>
         ))}

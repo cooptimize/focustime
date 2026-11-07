@@ -122,6 +122,9 @@ describe.skipIf(!CHROMIUM)("UI-5: Start here and the tours", () => {
         const baseline = recordActions(base.page);
         for (const hash of screensOf(t)) {
           await base.page.evaluate((x) => (location.hash = x), hash);
+          // MB-1: on the phone Ahead asks first; a tour shows it read only, as Open anyway does.
+          const anyway = base.page.getByRole("button", { name: "Open anyway" });
+          if (phone && (await anyway.waitFor({ state: "visible", timeout: 1500 }).then(() => true, () => false))) await anyway.click();
           await base.page.waitForTimeout(2500);
         }
         await base.page.close();

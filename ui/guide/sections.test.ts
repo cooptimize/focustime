@@ -1,5 +1,6 @@
 // UI-5: the rebuilt Guide's sections. Every link opens a real place, every question has one home, every tour named
 // exists, the words stay plain and within budget, no real person is named, and search finds what the Guide says.
+import { isAdminSection } from "../settings/Admin.tsx";
 import { describe, expect, it } from "vitest";
 import { ACTIONS } from "../../actions/registry.ts";
 import { hashOf, parseHash } from "../nav.ts";
@@ -74,6 +75,8 @@ describe("the link checker", () => {
     for (const href of allDoes.flatMap((d) => (d.go?.href.startsWith("#/settings") ? [d.go.href] : []))) {
       const [, , section, setting] = href.split("/");
       if (!section) continue;
+      // IN-1: an Admin section (Admin › People) opens through the same address; its parts aren't in Settings' registry.
+      if (isAdminSection(section)) continue;
       expect(SETTINGS_SECTIONS.some((s) => s.id === section), href).toBe(true);
       if (setting) expect(SETTINGS.find((s) => s.id === setting)?.section, href).toBe(section);
     }

@@ -102,11 +102,18 @@ describe.skipIf(!CHROMIUM)("IB-1: Close the loop never overflows", () => {
     await page.goto(h.url);
     await page.getByRole("button", { name: /Try the demo/ }).click({ timeout: 60_000 });
     await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
-    await openAndCheck(page, ".phone-due", "Send the export spec", ".phone-due");
-    if (SHOTS) {
-      await page.locator(".phone-due .follow-up", { hasText: "Send the export spec" }).first().getByRole("button", { name: "Close the loop", exact: true }).click();
-      await page.screenshot({ path: `${SHOTS}/ib1-close-loop-phone.png`, fullPage: true });
-    }
+    // MB-1: Today on the phone shows promises only in its urgent strip (which opens them in the Inbox); Close the loop
+    // is the Inbox item's main button there.
+    await page.locator(".urgent-strip").waitFor({ timeout: 20_000 });
+    await go(page, "#/inbox/promises");
+    await page.locator(".ib-row", { hasText: "Send the export spec" }).first().click();
+    const sheet = page.locator(".ib-sheet.tall");
+    await sheet.getByRole("button", { name: /^Close the loop/ }).first().click();
+    const form = sheet.locator("form.close-loop");
+    await form.waitFor();
+    for (const name of ["Teams", "Email", "DevOps", "Call"]) expect(await form.getByRole("button", { name, exact: true }).isVisible()).toBe(true);
+    expect(await overflow(page, ".ib-sheet.tall")).toEqual({ found: true, container: 0, page: 0 });
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/ib1-close-loop-phone.png`, fullPage: true });
     await page.close();
   }, T);
 

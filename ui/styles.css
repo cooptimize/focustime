@@ -5395,8 +5395,162 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .card-status .late-chip:first-child { margin-left: 0; }
 .late-chip:hover { background: color-mix(in oklab, var(--watch) 22%, var(--surface)); }
 .late-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.app.phone .card-head:has(.late-chip) { overflow: visible; }
-.app.phone .card-head button.late-chip { min-height: 0; margin-left: auto; margin-right: 6px; }
+.app.phone .card-status:has(.late-chip) { overflow: visible; }
+.app.phone .card-status button.late-chip { min-height: 0; }
 .app.phone .late-chip::after { content: ""; position: absolute; inset: -13px -8px; }
 /* UI-9: Promises narrowed to late ones from a Week card's chip. */
 .ib-late-line { margin: 0; display: inline-flex; align-items: baseline; gap: 8px; color: var(--watch); font-size: var(--fs-2); font-weight: 600; }
+
+/* ---- MB-1: the phone overhaul. Phone widths only (under 600 px, as P1's breakpoint); nothing here reaches a
+   computer. The bar: Today, Week, a raised Capture, Inbox, Ask. The header: the logo, the status dot, ⋯. ---- */
+@media (max-width: 599.98px) {
+  .bottom-bar.bb-five { grid-template-columns: repeat(5, minmax(0, 1fr)); overflow: visible; }
+  .bb-capture-slot { position: relative; display: flex; justify-content: center; }
+  .bb-capture {
+    position: absolute; top: -18px; width: 58px; height: 58px; min-height: 58px; padding: 0; border-radius: 50%;
+    display: grid; place-items: center; border: 3px solid var(--bg); background: var(--action); color: var(--on-action);
+    box-shadow: var(--shadow-pop); -webkit-tap-highlight-color: transparent;
+  }
+  .bb-capture svg { width: 26px; height: 26px; }
+  .bb-capture:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+  .bb-tab .bb-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .status-dot-btn { min-width: var(--tap); min-height: var(--tap); padding: 0; display: inline-grid; place-items: center; border-color: transparent; background: none; }
+  .status-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+  .status-dot-btn.stale .status-dot { background: var(--watch); box-shadow: 0 0 0 3px color-mix(in srgb, var(--watch) 22%, transparent); }
+  .status-dot-btn.trouble .status-dot { background: var(--risk); box-shadow: 0 0 0 3px color-mix(in srgb, var(--risk) 22%, transparent); }
+
+  /* One bottom sheet: above the bottom bar, its own scrolling, never wider than the screen. */
+  .ph-sheet-back { position: fixed; inset: 0 0 var(--bb-h) 0; z-index: 70; display: flex; flex-direction: column; justify-content: flex-end; background: color-mix(in srgb, var(--bg) 70%, transparent); }
+  .ph-sheet {
+    display: flex; flex-direction: column; gap: 10px; max-height: calc(100dvh - var(--bb-h) - 24px - env(safe-area-inset-top)); overflow-y: auto; overflow-x: hidden;
+    padding: 6px 16px 16px; border-radius: 16px 16px 0 0; background: var(--surface); border-top: 1px solid var(--border-strong); box-sizing: border-box; outline: none;
+  }
+  .ph-sheet-grip { align-self: center; width: 36px; height: 4px; border-radius: 2px; background: var(--border-strong); margin-bottom: 2px; }
+  .ph-sheet-head { display: flex; align-items: flex-start; gap: 8px; }
+  .ph-sheet-title { flex: 1; min-width: 0; margin: 10px 0 0; font-size: var(--fs-4); font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  .ph-sheet-close { flex: none; min-width: var(--tap); min-height: var(--tap); padding: 0; border: 0; background: none; font-size: 1.6em; line-height: 1; color: var(--text-muted); }
+
+  .ph-status-list, .ph-status-problems { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .ph-status-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .ph-status-list .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+  .ph-status-list .cached .dot, .ph-status-list .sample .dot { background: var(--watch); }
+  .ph-status-list .error .dot, .ph-status-list .signin .dot { background: var(--risk); }
+  .ph-src-name { font-weight: 600; }
+  .ph-status-list .state { font-size: var(--fs-2); color: var(--text-muted); }
+  .ph-src-detail { grid-column: 2 / -1; font-size: var(--fs-2); overflow-wrap: anywhere; }
+  .ph-status-problems li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; border-left: 3px solid var(--risk); border-radius: 8px; background: var(--sunken); }
+  .ph-status-extra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .ph-status-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+
+  /* Ahead on the phone: a notice first. */
+  .ahead-notice { padding: 32px 20px; display: grid; gap: 12px; max-width: 30em; }
+  .ahead-notice h1 { margin: 0; font-size: var(--fs-4); }
+  .ahead-notice p { margin: 0; }
+  .an-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  /* A notice where the footer's chip was: just above the bottom bar, then gone. */
+  .phone-notice { position: fixed; left: 16px; right: 16px; bottom: calc(var(--bb-h) + 10px); z-index: 66; margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-tooltip); font-size: var(--fs-3); }
+  .undo-toast { z-index: 66; left: 16px; right: 16px; bottom: calc(var(--bb-h) + 10px); width: auto; max-width: none; transform: none; }
+
+  /* Today on the phone: the Now card. */
+  .ph-now { display: grid; gap: 4px; padding: 14px 16px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); border-left: 5px solid var(--c, var(--border-strong)); }
+  .ph-now-after, .ph-now-between { border-left-color: var(--border-strong); }
+  .ph-now-tag { margin: 0; font-size: var(--fs-2); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+  .ph-now-title { margin: 0; font-size: var(--fs-4); font-weight: 600; overflow-wrap: anywhere; }
+  .ph-now-line { margin: 0; color: var(--text-muted); }
+  .ph-now-meet { margin: 6px 0 0; padding: 8px 10px; border-radius: 10px; background: var(--sunken); display: grid; gap: 2px; }
+  .ph-now-meet.on { border-left: 3px solid var(--watch); }
+  .pnm-tag { font-size: var(--fs-2); color: var(--text-muted); }
+  .pnm-title { font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .pnm-when { font-size: var(--fs-2); color: var(--text-muted); }
+  .ph-now-todo { margin-top: 8px; display: grid; gap: 6px; }
+  .pnt-label { margin: 0; font-size: var(--fs-2); color: var(--text-muted); }
+  .pnt-title { margin: 0; font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .pnt-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pnt-acts > button { min-height: 48px; flex: 1 1 0; min-width: 6em; font-size: var(--fs-3); font-weight: 600; }
+  .pnt-count { font-variant-numeric: tabular-nums; }
+  .ph-now-none { margin: 6px 0 0; }
+  .ph-urgent-head { margin: 14px 0 4px; }
+
+  /* Today's to-dos by block, then Next up. */
+  .ph-today { display: grid; gap: 14px; }
+  .ph-todos, .ph-next { display: grid; gap: 10px; }
+  .ph-todos > .section-label, .ph-next > .section-label { margin: 0; }
+  .ph-block { display: grid; gap: 2px; }
+  .ph-block.over { opacity: .7; }
+  .ph-block-head { margin: 0; display: flex; align-items: center; gap: 6px; font-size: var(--fs-3); font-weight: 600; overflow-wrap: anywhere; }
+  .ph-block-head .swatch { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+  .ph-block-head .muted { font-weight: 400; }
+  .ph-todo-list { list-style: none; margin: 0; padding: 0; display: grid; }
+  .ph-todo { display: grid; grid-template-columns: var(--tap) minmax(0, 1fr); align-items: start; border-bottom: 1px solid var(--border); }
+  .ph-todo > input[type="checkbox"] { justify-self: center; margin: 0; width: 22px; height: 22px; min-height: 0; margin-top: 11px; }
+  .ph-todo::before { content: none; }
+  .ph-todo-main { display: grid; gap: 2px; min-height: var(--tap); width: 100%; min-width: 0; padding: 8px 4px 8px 0; text-align: left; border: 0; background: none; color: inherit; font: inherit; border-radius: 0; }
+  .ph-todo-title { overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .ph-todo.done .ph-todo-title { text-decoration: line-through; color: var(--text-muted); }
+  .ph-todo-line { font-size: var(--fs-2); color: var(--text-muted); overflow-wrap: anywhere; }
+  .ph-block-none { margin: 4px 0 4px var(--tap); }
+  .ph-next ul { list-style: none; margin: 0; padding: 0; display: grid; }
+  .ph-next-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .pn-time { font-size: var(--fs-2); color: var(--text-muted); font-variant-numeric: tabular-nums; padding-top: 1px; white-space: nowrap; }
+  .pn-title { overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .ph-next-row.personal .pn-title { color: var(--text-muted); }
+
+  /* The to-do sheet. */
+  .ts-line { margin: 0; overflow-wrap: anywhere; }
+  .ts-acts { display: grid; gap: 8px; }
+  .ts-acts > button { min-height: 48px; width: 100%; text-align: left; padding: 0 14px; }
+
+  /* Week and Plan rows on the phone: the title on its own line (two at most), the chips on a smaller second line. */
+  .ph-row { flex-wrap: wrap; align-items: flex-start; row-gap: 2px; }
+  .ph-row > .pr-title, .ph-row > .pl-title { flex: 1 1 0; min-width: 0; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; text-overflow: clip; }
+  .ph-row > .pr-title .pr-text { white-space: normal; }
+  .pr-line2 { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-left: 28px; font-size: var(--fs-2); color: var(--text-muted); min-width: 0; }
+  .pr-line2 > .ph-more { margin-left: auto; min-width: var(--tap); min-height: var(--tap); }
+  /* Every planning row (Plan today, Plan, the Add pane): the title takes the line, the chips and buttons wrap under it. */
+  .app.phone .pl-row { flex-wrap: wrap; row-gap: 4px; }
+  .app.phone .pl-row > .pl-title { flex: 1 1 calc(100% - 56px); min-width: 0; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; text-overflow: clip; }
+  .app.phone .pl-row > .pl-title * { white-space: normal; }
+  .app.phone .planweek .pw-addrow { flex-wrap: wrap; row-gap: 4px; }
+  .app.phone .planweek .pw-addrow > .pw-title { flex: 1 1 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; text-overflow: clip; }
+  .app.phone .planweek .pw-addrow > .pw-acts { margin-left: auto; }
+  .app.phone .pw-addpane .pw-add-kids { margin-left: 18px; min-width: 0; max-width: calc(100% - 18px); }
+  .app.phone .pw-addpane .pw-add-kid { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+  .app.phone .pd2-add { flex-wrap: wrap; row-gap: 2px; }
+  .app.phone .pd2-add > .pr-title { flex: 1 1 calc(100% - 56px); min-width: 0; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; text-overflow: clip; }
+  .app.phone .pd2-add > .pr-title * { white-space: normal; }
+  .app.phone .us-tag { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
+  .app.phone .us-who, .app.phone .us-what { min-width: 0; overflow-wrap: anywhere; }
+  /* Plan, read only on the phone: nothing in it widens the page at the largest Text size. */
+  .phone-ro-body .pl-frame { overflow-x: clip; }
+  .team-feature, .carry-title { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+
+  /* The agenda, folded by default on the phone; open, titles wrap to two lines. */
+  .pd-agenda .ag-title { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; min-width: 0; }
+  .pd-agenda li { align-items: flex-start; }
+
+  .ph-row .pr-line2 .size-chip { min-width: var(--tap); min-height: 32px; line-height: 1.2; padding: 0 10px; border-radius: 999px; white-space: nowrap; display: inline-grid; place-items: center; }
+  .pr-line2 .pick-time, .pr-line2 > * { white-space: nowrap; }
+
+  /* Musts on the phone: short client names with their counts, wrapping as needed. */
+  .cl-musts-btn { flex-wrap: wrap; row-gap: 4px; text-align: left; }
+  .cl-must .cl-name { margin-right: 3px; color: var(--text); font-weight: 500; }
+
+  .card-agenda-fold { margin-top: 4px; }
+  .card-events .ce-title { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+
+  /* The mode switch fits the screen: its modes share the width, other buttons wrap to their own line. */
+  .app.phone .mode-area { flex-wrap: wrap; overflow-x: visible; row-gap: 8px; }
+  .app.phone .mode-area > .mode-switch { flex: 1 1 100%; width: auto; min-width: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); box-sizing: border-box; }
+  .app.phone .mode-area > .mode-switch .ms-btn { justify-content: center; padding: 5px 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .pw-row > * { min-width: 0; }
+  .pw-row .pw-meta { white-space: normal; overflow-wrap: anywhere; }
+
+  /* A way back: a small text link with an arrow, on its own line above the mode switch. */
+  .mode-area:has(> .done-link) { flex-wrap: wrap; }
+  .done-link { flex: 1 0 100%; text-align: left; white-space: nowrap; min-height: var(--tap); padding: 0 4px; border: 0; background: none; color: var(--accent); font: inherit; font-size: var(--fs-3); cursor: pointer; }
+
+  /* Ask: the assistant full screen, down to the bottom bar. */
+  .assistant-panel.assistant-sheet { top: 0; bottom: var(--bb-h); max-height: none; min-height: 0; border-radius: 0; border-top: 0; padding-top: env(safe-area-inset-top); z-index: 45; }
+}

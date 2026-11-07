@@ -56,7 +56,7 @@ import type { DraftStory, Pick } from "../plan/types.ts";
 import { PlanWeek } from "./PlanWeek.tsx";
 import { weekMusts } from "./WeekMusts.tsx";
 import { CaptureDialog, captureClients } from "./Capture.tsx";
-import { AssistantMark, AssistantPanel, COMMANDS_HREF } from "./Assistant.tsx";
+import { AssistantPanel, COMMANDS_HREF } from "./Assistant.tsx";
 import type { AssistantContext } from "../assistant/types.ts";
 import { CreateDraftCtx, CreateDraftDialog } from "./CreateDraft.tsx";
 import { DraftEditor, DraftEditorCtx } from "./DraftEditor.tsx";
@@ -79,7 +79,9 @@ import { useAdmin } from "./settings/Admin.tsx";
 import { clientColor, SampleSources, weekLabel } from "./labels.ts";
 import { useLayout, usePhone } from "./viewport.ts";
 import { BottomBar, InstallHowTo, PhoneReadOnly, type BottomTab } from "./Phone.tsx";
-import { commandList, type MenuEnv, type View } from "./menu.ts";
+import { AheadNotice, sourceHealth, StatusDot, StatusSheet } from "./PhoneShell.tsx";
+import { TodoSheet, TodoSheetCtx } from "./TodoSheet.tsx";
+import { commandList, withoutAhead, type MenuEnv, type View } from "./menu.ts";
 import { CommandMenu, MenuHost } from "./Menus.tsx";
 import { WeekDndProvider } from "./WeekStories.tsx";
 import { WeekItems } from "./ItemLookup.tsx";
@@ -139,6 +141,27 @@ export function App() {
   // P1: under 600 px, the phone app (bottom bar, one day at a time, planning read-only).
   const phone = usePhone();
   const [phoneMoreAt, setPhoneMoreAt] = useState<{ x: number; y: number } | null>(null);
+  // MB-1: the status dot's sheet, and Ahead opened anyway on the phone (for this visit; a reload shows the notice again).
+  const [statusOpen, setStatusOpen] = useState(false);
+  // MB-1: Open anyway on Ahead's phone notice lasts for this browser session (a reload keeps it; nothing else does).
+  const [aheadAnyway, setAheadAnywayState] = useState(() => {
+    try {
+      return sessionStorage.getItem("focustime.ahead.anyway") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const setAheadAnyway = (v: boolean) => {
+    setAheadAnywayState(v);
+    try {
+      sessionStorage.setItem("focustime.ahead.anyway", v ? "1" : "0");
+    } catch {
+      /* private mode: this page only */
+    }
+  };
+  // MB-1: a to-do's sheet on the phone (Today's rows, Week's ⋯).
+  const [todoSheet, setTodoSheet] = useState<Pick | null>(null);
+  const openTodoSheet = useCallback((p: Pick) => setTodoSheet(p), []);
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [loading, setLoading] = useState(false);
   const [sel, setSel] = useState<Selection>({ dayIndex: 0, half: "AM" });
@@ -1555,6 +1578,17 @@ export function App() {
     invites: data.invites ?? [],
   };
   tbEnvRef.current = tbEnv;
+  // U5.1: the "N personal hidden" switch: the footer's chip on a computer, a line in the status sheet on the phone (MB-1).
+  const personalHiddenChip =
+    !showPersonal && (base === "week" || base === "today") && !planWeekAt && !pd ? (() => {
+      // Week counts the week's personal events, Today today's.
+      const n = personalCount(base === "today" ? data.week.days.filter((d) => d.date === data.planDay.date) : data.week.days);
+      return (
+        <button type="button" className="status-chip personal-hidden" onClick={() => void saveShowPersonal(true)} title="Personal events are hidden on Week and Today. They still count in risk and free time. Click or press G to show them">
+          {n} personal hidden
+        </button>
+      );
+    })() : null;
 
   return (
     <>
@@ -1587,6 +1621,7 @@ export function App() {
         setDetailsOpen(true);
       }}
     >
+    <TodoSheetCtx.Provider value={phone ? openTodoSheet : null}>
     <div className={`app ${layout}${compact ? " compact" : ""}${phone ? " phone" : ""}`}>
       <header className="topbar">
         <div className="brand">
@@ -1609,15 +1644,11 @@ export function App() {
           ))}
         </nav>}
         <div className="top-actions">
-          <VmChip dot={phone} />
+          {!phone && <VmChip />}
           {phone && <>
-          {/* NV-1: on the phone, Capture and ⋯ sit here (the bottom bar holds the four tabs). */}
-          <button type="button" className="top-btn phone-capture" onClick={() => setCaptureOpen(true)} aria-label="Capture" title="Quick capture: one line, saved at once">
-            +
-          </button>
-          <button type="button" className="top-btn phone-assistant" data-tour="ask" onClick={() => setAssistantAt((a) => (a ? null : { text: "" }))} aria-label="Assistant" aria-expanded={!!assistantAt} title="Ask the assistant">
-            <AssistantMark />
-          </button>
+          {/* MB-1: on the phone the header is the logo, the status dot and ⋯; Capture and Ask are in the bottom bar, and the
+              VM and the sources are in the status dot's sheet. */}
+          <StatusDot health={sourceHealth(data.sources, data.devops)} open={statusOpen} onOpen={() => setStatusOpen(true)} />
           <button
             type="button"
             className="top-btn top-more"
@@ -1828,7 +1859,7 @@ export function App() {
         </div>
       ) : roadmapOpen ? (
         nav.tab === "ahead" ? (
-          <PhoneGate phone={phone}><Ahead data={data} mode={nav.mode} item={nav.item ?? null} switcher={switches.ahead} renderSwitch={aheadSwitch} onChanged={reloadQuiet} readOnly={phone} /></PhoneGate>
+          phone && !aheadAnyway && loc.overlay?.kind !== "tour" ? <AheadNotice onOpen={() => setAheadAnyway(true)} onToday={() => openTab("today")} /> : <PhoneGate phone={phone}><Ahead data={data} mode={nav.mode} item={nav.item ?? null} switcher={switches.ahead} renderSwitch={aheadSwitch} onChanged={reloadQuiet} readOnly={phone} /></PhoneGate>
         ) : null
       ) : planDayFocus ? (
         pd && week.days.some((d) => d.date === pd.date) ? (
@@ -2009,29 +2040,40 @@ export function App() {
         </>
       )}
 
-      <StatusBar
+      {phone ? (
+        (() => {
+          const msg = notice ?? (state.kind === "ready" ? state.refreshError ?? null : null);
+          return msg ? <p className="phone-notice" role="status">{msg}</p> : null;
+        })()
+      ) : <StatusBar
         sources={data.sources}
         devops={data.devops}
         hours={data.hours}
         loading={loading}
         busy={busy}
         notice={notice ?? (state.kind === "ready" ? state.refreshError ?? null : null)}
-        extra={
-          !showPersonal && (base === "week" || base === "today") && !planWeekAt && !pd ? (() => {
-            // Week counts the week's personal events, Today today's.
-            const n = personalCount(base === "today" ? data.week.days.filter((d) => d.date === data.planDay.date) : data.week.days);
-            return (
-              <button type="button" className="status-chip personal-hidden" onClick={() => void saveShowPersonal(true)} title="Personal events are hidden on Week and Today. They still count in risk and free time. Click or press G to show them">
-                {n} personal hidden
-              </button>
-            );
-          })() : null
-        }
+        extra={personalHiddenChip}
         clock={clock}
         onRefresh={() => auto.trigger("button")}
         onConnect={(src) => void connect(src)}
         onDisconnect={(src) => void disconnect(src)}
-      />
+      />}
+      {phone && statusOpen && (
+        <StatusSheet
+          sources={data.sources}
+          devops={data.devops}
+          clock={clock}
+          zone={userZone(data)}
+          loading={loading}
+          busy={busy}
+          vm={<VmChip />}
+          extra={personalHiddenChip}
+          onRefresh={() => auto.trigger("button")}
+          onConnect={(src) => void connect(src)}
+          onSettings={() => (setStatusOpen(false), setSettingsAt("connections", "sources"))}
+          onClose={() => setStatusOpen(false)}
+        />
+      )}
 
       {detailsOpen && base === "week" && !planWeekAt && !pd && !(nav.tab === "week" && (nav.mode === "team" || nav.mode === "status")) && (
         <DetailPanel variant="week" data={data} day={day} slot={slot} focus={panelFocus} now={now ?? new Date(clock).toISOString()} onClose={() => (setDetailsOpen(false), setPanelFocus(null), cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true }))} onStart={startFocus} onChanged={reloadQuiet} onNotice={setNotice} />
@@ -2041,10 +2083,15 @@ export function App() {
           current={settingsAt !== null || guideAt || meetingAt || focusOpen ? null : nav.tab}
           inboxCount={inboxCount}
           onTab={(t: BottomTab) => {
-            // The bar stays on screen under Capture: a tab closes it and goes there.
+            // The bar stays on screen under Capture and Ask: a tab closes them and goes there.
             setCaptureOpen(false);
+            setAssistantAt(null);
             openTab(t);
           }}
+          captureOpen={captureOpen}
+          onCapture={() => (setAssistantAt(null), setCaptureOpen(true))}
+          askOpen={!!assistantAt}
+          onAsk={() => (setCaptureOpen(false), setAssistantAt((a) => (a ? null : { text: "" })))}
         />
       )}
       {phoneMoreAt && (
@@ -2082,7 +2129,7 @@ export function App() {
           }}
         />
       )}
-      {cmdOpen && <CommandMenu commands={commandList(env)} onClose={() => setCmdOpen(false)} />}
+      {cmdOpen && <CommandMenu commands={phone ? withoutAhead(commandList(env)) : commandList(env)} onClose={() => setCmdOpen(false)} />}
       {noticesOpen && <NoticesPanel items={noticesOpen} onClose={() => setNoticesOpen(null)} onOpen={(r) => (setNoticesOpen(null), openRouteRef.current(r))} />}
       <NoticeToasts toasts={notices.toasts} onDismiss={notices.dismiss} onOpen={(n) => (notices.dismiss(n.id), n.route && openRouteRef.current(n.route))} />
       {installHowTo && <InstallHowTo onClose={() => setInstallHowTo(false)} />}
@@ -2171,7 +2218,9 @@ export function App() {
       {captureOpen && <CaptureDialog data={data} defaultClient={env?.selection.clientKey ?? null} initialKind={captureKind} onClose={() => (setCaptureOpen(false), setCaptureKind(null))} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
       {createDraft !== null && <CreateDraftDialog key={createDraft} draftId={createDraft} data={data} onClose={() => setCreateDraft(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
       {draftEdit && <DraftEditor key={draftEdit.id} draft={draftEdit} data={data} onClose={() => setDraftEdit(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
+      {phone && todoSheet && <TodoSheet pick={todoSheet} data={data} now={now ?? new Date(clock).toISOString()} onClose={() => setTodoSheet(null)} onChanged={reloadQuiet} />}
     </div>
+    </TodoSheetCtx.Provider>
     </WeekDndProvider>
     </CreateDraftCtx.Provider>
     </DraftEditorCtx.Provider>

@@ -115,13 +115,16 @@ export const PHONE = {
   items: [
     { q: "Can I hide the hour rail on Week?", a: "Yes. Timeline, beside Board · Plan · Team · Status, shows or hides it in one click (B does the same, and it's in Week's ⋯ and Ctrl K). Hidden, each block uses its full width for its to-dos, lists its meetings and events with their times, and today's block still shows the now line. Dragging works the same. A block with late promises shows \"1 late\" or \"3 late\": one opens that promise, several open your late promises for that client in the Inbox. FocusTime remembers your choice." },
     { q: "Why are some days narrow strips on Week?", a: "On a smaller window, at a larger Text size or with the side panel open, the Board makes room before anything is cut: the hour rail turns into a slim ruler, then a thin bar under each block's name. Each day decides for itself, so the narrower catch-up day or a PTO day can show a slimmer rail than the others. When the five days still don't fit, the day you've selected and its neighbours stay open and the others fold into narrow strips. A strip still shows each half-day's client colour, an at-risk dot, PTO and catch-up, and the now line, and you can drop a story on it. Click a strip, or use the arrow keys, to open that day." },
-    { q: "What works on a phone?", a: "The bottom bar has the same four tabs: Today, Week, Ahead and Inbox; Capture is the + at the top. Today with the block you're in, its next to-do, Start focus, Done and Mark done; the Midday check-in and Close out; Week one day at a time, with Plan today (day arrows, long-press to move a story, Confirm today); the Inbox, with every view and your promises; Coop brief and Break down. Plan and Ahead (Grid, Gantt, Gaps and Backlog) open read-only, with Copy link to finish on a computer." },
+    { q: "What works on a phone?", a: "The bar at the bottom has Today, Week, a round + to capture, the Inbox and Ask. Today comes first: the block you're in, your next meeting and your next to-do with Start and Done; the Midday check-in and Close out. Week one day at a time, with Plan today (day arrows, long-press to move a story, Confirm today); each to-do's title has its own line and the agenda is folded until you tap it. The Inbox, with every view and your promises; Coop brief and Break down. Plan opens read-only, with Copy link to finish on a computer. Ahead is made for a bigger screen: on a phone it asks first." },
+    { q: "What's on Today on a phone?", a: "Now, at the top: the block you're in, until when and how much is left, the meeting under way or your next one, and your next to-do with big Start and Done. Between blocks it says Free until 1:00; after your last block, Day done. Then Needs you (at most 3 lines, then N more in Inbox), your to-dos grouped by block, and Next up for the rest of the day. Tap a to-do for Done, Move to tomorrow, Snooze to this afternoon, Add time or Open in DevOps. Each runs at once, and Undo is in the message that follows." },
+    { q: "What does the dot at the top mean?", a: "On a phone, the dot beside FocusTime's mark says how your sources are: green when everything is live, amber when some data is older or a sample, red when a source needs you. Tap it to see each source and its age, DevOps per client and your VM, with Retry, Reconnect and Refresh. Connect or disconnect in Settings opens Accounts and calendars." },
+    { q: "Why does Ahead ask first on a phone?", a: "Ahead's grids and timelines need a wide screen, so the phone's bar leaves it out. An Ahead link on a phone says Ahead is made for a bigger screen, with Open anyway (read only, for the rest of the session) and Back to Today." },
     { q: "How do I install it?", a: "On Android or in Chrome or Edge on a computer: ⋯ › Install app. On iPhone: tap Share in Safari, then Add to Home Screen, then Add. ⋯ › Install app shows the steps. Once installed it opens like an app, straight to Today." },
     { q: "How do notifications work?", a: "Every notification shows in ⋯ › Notifications, with a dot on ⋯ when there's something new, and as a short note at the bottom while FocusTime is open. To get them on a phone or computer when FocusTime is closed, open Settings › Notifications on that device and tap Notify this device; the browser asks first. On iPhone this works only in FocusTime from the home screen." },
     { q: "What do they say on my lock screen?", a: "Only what kind of thing it is, like Promises due or Plan the day: no client names, no work item titles. Turn on Show details in notifications in Settings › Notifications if you want those." },
     { q: "Does it work offline?", a: "No. FocusTime opens without a connection but says it's offline; nothing of yours is kept on the phone. Signing out clears what the browser kept and turns notifications off on that device." },
-    { q: "Can I just talk to it?", a: "Yes: on a phone, tap the speech mark at the top for the assistant, then hold Hold to talk. Release and the words land in the box; fix them if needed, then Send. Changes still wait for your Confirm." },
-    { q: "Quick capture from anywhere?", a: "On a phone, Capture is the + at the top. With a keyboard, press {key:capture.add} anywhere outside a text field." },
+    { q: "Can I just talk to it?", a: "Yes: on a phone, tap Ask in the bar at the bottom for the assistant, then hold Hold to talk. Release and the words land in the box; fix them if needed, then Send. Changes still wait for your Confirm." },
+    { q: "Quick capture from anywhere?", a: "On a phone, Capture is the round + in the middle of the bar at the bottom. With a keyboard, press {key:capture.add} anywhere outside a text field." },
   ],
 };
 
@@ -364,6 +367,8 @@ export { SECTIONS, SECTION_GROUPS, type SectionId } from "./sections.ts";
 
 /** Questions with no G1 home, written for UI-5. */
 const NEW_QUESTIONS = [
+  { q: "How do I see who's set up?", a: "If you're a FocusTime admin: Admin › People shows every Cooptimizer with yes or no for Signed in, DevOps connected, Calendar connected and, where the Teams app is set up, Teams app added. Filter by Not signed in or Set up partly. It shows only these marks, never anyone's plan." },
+  { q: "How do I invite a teammate?", a: "In Admin › People, Invite on their row (or tick several and Invite several) opens a message to edit, with FocusTime's link and the first three steps. Open in Teams starts a chat with them, Open in Outlook starts an email, or Copy message. FocusTime doesn't send it: you do. The row then shows Invited <day> by <you>, and you can invite them again any time. In {key:Ctrl K}: Invite, or Who's set up." },
   { q: "What is the moment card?", a: "Today's one card for the moment of the day: Plan today until the day is confirmed, Midday check-in once your afternoon starts, and Close out near the end of your day. Each opens its flow; once it's done it's a small line with Reopen. Nothing is forced: skip any of them." },
   { q: "Can I look at another day?", a: "Yes. ‹ and › (or [ and ]) step to another day, and Back to today comes back. Other days are read only. A PTO day says you're off, with nothing nagging." },
   { q: "Does the assistant ever change something on its own?", a: "No. Every change is a proposal with the same preview as the button, and runs only when you Confirm. What it reads from chats, DevOps or captures is information for it, never instructions." },
@@ -429,7 +434,7 @@ export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "capture" | "a
       { title: "Any day", text: "‹ › step to other days, read only, and Back to today comes back. A PTO day just says you're off." },
     ],
     extras: ["urgent"],
-    faqs: ["What is the moment card?", "What's in Today's urgent strip?", "Can I look at another day?", "Does checking off a to-do change DevOps?", "What is the line across today?", "How does FocusTime know I'm off?", "Why can't I move some of my old timeboxes?"],
+    faqs: ["What is the moment card?", "What's on Today on a phone?", "What's in Today's urgent strip?", "Can I look at another day?", "Does checking off a to-do change DevOps?", "What is the line across today?", "How does FocusTime know I'm off?", "Why can't I move some of my old timeboxes?"],
   },
   week: {
     lead: "Week holds your half-day blocks and the plan for them, in four modes: Board, Plan, Team and Status.",
@@ -575,13 +580,16 @@ export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "capture" | "a
     lead: "Settings are yours. They save as you change them, and search at the top of the list finds any of them.",
     does: [
       { title: "Search settings", text: "Type at the top of Settings' list: it finds a setting by its name or its old name. × or Esc closes.", go: { href: "#/settings", label: "Open Settings" } },
-      { title: "On your phone", text: "The four tabs at the bottom, Capture at the top. Plan and Ahead are read only there, with Copy link." },
+      { title: "On your phone", text: "Today, Week, the round + to capture, the Inbox and Ask in the bar at the bottom. The dot at the top shows how your sources are. Plan is read only there, with Copy link; Ahead asks first.", go: { href: "#/today", label: "Open Today" } },
+      { title: "Invite teammates", text: "Admins only: Admin › People shows who's set up, and Invite opens a message for you to send in Teams or Outlook.", go: { href: "#/settings/admin-people/whos-set-up", label: "Open Who's set up" } },
       { title: "Send feedback", text: "⋯ › Send feedback: an idea, a problem or a question, as a story in the FocusTime backlog, after a preview." },
       { title: "Diagnostics", text: "Counts only, for your own chats, when a promise you expected is missing.", go: { href: "#/settings/data/diagnostics", label: "Open Diagnostics" } },
     ],
     extras: ["keys"],
     faqs: [
       "What works on a phone?",
+      "What does the dot at the top mean?",
+      "Why does Ahead ask first on a phone?",
       "How do I install it?",
       "How do notifications work?",
       "What do they say on my lock screen?",
@@ -591,6 +599,8 @@ export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "capture" | "a
       "Where do I add my DevOps write access?",
       'What does "Set by your FocusTime admin" mean?',
       "What can a FocusTime admin do?",
+      "How do I see who's set up?",
+      "How do I invite a teammate?",
       "Where does my level come from?",
       "Why isn't one of our accounts in my client list?",
       "Who shows as a Cooptimizer?",

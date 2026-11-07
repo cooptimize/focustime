@@ -185,7 +185,7 @@ const ASSISTANT: Tour = {
   start: { tab: "today", flow: null, date: null },
   section: "assistant",
   steps: [
-    { target: "ask", title: "Ask", text: "Ask in the top bar, Ctrl J or /. A panel opens beside the screen; on a phone, a sheet from the bottom.", phone: { text: "The speech mark at the top opens the assistant as a sheet from the bottom." } },
+    { target: "ask", title: "Ask", text: "Ask in the top bar, Ctrl J or /. A panel opens beside the screen; on a phone, a sheet from the bottom.", phone: { text: "Ask in the bar at the bottom opens the assistant over the screen." } },
     { title: "It answers from your plan", text: "What's next, what's due tonight, where an item stands, what people promised. Answers are cards with links.", example: "ask-answer" },
     { title: "Change several at once", text: "\"Move the export stories to Friday\": one card lists every move, across clients. One Confirm, one Undo.", example: "ask-move" },
     { title: "Update an item", text: "Mark an item done and comment on it in one card, with the same preview as the buttons. Nothing happens until you Confirm.", example: "ask-update" },

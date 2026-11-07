@@ -69,7 +69,7 @@ describe.skipIf(!CHROMIUM)("Capture's save button (UI-7)", () => {
     const { page, errors } = await freshPage(h, { width: 390, height: 844 });
     await openApp(page, h);
     await page.evaluate(() => void (document.documentElement.style.fontSize = "17px"));
-    await page.locator(".phone-capture").click();
+    await page.locator(".bottom-bar .bb-capture").click();
     await page.locator(".cap-dialog .cap-box").waitFor();
     await checkLayout(page, ".cap-dialog");
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/ui7-capture-phone.png` });

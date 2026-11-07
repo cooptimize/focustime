@@ -740,9 +740,9 @@ export function unsortedLine(k: string | null, clientName: string): UnsortedLine
     case "zero_budget": return { text: "the AI budget is $0", does: "switch", fix: `${admin("sets the budget")} They're sorted with the chat's next messages.` };
     case "over_budget": return { text: "this month's AI budget is used up", does: "switch", fix: `${admin("can raise it")} They're sorted with the chat's next messages.` };
     case "refused_client":
-    case CLIENT_REFUSED: return { text: "held back: it mentions another client", does: "held", fix: null };
-    case "refused_secret": return { text: "held back: it contains something that looks like a key or secret", does: "held", fix: null };
-    case "refused_email": return { text: "held back: it contains an email address", does: "held", fix: null };
+    case CLIENT_REFUSED: return { text: "held back because they mention another client", does: "held", fix: null };
+    case "refused_secret": return { text: "held back because they contain something that looks like a key or secret", does: "held", fix: null };
+    case "refused_email": return { text: "held back because they contain an email address", does: "held", fix: null };
     case "chat_cap": return { text: "this chat reached its AI limit for today", does: "retry", fix: null };
     case "invalid_output":
     case "unknown_ref": return { text: "the AI's answer wasn't usable", does: "retry", fix: null };
@@ -751,6 +751,17 @@ export function unsortedLine(k: string | null, clientName: string): UnsortedLine
     case "timeout": return { text: "the AI service didn't answer in time", does: "retry", fix: null };
     default: return { text: "the AI service couldn't answer", does: "retry", fix: null };
   }
+}
+
+/**
+ * MB-1: an Unsorted reason as one plain sentence: "20 messages held back because they mention another client.",
+ * "1 message held back because it mentions another client.", and "3 messages: the AI service was busy." for the rest.
+ */
+export function unsortedSentence(count: number, line: { text: string; does?: UnsortedLine["does"] }): string {
+  const n = count === 1 ? "1 message" : `${count} messages`;
+  if (line.does !== "held") return `${n}: ${line.text}.`;
+  const text = count === 1 ? line.text.replace(/\bthey (mention|contain)\b/, (_, v: string) => `it ${v}s`) : line.text;
+  return `${n} ${text}.`;
 }
 
 export function unsortedText(k: string | null, clientName: string): string {

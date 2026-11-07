@@ -5,6 +5,7 @@
 // agenda open only on the selected block; Enter in the type box makes a draft story under the chosen feature and plans
 // it, Shift+Enter a plain intention ("not in DevOps"); features aren't picks, so they offer Draft stories instead.
 // Everything here is local: the actions only write FocusTime's plan store.
+import { usePhone } from "./viewport.ts";
 import { CloseButton } from "./CloseButton.tsx";
 import { countsFor } from "../plan/process.ts";
 import { ModeArea } from "./ModeSwitch.tsx";
@@ -363,7 +364,9 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
   // U4: the agenda is open on the selected block and folded on the others; its fold line toggles it.
   const [calToggle, setCalToggle] = useState<boolean | null>(null);
   useEffect(() => setCalToggle(null), [selected]);
-  const cal = calToggle ?? selected;
+  // MB-1: on the phone every block's agenda starts folded ("Agenda · 4 meetings · 1h 30m free"); a tap opens it.
+  const phone = usePhone();
+  const cal = calToggle ?? (phone ? false : selected);
   const fw = blockFitWords(b.fit);
   const dues = pv.followUps ?? [];
   const [over, setOver] = useState(false);

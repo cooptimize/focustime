@@ -19,6 +19,8 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
   const open = async (hash: string, viewport?: { width: number; height: number }) => {
     const { page, errors } = await freshPage(h, viewport);
     await page.evaluate((x) => (location.hash = x), hash);
+    // MB-1: on the phone Ahead opens with its notice first; Open anyway shows it.
+    if (viewport && viewport.width < 600) await page.getByRole("button", { name: "Open anyway" }).click({ timeout: 30_000 });
     await page.locator(".ahead").waitFor({ timeout: 30_000 });
     await page.locator(".ah-pending").waitFor({ timeout: 30_000 });
     return { page, errors };

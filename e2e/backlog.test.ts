@@ -21,6 +21,8 @@ describe.skipIf(!CHROMIUM)("Ahead › Backlog (browser, demo mode)", () => {
   const open = async (viewport?: { width: number; height: number }) => {
     const { page, errors } = await freshPage(h, viewport);
     await page.evaluate(() => (location.hash = "#/ahead/backlog"));
+    // MB-1: on the phone Ahead opens with its notice first; Open anyway shows it (for the session, reloads too).
+    if (viewport && viewport.width < 600) await page.getByRole("button", { name: "Open anyway" }).click({ timeout: 30_000 });
     await page.locator(".bl-client").first().waitFor({ timeout: 30_000 });
     return { page, errors };
   };
