@@ -144,13 +144,13 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, setChanges, breakDown, color, focusItem: item, error: setError } : null;
   const anyFilter = f.clients.length || f.epic || f.gaps || f.from || f.to || f.q.trim();
   const visible = mode === "backlog" ? backlog.reduce((k, g) => k + g.rows.length, 0) : shown.reduce((k, g) => k + g.rows.filter((r) => !r.context).length, 0);
-  const title = mode === "fix" ? "Gaps" : mode === "gantt" ? "Gantt" : mode === "backlog" ? "Backlog" : "Grid";
+  const title = mode === "fix" ? "Readiness" : mode === "gantt" ? "Gantt" : mode === "backlog" ? "Backlog" : "Grid";
 
   return (
     <main className={`roadmap ahead ahead-${mode}`} aria-label={`Ahead: ${title}`}>
       <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
-          Ahead <span className="muted">{load ? (mode === "fix" ? plural(fixN, "thing to fix", "things to fix") : plural(visible, "item", "items")) : ""}</span>
+          Ahead <span className="muted">{load ? (mode === "fix" ? `${fixN} not ready yet` : plural(visible, "item", "items")) : ""}</span>
         </h2>
         <button type="button" className="top-btn" disabled={busy} onClick={() => void reload(true)} title="Read DevOps again">
           {busy ? "Reading…" : "Refresh"}

@@ -11,7 +11,7 @@ const commands = (ACTIONS as readonly ActionSpec[]).map<MenuItem>((a) => ({ id: 
 
 describe("QF-1 names", () => {
   it("Ahead's modes read Grid · Gantt · Gaps (BH-1: · Backlog); the code name and address stay fix", () => {
-    expect(MODES.ahead.map((m) => MODE_NAMES[m])).toEqual(["Grid", "Gantt", "Gaps", "Backlog"]);
+    expect(MODES.ahead.map((m) => MODE_NAMES[m])).toEqual(["Grid", "Gantt", "Readiness", "Backlog"]);
     expect(hashOf({ nav: navOf.ahead("fix"), overlay: null })).toBe("#/ahead/fix");
     expect(parseHash("#/ahead/gaps")?.nav).toEqual(navOf.ahead("fix"));
   });
