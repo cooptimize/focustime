@@ -1,6 +1,6 @@
 // IB-1's seed: what the Inbox needs beyond the conversations, promises, captures and sends the other seeds make, so a
 // demo shows every view (docs/demo/README.md). With the others it gives: Needs you with a reason on each item (a client
-// question nobody answered, an urgent ask by name, my late promise, Priya's Must), Promises with a late one, Waiting on
+// question nobody answered, Priya's question to me by name, my late promise, Priya's Must), Promises with a late one, Waiting on
 // (Priya's commitment to me, and my send to Sam), In progress (#2211), Captures and drafts, Handled by teammates
 // (Jordan's deploy), Done (a promise closed today and a conversation resolved this morning) and Chatter. Everything is
 // fictional, and nothing leaves FocusTime: the Close the loop and Resolve go through the app's own actions.
@@ -21,13 +21,11 @@ export const inboxSeed: DemoSeed = {
     const hc = "19:demo-harbor-collab@thread.v2";
     const me = { id: e.me.id, name: e.me.name };
 
-    // Needs you now: Priya asks me by name about a sign-in failure, and the request was sorted as needed now. Today's
-    // urgent strip shows it with Start focus; it opens in the Inbox's detail pane.
+    // Needs you: Priya asks me by name about a sign-in failure. (Not sorted as urgent: Today keeps one Start focus on
+    // the demo day, NV-1.)
     await thread(e, ad, "Atlas", "Warehouse sign-in fails after this morning's release", "Priya says warehouse users can't sign in since the 9:00 release.\nShe asks Alex to look before the afternoon shift.", [
       { id: "ib-ad-1", from: member(ad, priya.name), minutesAgo: 25, text: `${e.me.name.split(" ")[0]}, warehouse users can't sign in since the 9:00 release. Can you look before the afternoon shift starts?`, mentions: [me] },
     ]);
-    await e.teams.addRequest({ chatId: ad, messageId: "ib-ad-1", clientKey: "Atlas", rule: "mention", ruleDetail: null, at: e.ago(25) });
-    await e.teams.setSort(ad, "ib-ad-1", "sorted", { kind: "incident", urgency: "now", itemType: "bug", title: "Warehouse sign-in fails since the 9:00 release", description: "", likely: null, reason: "Users are blocked before a shift" }, null);
 
     // Waiting on: Priya's commitment to me, due tomorrow.
     const data = await thread(e, nd, "Northwind", "Test accounts for the loyalty points demo", "Alex needs test accounts with points balances for Thursday's demo.\nPriya will send them.", [

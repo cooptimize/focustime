@@ -44,7 +44,7 @@ starts the same.
 | `notices.ts`, `history.ts` | DM-1 | Notes and past days |
 | `conversations.ts` | DM-1 (CV-1, CV-5) | Four registered chats; a conversation that needs me, my late promise, my promise due Friday, one tracked as #2211, one a teammate handles, chatter |
 | `status.ts` | SR-1 | Kat's sends last Monday; this week's comments on two features (mine, a teammate's, a Coop update), last week's, and the story changes behind the drafts |
-| `inbox.ts` | IB-1 | What the Inbox needs beyond the other seeds, so every view shows something: Priya's urgent ask by name on Atlas (Needs you now on Today, with Start focus), her commitment to me (Waiting on), a conversation resolved this morning and a promise closed today (Done). `server/demo-inbox.test.ts` checks every view on every weekday |
+| `inbox.ts` | IB-1 | What the Inbox needs beyond the other seeds, so every view shows something: Priya's question to me by name on Atlas (Needs you, "Priya asked you by name"; not sorted as urgent, so Today keeps one Start focus), her commitment to me (Waiting on), a conversation resolved this morning and a promise closed today (Done). `server/demo-inbox.test.ts` checks every view on every weekday |
 | `assistant.ts` | AS-2 | Empty: AS-2's own demo data goes here |
 | `meetings.ts` | MC-1 | Northwind's weekly status call (Upload; reviewers me and Priya) on the last workday's weekday, with a short fictional transcript uploaded for it: six proposals (a gap, three commitments, two comments) to review |
 

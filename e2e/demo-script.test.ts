@@ -42,9 +42,8 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await page.locator(".phone-now, .today-next").first().waitFor({ timeout: 30_000 });
     await page.getByText(/Promise · was due/).first().waitFor();
     await page.getByText("Send Marcus the updated export spec").first().waitFor();
-    // IB-1 slice 4: the strip is the Inbox's own items: the urgent ask first, the sends as their own lines, the badge's count.
+    // IB-1 slice 4: the strip is the Inbox's own items: the late promise, the sends as their own lines, the badge's count.
     const strip = page.getByRole("region", { name: "Urgent" });
-    await expect(strip.locator(".us-item").first().textContent()).resolves.toContain("Warehouse sign-in fails since the 9:00 release");
     await expect.poll(() => strip.locator(".sent-line").count()).toBe(2);
     const badge = await page.locator("nav.views .view-tab .count").first().textContent();
     await expect(strip.locator(".us-all").textContent()).resolves.toBe(`${badge} need you in the Inbox`);
