@@ -93,7 +93,8 @@ describe.skipIf(!CHROMIUM)("MB-1b: phone polish", () => {
       await page.locator(".status-dot-btn").click();
       const sheet = page.locator(".ph-status");
       await sheet.waitFor();
-      await page.waitForTimeout(300);
+      // HK-6: measured once the sheet has finished sliding in (its animations done), not after a set time.
+      await sheet.evaluate((s) => Promise.all(s.getAnimations({ subtree: true }).filter((a) => a.effect?.getTiming().iterations !== Infinity).map((a) => a.finished)));
       const fit = await sheet.evaluate((s) => {
         const box = s.getBoundingClientRect();
         const over = [...s.querySelectorAll<HTMLElement>(".ph-status-list li, .ph-status-list li > *")].filter((e) => e.getBoundingClientRect().right > box.right + 0.5 || e.scrollWidth > e.clientWidth + 1).map((e) => e.className);
