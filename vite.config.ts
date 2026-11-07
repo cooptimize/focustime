@@ -1,6 +1,7 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { testWorkers, thisMachine } from "./test/workers.ts";
+import { techDocsPlugin } from "./scripts/tech-docs.ts";
 
 // HK-5: the test run's worker count from this machine (test/workers.ts), said once at the start of a run.
 const workers = testWorkers(thisMachine());
@@ -9,7 +10,8 @@ if (process.env.VITEST && !process.env.VITEST_WORKER_ID && !process.env.FOCUSTIM
 // Local only: bind to loopback, fixed port, no LAN exposure.
 // Vite's default allowedHosts check rejects requests whose Host header is not localhost.
 export default defineConfig({
-  plugins: [react()],
+  // DOC-1: docs/technical/*.md as `virtual:tech-docs`, imported only by the lazily loaded Technical docs panel.
+  plugins: [react(), techDocsPlugin()],
   server: { host: "127.0.0.1", port: 5317, strictPort: true },
   preview: { host: "127.0.0.1", port: 5318, strictPort: true },
   test: {
