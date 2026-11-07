@@ -1247,3 +1247,10 @@ The phone overhaul: Today first, Capture and Ask in the bar, a readable Week (ov
 - DOC-1: the image build keeps `docs/technical` (`.dockerignore` re-includes it) because the UI build renders it; the final stage still removes `docs`.
 - DOC-1: the coopilot-docs branch (`docs/architecture-site`, local-desktop era) was read, not merged. Salvaged after checking the code: the planning rules and risk table (architecture.md), the threat model and known gaps (security.md, rewritten for the hosted app), the write framework table (security.md). Dropped as no longer true: the loopback server, launch token and keyring-only secrets, the systemd service and launcher, config.toml and the SQLite store as the plan store, budgets in blocks, and "no CI".
 - DOC-1: CLAUDE.md now points to `docs/technical/`, has the Technical docs glossary row and the `ui/docs/` folder line, shows AH-1 through MC-1 as merged with DOC-1 in review, and its Sign-in row describes the hosted Entra sign-in. No hard rule was removed.
+
+## MB-1b: phone polish (Nov 7)
+
+Unnumbered; numbered at merge.
+
+- MB-1b (Q-MB1-7): on the phone, a Week card with no status pill shows UI-9's late chip at the end of its title line (after the time, before ⋯), so the card is exactly as tall as with no chip. On that line the client's name shortens with an ellipsis before the chip or the time would wrap (the full name stays in the card's label and title), and the chip keeps its 44 px tap area. Beside a status pill the chip stays on the chips line (D1021). A computer is unchanged.
+- MB-1b: the status sheet's rows wrap. They had inherited the desktop status bar's `white-space: nowrap` (`.source`), so at 360 px the DevOps line ran past the sheet and the sheet scrolled sideways. The line is wrapped, not shortened: every client and its state stay readable, on as many lines as they need.

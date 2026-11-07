@@ -3,7 +3,7 @@
 // Mon PM) and one I added for Cooptimize (on Mon AM, its due badge folded into the chip). Shown, the rail marks them
 // and there is no chip. One opens that promise; several open Promises, late ones, for the card's client. Keeping or
 // snoozing one updates the chip with no reload. On the phone (no rail) the chip sits on the card's chips line beside
-// the status (MB-1): no taller beside a status pill, the tap target is 44 px, and the page doesn't scroll sideways.
+// a status (MB-1; with no status it ends the title line, MB-1b, e2e/mb1b.test.ts): no taller beside a status pill, the tap target is 44 px, and the page doesn't scroll sideways.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
@@ -174,7 +174,7 @@ describe.skipIf(!CHROMIUM)("UI-9: the late chip on Week's cards", () => {
     expect(await c.textContent()).toBe("1 late");
     // MB-1: on the card's chips line (the status line), as on a computer.
     expect(await c.evaluate((e) => !!e.closest(".card-status"))).toBe(true);
-    // Beside a status pill the chip adds no height (a card with no status gets the line).
+    // Beside a status pill the chip adds no height (a card with no status: e2e/mb1b.test.ts).
     const card = page.locator(`main.grid ${MON_AM}`);
     const withChip = await card.evaluate((e) => e.getBoundingClientRect().height);
     const without = await card.evaluate((e) => {
