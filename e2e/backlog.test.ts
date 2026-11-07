@@ -53,7 +53,10 @@ describe.skipIf(!CHROMIUM)("Ahead › Backlog (browser, demo mode)", () => {
     for (const box of await page.locator(".bl-head input[type=checkbox]").all()) await box.check();
     await expect(page.locator(".bl-bulk strong").textContent()).resolves.toMatch(/selected$/);
     await page.getByRole("button", { name: "Set a target date…" }).click();
-    await page.locator(".bl-bulk-date input[type=date]").fill("2026-12-18");
+    // AH-5: the app's own date picker: typed in its box, then Save.
+    await page.locator(".bl-bulk-date .date-field").click();
+    await page.locator(".cell-pop").getByRole("textbox").fill("2026-12-18");
+    await page.locator(".cell-pop").getByRole("button", { name: "Save" }).click();
     await page.getByRole("button", { name: "Apply" }).click();
     await page.locator(".bl-result").waitFor();
     await expect(page.locator(".bl-result").textContent()).resolves.toMatch(/target dates? set to Dec 18, ready to save/);

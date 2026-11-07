@@ -62,8 +62,26 @@ try {
       await page.getByRole("button", { name: /^Review/ }).first().click();
       await page.locator(".ah-review").waitFor();
       await shot(page, "review", size);
+      await page.keyboard.press("Escape");
+      // A shared component elsewhere: Backlog's bulk date uses the same date picker.
+      await page.evaluate(() => (location.hash = "#/ahead/backlog"));
+      await page.locator(".bl-head input[type=checkbox]").first().waitFor({ timeout: 30_000 });
+      await page.locator(".bl-head input[type=checkbox]").first().check();
+      await page.getByRole("button", { name: "Set a target date…" }).click();
+      await page.locator(".bl-bulk-date .date-field").click();
+      await page.locator(".cell-pop").waitFor();
+      await shot(page, "backlog-date", size);
+      await page.keyboard.press("Escape");
     }
     errors.push(...e);
+    await page.close();
+  }
+  if (phase === "after") {
+    // The grid at 1920 too (CLAUDE.md: changed screens at 1920 and at the largest Text size).
+    const { page } = await freshPage(h, { width: 1920, height: 1080 });
+    await page.evaluate(() => (location.hash = "#/ahead"));
+    await page.locator(".ah-pending").waitFor({ timeout: 60_000 });
+    await shot(page, "grid-1920", "default");
     await page.close();
   }
 } finally {

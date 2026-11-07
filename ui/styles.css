@@ -5635,3 +5635,4 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .date-field.empty span:first-child { color: var(--text-muted); }
 .date-field-icon { color: var(--text-faint); font-size: var(--fs-1); }
 .bl-bulk-label { display: inline-flex; align-items: center; gap: 6px; }
+.cell-pop.ah-pop-size { width: calc(372px * var(--text-scale, 1)); }
