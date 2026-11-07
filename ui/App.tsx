@@ -138,7 +138,22 @@ export function App() {
   const [phoneMoreAt, setPhoneMoreAt] = useState<{ x: number; y: number } | null>(null);
   // MB-1: the status dot's sheet, and Ahead opened anyway on the phone (for this visit; a reload shows the notice again).
   const [statusOpen, setStatusOpen] = useState(false);
-  const [aheadAnyway, setAheadAnyway] = useState(false);
+  // MB-1: Open anyway on Ahead's phone notice lasts for this browser session (a reload keeps it; nothing else does).
+  const [aheadAnyway, setAheadAnywayState] = useState(() => {
+    try {
+      return sessionStorage.getItem("focustime.ahead.anyway") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const setAheadAnyway = (v: boolean) => {
+    setAheadAnywayState(v);
+    try {
+      sessionStorage.setItem("focustime.ahead.anyway", v ? "1" : "0");
+    } catch {
+      /* private mode: this page only */
+    }
+  };
   // MB-1: a to-do's sheet on the phone (Today's rows, Week's ⋯).
   const [todoSheet, setTodoSheet] = useState<Pick | null>(null);
   const openTodoSheet = useCallback((p: Pick) => setTodoSheet(p), []);

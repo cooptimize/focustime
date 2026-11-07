@@ -127,7 +127,7 @@ describe.skipIf(!CHROMIUM)("UI-3: one close button", () => {
     await x.click();
     await about.waitFor({ state: "detached" });
 
-    await page.locator(".topbar .phone-capture").click();
+    await page.locator(".bottom-bar .bb-capture").click();
     const cap = page.getByRole("dialog", { name: /capture/i });
     const cx = cap.getByRole("button", { name: "Close", exact: true });
     await expect(inside(cx)).resolves.toBe(true);

@@ -5567,7 +5567,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   .bb-capture {
     position: absolute; top: -18px; width: 58px; height: 58px; min-height: 58px; padding: 0; border-radius: 50%;
     display: grid; place-items: center; border: 3px solid var(--bg); background: var(--action); color: var(--on-action);
-    box-shadow: 0 4px 14px color-mix(in srgb, #000 35%, transparent); -webkit-tap-highlight-color: transparent;
+    box-shadow: var(--shadow-pop); -webkit-tap-highlight-color: transparent;
   }
   .bb-capture svg { width: 26px; height: 26px; }
   .bb-capture:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
@@ -5608,7 +5608,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   .an-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 
   /* A notice where the footer's chip was: just above the bottom bar, then gone. */
-  .phone-notice { position: fixed; left: 16px; right: 16px; bottom: calc(var(--bb-h) + 10px); z-index: 66; margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: 0 4px 14px color-mix(in srgb, #000 30%, transparent); font-size: var(--fs-3); }
+  .phone-notice { position: fixed; left: 16px; right: 16px; bottom: calc(var(--bb-h) + 10px); z-index: 66; margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-tooltip); font-size: var(--fs-3); }
   .undo-toast { z-index: 66; left: 16px; right: 16px; bottom: calc(var(--bb-h) + 10px); width: auto; max-width: none; transform: none; }
 
   /* Today on the phone: the Now card. */
