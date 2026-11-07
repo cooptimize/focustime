@@ -21,6 +21,7 @@ footage
 *-footage*
 *-kickoff
 docs
+!docs/technical
 infra
 system
 scratch
