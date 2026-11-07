@@ -7,6 +7,7 @@
 // preview, confirm, read back and undo): push the target date by 2 or 4 weeks or to a chosen date, set one where
 // there's none, assign to me. Items I can't change are skipped with the reason. Plan it puts the selected stories on
 // next week's Plan as nice to haves (a plan-store write), with Undo.
+import { DateField } from "../DatePicker.tsx";
 import { useMemo, useState, type CSSProperties } from "react";
 import type { WeekPlanState } from "../../actions/types.ts";
 import { bulkSummary, lastText, nextMonday, type BacklogGroup, type BacklogRow, type BulkOp } from "../../plan/backlog.ts";
@@ -135,10 +136,10 @@ export function Backlog({ groups, tier, onChanged }: { groups: BacklogGroup[]; t
           </button>
           {dateFor && (
             <span className="bl-bulk-date">
-              <label>
+              <span className="bl-bulk-label">
                 {dateFor === "move" ? "New target date" : "Target date, only where there's none"}
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-              </label>
+                <DateField label={dateFor === "move" ? "New target date" : "Target date, only where there's none"} value={date || null} today={a.load.today} clearable={false} placeholder="Choose a date" onChange={(d) => setDate(d ?? "")} />
+              </span>
               <button type="button" className="mini primary" disabled={busy || !date} onClick={() => void bulk({ kind: dateFor, date })}>
                 Apply
               </button>

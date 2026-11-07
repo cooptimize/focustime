@@ -30,10 +30,11 @@ describe.skipIf(!CHROMIUM)("client DevOps identities (browser, demo mode)", () =
 
   it("a linked login shows the FocusTime name; a suggestion changes nothing until Confirm; then it's Sam everywhere", async () => {
     const { page, errors } = await freshPage(h, { width: 1920, height: 1080 });
+    // AH-5: the cell shows "First L."; the full name is its title.
     let who = await ahead(page);
-    await expect(who("Referral tracking").textContent()).resolves.toContain("Priya Shah");
-    await expect(who("Referral tracking").textContent()).resolves.not.toContain("Ext-");
-    await expect(who("Referral source field").textContent()).resolves.toContain("Ext-Sam Ortiz");
+    await expect(who("Referral tracking").locator(".ah-who").getAttribute("title")).resolves.toContain("Priya Shah");
+    await expect(who("Referral tracking").locator(".ah-who").getAttribute("title")).resolves.not.toContain("Ext-");
+    await expect(who("Referral source field").locator(".ah-who").getAttribute("title")).resolves.toContain("Ext-Sam Ortiz");
 
     await openAdmin(page, "People");
     const ids = page.getByRole("region", { name: "Client DevOps identities" });
@@ -49,8 +50,8 @@ describe.skipIf(!CHROMIUM)("client DevOps identities (browser, demo mode)", () =
     await expect(harbor.locator(".adm-id-row.suggested").count()).resolves.toBe(0);
 
     who = await ahead(page);
-    await expect(who("Referral source field").textContent()).resolves.toContain("Sam Ortiz");
-    await expect(who("Referral source field").textContent()).resolves.not.toContain("Ext-");
+    await expect(who("Referral source field").locator(".ah-who").getAttribute("title")).resolves.toContain("Sam Ortiz");
+    await expect(who("Referral source field").locator(".ah-who").getAttribute("title")).resolves.not.toContain("Ext-");
 
     // Remove puts it back to a suggestion-free unmatched login (an admin said it isn't him).
     await openAdmin(page, "People");

@@ -14,7 +14,7 @@ const NOW = "2026-11-02T14:00:00Z";
 const ME = "you@cooptimize.example";
 const DANA = anAssignee("Dana Reyes");
 
-function setup(o: { lead?: boolean; automation?: boolean } = {}) {
+function setup(o: { lead?: boolean; automation?: boolean; /** AH-5: the project's team members (null: unread). */ project?: { email: string; name: string }[] | null; projectOf?: (clientKey: string) => { email: string; name: string }[] | null } = {}) {
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });
   const epic = anAheadItem({ id: 100, type: "Epic", level: "top", rung: 0, assignee: { name: "Alex Rivera", email: ME } });
   const mine = anAheadItem({ id: 110, parentId: 100, assignee: { name: "Dana Reyes", email: DANA.email }, target: "2026-12-04" });
@@ -29,7 +29,8 @@ function setup(o: { lead?: boolean; automation?: boolean } = {}) {
       return r.ok ? r.config : null;
     },
     clients: async () => [{ clientKey: "Northwind", clientName: "Northwind Foods" } as never],
-    devops: () => ({ aheadItems: async (_refs, opts) => (reads.push(opts ?? {}), [client]) }),
+    devops: () => ({ aheadItems: async (_refs, opts) => (reads.push(opts ?? {}), [client]), projectPeople: async (k) => (o.projectOf ? o.projectOf(k) : o.project === undefined ? null : o.project) }),
+    people: async () => ({ cooptimizers: [{ email: DANA.email, name: "Dana Reyes" }], isCooptimizer: (e) => e.endsWith("@cooptimize.example"), myName: "Alex Rivera" }),
     isLead: async () => o.lead ?? false,
     automation: async () => o.automation ?? false,
     canWrite: async () => true,
@@ -48,7 +49,7 @@ function setup(o: { lead?: boolean; automation?: boolean } = {}) {
   };
   const edit = (f: (c: AheadClient) => AheadClient) => void (client = f(client));
   const setItem = (id: number, patch: Partial<AheadClient["items"][number]>) => edit((c) => ({ ...c, items: c.items.map((i) => (i.id === id ? { ...i, ...patch } : i)) }));
-  return { plan, run, fail, setItem, reads };
+  return { plan, run, fail, setItem, edit, reads };
 }
 type S = ReturnType<typeof setup>;
 const load = (s: S) => s.run<AheadLoad>("ahead.load");
@@ -188,5 +189,43 @@ describe("BH-1: ahead.stage_bulk and Backlog's reads", () => {
     await expect(s.fail("ahead.stage_bulk", { items: [], op: { kind: "assign_me" } })).resolves.toMatchObject({ status: 400 });
     const l = await load(s);
     expect([l.staleWeeks, l.clients[0]!.last]).toEqual([6, undefined]);
+  });
+});
+
+describe("AH-5: State in the change set, and whom I may assign", () => {
+  const STATES = { Feature: [{ name: "New", category: "Proposed", color: "b2b2b2" }, { name: "Active", category: "InProgress", color: "007acc" }, { name: "Closed", category: "Completed", color: "339933" }] };
+  it("a state is one of the type's states from the process model (its own spelling); none listed: no state edits", async () => {
+    const s = setup({ lead: true });
+    expect(await s.fail("ahead.stage", { clientKey: "Northwind", itemId: 110, field: "state", value: "Active" })).toMatchObject({ status: 409, error: expect.stringContaining("A state isn't in") });
+    s.edit((c) => ({ ...c, states: STATES }));
+    expect((await s.fail("ahead.stage", { clientKey: "Northwind", itemId: 110, field: "state", value: "Doing" })).error).toBe("Doing isn't a state of Feature in Portal's process");
+    await s.run("ahead.stage", { clientKey: "Northwind", itemId: 110, field: "state", value: "closed" });
+    expect((await load(s)).changes).toEqual([expect.objectContaining({ itemId: 110, field: "state", value: "Closed", baseValue: "Active" })]);
+    // Back to what DevOps has: no change.
+    await s.run("ahead.stage", { clientKey: "Northwind", itemId: 110, field: "state", value: "Active" });
+    expect((await load(s)).changes).toEqual([]);
+  });
+
+  it("ahead.people lists this client's project only, me first, then people assigned here, then everyone by name, with domains and who's outside", async () => {
+    const s = setup({ lead: true, projectOf: (k) => (k === "Northwind" ? [{ email: "zoe.park@northwind.example", name: "Zoe Park" }, { email: "ari.bell@northwind.example", name: "Ari Bell" }, { email: ME, name: "Alex Rivera" }] : [{ email: "other@fabrikam.example", name: "Other Client Person" }]) });
+    const r = await s.run<{ people: { email: string; name: string; domain: string; external: boolean; me: boolean; assigned: boolean }[]; problem: string | null }>("ahead.people", { clientKey: "Northwind" });
+    expect(r.problem).toBeNull();
+    expect(r.people.map((p) => [p.name, p.domain, p.external, p.me, p.assigned])).toEqual([
+      ["Alex Rivera", "cooptimize.example", false, true, true],
+      ["Dana Reyes", "cooptimize.example", false, false, true],
+      ["Ari Bell", "northwind.example", true, false, false],
+      ["Zoe Park", "northwind.example", true, false, false],
+    ]);
+    expect(r.people.some((p) => p.email.includes("fabrikam"))).toBe(false);
+    expect(await s.fail("ahead.people", { clientKey: "Northwind", extra: 1 })).toMatchObject({ status: 400 });
+  });
+
+  it("anyone on the project can be assigned, nobody else; an unread project falls back with a reason", async () => {
+    const s = setup({ lead: true, project: [{ email: "zoe.park@northwind.example", name: "Zoe Park" }] });
+    await s.run("ahead.stage", { clientKey: "Northwind", itemId: 120, field: "assignee", value: { email: "zoe.park@northwind.example", name: "Zoe Park" } });
+    expect((await load(s)).changes).toEqual([expect.objectContaining({ itemId: 120, field: "assignee", value: { email: "zoe.park@northwind.example", name: "Zoe Park" } })]);
+    expect((await s.fail("ahead.stage", { clientKey: "Northwind", itemId: 120, field: "assignee", value: { email: "lee@fabrikam.example", name: "Lee" } })).error).toBe("Only people on Northwind Foods's DevOps project can be assigned here");
+    const unread = setup({ lead: true });
+    expect((await unread.run<{ problem: string | null }>("ahead.people", { clientKey: "Northwind" })).problem).toMatch(/couldn't be read/);
   });
 });

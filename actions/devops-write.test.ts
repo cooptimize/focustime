@@ -832,7 +832,7 @@ describe("AH-1: Ahead's change set as one fields write per item (D657 to D660)",
     await stage(437, "start", "2026-11-16", null, "PM");
     await stage(437, "target", "2026-12-11", null, "AM");
     const p = await s.preview({ kind: "fields", itemId: 437 });
-    expect(p.summary).toBe("Change dates, size or owner in DevOps");
+    expect(p.summary).toBe("Change dates, state, size or owner in DevOps");
     expect(p.fields).toEqual(expect.arrayContaining([{ label: "Start date", before: null, after: "2026-11-16", changed: true }, { label: "Target date", before: null, after: "2026-12-11", changed: true }]));
     expect(p.notes.join(" ")).toContain("Mon, Nov 16 PM in FocusTime");
     const r = await s.confirm(p);
@@ -882,6 +882,23 @@ describe("AH-1: Ahead's change set as one fields write per item (D657 to D660)",
     await s.write({ kind: "fields", itemId: 500 });
     expect(patches(s).at(-1)!.body).toContainEqual({ op: "add", path: "/fields/System.AssignedTo", value: "" });
     expect(s.dv.items.get(500)!.fields["System.AssignedTo"]).toBeUndefined();
+  });
+  it("AH-5: a state goes in the same patch, checked against the type's states; undo puts the old state back", async () => {
+    await s.plan.stageAheadChange({ clientKey: COOP, itemId: 500, field: "state", value: "Closed", half: null, baseRev: 3, baseValue: "Active" });
+    await stage(500, "size", 2);
+    const p = await s.preview({ kind: "fields", itemId: 500 });
+    expect(p.fields).toContainEqual({ label: "State", before: "Active", after: "Closed", changed: true });
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(true);
+    expect(patches(s).at(-1)!.body).toContainEqual({ op: "add", path: "/fields/System.State", value: "Closed" });
+    expect(s.dv.items.get(500)!.fields["System.State"]).toBe("Closed");
+    expect(await s.plan.aheadChanges()).toEqual([]);
+    const u = await s.write({ kind: "undo", writeId: r.entry.id });
+    expect(u.confirmed).toBe(true);
+    expect(s.dv.items.get(500)!.fields["System.State"]).toBe("Active");
+    // A name the type doesn't have is refused before anything is written.
+    await s.plan.stageAheadChange({ clientKey: COOP, itemId: 500, field: "state", value: "Doing", half: null, baseRev: s.dv.items.get(500)!.rev, baseValue: "Active" });
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "fields", itemId: 500 } })).toMatchObject({ status: 409, code: "no_field" });
   });
   it("a conflict only when a field I'm changing changed in DevOps; anything else and mine go on the new rev quietly", async () => {
     await stage(437, "target", "2026-12-11");

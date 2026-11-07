@@ -15,8 +15,9 @@ import { userZone } from "../week/zone.ts";
 import type { ActionResponse, AheadClient, AheadItem, AheadLoad } from "./types.ts";
 import { GAP_KINDS, TOP_N, type GapKind } from "../plan/fixnext.ts";
 import { bulkDecide, DEFAULT_AHEAD, type BulkOp } from "../plan/backlog.ts";
+import { assignPeople, type AssignPerson } from "../plan/ahead-people.ts";
 
-export const AHEAD_ACTIONS = ["ahead.load", "ahead.stage", "ahead.stage_bulk", "ahead.unstage", "ahead.discard", "ahead.resolve", "ahead.filters", "ahead.set_filters"] as const;
+export const AHEAD_ACTIONS = ["ahead.load", "ahead.people", "ahead.stage", "ahead.stage_bulk", "ahead.unstage", "ahead.discard", "ahead.resolve", "ahead.filters", "ahead.set_filters"] as const;
 export type AheadAction = (typeof AHEAD_ACTIONS)[number];
 
 export type AheadContext = {
@@ -24,7 +25,7 @@ export type AheadContext = {
   config: () => Promise<AppConfig | null>;
   /** The clients this person sees (followed, clients only via clientAccounts(), with DevOps), as Roadmap reads them. */
   clients: (cfg: AppConfig, weekStart: IsoDate, refresh: boolean) => Promise<ClientRef[]>;
-  devops: (cfg: AppConfig) => Pick<DevOpsSource, "aheadItems" | "lastChanges">;
+  devops: (cfg: AppConfig) => Pick<DevOpsSource, "aheadItems" | "lastChanges" | "projectPeople">;
   /** isClientLead over clientAccounts() for me (Internal like any client). */
   isLead: (clientKey: string) => Promise<boolean>;
   /** An admin flagged me as an automation account. */
@@ -33,6 +34,8 @@ export type AheadContext = {
   canWrite: (clientKey: string) => Promise<boolean>;
   /** Whom I may assign on this client: its Account Workers who are Cooptimizers, and me (by email). */
   assignable: (clientKey: string, email: string) => Promise<boolean>;
+  /** AH-5: the client's Cooptimizers (its Account Workers, with their own email), who is one, and my name. Missing: none. */
+  people?: (clientKey: string) => Promise<{ cooptimizers: { email: string; name: string }[]; isCooptimizer: (email: string) => boolean; myName: string | null }>;
   now: () => string;
   /**
    * AH-3: client DevOps identities: every address that is me on a client, and who a DevOps email is (their FocusTime
@@ -78,11 +81,12 @@ export function currentValue(i: AheadItem, field: ChangeField): ChangeValue {
   if (field === "start") return i.start;
   if (field === "target") return i.target;
   if (field === "size") return i.size;
+  if (field === "state") return i.state;
   return i.assignee?.email ? { email: i.assignee.email.toLowerCase(), name: i.assignee.name } : null;
 }
-/** Whether the item's type has the field in its process (assignee always). */
-export const hasField = (c: Pick<AheadClient, "startFields" | "targetFields" | "sizeFields">, type: string, field: ChangeField): boolean =>
-  field === "assignee" ? true : !!(field === "start" ? c.startFields : field === "target" ? c.targetFields : c.sizeFields)[type];
+/** Whether the item's type has the field in its process (assignee always; a state where the model lists the type's states). */
+export const hasField = (c: Pick<AheadClient, "startFields" | "targetFields" | "sizeFields" | "states">, type: string, field: ChangeField): boolean =>
+  field === "assignee" ? true : field === "state" ? (c.states?.[type]?.length ?? 0) > 0 : !!(field === "start" ? c.startFields : field === "target" ? c.targetFields : c.sizeFields)[type];
 
 /** My rights on every item of a client. */
 export function rightsOf(c: AheadClient & { mine?: readonly string[] }, me: { lead: boolean; automation: boolean }): Map<number, EditRight> {
@@ -147,13 +151,56 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     return { ok: true, data: { today, clients: out, changes: await plan.aheadChanges(), halves, automation, fixTopN: fr.topN, staleWeeks: cfg.ahead?.staleWeeks ?? DEFAULT_AHEAD.staleWeeks } satisfies AheadLoad };
   }
 
+  /**
+   * AH-5: whom the assignee dropdown lists for one client: its own DevOps project's people (never another client's),
+   * its Cooptimizers and whoever has an item there, me first (plan/ahead-people.ts).
+   */
+  const peopleOf = async (c: AheadClient & { mine?: string[] }): Promise<{ people: AssignPerson[]; problem: string | null }> => {
+    const [project, org, ix, staged] = await Promise.all([
+      ctx.devops(cfg).projectPeople?.(c.clientKey).catch(() => null) ?? Promise.resolve(null),
+      ctx.people ? ctx.people(c.clientKey).catch(() => null) : Promise.resolve(null),
+      idx(),
+      plan.aheadChanges(),
+    ]);
+    const coops = org?.cooptimizers ?? [];
+    const assignees = [
+      ...c.items.flatMap((i) => (i.assignee?.email ? [{ email: i.assignee.email, name: i.assignee.name }] : [])),
+      ...staged.filter((x) => x.clientKey === c.clientKey && x.field === "assignee").flatMap((x) => (x.value && typeof x.value === "object" ? [x.value] : [])),
+    ];
+    const loginOf = (e: string): string | null => {
+      const who = ix?.personOf(c.clientKey, e);
+      if (!who) return null;
+      return coops.find((w) => w.email.toLowerCase() !== e && ix!.personOf(c.clientKey, w.email)?.id === who.id)?.email ?? null;
+    };
+    const people = assignPeople({ mine: c.mine ?? (c.me ? [c.me] : []), myName: org?.myName ?? null, cooptimizers: coops, project: project ?? [], assignees, loginOf, isCooptimizer: org?.isCooptimizer ?? (() => false) });
+    return { people, problem: project === null ? `${c.clientName}'s DevOps project members couldn't be read, so only its Cooptimizers and people already assigned are listed.` : null };
+  };
+
+  if (action === "ahead.people") {
+    const o = obj(input, ["clientKey"]);
+    if (!o || !isKey(o.clientKey)) return bad("ahead.people takes { clientKey }");
+    const c = await oneClient(o.clientKey);
+    if (!c) return bad("That client isn't one you see in Ahead", 404);
+    return { ok: true, data: { clientKey: c.clientKey, ...(await peopleOf(c)) } };
+  }
+
   /** One change into my change set, after the same checks every edit has (rights, the field, whom I may assign). */
   const stageOne = async (c: AheadClient, item: AheadItem, field: ChangeField, raw: ChangeValue, halfIn: DayHalf | null, lead: boolean): Promise<string | null> => {
     let value = raw;
     const right = rightsOf(c, { lead, automation }).get(item.id)!;
     if (!right.ok) return right.note;
-    if (!hasField(c, item.type, field)) return `${field === "size" ? "A size" : field === "start" ? "A start date" : "A target date"} isn't in ${c.project ?? c.clientName}'s process for ${item.type}`;
-    if (field === "assignee" && value && typeof value === "object" && !(await ctx.assignable(c.clientKey, value.email).catch(() => false))) return `Only Cooptimizers on ${c.clientName} can be assigned here`;
+    if (!hasField(c, item.type, field)) return `${field === "size" ? "A size" : field === "start" ? "A start date" : field === "state" ? "A state" : "A target date"} isn't in ${c.project ?? c.clientName}'s process for ${item.type}`;
+    // AH-5: one of the type's states in the process model, by its own spelling.
+    if (field === "state") {
+      const st = c.states?.[item.type]?.find((x) => typeof value === "string" && x.name.toLowerCase() === value.toLowerCase());
+      if (!st) return `${String(value)} isn't a state of ${item.type} in ${c.project ?? c.clientName}'s process`;
+      value = st.name;
+    }
+    // AH-5: anyone on this client's DevOps project (its teams), its Cooptimizers, or someone already assigned there.
+    if (field === "assignee" && value && typeof value === "object" && !(await ctx.assignable(c.clientKey, value.email).catch(() => false))) {
+      const email = value.email.toLowerCase();
+      if (!(await peopleOf(c)).people.some((p) => p.email === email)) return `Only people on ${c.clientName}'s DevOps project can be assigned here`;
+    }
     // AH-3: a person who signs in to this client's DevOps with a client login is assigned as that login.
     if (field === "assignee" && value && typeof value === "object") {
       const ix = await idx();
@@ -240,7 +287,7 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     const lead = await ctx.isLead(c.clientKey).catch(() => false);
     const right = rightsOf(c, { lead, automation }).get(item.id)!;
     if (!right.ok) return bad(right.note, 403);
-    if (!hasField(c, item.type, o.field)) return bad(`${o.field === "size" ? "A size" : o.field === "start" ? "A start date" : "A target date"} isn't in ${c.project ?? c.clientName}'s process for ${item.type}`, 409);
+    if (!hasField(c, item.type, o.field)) return bad(`${o.field === "size" ? "A size" : o.field === "start" ? "A start date" : o.field === "state" ? "A state" : "A target date"} isn't in ${c.project ?? c.clientName}'s process for ${item.type}`, 409);
     const why = await stageOne(c, item, o.field, value, (o.half as DayHalf | undefined) ?? null, lead);
     if (why) return bad(why, 403);
     return { ok: true, data: { changes: await plan.aheadChanges() } };

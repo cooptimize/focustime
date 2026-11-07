@@ -21,7 +21,7 @@ import { HoursStepper } from "../plan/Estimate.tsx";
 import { WorkLink } from "../WorkLink.tsx";
 import { ganttLabelW, useWindowScale } from "./layout.ts";
 import { useAhead } from "./Ahead.tsx";
-import { Editor } from "./Grid.tsx";
+import { Editor } from "./Editors.tsx";
 import { OneChip, ReadyChips, stateChip } from "./Chips.tsx";
 import { isOpen, type Group, type Row } from "./model.ts";
 

@@ -4,12 +4,17 @@
 // <project>'s process", and gaps show only in Readiness as quiet chips (two, then +N). Closed items are dimmed with no
 // gap marks; a state is a small dot and its word in the neutral color. Edits are inline and go into my change set (nothing is written until Commit): Enter
 // edits, Enter keeps, Esc cancels; arrows move between cells. Items I may not change say who can.
+// AH-5: a click or Enter on an editable cell opens its editor as a small popover anchored to the cell (ui/ahead/Editors.tsx),
+// never squeezed into the column: Enter saves, Esc cancels, Tab saves and moves to the next editable cell in the row, and
+// focus comes back to the cell. State is editable too (the type's states from the process model). Assigned to shows a
+// photo or initials and "First L."; readiness chips wrap inside their cell.
 // AH-3: the Item column comes first at every window size (ui/ahead/layout.ts): the type as its icon, the title on one or
 // two lines with #id beside it, the other columns compact and fixed; under 1400 Start and Target are one Dates column,
 // under 1200 Readiness is dots, under 900 each row is a two-line card (Size leaves; Unsized shows as a dot).
 import type React from "react";
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import type { ChangeField, DayHalf } from "../../plan/ahead-edit.ts";
+import type { ChangeField } from "../../plan/ahead-edit.ts";
+import { shortName } from "../../plan/ahead-people.ts";
 import { GAP_WORDS } from "../../plan/fixnext.ts";
 import { STATE_WORDS } from "../../plan/roadmap.ts";
 import { gapChip, ReadyChips, stateChip } from "./Chips.tsx";
@@ -18,7 +23,8 @@ import { WorkLink } from "../WorkLink.tsx";
 import { TypeIcon } from "../TypeIcon.tsx";
 import type { GridLayout } from "./layout.ts";
 import { useAhead } from "./Ahead.tsx";
-import { AssigneePicker } from "./Assignee.tsx";
+import { CellEditor } from "./Editors.tsx";
+import { Avatar, usePhotos } from "../Presence.tsx";
 import type { Group, Row } from "./model.ts";
 
 type Col = "item" | "state" | "start" | "target" | "dates" | "assignee" | "size" | "ready";
@@ -31,7 +37,7 @@ export const COLUMNS: Record<GridLayout, readonly Col[]> = {
 };
 const HEAD: Record<Col, string> = { item: "Item", state: "State", start: "Start", target: "Target", dates: "Dates", assignee: "Assigned to", size: "Size", ready: "Readiness" };
 const WIDTH: Record<Col, string> = { item: "w-item", state: "w-state", start: "w-date", target: "w-date", dates: "w-dates", assignee: "w-who", size: "w-size", ready: "w-ready" };
-const EDIT: Partial<Record<Col, ChangeField>> = { start: "start", target: "target", dates: "start", assignee: "assignee", size: "size" };
+const EDIT: Partial<Record<Col, ChangeField>> = { state: "state", start: "start", target: "target", dates: "start", assignee: "assignee", size: "size" };
 const monthDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric" });
 const longDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
@@ -61,6 +67,11 @@ export function Grid({ groups, layout = "wide" }: { groups: Group[]; layout?: Gr
     return out;
   }, [groups, closed]);
   const flat = shown.flatMap((x) => x.rows);
+  // AH-5: after a popover closes, focus goes back to its cell; Tab moves to the next editable cell in the row.
+  const backTo = (key: string, col: Col) => requestAnimationFrame(() => {
+    setFocus({ key, col });
+    cells.current.get(cellKey(key, col))?.focus({ preventScroll: true });
+  });
   const cellKey = (k: string, c: Col) => `${k}|${c}`;
   const move = (dr: number, dc: number) => {
     const f = focus ?? (flat[0] ? { key: flat[0].key, col: "item" as Col } : null);
@@ -124,6 +135,8 @@ export function Grid({ groups, layout = "wide" }: { groups: Group[]; layout?: Gr
                     editing={editing?.key === r.key ? editing.col : null}
                     setFocus={setFocus}
                     edit={(c) => setEditing(c ? { key: r.key, col: c } : null)}
+                    backTo={(c) => backTo(r.key, c)}
+                    cellOf={(c) => cells.current.get(cellKey(r.key, c)) ?? null}
                     move={move}
                     reg={(c, el) => void (el ? cells.current.set(cellKey(r.key, c), el) : cells.current.delete(cellKey(r.key, c)))}
                     highlighted={a.focusItem === r.item.id}
@@ -140,9 +153,9 @@ export function Grid({ groups, layout = "wide" }: { groups: Group[]; layout?: Gr
   );
 }
 
-function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, move, reg, highlighted, cols, dots }: {
+function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, backTo, cellOf, move, reg, highlighted, cols, dots }: {
   r: Row; g: Group; open: boolean; toggle: () => void; focus: { key: string; col: Col } | null; first: boolean; editing: Col | null;
-  setFocus: (f: { key: string; col: Col }) => void; edit: (c: Col | null) => void; move: (dr: number, dc: number) => void; reg: (c: Col, el: HTMLElement | null) => void; highlighted: boolean;
+  setFocus: (f: { key: string; col: Col }) => void; edit: (c: Col | null) => void; backTo: (c: Col) => void; cellOf: (c: Col) => HTMLElement | null; move: (dr: number, dc: number) => void; reg: (c: Col, el: HTMLElement | null) => void; highlighted: boolean;
   cols: readonly Col[]; dots: boolean;
 }) {
   const a = useAhead();
@@ -152,6 +165,14 @@ function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, mo
   const canChange = r.editable && !a.readOnly;
   const notIn = `Not in ${c.project ?? c.clientName}'s process`;
   const can = (col: Col) => (col === "dates" ? r.has.start || r.has.target : !!EDIT[col] && r.has[EDIT[col]!]);
+  const editableCols = cols.filter((col) => !!EDIT[col] && canChange && can(col));
+  /** A popover closed: back to its cell, or (Tab) on to the next editable cell in the row. */
+  const closed = (col: Col, step: 0 | 1 | -1) => {
+    edit(null);
+    const i = editableCols.indexOf(col);
+    const next = step && i >= 0 ? editableCols[i + step] : undefined;
+    backTo(next ?? col);
+  };
   const tab = (col: Col) => (focus ? (focus.key === r.key && focus.col === col ? 0 : -1) : first && col === "item" ? 0 : -1);
   const keys = (col: Col) => (e: React.KeyboardEvent) => {
     if (e.target !== e.currentTarget) return;
@@ -180,14 +201,17 @@ function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, mo
         role="gridcell"
         tabIndex={tab(col)}
         aria-label={o.label}
-        className={`ah-cell ah-col-${col}${pending ? " ah-pend" : ""}${conf ? " ah-conf" : ""}${field && !can(col) ? " ah-abs" : ""}${editable && editing !== col ? " ah-edit" : ""}`}
+        className={`ah-cell ah-col-${col}${pending ? " ah-pend" : ""}${conf ? " ah-conf" : ""}${field && !can(col) ? " ah-abs" : ""}${editable ? " ah-edit" : ""}${editing === col ? " ah-editing" : ""}`}
+        aria-haspopup={editable ? "dialog" : undefined}
+        aria-expanded={editable ? editing === col : undefined}
         onFocus={() => setFocus({ key: r.key, col })}
         onKeyDown={keys(col)}
         onClick={(e) => editable && editing !== col && !(e.target as HTMLElement).closest("a, button, input, select, [role=listbox]") && edit(col)}
         onDoubleClick={() => editable && edit(col)}
       >
-        {editing === col && col === "dates" ? <DatesEditor r={r} done={() => (edit(null), move(0, 0))} /> : editing === col && field ? <Editor r={r} field={field} done={() => (edit(null), move(0, 0))} /> : body}
-        {pending && editing !== col && <span className="ah-dot" title={conf ? "Changed in DevOps too: see the review" : "Pending: not in DevOps until you save"} aria-hidden="true" />}
+        {body}
+        {editing === col && field && <CellEditor r={r} kind={col === "dates" ? "dates" : field} anchor={cellOf(col)} done={(step) => closed(col, step)} />}
+        {pending && <span className="ah-dot" title={conf ? "Changed in DevOps too: see the review" : "Pending: not in DevOps until you save"} aria-hidden="true" />}
       </td>
     );
   };
@@ -252,17 +276,17 @@ function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, mo
               {cell(
                 "state",
                 <span className="ah-state">
-                  <span className={`ah-state-dot cat-${r.item.stateCategory.toLowerCase()}`} aria-hidden="true" />
-                  {r.item.state}
+                  <span className={`ah-state-dot cat-${r.eff.stateCategory.toLowerCase()}`} aria-hidden="true" />
+                  {r.eff.state}
                 </span>,
-                { label: `State: ${r.item.state}` },
+                { label: `State: ${r.eff.state}` },
               )}
             </Fragment>
           );
         if (col === "start") return <Fragment key={col}>{cell("start", date("start"), { label: `Start: ${r.eff.start ?? (r.has.start ? "no start date" : notIn)}` })}</Fragment>;
         if (col === "target") return <Fragment key={col}>{cell("target", date("target"), { label: `Target: ${r.eff.target ?? (r.has.target ? "no target date" : notIn)}` })}</Fragment>;
         if (col === "dates") return <Fragment key={col}>{cell("dates", dates(), { label: datesLabel })}</Fragment>;
-        if (col === "assignee") return <Fragment key={col}>{cell("assignee", r.eff.assignee ? <span className="ah-who" title={r.eff.assignee.name}>{r.eff.assignee.name}</span> : <None title="Nobody assigned" />, { label: `Assigned to: ${r.eff.assignee?.name ?? "nobody"}` })}</Fragment>;
+        if (col === "assignee") return <Fragment key={col}>{cell("assignee", r.eff.assignee ? <Who name={r.eff.assignee.name} email={r.eff.assignee.email} /> : <None title="Nobody assigned" />, { label: `Assigned to: ${r.eff.assignee?.name ?? "nobody"}` })}</Fragment>;
         if (col === "size")
           return (
             <Fragment key={col}>
@@ -302,17 +326,6 @@ export function shortLabel(label: string | null): string {
   return words.length > 1 ? words.map((w) => w[0]!.toUpperCase()).join("") : label;
 }
 
-/** The Dates column's editor: start first (where the type has one), then target. */
-function DatesEditor({ r, done }: { r: Row; done: () => void }) {
-  const [f, setF] = useState<"start" | "target">(r.has.start ? "start" : "target");
-  return (
-    <span className="ah-dates-edit">
-      <span className="muted">{f === "start" ? "Start" : "Target"}</span>
-      <Editor key={f} r={r} field={f} done={() => (f === "start" && r.has.target ? setF("target") : done())} />
-    </span>
-  );
-}
-
 /** A value that isn't there: a muted dash, with what's missing in words for the tooltip and screen readers. */
 function None({ title }: { title: string }) {
   return (
@@ -323,55 +336,16 @@ function None({ title }: { title: string }) {
   );
 }
 
-/** One inline editor: a date (with its half-day), a number, or the assignee picker. Enter keeps, Esc cancels. */
-export function Editor({ r, field, done }: { r: Row; field: ChangeField; done: () => void }) {
-  const a = useAhead();
-  const c = a.load.clients.find((x) => x.clientKey === r.clientKey)!;
-  const [text, setText] = useState(() => (field === "size" ? (r.eff.size === null ? "" : String(r.eff.size)) : field === "start" ? (r.eff.start ?? "") : field === "target" ? (r.eff.target ?? "") : ""));
-  const [half, setHalf] = useState<DayHalf>(() => (field === "start" ? (r.startHalf ?? "AM") : (r.targetHalf ?? "PM")));
-  const box = useRef<HTMLInputElement>(null);
-  useEffect(() => box.current?.focus(), []);
-  if (field === "assignee")
-    return (
-      <AssigneePicker
-        clientKey={r.clientKey}
-        me={c.me}
-        current={r.eff.assignee}
-        onCancel={done}
-        onPick={(v) => void a.stage(r, "assignee", v).then(done)}
-      />
-    );
-  const keep = () => {
-    if (field === "size") {
-      const n = text.trim() === "" ? null : Number(text);
-      if (n !== null && !Number.isFinite(n)) return;
-      void a.stage(r, "size", n).then(done);
-    } else void a.stage(r, field, text || null, text ? half : null).then(done);
-  };
-  const keys = (e: React.KeyboardEvent) => {
-    e.stopPropagation();
-    if (e.key === "Enter") (e.preventDefault(), keep());
-    else if (e.key === "Escape") (e.preventDefault(), done());
-  };
+/** AH-5: who an item is assigned to, compact: a photo or initials and "First L.", the full name on hover. */
+function Who({ name, email }: { name: string; email: string }) {
+  const photos = usePhotos({ emails: [email] });
   return (
-    <span className="ah-editor" onKeyDown={keys}>
-      {field === "size" ? (
-        <input ref={box} type="number" min={0} step="any" inputMode="decimal" aria-label={r.sizeLabel ?? "Size"} value={text} onChange={(e) => setText(e.target.value)} />
-      ) : (
-        <>
-          <input ref={box} type="date" aria-label={field === "start" ? "Start date" : "Target date"} value={text} onChange={(e) => setText(e.target.value)} />
-          <select aria-label="Half-day" value={half} onChange={(e) => setHalf(e.target.value as DayHalf)}>
-            <option value="AM">AM</option>
-            <option value="PM">PM</option>
-          </select>
-        </>
-      )}
-      <button type="button" className="mini" onClick={keep}>
-        Keep
-      </button>
-      <button type="button" className="mini quiet" onClick={done}>
-        Cancel
-      </button>
+    <span className="ah-who" title={name}>
+      <Avatar name={name} photo={photos.photoFor(email)} size={20} />
+      <span className="ah-who-name">{shortName(name)}</span>
     </span>
   );
 }
+
+// The editors moved to ./Editors.tsx (AH-5); Gantt and Gaps import Editor from there.
+export { Editor } from "./Editors.tsx";

@@ -1263,6 +1263,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     // AH-1: Ahead's grid, its change set and filters live on Ahead itself.
     case "ahead.load":
     case "ahead.filters":
+    case "ahead.people":
     case "ahead.set_filters":
     case "ahead.stage":
     case "ahead.unstage":

@@ -2,6 +2,7 @@
 // Each client is fetched, fails and is cached on its own. PATs arrive from Dataverse for one fetch,
 // wrapped in Pat, and are used only to build the Authorization header right at the request. They are
 // never logged, cached, returned or put in a message. Only the normalized items are cached.
+import { teamPeople, type RawTeamMember } from "../../plan/ahead-people.ts";
 import { createHash } from "node:crypto";
 import type { RawReportComment } from "../../plan/status-report.ts";
 import type { SnapshotStore } from "../../host/types.ts";
@@ -273,6 +274,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     }
     let teams: ProjectAreas["teams"] = null;
     let teamsProblem: string | null = null;
+    let people: ProjectAreas["people"] = null;
     try {
       const list = await call<{ value?: { name?: unknown }[] }>(c, "teams", `_apis/projects/${p}/teams?$top=200`);
       const names = (list.value ?? []).map((x) => x.name).filter((n): n is string => typeof n === "string").slice(0, 200);
@@ -284,11 +286,19 @@ export function createDevOpsSource(d: DevOpsDeps) {
         teams.push({ name, otherField, areas: otherField ? [] : (v.values ?? []).filter((x) => typeof x.value === "string").map((x) => ({ path: x.value as string, sub: x.includeChildren === true })) });
       }
       teams.sort((a, b) => a.name.localeCompare(b.name));
+      // AH-5: the people on the project's teams, for Ahead's assignee list (the same Project read scope; 50 teams at
+      // most, 1000 a team). A team that can't be read is skipped; people stay in memory with the rest of this read.
+      const seen = new Map<string, { email: string; name: string }>();
+      for (const name of names.slice(0, 50)) {
+        const m = await call<{ value?: RawTeamMember[] }>(c, "team_members", `_apis/projects/${p}/teams/${encodeURIComponent(name)}/members?$top=1000`).catch(() => null);
+        for (const x of teamPeople(m?.value ?? [])) if (!seen.has(x.email) && seen.size < 2000) seen.set(x.email, x);
+      }
+      people = [...seen.values()];
     } catch {
       // A token without the Project read scope is refused here (401 or a sign-in page), and only here.
       teamsProblem = "The project's teams couldn't be read with the company's DevOps token (it needs Project read). Area paths still work";
     }
-    const areas: ProjectAreas = { root, paths, areasProblem, teams, teamsProblem, readAt: now().toString() };
+    const areas: ProjectAreas = { root, paths, areasProblem, teams, teamsProblem, readAt: now().toString(), people };
     areaMemo.set(key, { at: t, areas });
     return areas;
   }
@@ -1184,9 +1194,26 @@ export function createDevOpsSource(d: DevOpsDeps) {
           fetchedAt, project: ctx.projectName, me: target?.email ?? null,
           startFields: pick(f.starts), targetFields: pick(f.fields), sizeFields: pick(f.sizes ?? {}), fieldNames: f.names ?? {},
           types: looksOf(meta.model), items, scope, orderField: meta.orderField,
+          // AH-5: the states each type has, for Grid's State editor (never hard-coded).
+          states: Object.fromEntries(meta.model.types.map((t) => [t.name, t.states.map((x) => ({ name: x.name, category: x.category, color: x.color }))])),
         };
       }),
     );
+  }
+
+  /**
+   * AH-5: the people on this client's DevOps project (its teams' members), as the central poller last read them with
+   * the company read token; null when this person can't see the client or the teams couldn't be read. One client's
+   * project only.
+   */
+  async function projectPeople(clientKey: string): Promise<{ email: string; name: string }[] | null> {
+    if (!d.central) return null;
+    const targets = await viewerTargets([clientKey], false);
+    if (!targets.ok) return null;
+    const target = targets.targets.find((t) => t.clientKey === clientKey);
+    if (precheck({ clientKey, clientName: target?.clientName ?? clientKey }, target, { pat: false })) return null;
+    const view = await d.central.view(clientKey, { force: false });
+    return view.areas?.people ?? null;
   }
 
   /** PL-1: the state category of these items (any state) as the store has them; null when DevOps can't say now. */
@@ -1359,13 +1386,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
     },
   };
 
-  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, lastChanges, aheadItems, linkedItems, searchItems, featureComments, activity, internal };
+  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, lastChanges, aheadItems, projectPeople, linkedItems, searchItems, featureComments, activity, internal };
 }
 
 /** What screens use (the same interface whether it reads DevOps or the central store). */
 type FullSource = ReturnType<typeof createDevOpsSource>;
 /** PL-1's by-id reads are optional: a source without them (a stub, an older adapter) means "DevOps can't say". */
-type PlanReads = "featureTrees" | "itemStates" | "stateChanges" | "lastChanges" | "aheadItems" | "linkedItems" | "searchItems" | "featureComments" | "activity";
+type PlanReads = "featureTrees" | "itemStates" | "stateChanges" | "lastChanges" | "aheadItems" | "projectPeople" | "linkedItems" | "searchItems" | "featureComments" | "activity";
 export type DevOpsSource = Omit<FullSource, "internal" | PlanReads> & Partial<Pick<FullSource, PlanReads>>;
 /** DV-1: what the central poller uses of an app-level source. */
 export type DevOpsInternal = ReturnType<typeof createDevOpsSource>["internal"];

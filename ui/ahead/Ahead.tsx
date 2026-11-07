@@ -20,6 +20,8 @@ import { ModeArea } from "../ModeSwitch.tsx";
 import type { AheadMode } from "../nav.ts";
 import { buildRows, DEFAULT_FILTERS, epicsOf, fixGroups, groups, ownerOf, type Group, type Row } from "./model.ts";
 import { Grid } from "./Grid.tsx";
+import { DateField } from "../DatePicker.tsx";
+import { SelectField } from "../SelectField.tsx";
 import { Gantt } from "./Gantt.tsx";
 import { FixNext } from "./FixNext.tsx";
 import { Backlog } from "./Backlog.tsx";
@@ -283,29 +285,22 @@ function Filters({ load, f, set, setWhole, color, anyFilter }: { load: AheadLoad
         ))}
       </span>
       {epics.length > 0 && (
-        <label className="rm-sort">
+        <span className="rm-sort">
           Epic
-          <select value={f.epic ?? ""} onChange={(e) => set({ ...f, epic: e.target.value || null })}>
-            <option value="">Any</option>
-            {epics.map((x) => (
-              <option key={x.key} value={x.key}>
-                {x.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          <SelectField label="Epic" value={f.epic ?? ""} onChange={(k) => set({ ...f, epic: k || null })} options={[{ key: "", label: "Any" }, ...epics.map((x) => ({ key: x.key, label: x.label }))]} />
+        </span>
       )}
       <button type="button" className="rm-chip ah-gaps" aria-pressed={f.gaps} onClick={() => set({ ...f, gaps: !f.gaps })} title="Only items missing dates, an owner, a size or stories">
         Has gaps
       </button>
-      <label className="rm-sort">
+      <span className="rm-sort">
         From
-        <input type="date" value={f.from ?? ""} onChange={(e) => set({ ...f, from: e.target.value || null })} />
-      </label>
-      <label className="rm-sort">
+        <DateField label="From" value={f.from} today={load.today} onChange={(d) => set({ ...f, from: d })} />
+      </span>
+      <span className="rm-sort">
         To
-        <input type="date" value={f.to ?? ""} onChange={(e) => set({ ...f, to: e.target.value || null })} />
-      </label>
+        <DateField label="To" value={f.to} today={load.today} onChange={(d) => set({ ...f, to: d })} />
+      </span>
       <input className="rm-search" type="search" placeholder="Search titles or #id" aria-label="Search Ahead" value={f.q} onChange={(e) => set({ ...f, q: e.target.value })} />
       {(scoped.length > 0 || f.whole) && (
         <button type="button" className="rm-chip ah-whole" aria-pressed={!!f.whole} onClick={() => setWhole(!f.whole)} title={scopeTitle || "Every item in the project, not only Cooptimize's work"}>
@@ -326,7 +321,7 @@ export function changeText(c: Pick<StagedChange, "field" | "value" | "half">, si
   if (c.field === "size") return typeof c.value === "number" ? `${c.value}${sizeLabel ? ` ${sizeLabel}` : ""}` : "None";
   return valueText(c.field, c.value, c.half);
 }
-const FIELD_WORD: Record<ChangeField, string> = { start: "Start", target: "Target", size: "Size", assignee: "Assigned to" };
+const FIELD_WORD: Record<ChangeField, string> = { start: "Start", target: "Target", size: "Size", assignee: "Assigned to", state: "State" };
 
 /**
  * The review (D657): my changes grouped by item, before → after, each removable; a conflict shows DevOps's value now

@@ -12,7 +12,7 @@ export type LoadClient = AheadLoad["clients"][number];
 export type Tier = "epic" | "feature" | "story";
 
 /** An item's values as Ahead shows them: my pending change where there is one, else DevOps. */
-export type Eff = { start: string | null; target: string | null; size: number | null; assignee: Assignee };
+export type Eff = { start: string | null; target: string | null; size: number | null; assignee: Assignee; /** AH-5: the state and its category (my pending one first). */ state: string; stateCategory: string };
 
 export type Row = {
   key: string;
@@ -52,12 +52,14 @@ const lc = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
 /** The owner filter for a client: what I chose, else All for a lead and Mine for everyone else (D654). */
 export const ownerOf = (f: AheadFilters, c: Pick<LoadClient, "clientKey" | "lead">): AheadOwner => f.owner[c.clientKey] ?? (c.lead ? "all" : "mine");
 
-function effOf(i: AheadItem, p: Row["pending"]): Eff {
+function effOf(i: AheadItem, p: Row["pending"], states?: readonly { name: string; category: string }[]): Eff {
   return {
     start: p.start ? (p.start.value as string | null) : i.start,
     target: p.target ? (p.target.value as string | null) : i.target,
     size: p.size ? (p.size.value as number | null) : i.size,
     assignee: p.assignee ? (p.assignee.value as Assignee) : i.assignee?.email ? { email: i.assignee.email.toLowerCase(), name: i.assignee.name } : null,
+    state: p.state && typeof p.state.value === "string" ? p.state.value : i.state,
+    stateCategory: p.state && typeof p.state.value === "string" ? (states?.find((s) => lc(s.name) === lc(p.state!.value as string))?.category ?? i.stateCategory) : i.stateCategory,
   };
 }
 
@@ -79,11 +81,11 @@ export function buildRows(load: AheadLoad, c: LoadClient): Row[] {
   const visit = (i: AheadItem, depth: number) => {
     const pending: Row["pending"] = {};
     for (const x of changes.filter((x) => x.itemId === i.id)) pending[x.field] = x;
-    const eff = effOf(i, pending);
+    const eff = effOf(i, pending, c.states?.[i.type]);
     const half = (f: "start" | "target") => pending[f]?.half ?? halves.find((h) => h.itemId === i.id && h.field === f && h.day === eff[f])?.half ?? null;
     const tier = tierOf(i)!;
     const open = (kids.get(i.id) ?? []).filter(isOpen).length;
-    const has = { start: !!c.startFields[i.type], target: !!c.targetFields[i.type], size: !!c.sizeFields[i.type], assignee: true };
+    const has = { start: !!c.startFields[i.type], target: !!c.targetFields[i.type], size: !!c.sizeFields[i.type], assignee: true, state: (c.states?.[i.type]?.length ?? 0) > 0 };
     const sizeRef = c.sizeFields[i.type];
     const gi: GapItem = { clientKey: c.clientKey, id: i.id, open: isOpen(i), needsBreakdown: tier !== "story", openChildren: open, startField: c.startFields[i.type] ?? null, targetField: c.targetFields[i.type] ?? null, sizeField: sizeRef ?? null, child: tier === "story", start: i.start, target: i.target, size: i.size, assigneeEmail: i.assignee?.email ?? null, canEdit: editable.has(i.id) };
     out.push({

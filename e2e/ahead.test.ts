@@ -71,7 +71,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await expect(theirs.getAttribute("title")).resolves.toBe("Only Harbor Health's leads and the owner can change this.");
     await theirs.locator(".ah-col-target").focus();
     await page.keyboard.press("Enter");
-    await expect(page.locator(".ah-editor").count()).resolves.toBe(0);
+    await expect(page.locator(".cell-pop").count()).resolves.toBe(0);
     await shotBoth(page, "ahead-readonly", theirs);
     // Filters are remembered for me: reopening keeps them.
     const ctx2 = await sameSession(h, page);
@@ -85,18 +85,18 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("inline edits: Enter edits, Enter keeps, Esc cancels, arrows move; the change is pending and survives a reload", async () => {
+  it("cell edits (AH-5 popovers): Enter opens, Enter saves, Esc cancels, arrows move; the change is pending and survives a reload", async () => {
     const { page } = await open("#/ahead");
     await page.getByRole("button", { name: "Northwind Foods", exact: true }).click();
     const size = row(page, "Export button on the order page").locator(".ah-col-size");
     await size.focus();
     await page.keyboard.press("Enter");
-    await page.getByRole("spinbutton", { name: "Story Points" }).fill("5");
+    await page.getByRole("textbox", { name: "Story Points" }).fill("5");
     await page.keyboard.press("Escape");
     await expect(size.getAttribute("class")).resolves.not.toContain("ah-pend");
     await size.focus();
     await page.keyboard.press("Enter");
-    await page.getByRole("spinbutton", { name: "Story Points" }).fill("5");
+    await page.getByRole("textbox", { name: "Story Points" }).fill("5");
     await page.keyboard.press("Enter");
     await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes to save");
     await expect(size.textContent()).resolves.toContain("5");
@@ -120,41 +120,178 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await page.getByRole("button", { name: "Northwind Foods", exact: true }).click();
     const story = row(page, "Export button on the order page");
     const staged = (cell: ReturnType<Page["locator"]>) => expect.poll(() => cell.getAttribute("class"), { timeout: 10_000 }).toContain("ah-pend");
-    // Size: a click, a number, Keep.
+    // Size: a click, a number, Save.
     const size = story.locator(".ah-col-size");
     await expect(size.getAttribute("class")).resolves.toContain("ah-edit");
     await size.click();
-    await page.getByRole("spinbutton", { name: "Story Points" }).fill("8");
-    await story.getByRole("button", { name: "Keep" }).click();
+    await page.getByRole("textbox", { name: "Story Points" }).fill("8");
+    await page.locator(".cell-pop").getByRole("button", { name: "Save" }).click();
     await staged(size);
-    // Assigned to: a click opens the people picker; a mouse pick lands (the picker used to close on its own blur first).
+    // Assigned to: a click opens the people dropdown; a mouse pick lands.
     // HK-5: the demo already has a pending assignee change on this story (Priya Shah, DevOps' value, to me), so the
-    // cell is pending before the pick. Picking Priya put DevOps' value back (no change, rightly) and the test passed
-    // only when it looked before the answer came. Sam Ortiz is a real change; the name shows only once the pick lands.
+    // cell is pending before the pick. Sam Ortiz is a real change; the name shows only once the pick lands.
     const who = story.locator(".ah-col-assignee");
     await who.click();
     await page.getByRole("option", { name: /Sam Ortiz/ }).click();
-    await expect.poll(() => who.textContent(), { timeout: 10_000 }).toContain("Sam Ortiz");
+    await expect.poll(() => who.getAttribute("aria-label"), { timeout: 10_000 }).toContain("Sam Ortiz");
     await staged(who);
-    // Target, then start on a feature that has one: a date and its half-day.
+    // Target, then start on a feature that has one: a typed date, Save.
     const target = story.locator(".ah-col-target");
     await target.click();
-    await target.locator("input[type=date]").fill("2026-11-20");
-    await story.getByRole("button", { name: "Keep" }).click();
+    await page.getByRole("textbox", { name: "Target date" }).fill("2026-11-20");
+    await page.locator(".cell-pop").getByRole("button", { name: "Save" }).click();
     await staged(target);
     const title = await page.locator(".ah-row.tier-feature:not(.ro)", { has: page.locator(".ah-col-start.ah-edit") }).first().locator(".ah-title a").first().textContent();
     const feature = row(page, title!.trim());
     const start = feature.locator(".ah-col-start");
     await start.click();
-    await start.locator("input[type=date]").fill("2026-11-09");
-    await feature.getByRole("button", { name: "Keep" }).click();
+    await page.getByRole("textbox", { name: "Start date" }).fill("nov 9");
+    await page.locator(".cell-pop").getByRole("button", { name: "Save" }).click();
     await staged(start);
     await expect.poll(() => page.locator(".ah-pending").textContent()).toMatch(/\d+ changes to save/);
-    // State isn't a field Ahead changes (AH-1's fields write): no picker, no hover mark.
-    await expect(story.locator(".ah-col-state").getAttribute("class")).resolves.not.toContain("ah-edit");
-    await story.locator(".ah-col-state").click();
-    await expect(page.locator(".ah-editor").count()).resolves.toBe(0);
+    // AH-5: State is a picker too.
+    await expect(story.locator(".ah-col-state").getAttribute("class")).resolves.toContain("ah-edit");
     await page.close();
+  }, T);
+
+  it("AH-5: each editor is a popover anchored to its cell and on screen; keyboard; dates; state from the process; assignees from the client's project; nothing written before Save to DevOps", async () => {
+    const { page, errors } = await open("#/ahead", { width: 1440, height: 900 });
+    // Nothing goes to DevOps while editing: no preview or confirm call until "Save N items to DevOps".
+    const writes: string[] = [];
+    page.on("request", (r) => {
+      const b = r.postData() ?? "";
+      if (/"action":"devops\.(preview|confirm)"/.test(b)) writes.push(b);
+    });
+    await page.getByRole("button", { name: "Northwind Foods", exact: true }).click();
+    const inView = async (cellLoc: ReturnType<Page["locator"]>) => {
+      const pop = page.locator(".cell-pop");
+      await pop.waitFor();
+      const [p, c] = [(await pop.boundingBox())!, (await cellLoc.boundingBox())!];
+      expect(p.x).toBeGreaterThanOrEqual(0);
+      expect(p.y).toBeGreaterThanOrEqual(0);
+      expect(p.x + p.width).toBeLessThanOrEqual(1440);
+      expect(p.y + p.height).toBeLessThanOrEqual(900);
+      // Anchored: it touches the cell's column or sits just above or below it.
+      expect(Math.abs(p.x - c.x) < 330 && (Math.abs(p.y - (c.y + c.height)) < 12 || Math.abs(p.y + p.height - c.y) < 12 || (p.y <= c.y && p.y + p.height >= c.y))).toBe(true);
+      return pop;
+    };
+    const story = row(page, "Export button on the order page");
+    // Keyboard: Enter opens, Esc cancels with focus back on the cell.
+    const target = story.locator(".ah-col-target");
+    await target.focus();
+    await page.keyboard.press("Enter");
+    let pop = await inView(target);
+    await expect(pop.getByText("Target date", { exact: true })).toBeTruthy();
+    await expect(pop.locator(".cell-pop-head").textContent()).resolves.toContain("#1113 Export button on the order page");
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".cell-pop").count()).resolves.toBe(0);
+    await expect.poll(() => page.evaluate(() => document.activeElement?.className ?? "")).toContain("ah-col-target");
+    // Quick picks: Next Monday (Nov 9 from Fri Nov 6), PM, then Tab saves and moves on to the next editable cell.
+    await page.keyboard.press("Enter");
+    pop = await inView(target);
+    await pop.getByRole("button", { name: "Next Monday" }).click();
+    await pop.getByRole("radio", { name: "AM" }).click();
+    await page.keyboard.press("Tab");
+    await expect.poll(() => target.textContent()).toContain("Nov 9 AM");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.className ?? "")).toContain("ah-col-assignee");
+    // Clear takes it back to DevOps's (none): no change.
+    await target.click();
+    pop = await inView(target);
+    await pop.getByRole("button", { name: "Clear" }).click();
+    await pop.getByRole("button", { name: "Save" }).click();
+    await expect.poll(() => target.getAttribute("class")).not.toContain("ah-pend");
+    // A feature: Target before Start shows a warning and doesn't save.
+    const feat = row(page, "Store locator");
+    const fTarget = feat.locator(".ah-col-target");
+    await fTarget.click();
+    pop = await inView(fTarget);
+    await pop.getByRole("textbox", { name: "Target date" }).fill("11/10");
+    await expect(pop.getByRole("alert").textContent()).resolves.toContain("The target is before the start");
+    await expect(pop.getByRole("button", { name: "Save" }).isDisabled()).resolves.toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".cell-pop").count()).resolves.toBe(1);
+    await page.keyboard.press("Escape");
+    // State: the type's states from the process model, the current one checked, filtered by typing.
+    const st = story.locator(".ah-col-state");
+    await st.click();
+    pop = await inView(st);
+    await expect(pop.getByRole("option").allTextContents()).resolves.toEqual(expect.arrayContaining([expect.stringContaining("New"), expect.stringContaining("Active"), expect.stringContaining("Closed")]));
+    await expect(pop.getByRole("option", { selected: true }).textContent()).resolves.toContain("New");
+    await page.keyboard.type("act");
+    await expect(pop.getByRole("option").count()).resolves.toBe(1);
+    await page.keyboard.press("Enter");
+    await expect.poll(() => st.textContent()).toContain("Active");
+    await expect.poll(() => st.getAttribute("class")).toContain("ah-pend");
+    // Assigned to: Northwind's project only (Morgan Lee, outside Cooptimize), never Atlas's (Casey Ward); me first; search.
+    const who = story.locator(".ah-col-assignee");
+    await who.click();
+    pop = await inView(who);
+    await pop.getByRole("option").first().waitFor();
+    const names = await pop.locator(".fl-label").allTextContents();
+    expect(names[0]).toMatch(/\(me\)$/);
+    expect(names).toContain("Unassigned");
+    expect(names).toContain("Morgan Lee");
+    expect(names).not.toContain("Casey Ward");
+    await expect(pop.getByRole("option", { name: /Morgan Lee/ }).textContent()).resolves.toContain("Outside Cooptimize");
+    await page.keyboard.type("morgan");
+    await expect(pop.getByRole("option").count()).resolves.toBe(1);
+    await page.keyboard.press("Enter");
+    await expect.poll(() => who.getAttribute("aria-label")).toBe("Assigned to: Morgan Lee");
+    await expect(who.textContent()).resolves.toContain("Morgan L.");
+    // Unassigned.
+    await who.click();
+    pop = await inView(who);
+    await pop.getByRole("option", { name: "Unassigned" }).click();
+    await expect.poll(() => who.getAttribute("aria-label")).toBe("Assigned to: nobody");
+    // Size, near the right edge; and a row at the bottom of the window: the popover flips above and stays on screen.
+    const sz = story.locator(".ah-col-size");
+    await sz.click();
+    pop = await inView(sz);
+    await expect(pop.getByRole("radiogroup", { name: /Common Story Points values/ }).getByRole("radio").allTextContents()).resolves.toEqual(["1", "2", "3", "5", "8", "13"]);
+    await page.keyboard.press("Escape");
+    const low = page.locator(".ah-row:not(.ro) .ah-col-size.ah-edit").last();
+    await low.scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.scrollBy(0, 2000));
+    const lb = (await low.boundingBox())!;
+    if (lb.y > 600) {
+      await low.click();
+      const p = await inView(low);
+      expect(await p.getAttribute("data-above")).not.toBeNull();
+      await page.keyboard.press("Escape");
+    }
+    expect(writes).toEqual([]);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("AH-5: no native select or date input anywhere in Ahead; no horizontal scroll at 1280 and 1440; readiness chips stay in their cells", async () => {
+    for (const width of [1280, 1440]) {
+      const { page } = await open("#/ahead", { width, height: 900 });
+      await page.getByRole("group", { name: "Owner" }).getByRole("button", { name: "All" }).first().click();
+      for (const hash of ["#/ahead", "#/ahead/gantt", "#/ahead/fix", "#/ahead/backlog"]) {
+        await page.evaluate((x) => (location.hash = x), hash);
+        await page.waitForTimeout(400);
+        await expect(page.locator(".ahead select, .ahead input[type=date], .ahead input[type=datetime-local], .ahead input[type=month]").count(), hash).resolves.toBe(0);
+      }
+      await page.evaluate(() => (location.hash = "#/ahead"));
+      await page.locator(".ah-grid").first().waitFor();
+      await expect(page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), `width ${width}`).resolves.toBeLessThanOrEqual(0);
+      const spill = await page.locator(".ah-col-ready").evaluateAll((cells) =>
+        cells.flatMap((c) => {
+          const box = c.getBoundingClientRect();
+          return [...c.querySelectorAll(".ah-chip, .ah-gapdot")].filter((x) => x.getBoundingClientRect().right > box.right + 0.5).map((x) => x.textContent);
+        }),
+      );
+      expect(spill, `width ${width}`).toEqual([]);
+      // Column headers line up with their cells.
+      const off = await page.locator(".ah-grid").first().evaluate((t) => {
+        const th = [...t.querySelectorAll("thead th")].map((x) => Math.round(x.getBoundingClientRect().left));
+        const td = [...(t.querySelector("tbody tr")?.children ?? [])].map((x) => Math.round(x.getBoundingClientRect().left));
+        return th.map((x, i) => Math.abs(x - (td[i] ?? x)));
+      });
+      expect(Math.max(...off)).toBeLessThanOrEqual(1);
+      await page.close();
+    }
   }, T);
 
   it("the review: grouped by item, before → after, a conflict with Keep mine or Take theirs, Remove, Discard all with a confirm", async () => {
@@ -164,7 +301,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await loyal.waitFor({ timeout: 30_000 });
     await loyal.focus();
     await page.keyboard.press("Enter");
-    await page.locator(".ah-editor").getByLabel("Start date").fill("2026-11-30");
+    await page.getByRole("textbox", { name: "Start date" }).fill("2026-11-30");
     await page.keyboard.press("Enter");
     await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes to save");
     await page.getByRole("button", { name: "Review" }).click();
@@ -356,8 +493,8 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     const title = await nw.locator(".ah-fx-row", { has: page.getByRole("button", { name: "Size", exact: true }) }).first().locator(".ah-title a").textContent();
     const sizeRow = nw.locator(".ah-fx-row", { has: page.getByRole("link", { name: title ?? "", exact: true }) });
     await sizeRow.getByRole("button", { name: "Size", exact: true }).click();
-    await sizeRow.getByRole("spinbutton").fill("2");
-    await sizeRow.getByRole("button", { name: "Keep" }).click();
+    await page.locator(".cell-pop").getByRole("textbox").first().fill("2");
+    await page.locator(".cell-pop").getByRole("button", { name: "Save" }).click();
     await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes to save");
     await expect.poll(() => page.locator(".ah-fx-row:not(.ctx)", { hasText: title ?? "" }).count()).toBe(0);
     // Skip puts one aside for the session.

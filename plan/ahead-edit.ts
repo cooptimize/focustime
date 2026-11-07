@@ -51,13 +51,14 @@ export const rungOf = (ladder: readonly (readonly string[])[], type: string): nu
 
 // ---- The change set ----
 
-export const CHANGE_FIELDS = ["start", "target", "size", "assignee"] as const;
+// AH-5: state joins the change set (kept in its own table, ahead_state_changes).
+export const CHANGE_FIELDS = ["start", "target", "size", "assignee", "state"] as const;
 export type ChangeField = (typeof CHANGE_FIELDS)[number];
 export type DayHalf = "AM" | "PM";
 
 /** A person as the change set keeps an assignee: their DevOps uniqueName (email) and name; null is Nobody. */
 export type Assignee = { email: string; name: string } | null;
-/** A staged value: a date (start, target), a number (size) or an assignee. */
+/** A staged value: a date (start, target), a number (size), an assignee or a state name (AH-5). */
 export type ChangeValue = string | number | Assignee;
 
 /** One pending change (one item and field), as the store keeps it for one person. */
@@ -85,6 +86,7 @@ export function sameValue(field: ChangeField, a: ChangeValue | undefined, b: Cha
     return ea === eb;
   }
   if (field === "size") return (typeof a === "number" ? a : null) === (typeof b === "number" ? b : null);
+  if (field === "state") return (typeof a === "string" ? a.trim().toLowerCase() : null) === (typeof b === "string" ? b.trim().toLowerCase() : null);
   return (typeof a === "string" ? a.slice(0, 10) : null) === (typeof b === "string" ? b.slice(0, 10) : null);
 }
 
@@ -112,6 +114,11 @@ export function checkValue(field: ChangeField, v: unknown): ChangeValue {
     if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 10_000) throw new Error("A size is a number from 0 to 10000");
     return Math.round(v * 100) / 100;
   }
+  if (field === "state") {
+    // A state always has a value; which names the type takes is checked against the process model by the caller.
+    if (typeof v !== "string" || !v.trim() || v.length > 128) throw new Error("A state is the name of one of the type's states");
+    return v.trim();
+  }
   if (v === null) return null;
   const o = v as { email?: unknown; name?: unknown };
   if (typeof o !== "object" || typeof o.email !== "string" || !/^[^\s@<>]+@[^\s@<>]+$/.test(o.email.trim()) || typeof o.name !== "string" || !o.name.trim()) throw new Error("An assignee is { email, name }, or null for Nobody");
@@ -128,7 +135,7 @@ export function byItem(changes: readonly StagedChange[]): { clientKey: string; i
     if (c.createdAt < g.first) g.first = c.createdAt;
     out.set(k, g);
   }
-  const order: Record<ChangeField, number> = { start: 0, target: 1, size: 2, assignee: 3 };
+  const order: Record<ChangeField, number> = { state: 0, start: 1, target: 2, size: 3, assignee: 4 };
   return [...out.values()].sort((a, b) => a.first.localeCompare(b.first) || a.itemId - b.itemId).map(({ first: _f, ...g }) => ({ ...g, changes: g.changes.sort((a, b) => order[a.field] - order[b.field]) }));
 }
 
@@ -139,6 +146,7 @@ export const pendingText = (n: number) => (n <= 0 ? null : `${n} ${n === 1 ? "ch
 export function valueText(field: ChangeField, v: ChangeValue | undefined, half: DayHalf | null = null): string {
   if (field === "assignee") return v && typeof v === "object" ? v.name : "Nobody";
   if (field === "size") return typeof v === "number" ? String(v) : "None";
+  if (field === "state") return typeof v === "string" ? v : "None";
   if (typeof v !== "string") return "None";
   const d = Temporal.PlainDate.from(v.slice(0, 10)).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
   return half ? `${d} ${half}` : d;

@@ -425,7 +425,22 @@ export function demoAheadClient(d: DemoItems, k: DemoClientKey, fetchedAt: strin
     }),
     // AH-3: Harbor Health's demo project has no backlog order field, so its Fix next ranks by target date.
     orderField: k === "Harbor" ? null : "Microsoft.VSTS.Common.StackRank",
+    // AH-5: each type's states from the demo's process model, for Grid's State editor.
+    states: Object.fromEntries(model.types.map((t) => [t.name, t.states.map((x) => ({ name: x.name, category: x.category, color: x.color }))])),
   };
+}
+
+/** AH-5: the client's own staff on each demo project's teams (fictional, outside Cooptimize). */
+const DEMO_CLIENT_STAFF: Record<DemoClientKey, { email: string; name: string }[]> = {
+  Cooptimize: [],
+  Northwind: [{ email: "morgan.lee@northwind.example", name: "Morgan Lee" }, { email: "ines.duarte@northwind.example", name: "Ines Duarte" }],
+  Harbor: [{ email: "noor.haddad@harbor.example", name: "Noor Haddad" }],
+  Atlas: [{ email: "casey.ward@atlas.example", name: "Casey Ward" }],
+};
+
+/** AH-5: the people on a demo project's teams, as the central poller would read them: its assignees and its own staff. */
+export function demoProjectPeople(d: DemoItems, k: DemoClientKey): { email: string; name: string }[] {
+  return [...demoAssignees(d, k), ...(DEMO_CLIENT_STAFF[k] ?? [])];
 }
 
 /** AH-3: who is assigned work in a demo project (DevOps email and display name), as the central store would say. */
