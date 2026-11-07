@@ -260,6 +260,8 @@ export const QUESTIONS = {
 export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"] as const;
 
 export const FOOTER = "FocusTime by Cooptimize. Questions or ideas? ⋯ › Send feedback, or message the FocusTime team in Teams.";
+/** DOC-1: the footer's link to the Technical docs (signed in only). */
+export const TECH_DOCS_LINK = { label: "How FocusTime works under the hood", href: "#/docs" };
 
 // ---------- Ways in ----------
 

@@ -242,13 +242,6 @@
 .gr-table th { font-size: var(--fs-1); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); font-weight: 600; }
 .gr-table td:first-child { color: var(--text-muted); width: 45%; }
 
-/* Search results, in the rail's place while typing */
-.gsr { display: flex; flex-direction: column; gap: 2px; }
-.gsr-count { font-size: var(--fs-2); color: var(--text-muted); padding: 4px 10px 6px; }
-.gsr-hit { text-align: left; display: flex; flex-direction: column; gap: 1px; padding: 7px 10px; border-radius: 8px; border: 0; background: none; color: var(--text); font-size: var(--fs-3); min-height: 40px; }
-.gsr-hit:hover, .gsr-hit:focus-visible { background: var(--surface); }
-.gsr-in { font-size: var(--fs-1); color: var(--text-faint); }
-
 /* ---------- UI-5: try-it sandboxes (ui/guide/TryIt.tsx) ---------- */
 .try { border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; background: color-mix(in oklab, var(--surface) 70%, var(--bg)); }
 .try-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
