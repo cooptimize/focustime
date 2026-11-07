@@ -244,3 +244,18 @@ export async function linkSearchRead(d: ReadDeps, o: { conversationId: number | 
   const cards: Card[] = items.length ? items.map((i) => ({ kind: "note", text: `#${i.id} ${i.title} · ${i.type} · ${i.state}` })) : [{ kind: "note", text: "No open items match." }];
   return { cards, facts: client ? items.map((i) => ({ id: i.id, title: { quoted: i.title }, type: i.type, state: i.state })) : null, itemIds: items.map((i) => i.id), pickIds: [] };
 }
+
+/**
+ * LP-1: Close the loop with someone. Finds my open promises to that person (and about those words) and links to each
+ * one's draft (#/inbox/item/<key>/loop), where the preview's Send is the only thing that sends. The assistant never
+ * sends: no proposal, no write. With one client the model hears what each promise says (quoted); with none, how many.
+ */
+export async function closeLoopRead(d: ReadDeps, who: string | null, about: string | null, client: string | null): Promise<ReadResult> {
+  const r = await data<{ matches: { key: string; what: string; who: string | null; clientKey: string | null; clientName: string | null; href: string }[] }>(d.run("loop.find", { ...(who ? { who } : {}), ...(about ? { about } : {}) }));
+  if (typeof r === "string") return fail(r);
+  const list = r.matches.filter((m) => !m.clientKey || (d.isMine(m.clientKey) && (client === null || m.clientKey === client)));
+  if (!list.length) return { cards: [{ kind: "note", text: who ? `No open promise to ${who} matched. Your promises are in the Inbox.` : "No open promise matched. Your promises are in the Inbox.", link: d.link("#/inbox/promises", "Open Promises") }], facts: { matches: 0 }, itemIds: [], pickIds: [] };
+  const cards: Card[] = list.slice(0, 3).map((m) => ({ kind: "note", text: `${m.what}${m.who ? ` · to ${m.who}` : ""}${m.clientName ? ` · ${m.clientName}` : ""}. Open the draft, check it, and Send from its preview.`, link: d.link(m.href, "Open the draft") }));
+  const facts = client ? list.slice(0, 3).map((m) => ({ promise: { quoted: m.what }, to: m.who, opens: "the draft; nothing is sent until the person presses Send on its preview" })) : { matches: list.length, opens: "the draft; nothing is sent until the person presses Send" };
+  return { cards, facts, itemIds: [], pickIds: [], keys: list.map((m) => m.key) };
+}

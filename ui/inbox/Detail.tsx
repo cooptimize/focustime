@@ -10,7 +10,7 @@ import type { PersonRef } from "../../plan/person-ref.ts";
 import type { ConversationCard } from "../../plan/conversation-views.ts";
 import { call } from "../api.ts";
 import { SortCapture, captureClients } from "../Capture.tsx";
-import { CloseLoop } from "../CloseLoop.tsx";
+import { SendLoop } from "../SendLoop.tsx";
 import { ConvLink, DraftItem, LinkedItem, Messages, NotRequest, SuggestionBox } from "../Conversations.tsx";
 import { MergePane } from "./MergePane.tsx";
 import { useDevOpsWrite } from "../DevOpsWrite.tsx";
@@ -60,6 +60,8 @@ export type DetailProps = {
   /** Slice 3: the Snooze choices to offer now (the list's; Later today only with an hour or more left). */
   snoozeChoices?: readonly SnoozeChoice[] | undefined;
   phone?: boolean;
+  /** LP-1: a send closed the loop (or saved a draft): close the form, say so, read the Inbox again. */
+  finished?: (notice: string) => void;
 };
 
 /** The status pill at the top right: late, due, needs you, in progress. */
@@ -140,10 +142,13 @@ function FormArea(p: DetailProps): ReactNode {
         : e.kind === "followUp" && e.followUp
           ? p.submit("followup.close", { id: e.followUp.id, note: v.note, ...(v.how ? { how: v.how } : {}) }, "Loop closed")
           : Promise.resolve("Nothing to close");
-    // A promise I added starts on its own channel (as its row did before IB-1).
+    // A promise I added starts on its own channel (as its row did before IB-1), in Close without sending.
     const ch = e.kind === "followUp" ? e.followUp?.channel ?? null : null;
     const initialHow = (CLOSE_HOW as readonly string[]).includes(ch ?? "") ? (ch as CloseHow) : null;
-    return <CloseLoop who={who} compact={false} initialHow={initialHow} onSubmit={submit} onCancel={cancel} />;
+    // LP-1: Draft › Preview › Sent; IB-1's form stays as "Close without sending".
+    const key = e.kind === "chatPromise" && e.promise ? `c${e.promise.id}` : e.kind === "followUp" && e.followUp ? `f${e.followUp.id}` : null;
+    if (!key) return null;
+    return <SendLoop key={key} promiseKey={key} who={who} demo={!!p.data.demo} compact={!!p.phone} onClosed={(m) => (p.finished ? p.finished(m) : (setForm(null), p.reload?.()))} onCancel={cancel} closeWithout={submit} initialHow={initialHow} />;
   }
   if (form === "due") return <DueForm {...p} />;
   if (form === "snooze") return <SnoozeForm {...p} />;

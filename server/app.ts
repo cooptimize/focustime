@@ -18,8 +18,8 @@ import type { Logger } from "../log/logger.ts";
 import type { AccountStore, Session } from "../store/accounts.ts";
 import { DEMO_SESSION_MS, SESSION_MAX_MS } from "../store/accounts.ts";
 import { checkRequest, REOPEN_PATH, TEAMS_BOT_PATH } from "./guard.ts";
-import { AUTH_COOKIE, authCookie, clearAuthCookie, clearSessionCookies, CSRF_HEADER, readCookie, SESSION_COOKIE, sessionCookies } from "./auth/cookies.ts";
-import { CONSENTS, SignInError, type Consent, type SignedIn, type SignInTokens } from "./auth/entra.ts";
+import { AUTH_COOKIE, authCookie, clearAuthCookie, CONSENT_COOKIE, consentCookie, clearConsentCookie, clearSessionCookies, CSRF_HEADER, readCookie, SESSION_COOKIE, sessionCookies } from "./auth/cookies.ts";
+import { CONSENTS, CONSENT_RETURN, SignInError, type Consent, type SignedIn, type SignInTokens } from "./auth/entra.ts";
 
 /** What the sign-in routes need: Microsoft (null when not set up), Google, the demo, and what to do with a sign-in. */
 export type SignInHooks = {
@@ -256,10 +256,10 @@ export function createApp(opts: AppOptions) {
         const asked = url.searchParams.get("consent");
         const consent = asked && Object.hasOwn(CONSENTS, asked) ? (asked as Consent) : null;
         const s = consent ? await session() : null;
-        if (consent && (!s || s.demo)) return redirect(res, "/#/settings/clients");
+        if (consent && (!s || s.demo)) return redirect(res, `/${CONSENT_RETURN[consent]}`);
         const { url: to, pending } = await opts.auth.microsoft.start({ ...(hint && hint.length < 256 ? { loginHint: hint } : {}), ...(consent ? { consent } : {}) });
         await opts.accounts.authRequests.put("microsoft", pending, s?.userId ?? null);
-        return redirect(res, to, [authCookie(pending.state)]);
+        return redirect(res, to, [authCookie(pending.state), ...(consent ? [consentCookie(consent)] : [])]);
       } catch (e) {
         return signInFailed(res, e instanceof SignInError ? e.reason : "unavailable");
       }
@@ -278,7 +278,10 @@ export function createApp(opts: AppOptions) {
         // A fresh session id at sign-in (never one the browser brought).
         await opts.accounts.sessions.end(readCookie(cookieHeader, SESSION_COOKIE));
         // AP-1: a consent started from Settings goes back there (it was for this person: a session started it).
-        return redirect(res, pending.userId && pending.userId === r.userId ? "/?allowed=chat_read#/settings/clients" : "/", [...(await startSession(r.userId, false)), clearAuthCookie()]);
+        // LP-1: a send's consent goes back to the Inbox; chat reading's to Settings › Clients.
+        const asked = readCookie(cookieHeader, CONSENT_COOKIE);
+        const back: Consent = asked && Object.hasOwn(CONSENT_RETURN, asked) ? (asked as Consent) : "chat_read";
+        return redirect(res, pending.userId && pending.userId === r.userId ? `/?allowed=${back}${CONSENT_RETURN[back]}` : "/", [...(await startSession(r.userId, false)), clearAuthCookie(), clearConsentCookie()]);
       } catch (e) {
         return signInFailed(res, e instanceof SignInError ? e.reason : "invalid");
       }

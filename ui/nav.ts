@@ -49,7 +49,7 @@ export type Nav =
    * IB-1: one list with views. `view` null is the bare #/inbox (the view I last used, Needs you the first time);
    * `item` is the item open in the detail pane (#/inbox/item/<key>), which picks a view it's in when `view` is null.
    */
-  | { tab: "inbox"; view: InboxView | null; item: string | null; late?: LateFilter };
+  | { tab: "inbox"; view: InboxView | null; item: string | null; late?: LateFilter; /** LP-1: open the item's Close the loop draft (#/inbox/item/<key>/loop: the assistant's link). */ loop?: true };
 
 /** UI-9: Promises narrowed to late ones (from a Week card's "N late" chip), for one client (null: any), not saved. */
 export type LateFilter = { client: string | null };
@@ -182,7 +182,7 @@ export function hashOf(l: Loc): string {
     return ["#/week", n.week].filter(Boolean).join("/");
   }
   if (n.tab === "ahead") return n.mode === "gantt" ? "#/ahead/gantt" : n.mode === "fix" ? "#/ahead/fix" : n.mode === "backlog" ? "#/ahead/backlog" : n.item ? `#/ahead/item/${n.item}` : "#/ahead";
-  if (n.item) return `#/inbox/item/${n.item}`;
+  if (n.item) return `#/inbox/item/${n.item}${n.loop ? "/loop" : ""}`;
   if (n.late) return n.late.client ? `#/inbox/promises/late/${encodeURIComponent(n.late.client)}` : "#/inbox/promises/late";
   return n.view ? `#/inbox/${INBOX_VIEW_SLUGS[n.view]}` : "#/inbox";
 }
@@ -279,6 +279,8 @@ export function parseHash(hash: string): Loc | null {
     case "inbox": {
       // IB-1: #/inbox/item/<key>. The addresses before it land on the same item or view: #/inbox/conversation/<id>,
       // #/inbox/promise/<id>, #/inbox/<id> (a follow-up, now a promise), and UI-7's modes.
+      // LP-1: #/inbox/item/<key>/loop opens a promise with its Close the loop draft (only a promise: c or f).
+      if (a === "item" && c === "loop") return b !== undefined && /^[cf][1-9]\d{0,9}$/.test(b) ? plain({ tab: "inbox", view: null, item: b, loop: true }) : null;
       if (a === "item") return c === undefined && b !== undefined && ITEM_KEY.test(b) ? plain(navOf.inboxItem(b)) : null;
       if (a === "conversation" || a === "promise") return c === undefined && b !== undefined && ID.test(b) ? plain(a === "conversation" ? navOf.conversation(Number(b)) : navOf.promise(Number(b))) : null;
       // UI-9: #/inbox/promises/late and #/inbox/promises/late/<client>.

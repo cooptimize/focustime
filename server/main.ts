@@ -4,6 +4,7 @@
 // FOCUSTIME_HOST=local|azure (A1) picks the host: local (the default) is the developer loop on this machine; azure is
 // the hosted app's host, a stub until A2 (its secrets, snapshots and plan store are in memory).
 // --clock (verification runs only): the server's clock starts at that instant and runs forward from there.
+import { createSendClient, type SendClient } from "../sources/graph/send.ts";
 import { createChatsClient, type ChatMessagesClient, type ChatsClient } from "../sources/graph/chats.ts";
 import type { Host, KeyProvider, SnapshotStore } from "../host/types.ts";
 import { perPerson } from "../host/per-person.ts";
@@ -244,6 +245,7 @@ const photoClients = new WeakMap<object, PhotoClient>();
 const chatsClients = new WeakMap<object, ChatsClient>();
 const messageClients = new WeakMap<object, ChatMessagesClient>();
 const meetingClients = new WeakMap<object, MeetingsClient>();
+const sendClients = new WeakMap<object, SendClient>();
 const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null => {
   if (!cfg.outlook) return null;
   const src = outlookFor(who)(cfg.outlook, userZone(cfg));
@@ -273,7 +275,20 @@ const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null =>
       homeDomains: inviteDomains(cfg),
       log,
     })));
+  // LP-1: Close the loop's sends as me, each on its own consented token (sources/graph/send.ts).
+  let sender = sendClients.get(src);
+  if (!sender)
+    sendClients.set(src, (sender = createSendClient({
+      fetch,
+      chatToken: () => src.auth.accessToken("send"),
+      chatReadToken: () => src.auth.accessToken("messages"),
+      mailToken: () => src.auth.accessToken("mail"),
+      mailSendToken: () => src.auth.accessToken("mail_send"),
+      invalidate: () => src.auth.invalidate(),
+      log,
+    })));
   return {
+    sender,
     meetings,
     presence,
     photos,

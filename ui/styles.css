@@ -1359,6 +1359,58 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .close-loop-note { display: grid; gap: 4px; min-width: 0; }
 .close-loop-note textarea { width: 100%; box-sizing: border-box; min-width: 0; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; resize: vertical; }
 .close-loop-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* LP-1: Close the loop by sending: Draft › Preview › Sent, in the same box. Everything wraps; nothing scrolls sideways. */
+.send-loop { min-width: 0; max-width: 640px; overflow-wrap: anywhere; }
+.send-loop.close-loop { max-width: 640px; }
+.sl-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; min-width: 0; }
+.sl-steps { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-2); color: var(--text-muted); }
+.sl-steps li { display: inline-flex; align-items: center; gap: 4px; }
+.sl-steps li + li::before { content: "›"; color: var(--text-muted); }
+.sl-steps li[aria-current="step"] { color: var(--text); font-weight: 600; }
+.sl-steps li.done { color: var(--ok); }
+.sl-how { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.sl-legend { grid-column: 1 / -1; }
+.sl-choice { display: grid; gap: 2px; align-content: start; min-height: 44px; }
+.sl-choice[aria-checked="true"] { border-color: var(--accent); }
+.sl-choice[aria-checked="true"] .sl-choice-name { color: var(--accent); font-weight: 600; }
+.sl-choice:disabled { opacity: 0.55; cursor: default; }
+.sl-choice-name { font-size: var(--fs-3); }
+.sl-choice-where { font-size: var(--fs-2); color: var(--text-muted); overflow-wrap: anywhere; }
+.sl-targets { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: var(--fs-3); }
+.sl-targets label, .sl-checks label { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; min-width: 0; }
+.sl-checks { display: grid; gap: 2px; font-size: var(--fs-3); }
+.sl-state { flex-wrap: wrap; }
+.sl-state select { font: inherit; font-size: var(--fs-3); min-height: 32px; max-width: 100%; }
+.close-loop-note input { width: 100%; box-sizing: border-box; min-width: 0; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+.sl-from { font-size: var(--fs-2); }
+.sl-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sl-actions a.mini { text-decoration: none; display: inline-flex; align-items: center; }
+.sl-link { padding: 4px 6px; border: 0; background: none; font: inherit; font-size: var(--fs-3); color: var(--accent); text-decoration: underline; cursor: pointer; }
+.sl-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 0; align-items: baseline; }
+.sl-facts dd { margin: 0; display: grid; gap: 2px; min-width: 0; font-size: var(--fs-3); }
+.sl-outside { font-size: var(--fs-2); color: var(--text-muted); }
+.sl-text { white-space: pre-wrap; font-size: var(--fs-3); padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); min-width: 0; }
+.sl-blocked { margin: 0; padding: 6px 10px; border-radius: 6px; font-size: var(--fs-3); color: var(--text); border: 1px solid var(--risk); background: color-mix(in oklab, var(--risk) 10%, var(--surface)); }
+.sl-then, .sl-parts { margin: 0; padding-left: 18px; display: grid; gap: 2px; font-size: var(--fs-3); }
+.sl-parts { list-style: none; padding-left: 0; }
+.sl-parts .ok { color: var(--ok); }
+.sl-parts .bad { color: var(--risk); }
+.sl-field { color: var(--text-muted); }
+.sl-final { margin: 0; font-size: var(--fs-2); color: var(--text-muted); }
+.sl-fallback { display: grid; gap: 6px; justify-items: start; padding: 8px 10px; border-radius: 6px; font-size: var(--fs-3); border: 1px solid var(--watch); background: color-mix(in oklab, var(--watch) 10%, var(--surface)); }
+.sl-fallback p { margin: 0; }
+.sl-waiting { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--fs-3); padding: 6px 10px; border: 1px dashed var(--border-strong); border-radius: 6px; }
+.sl-result { margin: 0; font-size: var(--fs-3); }
+.sl-result.bad { color: var(--risk); }
+@container (max-width: 480px) { .sl-how { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sl-facts { grid-template-columns: minmax(0, 1fr); } }
+@media (pointer: coarse) {
+  .send-loop .mini, .send-loop .sl-link, .send-loop select { min-height: 44px; }
+  .sl-targets label, .sl-checks label { min-height: 44px; }
+}
+/* On a phone the actions stay in reach above the bottom bar and the home indicator while the sheet scrolls. */
+.app.phone .sl-sticky { position: sticky; bottom: 0; z-index: 1; padding: 8px 0 calc(8px + env(safe-area-inset-bottom)); margin-bottom: calc(-1 * env(safe-area-inset-bottom)); background: var(--sunken); }
+.app.phone .send-loop .mini { min-height: 44px; }
+.app.phone .sl-checks label, .app.phone .sl-targets label { min-height: 44px; }
 .view-tab .count { margin-left: 6px; padding: 0 6px; border-radius: 99px; font-size: var(--fs-1); line-height: calc(16px * var(--text-scale)); background: var(--sunken); color: var(--text); }
 
 /* Close out and Check-in (step 7) */

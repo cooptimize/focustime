@@ -30,4 +30,8 @@ export const clearSessionCookies = (): string[] => [
   `${CSRF_COOKIE}=${attrs({ httpOnly: false, sameSite: "Strict", maxAgeS: 0 })}`,
 ];
 export const authCookie = (state: string) => `${AUTH_COOKIE}=${state}${attrs({ httpOnly: true, sameSite: "Lax", maxAgeS: 600 })}`;
+/** LP-1: which incremental consent a sign-in visit was for (a name from CONSENTS, never a secret), so it comes back to the right place. */
+export const CONSENT_COOKIE = "__Host-focustime-consent";
+export const consentCookie = (name: string) => `${CONSENT_COOKIE}=${name}${attrs({ httpOnly: true, sameSite: "Lax", maxAgeS: 600 })}`;
+export const clearConsentCookie = () => `${CONSENT_COOKIE}=${attrs({ httpOnly: true, sameSite: "Lax", maxAgeS: 0 })}`;
 export const clearAuthCookie = () => `${AUTH_COOKIE}=${attrs({ httpOnly: true, sameSite: "Lax", maxAgeS: 0 })}`;

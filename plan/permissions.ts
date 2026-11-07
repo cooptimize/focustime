@@ -2,7 +2,7 @@
 // admin must. Settings > Connections lists them with their state for the signed-in person. Keep this list in step with
 // infra/scripts/app-registration.sh (GRAPH_SCOPES and the Azure Service Management scope) and sources/oauth/oauth.ts.
 /** The sign-in's token kinds (sources/oauth/oauth.ts TokenKind), repeated here so plan/ stays pure. */
-export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings";
+export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings" | "send" | "mail" | "mail_send";
 
 export type Permission = {
   scope: string;
@@ -28,6 +28,10 @@ export const PERMISSIONS: readonly Permission[] = [
   { scope: "ProfilePhoto.Read.All", api: "Microsoft Graph", why: "Profile photos", admin: true, kind: "photo" },
   { scope: "Chat.ReadBasic", api: "Microsoft Graph", why: "Delivery chats: chat names and members, never messages", admin: false, kind: "chats" },
   { scope: "Chat.Read", api: "Microsoft Graph", why: "Requests: new messages in the client chats registered in FocusTime, read for everyone on them who follows the client; read only, never posts", admin: false, kind: "messages", later: "Settings > Clients: Add a chat to allow it" },
+  { scope: "ChatMessage.Send", api: "Microsoft Graph", why: "Close the loop by Teams: posts your update as you, only after you confirm the preview, into the chat you chose", admin: false, kind: "send", later: "Close the loop: allow it the first time you send by Teams" },
+  { scope: "Chat.Create", api: "Microsoft Graph", why: "Close the loop by Teams: finds your 1:1 chat with the person (Teams makes it once if there isn't one)", admin: false, kind: "send", later: "Close the loop: allow it the first time you send by Teams" },
+  { scope: "Mail.ReadWrite", api: "Microsoft Graph", why: "Close the loop by email: saves your update as a draft in Outlook and reads back that one message; never reads other mail", admin: false, kind: "mail", later: "Close the loop: allow it the first time you save an email draft" },
+  { scope: "Mail.Send", api: "Microsoft Graph", why: "Close the loop by email: Send now sends your update from your mailbox, only after you confirm the preview", admin: false, kind: "mail_send", later: "Close the loop: allow it the first time you choose Send now" },
   { scope: "OnlineMeetings.Read", api: "Microsoft Graph", why: "Meeting capture: finds a client call registered in FocusTime from its join link; never any other meeting", admin: true, kind: "meetings" },
   { scope: "OnlineMeetingTranscript.Read.All", api: "Microsoft Graph", why: "Meeting capture: the transcript of a registered client call organized at Cooptimize, for its reviewers; read only, kept 30 days", admin: true, kind: "meetings" },
   { scope: "user_impersonation", api: "Azure Service Management", why: "Your VM, with your own Azure access", admin: false, kind: "arm" },

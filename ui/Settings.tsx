@@ -2,7 +2,7 @@
 // account, or the config file in the developer loop); each field saves itself (ui/settings/autosave.tsx). Values
 // owned by Dataverse are shown read-only with where to change them. Secrets are entered in masked fields that go
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
-import { AzureWriteLog, TeamsAccessLine, TeamsStatusLog, YouAccount } from "./Account.tsx";
+import { AzureWriteLog, LoopSendsLog, TeamsAccessLine, TeamsStatusLog, YouAccount } from "./Account.tsx";
 import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -2089,6 +2089,7 @@ function ActivitySection(p: BodyProps) {
       <div data-setting="devops-log"><DevOpsWriteLog /></div>
       <div data-setting="azure-log"><AzureWriteLog tz={userZone(p.data.you)} /></div>
       <div data-setting="teams-log"><TeamsStatusLog tz={userZone(p.data.you)} /></div>
+      <div data-setting="loop-log"><LoopSendsLog tz={userZone(p.data.you)} /></div>
     </div>
   );
 }

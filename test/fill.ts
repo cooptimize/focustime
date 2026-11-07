@@ -96,6 +96,8 @@ export async function fill(db: Conn, userId: string): Promise<PlanStore> {
   const w2 = (await plan.logWrite({ op: "update", uid: box.uid, eventId: `E-${tag}`, account: null, calendar: null, before: F, after: F, localBefore: null, localAfter: null, auto: false }));
   const u2 = (await plan.logWrite({ op: "update", uid: box.uid, eventId: `E-${tag}`, account: null, calendar: null, before: F, after: F, localBefore: null, localAfter: null, auto: false, undoOf: w2.id }));
   await plan.markUndone(w2.id, u2.id);
+  // LP-1: one Close the loop send.
+  (await plan.addLoopSend({ promiseKey: "f1", clientKey: "cooptimize", channel: "teams", mode: "post", state: "sent", destination: `${tag} chat`, recipient: tag, insideCount: 2, outsideCount: 0, body: tag }));
   return plan;
 }
 

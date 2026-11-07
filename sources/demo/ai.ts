@@ -121,6 +121,8 @@ async function samples(c: ProviderCall, script: AiProvider): Promise<ProviderRep
       return reply(demoMeetingAnswer(c.input));
     case "status_draft":
       return reply({ drafts: statusDraft(c.input) });
+    case "loop_draft":
+      return reply({ text: loopDraft(c.input) });
     case "conversations_merge_summary": {
       const i = JSON.parse(c.input) as { into?: { title?: string; summary?: string } };
       return reply({ title: i.into?.title ?? "Merged conversation", summary: i.into?.summary ?? "Two threads about the same question, now one." });
@@ -200,6 +202,22 @@ function conversationComment(c: ProviderCall): string[] {
  * SR-1: a status line per feature from its facts (the input lists "Feature #id: title" and "- fact: ..." lines): the
  * newest state change and what's done, in plain words; no facts, no line.
  */
+/** LP-1: Close the loop's message from the promise, the conversation and the item's state (fictional demo people only). */
+function loopDraft(input: string): string {
+  const line = (k: string) => new RegExp(`^${k}: (.*)$`, "m").exec(input)?.[1]?.trim() ?? "";
+  const to = line("To") || "there";
+  const from = line("From");
+  const what = sentence(line("Promise")).replace(/^I'll /i, "").replace(/^I will /i, "");
+  const item = /^Work item #(\d+): (.*) \((.*)\), state now: (.*)$/m.exec(input);
+  const state = item ? ` #${item[1]} is ${item[4]} now, so you can check it whenever suits you.` : "";
+  // "Tell Priya the export is ready" says itself; anything else is closed out as done.
+  const told = /^(?:tell|let) \S+ (?:know )?(?:that )?(.+)$/i.exec(what.replace(/\.$/, ""));
+  // "Send Marcus the updated spec" → "the updated spec"; "Confirm the go-live date" → "the go-live date".
+  const thing = what.replace(/\.$/, "").replace(new RegExp(`^\\w+ (?:${to.split(" ")[0]} )?`, "i"), "");
+  const body = told ? `${sentence(told[1]!)}.` : `Closing the loop on ${thing}: it's done.`;
+  return `Hi ${to},\n\n${body}${state} Let me know if anything looks off.${from ? `\n\n${from}` : ""}`;
+}
+
 function statusDraft(input: string): { itemId: number; text: string }[] {
   const out: { itemId: number; text: string }[] = [];
   let cur: { itemId: number; facts: string[] } | null = null;
