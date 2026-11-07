@@ -1,6 +1,6 @@
 // S1 (D452): ⋯ › About. One line: "FocusTime · dev · #8 · abc1234 · built Nov 3, 12:05 PM" (the time in the person's
-// zone; a local build is "FocusTime · local · abc1234"), with links to the PR and the commit on GitHub, Copy, and the
-// Guide. Nothing else. The facts come from /version (env, PR, sha, build time; no secrets, hostnames or user data).
+// zone; a local build is "FocusTime · local · abc1234"), with links to the PR and the commit on GitHub, Copy, the
+// Guide and (DOC-1) the Technical docs. Nothing else. The facts come from /version (env, PR, sha, build time; no secrets, hostnames or user data).
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useEffect, useRef, useState } from "react";
 
@@ -19,7 +19,7 @@ export function aboutLine(b: Build, zone: string): string {
   return parts.join(" · ");
 }
 
-export function AboutDialog({ zone, onClose, onGuide }: { zone: string; onClose: () => void; onGuide: () => void }) {
+export function AboutDialog({ zone, onClose, onGuide, onDocs }: { zone: string; onClose: () => void; onGuide: () => void; /** DOC-1: the Technical docs for this build. */ onDocs?: () => void }) {
   const [build, setBuild] = useState<Build | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -104,6 +104,18 @@ export function AboutDialog({ zone, onClose, onGuide }: { zone: string; onClose:
           >
             Guide
           </a>
+          {onDocs && (
+            <a
+              href="#/docs"
+              onClick={(e) => {
+                e.preventDefault();
+                onClose();
+                onDocs();
+              }}
+            >
+              Technical docs
+            </a>
+          )}
         </div>
       </div>
     </div>

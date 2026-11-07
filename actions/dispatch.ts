@@ -38,6 +38,7 @@ import { buildWeek } from "../week/build.ts";
 import { followedKeys } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
 import { guideAction } from "./guide-actions.ts";
+import { docsAccessAction } from "./docs-actions.ts";
 import { defaultWeekStart, localToday, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
 import { hoursOn, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
@@ -1521,6 +1522,9 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
         req.input ?? {},
       );
     }
+    case "docs.access":
+      // DOC-1: whether this account may open the Technical docs (not an automation account; actions/docs-actions.ts).
+      return docsAccessAction({ automation: async () => (await aheadContext(ctx)).automation() }, req.input);
     case "guide.checklist":
       // UI-5: read only, states and counts only (actions/guide-actions.ts).
       return guideAction(

@@ -30,6 +30,7 @@ import { userZone } from "../week/zone.ts";
 import { openSend, sendLevel } from "./send-event.ts";
 import { TOURS } from "./guide/tours.ts";
 import { SECTIONS as GUIDE_SECTIONS } from "./guide/sections.ts";
+import { DOC_PAGES } from "./docs/pages.ts";
 
 export type MenuItem = {
   id: string;
@@ -131,6 +132,8 @@ export type MenuEnv = {
   showKeys: () => void;
   /** G1: the in-app Guide (#/guide), at a section (UI-5: #/guide/<section>). */
   showGuide: (section?: string) => void;
+  /** DOC-1: the Technical docs (#/docs/<page>/<heading>); absent signed out. */
+  showDocs?: (page?: string, heading?: string) => void;
   /** UI-5: start a Show me tour over its screen (#/guide/tour/<id>). */
   startTour?: (id: string) => void;
   /** The active theme and how to change it (saved in config, applied live). */
@@ -1062,6 +1065,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ui.first_launch": return { disabled: "Runs on its own the first time FocusTime opens" };
     case "ui.tour_offer": return { run: () => env.showGuide() };
     case "guide.checklist": return { run: () => env.showGuide("first-day") };
+    case "docs.access": return env.showDocs ? { run: () => env.showDocs!() } : { disabled: "Sign in to read the Technical docs" };
     case "setup.load":
     case "setup.prefill":
     case "setup.mark":
@@ -1480,6 +1484,8 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     // UI-5: each tour by name ("Show me: Plan your week"), and each Guide section ("Guide: Ahead").
     ...TOURS.map((t) => ({ id: `ui.tour.${t.id}`, action: "ui.guide", group: "Help", label: `Show me: ${t.title}`, aka: ["tour"], ...(env.startTour ? { run: () => env.startTour!(t.id) } : { disabled: "Sign in to see it on your own screens" }) })),
     ...GUIDE_SECTIONS.filter((s) => s.id !== "start").map((s) => ({ id: `ui.guide.${s.id}`, action: "ui.guide", group: "Help", label: `Guide: ${s.name}`, run: () => env.showGuide(s.id) })),
+    // DOC-1: each Technical docs page by name ("Technical docs: Security"); the registry's docs.access opens the Overview.
+    ...DOC_PAGES.filter((p) => p.id !== "overview").map((p) => ({ id: `ui.docs.${p.id}`, action: "docs.access", group: "Help", label: `Technical docs: ${p.label}`, aka: ["technical", "docs", ...p.aka], ...(env.showDocs ? { run: () => env.showDocs!(p.id) } : { disabled: "Sign in to read the Technical docs" }) })),
     { id: "ui.keys", action: "ui.keys", group: "Keyboard", label: "Keyboard shortcuts (every key in one list)", run: env.showKeys },
   ];
 }

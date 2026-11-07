@@ -5,6 +5,7 @@ import type { Half, IsoDate } from "../week/types.ts";
 import type { Route } from "../plan/notify.ts";
 import type { InboxView } from "../plan/inbox-items.ts";
 import { tourById } from "./guide/tours.ts";
+import { DOC_ANCHOR, DOC_CONTENTS, DOC_PAGES, docPageLabel } from "./docs/pages.ts";
 
 export const TABS = ["today", "week", "ahead", "inbox"] as const;
 export type Tab = (typeof TABS)[number];
@@ -56,7 +57,7 @@ export type LateFilter = { client: string | null };
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
 /** MC-1: a call's review over the place (`occurrence` null: my calls, the ones I review or attend). */
 /** UI-5: a Show me tour running over the real screen in `nav` (only highlights and explains; #/guide/tour/<id>). */
-export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null } | null;
+export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null } | null;
 export type Loc = { nav: Nav; overlay: Overlay };
 
 export const navOf = {
@@ -167,6 +168,8 @@ export function hashOf(l: Loc): string {
   if (l.overlay?.kind === "settings") return l.overlay.section ? `#/settings/${l.overlay.section}${l.overlay.setting ? `/${encodeURIComponent(l.overlay.setting)}` : ""}` : "#/settings";
   if (l.overlay?.kind === "guide") return l.overlay.chapter ? `#/guide/${l.overlay.chapter}` : "#/guide";
   if (l.overlay?.kind === "tour") return `#/guide/tour/${l.overlay.id}`;
+  // DOC-1: the Technical docs, at a page and a heading.
+  if (l.overlay?.kind === "docs") return ["#/docs", l.overlay.page, l.overlay.page ? l.overlay.heading : null].filter(Boolean).join("/");
   if (l.overlay?.kind === "meeting") return l.overlay.occurrence ? `#/meetings/${l.overlay.occurrence}` : "#/meetings";
   const n = l.nav;
   if (n.tab === "today") return ["#/today", n.flow, n.flow === "closeout" || n.flow === null ? n.date : null].filter(Boolean).join("/");
@@ -230,6 +233,15 @@ export function parseHash(hash: string): Loc | null {
         return t ? { nav: t.start, overlay: { kind: "tour", id: t.id } } : null;
       }
       return b !== undefined ? null : a === undefined ? { nav: navOf.today(), overlay: { kind: "guide", chapter: null } } : SECTION.test(a) ? { nav: navOf.today(), overlay: { kind: "guide", chapter: a } } : null;
+    // DOC-1: #/docs, #/docs/<page> (#/docs/contents is the phone's list) and #/docs/<page>/<heading>, over Today.
+    case "docs": {
+      if (c !== undefined) return null;
+      const docs = (page: string | null, heading: string | null): Loc => ({ nav: navOf.today(), overlay: { kind: "docs", page, heading } });
+      if (a === undefined) return docs(null, null);
+      if (a !== DOC_CONTENTS && !DOC_PAGES.some((p) => p.id === a)) return null;
+      if (b === undefined) return docs(a, null);
+      return a !== DOC_CONTENTS && DOC_ANCHOR.test(b) ? docs(a, b) : null;
+    }
     // MC-1: #/meetings (my calls) and #/meetings/<occurrence> (Update <client>'s plan from one call), over Week.
     case "meetings":
       return b !== undefined ? null : a === undefined ? { nav: navOf.week(), overlay: { kind: "meeting", occurrence: null } } : ID.test(a) ? { nav: navOf.week(), overlay: { kind: "meeting", occurrence: Number(a) } } : null;
@@ -407,5 +419,5 @@ export function viewName(loc: Loc): string {
     : n.tab === "ahead" ? `${TAB_NAMES.ahead} › ${MODE_NAMES[n.mode]}`
     : n.view ? `${TAB_NAMES.inbox} › ${INBOX_VIEW_NAMES[n.view]}` : TAB_NAMES.inbox;
   const o = loc.overlay;
-  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "meeting" ? "Client calls" : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
+  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "meeting" ? "Client calls" : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : o.kind === "docs" ? `Technical docs${o.page ? `: ${docPageLabel(o.page)}` : ""}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
 }
