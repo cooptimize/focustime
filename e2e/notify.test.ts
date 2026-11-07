@@ -36,6 +36,7 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
   it("Start my VM without asking off: the morning box's Start shows the preview instead", async () => {
     const { page, errors } = await freshPage(h);
     await openSettings(page);
+    await settingsSection(page, "connections");
     const toggle = page.locator(".set-field", { hasText: "Start my VM without asking" }).locator("input");
     await toggle.waitFor();
     await expect(toggle.isChecked()).resolves.toBe(true);
