@@ -318,3 +318,11 @@ What DS-1 learned, and what is still open:
 - Q-UI9-2: A late promise whose client has no block today (or one with no client) shows on no Week card, only in Today's strip and the Inbox (and, for one I added, as U3's due badge on the day's first block). Is that enough, or should the day header carry a "N late" for those?
 - Q-UI9-3: The wide layout's hour timeline (3840) and strip or mini cards never marked late promises; they now get the chip because they draw no rail. Confirm that's wanted on the wide layout, where the timeline is "shown".
 
+## Phone overhaul (MB-1, Nov 7)
+
+- Q-MB1-1: Join on the Now card needs the meeting's link. Calendar events in FocusTime carry no online meeting link; reading Graph's `onlineMeeting.joinUrl` (and Google's `hangoutLink`) is a source change. Worth adding, phone only, opening Teams?
+- Q-MB1-2: Snooze for a to-do is "Snooze to this afternoon" (a move to PM). Should Snooze instead hide it until a time (as promises do), which needs a new pick field?
+- Q-MB1-3: Open anyway on Ahead lasts the browser session. Should it be remembered per device, or should the phone get a small read-only Ahead summary instead (this week's dated features)?
+- Q-MB1-4: the VM chip moved from the phone header into the status sheet; Today's morning VM prompt still shows. Is the prompt enough on the phone, or should the dot turn amber while the VM is off during working hours?
+- Q-MB1-5: Settings › Data › Diagnostics lists Unsorted reasons as "<reason> <count>" and now reads "held back because they mention another client 20". It is ST-1's screen, so it wasn't changed here; reword to "20 held back because they mention another client"?
+- Q-MB1-6: the phone's to-do sheet shows Done only on a confirmed day (as Today's checkboxes do). On an unconfirmed morning, should the sheet offer Confirm today first?
