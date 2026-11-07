@@ -213,10 +213,10 @@ describe("[plan] planning settings (step 6c, Q36)", () => {
   });
 
   it("reads Keep following per client (step 6d)", () => {
-    const r = parseConfig(valid.replace("[clients]\n", "[clients]\nHME = { follow = true }\nKEEP = \"#d2892a\"\n"));
-    expect(r.ok && r.config.clientSettings.HME?.follow).toBe(true);
+    const r = parseConfig(valid.replace("[clients]\n", "[clients]\nLitware = { follow = true }\nKEEP = \"#d2892a\"\n"));
+    expect(r.ok && r.config.clientSettings.Litware?.follow).toBe(true);
     expect(r.ok && r.config.clientSettings.KEEP?.follow).toBe(false);
-    expect(fields(valid.replace("[clients]\n", "[clients]\nHME = { follow = \"yes\" }\n"))).toEqual(["clients.HME.follow"]);
+    expect(fields(valid.replace("[clients]\n", "[clients]\nLitware = { follow = \"yes\" }\n"))).toEqual(["clients.Litware.follow"]);
   });
 });
 

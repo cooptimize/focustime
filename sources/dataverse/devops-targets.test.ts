@@ -34,7 +34,7 @@ describe("Dataverse → DevOps settings", () => {
     expect(adatum.pat!.basicAuth()).toBe(`Basic ${Buffer.from(`:${FAKE_PAT_Adatum}`).toString("base64")}`);
     // A blank DevOps email stays null (never guessed).
     expect(r.targets.find((t) => t.clientKey === "T&W")).toMatchObject({ project: "TW Project", email: null });
-    // HME has an Account Worker but no block this week: not returned.
+    // Litware has an Account Worker but no block this week: not returned.
     expect(r.targets.map((t) => t.clientKey).sort()).toEqual(["Adatum", "T&W"]);
 
     const workers = decodeURIComponent(s.calls.find((c) => c.url.includes("coop_accountworkers"))!.url);
@@ -61,7 +61,7 @@ describe("Dataverse → DevOps settings", () => {
   });
 
   it("two accounts with the same client key are refused, not merged", async () => {
-    const dup = { value: [...devopsAccounts.value, { ...devopsAccounts.value[0], accountid: ACCT.hme }] };
+    const dup = { value: [...devopsAccounts.value, { ...devopsAccounts.value[0], accountid: ACCT.litware }] };
     const r = await setup("ok", { devopsAccounts: dup }).source.devopsTargets(["Adatum"]);
     if (!r.ok) throw new Error("expected ok");
     expect(r.targets.filter((t) => t.clientKey === "Adatum").every((t) => t.pat === null && t.problem === "More than one account is named Adatum in Dataverse")).toBe(true);
@@ -92,7 +92,7 @@ describe("my clients for Open half-days (Q21)", () => {
     const mine = await src.myClients();
     expect(mine).toEqual([
       { clientKey: "Adatum", clientName: "Adatum", devops: true, devopsEmail: "me@contoso.example" },
-      { clientKey: "HM Electronics", clientName: "HM Electronics", devops: true, devopsEmail: "c.someone@hme.example" },
+      { clientKey: "Litware Electronics", clientName: "Litware Electronics", devops: true, devopsEmail: "c.someone@litware.example" },
       { clientKey: "T&W", clientName: "T&W", devops: true, devopsEmail: null },
     ]);
     const urls = calls.map((c) => decodeURIComponent(c.url));

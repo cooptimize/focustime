@@ -170,11 +170,11 @@ describe("Settings > Clients follow state (step 6d)", () => {
     let cs = await load();
     expect(by(cs, "Cooptimize")).toEqual({ active: true, why: "internal" });
     expect(by(cs, "T&W")).toEqual({ active: true, why: "ongoing" });
-    expect(by(cs, "HM Electronics")).toEqual({ active: false, why: "none" });
-    expect((await t.run("settings.save", { section: "client", values: { key: "HM Electronics", follow: true } })).ok).toBe(true);
-    expect(readFileSync(t.path, "utf8")).toMatch(/"HM Electronics" = \{[^}]*follow = true/);
+    expect(by(cs, "Litware Electronics")).toEqual({ active: false, why: "none" });
+    expect((await t.run("settings.save", { section: "client", values: { key: "Litware Electronics", follow: true } })).ok).toBe(true);
+    expect(readFileSync(t.path, "utf8")).toMatch(/"Litware Electronics" = \{[^}]*follow = true/);
     cs = await load();
-    expect(by(cs, "HM Electronics")).toEqual({ active: true, why: "kept" });
+    expect(by(cs, "Litware Electronics")).toEqual({ active: true, why: "kept" });
   });
 });
 

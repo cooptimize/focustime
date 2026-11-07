@@ -44,12 +44,12 @@ const leakyError = (status: number, code: string) =>
 
 export const FAKE_PAT_Adatum = "FAKE-DV-PAT-Adatum-0d9e";
 export const FAKE_PAT_WC = "FAKE-DV-PAT-WC-41aa";
-export const ACCT = { adatum: "a0000000-0000-4000-8000-00000000c5c0", tw: "a0000000-0000-4000-8000-0000000000dc", hme: "a0000000-0000-4000-8000-000000000e1e" };
+export const ACCT = { adatum: "a0000000-0000-4000-8000-00000000c5c0", tw: "a0000000-0000-4000-8000-0000000000dc", litware: "a0000000-0000-4000-8000-000000000e1e" };
 export const accountWorkers = {
   value: [
     { _coop_account_value: ACCT.adatum, coop_devopsemail: "me@contoso.example" },
     { _coop_account_value: ACCT.tw, coop_devopsemail: null },
-    { _coop_account_value: ACCT.hme, coop_devopsemail: "c.someone@hme.example" },
+    { _coop_account_value: ACCT.litware, coop_devopsemail: "c.someone@litware.example" },
   ],
 };
 /**
@@ -68,7 +68,7 @@ export const devopsAccounts = {
   value: [
     { accountid: ACCT.adatum, name: "Adatum Example Corp", coop_reportingnickname: "Adatum", coop_devopsorg: "contoso", coop_devopsprojectid: "11111111-2222-4333-8444-555555555555", coop_devopsprojectname: "Project Ada", coop_devopstoken: FAKE_PAT_Adatum },
     { accountid: ACCT.tw, name: "Tailspin & Wingtip", coop_reportingnickname: "T&W", coop_devopsorg: "cooptimize", coop_devopsprojectid: null, coop_devopsprojectname: "TW Project", coop_devopstoken: FAKE_PAT_WC },
-    { accountid: ACCT.hme, name: "HM Electronics", coop_reportingnickname: null, coop_devopsorg: "hme", coop_devopsprojectid: null, coop_devopsprojectname: "DW", coop_devopstoken: "FAKE-DV-PAT-HME-UNNEEDED" },
+    { accountid: ACCT.litware, name: "Litware Electronics", coop_reportingnickname: null, coop_devopsorg: "litware", coop_devopsprojectid: null, coop_devopsprojectname: "Ledger", coop_devopstoken: "FAKE-DV-PAT-Litware-UNNEEDED" },
   ],
 };
 

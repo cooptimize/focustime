@@ -83,7 +83,7 @@ export function liveTeam(): LiveTeam {
   const base = createOrgRuntime({ store, bootstrap: { model: "gpt-6-luna", appCapUsd: 100, inviteDomains: ["contoso.example"], feedback: null }, holdMs: 0 });
   // CV-3b: clientAccounts() fails closed, so the fake Dataverse's clients are active (I'm an Account Worker on each);
   // a test that lists its own clients (liveAdminOps) replaces them. Reads wait for this.
-  const seeded = store.replaceDirectory([], [], ["Adatum", "T&W", "HM Electronics"].map((clientKey) => ({ personId: ME, clientKey })));
+  const seeded = store.replaceDirectory([], [], ["Adatum", "T&W", "Litware Electronics"].map((clientKey) => ({ personId: ME, clientKey })));
   const after = <A extends unknown[], R>(f: (...a: A) => Promise<R>) => async (...a: A): Promise<R> => (await seeded, f(...a));
   const org: OrgRuntime = { ...base, rules: after(base.rules), levels: after(base.levels), clientAccounts: after(base.clientAccounts), levelOf: after(base.levelOf), clientLeads: after(base.clientLeads), isClientLead: after(base.isClientLead), apply: after(base.apply) };
   return {
