@@ -195,7 +195,6 @@ export function buildProcessModel(raw: RawProcess, o: ProcessOverrides = {}): Pr
 
 export const typeOf = (m: ProcessModel, name: string): ProcessType | undefined => m.types.find((t) => t.name === name) ?? m.types.find((t) => t.name.toLowerCase() === name.toLowerCase());
 export const levelOfType = (m: ProcessModel, name: string): ProcessLevel | null => typeOf(m, name)?.level ?? null;
-export const needsBreakdownType = (m: ProcessModel, name: string) => !!typeOf(m, name)?.needsBreakdown;
 
 /** Pickable: child and task level, plus parent or top types that don't need breakdown. */
 export function pickableTypes(m: ProcessModel): Set<string> {
@@ -218,8 +217,6 @@ export function stateCategories(m: ProcessModel, openStates: readonly string[] =
   return new Map(m.types.map((t) => [t.name, new Map(t.states.map((s) => [s.name.toLowerCase(), wanted.has(s.name.toLowerCase()) && !isOpen(s.category) ? "InProgress" : s.category]))]));
 }
 
-/** The states of a type, with categories. */
-export const statesOf = (m: ProcessModel, name: string): TypeState[] => typeOf(m, name)?.states ?? [];
 /** The first state of a type in a category (Completed for Mark done, Removed for undoing a create). */
 export const stateIn = (states: readonly { name: string; category: string }[], category: StateCategory) => states.find((s) => s.category === category)?.name ?? null;
 

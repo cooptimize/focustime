@@ -7,7 +7,7 @@
 // discussion, <Name> committed while a commitment is open, Tracked #id once an item is linked, Resolved and Closed only
 // by a person. Nothing here does I/O or logs.
 import { userZone } from "../week/zone.ts";
-import type { AiErrorKind, JsonSchema } from "../ai/types.ts";
+import type { JsonSchema } from "../ai/types.ts";
 import { hasPhrase, isAcknowledgement } from "./asks.ts";
 import { withoutEmails } from "./asks-ai.ts";
 import { bodyKind } from "./sanitize.ts";
@@ -722,8 +722,6 @@ export const daysWaiting = (escalatedAt: string, now: string) => Math.max(1, 1 +
 export const CLIENT_REFUSED = "other_client";
 export const LEGACY_CLIENT_REFUSED = "refused_client";
 
-/** Why messages wait unsorted, in a few plain words (no ids, nothing from a message). A $0 cap isn't "reached". */
-export type UnsortedReason = AiErrorKind | "chat_cap" | "unknown_ref" | "zero_budget";
 /**
  * IB-1 slice 3, the retry rule: what the unsorted line says for a reason and what can be done. `retry` only for what
  * passes on its own (busy, timed out, out of credit, an unusable answer, the chat's daily cap, a service error);

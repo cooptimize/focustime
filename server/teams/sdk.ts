@@ -143,4 +143,3 @@ export async function createTeamsEndpoint(o: TeamsEndpointOptions) {
     res.end(r.body === undefined ? undefined : JSON.stringify(r.body));
   };
 }
-export type TeamsHandler = Awaited<ReturnType<typeof createTeamsEndpoint>>;

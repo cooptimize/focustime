@@ -354,4 +354,3 @@ export const ACTIONS = [
 export type ActionName = (typeof ACTIONS)[number]["name"];
 export const ACTION_NAMES: readonly ActionName[] = ACTIONS.map((a) => a.name);
 export const isActionName = (a: unknown): a is ActionName => typeof a === "string" && (ACTION_NAMES as readonly string[]).includes(a);
-export const actionSpec = (name: ActionName): ActionSpec => ACTIONS.find((a) => a.name === name)!;

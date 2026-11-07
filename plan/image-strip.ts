@@ -5,7 +5,6 @@
 // re-encoded. Anything that doesn't parse cleanly is refused (null), never passed through. Pure: no I/O.
 
 export type ImageType = "image/png" | "image/jpeg" | "image/gif";
-export const IMAGE_TYPES: readonly ImageType[] = ["image/png", "image/jpeg", "image/gif"];
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];

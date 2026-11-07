@@ -4,18 +4,6 @@
 import { WEEKDAY_KEYS, type WeekdayKey } from "../week/hours.ts";
 import { hoursBody, removeValue, replaceArrayTables, replaceSection, setValue, tomlValue, type TomlValue } from "./edit.ts";
 import { NOTIFY_KINDS } from "../plan/notify.ts";
-import { parse as parseToml } from "smol-toml";
-
-/** A list value already in the settings text ([] when absent or unreadable), for edits that add or remove one entry. */
-export function currentList(text: string, section: string, key: string): string[] {
-  try {
-    const sec = (parseToml(text) as Record<string, unknown>)[section] as Record<string, unknown> | undefined;
-    const v = sec?.[key];
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
-  } catch {
-    return [];
-  }
-}
 
 export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap", "ahead", "asks", "ai", "guidance", "keep_open"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];

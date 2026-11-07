@@ -14,7 +14,7 @@
 // Nothing is added to the plan until a row is accepted; a decided row isn't proposed again that week. Only clients
 // (clientAccounts()) get rows, and only a Cooptimizer gets any. A feature DevOps can't say anything about right now is
 // counted as unknown, never guessed.
-import { countsAsDone, isOpen, isRemoved } from "./process.ts";
+import { isOpen, isRemoved } from "./process.ts";
 import type { IsoDate, PortfolioItem } from "../week/types.ts";
 import type { Pick as PlanPick, WeekWatch } from "./types.ts";
 
@@ -166,9 +166,6 @@ export function checkInWith(t: FeatureTree, me: string | null, isCooptimizer: (e
   }
   return [...counts.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name))[0]?.name ?? null;
 }
-
-/** Done for a must: resolved or completed (WT-1's categories). Removed counts zero too but isn't "done". */
-export const finishedState = (category: string | null | undefined) => countsAsDone(category);
 
 // ---- Where the check-in goes ----
 

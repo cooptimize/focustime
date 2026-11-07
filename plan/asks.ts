@@ -150,7 +150,6 @@ export function backoffUntil(nowIso: string, retryAfterSeconds: number | null, f
 
 /** Resolutions: Create (a DevOps item), Link (an existing one), Handled (no item, optional note), Dismiss. */
 export type AskStatus = "open" | "created" | "linked" | "handled" | "dismissed";
-export const ASK_STATUSES: readonly AskStatus[] = ["open", "created", "linked", "handled", "dismissed"];
 
 /** Which kind of DevOps item to create from an ask; the client's process names it. */
 export type AskItemLevel = "bug" | "story" | "feature";
@@ -169,7 +168,6 @@ export type AsksState = {
   /** A plain line for Settings > Connections when the last read failed (null when healthy). */
   status: string | null;
 };
-export const ASKS_OFF: AsksState = { on: false, since: null, seenAt: null, polledAt: null, retryAt: null, failures: 0, status: null };
 
 /** A stored ask: the message the rules matched, the rule, and how it ended. */
 export type Ask = {

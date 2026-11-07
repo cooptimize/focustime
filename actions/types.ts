@@ -108,9 +108,6 @@ export type FieldProblem = { field: string; message: string };
 export type ActionResponse<T = unknown> = { ok: true; data: T } | { ok: false; status: number; error: string; fields?: FieldProblem[]; /** A refusal the UI can answer (step 13.5): "no_hours" asks Add hours or Move anyway. */ code?: string };
 
 // ---- Settings (step 6b): what settings.load returns. Never a secret value. ----
-export type AppSecret = "dataverse-client-secret" | "google-client-secret";
-export type SecretPresence = "set" | "missing" | "locked" | "unavailable";
-
 export type SettingsClient = {
   key: string;
   /** From Dataverse (reporting nickname); null when Dataverse couldn't be read. */

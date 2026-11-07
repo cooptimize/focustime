@@ -1338,8 +1338,6 @@ import type { CarryDecisionRow, WeekFeature, WeekPlanRecord, WeekWatch } from ".
 export type NewWeekFeature = { weekStart: IsoDate; clientKey: string; itemId: number; title: string; itemType: string | null; url: string | null; /** Minutes (whole hours); 0 takes it off. */ estimate: number };
 export type NewWeekItem = Omit<NewWeekFeature, "estimate"> & { level: ItemLevel; tier?: Tier; /** Features: an estimate in minutes (whole hours), or null for 4h. */ estimate?: number | null; size?: StorySize | null; parentId?: number | null };
 
-/** Most hours one feature can take in a week (E2). */
-export const MAX_FEATURE_HOURS = MAX_ESTIMATE_HOURS;
 const ESTIMATE_ERROR = `an estimate must be whole hours, 1 to ${MAX_ESTIMATE_HOURS}`;
 
 export type Borrowed = {

@@ -1137,6 +1137,3 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
     throw e;
   }
 }
-
-/** Whether a person outside Cooptimize: shown as External (by tenant only). */
-export const externalOf = (tenant: string | null, home: string | null) => (home ? isExternal({ tenantId: tenant }, home) : false);

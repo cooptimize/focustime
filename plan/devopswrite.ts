@@ -38,8 +38,6 @@ export const itemApiUrl = (org: string, id: number) => `${orgBase(org)}/_apis/wi
 export type PatchOp = { op: "add" | "replace" | "remove" | "test"; path: string; value?: unknown };
 export type ChangeKind = "state" | "comment" | "create" | "target_date" | "description" | "assign" | "fields" | "comment_edit";
 export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description" | "undo_assign" | "undo_fields" | "undo_comment_edit" | "feedback";
-/** UI-8: the audit log's client key for Send feedback's creates (F1): never a client, so no client's undo or retry reaches it. */
-export const FEEDBACK_LOG_KEY = "FocusTime feedback";
 
 /** One identity as connectionData reports it. */
 export type DevOpsIdentity = { id: string; name: string; email: string };
@@ -88,13 +86,6 @@ export function datesOps(rev: number, fields: { field: string; date: string | nu
     } else ops.push({ op: f.had ? "replace" : "add", path: `/fields/${f.field}`, value: Temporal.PlainDate.from(f.date).toZonedDateTime({ timeZone }).toInstant().toString() });
   }
   return ops;
-}
-/** The date fields a dates write touches, by label ("Target date", "Start date"), from its ops. */
-export function dateFieldsOf(ops: unknown, targetField: string | null): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (targetField) out["Target date"] = targetField;
-  if (Array.isArray(ops)) for (const p of ops as PatchOp[]) if (p.op !== "test" && p.path === `/fields/${START_FIELD}`) out["Start date"] = START_FIELD;
-  return out;
 }
 export const dateValue = (date: string, timeZone: string) => Temporal.PlainDate.from(date).toZonedDateTime({ timeZone }).toInstant().toString();
 
@@ -148,11 +139,6 @@ export const isOpenCategory = (c: string | null | undefined) => isOpen(c);
 export type Row = { label: string; before: string | null; after: string | null; changed: boolean };
 export const row = (label: string, before: string | null, after: string | null): Row => ({ label, before, after, changed: before !== after });
 
-/** What changed between what I loaded and what DevOps shows now (fields the preview names). */
-export function changedSince(loaded: Record<string, string | null>, now: Record<string, string | null>): { field: string; was: string | null; now: string | null }[] {
-  return Object.keys(loaded).filter((k) => (loaded[k] ?? null) !== (now[k] ?? null)).map((k) => ({ field: k, was: loaded[k] ?? null, now: now[k] ?? null }));
-}
-
 /** A logged DevOps write (the audit log). */
 export type DevOpsWriteStatus = "pending" | "confirmed" | "unconfirmed" | "failed" | "refused";
 export type DevOpsWriteEntry = {
@@ -165,11 +151,6 @@ export type DevOpsWriteEntry = {
   /** CV-1: the conversation, commitment and suggestion a create, comment or description change came from. */
   conv?: { conversationId: number; commitmentId: number | null; suggestionId: number | null } | null;
 };
-/** The undo each write has; null when it has none (an undo, or not confirmed). */
-export function undoKind(e: Pick<DevOpsWriteEntry, "op" | "status" | "undoneBy" | "itemId">): WriteOp | null {
-  if (e.status !== "confirmed" || e.undoneBy !== null || e.itemId === null) return null;
-  return e.op === "state" ? "undo_state" : e.op === "comment" ? "undo_comment" : e.op === "comment_edit" ? "undo_comment_edit" : e.op === "create" ? "undo_create" : e.op === "target_date" ? "undo_target_date" : e.op === "description" ? "undo_description" : e.op === "assign" ? "undo_assign" : null;
-}
 /**
  * SR-1: comments don't stack with an item's other writes. Each new comment is its own stack (undo deletes only it),
  * and edits stack per comment (the newest edit of a comment is undone first). Everything else stacks per item.

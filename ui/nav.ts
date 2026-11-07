@@ -93,7 +93,6 @@ export const HOME: Loc = { nav: navOf.today(), overlay: null };
 
 /** The mode a tab opens in. */
 export const defaultNav = (tab: Tab): Nav => (tab === "today" ? navOf.today() : tab === "week" ? navOf.week() : tab === "ahead" ? navOf.ahead() : navOf.inbox());
-export const modeOf = (n: Nav): ModeName | null => (n.tab === "week" || n.tab === "ahead" ? n.mode : null);
 /** NV-1: the Board focused on a day (Plan the day). */
 export const focusOf = (n: Nav): DayFocus | null => (n.tab === "week" && n.mode === "board" ? n.focus : null);
 

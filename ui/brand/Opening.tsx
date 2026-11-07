@@ -1,7 +1,7 @@
 // Step 17.5: the app open (loader, unroll, "Back into Mon AM", into the top bar), the Close out reverse, and the
 // fun moments. Lumen appears only here, on sign-in and connect screens, in About, in the Guide's footer and in three empty states;
 // never in Week, Plan the week, Today, Plan the day, Check-in, Roadmap or on a card. Lumen never carries information.
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Lumen, LumenLoading, Unroll } from "./Brand.tsx";
 import { WEEK_BOX, STAGE } from "./geometry.ts";
 import { useReducedMotion } from "./motion.ts";
@@ -208,19 +208,6 @@ export function MomentOverlay({ line, onDone }: { line: string; onDone: () => vo
         <Lumen pose="bob" size={64} />
         <p className="brand-moment-line">{line}</p>
         <p className="brand-skip">Click or press any key</p>
-      </div>
-    </div>
-  );
-}
-
-/** An empty state: Lumen idle, one plain line, one action. */
-export function EmptyState({ line, children }: { line: string; children: ReactNode }) {
-  return (
-    <div className="brand-empty">
-      <Lumen pose="idle" size={26} />
-      <div className="brand-empty-text">
-        <p>{line}</p>
-        {children}
       </div>
     </div>
   );
