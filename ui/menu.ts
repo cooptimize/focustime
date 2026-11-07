@@ -1111,6 +1111,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "suggestions.skip":
     case "conversations.merge":
     case "conversations.unmerge":
+    case "conversations.search_items":
+    case "conversations.unlink":
       return { run: () => env.setView("conversations") };
     case "conversations.refresh": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.refresh", {})) };
     case "conversations.sort_unsorted": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.sort_unsorted", {})) };
@@ -1128,6 +1130,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "my_promises.due":
     case "my_promises.who":
     case "my_promises.close":
+    case "my_promises.unlink":
       return { run: () => env.setView("my_promises") };
     case "promises.list":
     case "promises.resolve":
@@ -1283,6 +1286,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "assistant.ask":
     case "assistant.confirm":
     case "assistant.cancel":
+    case "assistant.undo":
     case "assistant.history":
     case "assistant.today":
     case "lookup.day":

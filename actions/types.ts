@@ -377,6 +377,8 @@ export type DevOpsPreview = {
 export type DevOpsResult = { entry: import("../plan/devopswrite.ts").DevOpsWriteEntry; confirmed: boolean; message: string; changed?: { field: string; was: string | null; now: string | null }[]; itemId?: number | null; url?: string | null };
 /** PK-1: one checked-off to-do whose DevOps item FocusTime may offer to set done: its current state and the done choices (Completed first, then Resolved). */
 export type DoneOffer = { pickId: number; clientKey: string; clientName: string; itemId: number; title: string; type: string; state: string; choices: string[]; /** The rule's open "Update DevOps" follow-up for it, closed by the write. */ followUpId: number | null };
+/** AS-2: an item's done states by id (devops.done_offer { clientKey, itemIds }), with no to-do. */
+export type ItemDoneOffer = Omit<DoneOffer, "pickId" | "followUpId">;
 /** PK-1: the state write a to-do's offer made, offered for Undo when the to-do is unchecked. */
 export type UndoOffer = { pickId: number; writeId: number; clientKey: string; clientName: string; itemId: number | null; title: string; before: string | null; after: string | null };
 export type DevOpsLogView = { entries: (import("../plan/devopswrite.ts").DevOpsWriteEntry & { undoable: boolean; retryable: boolean })[] };

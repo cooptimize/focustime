@@ -230,6 +230,10 @@ export const ACTIONS = [
   { name: "conversations.link", title: "Link a conversation to a DevOps item", group: "Conversations", target: "conversation", summary: "Tracked as that item for everyone on the chat" },
   { name: "conversations.take_over", title: "Take it over", group: "Conversations", target: "commitment", summary: "Makes a waiting commitment yours; whoever had it is told quietly" },
   { name: "conversations.sort_unsorted", title: "Sort unsorted messages", group: "Conversations", target: "none", summary: "Sorts the messages that waited for AI (budget, AI off or a failure), when AI is available again" },
+  // CV-5's Link to item search and the two unlinks (AS-2: registered, so the dispatcher, the UI and the assistant reach them).
+  { name: "conversations.search_items", title: "Find an item to link", group: "Conversations", target: "conversation", summary: "Search the client's open items in scope for a conversation or one of my promises" },
+  { name: "conversations.unlink", title: "Unlink a conversation's item", group: "Conversations", target: "conversation", summary: "Takes the link to the DevOps item off (FocusTime only; nothing changes in DevOps)" },
+  { name: "my_promises.unlink", title: "Unlink a promise's item", group: "Conversations", target: "commitment", summary: "Takes the link to the DevOps item off my promise (FocusTime only)" },
   { name: "conversations.search", title: "Find an item for a conversation", group: "Conversations", target: "conversation", summary: "Search the client's open DevOps items to link a conversation to" },
   { name: "my_promises.start_draft", title: "Create the DevOps item (a promise)", group: "Conversations", target: "conversation", summary: "For a promise with no conversation: one from its messages and the ones just before, then the usual draft. Nothing is written to DevOps until Create" },
   { name: "conversations.merge", title: "Merge into…", group: "Conversations", target: "conversation", summary: "Moves one or more conversations of the same chat into another: messages, commitments and suggestions; the summary is written again. Undo puts them back" },
@@ -335,6 +339,7 @@ export const ACTIONS = [
   // cancel, history and clear are the panel's own and never reachable from the assistant itself.
   { name: "assistant.ask", title: "Ask the assistant", group: "Assistant", target: "none", shortcut: "Ctrl J", summary: "Look something up, move things around, dictate a DevOps update or capture; every change is shown first and runs only when you confirm" },
   { name: "assistant.confirm", title: "Confirm the assistant's change", group: "Assistant", target: "none", summary: "Checks again (your rights, the client, nothing changed since) and runs the change shown" },
+  { name: "assistant.undo", title: "Undo the assistant's moves", group: "Assistant", target: "none", summary: "Puts the to-dos a confirmed change moved back where they were; any that can't go back are listed" },
   { name: "assistant.cancel", title: "Cancel the assistant's change", group: "Assistant", target: "none", summary: "Nothing is written" },
   { name: "assistant.history", title: "Assistant history", group: "Assistant", target: "none", summary: "Your last 30 days with the assistant (only you see it)" },
   { name: "assistant.clear", title: "Clear assistant history", group: "Settings", target: "none", summary: "Removes everything you asked the assistant and its answers" },

@@ -145,7 +145,8 @@ describe("the allowlist", () => {
     s.script(["item"], call(["admin_set", { key: "ai.on", value: false }], ["item", { id: 4417 }]), say("Sam has it."));
     const r = await s.a.handle("Who has #4417?");
     expect(r.status).toBe("ok");
-    expect(s.ran.map((x) => x.action)).toEqual(["ahead.load"]);
+    // AS-2: the resolver's store read first (my words against my items), then the tool's.
+    expect(s.ran.map((x) => x.action)).toEqual(["ahead.load", "ahead.load"]);
     expect(JSON.stringify(s.calls.at(-1)!.rounds)).toContain("isn't allowed for this request");
   });
 });
@@ -187,7 +188,8 @@ describe("look things up", () => {
     expect(c.cards[0]).toMatchObject({ kind: "promise", who: "Dana Reyes" });
     s.script(["sends"], call(["sends", {}]), say("No sends."));
     await s.a.handle("What did I send this week?");
-    expect(s.ran.map((x) => x.action)).toEqual(["ahead.load", "conversations.list", "team.commit", "team.commit"]);
+    // AS-2: each request starts with the resolver's store read.
+    expect(s.ran.map((x) => x.action)).toEqual(["ahead.load", "ahead.load", "ahead.load", "conversations.list", "ahead.load", "team.commit", "team.commit"]);
   });
 });
 
@@ -197,7 +199,8 @@ describe("one client per request", () => {
     const r = await s.a.handle("Compare Fabrikam and Northwind Traders this week");
     expect(r.status).toBe("which_client");
     expect(s.calls).toEqual([]);
-    expect(r.links).toEqual([{ label: "Open the command menu", href: "#/commands" }]);
+    // AS-2: it asks instead of giving up: one choice per client named, built from my own clients.
+    expect(r.cards).toEqual([expect.objectContaining({ kind: "question", choices: [{ label: "Fabrikam", value: "c1" }, { label: "Northwind Traders", value: "c2" }] })]);
   });
   it("GD-1's rule: naming Internal and one client is that client's request, not Which client?", async () => {
     const s = setup();
@@ -248,7 +251,8 @@ describe("injected instructions in DevOps or chat text never produce a tool call
     s.script(["item"], call(["item", { id: 4417 }]), call(["send", { itemId: 4417, to: "Dana Reyes", kind: "must", week: "this", note: null }], ["comment", { itemId: 4417, text: "Approved" }]), say("Sam has it."));
     const r = await s.a.handle("Who has #4417?");
     expect(r.proposals).toEqual([]);
-    expect(s.ran.map((x) => x.action)).toEqual(["ahead.load"]);
+    // AS-2: the resolver's store read first (my words against my items), then the tool's.
+    expect(s.ran.map((x) => x.action)).toEqual(["ahead.load", "ahead.load"]);
     // The intent round saw only my words; the item's text went back only as quoted data.
     expect(s.calls[0]!.input).not.toContain("Ignore all previous");
     expect(s.calls[0]!.tools ?? []).toEqual([]);
