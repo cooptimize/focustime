@@ -157,7 +157,7 @@ const INBOX: Tour = {
     { target: "ib-list", title: "Why it's here", text: "Grouped by client, late first. Each row says why it needs you: due, late, new, or waiting on you." },
     { target: "ib-pane", title: "The open item", text: "Its summary, the messages, the linked DevOps item and where it came from.", example: "ib-item", phone: "skip" },
     { target: "ib-acts", title: "Every action, the main one first", text: "Create DevOps item, Link, Close the loop or Accept leads, with the rest beside it. Anything outside FocusTime shows a preview first.", example: "ib-item" },
-    { target: "ib-keys", title: "Close the loop", text: "When you've done what you promised, Close the loop (L) and say how if you like. Not needed closes it quietly. J and K move, Enter opens.", phone: "skip" },
+    { target: "ib-keys", title: "Close the loop", text: "When you've done what you promised, Close the loop (L): send the update by Teams, email, a DevOps comment or a call, after a preview of who sees it. Not needed closes it quietly. J and K move, Enter opens.", phone: "skip" },
   ],
   end: { line: "That's the Inbox. Needs you is the one number to keep at zero.", tryIt: "Try it yourself: the Guide's Inbox section has a list to open items in." },
 };

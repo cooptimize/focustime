@@ -43,6 +43,7 @@ export function SendLoop({ promiseKey, who, demo = false, compact = false, onClo
   const [kept, setKept] = useState(true);
   const [comment, setComment] = useState(false);
   const [state, setState] = useState("");
+  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const id = useId();
@@ -236,6 +237,8 @@ export function SendLoop({ promiseKey, who, demo = false, compact = false, onClo
           {p.fallback && !p.blocked ? (
             <>
               <a className="mini primary" href={p.fallback.open} target="_blank" rel="noreferrer">{p.fallback.label}</a>
+              {/* A group chat can't be prefilled: copy the text to paste there. */}
+              <button type="button" className="mini" onClick={() => void navigator.clipboard?.writeText(p.text).then(() => setCopied(true), () => {})}>{copied ? "Copied" : "Copy text"}</button>
               <button type="button" className="mini" disabled={busy} onClick={() => void markSent({ channel: p.channel })}>Mark sent</button>
             </>
           ) : (

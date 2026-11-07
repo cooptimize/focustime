@@ -381,13 +381,10 @@ const NEW_QUESTIONS = [
   { q: "What is the demo?", a: "Try the demo, on the sign-in screen, opens FocusTime with made-up clients, work and calendars, so you can click everything. Nothing of yours is in it and nothing reaches DevOps, Outlook or Teams. Starting it signs you out of your own FocusTime; sign in again to come back." },
 ] as const;
 
-/**
- * LP-1 (feat/close-the-loop) is rewriting Close the loop; its words replace this one entry when it lands. Until then
- * this is the current behaviour (the glossary's Follow-up row).
- */
+/** LP-1: Close the loop sends the update (Teams, email, a DevOps comment or a call note), or closes without sending. */
 export const CLOSE_THE_LOOP = {
   q: "How do I close the loop on a promise?",
-  a: "When you've done what you promised, press Close the loop ({key:inbox.key.close}) and, if you like, say how: Teams, email, DevOps or a call, with a note. Not needed closes it quietly, without counting it done. Snooze hides it until a day you choose.",
+  a: "Press Close the loop ({key:inbox.key.close}) on the promise. FocusTime drafts the update to the person you promised, says what it drafted from, and you edit it. Pick how it goes: Teams (the chat it came from, or a 1:1 with someone at Cooptimize), Email (an Outlook draft by default, or send now), a Comment on its DevOps item, or Call (a Teams call link and a note). Preview shows where it goes and who sees it, people outside Cooptimize by name, and nothing is sent until you press Send there. Sent messages can't be undone; Mark this promise kept has Undo. You can also add it as a comment on the item or move the item's state, each previewed. Close without sending closes it the old way, with how and a note. Not needed closes it quietly.",
 };
 
 /** Every question the Guide answers, from every pool; the sections below place each one by its words. */
@@ -503,7 +500,7 @@ export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "capture" | "a
       { title: "Why it's here", text: "Each row says why it needs you: you said you'd do it, you own it, nobody picked it up, or it's due. Late ones come first." },
       { title: "The open item", text: "On the right: its summary, the messages, the linked item, commitments and every action, the main one first." },
       { title: "Create a DevOps item", text: "From a conversation or promise without one. With AI allowed for the client the form is drafted for you. Nothing is written until you confirm the preview." },
-      { title: "Close the loop", text: "When you've done what you promised, Close the loop, and say how if you like. Not needed closes it quietly." },
+      { title: "Close the loop", text: "Send the update from the promise: Teams, email, a DevOps comment or a call note. FocusTime drafts it, you edit it, and the preview shows who will see it before anything is sent. Close without sending still works." },
     ],
     tryIts: ["inbox"],
     faqs: [
