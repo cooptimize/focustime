@@ -11,8 +11,8 @@ const T = 120_000;
 async function openAdmin(page: Page, item: string) {
   await page.getByRole("button", { name: /^More: the Guide/ }).click();
   await page.getByRole("menuitem", { name: "Admin" }).click();
-  await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: item, exact: true }).click();
-  await page.locator(".set-body h2", { hasText: `Admin › ${item}` }).waitFor();
+  await page.locator(`.ps-rail [data-settings-section="admin-${item.toLowerCase()}"]`).click();
+  await page.locator(".ps-head h2", { hasText: `Admin › ${item}` }).waitFor();
 }
 
 describe.skipIf(!CHROMIUM)("client DevOps identities (browser, demo mode)", () => {

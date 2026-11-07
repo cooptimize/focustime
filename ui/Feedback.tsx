@@ -236,7 +236,7 @@ function SetupNote({ setup, line, onClose }: { setup: FeedbackSetup; line: strin
         <>
           {" "}
           <a href={WRITES_HREF} onClick={onClose}>
-            Open Settings › Clients
+            Open Settings › DevOps
           </a>
         </>
       )}

@@ -46,6 +46,9 @@ export const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.strin
  * The provider Settings wraps its sections in: the Undo toast, the saves in flight, and `leave` (blur the edited
  * field, wait for its save, then go).
  */
+/** Where Settings' fields live (ST-1: the panel shell's body; Admin renders there too). */
+const SETTINGS_BODY = ".settings .ps-body";
+
 export function AutoSaveProvider({ children, onNotice }: { children: (leave: (go: () => void) => void) => ReactNode; onNotice?: ((m: string) => void) | undefined }) {
   const [undo, setUndo] = useState<Undo | null>(null);
   const [busyUndo, setBusyUndo] = useState(false);
@@ -66,12 +69,12 @@ export function AutoSaveProvider({ children, onNotice }: { children: (leave: (go
   useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
   const leave = useCallback((go: () => void) => {
     const el = document.activeElement;
-    if (el instanceof HTMLElement && el.closest(".set-body")) el.blur();
+    if (el instanceof HTMLElement && el.closest(SETTINGS_BODY)) el.blur();
     // The blur's save starts on the next tick (React's handler, then the debounce is flushed by the form).
     setTimeout(() => {
       void Promise.allSettled([...pending.current]).then(() => {
         // A field still showing an error isn't saved: stay, and put the person on it.
-        const bad = document.querySelector<HTMLElement>(".set-body [aria-invalid='true']");
+        const bad = document.querySelector<HTMLElement>(`${SETTINGS_BODY} [aria-invalid='true']`);
         if (bad) bad.focus();
         else go();
       });

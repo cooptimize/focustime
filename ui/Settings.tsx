@@ -38,39 +38,22 @@ import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { WRITES_HREF, type FeedbackStatus } from "../actions/feedback-types.ts";
 import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, useAdmin } from "./settings/Admin.tsx";
-import { SideMenu, useNarrow } from "./settings/SideMenu.tsx";
+import { PanelShell, useNarrow, type RailGroup } from "./PanelShell.tsx";
+import { useAppEnv, useDeveloperLoop } from "./appenv.ts";
+import { resolveSettings, searchSettings, sectionOf, SECTIONS, settingsHref, SETTINGS_GROUPS, type SearchHit } from "./settings/registry.ts";
 import { DemoSection } from "./settings/Demo.tsx";
 import { DiagnosticsPanel } from "./settings/Diagnostics.tsx";
 
-export const SETTINGS_SECTIONS = [
-  ["you", "You"],
-  ["hours", "Working hours"],
-  ["standing", "Standing blocks"],
-  ["planning", "Planning"],
-  ["focus", "Focus"],
-  ["notifications", "Notifications"],
-  ["roadmap", "Ahead"],
-  ["risk", "Risk rules"],
-  ["clients", "Clients"],
-  ["ai", "AI"],
-  ["connections", "Connections"],
-  ["display", "Display"],
-  ["data", "Data"],
-  ["setup", "Setup"],
-  ["about", "About"],
-  // DM-1: only in a demo session (Reset demo).
-  ["demo", "Demo"],
-  // ADM-1: Admin, shown only to FocusTime admins (the server checks every admin action again).
-  ...ADMIN_UI_SECTIONS,
-] as const;
-export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number][0];
-
-/** P1: the sections laid out for a big screen (a week of hours, the standing blocks grid, client tables, the logs) read on the phone; the rest are simple fields that work there. */
-export const PHONE_READ_ONLY: ReadonlySet<SettingsSectionId> = new Set(["hours", "standing", "clients", "data"]);
+/** ST-1: every section id Settings opens (the registry's, then Admin's, for admins only). */
+export const SETTINGS_SECTIONS: readonly (readonly [string, string])[] = [...SECTIONS.map((s) => [s.id, s.label] as const), ...ADMIN_UI_SECTIONS];
+export type SettingsSectionId = string;
 
 type Props = {
-  section: SettingsSectionId;
-  onSection: (s: SettingsSectionId) => void;
+  /** The section in the address ("" is the rail: a list on the phone, Profile on a big screen); old ids still open. */
+  section: string;
+  /** A setting in the section (it scrolls into view with a brief highlight), or a client's key on its own page. */
+  setting?: string | null;
+  onSection: (s: string, setting?: string | null) => void;
   onClose: () => void;
   /** Called after any save, so the week reloads with the new settings. */
   onSaved: () => void;
@@ -104,8 +87,10 @@ type Props = {
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
   /** A setting that couldn't be saved after its form closed (said out loud, never dropped). */
   onNotice?: (message: string) => void;
-  /** S1 (D451): opens first-run setup at a step (Settings > Setup runs it again; it edits these same settings). */
+  /** S1 (D451): opens first-run setup at a step (Settings > Profile > Setup runs it again; it edits these same settings). */
   onSetup?: (step: SetupStep) => void;
+  /** ST-1: About's Open the Guide. */
+  onGuide?: () => void;
 };
 
 /** Where an app-level value is changed when there is no config file here (hosted, signed in, the demo). */
@@ -123,9 +108,10 @@ const ZONES: readonly string[] = (() => {
   }
 })();
 
-function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {
+/** ST-1: `sid` is the setting's id in the registry (ui/settings/registry.ts): search and deep links land on it. */
+function Field({ label, children, hint, sid }: { label: string; children: ReactNode; hint?: ReactNode; sid?: string | undefined }) {
   return (
-    <label className="set-field">
+    <label className="set-field" data-setting={sid}>
       <span className="set-label">{label}</span>
       {children}
       {hint && <span className="set-hint">{hint}</span>}
@@ -133,9 +119,9 @@ function Field({ label, children, hint }: { label: string; children: ReactNode; 
   );
 }
 
-function ReadOnly({ label, value, where }: { label: string; value: ReactNode; where: string }) {
+function ReadOnly({ label, value, where, sid }: { label: string; value: ReactNode; where: string; sid?: string }) {
   return (
-    <div className="set-field readonly">
+    <div className="set-field readonly" data-setting={sid}>
       <span className="set-label">{label}</span>
       <span className="set-value">{value || <span className="muted">not set</span>}</span>
       <span className="set-hint">{where}</span>
@@ -143,10 +129,95 @@ function ReadOnly({ label, value, where }: { label: string; value: ReactNode; wh
   );
 }
 
+/** A group of settings under a heading, with the heading's own deep link when it is one setting. */
+function Group({ title, sid, intro, children }: { title: string; sid?: string; intro?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="set-section" data-setting={sid} aria-label={title}>
+      <h3>{title}</h3>
+      {intro && <p className="muted set-intro">{intro}</p>}
+      {children}
+    </section>
+  );
+}
+
+/** ST-1: the rail's search. Finds any setting by its label, an old label or a keyword; Enter opens the first. */
+function SettingsSearch({ q, setQ, hits, onGo }: { q: string; setQ: (q: string) => void; hits: SearchHit[]; onGo: (h: SearchHit) => void }) {
+  return (
+    <div className="ps-search">
+      <input
+        type="search"
+        value={q}
+        placeholder="Search settings"
+        aria-label="Search settings"
+        aria-controls="settings-search-results"
+        onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && q) {
+            // The first Esc clears the search; the next closes Settings.
+            e.preventDefault();
+            e.nativeEvent.stopImmediatePropagation();
+            setQ("");
+          } else if (e.key === "Enter" && hits[0]) {
+            e.preventDefault();
+            onGo(hits[0]);
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            document.querySelector<HTMLElement>("#settings-search-results a")?.focus();
+          }
+        }}
+      />
+    </div>
+  );
+}
+
+function SearchResults({ q, hits, onGo }: { q: string; hits: SearchHit[]; onGo: (h: SearchHit) => void }) {
+  return (
+    <div id="settings-search-results" className="ps-results" role="region" aria-label="Search results" aria-live="polite">
+      {hits.length === 0 ? (
+        <p className="muted ps-none">Nothing called “{q.trim()}”.</p>
+      ) : (
+        hits.map((h) => (
+          <a
+            key={`${h.section}/${h.setting ?? ""}`}
+            className="ps-item ps-hit"
+            href={settingsHref(h.section, h.setting)}
+            onClick={(e) => (e.preventDefault(), onGo(h))}
+            onKeyDown={(e) => {
+              const el = e.currentTarget;
+              if (e.key === "ArrowDown") (e.preventDefault(), (el.nextElementSibling as HTMLElement | null)?.focus());
+              if (e.key === "ArrowUp") (e.preventDefault(), ((el.previousElementSibling as HTMLElement | null) ?? document.querySelector<HTMLElement>(".ps-search input"))?.focus());
+            }}
+          >
+            <span>{h.label}</span>
+            <span className="ps-hint">
+              {h.where}
+              {h.matched ? ` · was “${h.matched}”` : ""}
+            </span>
+          </a>
+        ))
+      )}
+    </div>
+  );
+}
+
+/** The section and setting an address opens: old ids mapped; "" is the rail (a list on the phone, Profile otherwise). */
+function placeOf(section: string, setting: string | null | undefined, list: boolean, demo: boolean): { current: string | null; setting: string | null } {
+  if (section === "") return { current: list ? null : "you", setting: null };
+  if (isAdminSection(section)) return { current: section, setting: null };
+  const r = resolveSettings(section, setting);
+  if (!r || (sectionOf(r.section)?.demoOnly && !demo)) return { current: "you", setting: null };
+  return { current: r.section, setting: r.setting };
+}
+
 export function Settings(props: Props) {
   const [data, setData] = useState<SettingsData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const headRef = useRef<HTMLHeadingElement>(null);
+  const [q, setQ] = useState("");
+  const phone = usePhone();
+  const list = useNarrow() || phone;
+  const admin = useAdmin();
+  const devLoop = useDeveloperLoop();
+  const { current, setting } = placeOf(props.section, props.setting, list, props.demo);
   const reload = useCallback(async () => {
     try {
       setData(await call<SettingsData>("settings.load", {}));
@@ -158,13 +229,22 @@ export function Settings(props: Props) {
   // Each section reads fresh data, so team values an admin just changed (here or elsewhere) show.
   useEffect(() => {
     void reload();
-  }, [reload, props.section]);
+  }, [reload, current]);
+  // A deep link to one setting: into view with a brief highlight, focus on its first control.
   useEffect(() => {
-    // A new section starts at its top (the body scrolls on its own beside the menu; on a phone, the page).
-    headRef.current?.closest(".set-body")?.scrollTo?.({ top: 0 });
-    headRef.current?.closest(".settings")?.scrollTo?.({ top: 0 });
-    headRef.current?.focus({ preventScroll: true });
-  }, [props.section]);
+    if (!data || !setting || current === "client") return;
+    const t = setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(`.ps-body [data-setting="${CSS.escape(setting)}"]`);
+      if (!el) return;
+      el.scrollIntoView?.({ block: "start" });
+      el.classList.remove("ps-flash");
+      void el.offsetWidth;
+      el.classList.add("ps-flash");
+      el.querySelector<HTMLElement>("input:not([disabled]), select:not([disabled]), textarea, button:not([disabled]), a[href]")?.focus({ preventScroll: true });
+      setTimeout(() => el.classList.remove("ps-flash"), 2200);
+    }, 60);
+    return () => clearTimeout(t);
+  }, [data, current, setting]);
   const saved = useCallback(
     (d: SettingsData) => {
       setData(d);
@@ -173,89 +253,119 @@ export function Settings(props: Props) {
     [props.onSaved], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const inAdmin = isAdminSection(props.section);
-  const title = `${inAdmin ? "Admin › " : ""}${SETTINGS_SECTIONS.find(([id]) => id === props.section)![1]}`;
-  const phone = usePhone();
-  const narrow = useNarrow() || phone;
-  const admin = useAdmin();
+  const inAdmin = current !== null && isAdminSection(current);
+  const def = current ? sectionOf(current) : undefined;
+  const client = current === "client" ? (data?.clients.find((c) => c.key === setting) ?? null) : null;
+  const clientName = (c: SettingsClient) => c.setting.name ?? c.dataverseName ?? c.key;
+  const title = inAdmin ? `Admin › ${ADMIN_UI_SECTIONS.find(([id]) => id === current)![1]}` : current === "client" ? (client ? clientName(client) : (setting ?? "Client")) : (def?.label ?? "Settings");
+  const description = inAdmin ? "Team settings for everyone in FocusTime. Changes save as you make them and are logged in Admin › Audit." : def?.description;
+  const hits = q.trim() ? searchSettings(q, { demo: props.demo, dev: devLoop }) : [];
+  const groups: RailGroup[] = [
+    ...SETTINGS_GROUPS.map(([g, label]) => ({
+      id: g,
+      label,
+      items: SECTIONS.filter((s) => s.group === g && !s.parent && (!s.demoOnly || props.demo)).map((s) => ({ id: s.id, label: s.label, href: settingsHref(s.id) })),
+    })),
+    ...(admin ? [{ id: "admin", label: "Admin", items: ADMIN_UI_SECTIONS.map(([id, label]) => ({ id, label, href: settingsHref(id) })) }] : []),
+  ];
   return (
     <AutoSaveProvider onNotice={props.onNotice}>
-      {(leave) => (
-    <main className={`settings${narrow ? " narrow" : ""}`} aria-label="Settings">
-      <SideMenu
-        settings={SETTINGS_SECTIONS.filter(([id]) => !isAdminSection(id) && (id !== "demo" || props.demo))}
-        admin={admin ? ADMIN_UI_SECTIONS : null}
-        current={props.section}
-        narrow={narrow}
-        onPick={(id) => leave(() => props.onSection(id as SettingsSectionId))}
-        onBack={() => leave(props.onClose)}
-      />
-      <section className="set-body">
-        <h2 ref={headRef} tabIndex={-1}>
-          {title}
-        </h2>
-        {inAdmin && <p className="muted set-path">Team settings for everyone in FocusTime. Changes save as you make them and are logged in Admin › Audit.</p>}
-        {data && !inAdmin && props.section !== "about" && props.section !== "setup" && props.section !== "demo" && <p className="muted set-path">Changes save as you make them, to {data.configPath}</p>}
-        {error && <p className="field-problem">{error}</p>}
-        {data && !inAdmin && data.problems.length > 0 && props.section !== "connections" && props.section !== "data" && (
-          <div className="config-banner" role="alert">
-            <strong>{data.fromFile ? "The config file has problems, so only Connections and Data work here until it is fixed by hand." : "Your saved settings have problems, so only Connections and Data work here. Ask your FocusTime admin."}</strong>
-            <ul>
-              {data.problems.map((p) => (
-                <li key={p.field}>
-                  <code>{p.field}</code> {p.message}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {inAdmin ? (
-          <AdminSection id={props.section as Parameters<typeof AdminSection>[0]["id"]} admin={admin} />
-        ) : data && (phone && PHONE_READ_ONLY.has(props.section) ? (
-          <>
-            <PhoneReadOnly>
-              <SectionBody {...props} data={data} onSavedData={saved} reload={reload} />
-            </PhoneReadOnly>
-            {/* DX-1: Diagnostics only reads, so it runs on the phone too, outside the read-only Data. */}
-            {props.section === "data" && <DiagnosticsPanel />}
-          </>
-        ) : (
-          <SectionBody {...props} data={data} onSavedData={saved} reload={reload} />
-        ))}
-      </section>
-    </main>
-      )}
+      {(leave) => {
+        const go = (section: string, s?: string | null) => leave(() => (setQ(""), props.onSection(section, s ?? null)));
+        return (
+          <PanelShell
+            name="Settings"
+            className="settings"
+            groups={groups}
+            current={current}
+            railCurrent={current === "client" ? "clients" : current}
+            onPick={(id) => go(id)}
+            onClose={() => leave(props.onClose)}
+            onBack={current === "client" ? () => go("clients") : list && current !== null ? () => go("") : null}
+            backLabel={current === "client" ? "Clients" : "Settings"}
+            title={title}
+            description={description}
+            railTop={<SettingsSearch q={q} setQ={setQ} hits={hits} onGo={(h) => go(h.section, h.setting)} />}
+            railOverride={q.trim() ? <SearchResults q={q} hits={hits} onGo={(h) => go(h.section, h.setting)} /> : undefined}
+            phone={list}
+            pageKey={`${current}/${current === "client" ? setting : ""}`}
+          >
+            {current !== null && (
+              <>
+                {error && <p className="field-problem">{error}</p>}
+                {data && !inAdmin && data.problems.length > 0 && current !== "connections" && current !== "devops" && current !== "data" && current !== "activity" && (
+                  <div className="config-banner" role="alert">
+                    <strong>{data.fromFile ? "The config file has problems, so only Connections and Data work here until it is fixed by hand." : "Your saved settings have problems, so only Connections and Data work here. Ask your FocusTime admin."}</strong>
+                    <ul>
+                      {data.problems.map((p) => (
+                        <li key={p.field}>
+                          <code>{p.field}</code> {p.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {inAdmin ? (
+                  <AdminSection id={current as Parameters<typeof AdminSection>[0]["id"]} admin={admin} />
+                ) : (
+                  data &&
+                  (phone && def?.phoneReadOnly ? (
+                    <PhoneReadOnly line="Changing these works best on a bigger screen">
+                      <SectionBody {...props} section={current} data={data} onSavedData={saved} reload={reload} client={client} go={go} />
+                    </PhoneReadOnly>
+                  ) : (
+                    <SectionBody {...props} section={current} data={data} onSavedData={saved} reload={reload} client={client} go={go} />
+                  ))
+                )}
+              </>
+            )}
+          </PanelShell>
+        );
+      }}
     </AutoSaveProvider>
   );
 }
 
-function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void; reload: () => Promise<void> }) {
+type BodyProps = Props & { section: string; data: SettingsData; onSavedData: (d: SettingsData) => void; reload: () => Promise<void>; client: SettingsClient | null; go: (section: string, setting?: string | null) => void };
+
+function SectionBody(p: BodyProps) {
   const d = p.data;
+  const dev = useDeveloperLoop();
   switch (p.section) {
     default:
-      // ADM-1: the Admin sections render on their own (AdminSection).
       return null;
-    case "setup":
-      return <SetupSection {...p} />;
     case "you":
       return (
         <>
-        <YouAccount />
-        <VmStartForm {...p} />
-        {d.you && (
-        <div className="set-grid">
-          <ReadOnly label={d.fromFile ? "Email when signed out" : "Email"} value={d.you.email} where={d.fromFile ? "Used only when signed out ([dataverse] my_email in config.toml)" : "From your Microsoft sign-in"} />
-          <ReadOnly label="Dataverse user" value={d.you.systemUserId ? "Found" : "Not found yet"} where="Change this in Dataverse" />
-          <ReadOnly label="Environment" value={d.you.environmentUrl} where={d.fromFile ? "Set in config.toml ([dataverse] environment_url)" : ADMIN} />
-          <ReadOnly label="Time zone" value={userZone(d.you)} where="Change it under Working hours" />
-        </div>
-        )}
+          <YouAccount part="account" />
+          {d.you && (
+            <div className="set-grid">
+              <ReadOnly sid="email" label={d.fromFile ? "Email when signed out" : "Email"} value={d.you.email} where={d.fromFile ? "Used only when signed out ([dataverse] my_email in config.toml)" : "From your Microsoft sign-in"} />
+              <ReadOnly sid="dataverse-user" label="Dataverse user" value={d.you.systemUserId ? "Found" : "Not found yet"} where="Change this in Dataverse" />
+              <ReadOnly sid="environment" label="Dataverse environment" value={d.you.environmentUrl} where={d.fromFile ? "Set in config.toml ([dataverse] environment_url)" : ADMIN} />
+            </div>
+          )}
+          <p className="muted set-intro">
+            Your settings save as you change them, to {d.configPath}. Your time zone is under{" "}
+            <a href={settingsHref("hours", "time-zone")} onClick={(e) => (e.preventDefault(), p.go("hours", "time-zone"))}>
+              Working hours
+            </a>
+            .
+          </p>
+          <Group title="Setup" sid="setup">
+            <SetupSection {...p} />
+          </Group>
         </>
       );
     case "hours":
-      return d.hours ? <HoursForm {...p} /> : null;
-    case "standing":
-      return <StandingForm {...p} />;
+      return (
+        <>
+          {d.hours && <HoursForm {...p} />}
+          <Group title="Standing blocks" sid="standing-blocks" intro="Shown when Dataverse has no focus block there.">
+            <StandingForm {...p} />
+          </Group>
+        </>
+      );
     case "planning":
       return (
         <>
@@ -263,52 +373,56 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
           <PlanningForm {...p} />
           <TimeboxForm {...p} />
           <CollabForm {...p} />
+          <RiskForm {...p} />
         </>
       );
     case "focus":
-      return <FocusForm {...p} />;
+      return (
+        <>
+          <FocusTimerForm {...p} />
+          <FocusForm {...p} />
+        </>
+      );
     case "notifications":
       return <NotifyForm {...p} />;
-    case "roadmap":
+    case "ahead":
       return <RoadmapForm {...p} />;
-    case "risk":
-      return d.risk ? <RiskForm {...p} /> : null;
     case "clients":
+      return <ClientList {...p} />;
+    case "client":
+      return p.client ? (
+        <DeliveryChatsProvider>
+          <ClientCard c={p.client} d={d} p={p} />
+        </DeliveryChatsProvider>
+      ) : <p className="muted">This client isn't one of yours. <a href={settingsHref("clients")} onClick={(e) => (e.preventDefault(), p.go("clients"))}>See your clients</a>.</p>;
+    case "chats":
       return (
         <DeliveryChatsProvider>
-        <AsksForm {...p} />
-        <div className="set-clients">
-          {d.dataverseProblem && (
-            <p className="set-problem" role="status">
-              {d.dataverseProblem}{" "}
-              <button type="button" className="link-btn" onClick={() => void p.reload()}>Refresh</button>
-            </p>
-          )}
-          {d.clients.length === 0 && !d.dataverseProblem && <p className="muted">No clients yet. Your followed clients come from Dataverse (your Account Worker records and focus time).</p>}
-          {followedFirst(d.clients).followed.map((c) => (
-            <ClientCard key={c.key} c={c} d={d} p={p} />
-          ))}
-          {followedFirst(d.clients).other.length > 0 && (
-            <details className="set-client-more">
-              <summary>Not followed · {followedFirst(d.clients).other.length}</summary>
-              {followedFirst(d.clients).other.map((c) => (
-                <ClientCard key={c.key} c={c} d={d} p={p} />
-              ))}
-            </details>
-          )}
-        </div>
+          <AsksForm {...p} />
+          <div data-setting="chats-read">
+            <AsksConnections />
+          </div>
         </DeliveryChatsProvider>
       );
     case "ai":
-      return <AiForm {...p} />;
-    case "demo":
-      return p.demo ? <DemoSection /> : <p className="muted">This is only in the demo.</p>;
+      return (
+        <>
+          <AiForm {...p} />
+          <Group title="Assistant" sid="assistant-history">
+            <div className="set-grid">
+              <ClearAssistant />
+            </div>
+          </Group>
+        </>
+      );
     case "connections":
       return <Connections {...p} />;
+    case "devops":
+      return <DevOpsSection {...p} />;
     case "display":
       return (
         <div className="set-grid">
-          <fieldset className="set-choice">
+          <fieldset className="set-choice" data-setting="theme">
             <legend>Theme</legend>
             {THEMES.map((t) => (
               <label key={t}>
@@ -317,7 +431,7 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
             ))}
             <span className="set-hint">Applies at once.</span>
           </fieldset>
-          <fieldset className="set-choice">
+          <fieldset className="set-choice" data-setting="text-size">
             <legend>Text size</legend>
             {TEXT_SIZES.map((s) => (
               <label key={s}>
@@ -326,7 +440,7 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
             ))}
             <span className="set-hint">Ctrl + and Ctrl − change it; Ctrl 0 resets.</span>
           </fieldset>
-          <fieldset className="set-choice">
+          <fieldset className="set-choice" data-setting="timelines">
             <legend>Timelines</legend>
             {VIEW_RANGES.map((r) => (
               <label key={r}>
@@ -335,36 +449,24 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
             ))}
             <span className="set-hint">The default. V on Week changes it until you close FocusTime.</span>
           </fieldset>
-          <fieldset className="set-choice">
+          <fieldset className="set-choice" data-setting="personal-events">
             <legend>Personal events</legend>
             <label>
               <input type="checkbox" checked={p.showPersonal} onChange={(e) => p.setShowPersonal(e.target.checked)} /> Show personal events on Week and Today
             </label>
             <span className="set-hint">Hidden ones still count in risk and free time. G switches it.</span>
           </fieldset>
-          <fieldset className="set-choice">
+          <fieldset className="set-choice" data-setting="reduce-motion">
             <legend>Motion</legend>
             <label>
               <input type="checkbox" checked={p.reduceMotion} onChange={(e) => p.setReduceMotion(e.target.checked)} /> Reduce motion
             </label>
             <span className="set-hint">No opening or Close out animation; Lumen stays still.</span>
           </fieldset>
-          <fieldset className="set-choice">
-            <legend>Demo mode</legend>
-            <label>
-              <input type="checkbox" checked={p.demo} onChange={(e) => p.setDemo(e.target.checked)} /> Show demo data
-            </label>
-            <span className="set-hint">Fictional data; your own plan isn't touched.</span>
-          </fieldset>
-          <div className="set-field">
-            <span className="set-label">Style guide</span>
-            <a href="/styleguide" target="_blank" rel="noopener">
-              Open the style guide
-            </a>
-            <span className="set-hint">Tokens and components in each theme.</span>
-          </div>
         </div>
       );
+    case "activity":
+      return <ActivitySection {...p} />;
     case "data":
       return <DataSection {...p} />;
     case "about":
@@ -372,8 +474,26 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
       return (
         <div className="brand-about">
           <Lockup width={320} />
-          <p>Version {APP_VERSION}</p>
+          <p data-setting="version">Version {APP_VERSION}</p>
           <p className="set-hint">FocusTime is made by Cooptimize, for planning a week of client work.</p>
+          <div className="set-grid">
+            <div className="set-field" data-setting="guide">
+              <span className="set-label">Guide</span>
+              <button type="button" className="mini" onClick={() => p.onGuide?.()}>
+                Open the Guide
+              </button>
+              <span className="set-hint">How FocusTime works, the keys and the questions people ask.</span>
+            </div>
+            {dev && (
+              <div className="set-field" data-setting="style-guide">
+                <span className="set-label">Style guide</span>
+                <a href="/styleguide" target="_blank" rel="noopener">
+                  Open the style guide
+                </a>
+                <span className="set-hint">Tokens and components in each theme (developer loop).</span>
+              </div>
+            )}
+          </div>
         </div>
       );
   }
@@ -385,9 +505,21 @@ const spansIn = (s: string) => s.split(/[,;]/).map((x) => x.replace(/\s+/g, ""))
 type FormProps = Props & { data: SettingsData; onSavedData: (d: SettingsData) => void };
 
 /** A field that saves itself: its input (from `children`), "Saved" or "Couldn't save. Retry" by it, an error under it. */
-function AutoField<V>({ a, k, label, hint, children }: { a: AutoSave<V>; k: keyof V; label: string; hint?: ReactNode; children: ReactNode }) {
+/** ST-1: a field's key → its setting id in the registry, where the two differ only in name. */
+const SID: Record<string, string> = {
+  lunch: "lunch", tz: "time-zone", planShare: "plan-share", draftStories: "break-down-offered", readinessNudges: "readiness-nudges", carryDays: "carry-over",
+  reminderOffsetMinutes: "plan-reminder", devopsOnDone: "devops-on-done", checkinReminderMinutes: "checkin-reminder", closeoutReminderMinutes: "closeout-reminder",
+  followGraceDays: "follow-grace", focusMinutes: "focus-length", breakMinutes: "break-length", endSound: "end-sound", enabled: "timeboxing", outlookDefault: "outlook-default",
+  confirmOwn: "confirm-own", meetingMinutes: "help-length", teams: "help-teams", daysAhead: "help-days", exclude: "exclude", teamsStatus: "teams-status",
+  plainFocusStatus: "plain-focus-status", sound: "sound", volume: "volume", fadeSeconds: "fade", onBreak: "on-break", pauseMedia: "pause-media", staleWeeks: "stale-weeks",
+  stalledDays: "stalled-days", watchWeeks: "watch-weeks", requestPhrases: "request-phrases", ackPhrases: "ack-phrases", promisePhrases: "promise-phrases",
+  status: "status-report-times", asksThroughFocus: "urgent-during-focus", quiet: "quiet", quietPto: "quiet-pto", pushDetails: "push-details", teamsMessages: "teams-messages",
+  draftMonths: "draft-months", startWithoutAsking: "vm-start",
+};
+
+function AutoField<V>({ a, k, label, hint, children, sid }: { a: AutoSave<V>; k: keyof V; label: string; hint?: ReactNode; children: ReactNode; sid?: string | undefined }) {
   return (
-    <Field label={label} hint={hint}>
+    <Field label={label} hint={hint} sid={sid ?? SID[String(k)]}>
       {children}
       <SaveMark s={a.status(k)} retry={() => a.commit(k)} />
     </Field>
@@ -405,8 +537,8 @@ function HoursForm(p: FormProps & { reload: () => Promise<void> }) {
   });
   return (
     <div className="set-form">
-      <p className="muted">Like 09:00-17:00; a second span is an evening. Empty is a day off.</p>
-      <div className="set-days">
+      <p className="muted set-intro">Like 09:00-17:00; a second span is an evening. Empty is a day off.</p>
+      <div className="set-days" data-setting="weekdays">
         {WEEKDAY_KEYS.map((k) => (
           <AutoField key={k} a={a} k={k} label={DAY_NAMES[k]}>
             <input value={a.v[k]} placeholder="day off" onChange={(e) => a.set(k, e.target.value)} {...a.text(k)} />
@@ -426,7 +558,7 @@ function HoursForm(p: FormProps & { reload: () => Promise<void> }) {
           </datalist>
         </AutoField>
       </div>
-      <h3>One-day changes</h3>
+      <h3 data-setting="one-day-changes">One-day changes</h3>
       {h.overrides.length === 0 ? (
         <p className="muted">None. Set a day's own hours from its ⋯ menu in the week.</p>
       ) : (
@@ -461,7 +593,6 @@ function StandingForm(p: FormProps) {
   const edit = (i: number, patch: Partial<StandingRow>) => a.change("rows", rows.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   return (
     <div className="set-form">
-      <p className="muted">Shown when Dataverse has no focus block there.</p>
       {rows.map((r, i) => (
         <div key={i} className="set-row">
           <select value={r.day} onChange={(e) => edit(i, { day: e.target.value })} aria-label="Day">
@@ -499,92 +630,113 @@ const PLANNING_LABELS: Record<string, string> = {
   weekNudgeFri: "Friday nudge", weekNudgeMon: "Monday nudge", followGraceDays: "Keep following", focusMinutes: "Focus length", breakMinutes: "Break length", endSound: "End sound", devopsOnDone: "When I check off a to-do",
 };
 
-function PlanningForm(p: FormProps) {
+/** The [plan] keys a form edits: each form saves only its own (the server takes any subset). */
+function usePlan<K extends keyof PlanValues>(p: FormProps, keys: readonly K[]) {
   const pl = p.data.planning;
-  const a = useAutoSave({
+  const all: PlanValues = {
+    minS: pl.minSizes.S, minM: pl.minSizes.M, minL: pl.minSizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes,
+    focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, devopsOnDone: pl.devopsOnDone, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes,
+    checkinReminderMinutes: pl.checkinReminderMinutes, weekNudgeThu: pl.weekNudgeThu, weekNudgeFri: pl.weekNudgeFri, weekNudgeMon: pl.weekNudgeMon,
+  };
+  return useAutoSave({
     section: "planning",
-    initial: {
-      minS: pl.minSizes.S, minM: pl.minSizes.M, minL: pl.minSizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes,
-      focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, devopsOnDone: pl.devopsOnDone, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes,
-      checkinReminderMinutes: pl.checkinReminderMinutes, weekNudgeThu: pl.weekNudgeThu, weekNudgeFri: pl.weekNudgeFri, weekNudgeMon: pl.weekNudgeMon,
+    initial: Object.fromEntries(keys.map((k) => [k, all[k]])) as Pick<PlanValues, K>,
+    payload: (v) => {
+      const { minS, minM, minL, ...rest } = v as Partial<PlanValues>;
+      return { ...rest, ...(minS !== undefined ? { minSizes: { S: minS, M: minM, L: minL } } : {}) };
     },
-    payload: (v) => ({
-      minSizes: { S: v.minS, M: v.minM, L: v.minL },
-      carryDays: v.carryDays,
-      reminderOffsetMinutes: v.reminderOffsetMinutes,
-      focusMinutes: v.focusMinutes,
-      breakMinutes: v.breakMinutes,
-      endSound: v.endSound,
-      devopsOnDone: v.devopsOnDone,
-      followGraceDays: v.followGraceDays,
-      closeoutReminderMinutes: v.closeoutReminderMinutes,
-      checkinReminderMinutes: v.checkinReminderMinutes,
-      weekNudgeThu: v.weekNudgeThu,
-      weekNudgeFri: v.weekNudgeFri,
-      weekNudgeMon: v.weekNudgeMon,
-    }),
     onSaved: p.onSavedData,
     label: (k) => PLANNING_LABELS[k as string] ?? "Planning",
   });
-  type NumKey = "minS" | "minM" | "minL" | "carryDays" | "reminderOffsetMinutes" | "focusMinutes" | "breakMinutes" | "followGraceDays" | "closeoutReminderMinutes" | "checkinReminderMinutes";
-  const num = (k: NumKey, label: string, hint: string, step = 5, max = 480) => (
+}
+type PlanValues = {
+  minS: number; minM: number; minL: number; carryDays: number; reminderOffsetMinutes: number; focusMinutes: number; breakMinutes: number; endSound: boolean;
+  devopsOnDone: "ask" | "never"; followGraceDays: number; closeoutReminderMinutes: number; checkinReminderMinutes: number; weekNudgeThu: string; weekNudgeFri: string; weekNudgeMon: string;
+};
+type NumKey = "minS" | "minM" | "minL" | "carryDays" | "reminderOffsetMinutes" | "focusMinutes" | "breakMinutes" | "followGraceDays" | "closeoutReminderMinutes" | "checkinReminderMinutes";
+function numField<V>(a: AutoSave<V>, k: NumKey & keyof V, label: string, hint: string, step = 5, max = 480) {
+  const v = a.v as unknown as Record<NumKey, number>;
+  return (
     <AutoField a={a} k={k} label={label} hint={hint}>
-      <input type="number" min={0} max={max} step={step} value={a.v[k]} onChange={(e) => a.set(k, Number(e.target.value))} {...a.text(k)} />
+      <input type="number" min={0} max={max} step={step} value={v[k]} onChange={(e) => a.set(k, Number(e.target.value) as never)} {...a.text(k)} />
     </AutoField>
   );
+}
+
+/** ST-1: Today and Week's to-dos, rituals and nudges (the focus timer is under Focus, following under Clients). */
+function PlanningForm(p: FormProps) {
+  const a = usePlan(p, ["minS", "minM", "minL", "carryDays", "reminderOffsetMinutes", "devopsOnDone", "checkinReminderMinutes", "closeoutReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"] as const);
   return (
-    <div className="set-form">
-      <h3>To-dos</h3>
-      <div className="set-grid">
-        {num("minS", "Shortest useful time, S (minutes)", "The least Timebox my day gives an S to-do (S is 1h, M 2h, L 4h).")}
-        {num("minM", "Shortest useful time, M (minutes)", "The same for M.")}
-        {num("minL", "Shortest useful time, L (minutes)", "The same for L.")}
-        {num("carryDays", "Carry-over (days back)", "Unfinished to-dos offered again. 0 turns it off.", 1, 30)}
-        {num("reminderOffsetMinutes", "Reminder (minutes after the day starts)", "Only when today isn't confirmed.", 5, 240)}
-      </div>
-      <AutoField a={a} k="devopsOnDone" label="When I check off a to-do" hint="Asking shows its DevOps item's done state to confirm, only for items you can change. Nothing is written without Confirm.">
-        <div className="set-radios" role="radiogroup" aria-label="When I check off a to-do">
-          <label className="set-check">
-            <input type="radio" name="devops-on-done" checked={a.v.devopsOnDone === "ask"} onChange={() => a.change("devopsOnDone", "ask")} /> Ask to update DevOps
-          </label>
-          <label className="set-check">
-            <input type="radio" name="devops-on-done" checked={a.v.devopsOnDone === "never"} onChange={() => a.change("devopsOnDone", "never")} /> Never ask
-          </label>
+    <>
+      <Group title="To-dos">
+        <div className="set-grid" data-setting="shortest-useful-time">
+          {numField(a, "minS", "Shortest useful time, S (minutes)", "The least Timebox my day gives an S to-do (S is 1h, M 2h, L 4h).")}
+          {numField(a, "minM", "Shortest useful time, M (minutes)", "The same for M.")}
+          {numField(a, "minL", "Shortest useful time, L (minutes)", "The same for L.")}
         </div>
-      </AutoField>
-      <h3>Check-in and Close out</h3>
+        <div className="set-grid">
+          {numField(a, "carryDays", "Carry-over (days back)", "Unfinished to-dos offered again. 0 turns it off.", 1, 30)}
+        </div>
+        <AutoField a={a} k="devopsOnDone" label="When I check off a to-do" hint="Asking shows its DevOps item's done state to confirm, only for items you can change. Nothing is written without Confirm.">
+          <div className="set-radios" role="radiogroup" aria-label="When I check off a to-do">
+            <label className="set-check">
+              <input type="radio" name="devops-on-done" checked={a.v.devopsOnDone === "ask"} onChange={() => a.change("devopsOnDone", "ask")} /> Ask to update DevOps
+            </label>
+            <label className="set-check">
+              <input type="radio" name="devops-on-done" checked={a.v.devopsOnDone === "never"} onChange={() => a.change("devopsOnDone", "never")} /> Never ask
+            </label>
+          </div>
+        </AutoField>
+      </Group>
+      <Group title="Reminders" intro="Each comes as a notification; switch the kinds in Notifications.">
+        <div className="set-grid">
+          {numField(a, "reminderOffsetMinutes", "Plan today reminder (minutes after the day starts)", "Only when today isn't confirmed.", 5, 240)}
+          {numField(a, "checkinReminderMinutes", "Midday check-in reminder (minutes after lunch)", "On a confirmed day. 0 is the end of lunch.", 5, 120)}
+          {numField(a, "closeoutReminderMinutes", "Close out reminder (minutes before the day ends)", "Only if Close out isn't done.", 5, 120)}
+        </div>
+      </Group>
+      <Group title="Plan the week nudges" sid="week-nudges" intro="Empty turns a nudge off.">
+        <div className="set-grid">
+          {([
+            ["weekNudgeThu", "Thursday", "For next week."],
+            ["weekNudgeFri", "Friday", "For next week, if still not confirmed."],
+            ["weekNudgeMon", "Monday", "For this week, if still not confirmed."],
+          ] as const).map(([k, label, hint]) => (
+            <AutoField key={k} a={a} k={k} label={label} hint={hint}>
+              <input type="time" value={a.v[k]} onChange={(e) => a.set(k, e.target.value)} {...a.text(k)} />
+            </AutoField>
+          ))}
+        </div>
+      </Group>
+      <Group title="Plan ahead rituals" sid="rituals">
+        <AheadRituals />
+      </Group>
+    </>
+  );
+}
+
+/** ST-1: Focus › Focus timer (these are [plan] keys; they lived under Planning before). */
+function FocusTimerForm(p: FormProps) {
+  const a = usePlan(p, ["focusMinutes", "breakMinutes", "endSound"] as const);
+  return (
+    <Group title="Focus timer">
       <div className="set-grid">
-        {num("checkinReminderMinutes", "Check-in reminder (minutes after lunch)", "On a confirmed day. 0 is the end of lunch.", 5, 120)}
-        {num("closeoutReminderMinutes", "Close out reminder (minutes before the day ends)", "Only if Close out isn't done.", 5, 120)}
-      </div>
-      <h3>Plan the week</h3>
-      <div className="set-grid">
-        {([
-          ["weekNudgeThu", "Thursday nudge", "For next week. Empty turns it off."],
-          ["weekNudgeFri", "Friday nudge", "For next week, if still not confirmed."],
-          ["weekNudgeMon", "Monday nudge", "For this week, if still not confirmed."],
-        ] as const).map(([k, label, hint]) => (
-          <AutoField key={k} a={a} k={k} label={label} hint={hint}>
-            <input type="time" value={a.v[k]} onChange={(e) => a.set(k, e.target.value)} {...a.text(k)} />
-          </AutoField>
-        ))}
-      </div>
-      <h3>Clients followed</h3>
-      <div className="set-grid">{num("followGraceDays", "Keep following after focus time ends (days)", "Clients stay followed this long after focus time ends.", 1, 90)}</div>
-      <h3>Plan ahead rituals</h3>
-      <AheadRituals />
-      <h3>Focus timer</h3>
-      <div className="set-grid">
-        {num("focusMinutes", "Focus length (minutes)", "The default for a plain timer. A to-do suggests its size instead.", 5, 240)}
-        {num("breakMinutes", "Break length (minutes)", "Offered when a session ends. 0 for none.", 5, 60)}
+        {numField(a, "focusMinutes", "Focus length (minutes)", "The default for a plain timer. A to-do suggests its size instead.", 5, 240)}
+        {numField(a, "breakMinutes", "Break length (minutes)", "Offered when a session ends. 0 for none.", 5, 60)}
         <AutoField a={a} k="endSound" label="End sound" hint="With the notification when a session ends.">
           <label className="set-check">
             <input type="checkbox" checked={a.v.endSound} onChange={(e) => a.change("endSound", e.target.checked)} /> Play a sound
           </label>
         </AutoField>
       </div>
-    </div>
+    </Group>
   );
+}
+
+/** ST-1: Clients › Keep following after focus time ends (a [plan] key; under Planning before). */
+function FollowGraceForm(p: FormProps) {
+  const a = usePlan(p, ["followGraceDays"] as const);
+  return <div className="set-grid">{numField(a, "followGraceDays", "Keep following after focus time ends (days)", "Clients stay followed this long after their focus time ends.", 1, 90)}</div>;
 }
 
 /**
@@ -612,10 +764,9 @@ function GuidanceForm(p: FormProps) {
     );
   const onOff = (b: boolean) => (b ? "on" : "off");
   return (
-    <div className="set-form set-guidance">
-      <h3>Guidance</h3>
-      <div className="set-grid">
-        <ReadOnly label="Your level" value={level} where="From your position in Dataverse. It changes suggestions only, never what you can do." />
+    <Group title="Guidance" intro="Your level changes emphasis only; none of these ever blocks anything.">
+      <div className="set-grid set-guidance">
+        <ReadOnly sid="level" label="Your level" value={level} where="From your position in Dataverse. It changes suggestions only, never what you can do." />
         <AutoField a={a} k="planShare" label="Plan up to (% of free time)" hint={<>Moves Plan the week's amber over line; it never blocks. Team default for your level: {team.planShare}%. {reset("planShare")}</>}>
           <input type="number" min={50} max={100} step={5} value={a.v.planShare ?? team.planShare} onChange={(e) => a.set("planShare", Number(e.target.value))} {...a.text("planShare")} />
         </AutoField>
@@ -630,7 +781,7 @@ function GuidanceForm(p: FormProps) {
           </label>
         </AutoField>
       </div>
-    </div>
+    </Group>
   );
 }
 
@@ -663,8 +814,7 @@ function TimeboxForm(p: FormProps) {
     label: (k) => (k === "enabled" ? "Use timeboxing" : k === "outlookDefault" ? "Put on Outlook" : "Asking about my own timeboxes"),
   });
   return (
-    <div className="set-form">
-      <h3>Timeboxes</h3>
+    <Group title="Timeboxes">
       <div className="set-grid">
         <AutoField a={a} k="enabled" label="Use timeboxing" hint="Off hides the time controls; timeboxes are kept.">
           <label className="set-check">
@@ -682,7 +832,7 @@ function TimeboxForm(p: FormProps) {
           </label>
         </AutoField>
       </div>
-    </div>
+    </Group>
   );
 }
 
@@ -703,8 +853,7 @@ function CollabForm(p: FormProps) {
     setAdding("");
   };
   return (
-    <div className="set-form">
-      <h3>Help sessions</h3>
+    <Group title="Help sessions" intro="For Ask to collaborate.">
       <div className="set-grid">
         <AutoField a={a} k="meetingMinutes" label="Default length" hint="Where Ask to collaborate starts.">
           <select value={a.v.meetingMinutes} onChange={(e) => a.change("meetingMinutes", Number(e.target.value))}>
@@ -721,7 +870,7 @@ function CollabForm(p: FormProps) {
         <AutoField a={a} k="daysAhead" label="Days to search" hint="Workdays from today, for items not pinned to a day.">
           <input type="number" min={1} max={10} step={1} value={a.v.daysAhead} onChange={(e) => a.set("daysAhead", Number(e.target.value))} {...a.text("daysAhead")} />
         </AutoField>
-        {p.data.org && <ReadOnly label="Never suggested, for everyone" value={p.data.org.rules.neverSuggest.join(", ") || "Nobody"} where={ADMIN} />}
+        {p.data.org && <ReadOnly sid="never-suggested" label="Never suggested, for everyone" value={p.data.org.rules.neverSuggest.join(", ") || "Nobody"} where={ADMIN} />}
         <AutoField a={a} k="exclude" label={p.data.org ? "People I exclude" : "People to exclude"} hint="Never suggested as helpers or as Who. By name or email.">
           <ul className="set-list">
             {a.v.exclude.map((x, i) => (
@@ -742,9 +891,9 @@ function CollabForm(p: FormProps) {
             <button type="button" className="mini" disabled={!adding.trim()} onClick={add}>Add</button>
           </span>
         </AutoField>
-        <ReadOnly label="Invites go only to" value={c.domains.join(", ") || "No domain yet"} where={p.data.fromFile ? "Set in config.toml ([collab] domains)" : ADMIN} />
+        <ReadOnly sid="invite-domains" label="Invites go only to" value={c.domains.join(", ") || "No domain yet"} where={p.data.fromFile ? "Set in config.toml ([collab] domains)" : ADMIN} />
       </div>
-    </div>
+    </Group>
   );
 }
 
@@ -785,9 +934,8 @@ function FocusForm(p: FormProps) {
     if (!lists.some((l) => badLink(l.url))) a.commit("playlists");
   };
   return (
-    <div className="set-form">
-      <h3>Teams status</h3>
-      <p className="muted">Set while focus runs, back to automatic after. A change you make in Teams wins.</p>
+    <>
+    <Group title="Teams status" intro="Set while focus runs, back to automatic after. A change you make in Teams wins.">
       <div className="set-grid">
         <AutoField a={a} k="teamsStatus" label="Set Teams status during focus" hint="Logged in Data › Teams status log.">
           <label className="set-check">
@@ -802,8 +950,8 @@ function FocusForm(p: FormProps) {
           </select>
         </AutoField>
       </div>
-      <h3>Sound while focusing</h3>
-      <p className="muted">Plays only while focus runs. The focus screen can pick another.</p>
+    </Group>
+    <Group title="Sound while focusing" intro="Plays only while focus runs. The focus screen can pick another.">
       <div className="set-grid">
         <AutoField a={a} k="sound" label="Default sound" hint={BINAURAL[v.sound as SoundKind] ? "Binaural beats need headphones." : "Brown is deep, pink brighter, rain a slow swell."}>
           <span className="set-inline">
@@ -832,7 +980,8 @@ function FocusForm(p: FormProps) {
           </select>
         </AutoField>
       </div>
-      <h3>Music players</h3>
+    </Group>
+    <Group title="Music players">
       <div className="set-grid">
         <AutoField
           a={a}
@@ -851,8 +1000,9 @@ function FocusForm(p: FormProps) {
           </label>
         </AutoField>
       </div>
-      <h3>Playlists</h3>
-      <p className="muted">
+    </Group>
+    <Group title="Playlists" sid="playlists">
+      <p className="muted set-intro">
         Keep up to {MAX_PLAYLISTS} Spotify or YouTube links. Choosing one on the focus screen opens it: {media?.spotify ? "Spotify links in the Spotify app" : "in your default browser (the Spotify app isn't installed)"}.
       </p>
       <ul className="set-playlists">
@@ -875,7 +1025,8 @@ function FocusForm(p: FormProps) {
         )}
         <SaveMark s={a.status("playlists")} retry={() => a.commit("playlists")} />
       </span>
-    </div>
+    </Group>
+    </>
   );
 }
 
@@ -900,7 +1051,6 @@ function RoadmapForm(p: FormProps) {
   const b = useAutoSave({ section: "ahead", initial: { staleWeeks: p.data.ahead?.staleWeeks ?? 6 }, payload: (v) => v, onSaved: p.onSavedData, label: () => "Stale after" });
   return (
     <div className="set-form">
-      <p className="muted">When Backlog calls an item stale, and when a feature or epic reads Stalled or Watch.</p>
       <div className="set-grid">
         <AutoField a={b} k="staleWeeks" label="Stale after (weeks)" hint="Open items with no change in DevOps for this long. 1 to 26.">
           <input type="number" min={1} max={26} step={1} value={b.v.staleWeeks} onChange={(e) => b.set("staleWeeks", Math.round(Number(e.target.value)))} {...b.text("staleWeeks")} />
@@ -930,15 +1080,12 @@ function AsksForm(p: FormProps) {
     label: (k) => (k === "requestPhrases" ? "Request phrases" : k === "promisePhrases" ? "Promise phrases" : "Acknowledgements"),
   });
   return (
-    <details className="set-form set-asks">
-      <summary>
-        <strong>Requests</strong> <span className="muted">· the phrases · Inbox › Requests</span>
-      </summary>
-      <p className="muted">
+    <Group title="Phrases">
+      <p className="muted set-intro">
         Each client chat registered below is read every {p.data.org?.rules.pollMinutes ?? 5} minutes in working hours, once for everyone who follows the client. A new message from someone outside Cooptimize becomes a request when it mentions a Cooptimizer, has a question mark, uses a request phrase, or has an attachment. One that is only an acknowledgement isn't. The request phrases used are the team's plus those of the person whose sign-in read the chat. Your own messages with one of the promise phrases become your promises. When a FocusTime admin allows AI for a client, AI sorts these; otherwise the rules alone decide.
       </p>
       {team && (
-        <div className="set-grid">
+        <div className="set-grid" data-setting="team-phrases">
           <ReadOnly label="Team request phrases" value={team.request.join(", ") || "None"} where={ADMIN} />
           <ReadOnly label="Team acknowledgements" value={team.ack.join(", ") || "None"} where={ADMIN} />
           <ReadOnly label="Team promise phrases" value={team.promise.join(", ") || "None"} where={ADMIN} />
@@ -955,7 +1102,7 @@ function AsksForm(p: FormProps) {
           <input type="text" value={a.v.promisePhrases} onChange={(e) => a.set("promisePhrases", e.target.value)} {...a.text("promisePhrases")} />
         </AutoField>
       </div>
-    </details>
+    </Group>
   );
 }
 
@@ -984,7 +1131,7 @@ function NotifyForm(p: FormProps) {
   );
   return (
     <div className="set-form">
-      <p className="muted">Each is sent once; a click opens FocusTime there.</p>
+      <Group title="In FocusTime" sid="kinds" intro="Each is sent once; a click opens FocusTime there.">
       <div className="set-notify">
         {group("Ritual reminders", RITUAL_KINDS)}
         {group("While you focus", ["timer", "meeting"])}
@@ -994,6 +1141,8 @@ function NotifyForm(p: FormProps) {
         {group("Client calls", ["meeting_review"])}
       </div>
       <SaveMark s={a.status("kinds")} retry={() => a.commit("kinds")} />
+      </Group>
+      <Group title="Timing">
       <AutoField a={a} k="status" label="Status report times" hint="Friday at this time, or an hour before your day ends if that comes first. Sunday only when you turn it on. These times hold in Teams too.">
         <span className="set-teams-time">
           <input type="time" aria-label="Friday at" value={a.v.status.fridayAt} onChange={(e) => HM.test(e.target.value) && a.set("status", { ...a.v.status, fridayAt: e.target.value })} onBlur={() => a.commit("status")} />
@@ -1008,7 +1157,8 @@ function NotifyForm(p: FormProps) {
           <input type="checkbox" checked={a.v.asksThroughFocus} onChange={(e) => a.change("asksThroughFocus", e.target.checked)} /> Let urgent asks through
         </label>
       </AutoField>
-      <h3>Quiet hours</h3>
+      </Group>
+      <Group title="Quiet hours">
       <div className="set-grid">
         <AutoField a={a} k="quiet" label="Quiet" hint="Focus timer and meeting warnings still come.">
           <select value={a.v.quiet} onChange={(e) => a.change("quiet", e.target.value as QuietMode)}>
@@ -1022,9 +1172,9 @@ function NotifyForm(p: FormProps) {
           </label>
         </AutoField>
       </div>
-      <h3>During a focus session</h3>
-      <p className="muted">The rest wait and come as one after the session.</p>
-      <div className="set-actions-row">
+      </Group>
+      <Group title="Test" intro="During a focus session only the timer, meeting warnings and (if you let them) urgent requests come; the rest wait and come as one after the session.">
+      <div className="set-actions-row" data-setting="test-notification">
         <button
           type="button"
           className="mini"
@@ -1040,14 +1190,16 @@ function NotifyForm(p: FormProps) {
         </button>
         {test && <span className="set-hint" role="status">{test}</span>}
       </div>
-      <h3>On your devices</h3>
+      </Group>
+      <Group title="On your devices" sid="devices">
       <PushDevices />
       <AutoField a={a} k="pushDetails" label="Show details in notifications" hint="Off: a push says only what kind of thing it is (Promises due). On: client names and work item titles too, on the lock screen.">
         <label className="set-check">
           <input type="checkbox" checked={a.v.pushDetails} onChange={(e) => a.change("pushDetails", e.target.checked)} /> Show details
         </label>
       </AutoField>
-      <h3>In Teams</h3>
+      </Group>
+      <Group title="In Teams">
       <TeamsStatusLine />
       <AutoField a={a} k="teamsMessages" label="Messages in Teams" hint="Off: FocusTime only answers when you message it in Teams. On: it may send the kinds you turn on below, only in your own chat with it, never in quiet hours, on PTO days or weekends, and held while you focus.">
         <label className="set-check">
@@ -1056,6 +1208,7 @@ function NotifyForm(p: FormProps) {
       </AutoField>
       <TeamsKinds v={a.v.teams} on={a.v.teamsMessages} set={(t) => a.set("teams", t)} commit={(t) => a.commit("teams", t)} change={(t) => a.change("teams", t)} />
       <SaveMark s={a.status("teams")} retry={() => a.commit("teams")} />
+      </Group>
     </div>
   );
 }
@@ -1063,14 +1216,14 @@ function NotifyForm(p: FormProps) {
 type TeamsStatus = { available: boolean; chat: boolean; blocked: boolean };
 
 /** TB-2: whether FocusTime can reach me in Teams: the hosted app only, after my first message, unless Teams refused it. */
-function TeamsStatusLine() {
+function TeamsStatusLine({ always = false }: { always?: boolean } = {}) {
   const [st, setSt] = useState<TeamsStatus | null>(null);
   useEffect(() => void call<TeamsStatus>("teams.status", {}).then(setSt, () => setSt(null)), []);
-  if (!st) return null;
+  if (!st) return always ? <p className="muted">Checking…</p> : null;
   if (!st.available) return <p className="muted">FocusTime in Teams runs in the hosted app. Here it can't send anything.</p>;
   if (st.blocked) return <p className="set-warn" role="status">FocusTime can't message you in Teams. Add the app again.</p>;
   if (!st.chat) return <p className="muted">Message FocusTime in Teams once, so it knows where to reach you.</p>;
-  return null;
+  return always ? <p>Connected: FocusTime can reach you in your chat with it.</p> : null;
 }
 
 /** TB-2: the kinds FocusTime may send in Teams, each with its time and Send me a test now. */
@@ -1107,7 +1260,7 @@ function TeamsKinds(p: { v: TeamsRhythm; on: boolean; set: (t: TeamsRhythm) => v
     return null;
   };
   return (
-    <fieldset className="set-notify-group set-teams" disabled={!p.on}>
+    <fieldset className="set-notify-group set-teams" disabled={!p.on} data-setting="teams-kinds">
       <legend>What FocusTime sends</legend>
       {TEAMS_KINDS.map((k) => (
         <div key={k} className="set-teams-row">
@@ -1219,6 +1372,10 @@ function PushDevices() {
 }
 
 function RiskForm(p: FormProps) {
+  if (!p.data.risk) return null;
+  return <RiskFields {...p} />;
+}
+function RiskFields(p: FormProps) {
   const r = p.data.risk!;
   const a = useAutoSave({
     section: "risk",
@@ -1233,13 +1390,13 @@ function RiskForm(p: FormProps) {
     </AutoField>
   );
   return (
-    <div className="set-form">
+    <Group title="At-risk blocks" sid="risk-rules" intro="When a block's meetings make it Watch or At risk.">
       <div className="set-grid">
         {num("meetingWatchMinutes", "Watch at (minutes of meetings)", "A block with this many minutes of meetings is marked Watch.")}
         {num("meetingAtRiskMinutes", "At risk at (minutes of meetings)", "At least the Watch value.")}
         {num("minFocusWindowMinutes", "Shortest useful focus window (minutes)", "With no free stretch this long, the block is at risk.")}
       </div>
-    </div>
+    </Group>
   );
 }
 
@@ -1262,12 +1419,120 @@ export function followText(f: FollowState | null, grace: number): string {
 /** Followed clients (or follow unknown) first; Dataverse clients FocusTime doesn't follow fold away. */
 const followedFirst = (cs: readonly SettingsClient[]) => ({ followed: cs.filter((c) => c.follow?.active !== false), other: cs.filter((c) => c.follow?.active === false) });
 
+/** ST-1: Clients: how long a client stays followed, then one row per client that opens its own page. */
+function ClientList(p: BodyProps) {
+  const d = p.data;
+  const { followed, other } = followedFirst(d.clients);
+  const row = (c: SettingsClient) => {
+    const color = c.setting.color || c.teamColor || "";
+    return (
+      <li key={c.key}>
+        <a
+          className="set-client-row"
+          href={settingsHref("client", c.key)}
+          onClick={(e) => (e.preventDefault(), p.go("client", c.key))}
+          style={{ "--c": color ? (color.startsWith("#") ? color : `var(--client-${color})`) : "var(--client-none)" } as CSSProperties}
+        >
+          <span className="swatch" aria-hidden="true" />
+          <strong>{c.setting.name ?? c.dataverseName ?? c.key}</strong>
+          <span className="muted">{c.follow?.active === false ? "Not followed" : "Followed"}</span>
+          <span className="muted">{c.devops ? (c.write ? "DevOps writes on" : "DevOps read-only") : "No DevOps"}</span>
+          <span className="ps-chev" aria-hidden="true">›</span>
+        </a>
+      </li>
+    );
+  };
+  return (
+    <>
+      <FollowGraceForm {...p} />
+      <Group title="Your clients" sid="client-list" intro="From Dataverse (your Account Worker records and focus time). Open one to change how it shows.">
+        {d.dataverseProblem && (
+          <p className="set-problem" role="status">
+            {d.dataverseProblem}{" "}
+            <button type="button" className="link-btn" onClick={() => void p.reload()}>Refresh</button>
+          </p>
+        )}
+        {d.clients.length === 0 && !d.dataverseProblem && <p className="muted">No clients yet.</p>}
+        <ul className="set-client-list">{followed.map(row)}</ul>
+        {other.length > 0 && (
+          <details className="set-client-more">
+            <summary>Not followed · {other.length}</summary>
+            <ul className="set-client-list">{other.map(row)}</ul>
+          </details>
+        )}
+      </Group>
+    </>
+  );
+}
+
+/** ST-1: DevOps: each client's read status (from the week's fetch) and my own write access per client. */
+function DevOpsSection(p: BodyProps) {
+  const d = p.data;
+  const withDevOps = d.clients.filter((c) => c.devops);
+  return (
+    <div className="set-form">
+      <Group title="Reading" sid="devops-read" intro="FocusTime reads with the company PAT from Dataverse, only when fetching; it is never shown.">
+        {p.devops && p.devops.length > 0 ? (
+          <ul className="set-list sources">
+            {p.devops.map((c) => {
+              const ok = c.status === "ok";
+              const cls = ok ? (c.fromCache ? "cached" : "live") : "error";
+              return (
+                <li key={c.clientKey} className={`source ${cls}`}>
+                  <span className="dot" aria-hidden="true" />
+                  <strong>{c.clientName}</strong>
+                  <span className={`state ${cls}`}>{ok ? (c.fromCache ? "Cached" : "Live") : DEVOPS_STATE[c.status]}</span>
+                  <span className="muted">
+                    {ok ? `${c.items.length} ${c.items.length === 1 ? "item" : "items"} assigned` : c.message}
+                    {c.status === "auth_failed" || c.status === "not_set_up" || c.status === "identity_missing" ? ". Change it in Dataverse" : ""}
+                  </span>
+                  <span className="row-actions">
+                    <button type="button" className="mini" disabled={p.loading} onClick={p.onRefresh}>
+                      {p.loading ? "Retrying…" : "Retry"}
+                    </button>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="muted">No DevOps yet. It comes from each followed client's record in Dataverse.</p>
+        )}
+      </Group>
+      <Group title="Write access" sid="devops-write" intro="Your own PAT per client, with Work Items (Read & write). FocusTime checks it is yours, keeps it sealed and never shows it again.">
+        {withDevOps.length === 0 ? (
+          <p className="muted">No client has DevOps set up in Dataverse.</p>
+        ) : (
+          withDevOps.map((c) => <WriteAccess key={c.key} client={c} onDone={p.reload} />)
+        )}
+      </Group>
+    </div>
+  );
+}
+
 /** One client: its settings, its DevOps identity (Dataverse's) and, when it has DevOps, my write access. */
-function ClientCard({ c, d, p }: { c: SettingsClient; d: SettingsData; p: { onSavedData: (d: SettingsData) => void; reload: () => Promise<void> } }) {
+function ClientCard({ c, d, p }: { c: SettingsClient; d: SettingsData; p: { onSavedData: (d: SettingsData) => void; reload: () => Promise<void>; go: (section: string, setting?: string | null) => void } }) {
   return (
     <div className="set-client-wrap" style={{ "--c": c.setting.color ? (c.setting.color.startsWith("#") ? c.setting.color : `var(--client-${c.setting.color})`) : "var(--client-none)" } as CSSProperties}>
       <ClientForm client={c} data={d} onSavedData={p.onSavedData} />
-      {c.devops ? <WriteAccess client={c} onDone={p.reload} /> : d.dataverseReached && <p className="muted set-client-note">No DevOps set up for {c.setting.name ?? c.dataverseName ?? c.key} in Dataverse, so there is nothing to write to. Change it in Dataverse.</p>}
+      <div className="set-form set-allow-ai">
+      {c.devops ? (
+        <ReadOnly
+          label="DevOps writes"
+          value={c.write ? "On" : "Off, read-only"}
+          where={c.write ? `As ${c.write.name} on ${c.write.org}${c.write.expires ? `, expires ${shortDate(c.write.expires)}` : ""}.` : "Add your own PAT to write to DevOps."}
+        />
+      ) : (
+        d.dataverseReached && <p className="muted set-client-note">No DevOps set up for {c.setting.name ?? c.dataverseName ?? c.key} in Dataverse, so there is nothing to write to. Change it in Dataverse.</p>
+      )}
+      {c.devops && (
+        <p className="set-fix">
+          <a href={settingsHref("devops", "devops-write")} onClick={(e) => (e.preventDefault(), p.go("devops", "devops-write"))}>
+            {c.write ? "Change DevOps write access" : "Turn on DevOps writes"}
+          </a>
+        </p>
+      )}
+      </div>
       <DeliveryChatField clientKey={c.key} clientName={c.setting.name ?? c.dataverseName ?? c.key} readOnly />
       <AllowAi c={c} d={d} />
       {c.devops && <HouseStyleField clientKey={c.key} name={c.setting.name ?? c.dataverseName ?? c.key} />}
@@ -1335,7 +1600,7 @@ function AiForm(p: FormProps) {
   const notSetUp = st !== null && !st.setUp;
   return (
     <div className="set-form set-ai">
-      <div className="set-grid">
+      <div className="set-grid" data-setting="ai-team">
         <ReadOnly label="AI for FocusTime" value={rules.on ? "On" : "Off"} where={ADMIN} />
         <ReadOnly
           label="Allowed for"
@@ -1349,7 +1614,7 @@ function AiForm(p: FormProps) {
           AI isn't set up for this FocusTime yet{st?.provider === "off" ? ": it's turned off" : ""}. Everything else works without it.
         </p>
       )}
-      <div className="set-ai-month">
+      <div className="set-ai-month" data-setting="ai-month">
         <span className="set-ai-label">This month</span>
         <strong>
           {st ? st.spentText : "$0"} of {st ? st.capText : `$${rules.personCapUsd}`}
@@ -1359,20 +1624,20 @@ function AiForm(p: FormProps) {
       <AutoField a={a} k="draftMonths" label="Break down looks back (months)" hint="Examples come from the same client's features changed in this many months, 1 to 36.">
         <input type="number" min={1} max={36} step={1} value={a.v.draftMonths} onChange={(e) => a.set("draftMonths", Number(e.target.value))} {...a.text("draftMonths")} />
       </AutoField>
-      <div className="set-ai-test">
+      <div className="set-ai-test" data-setting="ai-test">
         <button type="button" className="mini" disabled={testing} onClick={() => void runTest()}>
           {testing ? "Testing…" : "Test AI"}
         </button>
         {test && (test.ok ? <span className="set-ai-ok" role="status">OK · {(test.latencyMs / 1000).toFixed(1)} s · {test.cost}</span> : <span className="field-problem" role="status">{test.message}</span>)}
         <span className="set-hint">Sends one fixed request with no client data.</span>
       </div>
-      <details className="set-ai-sent">
+      <details className="set-ai-sent" data-setting="ai-sent">
         <summary>What is sent</summary>
         <p className="muted">
           Only what a task needs, about one client at a time, and only for clients a FocusTime admin allowed. Before anything goes, FocusTime checks it: another client's name, project or work item, anything that looks like a key, token or password, your VM, or an email address from outside Cooptimize stops the request. The AI service is asked not to keep requests, and FocusTime's log keeps only the counts and the cost below, never the text.
         </p>
       </details>
-      <h3 className="set-ai-h">Last 20 requests</h3>
+      <h3 className="set-ai-h" data-setting="ai-log">Last 20 requests</h3>
       {st && st.recentText.length ? (
         <table className="set-ai-log">
           <thead>
@@ -1470,9 +1735,10 @@ function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; 
   );
 }
 
-function Connections(p: Props & { data: SettingsData; reload: () => Promise<void> }) {
+function Connections(p: BodyProps) {
   return (
     <div className="set-form">
+      <Group title="Sources" sid="sources">
       <ul className="set-list sources">
         {p.sources.map((s) => {
           const st = stateOf(s);
@@ -1504,97 +1770,27 @@ function Connections(p: Props & { data: SettingsData; reload: () => Promise<void
         })}
       </ul>
       {p.reconnected && <InlineMoment line={`${SOURCE_NAMES[p.reconnected]} is connected again.`} />}
-      <OutlookWriteRow />
-      <FeedbackRow />
-      <MicrosoftPermissions />
-      <AsksConnections />
-      {p.devops && p.devops.length > 0 && (
-        <>
-          <h3>DevOps per client</h3>
-          <p className="muted">Read from Dataverse only when fetching; never shown.</p>
-          <ul className="set-list sources">
-            {p.devops.map((c) => {
-              const ok = c.status === "ok";
-              const cls = ok ? (c.fromCache ? "cached" : "live") : "error";
-              return (
-                <li key={c.clientKey} className={`source ${cls}`}>
-                  <span className="dot" aria-hidden="true" />
-                  <strong>{c.clientName}</strong>
-                  <span className={`state ${cls}`}>{ok ? (c.fromCache ? "Cached" : "Live") : DEVOPS_STATE[c.status]}</span>
-                  <span className="muted">
-                    {ok ? `${c.items.length} ${c.items.length === 1 ? "item" : "items"} assigned` : c.message}
-                    {c.status === "auth_failed" || c.status === "not_set_up" || c.status === "identity_missing" ? ". Change it in Dataverse" : ""}
-                  </span>
-                  <span className="row-actions">
-                    <button type="button" className="mini" disabled={p.loading} onClick={p.onRefresh}>
-                      {p.loading ? "Retrying…" : "Retry"}
-                    </button>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </>
-      )}
-      {p.data.secrets.length > 0 && <h3>Client secrets</h3>}
-      {p.data.secrets.length > 0 && <p className="muted">Saved to the keyring; never shown again.</p>}
-      {p.data.secrets.map((s) => (
-        <SecretForm key={s.account} secret={s} onDone={p.reload} />
-      ))}
+      </Group>
+      <div data-setting="outlook-changes"><OutlookWriteRow /></div>
+      <div data-setting="permissions"><MicrosoftPermissions /></div>
+      <Group title="My VM">
+        <YouAccount part="vm" />
+        <VmStartForm {...p} />
+      </Group>
+      <Group title="FocusTime in Teams" sid="teams-app">
+        <TeamsStatusLine always />
+        <p className="set-fix">
+          <a href={settingsHref("notifications", "teams-messages")} onClick={(e) => (e.preventDefault(), p.go("notifications", "teams-messages"))}>
+            What FocusTime may send you in Teams
+          </a>
+          {" · "}
+          <a href={settingsHref("focus", "teams-status")} onClick={(e) => (e.preventDefault(), p.go("focus", "teams-status"))}>
+            Your Teams status while you focus
+          </a>
+        </p>
+      </Group>
+      <div data-setting="feedback"><FeedbackRow go={p.go} /></div>
     </div>
-  );
-}
-
-function SecretForm({ secret: s, onDone }: { secret: SettingsData["secrets"][number]; onDone: () => Promise<void> }) {
-  const ref = useRef<HTMLInputElement>(null);
-  const [expires, setExpires] = useState(s.expires ?? "");
-  const [confirm, setConfirm] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
-  const state = s.state === "set" ? "Set" : s.state === "missing" ? "Not set" : s.state === "locked" ? "Keyring locked" : "Keyring unavailable";
-  const daysLeft = s.expires ? Temporal.PlainDate.from(s.expires).since(Temporal.Now.plainDateISO()).days : null;
-  return (
-    <form
-      className="set-row secret"
-      autoComplete="off"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        const value = ref.current?.value ?? "";
-        if (value && s.state === "set" && !confirm) {
-          setConfirm(true);
-          setStatus("This replaces the secret in the keyring. Press Replace again to confirm.");
-          return;
-        }
-        const input: Record<string, unknown> = { account: s.account };
-        if (value) input.value = value;
-        if (expires !== (s.expires ?? "")) input.expires = expires;
-        if (Object.keys(input).length === 1) return setStatus("Nothing to save");
-        try {
-          await call("secret.set", input);
-          if (ref.current) ref.current.value = "";
-          setConfirm(false);
-          setStatus(value ? "Saved to the keyring" : "Expiry date saved");
-          await onDone();
-        } catch (err) {
-          setStatus(err instanceof Error ? err.message : "Not saved");
-        } finally {
-          if (ref.current) ref.current.value = "";
-        }
-      }}
-    >
-      <strong>{s.label}</strong>
-      <span className={`state ${s.state === "set" ? "live" : "error"}`}>{state}</span>
-      {s.expires && <span className={daysLeft !== null && daysLeft < 30 ? "field-problem" : "muted"}>expires {shortDate(s.expires)}</span>}
-      <input ref={ref} type="password" autoComplete="new-password" spellCheck={false} placeholder={s.state === "set" ? "New secret to replace it" : "Paste the secret"} aria-label={`${s.label} (masked)`} onChange={() => setConfirm(false)} />
-      <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} aria-label={`${s.label} expiry date`} title="Expiry date, if you know it" />
-      <button type="submit" className="mini primary">
-        {confirm ? "Replace" : "Save"}
-      </button>
-      {status && (
-        <span className="muted" role="status">
-          {status}
-        </span>
-      )}
-    </form>
   );
 }
 
@@ -1685,13 +1881,11 @@ function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][nu
 function SetupSection(p: Props) {
   const [view, setView] = useState<SetupView | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [prod, setProd] = useState(true);
+  const env = useAppEnv();
+  // Start over is for dev and local only (the server refuses it on prod too).
+  const prod = env === null || env === "prod";
   useEffect(() => {
     call<SetupView>("setup.load", {}).then(setView, () => setView(null));
-    // Start over is for dev and local only (the server refuses it on prod too).
-    fetch("/version", { credentials: "same-origin" })
-      .then((r) => r.json() as Promise<{ env?: string }>)
-      .then((b) => setProd(b.env === "prod"), () => setProd(true));
   }, []);
   if (p.demo) return <p className="muted">Setup isn't part of the demo.</p>;
   const left = view?.line?.text;
@@ -1741,7 +1935,7 @@ function ResetPlan({ disabled, onDone }: { disabled: boolean; onDone: () => void
   const [typed, setTyped] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   return (
-    <div className="set-field">
+    <div className="set-field" data-setting="reset-plan">
       <span className="set-label">Reset my plan</span>
       {asking ? (
         <form
@@ -1781,7 +1975,7 @@ function ResetPlan({ disabled, onDone }: { disabled: boolean; onDone: () => void
 function ExportMine() {
   const [status, setStatus] = useState<string | null>(null);
   return (
-    <div className="set-field">
+    <div className="set-field" data-setting="export">
       <span className="set-label">Export my data</span>
       <button
         type="button"
@@ -1849,7 +2043,7 @@ function DeleteMine() {
   const [typed, setTyped] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   return (
-    <div className="set-field">
+    <div className="set-field" data-setting="delete">
       <span className="set-label">Delete my data</span>
       {asking ? (
         <form
@@ -1887,27 +2081,54 @@ function DeleteMine() {
   );
 }
 
-function DataSection(p: Props & { data: SettingsData }) {
-  const phone = usePhone();
+/** ST-1: Activity: every change FocusTime made in other apps (was the top of Data). */
+function ActivitySection(p: BodyProps) {
   return (
     <div className="set-form">
-      <WriteLog />
-      <DevOpsWriteLog />
-      <AzureWriteLog tz={userZone(p.data.you)} />
-      <TeamsStatusLog tz={userZone(p.data.you)} />
+      <div data-setting="write-log"><WriteLog /></div>
+      <div data-setting="devops-log"><DevOpsWriteLog /></div>
+      <div data-setting="azure-log"><AzureWriteLog tz={userZone(p.data.you)} /></div>
+      <div data-setting="teams-log"><TeamsStatusLog tz={userZone(p.data.you)} /></div>
+    </div>
+  );
+}
+
+function DataSection(p: BodyProps) {
+  const dev = useDeveloperLoop();
+  return (
+    <div className="set-form">
       <div className="set-grid">
         <ExportMine />
-        <ClearAssistant />
         <ResetPlan disabled={!p.data.data.planStore} onDone={p.onSaved} />
         <DeleteMine />
       </div>
-      {!phone && <DiagnosticsPanel />}
+      <div data-setting="diagnostics"><DiagnosticsPanel /></div>
+      {(dev || p.demo) && (
+        <Group title="Demo" intro="Fictional data; your own plan isn't touched.">
+          {/* ST-1: the switch works only in the developer loop (the hosted demo is "Try the demo" at sign-in). */}
+          {dev && (
+            <div className="set-grid">
+              <fieldset className="set-choice" data-setting="demo-mode">
+                <legend>Demo mode</legend>
+                <label>
+                  <input type="checkbox" checked={p.demo} onChange={(e) => p.setDemo(e.target.checked)} /> Show demo data
+                </label>
+              </fieldset>
+            </div>
+          )}
+          {p.demo && (
+            <div data-setting="demo-reset">
+              <DemoSection />
+            </div>
+          )}
+        </Group>
+      )}
     </div>
   );
 }
 
 /** F1, FB-1: Send feedback's setup for me: my own write PAT for the feedback project's client, and the parent there. */
-function FeedbackRow() {
+function FeedbackRow({ go }: { go: (section: string, setting?: string | null) => void }) {
   const [st, setSt] = useState<FeedbackStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = (fresh: boolean) => call<FeedbackStatus>("feedback.status", fresh ? { fresh: true } : {}).then((r) => (setSt(r), setError(null)), (e: unknown) => setError(e instanceof Error ? e.message : "Couldn't check"));
@@ -1917,8 +2138,8 @@ function FeedbackRow() {
       <h3>Send feedback</h3>
       <p>{error ?? (st ? st.line : "Checking…")}</p>
       {st?.setup.state === "no_pat" && (
-        <a className="mini primary" href={WRITES_HREF}>
-          Open Settings › Clients
+        <a className="mini primary" href={WRITES_HREF} onClick={(e) => (e.preventDefault(), go("devops", "devops-write"))}>
+          Turn on DevOps writes
         </a>
       )}
       {st && (

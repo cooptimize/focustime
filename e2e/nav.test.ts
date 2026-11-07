@@ -131,7 +131,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.keyboard.press("Escape");
     await page.locator(".person-chip").click();
     await page.getByRole("menuitem", { name: /^Settings/ }).click();
-    await expect.poll(() => hash(page)).toBe("#/settings/you");
+    await expect.poll(() => hash(page)).toBe("#/settings");
     await page.keyboard.press("Escape");
     await expect.poll(() => hash(page)).toBe("#/ahead");
     await page.close();

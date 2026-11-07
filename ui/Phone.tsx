@@ -77,12 +77,12 @@ export const PHONE_PLAN_LINE = "Planning works best on a bigger screen";
  * A planning screen on the phone: the screen as it is, read-only (inert: no taps, no focus), under one line with Copy
  * link (to open the same place on a computer) and Back where there is somewhere to go back to.
  */
-export function PhoneReadOnly({ children, onBack, backLabel = "Back" }: { children: ReactNode; onBack?: (() => void) | undefined; backLabel?: string }) {
+export function PhoneReadOnly({ children, onBack, backLabel = "Back", line = PHONE_PLAN_LINE }: { children: ReactNode; onBack?: (() => void) | undefined; backLabel?: string; /** ST-1: Settings says its own line. */ line?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="phone-ro">
       <div className="phone-ro-bar" role="note">
-        <span className="phone-ro-line">{PHONE_PLAN_LINE}</span>
+        <span className="phone-ro-line">{line}</span>
         <span className="phone-ro-acts">
           <button
             type="button"

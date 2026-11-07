@@ -87,7 +87,7 @@ export type ProposeTool = (typeof PROPOSE_TOOLS)[number];
 
 /** Never reachable from the assistant, whatever the model asks (checked by the test against the list above). */
 export const NEVER: readonly string[] = [
-  "admin.", "settings.save", "secret.set", "devops.set_write_pat", "devops.clear_write_pat", "auth.", "data.", "plan.reset", "demo.set", "chats.", "requests.purge", "vm.", "timer.", "presence.", "push.",
+  "admin.", "settings.save", "devops.set_write_pat", "devops.clear_write_pat", "auth.", "data.", "plan.reset", "demo.set", "chats.", "requests.purge", "vm.", "timer.", "presence.", "push.",
   "assistant.ask", "assistant.confirm", "assistant.cancel", "assistant.undo", "assistant.clear", "teams.", "write.confirm", "stories.publish", "feedback.send",
 ];
 

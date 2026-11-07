@@ -57,10 +57,10 @@ describe.skipIf(!CHROMIUM)("AS-1 the assistant panel", () => {
     await expect.poll(() => box.inputValue(), { timeout: 30_000 }).toBe(DEMO_TRANSCRIPT);
     await expect(panel.locator(".as-turn.me", { hasText: DEMO_TRANSCRIPT }).count()).resolves.toBe(0);
 
-    // × closes it; Settings › Data clears the history.
+    // × closes it; Settings › AI and assistant clears the history.
     await panel.getByRole("button", { name: "Close" }).click();
     await panel.waitFor({ state: "detached" });
-    await page.evaluate(() => (location.hash = "#/settings/data"));
+    await page.evaluate(() => (location.hash = "#/settings/ai"));
     const row = page.locator(".set-field", { hasText: "Assistant history" });
     await row.getByRole("button", { name: "Clear" }).click();
     await row.getByRole("button", { name: "Clear it" }).click();

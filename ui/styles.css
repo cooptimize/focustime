@@ -1217,16 +1217,9 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .range-toggle { white-space: nowrap; }
 
 /* Settings (step 6b): a section list on the left, one section at a time on the right */
-.settings { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr); align-items: start; gap: 20px; padding: 6px 24px 12px; overflow-y: auto; }
 /* fix/settings-autosave: Settings scrolls as one page; the section list stays in view beside it. */
-.set-tab { text-align: left; border: 0; background: transparent; padding: 8px 12px; border-radius: 8px; color: var(--text-muted); font: inherit; font-size: var(--fs-3); }
-.set-tab:hover { background: var(--raised); color: var(--text); }
-.set-tab[aria-current="page"] { background: var(--raised); color: var(--text); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
-.set-tab.close { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
-.set-body { min-width: 0; padding: 4px 4px 24px; max-width: 1100px; }
-.set-body h2 { margin: 4px 0 2px; font-size: var(--fs-4); letter-spacing: -0.01em; outline: none; }
-.set-body h3 { margin: 18px 0 8px; font-size: var(--fs-4); display: flex; gap: 8px; align-items: center; }
-.set-body h3 + p { margin-top: 0; }
+.ps-body h3 { margin: 18px 0 8px; font-size: var(--fs-4); display: flex; gap: 8px; align-items: center; }
+.ps-body h3 + p { margin-top: 0; }
 .set-path { margin: 0 0 14px; font-size: var(--fs-2); }
 .set-form { display: flex; flex-direction: column; gap: 12px; }
 .set-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px 20px; }
@@ -1270,7 +1263,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .set-row.secret strong { min-width: 200px; }
 .set-row.secret input[type="password"] { flex: 1; min-width: 220px; }
 .top-btn[aria-current="page"] { color: var(--text); border-color: var(--accent); }
-@media (max-width: 900px) { .settings { grid-template-columns: 1fr; } }
 
 /* Now strip (step 6b slice 4): one line under the top bar; clicking selects the current half-day. Step 6c adds the timer. */
 .app > .nowstrip { flex: none; }
@@ -3650,6 +3642,9 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .dchat-options li.on { background: color-mix(in oklab, var(--accent) 14%, var(--surface)); outline: 1px solid color-mix(in oklab, var(--accent) 40%, transparent); }
 .perms li code { font-size: var(--fs-2); }
 .perms-again { justify-self: start; align-self: flex-start; width: auto; }
+/* ST-1: the status bar's .source keeps to one line; in Settings' lists (sources, permissions) the reasons wrap. */
+.settings .set-list li.source { white-space: normal; }
+.settings .set-list li.source > .muted { min-width: 0; overflow-wrap: anywhere; }
 /* ---------------------------------------------------------------------------------------------------------------
    P1: the phone (under 600 px). Checking and doing, not planning: a bottom bar (Today, Week, Capture, ⋯), a top bar
    with only the mark, the VM dot and the avatar, one column, full-screen panels and sheets, touch targets of 44 px and
@@ -3811,12 +3806,11 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .phone-ro-body .pl-frame { height: auto; overflow: visible; }
   .phone-ro-body .pl-panes { display: flex; flex-direction: column; gap: 12px; }
   .phone-ro-body .pl-panes > * { position: static; width: auto; max-height: none; overflow: visible; }
-  .set-body .phone-ro { display: block; }
-  .set-body .phone-ro-body { overflow: visible; }
+  .ps-body .phone-ro { display: block; }
+  .ps-body .phone-ro-body { overflow: visible; }
 
   /* Settings: the sections as a row of tabs that scrolls sideways, then one column. */
   .app.phone .settings { display: block; overflow-y: auto; flex: 1; padding: 0 16px 16px; }
-  .app.phone .set-tab { white-space: nowrap; flex: none; }
   .app.phone .set-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -4154,7 +4148,6 @@ button.ask-label { cursor: pointer; }
 .set-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 
 /* ADM-1: the Admin part of Settings (ui/settings/Admin.tsx): its own nav under the Settings nav, one sticky sidebar. */
-.set-side { position: sticky; top: 0; max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; }
 .adm-kind { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; font-size: var(--fs-1); font-weight: 500; color: var(--text-faint); vertical-align: 1px; }
 .adm-mark { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--raised); font-size: var(--fs-1); font-weight: 500; color: var(--text-muted); }
 .adm-ok { color: var(--ok); font-weight: 500; }
@@ -4386,20 +4379,6 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 
 /* ADM-2: the Settings and Admin side menu (ui/settings/SideMenu.tsx). Beside the body it fills the height between the
    top bar and the status bar and scrolls on its own; the body scrolls beside it. Narrow windows and phones: a picker. */
-.settings:not(.narrow) { overflow: hidden; align-items: stretch; grid-template-rows: minmax(0, 1fr); padding-bottom: 0; }
-.settings:not(.narrow) > .set-side { position: static; max-height: none; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 4px 12px 0; outline: none; }
-.settings:not(.narrow) > .set-side:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); border-radius: 6px; }
-.settings:not(.narrow) > .set-body { min-height: 0; overflow-y: auto; max-width: none; padding-bottom: 24px; }
-.settings:not(.narrow) > .set-body > * { max-width: 1100px; }
-.set-group { display: flex; flex-direction: column; gap: 2px; }
-.set-group + .set-group { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
-.set-group-head { display: flex; gap: 6px; align-items: center; margin: 6px 0 2px; padding: 4px 12px; border: 0; background: none; font: inherit; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); cursor: pointer; text-align: left; border-radius: 6px; }
-.set-group-head:hover { color: var(--text-muted); background: var(--raised); }
-.set-side > .set-tab.close { margin-top: 8px; }
-.settings.narrow { display: block; overflow-y: auto; }
-.set-picker { display: flex; gap: 8px; align-items: center; position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 8px 0; }
-.set-picker label { flex: 1; min-width: 0; }
-.set-picker select { width: 100%; font: inherit; font-size: var(--fs-3); padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--text); }
 .adm-block { display: block; }
 
 /* DV-1: the status rows registry's states in Admin › Status. */
@@ -5500,3 +5479,71 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 @container cardbody (max-width: 13em) {
   .grid.no-timeline .card-events li { grid-template-columns: minmax(0, 1fr); gap: 0; }
 }
+
+/* ST-1: the panel shell (ui/PanelShell.tsx): Settings now, the Guide next. A rail of groups with search on the left, one
+   header (Back on a sub-page, the title and its line, ×) and a body that scrolls on its own. On a phone or a narrow
+   window the rail is its own list page and each item a page with Back and ×. */
+.panel-shell { flex: 1; min-height: 0; display: grid; grid-template-columns: clamp(200px, 15vw, 280px) minmax(0, 1fr); gap: 0; overflow: hidden; }
+.ps-side { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 12px 16px 20px; border-right: 1px solid var(--border); }
+.ps-name { font-size: var(--fs-4); font-weight: 600; padding: 2px 10px 10px; }
+.ps-rail { display: flex; flex-direction: column; gap: 2px; }
+.ps-search { padding: 0 0 8px; }
+.ps-search input { width: 100%; box-sizing: border-box; font: inherit; font-size: var(--fs-3); padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); }
+.ps-group { display: flex; flex-direction: column; gap: 1px; }
+.ps-group + .ps-group { margin-top: 10px; }
+.ps-group-head { padding: 4px 10px 2px; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+.ps-group:last-child[aria-labelledby="ps-g-admin"] { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.ps-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 7px 10px; border-radius: 8px; color: var(--text-muted); text-decoration: none; font-size: var(--fs-3); }
+.ps-item:hover { background: var(--raised); color: var(--text); }
+.ps-item:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ps-item[aria-current="page"] { background: var(--raised); color: var(--text); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+.ps-hint { flex-basis: 100%; font-size: var(--fs-1); color: var(--text-faint); font-weight: 400; }
+.ps-chev { margin-left: auto; color: var(--text-faint); }
+.ps-results { display: flex; flex-direction: column; gap: 1px; }
+.ps-hit span:first-child { color: var(--text); }
+.ps-none { padding: 6px 10px; }
+.ps-main { min-height: 0; display: flex; flex-direction: column; min-width: 0; }
+.ps-head { display: flex; align-items: flex-start; gap: 12px; padding: 14px 24px 12px 28px; border-bottom: 1px solid var(--border); }
+.ps-titles { flex: 1; min-width: 0; }
+.ps-head h2 { margin: 0; font-size: var(--fs-4); font-weight: 600; outline: none; }
+.ps-desc { margin: 2px 0 0; color: var(--text-muted); font-size: var(--fs-2); }
+.ps-head .x-close { margin: -8px -10px -8px 0; align-self: flex-start; }
+.ps-back { flex: none; display: inline-flex; gap: 4px; align-items: center; min-height: 32px; padding: 0 10px 0 6px; margin: -4px 0 -4px -10px; border: 0; border-radius: 8px; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-3); cursor: pointer; }
+.ps-back:hover { background: var(--raised); color: var(--text); }
+.ps-back:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ps-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 28px 32px; }
+.ps-body > * { max-width: 1100px; }
+.ps-flash { animation: ps-flash 2s ease-out; border-radius: 8px; }
+@keyframes ps-flash { 0%, 35% { background: color-mix(in srgb, var(--accent) 18%, transparent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 18%, transparent); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
+@media (prefers-reduced-motion: reduce) { .ps-flash { animation: none; outline: 2px solid var(--accent); outline-offset: 4px; } }
+.panel-shell.phone { display: block; overflow-y: auto; }
+.panel-shell.phone .ps-head { padding: 8px 12px 8px 16px; align-items: center; }
+.app.phone .settings.panel-shell { padding: 0; }
+.panel-shell.phone .ps-head .x-close { margin: -6px -8px -6px 0; }
+.panel-shell.phone .ps-back { margin-left: -8px; min-height: 44px; }
+.panel-shell.phone .ps-rail { padding: 12px 16px 24px; }
+.panel-shell.phone .ps-item { padding: 12px 10px; min-height: 44px; box-sizing: border-box; align-items: center; color: var(--text); }
+.panel-shell.phone .ps-group-head { padding-top: 10px; }
+.panel-shell.phone .ps-body { overflow: visible; padding: 4px 16px 24px; }
+.panel-shell.phone .ps-search input { font-size: max(16px, var(--fs-3)); }
+.set-section { margin: 0 0 6px; }
+.set-section > h3 { margin: 20px 0 6px; }
+.set-intro { margin: 0 0 10px; }
+.set-fix { margin: 4px 0 10px; }
+.set-client-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.set-client-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto 12px; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 8px; text-decoration: none; color: var(--text); border: 1px solid var(--border); }
+.set-client-row:hover { background: var(--raised); }
+.set-client-row .swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+@media (max-width: 599.98px) { .set-client-row { grid-template-columns: 10px minmax(0, 1fr) 12px; } .set-client-row > .muted { display: none; } }
+.panel-shell.phone .ps-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "back x" "titles titles"; row-gap: 2px; }
+.panel-shell.phone .ps-head:not(:has(.ps-back)) { grid-template-areas: "titles x"; }
+.panel-shell.phone .ps-back { grid-area: back; justify-self: start; }
+.panel-shell.phone .ps-titles { grid-area: titles; }
+.panel-shell.phone .ps-head .x-close { grid-area: x; }
+.ps-body .set-grid + .set-grid { margin-top: 12px; }
+/* ST-1: a table wider than the phone scrolls sideways on its own. Without this Admin › Organization and Status widened
+   the page: Chromium's mobile viewport grew to fit, the app left the phone layout, the table narrowed, and it flipped
+   back, over and over ("Maximum update depth exceeded"). */
+.panel-shell.phone .ps-body table { display: block; max-width: 100%; overflow-x: auto; }
+.panel-shell.phone .ps-body table :is(th, td) { overflow-wrap: normal; min-width: 4.5em; }
+.panel-shell.phone .ps-body { overflow-wrap: anywhere; }

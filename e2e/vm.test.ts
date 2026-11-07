@@ -2,7 +2,7 @@
 // auto-shutdown time is shown, never changed), Settings > You and the Inbox's kind chips, clicked in a real browser on
 // demo data (a fictional person and VM, no Azure calls). Screenshots when FOCUSTIME_SHOTS is set.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CHROMIUM, freshPage, startDemo, type Harness, openSettings, openCaptures } from "./harness.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness, openSettings, openCaptures, settingsSection } from "./harness.ts";
 import { shotBoth } from "./shots.ts";
 
 let h: Harness;
@@ -38,7 +38,7 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("Start from the prompt: Starting… then Running, logged in Settings > Data", async () => {
+  it("Start from the prompt: Starting… then Running, logged in Settings › Activity", async () => {
     const { page, errors } = await freshPage(h);
     await today(page);
     const prompt = page.locator(".att-chip.vm", { hasText: "VM is off" });
@@ -47,7 +47,7 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
     await expect.poll(() => chip.textContent(), { timeout: 10_000 }).toContain("Starting…");
     await expect.poll(() => chip.textContent(), { timeout: 45_000, interval: 1000 }).toContain("Running · off at 7:00 PM");
     await page.keyboard.press(",");
-    await page.getByRole("button", { name: "Data", exact: true }).click();
+    await settingsSection(page, "activity");
     const log = page.locator('[aria-label="Azure write log"]');
     await expect.poll(() => log.textContent(), { timeout: 10_000 }).toMatch(/Started vm-demo-alex.*Confirmed/);
     expect(errors).toEqual([]);
@@ -87,12 +87,15 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("Settings > You: signed in, Find my VM by the Owner tag, the confirmed VM", async () => {
+  it("Settings › Profile: signed in; Accounts and calendars: Find my VM by the Owner tag, the confirmed VM", async () => {
     const { page, errors } = await freshPage(h);
     await openSettings(page);
-    const you = page.locator(".set-account");
-    await expect(you.textContent()).resolves.toContain("Alex Rivera");
-    await expect(you.getByRole("button", { name: "Sign out" }).count()).resolves.toBe(1);
+    const profile = page.locator(".set-account");
+    await expect(profile.textContent()).resolves.toContain("Alex Rivera");
+    await expect(profile.getByRole("button", { name: "Sign out" }).count()).resolves.toBe(1);
+    // ST-1: the VM is in Accounts and calendars.
+    await settingsSection(page, "connections");
+    const you = page.locator(".set-account", { has: page.getByRole("button", { name: "Find my VM" }) });
     await you.getByRole("button", { name: "Find my VM" }).click();
     await expect.poll(() => you.locator(".vm-found").textContent(), { timeout: 10_000 }).toMatch(/Owner = “Alex Rivera”.*vm-demo-alex.*Your VM/);
     // A typed ID that isn't a VM is refused in plain words.

@@ -96,6 +96,10 @@ describe("addresses", () => {
     [loc(navOf.myPromises()), "#/inbox/promises"],
     [{ nav: navOf.today(), overlay: { kind: "focus" } }, "#/focus"],
     [{ nav: navOf.today(), overlay: { kind: "settings", section: "notifications" } }, "#/settings/notifications"],
+    // ST-1: Settings' own page (the rail as a list on a phone) and one setting in a section.
+    [{ nav: navOf.today(), overlay: { kind: "settings", section: "" } }, "#/settings"],
+    [{ nav: navOf.today(), overlay: { kind: "settings", section: "devops", setting: "devops-write" } }, "#/settings/devops/devops-write"],
+    [{ nav: navOf.today(), overlay: { kind: "settings", section: "client", setting: "Wide World Importers" } }, "#/settings/client/Wide%20World%20Importers"],
   ];
   it("every tab, mode and flow has an address that reads back as the same place (back and reopen land there)", () => {
     for (const [l, h] of places) {

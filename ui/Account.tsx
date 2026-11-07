@@ -2,6 +2,7 @@
 // sign-out, the person in the top bar, the VM chip (top bar) with Start and its preview, the auto-shutdown time shown
 // read only (D475), Today's morning prompt, Settings > You (sign out, find and confirm my VM) and the Azure write log
 // in Settings > Data.
+import { useDeveloperLoop } from "./appenv.ts";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { Avatar, forgetPhotos, usePhotos, usePresence } from "./Presence.tsx";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -442,7 +443,9 @@ export function VmToday() {
 
 type Found = { tag: string; value: string; vms: { id: string; name: string; resourceGroup: string; location: string; power: string }[]; chosen: string | null };
 
-export function YouAccount() {
+/** ST-1: Profile shows the account part (who is signed in, photos), Accounts and calendars the VM part. */
+export function YouAccount({ part }: { part: "account" | "vm" }) {
+  const dev = useDeveloperLoop();
   const { status, signIn, signOut } = useContext(AuthCtx);
   const vm = useContext(VmCtx);
   const [busy, setBusy] = useState(false);
@@ -469,12 +472,13 @@ export function YouAccount() {
     await vm.refresh(true);
     notify(vmId ? "This VM is yours in FocusTime" : "VM choice cleared");
   });
-  if (!status?.configured) return <p className="muted">Microsoft sign-in needs an app registration: set [outlook] client_id in config.</p>;
+  if (!status?.configured) return <p className="muted">{dev ? "Microsoft sign-in needs an app registration: set [outlook] client_id in config." : "Microsoft sign-in isn't set up for this FocusTime yet."}</p>;
   const p = status.person;
   const signedIn = status.state !== "signed_out";
   return (
     <div className="set-account">
-      <div className="set-field">
+      {part === "account" && (
+      <div className="set-field" data-setting="signed-in">
         <span className="set-label">Signed in</span>
         <span className="set-value">{p && signedIn ? <>{p.name} <span className="muted">{p.username}</span></> : <span className="muted">Not signed in</span>}</span>
         <span className="set-hint">{status.state === "unavailable" ? `Offline or keyring locked: showing who was signed in. ${status.message ?? ""}` : "One Microsoft sign-in for you, your calendar and your Azure VM."}</span>
@@ -487,14 +491,16 @@ export function YouAccount() {
         </span>
         {signedIn && <span className="set-hint">Your plan stays in your FocusTime account.</span>}
       </div>
-      {signedIn && (
-        <div className="set-field">
+      )}
+      {part === "account" && signedIn && (
+        <div className="set-field" data-setting="photos">
           <span className="set-label">Photos</span>
           <PhotosAccessLine />
         </div>
       )}
-      {signedIn && (
-        <div className="set-field set-vm">
+      {part === "vm" && !signedIn && <p className="muted" data-setting="vm">Sign in with Microsoft to find your VM.</p>}
+      {part === "vm" && signedIn && (
+        <div className="set-field set-vm" data-setting="vm">
           <span className="set-label">My VM</span>
           <span className="set-value">
             {vm.status?.vm ? <>{vm.status.vm.name} <span className="muted">{vm.status.vm.resourceGroup} · {vm.status.vm.location}</span></> : <span className="muted">None chosen yet</span>}

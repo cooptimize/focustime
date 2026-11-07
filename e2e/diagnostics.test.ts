@@ -53,7 +53,7 @@ describe.skipIf(!CHROMIUM)("DX-1 Diagnostics (browser, demo mode)", () => {
     await page.getByRole("menuitem", { name: "Diagnostics", exact: true }).click();
     const panel = page.locator("#diagnostics");
     await panel.waitFor();
-    await expect.poll(() => page.evaluate(() => location.hash), { timeout: 10_000 }).toBe("#/settings/data");
+    await expect.poll(() => page.evaluate(() => location.hash), { timeout: 10_000 }).toBe("#/settings/data/diagnostics");
     await panel.getByRole("button", { name: "Run checks" }).click();
     await panel.getByRole("heading", { name: "Promises check" }).waitFor();
     await panel.getByRole("heading", { name: /Chatter filter check/ }).waitFor();

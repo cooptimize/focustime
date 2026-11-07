@@ -51,7 +51,7 @@ export type Nav =
 
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
 /** MC-1: a call's review over the place (`occurrence` null: my calls, the ones I review or attend). */
-export type Overlay = { kind: "focus" } | { kind: "settings"; section: string } | { kind: "guide"; chapter: string | null } | { kind: "meeting"; occurrence: number | null } | null;
+export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "meeting"; occurrence: number | null } | null;
 export type Loc = { nav: Nav; overlay: Overlay };
 
 export const navOf = {
@@ -139,6 +139,8 @@ const HALF = /^(AM|PM|EVE)$/;
 /** A Settings or Admin section: letters, with one hyphen between words (CV-2: "admin-audit", Q-ADM2-4). */
 const SECTION = /^[a-z]{2,20}(-[a-z]{2,20})?$/;
 const ID = /^[1-9]\d{0,9}$/;
+/** A setting id, or a client key (Dataverse nicknames: letters, digits, spaces and a little punctuation). */
+const SETTING = /^[\p{L}\p{N} ._&'()-]{1,60}$/u;
 const validDate = (s: string) => {
   if (!DATE.test(s)) return false;
   try {
@@ -155,7 +157,7 @@ const validDate = (s: string) => {
  */
 export function hashOf(l: Loc): string {
   if (l.overlay?.kind === "focus") return "#/focus";
-  if (l.overlay?.kind === "settings") return `#/settings/${l.overlay.section}`;
+  if (l.overlay?.kind === "settings") return l.overlay.section ? `#/settings/${l.overlay.section}${l.overlay.setting ? `/${encodeURIComponent(l.overlay.setting)}` : ""}` : "#/settings";
   if (l.overlay?.kind === "guide") return l.overlay.chapter ? `#/guide/${l.overlay.chapter}` : "#/guide";
   if (l.overlay?.kind === "meeting") return l.overlay.occurrence ? `#/meetings/${l.overlay.occurrence}` : "#/meetings";
   const n = l.nav;
@@ -181,7 +183,7 @@ export function hashOf(l: Loc): string {
  * requests, asks and promises) in the Inbox. App writes the new address in place of the old one.
  */
 export function parseHash(hash: string): Loc | null {
-  if (typeof hash !== "string" || hash.length > 80) return null;
+  if (typeof hash !== "string" || hash.length > 160) return null;
   const parts = hash.replace(/^#\/?/, "").split("/").filter((p) => p !== "");
   const [tab, a, b, c, ...rest] = parts;
   if (rest.length) return null;
@@ -201,7 +203,17 @@ export function parseHash(hash: string): Loc | null {
     case "focus":
       return a === undefined ? { nav: navOf.today(), overlay: { kind: "focus" } } : null;
     case "settings":
-      return a !== undefined && SECTION.test(a) && b === undefined ? { nav: navOf.today(), overlay: { kind: "settings", section: a } } : a === undefined ? { nav: navOf.today(), overlay: { kind: "settings", section: "you" } } : null;
+      // ST-1: #/settings (the rail; on a big screen, Profile), #/settings/<section> and #/settings/<section>/<setting>
+      // (a setting in it, or a client's own page: #/settings/client/<key>).
+      if (a === undefined) return { nav: navOf.today(), overlay: { kind: "settings", section: "" } };
+      if (!SECTION.test(a) || c !== undefined) return null;
+      if (b === undefined) return { nav: navOf.today(), overlay: { kind: "settings", section: a } };
+      try {
+        const setting = decodeURIComponent(b);
+        return SETTING.test(setting) ? { nav: navOf.today(), overlay: { kind: "settings", section: a, setting } } : null;
+      } catch {
+        return null;
+      }
     case "guide":
       return b !== undefined ? null : a === undefined ? { nav: navOf.today(), overlay: { kind: "guide", chapter: null } } : SECTION.test(a) ? { nav: navOf.today(), overlay: { kind: "guide", chapter: a } } : null;
     // MC-1: #/meetings (my calls) and #/meetings/<occurrence> (Update <client>'s plan from one call), over Week.
