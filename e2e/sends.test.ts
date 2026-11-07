@@ -43,13 +43,12 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
 
   it("Today's line, Accept, Send to… a Must, the Sent list and Team", async () => {
     const { page, errors } = await freshPage(h);
-    // IB-1 slice 4: each send waiting for me is its own line (the Inbox's rows), the Must first; one opens that send in
-    // the Inbox's detail pane.
+    // IB-1 slice 4: a send waiting for me is its own line (the Inbox's rows), the Must first, after the late promises; the
+    // strip shows 3 lines, so the other send is in "N more in Inbox". The line opens that send in the detail pane.
     const lines = page.locator(".sent-line");
     await lines.first().waitFor({ timeout: 30_000 });
-    await expect.poll(() => lines.count()).toBe(2);
     await expect(lines.first().locator(".us-tag").textContent()).resolves.toBe("Sent to you · Must");
-    await expect(lines.nth(1).locator(".us-tag").textContent()).resolves.toBe("Sent to you");
+    await expect(page.locator(".urgent-strip .us-all").textContent()).resolves.toMatch(/^\d+ more in Inbox$/);
     await lines.filter({ hasText: "Loyalty points" }).locator(".us-line").click();
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/inbox\/item\/s\d+$/);
     await page.locator(".ib-pane .ib-detail-title", { hasText: "Loyalty points" }).waitFor();

@@ -42,11 +42,15 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await page.locator(".phone-now, .today-next").first().waitFor({ timeout: 30_000 });
     await page.getByText(/Promise · was due/).first().waitFor();
     await page.getByText("Send Marcus the updated export spec").first().waitFor();
-    // IB-1 slice 4: the strip is the Inbox's own items: the late promise, the sends as their own lines, the badge's count.
+    // IB-1 slice 4: the strip is the Inbox's own items, 3 at most, the most urgent first; the rest are "N more in Inbox".
     const strip = page.getByRole("region", { name: "Urgent" });
-    await expect.poll(() => strip.locator(".sent-line").count()).toBe(2);
-    const badge = await page.locator("nav.views .view-tab .count").first().textContent();
-    await expect(strip.locator(".us-all").textContent()).resolves.toBe(`${badge} need you in the Inbox`);
+    await expect.poll(() => strip.locator(".us-item").count()).toBe(3);
+    const badge = Number(await page.locator("nav.views .view-tab .count").first().textContent());
+    await expect(strip.locator(".us-all").textContent()).resolves.toBe(`${badge - 3} more in Inbox`);
+    await strip.locator(".us-all").click();
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/inbox/needs-you");
+    await go(page, "#/today");
+    await page.locator(".phone-now, .today-next").first().waitFor({ timeout: 30_000 });
     await shot(page, "today");
 
     // 2. Plan today: drag Filter orders by date range onto Northwind's afternoon, then Confirm today.

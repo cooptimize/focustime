@@ -63,7 +63,7 @@ import { DetailPanel, BreakDown, interactive } from "./DetailPanel.tsx";
 import type { PanelFocus } from "./WeekGrid.tsx";
 import { userZone } from "../week/zone.ts";
 import type { Moment } from "../plan/modes.ts";
-import { inboxSource, untimedDue, urgentLines, type UrgentLine, type UrgentSource } from "../plan/urgent.ts";
+import { inboxSource, moreInInbox, untimedDue, urgentLines, type UrgentLine, type UrgentSource } from "../plan/urgent.ts";
 import type { InboxItemView } from "../plan/inbox-items.ts";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { openCoopBrief } from "./menu.ts";
@@ -606,13 +606,13 @@ function Attention({ noDue = false, promises = [], soon = [], inStrip, onItem, o
 /**
  * NV-1: the urgent strip, under what's next: what needs me now, mine only. IB-1 slice 4: its lines are the Inbox's own
  * items (plan/inbox-items.ts `todayLines`): conversations with a request needed now, my promises late or due soon, sends
- * to me waiting for my answer; each opens its item in the Inbox's detail pane, and the foot says how many need me in
- * all (the badge's number). An urgent request keeps its Start focus. Hidden when there is nothing.
+ * to me waiting for my answer; each opens its item in the Inbox's detail pane. At most 3 lines, the most urgent first;
+ * "N more in Inbox" opens Needs you for the rest (the badge's number less the lines shown). An urgent request keeps its Start focus. Hidden when there is nothing.
  */
 export function UrgentStrip({ sources, now, today, tz, clientName, onItem, needsYou, onNeedsYou, onAskFocus }: { sources: readonly UrgentSource[]; now: string; today: IsoDate; tz: string; clientName: (k: string) => string; onItem: (key: string) => void; needsYou?: number | null; onNeedsYou?: (() => void) | undefined; onAskFocus: (u: UrgentAsk) => void }) {
   const lines = urgentLines(sources, now, tz);
   if (!lines.length) return null;
-  const more = needsYou != null && needsYou > 0 ? needsYou : null;
+  const more = moreInInbox(lines, needsYou);
   return (
     <section className="urgent-strip" aria-label="Urgent">
       <ul>
@@ -637,7 +637,7 @@ export function UrgentStrip({ sources, now, today, tz, clientName, onItem, needs
       </ul>
       {more !== null && onNeedsYou && (
         <button type="button" className="link-btn us-all" onClick={onNeedsYou}>
-          {more} {more === 1 ? "needs" : "need"} you in the Inbox
+          {more} more in Inbox
         </button>
       )}
     </section>

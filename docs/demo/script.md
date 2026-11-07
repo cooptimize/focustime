@@ -37,9 +37,9 @@ Each step: **Click** what to do · **Say** one line · **Expect** what appears �
 
 - **Click**: nothing. You open on Today.
 - **Say**: "Today is one screen: what's next, what's urgent, and the one thing to do now."
-- **Expect**: the Now card; the urgent strip with the late promises ("was due Wed, Nov 4 · Send Marcus the updated
-  export spec"), two **Sent to you** lines (the Must first) and "… need you in the Inbox" (the badge's number); each
-  line opens its item in the Inbox; the **Plan today** card; the Cooptimize and Northwind blocks with "At risk ·
+- **Expect**: the Now card; the urgent strip's three most urgent lines: the two late promises ("was due Wed, Nov 4 ·
+  Send Marcus the updated export spec" first) and Priya's Must (**Sent to you · Must**), then "… more in Inbox"
+  (the rest of Needs you); each line opens its item in the Inbox; the **Plan today** card; the Cooptimize and Northwind blocks with "At risk ·
   Dentist 12:00".
 - **If not**: Settings › Demo › Reset demo, which brings you back to Today.
 

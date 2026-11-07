@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { aDayPromise, anInboxRow } from "../test/builders/index.ts";
 import type { UrgentAsk } from "../actions/types.ts";
-import { inboxSource, promiseUrgent, untimedDue, urgentLines, type UrgentSource } from "./urgent.ts";
+import { inboxSource, moreInInbox, promiseUrgent, untimedDue, urgentLines, type UrgentSource } from "./urgent.ts";
 
 const TODAY = "2026-11-05";
 const ZONE = "America/New_York";
@@ -24,7 +24,19 @@ describe("the urgent strip", () => {
       anInboxRow({ key: "v9", kind: "conversation", views: ["needs_you"], due: null, title: "Login trouble", urgent: anUrgentAsk() }),
       anInboxRow({ key: "s5", kind: "send", sendState: "waiting", must: true, title: "Musts", who: "Avery", due: null }),
     ];
-    expect(keys([inbox(rows)])).toEqual(["v9", "f3", "c2", "s5", "s4"]);
+    // At most 3 lines, the most urgent first; the rest are "N more in Inbox".
+    expect(keys([inbox(rows)])).toEqual(["v9", "f3", "c2"]);
+    expect(moreInInbox(strip([inbox(rows)]), 5)).toBe(2);
+    expect(keys([inbox(rows.filter((r) => r.kind === "send"))])).toEqual(["s5", "s4"]);
+  });
+
+  it("N more in Inbox is the badge's number less the Inbox lines shown; none when nothing is left or the count isn't known", () => {
+    const shown = strip([inbox([anInboxRow({ key: "c1", late: true }), anInboxRow({ key: "c2", late: true })])]);
+    expect(moreInInbox(shown, 7)).toBe(5);
+    expect(moreInInbox(shown, 2)).toBeNull();
+    expect(moreInInbox(shown, null)).toBeNull();
+    const other: UrgentSource = { kind: "other", lines: () => [{ kind: "other", source: "other", key: "o:1", who: "", what: "x", tag: "Other" }] };
+    expect(moreInInbox(strip([inbox([anInboxRow({ key: "c1", late: true })]), other]), 3)).toBe(2);
   });
 
   it("only Needs you items: a conversation that isn't urgent, a snoozed or done promise, a send already answered stay out", () => {

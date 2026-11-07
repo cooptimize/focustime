@@ -19,9 +19,22 @@ export type UrgentLine =
 /** One source of urgent lines; the strip shows the sources' lines in the order the sources are given. */
 export type UrgentSource = { kind: string; lines: (now: string, zone: string) => UrgentLine[] };
 
-/** The strip's lines from its sources, in order; empty hides the strip. */
+/** IB-1 slice 4: the strip shows at most this many lines, the most urgent first; the rest wait in the Inbox. */
+export const STRIP_MAX = 3;
+
+/** The strip's lines from its sources, in order, at most STRIP_MAX; empty hides the strip. */
 export function urgentLines(sources: readonly UrgentSource[], now: string, zone: string): UrgentLine[] {
-  return sources.flatMap((s) => s.lines(now, zone));
+  return sources.flatMap((s) => s.lines(now, zone)).slice(0, STRIP_MAX);
+}
+
+/**
+ * "N more in Inbox": the Needs you items the strip doesn't show (the badge's number less the Inbox lines shown), or
+ * null when there are none or the count isn't known.
+ */
+export function moreInInbox(lines: readonly UrgentLine[], needsYou: number | null | undefined): number | null {
+  if (needsYou == null) return null;
+  const n = needsYou - lines.filter((l) => l.kind === "item").length;
+  return n > 0 ? n : null;
 }
 
 const ms = (iso: string) => Date.parse(iso.replace(/\[.*\]$/, ""));
