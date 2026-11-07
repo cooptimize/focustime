@@ -3,7 +3,9 @@
 // previews through the real service, its allowlist and its confirm checks. DM-1: it is the stored sample for the
 // assistant's two tasks (sources/demo/ai.ts uses it when the real provider isn't there or is slow), and it knows the
 // demo script's steps: a lookup (what's next), a move ("Move Northwind's date filter to Wednesday afternoon": it reads
-// today's picks, then proposes moving the one the words name) and a dictated comment on an item.
+// today's picks, then proposes moving the one the words name) and a dictated comment on an item. AS-2: a move by
+// feature or by day ("Move the order history export stories to Friday", "Push everything from today to tomorrow":
+// move_plan, the server finds the to-dos) and a compound update ("Mark #1112 done and comment that it's in review").
 import type { AiProvider, ProviderCall, ProviderReply, ToolCall } from "../../ai/types.ts";
 
 const usage = (c: ProviderCall, out: string) => ({ inputTokens: Math.ceil((c.instructions.length + c.input.length) / 4), cachedTokens: 0, outputTokens: Math.ceil(out.length / 4) });
@@ -24,11 +26,26 @@ function monday(d: string): string {
   return t.toISOString().slice(0, 10);
 }
 
+/** AS-2: a move the server builds (by feature or by day), not one named to-do. */
+const planMove = (s: string) => /\b(move|push)\b/.test(s) && /\b(stories|everything|all)\b/.test(s);
+/** AS-2: a done and a comment on one item, in one card. */
+const compound = (s: string, id: number) => !!id && /\b(done|complete|close)\b/.test(s) && /\bcomment\b/.test(s);
+
 /** The calls for a request, in order (the first round); none when the demo doesn't know it. */
 function callsFor(said: string, today: string | null): { name: string; arguments: Record<string, unknown> }[] {
   const s = said.toLowerCase();
   const id = Number(/#(\d+)/.exec(said)?.[1] ?? 0);
   const quoted = /"([^"]+)"|“([^”]+)”/.exec(said);
+  if (planMove(s) && today) {
+    const from = /\bfrom today\b/.test(s) ? today : null;
+    const to = moveTarget(said.replace(/\bfrom today\b/i, ""), today);
+    const toHalf = /\b(afternoon|pm|morning|am)\b/.test(s) ? to.half : null;
+    return [{ name: "move_plan", arguments: { fromDate: from, fromHalf: null, toDate: to.date, toHalf, which: /\beverything|\ball\b/.test(s) ? "all" : "named" } }];
+  }
+  if (compound(s, id)) {
+    const words = said.replace(/^.*?\bcomment\b\s*(that|saying)?\s*/i, "").trim();
+    return [{ name: "item_update", arguments: { itemId: id, done: true, comment: words ? words[0]!.toUpperCase() + words.slice(1) : null, target: null } }];
+  }
   if (/\bmove\b/.test(s) && today) return [{ name: "today", arguments: { when: "today" } }];
   if (id && /\bcomment\b/.test(s)) {
     const words = quoted?.[1] ?? quoted?.[2] ?? said.replace(/^.*?\b(saying|that|:)\s*/i, "");
@@ -84,6 +101,8 @@ const REPLY: Record<string, string> = {
   commitments: "Here's what people committed to.",
   today: "Here's what's on.",
   move_pick: "Here's the move. Confirm to move it.",
+  move_plan: "Here's the move. Confirm to move them; Undo puts them back.",
+  item_update: "Here's the update. Confirm to write both parts in DevOps.",
 };
 
 export function demoAssistantProvider(): AiProvider {
@@ -96,6 +115,8 @@ export function demoAssistantProvider(): AiProvider {
         // The intent round: only the proposals the words ask for (reads are always allowed), or close_loop.
         const s = said.toLowerCase();
         if (/\bclose\b.*\b(loop|follow-?up)\b/.test(s)) return text(c, { tools: ["close_loop"] });
+        if (planMove(s)) return text(c, { tools: ["move_plan"] });
+        if (compound(s, Number(/#(\d+)/.exec(said)?.[1] ?? 0))) return text(c, { tools: ["item_update"] });
         if (/\bmove\b/.test(s)) return text(c, { tools: ["move_pick"] });
         const named = calls.map((x) => x.name);
         return text(c, { tools: named.length ? named : [] });
@@ -105,7 +126,7 @@ export function demoAssistantProvider(): AiProvider {
         return { ok: true, text: "", model: "demo assistant", usage: usage(c, ""), calls: made, items: made.map((m) => ({ type: "function_call", call_id: m.callId, name: m.name, arguments: m.arguments })) };
       }
       // DM-1: a move reads today's picks first, then proposes moving the one the words name (once).
-      if (c.rounds?.length && /\bmove\b/i.test(said) && today && !c.rounds.some((r) => r.items.some((i) => (i as { name?: string }).name === "move_pick"))) {
+      if (c.rounds?.length && /\bmove\b/i.test(said) && !planMove(said.toLowerCase()) && today && !c.rounds.some((r) => r.items.some((i) => (i as { name?: string }).name === "move_pick"))) {
         const pickId = pickFrom(c.rounds.flatMap((r) => r.outputs.map((o) => o.output)), said);
         if (pickId) {
           const m: ToolCall = { callId: "demo_move", name: "move_pick", arguments: JSON.stringify({ pickId, ...moveTarget(said, today) }) };

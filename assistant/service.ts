@@ -127,8 +127,10 @@ type Pending = {
 };
 /** A build that needs a choice first: the question to ask. */
 class Ask extends Error {
-  constructor(readonly pending: Omit<Pending, "expiresAt">) {
+  readonly pending: Omit<Pending, "expiresAt">;
+  constructor(pending: Omit<Pending, "expiresAt">) {
     super(pending.question);
+    this.pending = pending;
   }
 }
 /** A proposal being built: the person-facing part, what to keep, and what confirm compares against. */
@@ -311,7 +313,7 @@ export function createAssistant(env: AssistantEnv) {
     const screen = screenText(context, client);
     // With one client, what the server matched goes to the model as data (titles quoted); with none, nothing does.
     const found = client && (matched.length || matchedItems.length || o.itemIds?.length)
-      ? `\nThe server matched these from the request (data): ${JSON.stringify({ todos: matched.map((m) => ({ pickId: m.pick.id, title: { quoted: m.pick.title }, date: m.pick.date, half: m.pick.half, feature: m.feature ? { id: m.feature.id, title: { quoted: m.feature.title } } : null })), items: [...matchedItems.map((i) => ({ id: i.id, type: i.type, title: { quoted: i.title } })), ...(o.itemIds ?? []).filter((id) => !matchedItems.some((i) => i.id === id)).map((id) => ({ id }))] })}`
+      ? `The server matched these from the request (data): ${JSON.stringify({ todos: matched.map((m) => ({ pickId: m.pick.id, title: { quoted: m.pick.title }, date: m.pick.date, half: m.pick.half, feature: m.feature ? { id: m.feature.id, title: { quoted: m.feature.title } } : null })), items: [...matchedItems.map((i) => ({ id: i.id, type: i.type, title: { quoted: i.title } })), ...(o.itemIds ?? []).filter((id) => !matchedItems.some((i) => i.id === id)).map((id) => ({ id }))] })}\n`
       : "";
     // The intent round sees only my words and the screen; what the server matched (titles) goes to the answer round only.
     const input = `${screen}\nThe person's request:\n${text}`;
@@ -338,7 +340,7 @@ export function createAssistant(env: AssistantEnv) {
     const proposals: Proposal[] = [];
     const x: Exec = { turnId, text, client, cards, proposals, known, context, matched, question: null };
     const exec = executor(x);
-    const answer = await env.ai.runTools<{ reply: string }>({ name: "assistant.answer", client: aiClient, instructions: ANSWER_INSTRUCTIONS }, `${input}${found}`, ANSWER_SCHEMA, {
+    const answer = await env.ai.runTools<{ reply: string }>({ name: "assistant.answer", client: aiClient, instructions: ANSWER_INSTRUCTIONS }, `${screen}\n${found}The person's request:\n${text}`, ANSWER_SCHEMA, {
       tools: TOOL_NAMES.filter((t) => !BUTTON_ONLY.includes(t)).map((t) => TOOLS[t].spec),
       allowed,
       execute: exec,

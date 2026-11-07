@@ -853,7 +853,7 @@ describe("AS-2", () => {
     expect(s.writes().filter((w) => w.action === "devops.confirm")).toEqual([]);
     // Internal: its items may name clients (the request runs for Cooptimize, by #id).
     const ahead = twoClients();
-    ahead.clients.push(anAheadClient({ clientKey: "Cooptimize", clientName: "Cooptimize", items: [anAheadItem({ id: 8100, title: "Delivery handbook", type: "User Story", level: "child", rung: 2 })], editable: [8100] } as never));
+    (ahead.clients as unknown[]).push(anAheadClient({ clientKey: "Cooptimize", clientName: "Cooptimize", items: [anAheadItem({ id: 8100, title: "Delivery handbook", type: "User Story", level: "child", rung: 2 })], editable: [8100] } as never));
     const i = opts({ ahead, rules: { allowedClients: [FAB, NW, "Cooptimize"] } });
     i.script(["comment"], call(["comment", { itemId: 8100, text: "Add the Fabrikam export example." }]), say("Here's the comment."));
     const ri = await i.a.handle("Comment on #8100: add the Fabrikam export example");
