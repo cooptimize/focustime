@@ -77,16 +77,17 @@ jobs:
           npx vitest run --exclude 'e2e/**' --reporter=default
       - name: Build the UI
         run: npx vite build
-  # Four shards: the repo's runners have two cores, where vitest runs one file at a time, so all the browser files in
-  # one job took about ten minutes in a row. Each shard takes a quarter of the files.
+  # Six shards (HK-5; four before): the runners have four cores, where test/workers.ts runs two files at once (each a
+  # demo server and a browser; vitest's default of three overloaded them). Two at a time took the slowest of four
+  # shards from 180 to 231 s; six shards keep it near where it was. Each shard takes a sixth of the files.
   browser:
-    name: Browser tests ${{ matrix.shard }}/4 (Chromium and WebKit)
+    name: Browser tests ${{ matrix.shard }}/6 (Chromium and WebKit)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6]
     env:
       FOCUSTIME_TEST_WEBKIT: required
       TZ: America/Chicago
@@ -133,7 +134,7 @@ jobs:
       - name: Browser tests
         run: |
           echo "cores: $(nproc)"
-          npx vitest run e2e/ --shard=${{ matrix.shard }}/4 --reporter=default
+          npx vitest run e2e/ --shard=${{ matrix.shard }}/6 --reporter=default
   test:
     needs: [unit, browser]
     runs-on: ubuntu-latest

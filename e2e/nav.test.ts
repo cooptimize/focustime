@@ -57,7 +57,8 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     }
     await expect.poll(() => hash(page)).toMatch(/^#\/week(\/2026-11-02)?$/);
     await page.keyboard.press("1");
-    await page.locator(".today-view .card, .today-view .tc-card").first().waitFor().catch(() => undefined);
+    // HK-5: Today itself (the old ".card, .tc-card" never matched, and its swallowed wait cost 30 s every run).
+    await page.locator(".today-view").waitFor();
     await expect.poll(() => page.getByRole("region", { name: "Plan today" }).count()).toBe(0);
     await page.close();
   }, T);

@@ -37,16 +37,19 @@ describe.skipIf(!CHROMIUM)("the Inbox (IB-1)", () => {
       header: Number((await main.locator(".ib-list-head h2 .muted").textContent()) ?? "-1"),
       rows: await main.locator(".ib-row").count(),
     });
+    // HK-5: the top bar's badge reads its count on its own, so it can land a moment after the list: wait until all four
+    // agree (each read once was a race under load), then the same after the action.
+    const agreed = async () => {
+      const r = await read();
+      return r.badge > 0 && r.rail === r.badge && r.header === r.badge && r.rows === r.badge ? r.badge : -1;
+    };
+    await expect.poll(agreed).toBeGreaterThan(0);
     const first = await read();
-    expect(first.badge).toBeGreaterThan(0);
-    expect(first).toEqual({ badge: first.badge, rail: first.badge, header: first.badge, rows: first.badge });
     // Hide one for me (H): every count drops by one, together.
     await main.locator(".ib-row").first().click();
     await page.locator(".ib-pane .ib-detail-title").waitFor();
     await page.keyboard.press("h");
-    await expect.poll(async () => (await read()).rail).toBe(first.badge - 1);
-    const after = await read();
-    expect([after.badge, after.header]).toEqual([first.badge - 1, first.badge - 1]);
+    await expect.poll(async () => { const r = await read(); return [r.badge, r.rail, r.header]; }).toEqual([first.badge - 1, first.badge - 1, first.badge - 1]);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

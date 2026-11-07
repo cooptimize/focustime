@@ -73,7 +73,7 @@ describe.skipIf(!CHROMIUM)("a real session never shows demo data (no-demo-leak)"
       const found: string[] = [];
       for (const [name, hash, ready] of SCREENS) {
         await page.evaluate((h) => (location.hash = h), hash);
-        await page.locator(ready).first().waitFor({ timeout: 20_000 }).catch(() => {});
+        await page.locator(ready).first().waitFor({ timeout: 20_000 });
         await page.waitForTimeout(800);
         for (const w of await demoWordsOn(page)) found.push(`${name}: ${w}`);
         // Positive control: this is the fake person's live data (Dataverse's focus blocks), not an empty page.
@@ -89,8 +89,10 @@ describe.skipIf(!CHROMIUM)("a real session never shows demo data (no-demo-leak)"
         await page.keyboard.press("Escape");
       }
       // Settings > Clients.
-      await page.keyboard.press(",");
-      await page.getByRole("tab", { name: /Clients/ }).or(page.getByRole("button", { name: /^Clients$/ })).first().click({ timeout: 10_000 }).catch(() => {});
+      // HK-5: by its address. The old tab or button named Clients wasn't there, the swallowed click went on after 10 s,
+      // and this scanned whatever Settings showed, never Settings > Clients.
+      await page.evaluate(() => (location.hash = "#/settings/clients"));
+      await page.locator(".set-body .set-clients").waitFor({ timeout: 20_000 });
       await page.waitForTimeout(800);
       for (const w of await demoWordsOn(page)) found.push(`Settings > Clients: ${w}`);
       await page.keyboard.press("Escape");

@@ -25,7 +25,10 @@ import type { TargetsResult } from "../sources/devops/types.ts";
 
 /** DV-1: the central DevOps poller over a fake dev.azure.com, its rows in Admin › Status. */
 function devopsStatus() {
-  const clock = () => Temporal.Now.instant();
+  // HK-5: the live harness's Monday 9:30 AM, moving with real time from there. The poller's cadence follows the clock
+  // (working hours or not), so the real clock made "every minute" read "every 10 minutes" at night and on weekends.
+  const start = Date.now();
+  const clock = () => Temporal.Instant.from(NOW).add({ milliseconds: Date.now() - start });
   const fake = fakeLiveDevOps(
     {
       Adatum: { project: "Delivery", items: [aFakeItem({ id: 1, type: "Feature" }), aFakeItem({ id: 2, parent: 1 })], headers: { "X-RateLimit-Resource": "Core", "X-RateLimit-Limit": "200", "X-RateLimit-Remaining": "196", "X-RateLimit-Cost": "0.3" } },
@@ -210,8 +213,7 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       // DV-1: one row per client; Check now reads DevOps once for it, and a refused token says so in plain words.
       const adatumRow = body.locator(".adm-status-group tr", { hasText: "Adatum" });
       await adatumRow.getByRole("button", { name: "Check now" }).click();
-      // The cadence follows the real clock (working hours or not), so either wording passes (QF-1: it failed by day).
-      await adatumRow.getByText(/every (minute|\d+ minutes)/).waitFor();
+      await adatumRow.getByText(/every minute/).waitFor();
       await body.locator(".adm-status-group tr", { hasText: "Fabrikam" }).getByRole("button", { name: "Check now" }).click();
       await body.locator(".adm-status-group tr", { hasText: "Fabrikam" }).getByText("Token not valid").waitFor();
       expect(devops.fake.calls.filter((c) => c.org === "Adatum" && c.op === "wiql").length).toBeGreaterThan(0);

@@ -126,11 +126,14 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await story.getByRole("button", { name: "Keep" }).click();
     await staged(size);
     // Assigned to: a click opens the people picker; a mouse pick lands (the picker used to close on its own blur first).
+    // HK-5: the demo already has a pending assignee change on this story (Priya Shah, DevOps' value, to me), so the
+    // cell is pending before the pick. Picking Priya put DevOps' value back (no change, rightly) and the test passed
+    // only when it looked before the answer came. Sam Ortiz is a real change; the name shows only once the pick lands.
     const who = story.locator(".ah-col-assignee");
     await who.click();
-    await page.getByRole("option", { name: /Priya Shah/ }).click();
+    await page.getByRole("option", { name: /Sam Ortiz/ }).click();
+    await expect.poll(() => who.textContent(), { timeout: 10_000 }).toContain("Sam Ortiz");
     await staged(who);
-    await expect.poll(() => who.textContent(), { timeout: 10_000 }).toContain("Priya Shah");
     // Target, then start on a feature that has one: a date and its half-day.
     const target = story.locator(".ah-col-target");
     await target.click();
