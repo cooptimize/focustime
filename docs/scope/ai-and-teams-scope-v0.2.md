@@ -1,4 +1,4 @@
-# Coopilot | AI and Teams Integration Scope v0.2
+# FocusTime | AI and Teams Integration Scope v0.2
 
 > Reference copy, word for word except that real names are replaced (the owner's name by "the owner", a client by "Fabrikam") as the repo's names rule requires. The AP-1 step prompt wins wherever this differs.
 
@@ -10,7 +10,7 @@ The core loop (plan the week, plan the day, focus, check in, close out, follow u
 
 ## Principles
 
-1. AI proposes; Coopilot's named actions execute, with the same previews and confirmations as the UI.
+1. AI proposes; FocusTime's named actions execute, with the same previews and confirmations as the UI.
 2. Every core view works with AI off or unavailable.
 3. Send only what a task needs. Never secrets, tokens, PATs, VM contents or client code.
 4. One client's data never goes into another client's prompt or post.
@@ -22,11 +22,11 @@ The core loop (plan the week, plan the day, focus, check in, close out, follow u
 | ID | Status | Decision |
 |---|---|---|
 | AI-D1 | Confirmed | Provider: **OpenAI API**. Built behind a provider adapter so it can change later. |
-| AI-D2 | Confirmed | Data policy: anything Coopilot holds may be sent to the provider (calendar, DevOps text for all clients, internal Teams), one client per request. the owner: the business terms exclude training, and no client contract restricts the data Coopilot holds. |
+| AI-D2 | Confirmed | Data policy: anything FocusTime holds may be sent to the provider (calendar, DevOps text for all clients, internal Teams), one client per request. the owner: the business terms exclude training, and no client contract restricts the data FocusTime holds. |
 | AI-D3 | Set up in AI-0 (Nov 4) | **AI-0:** one OpenAI project and key per environment (FocusTime dev, FocusTime prod) in the Cooptimize API organization, each with a hard monthly spend limit; the key only in that environment's Key Vault as `ft-openai-key` (infra/scripts/openai-key.sh, never printed); requests sent with `store: false` (no application state kept by OpenAI; abuse monitoring logs up to 30 days; API data not used for training); zero data retention not requested yet. Caps in FocusTime too: 10 USD a person and 100 USD for the app each month (D495 to D499, runbook › AI). Original text: **API access is separate from ChatGPT Business.** OpenAI's Business FAQ: a Business subscription does not include API usage; the API platform is billed separately. Need: which API organization/project and key (Cooptimize org vs personal), and confirm its data controls (training off by default for API; retention window; zero-retention option if wanted). Key lives in Key Vault only. |
 | T-D1 | Confirmed | Each client's delivery thread is usually a **Teams group chat with internal and external people**, e.g. "Fabrikam Delivery Team (Cooptimize)". Not a channel. |
 | T-D2 | Open | Posting to chats that include external people. Proposal: allowed, never automatic; preview lists everyone who will see it with external people flagged; a client-safe filter keeps internal planning details out (see below). |
-| T-D3 | Confirmed | Post types: slip heads-up, deployment done, weekly status, loop closed, all of them. And "more intelligence than templates": Coopilot should notice when a post is worth making and draft it with AI. |
+| T-D3 | Confirmed | Post types: slip heads-up, deployment done, weekly status, loop closed, all of them. And "more intelligence than templates": FocusTime should notice when a post is worth making and draft it with AI. |
 | T-D4 | Confirmed | Signals: **Teams first, Outlook email after.** |
 
 ## Client-safe filter (proposal, for chats with external people)

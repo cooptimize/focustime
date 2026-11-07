@@ -124,6 +124,8 @@ describe.skipIf(!CHROMIUM)("Settings shell (ST-1)", () => {
     await results.locator(".ps-hit", { hasText: "Time zone" }).first().click();
     await expect.poll(() => hash(page)).toBe("#/settings/hours/time-zone");
     await box.fill("write log");
+    // The results render after the keystroke: wait for one before moving into them (CI raced here, DOC-1).
+    await results.locator(".ps-hit").first().waitFor();
     await box.press("ArrowDown");
     expect(await page.evaluate(() => document.activeElement?.closest("#settings-search-results") !== null)).toBe(true);
     await box.fill("app secrets");

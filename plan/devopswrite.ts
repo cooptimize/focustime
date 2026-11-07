@@ -15,7 +15,7 @@ export const AC_FIELD = "Microsoft.VSTS.Common.AcceptanceCriteria";
  * The comment an undo of Create in DevOps adds. Kept word for word from before the rename (R1): it is already posted
  * on DevOps items, and one template keeps them consistent.
  */
-export const REMOVED_COMMENT = "Removed by Coopilot: undo of an item created from Coopilot.";
+export const REMOVED_COMMENT = "Removed by FocusTime: undo of an item created from FocusTime.";
 
 const ORG = /^[A-Za-z0-9][A-Za-z0-9-]{0,49}$/;
 export const validOrg = (org: string | null | undefined): org is string => typeof org === "string" && ORG.test(org);

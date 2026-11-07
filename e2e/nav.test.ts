@@ -117,7 +117,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.close();
   }, T);
 
-  it("Ahead: Grid · Gantt · Fix next; the ⋯ menu has Commands, the Guide, the keys, Send feedback and About; the initials menu has Settings", async () => {
+  it("Ahead: Grid · Gantt · Fix next; the ⋯ menu has Commands, the Guide, the Technical docs, the keys, Send feedback and About; the initials menu has Settings", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("3");
     await expect.poll(() => page.locator(".mode-switch .ms-btn").allTextContents()).toEqual(["Grid", "Gantt", "Gaps · 7", "Backlog"]);
@@ -127,7 +127,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.keyboard.press("p");
     await expect.poll(() => hash(page)).toBe("#/ahead");
     await page.locator(".top-more").click();
-    await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringMatching(/^Notifications/), expect.stringMatching(/^Commands/), expect.stringMatching(/^Guide/), expect.stringMatching(/^Keyboard shortcuts/), "Send feedback", "Admin", "About"]);
+    await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringMatching(/^Notifications/), expect.stringMatching(/^Commands/), expect.stringMatching(/^Guide/), "Technical docs", expect.stringMatching(/^Keyboard shortcuts/), "Send feedback", "Admin", "About"]);
     await page.keyboard.press("Escape");
     await page.locator(".person-chip").click();
     await page.getByRole("menuitem", { name: /^Settings/ }).click();

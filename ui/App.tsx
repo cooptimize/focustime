@@ -93,9 +93,12 @@ import { promptInstall, takeLaunchRoute, useInstall } from "./pwa.ts";
 import { TourLink } from "./guide/TourLink.tsx";
 import { tourById } from "./guide/tours.ts";
 import type { Checklist } from "../actions/guide-actions.ts";
+import type { DocsAccess } from "../actions/docs-actions.ts";
 // UI-5: the Guide and its tours load only when opened (no weight on the app's first load).
 const Guide = lazy(() => import("./guide/Guide.tsx"));
 const Tour = lazy(() => import("./guide/tour/Tour.tsx"));
+// DOC-1: the Technical docs, their pages and diagrams load only when opened.
+const TechDocs = lazy(() => import("./docs/TechDocs.tsx"));
 import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
 import { userZone } from "../week/zone.ts";
 
@@ -258,6 +261,8 @@ export function App() {
   const focusOpen = loc.overlay?.kind === "focus";
   /** G1: the Guide (#/guide), over the current place like Settings. */
   const guideAt = loc.overlay?.kind === "guide" ? loc.overlay : null;
+  /** DOC-1: the Technical docs (#/docs/<page>/<heading>), over the current place like the Guide. */
+  const docsAt = loc.overlay?.kind === "docs" ? loc.overlay : null;
   /** UI-5: a Show me tour over the real screen (#/guide/tour/<id>); it only highlights and explains. */
   const tourAt = loc.overlay?.kind === "tour" ? (tourById(loc.overlay.id) ?? null) : null;
   // MC-1: Client calls over the place (#/meetings and #/meetings/<occurrence>).
@@ -286,6 +291,8 @@ export function App() {
   /** UI-5: Your first day's states (read only; never a token). */
   const guideChecklist = useCallback(() => call<Checklist>("guide.checklist", {}), []);
   const openGuide = useCallback((chapter: string | null = null) => go((l) => ({ nav: l.nav, overlay: { kind: "guide", chapter } })), [go]);
+  const openDocs = useCallback((page: string | null = null, heading: string | null = null) => go((l) => ({ nav: l.nav, overlay: { kind: "docs", page, heading } })), [go]);
+  const docsAccess = useCallback(() => call<DocsAccess>("docs.access", {}), []);
   // P1: opening the list marks every notice read (the dot goes).
   const readAllNotices = notices.readAll;
   const openNotices = useCallback(() => setNoticesOpen(readAllNotices()), [readAllNotices]);
@@ -1221,7 +1228,7 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (base !== "week" || (nav.tab === "week" && (nav.mode === "team" || nav.mode === "status")) || focusOpen || guideAt || meetingAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (base !== "week" || (nav.tab === "week" && (nav.mode === "team" || nav.mode === "status")) || focusOpen || guideAt || docsAt || meetingAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
       const days = data.week.days;
@@ -1271,7 +1278,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, guideAt, meetingAt, base, captureOpen, layout, nav]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, guideAt, docsAt, meetingAt, base, captureOpen, layout, nav]);
 
   // QF-1: [ and ] on Today step a day back or ahead (never while typing; Week keeps them for its weeks).
   useEffect(() => {
@@ -1342,6 +1349,7 @@ export function App() {
       focusedItem: focusedItem.current,
       showKeys: () => setKeysOpen(true),
       showGuide: (section) => openGuide(section ?? null),
+      showDocs: (page, heading) => openDocs(page ?? null, heading ?? null),
       startTour: (id) => {
         const t = tourById(id);
         if (t) go(() => ({ nav: t.start, overlay: { kind: "tour", id: t.id } }));
@@ -1811,6 +1819,16 @@ export function App() {
             checklist={guideChecklist}
           />
         </Suspense>
+      ) : docsAt ? (
+        <Suspense fallback={null}>
+          <TechDocs
+            page={docsAt.page}
+            heading={docsAt.heading}
+            onGo={(page, heading) => openDocs(page, heading)}
+            onClose={() => go((l) => ({ nav: l.nav, overlay: null }))}
+            access={docsAccess}
+          />
+        </Suspense>
       ) : meetingAt ? (
         <Meetings occurrence={meetingAt.occurrence} colors={data.clients} onOpen={(id) => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: id } }))} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} />
       ) : focusOpen ? (
@@ -2080,7 +2098,7 @@ export function App() {
       )}
       {phone && (
         <BottomBar
-          current={settingsAt !== null || guideAt || meetingAt || focusOpen ? null : nav.tab}
+          current={settingsAt !== null || guideAt || docsAt || meetingAt || focusOpen ? null : nav.tab}
           inboxCount={inboxCount}
           onTab={(t: BottomTab) => {
             // The bar stays on screen under Capture and Ask: a tab closes them and goes there.
@@ -2107,6 +2125,7 @@ export function App() {
               { id: "settings", label: "Settings", run: () => setSettingsAt("") },
               ...(isAdmin ? [{ id: "admin", label: "Admin", run: () => setSettingsAt("admin-clients") }] : []),
               { id: "guide", label: "Guide", run: () => openGuide() },
+              { id: "docs", label: "Technical docs", run: () => openDocs() },
               ...installItem,
               { id: "about", label: "About", run: () => setAboutOpen(true) },
             ],
@@ -2143,6 +2162,7 @@ export function App() {
               { id: "notices", label: "Notifications", ...(notices.unread > 0 ? { hint: `${notices.unread} new` } : {}), run: () => openNotices() },
               { id: "commands", label: "Commands", hint: "Ctrl K", run: () => openCommands() },
               { id: "guide", label: "Guide", hint: "?", run: () => openGuide() },
+              { id: "docs", label: "Technical docs", run: () => openDocs() },
               { id: "keys", label: "Keyboard shortcuts", run: () => setKeysOpen(true) },
               { id: "feedback", label: "Send feedback", run: () => setFeedbackOpen(true) },
               // ADM-1: only for FocusTime admins (the server checks every admin action again).
@@ -2200,7 +2220,7 @@ export function App() {
       <BreakDownHost onDone={() => (setPlanWeekVersion((v) => v + 1), reloadQuiet())} />
       <CoopBriefHost />
       {feedbackOpen && <FeedbackDialog view={viewName(loc)} zone={userZone(data)} onClose={() => setFeedbackOpen(false)} />}
-      {aboutOpen && <AboutDialog zone={userZone(data)} onClose={() => setAboutOpen(false)} onGuide={() => openGuide()} />}
+      {aboutOpen && <AboutDialog zone={userZone(data)} onClose={() => setAboutOpen(false)} onGuide={() => openGuide()} onDocs={() => openDocs()} />}
       {setupAt && (
         <SetupFlow
           start={setupAt}

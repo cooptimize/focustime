@@ -8,8 +8,9 @@ import type { Checklist } from "../../actions/guide-actions.ts";
 import { Lumen } from "../brand/Brand.tsx";
 import { KEYS } from "../keys.ts";
 import { TypeIcon } from "../TypeIcon.tsx";
-import { AREA_UI, AREAS, DEVOPS, FIRST_DAY, FOOTER, QUESTION_POOL, RENAMED, SEARCH, SECTION_LINES, SHORTCUTS, START, TRY, type AreaBody, type Do, type Extra } from "./content.ts";
+import { AREA_UI, AREAS, DEVOPS, FIRST_DAY, FOOTER, QUESTION_POOL, RENAMED, SEARCH, SECTION_LINES, SHORTCUTS, START, TECH_DOCS_LINK, TRY, type AreaBody, type Do, type Extra } from "./content.ts";
 import { GuideFrame, useGuideList } from "./GuideFrame.tsx";
+import { SearchBox, searchEntries, SearchResults } from "./Search.tsx";
 import { Keys, plainText, Rich } from "./Rich.tsx";
 import { SECTIONS, sectionFor, type SectionId } from "./sections.ts";
 import { keysFor } from "./shortcuts.ts";
@@ -280,57 +281,11 @@ export function guideIndex(): Hit[] {
 
 /** Entries with every typed word, ones whose title has them all first; at most 20. */
 export function searchGuide(q: string, index: readonly Hit[]): Hit[] {
-  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!words.length) return [];
-  const has = (s: string) => words.every((w) => s.toLowerCase().includes(w));
-  const hits = index.filter((h) => has(`${h.title} ${h.text}`));
-  return [...hits.filter((h) => has(h.title)), ...hits.filter((h) => !has(h.title))].slice(0, 20);
-}
-
-function SearchBox({ q, setQ, first }: { q: string; setQ: (s: string) => void; first: () => void }) {
-  return (
-    <div className="ps-search">
-      <input
-        type="search"
-        aria-label={SEARCH.label}
-        placeholder={SEARCH.placeholder}
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape" && q) (e.preventDefault(), e.stopPropagation(), e.nativeEvent.stopImmediatePropagation(), setQ(""));
-          else if (e.key === "Enter") (e.preventDefault(), first());
-          else if (e.key === "ArrowDown") (e.preventDefault(), document.querySelector<HTMLElement>(".gsr-hit")?.focus());
-        }}
-      />
-    </div>
-  );
+  return searchEntries(q, index);
 }
 
 function Results({ q, hits, onGo }: { q: string; hits: Hit[]; onGo: (h: Hit) => void }) {
-  return (
-    <div className="gsr" role="region" aria-label={SEARCH.results(hits.length)}>
-      <div className="gsr-count" role="status">
-        {hits.length ? SEARCH.results(hits.length) : SEARCH.none(q)}
-      </div>
-      {hits.map((h, i) => (
-        <button
-          key={`${h.section}${h.title}${i}`}
-          type="button"
-          className="gsr-hit"
-          onClick={() => onGo(h)}
-          onKeyDown={(e) => {
-            const el = e.currentTarget;
-            const prev = el.previousElementSibling as HTMLElement | null;
-            if (e.key === "ArrowDown") (e.preventDefault(), (el.nextElementSibling as HTMLElement | null)?.focus());
-            if (e.key === "ArrowUp") (e.preventDefault(), (prev?.classList.contains("gsr-hit") ? prev : document.querySelector<HTMLElement>(".ps-search input"))?.focus());
-          }}
-        >
-          <span className="gsr-title">{h.title}</span>
-          <span className="gsr-in">{SEARCH.in(nameOf(h.section))}</span>
-        </button>
-      ))}
-    </div>
-  );
+  return <SearchResults rows={hits.map((h, i) => ({ key: `${h.section}${h.title}${i}`, title: h.title, where: SEARCH.in(nameOf(h.section)) }))} label={SEARCH.results(hits.length)} count={hits.length ? SEARCH.results(hits.length) : SEARCH.none(q)} onGo={(i) => onGo(hits[i]!)} />;
 }
 
 // ---------- The Guide ----------
@@ -403,7 +358,7 @@ export function Guide({
       onPick={(id) => (setQ(""), onSection(id))}
       onClose={onClose}
       standalone={standalone}
-      railTop={<SearchBox q={q} setQ={setQ} first={() => hits[0] && go(hits[0])} />}
+      railTop={<SearchBox q={q} setQ={setQ} first={() => hits[0] && go(hits[0])} label={SEARCH.label} placeholder={SEARCH.placeholder} />}
       railOverride={q.trim() ? <Results q={q} hits={hits} onGo={go} /> : undefined}
     >
       {current && (
@@ -413,6 +368,14 @@ export function Guide({
             <Lumen pose="still" size={22} />
             <span>
               <Rich text={FOOTER} />
+              {signedIn && (
+                <>
+                  {" "}
+                  <a href={TECH_DOCS_LINK.href} className="guide-tech-link">
+                    {TECH_DOCS_LINK.label}
+                  </a>
+                </>
+              )}
             </span>
           </footer>
         </div>

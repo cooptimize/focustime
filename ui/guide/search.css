@@ -1,0 +1,6 @@
+/* UI-5's search results in a panel's rail, in the rail's place while typing; shared by the Guide and the Technical docs (DOC-1, ui/guide/Search.tsx). */
+.gsr { display: flex; flex-direction: column; gap: 2px; }
+.gsr-count { font-size: var(--fs-2); color: var(--text-muted); padding: 4px 10px 6px; }
+.gsr-hit { text-align: left; display: flex; flex-direction: column; gap: 1px; padding: 7px 10px; border-radius: 8px; border: 0; background: none; color: var(--text); font-size: var(--fs-3); min-height: 40px; }
+.gsr-hit:hover, .gsr-hit:focus-visible { background: var(--surface); }
+.gsr-in { font-size: var(--fs-1); color: var(--text-faint); }
