@@ -58,6 +58,8 @@ import { timeChoices } from "../plan/picktime.ts";
 import { updatedAgo } from "./refresh.ts";
 import { usePhone } from "./viewport.ts";
 import { PhoneFollowUps, PhoneNow } from "./Phone.tsx";
+import { PhoneNextUp, PhoneNowCard, PhoneTodos, phoneNowOf } from "./PhoneToday.tsx";
+import { WeekDnd } from "./WeekStories.tsx";
 import { VmCtx, VmToday, vmNeedsToday } from "./Account.tsx";
 import { DetailPanel, BreakDown, interactive } from "./DetailPanel.tsx";
 import type { PanelFocus } from "./WeekGrid.tsx";
@@ -162,6 +164,14 @@ export function Today(props: Props) {
   // P1: on the phone, Now leads with one card (the block under way, its next pick, Start focus or the timer).
   const phone = usePhone();
   const view = useContext(PlanCtx);
+  // MB-1: today on the phone: the Now card, Needs you, the to-dos by block and Next up (other days, Check-in and
+  // Close out keep the block cards).
+  const phoneToday = phone && mode === "now" && isToday;
+  const dnd = useContext(WeekDnd);
+  const tickWithUndo = (p: Pick, done = true) => {
+    view.toggle(p.id, done);
+    dnd?.note(`${done ? "Done" : "Not done"}: ${p.title}`, async () => view.toggle(p.id, !done));
+  };
   const day = data.week.days.find((d) => d.date === date) ?? null;
   const plan = data.plan?.[date];
   const picks = useMemo(() => plan?.picks ?? [], [plan]);
@@ -377,7 +387,21 @@ export function Today(props: Props) {
           onClose={() => setMoreAt(null)}
         />
       )}
-      {mode === "now" && nudges && (
+      {mode === "now" && nudges && phoneToday && (
+        <PhoneNowCard
+          card={phoneNowOf(blocks, cal?.timed ?? [], clockNow)}
+          data={data}
+          pick={nextPick}
+          nowMs={nowMs}
+          nameOf={nameOf}
+          committed={committed}
+          onStart={props.onStart}
+          onDone={tickWithUndo}
+          onTimer={props.onTimer}
+          onFocusScreen={props.onFocusScreen}
+        />
+      )}
+      {mode === "now" && nudges && !phoneToday && (
         <PhoneNow
           data={data}
           block={blocks.find((s) => !ended(s)) ?? null}
@@ -390,9 +414,11 @@ export function Today(props: Props) {
           onDone={committed ? (p) => view.toggle(p.id, true) : null}
         />
       )}
+      {/* MB-1: on the phone one heading over the strip (its 3 lines and "N more in Inbox"); Promises due is gone there. */}
+      {mode === "now" && nudges && phoneToday && urgentLines(urgentSources, clockNow, tz).length > 0 && <h2 className="section-label ph-urgent-head">Needs you</h2>}
       {mode === "now" && nudges && <UrgentStrip sources={urgentSources} now={clockNow} today={date} tz={tz} clientName={(k) => data.planClients.find((c) => c.clientKey === k)?.clientName ?? k} onItem={props.onItem ?? (() => props.onInbox())} needsYou={props.needsYou ?? null} onNeedsYou={props.onNeedsYou} onAskFocus={(u) => void startAsk(u)} />}
       {!wide && attention}
-      {mode === "now" && nudges && props.moment && <MomentCard m={props.moment} onPlan={() => props.onPlan(date)} onCheckIn={props.onCheckIn} onCloseOut={props.onCloseOut} />}
+      {mode === "now" && nudges && props.moment && <MomentCard phone={phoneToday} m={props.moment} onPlan={() => props.onPlan(date)} onCheckIn={props.onCheckIn} onCloseOut={props.onCloseOut} />}
       {mode === "now" && nudges && props.setupLine && props.onSetup && (
         <p className="setup-line">
           <button type="button" className="link-btn" onClick={() => props.onSetup!(props.setupLine!.step)} title="Finish setting up FocusTime">
@@ -442,6 +468,12 @@ export function Today(props: Props) {
           )}
         </p>
       ) : (
+        phoneToday ? (
+          <div className="today-body ph-today">
+            <PhoneTodos blocks={blocks} picks={picks} data={data} nameOf={nameOf} committed={committed} now={now} onTick={(p, d) => tickWithUndo(p, d)} />
+            <PhoneNextUp blocks={blocks} events={cal?.timed ?? []} data={data} nameOf={nameOf} now={clockNow} />
+          </div>
+        ) : (
         <div className="today-body">
           {wide && day && mode !== "closeout" && !readOnly && <DayTimeline day={day} blocks={blocks} data={data} picks={picks} now={now} nowMs={nowMs} events={cal?.timed ?? []} onNotice={setNotice} />}
           <div className="today-main">
@@ -487,6 +519,7 @@ export function Today(props: Props) {
             {mode === "checkin" && <CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} now={now} act={act} onReview={props.onPlanWeek} onAsks={props.onAsks ?? props.onInbox} />}
           </div>
         </div>
+        )
       )}
 
       {panel && panelSlot && day && mode !== "closeout" && !readOnly && (
@@ -662,9 +695,9 @@ const MOMENTS = {
 } as const;
 
 /** NV-1: the card for the moment of the day. Plan today opens Week's Board on today; the others open their flow here. Done is one small line, reopenable. */
-export function MomentCard({ m, onPlan, onCheckIn, onCloseOut }: { m: Moment; onPlan: () => void; onCheckIn?: (() => void) | undefined; onCloseOut?: (() => void) | undefined }) {
+export function MomentCard({ m, onPlan, onCheckIn, onCloseOut, phone = false }: { /** MB-1: on the phone, Close out's card reads "Wrap up the day". */ phone?: boolean; m: Moment; onPlan: () => void; onCheckIn?: (() => void) | undefined; onCloseOut?: (() => void) | undefined }) {
   const open = m.kind === "plan" ? onPlan : m.kind === "checkin" ? onCheckIn : onCloseOut;
-  const t = MOMENTS[m.kind];
+  const t = phone && m.kind === "closeout" ? { ...MOMENTS.closeout, title: "Wrap up the day" } : MOMENTS[m.kind];
   if (m.done)
     return (
       <p className="moment-done" role="status">

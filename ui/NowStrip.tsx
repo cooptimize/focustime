@@ -5,6 +5,13 @@ import { formatDuration } from "../week/format.ts";
 import { clientColor, halfName } from "./labels.ts";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { progressLabel } from "../plan/weeklist.ts";
+import { usePhone } from "./viewport.ts";
+
+/** MB-1: a client's name short enough for the phone's Musts row: its first word, at most 10 letters. */
+export const shortClient = (name: string) => {
+  const w = name.trim().split(/\s+/)[0] ?? name;
+  return w.length > 10 ? `${w.slice(0, 9)}…` : w;
+};
 
 /** "13:05" as "1:05 PM", like the rest of the UI. */
 const clock = (hm: string) => {
@@ -135,6 +142,7 @@ export function MustsSummary({ musts, colors, onPlanWeek }: { musts: MustsRow[];
       document.removeEventListener("keydown", close);
     };
   }, [open]);
+  const phone = usePhone();
   const shown = musts.filter((m) => m.musts > 0);
   if (!shown.length) return null;
   // U3: musts once, as a swatch and "0/2" per client; amber when the on-track question says tight, muted otherwise.
@@ -145,6 +153,7 @@ export function MustsSummary({ musts, colors, onPlanWeek }: { musts: MustsRow[];
         {shown.map((m) => (
           <span key={m.clientKey} className={`cl-must${m.track?.kind === "at_risk" ? " tight" : ""}`} style={{ "--c": clientColor(m.clientKey, colors) } as CSSProperties} title={`${m.name}${m.track ? ` · ${m.track.text}` : ""}`}>
             <span className="swatch" aria-hidden="true" />
+            {phone && <span className="cl-name">{shortClient(m.name)}</span>}
             {m.done}/{m.musts}
           </span>
         ))}

@@ -2,6 +2,15 @@ import { createContext, Fragment, useContext, useLayoutEffect, useRef, useState,
 import { callMarks, callsIn, MeetingCalls, useCallMarks, useMine } from "./meetings/calls.ts";
 import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
+import { freeMinutes } from "../week/free.ts";
+import { FoldLine } from "./plan/FoldLine.tsx";
+
+/** MB-1: "2 meetings · 1 personal · 2h free", the phone card's folded agenda line (as Plan today's). */
+function agendaCount(slot: Slot): string {
+  const meetings = slot.events.filter((e) => !e.event.isPersonal && e.event.showAs !== "free").length;
+  const personal = slot.events.filter((e) => e.event.isPersonal).length;
+  return [meetings ? `${meetings} meeting${meetings === 1 ? "" : "s"}` : "", personal ? `${personal} personal` : "", `${formatDuration(freeMinutes(slot))} free`].filter(Boolean).join(" · ");
+}
 import { worstSeverity } from "../week/risks.ts";
 import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types.ts";
 import type { PtoDay } from "../week/pto.ts";
@@ -538,6 +547,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   const rail = compact && timeline ? railFor(tier, slot, phone) : null;
   // WK-2: with no time rail (the phone, or the timeline hidden) the card lists its meetings and events as lines.
   const listEvents = phone || !timeline;
+  const [agendaOpen, setAgendaOpen] = useState(false);
   const ruler = rail === "rail" || rail === "slim";
   // UI-9: a card with no rail to mark them (the timeline hidden, the phone, a strip or mini card) counts its late
   // promises in one chip; an overdue due badge for a promise a chip counts is folded into it, so it shows once.
@@ -640,7 +650,11 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
         </div>
       )}
       {flexList}
-      {listEvents && slot.events.length > 0 && (
+      {listEvents && slot.events.length > 0 && phone && (
+        // MB-1: on the phone the card's agenda starts folded, with what's in it and the free time; a tap opens it.
+        <FoldLine className="card-agenda-fold" open={agendaOpen} onToggle={() => setAgendaOpen(!agendaOpen)} label="Agenda" count={agendaOpen ? undefined : agendaCount(slot)} />
+      )}
+      {listEvents && slot.events.length > 0 && (!phone || agendaOpen) && (
         <ul className="card-events" aria-label={`Meetings and events, ${dayLabel} ${slot.half}`}>
           {slot.events.map((p) => (
             <li key={p.event.id} className={p.event.isPersonal ? "personal" : p.event.unavailable ? "unavailable" : undefined}>

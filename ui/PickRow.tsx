@@ -18,6 +18,7 @@ import { useTimeboxes } from "./Timeboxes.tsx";
 import { useFocused } from "./planview.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { PlanRow } from "./plan/PlanRow.tsx";
+import { useTodoSheet } from "./TodoSheet.tsx";
 import { DevOpsWork } from "./work.ts";
 import { isResolved } from "../plan/process.ts";
 
@@ -62,6 +63,15 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
   const tbs = useTimeboxes();
   const timed = (week || planD) && !!tbs && tbs.settings.enabled && pickTime(pick.id, tbs.timeboxes).state !== "untimed";
   const menu = useMenu((env) => pickMenu(env, pick));
+  // MB-1: on the phone ⋯ opens the to-do's sheet (the same as Today's); elsewhere the menu, as before.
+  const sheet = useTodoSheet();
+  const more = sheet ? (
+    <button type="button" className="more-btn ph-more" aria-label={`More for ${pick.title}`} aria-haspopup="dialog" onClick={(e) => (e.stopPropagation(), sheet(pick))} onDoubleClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+      ⋯
+    </button>
+  ) : (
+    menu.button(`More for ${pick.title}`)
+  );
   const { env } = useContext(MenuCtx);
   const focused = focusLabel(useFocused()(pick.id), pick.size);
   const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
@@ -78,6 +88,41 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
     <SizeChip size={pick.size} title={pick.title} wide={planD} tabIndex={tabIndex} note={focused ? `${focused} focused` : null}
       {...(readOnly || pick.status !== "planned" || !env ? {} : { onSet: (size) => void env.runPlan("pick.set_size", { id: pick.id, size }) })} />
   );
+  // MB-1: on the phone (the sheet is there only on the phone) every to-do row puts its title on its own line (two at
+  // most) and its chips (time, size, + time, ⋯) on a smaller second line, so a chip never squeezes the title.
+  if (sheet) {
+    const titleNode = link && pick.itemUrl ? <WorkLink clientKey={pick.clientKey} url={pick.itemUrl}>{pick.title}</WorkLink> : pick.title;
+    const line2 = (
+      <span className="pr-line2">
+        {extra}
+        {resolved && <ResolvedMark state={resolved.state} />}
+        {badge}
+        {actions}
+        <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />
+        {sizeChip}
+        {more}
+      </span>
+    );
+    if (planD)
+      return (
+        <PlanRow data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""} dens-plan ph-row ${className}`} onContextMenu={menu.onContextMenu} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}
+          handle={pick.status === "done" ? "✓" : "⋮⋮"} titleText={pick.title}
+          icon={pick.itemType ? <TypeIcon clientKey={pick.clientKey} type={pick.itemType} /> : undefined}
+          title={titleNode}>
+          {line2}
+        </PlanRow>
+      );
+    return (
+      <li data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""}${today ? " dens-today" : ""}${week ? " dens-week" : ""}${next ? " next" : ""} ph-row ${className}`} onContextMenu={menu.onContextMenu} {...(dragProps ?? {})} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
+        <input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} disabled={!canTick || pick.status === "dropped"} onChange={(e) => toggle(pick.id, e.target.checked)} onClick={stop} onDoubleClick={stop} aria-label={`Done: ${pick.title}`} />
+        {typeIcon && pick.itemType && <TypeIcon clientKey={pick.clientKey} type={pick.itemType} />}
+        <span className="pr-title" title={pick.title}>
+          {titleNode}
+        </span>
+        {line2}
+      </li>
+    );
+  }
   if (planD)
     // U6: Plan the day's row is the shared planning row (ui/plan/PlanRow.tsx).
     return (
@@ -87,7 +132,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
         title={link && pick.itemUrl ? <WorkLink clientKey={pick.clientKey} url={pick.itemUrl}>{pick.title}</WorkLink> : pick.title}
         badges={<>{resolved && <ResolvedMark state={resolved.state} />}{extra}{badge}</>}
         right={<>{timed && <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}{sizeChip}</>}
-        hover={<>{!timed && <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}{menu.button(`More for ${pick.title}`)}</>} />
+        hover={<>{!timed && <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}{more}</>} />
     );
   return (
     <li data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""}${today ? " dens-today" : ""}${week ? " dens-week" : ""}${next ? " next" : ""} ${className}`} onContextMenu={menu.onContextMenu} {...(dragProps ?? { draggable, onDragStart: draggable ? onDrag : undefined })} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
@@ -110,7 +155,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
           {actions}
           <span className="pr-hover">
             <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />
-            {menu.button(`More for ${pick.title}`)}
+            {more}
           </span>
         </>
       ) : week ? (
@@ -120,14 +165,14 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
           <span className="pr-hover">
             {sizeChip}
             {!timed && <PickTime pick={pick} editable={timeEditable && !readOnly} />}
-            {menu.button(`More for ${pick.title}`)}
+            {more}
           </span>
         </>
       ) : (
         <>
           {sizeChip}
           <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />
-          {menu.button(`More for ${pick.title}`)}
+          {more}
         </>
       )}
     </li>

@@ -88,6 +88,12 @@ describe.skipIf(!CHROMIUM || !SHOTS)("MB-1 screenshots", () => {
       await planMonday(page);
       await at(page, "#/week");
       await shot(page, `phone${w}-week-board`);
+      const cardFold = page.locator(".card-agenda-fold").first();
+      if (await cardFold.count()) {
+        await cardFold.click();
+        await page.waitForTimeout(300);
+        await shot(page, `phone${w}-week-board-agenda-open`);
+      }
       await at(page, `#/week/day/${MON}`);
       await shot(page, `phone${w}-week-day`);
       const fold = page.locator(".pd2-fold").first();
@@ -103,11 +109,13 @@ describe.skipIf(!CHROMIUM || !SHOTS)("MB-1 screenshots", () => {
       await at(page, "#/ahead");
       await shot(page, `phone${w}-ahead`);
       await at(page, "#/today");
-      const row = page.locator(".today-view .pick-row, .today-view .ptd-row").first();
+      const row = page.locator(".ph-todo-main").first();
       if (await row.count()) {
         await row.click({ position: { x: 60, y: 10 } }).catch(() => undefined);
         await page.waitForTimeout(400);
         await shot(page, `phone${w}-today-row-tapped`);
+        await page.keyboard.press("Escape");
+        await page.waitForTimeout(200);
       }
       const dot = page.locator(".status-dot-btn");
       if (await dot.count()) {

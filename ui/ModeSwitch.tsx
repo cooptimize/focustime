@@ -1,5 +1,6 @@
 // Step 16.2: one mode switch per tab, always at the right of the page header, the same everywhere. Each mode may show
 // a ✓ (done for that day or week) or a small dot (due now). Status is shown, never forced.
+import { usePhone } from "./viewport.ts";
 import type { ModeStatus } from "../plan/modes.ts";
 import { MODE_NAMES, MODES, TAB_NAMES, type ModeName, type Tab } from "./nav.ts";
 
@@ -30,14 +31,21 @@ export function ModeSwitch({ tab, current, status = {}, counts = {}, badges = {}
 
 /** The right side of a page header: a planning mode's state (UI-7: Draft, Confirmed, changed since you confirmed), its green Done, then the switch. */
 export function ModeArea({ children, done, note = null }: { children: React.ReactNode; done?: { label?: string; title?: string; disabled?: boolean; onClick: () => void } | null; note?: string | null }) {
+  const phone = usePhone();
   return (
     <div className="mode-area">
       {note && <span className="ma-note" role="status">{note}</span>}
-      {done && (
+      {done && (phone && /^Back to /.test(done.label ?? "") ? (
+        // MB-1: on the phone a way back is a small text link with an arrow, not a big green button.
+        <button type="button" className="done-link" disabled={done.disabled} onClick={done.onClick} title={done.title ?? "Go back"}>
+          <span aria-hidden="true">← </span>
+          {done.label}
+        </button>
+      ) : (
         <button type="button" className="done-btn" disabled={done.disabled} onClick={done.onClick} title={done.title ?? "Save and go back"}>
           {done.label ?? "Done"}
         </button>
-      )}
+      ))}
       {children}
     </div>
   );

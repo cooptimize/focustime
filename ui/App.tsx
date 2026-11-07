@@ -80,6 +80,7 @@ import { clientColor, SampleSources, weekLabel } from "./labels.ts";
 import { useLayout, usePhone } from "./viewport.ts";
 import { BottomBar, InstallHowTo, PhoneReadOnly, type BottomTab } from "./Phone.tsx";
 import { AheadNotice, sourceHealth, StatusDot, StatusSheet } from "./PhoneShell.tsx";
+import { TodoSheet, TodoSheetCtx } from "./TodoSheet.tsx";
 import { commandList, withoutAhead, type MenuEnv, type View } from "./menu.ts";
 import { CommandMenu, MenuHost } from "./Menus.tsx";
 import { WeekDndProvider } from "./WeekStories.tsx";
@@ -138,6 +139,9 @@ export function App() {
   // MB-1: the status dot's sheet, and Ahead opened anyway on the phone (for this visit; a reload shows the notice again).
   const [statusOpen, setStatusOpen] = useState(false);
   const [aheadAnyway, setAheadAnyway] = useState(false);
+  // MB-1: a to-do's sheet on the phone (Today's rows, Week's ⋯).
+  const [todoSheet, setTodoSheet] = useState<Pick | null>(null);
+  const openTodoSheet = useCallback((p: Pick) => setTodoSheet(p), []);
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [loading, setLoading] = useState(false);
   const [sel, setSel] = useState<Selection>({ dayIndex: 0, half: "AM" });
@@ -1589,6 +1593,7 @@ export function App() {
         setDetailsOpen(true);
       }}
     >
+    <TodoSheetCtx.Provider value={phone ? openTodoSheet : null}>
     <div className={`app ${layout}${compact ? " compact" : ""}${phone ? " phone" : ""}`}>
       <header className="topbar">
         <div className="brand">
@@ -2163,7 +2168,9 @@ export function App() {
       {captureOpen && <CaptureDialog data={data} defaultClient={env?.selection.clientKey ?? null} initialKind={captureKind} onClose={() => (setCaptureOpen(false), setCaptureKind(null))} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
       {createDraft !== null && <CreateDraftDialog key={createDraft} draftId={createDraft} data={data} onClose={() => setCreateDraft(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
       {draftEdit && <DraftEditor key={draftEdit.id} draft={draftEdit} data={data} onClose={() => setDraftEdit(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
+      {phone && todoSheet && <TodoSheet pick={todoSheet} data={data} now={now ?? new Date(clock).toISOString()} onClose={() => setTodoSheet(null)} onChanged={reloadQuiet} />}
     </div>
+    </TodoSheetCtx.Provider>
     </WeekDndProvider>
     </CreateDraftCtx.Provider>
     </DraftEditorCtx.Provider>
