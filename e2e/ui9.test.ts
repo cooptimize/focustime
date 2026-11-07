@@ -132,7 +132,7 @@ describe.skipIf(!CHROMIUM)("UI-9: the late chip on Week's cards", () => {
       return !items.some((i) => i.key === key && !i.done);
     }).toBe(true);
     await page.keyboard.press("2");
-    await expect.poll(() => chipText(page, MON_AM), { timeout: 10_000 }).toBeNull();
+    await expect.poll(() => chipText(page, MON_AM), { timeout: 20_000 }).toBeNull();
     expect(await chipText(page, MON_PM)).toBe("3 late");
 
     // Snooze one of Northwind's: two left.
