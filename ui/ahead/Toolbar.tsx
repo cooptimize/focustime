@@ -124,12 +124,12 @@ export function Toolbar({ mode, load, f, set, setWhole, view, counts, color }: {
             <LevelControl fold={view.fold} setFold={view.setFold} names={view.names} />
           </Group>
           <Group label="Callouts" control="callouts" off={off("callouts")}>
-            <OffButton off={off("callouts")} className="rm-chip ah-callouts-toggle" aria-pressed={view.callouts} onClick={() => view.setCallouts(!view.callouts)} title="The marker at the end of a bar: what needs attention, with its fix">
+            <OffButton off={off("callouts")} className="rm-chip ah-callouts-toggle" aria-label="Show callouts" aria-pressed={view.callouts} onClick={() => view.setCallouts(!view.callouts)} title="The marker at the end of a bar: what needs attention, with its fix">
               {view.callouts ? "On" : "Off"}
             </OffButton>
           </Group>
           <Group label="Whole project" control="whole" off={wholeOff}>
-            <OffButton off={wholeOff} className="rm-chip ah-whole" aria-pressed={!!f.whole} onClick={() => setWhole(!f.whole)} title={scopeTitle || "Every item in the project, not only Cooptimize's work"}>
+            <OffButton off={wholeOff} className="rm-chip ah-whole" aria-label="Show the whole project" aria-pressed={!!f.whole} onClick={() => setWhole(!f.whole)} title={scopeTitle || "Every item in the project, not only Cooptimize's work"}>
               {f.whole ? "On" : "Off"}
             </OffButton>
           </Group>

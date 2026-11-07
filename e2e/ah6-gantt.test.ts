@@ -26,7 +26,7 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", 
     await page.waitForTimeout(400);
     return { page, errors };
   };
-  const level = (page: Page, name: string) => page.locator(".ah-gantt-bar .ah-levels").getByRole("button", { name, exact: true });
+  const level = (page: Page, name: string) => page.locator(".ah-toolbar .ah-levels").getByRole("button", { name, exact: true });
   const row = (page: Page, title: string) => page.locator(".pa-item", { has: page.getByRole("link", { name: title, exact: true }) });
   const shot = async (page: Page, name: string) => {
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` });
@@ -212,7 +212,9 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", 
   it("levels: Epics, Features and Stories fold the tree; a roll-up spans its children with their count; carets work after a level; the choice is remembered", async () => {
     const { page, errors } = await open();
     const states = () => page.locator(".pa-item").evaluateAll((els) => els.map((e) => ({ level: Number(e.getAttribute("aria-level")), expanded: e.getAttribute("aria-expanded"), title: e.querySelector(".pa-title")!.textContent })));
-    // Features (the default): epics open, features closed.
+    // Stories is the default (AH-6 toolbar: one level for every mode, nothing folded); Features: epics open, features closed.
+    await expect(level(page, "Stories").getAttribute("aria-pressed")).resolves.toBe("true");
+    await level(page, "Features").click();
     await expect(level(page, "Features").getAttribute("aria-pressed")).resolves.toBe("true");
     let s = await states();
     for (const r of s) if (r.expanded !== null) expect(r.expanded, `${r.title}`).toBe(r.level === 1 ? "true" : "false");
@@ -260,7 +262,7 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", 
     await row(page, "Order history export").locator(".pa-caret").click();
     await expect(row(page, "Order history export").getAttribute("aria-expanded")).resolves.toBe("true");
     // Expand all and Collapse all in the control's menu.
-    await page.locator(".ah-gantt-bar .ah-levels-more").click();
+    await page.locator(".ah-toolbar .ah-levels-more").click();
     await page.getByRole("menuitem", { name: "Collapse all" }).click();
     await expect.poll(async () => (await states()).every((r) => r.expanded !== "true")).toBe(true);
     // Remembered after a reload.
@@ -268,11 +270,12 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", 
     await page.evaluate(() => (location.hash = "#/ahead/gantt"));
     await page.locator(".pa-item").first().waitFor({ timeout: 60_000 });
     await expect(level(page, "Epics").getAttribute("aria-pressed")).resolves.toBe("true");
-    // The Grid has the same control, its own choice.
+    // AH-6 toolbar: the Grid has the same control and the same level (one view for every mode).
     await page.evaluate(() => (location.hash = "#/ahead"));
     await page.locator(".ah-row").first().waitFor({ timeout: 30_000 });
-    const grid = page.locator(".ah-grid-bar .ah-levels");
-    await expect(grid.getByRole("button", { name: "Stories", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
+    const grid = page.locator(".ah-toolbar .ah-levels");
+    await expect(grid.getByRole("button", { name: "Epics", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
+    await grid.getByRole("button", { name: "Stories", exact: true }).click();
     const all = await page.locator(".ah-row").count();
     await grid.getByRole("button", { name: "Epics", exact: true }).click();
     await expect.poll(() => page.locator(".ah-row").count()).toBeLessThan(all);

@@ -24,7 +24,7 @@ describe.skipIf(!CHROMIUM)("client DevOps identities (browser, demo mode)", () =
   const ahead = async (page: Page) => {
     await page.evaluate(() => (location.hash = "#/ahead"));
     await page.locator(".ah-pending").waitFor({ timeout: 30_000 });
-    await page.getByRole("group", { name: "Owner" }).getByRole("button", { name: "All" }).click();
+    await page.getByRole("group", { name: "People" }).getByRole("button", { name: "Everyone" }).click();
     return (title: string) => page.locator(".ah-row", { has: page.getByRole("link", { name: title, exact: true }) }).locator(".ah-col-assignee");
   };
 

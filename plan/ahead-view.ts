@@ -68,7 +68,7 @@ export function notHere(mode: AheadModeKey, c: Control, o: { scoped: boolean; wh
 // ---- The address ----
 
 export type AheadView = { f: AheadFilters; level: Tier; callouts: boolean };
-export const DEFAULT_LEVEL: Tier = "feature";
+export const DEFAULT_LEVEL: Tier = "story";
 const KEY = /^[\w.:@-]{1,100}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const validDate = (s: string) => {

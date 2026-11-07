@@ -85,10 +85,10 @@ describe("AH-6: the address", () => {
     const back = fromQuery(q)!;
     expect(withQuery(DEFAULT_FILTERS, DEFAULT_FILTERS, back)).toEqual({ ...DEFAULT_FILTERS, ...f });
     expect([back.level, back.callouts]).toEqual(["epic", false]);
-    expect(toQuery({ f: DEFAULT_FILTERS, level: "feature", callouts: true })).toBe("");
+    expect(toQuery({ f: DEFAULT_FILTERS, level: "story", callouts: true })).toBe("");
     expect(fromQuery("")).toBeNull();
     // Custom dates instead of a quick pick.
-    expect(fromQuery(toQuery({ f: all({ from: "2026-11-09", to: "2026-12-04" }), level: "feature", callouts: true }))!.f).toMatchObject({ from: "2026-11-09", to: "2026-12-04" });
+    expect(fromQuery(toQuery({ f: all({ from: "2026-11-09", to: "2026-12-04" }), level: "story", callouts: true }))!.f).toMatchObject({ from: "2026-11-09", to: "2026-12-04" });
   });
   it("leaves out what it can't read, never failing", () => {
     expect(fromQuery("r=soon&from=2026-02-30&l=task&k=bogus,unsized&o=Northwind~nobody&c=a%20b")).toEqual({ f: { kinds: ["unsized"], owner: {}, clients: [] } });
