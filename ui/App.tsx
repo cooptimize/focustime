@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Meetings } from "./meetings/Meetings.tsx";
 import { addWeeks, mondayOf } from "../week/dates.ts";
 import { hidePersonal, personalCount } from "../week/personal.ts";
@@ -87,7 +87,11 @@ import { KeyLegend } from "./KeyLegend.tsx";
 import { NoticesPanel, NoticeToasts, useNotices } from "./Notices.tsx";
 import type { InAppNotice } from "../plan/push.ts";
 import { promptInstall, takeLaunchRoute, useInstall } from "./pwa.ts";
-import { Guide, TourLink } from "./guide/Guide.tsx";
+import { TourLink } from "./guide/TourLink.tsx";
+import { tourById } from "./guide/tours.ts";
+// UI-5: the Guide and its tours load only when opened (no weight on the app's first load).
+const Guide = lazy(() => import("./guide/Guide.tsx"));
+const Tour = lazy(() => import("./guide/tour/Tour.tsx"));
 import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
 import { userZone } from "../week/zone.ts";
 
@@ -224,6 +228,8 @@ export function App() {
   const focusOpen = loc.overlay?.kind === "focus";
   /** G1: the Guide (#/guide), over the current place like Settings. */
   const guideAt = loc.overlay?.kind === "guide" ? loc.overlay : null;
+  /** UI-5: a Show me tour over the real screen (#/guide/tour/<id>); it only highlights and explains. */
+  const tourAt = loc.overlay?.kind === "tour" ? (tourById(loc.overlay.id) ?? null) : null;
   // MC-1: Client calls over the place (#/meetings and #/meetings/<occurrence>).
   const meetingAt = loc.overlay?.kind === "meeting" ? loc.overlay : null;
   const base: "today" | "week" = nav.tab === "week" ? "week" : "today";
@@ -1689,6 +1695,11 @@ export function App() {
         </div>
       )}
 
+      {tourAt && (
+        <Suspense fallback={null}>
+          <Tour key={tourAt.id} tour={tourAt} phone={phone} onEnd={(to) => go((l) => ({ nav: l.nav, overlay: to === "guide" ? { kind: "guide", chapter: "start" } : null }))} />
+        </Suspense>
+      )}
       {showTour && (
         <div className="today-tour">
           <TourLink onOpen={() => (endTourOffer(), openGuide())} onDismiss={endTourOffer} />
@@ -1733,7 +1744,17 @@ export function App() {
           onSetup={(step) => setSetupAt(step)}
         />
       ) : guideAt ? (
-        <Guide chapter={guideAt.chapter} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} />
+        <Suspense fallback={null}>
+          <Guide
+            chapter={guideAt.chapter}
+            onClose={() => go((l) => ({ nav: l.nav, overlay: null }))}
+            onSection={(id) => go((l) => ({ nav: l.nav, overlay: { kind: "guide", chapter: id } }))}
+            onTour={(id) => {
+              const t = tourById(id);
+              if (t) go(() => ({ nav: t.start, overlay: { kind: "tour", id: t.id } }));
+            }}
+          />
+        </Suspense>
       ) : meetingAt ? (
         <Meetings occurrence={meetingAt.occurrence} colors={data.clients} onOpen={(id) => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: id } }))} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} />
       ) : focusOpen ? (

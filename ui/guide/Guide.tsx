@@ -1,15 +1,16 @@
 // G1: the in-app Guide (#/guide), rebuilt from the approved prototype (docs/ux/guide/prototype.html) in the app's
 // tokens, type scale and components. Every word is in ./content.ts; keys come from ui/keys.ts and the sizing sandbox
 // from the app's own math (./sandbox.ts). Example data only, labeled as such: never the person's own.
-// Lumen appears in the footer only (docs/design/brand.md lists the Guide among the places it may appear).
-import { CloseButton, useReturnFocus } from "../CloseButton.tsx";
+// UI-5: one section at a time in GuideFrame; Start here is ./StartHere.tsx, the tours ./tour/. Lumen: the footer, Start here's unroll and a tour's end (docs/design/brand.md).
 import { TypeIcon } from "../TypeIcon.tsx";
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Lumen, WeekMark } from "../brand/Brand.tsx";
-import { reducedMotion } from "../brand/motion.ts";
+import { Fragment, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Lumen } from "../brand/Brand.tsx";
 import { KEYS } from "../keys.ts";
 import type { StorySize } from "../../plan/estimate.ts";
-import { ASKS, BASICS, TEAM, TEAMS_BOT, CHAPTERS, DAYS, DEVOPS, EXAMPLE_WEEK, FOOTER, GUIDE_TITLE, HERO, PHONE, QUESTIONS, RHYTHM, SHORTCUTS, SIZING, TOUR, type ChapterId, type ExampleCell, type ExampleColor, type Mini, type Tone } from "./content.ts";
+import { ASKS, BASICS, TEAM, TEAMS_BOT, DEVOPS, FOOTER, GUIDE_TITLE, PHONE, QUESTIONS, RHYTHM, SECTION_GROUPS, SECTIONS, SHORTCUTS, SIZING, TOUR, type ExampleColor, type Mini, type SectionId, type Tone } from "./content.ts";
+import { GuideFrame } from "./GuideFrame.tsx";
+import { StartHere } from "./StartHere.tsx";
+import "./guide.css";
 import { caps, keysFor, richParts } from "./shortcuts.ts";
 import { sandbox } from "./sandbox.ts";
 
@@ -52,68 +53,11 @@ export function Rich({ text }: { text: string }) {
   );
 }
 
-function Cell({ cell, lit }: { cell: ExampleCell; lit: boolean }) {
-  const cls = `guide-cell ${cell.kind}${lit ? " lit" : ""}`;
-  if (cell.kind === "focus")
-    return (
-      <div className={cls} style={tint(color(cell.color))}>
-        <span>{cell.client}</span>
-      </div>
-    );
-  return (
-    <div className={cls}>
-      <span>{cell.label}</span>
-    </div>
-  );
-}
-
-function Hero({ lit }: { lit: Set<string> }) {
-  return (
-    <section className="guide-hero" aria-labelledby="g-hero">
-      <div>
-        <div className="guide-eyebrow">{HERO.eyebrow}</div>
-        <h1 id="g-hero">
-          {HERO.title[0]}
-          <em>{HERO.title[1]}</em>
-          {HERO.title[2]}
-        </h1>
-        <p className="guide-lede">{HERO.lede}</p>
-      </div>
-      <div className="guide-weekbox" role="img" aria-label={`${HERO.weekLabel} (${HERO.example.toLowerCase()})`}>
-        <div className="guide-week">
-          <span />
-          {DAYS.map((d) => (
-            <span key={d} className="d">
-              {d}
-            </span>
-          ))}
-          {(["AM", "PM"] as const).map((half) => (
-            <Fragment key={half}>
-              <span className="r">{half}</span>
-              {EXAMPLE_WEEK[half].map((c, i) => (
-                <Cell key={i} cell={c} lit={lit.has(`${half}${i}`)} />
-              ))}
-            </Fragment>
-          ))}
-        </div>
-        <div className="guide-weekcap">
-          <span>
-            {HERO.caption[0]}
-            <b>{HERO.caption[1]}</b>
-            {HERO.caption[2]}
-          </span>
-          <span className="guide-example">{HERO.example}</span>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Chapter({ id, eyebrow, title, sub, children }: { id: ChapterId; eyebrow: string; title: string; sub?: string; children: ReactNode }) {
+function Chapter({ id, eyebrow, title, sub, children }: { id: SectionId; eyebrow: string; title: string; sub?: string; children: ReactNode }) {
   return (
     <section className="guide-ch" id={`guide-${id}`} data-chapter={id} aria-labelledby={`g-${id}`}>
       <div className="guide-eyebrow">{eyebrow}</div>
-      <h2 id={`g-${id}`}>{title}</h2>
+      <h2 id={`g-${id}`} tabIndex={-1}>{title}</h2>
       {sub && (
         <p className="guide-sub">
           <Rich text={sub} />
@@ -566,77 +510,46 @@ function Questions() {
   );
 }
 
+/** The sections a legacy chapter draws (UI-5 keeps G1's chapters, facts fixed, until the next build replaces them). */
+function Section({ id, step, setStep, onTour }: { id: SectionId; step: number; setStep: (n: number) => void; onTour: ((id: string) => void) | null }) {
+  switch (id) {
+    case "start":
+      return <StartHere onTour={onTour} />;
+    case "basics":
+      return <Basics />;
+    case "rhythm":
+      return <Rhythm cur={step} setCur={setStep} />;
+    case "sizing":
+      return <Sizing />;
+    case "devops":
+      return <Devops />;
+    case "keys":
+      return <Shortcuts />;
+    case "phone":
+      return <Phone />;
+    case "asks":
+      return <AsksChapter />;
+    case "team":
+      return <TeamChapter />;
+    case "teams":
+      return <TeamsBotChapter />;
+    case "questions":
+      return <Questions />;
+  }
+}
+
 /**
- * The Guide. In the app it sits over the current place like Settings (Esc or Close goes back); signed out it is a page
- * of its own from the sign-in screen. `chapter` scrolls to that chapter when it changes.
+ * The Guide (UI-5): one section at a time beside a rail, like Settings. In the app it sits over the current place
+ * (Esc or Close goes back); signed out it is a page of its own from the sign-in screen. `chapter` is the section in
+ * the address (#/guide/<section>; none or unknown: Start here). `onTour` starts a Show me tour (null signed out).
  */
-export function Guide({ chapter, onClose, closeLabel = TOUR.close, standalone = false }: { chapter: string | null; onClose: () => void; closeLabel?: string; standalone?: boolean }) {
-  const scroller = useRef<HTMLElement>(null);
-  useReturnFocus();
+export function Guide({ chapter, onClose, onSection, onTour = null, closeLabel = TOUR.close, standalone = false }: { chapter: string | null; onClose: () => void; onSection: (id: string) => void; onTour?: ((id: string) => void) | null; closeLabel?: string; standalone?: boolean }) {
   const [step, setStep] = useState(0);
-  const [on, setOn] = useState<ChapterId | null>(null);
-  const lit = useMemo(() => new Set(RHYTHM.steps[step]!.lit.map((l) => `${l.half}${l.day}`)), [step]);
-
-  const go = (id: string, smooth = true) => {
-    const el = scroller.current?.querySelector(`#guide-${CSS.escape(id)}`);
-    el?.scrollIntoView({ behavior: smooth && !reducedMotion() ? "smooth" : "auto", block: "start" });
-  };
-  useEffect(() => {
-    if (chapter) go(chapter, false);
-    else scroller.current?.scrollTo({ top: 0 });
-    scroller.current?.focus({ preventScroll: true });
-  }, [chapter]);
-
-  // The chapter in view is marked in the chapter list.
-  useEffect(() => {
-    const root = scroller.current;
-    if (!root || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting && setOn((e.target as HTMLElement).dataset.chapter as ChapterId)), { root, rootMargin: "-40% 0px -55% 0px" });
-    root.querySelectorAll("[data-chapter]").forEach((s) => io.observe(s));
-    return () => io.disconnect();
-  }, []);
-
+  const current: SectionId = SECTIONS.find((s) => s.id === chapter)?.id ?? "start";
   return (
-    <main ref={scroller} className={`guide${standalone ? " standalone" : ""}`} aria-label={GUIDE_TITLE} tabIndex={-1}>
-      <header className="guide-top">
-        <div className="guide-wrap">
-          <div className="guide-brand">
-            <WeekMark height={16} />
-            FocusTime <span className="muted">{GUIDE_TITLE}</span>
-          </div>
-          <nav className="guide-chapters" aria-label="Chapters">
-            {CHAPTERS.map((c) => (
-              <button key={c.id} type="button" className={on === c.id ? "on" : ""} aria-current={on === c.id ? "true" : undefined} onClick={() => go(c.id)}>
-                {c.name}
-              </button>
-            ))}
-          </nav>
-          {standalone ? (
-            <button type="button" className="quiet guide-close" onClick={onClose} title={`${closeLabel} (Esc)`}>
-              {closeLabel}
-            </button>
-          ) : (
-            <CloseButton onClose={onClose} />
-          )}
-        </div>
-      </header>
-      <div
-        className="guide-wrap guide-body"
-        onKeyDown={(e) => {
-          if (standalone && e.key === "Escape") (e.preventDefault(), onClose());
-        }}
-      >
-        <Hero lit={lit} />
-        <Basics />
-        <Rhythm cur={step} setCur={setStep} />
-        <Sizing />
-        <Devops />
-        <Shortcuts />
-        <Phone />
-        <AsksChapter />
-        <TeamChapter />
-        <TeamsBotChapter />
-        <Questions />
+    <GuideFrame title={GUIDE_TITLE} rail={SECTIONS.map((s) => ({ id: s.id, label: s.name, group: s.group }))} groups={SECTION_GROUPS} current={current} onPick={onSection} onClose={onClose} closeLabel={closeLabel} standalone={standalone}>
+      <div className="guide-wrap guide-body" data-section={current}>
+        <Section id={current} step={step} setStep={setStep} onTour={onTour} />
         <footer className="guide-footer">
           <Lumen pose="still" size={22} />
           <span>
@@ -644,22 +557,8 @@ export function Guide({ chapter, onClose, closeLabel = TOUR.close, standalone = 
           </span>
         </footer>
       </div>
-    </main>
+    </GuideFrame>
   );
 }
 
-/** The tour link: on the sign-in page, and once on a person's first Today (with Not now). */
-export function TourLink({ onOpen, onDismiss }: { onOpen: () => void; onDismiss?: () => void }) {
-  return (
-    <div className="guide-tour" role={onDismiss ? "status" : undefined}>
-      <button type="button" className="link-btn" onClick={onOpen}>
-        {TOUR.link}
-      </button>
-      {onDismiss && (
-        <button type="button" className="quiet" onClick={onDismiss}>
-          {TOUR.dismiss}
-        </button>
-      )}
-    </div>
-  );
-}
+export default Guide;

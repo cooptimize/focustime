@@ -72,7 +72,7 @@ export const BASICS = {
     { name: "Must & nice to have", tone: "action", short: "What you'll definitely touch this week, and what fits if there's room.", more: "A must is a target, not a contract. Moving one is one click and nobody gets scolded. Dropping a promised one offers to draft a heads-up." },
     { name: "Size", tone: "watch", short: "Everything is sized in hours. {size:S} {size:M} {size:L} are shortcuts.", more: "S is 1h, M is 2h, L is 4h. Sizing is optional: an unsized story counts as 2h until you size it. Once a feature's stories are sized, they decide how big the feature is." },
     { name: "Promise", tone: "risk", short: "Something you owe someone, until you close the loop.", more: "An update, an answer, a DevOps change. Some open on their own (a slipped must, a done story still Active in DevOps). Close the loop when it's done." },
-    { name: "Capture", tone: "brand", short: "Get a thought out of your head in one line.", more: "Press {key:capture.add} anywhere. Save it as is, or as a promise, a draft story or a draft feature. A promise's Who is the same search box as everywhere else: pick a person, or keep a plain name. Sort the rest later in Inbox › Captures. Enter saves, Shift+Enter starts a new line, and the client chip is where it goes: the Saved note names that client, with Undo for a few seconds. A draft story or feature gets a DevOps-ready version from AI in the background when AI is allowed for that client and you have a write PAT for it; your own words stay as you typed them. Create in DevOps shows yours and the AI version side by side: use either, edit it, pick the parent, then confirm the preview. Ctrl+Enter saves and opens that preview at once. Nothing is created in DevOps until you confirm." },
+    { name: "Capture", tone: "brand", short: "Get a thought out of your head in one line.", more: "Press {key:capture.add} anywhere. Save it as is, or as a promise, a draft story or a draft feature. A promise's Who is the same search box as everywhere else: pick a person, or keep a plain name. Sort the rest later in Inbox › Captures and drafts. Enter saves, Shift+Enter starts a new line, and the client chip is where it goes: the Saved note names that client, with Undo for a few seconds. A draft story or feature gets a DevOps-ready version from AI in the background when AI is allowed for that client and you have a write PAT for it; your own words stay as you typed them. Create in DevOps shows yours and the AI version side by side: use either, edit it, pick the parent, then confirm the preview. Ctrl+Enter saves and opens that preview at once. Nothing is created in DevOps until you confirm." },
     { name: "Assistant", tone: "accent", short: "Ask what's next, or ask for a change you then confirm.", more: "Press {key:assistant.ask} (or / outside a text field), or Ask in the top bar. Ask what's next, what's due today or tonight, what you did for a client on a day, where an item stands, which features have gaps, what people promised in a client's conversations, or what you sent. It can also propose a change: move, drop or keep a to-do, confirm today or the week, add a must, a date, size or owner in Ahead (into your change set), send work to a teammate, a DevOps comment or description, or a capture. It can move several to-dos at once, across clients (“Move the stories under the export feature to Friday”, “Push everything from today to tomorrow”), with one Confirm and one Undo, and mark an item done and comment on it in one card. When it isn't sure which client, block or item you mean, it asks with a few choices: tap one or just type it. Every change shows the same preview as the button, and nothing happens until you Confirm. Hold the mic to talk (60 seconds at most); the words land in the box for you to edit before Send, and the recording isn't kept. It needs AI for FocusTime, and Allow AI for the client it's about. Your history stays 30 days; clear it in Settings › Data." },
     { name: "At risk", tone: "risk", short: "A block that meetings or life are eating into.", more: 'The reason is always written on the card: "At risk · Dentist 12:00". It\'s a heads-up, not a failure.' },
     { name: "Close out", tone: "faint", short: "Leave each client ready to pick up again.", more: "One line per client on where you left off. Next time that client's block comes around, the note is waiting at the top." },
@@ -106,7 +106,7 @@ export const RHYTHM = {
       name: "Plan the week",
       when: "Thursday or Friday · about 15 minutes",
       keys: [{ command: "view.planweek" }],
-      what: ["In Week, switch to Plan (W) and open one client at a time: their blocks next week are already laid out.", "From last week comes first: each feature from this week's list with what it means now (carry it over, watch it, finished). Accept all, or keep, drop or watch each one. Nothing is added until you do.", "Pick the features you'll definitely touch (musts) and the ones that fit if there's room.", "Anything without stories gets a nudge: draft them now or send a Coop brief.", "A target date shows on a row only when it falls this week or has passed. Amber means it may land too late.", "Click Next client until all are planned, then Done."],
+      what: ["In Week, switch to Plan (W) and open one client at a time: their blocks next week are already laid out.", "From last week comes first: each feature from this week's list with what it means now (carry it over, watch it, finished). Accept all, or keep, drop or watch each one. Nothing is added until you do.", "Pick the features you'll definitely touch (musts) and the ones that fit if there's room.", "Anything without stories gets a nudge: Break down, or send a Coop brief.", "A target date shows on a row only when it falls this week or has passed. Amber means it may land too late.", "Click Next client until all are planned, then Done."],
       lit: [{ half: "AM", day: 0 }, { half: "AM", day: 1 }, { half: "AM", day: 2 }, { half: "PM", day: 0 }, { half: "PM", day: 1 }, { half: "PM", day: 2 }],
       mini: {
         kind: "week",
@@ -304,7 +304,7 @@ export const ASKS = {
     { q: "What if nobody creates it?", a: "After one of their working days (at once if they're on time off) the card says \"Waiting on <Name> · 1 day\" in amber, the client's leads see it as Unclaimed, and the person gets one reminder. Anyone who sees it can Take it over; the person is told quietly. FocusTime never reassigns on its own and never notifies the whole team." },
     { q: "What are the suggested comments?", a: "When a tracked conversation changes and then goes quiet for 30 minutes, or is resolved, the item's owner gets one drafted DevOps comment with a link to the chat: Post comment or Skip. At most one a day per item, plus one on resolve. A description change is suggested only for a clear change of scope, with before and after, and needs your confirm. Lines from an internal chat are flagged and left out unless you include them." },
     { q: "What does Show messages show?", a: "The messages as Teams shows them: one person's messages together under their picture and name, yours on the other side, a reply's quoted message above it, and reactions small underneath (only each emoji and how many, never who). The latest 20 show first; Show earlier loads 20 more." },
-    { q: "Why do I see pictures from the chat?", a: "Pictures pasted into a chat show as thumbnails on the message, and the card says how many. Click one to see it large; Previous and Next (or the arrow keys) move between them, and Esc closes. FocusTime keeps a copy with its hidden details (where and when it was taken, the camera, comments) removed, shows it only to people on that chat who follow its client, and deletes it with its message. Pictures never go to AI. Only PNG, JPEG and GIF up to 10 MB show; anything else says why." },
+    { q: "Why do I see pictures from the chat?", a: "Pictures pasted into a chat show as thumbnails on the message, and the card says how many. Click one to see it large; Previous and Next (or the arrow keys) move between them, and Esc closes. FocusTime doesn't keep them: it reads each one from Teams with your own sign-in when you look (held in memory for a few minutes, never on disk), and only for people on that chat who follow its client. Whether they go to AI is a per-client switch, off by default (see Are chat images sent to the AI?). Only PNG, JPEG and GIF up to 10 MB show; anything else says why." },
     { q: "Can I merge two conversations?", a: "Yes, when one topic was split in two. On a card, ⋯ then Merge into…, and pick the one to keep; or Select, tick several of one chat, and choose the one to keep. Their messages, commitments and suggestions move into it for everyone on the chat, and the summary is written again. Undo puts everything back." },
     { q: "When is a promise in Today's urgent strip?", a: "When it's overdue, or due within the next 2 hours. Otherwise it waits at its time in Today's agenda (and on Week's rail), so it doesn't sit at the top all day. One due today with no time is in the promises row of the attention line, and joins the strip in your last 2 working hours." },
     { q: "How do I link a conversation or promise to an item that already exists?", a: "Link to item (the main button when FocusTime sees a likely item, else under ⋯) searches that client's open items in Cooptimize's scope by title or #id; on a promise it first lists up to 5 likely ones with the reason. Linking is FocusTime's own note, nothing changes in DevOps, and Undo (or Unlink under ⋯) takes it off. Tick Also add a comment on the item to post a short comment with a link back to Teams: it has its own preview and confirm. A linked conversation moves to In progress with the item's state, assignee and last change; when the item closes in DevOps it shows Item closed with Mark done, and nothing is closed for you." },
@@ -359,7 +359,7 @@ export const TEAMS_BOT = {
     { q: "What's in each one?", a: "The morning brief (at the start of your day, or a time you set): today's blocks, meetings, to-dos, promises due and work sent to you, with Confirm today and Move…. The midday check-in (12:00 unless you change it): this morning's to-dos with Done and Not yet, and Move the rest. Done on a to-do with a DevOps item asks, in the card, whether to set it done in DevOps too; nothing is written until you Confirm. Close out (30 minutes before your day ends unless you change it): today's to-dos; tick what got done or just tell it. Nudges: a promise due tonight that's still open, work sent to you waiting over half a day, or someone taking over an item assigned to you, together in one message, at most one an hour." },
     { q: "Does tapping a button change things right away?", a: "Done and Not yet on a to-do change only your own plan, at once, exactly like the buttons in the app, with Undo on the card. Anything bigger (moving to-dos, confirming today, closing out the day) shows the change first, with Confirm and Cancel, and nothing happens until you Confirm. Nothing in DevOps, Outlook or anywhere outside FocusTime changes without a Confirm." },
     { q: "Can I just tell it what I got done?", a: "Yes. While today's Close out is waiting, reply in your own words: \"all but the export\", \"1 and 3\", \"fixed the login timeout\". The card above fills in what it understood: the to-dos done, where the rest move (each to its client's next block, or the unfinished list when there's none this week) and the day closed out. One Confirm does all of it. FocusTime matches your words to the to-dos itself; no AI reads them." },
-    { q: "How do I capture something from Teams?", a: "Start the message with capture: (or c:), for example \"capture: call Dana about the export\". It goes to Inbox › Captures exactly as typed, to sort later, with Undo on the reply. Anything else you write goes to the assistant." },
+    { q: "How do I capture something from Teams?", a: "Start the message with capture: (or c:), for example \"capture: call Dana about the export\". It goes to Inbox › Captures and drafts exactly as typed, to sort later, with Undo on the reply. Anything else you write goes to the assistant." },
     { q: "It says FocusTime can't message me in Teams.", a: "Teams told FocusTime the chat is blocked or the app was removed, so Let FocusTime message me in Teams turned itself off. Add FocusTime again in Teams, send it a message, then turn the switch back on." },
   ],
 };
@@ -401,7 +401,7 @@ export const QUESTIONS = {
     { q: "Which version am I on?", a: "⋯ › About: one line with where it runs, the pull request, the commit and when it was built, and a Copy button for sending it to the FocusTime team." },
     { q: "How does FocusTime know I'm off?", a: "PTO in Dataverse is a whole day off. Out of office in Outlook over a whole morning or afternoon makes that half PTO. A PTO half has no free time and nothing can be planned on it; a must already pinned there stays, marked \"Pinned to PTO, move it\"." },
     { q: "Why can't I move some of my old timeboxes?", a: "Timeboxes made by an earlier FocusTime, before you signed in here, show as ordinary Outlook events. FocusTime leaves them alone; change or delete them in Outlook." },
-    { q: "How do I add a client's Teams chats?", a: "A FocusTime admin adds them: Admin › Clients, on each client, Delivery chats, then Add a chat (everyone else sees the chats in Settings › Clients, read-only). Type to search your Teams group chats, then Enter. A client can have several chats; a chat belongs to one client. Each is labelled Delivery team (the internal Cooptimize team) or Customer collaboration (with the client's key people): FocusTime suggests it from who is in the chat, and you can change it. People from other organizations, and guests, are marked External, and FocusTime warns when someone from outside is in a Delivery team chat. A chat added to a client is shared with everyone on it who follows the client, and its new messages are read into conversations (see Conversations and my promises)." },
+    { q: "How do I add a client's Teams chats?", a: "A FocusTime admin adds them: Admin › Clients, on each client, Delivery chats, then Add a chat (everyone else sees the chats in Settings › Clients, read-only). Type to search your Teams group chats, then Enter. A client can have several chats; a chat belongs to one client. Each is labelled Delivery team (the internal Cooptimize team) or Customer collaboration (with the client's key people): FocusTime suggests it from who is in the chat, and you can change it. People from other organizations, and guests, are marked External, and FocusTime warns when someone from outside is in a Delivery team chat. A chat added to a client is shared with everyone on it who follows the client, and its new messages are read into conversations (see The Inbox, conversations and promises)." },
     { q: "Where do I add my DevOps write access?", a: "Settings > Clients, on each client: enter a personal access token with work item read and write, then Check and save. FocusTime checks it against your DevOps identity, stores it encrypted, and never shows it again." },
     { q: "How do I send an idea, a problem or a question?", a: "⋯ › Send feedback, or Send feedback in Commands. Pick Idea, Problem or Question, write it, and look at the preview: it shows exactly what goes to the FocusTime backlog in Cooptimize's DevOps. Your name and email go with it, and where you were if you leave that ticked; nothing from your plan or clients. It's created as you, with your own DevOps write PAT for Internal, so turn on DevOps writes for Internal in Settings › Clients first; Settings › Connections › Send feedback says whether you're set up. Once it's created you see its number, linked to the item in DevOps, and Settings › Data lists it in the DevOps write log, with Undo. If it can't be sent, it says so and nothing is claimed; Copy text keeps it, and you can message the FocusTime team in Teams." },
     { q: "Does FocusTime use AI?", a: "Only where your FocusTime admin turns it on: AI for FocusTime and each client's Allow AI are set in Admin › AI, and Settings › AI shows them. What's sent is only what one task needs, about one client at a time; FocusTime checks it first and won't send another client's details, keys or passwords, your VM, or email addresses from outside Cooptimize. Your AI use stops at your monthly limit (10 dollars unless an admin changes it). Settings › AI shows this month's cost and your last 20 requests, never their text, and Test AI checks it works." },
@@ -424,8 +424,102 @@ export const FOOTER = "FocusTime by Cooptimize. Questions or ideas? ⋯ › Send
 
 export const TOUR = {
   /** The sign-in page and a person's first Today. */
-  link: "New here? Take the 2-minute tour",
+  link: "New here? Start here (about 10 minutes)",
   dismiss: "Not now",
   close: "Close",
   signIn: "Back to sign in",
+};
+
+// ---------- UI-5: the rebuilt Guide ----------
+
+/** UI-5: the Guide's sections in its rail. `legacy` ones are G1's chapters, kept (with their facts fixed) until UI-5's next build replaces them with the approved outline. */
+export const SECTIONS = [
+  { id: "start", name: "Start here", group: "guide" },
+  { id: "basics", name: "The basics", group: "legacy" },
+  { id: "rhythm", name: "Your rhythm", group: "legacy" },
+  { id: "sizing", name: "Sizing work", group: "legacy" },
+  { id: "devops", name: "DevOps first", group: "legacy" },
+  { id: "keys", name: "Shortcuts", group: "legacy" },
+  { id: "phone", name: "On your phone", group: "legacy" },
+  { id: "asks", name: "The Inbox", group: "legacy" },
+  { id: "team", name: "Working with your team", group: "legacy" },
+  { id: "teams", name: "FocusTime in Teams", group: "legacy" },
+  { id: "questions", name: "Questions", group: "legacy" },
+] as const;
+export type SectionId = (typeof SECTIONS)[number]["id"];
+export const SECTION_GROUPS = { guide: "Guide", legacy: "More (being rebuilt)" } as const;
+
+/** UI-5: Start here. About 250 words: what FocusTime is for, the day in five steps, the week in three. */
+export const START = {
+  eyebrow: "Start here",
+  title: "Plan features. Work stories. DevOps stays current.",
+  why: [
+    "Plan at the feature level, and work at the story level.",
+    "DevOps is the system of record. FocusTime keeps it current without extra effort.",
+    "The healthy path is the easy path. Re-planning is normal, never a failure.",
+  ],
+  markLabel: "The FocusTime week: four half-day columns, morning over afternoon",
+  day: {
+    title: "Your day, in five steps",
+    steps: [
+      { name: "Plan today", text: "In the morning, put stories on today's blocks and Confirm today.", teams: true },
+      { name: "Focus", text: "What's next has one Start focus. The urgent strip above it shows what's due now.", teams: false },
+      { name: "Check it off", text: "Tick a to-do when it's done. FocusTime offers the DevOps update.", teams: false },
+      { name: "Midday check-in", text: "After lunch, re-fit what's left. Anything that won't fit gets one suggested move.", teams: true },
+      { name: "Close out", text: "One line per client on where you left off, and the DevOps updates you owe.", teams: true },
+    ],
+    teams: "Also in Teams",
+  },
+  week: {
+    title: "Your week, in three",
+    steps: [
+      { name: "Plan", where: "Week › Plan", text: "Thursday or Friday: choose the features you'll touch next week, client by client.", tour: "plan-week" },
+      { name: "Board", where: "Week › Board", text: "Put to-dos on your half-day blocks. Timeline shows each block's hours.", tour: null },
+      { name: "Status", where: "Week › Status", text: "Before Kat's Monday report, write a line per feature. It goes to DevOps as a comment.", tour: null },
+    ] as { name: string; where: string; text: string; tour: string | null }[],
+  },
+  promises: {
+    title: "Two things that never change",
+    items: [
+      { name: "FocusTime proposes, you confirm", text: "Every change to DevOps, Teams or Outlook shows a preview first, and has Undo. Your own plan changes from a tap happen at once, with Undo." },
+      { name: "Clients stay separate", text: "One client's work never shows in another client's view, AI request or post. AI is optional, and allowed per client." },
+    ],
+    /** The proposal card's two states (an animation from one to the other). */
+    proposal: { ask: "Set #4411 to Closed?", confirm: "Confirm", done: "Done ✓", undo: "Undo", replay: "Play again", label: "Example: a proposal, confirmed" },
+  },
+  showMe: "Show me",
+  soon: "Tour next build",
+  /** Signed out there are no screens to show. */
+  signedOut: "Sign in to see it on your own screens.",
+};
+
+/** UI-5: the words of the tour card (ui/guide/tour/Tour.tsx). */
+export const TOUR_UI = {
+  stepOf: (n: number, of: number) => `Step ${n} of ${of}`,
+  back: "Back",
+  next: "Next",
+  finish: "Finish",
+  skip: "Skip tour",
+  example: "Example: what it looks like once there's something here",
+  loading: "Opening the screen…",
+  endTitle: "You're set",
+  toGuide: "Back to the Guide",
+  done: "Done",
+  keys: "→ next · ← back · Esc skips",
+  label: (title: string) => `Tour: ${title}`,
+};
+
+/** UI-5: the example data the tours' drawings use where a real screen has nothing yet. Fictional, labeled as an example. */
+export const TOUR_EXAMPLES = {
+  grid: {
+    AM: [{ client: "Northwind", color: "teal" }, { client: "Harbor", color: "violet" }, { client: "Northwind", color: "teal" }, { client: "PTO", color: null }, { client: "Catch-up", color: null }],
+    PM: [{ client: "Atlas", color: "ochre" }, { client: "Northwind", color: "teal" }, { client: "Cooptimize", color: "blue" }, { client: "PTO", color: null }, { client: "Catch-up", color: null }],
+  } as Record<"AM" | "PM", { client: string; color: ExampleColor | null }[]>,
+  carry: [
+    { title: "Order history export", hint: "3 of your stories open", action: "Carry over" },
+    { title: "Supplier onboarding", hint: "Finished last week", action: "Keep" },
+  ],
+  card: { client: "Northwind", color: "teal" as ExampleColor, fit: "9h planned · 11h free", musts: [{ title: "Order history export", hours: "about 6h" }, { title: "Invoice totals", hours: "3h" }], nice: "Nice to have · 1" },
+  add: { client: "Northwind", rows: ["#4120 Returns dashboard", "#4133 Price list import", "#4158 Shipping labels"], box: "Type a feature for Northwind, then Enter" },
+  next: { label: "Next client: Harbor ›" },
 };

@@ -4,7 +4,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { CHAPTERS, SHORTCUTS, SIZING, TOUR } from "../ui/guide/content.ts";
+import { SECTIONS, SHORTCUTS, SIZING, START, TOUR } from "../ui/guide/content.ts";
 import { sandbox } from "../ui/guide/sandbox.ts";
 import { keysFor } from "../ui/guide/shortcuts.ts";
 
@@ -17,7 +17,7 @@ const THEMES = { dark: "cooptimize-dark", light: "cooptimize-light" } as const;
 async function noSidewaysScroll(page: Page) {
   return page.evaluate(() => {
     const g = document.querySelector(".guide") as HTMLElement;
-    const wide = [...document.querySelectorAll(".guide-ch, .guide-hero, .guide-top")].filter((e) => e.getBoundingClientRect().right > innerWidth + 1).map((e) => e.className);
+    const wide = [...document.querySelectorAll(".guide-ch, .gs, .gf-top, .gf-rail")].filter((e) => e.getBoundingClientRect().right > innerWidth + 1).map((e) => e.className);
     return { page: document.documentElement.scrollWidth <= innerWidth, guide: g.scrollWidth <= g.clientWidth + 1, wide };
   });
 }
@@ -42,19 +42,29 @@ describe.skipIf(!CHROMIUM)("the Guide (G1)", () => {
         const guide = page.locator("main.guide");
         await guide.waitFor({ timeout: 10_000 });
         expect(await page.evaluate(() => location.hash)).toBe("#/guide");
-        await expect.poll(() => guide.locator(".guide-hero h1").textContent()).toContain("half-days");
-        expect(await guide.locator("[data-chapter]").evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.chapter))).toEqual(CHAPTERS.map((c) => c.id));
+        // UI-5: Start here first; every section in the rail (a picker at phone width), one at a time.
+        await expect.poll(() => guide.locator("[data-section='start'] h1").textContent()).toBe(START.title);
+        const rail = width > 1000 ? await guide.locator(".gf-rail .set-tab:not(.close)").allTextContents() : await guide.locator(".gf-picker option").allTextContents();
+        expect(rail).toEqual(SECTIONS.map((c) => c.name));
+        expect(await noSidewaysScroll(page)).toEqual({ page: true, guide: true, wide: [] });
+        const open = async (id: string) => {
+          await page.evaluate((x) => (location.hash = `#/guide/${x}`), id);
+          await guide.locator(`[data-section='${id}']`).waitFor();
+        };
+        await open("basics");
         expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe(THEMES[theme]);
 
         // Chapter 1: a card opens its detail.
         await guide.locator(".guide-concept").first().click();
         await expect.poll(() => guide.locator(".guide-concept").first().getAttribute("aria-expanded")).toBe("true");
         // Chapter 2: the stepper moves, by click and by arrow key.
+        await open("rhythm");
         await guide.locator(".guide-panel .primary").click();
         await expect.poll(() => guide.locator(".guide-panel h3").textContent()).toBe("Plan today");
         await page.keyboard.press("ArrowRight");
         await expect.poll(() => guide.locator(".guide-panel h3").textContent()).toBe("Now");
         // Chapter 3: the sandbox's words are plan/fit.ts's.
+        await open("sizing");
         const fit = guide.getByTestId("guide-fit");
         expect(await fit.textContent()).toBe(sandbox(SIZING.start, SIZING.block).fit.text);
         await guide.locator('[data-add="L"]').click();
@@ -70,10 +80,12 @@ describe.skipIf(!CHROMIUM)("the Guide (G1)", () => {
         await guide.locator("[data-clear]").click();
         expect(await fit.textContent()).toBe(SIZING.empty);
         // Chapter 5: the cards draw keys.ts's keys.
+        await open("keys");
         for (const c of SHORTCUTS.cards) expect(await cardKeys(page, c.label), c.label).toEqual(keysFor(c.keys, c.all).flatMap((k) => k.split(" ")));
         await guide.locator(".guide-every summary").click();
         expect(await guide.locator(".guide-every .key-list dt").count()).toBeGreaterThan(20);
-        // Chapter 6 and the footer.
+        // Questions and the footer.
+        await open("questions");
         await guide.locator(".guide-q summary").last().click();
         for (const q of ["Do I have to size everything?", "What's a block, then?"]) expect(await guide.locator(".guide-q summary", { hasText: q }).count(), q).toBe(1);
         expect(await guide.locator(".guide-footer").textContent()).toContain("⋯ › Send feedback, or message the FocusTime team in Teams.");

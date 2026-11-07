@@ -14,7 +14,7 @@ P1 (phone and PWA, D476 to D482): under 600 px (`viewport.ts`: `PHONE_MAX_PX`, `
 
 ## ui/guide/: the in-app Guide
 
-`ui/guide/`: the in-app Guide (G1, D443, #/guide): content.ts (every word, example data only; keys as references to keys.ts rows), Guide.tsx (the seven chapters, P1 added On your phone, Keys, Rich, TourLink), shortcuts.ts (keys from keys.ts), sandbox.ts (the sizing sandbox on plan/estimate.ts and plan/fit.ts); guide-* styles in styles.css; docs/ux/guide/prototype.html is the approved design
+`ui/guide/`: the in-app Guide (G1, D443, #/guide; UI-5: docs/guide.md), loaded lazily: content.ts (every word, example data only; keys as references to keys.ts rows; SECTIONS, START, TOUR_UI, TOUR_EXAMPLES), GuideFrame.tsx (the rail, picker, close; ST-1's shell later), Guide.tsx (one section at a time, Keys, Rich), StartHere.tsx, TourLink.tsx (the sign-in and first-Today link, in the main bundle), tours.ts (the Show me tours as data; #/guide/tour/<id>), tour/Tour.tsx (the layer: ring, card, keys, focus; never clicks or writes) and tour/Illustrations.tsx (example drawings), guide.css, shortcuts.ts (keys from keys.ts), sandbox.ts (the sizing sandbox on plan/estimate.ts and plan/fit.ts); guide-* styles in styles.css; docs/ux/guide/prototype.html is the approved design
 
 ## ui/brand/: the brand module
 

@@ -19,11 +19,13 @@ type Props = {
   /** The type box and its hint, pinned at the bottom. */
   box?: ReactNode | undefined;
   label?: string | undefined;
+  /** UI-5: a Guide tour's hook (data-tour), nothing else. */
+  tour?: string | undefined;
 };
 
-export function AddPane({ className = "", color, client, suffix, count, titleClass = "", top, children, scrollClass = "", box, label = "Add work" }: Props) {
+export function AddPane({ className = "", color, client, suffix, count, titleClass = "", top, children, scrollClass = "", box, label = "Add work", tour }: Props) {
   return (
-    <div className={`pl-add ${className}`} data-plan="add" style={{ "--c": color } as CSSProperties} aria-label={label}>
+    <div className={`pl-add ${className}`} data-plan="add" data-tour={tour} style={{ "--c": color } as CSSProperties} aria-label={label}>
       <h3 className={`pl-add-title ${titleClass}`}>
         Add to <span className="pl-add-client">{client}</span>
         {suffix != null && <> {suffix}</>}

@@ -4,6 +4,7 @@
 import type { Half, IsoDate } from "../week/types.ts";
 import type { Route } from "../plan/notify.ts";
 import type { InboxView } from "../plan/inbox-items.ts";
+import { tourById } from "./guide/tours.ts";
 
 export const TABS = ["today", "week", "ahead", "inbox"] as const;
 export type Tab = (typeof TABS)[number];
@@ -51,7 +52,8 @@ export type Nav =
 
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
 /** MC-1: a call's review over the place (`occurrence` null: my calls, the ones I review or attend). */
-export type Overlay = { kind: "focus" } | { kind: "settings"; section: string } | { kind: "guide"; chapter: string | null } | { kind: "meeting"; occurrence: number | null } | null;
+/** UI-5: a Show me tour running over the real screen in `nav` (only highlights and explains; #/guide/tour/<id>). */
+export type Overlay = { kind: "focus" } | { kind: "settings"; section: string } | { kind: "guide"; chapter: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null } | null;
 export type Loc = { nav: Nav; overlay: Overlay };
 
 export const navOf = {
@@ -157,6 +159,7 @@ export function hashOf(l: Loc): string {
   if (l.overlay?.kind === "focus") return "#/focus";
   if (l.overlay?.kind === "settings") return `#/settings/${l.overlay.section}`;
   if (l.overlay?.kind === "guide") return l.overlay.chapter ? `#/guide/${l.overlay.chapter}` : "#/guide";
+  if (l.overlay?.kind === "tour") return `#/guide/tour/${l.overlay.id}`;
   if (l.overlay?.kind === "meeting") return l.overlay.occurrence ? `#/meetings/${l.overlay.occurrence}` : "#/meetings";
   const n = l.nav;
   if (n.tab === "today") return ["#/today", n.flow, n.flow === "closeout" || n.flow === null ? n.date : null].filter(Boolean).join("/");
@@ -203,6 +206,11 @@ export function parseHash(hash: string): Loc | null {
     case "settings":
       return a !== undefined && SECTION.test(a) && b === undefined ? { nav: navOf.today(), overlay: { kind: "settings", section: a } } : a === undefined ? { nav: navOf.today(), overlay: { kind: "settings", section: "you" } } : null;
     case "guide":
+      // UI-5: #/guide/tour/<id> opens the tour's screen with the tour over it.
+      if (a === "tour") {
+        const t = b !== undefined && c === undefined ? tourById(b) : undefined;
+        return t ? { nav: t.start, overlay: { kind: "tour", id: t.id } } : null;
+      }
       return b !== undefined ? null : a === undefined ? { nav: navOf.today(), overlay: { kind: "guide", chapter: null } } : SECTION.test(a) ? { nav: navOf.today(), overlay: { kind: "guide", chapter: a } } : null;
     // MC-1: #/meetings (my calls) and #/meetings/<occurrence> (Update <client>'s plan from one call), over Week.
     case "meetings":
@@ -371,5 +379,5 @@ export function viewName(loc: Loc): string {
     : n.tab === "ahead" ? `${TAB_NAMES.ahead} › ${MODE_NAMES[n.mode]}`
     : n.view ? `${TAB_NAMES.inbox} › ${INBOX_VIEW_NAMES[n.view]}` : TAB_NAMES.inbox;
   const o = loc.overlay;
-  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "meeting" ? "Client calls" : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
+  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "meeting" ? "Client calls" : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
 }

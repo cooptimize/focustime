@@ -10,7 +10,7 @@ export function ModeSwitch({ tab, current, status = {}, counts = {}, badges = {}
   const modes = MODES[tab];
   if (modes.length < 2) return null;
   return (
-    <nav className="mode-switch" aria-label={`${TAB_NAMES[tab]} modes`}>
+    <nav className="mode-switch" aria-label={`${TAB_NAMES[tab]} modes`} data-tour={`modes-${tab}`}>
       {modes.map((m) => {
         const s = status[m] ?? null;
         const n = badges[m] ?? 0;
@@ -34,7 +34,7 @@ export function ModeArea({ children, done, note = null }: { children: React.Reac
     <div className="mode-area">
       {note && <span className="ma-note" role="status">{note}</span>}
       {done && (
-        <button type="button" className="done-btn" disabled={done.disabled} onClick={done.onClick} title={done.title ?? "Save and go back"}>
+        <button type="button" className="done-btn" data-tour="mode-done" disabled={done.disabled} onClick={done.onClick} title={done.title ?? "Save and go back"}>
           {done.label ?? "Done"}
         </button>
       )}
