@@ -73,7 +73,7 @@ import { BreakDownHost, CoopBriefHost } from "./BreakDownPanel.tsx";
 import { FromLastWeek } from "./FromLastWeek.tsx";
 import { CarryProvider, CarrySummary } from "./Carry.tsx";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
-import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
+import { Settings } from "./Settings.tsx";
 import { useAdmin } from "./settings/Admin.tsx";
 import { clientColor, SampleSources, weekLabel } from "./labels.ts";
 import { useLayout, usePhone } from "./viewport.ts";
@@ -220,7 +220,9 @@ export function App() {
     return () => window.removeEventListener("popstate", on);
   }, []);
   const nav = loc.nav;
-  const settingsAt: SettingsSectionId | null = loc.overlay?.kind === "settings" ? (SETTINGS_SECTIONS.some(([id]) => id === (loc.overlay as { section: string }).section) ? (loc.overlay.section as SettingsSectionId) : "you") : null;
+  // ST-1: the section in the address ("" is the rail) and a setting in it; Settings maps old ids and unknown ones.
+  const settingsAt: string | null = loc.overlay?.kind === "settings" ? loc.overlay.section : null;
+  const settingAt: string | null = loc.overlay?.kind === "settings" ? (loc.overlay.setting ?? null) : null;
   const focusOpen = loc.overlay?.kind === "focus";
   /** G1: the Guide (#/guide), over the current place like Settings. */
   const guideAt = loc.overlay?.kind === "guide" ? loc.overlay : null;
@@ -235,7 +237,7 @@ export function App() {
   /** NV-1: the Board focused on a day (Plan the day lives here now). */
   const planDayFocus = focusOf(nav);
   /** Settings (step 6b) at a section, or closed (back to the place under it). */
-  const setSettingsAt = useCallback((section: SettingsSectionId | null) => go((l) => ({ nav: l.nav, overlay: section ? { kind: "settings", section } : null })), [go]);
+  const setSettingsAt = useCallback((section: string | null, setting: string | null = null) => go((l) => ({ nav: l.nav, overlay: section !== null ? { kind: "settings", section, setting } : null })), [go]);
   // CV-3: the account menu, for the phone's ⋯ first row (the person chip on wider screens).
   const account = useAccountMenu(() => setSettingsAt("you"));
   // G1: the tour link shows on the first Today (Now) a person sees, once: it is recorded as shown when it first
@@ -538,12 +540,12 @@ export function App() {
   }, []);
   const writes = useWriteFlow(reloadQuiet);
   // Step 14: DevOps writes (preview, confirm, read back) and the way to Settings > Clients for a write PAT.
-  const openSettingsRef = useRef<((section?: string) => void) | null>(null);
+  const openSettingsRef = useRef<((section?: string, setting?: string) => void) | null>(null);
   // CP-1: the preview names the client (and its color) it writes to.
   const devopsWrites = useDevOpsWriteFlow({
     allowed: data?.devopsWrite ?? [],
     onDone: reloadQuiet,
-    openSettings: () => openSettingsRef.current?.("clients"),
+    openSettings: () => openSettingsRef.current?.("devops", "devops-write"),
     client: { name: (k) => (data ? captureClients(data).find((c) => c.clientKey === k)?.clientName : undefined) ?? k, color: (k) => (data ? clientColor(k, data.clients) : undefined) },
   });
   // PK-1: a to-do checked off offers its DevOps item's done state (never automatically); unchecked, the Undo.
@@ -1125,7 +1127,8 @@ export function App() {
       const free = !typing && !captureOpen;
       const k = e.key;
       if (loc.overlay && k === "Escape" && !captureOpen) {
-        // The focus screen and Settings sit over a place; Esc goes back to it (the timer keeps running).
+        // The focus screen and Settings sit over a place; Esc goes back to it (the timer keeps running). Settings' own
+        // shell takes Esc first (ST-1), so its unsaved fields are saved on the way out.
         e.preventDefault();
         go((l) => ({ nav: l.nav, overlay: null }));
       } else if (k === "Escape" && !captureOpen && !pd && isPlanning(nav)) {
@@ -1134,7 +1137,7 @@ export function App() {
         goNav(afterDone(nav));
       } else if (settingsAt === null && k === "," && free) {
         e.preventDefault();
-        setSettingsAt("you");
+        setSettingsAt("");
       } else if (tabForKey(k) && free) {
         // Step 16.2: 1–4 are the tabs in order (T stays Today).
         e.preventDefault();
@@ -1368,9 +1371,9 @@ export function App() {
       openVm: () => window.dispatchEvent(new Event(VM_MENU_EVENT)),
       openFeedback: () => setFeedbackOpen(true),
       openNotifications: () => openNotices(),
-      openSettings: (section) => {
+      openSettings: (section, setting) => {
         setDetailsOpen(false);
-        setSettingsAt(SETTINGS_SECTIONS.some(([id]) => id === section) ? (section as SettingsSectionId) : "you");
+        setSettingsAt(section ?? "", setting ?? null);
       },
       openTimebox: (t) => {
         setCmdOpen(false);
@@ -1547,7 +1550,7 @@ export function App() {
     <DevOpsWriteCtx.Provider value={devopsWrites.env}>
     <DoneOfferCtx.Provider value={doneOffer.env}>
     <MenuHost env={env}>
-    <VmProvider onSettings={() => setSettingsAt("you")}>
+    <VmProvider onSettings={() => setSettingsAt("connections", "vm")}>
     <DraftEditorCtx.Provider value={setDraftEdit}>
     <CreateDraftCtx.Provider value={setCreateDraft}>
     <WeekDndProvider
@@ -1573,7 +1576,7 @@ export function App() {
             <span className="name">FocusTime</span>
           </button>
           {data.demo && (
-            <button type="button" className="demo-tag" onClick={() => setSettingsAt("display")} title="Demo mode: fictional data, nothing leaves FocusTime. Turn it off in Settings > Display">
+            <button type="button" className="demo-tag" onClick={() => setSettingsAt("data", "demo-mode")} title="Demo mode: fictional data, nothing leaves FocusTime. Turn it off in Settings › Your data">
               {phone ? "Demo" : "Demo data"}
             </button>
           )}
@@ -1657,7 +1660,7 @@ export function App() {
           </>}
           <PersonChip
             onOpen={(at, step) => setPersonMenu({ at, step })}
-            onSettings={() => setSettingsAt(settingsAt === null ? "you" : null)}
+            onSettings={() => setSettingsAt(settingsAt === null ? "" : null)}
             menuOnly={phone}
           />
         </div>
@@ -1697,7 +1700,9 @@ export function App() {
       {settingsAt !== null ? (
         <Settings
           section={settingsAt}
-          onSection={setSettingsAt}
+          setting={settingAt}
+          onSection={(s, setting) => setSettingsAt(s, setting ?? null)}
+          onGuide={() => openGuide()}
           onClose={() => setSettingsAt(null)}
           onSaved={reloadQuiet}
           onNotice={setNotice}
@@ -2008,7 +2013,7 @@ export function App() {
               { id: "account", label: account.title, next: account.step },
               { id: "notices", label: "Notifications", ...(notices.unread > 0 ? { hint: `${notices.unread} new` } : {}), run: () => openNotices() },
               ...(data.timer ? [{ id: "focus", label: "Focus screen", run: () => setView("focus") }] : [{ id: "focus", label: "Start focus", run: () => setTimerMenuAt(phoneMoreAt) }]),
-              { id: "settings", label: "Settings", run: () => setSettingsAt("you") },
+              { id: "settings", label: "Settings", run: () => setSettingsAt("") },
               ...(isAdmin ? [{ id: "admin", label: "Admin", run: () => setSettingsAt("admin-clients") }] : []),
               { id: "guide", label: "Guide", run: () => openGuide() },
               ...installItem,

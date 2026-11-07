@@ -442,7 +442,8 @@ export function VmToday() {
 
 type Found = { tag: string; value: string; vms: { id: string; name: string; resourceGroup: string; location: string; power: string }[]; chosen: string | null };
 
-export function YouAccount() {
+/** ST-1: Profile shows the account part (who is signed in, photos), Accounts and calendars the VM part. */
+export function YouAccount({ part }: { part: "account" | "vm" }) {
   const { status, signIn, signOut } = useContext(AuthCtx);
   const vm = useContext(VmCtx);
   const [busy, setBusy] = useState(false);
@@ -474,7 +475,8 @@ export function YouAccount() {
   const signedIn = status.state !== "signed_out";
   return (
     <div className="set-account">
-      <div className="set-field">
+      {part === "account" && (
+      <div className="set-field" data-setting="signed-in">
         <span className="set-label">Signed in</span>
         <span className="set-value">{p && signedIn ? <>{p.name} <span className="muted">{p.username}</span></> : <span className="muted">Not signed in</span>}</span>
         <span className="set-hint">{status.state === "unavailable" ? `Offline or keyring locked: showing who was signed in. ${status.message ?? ""}` : "One Microsoft sign-in for you, your calendar and your Azure VM."}</span>
@@ -487,14 +489,16 @@ export function YouAccount() {
         </span>
         {signedIn && <span className="set-hint">Your plan stays in your FocusTime account.</span>}
       </div>
-      {signedIn && (
-        <div className="set-field">
+      )}
+      {part === "account" && signedIn && (
+        <div className="set-field" data-setting="photos">
           <span className="set-label">Photos</span>
           <PhotosAccessLine />
         </div>
       )}
-      {signedIn && (
-        <div className="set-field set-vm">
+      {part === "vm" && !signedIn && <p className="muted" data-setting="vm">Sign in with Microsoft to find your VM.</p>}
+      {part === "vm" && signedIn && (
+        <div className="set-field set-vm" data-setting="vm">
           <span className="set-label">My VM</span>
           <span className="set-value">
             {vm.status?.vm ? <>{vm.status.vm.name} <span className="muted">{vm.status.vm.resourceGroup} · {vm.status.vm.location}</span></> : <span className="muted">None chosen yet</span>}
