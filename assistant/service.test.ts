@@ -11,7 +11,8 @@ import { ACTION_NAMES } from "../actions/registry.ts";
 import type { ActionResponse } from "../actions/types.ts";
 import { createPlanStore, openPlanDb, planStoreOn } from "../store/plan-store.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
-import { aStatusLoad, aClientEntry, anAheadClient, anAheadItem, anAheadLoad, anAiApp, anAiRules, anAssignee } from "../test/builders/index.ts";
+import { aStatusLoad, aClientEntry, anAheadClient, anAheadItem, anAheadLoad, anAiApp, anAiRules, anAssignee, aPto, aWeek } from "../test/builders/index.ts";
+import { SIZE_MINUTES } from "../plan/types.ts";
 import { NEVER, RUNS, TOOLS, TOOL_NAMES } from "./allowlist.ts";
 import { createAssistant, type AssistantEnv } from "./service.ts";
 import type { ConfirmResult } from "./types.ts";
@@ -29,7 +30,7 @@ const say = (reply: string): ProviderReply => ({ ok: true, text: JSON.stringify(
 let n = 0;
 const call = (...calls: [string, Record<string, unknown>][]): ProviderReply => ({ ok: true, text: "", usage, model: "test-model", calls: calls.map(([name, args]) => ({ callId: `call_${++n}`, name, arguments: JSON.stringify(args) })), items: [] });
 
-function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnType<typeof anAheadLoad>; people?: { id: string; name: string; email: string; lead: boolean }[]; handlers?: Partial<Record<ActionName, (input: unknown) => ActionResponse | Promise<ActionResponse>>>; channel?: "panel" | "teams" } = {}) {
+function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnType<typeof anAheadLoad>; people?: { id: string; name: string; email: string; lead: boolean }[]; handlers?: Partial<Record<ActionName, (input: unknown) => ActionResponse | Promise<ActionResponse>>>; channel?: "panel" | "teams"; /** AS-2: PTO days in the fake week. */ pto?: string[]; /** AS-2: extra items in the guard's directory. */ dirItems?: Record<string, number[]> } = {}) {
   let now = NOW;
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(now).toZonedDateTimeISO(ZONE) });
   const ran: { action: ActionName; input: unknown }[] = [];
@@ -50,12 +51,12 @@ function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnTyp
     provider: async () => provider,
     app: anAiApp(),
     rules: async () => rules,
-    guard: async () => ({ directory: dir, homeDomains: ["cooptimize.example"], forbidden: [] }),
+    guard: async (c) => ({ directory: dir, homeDomains: ["cooptimize.example"], forbidden: [], internal: c === "Cooptimize" }),
     log: { add: async (e) => void log.push(e), spentMicros: async () => 0, recent: async () => [] },
     appSpend: { get: async () => 0, add: async () => {} },
     now: () => now,
   });
-  const dir = [aClientEntry({ key: FAB, names: ["Fabrikam"], projects: ["Portal"], itemIds: [4417, 4418, 4500] }), aClientEntry({ key: NW, names: ["Northwind Traders"], projects: ["Ledger"], itemIds: [5150] })];
+  const dir = [aClientEntry({ key: FAB, names: ["Fabrikam"], projects: ["Portal"], itemIds: [4417, 4418, 4500, ...(o.dirItems?.[FAB] ?? [])] }), aClientEntry({ key: NW, names: ["Northwind Traders"], projects: ["Ledger"], itemIds: [5150, ...(o.dirItems?.[NW] ?? [])] })];
   // An Internal account under its own key (clientAccounts()'s why "internal"): in the assistant's directory, not the guard's.
   const internal = aClientEntry({ key: "Cooptimize", names: ["Cooptimize"], projects: ["Internal"], itemIds: [] });
   const mine = new Set(o.mine ?? [FAB, NW, "Cooptimize"]);
@@ -73,14 +74,15 @@ function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnTyp
   const people = o.people ?? [{ id: "p-sam", name: "Sam Lee", email: "sam@cooptimize.example", lead: false }, { id: "p-dana", name: "Dana Reyes", email: "dana@cooptimize.example", lead: true }];
   let description = "<div>Old scope</div>";
   const handlers: Partial<Record<ActionName, (input: unknown) => ActionResponse | Promise<ActionResponse>>> = {
-    "week.load": async (i) => ({ ok: true, data: { plan: Object.fromEntries(await Promise.all([0, 1, 2, 3, 4, 5, 6].map(async (k) => { const d = Temporal.PlainDate.from((i as { weekStart: string }).weekStart).add({ days: k }).toString(); return [d, { committedAt: null, picks: await plan.picksFor(d) }]; }))), followUps: [], promises: [], timer: null, planDay: { date: TODAY, workday: true, committed: false, available: true }, hours: { timeZone: ZONE, weekdays: { mon: [{ start: "09:00", end: "17:00" }], tue: [{ start: "09:00", end: "17:00" }], wed: [{ start: "09:00", end: "17:00" }], thu: [{ start: "09:00", end: "17:00" }], fri: [], sat: [], sun: [] }, lunch: null, overrides: [] }, resumeNotes: {}, focused: {} } }),
+    "week.load": async (i) => ({ ok: true, data: { week: aWeek({ weekStart: (i as { weekStart: string }).weekStart, pto: (o.pto ?? []).map((date) => aPto({ date })) }), planning: { sizes: SIZE_MINUTES }, timeboxes: [], plan: Object.fromEntries(await Promise.all([0, 1, 2, 3, 4, 5, 6].map(async (k) => { const d = Temporal.PlainDate.from((i as { weekStart: string }).weekStart).add({ days: k }).toString(); return [d, { committedAt: null, picks: await plan.picksFor(d) }]; }))), followUps: [], promises: [], timer: null, planDay: { date: TODAY, workday: true, committed: false, available: true }, hours: { timeZone: ZONE, weekdays: { mon: [{ start: "09:00", end: "17:00" }], tue: [{ start: "09:00", end: "17:00" }], wed: [{ start: "09:00", end: "17:00" }], thu: [{ start: "09:00", end: "17:00" }], fri: [], sat: [], sun: [] }, lunch: null, overrides: [] }, resumeNotes: {}, focused: {} } }),
     "ahead.load": () => ({ ok: true, data: ahead }),
     "conversations.list": () => ({ ok: true, data: { needsYou: [{ id: 9, clientKey: FAB, clientName: "Fabrikam", title: "Invoices", commitments: [{ id: 31, whoName: "Dana Reyes", mine: false, what: `Send the file. ${INJECTED}`, dueAt: null, dueDate: "2026-11-06", state: "open", impliesItem: false, item: null }] }], teammates: [], closed: [] } }),
     "team.commit": () => ({ ok: true, data: { weekStart: "2026-11-02", clients: [] } }),
     "send.people": () => ({ ok: true, data: { people, canSend: true, canMust: false, why: null } }),
     "send.create": () => ({ ok: true, data: { send: { id: 1 } } }),
     "devops.preview": (i) => {
-      const ch = (i as { change: { kind: string; text?: string; after?: string } }).change;
+      const ch = (i as { change: { kind: string; text?: string; after?: string; state?: string } }).change;
+      if (ch.kind === "state") return { ok: true, data: { preview: { previewId: `pv${++n}`, expiresAt: NOW, op: "state", summary: "Change a DevOps item's state", system: "DevOps", org: "contoso", project: "Portal", item: "#item", identity: "Sam Tester <sam@cooptimize.example>", fields: [{ label: "State", before: "Active", after: ch.state!, changed: true }], links: [], notes: [], visibility: "Visible to everyone with access to the Portal project in DevOps.", undo: true } } };
       const desc = ch.kind === "description_edit";
       return { ok: true, data: { preview: { previewId: `pv${++n}`, expiresAt: NOW, op: desc ? "description" : "comment", summary: desc ? "Change a DevOps item's description" : "Add a comment to a DevOps item", system: "DevOps", org: "contoso", project: "Portal", item: "#4417 Export the invoices", identity: "Sam Tester <sam@cooptimize.example>", fields: desc ? [{ label: "Description", before: description.replace(/<[^>]+>/g, ""), after: ch.after!, changed: true }] : [{ label: "Comment", before: null, after: ch.text!, changed: true }], links: [], notes: [], visibility: "Visible to everyone with access to the Portal project in DevOps.", undo: false } } };
     },
@@ -90,6 +92,10 @@ function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnTyp
       return { ok: true, data: { pick: await plan.move(x.id, x.date, x.half) } };
     },
     "pick.remove": () => ({ ok: true, data: { result: "removed" } }),
+    "pick.uncarry": async (i) => ({ ok: true, data: { pick: await plan.uncarry((i as { id: number }).id) } }),
+    // AS-2: an item's done states come from its process; this fake's process calls it "Done" (Basic), not "Closed".
+    "devops.done_offer": (i) => ({ ok: true, data: { itemOffers: [{ clientKey: (i as { clientKey: string }).clientKey, clientName: "x", itemId: (i as { itemIds: number[] }).itemIds[0], title: "t", type: "Issue", state: "Doing", choices: ["Done"] }], why: null } }),
+    "inbox.list": () => ({ ok: true, data: { today: TODAY, items: [], counts: {}, needsYou: 0 } }),
     "planday.commit": () => ({ ok: true, data: {} }),
     "weekplan.commit": () => ({ ok: true, data: {} }),
     "weekplan.add": () => ({ ok: true, data: {} }),

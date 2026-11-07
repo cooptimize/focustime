@@ -256,7 +256,8 @@ export function createAssistant(env: AssistantEnv) {
         if (!looksNew(text)) return ask(turnId, "ok", { ...last, question: `I still need to know: ${last.question.replace(/^That matches more than one client\. /, "")}` });
       }
     }
-    return run(turnId, text, context, { afterQuestion: !!last, last });
+    // Past its 10 minutes (or something new): a fresh request, though never the capability list right after a question.
+    return run(turnId, text, context, { afterQuestion: !!last, last: null });
   }
 
   /** AS-2: a choice answers the question: the client or item it names, or the to-dos to move (no AI call). */
@@ -289,7 +290,10 @@ export function createAssistant(env: AssistantEnv) {
     const named = clientsNamed(text, env.directory, env.isInternal).filter(env.isMine);
     if (!o.client && named.length > 1) return ask(turnId, "which_client", { ...clientQuestion(text, context, named, null), question: "That names more than one client. Which one is it about?" });
     const res = await resolveFor(text);
-    let client: string | null = o.client ?? named[0] ?? null;
+    // GD-1: an item of Cooptimize Internal named by its #id makes it Internal's request, which may name clients.
+    const ids = idsIn(text);
+    const internalHit = env.isInternal ? (res.items.find((i) => ids.includes(i.id) && env.isInternal!(i.clientKey))?.clientKey ?? null) : null;
+    let client: string | null = o.client ?? internalHit ?? named[0] ?? null;
     if (!client) {
       if (res.clients.length > 1) return ask(turnId, "ok", clientQuestion(text, context, res.clients, res));
       client = res.clients[0] ?? clientOf(text, context).client;
