@@ -28,3 +28,19 @@ back to the step 1 release still works against the database.
 | 7 | `dedupe_log` (user table) | Written and read only inside the numbered migrations (the week features dedupe); no live code reads it | None needed (no code) | Drop the table |
 | 8 | `[ai] use`, `monthly_cap_usd`, `allowed_clients` in a person's settings | `ai/types.ts` says they are read (for the one-time org bootstrap) and never enforced since ADM-1 | Stop reading them once every environment's org bootstrap has run | Remove the keys from the settings model (no column) |
 | 9 | `teams-bot-store` `sweep()` and `teams-store` `purgeChats()` | No callers (the retention purge now removes old cards; `purgeChats` is reached only through `purgeClient`) | Remove `sweep`; keep `purgeChats` (used inside the store) | Nothing to drop |
+
+## Status after CL-1 (Nov 7)
+
+Step 1 is done where an item was dead; details and the reasons for each choice are under "CL-1" in `docs/decisions.md`,
+and step 2's list with the drop SQL is `docs/cleanup-step-2.md`.
+
+| # | Step 1 | Notes |
+|---|---|---|
+| 1 | Done in CV-4 | On the step 2 list |
+| 2 | Done | Store methods removed; the table stays in Export and Delete my data until step 2 |
+| 3, 4 | Done, except the 14-day cleanup | The cleanup keeps deleting the rows still there (client chat text) until step 2's release 2a |
+| 5 | Not changed | Still read; waiting on D910 |
+| 6 | Done | Both actions removed; follow-ups already made from promises keep working |
+| 7 | Not changed | Live on SQLite (frozen migrations); drop on SQL Server only |
+| 8 | Not changed | Still read by the one-time org bootstrap (Q-CL1-3); not in Settings |
+| 9 | Done | `sweep` removed; `purgeChats` kept |
