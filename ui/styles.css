@@ -5558,3 +5558,59 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .app.phone .late-chip::after { content: ""; position: absolute; inset: -13px -8px; }
 /* UI-9: Promises narrowed to late ones from a Week card's chip. */
 .ib-late-line { margin: 0; display: inline-flex; align-items: baseline; gap: 8px; color: var(--watch); font-size: var(--fs-2); font-weight: 600; }
+
+/* ---- MB-1: the phone overhaul. Phone widths only (under 600 px, as P1's breakpoint); nothing here reaches a
+   computer. The bar: Today, Week, a raised Capture, Inbox, Ask. The header: the logo, the status dot, ⋯. ---- */
+@media (max-width: 599.98px) {
+  .bottom-bar.bb-five { grid-template-columns: repeat(5, minmax(0, 1fr)); overflow: visible; }
+  .bb-capture-slot { position: relative; display: flex; justify-content: center; }
+  .bb-capture {
+    position: absolute; top: -18px; width: 58px; height: 58px; min-height: 58px; padding: 0; border-radius: 50%;
+    display: grid; place-items: center; border: 3px solid var(--bg); background: var(--action); color: var(--on-action);
+    box-shadow: 0 4px 14px color-mix(in srgb, #000 35%, transparent); -webkit-tap-highlight-color: transparent;
+  }
+  .bb-capture svg { width: 26px; height: 26px; }
+  .bb-capture:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+  .bb-tab .bb-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .status-dot-btn { min-width: var(--tap); min-height: var(--tap); padding: 0; display: inline-grid; place-items: center; border-color: transparent; background: none; }
+  .status-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+  .status-dot-btn.stale .status-dot { background: var(--watch); box-shadow: 0 0 0 3px color-mix(in srgb, var(--watch) 22%, transparent); }
+  .status-dot-btn.trouble .status-dot { background: var(--risk); box-shadow: 0 0 0 3px color-mix(in srgb, var(--risk) 22%, transparent); }
+
+  /* One bottom sheet: above the bottom bar, its own scrolling, never wider than the screen. */
+  .ph-sheet-back { position: fixed; inset: 0 0 var(--bb-h) 0; z-index: 70; display: flex; flex-direction: column; justify-content: flex-end; background: color-mix(in srgb, var(--bg) 70%, transparent); }
+  .ph-sheet {
+    display: flex; flex-direction: column; gap: 10px; max-height: calc(100dvh - var(--bb-h) - 24px - env(safe-area-inset-top)); overflow-y: auto; overflow-x: hidden;
+    padding: 6px 16px 16px; border-radius: 16px 16px 0 0; background: var(--surface); border-top: 1px solid var(--border-strong); box-sizing: border-box; outline: none;
+  }
+  .ph-sheet-grip { align-self: center; width: 36px; height: 4px; border-radius: 2px; background: var(--border-strong); margin-bottom: 2px; }
+  .ph-sheet-head { display: flex; align-items: flex-start; gap: 8px; }
+  .ph-sheet-title { flex: 1; min-width: 0; margin: 10px 0 0; font-size: var(--fs-4); font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  .ph-sheet-close { flex: none; min-width: var(--tap); min-height: var(--tap); padding: 0; border: 0; background: none; font-size: 1.6em; line-height: 1; color: var(--text-muted); }
+
+  .ph-status-list, .ph-status-problems { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .ph-status-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .ph-status-list .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+  .ph-status-list .cached .dot, .ph-status-list .sample .dot { background: var(--watch); }
+  .ph-status-list .error .dot, .ph-status-list .signin .dot { background: var(--risk); }
+  .ph-src-name { font-weight: 600; }
+  .ph-status-list .state { font-size: var(--fs-2); color: var(--text-muted); }
+  .ph-src-detail { grid-column: 2 / -1; font-size: var(--fs-2); overflow-wrap: anywhere; }
+  .ph-status-problems li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; border-left: 3px solid var(--risk); border-radius: 8px; background: var(--sunken); }
+  .ph-status-extra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .ph-status-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+
+  /* Ahead on the phone: a notice first. */
+  .ahead-notice { padding: 32px 20px; display: grid; gap: 12px; max-width: 30em; }
+  .ahead-notice h1 { margin: 0; font-size: var(--fs-4); }
+  .ahead-notice p { margin: 0; }
+  .an-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  /* A notice where the footer's chip was: just above the bottom bar, then gone. */
+  .phone-notice { position: fixed; left: 16px; right: 16px; bottom: calc(var(--bb-h) + 10px); z-index: 66; margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: 0 4px 14px color-mix(in srgb, #000 30%, transparent); font-size: var(--fs-3); }
+  .undo-toast { z-index: 66; left: 16px; right: 16px; bottom: calc(var(--bb-h) + 10px); width: auto; max-width: none; transform: none; }
+
+  /* Ask: the assistant full screen, down to the bottom bar. */
+  .assistant-panel.assistant-sheet { top: 0; bottom: var(--bb-h); max-height: none; min-height: 0; border-radius: 0; border-top: 0; padding-top: env(safe-area-inset-top); z-index: 45; }
+}

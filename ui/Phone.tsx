@@ -13,11 +13,14 @@ import { clientColor, slotRange } from "./labels.ts";
 import { countdown, timerLeft } from "./NowStrip.tsx";
 import { userZone } from "../week/zone.ts";
 
-/** NV-1: the same four tabs as the top bar. Capture is the + in the phone top bar. */
-export type BottomTab = "today" | "week" | "ahead" | "inbox";
+/**
+ * MB-1: the phone's bar: Today, Week, Capture (the raised + in the middle), Inbox and Ask. Ahead is made for a bigger
+ * screen, so it isn't here (its address still opens, with a notice). Was NV-1's four tabs with Capture in the top bar.
+ */
+export type BottomTab = "today" | "week" | "inbox";
 
-/** The bottom bar's icons, drawn in the tab's text color: a day, the week's half-days, bars ahead, a tray. */
-const BB_ICONS: Record<BottomTab, ReactNode> = {
+/** The bottom bar's icons, drawn in the tab's text color: a day, the week's half-days, a tray, a speech bubble. */
+const BB_ICONS: Record<BottomTab | "ask", ReactNode> = {
   today: (
     <>
       <rect x="4" y="5" width="16" height="15" rx="2.5" />
@@ -35,37 +38,53 @@ const BB_ICONS: Record<BottomTab, ReactNode> = {
       <rect x="17" y="13" width="4" height="6" rx="1" />
     </>
   ),
-  ahead: (
-    <>
-      <path d="M4 6h9M4 12h13M4 18h7" />
-      <path d="M17 4.5l2.5 1.5L17 7.5" />
-    </>
-  ),
   inbox: (
     <>
       <path d="M4 13l2.5-7.5h11L20 13v5.5H4z" />
       <path d="M4 13h4.5l1.5 2.5h4l1.5-2.5H20" />
     </>
   ),
+  ask: <path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5h-8l-4 3.5v-3.5H5A1.5 1.5 0 0 1 3.5 15V7A1.5 1.5 0 0 1 5 5.5z" />,
 };
 
-/** NV-1: Today, Week, Ahead and Inbox at the foot of the screen; the top bar keeps the logo, the VM dot, Capture (+), ⋯ and the avatar. */
-export function BottomBar({ current, inboxCount, onTab }: { current: BottomTab | null; inboxCount: number; onTab: (t: BottomTab, e: React.MouseEvent<HTMLButtonElement>) => void }) {
+const icon = (k: BottomTab | "ask") => (
+  <svg className="bb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    {BB_ICONS[k]}
+  </svg>
+);
+
+export function BottomBar({ current, inboxCount, onTab, onCapture, onAsk, askOpen = false, captureOpen = false }: {
+  current: BottomTab | "ahead" | null;
+  inboxCount: number;
+  onTab: (t: BottomTab, e: React.MouseEvent<HTMLButtonElement>) => void;
+  onCapture: () => void;
+  onAsk: () => void;
+  askOpen?: boolean;
+  captureOpen?: boolean;
+}) {
   const tab = (t: BottomTab, label: string, extra?: ReactNode) => (
-    <button key={t} type="button" className="bb-tab" aria-current={current === t ? "page" : undefined} onClick={(e) => onTab(t, e)}>
-      <svg className="bb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        {BB_ICONS[t]}
-      </svg>
+    <button key={t} type="button" className="bb-tab" aria-current={current === t && !askOpen ? "page" : undefined} onClick={(e) => onTab(t, e)}>
+      {icon(t)}
       <span className="bb-label">{label}</span>
       {extra}
     </button>
   );
   return (
-    <nav className="bottom-bar" aria-label="Tabs">
+    <nav className="bottom-bar bb-five" aria-label="Tabs">
       {tab("today", "Today")}
       {tab("week", "Week")}
-      {tab("ahead", "Ahead")}
+      <span className="bb-capture-slot">
+        <button type="button" className="bb-capture" aria-label="Capture" aria-expanded={captureOpen} title="Quick capture: one line, saved at once" onClick={onCapture}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+      </span>
       {tab("inbox", "Inbox", inboxCount > 0 && <span className="bb-count" aria-label={`${inboxCount} need you`}>{inboxCount}</span>)}
+      <button type="button" className="bb-tab" aria-label="Ask the assistant" aria-expanded={askOpen} aria-current={askOpen ? "page" : undefined} onClick={onAsk}>
+        {icon("ask")}
+        <span className="bb-label" aria-hidden="true">Ask</span>
+      </button>
     </nav>
   );
 }

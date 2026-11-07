@@ -1634,3 +1634,12 @@ export function roadmapRowMenu(f: RoadmapRowFacts, ops: RoadmapRowOps): MenuStep
     ],
   };
 }
+
+/**
+ * MB-1: the command menu on the phone leaves out Ahead (its views and its actions): Ahead is made for a bigger screen.
+ * Its address still opens there, with a notice and Open anyway.
+ */
+export function withoutAhead(items: readonly MenuItem[]): MenuItem[] {
+  const AHEAD_VIEWS = new Set(["view.roadmap", "view.ahead", "view.backlog", "view.gaps"]);
+  return items.filter((i) => !AHEAD_VIEWS.has(i.id) && !/^(ahead|roadmap)\./.test(i.action ?? i.id) && !/^Ahead\b/.test(i.label));
+}
