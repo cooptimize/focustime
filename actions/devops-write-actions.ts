@@ -107,6 +107,8 @@ export type AheadPort = {
   automation: () => Promise<boolean>;
   /** The read-back goes straight into the central store and its change log. */
   stored?: (clientKey: string, value: { id: number; fields: Record<string, unknown> }) => Promise<void>;
+  /** AH-5: a new assignee who isn't a Cooptimizer gets no FocusTime notice (and no devops_notes row). Missing: everyone does. */
+  isCooptimizer?: (clientKey: string, email: string) => Promise<boolean>;
 };
 
 /** CV-1: what the write framework needs from Conversations. */
@@ -176,7 +178,7 @@ const SUMMARY: Record<WriteOp, string> = {
   undo_state: "Undo: put the state back", undo_comment: "Undo: delete the comment FocusTime added", undo_create: "Undo: set the created item to Removed", undo_target_date: "Undo: put the target date back",
   description: "Change a DevOps item's description", undo_description: "Undo: put the description back",
   assign: "Assign a DevOps story or feature to you", undo_assign: "Undo: give it back to who had it",
-  fields: "Change dates, size or owner in DevOps", undo_fields: "Undo: put the dates, size and owner back",
+  fields: "Change dates, state, size or owner in DevOps", undo_fields: "Undo: put the dates, state, size and owner back",
   feedback: "Send feedback to the FocusTime backlog",
   comment_edit: "Edit your comment on a DevOps item", undo_comment_edit: "Undo: put your comment's earlier text back",
 };
@@ -690,7 +692,10 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
           specs.push({ kind: "identity", field: ref, value: v?.email ?? null, had });
           before[label("assignee")] = assigneeText(identityName(item.fields[ref]), identityEmail(item.fields[ref]));
           after[label("assignee")] = v ? assigneeText(v.name, v.email) : null;
-          if (v && v.email.toLowerCase() !== env.me.email.toLowerCase()) notes.push(`${v.name} gets a notice in FocusTime with a link to it.`);
+          if (v && v.email.toLowerCase() !== env.me.email.toLowerCase()) {
+            const coop = port.isCooptimizer ? await port.isCooptimizer(env.clientKey, v.email).catch(() => true) : true;
+            notes.push(coop ? `${v.name} gets a notice in FocusTime with a link to it.` : `${v.name} is outside Cooptimize, so FocusTime sends them no notice.`);
+          }
         }
       }
       // BH-1: a bulk change can touch items that aren't mine: the preview says whose each one is.
@@ -1399,7 +1404,8 @@ async function aheadLanded(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWrite
   const was = assigneeEmail(entry.before[FIELD_LABEL.assignee]);
   const now = assigneeEmail(entry.after[FIELD_LABEL.assignee]);
   if (FIELD_LABEL.assignee in entry.after) {
-    if (entry.op === "fields" && now && now !== me) await notes.add({ kind: "assigned", clientKey: env.clientKey, org: env.org, itemIds: [itemId], toEmail: now, byName: env.me.name });
+    const coop = now && port?.isCooptimizer ? await port.isCooptimizer(env.clientKey, now).catch(() => false) : true;
+    if (entry.op === "fields" && now && now !== me && coop) await notes.add({ kind: "assigned", clientKey: env.clientKey, org: env.org, itemIds: [itemId], toEmail: now, byName: env.me.name });
     if (entry.op === "undo_fields" && was && was !== me) await notes.remove({ kind: "assigned", org: env.org, toEmail: was, itemId });
   }
   const owner = identityEmail(back.fields["System.AssignedTo"]);

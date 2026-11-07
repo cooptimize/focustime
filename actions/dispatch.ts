@@ -883,6 +883,8 @@ function aheadPort(ctx: ActionContext, plan: PlanStore): AheadPort {
     isLead: async (clientKey) => (await cc).isLead(clientKey),
     automation: async () => (await aheadContext(ctx)).automation(),
     ...(ctx.devopsStored ? { stored: ctx.devopsStored } : {}),
+    // AH-5: only Cooptimizers (and their client logins) get FocusTime's quiet assigned note.
+    ...(ctx.org ? { isCooptimizer: async (clientKey: string, email: string) => !!(await scopeDepsOf(ctx.org!)(clientKey))?.isCooptimizer(email) } : {}),
   };
 }
 
