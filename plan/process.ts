@@ -24,6 +24,9 @@ export const isRemoved = (category: string | null | undefined) => category === "
 export const isCompleted = (category: string | null | undefined) => category === "Completed";
 export const isProposed = (category: string | null | undefined) => category === "Proposed";
 /** The categories a write may move an item to as "done" or "removed" (the write framework). */
+/** A state category in words for a list ("In progress"); null for an unknown one. */
+export const categoryLabel = (category: string | null | undefined): string | null =>
+  category === "Proposed" ? "Not started" : category === "InProgress" ? "In progress" : category === "Resolved" ? "Resolved" : category === "Completed" ? "Done" : category === "Removed" ? "Removed" : null;
 export const COMPLETED: StateCategory = "Completed";
 export const REMOVED: StateCategory = "Removed";
 

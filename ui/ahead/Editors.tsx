@@ -1,11 +1,12 @@
 // AH-5: Ahead's cell editors, each a small popover anchored to its cell (ui/CellPopover.tsx) with a clear title,
-// Save and Cancel: dates on the app's calendar with the quick picks and AM or PM, State from the type's states in the
+// Save and Cancel: dates on the app's calendar with the quick dates and AM or PM, State from the type's states in the
 // process model, Assigned to from the client's own DevOps project (ahead.people) with a search, and Size as the
 // process's number with a few common values. Save puts the change in my change set; nothing is written to DevOps
 // until "Save N items to DevOps", as before.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeField, DayHalf } from "../../plan/ahead-edit.ts";
 import type { AssignPerson } from "../../plan/ahead-people.ts";
+import { categoryLabel } from "../../plan/process.ts";
 import { call } from "../api.ts";
 import { CellPopover, FilterList, Segmented, type ListOption } from "../CellPopover.tsx";
 import { DatePicker } from "../DatePicker.tsx";
@@ -88,7 +89,7 @@ function StateEditor({ r, anchor, done }: { r: Row; anchor: HTMLElement | null; 
     key: s.name,
     label: s.name,
     lead: <span className={`ah-state-dot cat-${s.category.toLowerCase()}`} style={s.color ? { background: `#${s.color}`, boxShadow: "none" } : undefined} aria-hidden="true" />,
-    hint: s.category === "Proposed" ? "Not started" : s.category === "InProgress" ? "In progress" : s.category === "Resolved" ? "Resolved" : s.category === "Completed" ? "Done" : s.category === "Removed" ? "Removed" : undefined,
+    hint: categoryLabel(s.category) ?? undefined,
   }));
   const save = async (name: string, step: 0 | 1 | -1 = 0) => {
     if (name.toLowerCase() !== r.eff.state.toLowerCase() && !(await a.stage(r, "state", name))) return;

@@ -96,7 +96,7 @@ export function searchPeople(list: readonly AssignPerson[], q: string): AssignPe
   return list.filter((x) => words.every((w) => x.name.toLowerCase().includes(w) || x.domain.includes(w) || (x.me && "me".startsWith(w))));
 }
 
-/** "Tanner Spaulding" → "Tanner S."; one word stays as it is. */
+/** "Alex Rivera" → "Alex R."; one word stays as it is. */
 export function shortName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length < 2) return name.trim();

@@ -47,7 +47,7 @@ describe("assignPeople", () => {
     expect(searchPeople(list, "").length).toBe(3);
   });
   it("shortName is first name and last initial", () => {
-    expect(shortName("Tanner Spaulding")).toBe("Tanner S.");
+    expect(shortName("Alex Rivera")).toBe("Alex R.");
     expect(shortName("Mary Ann van der Berg")).toBe("Mary B.");
     expect(shortName("Cher")).toBe("Cher");
   });

@@ -221,7 +221,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await expect(pop.getByRole("option").count()).resolves.toBe(1);
     await page.keyboard.press("Enter");
     await expect.poll(() => st.textContent()).toContain("Active");
-    await expect(st.getAttribute("class")).resolves.toContain("ah-pend");
+    await expect.poll(() => st.getAttribute("class")).toContain("ah-pend");
     // Assigned to: Northwind's project only (Morgan Lee, outside Cooptimize), never Atlas's (Casey Ward); me first; search.
     const who = story.locator(".ah-col-assignee");
     await who.click();

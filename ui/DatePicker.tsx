@@ -1,5 +1,5 @@
 // AH-5: the app's own date picker (no native date input): a box at the top that takes a typed date ("nov 20",
-// "11/20"), the quick picks (Today, Tomorrow, Next Monday, +1 week, Clear), and a month calendar with today marked and
+// "11/20"), the quick dates (Today, Tomorrow, Next Monday, +1 week, Clear), and a month calendar with today marked and
 // the week starting on Monday. Arrow keys move a day or a week in the calendar, Page Up and Page Down a month.
 // DateField is the same picker behind a button, for filters and forms.
 import type React from "react";
@@ -13,7 +13,7 @@ const longDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US"
 
 /**
  * The picker's body. `value` is the chosen day (or null for none); `onChange` gets each choice; Enter in the box keeps
- * the typed day and lets the popover save (`onEnter`). `clearable` shows Clear among the quick picks.
+ * the typed day and lets the popover save (`onEnter`). `clearable` shows Clear among the quick dates.
  */
 export function DatePicker({ value, onChange, today, label, clearable = true, onEnter, children }: { value: string | null; onChange: (d: string | null) => void; today: string; label: string; clearable?: boolean; /** Enter: keep this day and save (the popover's Save with it). */ onEnter?: (d: string | null) => void; children?: React.ReactNode }) {
   const [text, setText] = useState(() => (value ? dayText(value, today) : ""));
@@ -83,7 +83,7 @@ export function DatePicker({ value, onChange, today, label, clearable = true, on
         }}
       />
       {bad && <p className="dp-bad">That isn't a date FocusTime can read. Try nov 20 or 11/20.</p>}
-      <div className="dp-quick" role="group" aria-label="Quick picks">
+      <div className="dp-quick" role="group" aria-label="Quick dates">
         {quickPicks(today, value)
           .filter((q) => clearable || q.key !== "clear")
           .map((q) => (
