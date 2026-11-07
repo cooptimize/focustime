@@ -1271,6 +1271,14 @@ Works through HK-4's cleanup list (`docs/azure/cleanup-list.md`) and the known i
 - CL-1: no file was deleted. The only unimported files are two ambient `.d.ts` files and `scripts/screenshot-mc1.ts` (run by hand, like the other screenshot scripts). No dependency was removed: every one is imported except `@microsoft/teams.cards`, which `@microsoft/teams.api` depends on and the direct entry keeps at the same 2.1.1 as the other Teams packages.
 - CL-1: the retention purge (`store/retention.ts`, `server/retention-job.ts`) and Diagnostics (`actions/diagnostics.ts`, `plan/diagnostics.ts`) use none of what was removed (the shared Teams store's `messagesBefore` is the one Diagnostics reads); their tests pass unchanged.
 
+## HK-6: the flaky late chip test (Nov 7)
+
+Unnumbered; numbered at merge.
+
+- HK-6 (Q-DOC1-8): the flake was in the test, not the app. With network and chip logging on the failing runs, Monday AM's chip went within about half a second of Done (`inbox.today` came back without the promise, as it should). The test's `chipText` read it in two steps, `count()` then `textContent()`: when the chip went between them, `textContent()` waited Playwright's 30 s for an element that wasn't coming back, so the 20 s poll for "no chip" timed out. Under load that window is hit often (20 of 84 runs of that test failed this way, 10 at a time on this machine). `chipText` now reads the page once (`evaluateAll`), so a poll sees each state as it is. Every assertion is unchanged.
+- HK-6: no app change. `inbox.today` is already read again after every Inbox change (the Inbox's reload calls the week's reload, and the count reads after it), so the re-read Q-DOC1-8 suggested isn't needed.
+- HK-6: MB-1b's test (`e2e/mb1b.test.ts`) didn't read in two steps, but it waited a set 300 ms for the status sheet to slide in before measuring it. It now waits for the sheet's animations to finish. No other e2e reads a chip in two steps.
+
 ## LP-1
 
 Close the loop by Teams, Email, DevOps comment or Call (Nov 7). Unnumbered until merge. Tanner's four decisions (email as an Outlook draft by default or sent now, Teams into a chat with outside people only after a preview that lists them, the three after-send options, posts as the person) are taken as given.
