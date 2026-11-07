@@ -5536,4 +5536,5 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
    the page: Chromium's mobile viewport grew to fit, the app left the phone layout, the table narrowed, and it flipped
    back, over and over ("Maximum update depth exceeded"). */
 .panel-shell.phone .ps-body table { display: block; max-width: 100%; overflow-x: auto; }
+.panel-shell.phone .ps-body table :is(th, td) { overflow-wrap: normal; min-width: 4.5em; }
 .panel-shell.phone .ps-body { overflow-wrap: anywhere; }

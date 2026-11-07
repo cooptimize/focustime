@@ -52,6 +52,8 @@ try {
       await page.waitForSelector(".demo-tag", { timeout: 60_000 });
       await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
       await act(page, "ui.set_theme", { theme: scheme === "dark" ? "cooptimize-dark" : "cooptimize-light" });
+      // FOCUSTIME_SHOT_TEXT=larger: the largest Text size (file names end in -larger).
+      await act(page, "ui.set_text_size", { size: process.env.FOCUSTIME_SHOT_TEXT ?? "default" });
       const base = harness.url.split("#")[0];
       await page.goto(`${base}#/settings`);
       await page.reload();
@@ -78,7 +80,7 @@ try {
         const vw = (r.opts.viewport as { width: number } | undefined)?.width ?? 0;
         const [iw, sw] = await page.evaluate(() => [window.innerWidth, document.documentElement.scrollWidth]);
         if (sw > iw + 1 || (vw && iw !== vw)) errors.push(`${r.tag} ${scheme} ${id}: wider than the screen (${iw}/${sw}, viewport ${vw})`);
-        await page.screenshot({ path: `${out}/st1-${id.replace(/\//g, "-")}-${r.tag}-${scheme}.png`, fullPage: r.tag === "phone" });
+        await page.screenshot({ path: `${out}/st1-${id.replace(/\//g, "-")}-${r.tag}-${scheme}${process.env.FOCUSTIME_SHOT_TEXT === "larger" ? "-larger" : ""}.png`, fullPage: r.tag === "phone" });
       }
       await ctx.close();
     }
