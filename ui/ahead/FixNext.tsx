@@ -95,7 +95,7 @@ function FixRowView({ r, entry, depth, skip, dots, fold }: { r: Row; entry: FixE
   );
 }
 
-function ClientFix({ client, group, rows, skip, dots }: { client: LoadClient; group: FixGroup; rows: Row[]; skip: (k: string) => void; dots: boolean }) {
+function ClientFix({ client, group, rows, skip, dots, filtered }: { client: LoadClient; group: FixGroup; rows: Row[]; skip: (k: string) => void; dots: boolean; filtered: boolean }) {
   const a = useAhead();
   const [all, setAll] = useState(false);
   const n = group.entries.length;
@@ -127,7 +127,7 @@ function ClientFix({ client, group, rows, skip, dots }: { client: LoadClient; gr
       </h3>
       {group.rankedBy === "target" && n > 0 && <p className="muted ah-fx-note">{client.project ?? client.clientName} has no backlog order, so these are ranked by target date.</p>}
       {n === 0 ? (
-        <p className="muted ah-fx-note">Nothing to fix near the top of the backlog or in the next 4 weeks.</p>
+        <p className="muted ah-fx-note">{filtered ? "Nothing here matches these filters." : "Nothing to fix near the top of the backlog or in the next 4 weeks."}</p>
       ) : (
         <ol className="ah-fx-list">
           {shown.map(({ x, f }) => <FixRowView key={x.key} r={byId.get(x.itemId)!} entry={x.entry} depth={x.depth} skip={skip} dots={dots} fold={f} />)}
@@ -154,7 +154,7 @@ export function FixNext({ groups, skip, dots, filtered = false }: { groups: { cl
             ? "Nothing not ready matches these filters."
             : "Nothing to fix on items you can change. The top of each backlog has its stories, dates, owners and sizes."}
       </p>
-      {groups.map((g) => <ClientFix key={g.client.clientKey} {...g} skip={skip} dots={dots} />)}
+      {groups.map((g) => <ClientFix key={g.client.clientKey} {...g} skip={skip} dots={dots} filtered={filtered} />)}
     </div>
   );
 }

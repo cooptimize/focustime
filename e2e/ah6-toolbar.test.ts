@@ -6,7 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { SHOTS } from "./shots.ts";
+import { shotBoth, SHOTS } from "./shots.ts";
 
 let h: Harness;
 const T = 120_000;
@@ -38,9 +38,7 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead's one toolbar (browser, demo mode)", () 
   const structure = (page: Page) =>
     page.locator(".ah-toolbar .ah-tb-group").evaluateAll((gs) => gs.map((g) => `${g.getAttribute("data-control")}${g.classList.contains("off") ? ":off" : ""}`));
   const summary = (page: Page) => page.locator(".ah-tb-sumtext").textContent();
-  const shot = async (page: Page, name: string) => {
-    if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` });
-  };
+  const shot = (page: Page, name: string) => shotBoth(page, name);
 
   it("the same groups in the same order in every mode; what can't apply is disabled with its reason, never removed", async () => {
     const { page, errors } = await open("#/ahead");
@@ -222,6 +220,16 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead's one toolbar (browser, demo mode)", () 
       await expect(page.locator(".mode-switch .ms-btn").allTextContents()).resolves.toEqual(["Grid", "Gantt", expect.stringMatching(/^Readiness · \d+$/), "Backlog"]);
       if (hash === "#/ahead/fix") await shot(page, "readiness");
       expect(errors).toEqual([]);
+      await page.close();
+    }
+  }, T);
+
+  it.skipIf(!SHOTS)("screenshots at 1920: the same filters in every mode", async () => {
+    const q = "c=Northwind,Harbor&o=Northwind~all,Harbor~all&nr=1&l=feature";
+    for (const m of MODES) {
+      const { page } = await open(`${m.hash}?${q}`, { width: 1920, height: 1080 });
+      await page.waitForTimeout(600);
+      await shotBoth(page, `toolbar-1920-${m.name.toLowerCase()}`);
       await page.close();
     }
   }, T);
