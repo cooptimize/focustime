@@ -4,6 +4,8 @@
 // Edits never write: ahead.stage keeps a change in the plan store; committing goes through the write framework
 // (devops.preview / devops.confirm with kind "fields", actions/devops-write-actions.ts), one patch per item.
 import type { AppConfig } from "../config/schema.ts";
+import { KINDS, RANGES } from "../plan/ahead-view.ts";
+import type { AheadGapKind, AheadRange } from "../plan/ahead-edit.ts";
 import { byItem, canEdit, CHANGE_FIELDS, checkValue, conflictOf, sameValue, type ChangeField, type ChangeValue, type DayHalf, type EditRight, type StagedChange, type AheadFilters, type AheadOwner } from "../plan/ahead-edit.ts";
 import { aboutText, hoursText, storyMinutes } from "../plan/estimate.ts";
 import { aheadWeeks, PLAN_WEEKS } from "../plan/ahead.ts";
@@ -397,7 +399,7 @@ export type { AheadFilters, AheadOwner };
 export function checkFilters(v: unknown): AheadFilters | null {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
   const o = v as Obj;
-  if (Object.keys(o).some((k) => !["owner", "clients", "epic", "gaps", "from", "to", "q", "states", "whole", "tier", "stale"].includes(k))) return null;
+  // AH-6: a key a newer build added is left out, not refused (as settings since D900), so a rollback keeps working.
   const date = (x: unknown) => (x === null || x === undefined ? null : typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x) ? x : undefined);
   const owner: Record<string, AheadOwner> = {};
   if (o.owner !== undefined) {
@@ -418,7 +420,14 @@ export function checkFilters(v: unknown): AheadFilters | null {
   if (o.tier !== undefined && o.tier !== "epic" && o.tier !== "feature" && o.tier !== "story") return null;
   if (o.stale !== undefined && typeof o.stale !== "boolean") return null;
   if (o.q !== undefined && (typeof o.q !== "string" || o.q.length > 200)) return null;
-  return { owner, clients, epic: (o.epic as string | null | undefined) ?? null, gaps: o.gaps === true, from, to, q: (o.q as string | undefined) ?? "", states, ...(o.whole === true ? { whole: true } : {}), ...(o.tier !== undefined ? { tier: o.tier as "epic" | "feature" | "story" } : {}), ...(o.stale === true ? { stale: true } : {}) };
+  // AH-6: the Dates quick pick and the readiness kinds.
+  if (o.range !== undefined && o.range !== null && !(RANGES as readonly unknown[]).includes(o.range)) return null;
+  if (o.kinds !== undefined && !(Array.isArray(o.kinds) && o.kinds.length <= KINDS.length && o.kinds.every((k) => (KINDS as readonly unknown[]).includes(k)))) return null;
+  const range = typeof o.range === "string" ? (o.range as AheadRange) : null;
+  const kinds = Array.isArray(o.kinds) ? [...new Set(o.kinds as AheadGapKind[])] : [];
+  return {
+    ...(range ? { range } : {}),
+    ...(kinds.length ? { kinds } : {}), owner, clients, epic: (o.epic as string | null | undefined) ?? null, gaps: o.gaps === true, from, to, q: (o.q as string | undefined) ?? "", states, ...(o.whole === true ? { whole: true } : {}), ...(o.tier !== undefined ? { tier: o.tier as "epic" | "feature" | "story" } : {}), ...(o.stale === true ? { stale: true } : {}) };
 }
 
 /** BH-1: a bulk action as Backlog sends it. */

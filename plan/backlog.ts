@@ -10,9 +10,8 @@
 // Bulk actions decide here, per item, what would be staged in Ahead's change set or why the item is skipped; the
 // server applies the same rights and field checks as a single edit (actions/ahead-actions.ts ahead.stage_bulk).
 import type { AheadFilters } from "./ahead-edit.ts";
-import { buildRows, DEFAULT_FILTERS, filterRows, isOpen, ownerOf, type LoadClient, type Row, type Tier } from "./ahead-model.ts";
+import { buildRows, filterRows, isOpen, ownerOf, type LoadClient, type Row, type Tier } from "./ahead-model.ts";
 import type { AheadLoad } from "../actions/types.ts";
-import { isOpen as isOpenCategory } from "./process.ts";
 
 export type AheadSettings = { staleWeeks: number };
 export const DEFAULT_AHEAD: AheadSettings = { staleWeeks: 6 };
@@ -25,21 +24,8 @@ export const LAST_WORDS: Record<LastChangeKind, string> = { assignee: "assigned"
 /** The change log keeps this many days. */
 export const LOG_DAYS = 30;
 
-const dayOf = (at: string): string | null => (/^\d{4}-\d{2}-\d{2}/.test(at) ? at.slice(0, 10) : null);
-
-/** Whole days since an instant's day, or null when it isn't known. */
-export function ageDays(changedAt: string | null | undefined, today: string): number | null {
-  const d = changedAt ? dayOf(changedAt) : null;
-  if (!d) return null;
-  return Math.max(0, Temporal.PlainDate.from(d).until(Temporal.PlainDate.from(today), { largestUnit: "days" }).days);
-}
-
-/** Open and untouched for at least `weeks` weeks. */
-export function isStale(i: { stateCategory: string; changedAt: string | null | undefined }, today: string, weeks: number): boolean {
-  if (!isOpenCategory(i.stateCategory)) return false;
-  const days = ageDays(i.changedAt, today);
-  return days !== null && days >= weeks * 7;
-}
+export { ageDays, isStale } from "./stale.ts";
+import { ageDays, isStale } from "./stale.ts";
 
 /** "today", "yesterday", "5 days ago", "7 weeks ago", "5 months ago"; "not known". */
 export function ageText(days: number | null): string {
@@ -91,7 +77,8 @@ export function backlogOf(load: AheadLoad, c: LoadClient, f: BacklogFilters, o: 
   // Rank among the open items at this tier in Cooptimize's scope: the backlog as DevOps orders it.
   const ranked = backlogOrder(all.filter((r) => r.tier === tier && isOpen(r.item) && r.item.inScope !== false), byOrder);
   const owner = ownerOf(f, c);
-  const kept = new Set(filterRows(all, c, { ...DEFAULT_FILTERS, owner: { [c.clientKey]: owner } }, { stories: true }).filter((r) => !r.context).map((r) => r.key));
+  // AH-6: every Ahead filter applies here too (Stale is counted first, then applied below).
+  const kept = new Set(filterRows(all, c, { ...f, owner: { [c.clientKey]: owner }, stale: false }, { stories: true, today: load.today, staleWeeks: o.staleWeeks }).filter((r) => !r.context).map((r) => r.key));
   const rows: BacklogRow[] = ranked
     .map((r, i) => {
       const age = ageDays(r.item.changedAt, load.today);

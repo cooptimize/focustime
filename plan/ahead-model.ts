@@ -7,6 +7,8 @@ import type { AheadFilters, AheadOwner } from "./ahead-edit.ts";
 import type { Assignee, ChangeField, DayHalf, StagedChange } from "./ahead-edit.ts";
 import { fixClient, gapsOf, GAP_KINDS, type FixClient, type FixGroup, type GapItem, type GapKind } from "./fixnext.ts";
 import { isOpen as isOpenCategory } from "./process.ts";
+import { rangeDates } from "./ahead-view.ts";
+import { isStale } from "./stale.ts";
 
 export type LoadClient = AheadLoad["clients"][number];
 export type Tier = "epic" | "feature" | "story";
@@ -115,7 +117,7 @@ export function buildRows(load: AheadLoad, c: LoadClient): Row[] {
 }
 
 /** The rows the filters keep, with their ancestors as context so the tree still reads. */
-export function filterRows(rows: readonly Row[], c: LoadClient, f: AheadFilters, o: { stories: boolean }): Row[] {
+export function filterRows(rows: readonly Row[], c: LoadClient, f: AheadFilters, o: { stories: boolean; /** AH-6: for the Dates quick picks and Stale. */ today?: string; staleWeeks?: number }): Row[] {
   const byId = new Map(rows.map((r) => [r.item.id, r]));
   const parentOf = (r: Row) => (r.item.parentId !== null ? byId.get(r.item.parentId) ?? null : null);
   const ancestors = (r: Row) => {
@@ -124,6 +126,10 @@ export function filterRows(rows: readonly Row[], c: LoadClient, f: AheadFilters,
     return out;
   };
   const owner = ownerOf(f, c);
+  const kinds = f.kinds ?? [];
+  const notReady = f.gaps || kinds.length > 0;
+  // A quick pick needs today; without it only from and to apply.
+  const dates = o.today ? rangeDates(f, o.today) : f.from || f.to ? { from: f.from, to: f.to } : null;
   const mineIds = new Set(rows.filter((r) => r.mine).map((r) => r.item.id));
   const pick = (r: Row): boolean => {
     if (!o.stories && r.tier === "story") return false;
@@ -131,13 +137,15 @@ export function filterRows(rows: readonly Row[], c: LoadClient, f: AheadFilters,
     // Contributing (as Roadmap had it): the features and epics my stories are under, with those stories.
     if (owner === "contributing" && !((r.mine && r.tier === "story") || rows.some((x) => x.mine && x.tier === "story" && ancestors(x).includes(r)))) return false;
     if (f.epic && !(r.key === f.epic || ancestors(r).some((a) => a.key === f.epic))) return false;
-    if (f.gaps && !r.gaps.length) return false;
-    if (f.from || f.to) {
+    // AH-6: Not ready only, narrowed to the kinds chosen (a kind implies it).
+    if (notReady && !r.gaps.some((g) => !kinds.length || kinds.includes(g))) return false;
+    if (dates) {
       const a = r.eff.start ?? r.eff.target, b = r.eff.target ?? r.eff.start;
       if (!a || !b) return false;
-      if (f.from && b < f.from) return false;
-      if (f.to && a > f.to) return false;
+      if (dates.from && b < dates.from) return false;
+      if (dates.to && a > dates.to) return false;
     }
+    if (f.stale && o.today && !isStale(r.item, o.today, o.staleWeeks ?? 6)) return false;
     if (f.q.trim()) {
       const q = lc(f.q);
       if (!lc(r.item.title).includes(q) && `#${r.item.id}` !== q && String(r.item.id) !== q) return false;
@@ -175,9 +183,11 @@ export function dueOfRow(rows: readonly Row[], r: Row): string | null {
  * AH-3: Fix next for every client with DevOps (whatever Grid's filters say: Fix next has none), from the rows Ahead
  * shows: what I see (my pending change first), what I may change, never outside Cooptimize's scope.
  */
-export function fixGroups(load: AheadLoad, o: { readOnly: boolean; skipped?: ReadonlySet<string> }): { client: LoadClient; group: FixGroup; rows: Row[] }[] {
+export function fixGroups(load: AheadLoad, o: { readOnly: boolean; skipped?: ReadonlySet<string>; /** AH-6: Ahead's filters apply to Readiness too. */ f?: AheadFilters; staleWeeks?: number }): { client: LoadClient; group: FixGroup; rows: Row[]; /** Entries before the filters. */ total: number }[] {
+  const f = o.f;
   return load.clients
     .filter((c) => c.status === "ok")
+    .filter((c) => !f?.clients.length || f.clients.includes(c.clientKey))
     .map((c) => {
       const rows = buildRows(load, c);
       const input: FixClient = {
@@ -191,6 +201,12 @@ export function fixGroups(load: AheadLoad, o: { readOnly: boolean; skipped?: Rea
           tier: r.tier, parentId: r.item.parentId, order: r.item.order ?? null, inScope: r.item.inScope !== false, mine: r.mine,
         })),
       };
-      return { client: c, group: fixClient(input, { today: load.today, topN: load.fixTopN, ...(o.skipped ? { skipped: o.skipped } : {}) }), rows };
+      const group = fixClient(input, { today: load.today, topN: load.fixTopN, ...(o.skipped ? { skipped: o.skipped } : {}) });
+      if (!f) return { client: c, group, rows, total: group.entries.length };
+      // Every row the filters keep (Not ready is what Readiness is; the kinds narrow which gaps count).
+      const kept = new Set(filterRows(rows, c, { ...f, gaps: false, kinds: [] }, { stories: true, today: load.today, ...(o.staleWeeks !== undefined ? { staleWeeks: o.staleWeeks } : {}) }).filter((r) => !r.context).map((r) => r.item.id));
+      const kinds = f.kinds ?? [];
+      const entries = group.entries.filter((e) => kept.has(e.itemId) && (!kinds.length || e.gaps.some((g) => kinds.includes(g))));
+      return { client: c, group: { ...group, entries }, rows, total: group.entries.length };
     });
 }
