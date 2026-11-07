@@ -1,7 +1,7 @@
 // MB-1: a to-do's sheet on the phone, the same from Today's rows and Week's ⋯: Done, Move to tomorrow, Snooze (to
 // this afternoon), Add time and Open in DevOps. Every one is an existing action (pick.mark_done, pick.move, the
 // timebox menu, link.open); a change to my own plan runs at once with Undo, as the Week's moves do (pick.uncarry puts
-// a moved to-do back, Done takes back Done). Phone only: on a computer the ⋯ menu is unchanged.
+// a to-do moved to another day back, a move within the day is moved back, Done takes back Done). Phone only: on a computer the ⋯ menu is unchanged.
 import { createContext, useContext, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import type { Half, IsoDate } from "../week/types.ts";
@@ -67,8 +67,13 @@ export function TodoSheet({ pick, data, now, onClose, onChanged }: { pick: Pick;
     try {
       const r = await planAction("pick.move", { id: pick.id, date: to.date, half: to.half });
       onChanged();
+      // The same day moves the to-do in place (Undo moves it back); another day carries a copy (Undo puts it back).
       const copy = r.pick?.id;
-      note(`${label} · ${pick.title}`, copy ? async () => (await planAction("pick.uncarry", { id: copy }), onChanged()) : null);
+      const undo =
+        to.date === pick.date ? async () => (await planAction("pick.move", { id: pick.id, date: pick.date, half: pick.half }), onChanged())
+        : copy ? async () => (await planAction("pick.uncarry", { id: copy }), onChanged())
+        : null;
+      note(`${label} · ${pick.title}`, undo);
     } catch (e) {
       note(errText(e));
     }

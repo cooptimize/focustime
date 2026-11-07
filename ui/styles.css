@@ -5673,6 +5673,15 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   .app.phone .planweek .pw-addrow { flex-wrap: wrap; row-gap: 4px; }
   .app.phone .planweek .pw-addrow > .pw-title { flex: 1 1 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; text-overflow: clip; }
   .app.phone .planweek .pw-addrow > .pw-acts { margin-left: auto; }
+  .app.phone .pw-addpane .pw-add-kids { margin-left: 18px; min-width: 0; max-width: calc(100% - 18px); }
+  .app.phone .pw-addpane .pw-add-kid { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+  .app.phone .pd2-add { flex-wrap: wrap; row-gap: 2px; }
+  .app.phone .pd2-add > .pr-title { flex: 1 1 calc(100% - 56px); min-width: 0; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; text-overflow: clip; }
+  .app.phone .pd2-add > .pr-title * { white-space: normal; }
+  .app.phone .us-tag { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
+  .app.phone .us-who, .app.phone .us-what { min-width: 0; overflow-wrap: anywhere; }
+  /* Plan, read only on the phone: nothing in it widens the page at the largest Text size. */
+  .phone-ro-body .pl-frame { overflow-x: clip; }
   .team-feature, .carry-title { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
 
   /* The agenda, folded by default on the phone; open, titles wrap to two lines. */

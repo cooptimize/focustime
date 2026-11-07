@@ -1,5 +1,5 @@
 // P1: the phone layout (under 600 px) in the browser, demo mode, clock pinned to Mon Nov 2, 9:30 AM. The layout
-// (bottom bar of four tabs, Capture and ⋯ at the top, no hover-only controls, Commit and Ahead read-only) and the main path: Today, start focus, mark done, capture,
+// (MB-1: Today, Week, Capture, Inbox and Ask in the bottom bar, the status dot and ⋯ at the top, no hover-only controls, Commit and Ahead read-only) and the main path: Today, start focus, mark done, capture,
 // then ⋯ › Notifications.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
@@ -29,11 +29,12 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
   it("has the bottom bar and a small top bar, no hover-only controls, Plan today on the phone, Commit and Ahead read-only", async () => {
     const { page, errors } = await freshPage(h, PHONE);
     await open(page, "#/today");
-    // NV-1: the bottom bar is the four tabs; Capture is the + and ⋯ the menu, in the top bar.
-    expect(await page.locator(".bottom-bar .bb-tab").allTextContents()).toEqual(["Today", "Week", "Ahead", expect.stringMatching(/^Inbox/)]);
+    // MB-1: the bottom bar is Today, Week, the raised Capture, Inbox and Ask; the top bar only the logo, the status dot and ⋯.
+    expect(await page.locator(".bottom-bar .bb-tab").allTextContents()).toEqual(["Today", "Week", expect.stringMatching(/^Inbox/), "Ask"]);
+    expect(await page.locator(".bottom-bar .bb-capture").count()).toBe(1);
     expect(await page.locator(".topbar .views").count()).toBe(0);
-    expect(await page.locator(".topbar .capture-btn, .topbar .timer-btn").count()).toBe(0);
-    expect(await page.locator(".topbar .phone-capture").count()).toBe(1);
+    expect(await page.locator(".topbar .capture-btn, .topbar .timer-btn, .topbar .phone-capture").count()).toBe(0);
+    expect(await page.locator(".topbar .status-dot-btn").count()).toBe(1);
     expect(await page.locator(".topbar .top-more").count()).toBe(1);
     // The page itself scrolls (Safari's own scrolling), with nothing left behind the bottom bar at the end.
     const scroll = await page.evaluate(() => {
@@ -63,8 +64,11 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
     await open(page, "#/week/day");
     await page.getByRole("button", { name: "Next day (→)" }).waitFor();
     expect(await page.locator(".phone-ro").count()).toBe(0);
-    // Commit, Ahead and Plan ahead read only, with the line, Copy link, and nothing to tap inside.
-    for (const hash of ["#/week/commit", "#/ahead", "#/ahead/plan"]) {
+    // Commit read only, with the line, Copy link, and nothing to tap inside; Ahead too once opened anyway (MB-1).
+    await open(page, "#/ahead");
+    await page.getByRole("button", { name: "Open anyway" }).click();
+    await page.waitForSelector(".phone-ro");
+    for (const hash of ["#/week/commit"]) {
       await open(page, hash);
       await page.waitForSelector(".phone-ro");
       expect(await page.locator(".phone-ro-bar").textContent()).toContain("Planning works best on a bigger screen");
@@ -82,28 +86,29 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
     ]) expect((await call(page, "pick.add", input)).ok).toBe(true);
     expect((await call(page, "planday.commit", { date: "2026-11-02" })).ok).toBe(true);
 
-    // Today: Now leads with the block and its next pick; one Start focus on the page.
+    // Today: Now leads with the block and its next to-do; one Start on the page (MB-1).
     await open(page, "#/today");
-    const now = page.locator(".phone-now");
-    await now.getByRole("button", { name: "Start focus" }).waitFor();
-    const first = (await now.locator(".pn-pick").textContent())!;
-    expect(await page.getByRole("button", { name: "Start focus" }).count()).toBe(1);
+    const now = page.locator(".ph-now");
+    await now.getByRole("button", { name: "Start", exact: true }).waitFor();
+    const first = (await now.locator(".pnt-title").textContent())!;
+    // One Start for focus (the VM's morning prompt has its own Start for the VM).
+    expect(await page.getByRole("button", { name: "Start", exact: true }).count()).toBe((await page.locator(".att-chip.vm").getByRole("button", { name: "Start", exact: true }).count()) + 1);
 
-    // Start focus, back to Today: the timer is in the Now card; Done ends it and ticks the pick.
-    await now.getByRole("button", { name: "Start focus" }).click();
+    // Start, back to Today: the timer is in the Now card; Done ends it and ticks the to-do.
+    await now.getByRole("button", { name: "Start", exact: true }).click();
     // The timer has started (the focus screen runs) before the reload reads it back.
     await page.locator("main.focus-screen:not(.idle)").waitFor();
     await open(page, "#/today");
-    await now.locator(".pn-count").waitFor();
-    await now.getByRole("button", { name: "Done" }).click();
-    await expect.poll(async () => (await page.locator(".phone-now .pn-pick").textContent()) !== first).toBe(true);
+    await now.locator(".pnt-count").waitFor();
+    await now.getByRole("button", { name: "Done", exact: true }).click();
+    await expect.poll(async () => (await page.locator(".ph-now .pnt-title").textContent()) !== first).toBe(true);
 
-    // Mark done on the next pick.
-    await now.getByRole("button", { name: "Mark done" }).click();
+    // Done on the next to-do.
+    await now.getByRole("button", { name: "Done", exact: true }).click();
     await expect.poll(async () => ((await call(page, "week.load", {})).data.plan["2026-11-02"].picks as { status: string }[]).filter((p) => p.status === "done").length).toBe(2);
 
-    // Capture from the top bar's +: a full-screen sheet, Enter saves.
-    await page.locator(".topbar .phone-capture").click();
+    // Capture from the bottom bar's raised +: a full-screen sheet, Enter saves.
+    await page.locator(".bottom-bar .bb-capture").click();
     const sheet = page.locator(".cap-dialog");
     await sheet.waitFor();
     expect(await sheet.evaluate((e) => Math.round(e.getBoundingClientRect().width))).toBe(PHONE.width);

@@ -6,45 +6,13 @@
 import { afterAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { call, phonePage, planMonday } from "./mb1-helpers.ts";
 import { SHOTS } from "./shots.ts";
 
 const T = 600_000;
 const TAG = process.env.MB1_TAG ?? "after";
 const MON = "2026-11-02";
 const PHONES = [390, 360] as const;
-
-const call = (page: Page, action: string, input: unknown) =>
-  page.evaluate(([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()), [action, input] as const) as Promise<{ ok: boolean }>;
-
-/** A phone page signed in to the demo, with the iPhone's larger root font. */
-export async function phonePage(h: Harness, width: number): Promise<Page> {
-  const page = await h.browser.newPage({ viewport: { width, height: 800 }, isMobile: true, hasTouch: true, bypassCSP: true });
-  await page.addInitScript(() => {
-    localStorage.setItem("focustime.hint.flow", "dismissed");
-    localStorage.setItem("focustime.hint.picktime", "1");
-    document.addEventListener("DOMContentLoaded", () => {
-      const st = document.createElement("style");
-      st.textContent = "html{font-size:17px}";
-      document.head.append(st);
-    });
-  });
-  await page.goto(h.url);
-  await page.getByRole("button", { name: /Try the demo/ }).click({ timeout: 60_000 });
-  await page.waitForSelector(".topbar", { timeout: 60_000 });
-  await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
-  return page;
-}
-
-/** Today planned and confirmed: two to-dos in the morning (one with a long title), one in the afternoon. */
-export async function planMonday(page: Page): Promise<void> {
-  for (const p of [
-    { half: "AM", clientKey: "Cooptimize", intention: "Write the migration notes for the customer export and share them with the delivery team", size: "M" },
-    { half: "AM", clientKey: "Cooptimize", intention: "Review open pull requests", size: "S" },
-    { half: "PM", clientKey: "Northwind", intention: "Prepare the data model review", size: "L" },
-  ])
-    await call(page, "pick.add", { date: MON, ...p });
-  await call(page, "planday.commit", { date: MON });
-}
 
 async function at(page: Page, hash: string): Promise<void> {
   await page.evaluate((x) => (location.hash = x), hash);
