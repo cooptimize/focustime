@@ -86,10 +86,9 @@ const find = (s: MenuStep, label: string) => items(s).find((i) => i.label === la
 describe("command menu (built from the action registry)", () => {
   it("lists every dispatcher action, so new actions appear automatically", () => {
     const listed = commandList(env().e).map((c) => c.action);
-    // IB-1: Make it a follow-up is no longer offered anywhere in the UI.
-    const gone = new Set(["my_promises.followup", "promises.followup"]);
-    for (const name of ACTION_NAMES) if (!gone.has(name)) expect(listed, name).toContain(name);
-    for (const name of gone) expect(listed).not.toContain(name);
+    for (const name of ACTION_NAMES) expect(listed, name).toContain(name);
+    // CL-1: Make it a follow-up (gone from the UI in IB-1) is gone from the server too.
+    for (const name of ["my_promises.followup", "promises.followup"]) expect(ACTION_NAMES as readonly string[]).not.toContain(name);
   });
   it("shows shortcuts; every view is built (Plan the week since step 8)", () => {
     const list = commandList(env().e);

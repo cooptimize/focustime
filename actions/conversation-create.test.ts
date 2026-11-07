@@ -132,7 +132,7 @@ describe("a promise with an item stays actionable", () => {
     return (await w.convs.commitmentsInChat(CHAT.chatId))[0]!;
   }
 
-  it("linked: still open, with due, Today, a follow-up and done; Unlink is its undo; the item closing never closes it", async () => {
+  it("linked: still open, with due, Today and done; Unlink is its undo; the item closing never closes it", async () => {
     const w = world({ allowed: [] });
     const k = await promise(w);
     let state = DASHBOARD;
@@ -146,8 +146,6 @@ describe("a promise with an item stays actionable", () => {
     const back = await sam.run<MyPromisesData>("my_promises.unlink", { id: k.id });
     expect(back.promises[0]).toMatchObject({ state: "open", item: null });
     await sam.run("my_promises.link", { id: k.id, itemId: 4101 });
-    const f = await sam.run<MyPromisesData>("my_promises.followup", { id: k.id });
-    expect(f.promises[0]!.state).toBe("followup");
   });
 
   it("the one-time move: Kept by an open item becomes open with it; a closed item's stays kept; once only", async () => {
