@@ -374,3 +374,12 @@ What DS-1 learned, and what is still open:
 - Q-AH5-2: team members are read for at most 50 teams per project (the existing teams read). A project with more teams lists only those teams' members; enough?
 - Q-AH5-3: a process that restricts state transitions (rules in an inherited process) can refuse a state the type has. FocusTime lists every state of the type and shows DevOps's refusal on save; should it read the transition rules and list only allowed ones?
 - Q-AH5-4: not checked against a real org: the team members response for a real project (guests, groups, display names), and a state write on a real process. Both use fakes in tests.
+
+## Ahead Gantt layout (AH-6, Nov 7)
+
+- Q-AH6-1: a collapsed row with no dates of its own shows its children's span, which can't be dragged. Should dragging a summary bar move every child with it (one change per child in the change set)?
+- Q-AH6-2: should the level, carets, Show callouts and the column width follow the person to another browser (server settings, like the filters) rather than stay in this browser?
+- Q-AH6-3: the per-week hours are now in the marker's popover. Is that enough in the Gantt, or do people want them back on the timeline as an optional lane?
+- Q-AH6-4: stories show in the Gantt only from their own dates. Should a story without dates get a bar from where it's planned (its week in Plan the week, or its to-do's day)?
+- Q-AH6-5: not checked against a real org: a real client's view at 1440 (deep trees, long titles, dates years out). The demo covers the shapes; the real one should be looked at after deploy.
+

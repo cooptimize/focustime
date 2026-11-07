@@ -1,6 +1,6 @@
 # Architecture
 
-For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `13cd461` on Nov 7, 2026.
+For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `8b52b81` on Nov 7, 2026.
 
 FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a React app and a JSON action API, keeps its data in one SQL database, and talks to Microsoft Graph, Dataverse, Azure DevOps, Google Calendar, Azure Resource Manager and OpenAI. The per-folder detail is in [docs/architecture.md](../architecture.md); this page is the overview.
 
@@ -83,6 +83,8 @@ The week, risks, free time, budgets and estimates are pure code in `week/` and `
 | All-day busy | An all-day Outlook event that is busy or has no show-as | Watch |
 | No focus window | The longest free stretch is under 90 minutes (`min_focus_window_minutes`) | At risk |
 | Double-booked | More than one focus block in the half-day | At risk |
+
+- **Ahead's tree (AH-6).** Grid and Gantt fold the same tree (`plan/gantt-tree.ts`): a level for the whole tree (Show: Epics · Features · Stories, names from the process model) with per-row carets on top, the rows on screen, and a collapsed row's roll-up (its children's earliest start to latest end). The Gantt (`ui/ahead/Gantt.tsx`) draws one row height for label and bar, status as the bar's look (`barTreatment` in `plan/gantt.ts`), one callout marker per row with its popover and fixes, and arrow caps past the edges (`capText`). View choices (level, carets, Show callouts, column width) are per browser (`ui/ahead/prefs.ts`).
 
 A card shows one status: At risk with its short reason, Too much planned, Fits just or Fits (`plan/blockstatus.ts`). Budgets and estimates are in hours (`plan/weekplan.ts`, `plan/estimate.ts`).
 

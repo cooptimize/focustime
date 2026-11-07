@@ -588,7 +588,7 @@ function GanttRow({ node, open, kids, bar: b, sum, callouts, env, freeze, runFix
         aria-label={`${r.item.type} #${r.item.id} ${r.item.title}${kids > 0 ? `, ${open ? "expanded" : "collapsed"}` : ""}`}
         onFocus={() => env.setCursor(r.key)}
         onKeyDown={keys}
-        style={{ "--lvl": levelRank(r.tier) } as CSSProperties}
+        style={{ paddingLeft: `calc(6px + ${levelRank(r.tier)} * var(--gantt-step))` }}
       >
         {kids > 0 ? (
           <button type="button" className="rm-expand pa-caret" tabIndex={-1} aria-expanded={open} aria-label={`${open ? "Hide" : "Show"} what's under ${r.item.title}`} onClick={() => env.setFold((f) => setRow(f, r, !open))}>
