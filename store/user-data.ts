@@ -95,6 +95,8 @@ export async function hardDeleteUser(db: Conn, id: string, now: Temporal.Instant
     await db.run("DELETE FROM week_commitments WHERE person_id = ?", [pid]);
     await db.run("DELETE FROM sends WHERE from_id = ? OR to_id = ?", [pid, pid]);
     await db.run("DELETE FROM look_asks WHERE from_id = ? OR to_id = ?", [pid, pid]);
+    // IN-1: an admin's record of having invited them.
+    await db.run("DELETE FROM people_invites WHERE person_id = ?", [pid]);
     await db.run("UPDATE deletions SET hard_deleted_at = ? WHERE user_hash = ? AND hard_deleted_at IS NULL", [now.toString(), hashOf(id)]);
   });
 }

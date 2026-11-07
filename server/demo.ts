@@ -39,7 +39,7 @@ import { teamStore } from "../store/team-store.ts";
 import { DEMO_PEOPLE } from "../sources/demo/data.ts";
 import { demoAdminCheck } from "../actions/admin.ts";
 import type { AdminOps, ClientScopeFacts } from "../actions/admin-actions.ts";
-import { demoDirectory } from "../sources/demo/directory.ts";
+import { DEMO_BOT, demoDirectory } from "../sources/demo/directory.ts";
 import { scopeDepsOf } from "../actions/scope-deps.ts";
 import { scopeCounts } from "../plan/devops-scope.ts";
 import { demoAreas, demoAssignees, demoScopeItems, isDemoClient } from "../sources/demo/data.ts";
@@ -65,7 +65,7 @@ const sessions = new WeakMap<ActionContext, DemoSession>();
 /** The demo session a context belongs to (null for any other context). */
 export const demoSessionOf = (ctx: ActionContext): DemoSession | null => sessions.get(ctx) ?? null;
 
-export function createDemoContext(opts: { now: () => string; demo: DemoControl; /** A2 tests: a store on a shared database. */ plan?: PlanStore; /** F1 checks: the pretend feature's state. */ feedbackParent?: DemoFeedbackParent; /** DM-1: the app's real AI, for real answers on the demo's fictional data. */ realAi?: DemoRealAi | null }): ActionContext {
+export function createDemoContext(opts: { now: () => string; demo: DemoControl; /** A2 tests: a store on a shared database. */ plan?: PlanStore; /** F1 checks: the pretend feature's state. */ feedbackParent?: DemoFeedbackParent; /** DM-1: the app's real AI, for real answers on the demo's fictional data. */ realAi?: DemoRealAi | null; /** IN-1: the app's address, for the invite's link. */ publicUrl?: string }): ActionContext {
   let text = followTeamColors(DEMO_CONFIG);
   // The demo team's process Rules (Admin › Clients in the demo) apply to the demo's process models.
   let rulesOf: (k: string) => Promise<ProcessOverrides> = async () => ({});
@@ -92,7 +92,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   // demo's person is an admin inside their own demo and nowhere else.
   const adminStore = createAdminStore(shared, instant);
   // The demo's person is signed in, so the one person match (D599) finds them the way it does in the hosted app.
-  const org = createOrgRuntime({ store: adminStore, bootstrap: { model: "stub", appCapUsd: 100, inviteDomains: ["example.com"], feedback: null }, now: () => Date.parse(opts.now()), signedIn: async () => [{ id: DEMO_PERSON.oid, email: DEMO_PERSON.email, upn: DEMO_PERSON.username }] });
+  const org = createOrgRuntime({ store: adminStore, bootstrap: { model: "stub", appCapUsd: 100, inviteDomains: ["example.com"], feedback: null }, now: () => Date.parse(opts.now()), signedIn: async () => [{ id: DEMO_PERSON.oid, email: DEMO_PERSON.email, upn: DEMO_PERSON.username }, ...DEMO_PEOPLE.slice(0, 3).map((p) => ({ id: p.aadId, email: p.email, upn: p.email }))] });
   scopeOf = scopeDepsOf(org);
   rulesOf = async (k) => {
     const c = (await org.rules()).clients[k];
@@ -115,6 +115,8 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     await adminStore.setOrg({ scope: "org", key: "ai.on", value: true, actor: FOCUSTIME, area: "ai", target: "ai.on", note: "demo" });
     await adminStore.setOrg({ scope: "org", key: "ai.person_cap_usd", value: 1, actor: FOCUSTIME, area: "ai", target: "ai.person_cap_usd", note: "demo" });
     for (const c of DEMO_CLIENTS) await adminStore.setOrg({ scope: clientScope(c.key), key: "allow_ai", value: true, actor: FOCUSTIME, area: "ai", target: c.key, note: "demo" });
+    // IN-1: the helper bot is flagged as an automation account (ADM-2 meant it as one), so it is never a Cooptimizer.
+    await adminStore.setOrg({ scope: `person:${DEMO_BOT.personId}`, key: "automation", value: true, actor: FOCUSTIME, area: "people", target: DEMO_BOT.name, note: "demo" });
   })();
   // DV-1: Admin › Status's DevOps rows, pretend (the demo reads no DevOps): one fine, one with a bad token, one slowed.
   const checked = new Map<string, string>();
@@ -135,7 +137,19 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     groupId: null,
     breakGlass: [],
     tenantId: null,
-    people: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, email: DEMO_PERSON.email, lastSignInAt: opts.now(), setup: "done", sources: { microsoft: true, google: true, devopsWrites: 1 } }],
+    // IN-1: the teammates SW-1 counts as on FocusTime are signed in here too, two of them set up partly, so Who's set up
+    // shows every state; Taylor Kim hasn't signed in.
+    people: async () => {
+      const [jordan, priya, sam] = DEMO_PEOPLE;
+      const days = (n: number) => Temporal.Instant.from(opts.now()).subtract({ hours: 24 * n }).toString();
+      return [
+        { id: DEMO_PERSON.oid, name: DEMO_PERSON.name, email: DEMO_PERSON.email, lastSignInAt: opts.now(), setup: "done", sources: { microsoft: true, google: true, devopsWrites: 1 } },
+        { id: jordan!.aadId, name: jordan!.name, email: jordan!.email, lastSignInAt: days(2), setup: "started", sources: { microsoft: true, google: false, devopsWrites: 0 } },
+        { id: priya!.aadId, name: priya!.name, email: priya!.email, lastSignInAt: days(6), setup: "skipped", sources: { microsoft: false, google: false, devopsWrites: 1 } },
+        { id: sam!.aadId, name: sam!.name, email: sam!.email, lastSignInAt: days(1), setup: "done", sources: { microsoft: true, google: false, devopsWrites: 2 } },
+      ];
+    },
+    invite: { appUrl: opts.publicUrl ? `${opts.publicUrl.replace(/\/$/, "")}/` : "https://focustime.example.com/", teamsAppLink: null },
     chatClients: async () => [...new Set([...(await teams.chats()).map((c) => c.clientKey), ...dir.clients.map((c) => c.clientKey)])].sort(),
     aiSetUp: async () => ({ provider: real ? "openai" : "stub", keyConfigured: true }),
     appSpentMicros: async () => 0,

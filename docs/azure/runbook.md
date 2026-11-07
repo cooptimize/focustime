@@ -719,3 +719,15 @@ Admin › People: a person's level select overrides Dataverse's (marked Override
 ### What admins see
 
 Team settings, health and the audit; never anyone's plan, picks, follow-ups, captures, focus sessions, PATs, AI request text or chat messages they aren't a member of (D558).
+
+### Inviting teammates (IN-1)
+
+Admin › People › Who's set up lists every Cooptimizer (the same rule as People: no guests, nobody outside the Cooptimize email domains, no automation accounts) with yes or no for Signed in (and the day they were last active), DevOps connected (a write PAT for any client; never which one), Calendar connected (the Outlook calendar's sign-in is kept) and, where the Teams bot runs, Teams app added (their 1:1 chat with the bot). The counts at the top read "6 of 9 signed in · 2 set up partly"; the filters are All, Not signed in and Set up partly. The command menu finds it as "Invite" or "Who's set up".
+
+To invite someone who hasn't signed in: Invite on their row, or tick several and Invite several. The sheet has a message to edit (what FocusTime is, this environment's link, the first three steps, and the Teams app's link where the Teams app is set up; `{first name}` becomes each person's first name). Then:
+
+- **Open in Teams** opens a 1:1 chat with them with the message filled in. With several people it opens one chat at a time: Next for the next person.
+- **Open in Outlook** opens one email in Outlook on the web to everyone, with the subject and message. **Use my mail app instead** opens the same email in the computer's mail app.
+- **Copy message** copies it to paste anywhere.
+
+FocusTime doesn't send anything: you send it from Teams or Outlook. Opening or copying marks the row "Invited <day> by <you>" (Admin › Audit has each one); the same person can be invited again. The link is the app's public URL (`FOCUSTIME_PUBLIC_URL`), so dev invites point at dev and prod invites at prod.

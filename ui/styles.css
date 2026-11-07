@@ -4004,6 +4004,15 @@ button.ask-label { cursor: pointer; }
 .adm-filter { margin-bottom: 10px; }
 .adm-process h4, .adm-scope h4, .adm-client h4 { margin: 8px 0 4px; font-size: var(--fs-3); font-weight: 600; }
 .adm-admins li { padding: 6px 10px; }
+/* IN-1: Admin › People › Who's set up and the invite sheet. */
+.adm-setup { margin: 6px 0 18px; }
+.adm-setup-counts { margin: 0 0 4px; font-size: var(--fs-3); font-weight: 500; }
+.adm-setup-bar { margin-bottom: 10px; gap: 8px 12px; }
+.adm-setup-bar .adm-filter { margin-bottom: 0; }
+.adm-setup-table td:first-child, .adm-setup-table th:first-child { width: 1.5em; }
+.invite-note { margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--raised); font-size: var(--fs-3); }
+.invite-message { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; resize: vertical; width: 100%; box-sizing: border-box; }
+.invite-sheet .set-field input { width: 100%; box-sizing: border-box; }
 .set-pre { white-space: pre-wrap; }
 .set-team-color { flex-basis: 100%; }
 

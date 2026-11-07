@@ -23,11 +23,14 @@ import type { ProcessModelResult } from "../sources/devops/source.ts";
 import type { ConversationCounts } from "../store/conversation-store.ts";
 import type { ActionResponse, ClientProcess } from "./types.ts";
 import { scopeWords, type ClientScopeFacts } from "../plan/devops-scope.ts";
+import { INVITE_SUBJECT, inviteTemplate, setupCounts, validEmail, type SetupRow } from "../plan/invite.ts";
+export type { SetupRow };
+import { INVITE_VIA, type InviteVia } from "../store/admin-store.ts";
 export type { ClientScopeFacts };
 
-export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit", "admin.status_action", "admin.identity"] as const;
+export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit", "admin.status_action", "admin.identity", "admin.invited"] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
-export const ADMIN_SECTIONS = ["clients", "ai", "conversations", "people", "organization", "status", "audit"] as const;
+export const ADMIN_SECTIONS = ["clients", "ai", "conversations", "people", "setup", "organization", "status", "audit"] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
 
 /** A person's health for Admin › People: names, dates and yes or no only. Never plan content or secrets. */
@@ -40,6 +43,10 @@ export type PersonHealth = {
   setup: "done" | "skipped" | "started" | "not_started";
   /** Connected or not (never the token), and how many clients have write access (never the PAT). */
   sources: { microsoft: boolean; google: boolean; devopsWrites: number };
+  /** IN-1: whether they added the FocusTime app in Teams (its 1:1 chat with the bot); null where the bot isn't set up. */
+  teamsApp?: boolean | null;
+  /** IN-1: their latest request in a live session, else their last sign-in (shown as a day). */
+  lastActiveAt?: string | null;
 };
 
 export type ChatHealth = { chatId: string; clientKey: string; name: string; reading: boolean; polledAt: string | null; state: string | null; note: string | null; via: string | null };
@@ -96,6 +103,8 @@ export type AdminOps = {
   breakGlass: readonly string[];
   tenantId: string | null;
   people(): Promise<PersonHealth[]>;
+  /** IN-1: what an invite links to here: the app's public URL and, where the Teams app is set up, its page in Teams. */
+  invite?: { appUrl: string; teamsAppLink: string | null };
   /** Clients FocusTime knows of for this team (registered chats, Dataverse's directory), for Admin › Clients. */
   chatClients(): Promise<string[]>;
   aiSetUp(): Promise<{ provider: string; keyConfigured: boolean }>;
@@ -122,6 +131,8 @@ export type AdminContext = {
   process?: (clientKeys: string[], refresh: boolean) => Promise<ProcessModelResult[] | null>;
   /** The admin's own today (their time zone), for Status's AI calls per chat today. */
   today?: () => Promise<string>;
+  /** IN-1: the admin's time zone, for Who's set up's days. */
+  zone?: () => Promise<string>;
 };
 
 
@@ -336,6 +347,57 @@ async function peopleSection(ops: AdminOps, meId: string) {
   };
 }
 
+const dayIn = (iso: string | null | undefined, zone: string): string | null => {
+  if (!iso) return null;
+  try {
+    return Temporal.Instant.from(iso).toZonedDateTimeISO(zone).toPlainDate().toString();
+  } catch {
+    return iso.slice(0, 10);
+  }
+};
+
+/**
+ * IN-1: Who's set up. Cooptimizers only (guests, people outside the Cooptimize domains and automation accounts are left
+ * out, by the same rules as Admin › People), from what FocusTime already keeps: a users row, a DevOps write PAT for any
+ * client (yes or no), the Outlook calendar's refresh token, and the Teams app's 1:1 chat where the bot is set up.
+ */
+export async function setupRows(ops: AdminOps, meId: string, zone: string): Promise<SetupRow[]> {
+  const [users, lv, invites, dir] = await Promise.all([ops.people(), ops.org.levels(), ops.org.store.latestInvites(), ops.org.store.directory()]);
+  const dirName = new Map(dir.map((d) => [d.personId, d.name]));
+  const teamsKnown = !!ops.invite?.teamsAppLink;
+  // The same rule as Admin › People and every picker: guests, other domains and automation accounts aren't Cooptimizers.
+  return lv.people.cooptimizers
+    .map((e): SetupRow => {
+      const u = users.find((x) => x.id.toLowerCase() === e.id) ?? null;
+      const inv = invites.get(e.id) ?? (e.dir ? invites.get(e.dir.personId.toLowerCase()) : undefined) ?? null;
+      return {
+        id: e.id,
+        name: u?.name ?? (e.dir ? dirName.get(e.dir.personId) : undefined) ?? e.id,
+        email: u?.email ?? e.dir?.email ?? null,
+        me: e.id === meId.toLowerCase(),
+        signedIn: !!u,
+        lastActiveDay: u ? dayIn(u.lastActiveAt ?? u.lastSignInAt, zone) : null,
+        devops: !!u && u.sources.devopsWrites > 0,
+        calendar: !!u && u.sources.microsoft,
+        teams: teamsKnown ? !!u && u.teamsApp === true : null,
+        invited: inv ? { day: dayIn(inv.at, zone) ?? inv.at.slice(0, 10), byName: inv.byName } : null,
+      };
+    })
+    .sort((a, b) => Number(a.signedIn) - Number(b.signedIn) || a.name.localeCompare(b.name));
+}
+
+async function setupSection(ops: AdminOps, me: { id: string; name: string }, zone: string) {
+  const rows = await setupRows(ops, me.id, zone);
+  const appUrl = ops.invite?.appUrl ?? null;
+  const teamsAppLink = ops.invite?.teamsAppLink ?? null;
+  return {
+    people: rows,
+    counts: setupCounts(rows),
+    teamsKnown: !!teamsAppLink,
+    invite: appUrl ? { appUrl, teamsAppLink, subject: INVITE_SUBJECT, template: inviteTemplate({ appUrl, teamsAppLink, from: me.name }) } : null,
+  };
+}
+
 /** AI-F1: every AI task with its tier for Admin › AI: background ones (flex unless switched back) first, plain names. */
 const TASK_LABELS: Record<string, string> = {
   "conversations.update": "Sorting client chats into conversations (with image descriptions)",
@@ -359,7 +421,7 @@ export function aiTasks(standard: readonly string[]): { name: string; label: str
 
 const specList = (specs: Record<string, { kind: keyof typeof KIND_NAMES; label: string; area: AdminArea }>) => Object.entries(specs).map(([key, s]) => ({ key, label: s.label, kind: s.kind, kindName: KIND_NAMES[s.kind], area: s.area }));
 
-async function section(ops: AdminOps, s: AdminSection, meId: string, input: Record<string, unknown>, process?: AdminContext["process"], today?: AdminContext["today"]): Promise<unknown> {
+async function section(ops: AdminOps, s: AdminSection, meId: string, input: Record<string, unknown>, process?: AdminContext["process"], today?: AdminContext["today"], me?: { name: string }, zone?: AdminContext["zone"]): Promise<unknown> {
   const rules = await ops.org.rules();
   switch (s) {
     case "clients":
@@ -386,6 +448,8 @@ async function section(ops: AdminOps, s: AdminSection, meId: string, input: Reco
     }
     case "people":
       return peopleSection(ops, meId);
+    case "setup":
+      return setupSection(ops, { id: meId, name: me?.name ?? "" }, zone ? await zone().catch(() => "UTC") : "UTC");
     case "status": {
       const [st, warnings, rules, groups] = await Promise.all([ops.status(today ? await today() : new Date().toISOString().slice(0, 10)), clientWarnings(ops), ops.org.rules(), ops.statusRows ? ops.statusRows.groups() : Promise.resolve([])]);
       return { ...st, warnings: [...(st.warnings ?? []), ...ruleWarnings(rules), ...warnings], jobs: statusJobs(rules, st), groups };
@@ -420,7 +484,7 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
       const extra = only(i, ["section", "area", "text", "refresh", "filter"]);
       if (extra) return bad(`unknown input field ${extra}`);
       if (typeof i.section !== "string" || !(ADMIN_SECTIONS as readonly string[]).includes(i.section)) return bad(`section must be one of ${ADMIN_SECTIONS.join(", ")}`);
-      return { ok: true, data: await section(ops, i.section as AdminSection, me.id, i, ctx.process, ctx.today) };
+      return { ok: true, data: await section(ops, i.section as AdminSection, me.id, i, ctx.process, ctx.today, me, ctx.zone) };
     }
     case "admin.audit": {
       const extra = only(i, ["area", "text"]);
@@ -522,6 +586,22 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
       }
       ops.org.invalidate();
       return { ok: true, data: { linked: i.op === "link" } };
+    }
+    case "admin.invited": {
+      // IN-1: an admin opened or copied an invite to send it themselves; FocusTime records only who, when and how.
+      const extra = only(i, ["personIds", "via"]);
+      if (extra) return bad(`unknown input field ${extra}`);
+      if (!Array.isArray(i.personIds) || !i.personIds.length || i.personIds.length > 200 || !i.personIds.every((x) => typeof x === "string") || typeof i.via !== "string" || !(INVITE_VIA as readonly string[]).includes(i.via))
+        return bad(`admin.invited takes { personIds: [..], via: ${INVITE_VIA.join(" | ")} }`);
+      const rows = await setupRows(ops, me.id, ctx.zone ? await ctx.zone().catch(() => "UTC") : "UTC");
+      const ids = [...new Set((i.personIds as string[]).map((x) => x.toLowerCase()))];
+      const people = ids.map((id) => rows.find((r) => r.id === id));
+      if (people.some((p) => !p)) return bad("Only Cooptimizers in Who's set up can be invited", 404);
+      const found = people as SetupRow[];
+      if (found.some((p) => p.signedIn)) return bad("They have signed in already", 409, "signed_in");
+      if ((i.via === "teams" || i.via === "outlook" || i.via === "email") && found.some((p) => !validEmail(p.email))) return bad("FocusTime has no email address for them. Copy the message instead.", 422, "no_email");
+      await ops.org.store.recordInvites(found, i.via as InviteVia, actor);
+      return { ok: true, data: { invited: found.length } };
     }
     case "admin.refresh_people": {
       if (Object.keys(i).length) return bad("admin.refresh_people takes {}");
