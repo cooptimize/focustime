@@ -541,6 +541,8 @@ export type AheadClient = {
   scope?: AheadScope;
   /** AH-3: the project's backlog order field (null: none, Fix next ranks by target date). Missing before AH-3. */
   orderField?: string | null;
+  /** AH-5: per type, its states from the process model in the process's order (name, category, color hex without #). */
+  states?: Record<string, { name: string; category: string; color: string | null }[]>;
 };
 /** ahead.load: every client's items, my rights on each, my change set and my kept half-days. */
 export type AheadLoad = {

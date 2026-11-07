@@ -10,7 +10,7 @@ import type { CalEvent, ClientWork, SourceId, SourceResult } from "../../week/ty
 import { createGraphWriter, type GraphWriter } from "../graph/write.ts";
 import type { DemoOutlook } from "./outlook.ts";
 import { demoDirectory } from "./directory.ts";
-import { DEMO_CLIENTS, DEMO_ME, DEMO_TZ, DEMO_PEOPLE, demoGoogle, demoOutlook, demoPatterns, demoPortfolio, demoProcess, demoPto, demoWork, demoWorkItem, isDemoClient, demoAheadClient, type DemoClientKey } from "./data.ts";
+import { DEMO_CLIENTS, DEMO_ME, DEMO_TZ, DEMO_PEOPLE, demoGoogle, demoOutlook, demoPatterns, demoPortfolio, demoProcess, demoPto, demoWork, demoWorkItem, isDemoClient, demoAheadClient, demoProjectPeople, type DemoClientKey } from "./data.ts";
 import { itemUrlOf, type DemoDevOps } from "./devops.ts";
 import { demoKatSent } from "./seeds/status.ts";
 import { typeOf } from "../../plan/process.ts";
@@ -123,6 +123,8 @@ export function createDemoSources(world: DemoDevOps, cal: DemoOutlook, now: () =
     stateChanges: async (clientKey) => ({ known: true, itemIds: clientKey === "Atlas" || !isDemoClient(clientKey) ? [] : portfolio(clientKey).items.flatMap((i) => i.children.filter((x) => x.open).map((x) => x.id)) }),
     // AH-1: Ahead's items, every level, as the store would give them.
     aheadItems: async (clients, o = {}) => Promise.all(clients.filter((c) => isDemoClient(c.clientKey)).map((c) => ahead(c.clientKey as DemoClientKey, !!o.whole))),
+    // AH-5: who can be assigned on a demo project (its assignees and the client's own fictional staff).
+    projectPeople: async (clientKey) => (isDemoClient(clientKey) ? demoProjectPeople(world, clientKey) : null),
     // CV-5: a conversation's linked items (their live state), and Link's search, from the same items.
     linkedItems: async (ref, ids) => {
       if (!isDemoClient(ref.clientKey)) return null;

@@ -1,5 +1,6 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
+import { scopeDepsOf } from "./scope-deps.ts";
 import { TEAMS_KINDS, type TeamsKind } from "../plan/teams-rhythm.ts";
 import { checkinGhosts } from "../plan/carry.ts";
 import { isClosed, isCompleted } from "../plan/process.ts";
@@ -922,6 +923,13 @@ async function aheadContext(ctx: ActionContext): Promise<AheadContext> {
       const ix = ctx.org ? await ctx.org.identities().catch(() => null) : null;
       const who = ix?.personOf(clientKey, email);
       return !!who && p.picker.workers(clientKey).some((w) => !!w.email && ix!.personOf(clientKey, w.email)?.id === who.id);
+    },
+    // AH-5: the client's Cooptimizers, who counts as one, and my name, for the assignee dropdown.
+    people: async (clientKey) => {
+      const [p, meId, isCoop] = await Promise.all([people().catch(() => null), cc.me().catch(() => null), ctx.org ? scopeDepsOf(ctx.org)(clientKey).then((x) => x?.isCooptimizer ?? null).catch(() => null) : Promise.resolve(null)]);
+      const workers = p ? p.picker.workers(clientKey).flatMap((w) => (w.email ? [{ email: w.email, name: w.name }] : [])) : [];
+      const myName = (meId && p?.picker.cooptimizers.find((x) => x.id === meId)?.name) || null;
+      return { cooptimizers: workers, isCooptimizer: isCoop ?? ((e: string) => workers.some((w) => w.email.toLowerCase() === e.toLowerCase())), myName };
     },
     identities: async () => {
       if (!ctx.org) throw new Error("no org runtime");
@@ -1856,6 +1864,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "draft.get":
       return draftAiAction(prepareContext(ctx), action, req.input);
     case "ahead.load":
+    case "ahead.people":
     case "ahead.stage":
     case "ahead.stage_bulk":
     case "ahead.unstage":

@@ -1392,6 +1392,9 @@ const toInvite = (r: Row): Invite => ({
   title: r.title as string, url: (r.url as string | null) ?? null, start: r.start_at as string, end: r.end_at as string, attendees: json<Attendee[]>(r.attendees) ?? [], teams: r.teams === 1, note: (r.note as string | null) ?? null,
   eventId: (r.event_id as string | null) ?? null, status: r.status as Invite["status"], followUpId: (r.follow_up_id as number | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
 });
+/** AH-5: the table a pending change lives in (state has its own, D468). */
+const changeTable = (field: ChangeField): "ahead_changes" | "ahead_state_changes" => (field === "state" ? "ahead_state_changes" : "ahead_changes");
+const stampText = (v: unknown) => (v instanceof Date ? v.toISOString() : String(v));
 const json = <T>(v: unknown): T | null => (typeof v === "string" ? (JSON.parse(v) as T) : null);
 const toOwn = (r: Row): OwnEvent => ({ uid: r.uid as string, timeboxId: (r.timebox_id as number | null) ?? null, eventId: r.event_id as string, fields: json<Fields>(r.fields)!, deletedAt: (r.deleted_at as string | null) ?? null });
 const toWrite = (r: Row): WriteEntry => ({
@@ -2808,7 +2811,8 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     },
     /** AH-1 (D657): my pending DevOps edits in Ahead, oldest first. */
     async aheadChanges(): Promise<StagedChange[]> {
-      const rows = (await db.all("SELECT * FROM ahead_changes ORDER BY created_at, client_key, item_id, field")) as Row[];
+      // AH-5: a pending state change sits in its own table (ahead_changes' field CHECK is kept, D468).
+      const rows = [...((await db.all("SELECT * FROM ahead_changes ORDER BY created_at, client_key, item_id, field")) as Row[]), ...((await db.all("SELECT * FROM ahead_state_changes ORDER BY created_at, client_key, item_id")) as Row[])].sort((a, b) => stampText(a.created_at).localeCompare(stampText(b.created_at)) || String(a.client_key).localeCompare(String(b.client_key)) || (a.item_id as number) - (b.item_id as number));
       const parse = (v: unknown) => (typeof v === "string" ? (JSON.parse(v) as ChangeValue) : null);
       return rows.map((r) => ({
         clientKey: r.client_key as string, itemId: r.item_id as number, field: r.field as ChangeField, value: parse(r.value_json), half: (r.half as DayHalf | null) ?? null,
@@ -2820,24 +2824,28 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async stageAheadChange(c: { clientKey: string; itemId: number; field: ChangeField; value: ChangeValue; half: DayHalf | null; baseRev: number; baseValue: ChangeValue }): Promise<void> {
       return tx(async () => {
         const at = stamp();
-        (await db.run("INSERT INTO ahead_changes (client_key, item_id, field, value_json, half, base_rev, base_json, theirs_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?) ON CONFLICT (client_key, item_id, field) DO UPDATE SET value_json = excluded.value_json, half = excluded.half, updated_at = excluded.updated_at", c.clientKey, c.itemId, c.field, JSON.stringify(c.value), c.half, c.baseRev, JSON.stringify(c.baseValue), at, at));
+        (await db.run(`INSERT INTO ${changeTable(c.field)} (client_key, item_id, field, value_json, half, base_rev, base_json, theirs_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?) ON CONFLICT (client_key, item_id, field) DO UPDATE SET value_json = excluded.value_json, half = excluded.half, updated_at = excluded.updated_at`, c.clientKey, c.itemId, c.field, JSON.stringify(c.value), c.half, c.baseRev, JSON.stringify(c.baseValue), at, at));
       });
     },
     /** DevOps changed this field since editing began: keep its value now beside mine (a conflict). */
     async markAheadConflict(clientKey: string, itemId: number, field: ChangeField, theirs: ChangeValue): Promise<void> {
-      return tx(async () => void (await db.run("UPDATE ahead_changes SET theirs_json = ?, updated_at = ? WHERE client_key = ? AND item_id = ? AND field = ?", JSON.stringify(theirs), stamp(), clientKey, itemId, field)));
+      return tx(async () => void (await db.run(`UPDATE ${changeTable(field)} SET theirs_json = ?, updated_at = ? WHERE client_key = ? AND item_id = ? AND field = ?`, JSON.stringify(theirs), stamp(), clientKey, itemId, field)));
     },
     /** Keep mine: edit on from what DevOps has now (its revision and value); the conflict goes. */
     async rebaseAheadChange(clientKey: string, itemId: number, field: ChangeField, baseRev: number, baseValue: ChangeValue): Promise<void> {
-      return tx(async () => void (await db.run("UPDATE ahead_changes SET base_rev = ?, base_json = ?, theirs_json = NULL, updated_at = ? WHERE client_key = ? AND item_id = ? AND field = ?", baseRev, JSON.stringify(baseValue), stamp(), clientKey, itemId, field)));
+      return tx(async () => void (await db.run(`UPDATE ${changeTable(field)} SET base_rev = ?, base_json = ?, theirs_json = NULL, updated_at = ? WHERE client_key = ? AND item_id = ? AND field = ?`, baseRev, JSON.stringify(baseValue), stamp(), clientKey, itemId, field)));
     },
     /** Remove pending changes: one field, an item's (no field), or all (no item). */
     async removeAheadChanges(clientKey: string | null, itemId: number | null = null, field: ChangeField | null = null): Promise<number> {
       return tx(async () => {
-        if (clientKey === null) return (await db.run("DELETE FROM ahead_changes")).changes;
-        if (itemId === null) return (await db.run("DELETE FROM ahead_changes WHERE client_key = ?", clientKey)).changes;
-        if (field === null) return (await db.run("DELETE FROM ahead_changes WHERE client_key = ? AND item_id = ?", clientKey, itemId)).changes;
-        return (await db.run("DELETE FROM ahead_changes WHERE client_key = ? AND item_id = ? AND field = ?", clientKey, itemId, field)).changes;
+        let n = 0;
+        for (const t of field === null ? ["ahead_changes", "ahead_state_changes"] : [changeTable(field)]) {
+          if (clientKey === null) n += (await db.run(`DELETE FROM ${t}`)).changes;
+          else if (itemId === null) n += (await db.run(`DELETE FROM ${t} WHERE client_key = ?`, clientKey)).changes;
+          else if (field === null) n += (await db.run(`DELETE FROM ${t} WHERE client_key = ? AND item_id = ?`, clientKey, itemId)).changes;
+          else n += (await db.run(`DELETE FROM ${t} WHERE client_key = ? AND item_id = ? AND field = ?`, clientKey, itemId, field)).changes;
+        }
+        return n;
       });
     },
     /** AS-1: one turn of the assistant's history (what I asked, or what it answered); returns its id. */

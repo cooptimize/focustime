@@ -326,7 +326,7 @@ export function changeText(c: Pick<StagedChange, "field" | "value" | "half">, si
   if (c.field === "size") return typeof c.value === "number" ? `${c.value}${sizeLabel ? ` ${sizeLabel}` : ""}` : "None";
   return valueText(c.field, c.value, c.half);
 }
-const FIELD_WORD: Record<ChangeField, string> = { start: "Start", target: "Target", size: "Size", assignee: "Assigned to" };
+const FIELD_WORD: Record<ChangeField, string> = { start: "Start", target: "Target", size: "Size", assignee: "Assigned to", state: "State" };
 
 /**
  * The review (D657): my changes grouped by item, before → after, each removable; a conflict shows DevOps's value now

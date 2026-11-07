@@ -27,6 +27,11 @@ export type ProjectAreas = {
   teams: ProjectTeam[] | null;
   teamsProblem: string | null;
   readAt: string;
+  /**
+   * AH-5: the people on the project's teams (DevOps uniqueName and display name), for Ahead's assignee list. Read
+   * with the teams, a day, in memory only; never shown as addresses (only a domain). Absent before AH-5 or unread.
+   */
+  people?: { email: string; name: string }[] | null;
 };
 
 /** What the rules need of an item. */
