@@ -120,12 +120,12 @@ describe.skipIf(!CHROMIUM)("Plan the day: adding work (browser, demo mode)", () 
     await page.close();
   }, T);
 
-  it("+ Add work on a Week card opens Plan the day on that block, and + adds there", async () => {
+  it("+ Add to-do on a Week card opens Plan the day on that block, and + adds there", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("2");
     const card = page.locator(".half", { hasText: "Northwind" }).first();
     await card.click({ position: { x: 12, y: 12 } });
-    await card.getByRole("button", { name: "+ Add work" }).click();
+    await card.getByRole("button", { name: "+ Add to-do" }).click();
     await page.locator(".pd2-right .pd2-pane-title", { hasText: "Northwind" }).waitFor();
     await expandAll(page);
     const row = section(page, "This week's priorities").locator("li.pd2-add:not(.planned)").first();

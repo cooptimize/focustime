@@ -365,7 +365,7 @@ describe("Timebox a pick into a free gap (step 13.6, D245)", () => {
 describe("+ Add work entry points (step 13.6, D241)", () => {
   it("the block menu and the command menu add work to a block with working time (key A)", async () => {
     const { e, calls } = env({ addWork: (d, h) => calls.push(["addWork", d, h]), selection: { date: "2026-11-04", half: "PM" } });
-    await find(slotMenu(e, "2026-11-04", "AM", "internal", "Internal"), "Add work…").run?.();
+    await find(slotMenu(e, "2026-11-04", "AM", "internal", "Internal"), "Add a to-do…").run?.();
     expect(calls.at(-1)).toEqual(["addWork", "2026-11-04", "AM"]);
     const cmd = commandList(e).find((c) => c.action === "ui.add_work")!;
     expect(cmd.hint).toBe("A");
@@ -374,9 +374,9 @@ describe("+ Add work entry points (step 13.6, D241)", () => {
   });
   it("is disabled on a past day, a PTO day and a block without working hours", () => {
     const { e } = env();
-    expect(find(slotMenu(e, "2026-11-02", "AM", "internal", "Internal"), "Add work…").disabled).toMatch(/Past day/);
-    expect(find(slotMenu(e, "2026-11-05", "AM", "internal", "Internal"), "Add work…").disabled).toMatch(/PTO/);
-    expect(find(slotMenu(e, "2026-11-07", "AM", null, null), "Add work…").disabled).toBe("No working hours in this block");
+    expect(find(slotMenu(e, "2026-11-02", "AM", "internal", "Internal"), "Add a to-do…").disabled).toMatch(/Past day/);
+    expect(find(slotMenu(e, "2026-11-05", "AM", "internal", "Internal"), "Add a to-do…").disabled).toMatch(/PTO/);
+    expect(find(slotMenu(e, "2026-11-07", "AM", null, null), "Add a to-do…").disabled).toBe("No working hours in this block");
   });
 });
 

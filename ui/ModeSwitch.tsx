@@ -42,3 +42,23 @@ export function ModeArea({ children, done, note = null }: { children: React.Reac
     </div>
   );
 }
+
+/**
+ * WK-2: the Board's Timeline toggle, beside the mode switch: one click shows or hides the hour rail beside each card's
+ * to-dos (B, Week's ⋯ and the command do the same). Pressed while the timeline shows.
+ */
+export function TimelineToggle({ shown, onToggle }: { shown: boolean; onToggle: () => void }) {
+  const words = shown ? "Hide timeline" : "Show timeline";
+  return (
+    <button type="button" className={`tl-toggle${shown ? " on" : ""}`} aria-pressed={shown} onClick={onToggle} title={`${words} (B)`} aria-label={words}>
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+        <rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="1.3" />
+        <line x1="10" y1="2.5" x2="10" y2="13.5" stroke="currentColor" strokeWidth="1.3" />
+        <line x1="11.5" y1="6" x2="13.5" y2="6" stroke="currentColor" strokeWidth="1.1" />
+        <line x1="11.5" y1="9" x2="13.5" y2="9" stroke="currentColor" strokeWidth="1.1" />
+        {!shown && <line x1="2" y1="14" x2="14" y2="2" stroke="currentColor" strokeWidth="1.3" />}
+      </svg>
+      <span className="tl-word">Timeline</span>
+    </button>
+  );
+}
