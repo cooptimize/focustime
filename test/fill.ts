@@ -44,17 +44,19 @@ export async function fill(db: Conn, userId: string): Promise<PlanStore> {
   (await plan.addInvite({ uid: `inv-${tag}`, clientKey: "cooptimize", itemId: null, pickId: null, timeboxId: null, title: tag, url: null, start: "2026-11-03T15:00:00Z", end: "2026-11-03T15:30:00Z", attendees: [], teams: false, note: null }));
   (await plan.markOnce("reminder", MON));
   (await plan.setSetupStep("day", "done"));
-  await plan.addDeliveryChat("cooptimize", "delivery", { chatId: `19:${tag}@thread.v2`, displayName: `${tag} delivery`, webUrl: null });
-  await plan.setDeliveryChatMembers(`19:${tag}@thread.v2`, [{ userId: null, displayName: tag, email: `${tag}@example.com`, tenantId: null }], NOW);
-  await plan.setAsksOn(`19:${tag}@thread.v2`, true, "2026-11-02T14:00:00Z");
-  await plan.addChatMessages([{ chatId: `19:${tag}@thread.v2`, messageId: "1730000000001", clientKey: "cooptimize", authorId: null, authorTenant: null, createdAt: "2026-11-02T15:00:00Z", text: tag, hasImage: false, hasFile: false, replyToId: null }]);
+  // CL-1: AP-1's per-person chat tables have no store methods any more (nothing writes them); rows as AP-1 left them
+  // (once: a second fill of the same person adds nothing, as the old store methods did).
+  const legacy = !(await db.get("SELECT 1 AS x FROM delivery_chats WHERE user_id = ?", [userId]));
+  if (legacy) await db.run("INSERT INTO delivery_chats (user_id, chat_id, client_key, display_name, web_url, chat_kind, is_primary, position, members_json, members_fetched_at, created_at, updated_at, asks_on, asks_since, asks_seen_at, asks_failures) VALUES (?, ?, 'cooptimize', ?, NULL, 'delivery', 0, 0, ?, ?, ?, ?, 1, ?, ?, 0)",
+    [userId, `19:${tag}@thread.v2`, `${tag} delivery`, JSON.stringify([{ userId: null, displayName: tag, email: `${tag}@example.com`, tenantId: null }]), NOW, NOW, NOW, "2026-11-02T14:00:00Z", "2026-11-02T14:00:00Z"]);
+  if (legacy) await db.run("INSERT INTO chat_messages (user_id, chat_id, message_id, client_key, author_id, author_tenant, created_at, body_text, has_image, has_file, reply_to_id) VALUES (?, ?, '1730000000001', 'cooptimize', NULL, NULL, '2026-11-02T15:00:00Z', ?, 0, 0, NULL)", [userId, `19:${tag}@thread.v2`, tag]);
   await plan.addAiRequest({ at: "2026-11-02T15:00:00Z", task: "test_ai", clientKey: null, model: tag, inputTokens: 10, outputTokens: 2, costMicros: 3, latencyMs: 400, outcome: "ok", detail: null });
   await plan.rememberItemClient(`client-${tag}`, [4100 + tag.length]);
   // DS-1: a draft with one card, its write, and a house style.
   const sd = await plan.addStoryDraft("cooptimize", 7001, { featureTitle: tag, storyType: "User Story", note: "", exemplarIds: [], proposals: [{ id: "P1", title: tag, description: "", acceptance: [], dependsOn: [], size: "S", evidence: [], questions: [], keep: true }], rationale: "", setAside: [], costMicros: 0 });
   await plan.linkStoryDraftWrite(sd.id, "P1", 1);
   await plan.editHouseStyle("cooptimize", `${tag} style`);
-  await plan.addAsk({ chatId: `19:${tag}@thread.v2`, messageId: "1730000000001", clientKey: "cooptimize", rule: "question", ruleDetail: null, at: "2026-11-02T15:00:00Z" });
+  if (legacy) await db.run("INSERT INTO asks (user_id, chat_id, message_id, client_key, ask_rule, rule_detail, status, created_at, updated_at) VALUES (?, ?, '1730000000001', 'cooptimize', 'question', NULL, 'open', '2026-11-02T15:00:00Z', ?)", [userId, `19:${tag}@thread.v2`, NOW]);
   await plan.addPromise({ chatId: `19:${tag}@thread.v2`, messageId: "1730000000001", clientKey: "cooptimize", phrase: "i'll", at: "2026-11-02T15:00:00Z", draft: { what: tag, due: null, toWhom: null, answers: null, reason: null }, aiStatus: null });
   await plan.seeConversation(1, 1);
   // IB-1: a seen promise and a snoozed one.

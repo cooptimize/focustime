@@ -8,7 +8,6 @@ import { setValue } from "../config/edit.ts";
 import { parseConfig } from "../config/schema.ts";
 import { starterToml } from "../config/starter.ts";
 import type { HostMedia, HostNotifications } from "../host/types.ts";
-import type { IncomingMessage } from "../plan/asks.ts";
 import { createPlanStore, openPlanDb } from "../store/plan-store.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
@@ -89,28 +88,20 @@ describe("the poll job in the scheduler", () => {
 });
 
 describe("Requests in each person's tick", () => {
-  it("once a day: unmatched messages older than 14 days are deleted, asks keep their text", async () => {
+  it("once a day: the AP-1 per-person rows' 14-day cleanup runs, with the cutoff 14 days back (CL-1: store/legacy-chat-rows.test.ts has the rule)", async () => {
     const s = await setup();
-    const old = (m: Partial<IncomingMessage>) => {
-      const { mentionedUserIds: _m, ...x } = aMessage({ chatId: CHAT.chatId, createdAt: "2026-10-15T15:00:00Z", ...m });
-      return x;
-    };
-    const plain = old({ text: "Just an update" });
-    const asked = old({ text: "Can you fix the export?" });
-    await s.plan.addChatMessages([plain, asked]);
-    await s.plan.addAsk({ chatId: CHAT.chatId, messageId: asked.messageId, clientKey: "fabrikam", rule: "phrase", ruleDetail: "can you", at: asked.createdAt });
+    const cuts: string[] = [];
+    const purge = s.plan.purgeChatText.bind(s.plan);
+    s.plan.purgeChatText = async (o) => (cuts.push(o.olderThan), purge(o));
     await s.ticks.slow();
-    expect(await s.plan.chatMessage(CHAT.chatId, plain.messageId)).toBeNull();
-    expect((await s.plan.chatMessage(CHAT.chatId, asked.messageId))?.text).toBe("Can you fix the export?");
-    // Not again the same day: a message that turns 14 days old later today waits for tomorrow.
-    const later = old({ createdAt: "2026-10-21T16:00:00Z", text: "Another update" });
-    await s.plan.addChatMessages([later]);
+    expect(cuts).toEqual(["2026-10-21T15:00:00Z"]);
+    // Not again the same day.
     s.at("2026-11-04T17:00:00Z");
     await s.ticks.slow();
-    expect(await s.plan.chatMessage(CHAT.chatId, later.messageId)).not.toBeNull();
+    expect(cuts).toHaveLength(1);
     s.at("2026-11-05T15:00:00Z");
     await s.ticks.slow();
-    expect(await s.plan.chatMessage(CHAT.chatId, later.messageId)).toBeNull();
+    expect(cuts).toEqual(["2026-10-21T15:00:00Z", "2026-10-22T15:00:00Z"]);
   });
 
   it("a request sorted as needing someone now, in a chat I see: one notification, held during focus unless let through", async () => {
