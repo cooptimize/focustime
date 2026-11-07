@@ -404,7 +404,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await expect(bar(page, "Supplier onboarding").count()).resolves.toBe(1);
     await expect(bar(page, "Supplier onboarding").locator(".pa-bar").count()).resolves.toBe(0);
     await bar(page, "Supplier onboarding").locator(".pa-marker").focus();
-    await expect(page.locator(".pa-pop").getByRole("button", { name: "Set dates" }).count()).resolves.toBe(1);
+    await page.locator(".pa-pop").getByRole("button", { name: "Set dates" }).waitFor({ timeout: 5_000 });
     await page.keyboard.press("Escape");
     await expect(page.locator(".pa-marker").count()).resolves.toBeGreaterThan(0);
     // Stories are folded away at the default level (Features).

@@ -381,5 +381,5 @@ What DS-1 learned, and what is still open:
 - Q-AH6-2: should the level, carets, Show callouts and the column width follow the person to another browser (server settings, like the filters) rather than stay in this browser?
 - Q-AH6-3: the per-week hours are now in the marker's popover. Is that enough in the Gantt, or do people want them back on the timeline as an optional lane?
 - Q-AH6-4: stories show in the Gantt only from their own dates. Should a story without dates get a bar from where it's planned (its week in Plan the week, or its to-do's day)?
-- Q-AH6-5: not checked against a real org: Tanner's Quiddity view at 1440 (deep trees, long titles, dates years out). The demo covers the shapes; the real one should be looked at after deploy.
+- Q-AH6-5: not checked against a real org: a real client's view at 1440 (deep trees, long titles, dates years out). The demo covers the shapes; the real one should be looked at after deploy.
 

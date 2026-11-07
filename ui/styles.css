@@ -5730,7 +5730,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .ah-gantt .pa-client-head { position: sticky; top: var(--gantt-head); z-index: 5; height: var(--gantt-client); min-height: 0; background: var(--bg); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .ah-gantt .pa-client-head .pa-track { background: var(--bg); }
 .ah-gantt .pa-item, .ah-gantt .pa-item .pa-track, .ah-gantt .pa-item .pa-label { height: var(--gantt-row); min-height: 0; }
-.ah-gantt .pa-item .pa-label { padding: 0 10px 0 calc(6px + var(--lvl, 0) * var(--gantt-step)); gap: 4px; outline-offset: -2px; }
+.ah-gantt .pa-item .pa-label { padding: 0 10px 0 6px; gap: 4px; outline-offset: -2px; }
 .ah-gantt .pa-item .pa-label:focus-visible { outline: 2px solid var(--selected); }
 .ah-gantt .pa-item:hover .pa-label, .ah-gantt .pa-item:focus-within .pa-label { background: color-mix(in oklab, var(--text) 4%, var(--bg)); }
 .ah-gantt .pa-item:hover .pa-track, .ah-gantt .pa-item:focus-within .pa-track { background: color-mix(in oklab, var(--text) 3%, transparent); }
