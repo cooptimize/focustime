@@ -19,20 +19,20 @@ describe("which clients FocusTime follows (step 6d)", () => {
 
   it("an ended pattern keeps it active for the grace days, then not", () => {
     // Ended Oct 19: 14 days later is Nov 2 (today), still followed.
-    expect(followState("HME", [p("HME", "2025-01-06", "2026-10-19")], opts)).toEqual({ active: true, why: "grace", date: "2026-10-19", until: "2026-11-02" });
+    expect(followState("Litware", [p("Litware", "2025-01-06", "2026-10-19")], opts)).toEqual({ active: true, why: "grace", date: "2026-10-19", until: "2026-11-02" });
     // Ended Oct 18: grace ran out yesterday.
-    expect(followState("HME", [p("HME", "2025-01-06", "2026-10-18")], opts)).toEqual({ active: false, why: "ended", date: "2026-10-18" });
-    expect(followState("HME", [p("HME", "2025-01-06", "2026-10-31")], { ...opts, graceDays: 0 })).toEqual({ active: false, why: "ended", date: "2026-10-31" });
+    expect(followState("Litware", [p("Litware", "2025-01-06", "2026-10-18")], opts)).toEqual({ active: false, why: "ended", date: "2026-10-18" });
+    expect(followState("Litware", [p("Litware", "2025-01-06", "2026-10-31")], { ...opts, graceDays: 0 })).toEqual({ active: false, why: "ended", date: "2026-10-31" });
   });
 
   it("the latest pattern wins; inactive rows and other clients' rows don't count", () => {
     const rows = [p("Adatum", "2025-01-06", "2025-06-30"), p("Adatum", "2026-01-05", "2026-12-31"), p("Adatum", "2027-01-04", null, false), p("Other", "2026-01-05", null)];
     expect(followState("Adatum", rows, opts)).toEqual({ active: true, why: "until", date: "2026-12-31" });
-    expect(followState("Antigua", rows, opts)).toEqual({ active: false, why: "none" });
+    expect(followState("Lamna", rows, opts)).toEqual({ active: false, why: "none" });
   });
 
   it("Keep following makes an inactive client active; Cooptimize and standing-block clients always are", () => {
-    expect(followState("Antigua", [], { ...opts, kept: ["Antigua"] })).toEqual({ active: true, why: "kept" });
+    expect(followState("Lamna", [], { ...opts, kept: ["Lamna"] })).toEqual({ active: true, why: "kept" });
     expect(followState(INTERNAL_CLIENT, [], opts)).toEqual({ active: true, why: "internal" });
     expect(followState("Proseware", [], { ...opts, always: ["Proseware"] })).toEqual({ active: true, why: "standing" });
     // A pattern reason is shown before the override.
@@ -40,8 +40,8 @@ describe("which clients FocusTime follows (step 6d)", () => {
   });
 
   it("filters a client list to the followed ones, keeping order", () => {
-    const rows = [p("Adatum", "2026-01-05", null), p("HME", "2025-01-06", "2026-06-30")];
-    const list = ["Adatum", "HME", "Antigua", "Cooptimize", "T&W"].map((clientKey) => ({ clientKey }));
+    const rows = [p("Adatum", "2026-01-05", null), p("Litware", "2025-01-06", "2026-06-30")];
+    const list = ["Adatum", "Litware", "Lamna", "Cooptimize", "T&W"].map((clientKey) => ({ clientKey }));
     expect(followedKeys(list, rows, { ...opts, kept: ["T&W"] }).map((c) => c.clientKey)).toEqual(["Adatum", "Cooptimize", "T&W"]);
   });
 });
