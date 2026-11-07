@@ -49,7 +49,7 @@ export function PhoneNowCard({ card, data, pick, nowMs, nameOf, committed, onSta
   const head =
     card.kind === "block" ? { tag: running ? "Focusing" : "Now", title: name, line: `until ${when(card.block.end)} · ${formatDuration(card.leftMinutes)} left` }
     : card.kind === "before" ? { tag: "Your day starts", title: `${when(card.block.start)} · ${name}`, line: `in ${formatDuration(Math.max(0, Math.ceil((ms(card.block.start) - nowMs) / 60_000)))}` }
-    : card.kind === "between" ? { tag: "Between blocks", title: `Free until ${when(card.block.start)}`, line: `Then ${name}, ${when(card.block.start)}–${when(card.block.end)}` }
+    : card.kind === "between" ? { tag: "Between blocks", title: `Free until ${when(card.block.start)}`, line: `Then ${client ? name : "an open block"}, ${when(card.block.start)}–${when(card.block.end)}` }
     : { tag: "Today", title: "Day done", line: "Nothing else is scheduled today." };
   const meeting = card.kind === "after" ? null : card.meeting;
   return (

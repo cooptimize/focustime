@@ -85,6 +85,19 @@ describe.skipIf(!CHROMIUM || !SHOTS)("MB-1 screenshots", () => {
         await page.keyboard.press("Escape");
         await page.waitForTimeout(200);
       }
+      // The largest Text size (and a 21 px root font), Today and the Week.
+      for (const [name, hash] of [["today", "#/today"], ["week-board", "#/week"]] as const) {
+        await at(page, hash);
+        await page.evaluate(() => {
+          document.documentElement.setAttribute("data-text-size", "larger");
+          const st = document.createElement("style");
+          st.textContent = "html{font-size:21px}";
+          document.head.append(st);
+        });
+        await page.waitForTimeout(300);
+        await shot(page, `phone${w}-${name}-larger`);
+      }
+      await at(page, "#/today");
       const dot = page.locator(".status-dot-btn");
       if (await dot.count()) {
         await dot.click();
