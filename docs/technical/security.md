@@ -25,7 +25,7 @@ flowchart LR
   T[Teams bot service] <-->|signed messages| A
 ```
 
-Arrows point the way data is written. Graph and DevOps are two-way only for the named writes below; Dataverse and Google are read only.
+Arrows point from the side that starts the call, labelled with the identity it uses. Data comes back on every arrow; FocusTime writes only to Graph, DevOps and Azure, and only the named writes below. Dataverse and Google are read only.
 
 ## Sign-in and sessions
 
@@ -99,6 +99,28 @@ Nothing writes to Dataverse, Google, other Teams data or any other Azure resourc
 ## The VM and its auto-shutdown
 
 FocusTime reads and starts only the one VM you confirmed, with your own Azure access. It never stops a VM and never writes its auto-shutdown schedule (no time, status, time zone, notification or delete): the schedule is yours and is only read. The Azure client throws before a request is sent for anything outside its allowlist (`ALLOWED` in `sources/azure/client.ts`).
+
+## Threat model
+
+| We protect | From | How |
+|---|---|---|
+| The API | Other web pages (CSRF, DNS rebinding), other people's sessions | Host and Origin checked against the public URL, fetch metadata, a session cookie and its `X-CSRF` token on every change (`server/guard.ts`, `server/app.ts`) |
+| One person's plan | Every other person, including admins | Every statement scoped by `store/scope.ts`; `store/isolation.test.ts` fails a table without `user_id` first in its keys |
+| Tokens, PATs, app secrets | Logs, errors, exports, the browser, git | Key Vault or sealed `user_secrets`; access tokens in memory only; the `Pat` wrapper prints `[PAT]`; the logger has a closed set of fields (`log/logger.ts`) |
+| Client data | Mixing clients | One client per view, draft and AI request; the AI guard (`ai/guard.ts`) and the DevOps preview refuse another client's names |
+| Other people's calendars and presence | Over-reading | Free/busy and working hours only; presence is a word, never stored |
+| Meetings others organize | Accidental edits | Calendar editing tiers; only accept, tentative or decline, never PATCH or DELETE |
+| DevOps items | Accidental loss or a lost update | Named writes only, no deletes; `test /rev` on every patch; read back; undo |
+| Azure | Acting on the wrong resource | One confirmed VM; the client's allowlist; the person's own access; never stop |
+| The database | A bad migration or a bad rollback | Migrations only add (`store/migrations/additive.test.ts`); an older build runs on a newer database |
+
+## Known gaps
+
+- **The Dataverse PAT column isn't secured.** Any identity with read on Accounts can read every client's company PAT (open question Q16). This is a Dataverse setting, not FocusTime code.
+- **Dataverse is read app-only.** FocusTime reads it with its reader's identity, not each person's own Dataverse permissions (Q89).
+- **Global PATs retire on December 1, 2026.** A client PAT created as global stops working then; recreate it as organization-scoped (Q17).
+- **The DevOps identity check uses an undocumented endpoint.** `_apis/connectionData` isn't on Microsoft Learn (Q80, D258).
+- **Data at rest.** Azure SQL encrypts its data at rest by default (transparent data encryption); `infra/` doesn't set it either way. Not verified.
 
 ## These docs
 

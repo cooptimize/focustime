@@ -64,6 +64,28 @@ flowchart LR
 
 The host boundary is enforced: `host/boundary.test.ts` fails when a core module (`week/`, `plan/`, `actions/`, `sources/`, `store/`, `ai/`) touches files, processes, sockets or the keyring. Demo data is wired in one place (`server/main.ts` to `server/demo.ts` to `sources/demo/`), and `host/no-demo-leak.test.ts` fails if anything else imports it.
 
+## The planning rules
+
+The week, risks, free time, budgets and estimates are pure code in `week/` and `plan/`: no I/O, deterministic, unit tested. The words for each idea are in the [glossary](../../CLAUDE.md#glossary-use-these-words-in-code-ui-and-chat).
+
+- **Half-days.** A person's working hours (`[hours]`, their own setting, read with `userZone()` in `week/zone.ts`) split each day into AM and PM at lunch (`week/hours.ts`). The hours only place meetings into AM or PM and estimate free time; a half-day is a unit of commitment, not a clock window.
+- **Focus blocks.** Dataverse Focus Time rows are weekly patterns (Mon to Thu, AM, PM or All Day, a start and an optional end), expanded into the week's blocks (`week/patterns.ts`). Standing blocks are the person's own setting, none by default. A Mon to Thu half-day with no block is Open.
+- **PTO.** Every PTO day is a whole day off: no risks, no to-dos, no free time (`week/pto.ts`, `week/free.ts`). Teammates' PTO shows only as "away".
+- **Risks.** Checked per half-day that has a focus block (`week/risks.ts` `evaluateRisks`); events shown as free or working elsewhere don't count, tentative and missing show-as count as busy. The thresholds start from the team's Default (Admin) or the built-in values below.
+
+| Rule | When | Shows as |
+|---|---|---|
+| Meeting load | Busy meeting minutes inside the block reach 90 (`meeting_watch_minutes`) | Watch |
+| Meeting load | They reach 150 (`meeting_at_risk_minutes`) | At risk |
+| Personal conflict | A busy personal (Google) event overlaps the block | At risk |
+| Personal conflict | An all-day personal event that day | Watch |
+| Out of office | An Outlook out-of-office event overlaps or covers the block | At risk |
+| All-day busy | An all-day Outlook event that is busy or has no show-as | Watch |
+| No focus window | The longest free stretch is under 90 minutes (`min_focus_window_minutes`) | At risk |
+| Double-booked | More than one focus block in the half-day | At risk |
+
+A card shows one status: At risk with its short reason, Too much planned, Fits just or Fits (`plan/blockstatus.ts`). Budgets and estimates are in hours (`plan/weekplan.ts`, `plan/estimate.ts`).
+
 ## A normal request
 
 1. The browser calls `POST /api/action` with `{ action, input }`, its session cookie and the `X-CSRF` header.
