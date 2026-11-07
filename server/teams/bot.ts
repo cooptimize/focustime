@@ -222,6 +222,7 @@ export function createBotCore(d: BotDeps) {
     const store = d.store(userId);
     const row = await store.card(t.proposalId);
     if (!row) return answer(failedCard("this card", "FocusTime doesn't know this card any more. Ask again for a fresh preview."));
+    if (t.ft === "undo") return undoTap(t.proposalId, row.title, row.state, userId);
     const title = row.title;
     if (SETTLED.has(row.state) && row.card) return d.log({ op: "tap", kind: "repeat" }), answer(row.card as Card);
     if (row.state === "running") return d.log({ op: "tap", kind: "in_progress" }), answer(workingCard(title));
@@ -239,12 +240,6 @@ export function createBotCore(d: BotDeps) {
     if (!assistant) {
       await store.release(t.proposalId);
       return answer(failedCard(title, NOT_READY));
-    }
-    if (t.ft === "undo") {
-      // AS-2: Undo on a done card (the to-dos a confirmed move moved). The service refuses a second undo itself.
-      const r = assistant.undo ? await assistant.undo({ person: { userId }, proposalId: t.proposalId }).catch(() => ({ ok: false, message: WENT_WRONG })) : { ok: false, message: "Undo it in FocusTime" };
-      d.log({ op: "tap", kind: r.ok ? "undone" : "undo_refused" });
-      return answer(r.ok ? undoneCard(title, r.message) : failedCard(`Undo ${title}`, r.message));
     }
     if (t.ft === "cancel") {
       await assistant.cancel({ person: { userId }, proposalId: t.proposalId }).catch(() => undefined);
@@ -297,6 +292,31 @@ export function createBotCore(d: BotDeps) {
   }
 
   /** AS-2: a tapped choice: claimed once, the card becomes "You chose …", and the assistant's answer is a new reply. */
+  /**
+   * AS-2: Undo on a done card (the to-dos a confirmed move moved). The done card is settled, so the undo keeps its own
+   * row ("u" and the proposal id): one tap wins, a repeat shows the same result. The service refuses a second undo too.
+   */
+  async function undoTap(proposalId: string, title: string, state: string, userId: string): Promise<InvokeBody> {
+    const answer = (c: Card): InvokeBody => ({ statusCode: 200, type: CARD_TYPE, value: c });
+    if (state !== "done") return answer(failedCard(`Undo ${title}`, "Only a change that went through can be undone"));
+    const store = d.store(userId);
+    const key = `u${proposalId}`.slice(0, 100);
+    const seen = await store.card(key);
+    if (seen && SETTLED.has(seen.state) && seen.card) return d.log({ op: "tap", kind: "repeat" }), answer(seen.card as Card);
+    // Two taps at once may both insert: the second insert fails on the key, and its claim then loses.
+    if (!seen) await store.cardSent(key, null, d.now().add({ hours: 24 }).toString(), `Undo ${title}`).catch(() => undefined);
+    if (!(await store.claim(key))) {
+      const now = await store.card(key);
+      return d.log({ op: "tap", kind: "repeat" }), answer(now?.card ? (now.card as Card) : workingCard(`Undo ${title}`));
+    }
+    const assistant = d.assistant;
+    const r = assistant?.undo ? await assistant.undo({ person: { userId }, proposalId }).catch(() => ({ ok: false, message: WENT_WRONG })) : { ok: false, message: "Undo it in FocusTime" };
+    d.log({ op: "tap", kind: r.ok ? "undone" : "undo_refused" });
+    const c = r.ok ? undoneCard(title, r.message) : failedCard(`Undo ${title}`, r.message);
+    await store.settle(key, r.ok ? "done" : "failed", c);
+    return answer(c);
+  }
+
   async function answerTap(t: AnswerTap, userId: string, to: Address | null, a: InActivity): Promise<InvokeBody> {
     const answer = (c: Card): InvokeBody => ({ statusCode: 200, type: CARD_TYPE, value: c });
     const store = d.store(userId);
