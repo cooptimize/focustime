@@ -2677,6 +2677,7 @@ button.att-chip { cursor: pointer; }
 .today-view .pn-pick { margin: 0; font-size: var(--fs-3); font-weight: 500; }
 .today-view .pn-acts, .today-view .pn-timer { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .today-view .pn-count { font: 600 var(--fs-4)/1 var(--font-mono); border: 0; background: none; color: var(--text); padding: 0 8px 0 0; cursor: pointer; }
+.us-all { margin-top: 6px; font-size: var(--fs-2); }
 .urgent-strip ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; max-width: 760px; }
 .us-item { display: flex; align-items: center; gap: 8px; }
 .us-line { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 6px 10px; border: 1px solid var(--border); border-left: 3px solid var(--risk); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-3); text-align: left; cursor: pointer; }
@@ -4238,11 +4239,6 @@ button.ask-label { cursor: pointer; }
 .conv-pick { margin: 0; inline-size: 16px; block-size: 16px; flex: none; }
 .conv-merge-bar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); font-size: var(--fs-2); }
 .conv-merge-bar .mini { max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ask-form.conv-merge { display: grid; justify-items: start; gap: 4px; margin-top: 8px; }
-.conv-merge p { margin: 0; }
-.conv-merge .conv-merge-list { justify-self: stretch; }
-.conv-merge-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.conv-merge-list .mini { inline-size: 100%; text-align: start; white-space: normal; }
 .conv-link-note { margin: 8px 0 0; padding: 6px 10px; border-radius: 6px; background: var(--surface); font-size: var(--fs-2); color: var(--text-muted); }
 /* CV-2: Show messages like Teams (ui/MessageThread.tsx). */
 .tm-thread { display: grid; gap: 8px; min-width: 0; }
@@ -4495,8 +4491,6 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .look-who { font-weight: 600; }
 .look-ask { justify-self: start; font-size: var(--fs-2); }
 .look-for-me { border-left: 3px solid var(--accent); padding-left: 8px; }
-.sent-line { margin: 0 0 8px; }
-.sent-line .link-btn { font-size: var(--fs-3); }
 .team-view { flex: 1; overflow: auto; padding: 8px 24px 32px; display: grid; align-content: start; gap: 12px; }
 .team-weeks { display: inline-flex; gap: 4px; }
 .team-intro { margin: 0; font-size: var(--fs-2); }
@@ -4521,13 +4515,9 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .send-acts { align-items: center; }
 .look-others { display: flex; align-items: baseline; gap: 4px 12px; flex-wrap: wrap; padding: 2px 8px; font-size: var(--fs-2); }
 .look-others .look { padding: 0; }
-/* CV-3: SW-1's sends line in the urgent strip: neutral, not a risk. */
+/* CV-3: a send in the urgent strip: neutral, not a risk. IB-1 slice 4: one line per send, like the others. */
 .us-sends .us-line { border-left-color: var(--accent); }
 .us-sends .us-tag { color: var(--accent); }
-@media (max-width: 599.98px) {
-  /* SW-1's line wrapped whole on a phone; in the strip it still does. */
-  .us-sends .us-what { white-space: normal; flex-basis: 100%; }
-}
 /* AH-1: Ahead (Grid · Gantt · Fix next), the change set and the review. */
 .ah-pending { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--selected); border-radius: 8px; background: color-mix(in oklab, var(--selected) 10%, var(--surface)); max-width: 1400px; }
 .ah-ro-note { margin: 0 0 10px; }
@@ -5012,6 +5002,25 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .ib-unsorted .does-held > span:first-child { color: var(--watch); }
 .ib-unsorted-acts { margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .ib-form-label { font-weight: 600; margin-right: 4px; }
+.ib-merge { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; overflow-wrap: anywhere; }
+.ib-merge p { margin: 0; }
+.mg-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.mg-choice { inline-size: 100%; text-align: start; white-space: normal; padding: 6px 8px; border: 1px solid transparent; border-radius: 6px; background: none; color: inherit; font: inherit; cursor: pointer; }
+.mg-choice:hover, .mg-choice:focus-visible { border-color: var(--border-strong); background: var(--raised); }
+.mg-before { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; gap: 8px; }
+.mg-side, .mg-after { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; min-width: 0; overflow-wrap: anywhere; }
+.mg-gone { border-style: dashed; }
+.mg-arrow { align-self: center; color: var(--text-muted); }
+.mg-after { border-color: var(--border-strong); background: var(--raised); }
+.mg-label { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.mg-title { font-weight: 600; }
+.mg-moves { margin: 0; padding-inline-start: 18px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
+.mg-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.mg-buttons .mini { max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 560px) {
+  .mg-before { grid-template-columns: minmax(0, 1fr); }
+  .mg-arrow { justify-self: center; transform: rotate(90deg); }
+}
 .ib-body { display: grid; gap: 12px; min-width: 0; align-content: start; }
 .ib-body.two { grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); align-items: start; }
 .ib-side { display: grid; gap: 12px; min-width: 0; }

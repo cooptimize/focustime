@@ -8,7 +8,6 @@
 //   Close out: a side panel over the dimmed cards (numbers, where you left off, DevOps updates owed, follow-ups due).
 // At 3840 wide a day timeline sits on the left (drop a pick onto a free gap to timebox it) and a detail panel under
 // the cards. Lumen never appears here.
-import { useSentToday } from "./Team.tsx";
 import type { SetupStep } from "../plan/setup.ts";
 import { useTextScale } from "./textsize.ts";
 import { ModeArea } from "./ModeSwitch.tsx";
@@ -64,7 +63,8 @@ import { DetailPanel, BreakDown, interactive } from "./DetailPanel.tsx";
 import type { PanelFocus } from "./WeekGrid.tsx";
 import { userZone } from "../week/zone.ts";
 import type { Moment } from "../plan/modes.ts";
-import { conversationSource, promiseSource, sendSource, untimedDue, urgentLines, type UrgentSource } from "../plan/urgent.ts";
+import { inboxSource, untimedDue, urgentLines, type UrgentLine, type UrgentSource } from "../plan/urgent.ts";
+import type { InboxItemView } from "../plan/inbox-items.ts";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { openCoopBrief } from "./menu.ts";
 
@@ -85,8 +85,19 @@ type Props = {
   target: { date: string; isToday: boolean };
   now: string;
   nowMs: number;
-  /** CV-3: more urgent strip sources after conversations and promises (SW-1's sends register here). */
+  /** CV-3: more urgent strip sources after the Inbox's own lines. */
   urgentSources?: readonly UrgentSource[];
+  /**
+   * IB-1 slice 4: the Inbox's rows for Today (inbox.today, the same read as the badge): the urgent strip shows the
+   * ones in Needs you that are urgent now, each opening its item in the Inbox's detail pane.
+   */
+  inbox?: readonly InboxItemView[] | null;
+  /** The badge's number, shown at the strip's foot. */
+  needsYou?: number | null;
+  /** Opens one Inbox item (#/inbox/item/<key>). */
+  onItem?: (key: string) => void;
+  /** Opens Inbox › Needs you. */
+  onNeedsYou?: () => void;
   /** U2: Now, Check-in or Close out: states of this one page. */
   mode: TodayMode;
   /** Close out's day (today by default; any earlier day). */
@@ -103,10 +114,6 @@ type Props = {
   onTimer: (action: "timer.done" | "timer.extend") => void;
   onPlan: (date?: string) => void;
   onPlanWeek: () => void;
-  /** SW-1: Today's line for work sent to me opens Commit on its week. */
-  onSent?: (weekStart: string) => void;
-  /** SW-1: reloads Today's sent line when the plan changes. */
-  sentVersion?: unknown;
   onInbox: () => void;
   /** AP-2: Inbox › Requests (an urgent request's chip, Check-in's "Walked in, not resolved"). */
   onAsks?: (conversationId?: number) => void;
@@ -175,9 +182,10 @@ export function Today(props: Props) {
   const todayPromises = target.isToday && nudges ? (data.promises ?? []) : [];
   const dayEnd = blocks.length ? blocks.map((s) => s.end).sort().at(-1)! : null;
   const clockNow = new Date(nowMs).toISOString();
-  const sent = useSentToday(props.sentVersion, !!props.onSent);
-  const urgentSources: UrgentSource[] = [conversationSource(data.requests?.urgent ?? []), promiseSource(todayPromises, { today: date, dayEnd }), ...(props.onSent ? [sendSource(sent, props.onSent)] : []), ...(props.urgentSources ?? [])];
-  const untimed = untimedDue(todayPromises, { now: clockNow, today: date, dayEnd });
+  // IB-1 slice 4: the strip reads the Inbox's rows; the attention line leaves out whatever the strip already shows.
+  const urgentSources: UrgentSource[] = [inboxSource(target.isToday && nudges ? (props.inbox ?? []) : [], { today: date, dayEnd }), ...(props.urgentSources ?? [])];
+  const inStrip = new Set(urgentLines(urgentSources, clockNow, tz).map((l) => l.key));
+  const untimed = untimedDue(todayPromises, { now: clockNow, today: date, dayEnd }).filter((p) => !inStrip.has(`c${p.id}`));
   const focused = useFocused();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -330,7 +338,7 @@ export function Today(props: Props) {
     </button>
   ) : null;
 
-  const attention = mode === "now" && nudges ? <Attention noDue={phone} promises={untimed} onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
+  const attention = mode === "now" && nudges ? <Attention noDue={phone} promises={untimed} inStrip={inStrip} onItem={props.onItem} onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
   const panelSlot = panel ? blocks.find((s) => s.half === panel.half) ?? null : null;
 
   return (
@@ -382,7 +390,7 @@ export function Today(props: Props) {
           onDone={committed ? (p) => view.toggle(p.id, true) : null}
         />
       )}
-      {mode === "now" && nudges && <UrgentStrip sources={urgentSources} now={clockNow} today={date} tz={tz} onAsks={props.onAsks ?? props.onInbox} onPromises={onPromise} onAskFocus={(u) => void startAsk(u)} />}
+      {mode === "now" && nudges && <UrgentStrip sources={urgentSources} now={clockNow} today={date} tz={tz} clientName={(k) => data.planClients.find((c) => c.clientKey === k)?.clientName ?? k} onItem={props.onItem ?? (() => props.onInbox())} needsYou={props.needsYou ?? null} onNeedsYou={props.onNeedsYou} onAskFocus={(u) => void startAsk(u)} />}
       {!wide && attention}
       {mode === "now" && nudges && props.moment && <MomentCard m={props.moment} onPlan={() => props.onPlan(date)} onCheckIn={props.onCheckIn} onCloseOut={props.onCloseOut} />}
       {mode === "now" && nudges && props.setupLine && props.onSetup && (
@@ -516,10 +524,11 @@ function checkLeft(check: readonly CheckSlot[]): string {
  * The attention line: only when something needs it. Follow-ups due collapse to one chip that opens into rows; a source
  * that failed shows with how old its data is and Retry; an expiring secret links to its setting. Nothing when healthy.
  */
-function Attention({ noDue = false, promises = [], soon = [], onPromises, data, date, clockMs, onInbox, onRetry, onFix, onSettings }: { noDue?: boolean; promises?: DayPromise[]; soon?: DayPromise[]; onPromises?: () => void; data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void}) {
+function Attention({ noDue = false, promises = [], soon = [], inStrip, onItem, onPromises, data, date, clockMs, onInbox, onRetry, onFix, onSettings }: { noDue?: boolean; promises?: DayPromise[]; soon?: DayPromise[]; inStrip?: ReadonlySet<string>; onItem?: ((key: string) => void) | undefined; onPromises?: () => void; data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void}) {
   const [open, setOpen] = useState(false);
   // P1: the phone lists due follow-ups at the foot of Today instead.
-  const due: FollowUpView[] = noDue ? [] : urgentFollowUps(data.followUps, date);
+  // IB-1 slice 4: a late promise I added is in the urgent strip now (the Inbox's rows), so it isn't listed twice.
+  const due: FollowUpView[] = noDue ? [] : urgentFollowUps(data.followUps, date).filter((l) => !inStrip?.has(`f${l.id}`));
   const down = causeLines(data.sources, data.devops);
   const vm = vmNeedsToday(useContext(VmCtx).status);
   // NV-1: urgent requests and my promises due are in the urgent strip above this line.
@@ -572,7 +581,7 @@ function Attention({ noDue = false, promises = [], soon = [], onPromises, data, 
         <ul className="att-rows">
           {due.map((l) => (
             <li key={l.id}>
-              <button type="button" className="att-row" onClick={onInbox}>
+              <button type="button" className="att-row" onClick={() => (onItem ? onItem(`f${l.id}`) : onInbox())}>
                 <DueBadge l={l} />
                 <span className="att-who">{l.hasWho ? l.who : l.clientName ?? ""}</span>
                 <span className="what">{l.what}</span>
@@ -581,7 +590,7 @@ function Attention({ noDue = false, promises = [], soon = [], onPromises, data, 
           ))}
           {promises.map((p) => (
             <li key={`promise-${p.id}`}>
-              <button type="button" className="att-row" onClick={onPromises ?? onInbox}>
+              <button type="button" className="att-row" onClick={() => (onItem ? onItem(`c${p.id}`) : (onPromises ?? onInbox)())}>
                 <span className={`due-badge${p.overdue ? " overdue-amber" : ""}`}>{p.overdue ? `Promise · ${wasDueText(p, date, userZone(data)).replace(/^Was/, "was")}` : "Promise"}</span>
                 <span className="att-who">{p.toName ?? p.clientName}</span>
                 <span className="what">{p.what}</span>
@@ -595,30 +604,30 @@ function Attention({ noDue = false, promises = [], soon = [], onPromises, data, 
 }
 
 /**
- * NV-1: the urgent strip, under what's next: what needs me now, mine only. Urgent requests from client chats (AI
- * urgency "now") and my promises due today or overdue, one short line each, linking to Inbox › Conversations or
- * My promises. An urgent request keeps its Start focus. Hidden when there is nothing.
+ * NV-1: the urgent strip, under what's next: what needs me now, mine only. IB-1 slice 4: its lines are the Inbox's own
+ * items (plan/inbox-items.ts `todayLines`): conversations with a request needed now, my promises late or due soon, sends
+ * to me waiting for my answer; each opens its item in the Inbox's detail pane, and the foot says how many need me in
+ * all (the badge's number). An urgent request keeps its Start focus. Hidden when there is nothing.
  */
-export function UrgentStrip({ sources, now, today, tz, onAsks, onPromises, onAskFocus }: { sources: readonly UrgentSource[]; now: string; today: IsoDate; tz: string; onAsks: (conversationId?: number) => void; onPromises: (promiseId?: number) => void; onAskFocus: (u: UrgentAsk) => void }) {
+export function UrgentStrip({ sources, now, today, tz, clientName, onItem, needsYou, onNeedsYou, onAskFocus }: { sources: readonly UrgentSource[]; now: string; today: IsoDate; tz: string; clientName: (k: string) => string; onItem: (key: string) => void; needsYou?: number | null; onNeedsYou?: (() => void) | undefined; onAskFocus: (u: UrgentAsk) => void }) {
   const lines = urgentLines(sources, now, tz);
   if (!lines.length) return null;
+  const more = needsYou != null && needsYou > 0 ? needsYou : null;
   return (
     <section className="urgent-strip" aria-label="Urgent">
       <ul>
         {lines.map((l) => {
-          const open = () => (l.kind === "conversation" ? onAsks(l.ask.conversationId ?? undefined) : l.kind === "promise" ? onPromises(l.promise.id) : l.open?.());
-          const tag = l.kind === "conversation" ? "Needs you now" : l.kind === "other" ? l.tag : l.overdue ? `Promise · ${wasDueText(l.promise, today, tz).replace(/^Was/, "was")}` : l.dueAt ? `Promise · ${clock(l.dueAt, tz)}` : "Promise due today";
-          const late = l.kind !== "conversation" && !!l.overdue;
+          const v = stripLine(l, { today, tz, clientName });
           return (
-            <li key={l.key} className={`us-item us-${l.kind === "other" ? l.source : l.kind}${l.kind === "other" && l.source === "sends" ? " sent-line" : ""}${late ? " overdue" : ""}`}>
-              <button type="button" className="us-line" onClick={open} title={l.kind === "conversation" ? "Open it in Inbox › Conversations" : l.kind === "promise" ? "Open it in Inbox › Promises" : undefined}>
-                <span className="us-tag">{tag}</span>
-                {l.who && <span className="us-who">{l.who}</span>}
-                <span className="us-what">{l.what}</span>
+            <li key={l.key} className={`us-item us-${v.cls}${v.late ? " overdue" : ""}`}>
+              <button type="button" className="us-line" onClick={() => (l.kind === "item" ? onItem(l.key) : l.open?.())} title={l.kind === "item" ? "Open it in the Inbox" : undefined}>
+                <span className="us-tag">{v.tag}</span>
+                {v.who && <span className="us-who">{v.who}</span>}
+                <span className="us-what">{v.what}</span>
                 <span className="us-go" aria-hidden="true">›</span>
               </button>
-              {l.kind === "conversation" && (
-                <button type="button" className="mini" onClick={() => onAskFocus(l.ask)} title="Add it to the block under way and start focus on it">
+              {l.kind === "item" && l.row.urgent && (
+                <button type="button" className="mini" onClick={() => onAskFocus(l.row.urgent!)} title="Add it to the block under way and start focus on it">
                   Start focus
                 </button>
               )}
@@ -626,8 +635,24 @@ export function UrgentStrip({ sources, now, today, tz, onAsks, onPromises, onAsk
           );
         })}
       </ul>
+      {more !== null && onNeedsYou && (
+        <button type="button" className="link-btn us-all" onClick={onNeedsYou}>
+          {more} {more === 1 ? "needs" : "need"} you in the Inbox
+        </button>
+      )}
     </section>
   );
+}
+
+/** One strip line's tag, who and what, in plain words. */
+export function stripLine(l: UrgentLine, o: { today: IsoDate; tz: string; clientName: (k: string) => string }): { cls: string; tag: string; who: string | null; what: string; late: boolean } {
+  if (l.kind === "other") return { cls: l.source, tag: l.tag, who: l.who || null, what: l.what, late: !!l.overdue };
+  const r = l.row;
+  const client = r.clientKey ? o.clientName(r.clientKey) : null;
+  if (r.kind === "conversation") return { cls: "conversation", tag: "Needs you now", who: client, what: r.urgent?.title ?? r.title, late: false };
+  if (r.kind === "send") return { cls: "sends sent-line", tag: r.must ? "Sent to you · Must" : "Sent to you", who: r.who, what: r.title, late: false };
+  const tag = r.late ? `Promise · ${wasDueText({ dueAt: r.dueAt, dueDate: r.due }, o.today, o.tz).replace(/^Was/, "was")}` : r.dueAt ? `Promise · ${clock(r.dueAt, o.tz)}` : "Promise due today";
+  return { cls: "promise", tag, who: r.who ?? client, what: r.title, late: r.late };
 }
 
 const MOMENTS = {

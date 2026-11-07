@@ -11,7 +11,8 @@ import type { ConversationCard } from "../../plan/conversation-views.ts";
 import { call } from "../api.ts";
 import { SortCapture, captureClients } from "../Capture.tsx";
 import { CloseLoop } from "../CloseLoop.tsx";
-import { ConvLink, DraftItem, LinkedItem, MergeInto, Messages, NotRequest, SuggestionBox } from "../Conversations.tsx";
+import { ConvLink, DraftItem, LinkedItem, Messages, NotRequest, SuggestionBox } from "../Conversations.tsx";
+import { MergePane } from "./MergePane.tsx";
 import { useDevOpsWrite } from "../DevOpsWrite.tsx";
 import { WRITING_POLL_MS } from "../createdraft-ctx.ts";
 import { draftRowState, draftRowText } from "../../plan/capture-prepare.ts";
@@ -176,8 +177,7 @@ function FormArea(p: DetailProps): ReactNode {
   }
   if (form === "merge" && e.kind === "conversation" && e.card && p.merge) {
     const c = e.card;
-    const merge = p.merge;
-    return <MergeInto c={c} others={p.mergeOthers ?? []} tz={p.tz} onPick={(into) => void merge(c.id, into)} onCancel={cancel} />;
+    return <MergePane c={c} others={p.mergeOthers ?? []} tz={p.tz} onMerge={p.merge} onCancel={cancel} />;
   }
   if (form === "sort" && e.kind === "capture" && e.capture)
     return (

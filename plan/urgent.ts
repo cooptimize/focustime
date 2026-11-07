@@ -1,19 +1,19 @@
-// NV-1: Today's urgent strip, mine only. CV-3: built from pluggable sources ({ kind, lines(now, zone) }) in order:
-// urgent requests from client chats (AI urgency "now"), then my promises, then SW-1's sends (and whatever else registers).
+// NV-1: Today's urgent strip, mine only. CV-3: built from pluggable sources ({ kind, lines(now, zone) }) in order.
+// IB-1 slice 4: the first source is the Inbox's own rows (inboxSource): conversations needed now, my promises, sends.
 // A promise is urgent only when overdue or due within the next 2 hours; one due today with no time joins in the last 2
 // working hours of the day. Otherwise it shows only at its time in the agenda (or, with no time, in the attention
 // line's follow-ups row). Pure.
-import type { UrgentAsk } from "../actions/types.ts";
 import type { DayPromise } from "./conversation-views.ts";
 import type { IsoDate } from "../week/types.ts";
+import { TODAY_SOON_MS, todayLines, type InboxItemView } from "./inbox-items.ts";
 
 /** How far ahead a promise with a time counts as urgent; also how early before the day's end an untimed one joins. */
-export const PROMISE_SOON_MS = 2 * 3600_000;
+export const PROMISE_SOON_MS = TODAY_SOON_MS;
 
 export type UrgentLine =
-  | { kind: "conversation"; key: string; who: string; what: string; ask: UrgentAsk }
-  | { kind: "promise"; key: string; who: string; what: string; overdue: boolean; dueAt: string | null; promise: DayPromise }
-  /** Any other source's line (SW-1's sends): its tag, one line, and where it opens. */
+  /** IB-1 slice 4: an Inbox item (a conversation needed now, a promise late or due soon, a send waiting), opening it in the Inbox. */
+  | { kind: "item"; key: string; row: InboxItemView }
+  /** Any other source's line: its tag, one line, and where it opens. */
   | { kind: "other"; source: string; key: string; who: string; what: string; tag: string; overdue?: boolean; open?: () => void };
 
 /** One source of urgent lines; the strip shows the sources' lines in the order the sources are given. */
@@ -23,12 +23,6 @@ export type UrgentSource = { kind: string; lines: (now: string, zone: string) =>
 export function urgentLines(sources: readonly UrgentSource[], now: string, zone: string): UrgentLine[] {
   return sources.flatMap((s) => s.lines(now, zone));
 }
-
-/** Urgent requests from client chats. */
-export const conversationSource = (urgent: readonly UrgentAsk[]): UrgentSource => ({
-  kind: "conversation",
-  lines: () => urgent.map((u) => ({ kind: "conversation", key: `c:${u.chatId}|${u.messageId}`, who: u.clientName, what: u.title, ask: u })),
-});
 
 const ms = (iso: string) => Date.parse(iso.replace(/\[.*\]$/, ""));
 
@@ -42,14 +36,14 @@ export function promiseUrgent(p: DayPromise, o: { now: string; today: IsoDate; d
   return p.dueDate <= o.today && !!o.dayEnd && ms(o.dayEnd) - ms(o.now) <= PROMISE_SOON_MS;
 }
 
-/** My promises in the strip: overdue first, then by time (untimed last). */
-export const promiseSource = (promises: readonly DayPromise[], o: { today: IsoDate; dayEnd: string | null }): UrgentSource => ({
-  kind: "promise",
-  lines: (now) =>
-    promises
-      .filter((p) => promiseUrgent(p, { now, today: o.today, dayEnd: o.dayEnd }))
-      .sort((a, b) => Number(b.overdue) - Number(a.overdue) || (a.dueAt ?? "9").localeCompare(b.dueAt ?? "9"))
-      .map((p): UrgentLine => ({ kind: "promise", key: `p:${p.id}`, who: p.toName ?? p.clientName, what: p.what, overdue: p.overdue, dueAt: p.dueAt, promise: p })),
+/**
+ * IB-1 slice 4: the Inbox's own rows as the strip's first source (plan/inbox-items.ts `todayLines`): what Today shows
+ * is what the Inbox holds, each line opening its item there. It replaces the strip's three sources before (urgent
+ * requests from week.load, my chat promises, SW-1's sends line).
+ */
+export const inboxSource = (rows: readonly InboxItemView[], o: { today: IsoDate; dayEnd: string | null }): UrgentSource => ({
+  kind: "inbox",
+  lines: (now) => todayLines(rows, { today: o.today, now, dayEnd: o.dayEnd }).map((row): UrgentLine => ({ kind: "item", key: row.key, row })),
 });
 
 /** Promises due today with no time that aren't in the strip yet: the attention line's follow-ups row carries them. */
@@ -57,15 +51,5 @@ export function untimedDue(promises: readonly DayPromise[], o: { now: string; to
   return promises.filter((p) => !p.dueAt && p.dueDate === o.today && !promiseUrgent(p, { now: o.now, today: o.today, dayEnd: o.dayEnd }));
 }
 
-/** SW-1's Today line ("Lee sent you Order export (Must)", or a count) as the strip's last source. */
+/** SW-1's Today line (send.today: "Lee sent you Order export (Must)", or a count). Since IB-1 slice 4 Today's strip shows each send from the Inbox instead. */
 export type SentToday = { line: string | null; count: number; weekStart: IsoDate };
-
-/**
- * SW-1's sends: one line while anything sent to me waits for my answer, exactly as SW-1 words and opens it (send.today,
- * unchanged). A send has a week and no due time, so the strip's time rules have nothing to hold back: it shows while
- * something waits, after conversations and promises, and the strip hides when nothing is left.
- */
-export const sendSource = (d: SentToday | null, open: (weekStart: IsoDate) => void): UrgentSource => ({
-  kind: "sends",
-  lines: () => (d?.line ? [{ kind: "other", source: "sends", key: `s:${d.weekStart}`, who: "", what: d.line, tag: "Sent to you", open: () => open(d.weekStart) }] : []),
-});

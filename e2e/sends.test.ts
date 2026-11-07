@@ -1,4 +1,4 @@
-// SW-1: sending work to someone's week, the main path on the demo (Monday Nov 2): Today's line for what Priya sent,
+// SW-1: sending work to someone's week, the main path on the demo (Monday Nov 2): Today's lines for what was sent (IB-1 slice 4: each opens in the Inbox),
 // Accept in Commit's From your team (it joins the week as a must), Send to… from a Commit row (a Must, as a Northwind
 // lead), the Sent list, and Week › Team (committed features only, Not committed yet, Not on FocusTime yet). With
 // FOCUSTIME_SHOTS, the screenshots for the report at 1920, 1366×768, Text size Larger and a phone.
@@ -43,10 +43,17 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
 
   it("Today's line, Accept, Send to… a Must, the Sent list and Team", async () => {
     const { page, errors } = await freshPage(h);
-    const line = page.locator(".sent-line");
-    await line.waitFor({ timeout: 30_000 });
-    await expect(line.locator(".us-what").textContent()).resolves.toBe("2 items sent to your week · 1 Must");
-    await line.getByRole("button").click();
+    // IB-1 slice 4: each send waiting for me is its own line (the Inbox's rows), the Must first; one opens that send in
+    // the Inbox's detail pane.
+    const lines = page.locator(".sent-line");
+    await lines.first().waitFor({ timeout: 30_000 });
+    await expect.poll(() => lines.count()).toBe(2);
+    await expect(lines.first().locator(".us-tag").textContent()).resolves.toBe("Sent to you · Must");
+    await expect(lines.nth(1).locator(".us-tag").textContent()).resolves.toBe("Sent to you");
+    await lines.filter({ hasText: "Loyalty points" }).locator(".us-line").click();
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/inbox\/item\/s\d+$/);
+    await page.locator(".ib-pane .ib-detail-title", { hasText: "Loyalty points" }).waitFor();
+    await commit(page);
     const group = page.locator("section.team-group");
     await group.waitFor({ timeout: 30_000 });
 
@@ -98,8 +105,8 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
           await larger(page, false);
         }
       };
-      await page.locator(".sent-line").waitFor({ timeout: 30_000 });
-      await page.locator(".sent-line").scrollIntoViewIfNeeded();
+      await page.locator(".sent-line").first().waitFor({ timeout: 30_000 });
+      await page.locator(".sent-line").first().scrollIntoViewIfNeeded();
       await snap("today-line");
       await commit(page);
       await page.locator("section.team-group").scrollIntoViewIfNeeded();
@@ -140,7 +147,7 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
       expect(over, `${name} is wider than the phone`).toBeLessThanOrEqual(0);
       await page.screenshot({ path: `${SHOTS}/sw1-phone-${name}.png` });
     };
-    await page.locator(".sent-line").waitFor({ timeout: 30_000 });
+    await page.locator(".sent-line").first().waitFor({ timeout: 30_000 });
     await fits("today-line");
     await team(page);
     await fits("team");

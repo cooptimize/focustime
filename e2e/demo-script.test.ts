@@ -42,6 +42,12 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await page.locator(".phone-now, .today-next").first().waitFor({ timeout: 30_000 });
     await page.getByText(/Promise · was due/).first().waitFor();
     await page.getByText("Send Marcus the updated export spec").first().waitFor();
+    // IB-1 slice 4: the strip is the Inbox's own items: the urgent ask first, the sends as their own lines, the badge's count.
+    const strip = page.getByRole("region", { name: "Urgent" });
+    await expect(strip.locator(".us-item").first().textContent()).resolves.toContain("Warehouse sign-in fails since the 9:00 release");
+    await expect.poll(() => strip.locator(".sent-line").count()).toBe(2);
+    const badge = await page.locator("nav.views .view-tab .count").first().textContent();
+    await expect(strip.locator(".us-all").textContent()).resolves.toBe(`${badge} need you in the Inbox`);
     await shot(page, "today");
 
     // 2. Plan today: drag Filter orders by date range onto Northwind's afternoon, then Confirm today.
@@ -116,6 +122,13 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await myp.locator(".ib-row", { hasText: "Send Marcus the updated export spec" }).waitFor({ timeout: 30_000 });
     await myp.locator(".ib-row", { hasText: "Confirm the intake form go-live date" }).first().waitFor();
     await shot(page, "inbox-promises");
+    const waiting = await openInboxView(page, "waiting");
+    await waiting.locator(".ib-row", { hasText: "Send Alex three test accounts with points balances" }).waitFor({ timeout: 30_000 });
+    await shot(page, "inbox-waiting");
+    const done = await openInboxView(page, "done");
+    await done.locator(".ib-row", { hasText: "Reminder text wording" }).waitFor({ timeout: 30_000 });
+    await done.locator(".ib-row", { hasText: "Send Lena the new reminder text" }).waitFor();
+    await shot(page, "inbox-done");
 
     // 8. Capture: N on Today, a line for Northwind, Enter. Then Captures: the seeded draft story's AI-prepared version.
     await go(page, "#/today");
