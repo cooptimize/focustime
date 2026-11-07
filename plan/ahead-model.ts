@@ -164,7 +164,7 @@ export function filterRows(rows: readonly Row[], c: LoadClient, f: AheadFilters,
 
 /** Clients the client filter keeps, each with its filtered rows; clients that failed keep their message. */
 export function groups(load: AheadLoad, f: AheadFilters, o: { stories: boolean }): Group[] {
-  return load.clients.filter((c) => !f.clients.length || f.clients.includes(c.clientKey)).map((c) => ({ client: c, rows: c.status === "ok" ? filterRows(buildRows(load, c), c, f, o) : [] }));
+  return load.clients.filter((c) => !f.clients.length || f.clients.includes(c.clientKey)).map((c) => ({ client: c, rows: c.status === "ok" ? filterRows(buildRows(load, c), c, f, { today: load.today, ...(load.staleWeeks !== undefined ? { staleWeeks: load.staleWeeks } : {}), ...o }) : [] }));
 }
 
 /** The epics a client filter offers (key, title), across the shown clients. */

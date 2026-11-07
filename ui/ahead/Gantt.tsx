@@ -17,7 +17,7 @@ import type { AheadState, RoadmapRow, WeekLoadData } from "../../actions/types.t
 import { aboutText, budgetWords, DEFAULT_FEATURE_MINUTES, hoursText } from "../../plan/estimate.ts";
 import { barDates, CROWDED_MINUTES_PER_FEATURE, monthLoad, NEXT_WORDS, pastWords, readiness, timelineScale, type AheadColumn, type MonthLoad, type NextStep, type ReadinessFlag, type Scale } from "../../plan/ahead.ts";
 import { barTreatment, capText, dayOf, dragHalves, ganttBar, halfRight, halfX, halvesMoved, receive, release, shownOrder, type DragMode, type GanttBar, type Held, type HalfBar } from "../../plan/gantt.ts";
-import { atLevel, countText, descendants, levelNames, levelRank, rollup, setRow, tree, visible, type Fold, type Node as TreeNode, type Span } from "../../plan/gantt-tree.ts";
+import { countText, descendants, levelRank, rollup, setRow, tree, visible, type Fold, type Node as TreeNode, type Span } from "../../plan/gantt-tree.ts";
 import { GAP_WORDS, type GapKind } from "../../plan/fixnext.ts";
 import { reach, type Reach } from "../../plan/reach.ts";
 import { STATE_WORDS } from "../../plan/roadmap.ts";
@@ -32,8 +32,7 @@ import { WorkLink } from "../WorkLink.tsx";
 import { ganttLabelW, useWindowScale } from "./layout.ts";
 import { useAhead } from "./Ahead.tsx";
 import { CellEditor, type EditKind } from "./Editors.tsx";
-import { LevelControl } from "./Levels.tsx";
-import { isNum, isBool, useFold, usePref } from "./prefs.ts";
+import { isNum, usePref } from "./prefs.ts";
 import { isOpen, type Group, type Row } from "./model.ts";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -81,8 +80,8 @@ type Env = {
 export function Gantt({ data, groups: incoming, onChanged }: { data: WeekLoadData; groups: Group[]; onChanged: () => void }) {
   const a = useAhead();
   const [ahead, setAhead] = useState<AheadState | null>(null);
-  const [fold, setFold] = useFold("gantt", atLevel("feature"));
-  const [callouts, setCallouts] = usePref("gantt.callouts", isBool, true);
+  // AH-6: the level, carets and Show callouts are Ahead's one view, set in its toolbar.
+  const { fold, setFold, callouts, names } = a.view;
   const [labelPref, setLabelPref] = usePref<number | null>("gantt.labelW", (v): v is number | null => v === null || isNum(v), null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [width, setWidth] = useState(1200);
@@ -144,7 +143,6 @@ export function Gantt({ data, groups: incoming, onChanged }: { data: WeekLoadDat
   const pastN = cols.filter((c) => c.kind === "past").length;
   const weekW = Math.max(90, Math.floor((width - labelW - 24) / (4 + 1.6 * months + 0.8 * pastN)));
   const scale = useMemo(() => (cols.length ? timelineScale(cols, { week: weekW, month: Math.floor(weekW * 1.6), past: Math.floor(weekW * 0.8) }) : null), [cols, weekW]);
-  const names = useMemo(() => levelNames(held.shown), [held.shown]);
 
   /** Whole hours; 0 takes the feature off that week (Plan the week's rows; immediate, outside the change set). */
   const setHours = useCallback(
@@ -173,11 +171,7 @@ export function Gantt({ data, groups: incoming, onChanged }: { data: WeekLoadDat
   const env: Env | null = ahead && scale ? { ahead, scale, cols, fold, setFold, names, callouts, nudges: data.guidance?.readinessNudges !== false, setHours, onChanged, cursor, setCursor, frozen, begin, end } : null;
   return (
     <div className="ah-gantt-wrap">
-      <div className="ah-gantt-bar" role="toolbar" aria-label="Gantt view">
-        <LevelControl fold={fold} setFold={setFold} names={names} />
-        <button type="button" className="rm-chip ah-callouts-toggle" aria-pressed={callouts} onClick={() => setCallouts(!callouts)} title="The marker at the end of a bar: what needs attention, with its fix">
-          Show callouts
-        </button>
+      <div className="ah-gantt-bar">
         <Legend />
       </div>
       <div className="pa-box ah-gantt" ref={box} style={maxH ? { maxHeight: maxH } : undefined}>

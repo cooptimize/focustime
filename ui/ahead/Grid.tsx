@@ -26,9 +26,7 @@ import { useAhead } from "./Ahead.tsx";
 import { CellEditor } from "./Editors.tsx";
 import { Avatar, usePhotos } from "../Presence.tsx";
 import type { Group, Row } from "./model.ts";
-import { atLevel, isOpenRow, levelNames, setRow } from "../../plan/gantt-tree.ts";
-import { LevelControl } from "./Levels.tsx";
-import { useFold } from "./prefs.ts";
+import { isOpenRow, setRow } from "../../plan/gantt-tree.ts";
 
 type Col = "item" | "state" | "start" | "target" | "dates" | "assignee" | "size" | "ready";
 /** The columns at each layout, in order. */
@@ -48,8 +46,7 @@ export function Grid({ groups, layout = "wide" }: { groups: Group[]; layout?: Gr
   const COLS = COLUMNS[layout];
   const a = useAhead();
   // AH-6: "Show: Epics · Features · Stories" as in the Gantt (everything open by default, as before), carets on top.
-  const [fold, setFold] = useFold("grid", atLevel("story"));
-  const names = useMemo(() => levelNames(groups), [groups]);
+  const { fold, setFold } = a.view;
   const [focus, setFocus] = useState<{ key: string; col: Col } | null>(null);
   const [editing, setEditing] = useState<{ key: string; col: Col } | null>(null);
   const cells = useRef(new Map<string, HTMLElement>());
@@ -104,9 +101,6 @@ export function Grid({ groups, layout = "wide" }: { groups: Group[]; layout?: Gr
   const toggle = (r: Row, open?: boolean) => setFold((f) => setRow(f, r, open ?? !isOpenRow(f, r)));
   return (
     <div className={`ah-grid-box lay-${layout}`}>
-      <div className="ah-grid-bar" role="toolbar" aria-label="Grid view">
-        <LevelControl fold={fold} setFold={setFold} names={names} />
-      </div>
       {shown.map(({ g, rows }) => (
         <section key={g.client.clientKey} className="ah-client" style={{ "--c": a.color(g.client.clientKey) } as CSSProperties} aria-label={g.client.clientName}>
           <h3 className="ah-client-head">
