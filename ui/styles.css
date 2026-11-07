@@ -4341,15 +4341,20 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .ah-grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--fs-3); }
 /* AH-3: Item takes what's left and never goes under its minimum (ui/ahead/layout.ts picks the columns so it fits); the
    rest are compact and fixed. Widths are in em so they grow with the Text size, and the layout counts that too. */
-.ah-grid .w-item { width: auto; } .ah-grid .w-state { width: 8em; } .ah-grid .w-date { width: 6.5em; } .ah-grid .w-dates { width: 12em; } .ah-grid .w-who { width: 9em; } .ah-grid .w-size { width: 5.5em; } .ah-grid .w-ready { width: 15em; }
+.ah-grid .w-item { width: auto; } .ah-grid .w-state { width: 8em; } .ah-grid .w-date { width: 6.5em; } .ah-grid .w-dates { width: 11.5em; } .ah-grid .w-who { width: 9.5em; } .ah-grid .w-size { width: 5.5em; } .ah-grid .w-ready { width: 14em; }
 .lay-dots .ah-grid .w-ready { width: 5em; }
 .ah-grid th { text-align: left; font-size: var(--fs-1); font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 4px 8px; border-bottom: 1px solid var(--border-strong); }
 .ah-cell { position: relative; padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: top; overflow: hidden; text-overflow: ellipsis; }
 .ah-cell:focus { outline: 2px solid var(--focus); outline-offset: -2px; }
 .ah-cell.ah-col-item { white-space: normal; }
 .ah-cell.ah-col-state, .ah-cell.ah-col-start, .ah-cell.ah-col-target, .ah-cell.ah-col-dates, .ah-cell.ah-col-assignee, .ah-cell.ah-col-size, .ah-cell.ah-col-ready { white-space: nowrap; }
-.ah-col-ready .ah-ready { flex-wrap: nowrap; overflow: hidden; }
-.ah-who { display: block; overflow: hidden; text-overflow: ellipsis; }
+/* AH-5: readiness chips wrap to a second line inside their cell; Assigned to is a photo or initials and "First L.". */
+.ah-cell.ah-col-ready { white-space: normal; }
+.ah-col-ready .ah-ready { flex-wrap: wrap; max-width: 100%; }
+.ah-col-ready .ah-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.ah-who { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ah-who .avatar { margin-right: 0; }
+.ah-who-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ah-dates .ah-arrow { color: var(--text-faint); }
 .ah-dates-edit { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; white-space: normal; }
 .ah-cell.ah-pend { background: color-mix(in oklab, var(--selected) 12%, transparent); }
@@ -4358,7 +4363,8 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 /* QF-1: a cell I can change: one click opens its picker; hover shows it can be changed. */
 .ah-cell.ah-edit { cursor: pointer; }
 .ah-cell.ah-edit:hover { box-shadow: inset 0 -2px 0 var(--selected); }
-.ah-cell.ah-edit:hover::after { content: "▾"; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: var(--fs-1); pointer-events: none; }
+.ah-cell.ah-editing { box-shadow: inset 0 0 0 2px var(--focus); }
+.ah-cell.ah-edit:not(.ah-editing):hover::after { content: "▾"; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: var(--fs-1); pointer-events: none; }
 .ah-dot { position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--selected); }
 .ah-cell.ah-conf .ah-dot { background: var(--watch); }
 .ah-item { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
@@ -5551,3 +5557,81 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   /* Ask: the assistant full screen, down to the bottom bar. */
   .assistant-panel.assistant-sheet { top: 0; bottom: var(--bb-h); max-height: none; min-height: 0; border-radius: 0; border-top: 0; padding-top: env(safe-area-inset-top); z-index: 45; }
 }
+
+/* AH-5: the cell popover (ui/CellPopover.tsx): the row menus' surface, radius, border and shadow, a title, the editor,
+   Save and Cancel. In the top layer, placed by ui/popover-place.ts. */
+.cell-pop {
+  position: fixed; inset: auto; margin: 0; z-index: 50; width: calc(320px * var(--text-scale, 1)); max-width: calc(100vw - 16px); overflow: auto;
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 12px; border-radius: 10px; border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow-menu); font-size: var(--fs-3); box-sizing: border-box;
+}
+.cell-pop.dp-pop, .cell-pop.ah-pop-date { width: calc(300px * var(--text-scale, 1)); }
+.cell-pop:focus-visible { outline: none; }
+.cell-pop-head { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2); color: var(--text-muted); padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.cell-pop-title { font-weight: 600; color: var(--text); }
+.cell-pop-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
+.cell-pop-warn { margin: 0; padding: 6px 10px; border-radius: 7px; font-size: var(--fs-2); color: var(--text); background: color-mix(in oklab, var(--watch) 14%, var(--surface)); border: 1px solid color-mix(in oklab, var(--watch) 55%, var(--border)); }
+.cell-pop-foot { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding-top: 8px; border-top: 1px solid var(--border); }
+.cell-pop-foot .mini { padding: 3px 12px; }
+.cell-pop input, .date-field { font: inherit; color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 9px; }
+.cell-pop input:focus-visible, .date-field:focus-visible, .seg-btn:focus-visible, .dp-day:focus-visible, .dp-chip:focus-visible, .dp-step:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.cell-pop input[aria-invalid="true"], .dp-box.bad { border-color: var(--watch); }
+
+/* A small segmented control: the mode switch's look, one step smaller. */
+.seg { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--sunken); }
+.seg-btn { padding: 2px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-2); font-weight: 500; cursor: pointer; white-space: nowrap; }
+.seg-btn:hover { color: var(--text); }
+.seg-btn.on { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 0 0 1px var(--border-strong); }
+
+/* The filterable list (State, Assigned to, a filter's choices). */
+.fl { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
+.fl-box { width: 100%; box-sizing: border-box; }
+.fl-list { list-style: none; margin: 0; padding: 2px; max-height: min(300px, 46vh); overflow: auto; outline: none; }
+.fl-option { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 7px; cursor: pointer; min-width: 0; }
+.fl-option.active { background: color-mix(in oklab, var(--accent) 14%, var(--surface)); }
+.fl-option .avatar { margin-right: 0; }
+.fl-check { flex: none; width: 1em; color: var(--accent); font-weight: 600; text-align: center; }
+.fl-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-option.current .fl-label { font-weight: 600; }
+.fl-two { flex: 1 1 auto; min-width: 0; display: grid; line-height: 1.25; }
+.fl-sub { font-size: var(--fs-1); color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-hint { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-2); color: var(--text-faint); }
+.fl-empty { padding: 8px; font-size: var(--fs-2); }
+.fl-note { margin: 0; font-size: var(--fs-2); }
+
+/* The date picker (ui/DatePicker.tsx): a typed box, the quick picks, a Monday-first month. */
+.dp { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
+.dp-box { width: 100%; box-sizing: border-box; }
+.dp-bad { margin: -4px 0 0; font-size: var(--fs-2); color: var(--text-muted); }
+.dp-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.dp-chip { font: inherit; font-size: var(--fs-2); padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border-strong); background: transparent; color: var(--text); cursor: pointer; }
+.dp-chip:hover { background: var(--raised); }
+.dp-chip.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.dp-cal { display: grid; gap: 4px; }
+.dp-nav { display: flex; align-items: center; justify-content: space-between; }
+.dp-month { font-weight: 600; }
+.dp-step { width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-4); cursor: pointer; }
+.dp-step:hover { background: var(--raised); color: var(--text); }
+.dp-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.dp-grid th { padding: 2px 0; font-size: var(--fs-1); font-weight: 600; color: var(--text-faint); text-align: center; }
+.dp-grid td { padding: 1px; text-align: center; }
+.dp-day { width: 100%; aspect-ratio: 1; max-height: calc(34px * var(--text-scale, 1)); border: 0; border-radius: 7px; background: transparent; color: var(--text); font: inherit; font-size: var(--fs-2); cursor: pointer; font-variant-numeric: tabular-nums; }
+.dp-day:hover { background: var(--raised); }
+.dp-day.out { color: var(--text-faint); }
+.dp-day.today { box-shadow: inset 0 0 0 1px var(--accent); font-weight: 600; }
+.dp-day.on { background: var(--accent); color: var(--surface); font-weight: 600; }
+.ah-pop-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ah-pop-half { padding-top: 2px; }
+.ah-pop-note { margin: 0; font-size: var(--fs-1); }
+.ah-pop-num { width: 6em; }
+.ah-pop-domain { color: var(--text-faint); }
+.ah-ext { font-size: var(--fs-1); color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; white-space: nowrap; }
+.ah-pop-nobody { display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1px dashed var(--border-strong); color: var(--text-faint); }
+.cell-pop.ah-pop-people { width: calc(340px * var(--text-scale, 1)); }
+.ah-editor-anchor { display: inline-block; width: 0; height: 1.2em; vertical-align: middle; }
+
+/* A date or a choice behind a button (Ahead's filters, Backlog's bulk date). */
+.date-field { display: inline-flex; align-items: center; gap: 8px; padding: 3px 9px; font-size: var(--fs-3); cursor: pointer; min-width: 7em; justify-content: space-between; }
+.date-field.empty span:first-child { color: var(--text-muted); }
+.date-field-icon { color: var(--text-faint); font-size: var(--fs-1); }
+.bl-bulk-label { display: inline-flex; align-items: center; gap: 6px; }

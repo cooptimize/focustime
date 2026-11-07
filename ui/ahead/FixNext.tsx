@@ -8,8 +8,7 @@ import { useState, type CSSProperties } from "react";
 import { GAP_ACTION, GAP_WORDS, PER_CLIENT, fixRows, type FixEntry, type FixGroup } from "../../plan/fixnext.ts";
 import { useAhead } from "./Ahead.tsx";
 import { gapChip, ReadyChips } from "./Chips.tsx";
-import { AssigneePicker } from "./Assignee.tsx";
-import { Editor } from "./Grid.tsx";
+import { Editor } from "./Editors.tsx";
 import { TypeIcon } from "../TypeIcon.tsx";
 import { WorkLink } from "../WorkLink.tsx";
 import type { LoadClient, Row } from "./model.ts";
@@ -21,7 +20,6 @@ type Open = "start" | "target" | "size" | "assignee" | null;
 function FixRowView({ r, entry, depth, skip, dots }: { r: Row; entry: FixEntry | null; depth: number; skip: (k: string) => void; dots: boolean }) {
   const a = useAhead();
   const [open, setOpen] = useState<Open>(null);
-  const c = a.load.clients.find((x) => x.clientKey === r.clientKey)!;
   const act = (e: FixEntry) => {
     if (e.action === "needs_stories") a.breakDown(r);
     else if (e.action === "no_dates") setOpen(r.has.start && !r.eff.start ? "start" : "target");
@@ -52,13 +50,9 @@ function FixRowView({ r, entry, depth, skip, dots }: { r: Row; entry: FixEntry |
           ) : null}
         </span>
       )}
-      {open === "assignee" ? (
+      {open ? (
         <span className="ah-fx-edit">
-          <AssigneePicker clientKey={r.clientKey} me={c.me} current={r.eff.assignee} onCancel={() => setOpen(null)} onPick={(v) => void a.stage(r, "assignee", v).then(() => setOpen(null))} />
-        </span>
-      ) : open ? (
-        <span className="ah-fx-edit">
-          <span className="muted">{open === "size" ? (r.sizeLabel ?? "Size") : open === "start" ? "Start" : "Target"}</span>
+          <span className="muted">{open === "size" ? (r.sizeLabel ?? "Size") : open === "assignee" ? "Assigned to" : open === "start" ? "Start" : "Target"}</span>
           <Editor key={open} r={r} field={open} done={() => setOpen(open === "start" && r.has.target && !r.eff.target ? "target" : null)} />
           {open === "size" && r.hint && <span className="muted ah-hint">{r.hint}</span>}
         </span>
