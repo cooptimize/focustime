@@ -45,7 +45,7 @@ export type LoopPreviewView = {
   expiresAt: string;
   channel: LoopChannel;
   mode: "post" | "draft" | "send" | "comment" | "note";
-  /** "W&C Project chat, 7 people, 4 outside Cooptimize" */
+  /** "Contoso project chat, 7 people, 4 outside Cooptimize" */
   line: string;
   destination: string;
   audience: Audience | null;

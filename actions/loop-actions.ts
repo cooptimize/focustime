@@ -18,6 +18,7 @@
 // - loop.sends: one promise's sends, or all of them (the audit entries, Settings › Data).
 // - loop.find: my open promises that match a person or words (the assistant and the command menu open the draft).
 // Nothing here sends without the preview's Send; the assistant only opens the draft. Logs carry ops and counts only.
+import { isRemoved } from "../plan/process.ts";
 import { randomUUID } from "node:crypto";
 import type { Logger } from "../log/logger.ts";
 import type { AiService } from "../ai/service.ts";
@@ -191,7 +192,7 @@ async function channelsFor(ctx: LoopContext, r: Resolved, item: LoopDraftView["i
   const teams: LoopChannelOption = {
     channel: "teams", label: "Teams", where: targets[0]?.label ?? (rec ? `1:1 chat with ${rec.name}` : "Teams"),
     available: !!rec && (targets.length > 0 || !!rec.email), reason: !rec ? r.noRecipient : targets.length || rec.email ? null : `${rec.name} can't be reached in Teams from here`,
-    access: targets.length ? teamsAccess : rec?.email ? { state: "unavailable", reason: `${firstName(rec.name)} isn't at Cooptimize, so FocusTime can't start a chat; open it in Teams prefilled` } : teamsAccess,
+    access: targets.length ? teamsAccess : rec?.email ? { state: "unavailable", reason: rec.outside ? `${firstName(rec.name)} isn't at Cooptimize, so FocusTime can't start a chat; open it in Teams prefilled` : `FocusTime can't find ${firstName(rec.name)}'s Teams account to start a chat; open it in Teams prefilled` } : teamsAccess,
     targets,
   };
   const email: LoopChannelOption = {
@@ -266,7 +267,7 @@ export async function loopAction(ctx: LoopContext, action: LoopAction, input: un
         const live = can && r.p.clientKey && r.p.itemId ? await ctx.devops("devops.states", { clientKey: r.p.clientKey, itemId: r.p.itemId }).catch(() => null) : null;
         const ld = live?.ok ? (live.data as { itemId: number; type: string; state: string; title: string; states: { name: string; category: string }[] }) : null;
         const fact: ItemFact | null = ld ? { id: ld.itemId, title: ld.title, state: ld.state, type: ld.type } : r.p.clientKey && r.p.itemId ? await ctx.item(r.p.clientKey, r.p.itemId).catch(() => null) : null;
-        const item = fact ? { ...fact, canComment: can, states: ld ? ld.states.filter((x) => x.name !== ld.state && x.category !== "Removed").map((x) => x.name) : [] } : null;
+        const item = fact ? { ...fact, canComment: can, states: ld ? ld.states.filter((x) => x.name !== ld.state && !isRemoved(x.category)).map((x) => x.name) : [] } : null;
         const d = await drafted(ctx, r, fact, me);
         const channels = await channelsFor(ctx, r, item);
         const own = channels.find((c) => c.available && c.channel === "teams" && r.p.chat) ?? channels.find((c) => c.available && c.channel !== "call") ?? channels.find((c) => c.available);

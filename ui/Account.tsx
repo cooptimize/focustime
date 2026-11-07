@@ -8,6 +8,7 @@ import { Avatar, forgetPhotos, usePhotos, usePresence } from "./Presence.tsx";
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AuthStatus, AzureWriteEntry, Person, TeamsStatusEntry, VmPreview, VmPreviewOp, VmStatus } from "../actions/account-types.ts";
 import type { PhotosData, TeamsStatusView } from "../actions/types.ts";
+import { sendLine, type LoopSendView } from "../plan/loop.ts";
 import { ActionRefusal, call, endSession, SessionError, setSignInShowing, signInWithMicrosoft, startDemo } from "./api.ts";
 import { MenuCtx } from "./Menus.tsx";
 import type { MenuItem, MenuStep } from "./menu.ts";
@@ -631,6 +632,50 @@ export function TeamsStatusLog({ tz }: { tz: string }) {
                 <td>{stamp(e.at)}</td>
                 <td>{TEAMS_OP[e.op]}{e.status && e.op === "set" ? <> <strong>{TEAMS_WORD[e.status]}</strong></> : null}{e.minutes ? <span className="muted"> · for up to {e.minutes} min</span> : null}</td>
                 <td>{e.result === "failed" ? "Failed" : "Done"}{e.message && <div className="muted">{e.message}</div>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+// ---- LP-1: Close the loop sends ----
+
+/** Settings > Data: every update Close the loop sent, drafted or marked sent, newest first. The message text is my own. */
+export function LoopSendsLog({ tz }: { tz: string }) {
+  const [log, setLog] = useState<LoopSendView[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    call<{ sends: LoopSendView[] }>("loop.sends", { limit: 50 }).then((r) => setLog(r.sends), (e: unknown) => setError(errText(e)));
+  }, []);
+  const stamp = (s: string) => Temporal.Instant.from(s).toZonedDateTimeISO(tz).toPlainDateTime().toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return (
+    <section className="write-log" aria-label="Close the loop sends">
+      <h3>Close the loop sends</h3>
+      <p className="muted">Each update you sent from a promise: by Teams, email, a DevOps comment or a call, where it went and how many people saw it. A sent message can't be undone; a promise marked kept can be reopened from the promise.</p>
+      {error && <p className="set-problem">{error}</p>}
+      {log && !log.length && <p className="muted">Nothing yet.</p>}
+      {log && log.length > 0 && (
+        <table className="wl-table">
+          <thead>
+            <tr><th scope="col">When</th><th scope="col">What</th><th scope="col">Result</th></tr>
+          </thead>
+          <tbody>
+            {log.map((e) => (
+              <tr key={e.id} className={`wl-${e.state === "failed" ? "failed" : "confirmed"}`}>
+                <td>{stamp(e.sentAt ?? e.createdAt)}</td>
+                <td>
+                  {sendLine(e)}
+                  {e.outsideCount ? <span className="muted"> · {e.outsideCount} outside Cooptimize</span> : null}
+                  {e.kept ? <span className="muted"> · promise kept</span> : null}
+                </td>
+                <td>
+                  {e.state === "failed" ? "Failed" : e.state === "unconfirmed" ? "Not read back" : e.state === "draft" ? "Draft" : "Done"}
+                  {e.link && <div><a href={e.link} target="_blank" rel="noreferrer">Open</a></div>}
+                  {e.error && <div className="muted">{e.error}</div>}
+                </td>
               </tr>
             ))}
           </tbody>

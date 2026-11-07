@@ -210,7 +210,12 @@ function loopDraft(input: string): string {
   const what = sentence(line("Promise")).replace(/^I'll /i, "").replace(/^I will /i, "");
   const item = /^Work item #(\d+): (.*) \((.*)\), state now: (.*)$/m.exec(input);
   const state = item ? ` #${item[1]} is ${item[4]} now, so you can check it whenever suits you.` : "";
-  return `Hi ${to}, a quick update on ${what.charAt(0).toLowerCase()}${what.slice(1)}: it's done.${state} Let me know if anything looks off.${from ? `\n\n${from}` : ""}`;
+  // "Tell Priya the export is ready" says itself; anything else is closed out as done.
+  const told = /^(?:tell|let) \S+ (?:know )?(?:that )?(.+)$/i.exec(what.replace(/\.$/, ""));
+  // "Send Marcus the updated spec" → "the updated spec"; "Confirm the go-live date" → "the go-live date".
+  const thing = what.replace(/\.$/, "").replace(new RegExp(`^\\w+ (?:${to.split(" ")[0]} )?`, "i"), "");
+  const body = told ? `${sentence(told[1]!)}.` : `Closing the loop on ${thing}: it's done.`;
+  return `Hi ${to},\n\n${body}${state} Let me know if anything looks off.${from ? `\n\n${from}` : ""}`;
 }
 
 function statusDraft(input: string): { itemId: number; text: string }[] {

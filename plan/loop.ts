@@ -47,7 +47,7 @@ export type Audience = { total: number; inside: number; outside: number; outside
 /**
  * The people a Teams message reaches, from the chat's cached member list. Outside: another tenant, no tenant, or a
  * guest in the chat (plan/chats.ts isExternal). I'm counted in the total (I see it too) but never named. Names only,
- * never addresses: the preview lists who will see it (LP-1, Tanner's decision 2), the way Teams shows its members.
+ * never addresses: the preview lists who will see it (LP-1, a product decision), the way Teams shows its members.
  */
 export function audienceOf(members: readonly ChatMember[], homeTenant: string, me: string | null): Audience {
   const meLow = (me ?? "").toLowerCase();
@@ -58,7 +58,7 @@ export function audienceOf(members: readonly ChatMember[], homeTenant: string, m
   return { total: others.length + (members.length > others.length ? 1 : 0), inside: inside.length, outside: outside.length, outsideNames: named(outside), insideNames: named(inside) };
 }
 
-/** "W&C Project chat, 7 people, 4 outside Cooptimize" (the preview's one line). */
+/** "Contoso project chat, 7 people, 4 outside Cooptimize" (the preview's one line). */
 export function audienceLine(where: string, a: Audience): string {
   const people = `${a.total} ${a.total === 1 ? "person" : "people"}`;
   const out = a.outside ? `, ${a.outside} outside Cooptimize` : ", all at Cooptimize";

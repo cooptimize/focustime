@@ -165,6 +165,7 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "devops-log", section: "activity", label: "DevOps write log" },
   { id: "azure-log", section: "activity", label: "Azure write log", keywords: ["vm"] },
   { id: "teams-log", section: "activity", label: "Teams status log", keywords: ["presence"] },
+  { id: "loop-log", section: "activity", label: "Close the loop sends", keywords: ["promise", "sent", "email", "teams message"] },
   // Your data
   { id: "export", section: "data", label: "Export my data", keywords: ["download", "json"] },
   { id: "reset-plan", section: "data", label: "Reset my plan" },

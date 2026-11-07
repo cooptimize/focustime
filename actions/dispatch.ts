@@ -932,7 +932,9 @@ export async function loopContext(ctx: ActionContext): Promise<LoopContext> {
       if (m?.userId && home && !m.guest && (m.tenantId ?? "").toLowerCase() === home.toLowerCase()) return m.userId;
       if (ref?.kind === "external") return null;
       const cfg = await cfgOf();
-      const email = m?.email ?? (ref?.kind === "cooptimizer" ? (await directory()).find((d) => d.personId.toLowerCase() === ref.id.toLowerCase())?.email ?? null : null);
+      const dir = ref?.kind === "cooptimizer" || !ref ? await directory() : [];
+      const byDir = ref?.kind === "cooptimizer" ? dir.find((d) => d.personId.toLowerCase() === ref.id.toLowerCase()) : dir.find((d) => d.name.trim().toLowerCase() === name.trim().toLowerCase());
+      const email = m?.email ?? byDir?.email ?? null;
       return email && cfg && insideDomain(email, inviteDomains(cfg)) ? email : null;
     },
     item: async (clientKey, itemId) => {

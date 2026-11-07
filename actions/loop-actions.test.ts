@@ -46,7 +46,7 @@ async function setup(o: Opts = {}) {
   let promise: LoopPromise = {
     key: `f${f.id}`, kind: "followUp", id: f.id, clientKey: "fabrikam", clientName: "Fabrikam", what: "Send the rerun counts", closed: false,
     who: "Dana Client", whoRef: { kind: "external", memberId: dana.userId!, name: "Dana Client" }, itemId: 4417,
-    chat: { chatId: CHAT_ID, name: "W&C Project chat", members: [me, lee, dana, ravi, guest] }, conversation: { title: "Rerun counts", summary: "Dana asked for the counts after the rerun." }, myWords: null,
+    chat: { chatId: CHAT_ID, name: "Contoso project chat", members: [me, lee, dana, ravi, guest] }, conversation: { title: "Rerun counts", summary: "Dana asked for the counts after the rerun." }, myWords: null,
     ...o.promise,
   };
   let preview = 0;
@@ -101,7 +101,7 @@ describe("the recipient", () => {
     expect(d1.noRecipient).toMatch(/Who is you/);
     const byName = await setup({ promise: { who: "sam tester", whoRef: null } });
     expect((await byName.run<LoopDraftView>("loop.draft", { key: byName.key })).recipient).toBeNull();
-    const byMail = await setup({ promise: { who: "S. Tester", whoRef: null, chat: { chatId: CHAT_ID, name: "W&C Project chat", members: [{ ...me, displayName: "S. Tester" }] } } });
+    const byMail = await setup({ promise: { who: "S. Tester", whoRef: null, chat: { chatId: CHAT_ID, name: "Contoso project chat", members: [{ ...me, displayName: "S. Tester" }] } } });
     expect((await byMail.run<LoopDraftView>("loop.draft", { key: byMail.key })).recipient).toBeNull();
     // And a send to me is refused at the preview.
     const r = await loopAction(byRef.ctx, "loop.preview", { key: byRef.key, channel: "teams", text: "Done" });
@@ -112,7 +112,7 @@ describe("the recipient", () => {
     const s = await setup();
     const d = await s.run<LoopDraftView>("loop.draft", { key: s.key });
     expect(d.recipient).toEqual({ name: "Dana Client", outside: true });
-    expect(d.channels.map((c) => [c.channel, c.where])).toEqual([["teams", "W&C Project chat"], ["email", "Dana Client only"], ["devops", "#4417"], ["call", "A reminder only: nothing is sent"]]);
+    expect(d.channels.map((c) => [c.channel, c.where])).toEqual([["teams", "Contoso project chat"], ["email", "Dana Client only"], ["devops", "#4417"], ["call", "A reminder only: nothing is sent"]]);
     expect(d.text).toMatch(/^Hi Dana,/);
     expect(d.draftedFrom).toBe("A plain draft from your promise, the conversation “Rerun counts” and #4417's state (Active). Edit it as you like.");
     expect(d.initial).toBe("teams");
@@ -141,7 +141,7 @@ describe("the preview", () => {
     const s = await setup();
     const p = await s.run<LoopPreviewView>("loop.preview", { key: s.key, channel: "teams", text: "Hi Dana, the counts match." });
     expect(p.audience).toMatchObject({ total: 5, inside: 1, outside: 3, outsideNames: ["Dana Client", "Gus Guest", "Ravi Client"] });
-    expect(p.line).toBe("W&C Project chat, 5 people, 3 outside Cooptimize");
+    expect(p.line).toBe("Contoso project chat, 5 people, 3 outside Cooptimize");
     expect(p.final).toBe("Sent Teams messages and emails can't be undone.");
     expect(audienceOf([me, lee], HOME_TENANT, ME)).toMatchObject({ total: 2, inside: 1, outside: 0 });
   });
@@ -167,7 +167,7 @@ describe("Teams", () => {
     expect(r.ok).toBe(true);
     expect(r.closed).toBe(true);
     expect(s.calls.posts).toEqual(["Hi Dana, the counts match."]);
-    expect(r.send).toMatchObject({ channel: "teams", state: "sent", destination: "W&C Project chat", recipient: "Dana Client", insideCount: 1, outsideCount: 3, kept: true });
+    expect(r.send).toMatchObject({ channel: "teams", state: "sent", destination: "Contoso project chat", recipient: "Dana Client", insideCount: 1, outsideCount: 3, kept: true });
     expect(r.send.link).toMatch(/^https:\/\/teams\.microsoft\.com\/l\/message\//);
     expect((await s.plan.getFollowUp(s.id))?.closedAt).toBeTruthy();
     expect((await s.plan.getFollowUp(s.id))?.closeHow).toBe("teams");
@@ -278,7 +278,7 @@ describe("after a confirmed send", () => {
     s.ctx.devops = async (action) => (action === "devops.confirm" ? { ok: false, status: 409, error: "#4417 changed in DevOps since the preview" } : { ok: true, data: {} });
     const r = await s.run<LoopResultView>("loop.send", { previewId: p.previewId });
     expect(r.ok).toBe(true);
-    expect(r.message).toBe("Posted in W&C Project chat. The comment didn't land: #4417 changed in DevOps since the preview.");
+    expect(r.message).toBe("Posted in Contoso project chat. The comment didn't land: #4417 changed in DevOps since the preview.");
   });
 });
 
