@@ -25,7 +25,9 @@ async function board(page: Page): Promise<void> {
   await page.locator(`main.grid ${MON_AM}`).waitFor();
 }
 const chip = (page: Page, card: string): Locator => page.locator(`main.grid ${card} .late-chip`);
-const chipText = (page: Page, card: string) => chip(page, card).count().then((n) => (n ? chip(page, card).textContent() : null));
+// HK-6 (Q-DOC1-8): one read of the page as it is now, never "count, then read": a chip that goes between the two
+// left textContent() waiting 30 s for an element that wasn't coming back, so a poll for it to go timed out.
+const chipText = (page: Page, card: string) => chip(page, card).evaluateAll((els) => els[0]?.textContent ?? null);
 const allChips = (page: Page) => page.locator("main.grid .late-chip").count();
 /** A mark on window that a reload would wipe. */
 const mark = (page: Page) => page.evaluate(() => ((window as unknown as { ui9: number }).ui9 = 1));
