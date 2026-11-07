@@ -13,8 +13,8 @@ const T = 300_000;
 async function openAdmin(page: Page, item: string) {
   await page.getByRole("button", { name: /^More: the Guide/ }).click();
   await page.getByRole("menuitem", { name: "Admin" }).click();
-  await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: item, exact: true }).click();
-  await page.locator(".set-body h2", { hasText: `Admin › ${item}` }).waitFor();
+  await page.locator(`.ps-rail [data-settings-section="admin-${item.toLowerCase()}"]`).click();
+  await page.locator(".ps-head h2", { hasText: `Admin › ${item}` }).waitFor();
   await page.waitForTimeout(400);
 }
 async function larger(page: Page, on: boolean) {
@@ -34,7 +34,6 @@ describe.skipIf(!CHROMIUM || !SHOTS)("ADM-2 screenshots", () => {
   for (const [w, ht] of [[1920, 1080], [1366, 768]] as const) {
     it(`desktop ${w}`, async () => {
       const { page } = await freshPage(h, { width: w, height: ht });
-      const body = page.locator(".set-body");
       const snap = async (name: string, alsoLarger = w === 1920) => {
         await page.screenshot({ path: `${SHOTS}/adm2-${name}-${w}.png` });
         if (alsoLarger) {
@@ -64,15 +63,9 @@ describe.skipIf(!CHROMIUM || !SHOTS)("ADM-2 screenshots", () => {
       await snap("status");
       await page.locator("h3", { hasText: "Jobs" }).scrollIntoViewIfNeeded();
       await snap("status-jobs");
-      // The side menu at its bottom, Admin unfolded, then folded (on a Settings page).
-      await page.locator(".set-side").evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
-      await snap("menu-bottom-unfolded");
-      await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "About", exact: true }).click();
-      await page.locator('nav[aria-label="Admin sections"] .set-group-head').click();
-      await page.locator(".set-side").evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
-      await snap("menu-bottom-folded");
-      await page.locator('nav[aria-label="Admin sections"] .set-group-head').click();
-      void body;
+      // The rail at its bottom (ST-1: no folds).
+      await page.locator(".ps-side").evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
+      await snap("menu-bottom");
       await page.close();
     }, T);
   }
@@ -90,11 +83,14 @@ describe.skipIf(!CHROMIUM || !SHOTS)("ADM-2 screenshots", () => {
     await page.addStyleTag({ content: "html { font-size: 17px; }" });
     await page.getByRole("button", { name: /^More: notifications/ }).click();
     await page.getByRole("menuitem", { name: "Admin" }).click();
-    const pick = page.getByRole("combobox", { name: "Settings section" });
-    await pick.waitFor();
+    // ST-1: the phone opens the section as a page; Back shows the rail as a list page.
+    await page.locator(".ps-head h2", { hasText: "Admin › Clients" }).waitFor();
+    await page.locator(".ps-head").getByRole("button", { name: "Settings" }).click();
+    await page.locator(".ps-rail").waitFor();
     await page.screenshot({ path: `${SHOTS}/adm2-phone-picker.png` });
     for (const id of ["admin-clients", "admin-people", "admin-status"]) {
-      await pick.selectOption(id);
+      await page.evaluate((x) => (location.hash = `#/settings/${x}`), id);
+      await page.locator(".ps-head h2").waitFor();
       await page.waitForTimeout(600);
       const m = await page.evaluate(() => ({ over: document.documentElement.scrollWidth - document.documentElement.clientWidth, scrolls: document.scrollingElement!.scrollHeight > innerHeight }));
       expect(m.over, `${id} is wider than the phone`).toBeLessThanOrEqual(0);

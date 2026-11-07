@@ -38,8 +38,8 @@ import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { WRITES_HREF, type FeedbackStatus } from "../actions/feedback-types.ts";
 import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, useAdmin } from "./settings/Admin.tsx";
-import { useNarrow } from "./settings/SideMenu.tsx";
-import { PanelShell, type RailGroup } from "./PanelShell.tsx";
+import { PanelShell, useNarrow, type RailGroup } from "./PanelShell.tsx";
+import { useAppEnv, useDeveloperLoop } from "./appenv.ts";
 import { resolveSettings, searchSettings, sectionOf, SECTIONS, settingsHref, SETTINGS_GROUPS, type SearchHit } from "./settings/registry.ts";
 import { DemoSection } from "./settings/Demo.tsx";
 import { DiagnosticsPanel } from "./settings/Diagnostics.tsx";
@@ -216,6 +216,7 @@ export function Settings(props: Props) {
   const phone = usePhone();
   const list = useNarrow() || phone;
   const admin = useAdmin();
+  const devLoop = useDeveloperLoop();
   const { current, setting } = placeOf(props.section, props.setting, list, props.demo);
   const reload = useCallback(async () => {
     try {
@@ -258,7 +259,7 @@ export function Settings(props: Props) {
   const clientName = (c: SettingsClient) => c.setting.name ?? c.dataverseName ?? c.key;
   const title = inAdmin ? `Admin › ${ADMIN_UI_SECTIONS.find(([id]) => id === current)![1]}` : current === "client" ? (client ? clientName(client) : (setting ?? "Client")) : (def?.label ?? "Settings");
   const description = inAdmin ? "Team settings for everyone in FocusTime. Changes save as you make them and are logged in Admin › Audit." : def?.description;
-  const hits = q.trim() ? searchSettings(q, { demo: props.demo }) : [];
+  const hits = q.trim() ? searchSettings(q, { demo: props.demo, dev: devLoop }) : [];
   const groups: RailGroup[] = [
     ...SETTINGS_GROUPS.map(([g, label]) => ({
       id: g,
@@ -309,13 +310,9 @@ export function Settings(props: Props) {
                 ) : (
                   data &&
                   (phone && def?.phoneReadOnly ? (
-                    <>
-                      <PhoneReadOnly>
-                        <SectionBody {...props} section={current} data={data} onSavedData={saved} reload={reload} client={client} go={go} />
-                      </PhoneReadOnly>
-                      {/* DX-1: Diagnostics only reads, so it runs on the phone too, outside the read-only Data. */}
-                      {current === "data" && <DiagnosticsPanel />}
-                    </>
+                    <PhoneReadOnly line="Changing these works best on a bigger screen">
+                      <SectionBody {...props} section={current} data={data} onSavedData={saved} reload={reload} client={client} go={go} />
+                    </PhoneReadOnly>
                   ) : (
                     <SectionBody {...props} section={current} data={data} onSavedData={saved} reload={reload} client={client} go={go} />
                   ))
@@ -333,6 +330,7 @@ type BodyProps = Props & { section: string; data: SettingsData; onSavedData: (d:
 
 function SectionBody(p: BodyProps) {
   const d = p.data;
+  const dev = useDeveloperLoop();
   switch (p.section) {
     default:
       return null;
@@ -486,13 +484,15 @@ function SectionBody(p: BodyProps) {
               </button>
               <span className="set-hint">How FocusTime works, the keys and the questions people ask.</span>
             </div>
-            <div className="set-field" data-setting="style-guide">
-              <span className="set-label">Style guide</span>
-              <a href="/styleguide" target="_blank" rel="noopener">
-                Open the style guide
-              </a>
-              <span className="set-hint">Tokens and components in each theme.</span>
-            </div>
+            {dev && (
+              <div className="set-field" data-setting="style-guide">
+                <span className="set-label">Style guide</span>
+                <a href="/styleguide" target="_blank" rel="noopener">
+                  Open the style guide
+                </a>
+                <span className="set-hint">Tokens and components in each theme (developer loop).</span>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -1790,67 +1790,7 @@ function Connections(p: BodyProps) {
         </p>
       </Group>
       <div data-setting="feedback"><FeedbackRow go={p.go} /></div>
-      {p.data.secrets.length > 0 && (
-        <Group title="App secrets (developer loop)" sid="app-secrets" intro="The app's own secrets, saved to this machine's keyring and never shown again. The hosted app keeps them in Key Vault.">
-          {p.data.secrets.map((s) => (
-            <SecretForm key={s.account} secret={s} onDone={p.reload} />
-          ))}
-        </Group>
-      )}
     </div>
-  );
-}
-
-function SecretForm({ secret: s, onDone }: { secret: SettingsData["secrets"][number]; onDone: () => Promise<void> }) {
-  const ref = useRef<HTMLInputElement>(null);
-  const [expires, setExpires] = useState(s.expires ?? "");
-  const [confirm, setConfirm] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
-  const state = s.state === "set" ? "Set" : s.state === "missing" ? "Not set" : s.state === "locked" ? "Keyring locked" : "Keyring unavailable";
-  const daysLeft = s.expires ? Temporal.PlainDate.from(s.expires).since(Temporal.Now.plainDateISO()).days : null;
-  return (
-    <form
-      className="set-row secret"
-      autoComplete="off"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        const value = ref.current?.value ?? "";
-        if (value && s.state === "set" && !confirm) {
-          setConfirm(true);
-          setStatus("This replaces the secret in the keyring. Press Replace again to confirm.");
-          return;
-        }
-        const input: Record<string, unknown> = { account: s.account };
-        if (value) input.value = value;
-        if (expires !== (s.expires ?? "")) input.expires = expires;
-        if (Object.keys(input).length === 1) return setStatus("Nothing to save");
-        try {
-          await call("secret.set", input);
-          if (ref.current) ref.current.value = "";
-          setConfirm(false);
-          setStatus(value ? "Saved to the keyring" : "Expiry date saved");
-          await onDone();
-        } catch (err) {
-          setStatus(err instanceof Error ? err.message : "Not saved");
-        } finally {
-          if (ref.current) ref.current.value = "";
-        }
-      }}
-    >
-      <strong>{s.label}</strong>
-      <span className={`state ${s.state === "set" ? "live" : "error"}`}>{state}</span>
-      {s.expires && <span className={daysLeft !== null && daysLeft < 30 ? "field-problem" : "muted"}>expires {shortDate(s.expires)}</span>}
-      <input ref={ref} type="password" autoComplete="new-password" spellCheck={false} placeholder={s.state === "set" ? "New secret to replace it" : "Paste the secret"} aria-label={`${s.label} (masked)`} onChange={() => setConfirm(false)} />
-      <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} aria-label={`${s.label} expiry date`} title="Expiry date, if you know it" />
-      <button type="submit" className="mini primary">
-        {confirm ? "Replace" : "Save"}
-      </button>
-      {status && (
-        <span className="muted" role="status">
-          {status}
-        </span>
-      )}
-    </form>
   );
 }
 
@@ -1941,13 +1881,11 @@ function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][nu
 function SetupSection(p: Props) {
   const [view, setView] = useState<SetupView | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [prod, setProd] = useState(true);
+  const env = useAppEnv();
+  // Start over is for dev and local only (the server refuses it on prod too).
+  const prod = env === null || env === "prod";
   useEffect(() => {
     call<SetupView>("setup.load", {}).then(setView, () => setView(null));
-    // Start over is for dev and local only (the server refuses it on prod too).
-    fetch("/version", { credentials: "same-origin" })
-      .then((r) => r.json() as Promise<{ env?: string }>)
-      .then((b) => setProd(b.env === "prod"), () => setProd(true));
   }, []);
   if (p.demo) return <p className="muted">Setup isn't part of the demo.</p>;
   const left = view?.line?.text;
@@ -2156,7 +2094,7 @@ function ActivitySection(p: BodyProps) {
 }
 
 function DataSection(p: BodyProps) {
-  const phone = usePhone();
+  const dev = useDeveloperLoop();
   return (
     <div className="set-form">
       <div className="set-grid">
@@ -2164,22 +2102,27 @@ function DataSection(p: BodyProps) {
         <ResetPlan disabled={!p.data.data.planStore} onDone={p.onSaved} />
         <DeleteMine />
       </div>
-      {!phone && <div data-setting="diagnostics"><DiagnosticsPanel /></div>}
-      <Group title="Demo" intro="Fictional data; your own plan isn't touched.">
-        <div className="set-grid">
-          <fieldset className="set-choice" data-setting="demo-mode">
-            <legend>Demo mode</legend>
-            <label>
-              <input type="checkbox" checked={p.demo} onChange={(e) => p.setDemo(e.target.checked)} /> Show demo data
-            </label>
-          </fieldset>
-        </div>
-        {p.demo && (
-          <div data-setting="demo-reset">
-            <DemoSection />
-          </div>
-        )}
-      </Group>
+      <div data-setting="diagnostics"><DiagnosticsPanel /></div>
+      {(dev || p.demo) && (
+        <Group title="Demo" intro="Fictional data; your own plan isn't touched.">
+          {/* ST-1: the switch works only in the developer loop (the hosted demo is "Try the demo" at sign-in). */}
+          {dev && (
+            <div className="set-grid">
+              <fieldset className="set-choice" data-setting="demo-mode">
+                <legend>Demo mode</legend>
+                <label>
+                  <input type="checkbox" checked={p.demo} onChange={(e) => p.setDemo(e.target.checked)} /> Show demo data
+                </label>
+              </fieldset>
+            </div>
+          )}
+          {p.demo && (
+            <div data-setting="demo-reset">
+              <DemoSection />
+            </div>
+          )}
+        </Group>
+      )}
     </div>
   );
 }

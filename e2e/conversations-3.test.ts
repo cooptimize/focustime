@@ -194,7 +194,7 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
 
       // Admin › Clients: add both chats to Adatum.
       await openSettings(page);
-      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Clients" }).click();
+      await page.locator('.ps-rail [data-settings-section="admin-clients"]').click();
       const adatum = page.getByRole("group", { name: /^Delivery chats for Adatum/ });
       for (const word of ["alliance", "delivery"]) {
         await adatum.getByRole("button", { name: "Add a chat" }).click();
@@ -208,7 +208,7 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
 
       // Admin › AI: the client's Group messages without AI switch, on by default, beside Allow AI (off).
       await openSettings(page);
-      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "AI" }).click();
+      await page.locator('.ps-rail [data-settings-section="admin-ai"]').click();
       const groupSwitch = page.getByRole("switch", { name: "Group messages without AI for Adatum" });
       await expect.poll(() => groupSwitch.isChecked()).toBe(true);
       expect(await page.getByRole("switch", { name: "Allow AI for Adatum" }).isChecked()).toBe(false);

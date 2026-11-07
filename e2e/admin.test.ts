@@ -11,7 +11,7 @@ import { createChatsClient } from "../sources/graph/chats.ts";
 import { openPlanDb } from "../store/plan-store.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
-import { CHROMIUM, openSettings } from "./harness.ts";
+import { CHROMIUM, openSettings, settingsSection, settingsClient } from "./harness.ts";
 import { appReady, liveAdminOps, liveBrowser, liveContext, liveTeam, ME, NOW, T, type LiveBrowser } from "./live.ts";
 import { shotBoth } from "./shots.ts";
 import { createDevOpsPoller, createLimiter, devopsStatusSource, NO_SNAPSHOTS } from "../actions/devops-poll.ts";
@@ -135,13 +135,13 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       // ⋯ shows Admin for an admin.
       await page.getByRole("button", { name: /^More/ }).first().click();
       await page.getByRole("menuitem", { name: "Admin" }).click();
-      const body = page.locator(".set-body");
-      await body.getByRole("heading", { name: "Admin › Clients" }).waitFor();
+      const body = page.locator(".ps-body");
+      await page.locator(".ps-head").getByRole("heading", { name: "Admin › Clients" }).waitFor();
       const adatum = page.locator(".adm-client").filter({ has: page.getByRole("heading", { name: "Adatum" }) });
       await adatum.waitFor();
       // CV-3b: account types not read here, so the fallback says so; only active accounts are clients.
       await body.getByText("Account types aren't read from Dataverse yet", { exact: false }).waitFor();
-      await shotBoth(page, "admin-clients-list", body.getByRole("heading", { name: "Admin › Clients" }));
+      await shotBoth(page, "admin-clients-list", page.locator(".ps-head").getByRole("heading", { name: "Admin › Clients" }));
 
       // Register the chat.
       const group = adatum.getByRole("group", { name: /^Delivery chats for Adatum/ });
@@ -169,8 +169,8 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await shotBoth(page, "admin-clients", adatum);
 
       // Admin › AI: on for FocusTime, allowed for Adatum.
-      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "AI" }).click();
-      await body.getByRole("heading", { name: "Admin › AI" }).waitFor();
+      await page.locator('.ps-rail [data-settings-section="admin-ai"]').click();
+      await page.locator(".ps-head").getByRole("heading", { name: "Admin › AI" }).waitFor();
       await body.getByRole("switch", { name: "AI on" }).check();
       await body.getByRole("switch", { name: "Allow AI for Adatum" }).check();
       await expect.poll(async () => (await team.org.rules()).ai).toMatchObject({ on: true, allowedClients: ["Adatum"] });
@@ -190,12 +190,12 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await expect.poll(() => body.getByRole("switch", { name: "AI on" }).evaluate((e) => e === document.activeElement)).toBe(true);
 
       // Admin › Conversations.
-      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Conversations" }).click();
+      await page.locator('.ps-rail [data-settings-section="admin-conversations"]').click();
       await body.getByLabel("Request phrases").waitFor();
       await shotBoth(page, "admin-conversations", body);
 
       // Admin › People: Kim becomes a lead of Adatum (an override, marked).
-      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "People" }).click();
+      await page.locator('.ps-rail [data-settings-section="admin-people"]').click();
       const kim = body.locator("tr", { has: page.getByRole("rowheader", { name: /Kim Person/ }) });
       await kim.getByRole("combobox", { name: "Kim Person: add as lead of" }).selectOption("Adatum");
       await kim.getByRole("button", { name: "Add" }).click();
@@ -205,10 +205,10 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await shotBoth(page, "admin-people", body);
 
       // Admin › Organization, Status and Audit.
-      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Organization" }).click();
+      await page.locator('.ps-rail [data-settings-section="admin-organization"]').click();
       await body.getByLabel("Help invites go only to").waitFor();
       await shotBoth(page, "admin-organization", body);
-      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Status" }).click();
+      await page.locator('.ps-rail [data-settings-section="admin-status"]').click();
       await body.getByText("Adatum Delivery Team").waitFor();
       // DV-1: one row per client; Check now reads DevOps once for it, and a refused token says so in plain words.
       const adatumRow = body.locator(".adm-status-group tr", { hasText: "Adatum" });
@@ -218,7 +218,7 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await body.locator(".adm-status-group tr", { hasText: "Fabrikam" }).getByText("Token not valid").waitFor();
       expect(devops.fake.calls.filter((c) => c.org === "Adatum" && c.op === "wiql").length).toBeGreaterThan(0);
       await shotBoth(page, "admin-status", body);
-      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Audit" }).click();
+      await page.locator('.ps-rail [data-settings-section="admin-audit"]').click();
       const audit = body.locator(".adm-audit");
       await audit.locator("tr", { hasText: "client:Adatum/color" }).filter({ hasText: "violet" }).filter({ hasNotText: "suggested" }).waitFor();
       await audit.getByText("client:Adatum/allow_ai").waitFor();
@@ -241,8 +241,8 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await page.goto(kimApp.url);
       await appReady(page);
       await openSettings(page);
-      await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Clients" }).click();
-      expect(await page.getByRole("navigation", { name: "Admin sections" }).count()).toBe(0);
+      await settingsClient(page, "Adatum");
+      expect(await page.locator('.ps-rail [data-settings-section^="admin-"]').count()).toBe(0);
       const card = page.locator(".set-client-wrap").filter({ has: page.getByRole("heading", { name: "Adatum" }) });
       await card.waitFor();
       // Read-only: the chat (no Add or Remove), AI allowed, the open states, all "Set by your FocusTime admin".
@@ -276,7 +276,7 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await expect(card.getByRole("radio", { name: "violet" }).isChecked()).resolves.toBe(true);
 
       // Settings › AI: read-only, AI on, allowed for Adatum.
-      await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "AI", exact: true }).click();
+      await settingsSection(page, "ai");
       await page.locator(".set-ai .set-field", { hasText: "AI for FocusTime" }).getByText("On", { exact: true }).waitFor();
       await shotBoth(page, "settings-ai-read-only", page.locator(".set-ai"));
       expect(errors).toEqual([]);

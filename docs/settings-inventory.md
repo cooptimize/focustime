@@ -54,7 +54,7 @@ Storage key: `[x] y` is a key in the person's settings rows (`user_settings`, on
 | Connections | Microsoft permissions | Per-permission state | Status | Everyone | Accounts and calendars |
 | Connections | Client chats read for requests | Poll status per chat | Status | Everyone | **Client chats** |
 | Connections | DevOps per client (read status, Retry) | Read status | Status | Everyone | **DevOps › Reading** |
-| Connections | Client secrets (app secrets) | App's own keyring secrets | Host keyring | Developer loop, signed out only | Accounts and calendars › App secrets (flagged, see 3) |
+| Connections | Client secrets (app secrets) | App's own keyring secrets | Host keyring | Developer loop, signed out only | Removed (ST-1) |
 | Display | Theme, Text size, Timelines, Personal events, Reduce motion | Display | `[ui]` | Everyone | Display |
 | Display | Demo mode: Show demo data | Demo switch | Session | Everyone | **Your data › Demo** |
 | Display | Style guide link | Developer page | None | Everyone | **About** |
@@ -88,7 +88,7 @@ Duplicates
 In the wrong place (moved, meaning unchanged): focus timer (Planning → Focus), Keep following (Planning → Clients), My VM (You → Accounts and calendars), the four write logs (Data → Activity), demo switch (Display → Your data), Assistant history (Data → AI and assistant), DevOps write PATs (Clients → DevOps), request phrases (folded inside Clients → Client chats), Risk rules (own section → Today and Week), Standing blocks (own section → Working hours), Setup (own section → Profile), Style guide (Display → About).
 
 Admin-flavored values in Settings (flagged, not moved; all read-only with "Set by your FocusTime admin"): Dataverse environment, Invites go only to, Never suggested, States treated as open, team phrases, AI rules, house style, team color. One is more than flavor:
-- **App secrets** (Connections › Client secrets): the app's own Dataverse and Google client secrets, editable from a person's Settings in the developer loop when signed out. CLAUDE.md says app secrets are "set up outside FocusTime, never from a person's Settings". It only appears there with a local keyring and no signed-in person, so it is a developer tool. Proposal: remove it in a follow-up (the `focustime` command can set them). Kept for now, labelled "App secrets (developer loop)".
+- **App secrets** (Connections › Client secrets): the app's own Dataverse and Google client secrets, editable from a person's Settings in the developer loop when signed out. CLAUDE.md says app secrets are "set up outside FocusTime, never from a person's Settings". It only appears there with a local keyring and no signed-in person, so it is a developer tool. **Removed in ST-1** (the product owner's answer at the checkpoint): secrets only through the scripts, never a UI.
 
 Dead-looking
 - Demo mode "Show demo data": in the hosted app `demo.set` answers "Demo mode isn't available here" (the demo is "Try the demo" at sign-in). It works only in the developer loop. Kept; candidate to hide outside the developer loop.
@@ -113,7 +113,7 @@ Rail with search on top, five groups, then Admin for admins. 15 items (was 16 pl
 | Planning | Ahead (`ahead`) | Stale, Stalled, Watch |
 | Clients | Clients (`clients`) | Keep following after; one row per client → its own page (`client/<key>`, Back to Clients) |
 | Clients | Client chats (`chats`) | My phrases, team phrases, chats read |
-| Connections | Accounts and calendars (`connections`) | Sources, Outlook changes, Microsoft permissions, My VM, FocusTime in Teams, Send feedback, app secrets |
+| Connections | Accounts and calendars (`connections`) | Sources, Outlook changes, Microsoft permissions, My VM, FocusTime in Teams, Send feedback (app secrets removed) |
 | Connections | DevOps (`devops`) | Reading per client, write access per client (status, never the PAT) |
 | Connections | AI and assistant (`ai`) | Team AI values, spend, Break down looks back, Test AI, what is sent, last 20, assistant history |
 | Data | Activity (`activity`) | Outlook, DevOps, Azure and Teams logs |

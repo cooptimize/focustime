@@ -11,20 +11,18 @@ import { DEFAULT_FOCUS } from "../plan/focussound.ts";
 import { DEFAULT_TIMEBOX, CLIENT_SLOTS, colorCss, DEFAULT_PLAN, inviteDomains, DEFAULT_COLLAB, type AppConfig, type ParseResult } from "../config/schema.ts";
 import { DEFAULT_NOTIFY } from "../plan/notify.ts";
 import { DEFAULT_AZURE } from "../config/schema.ts";
-import { secretExpiryEdit, settingsEdit, SETTINGS_SECTIONS, SettingsInputError, type SettingsSection } from "../config/settings.ts";
+import { settingsEdit, SETTINGS_SECTIONS, SettingsInputError, type SettingsSection } from "../config/settings.ts";
 import type { WriteResult } from "../config/edit.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { localToday } from "../week/dates.ts";
 import { followState, INTERNAL_CLIENT } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
-import type { ActionResponse, AppSecret, FieldProblem, SecretPresence, SettingsClient, SettingsData } from "./types.ts";
+import type { ActionResponse, FieldProblem, SettingsClient, SettingsData } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 import { DATAVERSE_UNREACHABLE, noDataverseMatch, type MatchResult } from "./dataverse-words.ts";
 
-export type SettingsAction = "settings.load" | "settings.save" | "secret.set" | "data.export";
-
-export const APP_SECRETS: readonly AppSecret[] = ["dataverse-client-secret", "google-client-secret"];
+export type SettingsAction = "settings.load" | "settings.save" | "data.export";
 
 export type SettingsContext = {
   /** The config as written (what a save edits). */
@@ -40,13 +38,9 @@ export type SettingsContext = {
   plan?: PlanStore;
   /** ADM-2: the team runtime, for clientAccounts() (clients only). */
   org?: OrgRuntime;
-  /** Secret presence and app secret writes (the host's secret store). Absent: shown as unavailable, can't be set. */
-  secrets?: { state: (a: AppSecret) => Promise<SecretPresence>; set: (a: AppSecret, value: string) => Promise<void> };
   /** Where data.export writes (0600), and how. */
   exportPlan?: (json: string) => Promise<string>;
 };
-
-const SECRET_LABELS: Record<AppSecret, string> = { "dataverse-client-secret": "Dataverse client secret", "google-client-secret": "Google client secret" };
 
 const bad = (error: string, status = 400, fields?: FieldProblem[]): ActionResponse => ({ ok: false, status, error, ...(fields ? { fields } : {}) });
 
@@ -55,17 +49,8 @@ export const isFilePath = (p: string) => p.startsWith("/") || /^[A-Za-z]:[\\/]/.
 
 async function load(ctx: SettingsContext): Promise<SettingsData> {
   const loaded = await (ctx.viewConfig ?? ctx.loadConfig)();
-  // A2: app secrets are the app's, never a person's: only a context that may change them (not a signed-in person's)
-  // lists them.
-  const secrets = await Promise.all(
-    (ctx.secrets ? APP_SECRETS : []).map(async (account) => ({
-      account,
-      label: SECRET_LABELS[account],
-      state: ctx.secrets ? await ctx.secrets.state(account).catch((): SecretPresence => "unavailable") : ("unavailable" as const),
-      expires: loaded.parsed.ok ? (loaded.parsed.config.secretExpiry[account] ?? null) : null,
-    })),
-  );
-  const base = { configPath: loaded.path, fromFile: isFilePath(loaded.path), palette: CLIENT_SLOTS, secrets, data: { planStore: !!ctx.plan } };
+  // ST-1: app secrets are never set or listed in Settings (only by the scripts and the keyring, docs/settings.md).
+  const base = { configPath: loaded.path, fromFile: isFilePath(loaded.path), palette: CLIENT_SLOTS, data: { planStore: !!ctx.plan } };
   if (!loaded.parsed.ok)
     return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [], backgroundTypes: [], ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } }, focus: { ...DEFAULT_FOCUS, playlists: [] }, clients: [], display: null, timebox: { ...DEFAULT_TIMEBOX }, collab: { ...DEFAULT_COLLAB, domains: [] }, notify: { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds } }, vm: { startWithoutAsking: DEFAULT_AZURE.startWithoutAsking }, roadmap: { ...DEFAULT_THRESHOLDS }, ahead: { ...DEFAULT_AHEAD }, asks: { ...DEFAULT_ASK_SETTINGS, requestPhrases: [...DEFAULT_ASK_SETTINGS.requestPhrases], ackPhrases: [...DEFAULT_ASK_SETTINGS.ackPhrases] }, ai: { ...DEFAULT_AI_PERSON, allowedClients: [] }, aiRules: { ...DEFAULT_AI_RULES, allowedClients: [] }, org: null, guidance: {} };
   const tz = userZone(loaded.parsed.config);
@@ -164,28 +149,6 @@ export async function settingsAction(ctx: SettingsContext, action: SettingsActio
         return bad(`Not saved: ${fields.map((f) => `${f.field} ${f.message}`).join("; ")}`, 422, fields);
       }
       return { ok: true, data: { settings: await load(ctx), backup: r.backup.split("/").pop() } };
-    }
-    case "secret.set": {
-      for (const k of Object.keys(o)) if (!["account", "value", "expires"].includes(k)) return bad(`unknown input field ${k}`);
-      if (typeof o.account !== "string" || !(APP_SECRETS as readonly string[]).includes(o.account)) return bad(`account must be one of ${APP_SECRETS.join(", ")}`);
-      const account = o.account as AppSecret;
-      const expires = o.expires === undefined || o.expires === null || o.expires === "" ? null : o.expires;
-      if (expires !== null && (typeof expires !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(expires))) return bad("expires must be a date like 2027-03-01", 422, [{ field: "expires", message: "Must be a date like 2027-03-01" }]);
-      // Either a new value, an expiry date, or both. The value goes to the keyring and nowhere else.
-      if (o.value !== undefined) {
-        if (typeof o.value !== "string" || !o.value || o.value.length > 1024 || /[\r\n]/.test(o.value)) return bad("The secret must be one line of 1 to 1024 characters", 422, [{ field: "value", message: "One line of 1 to 1024 characters" }]);
-        if (!ctx.secrets) return bad("The keyring isn't available here", 503);
-        try {
-          await ctx.secrets.set(account, o.value);
-        } catch {
-          return bad("The keyring refused the secret (locked or unavailable). Unlock it and try again", 503);
-        }
-      }
-      if (o.expires !== undefined && ctx.writeConfig) {
-        const r = await ctx.writeConfig(secretExpiryEdit(account, expires as string | null));
-        if (!r.ok) return bad("Secret saved, but the expiry date was not", 422, fieldsOf(r));
-      }
-      return { ok: true, data: { account, changed: o.value !== undefined ? "secret" : "expiry" } };
     }
     case "data.export": {
       if (Object.keys(o).length) return bad("data.export takes {}");

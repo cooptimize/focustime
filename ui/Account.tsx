@@ -2,6 +2,7 @@
 // sign-out, the person in the top bar, the VM chip (top bar) with Start and its preview, the auto-shutdown time shown
 // read only (D475), Today's morning prompt, Settings > You (sign out, find and confirm my VM) and the Azure write log
 // in Settings > Data.
+import { useDeveloperLoop } from "./appenv.ts";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { Avatar, forgetPhotos, usePhotos, usePresence } from "./Presence.tsx";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -444,6 +445,7 @@ type Found = { tag: string; value: string; vms: { id: string; name: string; reso
 
 /** ST-1: Profile shows the account part (who is signed in, photos), Accounts and calendars the VM part. */
 export function YouAccount({ part }: { part: "account" | "vm" }) {
+  const dev = useDeveloperLoop();
   const { status, signIn, signOut } = useContext(AuthCtx);
   const vm = useContext(VmCtx);
   const [busy, setBusy] = useState(false);
@@ -470,7 +472,7 @@ export function YouAccount({ part }: { part: "account" | "vm" }) {
     await vm.refresh(true);
     notify(vmId ? "This VM is yours in FocusTime" : "VM choice cleared");
   });
-  if (!status?.configured) return <p className="muted">Microsoft sign-in needs an app registration: set [outlook] client_id in config.</p>;
+  if (!status?.configured) return <p className="muted">{dev ? "Microsoft sign-in needs an app registration: set [outlook] client_id in config." : "Microsoft sign-in isn't set up for this FocusTime yet."}</p>;
   const p = status.person;
   const signedIn = status.state !== "signed_out";
   return (

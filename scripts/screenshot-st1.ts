@@ -35,6 +35,7 @@ async function sectionsOf(page: Page): Promise<string[]> {
 }
 
 const errors: string[] = [];
+let at = "";
 const runs = [
   ...(which !== "phone" ? [{ tag: "1920", opts: { viewport: { width: 1920, height: 1080 } } }] : []),
   ...(which !== "desktop" ? [{ tag: "phone", opts: { ...devices["iPhone 15"] }, font: "17px" }] : []),
@@ -45,7 +46,7 @@ try {
       const ctx = await harness.browser.newContext({ ...r.opts, colorScheme: scheme, reducedMotion: "reduce", ignoreHTTPSErrors: true, bypassCSP: true });
       await ctx.addInitScript(() => (localStorage.setItem("focustime.hint.flow", "dismissed"), localStorage.setItem("focustime.hint.picktime", "1")));
       const page = await ctx.newPage();
-      page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(`${r.tag} ${scheme}: ${e.message}`));
+      page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(`${r.tag} ${scheme} after ${at}: ${e.message} ${(e.stack ?? "").split("\n").slice(1, 8).join(" / ")}`));
       await page.goto(harness.url);
       await page.getByText(/Try the demo/).click({ timeout: 60_000 });
       await page.waitForSelector(".demo-tag", { timeout: 60_000 });
@@ -62,11 +63,21 @@ try {
         await page.screenshot({ path: `${out}/st1-rail-${r.tag}-${scheme}.png`, fullPage: true });
       }
       for (const id of ids) {
+        at = id;
         await page.goto(`${base}#/settings/${id}`);
-        await page.locator("main.settings").waitFor({ timeout: 30_000 });
+        // A fresh page per section, so one section that crashes (main's phone loop) doesn't take the rest down.
+        await page.reload();
+        if (r.font) await page.addStyleTag({ content: `html{font-size:${r.font}}` });
+        const shown = await page.locator("main.settings").waitFor({ timeout: 30_000 }).then(() => true, () => false);
+        if (!shown) {
+          errors.push(`${r.tag} ${scheme} ${id}: Settings didn't open (${await page.evaluate(() => location.hash)})`);
+          await page.screenshot({ path: `${out}/st1-FAILED-${id.replace(/\//g, "-")}-${r.tag}-${scheme}.png` });
+          continue;
+        }
         await page.waitForTimeout(900);
-        const wide = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
-        if (wide) errors.push(`${r.tag} ${scheme} ${id}: horizontal scroll`);
+        const vw = (r.opts.viewport as { width: number } | undefined)?.width ?? 0;
+        const [iw, sw] = await page.evaluate(() => [window.innerWidth, document.documentElement.scrollWidth]);
+        if (sw > iw + 1 || (vw && iw !== vw)) errors.push(`${r.tag} ${scheme} ${id}: wider than the screen (${iw}/${sw}, viewport ${vw})`);
         await page.screenshot({ path: `${out}/st1-${id.replace(/\//g, "-")}-${r.tag}-${scheme}.png`, fullPage: r.tag === "phone" });
       }
       await ctx.close();

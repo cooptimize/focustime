@@ -4,7 +4,7 @@
 // activities (server/teams/*.test.ts); its cards are previewed by scripts/teams-card-previews.ts. TB-1b: the privacy
 // and terms page the Teams app links to opens without signing in, with nothing the CSP blocks, on a desktop and a phone.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CHROMIUM, freshPage, openSettings, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, openSettings, startDemo, type Harness, settingsSection } from "./harness.ts";
 import { SHOTS, shotBoth } from "./shots.ts";
 
 const T = 300_000;
@@ -21,7 +21,7 @@ describe.skipIf(!CHROMIUM)("TB-1: Let FocusTime message me in Teams", () => {
   it("is off by default, turns on, and stays on", async () => {
     const { page, errors } = await freshPage(h);
     await openSettings(page);
-    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Notifications", exact: true }).click();
+    await settingsSection(page, "notifications");
     const box = page.getByRole("checkbox", { name: "Let FocusTime message me in Teams" });
     await box.scrollIntoViewIfNeeded();
     await expect(box.isChecked()).resolves.toBe(false);

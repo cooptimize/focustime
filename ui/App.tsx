@@ -214,7 +214,10 @@ export function App() {
         setCaptureOpen(true);
         return;
       }
-      setLocState(parseHash(location.hash) ?? HOME);
+      const next = parseHash(location.hash) ?? HOME;
+      // ST-1: a Settings address carries no tab: a link into Settings (Status, Feedback, the Guide's Do it now) opens it
+      // over the tab I'm on, so closing returns there.
+      setLocState(next.overlay?.kind === "settings" ? { ...next, nav: locRef.current.nav } : next);
     };
     window.addEventListener("popstate", on);
     return () => window.removeEventListener("popstate", on);
@@ -1576,7 +1579,7 @@ export function App() {
             <span className="name">FocusTime</span>
           </button>
           {data.demo && (
-            <button type="button" className="demo-tag" onClick={() => setSettingsAt("data", "demo-mode")} title="Demo mode: fictional data, nothing leaves FocusTime. Turn it off in Settings › Your data">
+            <button type="button" className="demo-tag" onClick={() => setSettingsAt("data", "demo-reset")} title="Demo mode: fictional data, nothing leaves FocusTime. Settings › Your data has Reset demo">
               {phone ? "Demo" : "Demo data"}
             </button>
           )}

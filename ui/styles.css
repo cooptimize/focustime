@@ -1218,14 +1218,8 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Settings (step 6b): a section list on the left, one section at a time on the right */
 /* fix/settings-autosave: Settings scrolls as one page; the section list stays in view beside it. */
-.set-tab { text-align: left; border: 0; background: transparent; padding: 8px 12px; border-radius: 8px; color: var(--text-muted); font: inherit; font-size: var(--fs-3); }
-.set-tab:hover { background: var(--raised); color: var(--text); }
-.set-tab[aria-current="page"] { background: var(--raised); color: var(--text); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
-.set-tab.close { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
-.set-body { min-width: 0; padding: 4px 4px 24px; max-width: 1100px; }
-.set-body h2 { margin: 4px 0 2px; font-size: var(--fs-4); letter-spacing: -0.01em; outline: none; }
-.set-body h3, .ps-body h3 { margin: 18px 0 8px; font-size: var(--fs-4); display: flex; gap: 8px; align-items: center; }
-.set-body h3 + p, .ps-body h3 + p { margin-top: 0; }
+.ps-body h3 { margin: 18px 0 8px; font-size: var(--fs-4); display: flex; gap: 8px; align-items: center; }
+.ps-body h3 + p { margin-top: 0; }
 .set-path { margin: 0 0 14px; font-size: var(--fs-2); }
 .set-form { display: flex; flex-direction: column; gap: 12px; }
 .set-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px 20px; }
@@ -1269,7 +1263,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .set-row.secret strong { min-width: 200px; }
 .set-row.secret input[type="password"] { flex: 1; min-width: 220px; }
 .top-btn[aria-current="page"] { color: var(--text); border-color: var(--accent); }
-@media (max-width: 900px) { .settings { grid-template-columns: 1fr; } }
 
 /* Now strip (step 6b slice 4): one line under the top bar; clicking selects the current half-day. Step 6c adds the timer. */
 .app > .nowstrip { flex: none; }
@@ -3648,6 +3641,9 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .dchat-options li.on { background: color-mix(in oklab, var(--accent) 14%, var(--surface)); outline: 1px solid color-mix(in oklab, var(--accent) 40%, transparent); }
 .perms li code { font-size: var(--fs-2); }
 .perms-again { justify-self: start; align-self: flex-start; width: auto; }
+/* ST-1: the status bar's .source keeps to one line; in Settings' lists (sources, permissions) the reasons wrap. */
+.settings .set-list li.source { white-space: normal; }
+.settings .set-list li.source > .muted { min-width: 0; overflow-wrap: anywhere; }
 /* ---------------------------------------------------------------------------------------------------------------
    P1: the phone (under 600 px). Checking and doing, not planning: a bottom bar (Today, Week, Capture, ⋯), a top bar
    with only the mark, the VM dot and the avatar, one column, full-screen panels and sheets, touch targets of 44 px and
@@ -3809,12 +3805,11 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .phone-ro-body .pl-frame { height: auto; overflow: visible; }
   .phone-ro-body .pl-panes { display: flex; flex-direction: column; gap: 12px; }
   .phone-ro-body .pl-panes > * { position: static; width: auto; max-height: none; overflow: visible; }
-  .set-body .phone-ro, .ps-body .phone-ro { display: block; }
-  .set-body .phone-ro-body, .ps-body .phone-ro-body { overflow: visible; }
+  .ps-body .phone-ro { display: block; }
+  .ps-body .phone-ro-body { overflow: visible; }
 
   /* Settings: the sections as a row of tabs that scrolls sideways, then one column. */
   .app.phone .settings { display: block; overflow-y: auto; flex: 1; padding: 0 16px 16px; }
-  .app.phone .set-tab { white-space: nowrap; flex: none; }
   .app.phone .set-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -4152,7 +4147,6 @@ button.ask-label { cursor: pointer; }
 .set-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 
 /* ADM-1: the Admin part of Settings (ui/settings/Admin.tsx): its own nav under the Settings nav, one sticky sidebar. */
-.set-side { position: sticky; top: 0; max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; }
 .adm-kind { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; font-size: var(--fs-1); font-weight: 500; color: var(--text-faint); vertical-align: 1px; }
 .adm-mark { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--raised); font-size: var(--fs-1); font-weight: 500; color: var(--text-muted); }
 .adm-ok { color: var(--ok); font-weight: 500; }
@@ -4389,14 +4383,6 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 
 /* ADM-2: the Settings and Admin side menu (ui/settings/SideMenu.tsx). Beside the body it fills the height between the
    top bar and the status bar and scrolls on its own; the body scrolls beside it. Narrow windows and phones: a picker. */
-.set-group { display: flex; flex-direction: column; gap: 2px; }
-.set-group + .set-group { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
-.set-group-head { display: flex; gap: 6px; align-items: center; margin: 6px 0 2px; padding: 4px 12px; border: 0; background: none; font: inherit; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); cursor: pointer; text-align: left; border-radius: 6px; }
-.set-group-head:hover { color: var(--text-muted); background: var(--raised); }
-.set-side > .set-tab.close { margin-top: 8px; }
-.set-picker { display: flex; gap: 8px; align-items: center; position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 8px 0; }
-.set-picker label { flex: 1; min-width: 0; }
-.set-picker select { width: 100%; font: inherit; font-size: var(--fs-3); padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--text); }
 .adm-block { display: block; }
 
 /* DV-1: the status rows registry's states in Admin › Status. */
@@ -5546,3 +5532,8 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .panel-shell.phone .ps-titles { grid-area: titles; }
 .panel-shell.phone .ps-head .x-close { grid-area: x; }
 .ps-body .set-grid + .set-grid { margin-top: 12px; }
+/* ST-1: a table wider than the phone scrolls sideways on its own. Without this Admin › Organization and Status widened
+   the page: Chromium's mobile viewport grew to fit, the app left the phone layout, the table narrowed, and it flipped
+   back, over and over ("Maximum update depth exceeded"). */
+.panel-shell.phone .ps-body table { display: block; max-width: 100%; overflow-x: auto; }
+.panel-shell.phone .ps-body { overflow-wrap: anywhere; }

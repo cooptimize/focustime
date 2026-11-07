@@ -159,8 +159,7 @@ export type ActionContext = {
   writeConfig?: (edit: (text: string) => string) => Promise<WriteResult>;
   /** The host's links (A1): open a link in the person's browser (link.open, outlook.open). Absent: links don't open. */
   links?: HostLinks;
-  /** Settings (step 6b): secret presence and app secret writes, plan export. */
-  secrets?: SettingsContext["secrets"];
+  /** Settings (step 6b): plan export. App secrets are never set from Settings (ST-1). */
   exportPlan?: (json: string) => Promise<string>;
   /** A2: the signed-in person's own data: everything as JSON (no secrets), and the delete (signs them out). */
   myData?: { export: () => Promise<Record<string, unknown>>; remove: () => Promise<{ hardDeleteOn: string }> };
@@ -203,7 +202,7 @@ export type ActionContext = {
  * opening links still are.
  */
 export const DEMO_REFUSED: readonly ActionName[] = [
-  "link.open", "outlook.open", "playlist.open", "data.export", "secret.set",
+  "link.open", "outlook.open", "playlist.open", "data.export",
   "auth.connect_microsoft", "auth.connect_google", "auth.connect_outlook_write", "auth.disconnect",
   "devops.set_write_pat", "devops.clear_write_pat",
   "auth.sign_in", "auth.sign_out", "push.subscribe",
@@ -1603,7 +1602,6 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     }
     case "settings.load":
     case "settings.save":
-    case "secret.set":
     case "data.export":
       return settingsAction(
         settingsCtx(raw, ctx),
@@ -2085,7 +2083,6 @@ function settingsCtx(raw: ActionContext, ctx: ActionContext): SettingsContext {
     ...(ctx.org ? { org: ctx.org } : {}),
     ...(ctx.writeConfig ? { writeConfig: ctx.writeConfig } : {}),
     ...(ctx.plan ? { plan: ctx.plan } : {}),
-    ...(ctx.secrets ? { secrets: ctx.secrets } : {}),
     ...(ctx.exportPlan ? { exportPlan: ctx.exportPlan } : {}),
   };
 }

@@ -285,7 +285,7 @@ function ClientSection({ c, color, mode, lines, drafting, draftNote, onAdd, onEd
       {sent && <p className="muted st-sent">{sent}</p>}
       {c.status !== "ok" ? <p className="set-problem">{c.message}</p> : c.message && <p className="set-problem">{c.message}</p>}
       {draftNote && <p className="muted st-note" role="status">{draftNote}</p>}
-      {mode === "edit" && !c.canWrite && c.features.length > 0 && <p className="muted st-note">Read only: add your DevOps write access for {c.clientName} in <a href="#/settings/clients">Settings › Clients</a> to write here.</p>}
+      {mode === "edit" && !c.canWrite && c.features.length > 0 && <p className="muted st-note">Read only: add your DevOps write access for {c.clientName} in <a href="#/settings/devops/devops-write">Settings › DevOps</a> to write here.</p>}
       {c.status === "ok" && !c.features.length && <p className="muted">Nothing planned or worked on for {c.clientName} this week.</p>}
       <div className="st-features">
         {c.features.map((f) => (

@@ -213,7 +213,7 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
 
       // Admin › Clients: add both chats to Adatum.
       await openSettings(page);
-      await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Clients" }).click();
+      await page.locator('.ps-rail [data-settings-section="admin-clients"]').click();
       const adatum = page.getByRole("group", { name: /^Delivery chats for Adatum/ });
       for (const word of ["alliance", "delivery"]) {
         await adatum.getByRole("button", { name: "Add a chat" }).click();

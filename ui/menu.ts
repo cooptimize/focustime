@@ -1072,7 +1072,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
     case "settings.load": return { run: () => env.openSettings() };
     case "settings.save": return { run: () => env.openSettings() };
-    case "secret.set": return { run: () => env.openSettings("connections", "app-secrets") };
     case "media.status": return { run: () => env.openSettings("focus", "pause-media") };
     // Step 16.3: deep focus switches the running session; Teams status lives in Settings > Focus; presence shows where Cooptimizers are listed.
     case "timer.deep": return env.timer?.kind === "focus" ? { run: () => env.runTimer("timer.deep", { on: !env.timer!.deep }) } : { next: () => ({ title: "Start deep focus", items: [{ id: "deep", label: "Deep focus", hint: `${env.planning.focusMinutes} min · Teams: Do not disturb`, action: "timer.start", run: () => env.runTimer("timer.start", { deep: true }) }] }) };

@@ -6,7 +6,7 @@
 // Text size Larger when FOCUSTIME_SHOTS is set.
 import type { Locator, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CHROMIUM, freshPage, openSettings, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, openSettings, startDemo, type Harness, settingsSection } from "./harness.ts";
 import { shotBoth } from "./shots.ts";
 
 let h: Harness;
@@ -29,7 +29,7 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
     await page.reload();
     await openSettings(page);
     // ADM-1: registering chats is in Admin › Clients (the demo's person is the demo's admin).
-    await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Clients" }).click();
+    await page.locator('.ps-rail [data-settings-section="admin-clients"]').click();
     const northwind = page.getByRole("group", { name: /^Delivery chats for Northwind/ });
     await northwind.waitFor();
 
@@ -101,7 +101,7 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
       await route.continue();
     });
     await openSettings(page);
-    await page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "Clients" }).click();
+    await page.locator('.ps-rail [data-settings-section="admin-clients"]').click();
     const northwind = page.getByRole("group", { name: /^Delivery chats for Northwind/ });
     await northwind.getByRole("button", { name: "Add a chat" }).click({ timeout: 5_000 });
     await picks(northwind).getByRole("option").first().waitFor();
@@ -115,7 +115,7 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
     for (const chatId of ["19:demo-northwind-delivery@thread.v2", "19:demo-northwind-collab@thread.v2"]) expect((await call(page, "chats.remove", { chatId })).ok).toBe(true);
     await page.reload();
     await openSettings(page);
-    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Connections" }).click();
+    await settingsSection(page, "connections");
     const row = page.locator(".perms li", { hasText: "Chat.ReadBasic" });
     await row.waitFor();
     await expect(row.textContent()).resolves.toContain("never messages");

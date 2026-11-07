@@ -4,8 +4,19 @@
 // Esc, e.g. clearing a search), focus starts on the title and goes back to what opened the panel when it closes.
 // On a phone the rail is its own list page (current = null) and each item opens as a page with Back and ×.
 // docs/settings.md has how to use it.
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
+
+/** Below this width the rail becomes its own list page (the phone's layout). */
+export const NARROW_MAX_PX = 900;
+const onResize = (cb: () => void) => {
+  window.addEventListener("resize", cb);
+  return () => window.removeEventListener("resize", cb);
+};
+/** Whether the window is narrower than the rail and a body need side by side. */
+export function useNarrow(): boolean {
+  return useSyncExternalStore(onResize, () => window.innerWidth < NARROW_MAX_PX, () => false);
+}
 
 export type RailItem = { id: string; label: string; href: string; hint?: ReactNode };
 export type RailGroup = { id: string; label: string; items: readonly RailItem[] };
@@ -60,9 +71,10 @@ export function PanelShell(p: PanelShellProps) {
       e.stopImmediatePropagation();
       close.current();
     };
-    // Capture: before the window's own Esc (which would leave without the panel's flush).
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    // On the document, bubbling: after the panel's own controls (a picker or menu inside that handles Esc stops it in
+    // React), before the window's own Esc (which would leave without the panel's flush).
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, []);
   useEffect(() => {
     body.current?.scrollTo?.({ top: 0 });
@@ -70,6 +82,10 @@ export function PanelShell(p: PanelShellProps) {
     head.current?.focus({ preventScroll: true });
   }, [p.pageKey]);
   const marked = p.railCurrent === undefined ? p.current : p.railCurrent;
+  useEffect(() => {
+    // The current item in view on open and on every change (deep links land on items far down the rail).
+    root.current?.querySelector<HTMLElement>('.ps-rail [aria-current="page"]')?.scrollIntoView?.({ block: "nearest" });
+  }, [marked, p.phone, p.groups.reduce((n, g) => n + g.items.length, 0)]);
 
   const rail = (
     <div className="ps-rail" role="navigation" aria-label={`${p.name} sections`}>

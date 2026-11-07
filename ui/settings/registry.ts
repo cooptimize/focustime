@@ -38,18 +38,28 @@ export const SECTIONS: readonly SectionDef[] = [
   { id: "planning", label: "Today and Week", group: "planning", description: "How to-dos, rituals, timeboxes, help sessions and risk work when you plan.", old: ["Planning", "Risk rules"] },
   { id: "focus", label: "Focus", group: "planning", description: "The focus timer, your Teams status while you focus, sounds and music." },
   { id: "ahead", label: "Ahead", group: "planning", description: "When Backlog calls an item stale, and when a feature reads Stalled or Watch.", old: ["Roadmap"] },
-  { id: "clients", label: "Clients", group: "clients", description: "The clients FocusTime follows for you, and how each one shows.", phoneReadOnly: true },
-  { id: "client", label: "Client", group: "clients", description: "How this client shows for you, and what comes from Dataverse and your admin.", parent: "clients", phoneReadOnly: true },
+  { id: "clients", label: "Clients", group: "clients", description: "The clients FocusTime follows for you, and how each one shows." },
+  { id: "client", label: "Client", group: "clients", description: "How this client shows for you, and what comes from Dataverse and your admin.", parent: "clients" },
   { id: "chats", label: "Client chats", group: "clients", description: "Your phrases for requests and promises, and how each client chat is read.", old: ["Requests", "Asks"] },
   { id: "connections", label: "Accounts and calendars", group: "connections", description: "Your sources, Microsoft permissions, your VM, Teams and Send feedback.", old: ["Connections", "My VM"] },
   { id: "devops", label: "DevOps", group: "connections", description: "Each client's DevOps read status and your write access.", old: ["DevOps write access", "Enable DevOps writes"], phoneReadOnly: true },
   { id: "ai", label: "AI and assistant", group: "connections", description: "AI for FocusTime, your spend, Break down, and the assistant's history.", old: ["AI"] },
   { id: "activity", label: "Activity", group: "data", description: "Every change FocusTime made in other apps, with Undo and Retry.", old: ["Write log", "Audit log"], phoneReadOnly: true },
-  { id: "data", label: "Your data", group: "data", description: "Export, reset or delete what FocusTime keeps for you, diagnostics, and demo mode.", old: ["Data", "Demo"], phoneReadOnly: true },
+  { id: "data", label: "Your data", group: "data", description: "Export, reset or delete what FocusTime keeps for you, diagnostics, and demo mode.", old: ["Data", "Demo"] },
   { id: "about", label: "About", group: "data", description: "The version, the Guide and the style guide." },
 ];
 
-export type SettingDef = { id: string; section: string; label: string; old?: readonly string[]; keywords?: readonly string[] };
+export type SettingDef = {
+  id: string;
+  section: string;
+  label: string;
+  old?: readonly string[];
+  keywords?: readonly string[];
+  /** Shown only in the developer loop. */
+  devOnly?: boolean;
+  /** Shown only in a demo session. */
+  demoOnly?: boolean;
+};
 
 // One row per setting or status a person looks for. `id` is unique across Settings (it is the deep link's last part).
 export const SETTINGS: readonly SettingDef[] = [
@@ -139,7 +149,6 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "vm-start", section: "connections", label: "Start my VM without asking" },
   { id: "teams-app", section: "connections", label: "FocusTime in Teams", keywords: ["bot", "teams"] },
   { id: "feedback", section: "connections", label: "Send feedback" },
-  { id: "app-secrets", section: "connections", label: "App secrets (developer loop)", old: ["Client secrets"], keywords: ["keyring"] },
   // DevOps
   { id: "devops-read", section: "devops", label: "DevOps per client", keywords: ["live", "cached", "pat problem"] },
   { id: "devops-write", section: "devops", label: "DevOps write access", old: ["Enable DevOps writes", "Write access"], keywords: ["pat", "personal access token"] },
@@ -161,12 +170,12 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "reset-plan", section: "data", label: "Reset my plan" },
   { id: "delete", section: "data", label: "Delete my data" },
   { id: "diagnostics", section: "data", label: "Diagnostics", keywords: ["promises check", "chatter"] },
-  { id: "demo-mode", section: "data", label: "Show demo data", old: ["Demo mode"] },
-  { id: "demo-reset", section: "data", label: "Reset demo", old: ["Demo"] },
+  { id: "demo-mode", section: "data", label: "Show demo data", old: ["Demo mode"], devOnly: true },
+  { id: "demo-reset", section: "data", label: "Reset demo", old: ["Demo"], demoOnly: true },
   // About
   { id: "version", section: "about", label: "Version" },
   { id: "guide", section: "about", label: "Open the Guide", keywords: ["help"] },
-  { id: "style-guide", section: "about", label: "Style guide", keywords: ["tokens"] },
+  { id: "style-guide", section: "about", label: "Style guide", keywords: ["tokens"], devOnly: true },
 ];
 
 /** Section ids before ST-1 that moved: where they open now. */
@@ -197,7 +206,7 @@ const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^\p{L}\p
  * Settings and sections whose label, old label or keywords contain every word typed, best first: a label match before
  * an old label, before a keyword. `matched` names the old label when that is what matched.
  */
-export function searchSettings(q: string, opts: { demo?: boolean; limit?: number } = {}): SearchHit[] {
+export function searchSettings(q: string, opts: { demo?: boolean; dev?: boolean; limit?: number } = {}): SearchHit[] {
   const words = norm(q).split(" ").filter(Boolean);
   if (!words.length) return [];
   const has = (s: string) => {
@@ -213,7 +222,7 @@ export function searchSettings(q: string, opts: { demo?: boolean; limit?: number
   }
   for (const d of SETTINGS) {
     const s = sectionOf(d.section);
-    if (!shown(s)) continue;
+    if (!shown(s) || (d.devOnly && !opts.dev) || (d.demoOnly && !opts.demo)) continue;
     const old = d.old?.find(has);
     const score = has(d.label) ? 0 : old ? 1 : d.keywords?.some(has) || has(`${d.label} ${s!.label} ${(d.keywords ?? []).join(" ")}`) ? 2 : -1;
     if (score < 0) continue;

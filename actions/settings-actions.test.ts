@@ -27,7 +27,6 @@ function setup(text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@exam
     saveSystemUserId: async () => {},
     now: () => "2026-11-02T14:00:00Z",
     writeConfig: (edit) => writeConfig(path, edit),
-    secrets: { state: async (a) => (stored.some((s) => s.account === a) ? "set" : "missing"), set: async (account, value) => void stored.push({ account, value }) },
   };
   const run = (action: string, input: unknown) => dispatch(c, { action, input });
   return { c, path, run, stored, dir };
@@ -45,7 +44,8 @@ describe("Settings (step 6b)", () => {
     expect(d.dataverseReached).toBe(false);
     // makeDataverse fails here: Dataverse can't be reached.
     expect(d.dataverseProblem).toBe("Couldn't reach Dataverse. Try again, or tell the FocusTime team.");
-    expect(d.secrets.map((s) => [s.account, s.state])).toEqual([["dataverse-client-secret", "missing"], ["google-client-secret", "missing"]]);
+    // ST-1: Settings never lists or sets the app's secrets.
+    expect("secrets" in d).toBe(false);
   });
 
   it("saves a client as a table and keeps comments and the other clients", async () => {
@@ -103,42 +103,17 @@ describe("Settings (step 6b)", () => {
   });
 });
 
-describe("secrets from Settings never come back", () => {
-  it("stores the value in the keyring only: not in the response, the config, or settings.load", async () => {
+describe("app secrets are never set from Settings (ST-1)", () => {
+  it("there is no secret.set action, and nothing writes a secret value anywhere", async () => {
     const t = setup();
-    const r = await t.run("secret.set", { account: "dataverse-client-secret", value: SECRET, expires: "2027-03-01" });
-    expect(r.ok).toBe(true);
-    expect(JSON.stringify(r)).not.toContain(SECRET);
-    expect(t.stored).toEqual([{ account: "dataverse-client-secret", value: SECRET }]);
-    const text = readFileSync(t.path, "utf8");
-    expect(text).not.toContain(SECRET);
-    expect(text).toContain('dataverse_client_secret_expires = "2027-03-01"');
-    const load = await t.run("settings.load", {});
-    expect(JSON.stringify(load)).not.toContain(SECRET);
-    expect((load as { data: SettingsData }).data.secrets[0]).toEqual({ account: "dataverse-client-secret", label: "Dataverse client secret", state: "set", expires: "2027-03-01" });
-  });
-
-  it("a signed-in person's context can't list or set the app's client secrets (A2)", async () => {
-    const t = setup();
-    delete (t.c as { secrets?: unknown }).secrets;
-    const load = await t.run("settings.load", {});
-    expect((load as { data: SettingsData }).data.secrets).toEqual([]);
     const r = await t.run("secret.set", { account: "dataverse-client-secret", value: SECRET });
-    expect(r).toMatchObject({ ok: false, status: 503 });
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r)).not.toContain(SECRET);
+    expect(readFileSync(t.path, "utf8")).not.toContain(SECRET);
     expect(t.stored).toEqual([]);
   });
 
-  it("refuses refresh-token accounts, multi-line values and unknown fields without echoing the value", async () => {
-    const t = setup();
-    for (const input of [{ account: "outlook-refresh-token", value: SECRET }, { account: "google-client-secret", value: `${SECRET}\nmore` }, { account: "google-client-secret", value: SECRET, extra: 1 }]) {
-      const r = await t.run("secret.set", input);
-      expect(r.ok).toBe(false);
-      expect(JSON.stringify(r)).not.toContain(SECRET);
-    }
-    expect(t.stored).toEqual([]);
-  });
-
-  it("never puts the value in the server's logs or HTTP response", async () => {
+  it("never puts a refused value in the server's logs or HTTP response", async () => {
     const t = setup();
     const logs: LogRecord[] = [];
     const app = await startTestApp({ ctx: t.c, log: (r) => logs.push(r) });
@@ -147,10 +122,9 @@ describe("secrets from Settings never come back", () => {
     const r = await b.action("secret.set", { account: "google-client-secret", value: SECRET });
     const res = `${r.status} ${r.body}`;
     await app.close();
-    expect(res).toMatch(/^200 /);
+    expect(res).not.toMatch(/^200 /);
     expect(res).not.toContain(SECRET);
     expect(JSON.stringify(logs)).not.toContain(SECRET);
-    expect(logs.length).toBeGreaterThan(0);
   });
 });
 
