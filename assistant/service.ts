@@ -30,7 +30,7 @@ import type { PickerPersonView } from "../plan/team-types.ts";
 import { BUTTON_ONLY, ITEM_TOOLS, MOVE_TOOLS, PICKS_TOOLS, PICK_TOOLS, PROPOSE_TOOLS, TOOLS, TOOL_NAMES, isTool, type ToolName } from "./allowlist.ts";
 import type { WeekLoadData } from "../actions/types.ts";
 import { nextBlockFor, type BlockAt } from "../plan/suggest.ts";
-import { commitmentsRead, dayRead, findItem, gapsRead, inboxRead, itemCard, itemRead, linkSearchRead, sendsRead, statusRead, todayRead, type FoundItem, type ReadDeps, type ReadResult } from "./reads.ts";
+import { closeLoopRead, commitmentsRead, dayRead, findItem, gapsRead, inboxRead, itemCard, itemRead, linkSearchRead, sendsRead, statusRead, todayRead, type FoundItem, type ReadDeps, type ReadResult } from "./reads.ts";
 import { HISTORY_DAYS, MAX_TEXT, PROPOSAL_MINUTES, QUESTION_MINUTES, type AssistantContext, type Card, type Channel, type Choice, type ConfirmResult, type HandleResult, type HandleStatus, type Link, type PartResult, type PreviewView, type Proposal, type QuestionCard, type Turn, type UndoResult } from "./types.ts";
 
 /** Everything the service needs for one person, built by actions/dispatch.ts (the person's own context). */
@@ -331,7 +331,6 @@ export function createAssistant(env: AssistantEnv) {
       if (o.afterQuestion) return finish(turnId, "ok", "I couldn't tell what that refers to. Name the to-do, the day or the client, and I'll take it from there.", [], [], []);
       return finish(turnId, "ok", "I can look things up (what's next, an item, a day, gaps, commitments, sends, your Inbox, your status report), move to-dos, confirm a day or week, change dates or owners in Ahead, send work, comment on or complete DevOps items and capture. The command menu has everything else.", [], [], [COMMANDS]);
     }
-    if (asked.length === 1 && asked[0] === "close_loop") return finish(turnId, "ok", "Closing loops from the assistant is coming with LP-1. For now, close it from the Inbox.", [], [], [link("#/inbox", "Open the Inbox")]);
 
     // Reads are always allowed; a proposal only when the intent round named it from my words.
     const allowed = TOOL_NAMES.filter((t) => !BUTTON_ONLY.includes(t) && (TOOLS[t].kind === "read" || asked.includes(t)));
@@ -395,7 +394,8 @@ export function createAssistant(env: AssistantEnv) {
           if ((conversationId !== null && !x.known.conversations.has(conversationId)) || (promiseId !== null && !x.known.promises.has(promiseId))) return JSON.stringify({ cannot: "That conversation or promise isn't in anything read for this request" });
           return heard(await linkSearchRead(d, { conversationId, promiseId, query: String(args.query ?? "") }, x.client));
         }
-        case "close_loop": return JSON.stringify({ cannot: "Coming with LP-1" });
+        // LP-1: opens the draft; the preview's Send is the only send.
+        case "close_loop": return heard(await closeLoopRead(d, (args.who as string | null) ?? null, (args.about as string | null) ?? null, x.client));
         default: {
           // A proposal: its item or pick must come from my words, the screen or a read (never from text inside data).
           if (ITEM_TOOLS.includes(name) && !x.known.items.has(Number(args.itemId))) return JSON.stringify({ cannot: `#${String(args.itemId)} isn't in the request or anything read for it` });

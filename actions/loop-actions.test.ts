@@ -69,7 +69,7 @@ async function setup(o: Opts = {}) {
     homeTenant: async () => HOME_TENANT,
     homeDomains: async () => ["contoso.example"],
     emailOf: async (p, ref, name) => p.chat?.members.find((m) => (ref?.kind === "external" ? m.userId === ref.memberId : ref?.kind === "cooptimizer" ? m.userId === ref.id : m.displayName === name))?.email ?? null,
-    userIdOf: async (p, ref) => (ref?.kind === "cooptimizer" ? ref.id : null),
+    userIdOf: async (_p, ref) => (ref?.kind === "cooptimizer" ? ref.id : null),
     item: async () => ({ id: 4417, title: "Salesforce rerun", state: "Active", type: "User Story" }),
     canComment: async () => o.canComment ?? true,
     boundary: async () => ({ internal: !!o.internal, directory: [{ key: "fabrikam", names: ["Fabrikam"], projects: ["Fabrikam"], itemIds: [4417] }, { key: "northwind", names: ["Northwind"], projects: ["Northwind Data"], itemIds: [5120] }] }),
@@ -324,7 +324,7 @@ describe("the assistant and the command menu", () => {
   it("loop.find opens the draft (an address) and never sends", async () => {
     const s = await setup();
     const r = await s.run<{ matches: { key: string; href: string }[] }>("loop.find", { who: "Dana", about: "the Salesforce rerun counts" });
-    expect(r.matches[0]).toMatchObject({ key: s.key, href: `#/inbox/item/${s.key}?loop=1` });
+    expect(r.matches[0]).toMatchObject({ key: s.key, href: `#/inbox/item/${s.key}/loop` });
     expect(s.calls.posts).toHaveLength(0);
     expect(await s.plan.loopSends(null)).toHaveLength(0);
   });

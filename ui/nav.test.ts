@@ -223,6 +223,14 @@ describe("Inbox views and items (IB-1)", () => {
     for (const k of ["v12", "c7", "f42", "s3", "k9", "d5"]) expect(parseHash(`#/inbox/item/${k}`)?.nav).toEqual(navOf.inboxItem(k));
     expect(parseHash("#/inbox/item/x1")).toBeNull();
     expect(parseHash("#/inbox/item/v0")).toBeNull();
+    // LP-1: a promise's Close the loop draft (the assistant's link); only promises (c, f) take /loop.
+    for (const k of ["c7", "f42"]) {
+      const l = parseHash(`#/inbox/item/${k}/loop`)!;
+      expect(l.nav).toEqual({ tab: "inbox", view: null, item: k, loop: true });
+      expect(hashOf(l)).toBe(`#/inbox/item/${k}/loop`);
+    }
+    expect(parseHash("#/inbox/item/v12/loop")).toBeNull();
+    expect(parseHash("#/inbox/item/c7/send")).toBeNull();
   });
   it("UI-9: Promises narrowed to late ones, for one client or any, reads back", () => {
     for (const c of ["contoso", "Fabrikam Inc", null]) {
