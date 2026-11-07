@@ -55,9 +55,9 @@ export const loopSends: NamedMigration = {
   write_id int NULL,
   error nvarchar(500) NULL,
   kept bit NOT NULL CONSTRAINT loop_sends_kept DEFAULT 0,
-  created_at nvarchar(40) NOT NULL,
-  sent_at nvarchar(40) NULL,
-  updated_at nvarchar(40) NOT NULL
+  created_at nvarchar(64) NOT NULL,
+  sent_at nvarchar(64) NULL,
+  updated_at nvarchar(64) NOT NULL
 );
 CREATE INDEX loop_sends_user_promise ON loop_sends (user_id, promise_key);`,
 };
