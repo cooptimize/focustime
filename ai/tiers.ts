@@ -19,7 +19,7 @@ export type FlexTask = (typeof FLEX_TASKS)[number];
  */
 export const STANDARD_TASKS = [
   "test_ai", "assistant.intent", "assistant.answer", "assistant_transcribe", "stories.draft", "status_draft",
-  "conversations.draft_item", "conversations.merge_summary", "conversations.comment", "capture.prepare",
+  "conversations.draft_item", "conversations.merge_summary", "conversations.comment", "capture.prepare", "loop_draft",
 ] as const;
 
 /** Whether a task is declared background (an admin may still switch it back to standard). */

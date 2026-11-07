@@ -37,6 +37,7 @@ import { aiTier } from "./20261115T0900_ai_tier.ts";
 import { meetings } from "./20261116T0900_meetings.ts";
 import { assistantPending } from "./20261117T0900_assistant_pending.ts";
 import { peopleInvites } from "./20261118T0310_people_invites.ts";
+import { loopSends } from "./20261119T0900_loop_sends.ts";
 import type { NamedMigration } from "./named.ts";
 
-export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll, clientAccounts, weekCarry, conversationMerges, messageReactions, messageImages, followUpWhoRef, teamSends, aheadChanges, draftAi, imagesNoBytes, clientLogins, teamsBot, assistant, teamsBotSeen, inboxMarks, teamsRhythm, commitmentClose, chatSocial, jobClaims, aiTier, meetings, assistantPending, peopleInvites];
+export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll, clientAccounts, weekCarry, conversationMerges, messageReactions, messageImages, followUpWhoRef, teamSends, aheadChanges, draftAi, imagesNoBytes, clientLogins, teamsBot, assistant, teamsBotSeen, inboxMarks, teamsRhythm, commitmentClose, chatSocial, jobClaims, aiTier, meetings, assistantPending, peopleInvites, loopSends];

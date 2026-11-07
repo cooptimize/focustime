@@ -8,7 +8,10 @@ import { chatAction, type ChatContext } from "./chat-actions.ts";
 import { DEFAULT_DRAFT_MONTHS, storyAction, type StoryContext } from "./story-actions.ts";
 import { serveChatImage, type ServedImage } from "./chat-images.ts";
 import { peoplePicker, pickerPeopleOf } from "./people-picker.ts";
-import { conversationPeople, conversationAction, dayPromises, inboxFacts, type ConversationContext } from "./conversation-actions.ts";
+import { conversationPeople, conversationAction, dayPromises, inboxFacts, loopChatOf, loopChatPromise, loopOpenChatPromises, type ConversationContext } from "./conversation-actions.ts";
+import { loopAction, type LoopContext, type LoopPromise } from "./loop-actions.ts";
+import { insideDomain } from "../plan/loop.ts";
+import type { PersonRef } from "../plan/person-ref.ts";
 import { refreshStatus } from "./conversations-pipeline.ts";
 import type { ConversationsPort } from "./devops-write-actions.ts";
 import { isClientLead } from "./client-lead.ts";
@@ -868,6 +871,107 @@ async function devopsWriteContext(ctx: ActionContext): Promise<DevOpsWriteContex
       const r = await katSentFor(ctx, cfg, [clientKey]).catch(() => null);
       return reportWindow(r?.ok ? (r.sent[clientKey] ?? null) : null, Temporal.Instant.from(ctx.now())).since;
     },
+  };
+}
+
+/**
+ * LP-1: Close the loop's pieces for this person: their promises (both kinds, mine only), the chat the ask came from
+ * with its cached members, the directory for a Cooptimizer's address, the item's live state, GD-1's boundary, the AI
+ * (a person waits: standard tier, my cap), the Graph sends as me, the consent probes and the DevOps write framework.
+ */
+export async function loopContext(ctx: ActionContext): Promise<LoopContext> {
+  const cc = await conversationContext(ctx);
+  const plan = ctx.plan;
+  const cfgOf = () => configured(ctx);
+  const nameOf = async (k: string | null) => (k ? ((await cfgOf())?.clientSettings[k]?.name ?? k) : null);
+  const directory = async () => (ctx.org ? await ctx.org.store.directory().catch(() => []) : []);
+  const followUpPromise = async (id: number): Promise<LoopPromise | null> => {
+    const f = plan ? await plan.getFollowUp(id) : null;
+    if (!f) return null;
+    const from = f.sourceKind === "commitment" && f.sourceId ? await loopChatOf(cc, f.sourceId).catch(() => null) : null;
+    return { key: `f${f.id}`, kind: "followUp", id: f.id, clientKey: f.clientKey, clientName: await nameOf(f.clientKey), what: f.what, closed: !!f.closedAt, who: f.who, whoRef: f.whoRef, itemId: f.itemId, chat: from?.chat ?? null, conversation: from?.conversation ?? null, myWords: null };
+  };
+  const member = (p: LoopPromise, ref: PersonRef | null, name: string) => {
+    const ms = p.chat?.members ?? [];
+    const id = ref?.kind === "cooptimizer" ? ref.id : ref?.kind === "external" ? ref.memberId : null;
+    return (id ? ms.find((m) => (m.userId ?? "").toLowerCase() === id.toLowerCase()) : undefined) ?? ms.find((m) => (m.displayName ?? "").trim().toLowerCase() === name.trim().toLowerCase());
+  };
+  const probe = async (kind: "send" | "mail" | "mail_send") => {
+    const a = await accountOf(ctx);
+    if (!a?.probe) return "unavailable" as const;
+    const r = await a.probe(kind).catch(() => null);
+    return r?.state === "granted" ? ("granted" as const) : r?.state === "consent" ? ("consent" as const) : ("unavailable" as const);
+  };
+  return {
+    plan,
+    me: async () => {
+      const id = await storedIdentity(plan);
+      return { id: (await cc.me()) ?? id?.oid ?? null, name: id?.name ?? null, email: id?.email ?? id?.username ?? null };
+    },
+    promise: async (key) => {
+      const n = Number(key.slice(1));
+      if (!Number.isSafeInteger(n) || n <= 0) return null;
+      return key.startsWith("c") ? loopChatPromise(cc, n) : followUpPromise(n);
+    },
+    homeTenant: () => cc.homeTenant(),
+    homeDomains: async () => {
+      const cfg = await cfgOf();
+      return cfg ? inviteDomains(cfg) : [];
+    },
+    emailOf: async (p, ref, name) => {
+      const m = member(p, ref, name);
+      if (m?.email) return m.email;
+      if (ref?.kind === "cooptimizer") return (await directory()).find((d) => d.personId.toLowerCase() === ref.id.toLowerCase() || d.systemUserId.toLowerCase() === ref.id.toLowerCase())?.email ?? null;
+      if (!ref) return (await directory()).find((d) => d.name.trim().toLowerCase() === name.trim().toLowerCase())?.email ?? null;
+      return null;
+    },
+    userIdOf: async (p, ref, name) => {
+      // A 1:1 chat only with someone at Cooptimize: their Entra id from the chat, else their work address (Graph binds a user by UPN).
+      const home = await cc.homeTenant();
+      const m = member(p, ref, name);
+      if (m?.userId && home && !m.guest && (m.tenantId ?? "").toLowerCase() === home.toLowerCase()) return m.userId;
+      if (ref?.kind === "external") return null;
+      const cfg = await cfgOf();
+      const email = m?.email ?? (ref?.kind === "cooptimizer" ? (await directory()).find((d) => d.personId.toLowerCase() === ref.id.toLowerCase())?.email ?? null : null);
+      return email && cfg && insideDomain(email, inviteDomains(cfg)) ? email : null;
+    },
+    item: async (clientKey, itemId) => {
+      const cfg = await cfgOf();
+      if (!cfg) return null;
+      const w = ctx.makeDevOps(cfg.dataverse, userZone(cfg)).last(clientKey);
+      const hit = w ? [...w.items, ...w.children, ...(w.watched ?? [])].find((i) => i.id === itemId) : undefined;
+      return hit ? { id: hit.id, title: hit.title, state: hit.state, type: hit.type } : null;
+    },
+    canComment: async (clientKey) => !!ctx.devopsWriter && !!ctx.writePats && !!plan && (await plan.devopsIdentities()).some((i) => i.clientKey === clientKey),
+    boundary: async (clientKey) => {
+      if (clientKey && (await isInternalKey(ctx.org, clientKey))) return { internal: true, directory: [] };
+      const cfg = await cfgOf();
+      return { internal: false, directory: cfg ? await aiDirectory(ctx, cfg) : [] };
+    },
+    ai: () => aiFor(ctx, { waiting: true }),
+    sender: async () => (await accountOf(ctx))?.sender ?? null,
+    access: probe,
+    devops: async (action, input) => devopsWriteAction(await devopsWriteContext(ctx), action, input),
+    close: async (p, how, note) => {
+      if (p.kind === "followUp") return void (await plan!.closeFollowUp(p.id, note, "me", { how, outcome: "done" }));
+      const r = await conversationAction(cc, "my_promises.close", { id: p.id, how, ...(note ? { note } : {}) });
+      if (!r.ok) throw new Error(r.error);
+    },
+    reopen: async (p) => {
+      if (p.kind === "followUp") return void (await plan!.reopenFollowUp(p.id));
+      const r = await conversationAction(cc, "my_promises.reopen", { id: p.id });
+      if (!r.ok) throw new Error(r.error);
+    },
+    open: async () => {
+      const fs = plan ? (await plan.openFollowUps()).map((f) => ({ key: `f${f.id}`, what: f.what, who: f.who, clientKey: f.clientKey })) : [];
+      const cs = await loopOpenChatPromises(cc).catch(() => []);
+      const all: { key: string; what: string; who: string | null; clientKey: string | null }[] = [...cs, ...fs];
+      const out = [];
+      for (const x of all) out.push({ ...x, clientName: await nameOf(x.clientKey) });
+      return out;
+    },
+    now: ctx.now,
+    log: ctx.log ?? (() => {}),
   };
 }
 
@@ -1847,6 +1951,15 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
         action,
         req.input,
       );
+    case "loop.draft":
+    case "loop.preview":
+    case "loop.send":
+    case "loop.retry":
+    case "loop.mark_sent":
+    case "loop.undo_kept":
+    case "loop.sends":
+    case "loop.find":
+      return loopAction(await loopContext(ctx), action, req.input);
     case "capture.add":
     case "capture.load":
     case "capture.route":

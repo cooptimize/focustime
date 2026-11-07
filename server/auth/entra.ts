@@ -15,7 +15,15 @@ export const SIGN_IN_SCOPE = "openid profile email offline_access https://graph.
  * doesn't mix .default with named scopes of the same resource). The refresh token that comes back serves every scope
  * the person has allowed.
  */
-export const CONSENTS = { chat_read: "openid profile email offline_access https://graph.microsoft.com/Chat.Read" } as const;
+export const CONSENTS = {
+  chat_read: "openid profile email offline_access https://graph.microsoft.com/Chat.Read",
+  // LP-1: Close the loop's sends, each the first time a person sends that way.
+  teams_send: "openid profile email offline_access https://graph.microsoft.com/ChatMessage.Send https://graph.microsoft.com/Chat.Create",
+  mail_draft: "openid profile email offline_access https://graph.microsoft.com/Mail.ReadWrite",
+  mail_send: "openid profile email offline_access https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send",
+} as const;
+/** Where a consent comes back to: Settings › Clients for chat reading, the Inbox for a send (LP-1). */
+export const CONSENT_RETURN: Record<keyof typeof CONSENTS, string> = { chat_read: "#/settings/clients", teams_send: "#/inbox", mail_draft: "#/inbox", mail_send: "#/inbox" };
 export type Consent = keyof typeof CONSENTS;
 
 export type EntraOptions = {

@@ -1232,6 +1232,19 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       if (!unpaid.length) return { disabled: "No unpaid borrowed time" };
       return { next: () => ({ title: "Mark which borrowed time paid?", items: unpaid.map((b) => ({ id: `b${b.id}`, label: b.title, hint: `${b.minutes} min from ${dayName(b.date)}`, run: () => env.runFollowUps("borrow.pay", { id: b.id }) })) }) };
     }
+    // LP-1: Close the loop with someone opens the Inbox's Promises, where each promise's Close the loop opens its draft
+    // (the assistant opens a promise's draft directly). Sending is only ever the preview's Send.
+    case "loop.find":
+      return { run: () => void (window.location.hash = "#/inbox/promises") };
+    case "loop.draft":
+    case "loop.preview":
+    case "loop.send":
+    case "loop.retry":
+    case "loop.mark_sent":
+    case "loop.undo_kept":
+      return { run: () => void (window.location.hash = "#/inbox/promises") };
+    case "loop.sends":
+      return { run: () => env.openSettings("data") };
     case "followups.list": return { run: env.openFollowUps };
     // Closing, not needed, snooze, edit, delete, who suggestions and the heads-up review are on each row in the Inbox.
     case "followup.close":
