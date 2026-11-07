@@ -2030,6 +2030,7 @@ export function App() {
           initialText={assistantAt.text}
           context={assistantContext}
           onClose={() => setAssistantAt(null)}
+          onChanged={reloadQuiet}
           onOpen={(href) => {
             if (href === COMMANDS_HREF) return openCommands();
             const to = parseHash(href);

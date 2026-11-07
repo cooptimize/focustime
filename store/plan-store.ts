@@ -2911,12 +2911,22 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       });
     },
     /** AS-1: one turn of the assistant's history (what I asked, or what it answered); returns its id. */
-    async addAssistantTurn(t: { channel: "panel" | "teams"; role: "me" | "assistant"; text: string; cards: unknown[] }): Promise<number> {
+    async addAssistantTurn(t: { channel: "panel" | "teams"; role: "me" | "assistant"; text: string; cards: unknown[]; pending?: unknown }): Promise<number> {
       return tx(async () => {
         const at = opts.now().toInstant().toString();
-        const r = await db.run("INSERT INTO assistant_turns (at, channel, role, text, cards_json) VALUES (?, ?, ?, ?, ?)", at, t.channel, t.role, t.text.slice(0, 8000), JSON.stringify(t.cards));
+        const r = await db.run("INSERT INTO assistant_turns (at, channel, role, text, cards_json, pending_json) VALUES (?, ?, ?, ?, ?, ?)", at, t.channel, t.role, t.text.slice(0, 8000), JSON.stringify(t.cards), t.pending === undefined || t.pending === null ? null : JSON.stringify(t.pending));
         return Number(r.lastId);
       });
+    },
+    /** AS-2: the question the assistant asked last, if its turn is the newest of mine that holds one and it's still open. */
+    async assistantQuestion(): Promise<{ turnId: number; at: string; pending: unknown } | null> {
+      const r = (await db.get("SELECT id, at, pending_json FROM assistant_turns WHERE role = 'assistant' ORDER BY id DESC LIMIT 1")) as Row | undefined;
+      if (!r || r.pending_json === null || r.pending_json === undefined) return null;
+      return { turnId: Number(r.id), at: asInstant(r.at), pending: JSON.parse(String(r.pending_json)) as unknown };
+    },
+    /** AS-2: the question is answered (or set aside): it waits no more. */
+    async closeAssistantQuestion(turnId: number): Promise<void> {
+      await tx(async () => void (await db.run("UPDATE assistant_turns SET pending_json = NULL WHERE id = ?", turnId)));
     },
     /** AS-1: the newest turns, oldest first (at most `limit`). */
     async assistantTurns(limit: number): Promise<AssistantTurnRow[]> {
@@ -2942,6 +2952,10 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       return ((await db.all(`SELECT * FROM assistant_proposals WHERE turn_id IN (${ids.map(() => "?").join(", ")}) ORDER BY id`, ...ids)) as Row[]).map(toProposalRow);
     },
     /** AS-1: a proposal's new state (and, after a fresh preview, its new view, snapshot, input and expiry). */
+    /** AS-2: what a confirmed proposal did (its to-do moves), kept so Undo can put them back. */
+    async setAssistantProposalInput(id: number, input: unknown): Promise<void> {
+      await tx(async () => void (await db.run("UPDATE assistant_proposals SET input_json = ? WHERE id = ?", JSON.stringify(input), id)));
+    },
     async setAssistantProposal(id: number, c: { state: AssistantProposalRow["state"]; view?: unknown; snapshot?: unknown; input?: unknown; expiresAt?: string }): Promise<void> {
       return tx(async () => {
         const at = opts.now().toInstant().toString();

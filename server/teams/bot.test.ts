@@ -228,6 +228,59 @@ await forEachDriver("the Teams bot (TB-1)", (d) => {
     expect((await t.store.card("p-1"))?.state).toBe("done");
   });
 
+  it("AS-2: a question's choices are buttons; a tap answers it once, with the choice as the answer, and the reply follows", async () => {
+    const asked: { text: string; answer?: string }[] = [];
+    const t = await setup(d, {
+      assistant: {
+        handle: async (i) => (asked.push({ text: i.text, ...(i.answer ? { answer: i.answer } : {}) }), i.answer ? handled({ reply: "Here's the move:", proposals: [proposal("p-9", { title: "Move 1 to-do to Fri, Nov 6" })] }) : handled({ turnId: "41", reply: "", question: { text: "Which to-dos on Thu, Nov 5?", choices: [{ label: "Thu, Nov 5 AM · Fabrikam · 1 to-do", value: "b1" }, { label: "All 2", value: "all" }], expiresAt: "2026-11-05T15:10:00Z" } })),
+      },
+    });
+    await t.core.activity(t.msg("move some of today's to-dos to friday"));
+    await t.settle();
+    const q = t.texts().at(-1)!;
+    expect(q).toContain("Which to-dos on Thu, Nov 5?");
+    expect(q).toContain('"verb":"answer"');
+    expect(q).toContain("All 2");
+    const row = (await t.store.card("q41"))!;
+    expect(row.state).toBe("open");
+    const tap = (): InActivity => ({ ...t.msg(""), type: "invoke", name: "adaptiveCard/action", replyToId: "msg-1", value: { action: { type: "Action.Execute", verb: "answer", data: { ft: "answer", questionId: "q41", value: "all", label: "All 2" } }, trigger: "manual" } });
+    const [a, b] = await Promise.all([t.core.activity(tap()), t.core.activity(tap())]);
+    await t.settle();
+    const shown = [a, b].map(cardOf);
+    expect(shown.some((x) => x.includes("You chose: All 2"))).toBe(true);
+    expect(shown.every((x) => x.includes("You chose: All 2") || x.includes("Working on it"))).toBe(true);
+    expect(cardOf(await t.core.activity(tap()))).toContain("You chose: All 2");
+    expect(asked).toEqual([{ text: "move some of today's to-dos to friday" }, { text: "All 2", answer: "all" }]);
+    expect(t.texts().at(-1)).toContain("Move 1 to-do to Fri, Nov 6");
+    // A forged choice (not one of ours) is refused before the assistant sees it.
+    const bad = await t.core.activity({ ...tap(), value: { action: { verb: "answer", data: { ft: "answer", questionId: "q41", value: "DROP TABLE", label: "x" } } } });
+    expect(cardOf(bad)).not.toContain("You chose");
+  });
+
+  it("AS-2: a multi-to-do move confirms once on a double tap, and its Undo runs once", async () => {
+    const undos: string[] = [];
+    const t = await setup(d, {
+      assistant: {
+        handle: async () => handled({ reply: "Here's the move:", proposals: [proposal("12", { title: "Move 2 to-dos to Fri, Nov 6", whoSees: "Only you", changes: [{ field: "Fabrikam · Export spec", before: "Thu morning", after: "Fri morning" }, { field: "Northwind Traders · Ledger review", before: "Thu afternoon", after: "Fri morning" }] })] }),
+        confirm: async (i): Promise<ConfirmResult> => (t.calls.confirm.push(i.proposalId), { status: "ok", message: "Moved 2 to-dos.", undo: { label: "Undo", proposalId: "12" } }),
+        undo: async (i) => (undos.push(i.proposalId), { ok: true, message: "Put 2 to-dos back." }),
+      },
+    });
+    await t.core.activity(t.msg("push everything from today to tomorrow"));
+    await t.settle();
+    expect(t.texts().at(-1)).toContain("Northwind Traders · Ledger review");
+    const [a, b] = await Promise.all([t.core.activity(t.tapAct("confirm", "12")), t.core.activity(t.tapAct("confirm", "12"))]);
+    expect(t.calls.confirm).toEqual(["12"]);
+    const done = [a, b].map(cardOf).find((x) => x.includes("Moved 2 to-dos."))!;
+    expect(done).toContain('"verb":"undo"');
+    const undoTap = (): InActivity => ({ ...t.tapAct("confirm", "12"), value: { action: { type: "Action.Execute", verb: "undo", data: { ft: "undo", proposalId: "12" } }, trigger: "manual" } });
+    const [u1, u2] = await Promise.all([t.core.activity(undoTap()), t.core.activity(undoTap())]);
+    const u3 = await t.core.activity(undoTap());
+    expect(undos).toEqual(["12"]);
+    expect(cardOf(u3)).toContain("Put 2 to-dos back.");
+    expect([u1, u2].map(cardOf).some((x) => x.includes("Undone: Move 2 to-dos"))).toBe(true);
+  });
+
   it("Cancel cancels once and nothing is confirmed; a tap after 15 minutes shows Expired", async () => {
     const t = await setup(d, { assistant: { handle: async () => handled({ proposals: [proposal("p-2"), proposal("p-3", { title: "Assign #77 to me" })] }) } });
     await t.core.activity(t.msg("do the things"));

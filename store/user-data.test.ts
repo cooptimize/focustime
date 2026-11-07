@@ -48,6 +48,18 @@ describe("export my data (A2)", () => {
   });
 });
 
+describe("export my data (AS-2)", () => {
+  it("includes the question the assistant is waiting on (pending_json), only this person's", async () => {
+    const t = await setup();
+    await t.person("ana");
+    await t.person("ben");
+    for (const id of ["ana", "ben"]) await planStoreOn(t.db, { userId: id, now: () => now().toZonedDateTimeISO(NY) }).addAssistantTurn({ channel: "panel", role: "assistant", text: "Which client?", cards: [], pending: { kind: "client", owner: `${id}-choice` } });
+    const out = (await exportUser(t.db, (await t.accounts.users.get("ana"))!, now())) as { tables: Record<string, { pending_json?: string | null }[]> };
+    const turns = out.tables.assistant_turns!;
+    expect(turns.map((r) => r.pending_json)).toEqual([JSON.stringify({ kind: "client", owner: "ana-choice" })]);
+  });
+});
+
 describe("delete my data (A2)", () => {
   it("removes the Teams bot's rows at once (TB-1b), only this person's, and the hard delete takes the rest", async () => {
     const t = await setup();
@@ -91,6 +103,17 @@ describe("delete my data (A2)", () => {
     };
     await planStoreOn(t.db, { userId: "ana", now: () => now().toZonedDateTimeISO(NY) }).clearAssistant();
     expect([await bot("ana"), await bot("ben")]).toEqual([0, 3]);
+  });
+
+  it("AS-2: Clear removes a waiting question with the history; another person's stays", async () => {
+    const t = await setup();
+    await t.person("ana");
+    await t.person("ben");
+    const store = (id: string) => planStoreOn(t.db, { userId: id, now: () => now().toZonedDateTimeISO(NY) });
+    for (const id of ["ana", "ben"]) await store(id).addAssistantTurn({ channel: "panel", role: "assistant", text: "Which client?", cards: [], pending: { kind: "client" } });
+    await store("ana").clearAssistant();
+    expect(await store("ana").assistantQuestion()).toBeNull();
+    expect(await store("ben").assistantQuestion()).toMatchObject({ pending: { kind: "client" } });
   });
 
   it("soft first (rows kept, a hashed record), then every row removed after 30 days, nobody else's touched", async () => {

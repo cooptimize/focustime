@@ -42,7 +42,7 @@ export type { DevOpsPreview, DevOpsResult };
 export const DEVOPS_WRITE_ACTIONS = ["devops.set_write_pat", "devops.clear_write_pat", "devops.write_status", "devops.states", "devops.preview", "devops.confirm", "devops.retry", "devops.log", "devops.done_offer", "devops.undo_offer"] as const;
 export type DevOpsWriteAction = (typeof DEVOPS_WRITE_ACTIONS)[number];
 export type { DoneOffer, UndoOffer } from "./types.ts";
-import type { DoneOffer, UndoOffer } from "./types.ts";
+import type { DoneOffer, ItemDoneOffer, UndoOffer } from "./types.ts";
 
 /** The keyring for write PATs (secrets/keyring.ts). A PAT only ever comes back wrapped. */
 export type WritePats = { get: (clientKey: string) => Promise<Pat>; set: (clientKey: string, value: string) => Promise<void>; clear: (clientKey: string) => Promise<void> };
@@ -300,6 +300,32 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       // PK-1: read only. For to-dos just checked done: which items to offer "Set #id to <done state>?" for. Only a
       // to-do with a DevOps item, with my write PAT for its client, whose item isn't done or removed already and that
       // the shared canEdit lets me change; the choices come from its type's states (Completed, then Resolved).
+      // AS-2: or items by id ({ clientKey, itemIds }), for "mark #id complete" with no to-do: the same rights check and
+      // the same done states from the item's type (the process model), never a hard-coded state name.
+      if (typeof input === "object" && input !== null && "itemIds" in input) {
+        const q = fields(input, ["clientKey", "itemIds"]);
+        if (!Array.isArray(q.itemIds) || q.itemIds.length === 0 || q.itemIds.length > 10) throw new Invalid("itemIds needs 1 to 10 items");
+        const clientKey = str(q.clientKey, "clientKey", 100)!;
+        const env = await envOf(clientKey).catch(() => null);
+        if (!env) return { ok: true, data: { itemOffers: [], why: "DevOps writes aren't on for this client" } };
+        const memo = new Map<string, Promise<unknown>>();
+        const itemOffers: ItemDoneOffer[] = [];
+        let why: string | null = null;
+        for (const raw of [...new Set(q.itemIds)]) {
+          try {
+            const item = await env.writer.item(env.org, env.pat, env.project, posId(raw, "itemIds"));
+            const states = await env.writer.states(env.org, env.pat, env.project, item.type);
+            const choices = doneChoices(states);
+            if (!choices.length) { why = `${item.type} has no done state in this process`; continue; }
+            if (alreadyDone(states, item.state)) { why = `#${item.id} is ${item.state} already`; continue; }
+            if (!(await rightsOn(env, item, memo)).ok) { why = `You can't change #${item.id}`; continue; }
+            itemOffers.push({ clientKey, clientName: env.clientName, itemId: item.id, title: item.title, type: item.type, state: item.state, choices });
+          } catch {
+            why = "DevOps couldn't read that item now";
+          }
+        }
+        return { ok: true, data: { itemOffers, why } };
+      }
       const o = fields(input, ["pickIds"]);
       if (!Array.isArray(o.pickIds) || o.pickIds.length === 0 || o.pickIds.length > 30) throw new Invalid("pickIds needs 1 to 30 to-dos");
       const ids = [...new Set(o.pickIds.map((x) => posId(x, "pickIds")))];

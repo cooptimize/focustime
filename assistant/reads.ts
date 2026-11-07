@@ -9,6 +9,7 @@ import { buildRows, isOpen, tierOf } from "../plan/ahead-model.ts";
 import { GAP_WORDS } from "../plan/fixnext.ts";
 import type { Pick } from "../plan/types.ts";
 import type { StatusLoad } from "../plan/status-types.ts";
+import { parseKey, type InboxListData, type InboxView } from "../plan/inbox-items.ts";
 import { hoursOn } from "../week/hours.ts";
 import type { BlockCard, Card, ItemCard, Link, PickCard, PromiseCard, SendCard } from "./types.ts";
 
@@ -26,7 +27,7 @@ export type ReadDeps = {
 };
 
 /** What a read gives: cards for the person, facts for the model (one client only), and ids the person may act on. */
-export type ReadResult = { cards: Card[]; facts: unknown; itemIds: number[]; pickIds: number[]; error?: string };
+export type ReadResult = { cards: Card[]; facts: unknown; itemIds: number[]; pickIds: number[]; error?: string; /** AS-2: Inbox row keys, conversation and promise ids a later proposal may name. */ keys?: string[]; conversationIds?: number[]; promiseIds?: number[] };
 
 const fail = (error: string): ReadResult => ({ cards: [], facts: null, itemIds: [], pickIds: [], error });
 const halfName = (h: string) => (h === "AM" ? "morning" : h === "PM" ? "afternoon" : "evening");
@@ -205,4 +206,41 @@ export async function statusRead(d: ReadDeps, client: string | null): Promise<Re
   const cards: Card[] = [{ kind: "note", text, link: d.link("#/week/status", "Open Status") }];
   const facts = client ? features.map(({ f }) => ({ id: f.id, title: { quoted: f.title }, updatesThisWeek: f.thisWeek?.length ?? null, canComment: clients[0]?.canWrite ?? false })) : { features: shown, without };
   return { cards, facts, itemIds: client ? features.map(({ f }) => f.id) : [], pickIds: [] };
+}
+
+const VIEW_WORDS: Partial<Record<InboxView, string>> = { needs_you: "Needs you", promises: "Promises", waiting: "Waiting on", in_progress: "In progress", captures: "Captures and drafts", done: "Done" };
+
+/**
+ * AS-2: one Inbox view (IB-1's inbox.list), my rows only. In progress is the conversations and promises with a linked
+ * item (CV-5). With one client the model hears titles (quoted), who, due and the linked item; with none, how many.
+ */
+export async function inboxRead(d: ReadDeps, view: InboxView, client: string | null): Promise<ReadResult> {
+  const l = await data<InboxListData>(d.run("inbox.list", {}));
+  if (typeof l === "string") return fail(l);
+  const rows = l.items.filter((r) => r.views.includes(view) && (r.clientKey === null ? client === null : d.isMine(r.clientKey) && (client === null || r.clientKey === client))).slice(0, 12);
+  const name = VIEW_WORDS[view] ?? view;
+  const cards: Card[] = rows.map((r) => ({ kind: "note", text: `${r.title}${r.who ? ` · ${r.who}` : ""}${r.due ? ` · due ${r.due}` : ""}${r.itemId ? ` · #${r.itemId}` : ""}`, link: d.link(`#/inbox/item/${r.key}`, "Open in the Inbox") }));
+  if (!cards.length) cards.push({ kind: "note", text: `Nothing in ${name}${client ? ` for ${d.clientName(client)}` : ""}.`, link: d.link("#/inbox", "Open the Inbox") });
+  const ids = rows.map((r) => ({ r, k: parseKey(r.key) }));
+  return {
+    cards,
+    facts: rows.map((r) => ({ key: r.key, kind: r.kind, title: { quoted: r.title }, who: r.who, due: r.due, itemId: r.itemId, late: r.late })),
+    itemIds: rows.map((r) => r.itemId).filter((x): x is number => x !== null),
+    pickIds: [],
+    keys: rows.map((r) => r.key),
+    conversationIds: ids.filter((x) => x.k?.source === "conversation").map((x) => x.k!.id),
+    promiseIds: ids.filter((x) => x.k?.source === "chatPromise").map((x) => x.k!.id),
+  };
+}
+
+/** AS-2: CV-5's Link to item search for a conversation or my promise: that client's open items in scope. */
+export async function linkSearchRead(d: ReadDeps, o: { conversationId: number | null; promiseId: number | null; query: string }, client: string | null): Promise<ReadResult> {
+  const input = o.conversationId !== null ? { id: o.conversationId, query: o.query.slice(0, 200) } : o.promiseId !== null ? { promiseId: o.promiseId, query: o.query.slice(0, 200) } : null;
+  if (!input) return fail("Say which conversation or promise");
+  const r = await data<{ available: boolean; items: { id: number; title: string; type: string; state: string }[] }>(d.run("conversations.search_items", input));
+  if (typeof r === "string") return fail(r);
+  if (!r.available) return fail("That client's items aren't available to link right now");
+  const items = r.items.slice(0, 8);
+  const cards: Card[] = items.length ? items.map((i) => ({ kind: "note", text: `#${i.id} ${i.title} · ${i.type} · ${i.state}` })) : [{ kind: "note", text: "No open items match." }];
+  return { cards, facts: client ? items.map((i) => ({ id: i.id, title: { quoted: i.title }, type: i.type, state: i.state })) : null, itemIds: items.map((i) => i.id), pickIds: [] };
 }

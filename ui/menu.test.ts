@@ -143,12 +143,12 @@ describe("⋯ menus", () => {
     await find(find(m, "Set size").next!(), "S · 1h").run!();
     expect(t.calls).toEqual([["link", "internal", pick.itemUrl], ["pick.set_size", { id: 7, size: "S" }]]);
   });
-  it("moving offers the other half, Friday and every other half-day, with full PTO days disabled", () => {
+  it("moving offers the other half, Friday and every other half-day; a PTO day takes it with a note (AS-2, D947)", () => {
     const m = find(pickMenu(env().e, pick), "Move").next!();
     expect(items(m)[0]!.label).toBe("To PM the same day");
     expect(items(m)[1]!.label).toBe("To Friday (catch-up)");
     const thu = items(m).filter((i) => i.label.startsWith("To Thu, Nov 5"));
-    expect(thu.map((i) => i.disabled)).toEqual(["PTO day (Watch Kids)", "PTO day (Watch Kids)"]);
+    expect(thu.map((i) => [i.disabled, i.hint])).toEqual([[undefined, "You're on PTO that day"], [undefined, "You're on PTO that day"]]);
   });
   it("a work item: open, add to the plan (stories only), draft story for an empty feature", () => {
     const story = itemMenu(env().e, "internal", item(1));
@@ -165,7 +165,9 @@ describe("⋯ menus", () => {
     const add = items(find(itemMenu(e, "internal", item(1)), "Add to the plan").next!());
     expect(add.some((i) => i.id.startsWith("add-2026-11-02"))).toBe(false);
     expect(new Set(add.map((i) => i.id)).size).toBe(add.length);
-    expect(add.find((i) => i.id === "add-2026-11-05-AM")!.disabled).toBe("Day off");
+    // AS-2 (D947): a PTO day takes it, with the note.
+    expect(add.find((i) => i.id === "add-2026-11-05-AM")).toMatchObject({ hint: "You're on PTO that day" });
+    expect(add.find((i) => i.id === "add-2026-11-05-AM")!.disabled).toBeUndefined();
     const first = add.find((i) => !i.disabled)!;
     expect(first.label).toBe("Wed, Nov 4 AM");
     void first.run!();

@@ -279,11 +279,12 @@ export function planDayRefusal(env: MenuEnv, date: IsoDate): string | undefined 
 export const halfLabel = (h: Half) => (h === "EVE" ? "Evening" : h);
 
 /** Half-days (and evening slots) of the week on screen with working time, as places to put a pick. */
-function halfDays(env: MenuEnv, skip?: { date: IsoDate; half: Half }): { date: IsoDate; half: Half; label: string; disabled?: string }[] {
+/** AS-2 (D947): a move is refused only for a past day; a PTO day takes it, with the note as a hint. */
+function halfDays(env: MenuEnv, skip?: { date: IsoDate; half: Half }): { date: IsoDate; half: Half; label: string; disabled?: string; hint?: string }[] {
   return env.week.days.flatMap((d) =>
     ([d.am, d.pm, ...(d.eve ? [d.eve] : [])] as const)
-      .filter((s) => (!s.off || d.kind === "overflow") && !(skip && skip.date === d.date && skip.half === s.half))
-      .map(({ half }) => ({ date: d.date, half, label: `${dayName(d.date)} ${halfLabel(half)}${d.kind === "overflow" ? " (Friday catch-up)" : ""}`, ...(closedReason(env, d.date) ? { disabled: closedReason(env, d.date)! } : {}) })),
+      .filter((s) => (!s.off || d.kind === "overflow" || !!d.pto) && !(skip && skip.date === d.date && skip.half === s.half))
+      .map(({ half }) => ({ date: d.date, half, label: `${dayName(d.date)} ${halfLabel(half)}${d.kind === "overflow" ? " (Friday catch-up)" : ""}`, ...(isPast(env, d.date) ? { disabled: PAST } : d.pto ? { hint: "You're on PTO that day" } : {}) })),
   );
 }
 
@@ -310,12 +311,12 @@ export function moveStep(env: MenuEnv, p: Pick): MenuStep {
   const other: Half = p.half === "AM" ? "PM" : "AM";
   const fri = env.week.days.find((d) => d.kind === "overflow")?.date ?? env.week.days[4]!.date;
   const quick: MenuItem[] = [
-    { id: "to-other", label: `To ${halfLabel(other)} the same day`, action: "pick.move", ...(closedReason(env, p.date) ? { disabled: closedReason(env, p.date)! } : {}), run: () => env.runPlan("pick.move", { id: p.id, date: p.date, half: other }) },
+    { id: "to-other", label: `To ${halfLabel(other)} the same day`, action: "pick.move", ...(isPast(env, p.date) ? { disabled: PAST } : {}), run: () => env.runPlan("pick.move", { id: p.id, date: p.date, half: other }) },
     ...(p.date !== fri && !isPast(env, fri) ? [{ id: "to-fri", label: "To Friday (catch-up)", action: "pick.move", run: () => env.runPlan("pick.move", { id: p.id, date: fri, half: "AM" }) } as MenuItem] : []),
   ];
   const days = halfDays(env, { date: p.date, half: p.half })
     .filter((h) => h.date !== p.date)
-    .map<MenuItem>((h) => ({ id: `to-${h.date}-${h.half}`, label: `To ${h.label}`, action: "pick.move", ...(h.disabled ? { disabled: h.disabled } : {}), run: () => env.runPlan("pick.move", { id: p.id, date: h.date, half: h.half }) }));
+    .map<MenuItem>((h) => ({ id: `to-${h.date}-${h.half}`, label: `To ${h.label}`, action: "pick.move", ...(h.disabled ? { disabled: h.disabled } : {}), ...(h.hint ? { hint: h.hint } : {}), run: () => env.runPlan("pick.move", { id: p.id, date: h.date, half: h.half }) }));
   return { title: `Move "${p.title}"`, items: [...quick, ...days] };
 }
 
@@ -457,7 +458,7 @@ export function addStep(env: MenuEnv, clientKey: string, item: WorkItem | { draf
   const items = targets.map<MenuItem>((t) => {
     const fri = env.week.days.find((d) => d.date === t.date)?.kind === "overflow";
     const label = `${dayName(t.date)} ${halfLabel(t.half)}${t.otherClient ? ` · ${clientName(t.otherClient)}` : fri ? " (Friday catch-up)" : ""}`;
-    const base: MenuItem = { id: `add-${t.date}-${t.half}`, label, group: t.selected ? "This block" : heading[t.group], action: "pick.add", ...(t.disabled ? { disabled: t.disabled, expected: true } : {}) };
+    const base: MenuItem = { id: `add-${t.date}-${t.half}`, label, group: t.selected ? "This block" : heading[t.group], action: "pick.add", ...(t.disabled ? { disabled: t.disabled, expected: true } : {}), ...(t.note ? { hint: t.note } : {}) };
     if (t.disabled) return base;
     if (t.otherClient)
       return {
@@ -1117,6 +1118,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "conversations.merge":
     case "conversations.merge_preview":
     case "conversations.unmerge":
+    case "conversations.search_items":
+    case "conversations.unlink":
       return { run: () => env.setView("conversations") };
     case "conversations.refresh": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.refresh", {})) };
     case "conversations.sort_unsorted": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.sort_unsorted", {})) };
@@ -1134,6 +1137,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "my_promises.due":
     case "my_promises.who":
     case "my_promises.close":
+    case "my_promises.unlink":
       return { run: () => env.setView("my_promises") };
     case "promises.list":
     case "promises.resolve":
@@ -1289,6 +1293,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "assistant.ask":
     case "assistant.confirm":
     case "assistant.cancel":
+    case "assistant.undo":
     case "assistant.history":
     case "assistant.today":
     case "lookup.day":

@@ -11,9 +11,11 @@ import { ACTION_NAMES } from "../actions/registry.ts";
 import type { ActionResponse } from "../actions/types.ts";
 import { createPlanStore, openPlanDb, planStoreOn } from "../store/plan-store.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
-import { aStatusLoad, aClientEntry, anAheadClient, anAheadItem, anAheadLoad, anAiApp, anAiRules, anAssignee } from "../test/builders/index.ts";
+import { aStatusLoad, aClientEntry, anAheadClient, anAheadItem, anAheadLoad, anAiApp, anAiRules, anAssignee, aPto, aWeek } from "../test/builders/index.ts";
+import { SIZE_MINUTES } from "../plan/types.ts";
+import { dropCheck } from "../plan/weekdrop.ts";
 import { NEVER, RUNS, TOOLS, TOOL_NAMES } from "./allowlist.ts";
-import { createAssistant, type AssistantEnv } from "./service.ts";
+import { ANSWER_INSTRUCTIONS, INTENT_INSTRUCTIONS, createAssistant, type AssistantEnv } from "./service.ts";
 import type { ConfirmResult } from "./types.ts";
 
 const NOW = "2026-11-05T15:00:00Z"; // Thursday, 10:00 in New York
@@ -29,7 +31,7 @@ const say = (reply: string): ProviderReply => ({ ok: true, text: JSON.stringify(
 let n = 0;
 const call = (...calls: [string, Record<string, unknown>][]): ProviderReply => ({ ok: true, text: "", usage, model: "test-model", calls: calls.map(([name, args]) => ({ callId: `call_${++n}`, name, arguments: JSON.stringify(args) })), items: [] });
 
-function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnType<typeof anAheadLoad>; people?: { id: string; name: string; email: string; lead: boolean }[]; handlers?: Partial<Record<ActionName, (input: unknown) => ActionResponse | Promise<ActionResponse>>>; channel?: "panel" | "teams" } = {}) {
+function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnType<typeof anAheadLoad>; people?: { id: string; name: string; email: string; lead: boolean }[]; handlers?: Partial<Record<ActionName, (input: unknown) => ActionResponse | Promise<ActionResponse>>>; channel?: "panel" | "teams"; /** AS-2: PTO days in the fake week. */ pto?: string[]; /** AS-2: extra items in the guard's directory. */ dirItems?: Record<string, number[]> } = {}) {
   let now = NOW;
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(now).toZonedDateTimeISO(ZONE) });
   const ran: { action: ActionName; input: unknown }[] = [];
@@ -50,12 +52,12 @@ function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnTyp
     provider: async () => provider,
     app: anAiApp(),
     rules: async () => rules,
-    guard: async () => ({ directory: dir, homeDomains: ["cooptimize.example"], forbidden: [] }),
+    guard: async (c) => ({ directory: dir, homeDomains: ["cooptimize.example"], forbidden: [], internal: c === "Cooptimize" }),
     log: { add: async (e) => void log.push(e), spentMicros: async () => 0, recent: async () => [] },
     appSpend: { get: async () => 0, add: async () => {} },
     now: () => now,
   });
-  const dir = [aClientEntry({ key: FAB, names: ["Fabrikam"], projects: ["Portal"], itemIds: [4417, 4418, 4500] }), aClientEntry({ key: NW, names: ["Northwind Traders"], projects: ["Ledger"], itemIds: [5150] })];
+  const dir = [aClientEntry({ key: FAB, names: ["Fabrikam"], projects: ["Portal"], itemIds: [4417, 4418, 4500, ...(o.dirItems?.[FAB] ?? [])] }), aClientEntry({ key: NW, names: ["Northwind Traders"], projects: ["Ledger"], itemIds: [5150, ...(o.dirItems?.[NW] ?? [])] })];
   // An Internal account under its own key (clientAccounts()'s why "internal"): in the assistant's directory, not the guard's.
   const internal = aClientEntry({ key: "Cooptimize", names: ["Cooptimize"], projects: ["Internal"], itemIds: [] });
   const mine = new Set(o.mine ?? [FAB, NW, "Cooptimize"]);
@@ -73,14 +75,15 @@ function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnTyp
   const people = o.people ?? [{ id: "p-sam", name: "Sam Lee", email: "sam@cooptimize.example", lead: false }, { id: "p-dana", name: "Dana Reyes", email: "dana@cooptimize.example", lead: true }];
   let description = "<div>Old scope</div>";
   const handlers: Partial<Record<ActionName, (input: unknown) => ActionResponse | Promise<ActionResponse>>> = {
-    "week.load": async (i) => ({ ok: true, data: { plan: Object.fromEntries(await Promise.all([0, 1, 2, 3, 4, 5, 6].map(async (k) => { const d = Temporal.PlainDate.from((i as { weekStart: string }).weekStart).add({ days: k }).toString(); return [d, { committedAt: null, picks: await plan.picksFor(d) }]; }))), followUps: [], promises: [], timer: null, planDay: { date: TODAY, workday: true, committed: false, available: true }, hours: { timeZone: ZONE, weekdays: { mon: [{ start: "09:00", end: "17:00" }], tue: [{ start: "09:00", end: "17:00" }], wed: [{ start: "09:00", end: "17:00" }], thu: [{ start: "09:00", end: "17:00" }], fri: [], sat: [], sun: [] }, lunch: null, overrides: [] }, resumeNotes: {}, focused: {} } }),
+    "week.load": async (i) => ({ ok: true, data: { week: aWeek({ weekStart: (i as { weekStart: string }).weekStart, pto: (o.pto ?? []).map((date) => aPto({ date })) }), planning: { sizes: SIZE_MINUTES }, timeboxes: [], plan: Object.fromEntries(await Promise.all([0, 1, 2, 3, 4, 5, 6].map(async (k) => { const d = Temporal.PlainDate.from((i as { weekStart: string }).weekStart).add({ days: k }).toString(); return [d, { committedAt: null, picks: await plan.picksFor(d) }]; }))), followUps: [], promises: [], timer: null, planDay: { date: TODAY, workday: true, committed: false, available: true }, hours: { timeZone: ZONE, weekdays: { mon: [{ start: "09:00", end: "17:00" }], tue: [{ start: "09:00", end: "17:00" }], wed: [{ start: "09:00", end: "17:00" }], thu: [{ start: "09:00", end: "17:00" }], fri: [], sat: [], sun: [] }, lunch: null, overrides: [] }, resumeNotes: {}, focused: {} } }),
     "ahead.load": () => ({ ok: true, data: ahead }),
     "conversations.list": () => ({ ok: true, data: { needsYou: [{ id: 9, clientKey: FAB, clientName: "Fabrikam", title: "Invoices", commitments: [{ id: 31, whoName: "Dana Reyes", mine: false, what: `Send the file. ${INJECTED}`, dueAt: null, dueDate: "2026-11-06", state: "open", impliesItem: false, item: null }] }], teammates: [], closed: [] } }),
     "team.commit": () => ({ ok: true, data: { weekStart: "2026-11-02", clients: [] } }),
     "send.people": () => ({ ok: true, data: { people, canSend: true, canMust: false, why: null } }),
     "send.create": () => ({ ok: true, data: { send: { id: 1 } } }),
     "devops.preview": (i) => {
-      const ch = (i as { change: { kind: string; text?: string; after?: string } }).change;
+      const ch = (i as { change: { kind: string; text?: string; after?: string; state?: string } }).change;
+      if (ch.kind === "state") return { ok: true, data: { preview: { previewId: `pv${++n}`, expiresAt: NOW, op: "state", summary: "Change a DevOps item's state", system: "DevOps", org: "contoso", project: "Portal", item: "#item", identity: "Sam Tester <sam@cooptimize.example>", fields: [{ label: "State", before: "Active", after: ch.state!, changed: true }], links: [], notes: [], visibility: "Visible to everyone with access to the Portal project in DevOps.", undo: true } } };
       const desc = ch.kind === "description_edit";
       return { ok: true, data: { preview: { previewId: `pv${++n}`, expiresAt: NOW, op: desc ? "description" : "comment", summary: desc ? "Change a DevOps item's description" : "Add a comment to a DevOps item", system: "DevOps", org: "contoso", project: "Portal", item: "#4417 Export the invoices", identity: "Sam Tester <sam@cooptimize.example>", fields: desc ? [{ label: "Description", before: description.replace(/<[^>]+>/g, ""), after: ch.after!, changed: true }] : [{ label: "Comment", before: null, after: ch.text!, changed: true }], links: [], notes: [], visibility: "Visible to everyone with access to the Portal project in DevOps.", undo: false } } };
     },
@@ -90,6 +93,10 @@ function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnTyp
       return { ok: true, data: { pick: await plan.move(x.id, x.date, x.half) } };
     },
     "pick.remove": () => ({ ok: true, data: { result: "removed" } }),
+    "pick.uncarry": async (i) => ({ ok: true, data: { pick: await plan.uncarry((i as { id: number }).id) } }),
+    // AS-2: an item's done states come from its process; this fake's process calls it "Done" (Basic), not "Closed".
+    "devops.done_offer": (i) => ({ ok: true, data: { itemOffers: [{ clientKey: (i as { clientKey: string }).clientKey, clientName: "x", itemId: (i as { itemIds: number[] }).itemIds[0], title: "t", type: "Issue", state: "Doing", choices: ["Done"] }], why: null } }),
+    "inbox.list": () => ({ ok: true, data: { today: TODAY, items: [], counts: {}, needsYou: 0 } }),
     "planday.commit": () => ({ ok: true, data: {} }),
     "weekplan.commit": () => ({ ok: true, data: {} }),
     "weekplan.add": () => ({ ok: true, data: {} }),
@@ -145,7 +152,8 @@ describe("the allowlist", () => {
     s.script(["item"], call(["admin_set", { key: "ai.on", value: false }], ["item", { id: 4417 }]), say("Sam has it."));
     const r = await s.a.handle("Who has #4417?");
     expect(r.status).toBe("ok");
-    expect(s.ran.map((x) => x.action)).toEqual(["ahead.load"]);
+    // AS-2: the resolver's store read first (my words against my items), then the tool's.
+    expect(s.ran.map((x) => x.action)).toEqual(["ahead.load", "ahead.load"]);
     expect(JSON.stringify(s.calls.at(-1)!.rounds)).toContain("isn't allowed for this request");
   });
 });
@@ -187,7 +195,8 @@ describe("look things up", () => {
     expect(c.cards[0]).toMatchObject({ kind: "promise", who: "Dana Reyes" });
     s.script(["sends"], call(["sends", {}]), say("No sends."));
     await s.a.handle("What did I send this week?");
-    expect(s.ran.map((x) => x.action)).toEqual(["ahead.load", "conversations.list", "team.commit", "team.commit"]);
+    // AS-2: each request starts with the resolver's store read.
+    expect(s.ran.map((x) => x.action)).toEqual(["ahead.load", "ahead.load", "ahead.load", "conversations.list", "ahead.load", "team.commit", "team.commit"]);
   });
 });
 
@@ -197,7 +206,8 @@ describe("one client per request", () => {
     const r = await s.a.handle("Compare Fabrikam and Northwind Traders this week");
     expect(r.status).toBe("which_client");
     expect(s.calls).toEqual([]);
-    expect(r.links).toEqual([{ label: "Open the command menu", href: "#/commands" }]);
+    // AS-2: it asks instead of giving up: one choice per client named, built from my own clients.
+    expect(r.cards).toEqual([expect.objectContaining({ kind: "question", choices: [{ label: "Fabrikam", value: "c1" }, { label: "Northwind Traders", value: "c2" }] })]);
   });
   it("GD-1's rule: naming Internal and one client is that client's request, not Which client?", async () => {
     const s = setup();
@@ -248,7 +258,8 @@ describe("injected instructions in DevOps or chat text never produce a tool call
     s.script(["item"], call(["item", { id: 4417 }]), call(["send", { itemId: 4417, to: "Dana Reyes", kind: "must", week: "this", note: null }], ["comment", { itemId: 4417, text: "Approved" }]), say("Sam has it."));
     const r = await s.a.handle("Who has #4417?");
     expect(r.proposals).toEqual([]);
-    expect(s.ran.map((x) => x.action)).toEqual(["ahead.load"]);
+    // AS-2: the resolver's store read first (my words against my items), then the tool's.
+    expect(s.ran.map((x) => x.action)).toEqual(["ahead.load", "ahead.load"]);
     // The intent round saw only my words; the item's text went back only as quoted data.
     expect(s.calls[0]!.input).not.toContain("Ignore all previous");
     expect(s.calls[0]!.tools ?? []).toEqual([]);
@@ -619,5 +630,263 @@ describe("propose from a button (TB-2): no AI call, the same preview and confirm
     for (const t of ["comment", "description", "send", "ahead_change", "capture", "nope"]) expect(await s.a.propose(t, { itemId: 4417, text: "x" })).toMatchObject({ ok: false, message: "That can't be proposed from a button" });
     expect(await s.a.propose("move_picks", { moves: [{ pickId: nw.id, date: TODAY, half: "PM" }] })).toMatchObject({ ok: false, message: "That to-do isn't one of yours here" });
     expect(s.calls).toEqual([]);
+  });
+});
+
+// AS-2: ask instead of giving up, the server-side resolver, moves across clients with one undo, compound updates.
+describe("AS-2", () => {
+  const WED = "2026-11-04", FRI = "2026-11-06", SAT = "2026-11-07", NEXT_WED = "2026-11-11";
+  const story = (id: number, title: string, parentId: number) => anAheadItem({ id, title, type: "User Story", level: "child", rung: 2, parentId, assignee: anAssignee("Sam Tester") });
+  const twoClients = () =>
+    anAheadLoad([
+      anAheadClient({ clientKey: FAB, clientName: "Fabrikam", items: [anAheadItem({ id: 4417, title: "Export the invoices", type: "Feature" }), story(4418, "CSV export", 4417), story(4600, "Stored procedure fields for XYZ", 4417)], editable: [4417, 4418, 4600] } as never),
+      anAheadClient({ clientKey: NW, clientName: "Northwind Traders", items: [anAheadItem({ id: 7000, title: "Freshness Alert", type: "Feature" }), story(7001, "Flag late alerts", 7000), story(7002, "Alert banner", 7000), story(7003, "Ledger totals", 5150)], editable: [7000, 7001, 7002, 7003] } as never),
+    ]);
+  const opts = (o: Parameters<typeof setup>[0] = {}) => setup({ ahead: twoClients(), dirItems: { [FAB]: [4600], [NW]: [7000, 7001, 7002, 7003] }, ...o });
+  const FRESHNESS_ALERT = "on wednesday I wasn't able to work on the user stories under the freshness alert feature. can you move those to friday on my board?";
+
+  it("the original Freshness Alert request: the to-dos under that feature move to Friday with one Confirm and one Undo", async () => {
+    const s = opts();
+    const a = await s.plan.addPick({ date: WED, half: "PM", clientKey: NW, kind: "item", itemId: 7001, title: "Flag late alerts", size: "M" });
+    const b = await s.plan.addPick({ date: WED, half: "AM", clientKey: NW, kind: "item", itemId: 7002, title: "Alert banner", size: "S" });
+    const other = await s.plan.addPick({ date: WED, half: "PM", clientKey: FAB, kind: "item", itemId: 4418, title: "CSV export", size: "S" });
+    s.script(["move_plan"], call(["move_plan", { fromDate: WED, fromHalf: null, toDate: FRI, toHalf: null, which: "named" }]), say("Here's the move to confirm."));
+    const r = await s.a.handle(FRESHNESS_ALERT);
+    expect(r.proposals).toHaveLength(1);
+    const p = r.proposals[0]!;
+    expect(p).toMatchObject({ action: "pick.move", title: "Move 2 to-dos to Fri, Nov 6", whoSees: "Only you" });
+    expect(p.preview.notes).toContain("Friday is your catch-up day");
+    expect(p.preview.rows.map((x) => x.label).sort()).toEqual(["Alert banner", "Flag late alerts"]);
+    // The intent round saw only my words: no titles from my store.
+    const intent = s.calls.find((c) => c.schemaName === "assistant_intent")!;
+    expect(JSON.stringify(intent)).not.toContain("Flag late alerts");
+    expect(s.writes()).toEqual([]);
+    const c = (await s.a.confirm(p.id)) as Extract<ConfirmResult, { ok: true }>;
+    expect(c.ok).toBe(true);
+    expect(c.undo).toMatchObject({ kind: "moves" });
+    expect(s.writes().map((w) => w.input)).toEqual(expect.arrayContaining([{ id: a.id, date: FRI, half: "AM" }, { id: b.id, date: FRI, half: "AM" }]));
+    expect((await s.plan.picksFor(FRI)).map((x) => x.title).sort()).toEqual(["Alert banner", "Flag late alerts"]);
+    expect((await s.plan.getPick(other.id))!.status).toBe("planned");
+    // One Undo puts both back where they were.
+    const u = await s.a.undo(p.id);
+    expect(u).toMatchObject({ ok: true, message: "Put 2 to-dos back.", notBack: [] });
+    expect(await s.plan.picksFor(FRI)).toEqual([]);
+    expect((await s.plan.picksFor(WED)).filter((x) => x.status === "planned").map((x) => x.id).sort()).toEqual([a.id, b.id, other.id].sort());
+    expect(await s.a.undo(p.id)).toMatchObject({ ok: false, message: "That's undone already" });
+  });
+  it("a question with choices: my tap continues it without another AI call; after 10 minutes the same words start fresh", async () => {
+    const s = opts();
+    await s.plan.addPick({ date: TODAY, half: "AM", clientKey: FAB, kind: "intention", title: "Export spec", size: "M" });
+    await s.plan.addPick({ date: TODAY, half: "PM", clientKey: NW, kind: "intention", title: "Ledger review", size: "S" });
+    s.script(["move_plan"], call(["move_plan", { fromDate: TODAY, fromHalf: null, toDate: NEXT_WED, toHalf: null, which: "named" }]), say("Which ones?"));
+    const q = await s.a.handle("Move some of today's to-dos to next Wednesday");
+    expect(q.proposals).toEqual([]);
+    const card = q.cards.find((c) => c.kind === "question") as Extract<(typeof q.cards)[number], { kind: "question" }>;
+    expect(card.text).toBe("Which to-dos on Thu, Nov 5?");
+    expect(card.choices.map((c) => c.label)).toEqual(["Thu, Nov 5 AM · Fabrikam · 1 to-do", "Thu, Nov 5 PM · Northwind Traders · 1 to-do", "All 2"]);
+    // Choices are built from my own data: names, dates and counts, never an item's text from a chat.
+    const before = s.calls.length;
+    const r = await s.a.handle("Thu, Nov 5 AM · Fabrikam · 1 to-do", {}, card.choices[0]!.value);
+    expect(s.calls.length).toBe(before);
+    expect(r.proposals[0]).toMatchObject({ action: "pick.move", title: "Move 1 to-do to Wed, Nov 11" });
+    // Words answer it too ("the afternoon one"), within 10 minutes.
+    const s2 = opts();
+    await s2.plan.addPick({ date: TODAY, half: "AM", clientKey: FAB, kind: "intention", title: "Export spec", size: "M" });
+    await s2.plan.addPick({ date: TODAY, half: "PM", clientKey: NW, kind: "intention", title: "Ledger review", size: "S" });
+    s2.script(["move_plan"], call(["move_plan", { fromDate: TODAY, fromHalf: null, toDate: NEXT_WED, toHalf: null, which: "named" }]), say("Which ones?"));
+    await s2.a.handle("Move some of today's to-dos to next Wednesday");
+    const w = await s2.a.handle("all of them");
+    expect(w.proposals[0]).toMatchObject({ title: "Move 2 to-dos to Wed, Nov 11" });
+    // After 10 minutes the answer is not taken: it is a fresh request (the model runs again).
+    const s3 = opts();
+    await s3.plan.addPick({ date: TODAY, half: "AM", clientKey: FAB, kind: "intention", title: "Export spec", size: "M" });
+    await s3.plan.addPick({ date: TODAY, half: "PM", clientKey: NW, kind: "intention", title: "Ledger review", size: "S" });
+    s3.script(["move_plan"], call(["move_plan", { fromDate: TODAY, fromHalf: null, toDate: NEXT_WED, toHalf: null, which: "named" }]), say("Which ones?"));
+    await s3.a.handle("Move some of today's to-dos to next Wednesday");
+    s3.setNow("2026-11-05T15:11:00Z");
+    s3.script([], say("What would you like to move?"));
+    const n3 = s3.calls.length;
+    const f = await s3.a.handle("all of them");
+    expect(s3.calls.length).toBeGreaterThan(n3);
+    expect(f.proposals).toEqual([]);
+  });
+
+  it("matches in two clients ask which client, and nothing from either goes to the AI before I choose", async () => {
+    const ahead = twoClients();
+    (ahead.clients[0]!.items as unknown[]).push(anAheadItem({ id: 4700, title: "Freshness Alert", type: "Feature" }), story(4701, "Nightly freshness check", 4700));
+    const s = opts({ ahead, dirItems: { [FAB]: [4600, 4700, 4701], [NW]: [7000, 7001, 7002, 7003] } });
+    await s.plan.addPick({ date: WED, half: "PM", clientKey: NW, kind: "item", itemId: 7001, title: "Flag late alerts", size: "M" });
+    await s.plan.addPick({ date: WED, half: "PM", clientKey: FAB, kind: "item", itemId: 4701, title: "Nightly freshness check", size: "S" });
+    s.script(["move_plan"], call(["move_plan", { fromDate: null, fromHalf: null, toDate: FRI, toHalf: null, which: "named" }]), say("Here's the move."));
+    const q = await s.a.handle("Move the freshness alert stories to Friday.");
+    expect(s.calls).toEqual([]);
+    const card = q.cards.find((c) => c.kind === "question") as Extract<(typeof q.cards)[number], { kind: "question" }>;
+    expect(card.choices.map((c) => c.label).sort()).toEqual(["Fabrikam · 1 to-do", "Northwind Traders · 1 to-do"]);
+    const nw = card.choices.find((c) => c.label.startsWith("Northwind Traders"))!;
+    const r = await s.a.handle("Northwind Traders", {}, nw.value);
+    expect(r.proposals[0]).toMatchObject({ title: "Move 1 to-do to Fri, Nov 6", clientKey: NW });
+    expect(r.proposals[0]!.preview.rows.map((x) => x.label)).toEqual(["Flag late alerts"]);
+    // The request ran for Northwind only: the other client's titles never reached the model.
+    expect(JSON.stringify(s.calls)).not.toContain("Nightly freshness check");
+    expect(s.log.every((e) => e.clientKey === NW)).toBe(true);
+  });
+
+  it("\"Push everything from today to tomorrow.\": one proposal across clients, one Confirm, and the AI heard no client's text", async () => {
+    const s = opts();
+    const a = await s.plan.addPick({ date: TODAY, half: "AM", clientKey: FAB, kind: "intention", title: "Export spec", size: "M" });
+    const b = await s.plan.addPick({ date: TODAY, half: "PM", clientKey: NW, kind: "intention", title: "Ledger review", size: "S" });
+    s.script(["move_plan"], call(["move_plan", { fromDate: TODAY, fromHalf: null, toDate: FRI, toHalf: null, which: "all" }]), say("Here's the move."));
+    const r = await s.a.handle("Push everything from today to tomorrow.");
+    const p = r.proposals[0]!;
+    expect(p).toMatchObject({ action: "pick.move", clientKey: null, title: "Move 2 to-dos to Fri, Nov 6" });
+    expect(p.preview.rows.map((x) => x.label)).toEqual(["Fabrikam · Export spec", "Northwind Traders · Ledger review"]);
+    expect(JSON.stringify(s.calls)).not.toContain("Export spec");
+    expect(s.log.every((e) => e.clientKey === null)).toBe(true);
+    const c = await s.a.confirm(p.id);
+    expect(c).toMatchObject({ ok: true, message: "Moved 2 to-dos." });
+    expect(s.writes().filter((w) => w.action === "pick.move").map((w) => (w.input as { id: number }).id)).toEqual([a.id, b.id]);
+  });
+
+  it("\"Move all the items I have on my Wednesday PM block to Friday AM.\": only that block's to-dos", async () => {
+    const s = opts();
+    await s.plan.addPick({ date: NEXT_WED, half: "AM", clientKey: FAB, kind: "intention", title: "Morning one", size: "S" });
+    const pm = await s.plan.addPick({ date: NEXT_WED, half: "PM", clientKey: FAB, kind: "intention", title: "Afternoon one", size: "S" });
+    s.script(["move_plan"], call(["move_plan", { fromDate: NEXT_WED, fromHalf: "PM", toDate: "2026-11-13", toHalf: "AM", which: "all" }]), say("Here's the move."));
+    const r = await s.a.handle("Move all the items I have on my Wednesday PM block to Friday AM.");
+    expect(r.proposals[0]!.preview.rows).toEqual([{ label: "Afternoon one", before: "Wed, Nov 11 afternoon", after: "Fri, Nov 13 morning" }]);
+    await s.a.confirm(r.proposals[0]!.id);
+    expect(s.writes().filter((w) => w.action === "pick.move").map((w) => w.input)).toEqual([{ id: pm.id, date: "2026-11-13", half: "AM" }]);
+  });
+
+  it("\"pick\" and \"to-do\" phrasings of the same move give the same proposal", async () => {
+    const view = async (words: string) => {
+      const s = opts();
+      await s.plan.addPick({ date: TODAY, half: "AM", clientKey: FAB, kind: "intention", title: "Export spec", size: "M" });
+      s.script(["move_plan"], call(["move_plan", { fromDate: TODAY, fromHalf: null, toDate: NEXT_WED, toHalf: null, which: "all" }]), say("Here's the move."));
+      const r = await s.a.handle(words);
+      return r.proposals.map((p) => ({ title: p.title, preview: p.preview }));
+    };
+    expect(await view("Move today's picks to next Wednesday")).toEqual(await view("Move today's to-dos to next Wednesday"));
+  });
+
+  it("a day never blocks a move: Saturday, a PTO day and an over-full block move with the Board's own note; an ended block stays", async () => {
+    const note = async (to: string, half: "AM" | "PM" | null, o: Parameters<typeof setup>[0] = {}, extra = 0) => {
+      const s = opts(o);
+      await s.plan.addPick({ date: TODAY, half: "PM", clientKey: FAB, kind: "intention", title: "Export spec", size: "L" });
+      for (let i = 0; i < extra; i++) await s.plan.addPick({ date: to, half: "PM", clientKey: FAB, kind: "intention", title: `Already ${i}`, size: "L" });
+      s.script(["move_plan"], call(["move_plan", { fromDate: TODAY, fromHalf: null, toDate: to, toHalf: half, which: "all" }]), say("Here's the move."));
+      const r = await s.a.handle("Move today's to-dos");
+      return { r, s };
+    };
+    const sat = await note(SAT, null);
+    expect(sat.r.proposals[0]!.preview.notes).toContain("Saturday isn't a working day: this is flex time");
+    const pto = await note(NEXT_WED, null, { pto: [NEXT_WED] });
+    expect(pto.r.proposals[0]!.preview.notes).toContain("You're on PTO that day");
+    expect((await pto.s.a.confirm(pto.r.proposals[0]!.id)).ok).toBe(true);
+    const over = await note(NEXT_WED, "PM", {}, 1);
+    expect(over.r.proposals[0]!.preview.notes.some((x) => /^Over your Wednesday PM hours by \dh$/.test(x))).toBe(true);
+    // The morning has ended at 2 PM: that to-do stays, with why.
+    const s = opts();
+    s.setNow("2026-11-05T19:00:00Z");
+    await s.plan.addPick({ date: TODAY, half: "PM", clientKey: FAB, kind: "intention", title: "Export spec", size: "S" });
+    s.script(["move_plan"], call(["move_plan", { fromDate: TODAY, fromHalf: "PM", toDate: TODAY, toHalf: "AM", which: "all" }]), say("That time has passed."));
+    const r = await s.a.handle("Move this afternoon's to-dos to this morning");
+    expect(r.proposals).toEqual([]);
+    expect(JSON.stringify(s.calls.at(-1)!.rounds)).toContain("that time has already ended");
+  });
+
+  it("the Board's drop and the assistant give the same note for the same block", async () => {
+    const s = opts({ pto: [NEXT_WED] });
+    await s.plan.addPick({ date: TODAY, half: "PM", clientKey: FAB, kind: "intention", title: "Export spec", size: "S" });
+    s.script(["move_plan"], call(["move_plan", { fromDate: TODAY, fromHalf: null, toDate: NEXT_WED, toHalf: null, which: "all" }]), say("Here's the move."));
+    const r = await s.a.handle("Move today's to-dos to next Wednesday");
+    const week = aWeek({ weekStart: "2026-11-09", pto: [aPto({ date: NEXT_WED })] });
+    const day = week.days.find((d) => d.date === NEXT_WED)!;
+    const board = dropCheck({ slot: day.am, ptoDay: true, catchUp: false, now: s.calls.length ? NOW : NOW, today: TODAY, picks: [], sizes: SIZE_MINUTES, timeboxes: [], dragged: { clientKey: FAB, itemId: -1, size: "S", title: "Export spec", pickId: 1 } });
+    expect(board.ok).toBe(true);
+    expect(r.proposals[0]!.preview.notes).toContain((board as { text: string }).text);
+  });
+
+  it("\"Mark the user story for XYZ as complete and add a comment\": one card, the process's done state, two parts written on one Confirm", async () => {
+    const s = opts();
+    s.script(["item_update"], call(["item_update", { itemId: 4600, done: true, comment: "The fields are mapped.", target: null }]), say("Here's the update to confirm."));
+    const r = await s.a.handle("Mark the user story for XYZ as complete and add a comment saying the fields are mapped");
+    expect(r.proposals).toHaveLength(1);
+    const p = r.proposals[0]!;
+    expect(p.clientKey).toBe(FAB);
+    expect(p.preview.rows).toEqual(expect.arrayContaining([{ label: "State", before: "Active", after: "Done" }, { label: "Comment", before: null, after: "The fields are mapped." }]));
+    // The done state came from the item's process ("Done" here), never a hard-coded "Closed".
+    expect(s.ran.find((x) => x.action === "devops.done_offer")!.input).toEqual({ clientKey: FAB, itemIds: [4600] });
+    expect(s.writes().filter((w) => w.action === "devops.confirm")).toEqual([]);
+    const c = (await s.a.confirm(p.id)) as Extract<ConfirmResult, { ok: true }>;
+    expect(c.ok).toBe(true);
+    expect(s.writes().filter((w) => w.action === "devops.confirm")).toHaveLength(2);
+    expect(c.parts!.map((x) => [x.ok, x.undo?.kind])).toEqual([[true, "devops"], [true, "devops"]]);
+  });
+
+  it("a compound update with one part failing says which, and the other stays done with its undo", async () => {
+    let k = 0;
+    const s = opts({ handlers: { "devops.confirm": () => (++k === 2 ? { ok: false, status: 409, error: "The item changed in DevOps since" } : { ok: true, data: { entry: { id: 70 + k }, confirmed: true, message: "State changed in DevOps" } }) } });
+    s.script(["item_update"], call(["item_update", { itemId: 4600, done: true, comment: "The fields are mapped.", target: null }]), say("Here's the update."));
+    const r = await s.a.handle("Mark the user story for XYZ as complete and add a comment saying the fields are mapped");
+    const c = (await s.a.confirm(r.proposals[0]!.id)) as Extract<ConfirmResult, { ok: true }>;
+    expect(c.ok).toBe(true);
+    expect(c.parts!.map((x) => x.ok)).toEqual([true, false]);
+    expect(c.parts![0]!.undo).toEqual({ kind: "devops", id: 71 });
+    expect(c.parts![1]!.message).toBe("The item changed in DevOps since");
+    expect(c.message).toMatch(/didn't go: The item changed in DevOps since/);
+  });
+
+  it("more than three changes on one item asks me to split it: the tool takes three, and the model is told to ask", async () => {
+    expect(Object.keys((TOOLS.item_update.spec.parameters as { properties: object }).properties)).toEqual(["itemId", "done", "comment", "target"]);
+    const s = opts();
+    s.script([], say("That's more than three changes. Can you split it?"));
+    await s.a.handle("Mark the user story for XYZ as complete, comment, move its target, assign it to Dana and size it");
+    expect(INTENT_INSTRUCTIONS + ANSWER_INSTRUCTIONS).toMatch(/more than three, ask the person to split/);
+  });
+
+  it("GD-1: a comment naming another client is never proposed; Internal may name clients", async () => {
+    const s = opts({ handlers: { "devops.preview": (i) => { const t = JSON.stringify(i); return /northwind/i.test(t) ? { ok: false, status: 409, error: "This mentions Northwind Traders; remove it before saving to Fabrikam's DevOps" } : { ok: false, status: 500, error: "unexpected" }; } } });
+    s.script(["comment"], call(["comment", { itemId: 4600, text: "Same fix as Northwind Traders had." }]), say("I can't add that."));
+    const r = await s.a.handle("Comment on the user story for XYZ: same fix as Northwind Traders had");
+    expect(r.proposals).toEqual([]);
+    expect(s.writes().filter((w) => w.action === "devops.confirm")).toEqual([]);
+    // Internal: its items may name clients (the request runs for Cooptimize, by #id).
+    const ahead = twoClients();
+    (ahead.clients as unknown[]).push(anAheadClient({ clientKey: "Cooptimize", clientName: "Cooptimize", items: [anAheadItem({ id: 8100, title: "Delivery handbook", type: "User Story", level: "child", rung: 2 })], editable: [8100] } as never));
+    const i = opts({ ahead, rules: { allowedClients: [FAB, NW, "Cooptimize"] } });
+    i.script(["comment"], call(["comment", { itemId: 8100, text: "Add the Fabrikam export example." }]), say("Here's the comment."));
+    const ri = await i.a.handle("Comment on #8100: add the Fabrikam export example");
+    expect(ri.proposals[0]).toMatchObject({ clientKey: "Cooptimize" });
+  });
+
+  it("after a question it never falls back to the list of what it can do", async () => {
+    const s = opts();
+    await s.plan.addPick({ date: TODAY, half: "AM", clientKey: FAB, kind: "intention", title: "Export spec", size: "M" });
+    await s.plan.addPick({ date: TODAY, half: "PM", clientKey: NW, kind: "intention", title: "Ledger review", size: "S" });
+    s.script(["move_plan"], call(["move_plan", { fromDate: TODAY, fromHalf: null, toDate: NEXT_WED, toHalf: null, which: "named" }]), say("Which ones?"));
+    await s.a.handle("Move some of today's to-dos to next Wednesday");
+    s.script([]);
+    const r = await s.a.handle("hmm, not sure");
+    expect(r.reply).not.toMatch(/I can help with|Here's what I can do/i);
+    expect(r.reply).toMatch(/still need to know|Which to-dos/);
+  });
+
+  it("every tool has 3 to 5 example phrasings, with no item ids or client names (the guard scans the instructions)", () => {
+    for (const t of TOOL_NAMES) {
+      const ex = TOOLS[t].examples;
+      expect(ex.length, t).toBeGreaterThanOrEqual(3);
+      expect(ex.length, t).toBeLessThanOrEqual(5);
+      for (const e of ex) expect(e, t).not.toMatch(/\d{2,}|Fabrikam|Northwind|Contoso/);
+    }
+  });
+
+  it("the Inbox is a read: what needs me, with counts and no AI text from chats", async () => {
+    const s = opts();
+    s.script(["inbox"], call(["inbox", { view: "needs_you" }]), say("Nothing needs you."));
+    const r = await s.a.handle("What's in my inbox?");
+    expect(r.status).toBe("ok");
+    expect(s.ran.some((x) => x.action === "inbox.list")).toBe(true);
+    expect(s.writes()).toEqual(s.writes().filter((w) => w.action === "inbox.list" || w.action === "ahead.load"));
   });
 });

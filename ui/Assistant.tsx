@@ -2,8 +2,10 @@
 // as cards, proposals with their preview and Confirm / Edit / Cancel, and push-to-talk. It calls only the assistant's
 // actions (assistant.ask, confirm, cancel, history) and the voice route; every write is the same action the button
 // calls, run by the server only after Confirm. Esc and × close it; Ctrl+J (or /) opens it (ui/App.tsx).
+// AS-2: a question shows its choices as chips (a tap answers it; typing works too), a change of several parts shows
+// each part's outcome with its own Undo, and moved to-dos have one Undo for all of them (assistant.undo).
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { AssistantContext, Card, ConfirmResult, HandleResult, Link, Proposal, Turn } from "../assistant/types.ts";
+import type { AssistantContext, Card, Choice, ConfirmResult, HandleResult, Link, PartResult, Proposal, Turn, UndoResult } from "../assistant/types.ts";
 import { VOICE_MAX_BYTES, VOICE_MAX_SECONDS } from "../assistant/types.ts";
 import { call, csrfToken } from "./api.ts";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
@@ -11,7 +13,7 @@ import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 
 type Gate = { assistant: "ok" | "off" | "not_set_up"; voice: { on: boolean; message: string | null } };
 type Entry = { id: string; role: "me" | "assistant"; text: string; cards: Card[]; proposals: Proposal[]; links: Link[] };
-type Outcome = { tone: "ok" | "warn"; text: string; undo?: { clientKey: string; writeId: number } };
+type Outcome = { tone: "ok" | "warn"; text: string; undo?: { clientKey: string; writeId: number }; /** AS-2: one Undo for this proposal's moved to-dos. */ moves?: number; parts?: PartResult[] };
 
 const fromTurn = (t: Turn): Entry => ({ id: `t${t.id}`, role: t.role, text: t.text, cards: t.cards, proposals: t.proposals, links: [] });
 
@@ -36,6 +38,8 @@ export function AssistantPanel(props: {
   onOpen: (href: string) => void;
   /** The server clock's lead over this browser's (a pinned clock in the demo and tests): expiry is server time. */
   skewMs?: number;
+  /** AS-2: a confirm or undo changed something: the views behind the panel reload (a moved to-do shows where it went). */
+  onChanged?: () => void;
 }): ReactNode {
   const { phone, context, onClose, onOpen } = props;
   const skew = props.skewMs ?? 0;
@@ -77,15 +81,15 @@ export function AssistantPanel(props: {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onClose]);
 
-  const send = useCallback(async () => {
-    const said = text.trim();
+  const send = useCallback(async (choice?: Choice) => {
+    const said = choice ? choice.label : text.trim();
     if (!said || busy) return;
     setBusy(true);
     setProblem(null);
     setEntries((xs) => [...(xs ?? []), { id: `me${Date.now()}`, role: "me", text: said, cards: [], proposals: [], links: [] }]);
-    setText("");
+    if (!choice) setText("");
     try {
-      const r = await call<HandleResult>("assistant.ask", { text: said, context });
+      const r = await call<HandleResult>("assistant.ask", { text: said, context, ...(choice ? { answer: choice.value } : {}) });
       setEntries((xs) => [...(xs ?? []), { id: `a${r.turnId}`, role: "assistant", text: r.reply, cards: r.cards, proposals: r.proposals, links: r.links }]);
     } catch (e) {
       setProblem((e as Error).message);
@@ -112,7 +116,7 @@ export function AssistantPanel(props: {
           <div className="as-empty">
             <p>Try:</p>
             <ul>
-              {["What's next?", "What's due today?", "What did I do for Northwind on Tuesday?", "Comment on #4417 that the export is ready"].map((s) => (
+              {["What's next?", "What's due today?", "Move everything from today to tomorrow", "Mark #4417 done and comment that the export is ready"].map((s) => (
                 <li key={s}><button type="button" className="link-btn" onClick={() => (setText(s), inputRef.current?.focus())}>{s}</button></li>
               ))}
             </ul>
@@ -122,8 +126,8 @@ export function AssistantPanel(props: {
         {entries?.map((e) => (
           <div key={e.id} className={`as-turn ${e.role}`}>
             {e.text && <p className="as-text">{e.text}</p>}
-            {e.cards.map((c, i) => <CardView key={i} card={c} onOpen={open} />)}
-            {e.proposals.map((p) => <ProposalView key={p.id} proposal={p} skew={skew} onChange={replaceProposal} />)}
+            {e.cards.map((c, i) => <CardView key={i} card={c} onOpen={open} onAnswer={e === entries.at(-1) && !busy ? (ch) => void send(ch) : null} skew={skew} />)}
+            {e.proposals.map((p) => <ProposalView key={p.id} proposal={p} skew={skew} onChange={replaceProposal} {...(props.onChanged ? { onChanged: props.onChanged } : {})} />)}
             {e.links.length > 0 && (
               <p className="as-links">
                 {e.links.map((l) => <button key={l.href} type="button" className="link-btn" onClick={() => open(l.href)}>{l.label}</button>)}
@@ -329,9 +333,23 @@ function useVoice(context: AssistantContext, onText: (t: string) => void) {
   };
 }
 
-function CardView({ card, onOpen }: { card: Card; onOpen: (href: string) => void }): ReactNode {
+function CardView({ card, onOpen, onAnswer, skew }: { card: Card; onOpen: (href: string) => void; /** The newest question's chips answer it; older ones are history. */ onAnswer: ((c: Choice) => void) | null; skew: number }): ReactNode {
   const go = (l: Link | undefined) => l && <button type="button" className="link-btn as-go" onClick={() => onOpen(l.href)}>{l.label}</button>;
   switch (card.kind) {
+    case "question": {
+      const live = !!onAnswer && Date.parse(card.expiresAt) > Date.now() + skew;
+      return (
+        <div className="as-card question" data-testid="assistant-question">
+          <div className="as-chips" role="group" aria-label={card.text}>
+            {card.choices.map((c) => (
+              <button key={c.value} type="button" className="as-chip" disabled={!live} onClick={() => onAnswer?.(c)}>{c.label}</button>
+            ))}
+          </div>
+          {/* An older question was answered by what follows it; only the newest one, once expired, says to ask again. */}
+          {live ? <p className="as-meta">Or just type it.</p> : onAnswer ? <p className="as-meta">This question timed out. Ask again to choose.</p> : null}
+        </div>
+      );
+    }
     case "note":
       return <div className="as-card note"><p>{card.text}</p>{go(card.link)}</div>;
     case "item":
@@ -365,9 +383,9 @@ function CardView({ card, onOpen }: { card: Card; onOpen: (href: string) => void
 }
 
 const LONG = 120;
-const editLabel: Record<string, string> = { text: "Comment", after: "Description after", date: "Day", half: "Half" };
+const editLabel: Record<string, string> = { text: "Comment", comment: "Comment", after: "Description after", date: "Day", half: "Half" };
 
-function ProposalView({ proposal: p, skew, onChange }: { proposal: Proposal; skew: number; onChange: (p: Proposal) => void }): ReactNode {
+function ProposalView({ proposal: p, skew, onChange, onChanged }: { proposal: Proposal; skew: number; onChange: (p: Proposal) => void; onChanged?: () => void }): ReactNode {
   const writes = useDevOpsWrite();
   const [editing, setEditing] = useState(false);
   const [edits, setEdits] = useState<Record<string, string>>(() => seedEdits(p));
@@ -388,7 +406,8 @@ function ProposalView({ proposal: p, skew, onChange }: { proposal: Proposal; ske
       const r = await call<ConfirmResult>("assistant.confirm", { proposalId: p.id, ...(Object.keys(sent).length ? { edits: sent } : {}) });
       if (r.ok) {
         onChange({ ...p, state: "confirmed" });
-        setOut({ tone: "ok", text: r.message, ...(r.undo?.kind === "devops" && p.clientKey ? { undo: { clientKey: p.clientKey, writeId: r.undo.id } } : {}) });
+        onChanged?.();
+        setOut({ tone: "ok", text: r.message, ...(r.undo?.kind === "devops" && p.clientKey && !r.parts ? { undo: { clientKey: p.clientKey, writeId: r.undo.id } } : {}), ...(r.undo?.kind === "moves" ? { moves: r.undo.id } : {}), ...(r.parts ? { parts: r.parts } : {}) });
         setEditing(false);
       } else if (r.reason === "changed" && r.proposal) {
         onChange(r.proposal);
@@ -398,6 +417,18 @@ function ProposalView({ proposal: p, skew, onChange }: { proposal: Proposal; ske
         if (r.reason === "expired" || r.reason === "gone") onChange({ ...p, state: r.reason === "expired" ? "expired" : "failed" });
         setOut({ tone: "warn", text: r.message });
       }
+    } catch (e) {
+      setOut({ tone: "warn", text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const undoMoves = async (id: number) => {
+    setBusy(true);
+    try {
+      const r = await call<UndoResult>("assistant.undo", { proposalId: id });
+      setOut({ tone: r.ok && !r.notBack.length ? "ok" : "warn", text: r.message });
+      if (r.ok) onChanged?.();
     } catch (e) {
       setOut({ tone: "warn", text: (e as Error).message });
     } finally {
@@ -425,7 +456,8 @@ function ProposalView({ proposal: p, skew, onChange }: { proposal: Proposal; ske
         {v.rows.map((r, i) => {
           const long = (r.before?.length ?? 0) > LONG || (r.after?.length ?? 0) > LONG || /\n/.test(`${r.before ?? ""}${r.after ?? ""}`);
           return (
-            <div key={i} className={long ? "as-row-long" : "as-row-short"}>
+            // AS-2: a long label (a move's "Client · To-do") goes above its before → after, so the dates keep their width.
+            <div key={i} className={long || r.label.length > 24 ? "as-row-long" : "as-row-short"}>
               <dt>{r.label}</dt>
               {long ? (
                 <dd>
@@ -475,7 +507,18 @@ function ProposalView({ proposal: p, skew, onChange }: { proposal: Proposal; ske
         <p className={`as-outcome ${out.tone}`} role="status">
           {out.text}
           {out.undo && writes && <> <button type="button" className="link-btn" onClick={() => void writes.begin(out.undo!.clientKey, [{ kind: "undo", writeId: out.undo!.writeId }])}>Undo</button></>}
+          {out.moves !== undefined && <> <button type="button" className="link-btn" disabled={busy} onClick={() => { const { moves: id, ...rest } = out; setOut(rest); void undoMoves(id!); }}>Undo</button></>}
         </p>
+      )}
+      {out?.parts && (
+        <ul className="as-parts">
+          {out.parts.map((x) => (
+            <li key={x.label} className={x.ok ? "ok" : "warn"}>
+              <span aria-hidden="true">{x.ok ? "✓" : "✗"}</span> <b>{x.label}</b>: {x.message}
+              {x.undo && writes && p.clientKey && <> <button type="button" className="link-btn" onClick={() => void writes.begin(p.clientKey!, [{ kind: "undo", writeId: x.undo!.id }])}>Undo</button></>}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
@@ -485,7 +528,7 @@ function ProposalView({ proposal: p, skew, onChange }: { proposal: Proposal; ske
 function seedEdits(p: Proposal): Record<string, string> {
   const out: Record<string, string> = {};
   for (const k of p.editable) {
-    if (k === "text" || k === "after") {
+    if (k === "text" || k === "after" || k === "comment") {
       const row = p.preview.rows.find((r) => /comment|description/i.test(r.label)) ?? p.preview.rows.at(-1);
       out[k] = row?.after ?? "";
     } else out[k] = "";

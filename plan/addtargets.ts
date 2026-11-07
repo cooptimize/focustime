@@ -1,8 +1,8 @@
 // Where "⋯ → Add to the plan" can put an item (step 15.2). Pure: which blocks, in what order, and why some can't take it.
 // Order: the block selected in Plan the day, this client's blocks on the day being planned, its other blocks, Open
 // half-days (and Friday catch-up), then other clients' blocks last (the menu labels those "Different client" and asks
-// first). Past days and halves with no working time are left out; a day off, a block with no free time, or one that
-// already has the item stays listed but disabled, with the reason.
+// first). Past days and halves with no working time are left out; one that already has the item stays listed but
+// disabled, with the reason. AS-2 (D947): a PTO day and a block with no free time take it, with a note.
 import type { Half, IsoDate } from "../week/types.ts";
 import type { Pick } from "./types.ts";
 import { alreadyPlanned, type PickRef } from "./dup.ts";
@@ -24,7 +24,7 @@ export type TargetBlock = {
 };
 
 export type TargetGroup = "here" | "client" | "open" | "other";
-export type AddTarget = { date: IsoDate; half: Half; group: TargetGroup; otherClient: string | null; selected: boolean; disabled?: string };
+export type AddTarget = { date: IsoDate; half: Half; group: TargetGroup; otherClient: string | null; selected: boolean; disabled?: string; /** AS-2: allowed, with this note (a PTO day, no free time). */ note?: string };
 
 export type TargetInput = {
   blocks: readonly TargetBlock[];
@@ -50,9 +50,14 @@ function groupOf(b: TargetBlock, clientKey: string, planDate: IsoDate): { group:
   return { group: "other", otherClient: owner };
 }
 
-function reason(b: TargetBlock, i: TargetInput): string | undefined {
-  if (b.pto) return "Day off";
+/** AS-2 (D947): the day never refuses; a PTO day or a full block says so. */
+function noteOf(b: TargetBlock): string | undefined {
+  if (b.pto) return "You're on PTO that day";
   if (!b.off && b.freeMinutes <= 0) return "No free time left: meetings fill it";
+  return undefined;
+}
+
+function reason(b: TargetBlock, i: TargetInput): string | undefined {
   if (alreadyPlanned(i.picks, i.ref, b.date, b.half)) return "Already planned here";
   const ref = i.ref;
   const same = i.picks.find(
@@ -71,7 +76,8 @@ export function addTargets(i: TargetInput): AddTarget[] {
     .map((b): AddTarget => {
       const why = reason(b, i);
       const selected = !!i.selected && i.selected.date === b.date && i.selected.half === b.half;
-      return { date: b.date, half: b.half, ...groupOf(b, i.clientKey, i.planDate), selected, ...(why ? { disabled: why } : {}) };
+      const note = why ? undefined : noteOf(b);
+      return { date: b.date, half: b.half, ...groupOf(b, i.clientKey, i.planDate), selected, ...(why ? { disabled: why } : {}), ...(note ? { note } : {}) };
     });
   // The selected block leads, unless it belongs to another client.
   const lead = (t: AddTarget) => (t.selected && t.group !== "other" ? 0 : 1);

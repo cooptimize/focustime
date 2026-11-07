@@ -6,7 +6,7 @@ import { dayRead, itemRead, todayRead, type ReadDeps } from "./reads.ts";
 import type { AssistantService } from "./service.ts";
 import { MAX_TEXT, type AssistantContext } from "./types.ts";
 
-export const ASSISTANT_ACTIONS = ["assistant.ask", "assistant.confirm", "assistant.cancel", "assistant.history", "assistant.clear", "assistant.today", "lookup.day", "items.get"] as const satisfies readonly ActionName[];
+export const ASSISTANT_ACTIONS = ["assistant.ask", "assistant.confirm", "assistant.cancel", "assistant.undo", "assistant.history", "assistant.clear", "assistant.today", "lookup.day", "items.get"] as const satisfies readonly ActionName[];
 export type AssistantAction = (typeof ASSISTANT_ACTIONS)[number];
 
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
@@ -57,14 +57,20 @@ export async function assistantAction(svc: () => Promise<AssistantService | null
   if (!s) return bad("The assistant isn't available here", 503);
   switch (action) {
     case "assistant.ask": {
-      const o = only(input, ["text", "context"]);
-      if (!o || typeof o.text !== "string" || o.text.length > MAX_TEXT) return bad(`assistant.ask takes { text (up to ${MAX_TEXT} characters), context? }`);
-      return { ok: true, data: await s.handle(o.text, contextOf(o.context)) };
+      const o = only(input, ["text", "context", "answer"]);
+      if (!o || typeof o.text !== "string" || o.text.length > MAX_TEXT || (o.answer !== undefined && (typeof o.answer !== "string" || o.answer.length > 40))) return bad(`assistant.ask takes { text (up to ${MAX_TEXT} characters), context?, answer? }`);
+      // AS-2: answer is a tapped choice's value; text is its label.
+      return { ok: true, data: await s.handle(o.text, contextOf(o.context), typeof o.answer === "string" ? o.answer : undefined) };
     }
     case "assistant.confirm": {
       const o = only(input, ["proposalId", "edits"]);
       if (!o || !posInt(o.proposalId) || (o.edits !== undefined && (!isObj(o.edits) || Object.values(o.edits).some((v) => typeof v !== "string" || v.length > 8000)))) return bad("assistant.confirm takes { proposalId, edits? }");
       return { ok: true, data: await s.confirm(o.proposalId, (o.edits as Record<string, string> | undefined) ?? {}) };
+    }
+    case "assistant.undo": {
+      const o = only(input, ["proposalId"]);
+      if (!o || !posInt(o.proposalId)) return bad("assistant.undo takes { proposalId }");
+      return { ok: true, data: await s.undo(o.proposalId) };
     }
     case "assistant.cancel": {
       const o = only(input, ["proposalId"]);

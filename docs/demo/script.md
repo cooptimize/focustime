@@ -125,6 +125,12 @@ Each step: **Click** what to do · **Say** one line · **Expect** what appears �
   done.
 - **If not**: type the comment sentence instead of saying it. With AI off, the assistant answers these script
   sentences only, so use the exact words.
+- **Then (AS-2)**: type **Move the order history export stories to Friday**, Enter, **Confirm**, then **Undo**.
+  Then **Mark #1112 done and comment that it's in review**, Enter, **Confirm**.
+- **Say**: "It finds the stories under a feature itself, asks when it isn't sure, and one Undo puts them back. One
+  card can set the done state and add a comment."
+- **Expect**: "Move 2 to-dos to Fri, Nov 6" with "Friday is your catch-up day", then Moved and Put 2 to-dos back; a
+  card with State and Comment, then a line for each part.
 
 ### 10. Send to someone's week (1 min)
 
@@ -151,5 +157,5 @@ Afterwards: Settings › Demo › **Reset demo** for the next run.
 - **Connecting, signing in, secrets and export** stay refused in the demo, with "Demo data: nothing leaves FocusTime".
 - **Real AI varies**: with AI on, Break down and the drafts differ from the stored samples. AI off or slow: the
   samples. The assistant with AI off understands only the script's sentences and a few others (what's next, an
-  item by #id, gaps, sends, confirm today).
+  item by #id, gaps, sends, confirm today, push everything from today to tomorrow).
 - **A restart** (deploy, dev scale-to-zero) loses the demo's changes and starts a fresh one at the next Try the demo.

@@ -184,6 +184,27 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await shot(page, "assistant-comment", as);
     await comment.getByRole("button", { name: "Confirm" }).click();
     await comment.locator(".as-outcome").waitFor({ timeout: 30_000 });
+    // AS-2: a move by feature (the server finds both to-dos under Order history export), one Confirm, one Undo.
+    await ask.fill("Move the order history export stories to Friday");
+    await ask.press("Enter");
+    const byFeature = as.getByTestId("assistant-proposal").last();
+    await expect.poll(() => byFeature.textContent(), { timeout: 30_000 }).toContain("Move 2 to-dos to Fri, Nov 6");
+    await expect(byFeature.textContent()).resolves.toContain("Friday is your catch-up day");
+    await expect(byFeature.textContent()).resolves.toContain("Export orders to CSV");
+    await shot(page, "assistant-move-feature", as);
+    await byFeature.getByRole("button", { name: "Confirm" }).click();
+    await byFeature.locator(".as-outcome").waitFor({ timeout: 30_000 });
+    await byFeature.getByRole("button", { name: "Undo" }).click();
+    await expect.poll(() => byFeature.textContent(), { timeout: 30_000 }).toContain("Put 2 to-dos back");
+    // AS-2: a compound update: the done state and a comment in one card, both written on one Confirm.
+    await ask.fill("Mark #1112 done and comment that it's in review");
+    await ask.press("Enter");
+    const both = as.getByTestId("assistant-proposal").last();
+    await expect.poll(() => both.textContent(), { timeout: 30_000 }).toContain("It's in review");
+    await expect(both.textContent()).resolves.toMatch(/State/);
+    await shot(page, "assistant-compound", as);
+    await both.getByRole("button", { name: "Confirm" }).click();
+    await both.locator(".as-parts").waitFor({ timeout: 30_000 });
     await page.keyboard.press("Escape");
 
     // 10. Send to someone's week: Supplier onboarding to Sam as a Must, from Week › Plan.

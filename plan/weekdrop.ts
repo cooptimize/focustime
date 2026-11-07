@@ -1,6 +1,10 @@
 // PV-1 (D571): dropping a story onto a Week block (drag and drop, or Add to… / Move to…). Which blocks take it and
-// what the target shows while dragging: "2h of 3h free", or amber "1h over" (the block's whole free time after its
-// planned picks, as Plan the day's fit, D266). PTO, past half-days and another client's block refuse it. Pure.
+// what the target shows while dragging: "2h of 3h free", or amber "Over your Wednesday PM hours by 1h" (the block's
+// whole free time after its planned picks, as Plan the day's fit, D266). AS-2 (supersedes PV-1's PTO refusal): the day
+// never refuses it; a PTO day, a weekend, Friday's catch-up or a day without hours takes it with a note (placeNote,
+// shared with pick.move and the assistant). Only a half-day that has ended, another client's block or a block that
+// already has it refuse. Pure.
+import { overNote, placeNote } from "./days.ts";
 import { freeMinutes } from "../week/free.ts";
 import { hoursText, storyMinutes, type StorySize } from "./estimate.ts";
 import { planMinutes } from "./fit.ts";
@@ -31,7 +35,6 @@ export function dropCheck(i: {
   dragged: Dragged;
 }): DropCheck {
   const { slot, dragged } = i;
-  if (i.ptoDay || slot.pto) return { ok: false, why: "PTO" };
   if (slot.date < i.today || Temporal.Instant.compare(Temporal.Instant.from(slot.end), Temporal.Instant.from(i.now)) <= 0) return { ok: false, why: "Already over" };
   // Another client's block refuses it: a story stays in its own client's blocks (or an Open half-day, or catch-up).
   const owner = slot.focus ?? [];
@@ -39,11 +42,11 @@ export function dropCheck(i: {
   const live = i.picks.filter((p) => p.date === slot.date && p.half === slot.half && (p.status === "planned" || p.status === "done"));
   const here = live.find((p) => p.clientKey === dragged.clientKey && p.itemId === dragged.itemId);
   if (here) return { ok: false, why: here.id === dragged.pickId ? "Planned here" : "Already planned here" };
-  if (i.catchUp) return { ok: true, text: "Catch-up, no set hours", over: false };
-  if (slot.off) return { ok: false, why: "No working hours" };
+  const note = placeNote(slot.date, { pto: i.ptoDay || slot.pto, hasHours: !i.catchUp && !slot.off });
+  if (note) return { ok: true, text: note, over: false };
   const free = freeMinutes(slot);
   const left = Math.max(0, free - planMinutes(live, i.sizes, i.timeboxes, slot));
   const need = storyMinutes(dragged.size);
   if (need <= left) return { ok: true, text: `${hoursText(need)} of ${hoursText(left)} free`, over: false };
-  return { ok: true, text: `${hoursText(need - left)} over`, over: true };
+  return { ok: true, text: overNote(slot.date, slot.half, hoursText(need - left)), over: true };
 }

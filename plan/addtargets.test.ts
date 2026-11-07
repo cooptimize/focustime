@@ -20,17 +20,17 @@ const week: TargetBlock[] = [
   blk("2026-11-06", "PM", null, { overflow: true, off: true }),
 ];
 const base = { blocks: week, clientKey: "nw", planDate: "2026-11-02", selected: null, today: "2026-11-02", picks: [] as Pick[], ref: { clientKey: "nw", itemId: 7 } };
-const keys = (t: ReturnType<typeof addTargets>) => t.map((x) => `${x.date.slice(8)}${x.half}:${x.group}${x.disabled ? `!${x.disabled}` : ""}`);
+const keys = (t: ReturnType<typeof addTargets>) => t.map((x) => `${x.date.slice(8)}${x.half}:${x.group}${x.disabled ? `!${x.disabled}` : ""}${x.note ? ` (${x.note})` : ""}`);
 
 describe("addTargets (where ⋯ → Add to the plan can put an item)", () => {
   it("orders: this client's blocks on the planned day, its other blocks, Open half-days, then other clients' blocks", () => {
     expect(keys(addTargets(base))).toEqual([
       "02PM:here",
       "04AM:client",
-      "04PM:client!No free time left: meetings fill it",
+      "04PM:client (No free time left: meetings fill it)",
       "03AM:open",
-      "05AM:open!Day off",
-      "05PM:open!Day off",
+      "05AM:open (You're on PTO that day)",
+      "05PM:open (You're on PTO that day)",
       "06AM:open",
       "06PM:open",
       "02AM:other",
@@ -57,7 +57,7 @@ describe("addTargets (where ⋯ → Add to the plan can put an item)", () => {
 
   it("uses the planned day, not today, for the first group", () => {
     const t = addTargets({ ...base, planDate: "2026-11-04" });
-    expect(keys(t).slice(0, 3)).toEqual(["04AM:here", "04PM:here!No free time left: meetings fill it", "02PM:client"]);
+    expect(keys(t).slice(0, 3)).toEqual(["04AM:here", "04PM:here (No free time left: meetings fill it)", "02PM:client"]);
   });
 
   it("leaves out past days and weekday halves with no working time", () => {
