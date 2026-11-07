@@ -276,6 +276,11 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         return toMerge((await db.get("SELECT * FROM conversation_merges WHERE id = ?", [r.lastId!]))!);
       });
     },
+    /** IB-1 slice 4: what a merge would move out of this conversation (the same rows merge moves), as counts. */
+    async contents(id: number): Promise<{ messages: number; commitments: number; suggestions: number }> {
+      const count = async (table: string) => Number((await db.get(`SELECT COUNT(*) AS n FROM ${table} WHERE conversation_id = ?`, [id]))?.n ?? 0);
+      return { messages: await count("conversation_messages"), commitments: await count("commitments"), suggestions: await count("conversation_suggestions") };
+    },
     async mergeRecord(id: number): Promise<ConversationMerge | null> {
       const r = await db.get("SELECT * FROM conversation_merges WHERE id = ?", [id]);
       return r ? toMerge(r) : null;
@@ -584,6 +589,11 @@ function viewerOf(store: BaseStore, teams: TeamsStore, userId: string, meetingMe
       await gate(fromId);
       await gate(intoId);
       return store.merge(fromId, intoId, userId, summary);
+    },
+    /** IB-1 slice 4: the counts the merge preview shows, only for a conversation I see. */
+    async contents(id: number): Promise<{ messages: number; commitments: number; suggestions: number }> {
+      await gate(id);
+      return store.contents(id);
     },
     async unmerge(id: number): Promise<ConversationMerge> {
       const m = await store.mergeRecord(id);

@@ -1096,6 +1096,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       return { run: () => env.setView("conversations") };
     case "inbox.list":
     case "inbox.count":
+    case "inbox.today":
     case "inbox.seen":
     case "conversations.list":
     case "conversations.count":
@@ -1115,6 +1116,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "conversations.draft":
     case "suggestions.skip":
     case "conversations.merge":
+    case "conversations.merge_preview":
     case "conversations.unmerge":
     case "conversations.search_items":
     case "conversations.unlink":

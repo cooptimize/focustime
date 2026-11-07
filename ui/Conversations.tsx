@@ -19,27 +19,6 @@ type Suggest = ConversationCard["suggestions"][number];
 export const PRIMARY_WORD = { create: "Create DevOps item", link: "Link", resolve: "Resolve", take_over: "Take it over", reopen: "Open again", mark_done: "Mark done" } as const;
 
 /** CV-2: Merge into…: the same chat's other conversations; the one picked keeps its place, this one moves into it. */
-export function MergeInto({ c, others, tz, onPick, onCancel }: { c: ConversationCard; others: ConversationCard[]; tz: string; onPick: (into: ConversationCard) => void; onCancel: () => void }) {
-  return (
-    <div className="ask-form conv-merge" role="group" aria-label={`Merge ${c.title} into another conversation`} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())}>
-      <p className="conv-suggest-head">Merge into…</p>
-      <p className="muted">Its messages, commitments and suggestions move into the one you pick, for everyone on the chat. The summary is written again. You can undo it.</p>
-      <ul className="conv-merge-list">
-        {others.map((o, i) => (
-          <li key={o.id}>
-            <button type="button" className="mini quiet" autoFocus={i === 0} onClick={() => onPick(o)}>
-              <strong>{o.title}</strong> <span className="muted">· {o.statusLine} · {whenText(o.lastAt, tz)}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      <button type="button" className="mini quiet" onClick={onCancel}>
-        Cancel
-      </button>
-    </div>
-  );
-}
-
 export function SuggestionBox({ s, onPost, onSkip }: { s: Suggest; onPost: (includeInternal: boolean) => void; onSkip: () => void }) {
   const [include, setInclude] = useState(false);
   const lines = [...(s.body ? s.body.split("\n") : []), ...(include ? s.internal : [])];

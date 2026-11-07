@@ -6,6 +6,7 @@
 // Item keys are stable across both promise stores (no rows moved): `c<id>` a promise found in a chat (commitments),
 // `f<id>` a promise I added or a rule opened (follow_ups, called follow-ups before IB-1), `v<id>` a conversation,
 // `s<id>` a send to me, `k<id>` a capture, `d<id>` a draft story or feature to add in DevOps.
+import type { UrgentAsk } from "../actions/types.ts";
 import type { IsoDate } from "../week/types.ts";
 import { hoursOn, type TimeModel } from "../week/hours.ts";
 
@@ -76,6 +77,11 @@ export type InboxFacts = {
   /** Slice 3, for the Needs you reason: a conversation's own why (CV-1's facts), and whether a promise came from a chat. */
   needsWhy?: "mention" | "work" | "committed" | "owner" | "unclaimed" | "suggestion" | "wrapped" | "new" | null;
   fromChat?: boolean;
+  /**
+   * Slice 4: a conversation holding a request the AI sorted as needing someone now (AP-2's urgency "now"), with that
+   * request for Today's Start focus. Before slice 4 Today read these on their own (week.load's `requests.urgent`).
+   */
+  urgent?: UrgentAsk | null;
 };
 
 /** Late: a promise past its due (the instant when one was stated, else the day before today). */
@@ -188,6 +194,8 @@ export type InboxItemView = {
   must?: boolean;
   weekStart?: IsoDate;
   snoozedUntil: string | null;
+  /** Slice 4: a conversation's urgent request (Today's "Needs you now" and its Start focus). */
+  urgent?: UrgentAsk;
 };
 export type InboxListData = {
   today: IsoDate;
@@ -249,6 +257,52 @@ export function reasonOf(f: InboxFacts, m: Mark | undefined, today: IsoDate, now
       return null;
   }
 }
+
+// ---- Slice 4: Today's urgent strip and Week's rail, from the same rows ----
+
+/** How far ahead a promise with a time joins Today's strip; also how close to the day's end an untimed one does. */
+export const TODAY_SOON_MS = 2 * 3600_000;
+
+const msOf = (iso: string) => Date.parse(iso.replace(/\[.*\]$/, ""));
+
+/** A promise in Today's strip now: late; due at a time within 2 hours; or due today with no time once the day's end (`dayEnd`) is 2 hours away or less. */
+export function promiseSoon(r: Pick<InboxItemView, "late" | "due" | "dueAt">, o: { today: IsoDate; now: string; dayEnd: string | null }): boolean {
+  if (r.late) return true;
+  if (r.dueAt) return msOf(r.dueAt) - msOf(o.now) <= TODAY_SOON_MS;
+  return !!r.due && r.due <= o.today && !!o.dayEnd && msOf(o.dayEnd) - msOf(o.now) <= TODAY_SOON_MS;
+}
+
+/**
+ * Today's urgent strip: Inbox rows that are in Needs you and urgent now, in this order: conversations with a request
+ * the AI sorted as needed now ("Needs you now"), my promises that are late or due soon (late first, then by time), and
+ * sends to me waiting for my answer (Musts first). Every line is a Needs you item, so the strip never shows something
+ * the badge doesn't count, and each opens its own item in the Inbox.
+ */
+export function todayLines(rows: readonly InboxItemView[], o: { today: IsoDate; now: string; dayEnd: string | null }): InboxItemView[] {
+  const needs = rows.filter((r) => r.views.includes("needs_you"));
+  const convs = needs.filter((r) => r.kind === "conversation" && !!r.urgent);
+  const promises = needs
+    .filter((r) => r.kind === "promise" && promiseSoon(r, o))
+    .sort((a, b) => Number(b.late) - Number(a.late) || (a.dueAt ?? "9").localeCompare(b.dueAt ?? "9") || (a.due ?? "9").localeCompare(b.due ?? "9"));
+  const sends = needs.filter((r) => r.kind === "send" && r.sendState === "waiting").sort((a, b) => Number(!!b.must) - Number(!!a.must) || b.at.localeCompare(a.at));
+  return [...convs, ...promises, ...sends];
+}
+
+/** One promise on Week's rail (plan/rail-promises.ts places it): the Inbox row's key, what, to whom and when. */
+export type RailItem = { key: string; what: string; toName: string | null; dueAt: string | null; dueDate: string; overdue: boolean };
+
+/** Week's rail: my open promises that have a time or are late, awake (not snoozed or hidden), as the Inbox has them. */
+export function railItems(rows: readonly InboxItemView[]): RailItem[] {
+  return rows
+    .filter((r) => r.kind === "promise" && !r.done && r.views.length > 0 && (!!r.dueAt || r.late))
+    .map((r) => ({ key: r.key, what: r.title, toName: r.who, dueAt: r.dueAt, dueDate: r.due ?? "", overdue: r.late }));
+}
+
+/** What `inbox.today` returns: the badge's number and the rows Today's strip and Week's rail read. */
+export type InboxTodayData = { today: IsoDate; needsYou: number; items: InboxItemView[] };
+
+/** The rows `inbox.today` sends: those in Needs you, and the promises the rail can show. */
+export const forToday = (r: InboxItemView) => r.views.includes("needs_you") || (r.kind === "promise" && !r.done && r.views.length > 0 && (!!r.dueAt || r.late));
 
 // ---- Slice 3: snooze ----
 
