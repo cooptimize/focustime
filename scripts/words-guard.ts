@@ -34,6 +34,8 @@ const ALLOWED = [
   /code name:? pick\b/,
   /\bpick (and|or) to-do\b/,
   /Where did picks go\?/,
+  // the Guide's Renamed table (UI-5)
+  /^Pick \(a planned piece of work\)$/,
 ];
 /** SQL in the store names the picks table. */
 const SQL = /\b(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|FROM|JOIN|REFERENCES|WHERE|INDEX)\b/;

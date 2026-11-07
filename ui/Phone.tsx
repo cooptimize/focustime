@@ -81,7 +81,7 @@ export function BottomBar({ current, inboxCount, onTab, onCapture, onAsk, askOpe
         </button>
       </span>
       {tab("inbox", "Inbox", inboxCount > 0 && <span className="bb-count" aria-label={`${inboxCount} need you`}>{inboxCount}</span>)}
-      <button type="button" className="bb-tab" aria-label="Ask the assistant" aria-expanded={askOpen} aria-current={askOpen ? "page" : undefined} onClick={onAsk}>
+      <button type="button" className="bb-tab" data-tour="ask" aria-label="Ask the assistant" aria-expanded={askOpen} aria-current={askOpen ? "page" : undefined} onClick={onAsk}>
         {icon("ask")}
         <span className="bb-label" aria-hidden="true">Ask</span>
       </button>
@@ -152,7 +152,7 @@ export function PhoneNow({ data, block, pick, nowMs, nameOf, onStart, onTimer, o
   const running = t && (!pick || t.pickId === pick.id);
   const title = client ? nameOf(client) : block?.open ? "Open" : "Focus";
   return (
-    <section className="phone-now" aria-label="Now" style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties}>
+    <section className="phone-now" data-tour="today-next" aria-label="Now" style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties}>
       <header>
         <span className="pn-tag">{running ? "Focusing" : "Now"}</span>
         <h2>{title}</h2>

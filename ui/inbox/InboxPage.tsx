@@ -341,7 +341,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
       <div className="ib-phone-top">
         <h1>Inbox</h1>
       </div>
-      <div className="ib-phone-pick">
+      <div className="ib-phone-pick" data-tour="ib-rail">
         <button type="button" className="ib-pick-btn" aria-haspopup="dialog" onClick={() => setPicker(true)}>
           <span className="muted">View</span>
           <strong>
@@ -396,7 +396,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
 
   return (
     <main className="ib" aria-label="Inbox">
-      <nav className="ib-rail" aria-label="Inbox views and clients">
+      <nav className="ib-rail" data-tour="ib-rail" aria-label="Inbox views and clients">
         <h3 className="ib-section">Clients</h3>
         <ul className="ib-clients">
           <li>
@@ -429,7 +429,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
             </li>
           ))}
         </ul>
-        <div className="ib-keys-box">
+        <div className="ib-keys-box" data-tour="ib-keys">
           <strong>Keys</strong>
           <p>
             <kbd>J</kbd> <kbd>K</kbd> move · <kbd>Enter</kbd> open
@@ -442,7 +442,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
           </p>
         </div>
       </nav>
-      <section className="ib-list" aria-label={viewLabel(view)}>
+      <section className="ib-list" data-tour="ib-list" aria-label={viewLabel(view)}>
         {header}
         <div className="ib-list-tools">
           <input type="search" className="ib-filter" placeholder="Filter" aria-label="Filter the list" value={filter} onChange={(e) => setFilter(e.target.value)} />
@@ -485,7 +485,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
           <RefreshChats run={run} />
         </p>
       </section>
-      <section className="ib-pane" aria-label="Item">
+      <section className="ib-pane" data-tour="ib-pane" aria-label="Item">
         {entry ? (
           <Detail entry={entry} acts={acts} form={form} setForm={setForm} data={data} tz={tz} today={today} clientName={clientName} run={run} submit={submit} reload={() => void reloadAll()} mergeOthers={mergeOthers} merge={merge} snoozeChoices={src.list?.snoozeChoices} />
         ) : openChatter ? (

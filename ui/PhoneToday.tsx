@@ -53,7 +53,7 @@ export function PhoneNowCard({ card, data, pick, nowMs, nameOf, committed, onSta
     : { tag: "Today", title: "Day done", line: "Nothing else is scheduled today." };
   const meeting = card.kind === "after" ? null : card.meeting;
   return (
-    <section className={`ph-now ph-now-${card.kind}`} aria-label="Now" style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties}>
+    <section className={`ph-now ph-now-${card.kind}`} data-tour="today-next" aria-label="Now" style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties}>
       <p className="ph-now-tag">{head.tag}</p>
       <h2 className="ph-now-title">{head.title}</h2>
       <p className="ph-now-line">{head.line}</p>

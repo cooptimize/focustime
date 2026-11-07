@@ -56,6 +56,9 @@ describe.skipIf(!CHROMIUM || !SHOTS)("MB-1 screenshots", () => {
       await planMonday(page);
       await at(page, "#/week");
       await shot(page, `phone${w}-week-board`);
+      // UI-9's late chip on the chips line of the phone card (Mon AM has the Cooptimize promise I added, late).
+      const late = page.locator('main.grid .half[aria-label^="Mon Nov 2 AM,"]');
+      if (await late.locator(".late-chip").count()) await late.screenshot({ path: `${SHOTS}/${TAG}-phone${w}-week-late-chip.png` });
       const cardFold = page.locator(".card-agenda-fold").first();
       if (await cardFold.count()) {
         await cardFold.click();
@@ -103,7 +106,14 @@ describe.skipIf(!CHROMIUM || !SHOTS)("MB-1 screenshots", () => {
         await dot.click();
         await page.waitForTimeout(300);
         await shot(page, `phone${w}-status-sheet`);
+        await page.keyboard.press("Escape");
       }
+      // The Guide's new phone text: Settings, phone and keys, at "On your phone".
+      await at(page, "#/guide/settings");
+      const ph = page.getByText("On your phone", { exact: true }).first();
+      if (await ph.count()) await ph.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: `${SHOTS}/${TAG}-phone${w}-guide-phone.png` });
       await page.close();
     }
     const { page } = await freshPage(h);

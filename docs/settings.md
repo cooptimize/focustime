@@ -72,29 +72,3 @@ The Guide can sit on the same shell once ST-1 is merged:
 
 The shell owns Esc (after the controls inside it: a picker or menu that handles Esc and stops it keeps it), the ×,
 focus on the title, focus return and the phone layout. Styles are `.panel-shell` and `.ps-*` in `ui/styles.css`.
-
-## The Guide's Settings text (for UI-5)
-
-The Guide (`ui/guide/content.ts`, on `feat/guide-rebuild` as of 6995046) names Settings places that moved. ST-1 doesn't
-change the Guide; these are the words to use when UI-5 rebuilds it, with the deep link for a Do it now:
-
-| Line | Says now | Say instead | Link |
-|---|---|---|---|
-| 76 | clear it in Settings › Data | clear it in Settings › AI and assistant | `#/settings/ai/assistant-history` |
-| 236, 303, 380, 384, 388, 406, 416 | Settings › Data (or > Data > Audit log) for Undo | Settings › Activity | `#/settings/activity` |
-| 277 | Settings › Notifications … Notify this device | unchanged | `#/settings/notifications/devices` |
-| 278 | Show details in notifications in Settings › Notifications | unchanged | `#/settings/notifications/push-details` |
-| 294, 404 | (chats) in Settings › Clients | in Settings › Client chats | `#/settings/chats` |
-| 342 | Settings › Planning › When I check off a to-do | Settings › Today and Week › When I check off a to-do | `#/settings/planning/devops-on-done` |
-| 358 | Settings › Notifications › In Teams | unchanged | `#/settings/notifications/teams-messages` |
-| 375 | Settings › Ahead | unchanged | `#/settings/ahead/stale-weeks` |
-| 392 | Settings › Notifications can remind you … no update yet | unchanged | `#/settings/notifications/status-report-times` |
-| 400 | Settings > Setup runs it again | Settings › Profile › Setup runs it again | `#/settings/you/setup` |
-| 405, 406 | DevOps writes in Settings › Clients, Check and save | Settings › DevOps › Write access | `#/settings/devops/devops-write` |
-| 406 | Settings › Connections › Send feedback | Settings › Accounts and calendars › Send feedback | `#/settings/connections/feedback` |
-| 406 | Settings › Data lists it in the DevOps write log | Settings › Activity › DevOps write log | `#/settings/activity/devops-log` |
-| 407 | Settings › AI shows them / this month's cost | Settings › AI and assistant | `#/settings/ai` |
-| 413 | "The menu on the left scrolls on its own, and Settings and Admin each fold … the Settings picker at the top lists every section." | "Type in Search settings at the top of the list: it finds a setting by its name or its old name and takes you there. The list scrolls on its own. On a phone, Settings opens on the list; each section is a page with Back." | `#/settings` |
-
-Also new for the Guide's Settings chapter: × at the top right or Esc closes Settings and goes back where you were;
-App secrets are no longer in Settings (they are set up by the scripts, never in the app).

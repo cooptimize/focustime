@@ -28,6 +28,8 @@ import type { CalEvent } from "../week/types.ts";
 import { PRESETS, suggestMinutes } from "../plan/timer.ts";
 import { userZone } from "../week/zone.ts";
 import { openSend, sendLevel } from "./send-event.ts";
+import { TOURS } from "./guide/tours.ts";
+import { SECTIONS as GUIDE_SECTIONS } from "./guide/sections.ts";
 
 export type MenuItem = {
   id: string;
@@ -127,8 +129,10 @@ export type MenuEnv = {
   /** The work item that had focus when the menu opened (O opens it), if any. */
   focusedItem: { clientKey: string; url: string } | null;
   showKeys: () => void;
-  /** G1: the in-app Guide (#/guide). */
-  showGuide: () => void;
+  /** G1: the in-app Guide (#/guide), at a section (UI-5: #/guide/<section>). */
+  showGuide: (section?: string) => void;
+  /** UI-5: start a Show me tour over its screen (#/guide/tour/<id>). */
+  startTour?: (id: string) => void;
   /** The active theme and how to change it (saved in config, applied live). */
   theme: Theme;
   /** Settings > Planning (step 6c): size minutes and focus timer defaults. */
@@ -1057,6 +1061,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ui.set_show_timelines": return { run: () => env.saveShowTimelines(!env.showTimelines) };
     case "ui.first_launch": return { disabled: "Runs on its own the first time FocusTime opens" };
     case "ui.tour_offer": return { run: () => env.showGuide() };
+    case "guide.checklist": return { run: () => env.showGuide("first-day") };
     case "setup.load":
     case "setup.prefill":
     case "setup.mark":
@@ -1157,6 +1162,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "admin.identity":
     case "admin.refresh_people":
     case "admin.remove_person": return env.admin ? { run: () => env.openSettings("admin-people") } : { disabled: "Only for FocusTime admins" };
+    // IN-1: Who's set up and the invite sheet live in Admin › People.
+    case "admin.invited": return env.admin ? { run: () => env.openSettings("admin-people", "whos-set-up") } : { disabled: "Only for FocusTime admins" };
     case "admin.audit": return env.admin ? { run: () => env.openSettings("admin-audit") } : { disabled: "Only for FocusTime admins" };
     case "admin.status_action": return env.admin ? { run: () => env.openSettings("admin-status") } : { disabled: "Only for FocusTime admins" };
     // BD-1: Break down opens its panel on any item whose type needs breaking down (the process model); the rest
@@ -1469,7 +1476,10 @@ function uiCommands(env: MenuEnv): MenuItem[] {
       hint: "O",
       ...(env.focusedItem ? { run: () => env.openLink(env.focusedItem!.clientKey, env.focusedItem!.url) } : { disabled: "Focus a work item first (Tab to it)" }),
     },
-    { id: "ui.guide", action: "ui.guide", group: "Help", label: "Guide: the basics, the rhythm, sizing and shortcuts", hint: "?", run: () => env.showGuide() },
+    { id: "ui.guide", action: "ui.guide", group: "Help", label: "Guide: start here, your first day and every area", hint: "?", run: () => env.showGuide() },
+    // UI-5: each tour by name ("Show me: Plan your week"), and each Guide section ("Guide: Ahead").
+    ...TOURS.map((t) => ({ id: `ui.tour.${t.id}`, action: "ui.guide", group: "Help", label: `Show me: ${t.title}`, aka: ["tour"], ...(env.startTour ? { run: () => env.startTour!(t.id) } : { disabled: "Sign in to see it on your own screens" }) })),
+    ...GUIDE_SECTIONS.filter((s) => s.id !== "start").map((s) => ({ id: `ui.guide.${s.id}`, action: "ui.guide", group: "Help", label: `Guide: ${s.name}`, run: () => env.showGuide(s.id) })),
     { id: "ui.keys", action: "ui.keys", group: "Keyboard", label: "Keyboard shortcuts (every key in one list)", run: env.showKeys },
   ];
 }

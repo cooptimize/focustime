@@ -608,20 +608,19 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
           )}
         </span>
         <CardWhen slot={slot} tz={tz} />
-        {/* UI-9: on the phone the chip sits in the header, so the card is never taller for it. */}
-        {phone && lateChip}
         <span className="card-more">{menu.button(`Actions for ${dayLabel} ${slot.half}`)}</span>
       </div>
       {rail === "strip" && <DayStrip slot={slot} tz={tz} label={`${dayLabel} ${eve ? "evening" : slot.half}`} now={railNow} />}
       {drop.tip}
-      {(status.kind !== "none" || (lateChip && !phone)) && (
+      {(status.kind !== "none" || lateChip) && (
         <div className="card-status">
           {status.kind !== "none" && (
             <span className={`status-pill ${status.kind}`} id={reasonsId} title={status.detail ?? undefined}>
               {pill}
             </span>
           )}
-          {!phone && lateChip}
+          {/* MB-1: on the phone too the chip sits on the card's chips line, beside the status pill. */}
+          {lateChip}
         </div>
       )}
       {slot.focus.slice(1).map((b) => (
@@ -696,6 +695,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
     <div
       ref={refFn}
       {...drop.props}
+      data-tour={state === "focus" ? "wk-block" : undefined}
       className={`half ${state}${ptoHalf ? " pto-half" : ""} ${span ? "span-all" : ""} ${sev ?? ""} ${selected ? "selected" : ""} ${compact ? "card" : ""}${ruler ? " has-ruler" : ""}${rail === "slim" ? " slim" : ""}${drop.cls}`}
       style={style}
       tabIndex={selected ? 0 : -1}

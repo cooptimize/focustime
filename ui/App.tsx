@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Meetings } from "./meetings/Meetings.tsx";
 import { addWeeks, mondayOf } from "../week/dates.ts";
 import { hidePersonal, personalCount } from "../week/personal.ts";
@@ -90,7 +90,12 @@ import { KeyLegend } from "./KeyLegend.tsx";
 import { NoticesPanel, NoticeToasts, useNotices } from "./Notices.tsx";
 import type { InAppNotice } from "../plan/push.ts";
 import { promptInstall, takeLaunchRoute, useInstall } from "./pwa.ts";
-import { Guide, TourLink } from "./guide/Guide.tsx";
+import { TourLink } from "./guide/TourLink.tsx";
+import { tourById } from "./guide/tours.ts";
+import type { Checklist } from "../actions/guide-actions.ts";
+// UI-5: the Guide and its tours load only when opened (no weight on the app's first load).
+const Guide = lazy(() => import("./guide/Guide.tsx"));
+const Tour = lazy(() => import("./guide/tour/Tour.tsx"));
 import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
 import { userZone } from "../week/zone.ts";
 
@@ -253,6 +258,8 @@ export function App() {
   const focusOpen = loc.overlay?.kind === "focus";
   /** G1: the Guide (#/guide), over the current place like Settings. */
   const guideAt = loc.overlay?.kind === "guide" ? loc.overlay : null;
+  /** UI-5: a Show me tour over the real screen (#/guide/tour/<id>); it only highlights and explains. */
+  const tourAt = loc.overlay?.kind === "tour" ? (tourById(loc.overlay.id) ?? null) : null;
   // MC-1: Client calls over the place (#/meetings and #/meetings/<occurrence>).
   const meetingAt = loc.overlay?.kind === "meeting" ? loc.overlay : null;
   const base: "today" | "week" = nav.tab === "week" ? "week" : "today";
@@ -276,6 +283,8 @@ export function App() {
     tourMarked.current = true;
     void call("ui.tour_offer", { done: true }).catch(() => {});
   }, [showTour]);
+  /** UI-5: Your first day's states (read only; never a token). */
+  const guideChecklist = useCallback(() => call<Checklist>("guide.checklist", {}), []);
   const openGuide = useCallback((chapter: string | null = null) => go((l) => ({ nav: l.nav, overlay: { kind: "guide", chapter } })), [go]);
   // P1: opening the list marks every notice read (the dot goes).
   const readAllNotices = notices.readAll;
@@ -1332,7 +1341,11 @@ export function App() {
       moveRegion: (dir) => setTimeout(() => moveRegion(dir), 0),
       focusedItem: focusedItem.current,
       showKeys: () => setKeysOpen(true),
-      showGuide: () => openGuide(),
+      showGuide: (section) => openGuide(section ?? null),
+      startTour: (id) => {
+        const t = tourById(id);
+        if (t) go(() => ({ nav: t.start, overlay: { kind: "tour", id: t.id } }));
+      },
       theme,
       setTheme: (t) => void setTheme(t),
       viewRange: data.week.range.mode,
@@ -1677,7 +1690,7 @@ export function App() {
           <button type="button" className="top-btn capture-btn" onClick={() => setCaptureOpen(true)} title="Quick capture: one line, saved at once (N)">
             Capture <kbd>N</kbd>
           </button>
-          <button type="button" className="top-btn assistant-btn" onClick={() => setAssistantAt((a) => (a ? null : { text: "" }))} aria-expanded={!!assistantAt} title="Ask the assistant: look things up, or ask for a change you confirm (Ctrl J or /)">
+          <button type="button" className="top-btn assistant-btn" data-tour="ask" onClick={() => setAssistantAt((a) => (a ? null : { text: "" }))} aria-expanded={!!assistantAt} title="Ask the assistant: look things up, or ask for a change you confirm (Ctrl J or /)">
             Ask <kbd>Ctrl J</kbd>
           </button>
           <button
@@ -1729,6 +1742,17 @@ export function App() {
         </div>
       )}
 
+      {tourAt && (
+        <Suspense fallback={null}>
+          <Tour
+            key={tourAt.id}
+            tour={tourAt}
+            phone={phone}
+            onEnd={(to) => go((l) => ({ nav: l.nav, overlay: to === "guide" ? { kind: "guide", chapter: tourAt.section } : null }))}
+            onNav={(nav) => go(() => ({ nav, overlay: { kind: "tour", id: tourAt.id } }))}
+          />
+        </Suspense>
+      )}
       {showTour && (
         <div className="today-tour">
           <TourLink onOpen={() => (endTourOffer(), openGuide())} onDismiss={endTourOffer} />
@@ -1775,7 +1799,18 @@ export function App() {
           onSetup={(step) => setSetupAt(step)}
         />
       ) : guideAt ? (
-        <Guide chapter={guideAt.chapter} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} />
+        <Suspense fallback={null}>
+          <Guide
+            chapter={guideAt.chapter}
+            onClose={() => go((l) => ({ nav: l.nav, overlay: null }))}
+            onSection={(id) => go((l) => ({ nav: l.nav, overlay: { kind: "guide", chapter: id } }))}
+            onTour={(id) => {
+              const t = tourById(id);
+              if (t) go(() => ({ nav: t.start, overlay: { kind: "tour", id: t.id } }));
+            }}
+            checklist={guideChecklist}
+          />
+        </Suspense>
       ) : meetingAt ? (
         <Meetings occurrence={meetingAt.occurrence} colors={data.clients} onOpen={(id) => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: id } }))} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} />
       ) : focusOpen ? (
@@ -1824,7 +1859,7 @@ export function App() {
         </div>
       ) : roadmapOpen ? (
         nav.tab === "ahead" ? (
-          phone && !aheadAnyway ? <AheadNotice onOpen={() => setAheadAnyway(true)} onToday={() => openTab("today")} /> : <PhoneGate phone={phone}><Ahead data={data} mode={nav.mode} item={nav.item ?? null} switcher={switches.ahead} renderSwitch={aheadSwitch} onChanged={reloadQuiet} readOnly={phone} /></PhoneGate>
+          phone && !aheadAnyway && loc.overlay?.kind !== "tour" ? <AheadNotice onOpen={() => setAheadAnyway(true)} onToday={() => openTab("today")} /> : <PhoneGate phone={phone}><Ahead data={data} mode={nav.mode} item={nav.item ?? null} switcher={switches.ahead} renderSwitch={aheadSwitch} onChanged={reloadQuiet} readOnly={phone} /></PhoneGate>
         ) : null
       ) : planDayFocus ? (
         pd && week.days.some((d) => d.date === pd.date) ? (
@@ -2035,7 +2070,7 @@ export function App() {
           extra={personalHiddenChip}
           onRefresh={() => auto.trigger("button")}
           onConnect={(src) => void connect(src)}
-          onSettings={() => (setStatusOpen(false), setSettingsAt("connections"))}
+          onSettings={() => (setStatusOpen(false), setSettingsAt("connections", "sources"))}
           onClose={() => setStatusOpen(false)}
         />
       )}

@@ -212,7 +212,7 @@ export function StatusView({ switcher, colors, readOnly, version, onChanged }: {
         </div>
         <ModeArea>
           {!readOnly && (
-            <span className="st-toggle" role="group" aria-label="Show">
+            <span className="st-toggle" data-tour="st-toggle" role="group" aria-label="Show">
               <button type="button" className="ms-btn" aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>Edit</button>
               <button type="button" className="ms-btn" aria-pressed={mode === "preview"} onClick={() => setMode("preview")}>Preview</button>
             </span>
@@ -229,7 +229,7 @@ export function StatusView({ switcher, colors, readOnly, version, onChanged }: {
           <div className="st-bar">
             <p className="st-count" role="status">{counts!.line}</p>
             {!readOnly && (
-              <span className="st-push">
+              <span className="st-push" data-tour="st-push">
                 {ready.length > 0 && <span className="muted">{ready.length === 1 ? "1 line to push" : `${ready.length} lines to push`}</span>}
                 <button type="button" className="commit" disabled={!ready.length || !!push} onClick={() => void startPush()}>Push all</button>
               </span>
@@ -376,8 +376,8 @@ function FeatureBlock({ c, f, mode, lines, drafting, onAdd, onEdit, onChange, on
             <LineBox key={l.key} line={l} label={`New line for ${f.title}`} onChange={onChange} onRemove={onRemove} removeLabel="Remove" />
           ))}
           <span className="st-adds">
-            <button type="button" className="mini" onClick={() => onAdd(c, f)}>+ Add a line</button>
-            {onDraft && c.ai === "ok" && <button type="button" className="mini quiet" disabled={drafting} onClick={onDraft}>{drafting ? "Drafting…" : "Draft"}</button>}
+            <button type="button" className="mini" data-tour="st-add" onClick={() => onAdd(c, f)}>+ Add a line</button>
+            {onDraft && c.ai === "ok" && <button type="button" className="mini quiet" data-tour="st-draft" disabled={drafting} onClick={onDraft}>{drafting ? "Drafting…" : "Draft"}</button>}
           </span>
         </div>
       )}

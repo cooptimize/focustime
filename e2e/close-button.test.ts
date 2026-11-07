@@ -63,7 +63,7 @@ describe.skipIf(!CHROMIUM)("UI-3: one close button", () => {
       await g.waitFor();
       return g;
     };
-    await closesBothWays(page, openGuide, more, (g) => g.locator(".guide-top"));
+    await closesBothWays(page, openGuide, more, (g) => g.locator(".ps-head"));
 
     // Capture from the top bar.
     const capture = page.locator(".topbar").getByRole("button", { name: /^Capture/ }).first();
