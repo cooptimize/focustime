@@ -146,6 +146,8 @@ export const ACTIONS = [
   { name: "pick.move", title: "Move to-do", group: "To-dos", target: "pick", summary: "To AM, PM, another day or Friday" },
   { name: "pick.mark_done", title: "Mark done or not done", group: "To-dos", target: "pick", summary: "Tick a to-do (local only)" },
   { name: "deploy.add", title: "Plan a deployment", group: "To-dos", target: "none", aka: ["deployment", "deploy", "release", "go live"], summary: "A Deployment to-do: a client, a date and a window (often an evening or a weekend), with the items and a note of what's going (local only; the runbook stays in Coop)" },
+  { name: "deploy.items", title: "A client's deployment items", group: "To-dos", target: "none", summary: "What a deployment for this client can move: its data platform's list, with its defaults" },
+  { name: "deploy.config_save", title: "Change a client's deployment items", group: "To-dos", target: "none", summary: "Admins and the client's leads: its data platform and its list of deployment items; only new deployments follow" },
   { name: "pick.set_kind", title: "Change the kind of a to-do", group: "To-dos", target: "pick", aka: ["make it a deployment"], summary: "A plain to-do or a Deployment (a Deployment needs its window)" },
   { name: "pick.remove", title: "Drop to-do", group: "To-dos", target: "pick", summary: "Remove a to-do from the plan" },
   { name: "pick.uncarry", title: "Put back an unfinished to-do", group: "To-dos", target: "pick", summary: "Undo of Keep or Move on a suggested to-do: it goes back to the day it came from" },

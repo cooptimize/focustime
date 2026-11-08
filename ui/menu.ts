@@ -84,9 +84,14 @@ export type FormField = {
   key: string;
   label: string;
   /** "item": the shared work item lookup (step 15.2) for the client chosen in the field named by `client`. */
-  type: "text" | "time" | "select" | "date" | "item";
+  /** DP-2: "checks" is a deployment's item checkboxes (saved as a JSON list of keys); "textbox" UI-10's growing text box. */
+  type: "text" | "time" | "select" | "date" | "item" | "checks" | "textbox";
   /** For an item field: the key of the select that holds its client. Saved as `<key>` (the id, or "") and `<key>Text`. */
   client?: string;
+  /** The client when the form has no select for it (a to-do's own). */
+  clientKey?: string;
+  /** DP-2, a "checks" field on a planned deployment: its ticks as they are (absent: a new one, the client's defaults). */
+  existing?: import("../plan/deploy-items.ts").DeployItem[] | null;
   value?: string;
   optional?: boolean;
   placeholder?: string;
@@ -422,7 +427,7 @@ function setKind(env: MenuEnv, p: Pick, input: Record<string, unknown>, done: st
   return env.runPlan("pick.set_kind", { id: p.id, ...input }).then((ok) => {
     if (ok && env.undoable) {
       const back = p.todoKind === "deployment" && p.window
-        ? { kind: "deployment", start: p.window.start, end: p.window.end, itemIds: (p.links ?? []).map((l) => l.id), note: p.notes ?? "" }
+        ? { kind: "deployment", start: p.window.start, end: p.window.end, itemIds: (p.links ?? []).map((l) => l.id), items: (p.deployItems ?? []).map((i) => i.key), note: p.notes ?? "" }
         : { kind: "todo", note: p.notes ?? "" };
       env.undoable(done, () => env.runPlan("pick.set_kind", { id: p.id, ...back }));
     }
@@ -465,24 +470,27 @@ export function deployForm(env: MenuEnv, o: { pick?: Pick; date?: IsoDate; clien
       ]),
       { key: "start", label: "Starts at", type: "time", value: p?.window?.start ?? "19:00" },
       { key: "end", label: "Ends at", type: "time", value: p?.window?.end ?? "21:00" },
-      ...(p?.itemId == null ? [{ key: "item", label: "DevOps item", type: "item", client: "client", optional: true, value: link ? String(link.id) : "" } satisfies FormField] : []),
-      { key: "note", label: "What's going", type: "text", value: p?.notes ?? "", placeholder: "code, SQL objects, the semantic model, reports", optional: true },
+      ...(p?.itemId == null ? [{ key: "item", label: "DevOps item", type: "item", client: "client", ...(p ? { clientKey: p.clientKey } : {}), optional: true, value: link ? String(link.id) : "" } satisfies FormField] : []),
+      { key: "items", label: "What's going", type: "checks", client: "client", optional: true, ...(p ? { clientKey: p.clientKey } : {}), ...(p?.todoKind === "deployment" ? { existing: p.deployItems ?? null } : {}) } satisfies FormField,
+      { key: "note", label: "Note", type: "textbox", value: p?.notes ?? "", placeholder: "Anything else that's going", optional: true },
     ],
     save: (v) => {
       // The server refuses a bad window in the same words (windowProblem); the form stays open with the notice.
       const itemIds = v.item ? [Number(v.item)] : [];
+      // DP-2: the ticks, once the list has loaded (else the server keeps what it has, or uses the client's defaults).
+      const items = v.items ? { items: JSON.parse(v.items) as string[] } : {};
       if (p) {
-        const input = { kind: "deployment", start: v.start, end: v.end, note: v.note ?? "", ...(p.itemId == null ? { itemIds } : {}) };
+        const input = { kind: "deployment", start: v.start, end: v.end, note: v.note ?? "", ...(p.itemId == null ? { itemIds } : {}), ...items };
         return setKind(env, p, input, p.todoKind === "deployment" ? `Deployment saved · ${windowText({ start: v.start!, end: v.end! })}` : `Now a deployment · ${windowText({ start: v.start!, end: v.end! })}`);
       }
       return env.planAction
-        ? env.planAction("deploy.add", { clientKey: v.client, date: v.date, start: v.start, end: v.end, ...(v.title ? { title: v.title } : {}), ...(v.note ? { note: v.note } : {}), ...(itemIds.length ? { itemIds } : {}) }).then((r) => {
+        ? env.planAction("deploy.add", { clientKey: v.client, date: v.date, start: v.start, end: v.end, ...(v.title ? { title: v.title } : {}), ...(v.note ? { note: v.note } : {}), ...(itemIds.length ? { itemIds } : {}), ...items }).then((r) => {
             const id = (r as { pick?: { id: number } } | null)?.pick?.id;
             const note = (r as { note?: string | null } | null)?.note;
             if (id && env.undoable) env.undoable(`Deployment planned for ${weekdayLong(v.date!)} ${windowText({ start: v.start!, end: v.end! })}${note ? ` · ${note}` : ""}`, () => env.runPlan("pick.remove", { id }));
             return !!r;
           })
-        : env.runPlan("deploy.add", { clientKey: v.client, date: v.date, start: v.start, end: v.end, ...(v.title ? { title: v.title } : {}), ...(v.note ? { note: v.note } : {}), ...(itemIds.length ? { itemIds } : {}) });
+        : env.runPlan("deploy.add", { clientKey: v.client, date: v.date, start: v.start, end: v.end, ...(v.title ? { title: v.title } : {}), ...(v.note ? { note: v.note } : {}), ...(itemIds.length ? { itemIds } : {}), ...items });
     },
   };
 }
@@ -1184,6 +1192,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "pick.mark_done": return { next: () => choosePick(env, "Mark which to-do done or not done?", (p) => () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" })) };
     case "pick.remove": return { next: () => choosePick(env, "Drop which to-do?", (p) => () => env.runPlan("pick.remove", { id: p.id })) };
     case "deploy.add": return { next: () => deployForm(env, env.selection.date >= env.today ? { date: env.selection.date } : {}) };
+    case "deploy.items":
+    case "deploy.config_save": return { disabled: "Set in Admin › Clients, or the client's page in Settings" };
     case "pick.set_kind": return { next: () => choosePick(env, "Change the kind of which to-do?", (p) => kindStep(env, p)) };
     case "pick.uncarry":
     case "pick.undrop": return { disabled: "Use Undo right after Keep, Move or Drop on a suggested to-do" };

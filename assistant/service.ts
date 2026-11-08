@@ -17,6 +17,7 @@
 //      proposal's own, nothing changed since: a fresh preview) and then dispatches the same action the button does.
 import type { ActionName } from "../actions/registry.ts";
 import { DEPLOYMENT, windowProblem, windowText } from "../plan/deploy.ts";
+import { matchNamed, namedInRequest, type ItemGroup } from "../plan/deploy-items.ts";
 import type { ActionResponse, AheadLoad, DevOpsPreview, DevOpsResult, DoneOffer, ItemDoneOffer, UndoOffer } from "../actions/types.ts";
 import { dropCheck } from "../plan/weekdrop.ts";
 import { placeNote } from "../plan/days.ts";
@@ -883,11 +884,20 @@ export function createAssistant(env: AssistantEnv) {
         const note = typeof args.note === "string" && args.note.trim() ? args.note.trim().slice(0, 2000) : null;
         const itemIds = [...new Set(Array.isArray(args.itemIds) ? args.itemIds.map(Number).filter((n) => Number.isInteger(n) && n > 0) : [])].slice(0, 20);
         const rows: PreviewView["rows"] = [{ label: "When", before: null, after: `${dayWords(date)} ${windowText(w)}` }];
-        if (note) rows.push({ label: "What's going", before: null, after: note });
+        // DP-2: the items named (my words, matched on the server against this client's own list), or its defaults.
+        const read = await env.run("deploy.items", { clientKey: client });
+        const groups = read.ok ? (read.data as { groups: ItemGroup[] }).groups : null;
+        const said = Array.isArray(args.items) ? args.items.filter((x): x is string => typeof x === "string" && !!x.trim()).slice(0, 20) : [];
+        const named = said.length ? said : namedInRequest(request);
+        const match = matchNamed(named, groups ?? []);
+        const ticks = named.length ? match.items.map((i) => ({ key: i.key, name: i.name })) : (groups ?? []).flatMap((g) => g.items.filter((i) => i.on).map((i) => ({ key: i.key, name: i.name })));
+        rows.push({ label: "What's moving", before: null, after: !groups ? "The client's defaults" : ticks.length ? `${ticks.map((i) => i.name).join(", ")}${named.length ? "" : " (the client's defaults)"}` : "Nothing ticked yet" });
+        if (note) rows.push({ label: "Note", before: null, after: note });
         if (itemIds.length) rows.push({ label: "Items", before: null, after: itemIds.map((i) => `#${i}`).join(", ") });
         const weekend = Temporal.PlainDate.from(date).dayOfWeek >= 6;
         const preview = plain("Plan a deployment", `Deployment: ${title}`, rows, weekend ? [`${Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" })} isn't a working day: it counts as after-hours time`] : []);
-        return { view: base("deploy.add", client, `Plan "${title}" on ${dayWords(date)} ${windowText(w)}`, preview, "Only you"), held: { tool, args: { ...args, title, note, itemIds }, run: { action: "deploy.add", input: { clientKey: client, date, start: w.start, end: w.end, title, ...(note ? { note } : {}), ...(itemIds.length ? { itemIds } : {}) } } }, snapshot: null };
+        if (match.unmatched.length) preview.notes.push(`Not matched to ${env.clientName(client)}'s list: ${match.unmatched.join(", ")}`);
+        return { view: base("deploy.add", client, `Plan "${title}" on ${dayWords(date)} ${windowText(w)}`, preview, "Only you"), held: { tool, args: { ...args, title, note, itemIds }, run: { action: "deploy.add", input: { clientKey: client, date, start: w.start, end: w.end, title, ...(note ? { note } : {}), ...(itemIds.length ? { itemIds } : {}), ...(groups ? { items: ticks.map((i) => i.key) } : {}) } } }, snapshot: null };
       }
       case "move_plan": {
         // AS-2: moves by day and block, built by the server. The to-dos: the ones the server matched from my words

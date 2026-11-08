@@ -2207,7 +2207,7 @@ export function App() {
           )}
         </div>
       )}
-      {deployed && <DeployedOffer pick={deployed} clientName={clientNameFor(data, deployed.clientKey)} demo={!!data.demo} onDone={(msg) => (setDeployed(null), msg && setUndoToast({ id: Date.now(), text: msg, undo: null }), reloadQuiet())} />}
+      {deployed && <DeployedOffer pick={deployed} clientName={clientNameFor(data, deployed.clientKey)} demo={!!data.demo} today={data.planDay.date} onDone={(msg) => (setDeployed(null), msg && setUndoToast({ id: Date.now(), text: msg, undo: null }), reloadQuiet())} />}
       <NoticeToasts toasts={notices.toasts} onDismiss={notices.dismiss} onOpen={(n) => (notices.dismiss(n.id), n.route && openRouteRef.current(n.route))} />
       {installHowTo && <InstallHowTo onClose={() => setInstallHowTo(false)} />}
       {timerMenuAt && <PopupMenu at={timerMenuAt} step={timerStep(env)} onClose={() => setTimerMenuAt(null)} />}

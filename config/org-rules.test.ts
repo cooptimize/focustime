@@ -33,3 +33,17 @@ describe("the in-use Rule (HK-3)", () => {
     expect(resolveRules([row("org.idle_minutes", 2)], BOOT).organization.idleMinutes).toBe(10);
   });
 });
+
+describe("DP-2: a client's data platform", () => {
+  const client = (key: string, value: unknown): OrgRow => ({ ...row("x", value), scope: "client:Contoso", key });
+  it("saves as a client rule", () => {
+    expect(resolveRules([client("data_platform", "fabric")], BOOT).clients.Contoso).toMatchObject({ dataPlatform: "fabric", deployItems: null });
+  });
+  it("settings saved before DP-2 still load, with the platform unset", () => {
+    expect(resolveRules([client("allow_ai", true)], BOOT).clients.Contoso).toMatchObject({ allowAi: true, dataPlatform: null, deployItems: null });
+  });
+  it("a key this build doesn't know is ignored, and a bad value falls back", () => {
+    expect(resolveRules([client("from_a_newer_build", 1), client("data_platform", "snowflake")], BOOT).clients.Contoso).toMatchObject({ dataPlatform: null });
+  });
+});
+

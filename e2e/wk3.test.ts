@@ -3,7 +3,7 @@
 // 9 PM first (deploy.add, as the app does), so the week starts with a Saturday column, Friday's Evening band and "4h after hours this week".
 // With FOCUSTIME_SHOTS the report's screenshots go there (demo data only).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Page } from "playwright-core";
+import type { Locator, Page } from "playwright-core";
 import { CHROMIUM, freshPage, NOW, startDemo, type Harness } from "./harness.ts";
 import { phonePage } from "./mb1-helpers.ts";
 import { SHOTS } from "./shots.ts";
@@ -16,6 +16,20 @@ const SUN = "2026-11-08";
 const call = (page: Page, action: string, input: unknown) =>
   page.evaluate(([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()), [action, input] as const) as Promise<{ ok: boolean; data: any; error?: string }>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
+/** DP-2: Quick capture's date and time pickers (no native inputs). */
+const pickDate = async (page: Page, box: Locator, label: string, d: string) => {
+  await box.getByRole("button", { name: new RegExp(`^${label}:`) }).click();
+  await page.locator(".dp-pop input.dp-box").fill(d);
+  await page.locator(".dp-pop input.dp-box").press("Enter");
+  await page.locator(".dp-pop").waitFor({ state: "detached" });
+};
+const pickTime = async (page: Page, box: Locator, label: string, t: string) => {
+  await box.getByRole("button", { name: new RegExp(`^${label}:`) }).click();
+  await page.locator(".tp-pop input").fill(t);
+  await page.locator(".tp-pop input").press("Enter");
+  await page.locator(".tp-pop").waitFor({ state: "detached" });
+};
+
 const shot = async (page: Page, name: string) => {
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` });
 };
@@ -25,8 +39,8 @@ const shot = async (page: Page, name: string) => {
  * keeps its Monday to Friday week). Each page is its own demo session.
  */
 async function planDeployments(page: Page): Promise<void> {
-  const sat = await call(page, "deploy.add", { clientKey: "Northwind", date: SAT, start: "09:00", end: "11:00", title: "Release 4.2", note: "Order export, the SQL views and the sales model", itemIds: [1111] });
-  const fri = await call(page, "deploy.add", { clientKey: "Harbor", date: FRI, start: "19:00", end: "21:00", title: "Portal hotfix", note: "The insurance card upload fix" });
+  const sat = await call(page, "deploy.add", { clientKey: "Northwind", date: SAT, start: "09:00", end: "11:00", title: "Release 4.2", note: "Order export, the SQL views and the sales model", itemIds: [1111], items: [] });
+  const fri = await call(page, "deploy.add", { clientKey: "Harbor", date: FRI, start: "19:00", end: "21:00", title: "Portal hotfix", note: "The insurance card upload fix", items: [] });
   if (!sat.ok || !fri.ok) throw new Error(`deploy.add: ${sat.error ?? fri.error}`);
 }
 
@@ -155,11 +169,11 @@ describe.skipIf(!CHROMIUM)("WK-3: weekends, the Evening band and Deployment to-d
     await expect.poll(() => box.locator("[role=radio][aria-checked=true]").textContent()).toMatch(/^Deployment/);
     await box.locator(".cap-client").click();
     await box.locator(".cap-choose").getByRole("button", { name: "Northwind" }).click();
-    await box.getByLabel("Deployment date").fill(FRI);
-    await box.getByLabel("Starts at").fill("18:00");
-    await box.getByLabel("Ends at").fill("17:00");
+    await pickDate(page, box, "Deployment date", FRI);
+    await pickTime(page, box, "Starts at", "18:00");
+    await pickTime(page, box, "Ends at", "17:00");
     await expect.poll(() => box.locator(".cap-send").isDisabled().then(async (d) => d || (await box.innerText()).includes("end must be after"))).toBe(true);
-    await box.getByLabel("Ends at").fill("20:00");
+    await pickTime(page, box, "Ends at", "20:00");
     await box.locator(".cap-send").click();
     await page.locator(".cap-dialog .cap-toast, .cap-toast").first().waitFor();
     await page.keyboard.press("Escape");

@@ -1606,3 +1606,29 @@ Unnumbered; numbered at merge. Builds on SR-1 (D859 to D870) and GD-2. FocusTime
 - SR-3: the phone writes too: Add a line, Use, Edit and Dismiss, and Push all, with 44 px targets. This replaces SR-1 and SR-2's view-only phone (D863's choice for Status). Checked at 390 with 17 px and 21 px root fonts and no horizontal scroll.
 - SR-3: the demo adds two fictional observed holidays ("Founders Day" on the report week's Thursday, an unnamed one the next Monday). Its suggestion for Harbor names another client, so GD-2's replacement shows.
 - SR-3: the Guide's note is "Finish your status update before Monday" (no real names, as the Guide's test requires).
+
+## DP-2
+
+Deployment items by data platform (Nov 8). Unnumbered until the next numbering pass. The runbook and the execution stay with Coop; this only says what's moving.
+
+| # | Status | Decision |
+|---|---|---|
+| - | Done | DP-2: the seeded catalog is data in `config/deploy-catalog.ts` (the brief allowed the database or config). Config needs no migration, and no screen holds a copy: the UI reads it through `deploy.items`. |
+| - | Done | DP-2: `data_platform` and `deploy_items` are client Rules in `org_settings`, beside aliases and Match only as written. `resolveRules` reads only keys it has a spec for, so an older build ignores them. |
+| - | Done | DP-2: a client's list is saved whole per platform, as ordered rows (key, on, hidden, a name for its own). A seed added to the catalog later joins the end of a list that was edited. |
+| - | Done | DP-2: rights. Admin › Clients is admin-only and `admin.set` too, so a client's lead had no way in. The new `deploy.config_save` allows a FocusTime admin or that client's lead, audited like Admin; a lead edits from the client's own page in Settings, an admin in Admin › Clients. Both show the same editor. The platform follows the same rights as the list. |
+| - | Done | DP-2: a deployment keeps a snapshot of its ticked items (`picks.deploy_items`, additive, Export schema 34): keys and the names as planned. That is what makes "new deployments only" hold. Editing shows the client's current list as unticked options and keeps ticks on items since hidden or removed, under "No longer on the list". |
+| - | Done | DP-2: a new deployment with no ticks sent takes the client's defaults (the assistant, or the list not loaded yet); one already planned keeps what it has. Keys that aren't on the client's list are refused. |
+| - | Done | DP-2: switching the client resets to its defaults and keeps only a hand tick on an item both lists share by name, as the brief says. A hand untick is not kept, so a default comes back. |
+| - | Done | DP-2: an unset client shows Reports and Semantic Models in both groups; they are separate boxes and save as one item by name. |
+| - | Done | DP-2: an own item can be removed; a seeded one only hidden. A deployment already planned keeps either. |
+| - | Done | DP-2: keyboard. No conflict with Space: only the checkboxes use it, as a browser does. Tab in the text box still changes the kind, so it can't also move into the details; ↓ goes there as before and lands on Date, and from there Tab moves through the pickers and checkboxes. Enter saves from a checkbox or the Note (Shift+Enter a new line in the Note). On the Date and time buttons Enter opens the picker instead of saving, because they are buttons. |
+| - | Done | DP-2: no native date or time inputs in the capture box for any kind (Due and Target date too). Date is AH-5's `DateField`; `ui/TimeField.tsx` matches it (15-minute steps, typed times such as 7pm, 19:30 or 1930). A bare hour is that hour of the 24: "7" is 07:00. The pickers can't sit inside a `<label>`: a click in the popover would re-trigger the button. |
+| - | Done | DP-2: Ends before Starts shows `windowProblem`'s words inline, amber, and blocks the save. Starts doesn't move Ends by itself. A past date is warned here too, since the date picker has no minimum. |
+| - | Done | DP-2: Deployment details (⋯ on the to-do, the same on the phone) and Plan a deployment… use the menu form with two new field types, `checks` and `textbox`. Found while there: the form's DevOps item field had no client on a to-do's own details (its `client` named a select the form doesn't have), so the lookup was empty; `clientKey` fixes both. |
+| - | Done | DP-2: the row's summary is a chip, "4 items", with the list and Note in its tooltip and in a small popover on tap. A WK-3 deployment with only text shows "Note", so that text stays reachable. |
+| - | Done | DP-2: assistant. The model passes the item words as said; the server matches them against that client's list (`matchNamed`: exact, then every word found in the name, one letter's typo allowed). Two that fit equally are unmatched, never a guess, and the preview says what wasn't matched. No words from the model: it reads what follows "with", "including" and the like in my request. None named: the defaults. The list never goes to the AI. |
+| - | Done | DP-2: the done draft says "Deployed tonight: A, B. Also: <Note>". "tonight" for a window starting at 17:00 or later ticked that day, else "today", or "on Saturday" when ticked later. A deployment with no ticked items keeps WK-3's words. It goes through LP-1's preview and GD-2's exit check unchanged. |
+| - | Done | DP-2: demo data: Northwind on Fabric, Harbor on Azure, Atlas and Cooptimize unset, so each state shows. |
+| - | Done | DP-2: on the phone a Deployment's sheet gets a "Deployment details" button that opens the same form as the desktop's ⋯ menu (checkboxes and Note), so editing is the same on both. The popup re-places itself as it grows, because the checkboxes load after it opens. |
+

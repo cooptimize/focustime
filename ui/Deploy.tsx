@@ -9,7 +9,7 @@ import { Modal } from "./DevOpsWrite.tsx";
 import { PersonPicker, type PersonValue } from "./PersonPicker.tsx";
 import { SendLoop } from "./SendLoop.tsx";
 import type { WeekLoadData } from "../actions/types.ts";
-import { afterHoursText, deployedText, tellWhat, windowText, type AfterHoursPart } from "../plan/deploy.ts";
+import { deployedWhen, afterHoursText, deployedText, tellWhat, windowText, type AfterHoursPart } from "../plan/deploy.ts";
 import type { Pick } from "../plan/types.ts";
 import { formatDuration } from "../week/format.ts";
 
@@ -59,7 +59,7 @@ export function clientNameFor(data: WeekLoadData, key: string): string {
  * deployed: <title>", who I choose) and LP-1's draft with the note and items; it goes only from the preview's Send.
  * Not now (or closing) leaves the to-do done and nothing else. Backing out of the draft removes the promise it opened.
  */
-export function DeployedOffer({ pick, clientName, demo, onDone }: { pick: Pick; clientName: string; demo: boolean; onDone: (notice: string | null) => void }) {
+export function DeployedOffer({ pick, clientName, demo, today, onDone }: { pick: Pick; clientName: string; demo: boolean; today: string; onDone: (notice: string | null) => void }) {
   const [who, setWho] = useState<PersonValue>({ who: "", whoRef: null });
   const [promise, setPromise] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +97,7 @@ export function DeployedOffer({ pick, clientName, demo, onDone }: { pick: Pick; 
           <p className="deployed-done"><DeployIcon /> {pick.title} is done</p>
           <p className="muted">
             {pick.window ? `${windowText(pick.window)} · ` : ""}
-            {pick.notes ? pick.notes : "No note of what went"}
+            {[pick.deployItems?.map((i) => i.name).join(", "), pick.notes].filter(Boolean).join(" · ") || "No note of what went"}
             {links.length ? ` · ${links.map((l) => `#${l.id}`).join(", ")}` : ""}
           </p>
           <label className="deployed-who">
@@ -114,7 +114,7 @@ export function DeployedOffer({ pick, clientName, demo, onDone }: { pick: Pick; 
           promiseKey={`f${promise}`}
           who={who.who.trim() || null}
           demo={demo}
-          initialText={{ text: deployedText({ who: who.who.trim() || null, clientName, title: pick.title, note: pick.notes, links, myName: null }), from: "A plain draft from the deployment's note and items. Edit it as you like." }}
+          initialText={{ text: deployedText({ who: who.who.trim() || null, clientName, title: pick.title, note: pick.notes, links, items: pick.deployItems ?? [], when: deployedWhen(pick, today), myName: null }), from: "A plain draft from what the deployment moved. Edit it as you like." }}
           onClosed={(m) => onDone(m)}
           onCancel={() => void back()}
           closeWithout={async (v) => {

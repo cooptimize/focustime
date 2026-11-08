@@ -43,6 +43,7 @@ import { useAppEnv, useDeveloperLoop } from "./appenv.ts";
 import { resolveSettings, searchSettings, sectionOf, SECTIONS, settingsHref, SETTINGS_GROUPS, type SearchHit } from "./settings/registry.ts";
 import { DemoSection } from "./settings/Demo.tsx";
 import { DiagnosticsPanel } from "./settings/Diagnostics.tsx";
+import { DeploySettings } from "./DeployItems.tsx";
 
 /** ST-1: every section id Settings opens (the registry's, then Admin's, for admins only). */
 export const SETTINGS_SECTIONS: readonly (readonly [string, string])[] = [...SECTIONS.map((s) => [s.id, s.label] as const), ...ADMIN_UI_SECTIONS];
@@ -1535,6 +1536,7 @@ function ClientCard({ c, d, p }: { c: SettingsClient; d: SettingsData; p: { onSa
       </div>
       <DeliveryChatField clientKey={c.key} clientName={c.setting.name ?? c.dataverseName ?? c.key} readOnly />
       <AllowAi c={c} d={d} />
+      <DeploySettings clientKey={c.key} clientName={c.setting.name ?? c.dataverseName ?? c.key} />
       {c.devops && <HouseStyleField clientKey={c.key} name={c.setting.name ?? c.dataverseName ?? c.key} />}
     </div>
   );

@@ -453,3 +453,11 @@ What DS-1 learned, and what is still open:
 - Q-SR3-3. "Created a story" counts only stories created through FocusTime (the write log). Counting stories created in DevOps itself would need `System.CreatedBy` on the stories Status already reads (one more field, no new request). Is that wanted?
 - Q-SR3-4. Should Needs your update also count time on the focus timer against a to-do on the feature? It isn't counted now, since a to-do already counts.
 - Q-SR3-5. Flaky candidate: `e2e/client-boundary.test.ts` (GD-2's held list, the tag and Close the loop's flag) timed out on a `waitFor` once in SR-3's full local run (Nov 8, 11 workers, Chromium) and passed when run again alone. It doesn't touch Status.
+
+## DP-2
+
+- Q-DP2-1. Inbox › Captures' Sort form (`SortCapture`) still has native Due and Target date inputs. The brief covers Quick capture; say if it should change too.
+- Q-DP2-2. Should the catalog itself be editable by admins (for every client), not only per client? It is config for now.
+- Q-DP2-3. Should a hand untick survive a client switch for an item both lists share? The brief keeps only ticks.
+- Q-DP2-4. A weekday evening Deployment doesn't appear on Today's blocks (it is on Week's Evening band), so the Today summary shows only where Today lists the to-do: its blocks and a weekend day. Should Today list evening deployments too?
+

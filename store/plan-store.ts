@@ -13,6 +13,7 @@ import { sqliteConn } from "./sql/sqlite.ts";
 import { carryOver } from "../plan/rules.ts";
 import { type ItemLevel, type Tier } from "../plan/weeklist.ts";
 import { MAX_ESTIMATE_HOURS, validEstimateMinutes, validStorySize, type StorySize } from "../plan/estimate.ts";
+import type { DeployItem } from "../plan/deploy-items.ts";
 import type { Capture, DayPlan, DraftAi, DraftAiState, DraftStory, Pick, PickKind, PlanWeek, Size, TodoKind, TodoLink, TodoWindow, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
 import type { Attendee, Fields, LocalState, OwnEvent, SyncOp, Timebox, WriteEntry, WriteKind, WriteStatus } from "../plan/timebox.ts";
@@ -1380,6 +1381,8 @@ export type NewPick = {
   todoKind?: TodoKind | null;
   window?: TodoWindow | null;
   links?: TodoLink[] | null;
+  /** DP-2: the ticked items, a snapshot. */
+  deployItems?: DeployItem[] | null;
   notes?: string | null;
 };
 
@@ -1433,6 +1436,7 @@ const toPick = (r: Row): Pick => ({
   ...(r.todo_kind === "deployment" ? { todoKind: "deployment" as const } : {}),
   ...(r.window_start != null && r.window_end != null ? { window: { start: r.window_start as string, end: r.window_end as string } } : {}),
   ...(r.links != null ? { links: json<TodoLink[]>(r.links) ?? [] } : {}),
+  ...(r.deploy_items != null ? { deployItems: json<DeployItem[]>(r.deploy_items) ?? [] } : {}),
   position: r.position as number,
   createdAt: r.created_at as string,
   updatedAt: r.updated_at as string,
@@ -1693,8 +1697,8 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     return (await getPick(r.lastId!))!;
   }
   /** WK-3: a deployment's kind, window and links (null clears them: back to a plain to-do). */
-  async function writeTodoKind(id: number, p: { todoKind?: NewPick["todoKind"]; window?: NewPick["window"]; links?: NewPick["links"] }): Promise<void> {
-    (await db.run("UPDATE picks SET todo_kind = ?, window_start = ?, window_end = ?, links = ?, updated_at = ? WHERE id = ?", p.todoKind ?? null, p.window?.start ?? null, p.window?.end ?? null, p.links?.length ? JSON.stringify(p.links) : null, stamp(), id));
+  async function writeTodoKind(id: number, p: { todoKind?: NewPick["todoKind"]; window?: NewPick["window"]; links?: NewPick["links"]; deployItems?: NewPick["deployItems"] }): Promise<void> {
+    (await db.run("UPDATE picks SET todo_kind = ?, window_start = ?, window_end = ?, links = ?, deploy_items = ?, updated_at = ? WHERE id = ?", p.todoKind ?? null, p.window?.start ?? null, p.window?.end ?? null, p.links?.length ? JSON.stringify(p.links) : null, p.deployItems?.length ? JSON.stringify(p.deployItems) : null, stamp(), id));
   }
   /** A pick's copy for a move or make up to another day: what it points at, its size, minutes, and a deployment's parts. */
   function copyOf(p: Pick, date: IsoDate, half: Half): NewPick {
@@ -1703,7 +1707,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     if (p.draftId !== null) base.draftId = p.draftId;
     if (p.followUpId !== null) base.followUpId = p.followUpId;
     if (p.minutes != null) base.minutes = p.minutes;
-    if (p.todoKind) Object.assign(base, { todoKind: p.todoKind, window: p.window ?? null, links: p.links ?? null, notes: p.notes });
+    if (p.todoKind) Object.assign(base, { todoKind: p.todoKind, window: p.window ?? null, links: p.links ?? null, deployItems: p.deployItems ?? null, notes: p.notes });
     return base;
   }
 
@@ -1816,11 +1820,11 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
      * WK-3: make a planned to-do a Deployment (its window, items and note) or a plain to-do again (todoKind null clears
      * the window and items; the note stays). `half` is where its window puts it on its date (actions/deploy-actions.ts).
      */
-    async setTodoKind(id: number, k: { todoKind: NewPick["todoKind"]; window: NewPick["window"]; links: NewPick["links"]; notes?: string | null; half?: Half; itemType?: string | null; minutes?: number | null }): Promise<Pick> {
+    async setTodoKind(id: number, k: { todoKind: NewPick["todoKind"]; window: NewPick["window"]; links: NewPick["links"]; deployItems?: NewPick["deployItems"]; notes?: string | null; half?: Half; itemType?: string | null; minutes?: number | null }): Promise<Pick> {
       return tx(async () => {
         const p = (await mustPick(id));
         if (p.status !== "planned" && p.status !== "done") throw new PlanError("Only a planned or done to-do can change kind");
-        (await writeTodoKind(id, k.todoKind ? k : { todoKind: null, window: null, links: null }));
+        (await writeTodoKind(id, k.todoKind ? k : { todoKind: null, window: null, links: null, deployItems: null }));
         if (k.notes !== undefined) (await db.run("UPDATE picks SET notes = ? WHERE id = ?", k.notes, id));
         if (k.itemType !== undefined) (await db.run("UPDATE picks SET item_type = ? WHERE id = ?", k.itemType, id));
         if (k.minutes !== undefined) (await db.run("UPDATE picks SET minutes = ? WHERE id = ?", k.minutes, id));

@@ -1,6 +1,6 @@
 # Data
 
-For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026; SR-3's parts against `feat/report-finish` on Nov 8.
+For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026; SR-3's parts against `feat/report-finish` on Nov 8; DP-2's parts against `feat/deployment-items` on Nov 8.
 
 ## One database, two kinds of table
 
@@ -34,7 +34,7 @@ FocusTime keeps everything in one database, its plan store: Azure SQL in dev and
 | Table | Kind | Per client | Holds |
 |---|---|---|---|
 | `week_plans`, `week_features`, `week_feature_slots`, `week_drafts`, `week_quiet`, `week_carry`, `week_watch` | User | Mostly | A week's lists per client, pins, carry decisions, watches |
-| `day_plans`, `picks`, `timeboxes`, `unavailable`, `borrowed`, `flex_sessions`, `resume_notes`, `focus_log` | User | Picks, timeboxes and notes yes | Day plans, to-dos (code name picks), their times, focus records. A to-do's kind (`picks.todo_kind`: null, or `deployment` since WK-3) and a Deployment's window (`window_start`, `window_end`, local "HH:MM" on its date), linked DevOps items (`links`, JSON of ids and titles, the same client's only) and what's going (`notes`) |
+| `day_plans`, `picks`, `timeboxes`, `unavailable`, `borrowed`, `flex_sessions`, `resume_notes`, `focus_log` | User | Picks, timeboxes and notes yes | Day plans, to-dos (code name picks), their times, focus records. A to-do's kind (`picks.todo_kind`: null, or `deployment` since WK-3) and a Deployment's window (`window_start`, `window_end`, local "HH:MM" on its date), linked DevOps items (`links`, JSON of ids and titles, the same client's only), its Note (`notes`; a WK-3 deployment's free text stays here) and, since DP-2, its ticked items (`deploy_items`, JSON of keys and names: a snapshot, so a later change to the client's list never reaches it) |
 | `follow_ups`, `promises`, `captures`, `draft_stories`, `story_drafts`, `story_draft_writes`, `breakdown_marks`, `house_styles` | User | Yes | Promises, captures, drafts, Break down's work |
 | `roadmap_dates`, `ahead_changes`, `ahead_halves`, `delivery_snapshots` | User | Yes | Ahead's dates, staged change sets, daily counts for trends |
 | `inbox_marks`, `conversation_views` | User | No | What a person has seen or hidden in the Inbox |
@@ -124,3 +124,12 @@ Kept elsewhere:
 - **Team views** (Team, sends, priorities) show a commit snapshot to people on the same client: no hours, to-dos, notes or focus.
 - **Admins** set team values and see health and counts. They never see anyone's plan, to-dos, promises, captures, focus sessions, PATs, AI request text, assistant history or chats they aren't in. Details in [Security](security.md#admins-guests-and-automation-accounts).
 - **Diagnostics** (Settings › Data › Diagnostics) is counts only, for a person's own chats, with no admin view.
+
+## Deployment items (DP-2)
+
+What a deployment can move depends on the client's data platform. Three places hold it:
+
+- **The seeded catalog** is data in `config/deploy-catalog.ts`: per platform (Fabric, Azure), each item's stable key, name and whether it is ticked by default. It is not in the database and no screen holds a copy; the UI reads it through `deploy.items`.
+- **A client's platform and its own list** are Rules in the app table `org_settings`, scope `client:<key>`: `data_platform` (`fabric` or `azure`; no row means not set, and both lists show with nothing ticked) and `deploy_items` (per platform, its rows in order: `{ key, on, hidden }`, with `name` for the client's own). A platform never edited has no rows and follows the catalog; a seed added later joins the end of a list that was edited. Changed by a FocusTime admin or the client's lead through `deploy.config_save`, each change in `admin_audit`. An older build reads neither key and ignores the rows.
+- **A planned deployment's ticks** are in `picks.deploy_items`, a snapshot (above). Editing keeps them, including an item since hidden or removed from the list; only a new deployment takes the list's defaults.
+
