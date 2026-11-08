@@ -774,6 +774,9 @@ export function unsortedSentence(count: number, line: { text: string; does?: Uns
   return `${n} ${text}.`;
 }
 
+/** HK-7 (Q-MB1-5): Diagnostics' Unsorted cell, count first: "20 messages held back because they mention another client". */
+export const unsortedCount = (count: number, reason: string, clientName: string): string => unsortedSentence(count, unsortedLine(reason, clientName)).replace(/\.$/, "");
+
 export function unsortedText(k: string | null, clientName: string): string {
   switch (k) {
     case "off": return "AI is off";

@@ -1,5 +1,6 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
+import { exactCaseDefault } from "../plan/common-words.ts";
 import { boundaryCheck } from "./boundary-actions.ts";
 import type { DayPromise } from "../plan/conversation-views.ts";
 import { afterHours } from "../plan/deploy.ts";
@@ -767,7 +768,9 @@ async function aiDirectory(ctx: ActionContext, cfg: AppConfig): Promise<ClientEn
     const names = [mine.find((c) => c.clientKey === key)?.clientName, cfg.clientSettings[key]?.name].filter((n): n is string => !!n && n !== key);
     // GD-2: an admin's aliases for the client (Admin › Clients), matched like its names.
     const aliases = cfg.org?.clients[key]?.aliases ?? [];
-    return { key, names: [...new Set(names)], ...(aliases.length ? { aliases: [...aliases] } : {}), projects: [...new Set(items.map((i) => projectOf(i.url)).filter((p): p is string => !!p))], itemIds: [...new Set([...items.map((i) => i.id), ...(remembered.get(key) ?? [])])] };
+    // HK-7: "Match only as written", the admin's choice or the default rule (on for a name that is an ordinary word).
+    const exactCase = cfg.org?.clients[key]?.exactCase ?? exactCaseDefault([key, ...names]);
+    return { key, names: [...new Set(names)], ...(aliases.length ? { aliases: [...aliases] } : {}), ...(exactCase ? { exactCase: true } : {}), projects: [...new Set(items.map((i) => projectOf(i.url)).filter((p): p is string => !!p))], itemIds: [...new Set([...items.map((i) => i.id), ...(remembered.get(key) ?? [])])] };
   });
 }
 
@@ -938,6 +941,16 @@ async function devopsWriteContext(ctx: ActionContext): Promise<DevOpsWriteContex
  * with its cached members, the directory for a Cooptimizer's address, the item's live state, GD-1's boundary, the AI
  * (a person waits: standard tier, my cap), the Graph sends as me, the consent probes and the DevOps write framework.
  */
+/** LP-1's consent probe for sending as me (a token check; nothing is sent). IN-2's invites use the same one. */
+function sendProbe(ctx: ActionContext): LoopContext["access"] {
+  return async (kind) => {
+    const a = await accountOf(ctx);
+    if (!a?.probe) return "unavailable" as const;
+    const r = await a.probe(kind).catch(() => null);
+    return r?.state === "granted" ? ("granted" as const) : r?.state === "consent" ? ("consent" as const) : ("unavailable" as const);
+  };
+}
+
 export async function loopContext(ctx: ActionContext): Promise<LoopContext> {
   const cc = await conversationContext(ctx);
   const plan = ctx.plan;
@@ -955,12 +968,7 @@ export async function loopContext(ctx: ActionContext): Promise<LoopContext> {
     const id = ref?.kind === "cooptimizer" ? ref.id : ref?.kind === "external" ? ref.memberId : null;
     return (id ? ms.find((m) => (m.userId ?? "").toLowerCase() === id.toLowerCase()) : undefined) ?? ms.find((m) => (m.displayName ?? "").trim().toLowerCase() === name.trim().toLowerCase());
   };
-  const probe = async (kind: "send" | "mail" | "mail_send") => {
-    const a = await accountOf(ctx);
-    if (!a?.probe) return "unavailable" as const;
-    const r = await a.probe(kind).catch(() => null);
-    return r?.state === "granted" ? ("granted" as const) : r?.state === "consent" ? ("consent" as const) : ("unavailable" as const);
-  };
+  const probe = sendProbe(ctx);
   return {
     plan,
     me: async () => {
@@ -1850,6 +1858,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "presence.people":
     case "presence.log":
       return presenceAction(await presenceContext(ctx), action, req.input);
+    case "chats.calls":
     case "chats.registered":
     case "chats.list":
     case "chats.add":
@@ -1884,6 +1893,10 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "admin.status_action":
     case "admin.identity":
     case "admin.invited":
+    case "admin.invite_access":
+    case "admin.invite_preview":
+    case "admin.invite_send":
+    case "admin.invite_retry":
       return adminAction(
         {
           ops: ctx.adminOps ?? null,
@@ -1904,6 +1917,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
             const cfg = await configured(ctx);
             return cfg ? userZone(cfg) : "UTC";
           },
+          // IN-2: the same sends and consent probes as Close the loop (LP-1), as this admin.
+          send: { sender: async () => (await accountOf(ctx))?.sender ?? null, access: sendProbe(ctx), canAsk: !ctx.demo?.on },
         },
         action as AdminAction,
         req.input,

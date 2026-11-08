@@ -15,7 +15,7 @@ For whoever deploys, watches or fixes FocusTime. The step-by-step commands are i
 | Image | Built from each merge to `main` | Dev's image for a chosen commit, by digest; never built for prod |
 | Deploy identity | `ft-dev-deploy` (OIDC) | `ft-prod-deploy` (OIDC) |
 
-Both run in the same subscription and share the Entra tenant, the "FocusTime" app registration and the "FocusTime Admins" group. Settings and resource names are in `infra/dev.bicepparam` and `infra/prod.bicepparam`. Scaling: one replica at most in both (`maxReplicas: 1`, `infra/modules/app.bicep`). The daily jobs claim their period in `job_claims`, and the Teams bot dedupes across replicas, but the scheduler's per-person ticks have no lease: its header mentions one, the code has none. Keep one replica until that changes.
+Both run in the same subscription and share the Entra tenant, the "FocusTime" app registration and the "FocusTime Admins" group. Settings and resource names are in `infra/dev.bicepparam` and `infra/prod.bicepparam`. Scaling: one replica at most in both (`maxReplicas: 1`, `infra/modules/app.bicep`). The daily jobs claim their period in `job_claims`, and the Teams bot dedupes across replicas, but the scheduler's per-person ticks have no lease (its header says so). Keep one replica until one is added.
 
 Costs and budgets: [runbook, Cost](../azure/runbook.md#cost-hk-2-fixed-price-databases-list-prices-for-central-us-on-2026-11-05) and [Budgets and alerts](../azure/runbook.md#budgets-and-alerts-hk-2).
 

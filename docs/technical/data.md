@@ -1,6 +1,6 @@
 # Data
 
-For engineers adding a table and IT checking what FocusTime keeps. Checked against `31b0d32` on Nov 7, 2026.
+For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026.
 
 ## One database, two kinds of table
 
@@ -58,6 +58,7 @@ FocusTime keeps everything in one database, its plan store: Azure SQL in dev and
 |---|---|---|---|
 | `client_chats`, `client_chat_changes`, `delivery_chats` | App and user | Yes | Registered client chats, their member lists, who registered them |
 | `teams_messages`, `teams_message_images` | App | Yes | Messages read from registered chats; for images only type, size, a skipped reason and the AI's description (never the bytes) |
+| `chat_calls` | App | Yes | CW-1: calls in registered chats, from their call started and ended events: the call id, when it started and ended, who started it (a user id and tenant). Never the participants or anything said |
 | `conversations`, `conversation_messages`, `commitments`, `conversation_suggestions`, `conversation_merges`, `requests` | App | Yes | Conversations, their summaries and commitments |
 | `chat_messages`, `asks`, `dedupe_log` | User | Yes | The older per-person Requests rows (AP-1) |
 | `meeting_series`, `meeting_occurrences`, `meeting_transcripts`, `meeting_proposals` | App | Yes | Registered client calls, transcripts (30 days), proposals |
@@ -93,6 +94,7 @@ What is deleted by age, for everyone at once (`store/retention.ts` `RETENTION_RU
 Kept elsewhere:
 
 - **Chat messages** that aren't part of a request, promise or conversation: deleted after the Rule `conv.retention_days` (Admin › Conversations, 14 days by default, 1 to 90; `config/org.ts`).
+- **Co-working calls** (`chat_calls`): 48 hours after the call started, at the next poll (`actions/request-poll.ts`); with their chat when it is removed or its messages purged.
 - **The older Requests rows** (`chat_messages`, `asks`): each person's daily cleanup (`server/ticks.ts`).
 - **Sessions** end after 12 hours idle or 7 days at most (`store/accounts.ts`); the hourly maintenance sweeps them.
 - **Delete my data** (Settings › Data): a soft delete now, everything removed 30 days later (`store/user-data.ts`, `HARD_DELETE_AFTER_DAYS`). Clear (the assistant history, for example) deletes at once.

@@ -113,7 +113,8 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     // 146: SR-1's fourth Week mode (Status) in the mode switch. 147: WK-2's Timeline toggle beside the modes.
     // 151: AS-2's demo seed (Export orders to CSV on Wednesday afternoon, for the script's move by feature).
     // 161: IB-1 slice 4's rail reads the Inbox, so a late promise I added is marked on today's rail too.
-    expect(await uiWords(page)).toBeLessThan(161);
+    // 175: CW-1's demo call live in Northwind's delivery chat on today's card ("Call live in <chat> · started …", who, Join).
+    expect(await uiWords(page)).toBeLessThan(175);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

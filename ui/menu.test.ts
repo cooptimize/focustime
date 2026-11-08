@@ -5,7 +5,8 @@ import type { Pick } from "../plan/types.ts";
 import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
 import type { ClientWork, WorkItem } from "../week/types.ts";
-import { eventMenu, timerStep, timeboxStep, timeStep, commandList, dayMenu, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
+import type { CoworkData } from "../plan/cowork.ts";
+import { callItems, eventMenu, timerStep, timeboxStep, timeStep, commandList, dayMenu, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
 
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
 const item = (id: number, level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `Item ${id}`, type: level === "story" ? "User Story" : "Feature", state: "New", stateCategory: "Proposed", level, order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
@@ -452,5 +453,46 @@ describe("AH-6: Readiness in the command menu", () => {
     const list = commandList(env().e);
     for (const q of ["readiness", "gaps", "get ready", "fix next"]) expect(filterCommands(list, q).map((c) => c.id), q).toContain("view.gaps");
     expect(list.find((c) => c.id === "view.gaps")?.label).toMatch(/^Ahead › Readiness/);
+  });
+});
+
+// CW-1: Start a call in the block's ⋯ and the command menu: one item per registered chat of the client I can see, Join
+// while a call is live there; each only opens the chat in Teams.
+describe("Start a call (CW-1)", () => {
+  const LINK = "https://teams.microsoft.com/l/chat/19%3Afabrikam-delivery%40thread.v2/conversations";
+  const cowork: CoworkData = {
+    available: true,
+    chats: [
+      { clientKey: "fabrikam", chatId: "19:fabrikam-delivery@thread.v2", name: "Fabrikam Delivery", link: LINK, live: null },
+      { clientKey: "fabrikam", chatId: "19:fabrikam-collab@thread.v2", name: "Fabrikam Collaboration", link: "https://teams.microsoft.com/l/chat/x/conversations", live: { startedAt: "2026-11-03T14:12:00Z", by: "Person 1", byOutside: false } },
+      { clientKey: "internal", chatId: "19:internal@thread.v2", name: "Internal Delivery", link: "https://teams.microsoft.com/l/chat/y/conversations", live: null },
+    ],
+  };
+  const withCalls = (o: Partial<MenuEnv> = {}) => {
+    const opened: string[] = [];
+    return { ...env({ cowork, openChat: (l) => opened.push(l), ...o }), opened };
+  };
+
+  it("the block's ⋯: one per chat of its client, Join while live, each opening that chat", async () => {
+    const { e, opened } = withCalls();
+    const calls = items(slotMenu(e, "2026-11-04", "AM", "fabrikam", "Fabrikam")).filter((i) => i.action === "chats.calls");
+    expect(calls.map((i) => [i.label, i.hint])).toEqual([["Join the call in Fabrikam Collaboration", "live now"], ["Start a call in Fabrikam Delivery", "opens Teams"]]);
+    await calls[1]!.run!();
+    expect(opened).toEqual([LINK]);
+  });
+
+  it("nothing for an open half-day, a client with no chat I'm in, or before the chats load", () => {
+    expect(callItems(withCalls().e, null)).toEqual([]);
+    expect(callItems(withCalls().e, "northwind")).toEqual([]);
+    expect(callItems(withCalls({ cowork: null }).e, "fabrikam")).toEqual([]);
+  });
+
+  it("the command menu lists every chat I can see, with its client", () => {
+    const cmd = commandList(withCalls().e).find((c) => c.action === "chats.calls")!;
+    expect(cmd.label).toBe("Start a call");
+    const step = cmd.next!();
+    expect(items(step).map((i) => [i.label, i.hint])).toEqual([["Start a call in Fabrikam Delivery", "fabrikam"], ["Join the call in Fabrikam Collaboration", "live now · fabrikam"], ["Start a call in Internal Delivery", "Internal"]]);
+    expect(commandList(withCalls({ cowork: { available: true, chats: [] } }).e).find((c) => c.action === "chats.calls")!.disabled).toMatch(/delivery chat/);
+    expect(commandList(env().e).find((c) => c.action === "chats.calls")!.disabled).toMatch(/aren't available/);
   });
 });

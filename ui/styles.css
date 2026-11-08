@@ -4053,6 +4053,21 @@ button.ask-label { cursor: pointer; }
 .invite-note { margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--raised); font-size: var(--fs-3); }
 .invite-message { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; width: 100%; box-sizing: border-box; }
 .invite-sheet .set-field input { width: 100%; box-sizing: border-box; }
+/* IN-2: sending from FocusTime in the invite sheet (Close the loop's preview and result styles, sl-*). */
+.invite-send { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); min-width: 0; }
+.invite-send-way { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; min-width: 0; }
+.invite-send-way > button { min-width: 11em; }
+.invite-send .invite-acts, .invite-preview .invite-acts, .invite-result .invite-acts { margin: 0; }
+.invite-sheet button.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.invite-preview, .invite-result { display: grid; gap: 10px; min-width: 0; }
+.invite-messages { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 50vh; overflow-y: auto; min-width: 0; }
+.invite-messages li { display: grid; gap: 4px; min-width: 0; }
+.invite-messages .sl-text { overflow-wrap: anywhere; }
+.invite-result .sl-parts li { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .invite-sheet .invite-acts button { min-height: 44px; }
+  .invite-sheet .sl-facts { grid-template-columns: minmax(0, 1fr); }
+}
 .set-pre { white-space: pre-wrap; }
 .set-team-color { flex-basis: 100%; }
 
@@ -4836,6 +4851,8 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   border-left: 0; border-top: 1px solid var(--border-strong); border-radius: 14px 14px 0 0;
 }
 .assistant-sheet .as-head { padding: 8px 8px 8px 16px; }
+/* HK-7 (Q-UI10-2): the sheet's 8 px right padding is less than the ×'s -10 px margin, which put it 2 px past the edge. */
+.assistant-sheet .as-head .x-close { margin-right: 0; }
 .assistant-sheet .as-list { padding: 12px 16px; }
 .assistant-sheet .as-compose { padding: 8px 16px 12px; }
 .assistant-sheet .as-row textarea { font-size: var(--fs-4); }
@@ -5950,3 +5967,24 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .mention-flag p { margin: 0; flex: 1 1 260px; }
 .names-removed { margin: 6px 0; font-size: var(--fs-2); color: var(--text-muted); }
 .names-removed::before { content: "ⓘ "; }
+/* CW-1: a co-working call live in a client's delivery chat: one line, who started it, Join (opens Teams). */
+.live-calls { display: grid; gap: 4px; min-width: 0; }
+.live-call { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 4px 4px 8px; border: 1px solid color-mix(in oklab, var(--ok) 45%, var(--border)); border-radius: 6px; background: color-mix(in oklab, var(--ok) 8%, transparent); }
+.live-call .lc-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok) 25%, transparent); }
+.live-call .lc-text { display: grid; flex: 1; min-width: 0; }
+.live-call .lc-line { font-size: var(--fs-2); font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
+.live-call .lc-by { font-size: var(--fs-1); color: var(--text-muted); overflow-wrap: anywhere; }
+.live-call .lc-join { flex: none; display: inline-flex; align-items: center; padding: 2px 12px; border-radius: 99px; background: var(--ok); color: var(--bg); font-size: var(--fs-2); font-weight: 600; text-decoration: none; }
+.live-call .lc-join:hover, .live-call .lc-join:focus-visible { filter: brightness(1.08); }
+.now-live { margin: 6px 0; }
+.dp-calls .lc-starts { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.dp-calls .lc-start { font-size: var(--fs-2); color: var(--accent); }
+.dp-calls .lc-start::before { content: "☎ "; color: var(--text-muted); }
+@media (prefers-reduced-motion: no-preference) {
+  .live-call .lc-dot { animation: lc-pulse 2s ease-in-out infinite; }
+}
+@keyframes lc-pulse { 50% { box-shadow: 0 0 0 5px color-mix(in oklab, var(--ok) 10%, transparent); } }
+/* The phone: Join and Start a call are 44px targets; the line wraps rather than scrolling sideways. */
+.app.phone .live-call .lc-join, .app.phone .dp-calls .lc-start { min-height: 44px; min-width: 44px; justify-content: center; }
+.app.phone .dp-calls .lc-start { display: inline-flex; align-items: center; }
+:root[data-reduce-motion] .live-call .lc-dot { animation: none; }
