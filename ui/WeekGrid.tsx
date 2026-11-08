@@ -1,4 +1,4 @@
-import { createContext, Fragment, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { createContext, Fragment, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject, type ReactNode } from "react";
 import { callMarks, callsIn, MeetingCalls, useCallMarks, useMine } from "./meetings/calls.ts";
 import { LiveCalls, liveOf, useCoworkData } from "./cowork.tsx";
 import { liveCallCard, type CoworkChatView } from "../plan/cowork.ts";
@@ -14,7 +14,7 @@ function agendaCount(slot: Slot): string {
   return [meetings ? `${meetings} meeting${meetings === 1 ? "" : "s"}` : "", personal ? `${personal} personal` : "", `${formatDuration(freeMinutes(slot))} free`].filter(Boolean).join(" · ");
 }
 import { worstSeverity } from "../week/risks.ts";
-import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types.ts";
+import type { CalEvent, Day, Half, Slot, Week } from "../week/types.ts";
 import type { PtoDay } from "../week/pto.ts";
 import type { Pick } from "../plan/types.ts";
 import type { FollowUpView } from "../actions/types.ts";
@@ -22,13 +22,13 @@ import { wasDueText, weekDueBadges } from "../plan/due.ts";
 import { homeRail, lateOnCards, railMarks, type CardRail, type RailSpan } from "../plan/rail-promises.ts";
 import { canAddWork, planButton } from "../plan/days.ts";
 import { bandIds, eveningBand, weekendRows, type EveningBand } from "../plan/evening.ts";
-import { checkinMenu, dayMenu, eventMenu, slotMenu } from "./menu.ts";
+import { checkinMenu, dayMenu, slotMenu } from "./menu.ts";
 import { MenuRow, useMenu } from "./Menus.tsx";
 import { EyeIcon } from "./Watching.tsx";
 import type { IsoDate } from "../week/types.ts";
 import { PickRow } from "./PickRow.tsx";
 import { DueBadge } from "./FollowUps.tsx";
-import { hourMarks, labelHere, layoutEvents, railFor, rulerSpan } from "./layout.ts";
+import { hourMarks, layoutEvents, railFor, rulerSpan } from "./layout.ts";
 import { dayShare, weekFit, type Tier } from "./weekfit.ts";
 import { DevOpsWork } from "./work.ts";
 import { clientColor, eventRange, SampleSources, shortDate, shortRange, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
@@ -48,9 +48,7 @@ import { pickDragged, useDragSource, useDropTarget } from "./WeekStories.tsx";
 import { OriginPick, SuggestedCards, useIsOrigin } from "./Carry.tsx";
 import { nowClock, nowSpot, type NowSpot } from "../plan/nowline.ts";
 import { NowEdge, NowLine, NowPast, NowTick } from "./NowLine.tsx";
-
-/** UI-B: the now line for one rail: where it is (null when not on it), how much of the rail has passed, the time. */
-type RailNow = { at: number | null; past: number; label: string; onClick: () => void };
+import { Timeline, ms, offHours, pct, railNowOf, useEventMenu, type RailNow } from "./Timeline.tsx";
 
 export type Selection = { dayIndex: number; half: Half };
 /** U3: where the detail panel opens: the features list, one follow-up or one pick. */
@@ -64,7 +62,7 @@ const TimelineCtx = createContext(true);
 
 /** UI-9: `late` is each card's late promises (by rail key), its chip's count when the card draws no rail; `onLate` opens several. */
 type RulerCtxValue = { layout: Layout; promises: readonly RailItem[]; onPromise?: ((key: string) => void) | undefined; onLate?: ((clientKey: string | null) => void) | undefined; today: string; now: string; home: RailSpan | null; late: ReadonlyMap<string, RailItem[]> };
-const RulerCtx = createContext<RulerCtxValue>({ layout: "wide", promises: [], today: "", now: "", home: null, late: new Map() });
+export const RulerCtx = createContext<RulerCtxValue>({ layout: "wide", promises: [], today: "", now: "", home: null, late: new Map() });
 /** CW-1: the live co-working calls each of today's cards shows (by rail key): a client's on its first card not ended. */
 const LiveOnCard = createContext<ReadonlyMap<string, CoworkChatView[]>>(new Map());
 
@@ -339,17 +337,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
   const spot: NowSpot | null = isToday ? nowSpot(day, props.now, tz, !!whole) : null;
   const nowLabel = spot ? nowClock(props.now, tz) : "";
   const toNow = () => props.onSelect({ dayIndex, half: spot?.kind === "rail" ? spot.half : "AM" });
-  const railNow = (half: Half): RailNow | null => {
-    if (!spot) return null;
-    const s = slotOf(day, half);
-    if (!s) return null;
-    // Before the day the line sits on the top edge of the first rail, after it on the bottom edge of the last, so the
-    // column's layout never changes.
-    const last = day.eve ? "EVE" : "PM";
-    const on = spot.kind === "rail" && spot.half === half ? spot.at : spot.kind === "before" && half === "AM" ? 0 : spot.kind === "after" && half === last ? 1 : null;
-    const ended = Temporal.Instant.compare(Temporal.Instant.from(props.now), Temporal.Instant.from(s.view.end)) >= 0;
-    return { at: on, past: ended ? 1 : spot.kind === "rail" && spot.half === half ? spot.at : 0, label: nowLabel, onClick: toNow };
-  };
+  const railNow = (half: Half): RailNow | null => railNowOf(day, half, spot, props.now, nowLabel, toNow);
 
   // WK-3: a weekend day is a narrow, quiet column: a muted header, then its calendar items and to-dos as plain rows
   // with their times. No AM/PM blocks, no Open half-days, no capacity or at-risk warnings.
@@ -454,7 +442,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
 }
 
 /** U3: all-day events as chips under the day header, only when there are some (the row stays for alignment); two or more stack. */
-function AllDay({ events }: { events: readonly CalEvent[] }) {
+export function AllDay({ events }: { events: readonly CalEvent[] }) {
   const samples = useContext(SampleSources);
   return (
     <div className={`day-allday${events.length ? "" : " empty"}`}>
@@ -468,7 +456,7 @@ function AllDay({ events }: { events: readonly CalEvent[] }) {
 }
 
 /** U3: events before or after the hours shown, as one small line at the top or bottom of the column, only when present. */
-function OutLine({ kind, items, tz }: { kind: "early" | "late"; items: readonly CalEvent[]; tz: string }) {
+export function OutLine({ kind, items, tz }: { kind: "early" | "late"; items: readonly CalEvent[]; tz: string }) {
   const samples = useContext(SampleSources);
   return (
     <div className={`day-out ${kind}${items.length ? "" : " empty"}`}>
@@ -486,7 +474,7 @@ function OutLine({ kind, items, tz }: { kind: "early" | "late"; items: readonly 
  * U3 (D387): a PTO day is one hatched cell labeled PTO, with its timed calendar items as plain lines (all-day ones are chips, D406); a day with no working
  * hours (Friday) is one dashed "Catch-up" column with the work moved there and its calendar items.
  */
-function WholeDay({ day, band, kind, tz, selected, refAm, refPm, onOpen, dayLabel, now }: { day: Day; band: EveningBand | null; kind: "pto" | "catchup"; tz: string; selected: boolean; refAm: (el: HTMLDivElement | null) => void; refPm: (el: HTMLDivElement | null) => void; onOpen: (focus?: PanelFocus) => void; dayLabel: string; now: { at: number; label: string; onClick: () => void } | null }) {
+export function WholeDay({ day, band, kind, tz, selected, refAm, refPm, onOpen, dayLabel, now }: { day: Day; band: EveningBand | null; kind: "pto" | "catchup"; tz: string; selected: boolean; refAm: (el: HTMLDivElement | null) => void; refPm: (el: HTMLDivElement | null) => void; onOpen: (focus?: PanelFocus) => void; dayLabel: string; now: { at: number; label: string; onClick: () => void } | null }) {
   const plan = useContext(PlanCtx);
   const samples = useContext(SampleSources);
   // All-day events are chips under the day header (D406); the cell lists only timed events.
@@ -593,7 +581,7 @@ function WeekendDay({ day, tz, selected, refAm, refPm, onOpen, dayLabel }: { day
  * card's hours, evening to-dos, deployments whose window starts after the day ends), so the day isn't stretched or
  * crowded. Only when there is something.
  */
-function EveningBandView({ band, date, tz, dayLabel }: { band: EveningBand; date: IsoDate; tz: string; dayLabel: string }) {
+export function EveningBandView({ band, date, tz, dayLabel }: { band: EveningBand; date: IsoDate; tz: string; dayLabel: string }) {
   const samples = useContext(SampleSources);
   void date;
   return (
@@ -866,7 +854,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
  * UI-9: "1 late" or "N late" on a card with no rail, in the urgent strip's promise colour (amber, never red). One opens
  * that promise in the Inbox; several open the Inbox's Promises, late ones, for the card's client.
  */
-function LateChip({ late, tabIndex, onPromise, onLate }: { late: readonly RailItem[]; tabIndex: number; onPromise?: ((key: string) => void) | undefined; onLate?: ((clientKey: string | null) => void) | undefined }) {
+export function LateChip({ late, tabIndex, onPromise, onLate }: { late: readonly RailItem[]; tabIndex: number; onPromise?: ((key: string) => void) | undefined; onLate?: ((clientKey: string | null) => void) | undefined }) {
   const n = late.length;
   const clients = new Set(late.map((p) => p.clientKey));
   const open = () => (n === 1 ? onPromise?.(late[0]!.key) : onLate?.(clients.size === 1 ? late[0]!.clientKey : null));
@@ -889,7 +877,7 @@ function LateChip({ late, tabIndex, onPromise, onLate }: { late: readonly RailIt
  * WK-2: a block's time range, never cut inside a number: it may only wrap after the dash, so a narrow card wraps there ("9:00–" over "1:00"); a very narrow one shows the hours alone ("9–1"), with the full range in its
  * title.
  */
-function CardWhen({ slot, tz }: { slot: Slot; tz: string }) {
+export function CardWhen({ slot, tz }: { slot: Slot; tz: string }) {
   const full = shortRange(slot, tz);
   const [a, b] = full.split("–");
   if (b === undefined) return <span className="card-when">{full}</span>;
@@ -1072,64 +1060,6 @@ function minutesOf(slot: Slot): number {
   return Math.max(30, (Temporal.Instant.from(slot.view.end).epochMilliseconds - Temporal.Instant.from(slot.view.start).epochMilliseconds) / 60000);
 }
 
-const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
-
-/** The parts of the view outside working windows (before and after hours, lunch), shaded on the timeline. */
-function offHours(slot: Slot): { start: number; end: number }[] {
-  const [a, b] = [ms(slot.view.start), ms(slot.view.end)];
-  const out: { start: number; end: number }[] = [];
-  let t = a;
-  for (const w of [...slot.windows].sort((x, y) => ms(x.start) - ms(y.start))) {
-    const [ws, we] = [Math.max(a, ms(w.start)), Math.min(b, ms(w.end))];
-    if (ws > t) out.push({ start: t, end: ws });
-    t = Math.max(t, we);
-  }
-  if (t < b) out.push({ start: t, end: b });
-  return out;
-}
-
-function Timeline({ slot, tz, showGaps, minFocusWindow, earlier, now }: { slot: Slot; tz: string; showGaps: boolean; minFocusWindow: number; earlier: ReadonlySet<string>; now: RailNow | null }) {
-  const { start, end } = slot.view;
-  const marks = hourMarks(start, end, tz);
-  const laid = layoutEvents(slot.events, start, end);
-  const min = minFocusWindow;
-  const span = Math.max(1, ms(end) - ms(start));
-  const posMs = (n: number) => (n - ms(start)) / span;
-  const pos = (s: string) => posMs(ms(s));
-
-  return (
-    <div className="timeline">
-      {offHours(slot).map((o) => (
-        <div key={o.start} className="offhours" style={{ top: pct(posMs(o.start)), height: pct(posMs(o.end) - posMs(o.start)) }} aria-hidden="true" />
-      ))}
-      {slot.flex.map((f) => (
-        <div key={`flex-${f.id}`} className="flexband" style={{ top: pct(pos(f.start)), height: pct(pos(f.end) - pos(f.start)) }} title={`Flex session · ${f.clientKey}`} aria-hidden="true" />
-      ))}
-      {marks.map((m) => (
-        <div key={m.label} className="hour" style={{ top: pct(m.at) }}>
-          <span>{m.label}</span>
-        </div>
-      ))}
-      {showGaps &&
-        slot.freeGaps
-          .filter((g) => g.minutes >= min)
-          .map((g) => (
-            <div key={g.start} className="gap" style={{ top: pct(pos(g.start)), height: pct(pos(g.end) - pos(g.start)) }}>
-              <span>{formatDuration(g.minutes)} free</span>
-            </div>
-          ))}
-      <TimeboxBands slot={slot} pos={pos} />
-      {now && <NowPast at={now.past} />}
-      <div className="lanes">
-        {laid.map(({ placed, top, height, lane, lanes }) => (
-          <EventCard key={placed.event.id} placed={placed} tz={tz} label={labelHere(placed, earlier)} style={{ top: pct(top), height: pct(height), left: `calc(${pct(lane / lanes)} + 4px)`, width: `calc(${pct(1 / lanes)} - 8px)` }} />
-        ))}
-      </div>
-      {now?.at != null && <NowLine at={now.at} label={now.label} onClick={now.onClick} />}
-    </div>
-  );
-}
-
 /**
  * Step 15.1 (D276): a narrow time ruler on the right edge of a compact card, covering only the block's working hours:
  * free stretches, meetings, personal events and unavailable time, and timed picks as bands in client color. A pick
@@ -1180,7 +1110,7 @@ function Ruler({ slot, half, tz, label, now, slim = false }: { slot: Slot; half:
  * CV-1: a promise due inside the rail's range, as a thin mark at its time. CV-3: past its due it is amber with a visible
  * "was due …" label; one overdue from an earlier day (or with no time) is drawn once at "now" on today's block. Never red.
  */
-function RulerPromises({ rail, tz }: { rail: RailSpan; tz: string }) {
+export function RulerPromises({ rail, tz }: { rail: RailSpan; tz: string }) {
   const { promises, onPromise, today, now, home } = useContext(RulerCtx);
   const span = Math.max(1, ms(rail.end) - ms(rail.start));
   return railMarks(promises, rail, { today, now, home }).map(({ p, at }) => {
@@ -1213,44 +1143,3 @@ function RulerEvent({ e, tz, style }: { e: CalEvent; tz: string; style: CSSPrope
   );
 }
 
-/** Step 13: any calendar event opens its menu (click, right-click, Enter): only what its tier allows is enabled. */
-export function useEventMenu(e: CalEvent) {
-  const menu = useMenu((env) => eventMenu(env, e));
-  const live = !e.unavailable && e.source !== "focustime";
-  const open = (ev: ReactMouseEvent | KeyboardEvent) => {
-    ev.stopPropagation();
-    const el = ev.currentTarget as HTMLElement;
-    const r = el.getBoundingClientRect();
-    menu.onContextMenu({ preventDefault: () => ev.preventDefault(), stopPropagation() {}, currentTarget: el, type: "contextmenu", clientX: "clientX" in ev ? ev.clientX : r.left + 8, clientY: "clientY" in ev ? ev.clientY : r.bottom } as never);
-  };
-  return live
-    ? { role: "button" as const, tabIndex: -1, onClick: open, onContextMenu: open, onKeyDown: (ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === "ContextMenu") && (ev.preventDefault(), open(ev)), onDoubleClick: (ev: ReactMouseEvent) => ev.stopPropagation() }
-    : {};
-}
-
-function EventCard({ placed, tz, style, label = true }: { placed: PlacedEvent; tz: string; style: CSSProperties; label?: boolean }) {
-  const e = placed.event;
-  const samples = useContext(SampleSources);
-  const kind = e.isPersonal ? "personal" : "meeting";
-  const show = e.showAs ?? "busy";
-  const menu = useEventMenu(e);
-  return (
-    <div
-      className={`event ${e.unavailable ? "unavailable" : kind} show-${show} ${placed.continuesBefore ? "cont-before" : ""} ${placed.continuesAfter ? "cont-after" : ""}`}
-      style={style}
-      title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${showAsLabel(e)}${e.unavailable ? "" : "\nClick for what FocusTime can do with it"}`}
-      {...menu}
-    >
-      {label && <><span className="ev-line">
-        <span className="ev-time">{eventRange(e, tz)}</span>
-        <span className="ev-title">{e.title}</span>
-      </span>
-      <span className="ev-meta">
-        {e.unavailable ? "Unavailable" : sourceName(e, samples)}
-        {show !== "busy" && show !== "unknown" ? ` · ${showAsLabel(e)}` : ""}
-      </span></>}
-    </div>
-  );
-}
-
-const pct = (f: number) => `${(f * 100).toFixed(3)}%`;

@@ -1,9 +1,8 @@
 // Step 15.1: shortest useful time per size in Timebox my day (D273), the didn't-fit summary and the offer (D274),
 // and duplicate picks (D277).
 import { describe, expect, it } from "vitest";
-import { DEFAULT_MIN_SIZES, didntFitText, placeInGap, planMyDay, smallerSize } from "./agenda.ts";
+import { DEFAULT_MIN_SIZES, didntFitText, placeInGap, planMyDay } from "./agenda.ts";
 import { alreadyPlanned } from "./dup.ts";
-import { offerAfterTimebox } from "./agenda.ts";
 import type { Slot } from "../week/types.ts";
 import type { Pick } from "./types.ts";
 import { DEFAULT_PLAN, parseConfig } from "../config/schema.ts";
@@ -73,20 +72,6 @@ describe("didn't fit, said plainly (D274)", () => {
     expect(didntFitText([], SIZES)).toBe("");
     expect(didntFitText([{ title: "Export spec draft", size: "M" }], SIZES)).toBe("1 to-do didn't fit: Export spec draft (M).");
     expect(didntFitText([{ title: "Export spec draft", size: "M" }, { title: "Delay alerts", size: "S" }], SIZES)).toBe("2 to-dos didn't fit: Export spec draft (M), Delay alerts (S).");
-  });
-  it("makes a pick one size smaller, and S has nothing smaller", () => {
-    expect(smallerSize("L", SIZES)).toBe("M");
-    expect(smallerSize("M", SIZES)).toBe("S");
-    expect(smallerSize("S", SIZES)).toBeNull();
-  });
-  it("clears the 'no time yet' offer once the summary is shown, and says so when everything fit", () => {
-    expect(offerAfterTimebox({ placed: 3, unplaced: [] }, SIZES)).toEqual({ offer: false, summary: null, notice: "Timeboxed 3 to-dos" });
-    expect(offerAfterTimebox({ placed: 1, unplaced: [{ pickId: 2, title: "Delay alerts", size: "S" }] }, SIZES)).toEqual({
-      offer: false,
-      summary: { text: "1 to-do didn't fit: Delay alerts (S).", picks: [{ pickId: 2, title: "Delay alerts", size: "S" }] },
-      notice: "Timeboxed 1 to-do",
-    });
-    expect(offerAfterTimebox({ placed: 0, unplaced: [{ pickId: 2, title: "Delay alerts", size: "S" }] }, SIZES).notice).toBeNull();
   });
 });
 

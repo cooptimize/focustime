@@ -102,7 +102,7 @@ describe("Settings (step 6b)", () => {
     expect(cfg.config.week.hours.weekdays.thu).toHaveLength(2);
     expect(cfg.config.week.standingBlocks).toEqual([{ day: "Tue", half: "PM", clientKey: "Internal", clientName: "Internal" }]);
     expect(cfg.config.plan).toEqual({ pickablePortfolioTypes: [], backgroundTypes: [], sizes: { S: 60, M: 120, L: 240, unsized: 120 }, minSizes: { S: 30, M: 60, L: 120 }, carryDays: 3, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true, devopsOnDone: "ask", followGraceDays: 21, closeoutReminderMinutes: 30, checkinReminderMinutes: 10, weekNudgeThu: "15:30", weekNudgeFri: "", weekNudgeMon: "08:30" });
-    expect(cfg.config.ui).toEqual({ theme: "neutral", viewRange: "12h", showTimelines: false, reduceMotion: false, textSize: "default", showPersonal: true, inbox: DEFAULT_INBOX });
+    expect(cfg.config.ui).toEqual({ theme: "neutral", viewRange: "12h", showTimelines: false, todayTimeline: false, todayTimelinePhone: false, reduceMotion: false, textSize: "default", showPersonal: true, inbox: DEFAULT_INBOX });
     expect(readFileSync(t.path, "utf8")).toContain("# my own note at the top");
   });
 });

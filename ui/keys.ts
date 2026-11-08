@@ -134,6 +134,7 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["R"], does: "Refresh all sources", command: "week.load" },
   { keys: ["V"], does: "Week: Timelines, the hours the rails show (business hours, 12 hours, 24 hours); H also works; also in Week's ⋯", command: "ui.set_view_range" },
   { keys: ["B"], does: "Week's Board: show or hide the timeline (the hour rail beside each card's to-dos); also beside the modes and in ⋯", command: "ui.set_show_timelines" },
+  { keys: ["B"], does: "Today: show or hide the timeline; also beside the header and in ⋯", command: "ui.set_today_timeline" },
   { keys: ["G"], does: "Week and Today: show or hide personal events (they still count in risk and free time); also in ⋯", command: "ui.set_show_personal" },
   { keys: ["Ctrl K"], does: "Command menu" },
   { keys: ["Ctrl J", "/"], does: "The assistant: ask what's next or about an item, or ask for a change you then confirm (/ when no text field has focus)", command: "assistant.ask" },

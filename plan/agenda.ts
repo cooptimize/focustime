@@ -98,7 +98,7 @@ const halfWord = (h: Half) => (h === "AM" ? "the morning" : h === "PM" ? "the af
 const dur = (m: number) => (m < 60 ? `${m}m` : m % 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m / 60}h`);
 
 /**
- * "Timebox my day" (D246): every planned pick without a timebox, musts first, then larger sizes, then pick order,
+ * "Timebox my day" (D246, TY-1 shows the result as placeholders on Today's timeline): every planned pick without a timebox, musts first, then larger sizes, then pick order,
  * into its own block: the first gap that fits it whole, else the largest gap left of at least its shortest useful
  * time (trimmed down to no less than that, D273), else not placed.
  */
@@ -136,25 +136,4 @@ export function planMyDay(picks: readonly Pick[], blocks: Partial<Record<Half, S
 export function didntFitText(picks: readonly { title: string; size: Size | null }[], sizes: SizeScale): string {
   if (!picks.length) return "";
   return `${picks.length} ${picks.length === 1 ? "to-do" : "to-dos"} didn't fit: ${picks.map((p) => `${p.title} (${p.size ?? `not sized, ${unsizedText(sizes)}`})`).join(", ")}.`;
-}
-
-/** One size smaller, for "Make smaller"; S has nothing smaller. An unsized pick counts as the size that holds the person's assumption (SZ-1), so at 1h there is nothing smaller. */
-export function smallerSize(s: Size | null, sizes: SizeScale): Size | null {
-  const z = namedSize(s, sizes);
-  return z === "L" ? "M" : z === "M" ? "S" : null;
-}
-
-export type DidntFit = { pickId: number; title: string; size: Size | null };
-
-/**
- * After Timebox my day runs (D274): the "no time yet" offer is cleared, a summary names what didn't fit,
- * and a short notice says how many picks got a time.
- */
-export function offerAfterTimebox(r: { placed: number; unplaced: readonly DidntFit[] }, sizes: SizeScale): { offer: false; summary: { text: string; picks: DidntFit[] } | null; notice: string | null } {
-  const picks = r.unplaced.map((u) => ({ pickId: u.pickId, title: u.title, size: u.size }));
-  return {
-    offer: false,
-    summary: picks.length ? { text: didntFitText(picks, sizes), picks } : null,
-    notice: r.placed ? `Timeboxed ${r.placed} ${r.placed === 1 ? "to-do" : "to-dos"}` : null,
-  };
 }

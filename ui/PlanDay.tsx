@@ -5,9 +5,7 @@
 // agenda open only on the selected block; Enter in the type box makes a draft story under the chosen feature and plans
 // it, Shift+Enter a plain intention ("not in DevOps"); features aren't picks, so they offer Draft stories instead.
 // Everything here is local: the actions only write FocusTime's plan store.
-import { unsizedText } from "../plan/estimate.ts";
 import { usePhone } from "./viewport.ts";
-import { CloseButton } from "./CloseButton.tsx";
 import { countsFor } from "../plan/process.ts";
 import { ModeArea } from "./ModeSwitch.tsx";
 import { planDayTitle } from "./nav.ts";
@@ -19,7 +17,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { blockClient, isPickable } from "../plan/rules.ts";
 import { dayCalendar, splitByBlocks, type DayEventWhen } from "../plan/todaycal.ts";
 import { AllDayRow, OutsideLine } from "./DayCalendar.tsx";
-import { agendaOf, offerAfterTimebox, planMyDay, smallerSize, type DayPlacement, type DidntFit, type Unplaced } from "../plan/agenda.ts";
+import { agendaOf } from "../plan/agenda.ts";
+import { mustPicks } from "../plan/musts.ts";
 import { addSections, defaultBlock, doneAction, type PriorityRow } from "../plan/addpane.ts";
 import { blockFitWords, dayHeadline, fitWords, planFit, planMinutes, trimCandidates } from "../plan/fit.ts";
 import { freeMinutes } from "../week/free.ts";
@@ -80,10 +79,10 @@ type Props = {
   onClose: () => void;
   /** ← → and the ‹ › buttons: the previous or next day that can be planned. */
   onStep: (dir: 1 | -1) => void;
-  /** Step 15.1 (D274): the next day that can be planned, for "Move to <day>" on picks that didn't fit. */
-  nextDay?: { date: string; label: string } | null;
   /** "+ Add work" or A on a block, or a card's "This week: <feature>" (focus): open on that block. */
-  start?: { half: Half; n: number; focus?: number | null; /** QF-1: open Timebox my day at once (from Today or the day menu). */ timebox?: boolean } | null;
+  start?: { half: Half; n: number; focus?: number | null } | null;
+  /** TY-1: Timebox my day: its placeholders are on Today's timeline. */
+  onTimebox?: (date: string) => void;
   /** Step 16.2: Today's mode switch, at the right of this view's header. */
   switcher?: ReactNode;
   /** Today's date, for the title ("Plan today" or "Plan Tuesday, Nov 3"). */
@@ -98,7 +97,7 @@ const inPlay = (p: Pick) => p.status === "planned" || p.status === "done";
 const pickedKey = (p: Pick) => (p.itemId !== null ? `i${p.clientKey}:${p.itemId}` : p.draftId !== null ? `d${p.draftId}` : p.followUpId !== null ? `f${p.followUpId}` : `t${p.clientKey}:${p.title}`);
 const weekdayOf = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "long" });
 
-export function PlanDay({ day, state, which, now, tz, colors, clients, error, act, onCommit, onClose, onStep, nextDay = null, start, justCommitted = false, onCommitSeen, switcher, today, onSelectBlock, onPlanWeek }: Props) {
+export function PlanDay({ day, state, which, now, tz, colors, clients, error, act, onCommit, onClose, onStep, start, justCommitted = false, onCommitSeen, onTimebox, switcher, today, onSelectBlock, onPlanWeek }: Props) {
   const past = state.access === "past";
   const off = day.pto;
   const ref = useRef<HTMLElement>(null);
@@ -130,22 +129,10 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
     if (halves.includes(start.half)) setSel(start.half);
     setFocusItem(start.focus ?? null);
   }, [start?.n]); // eslint-disable-line react-hooks/exhaustive-deps
-  // QF-1: asked from Today or the Board's day menu (the day already confirmed): Timebox my day's preview at once.
-  useEffect(() => {
-    if (start?.timebox && !past && !off && timing && state.plan.committedAt) setMyDay(true);
-  }, [start?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => onSelectBlock?.(sel), [sel]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onSelectBlock?.(null), []); // eslint-disable-line react-hooks/exhaustive-deps
-  const { sizes } = useContext(PlanCtx);
-  const [myDay, setMyDay] = useState(false);
   /** U6: bumped by /, so the right pane opens its list and focuses the search. */
   const [slash, setSlash] = useState(0);
-  /** Step 15.1 (D274): what didn't fit after Timebox my day ran, until it's acted on or closed. */
-  const [didntFit, setDidntFit] = useState<{ text: string; picks: DidntFit[] } | null>(null);
-  const settle = (pickId: number) => setDidntFit((d) => {
-    const picks = d?.picks.filter((x) => x.pickId !== pickId) ?? [];
-    return picks.length ? { ...offerAfterTimebox({ placed: 0, unplaced: picks }, sizes).summary! } : null;
-  });
   const boxed = new Set((tbEnv?.timeboxes ?? []).filter((t) => t.date === day.date && !t.removedAt).map((t) => t.pickId));
   const unboxed = dayPicks.filter((p) => p.status === "planned" && !boxed.has(p.id)).length;
   const hintPick = dayPicks.find((p) => p.status === "planned" && !boxed.has(p.id))?.id ?? null;
@@ -217,7 +204,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
       summary={off ? "Day off" : past ? "Tick what got done, or drop the rest" : <Headline h={dayHeadline(blocks.filter((b) => !b.slot.off))} />}
       secondary={
         !past && !off && committed && timing && unboxed > 0 ? (
-          <button type="button" className="pd2-secondary" onClick={() => setMyDay(true)} title="Give every planned to-do a time in its block's free time">
+          <button type="button" className="pd2-secondary" onClick={() => onTimebox?.(day.date)} title="Suggest a time for every planned to-do, on Today's timeline">
             Timebox my day
           </button>
         ) : null
@@ -228,47 +215,12 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
   );
   const notices = (
     <>
-        {didntFit && !past && (
-          <div className="pd-didnt-fit" role="status" aria-label="To-dos that didn't fit">
-            <p>
-              <strong>{didntFit.text}</strong>
-            </p>
-            <ul>
-              {didntFit.picks.map((u) => {
-                const smaller = smallerSize(u.size, sizes);
-                return (
-                  <li key={u.pickId}>
-                    <span className="df-title">
-                      {u.title} <span className="muted">({u.size ?? `not sized, ${unsizedText(sizes)}`})</span>
-                    </span>
-                    {nextDay && (
-                      <button type="button" className="mini" onClick={() => void act("pick.move", { id: u.pickId, date: nextDay.date, half: dayPicks.find((p) => p.id === u.pickId)?.half ?? "AM" }).then((ok) => ok && settle(u.pickId))}>
-                        Move to {nextDay.label}
-                      </button>
-                    )}
-                    {smaller && (
-                      <button type="button" className="mini" onClick={() => void act("pick.set_size", { id: u.pickId, size: smaller }).then((ok) => ok && settle(u.pickId))} title={`Make it ${smaller}, then run Timebox my day again`}>
-                        Make smaller
-                      </button>
-                    )}
-                    <button type="button" className="mini quiet" onClick={() => settle(u.pickId)}>
-                      Leave untimed
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            <button type="button" className="mini quiet df-close" onClick={() => setDidntFit(null)}>
-              Got it
-            </button>
-          </div>
-        )}
-        {justCommitted && !didntFit && !past && timing && unboxed > 0 && !off && (
+        {justCommitted && !past && timing && unboxed > 0 && !off && (
           <div className="pd-committed" role="status">
             <p>
               <strong>Planned.</strong> {unboxed} to-do{unboxed === 1 ? " has" : "s have"} no time yet.
             </p>
-            <button type="button" className="primary" onClick={() => (onCommitSeen?.(), setMyDay(true))}>
+            <button type="button" className="primary" onClick={() => (onCommitSeen?.(), onTimebox?.(day.date))}>
               Timebox my day
             </button>
             <button type="button" onClick={() => onCommitSeen?.()}>Not now</button>
@@ -326,23 +278,6 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
           after={
             <>
               {dragging && plannable && <WeekDropStrip drag={dragging} planDate={day.date} colors={colors} name={name} act={act} onDone={() => setDragging(null)} />}
-        {myDay && (
-          <TimeboxMyDay
-            day={day}
-            picks={dayPicks}
-            weekFeatures={state.weekFeatures}
-            now={now}
-            tz={tz}
-            onClose={() => setMyDay(false)}
-            onRan={(r) => {
-              // Step 15.1 (D274): the "no time yet" offer is done once this summary is shown.
-              const after = offerAfterTimebox(r, sizes);
-              onCommitSeen?.();
-              setDidntFit(after.summary);
-              if (after.notice) window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: after.notice }));
-            }}
-          />
-        )}
             </>
           }
         />
@@ -973,168 +908,3 @@ export function Agenda({ slot, now, tz, clientName, pickRow, whens }: { whens?: 
 }
 
 /** Musts on this day's picks: the item is a must on the week list, or its parent feature is. */
-function mustPicks(picks: readonly Pick[], weekFeatures: PlanDayState["weekFeatures"], work: ReadonlyMap<string, { items: WorkItem[] }>): Set<number> {
-  const musts = new Set(weekFeatures.filter((f) => f.tier === "must").map((f) => `${f.clientKey}:${f.itemId}`));
-  const out = new Set<number>();
-  for (const p of picks) {
-    if (p.itemId === null) continue;
-    const parent = work.get(p.clientKey)?.items.find((i) => i.id === p.itemId)?.parentId ?? null;
-    if (musts.has(`${p.clientKey}:${p.itemId}`) || (parent !== null && musts.has(`${p.clientKey}:${parent}`))) out.add(p.id);
-  }
-  return out;
-}
-
-/**
- * Timebox my day (D246): every planned pick without a timebox, musts first, then larger sizes, into its block's free
- * gaps. Shows the resulting agenda first; each new timebox has its own Put on Outlook. Apply adds them all at once,
- * then any Outlook events go through one combined preview.
- */
-function TimeboxMyDay({ day, picks, weekFeatures, now, tz, onClose, onRan }: { day: Day; picks: Pick[]; weekFeatures: PlanDayState["weekFeatures"]; now: string; tz: string; onClose: () => void; onRan: (r: { placed: number; unplaced: DidntFit[] }) => void }) {
-  const env = useTimeboxes();
-  const pv = useContext(PlanCtx);
-  const work = useContext(DevOpsWork);
-  const back = useRef<HTMLElement | null>(document.activeElement as HTMLElement | null);
-  const first = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    env?.loadAccess();
-    first.current?.focus();
-    return () => back.current?.focus?.();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const [plan] = useState(() => {
-    const blocks: Partial<Record<Half, Slot>> = {};
-    for (const h of ["AM", "PM", "EVE"] as Half[]) {
-      const sl = slotOf(day, h);
-      if (sl && !sl.off) blocks[h] = sl;
-    }
-    return planMyDay(picks, blocks, env?.timeboxes ?? [], pv.sizes, mustPicks(picks, weekFeatures, work), isTodayIn(day.date, now, tz) ? now : undefined, pv.minSizes);
-  });
-  const [outlook, setOutlook] = useState<Record<number, boolean>>(() => Object.fromEntries(plan.placed.map((p) => [p.pickId, !!env?.settings.outlookDefault])));
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  if (!env) return null;
-  const canWrite = env.access?.access === "write";
-  const anyOutlook = plan.placed.some((p) => outlook[p.pickId]);
-  const allOutlook = plan.placed.length > 0 && plan.placed.every((p) => outlook[p.pickId]);
-  const apply = async () => {
-    // Nothing fits: no write, only the summary of what didn't.
-    if (plan.placed.length === 0) {
-      onClose();
-      onRan({ placed: 0, unplaced: plan.unplaced });
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const r = await call<{ timeboxes: { uid: string }[]; sync: string[] }>("timebox.add_many", { date: day.date, items: plan.placed.map((p) => ({ pickId: p.pickId, start: p.start, end: p.end, outlook: !!outlook[p.pickId] })) });
-      env.changed();
-      onClose();
-      onRan({ placed: r.timeboxes.length, unplaced: plan.unplaced });
-      if (r.sync.length && canWrite) await env.syncMany(r.sync);
-    } catch (e) {
-      setBusy(false);
-      setError(e instanceof Error ? e.message : "That didn't work");
-    }
-  };
-  const halvesShown = (["AM", "PM", "EVE"] as Half[]).filter((h) => plan.placed.some((p) => p.half === h) || plan.unplaced.some((u) => u.half === h));
-  return (
-    <div className="cap-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
-      <div
-        className="cap-dialog write-dialog myday"
-        data-overlay="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Timebox my day"
-        onKeyDown={(e) => {
-          if (e.key === "Escape" && !busy) {
-            e.stopPropagation();
-            e.preventDefault();
-            onClose();
-          }
-        }}
-      >
-        <div className="cap-dialog-head">
-          <h2>Timebox my day</h2>
-          <span className="muted">{longDate(day.date)} · musts first, then larger to-dos, each in its own block</span>
-          <CloseButton onClose={onClose} disabled={busy} />
-        </div>
-        {plan.placed.length === 0 && plan.unplaced.length === 0 && <p className="muted">Every planned to-do already has a timebox.</p>}
-        {halvesShown.map((h) => (
-          <MyDayBlock key={h} slot={slotOf(day, h)!} placed={plan.placed.filter((p) => p.half === h)} unplaced={plan.unplaced.filter((u) => u.half === h)} outlook={outlook} setOutlook={(id, v) => setOutlook((o) => ({ ...o, [id]: v }))} now={isTodayIn(day.date, now, tz) ? now : undefined} tz={tz} colors={env.colors} />
-        ))}
-        {plan.placed.length > 1 && (
-          <label className="myday-all">
-            <input type="checkbox" checked={allOutlook} onChange={(e) => setOutlook(Object.fromEntries(plan.placed.map((p) => [p.pickId, e.target.checked])))} /> Put all on Outlook
-          </label>
-        )}
-        {anyOutlook && env.access && !canWrite && (
-          <p className="tb-explain" role="note">
-            {env.access.access === "not_set_up" ? "Outlook isn't set up, so these stay in FocusTime." : env.access.message}{" "}
-            {(env.access.access === "read_only" || env.access.access === "not_connected") && (
-              <button type="button" className="mini" onClick={env.connectWrite}>
-                Reconnect Outlook
-              </button>
-            )}
-          </p>
-        )}
-        {error && (
-          <p className="set-problem" role="alert">
-            {error}
-          </p>
-        )}
-        <div className="wd-actions">
-          <button ref={first} type="button" className="commit" disabled={busy || (plan.placed.length === 0 && plan.unplaced.length === 0)} onClick={() => void apply()}>
-            {busy ? "Saving…" : plan.placed.length === 0 ? "OK" : `Timebox ${plan.placed.length} to-do${plan.placed.length === 1 ? "" : "s"}`}
-          </button>
-          <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>
-            Cancel
-          </button>
-          {anyOutlook && canWrite && <span className="muted">You'll see every Outlook event in one preview before anything is written.</span>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MyDayBlock({ slot, placed, unplaced, outlook, setOutlook, now, tz, colors }: { slot: Slot; placed: DayPlacement[]; unplaced: Unplaced[]; outlook: Record<number, boolean>; setOutlook: (id: number, v: boolean) => void; now: string | undefined; tz: string; colors: Record<string, string> }) {
-  const env = useTimeboxes()!;
-  // The resulting agenda: what is there now plus the new timeboxes (marked New).
-  const proposed = placed.map((p) => ({ id: -p.pickId, date: slot.date, start: p.start, end: p.end, title: p.title, clientKey: p.clientKey, pickId: p.pickId, removedAt: null }));
-  const rows = agendaOf(slot, [...env.timeboxes, ...proposed], now);
-  return (
-    <section className="myday-block" aria-label={`${halfTag(slot.half)} after timeboxing`}>
-      <h3>
-        <span className="half-tag">{halfTag(slot.half)}</span> {slot.focus[0]?.clientName ?? (slot.half === "EVE" ? "Evening" : "Open")}
-      </h3>
-      <ol className="pd-agenda-list">
-        {rows.map((r) => {
-          const when = spanText(r.start, r.end, tz);
-          const p = r.kind === "timebox" && r.timeboxId !== undefined && r.timeboxId < 0 ? placed.find((x) => x.pickId === -r.timeboxId!) : undefined;
-          if (p)
-            return (
-              <li key={`n${p.pickId}`} className="ag-timebox new" style={{ "--c": clientColor(p.clientKey, colors) } as CSSProperties}>
-                <span className="ag-time">{when}</span>
-                <span className="ag-title">
-                  <span className="ag-new">New</span> {p.title}
-                  {p.trimmed && <span className="muted"> · trimmed to {formatDuration(p.minutes)}</span>}
-                </span>
-                <label className="ag-ol">
-                  <input type="checkbox" checked={!!outlook[p.pickId]} onChange={(e) => setOutlook(p.pickId, e.target.checked)} aria-label={`Put ${p.title} on Outlook`} /> Outlook
-                </label>
-              </li>
-            );
-          return (
-            <li key={`${r.kind}${r.start}${r.timeboxId ?? r.eventId ?? ""}`} className={`ag-${r.kind}`}>
-              <span className="ag-time">{when}</span>
-              <span className="ag-title">{r.kind === "free" ? `Free · ${formatDuration(r.minutes)}` : r.title}</span>
-            </li>
-          );
-        })}
-      </ol>
-      {unplaced.map((u) => (
-        <p key={u.pickId} className="pd-flag">
-          {u.title} ({u.size}): {u.reason}. After this you can move it, make it smaller or leave it untimed.
-        </p>
-      ))}
-    </section>
-  );
-}

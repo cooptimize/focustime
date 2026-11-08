@@ -1672,6 +1672,29 @@ Unnumbered until merge.
 | - | Done | GD-3: editing a client's Other names or Match only as written re-checks, in the background, the held messages that concern that client: those in its own chats and those matched against it. An added alias doesn't re-hold anything already sorted; holding only happens as a message is first sorted. |
 | - | Done | GD-3: bulk actions, per client, one line each at the top of the list (`conversations.held_bulk`): "Sort all for <client> by hand" makes one new conversation per chat (a conversation belongs to one chat), first message's title, each named client tagged, no AI; "Mark all not work-related" moves them to Chatter, placed by a person. Each asks first with the count, inline so it works on the phone, and the action sends that count: if the list changed since, it is refused and nothing moves. They act on every held message I can see, past the list's 200. |
 
+## TY-1: Today timeline and timeboxing on the timeline (Nov 8)
+
+Unnumbered until merge.
+
+| # | Status | Decision |
+|---|---|---|
+| - | Done | TY-1: the timeline is off by default and remembered per person (`[ui] today_timeline`). The phone has its own setting (`today_timeline_phone`), so turning it on at a desk doesn't change MB-1's phone layout. Older builds ignore both keys. |
+| - | Done | TY-1: one timeline: the hour grid, event layout, now line and event cards moved out of `ui/WeekGrid.tsx` into `ui/Timeline.tsx`, and Week and Today both draw it. Today adds only what Week doesn't have: the tray, the placeholders and the edits (`ui/TodayTimeline.tsx`). `ui/ty1.test.ts` fails if a second copy appears. |
+| - | Done | TY-1: an hour on Today is 94 px at Default, the height of an hour on the Board at 1920, scaled by Text size. |
+| - | Done | TY-1: the switch is on Today only in the view it applies to. Check-in and Close out stay lists, and a weekend day stays WK-3's plain list. A PTO day shows Week's hatched cell. Holidays have no separate form on Week (PTO or an all-day item), so Today shows them the same way. |
+| - | Done | TY-1: 3840's older day timeline beside the list stays while the switch is off and hides while it is on. |
+| - | Done | TY-1: dragging works without Confirm on today and future days, and not on past days, PTO days or a block that has ended. With Use timeboxing off there are no trays or bands. |
+| - | Done | TY-1: a to-do drops only into its own block, because the block is its client. Dropped on the other block it says "That's the <half> block. Move the to-do there first". |
+| - | Done | TY-1: a dragged or resized timebox may overlap a meeting, as a custom time always could; it draws above events. A Timebox my day placeholder may not: it stays inside an open gap of its block, clear of meetings and other timeboxes, the rule `planMyDay` already follows (a show-as-free event doesn't block). Dragged onto a meeting, it goes back with "A suggestion stays clear of meetings and other timeboxes". |
+| - | Done | TY-1: T takes the first free stretch that fits the to-do's length, from now on when the block is under way (`nextFreeSpan`). |
+| - | Done | TY-1: Timebox my day has no popup. Every entry point (Today, the day menu, the command menu, after Confirm) confirms the day if it needs to and opens that day's Today timeline with `planMyDay`'s suggestions as placeholders. It shows the timeline for that visit without changing the saved switch. |
+| - | Done | TY-1: Timebox my day's per-row Put on Outlook is now one Put on Outlook in the bar, off or on from the same default. Outlook events still go through the one combined preview after Accept all, and nothing reaches Outlook without it. A ✓ on one suggestion goes through that timebox's own preview. |
+| - | Done | TY-1: the didn't-fit panel (Move, Make smaller, Leave untimed) is gone: what didn't fit stays in the tray, the bar says so, and the to-do's ⋯ still has its size and Move. |
+| - | Done | TY-1: a suggestion's length: dragging a placeholder keeps its length, and its new time is what Accept saves. Suggestions are never saved until accepted, and leaving the day drops them. |
+| - | Done | TY-1: timed promises that aren't late are marks on the hours, as on Week. Late ones are the header's late chip (UI-9). |
+| - | Done | TY-1: a to-do's length comes from the shared `pickNeed` and its chip from `sizeChipText`, so the unsized default follows SZ-1 without a change here. Until SZ-1 merges it reads "Size? · 2h". |
+| - | Done | TY-1: a drag's end is read from the release, not the last drawn position, so a quick flick lands where it was let go. This also applies to Week's bands. Tray rows and bands aren't text-selectable on a computer, because a selection left by one drag turned the next press into the browser's own drag. |
+| - | Done | TY-1: `e2e/ty1.test.ts` adds its overlapping meeting and evening item by intercepting `week.load` on that page, so the shared demo data doesn't change for every other test. |
 
 ## SZ-1: unsized work counts as 1 hour, a setting (Nov 8)
 
@@ -1682,9 +1705,9 @@ Unnumbered until merge. Changes D448's "an unsized story counts as 2h everywhere
 | - | Done | SZ-1: the one value. `plan/estimate.ts` holds `DEFAULT_UNSIZED_MINUTES` (60) and `UNSIZED_CHOICES` (30, 60, 120, 180). The person's value travels in the existing `sizes` scale as `sizes.unsized` (`SizeScale`, in `cfg.plan.sizes` and `planning.sizes`), read through `storyMinutes(size, scale)`. Every function that counts unsized work now requires the scale, with no default argument, so the type-checker finds a caller that forgets it. |
 | - | Done | SZ-1: the copies removed: `UNSIZED_MINUTES` in `plan/estimate.ts` and a second 120 in `plan/reach.ts`, every `sizes[size ?? "M"]` (agenda, picktime, timer, todayorder, pickNeed, Close out's borrow, the timebox dialog), `?? 120` in todayorder, Close out's stale `{ S: 60, M: 120, L: 210 }` fallback, `sizes.M` on the phone's to-do sheet, BreakDownPanel's own hours table, and the text "2h" in focus labels, Didn't fit, Clear's hint, Ahead's size hint and the Guide. `plan/unsized.test.ts` scans the code so a new copy fails. |
 | - | Done | SZ-1: S, M and L stay fixed (E2, D446), so they are shown read-only beside the choice ("S 1h · M 2h · L 4h"). |
-| - | Done | SZ-1: where a size has to be named (shortest useful time, Timebox my day's sort, Make smaller), unsized is the smallest size that holds the assumption (`namedSize`): 30 min and 1h are S, 2h is M, 3h is L. So at 1h Make smaller offers nothing, since S wouldn't be smaller, and a short assumption is never asked for a stretch longer than itself. |
+| - | Done | SZ-1: where a size has to be named (shortest useful time, Timebox my day's sort), unsized is the smallest size that holds the assumption (`namedSize`): 30 min and 1h are S, 2h is M, 3h is L. So a short assumption is never asked for a stretch longer than itself. |
 | - | Done | SZ-1: 30 min is the one value not in whole hours, on the chip and in Clear's hint ("Size? · 30 min"), because "1h" would misstate the setting. Totals stay whole hours as E2 says, so one 30 minute story reads "about 1h". |
 | - | Done | SZ-1: `[plan] unsized_minutes`, a person's setting (settings rows, no migration). A file without it loads as 1h. An older build skips it as an unknown `[plan]` key (BH-1) and saving there keeps it. A value outside the four choices is refused like any other bad setting. |
 | - | Done | SZ-1: not changed: a draft story with no size chosen is still created as M (`DEFAULT_SIZE`): that is a real size on the draft, not an assumption. Readiness and Gaps read the DevOps size field only, so unsized items stay Unsized; nothing here reaches DevOps. Timeboxes and a to-do's own minutes win over the assumption as before. |
+| - | Done | SZ-1 and TY-1: Today's timeline uses the same scale: the tray's chip is `sizeChipText`, a dragged to-do's length is `pickNeed`, T's next free stretch and Timebox my day's placeholders are `timeChoices` and `planMyDay`. TY-1 removed Make smaller, so `smallerSize` is gone. |
 | - | Done | SZ-1: effect on existing plans: anyone who never changed the setting sees unsized work count 1h less the next time their week loads, so some "A little over" warnings go away. It is display only; nothing stored changes. |
-

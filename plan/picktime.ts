@@ -45,7 +45,7 @@ export function timeChoices(slot: Slot, timeboxes: readonly Box[], pick: { id: n
 }
 
 export type DragMode = "move" | "start" | "end";
-const shift = (iso: string, minutes: number) => {
+export const shift = (iso: string, minutes: number) => {
   const off = /([+-]\d{2}:\d{2}|Z)$/.exec(iso)?.[1] ?? "Z";
   const i = Temporal.Instant.from(iso).add({ minutes });
   return off === "Z" ? i.toString() : i.toZonedDateTimeISO(off).toString({ timeZoneName: "never", smallestUnit: "second" }).replace(/:00(?=[+-])/, ":00");

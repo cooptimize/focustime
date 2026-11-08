@@ -1791,6 +1791,15 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
       return { ok: true, data: { ui: r.parsed.config.ui } };
     }
+    case "ui.set_today_timeline": {
+      // TY-1: Today's Timeline switch, one for a computer and one for the phone. An older build skips the keys (BH-1).
+      const i = req.input as Record<string, unknown> | null;
+      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "show" && k !== "phone") || typeof i.show !== "boolean" || (i.phone !== undefined && typeof i.phone !== "boolean")) return bad("input must be { show: boolean, phone?: boolean }");
+      if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
+      const r = await ctx.writeConfig((text) => setValue(text, "ui", i.phone ? "today_timeline_phone" : "today_timeline", i.show as boolean, "Display (TY-1): the Timeline switch on Today."));
+      if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
+      return { ok: true, data: { ui: r.parsed.config.ui } };
+    }
     case "ui.set_inbox": {
       // IB-1: the Inbox's view, clients and grouping, remembered per person ([ui] inbox_view, inbox_clients, inbox_group).
       const i = req.input as Record<string, unknown> | null;

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_PLAN } from "../config/schema.ts";
 import { aFocusBlock, aClient, aWeek, aWeekFeature } from "../test/builders/index.ts";
-import { DEFAULT_MIN_SIZES, didntFitText, offerAfterTimebox, planMyDay, smallerSize } from "./agenda.ts";
+import { DEFAULT_MIN_SIZES, didntFitText, planMyDay } from "./agenda.ts";
 import { reviewTotal } from "./breakdown.ts";
 import { DEFAULT_SIZE_SCALE, DEFAULT_UNSIZED_MINUTES, estimate, namedSize, plannedMinutesOf, sizeChipText, storyMinutes, UNSIZED_CHOICES, unsizedText, validUnsizedMinutes, type SizeScale } from "./estimate.ts";
 import { gapsOf, type GapItem } from "./fixnext.ts";
@@ -13,6 +13,7 @@ import { focusLabel, dayFocus } from "./focus.ts";
 import { timeChoices } from "./picktime.ts";
 import { reach } from "./reach.ts";
 import { plannedMinutes } from "./rules.ts";
+import { nextFreeSpan } from "./timeline.ts";
 import { suggestMinutes } from "./timer.ts";
 import { pickNeed, sizeMinutes, SIZE_MINUTES, type Pick } from "./types.ts";
 import { progress } from "./weeklist.ts";
@@ -73,6 +74,7 @@ describe("every place reads the setting (1h by default, then 2h)", () => {
     ["progress (Week)", (s) => progress([{ clientKey: "k", itemId: 2, tier: "must", estimate: null, level: "story", size: null, parentId: null }], () => false, s)[0]!.leftMinutes, 60, 120],
     ["can't reach the target (Ahead)", (s) => reach({ unsizedMinutes: s.unsized, target: "2026-11-06", today: "2026-11-02", me: "me@example.com", weeks: [{ weekStart: "2026-11-02", freeMinutes: 300 }], months: [], stories: [{ assigneeEmail: "me@example.com", assigneeName: "Me", minutes: null }] }), { kind: "ok", needMinutes: 60, freeMinutes: 300 }, { kind: "ok", needMinutes: 120, freeMinutes: 300 }],
     ["Timebox my day", (s) => planMyDay([pick()], { AM: slot }, [], s, new Set(), undefined, DEFAULT_MIN_SIZES).placed.map((p) => p.end.slice(11, 16)), ["09:00"], ["10:00"]],
+    ["T on the timeline (nextFreeSpan)", (s) => { const x = nextFreeSpan(slot, [], { id: 1, size: null }, s, undefined, DEFAULT_MIN_SIZES)!; return x.end.slice(11, 16); }, "09:00", "10:00"],
     ["+ time's choices", (s) => timeChoices(slot, [], { id: 1, size: null }, s, undefined, DEFAULT_MIN_SIZES)[0]!.minutes, 60, 120],
   ];
   it.each(places)("%s", (_n, run, one, two) => {
@@ -97,14 +99,12 @@ describe("every place reads the setting (1h by default, then 2h)", () => {
   it("where a size has to be named, unsized is the smallest size that holds the assumption", () => {
     expect([HALF, ONE, TWO, THREE].map((s) => namedSize(null, s))).toEqual(["S", "S", "M", "L"]);
     expect(namedSize("L", ONE)).toBe("L");
-    // Make smaller only offers something actually smaller than the assumption.
-    expect([HALF, ONE, TWO, THREE].map((s) => smallerSize(null, s))).toEqual([null, null, "S", "M"]);
   });
 
   it("a 30 minute assumption is never asked for a longer stretch than it needs", () => {
     const narrow = { ...(slot as object), freeGaps: [{ start: iso("08:00"), end: iso("08:30"), minutes: 30 }], windows: [{ start: iso("08:00"), end: iso("08:30") }], end: iso("08:30") } as never;
     expect(timeChoices(narrow, [], { id: 1, size: null }, HALF, undefined, { S: 60, M: 60, L: 90 }).map((c) => c.minutes)).toEqual([30]);
-    expect(offerAfterTimebox({ placed: 0, unplaced: [{ pickId: 1, title: "A", size: null }] }, HALF).summary?.text).toBe("1 to-do didn't fit: A (not sized, 30 min).");
+    expect(didntFitText([{ title: "A", size: null }], HALF)).toBe("1 to-do didn't fit: A (not sized, 30 min).");
   });
 });
 
