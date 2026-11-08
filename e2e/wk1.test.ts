@@ -30,7 +30,8 @@ async function fits(page: Page): Promise<void> {
   });
   expect(m.page[0], "page scrolls sideways").toBe(m.page[1]);
   expect(m.grid[0], "grid scrolls sideways").toBe(m.grid[1]);
-  expect(m.days).toHaveLength(5);
+  // Monday to Friday, plus a weekend day when the demo has something on it (WK-3): every column fits.
+  expect(m.days.length).toBeGreaterThanOrEqual(5);
   for (const d of m.days) {
     expect(d.width, `${d.label} width`).toBeGreaterThan(30);
     expect(d.left, `${d.label} left`).toBeGreaterThanOrEqual(0);

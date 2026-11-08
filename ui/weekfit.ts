@@ -99,8 +99,12 @@ function perDay(shares: readonly number[], col: number, scale: number, working: 
   });
 }
 
-/** A day's share of the week: working days 1, Friday, weekend days and PTO days 0.6, the day being planned 2.6. */
+/**
+ * A day's share of the week: working days 1, Friday and PTO days 0.6, weekend days 0.4 (WK-3: narrow and quiet, a
+ * plain list, so Mon to Thu keep their tier at 1440), the day being planned 2.6.
+ */
 export function dayShare(day: { kind: string; pto?: unknown }, planning: boolean): number {
   if (planning) return 2.6;
+  if (day.kind === "weekend") return 0.4;
   return day.kind === "work" && !day.pto ? 1 : 0.6;
 }

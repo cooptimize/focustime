@@ -19,7 +19,7 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't w
 
 const SEND_LABEL: Record<LoopPreviewView["mode"], string> = { post: "Send in Teams", draft: "Create Outlook draft", send: "Send email now", comment: "Post comment", note: "Save call note" };
 
-export function SendLoop({ promiseKey, who, demo = false, compact = false, onClosed, onCancel, closeWithout, initialHow = null }: {
+export function SendLoop({ promiseKey, who, demo = false, compact = false, onClosed, onCancel, closeWithout, initialHow = null, initialText = null }: {
   promiseKey: string;
   who: string | null;
   /** Demo mode: the consent link isn't offered (the demo has no sign-in). */
@@ -32,6 +32,8 @@ export function SendLoop({ promiseKey, who, demo = false, compact = false, onClo
   closeWithout: (v: CloseLoopValue) => Promise<string | null>;
   /** Close without sending starts on the promise's own channel (a follow-up's), as before. */
   initialHow?: CloseHow | null;
+  /** WK-3: the draft's text when the caller has a better one (a Deployment's note and items), still editable. */
+  initialText?: { text: string; from: string } | null;
 }) {
   const [draft, setDraft] = useState<LoopDraftView | null>(null);
   const [step, setStep] = useState<Step>({ kind: "draft" });
@@ -54,8 +56,8 @@ export function SendLoop({ promiseKey, who, demo = false, compact = false, onClo
     call<LoopDraftView>("loop.draft", { key: promiseKey })
       .then((d) => {
         if (!live) return;
-        setDraft(d);
-        setText(d.text);
+        setDraft(initialText ? { ...d, text: initialText.text, draftedFrom: initialText.from, aiNote: null } : d);
+        setText(initialText?.text ?? d.text);
         setSubject(d.subject);
         setChannel(d.initial);
         setTarget(d.channels.find((c) => c.channel === "teams")?.targets?.[0]?.kind ?? null);

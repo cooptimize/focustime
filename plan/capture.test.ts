@@ -125,3 +125,16 @@ describe("boxKind: the chip the capture box highlights while I type (step 15.3)"
     expect(k("need to add paging", "Adatum")).toBe("draft");
   });
 });
+
+describe("boxKind: Deployment (WK-3)", () => {
+  const k = (text: string) => boxKind(text, null, "2026-11-02", clients);
+  it("deploy, release, go-live and cutover words highlight Deployment", () => {
+    expect(k("deploy the sales model Saturday")).toBe("deployment");
+    expect(k("release 4.2 Friday night")).toBe("deployment");
+    expect(k("go-live for the portal")).toBe("deployment");
+    expect(k("cutover weekend")).toBe("deployment");
+  });
+  it("a promise still wins: telling someone about a release is a follow-up", () => {
+    expect(k("told Dana I'd send the release notes")).toBe("follow_up");
+  });
+});

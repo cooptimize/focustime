@@ -39,7 +39,7 @@ import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
 import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { MustsSummary, TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
-import { stepWeekday, afterDone, defaultNav, focusOf, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, planDayNav, planWeekOf, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
+import { stepWeekday, weekendStops, afterDone, defaultNav, focusOf, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, planDayNav, planWeekOf, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
 import { ModeArea, ModeSwitch, TimelineToggle } from "./ModeSwitch.tsx";
 import { dayModeStatus, momentCard, weekModeStatus } from "../plan/modes.ts";
 import { FocusScreen, SoundControl } from "./FocusScreen.tsx";
@@ -63,6 +63,8 @@ import { DraftEditor, DraftEditorCtx } from "./DraftEditor.tsx";
 import type { BoxKind } from "../plan/capture.ts";
 import { borrowedSummary } from "../plan/borrow.ts";
 import { formatDuration } from "../week/format.ts";
+import { AfterHoursChip, clientNameFor, DeployedOffer } from "./Deploy.tsx";
+import { DEPLOYED_EVENT, readShowWeekend, writeShowWeekend } from "./weekend.ts";
 import { MoreButton, PopupMenu } from "./Menus.tsx";
 import { borrowStep, timerStep } from "./menu.ts";
 import { nowStrip } from "../plan/now.ts";
@@ -484,6 +486,24 @@ export function App() {
    * WK-2: the Board's Timeline toggle (its header button, B, Week's ⋯, the command). Hidden, every card uses its full
    * width for its to-dos and lists its meetings; remembered per person in [ui] show_timelines.
    */
+  // WK-3: Show weekend, per viewer in this browser (ui/weekend.ts); Saturday and Sunday also show whenever something is on them.
+  const [showWeekend, setShowWeekend] = useState(readShowWeekend);
+  const weekendRef = useRef(showWeekend);
+  weekendRef.current = showWeekend;
+  // WK-3: one Undo toast for changes made from menus (a move onto a weekend, a deployment planned or changed).
+  const [undoToast, setUndoToast] = useState<{ id: number; text: string; undo: (() => Promise<unknown>) | null } | null>(null);
+  useEffect(() => {
+    if (!undoToast) return;
+    const t = setTimeout(() => setUndoToast((x) => (x?.id === undoToast.id ? null : x)), undoToast.undo ? 10_000 : 5_000);
+    return () => clearTimeout(t);
+  }, [undoToast]);
+  // WK-3: a Deployment ticked done anywhere offers "Tell <client> it's deployed" (never sent on its own).
+  const [deployed, setDeployed] = useState<Pick | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => setDeployed((e as CustomEvent<Pick>).detail);
+    window.addEventListener(DEPLOYED_EVENT, on);
+    return () => window.removeEventListener(DEPLOYED_EVENT, on);
+  }, []);
   const [showTimelines, setShowTimelines] = useState(true);
   const showTimelinesRef = useRef(showTimelines);
   showTimelinesRef.current = showTimelines;
@@ -554,7 +574,7 @@ export function App() {
       if (input.weekStart) weekRef.current = input.weekStart;
       if (!opts.quiet) setLoading(true);
       try {
-        const d = await weekLoad({ ...input, ...(now ? { now } : {}), ...(rangeRef.current ? { viewRange: rangeRef.current } : {}) }, { background: !!opts.background });
+        const d = await weekLoad({ ...input, ...(now ? { now } : {}), ...(rangeRef.current ? { viewRange: rangeRef.current } : {}), ...(weekendRef.current ? { weekend: true } : {}) }, { background: !!opts.background });
         if (id !== seq.current) return undefined;
         weekRef.current = d.weekStart;
         setState((prev) => afterLoad(prev, { kind: "ok", data: d }));
@@ -571,6 +591,12 @@ export function App() {
     [now],
   );
   const reloadQuiet = useCallback(() => void load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}) }, { quiet: true }), [load]);
+  const saveShowWeekend = useCallback((show: boolean) => {
+    setShowWeekend(show);
+    weekendRef.current = show;
+    writeShowWeekend(show);
+    void load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}) }, { quiet: true });
+  }, [load]);
   // Timeboxes (step 12): the Timebox… dialog, Outlook write access (read when first needed), and the write flow.
   const [tbTarget, setTbTarget] = useState<TimeboxTarget | null>(null);
   // Step 13: the collaboration finder's target, and the timebox env for menus built before render.
@@ -1287,7 +1313,7 @@ export function App() {
       if (e.key !== "[" && e.key !== "]") return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       e.preventDefault();
-      const next = stepWeekday(todayAt ?? data.planDay.date, e.key === "]" ? 1 : -1);
+      const next = stepWeekday(todayAt ?? data.planDay.date, e.key === "]" ? 1 : -1, weekendStops({ showWeekend: weekendRef.current, days: data.week.days }));
       goNav(navOf.todayOn(next === data.planDay.date ? null : next));
     };
     window.addEventListener("keydown", onKey);
@@ -1365,6 +1391,19 @@ export function App() {
       saveShowPersonal: (show) => void saveShowPersonal(show),
       showTimelines,
       saveShowTimelines: (show) => void saveShowTimelines(show),
+      showWeekend,
+      saveShowWeekend,
+      undoable: (text, undo) => setUndoToast({ id: Date.now(), text, undo }),
+      planAction: async (action, input) => {
+        try {
+          const r = await planAction(action, input);
+          reloadQuiet();
+          return r;
+        } catch (e) {
+          setNotice(e instanceof Error ? e.message : "That did not work");
+          return null;
+        }
+      },
       saveTextSize: (s) => void saveTextSize(s),
       hours: data.hours,
       runTime,
@@ -1936,6 +1975,7 @@ export function App() {
       ) : base === "today" ? (
         <Today
           viewDate={todayAt}
+          showWeekend={showWeekend}
           onDay={(d) => goNav(navOf.todayOn(d && d !== data.planDay.date ? d : null))}
           onTimebox={(d) => void timeboxDay(d)}
           onCloseOutOn={(d) => goNav(navOf.today("closeout", d))}
@@ -2004,6 +2044,7 @@ export function App() {
                   {borrowWeek.unpaid ? `${formatDuration(borrowWeek.unpaidMinutes)} to make up` : `Borrowed ${formatDuration(borrowWeek.totalMinutes)}, paid`}
                 </button>
               )}
+              <AfterHoursChip after={data.afterHours} />
               <MustsSummary musts={weekMusts(data, data.weekStart, data.weekStart === data.today.weekStart ? (now ?? new Date(clock).toISOString()) : null).rows} colors={data.clients} onPlanWeek={() => openPlanWeek(data.weekStart)} />
               <MoreButton
                 label="View options for Week"
@@ -2150,6 +2191,17 @@ export function App() {
       )}
       {cmdOpen && <CommandMenu commands={phone ? withoutAhead(commandList(env)) : commandList(env)} onClose={() => setCmdOpen(false)} />}
       {noticesOpen && <NoticesPanel items={noticesOpen} onClose={() => setNoticesOpen(null)} onOpen={(r) => (setNoticesOpen(null), openRouteRef.current(r))} />}
+      {undoToast && (
+        <div className="undo-toast app-undo" role="status" aria-live="polite">
+          <span>{undoToast.text}</span>
+          {undoToast.undo && (
+            <button type="button" className="mini" onClick={() => { const u = undoToast.undo!; setUndoToast(null); void u().then(() => setUndoToast({ id: Date.now(), text: "Undone", undo: null }), () => undefined); }}>
+              Undo
+            </button>
+          )}
+        </div>
+      )}
+      {deployed && <DeployedOffer pick={deployed} clientName={clientNameFor(data, deployed.clientKey)} demo={!!data.demo} onDone={(msg) => (setDeployed(null), msg && setUndoToast({ id: Date.now(), text: msg, undo: null }), reloadQuiet())} />}
       <NoticeToasts toasts={notices.toasts} onDismiss={notices.dismiss} onOpen={(n) => (notices.dismiss(n.id), n.route && openRouteRef.current(n.route))} />
       {installHowTo && <InstallHowTo onClose={() => setInstallHowTo(false)} />}
       {timerMenuAt && <PopupMenu at={timerMenuAt} step={timerStep(env)} onClose={() => setTimerMenuAt(null)} />}
@@ -2186,6 +2238,8 @@ export function App() {
               { id: "personal", label: "Personal events", group: "Show", checked: showPersonal, hint: "G", run: () => void saveShowPersonal(!showPersonal) },
               // WK-2: the Board's timeline, the same toggle as the button beside the modes.
               { id: "timeline", label: "Timeline", group: "Show", checked: showTimelines, hint: "B", run: () => void saveShowTimelines(!showTimelines) },
+              // WK-3: Saturday and Sunday always (they show anyway when something lands on them).
+              { id: "weekend", label: "Weekend", group: "Show", checked: showWeekend, hint: showWeekend ? "always" : "when something's on it", run: () => saveShowWeekend(!showWeekend) },
             ],
           }}
           onClose={() => setWeekMoreAt(null)}

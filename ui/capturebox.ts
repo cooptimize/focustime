@@ -11,7 +11,7 @@ export function keyAction(e: { key: string; shiftKey: boolean; ctrlKey: boolean;
 /** Whether ↓ should leave the box for the kind's fields: only from the last line, so it still moves through the text. */
 export const onLastLine = (text: string, caret: number) => !text.slice(caret).includes("\n");
 
-const KIND_WORDS: Record<BoxKind, string> = { later: "", follow_up: " as a promise", draft: " as a draft story", draft_feature: " as a draft feature" };
+const KIND_WORDS: Record<BoxKind, string> = { later: "", follow_up: " as a promise", draft: " as a draft story", draft_feature: " as a draft feature", deployment: " as a deployment" };
 
 /** The toast after a save: it always names the client the capture went to ("Saved to Northwind as a draft story"). */
 export function savedText(kind: BoxKind, clientName: string | null, extra = ""): string {

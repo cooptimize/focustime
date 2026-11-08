@@ -894,3 +894,52 @@ describe("AS-2", () => {
     expect(s.writes()).toEqual(s.writes().filter((w) => w.action === "inbox.list" || w.action === "ahead.load"));
   });
 });
+
+// WK-3: a Deployment from the assistant is a proposal (deploy.add on Confirm only), and a move onto a Saturday is
+// allowed, with its note, and one Undo.
+describe("WK-3", () => {
+  const SAT = "2026-11-07", WED = "2026-11-04";
+  const deployFake = (s: ReturnType<typeof setup>) => async (i: unknown) => {
+    const x = i as { clientKey: string; date: string; start: string; end: string; title: string };
+    const p = await s.plan.addPick({ date: x.date, half: "EVE", clientKey: x.clientKey, kind: "intention", title: x.title, size: null });
+    return { ok: true as const, data: { pick: { ...p, todoKind: "deployment", window: { start: x.start, end: x.end } } } };
+  };
+
+  it("plans a deployment only on Confirm, with its window, note and items in the preview", async () => {
+    let s!: ReturnType<typeof setup>;
+    s = setup({ handlers: { "deploy.add": (i) => deployFake(s)(i) } });
+    s.script(["item", "plan_deployment"], call(["item", { id: 4417 }]), call(["plan_deployment", { date: SAT, start: "09:00", end: "11:00", title: "Release 4.2", note: "code and the sales model", itemIds: [4417] }]), say("Here's the deployment to confirm."));
+    const r = await s.a.handle("Plan a Fabrikam deployment of #4417 Saturday 9 to 11");
+    expect(r.proposals[0]).toMatchObject({ action: "deploy.add", clientKey: FAB, title: "Plan \"Release 4.2\" on Sat, Nov 7 9:00–11:00", whoSees: "Only you" });
+    expect(r.proposals[0]!.preview.rows.map((x) => x.label)).toEqual(["When", "What's going", "Items"]);
+    expect(r.proposals[0]!.preview.notes.join(" ")).toMatch(/Saturday isn't a working day/);
+    expect(s.writes()).toEqual([]);
+    const c = (await s.a.confirm(r.proposals[0]!.id)) as Extract<ConfirmResult, { ok: true }>;
+    expect(c).toMatchObject({ ok: true, message: "Deployment planned", result: { kind: "pick", date: SAT, time: "9:00–11:00" } });
+    expect(s.writes()).toEqual([{ action: "deploy.add", input: { clientKey: FAB, date: SAT, start: "09:00", end: "11:00", title: "Release 4.2", note: "code and the sales model", itemIds: [4417] } }]);
+  });
+
+  it("refuses a deployment without a valid window or with an item nobody named", async () => {
+    const s = setup();
+    s.script(["plan_deployment"], call(["plan_deployment", { date: SAT, start: "11:00", end: "09:00", title: null, note: null, itemIds: [] }]), say("I couldn't."));
+    expect((await s.a.handle("Plan a Fabrikam deployment Saturday")).proposals).toEqual([]);
+    s.script(["plan_deployment"], call(["plan_deployment", { date: SAT, start: "09:00", end: "11:00", title: null, note: null, itemIds: [4418] }]), say("I couldn't."));
+    expect((await s.a.handle("Plan a Fabrikam deployment Saturday 9 to 11")).proposals).toEqual([]);
+    expect(s.writes()).toEqual([]);
+  });
+
+  it("moves a to-do onto Saturday with a note, and one Undo puts it back", async () => {
+    const s = setup();
+    const p = await s.plan.addPick({ date: WED, half: "PM", clientKey: FAB, kind: "intention", title: "Export spec", size: "M" });
+    s.script(["move_plan"], call(["move_plan", { fromDate: WED, fromHalf: null, toDate: SAT, toHalf: null, which: "all" }]), say("Here's the move."));
+    const r = await s.a.handle("Move everything from Wednesday to Saturday");
+    const prop = r.proposals[0]!;
+    expect(prop.preview.notes.join(" ")).toMatch(/Saturday/);
+    const c = (await s.a.confirm(prop.id)) as Extract<ConfirmResult, { ok: true }>;
+    expect(c.undo).toMatchObject({ kind: "moves" });
+    expect((await s.plan.picksFor(SAT)).map((x) => x.title)).toEqual(["Export spec"]);
+    expect((await s.a.undo(prop.id)).ok).toBe(true);
+    expect(await s.plan.picksFor(SAT)).toEqual([]);
+    expect((await s.plan.getPick(p.id))!.status).toBe("planned");
+  });
+});

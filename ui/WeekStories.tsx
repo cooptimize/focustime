@@ -5,6 +5,7 @@
 //   created in DevOps through the write framework in one go), Break down, and Take one on a teammate's story.
 // - Drag and drop onto the Week's blocks (native drag, a long press on touch, "Add to…" and "Move to…" from the
 //   keyboard), with the fit shown on the target and Undo after each drop (plan/weekdrop.ts).
+import { userZone } from "../week/zone.ts";
 import { openSend } from "./send-event.ts";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type HTMLAttributes, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
@@ -62,12 +63,18 @@ function wholeCatchUp(day: Day): boolean {
   return !day.pto && day.kind !== "work" && day.am.off && day.pm.off && !day.eve;
 }
 
+/** The last minute of a date in the week's zone (a weekend drop is open all day, not only in the nominal morning). */
+const endOfDay = (date: IsoDate, timeZone: string) => Temporal.PlainDate.from(date).toZonedDateTime({ timeZone, plainTime: "23:59" }).toInstant().toString();
+
 /** The week's blocks: AM and PM of each day, one block for a PTO day and one for Friday's catch-up. */
 export function weekBlocks(week: Week): Block[] {
+  const zone = userZone(week);
   const out: Block[] = [];
   for (const d of week.days) {
     const day = Temporal.PlainDate.from(d.date).toLocaleString("en-US", { weekday: "short" });
-    if (d.pto) out.push({ date: d.date, half: "AM", label: `${day} (PTO)`, slot: d.am, ptoDay: true, catchUp: false });
+    // WK-3: a weekend day is one drop target too, with no fit (D947: it takes the move with its note).
+    if (d.kind === "weekend") out.push({ date: d.date, half: "AM", label: Temporal.PlainDate.from(d.date).toLocaleString("en-US", { weekday: "long" }), slot: { ...d.am, end: endOfDay(d.date, zone) }, ptoDay: !!d.pto, catchUp: true });
+    else if (d.pto) out.push({ date: d.date, half: "AM", label: `${day} (PTO)`, slot: d.am, ptoDay: true, catchUp: false });
     else if (wholeCatchUp(d)) out.push({ date: d.date, half: "AM", label: `${day} catch-up`, slot: d.am, ptoDay: false, catchUp: true });
     else for (const s of [d.am, d.pm]) out.push({ date: d.date, half: s.half, label: blockLabel(s), slot: s, ptoDay: false, catchUp: false });
   }
@@ -107,7 +114,9 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
           // UI-B: a pick from a past day (an unfinished one, maybe from an earlier week) can't be moved back into the
           // past: Undo deletes the carried copy and plans the original again.
           const copy = r.pick && r.pick.id !== d.pickId ? r.pick.id : null;
-          const back = copy !== null && (!from || from.date < data.planDay.date) ? async () => (await planAction("pick.uncarry", { id: copy }), onChanged()) : from ? async () => (await planAction("pick.move", { id: d.pickId, date: from.date, half: from.half, anyway: true }), onChanged()) : null;
+          // WK-3: any move that left a copy is undone by taking the copy back (moving the original, now marked moved,
+          // would leave the copy where it went).
+          const back = copy !== null ? async () => (await planAction("pick.uncarry", { id: copy }), onChanged()) : from ? async () => (await planAction("pick.move", { id: d.pickId, date: from.date, half: from.half, anyway: true }), onChanged()) : null;
           note(`Moved to ${b.label}${r.note ? ` · ${r.note}` : ""}`, back);
         } else {
           const r = await planAction("pick.add", { date: b.date, half: b.half, clientKey: d.clientKey, itemId: d.itemId, ...(d.size ? { size: d.size } : {}) });
@@ -204,7 +213,7 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
       {children}
       {touch && dragging && (
         <div className="touch-ghost" style={{ left: touch.x, top: touch.y }} aria-hidden="true">
-          #{dragging.itemId} {dragging.title}
+          {dragging.itemId > 0 ? `#${dragging.itemId} ` : ""}{dragging.title}
         </div>
       )}
       {toast && (
@@ -281,7 +290,11 @@ export function useDragSource(d: Dragged | null): HTMLAttributes<HTMLElement> {
 
 /** The pick's drag (a planned DevOps story, still to do) on Week's cards and the panel's Plan list. */
 export function pickDragged(p: Pick): Dragged | null {
-  return p.kind === "item" && p.itemId !== null && p.status === "planned" ? { clientKey: p.clientKey, itemId: p.itemId, size: p.size, title: p.title, pickId: p.id } : null;
+  if (p.status !== "planned") return null;
+  if (p.kind === "item" && p.itemId !== null) return { clientKey: p.clientKey, itemId: p.itemId, size: p.size, title: p.title, pickId: p.id };
+  // WK-3: a to-do with no DevOps item (a Deployment, an intention, a draft) moves by drag too; a negative id never
+  // matches a real item in the "already planned here" check.
+  return { clientKey: p.clientKey, itemId: -p.id, size: p.size, title: p.title, pickId: p.id };
 }
 
 /** "Move to…" for a planned pick: a small button that opens the blocks with their fit. */

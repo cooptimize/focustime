@@ -156,8 +156,10 @@ export function suggest(text: string, clientKey: string | null, today: IsoDate, 
   return { kind, clientKey, who, what, due: due?.date ?? null, title, others: (["follow_up", "draft", "draft_feature"] as const).filter((k) => k !== kind) };
 }
 
-/** Step 15.3: a kind chip under the capture box, or "later" (save it unsorted, as before). */
-export type BoxKind = CaptureKind | "later";
+/** Step 15.3: a kind chip under the capture box, or "later" (save it unsorted, as before). WK-3: or a Deployment to-do. */
+export type BoxKind = CaptureKind | "later" | "deployment";
+/** WK-3: words that make the box suggest a Deployment. */
+const DEPLOY = /\b(deploy(ment|ing|s)?|release|go[- ]live|cut ?over)\b/i;
 /**
  * The chip the capture box highlights while I type: the routing rules when they recognize something (a promise or a
  * due date after "by", feature words, work words like "story:", "todo" or "need to"), otherwise Sort later.
@@ -165,6 +167,8 @@ export type BoxKind = CaptureKind | "later";
 export function boxKind(text: string, clientKey: string | null, today: IsoDate, clients: readonly CaptureClient[]): BoxKind {
   if (!text.trim()) return "later";
   const s = suggest(text, clientKey, today, clients);
+  if (s.kind === "follow_up") return s.kind;
+  if (DEPLOY.test(text)) return "deployment";
   if (s.kind !== "draft") return s.kind;
   return WORK_LEAD.test(text) ? "draft" : "later";
 }

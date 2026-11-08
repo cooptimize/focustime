@@ -395,6 +395,12 @@ What DS-1 learned, and what is still open:
 - Q-AH7-3: Start here is 5 across every client shown. Should it be per client when several are shown, or follow the toolbar's level (only features at Features)?
 - Q-AH7-4: a skip lasts 2 weeks from the day it was made. Should Skip offer "until a date" or "until it changes in DevOps" instead?
 
+## WK-3
+
+- Q-WK3-1: should Week › Plan show a weekend cell too (pins to Saturday, a deployment's must)? WK-3 keeps Plan Monday to Friday: a weekend has no budget, and the Board, Today and the menu already place work there.
+- Q-WK3-2 (resolved Nov 7): AH-7 merged first with no migration and no Export schema change, so WK-3 keeps schema version 33 and its migration as they are.
+- Q-WK3-3: should the after-hours total count calendar events I organize myself after hours (a call I set at 19:00)? WK-3 counts only what I placed in FocusTime, so a meeting someone else set never reads as time I chose.
+
 ## Text boxes that grow (UI-10, Nov 7)
 
 - Q-UI10-1: the phone sheets rest on the on-screen keyboard through `--kb-inset` (visualViewport) on iOS and `interactive-widget=resizes-content` on Android. Checked in Chromium with a simulated inset, not on a real iPhone or Android phone yet: does the capture box stay above the keyboard on both?
