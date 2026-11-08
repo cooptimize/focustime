@@ -110,7 +110,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
     );
     if (planD)
       return (
-        <PlanRow data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""} dens-plan ph-row ${className}`} onContextMenu={menu.onContextMenu} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}
+        <PlanRow data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""} dens-plan ph-row ${className}`} onContextMenu={menu.onContextMenu} {...(dragProps ?? {})} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}
           handle={pick.status === "done" ? "✓" : "⋮⋮"} titleText={pick.title}
           icon={dep ? <DeployIcon /> : pick.itemType ? <TypeIcon clientKey={pick.clientKey} type={pick.itemType} /> : undefined}
           title={titleNode}>
@@ -131,7 +131,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
   if (planD)
     // U6: Plan the day's row is the shared planning row (ui/plan/PlanRow.tsx).
     return (
-      <PlanRow data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""} dens-plan ${className}`} onContextMenu={menu.onContextMenu} draggable={draggable} onDragStart={draggable ? onDrag : undefined} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}
+      <PlanRow data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""} dens-plan ${className}`} onContextMenu={menu.onContextMenu} {...(dragProps ?? { draggable, onDragStart: draggable ? onDrag : undefined })} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}
         handle={pick.status === "done" ? "✓" : "⋮⋮"} titleText={pick.title}
         icon={dep ? <DeployIcon /> : pick.itemType ? <TypeIcon clientKey={pick.clientKey} type={pick.itemType} /> : undefined}
         title={link && pick.itemUrl ? <WorkLink clientKey={pick.clientKey} url={pick.itemUrl}>{pick.title}</WorkLink> : pick.title}
