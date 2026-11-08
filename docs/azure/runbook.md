@@ -720,7 +720,7 @@ Admin › People: a person's level select overrides Dataverse's (marked Override
 
 Team settings, health and the audit; never anyone's plan, picks, follow-ups, captures, focus sessions, PATs, AI request text or chat messages they aren't a member of (D558).
 
-### Inviting teammates (IN-1)
+### Inviting teammates (IN-1, IN-2)
 
 Admin › People › Who's set up lists every Cooptimizer (the same rule as People: no guests, nobody outside the Cooptimize email domains, no automation accounts) with yes or no for Signed in (and the day they were last active), DevOps connected (a write PAT for any client; never which one), Calendar connected (the Outlook calendar's sign-in is kept) and, where the Teams bot runs, Teams app added (their 1:1 chat with the bot). The counts at the top read "6 of 9 signed in · 2 set up partly"; the filters are All, Not signed in and Set up partly. The command menu finds it as "Invite" or "Who's set up".
 
@@ -730,4 +730,13 @@ To invite someone who hasn't signed in: Invite on their row, or tick several and
 - **Open in Outlook** opens one email in Outlook on the web to everyone, with the subject and message. **Use my mail app instead** opens the same email in the computer's mail app.
 - **Copy message** copies it to paste anywhere.
 
-FocusTime doesn't send anything: you send it from Teams or Outlook. Opening or copying marks the row "Invited <day> by <you>" (Admin › Audit has each one); the same person can be invited again. The link is the app's public URL (`FOCUSTIME_PUBLIC_URL`), so dev invites point at dev and prod invites at prod.
+These open Teams or Outlook for you to send. Opening or copying marks the row "Invited <day> by <you>" (Admin › Audit has each one); the same person can be invited again. The link is the app's public URL (`FOCUSTIME_PUBLIC_URL`), so dev invites point at dev and prod invites at prod.
+
+**Sending from FocusTime (IN-2).** Where your Microsoft sign-in allows Close the loop's sends (`docs/setup/close-the-loop.md`: `ChatMessage.Send` and `Chat.Create` for Teams, `Mail.ReadWrite` for a draft, `Mail.Send` for Send now; delegated, per person), the sheet also has **Send from FocusTime**:
+
+- **Send in Teams**: a 1:1 chat with each person, as you. With several people, one message each.
+- **Create Outlook draft** (the default) or **Send now**: an email from your own mailbox. With several people, **One email each** (the default, each with their own first name) or **One email to everyone** ("Hi all").
+
+Each opens a preview first: how it goes, who gets it, the subject and every message's final text. Nothing is sent until you press Send. FocusTime then reads each one back (the Teams message, or the email in Drafts or Sent Items), marks each row "Invited by <you> via Teams, <day>" (or "via Email", "via Email (Outlook draft)"), and writes one Admin › Audit entry per message, landed or not (who, how and the outcome; never the text or an address). If some didn't go, the result lists who, with **Retry**: it sends only to them, and only reads back a message Teams or Outlook already took, so nobody gets it twice. Sent messages can't be undone.
+
+Only Cooptimizers in Who's set up who haven't signed in, with an address inside the Cooptimize email domains, can be sent to: never a guest, someone outside the domains or an automation account. Without the permission (or until an Entra admin approves it where user consent is restricted) the sheet shows only the buttons above, with "Sending from FocusTime needs an admin to approve access." and, for you, an **Allow** link per permission. Once it's granted the send buttons appear on their own; nothing to change in FocusTime. Nothing is ever sent automatically.

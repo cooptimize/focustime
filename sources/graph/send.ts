@@ -6,6 +6,8 @@
 //   1:1 chat; read back with GET /chats/{id}/messages/{id} (Chat.Read, the person's own consent from AP-1).
 // - Email, a draft: POST /me/messages with Prefer: IdType="ImmutableId" (Mail.ReadWrite), so the id stays the same
 //   once it is sent and moves to Sent Items; read back with GET /me/messages/{id}.
+// - IN-2 reuses these same requests for Admin › People's invites (a 1:1 chat with a Cooptimizer, a draft or an email
+//   with one or several Cooptimizers on To); nothing new is asked for.
 // - Email, send now: that draft, then POST /me/messages/{id}/send (Mail.Send), then the same read back (isDraft false).
 // Logs carry the op, the status and the duration: never a chat id, an address, a subject, a message or an id.
 // Docs (checked Nov 7, 2026): learn.microsoft.com/graph/api/chat-post, chat-post-messages, chatmessage-get,
@@ -55,14 +57,15 @@ export type SendClient = {
   post: (chatId: string, html: string) => Promise<string>;
   /** The message as Teams has it now, or null when Teams doesn't show it (yet). `unchecked`: I haven't allowed Chat.Read. */
   readMessage: (chatId: string, messageId: string) => Promise<{ found: boolean; unchecked?: boolean }>;
-  /** A draft in my Drafts folder: its immutable id and Outlook's link to it. */
-  draft: (m: { to: { address: string; name: string }; subject: string; html: string }) => Promise<{ id: string; webLink: string | null }>;
+  /** A draft in my Drafts folder: its immutable id and Outlook's link to it. IN-2: an invite may put several on To. */
+  draft: (m: { to: Recipient | readonly Recipient[]; subject: string; html: string }) => Promise<{ id: string; webLink: string | null }>;
   /** Sends a draft (it moves to Sent Items). */
   send: (id: string) => Promise<void>;
   /** The message now: still a draft, sent (with when), or not found. */
   readMail: (id: string) => Promise<{ state: "draft" | "sent" | "missing"; webLink: string | null; sentAt: string | null }>;
 };
 
+type Recipient = { address: string; name: string };
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : null);
 
@@ -144,10 +147,12 @@ export function createSendClient(d: SendDeps): SendClient {
       }
     },
     async draft(m) {
+      const to = Array.isArray(m.to) ? (m.to as readonly Recipient[]) : [m.to as Recipient];
+      if (!to.length || to.length > 50) throw new SendFailure("error", "An email needs 1 to 50 people on To");
       const r = await req("loop_draft", d.mailToken, "POST", `${GRAPH}/me/messages`, {
         subject: m.subject,
         body: { contentType: "HTML", content: m.html },
-        toRecipients: [{ emailAddress: { address: m.to.address, name: m.to.name } }],
+        toRecipients: to.map((t) => ({ emailAddress: { address: t.address, name: t.name } })),
       }, { prefer: IMMUTABLE });
       const id = typeof r.json?.id === "string" && ID.test(r.json.id) ? r.json.id : null;
       if (!id) throw new SendFailure("error", "Outlook didn't return the draft");

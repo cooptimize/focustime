@@ -55,7 +55,8 @@ describe.skipIf(!CHROMIUM)("Who's set up and Invite", () => {
     await table.getByRole("button", { name: "Invite", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "Invite Taylor Kim" });
     await sheet.waitFor();
-    await expect(sheet.getByText("FocusTime doesn't send this. It opens in Teams or Outlook for you to send.").isVisible()).resolves.toBe(true);
+    // IN-2: the demo's sign-in allows sending, so the note offers both (e2e/in2-invite-send.test.ts covers sending).
+    await sheet.getByText("Send it from FocusTime as you, or open it in Teams or Outlook and send it there.").waitFor();
     const message = sheet.getByLabel("Message");
     expect(await message.inputValue()).toContain("Open it here: http");
     await shotBoth(page, "in1-invite-sheet", sheet);

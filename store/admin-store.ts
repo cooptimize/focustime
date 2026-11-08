@@ -26,10 +26,20 @@ export type OverrideKind = "level" | "lead_add" | "lead_remove";
 export type PersonOverride = { personId: string; kind: OverrideKind; clientKey: string; value: string | null; byId: string | null; byName: string; at: string };
 /** AH-3: a person's DevOps email on one client, from their Account Worker (Dataverse). */
 export type DirectoryIdentity = { personId: string; clientKey: string; email: string };
-/** IN-1: how an admin sent an invite: opened in Teams or Outlook, the mail app, or copied. */
-export type InviteVia = "teams" | "outlook" | "email" | "copy";
+/** IN-1: how an admin invited someone themselves: opened in Teams or Outlook, the mail app, or copied. */
 export const INVITE_VIA = ["teams", "outlook", "email", "copy"] as const;
-const INVITE_VIA_WORDS: Record<InviteVia, string> = { teams: "opened in Teams", outlook: "opened in Outlook", email: "opened in the mail app", copy: "copied" };
+/** IN-2: sent from FocusTime as the admin: a Teams 1:1 message, an Outlook draft, or an email sent now (each read back). */
+export const INVITE_SENT_VIA = ["teams_sent", "email_draft", "email_sent"] as const;
+export type InviteVia = (typeof INVITE_VIA)[number] | (typeof INVITE_SENT_VIA)[number];
+const INVITE_VIA_WORDS: Record<InviteVia, string> = {
+  teams: "opened in Teams",
+  outlook: "opened in Outlook",
+  email: "opened in the mail app",
+  copy: "copied",
+  teams_sent: "sent in Teams from FocusTime",
+  email_draft: "saved as an Outlook draft from FocusTime",
+  email_sent: "emailed from FocusTime",
+};
 export type SeenAdmin = { personId: string; isAdmin: boolean; via: AdminVia | null; checkedAt: string };
 
 const iso = (v: unknown): string => (v instanceof Date ? v.toISOString() : typeof v === "string" ? Temporal.Instant.from(v).toString() : "");
@@ -250,6 +260,23 @@ export function createAdminStore(db: Conn, now: () => Temporal.Instant) {
         for (const p of people) await db.run("DELETE FROM people_invites WHERE person_id = ?", [p.id.toLowerCase()]);
         for (const p of people) await db.run("INSERT INTO people_invites (person_id, at, by_id, by_name, via) VALUES (?, ?, ?, ?, ?)", [p.id.toLowerCase(), at, actor.id, actor.name.slice(0, 200), via]);
         await audit(actor, { area: "people", target: people.map((p) => p.name).join(", ").slice(0, 200), setting: "invite", oldValue: null, newValue: null, note: `${INVITE_VIA_WORDS[via]}, ${people.length === 1 ? "1 person" : `${people.length} people`}` });
+      });
+      return at;
+    },
+    /**
+     * IN-2: one audit entry per send from FocusTime (a Teams message, a draft or an email, to one or several), landed or
+     * not; only a landed one (read back) becomes the person's latest invite. The audit never holds the message or an address.
+     */
+    async recordInviteSend(people: readonly { id: string; name: string }[], via: (typeof INVITE_SENT_VIA)[number], actor: Actor, outcome: { ok: boolean; note: string }): Promise<string> {
+      const at = stamp();
+      await db.tx(async () => {
+        if (outcome.ok)
+          for (const p of people) {
+            await db.run("DELETE FROM people_invites WHERE person_id = ?", [p.id.toLowerCase()]);
+            await db.run("INSERT INTO people_invites (person_id, at, by_id, by_name, via) VALUES (?, ?, ?, ?, ?)", [p.id.toLowerCase(), at, actor.id, actor.name.slice(0, 200), via]);
+          }
+        const who = people.length === 1 ? "1 person" : `${people.length} people`;
+        await audit(actor, { area: "people", target: people.map((p) => p.name).join(", ").slice(0, 200), setting: "invite", oldValue: null, newValue: null, note: `${INVITE_VIA_WORDS[via]}, ${who}${outcome.note ? `: ${outcome.note}` : ""}`.slice(0, 200) });
       });
       return at;
     },
