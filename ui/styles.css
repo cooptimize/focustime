@@ -5842,3 +5842,25 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .pa-rollup-line::before { left: 0; }
 .pa-rollup-line::after { right: 0; }
 .ah-gantt .pa-bar.early .pa-inner { padding-left: 18px; }
+
+/* GD-2: the held-back list and the "mentions <client>" tag. */
+.mention-tag { margin-left: 6px; }
+.ib-row-sub .mention-tag { margin: 0 6px 0 0; }
+.ib-mentions { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; }
+.ib-mentions .mention-tag { margin-left: 0; }
+.held-back { margin: 12px 0; }
+.held-list { margin-top: 8px; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--surface); }
+.held-list ul { list-style: none; margin: 0; padding: 0; }
+.held-why { margin: 0 0 8px; }
+.held-row { padding: 10px 0; border-top: 1px solid var(--border); }
+.held-row:first-child { border-top: none; }
+.held-row.left { opacity: 0.6; }
+.held-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0 0 4px; font-size: var(--fs-2); color: var(--text-muted); }
+.held-meta strong { color: var(--text); font-weight: 500; }
+.held-meta .mention-tag { margin-left: 0; }
+.held-text { margin: 4px 0 8px; }
+.held-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0; }
+.mention-flag { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0; padding: 8px 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--watch) 45%, transparent); background: color-mix(in srgb, var(--watch) 12%, transparent); }
+.mention-flag p { margin: 0; flex: 1 1 260px; }
+.names-removed { margin: 6px 0; font-size: var(--fs-2); color: var(--text-muted); }
+.names-removed::before { content: "ⓘ "; }

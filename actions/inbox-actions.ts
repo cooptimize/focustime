@@ -102,7 +102,7 @@ export function rowOf(i: { facts: InboxFacts; mark?: Mark | undefined }, today: 
     title: f.title ?? "", who: f.who ?? null, where: f.where ?? null, due: f.due ?? null, dueAt: f.dueAt ?? null, itemId: f.itemId ?? null,
     late: isLate(f, today, now), done: f.done, snoozedUntil: asleep,
     ...(f.sendState ? { sendState: f.sendState } : {}), ...(f.conversationView ? { conversationView: f.conversationView } : {}),
-    ...(f.mentionsMe ? { mentionsMe: true } : {}), ...(f.workRequest ? { workRequest: true } : {}), ...(f.must ? { must: true } : {}), ...(f.weekStart ? { weekStart: f.weekStart } : {}),
+    ...(f.mentionsMe ? { mentionsMe: true } : {}), ...(f.mentions?.length ? { mentions: f.mentions } : {}), ...(f.workRequest ? { workRequest: true } : {}), ...(f.must ? { must: true } : {}), ...(f.weekStart ? { weekStart: f.weekStart } : {}),
     ...(f.urgent ? { urgent: f.urgent } : {}),
   };
 }

@@ -1,4 +1,4 @@
-// GD-2: the client boundary, the pure rules (Tanner, Nov 7). Four questions, answered here and nowhere else:
+// GD-2: the client boundary, the pure rules (Nov 7). Four questions, answered here and nowhere else:
 //   chatAudience(members)        who can read a chat: "internal" when every member is a Cooptimizer (home tenant, not a
 //                                guest, not an automation account, inside the Cooptimize domains), else "client_facing";
 //                                no members known is client-facing (the safe side)
@@ -166,5 +166,5 @@ export function exitCheck(texts: readonly string[], client: string, directory: r
   return { names, replaced: texts.map((t) => replaceMentions(t, client, directory, { records: true }).text) };
 }
 
-/** "Quiddity", "Quiddity and Fabrikam", "Quiddity, Fabrikam and Contoso". */
+/** "Wingtip", "Wingtip and Fabrikam", "Wingtip, Fabrikam and Contoso". */
 export const nameList = (names: readonly string[]) => (names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);

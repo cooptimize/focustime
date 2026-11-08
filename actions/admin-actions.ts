@@ -218,6 +218,7 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
         openStates: c?.openStates ?? [],
         noBreakdown: c?.noBreakdown ?? [],
         background: c?.background ?? [],
+        aliases: c?.aliases ?? [],
         houseStyle: c?.houseStyle ?? null,
         fixGaps: c?.fixGaps ?? [...GAP_KINDS],
         process: isClient ? processOf(k) : { ok: false, message: "Not a client" },

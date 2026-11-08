@@ -1,13 +1,13 @@
 # Security
 
-For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `13cd461` on Nov 7, 2026.
+For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `da0eb07` on Nov 7, 2026.
 
 ## In short
 
 - Only Cooptimize accounts sign in (Entra, single tenant); guests are refused.
 - FocusTime acts as the signed-in person with delegated permissions, never app-only, except its read-only Dataverse reader.
 - Every outside write is a named action with a preview, a confirm, a read back, an audit log and an undo. The few exceptions are listed below.
-- One client's data stays in that client's views, drafts, AI requests and DevOps writes; Cooptimize Internal is the one exception.
+- One client's data stays in that client's views, drafts, AI requests and DevOps writes; Cooptimize Internal is the one exception. Where another client's name could reach a client's eyes, FocusTime holds it back, replaces it, or flags it first (the client boundary, GD-2).
 - Secrets live in Key Vault, set by scripts, never in the UI, the image, the repo, GitHub or logs.
 
 ## How data moves
@@ -57,8 +57,35 @@ App secrets live only in Key Vault (RBAC mode, soft delete and purge protection 
 - Rows that belong to a client carry its key, and views, drafts and DevOps writes for one client never show or touch another's ("That write belongs to another client").
 - DevOps calls for a client go only to that client's organization, with that client's PAT.
 - Chat messages and conversations show only to people who are members of the chat now and follow its client; never in another client's views, logs or errors (ids and counts only).
-- Text FocusTime writes into a client's DevOps never names another client: the preview refuses it.
 - **The Internal exception (GD-1).** Cooptimize Internal (recognized by the client list's own rule, `clientAccounts()` answering "internal" for the internal client key, never from a name in the text) may name clients in its drafts and AI requests, since Internal work is about them. Secrets, the VM and outside email addresses are still refused there.
+
+### The client boundary rule (GD-2)
+
+1. **The audience decides, from real membership.** A chat whose members are all Cooptimizers is internal. Any guest or outside member makes it client-facing. The Cooptimizer rule is the one every picker uses (home tenant, not a guest, not an automation account, inside the Cooptimize domains); a chat whose members aren't known yet is client-facing. Membership is read again at every poll from the cached member list (refreshed daily and on Refresh), so a guest added later changes the audience on the next poll (`plan/boundary.ts` `chatAudience`).
+2. **Internal chats** are sorted normally, keeping cross-client mentions.
+3. **Client-facing chats:** a message that names another client is held back, never sent to AI, and listed under "N messages held back" in the Inbox for the chat's members to sort by hand (no AI), mark not work-related, or leave. It is deleted with the chat's other messages by the existing retention.
+4. **Only words travel.** Sorting or drafting for one client never pulls another client's records (items, conversations, promises, transcripts) into the prompt. A mention in a message's own text is allowed in an internal chat; in a client-facing chat, recent context naming another client is left out.
+5. **AI-written DevOps text never names another client:** the generation prompt says so, and one shared check after generation (`ai/service.ts`, the `scrub` rule) replaces any other client's name or alias with "another client" and marks the draft "Another client's name was removed". Internal work may name clients.
+6. **Every exit to client eyes is checked** by one shared check (`plan/boundary.ts` `exitCheck`): Close the loop's posts and emails, every DevOps write into a client's org (create, comment, description, state with a note), and the status report's lines. The preview flags another client's name, alias, DevOps project or known item id (links included) with one click to replace it. Text the person typed can still go after they've seen the flag (Confirm carries `mentionsOk`); undos only put back what was there. Internal targets aren't checked.
+7. **The tag.** A conversation whose messages name another client shows "mentions <client>" to the people who can already see it (members of its chat who follow its client).
+
+Unchanged: admins never see others' content, client views only show that client's records, and FocusTime never posts to a client chat by itself.
+
+Names come only from the client directory: each client's key, its Dataverse and settings names, and the aliases an admin sets in Admin › Clients (a Rule). The match is whole words, any case, and ignores links and email addresses; numbers and projects count only at an exit. GD-2 logs only counts for its scrub and holds (`ai scrub`, `held_not_work`), never the matched name or the text.
+
+```mermaid
+flowchart LR
+  C[Client chat] -->|members| A{Audience}
+  A -->|all Cooptimizers| I[Sort with AI, names kept]
+  A -->|anyone outside| M{Names another client?}
+  M -->|no| S[Sort with AI, context without other clients]
+  M -->|yes| H[Held back: sort by hand]
+  S --> D[AI drafts for the client]
+  D -->|check after| R[Names replaced, draft marked]
+  R --> X{Exit to client eyes}
+  T[Text I typed] --> X
+  X -->|names another client| F[Flag: Replace, or send as written]
+```
 
 ## Admins, guests and automation accounts
 
@@ -70,9 +97,9 @@ App secrets live only in Key Vault (RBAC mode, soft delete and purge protection 
 ## AI: the guard and redaction
 
 - **One door.** Every AI request goes through `ai/` (`aiFor(ctx).run(task, input, schema)`), never to a provider directly, and runs only with AI for FocusTime on and, for a client, that client's Allow AI on (both admin switches, off by default), under each person's and the app's monthly caps.
-- **The guard** (`ai/guard.ts`) runs before anything is sent: a request for one client (or none) is refused if it names another client, its projects or its item ids, holds anything shaped like a secret, the person's VM, or an email address outside Cooptimize.
+- **The guard** (`ai/guard.ts`) runs before anything is sent: a request for one client (or none) is refused if it names another client, its projects or its item ids, holds anything shaped like a secret, the person's VM, or an email address outside Cooptimize. GD-2: a sorting or drafting task that takes words (`mentions.input: "words"`) may carry another client's name in those words; secrets, the VM and outside addresses still refuse.
 - **What is sent** is the task's own input: for chat sorting, the messages that pass the rules with that chat's open conversation summaries, participants' display names (never addresses) and message ids as short aliases; images only with that client's "Send attachments to AI" on. Meeting transcripts are masked for other clients and spoken email addresses first. Requests are sent with `store: false`.
-- **Answers** must match their schema or are dropped; a string that names a secret shape, the VM or an outside address is replaced with "[removed]" (`redact`). An answer naming another client is refused.
+- **Answers** must match their schema or are dropped; a string that names a secret shape, the VM or an outside address is replaced with "[removed]" (`redact`). An answer naming another client is refused, unless its task says otherwise (GD-2): an internal chat's sorting keeps names, and text for a client's DevOps has them replaced with "another client" and the draft marked.
 - **AI never acts.** It only suggests through allowlisted actions; every write it proposes needs the person's Confirm. Text read from chats, DevOps or captures is data, never instructions.
 - **The request log** keeps counts, cost and outcome, never prompt or answer text.
 
@@ -107,7 +134,7 @@ FocusTime reads and starts only the one VM you confirmed, with your own Azure ac
 | The API | Other web pages (CSRF, DNS rebinding), other people's sessions | Host and Origin checked against the public URL, fetch metadata, a session cookie and its `X-CSRF` token on every change (`server/guard.ts`, `server/app.ts`) |
 | One person's plan | Every other person, including admins | Every statement scoped by `store/scope.ts`; `store/isolation.test.ts` fails a table without `user_id` first in its keys |
 | Tokens, PATs, app secrets | Logs, errors, exports, the browser, git | Key Vault or sealed `user_secrets`; access tokens in memory only; the `Pat` wrapper prints `[PAT]`; the logger has a closed set of fields (`log/logger.ts`) |
-| Client data | Mixing clients | One client per view, draft and AI request; the AI guard (`ai/guard.ts`) and the DevOps preview refuse another client's names |
+| Client data | Mixing clients | One client per view, draft and AI request; the AI guard (`ai/guard.ts`); messages naming another client held back in client-facing chats; AI text for a client's DevOps scrubbed; every exit to client eyes flagged before it goes (GD-2) |
 | Other people's calendars and presence | Over-reading | Free/busy and working hours only; presence is a word, never stored |
 | Meetings others organize | Accidental edits | Calendar editing tiers; only accept, tentative or decline, never PATCH or DELETE |
 | DevOps items | Accidental loss or a lost update | Named writes only, no deletes; `test /rev` on every patch; read back; undo |

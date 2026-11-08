@@ -266,7 +266,7 @@ export const CLIENT_SPECS = {
   // safety check reads text only and can't inspect an image, so this switch is the consent.
   attachments_ai: { kind: "rule", area: "ai", label: "Send attachments to AI", builtin: false, parse: bool },
   open_states: { kind: "rule", area: "clients", label: "States treated as open", builtin: [] as string[], parse: list(20, 60) },
-  // GD-2: other names people use for the client in chats ("Q", "the Quiddity team"), for the client boundary's match.
+  // GD-2: other names people use for the client in chats ("WT", "the Wingtip team"), for the client boundary's match.
   aliases: { kind: "rule", area: "clients", label: "Other names (aliases)", builtin: [] as string[], parse: list(10, 60) },
   // WT-1's process overrides, one switch per type in Admin › Clients (type names; matched without case).
   no_breakdown: { kind: "rule", area: "clients", label: "Types that don't need breakdown", builtin: [] as string[], parse: list(40, 100) },

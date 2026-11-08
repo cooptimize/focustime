@@ -26,7 +26,7 @@ export type ConversationCard = {
   chatName: string;
   /** An internal delivery chat (its content is flagged before it goes to a client's DevOps). */
   internalChat: boolean;
-  /** GD-2 point 7: the other clients its messages name, by name ("mentions Quiddity"), for whoever can see it. */
+  /** GD-2 point 7: the other clients its messages name, by name ("mentions Wingtip"), for whoever can see it. */
   mentions?: string[];
   title: string;
   summary: string;

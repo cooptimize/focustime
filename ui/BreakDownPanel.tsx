@@ -7,6 +7,7 @@
 // created and what wasn't, with Retry for the rest. Run never creates anything; nothing reaches DevOps before Create
 // all. With AI off for the client the panel says so; with no write PAT nothing is sent, not even the AI request.
 // Opened by focustime:break-down, DS-1's focustime:draft-stories, and PV-1's focustime:breakdown ({ clientKey, itemId }).
+import { MentionFlag } from "./DevOpsWrite.tsx";
 import { CloseButton } from "./CloseButton.tsx";
 import { openSend } from "./send-event.ts";
 import { useCallback, useContext, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
@@ -20,7 +21,7 @@ import { WorkLink } from "./WorkLink.tsx";
 type Size = "S" | "M" | "L" | null;
 type CardStatus = { state: "not_sent" } | { state: "created"; itemId: number; url: string | null } | { state: "pending" | "unconfirmed" | "failed" | "refused" | "undone"; message: string; writeId: number };
 type Card = { id: string; title: string; description: string; acceptance: string[]; dependsOn: string[]; size: Size; evidence: string[]; questions: string[]; keep: boolean; status: CardStatus; after: string[]; sizeText: string };
-type Draft = { id: string; clientKey: string; featureId: number; featureTitle: string; storyType: string; note: string; cards: Card[]; rationale: string; setAside: { title: string; why: "out_of_scope" | "already_covered"; existing_item_id: number | null; reason: string }[]; published: number; left: number };
+type Draft = { id: string; clientKey: string; featureId: number; featureTitle: string; storyType: string; note: string; /** GD-2: the AI's answer named another client and the check replaced it. */ namesRemoved?: boolean; cards: Card[]; rationale: string; setAside: { title: string; why: "out_of_scope" | "already_covered"; existing_item_id: number | null; reason: string }[]; published: number; left: number };
 type Prepared = {
   clientKey: string; clientName: string; featureId: number; featureTitle: string; featureType: string; storyType: string; childTypes: string[]; url: string;
   item: { state: string; priority: number | null; description: string };
@@ -29,7 +30,7 @@ type Prepared = {
   sent: string[];
   ai: "on" | "off" | "client_off" | "not_set_up"; aiMessage: string | null; write: boolean; writeMessage: string | null; latest: Draft | null;
 };
-type Preview = { previewId: string; item: string; fields: { label: string; after: string | null }[]; links: string[]; notes: string[]; visibility: string; org: string; project: string; identity: string };
+type Preview = { previewId: string; item: string; fields: { label: string; after: string | null }[]; links: string[]; notes: string[]; visibility: string; org: string; project: string; identity: string; /** GD-2: other clients my edited card names. */ mentions?: string[] };
 
 // ---------- the button ----------
 
@@ -209,11 +210,11 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
     return !!d;
   };
 
-  const preview = async () => {
+  const preview = async (replace = false) => {
     if (!draft) return;
-    const r = await act("Preparing the preview…", async () => {
+    const r = await act(replace ? "Replacing and previewing again…" : "Preparing the preview…", async () => {
       await flush();
-      return call<{ previews: Preview[]; nothing?: string[] }>("stories.publish_preview", { draftId: draft.id });
+      return call<{ previews: Preview[]; nothing?: string[] }>("stories.publish_preview", { draftId: draft.id, ...(replace ? { replace: true } : {}) });
     });
     if (r) {
       setPreviews(r.previews);
@@ -224,7 +225,7 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
 
   const createAll = async () => {
     if (!draft || !previews?.length) return;
-    const r = await act("Creating in DevOps and checking…", () => call<{ draft: Draft; created: number; failed: string[] }>("stories.publish", { draftId: draft.id, previewIds: previews.map((p) => p.previewId) }));
+    const r = await act("Creating in DevOps and checking…", () => call<{ draft: Draft; created: number; failed: string[] }>("stories.publish", { draftId: draft.id, previewIds: previews.map((p) => p.previewId), ...(previews.some((p) => p.mentions?.length) ? { mentionsOk: true } : {}) }));
     if (r) {
       changed.current = changed.current || r.created > 0;
       setDraft(r.draft);
@@ -303,7 +304,7 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
           <div className="bd-body">
             {step === "prepare" && <PrepareStep prep={prep} childType={childType} setChildType={setChildType} onOpenLatest={prep?.latest ? () => (setDraft(prep.latest), setNote(prep.latest!.note), setStep("review")) : null} />}
             {step === "review" && draft && <ReviewStep clientKey={clientKey} draft={draft} busy={!!busy} onEdit={edit} onRegenerate={regenerate} />}
-            {step === "publish" && draft && <PublishStep clientKey={clientKey} draft={draft} previews={previews ?? []} failed={failed} parentUrl={prep?.url ?? null} />}
+            {step === "publish" && draft && <PublishStep clientKey={clientKey} draft={draft} previews={previews ?? []} failed={failed} parentUrl={prep?.url ?? null} busy={!!busy} onReplace={() => void preview(true)} />}
             {busy && <p className="bd-busy" role="status">{busy}</p>}
             {error && <p className="set-problem" role="alert">{error}</p>}
           </div>
@@ -372,7 +373,7 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
                   </button>
                   {previews && previews.length > 0 ? (
                     <button type="button" className="commit" disabled={!!busy} onClick={() => void createAll()}>
-                      Create all
+                      {previews.some((p) => p.mentions?.length) ? "Create all as written" : "Create all"}
                     </button>
                   ) : draft.left > 0 ? (
                     <button type="button" className="commit" disabled={!!busy} onClick={() => void retry()}>
@@ -561,6 +562,7 @@ function ReviewStep({ clientKey, draft, busy, onEdit, onRegenerate }: { clientKe
   const regenOne = (id: string, n: string) => void onRegenerate(n, id).then((ok) => ok && setRegen(null));
   return (
     <>
+      {draft.namesRemoved && <p className="names-removed">Another client's name was removed: the AI's text had one, and "another client" is written instead. Edit freely.</p>}
       {(draft.rationale || whyCount > 0) && (
         <details className="bd-why">
           <summary>Why these{whyCount ? `, and ${whyCount} left out` : ""}</summary>
@@ -751,7 +753,7 @@ function CardState({ status: s }: { status: CardStatus }) {
 
 const field = (p: Preview, label: string) => p.fields.find((f) => f.label === label)?.after ?? null;
 
-function PublishStep({ clientKey, draft, previews, failed, parentUrl }: { clientKey: string; draft: Draft; previews: Preview[]; failed: string[]; parentUrl: string | null }) {
+function PublishStep({ clientKey, draft, previews, failed, parentUrl, busy, onReplace }: { clientKey: string; draft: Draft; previews: Preview[]; failed: string[]; parentUrl: string | null; busy: boolean; onReplace: () => void }) {
   const p0 = previews[0];
   const created = draft.cards.filter((c) => c.status.state === "created");
   const notYet = draft.cards.filter((c) => c.keep && c.status.state !== "created");
@@ -777,6 +779,7 @@ function PublishStep({ clientKey, draft, previews, failed, parentUrl }: { client
                   <span className="bd-batch-title">{field(p, "Title") ?? p.item}</span>
                   {size && <span className="size-chip on">{size}</span>}
                   <span className="muted bd-batch-under">under {parent}</span>
+                  {p.mentions?.length ? <MentionFlag names={p.mentions} where={`${clientKey}'s DevOps`} disabled={busy} onReplace={onReplace} /> : null}
                 </li>
               );
             })}

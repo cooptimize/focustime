@@ -8,7 +8,7 @@ import type { StatusClient, StatusComment, StatusFeature, StatusLoad } from "../
 import type { DevOpsPreview, DevOpsResult } from "../actions/types.ts";
 import { call } from "./api.ts";
 import { CloseButton } from "./CloseButton.tsx";
-import { Modal } from "./DevOpsWrite.tsx";
+import { MentionFlag, Modal } from "./DevOpsWrite.tsx";
 import { clientColor } from "./labels.ts";
 import { ModeArea } from "./ModeSwitch.tsx";
 import { WorkLink } from "./WorkLink.tsx";
@@ -99,8 +99,10 @@ export function StatusView({ switcher, colors, readOnly, version, onChanged }: {
     setDrafting((d) => ({ ...d, [k]: true }));
     setDraftNote((n) => ({ ...n, [c.clientKey]: "" }));
     try {
-      const r = await call<{ ai: string; message: string | null; drafts: { itemId: number; text: string }[] }>("status.draft", { clientKey: c.clientKey, ...(ids ? { itemIds: ids } : {}) });
+      const r = await call<{ ai: string; message: string | null; drafts: { itemId: number; text: string }[]; namesRemoved?: string }>("status.draft", { clientKey: c.clientKey, ...(ids ? { itemIds: ids } : {}) });
       if (r.ai !== "ok") setDraftNote((n) => ({ ...n, [c.clientKey]: r.message ?? "AI couldn't draft this time" }));
+      // GD-2: the check after generation replaced another client's name; say so on the draft.
+      if (r.ai === "ok" && r.namesRemoved) setDraftNote((n) => ({ ...n, [c.clientKey]: `${r.namesRemoved}: the AI's draft had one, and "another client" is written instead. Edit freely.` }));
       const got = r.drafts.filter((d) => d.text.trim());
       if (r.ai === "ok" && !got.length) setDraftNote((n) => ({ ...n, [c.clientKey]: "Nothing to draft from: no story activity, notes or captures this week" }));
       setLines((ls) => [...ls, ...got.filter((d) => !ls.some((l) => l.itemId === d.itemId && l.from === "ai" && l.text === d.text)).map((d) => ({ key: newKey(), clientKey: c.clientKey, itemId: d.itemId, kind: "comment" as const, commentId: null, text: d.text, from: "ai" as const }))]);
@@ -135,6 +137,22 @@ export function StatusView({ switcher, colors, readOnly, version, onChanged }: {
       setPush(null);
     }
   };
+  // GD-2: the flag's one click for a batch: preview it again with "another client" written, and keep the boxes in step.
+  const replacePush = async (i: number) => {
+    if (!push) return;
+    const b = push.batches[i]!;
+    setPush({ ...push, busy: true });
+    try {
+      const batch = await call<Batch>("devops.preview", { clientKey: b.clientKey, changes: b.lines.map((l) => ({ key: l.key, kind: l.kind, itemId: l.itemId, text: l.text.trim(), mentions: "replace", ...(l.kind === "comment_edit" ? { commentId: l.commentId } : {}) })) });
+      const after = new Map(batch.previews.map((p) => [p.key, p.fields[0]?.after ?? null]));
+      const lines2 = b.lines.map((l) => (after.get(l.key) ? { ...l, text: after.get(l.key)!, from: "me" as const } : l));
+      setLines((ls) => ls.map((l) => lines2.find((x) => x.key === l.key) ?? l));
+      setPush({ ...push, busy: false, batches: push.batches.map((x, j) => (j === i ? { ...x, batch, lines: lines2 } : x)) });
+    } catch (e) {
+      setError(errText(e));
+      setPush({ ...push, busy: false });
+    }
+  };
   const confirmPush = async () => {
     if (!push) return;
     setPush({ ...push, busy: true });
@@ -144,7 +162,8 @@ export function StatusView({ switcher, colors, readOnly, version, onChanged }: {
       if (!ids.length) continue;
       let r: { results: (DevOpsResult | { error: string; status: number })[] } | null = null;
       try {
-        r = await call("devops.confirm", { previewIds: ids });
+        // GD-2: lines I wrote go as written once I've seen the flag (the button says so).
+        r = await call("devops.confirm", { previewIds: ids, ...(b.batch.previews.some((p) => p.mentions?.length) ? { mentionsOk: true } : {}) });
       } catch (e) {
         for (const p of b.batch.previews) {
           const l = b.lines.find((x) => x.key === p.key)!;
@@ -243,7 +262,7 @@ export function StatusView({ switcher, colors, readOnly, version, onChanged }: {
           ))}
         </>
       )}
-      {push && <PushDialog push={push} data={data} onConfirm={() => void confirmPush()} onClose={() => setPush(null)} />}
+      {push && <PushDialog push={push} data={data} onConfirm={() => void confirmPush()} onReplace={(i) => void replacePush(i)} onClose={() => setPush(null)} />}
       {undoing && <UndoDialog u={undoing} onConfirm={() => void confirmUndo()} onClose={() => setUndoing(null)} />}
     </main>
   );
@@ -407,9 +426,24 @@ function LineBox({ line, label, onChange, onRemove, removeLabel }: { line: Line;
   useEffect(() => {
     if (!line.text) ref.current?.focus();
   }, [line.text]);
+  // GD-2 point 6: these lines feed the client's status report; another client's name is flagged as I type (a pause).
+  const [flag, setFlag] = useState<{ names: string[]; replaced: string } | null>(null);
+  useEffect(() => {
+    const text = line.text.trim();
+    if (text.length < 3) return void setFlag(null);
+    let live = true;
+    const t = window.setTimeout(() => {
+      call<{ names: string[]; replaced: string[] }>("boundary.check", { clientKey: line.clientKey, texts: [line.text] }).then(
+        (r) => live && setFlag(r.names.length ? { names: r.names, replaced: r.replaced[0] ?? line.text } : null),
+        () => live && setFlag(null),
+      );
+    }, 500);
+    return () => ((live = false), window.clearTimeout(t));
+  }, [line.text, line.clientKey]);
   return (
     <div className={`st-box${line.from === "ai" ? " st-suggested" : ""}${line.kind === "comment_edit" ? " st-editing" : ""}`}>
       <textarea ref={ref} aria-label={label} rows={2} maxLength={4000} value={line.text} placeholder="What moved this week, and what's next" onChange={(e) => onChange(line.key, { text: e.target.value, from: "me" })} />
+      {flag && <MentionFlag names={flag.names} where="this client's status report" onReplace={() => onChange(line.key, { text: flag.replaced, from: "me" })} />}
       <span className="st-box-foot">
         <span className="muted">{line.kind === "comment_edit" ? "Edits your comment" : line.from === "ai" ? "Suggested: edit it before you push" : "A new comment, its own bullet on Monday"}</span>
         <button type="button" className="link-btn" onClick={() => onRemove(line.key)}>{removeLabel}</button>
@@ -423,13 +457,14 @@ function featureTitle(data: StatusLoad | null, clientKey: string, itemId: number
   return [...(c?.features ?? []), ...(c?.also ?? [])].find((f) => f.id === itemId)?.title ?? `#${itemId}`;
 }
 
-function PushDialog({ push, data, onConfirm, onClose }: { push: { batches: { clientKey: string; batch: Batch; lines: Line[] }[]; busy: boolean; results: Pushed[] | null }; data: StatusLoad | null; onConfirm: () => void; onClose: () => void }) {
+function PushDialog({ push, data, onConfirm, onReplace, onClose }: { push: { batches: { clientKey: string; batch: Batch; lines: Line[] }[]; busy: boolean; results: Pushed[] | null }; data: StatusLoad | null; onConfirm: () => void; onReplace: (batch: number) => void; onClose: () => void }) {
   const first = useRef<HTMLButtonElement>(null);
   useEffect(() => first.current?.focus(), [push.busy]);
   const n = push.batches.reduce((s, b) => s + b.batch.previews.length, 0);
   const refused = push.batches.flatMap((b) => b.batch.refused.map((r) => ({ b, r })));
   const name = (k: string) => data?.clients.find((c) => c.clientKey === k)?.clientName ?? k;
   const result = (key: string | undefined) => push.results?.find((r) => r.key === key) ?? null;
+  const flagged = push.batches.some((b) => b.batch.previews.some((p) => p.mentions?.length));
   const label = n === 1 ? "Push 1 line to DevOps" : `Push ${n} lines to DevOps`;
   return (
     <Modal label={label} busy={push.busy} onClose={onClose} wide>
@@ -439,7 +474,7 @@ function PushDialog({ push, data, onConfirm, onClose }: { push: { batches: { cli
       </div>
       {!push.batches.length && push.busy && <p className="muted">Checking each line with DevOps…</p>}
       <div className="dw-rows">
-        {push.batches.filter((b) => b.batch.previews.length || b.batch.refused.length).map((b, i) => {
+        {push.batches.map((b, i) => ({ b, i })).filter(({ b }) => b.batch.previews.length || b.batch.refused.length).map(({ b, i }) => {
           const p0 = b.batch.previews[0];
           return (
             <section key={`${b.clientKey}${i}`} className="st-push-client" aria-label={name(b.clientKey)}>
@@ -458,6 +493,7 @@ function PushDialog({ push, data, onConfirm, onClose }: { push: { batches: { cli
                     ) : (
                       <p className="st-preview-text">{p.fields[0]?.after ?? ""}</p>
                     )}
+                    {p.mentions?.length && !push.results ? <MentionFlag names={p.mentions} where={`${name(b.clientKey)}'s DevOps and Monday's report`} disabled={push.busy} onReplace={() => onReplace(i)} /> : null}
                     {r && <p className={r.ok ? "dw-ok" : "set-problem"} role={r.ok ? "status" : "alert"}>{r.message}</p>}
                   </div>
                 );
@@ -480,7 +516,7 @@ function PushDialog({ push, data, onConfirm, onClose }: { push: { batches: { cli
       {refused.length > 0 && !push.results && <p className="muted">{refused.length === 1 ? "1 line can't be pushed" : `${refused.length} lines can't be pushed`}: {refused.length === 1 ? "it stays" : "they stay"} in {refused.length === 1 ? "its box" : "their boxes"} to fix.</p>}
       <div className="wd-actions">
         {!push.results ? (
-          <button ref={first} type="button" className="commit" disabled={push.busy || !n} onClick={onConfirm}>{push.busy ? "Writing and checking…" : label}</button>
+          <button ref={first} type="button" className="commit" disabled={push.busy || !n} onClick={onConfirm}>{push.busy ? "Writing and checking…" : flagged ? `${label} as written` : label}</button>
         ) : null}
         <button type="button" className="mini quiet" disabled={push.busy} onClick={onClose}>{push.results ? "Close" : "Not now"}</button>
         <span className="muted">Each line is its own write, logged in Settings &gt; Data with Undo.</span>

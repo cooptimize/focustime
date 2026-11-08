@@ -426,7 +426,7 @@ export async function inboxFacts(ctx: ConversationContext, cfg: AppConfig): Prom
     out.push({
       key: itemKey("conversation", card.id), kind: "conversation", clientKey: card.clientKey, at: card.lastAt, done: view === "closed", conversationView: view,
       title: card.title, who: asker, where: card.chatName, itemId: card.item?.id ?? null, mentionsMe: card.mentionsMe,
-      workRequest, needsWhy,
+      workRequest, needsWhy, ...(card.mentions?.length ? { mentions: card.mentions } : {}),
     });
   }
   // Slice 3, Waiting on: someone else's open commitment made to me, or in a conversation I own.
