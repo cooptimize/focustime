@@ -485,14 +485,14 @@ describe("AS-3 rules", () => {
     expect(s.calls.map((c) => c.schemaName)).toEqual(["assistant_intent", "assistant_question"]);
   });
 
-  it("the conversation memory is mine, kept on the answer's turn, and gone after 30 minutes", async () => {
+  it("the conversation memory is mine, kept on the answer's turn, and gone after 2 hours", async () => {
     const s = setup();
     await s.seed();
     s.question({ topic: "agenda", period: "day", date: NEXT_WED });
     await s.a.handle("What's on my Wednesday next week?");
     const open = await s.plan.assistantQuestion();
     expect(open!.pending).toMatchObject({ kind: "context", memory: { request: "What's on my Wednesday next week?", topic: "agenda" } });
-    expect(Temporal.Instant.from((open!.pending as { memory: { expiresAt: string } }).memory.expiresAt).since(NOW).total("minutes")).toBe(30);
+    expect(Temporal.Instant.from((open!.pending as { memory: { expiresAt: string } }).memory.expiresAt).since(NOW).total("minutes")).toBe(120);
     expect(await s.plan.clearAssistant()).toBeGreaterThan(0);
     expect(await s.plan.assistantQuestion()).toBeNull();
   });

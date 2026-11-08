@@ -287,7 +287,7 @@ export function createAssistant(env: AssistantEnv) {
     const turnId = await env.plan.addAssistantTurn({ channel: env.channel, role: "me", text, cards: [] });
     if (!text && !answer) return finish(turnId, "ok", "Ask me something, like \"What should I look out for next week?\"", [], [], []);
     // AS-2: my message may answer the question the assistant asked (10 minutes), unless it clearly asks something new.
-    // AS-3: the last answer's memory (30 minutes) lets a follow-up refer to it; its suggestions answer a tap.
+    // AS-3: the last answer's memory (2 hours) lets a follow-up refer to it; its suggestions answer a tap.
     const open = await env.plan.assistantQuestion();
     let last: Pending | null = null;
     let memory: Memory | null = null;
