@@ -430,10 +430,10 @@ What DS-1 learned, and what is still open:
 ## The Assistant answers real questions (AS-3, Nov 7)
 
 - Q-AS3-1: holidays: answered by Q-AS3-6's table, waiting on its permission. Until then a holiday shows only as PTO or out of office.
-- Q-AS3-2: Answered (Tanner): keep the planning thresholds as defaults (over at planned > free + 30 minutes, a day called out at 4 hours of meetings or under 2 hours free); maybe settings later.
-- Q-AS3-3: Answered (Tanner): an over block's suggestion stays Friday AM, the overflow day.
-- Q-AS3-4: Answered (Tanner): no AI phrasing; FocusTime writes the answers from data. AI phrasing is a possible later option.
-- Q-AS3-5: Answered (Tanner): the conversation memory is 2 hours.
+- Q-AS3-2: Answered (Nov 7): keep the planning thresholds as defaults (over at planned > free + 30 minutes, a day called out at 4 hours of meetings or under 2 hours free); maybe settings later.
+- Q-AS3-3: Answered (Nov 7): an over block's suggestion stays Friday AM, the overflow day.
+- Q-AS3-4: Answered (Nov 7): no AI phrasing; FocusTime writes the answers from data. AI phrasing is a possible later option.
+- Q-AS3-5: Answered (Nov 7): the conversation memory is 2 hours.
 - Q-AS3-6: holidays need read access to `coop_workingdayscalendar`. FocusTime's Dataverse app user has the role "Coopilot Reader", which can't read its rows (403, missing `prvReadcoop_WorkingDaysCalendar`). Needed: a Dataverse admin adds Read on Working Days Calendar (Organization scope, since the rows are user owned by whoever imported them) to the "Coopilot Reader" security role. Nothing else changes: no new app registration, secret or API permission. Then the holidays reader can be built as planned (only `coop_observedholidayflag` = Yes, on exactly `coop_date`, "<Holiday Name> (observed)" or "Holiday", a day off for everyone since no column limits it).
 - Q-AS3-7: SR-2's "Upcoming PTO and Holidays" isn't on main yet. Once the holidays reader exists (Q-AS3-6), SR-2 should use it for holidays instead of its own read.
 - Q-AS3-8: flaky candidate: `e2e/mb1.test.ts` "the to-do sheet: focus kept inside, Esc and focus back; …" failed once in AS-3's first full local run (Nov 7, about 21:50, 11 workers, Chromium): after Esc, focus wasn't back on the to-do's row (`mb1.test.ts:118`, expected the row to be `document.activeElement`). Two other files failed in that run too; the log was cut off, so they're unnamed. All passed on the rerun and in CI.
