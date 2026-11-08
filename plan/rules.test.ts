@@ -1,3 +1,4 @@
+import { DEFAULT_SIZE_SCALE } from "./estimate.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -42,10 +43,10 @@ describe("capacity", () => {
 });
 
 describe("size fit", () => {
-  it("S, M and L are 1h, 2h and 4h, unsized counts as 2h (E2); only planned picks use capacity", () => {
-    expect(plannedMinutes([pick({ size: "S" }), pick({ size: "M" }), pick({ size: "L" })])).toBe(60 + 120 + 240);
-    expect(plannedMinutes([pick({ size: null }), pick({ size: "S" })])).toBe(120 + 60);
-    expect(plannedMinutes([pick({ status: "done" }), pick({ status: "moved" }), pick({ status: "dropped" })])).toBe(0);
+  it("S, M and L are 1h, 2h and 4h, unsized counts as 1h by default (SZ-1); only planned picks use capacity", () => {
+    expect(plannedMinutes([pick({ size: "S" }), pick({ size: "M" }), pick({ size: "L" })], DEFAULT_SIZE_SCALE)).toBe(60 + 120 + 240);
+    expect(plannedMinutes([pick({ size: null }), pick({ size: "S" })], DEFAULT_SIZE_SCALE)).toBe(60 + 60);
+    expect(plannedMinutes([pick({ status: "done" }), pick({ status: "moved" }), pick({ status: "dropped" })], DEFAULT_SIZE_SCALE)).toBe(0);
   });
   it("fits with room to spare, tight under 30 minutes of slack, over by the excess", () => {
     expect(fitOf(0, 120)).toEqual({ kind: "empty" });
@@ -55,7 +56,7 @@ describe("size fit", () => {
     expect(fitOf(240, 195)).toEqual({ kind: "over", by: 45 });
   });
   it("an L fills a clear 4h block exactly", () => {
-    expect(fitOf(plannedMinutes([pick({ size: "L" })]), 240).kind).toBe("tight");
+    expect(fitOf(plannedMinutes([pick({ size: "L" })], DEFAULT_SIZE_SCALE), 240).kind).toBe("tight");
   });
 });
 

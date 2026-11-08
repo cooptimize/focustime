@@ -1,3 +1,4 @@
+import { DEFAULT_SIZE_SCALE } from "./estimate.ts";
 import { describe, expect, it } from "vitest";
 import type { ClientWork, WorkItem } from "../week/types.ts";
 import { freeLeft, devopsStateFrom, headsUpKey, pickDoneFrom, weekHeadsUpDraft, weekList, itemDone, moveWithin, offersHeadsUp, onTrack, otherStoriesLine, orderList, progress, progressLabel, stackRank, validHours, type ListItem } from "./weeklist.ts";
@@ -50,14 +51,14 @@ describe("done and progress against the current plan", () => {
   });
   it("counts musts done of musts on the list now, and the minutes the open ones need", () => {
     const list = [item({ itemId: 1, doneAt: "x" }), item({ itemId: 2, estimate: 480 }), item({ itemId: 3, estimate: 120 }), item({ itemId: 4, tier: "nice" }), item({ itemId: 5, clientKey: "T&W" })];
-    const p = progress(list, (i) => !!i.doneAt);
+    const p = progress(list, (i) => !!i.doneAt, DEFAULT_SIZE_SCALE);
     expect(p).toEqual([
       { clientKey: "Adatum", musts: 3, done: 1, left: 2, leftMinutes: 600, nice: 1 },
       { clientKey: "T&W", musts: 1, done: 0, left: 1, leftMinutes: 240, nice: 0 },
     ]);
     expect(progressLabel(p[0]!)).toBe("1 of 3 musts done");
     // A must swapped out no longer counts: progress follows the current plan.
-    expect(progress(list.filter((i) => i.itemId !== 2), (i) => !!i.doneAt)[0]).toMatchObject({ musts: 2, done: 1 });
+    expect(progress(list.filter((i) => i.itemId !== 2), (i) => !!i.doneAt, DEFAULT_SIZE_SCALE)[0]).toMatchObject({ musts: 2, done: 1 });
   });
 });
 
@@ -102,16 +103,16 @@ describe("weekList (every view's order, done and progress)", () => {
     const work: ClientWork[] = [{ clientKey: "Adatum", clientName: "Adatum", status: "ok", fetchedAt: "x", fromCache: false, items: [wi(3), wi(1)], children: [], watched: [wi(2, "Completed")], committed: [] }];
     const f = [item({ itemId: 1, level: "story" }), item({ itemId: 2, level: "story" }), item({ itemId: 3, level: "story", tier: "nice" }), item({ itemId: 4, level: "story", doneAt: "x" }), item({ itemId: 5, level: "story" })];
     const days = { "2026-11-10": { picks: [{ clientKey: "Adatum", itemId: 5, status: "done" }] } };
-    const r = weekList(f, work, [], pickDoneFrom(days));
+    const r = weekList(f, work, DEFAULT_SIZE_SCALE, [], pickDoneFrom(days));
     expect(r.items.map((i) => [i.itemId, i.done])).toEqual([[1, null], [2, "devops"], [4, "local"], [5, "pick"], [3, null]]);
-    expect(r.progress).toEqual([{ clientKey: "Adatum", musts: 4, done: 3, left: 1, leftMinutes: 120, nice: 1 }]);
+    expect(r.progress).toEqual([{ clientKey: "Adatum", musts: 4, done: 3, left: 1, leftMinutes: 60, nice: 1 }]);
   });
 });
 
 describe("progress with features as envelopes (step 16.4)", () => {
   it("a story under a listed feature is part of it: not its own must, its done size counts toward the feature (its load comes from it)", () => {
     const list = [item({ itemId: 1, estimate: 480 }), item({ itemId: 2, level: "story", estimate: null, size: "L", parentId: 1, doneAt: "x" }), item({ itemId: 3, level: "story", estimate: null, size: "M", parentId: null })];
-    expect(progress(list, (i) => !!i.doneAt)).toEqual([{ clientKey: "Adatum", musts: 2, done: 0, left: 2, leftMinutes: 120, nice: 0 }]);
+    expect(progress(list, (i) => !!i.doneAt, DEFAULT_SIZE_SCALE)).toEqual([{ clientKey: "Adatum", musts: 2, done: 0, left: 2, leftMinutes: 120, nice: 0 }]);
   });
 });
 
@@ -122,7 +123,7 @@ describe("Resolved counts as done (Q65)", () => {
     const st = devopsStateFrom(work);
     expect([st("Adatum", 1), st("Adatum", 2)]).toEqual(["resolved", "open"]);
     expect(itemDone(item({ itemId: 1, level: "story" }), st, () => false)).toBe("resolved");
-    expect(weekList([item({ itemId: 1 }), item({ itemId: 2 })], work).progress[0]).toMatchObject({ musts: 2, done: 1 });
+    expect(weekList([item({ itemId: 1 }), item({ itemId: 2 })], work, DEFAULT_SIZE_SCALE).progress[0]).toMatchObject({ musts: 2, done: 1 });
   });
 });
 

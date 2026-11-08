@@ -71,7 +71,7 @@ export type AfterHoursPart = { pickId: number | null; date: IsoDate; title: stri
  *  - a Deployment counts the minutes of its window outside the day shape (the day's working span; on a weekday without
  *    hours the nominal one; a weekend or a PTO day has none, so all of it);
  *  - any other planned or done to-do I placed in the evening (half EVE) or on a weekend counts its timebox's minutes
- *    outside the day shape when it has one, else its own minutes (its size, 2h unsized);
+ *    outside the day shape when it has one, else its own minutes (its size, or the person's assumption when unsized);
  *  - FocusTime's own timeboxes without a to-do (an item timeboxed directly) count their minutes outside the shape on
  *    a weekend or after the day's end;
  *  - calendar events never count: a meeting someone else set isn't extra time I planned. Moved and dropped to-dos

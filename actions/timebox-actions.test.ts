@@ -476,12 +476,12 @@ describe("drag on the card timeline (step 14.5, D259)", () => {
 });
 
 describe("an unsized story never blocks anything (E2)", () => {
-  it("Start focus (2h suggested), Timebox my day and Done all work on a story with no size", async () => {
+  it("Start focus (1h suggested), Timebox my day and Done all work on a story with no size", async () => {
     const t = setup();
     const p = await t.plan.addPick({ date: D, half: "AM", clientKey: "Adatum", kind: "item", itemId: 4600, title: "Unsized story", itemType: "User Story", itemUrl: null, size: null });
     expect(p.size).toBeNull();
     const started = await t.run<{ timer: { pickId: number | null; plannedMinutes: number } }>("timer.start", { pickId: p.id });
-    expect(started.timer).toMatchObject({ pickId: p.id, plannedMinutes: 120 });
+    expect(started.timer).toMatchObject({ pickId: p.id, plannedMinutes: 60 });
     await t.run("timer.stop", {});
     const boxed = await t.run<{ timeboxes: { pickId: number }[] }>("timebox.add_many", { date: D, items: [{ pickId: p.id, start: `${D}T09:00:00-05:00`, end: `${D}T11:00:00-05:00` }] });
     expect(boxed.timeboxes.map((x) => x.pickId)).toEqual([p.id]);

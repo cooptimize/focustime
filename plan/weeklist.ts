@@ -4,7 +4,7 @@
 // midweek on-track question and when a dropped must offers a heads-up. No I/O.
 import { isCompleted, isRemoved, isResolved } from "./process.ts";
 import type { ClientWork, IsoDate } from "../week/types.ts";
-import { estimate, hoursText, storyMinutes, validEstimateHours } from "./estimate.ts";
+import { estimate, hoursText, storyMinutes, validEstimateHours, type SizeScale } from "./estimate.ts";
 import type { StorySize } from "./estimate.ts";
 
 export type Tier = "must" | "nice";
@@ -112,8 +112,8 @@ export type Progress = { clientKey: string; musts: number; done: number; left: n
  * Per client, against the current plan: musts done of musts now on the list (features and loose stories; a story
  * under a listed feature is part of it and takes its tier), and the minutes the open ones still need.
  */
-export function progress<T extends Pick<ListItem, "clientKey" | "itemId" | "tier" | "estimate" | "level" | "size" | "parentId">>(items: readonly T[], done: (i: T) => boolean): Progress[] {
-  const est = estimate(items.map((i) => ({ ...i, src: i, done: done(i) })));
+export function progress<T extends Pick<ListItem, "clientKey" | "itemId" | "tier" | "estimate" | "level" | "size" | "parentId">>(items: readonly T[], done: (i: T) => boolean, sizes: SizeScale): Progress[] {
+  const est = estimate(items.map((i) => ({ ...i, src: i, done: done(i) })), sizes);
   const out = new Map<string, Progress>();
   const at = (k: string) => out.get(k) ?? out.set(k, { clientKey: k, musts: 0, done: 0, left: 0, leftMinutes: 0, nice: 0 }).get(k)!;
   for (const i of items) at(i.clientKey);
@@ -137,7 +137,7 @@ export function progress<T extends Pick<ListItem, "clientKey" | "itemId" | "tier
       if (s.done) p.done++;
       else {
         p.left++;
-        p.leftMinutes += storyMinutes(s.size as StorySize | null | undefined);
+        p.leftMinutes += storyMinutes(s.size as StorySize | null | undefined, sizes);
       }
     }
   }
@@ -213,13 +213,14 @@ export function pickDoneFrom(days: Readonly<Record<string, { picks: readonly { c
 export function weekList<F extends ListLike>(
   features: readonly F[],
   work: readonly ClientWork[] | null,
+  sizes: SizeScale,
   portfolios: readonly { clientKey: string; items: readonly { id: number; order: number | null }[] }[] = [],
   pickDone: (clientKey: string, itemId: number) => boolean = () => false,
   resolved: (clientKey: string, itemId: number) => boolean = () => false,
 ): { items: Listed<F>[]; progress: Progress[] } {
   const devops = devopsStateFrom(work);
   const items = orderList(features, stackRank(work, portfolios)).map((f) => ({ ...f, done: itemDone(f, devops, pickDone, resolved) }));
-  return { items, progress: progress(items, (i) => !!i.done) };
+  return { items, progress: progress(items, (i) => !!i.done, sizes) };
 }
 
 /**

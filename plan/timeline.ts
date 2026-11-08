@@ -1,5 +1,6 @@
 // TY-1: the arithmetic of timeboxing on Today's timeline: where a drop lands, keeping a stretch inside its block, the
 // keyboard's nudges, the next free slot, a phone's 15-minute list and where a Timebox my day placeholder may go. Pure.
+import type { SizeScale } from "./estimate.ts";
 import type { Slot } from "../week/types.ts";
 import { openGaps, type AgendaTimebox } from "./agenda.ts";
 import { dragTimes, shift, timeChoices, type DragMode } from "./picktime.ts";
@@ -77,7 +78,7 @@ type Box = AgendaTimebox & { outlook: boolean };
 type PickLike = { id: number; size: Size | null; minutes?: number | null };
 
 /** T: the first place in the block's free time the pick fits, by the same rule as "+ time" and Timebox my day. */
-export function nextFreeSpan(slot: Slot, timeboxes: readonly Box[], pick: PickLike, sizes: Readonly<Record<Size, number>>, now?: string, minSizes?: Readonly<Record<Size, number>>): Span | null {
+export function nextFreeSpan(slot: Slot, timeboxes: readonly Box[], pick: PickLike, sizes: SizeScale, now?: string, minSizes?: Readonly<Record<Size, number>>): Span | null {
   const c = timeChoices(slot, timeboxes, pick, sizes, now, minSizes).find((x) => x.kind === "gap");
   return c ? { start: c.start, end: c.end } : null;
 }

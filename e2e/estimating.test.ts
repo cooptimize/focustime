@@ -1,4 +1,4 @@
-// E2 (D446): estimating in hours. A feature's load comes from its stories on the list (S 1h, M 2h, L 4h, unsized 2h)
+// E2 (D446): estimating in hours. A feature's load comes from its stories on the list (S 1h, M 2h, L 4h, unsized 1h by default)
 // once one is sized, else its estimate in whole hours (the shared "− 6h +" stepper); a client's fit is its real free
 // time against its musts ("5h free · 10h planned", the amber "about 5h over"). Profile photos, in demo mode (fictional
 // data, generated avatars, no Graph calls). The scans read every view for decimals and fractions, and Plan the week,
@@ -32,14 +32,14 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     const { page, errors } = await planWeek();
     const nw = await weekClient(page, "Northwind");
     const northwind = nw.locator(".pw-card-head");
-    await expect.poll(() => northwind.locator(".pw-fit2").textContent()).toBe("5h free · 10h planned · about 5h over");
-    await expect(northwind.locator(".pw-fit2 .over-word").textContent()).resolves.toBe(" · about 5h over");
+    await expect.poll(() => northwind.locator(".pw-fit2").textContent()).toBe("5h free · 9h planned · about 4h over");
+    await expect(northwind.locator(".pw-fit2 .over-word").textContent()).resolves.toBe(" · about 4h over");
     await expect(northwind.locator(".pw-fit2").evaluate((e) => getComputedStyle(e).color)).resolves.toBe(await page.evaluate(() => { const d = document.createElement("span"); d.style.color = "var(--watch)"; document.body.append(d); const c = getComputedStyle(d).color; d.remove(); return c; }));
     await expect(northwind.locator(".pw-budget").getAttribute("title")).resolves.toMatch(/^Free focus time in Northwind's blocks this week, after meetings/);
-    await expect(nw.locator("p.pw-over").textContent()).resolves.toBe("About 5h more than Northwind's free time this week. Make one a nice to have, or borrow Friday.");
+    await expect(nw.locator("p.pw-over").textContent()).resolves.toBe("About 4h more than Northwind's free time this week. Make one a nice to have, or borrow Friday.");
     await expect((await weekClient(page, "Cooptimize")).locator(".pw-card-head .pw-fit2").textContent()).resolves.toBe("2h free · 2h planned");
     // The client lines say the same.
-    await expect(page.locator('.pw-line[aria-label="Northwind"] .pl-fit').textContent()).resolves.toBe("5h free · 10h planned · about 5h over");
+    await expect(page.locator('.pw-line[aria-label="Northwind"] .pl-fit').textContent()).resolves.toBe("5h free · 9h planned · about 4h over");
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -62,11 +62,11 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     await page.getByRole("menuitem", { name: /^L · 4h/ }).click();
     await expect.poll(() => load.textContent()).toBe("5h");
     await expect.poll(() => harbor.locator(".pw-card-head .pw-fit2").textContent()).toBe("2h free · 5h planned · about 3h over");
-    // Clearing a size: it counts as 2h, marked as an estimate, never an error.
+    // Clearing a size: it counts as 1h (SZ-1's default), marked as an estimate, never an error.
     await feature.locator(".pw-nested > li").first().locator(".size-chip").click();
     await page.getByRole("menuitem", { name: /^Clear/ }).click();
-    await expect.poll(() => feature.locator(".pw-nested > li").first().locator(".size-chip").textContent()).toBe("Size? · 2h");
-    await expect.poll(() => load.textContent()).toBe("about 3h");
+    await expect.poll(() => feature.locator(".pw-nested > li").first().locator(".size-chip").textContent()).toBe("Size? · 1h");
+    await expect.poll(() => load.textContent()).toBe("about 2h");
     await page.close();
   }, T);
 
@@ -79,7 +79,7 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     await est.hover();
     await est.getByRole("button", { name: "More: 5h" }).click();
     await expect.poll(() => value.textContent()).toBe("about 5h");
-    await expect.poll(() => northwind.locator(".pw-card-head .pw-fit2").textContent()).toBe("5h free · 11h planned · about 6h over");
+    await expect.poll(() => northwind.locator(".pw-card-head .pw-fit2").textContent()).toBe("5h free · 10h planned · about 5h over");
     // Click the value: a number box. Esc keeps the old value; Enter saves whole hours.
     await value.click();
     const box = est.locator(".hs-input");
@@ -108,8 +108,36 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     await expect(est.locator(":scope > .hours-stepper .hs-step").first().isDisabled()).resolves.toBe(true);
     // A story has a size chip, never hours of its own to set: S, M, L, or a muted Size?.
     const story = northwind.locator(".pw-row").first().locator(".pw-nested > li");
-    await expect(story.locator(".size-chip").allTextContents()).resolves.toEqual(["L · 4h", "Size? · 2h"]);
+    await expect(story.locator(".size-chip").allTextContents()).resolves.toEqual(["L · 4h", "Size? · 1h"]);
     await expect(story.nth(1).locator(".size-chip").evaluate((e) => e.classList.contains("unsized"))).resolves.toBe(true);
+    await page.close();
+  }, T);
+
+  it("SZ-1: Count unsized work as moves the chip and the fit, and the scale is shown beside it", async () => {
+    const { page, errors } = await planWeek();
+    const northwind = await weekClient(page, "Northwind");
+    const fit = northwind.locator(".pw-card-head .pw-fit2");
+    await expect.poll(() => fit.textContent()).toMatch(/· 9h planned · about 4h over$/);
+    await page.evaluate(() => (location.hash = "#/settings/planning"));
+    const select = page.getByRole("combobox", { name: "Count unsized work as" });
+    await expect.poll(() => select.inputValue()).toBe("60");
+    await expect(select.locator("option").allTextContents()).resolves.toEqual(["30 min", "1h", "2h", "3h"]);
+    await expect(page.locator("[data-size-scale]").textContent()).resolves.toBe("S 1h · M 2h · L 4h");
+    await select.selectOption("120");
+    await page.getByText("Saved").first().waitFor();
+    await page.keyboard.press("Escape");
+    await page.evaluate(() => (location.hash = "#/week/commit"));
+    await page.locator(".pw-client").first().waitFor();
+    await page.locator(".planweek .co-step button[aria-label='Previous week']").click().catch(() => {});
+    const again = await weekClient(page, "Northwind");
+    await expect.poll(() => again.locator(".pw-card-head .pw-fit2").textContent()).toMatch(/· 10h planned · about 5h over$/);
+    await again.locator(".pw-row .pw-open", { hasText: "Order history export" }).click();
+    await expect.poll(() => page.locator(".dp-section[aria-label='Estimate'] .size-chip").allTextContents()).toEqual(["L · 4h", "Size? · 2h"]);
+    // Back to the default, for the tests after this one.
+    await page.evaluate(() => (location.hash = "#/settings/planning"));
+    await page.getByRole("combobox", { name: "Count unsized work as" }).selectOption("60");
+    await page.getByText("Saved").first().waitFor();
+    expect(errors).toEqual([]);
     await page.close();
   }, T);
 
@@ -118,9 +146,9 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     const northwind = await weekClient(page, "Northwind");
     await northwind.locator(".pw-row .pw-open", { hasText: "Order history export" }).click();
     const panel = page.locator(".dp-section[aria-label='Estimate']");
-    await expect(panel.locator(".hs-value").textContent()).resolves.toBe("about 6h");
+    await expect(panel.locator(".hs-value").textContent()).resolves.toBe("about 5h");
     await expect(panel.locator(".muted").first().textContent()).resolves.toBe("from stories");
-    await expect(panel.locator(".size-chip").allTextContents()).resolves.toEqual(["L · 4h", "Size? · 2h"]);
+    await expect(panel.locator(".size-chip").allTextContents()).resolves.toEqual(["L · 4h", "Size? · 1h"]);
     await panel.locator(".size-chip").nth(1).click();
     await page.getByRole("menuitem", { name: /^S · 1h/ }).click();
     await expect.poll(() => panel.locator(".hs-value").textContent()).toBe("5h");

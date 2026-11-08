@@ -1,14 +1,15 @@
+import { DEFAULT_SIZE_SCALE } from "./estimate.ts";
 import { describe, expect, it } from "vitest";
 import { aboutText, blocksToMinutes, budgetWords, estimate, hoursText, loadText, overLine, parseHours, plannedMinutesOf, progressWords, sizeChipText, sourceWords, stepHours, storyMinutes, tierOf, validEstimateHours, validEstimateMinutes, type EstItem } from "./estimate.ts";
 
 const H = 60;
 const f = (itemId: number, hours: number | null, o: Partial<EstItem> = {}): EstItem => ({ clientKey: "T&W", itemId, level: "feature", tier: "must", estimate: hours === null ? null : hours * H, ...o });
 const s = (itemId: number, size: "S" | "M" | "L" | null, parentId: number | null, o: Partial<EstItem> = {}): EstItem => ({ clientKey: "T&W", itemId, level: "story", tier: "must", estimate: null, size, parentId, ...o });
-const load = (items: EstItem[]) => estimate(items).envelopes[0]!;
+const load = (items: EstItem[]) => estimate(items, DEFAULT_SIZE_SCALE).envelopes[0]!;
 
 describe("one unit: hours (E2)", () => {
-  it("S, M and L are 1h, 2h and 4h; unsized counts as M", () => {
-    expect([storyMinutes("S"), storyMinutes("M"), storyMinutes("L"), storyMinutes(null)]).toEqual([60, 120, 240, 120]);
+  it("S, M and L are 1h, 2h and 4h; unsized counts as 1h by default (SZ-1)", () => {
+    expect([storyMinutes("S", DEFAULT_SIZE_SCALE), storyMinutes("M", DEFAULT_SIZE_SCALE), storyMinutes("L", DEFAULT_SIZE_SCALE), storyMinutes(null, DEFAULT_SIZE_SCALE)]).toEqual([60, 120, 240, 60]);
   });
   it("an estimate is whole hours, 1 to 80", () => {
     expect([1, 6, 8, 80].every(validEstimateHours)).toBe(true);
@@ -21,8 +22,8 @@ describe("one unit: hours (E2)", () => {
     expect(aboutText(360)).toBe("about 6h");
     for (let m = 0; m <= 6000; m += 7) expect(`${hoursText(m)} ${aboutText(m)}`).not.toMatch(/[.,]\d|½|¼|¾|block/);
   });
-  it("size chips: M · 2h, and Size? · 2h when unsized", () => {
-    expect(["S", "M", "L", null].map((z) => sizeChipText(z as "S" | null))).toEqual(["S · 1h", "M · 2h", "L · 4h", "Size? · 2h"]);
+  it("size chips: M · 2h, and Size? · 1h when unsized", () => {
+    expect(["S", "M", "L", null].map((z) => sizeChipText(z as "S" | null, DEFAULT_SIZE_SCALE))).toEqual(["S · 1h", "M · 2h", "L · 4h", "Size? · 1h"]);
   });
 });
 
@@ -31,9 +32,9 @@ describe("a feature's load", () => {
     expect(load([f(10, null), s(11, "M", 10), s(12, "M", 10)])).toMatchObject({ minutes: 4 * H, derived: true });
     expect(load([f(10, null), s(11, "S", 10), s(12, "M", 10), s(13, "L", 10)])).toMatchObject({ minutes: 7 * H, derived: true });
   });
-  it("a sized and an unsized story: the size plus 2h", () => {
-    expect(load([f(10, null), s(11, "L", 10), s(12, null, 10)])).toMatchObject({ minutes: 6 * H, derived: true });
-    expect(load([f(10, null), s(11, "S", 10), s(12, null, 10)]).minutes).toBe(3 * H);
+  it("a sized and an unsized story: the size plus 1h", () => {
+    expect(load([f(10, null), s(11, "L", 10), s(12, null, 10)])).toMatchObject({ minutes: 5 * H, derived: true });
+    expect(load([f(10, null), s(11, "S", 10), s(12, null, 10)]).minutes).toBe(2 * H);
   });
   it("no sized stories: its estimate (4h when none was set)", () => {
     expect(load([f(10, 6)])).toMatchObject({ minutes: 6 * H, derived: false, unsized: false });
@@ -51,7 +52,7 @@ describe("a feature's load", () => {
   });
   it("about where estimated; exact only when every story is sized", () => {
     expect(loadText(load([f(10, 6)]))).toBe("about 6h");
-    expect(loadText(load([f(10, null), s(11, "S", 10), s(12, null, 10)]))).toBe("about 3h");
+    expect(loadText(load([f(10, null), s(11, "S", 10), s(12, null, 10)]))).toBe("about 2h");
     expect(loadText(load([f(10, null), s(11, "S", 10), s(12, "L", 10)]))).toBe("5h");
   });
   it("progress in hours", () => {
@@ -62,20 +63,20 @@ describe("a feature's load", () => {
 
 describe("features as envelopes", () => {
   it("a story whose feature is on the list nests under it; others stay loose", () => {
-    const e = estimate([f(10, 2), s(11, "M", 10), s(12, "L", 99), s(13, "S", null)]);
+    const e = estimate([f(10, 2), s(11, "M", 10), s(12, "L", 99), s(13, "S", null)], DEFAULT_SIZE_SCALE);
     expect(e.envelopes[0]!.stories.map((x) => x.itemId)).toEqual([11]);
     expect(e.loose.map((x) => x.itemId)).toEqual([12, 13]);
   });
   it("only nests within the same client", () => {
-    expect(estimate([f(10, 1), s(11, "M", 10, { clientKey: "Other" })]).loose).toHaveLength(1);
+    expect(estimate([f(10, 1), s(11, "M", 10, { clientKey: "Other" })], DEFAULT_SIZE_SCALE).loose).toHaveLength(1);
   });
-  it("loose stories count their own size (unsized as 2h); nested ones only through their feature", () => {
-    const e = estimate([f(10, 8), s(11, "L", 10), s(12, "L", 10), s(20, "M", 99), s(21, null, null), s(22, "S", null)]);
-    expect(plannedMinutesOf(e, "T&W", "must")).toBe(8 * H + 2 * H + 2 * H + 1 * H);
+  it("loose stories count their own size (unsized as 1h); nested ones only through their feature", () => {
+    const e = estimate([f(10, 8), s(11, "L", 10), s(12, "L", 10), s(20, "M", 99), s(21, null, null), s(22, "S", null)], DEFAULT_SIZE_SCALE);
+    expect(plannedMinutesOf(e, "T&W", "must")).toBe(8 * H + 2 * H + 1 * H + 1 * H);
   });
   it("stories take their feature's tier; loose ones keep their own", () => {
     const items = [f(10, 3, { tier: "nice" }), s(11, "M", 10, { tier: "must" }), s(12, "M", null, { tier: "must" })];
-    const e = estimate(items);
+    const e = estimate(items, DEFAULT_SIZE_SCALE);
     expect(tierOf(e, items[1]!)).toBe("nice");
     expect(tierOf(e, items[2]!)).toBe("must");
     expect(plannedMinutesOf(e, "T&W", "must")).toBe(2 * H);

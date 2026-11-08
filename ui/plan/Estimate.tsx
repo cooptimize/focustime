@@ -2,9 +2,10 @@
 // - HoursStepper: "− 6h +". The arrows step 1h (2h above 8h); a click on the value makes it a box: Enter saves,
 //   Esc cancels, whole hours 1 to 80. A feature whose load comes from its stories shows the hours without a stepper.
 // - SizeChip: S, M, L, or a muted "Size?" when unsized (never amber). "M · 2h" where the row has room, else "M" with
-//   "2h" on hover. A click opens a tiny menu: S, M, L, Clear. Sizing is optional: an unsized story counts as 2h.
+//   "2h" on hover. A click opens a tiny menu: S, M, L, Clear. Sizing is optional: an unsized story counts as the person's assumption (SZ-1).
+import { PlanCtx } from "../planview.ts";
 import { useContext, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { aboutText, hoursText, MAX_ESTIMATE_HOURS, MIN_ESTIMATE_HOURS, parseHours, sizeChipText, stepHours, storyMinutes, STORY_SIZES, type StorySize } from "../../plan/estimate.ts";
+import { aboutText, hoursText, MAX_ESTIMATE_HOURS, MIN_ESTIMATE_HOURS, parseHours, sizeChipText, stepHours, storyMinutes, STORY_SIZES, unsizedText, type SizeScale, type StorySize } from "../../plan/estimate.ts";
 import { MenuCtx } from "../Menus.tsx";
 import type { MenuStep } from "../menu.ts";
 
@@ -82,12 +83,12 @@ export function HoursStepper({ minutes, onSet, onClear, derived = false, about =
 }
 
 /** The tiny size menu: S, M, L, Clear. */
-export function sizeMenu(title: string, size: StorySize | null, onSet: (s: StorySize | null) => void): MenuStep {
+export function sizeMenu(title: string, size: StorySize | null, onSet: (s: StorySize | null) => void, sizes: SizeScale): MenuStep {
   return {
     title: `Size of "${title}"`,
     items: [
-      ...STORY_SIZES.map((z) => ({ id: `size-${z}`, label: sizeChipText(z), checked: size === z, run: () => onSet(z) })),
-      { id: "size-clear", label: "Clear", hint: "counts as 2h", checked: size === null, run: () => onSet(null) },
+      ...STORY_SIZES.map((z) => ({ id: `size-${z}`, label: sizeChipText(z, sizes), checked: size === z, run: () => onSet(z) })),
+      { id: "size-clear", label: "Clear", hint: `counts as ${unsizedText(sizes)}`, checked: size === null, run: () => onSet(null) },
     ],
   };
 }
@@ -108,8 +109,9 @@ type ChipProps = {
 
 export function SizeChip({ size, title, onSet, wide = false, disabled = false, note = null, className = "", tabIndex }: ChipProps) {
   const { open } = useContext(MenuCtx);
-  const hours = hoursText(storyMinutes(size));
-  const text = wide ? sizeChipText(size) : (size ?? "Size?");
+  const { sizes } = useContext(PlanCtx);
+  const hours = size ? hoursText(storyMinutes(size, sizes)) : unsizedText(sizes);
+  const text = wide ? sizeChipText(size, sizes) : (size ?? "Size?");
   const hover = note ?? (size ? `${size} is ${hours}` : `Not sized: counts as ${hours}`);
   const cls = `size-chip${size ? "" : " unsized"} ${className}`;
   if (!onSet || disabled)
@@ -122,7 +124,7 @@ export function SizeChip({ size, title, onSet, wide = false, disabled = false, n
     e.preventDefault();
     e.stopPropagation();
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    open({ x: r.left, y: r.bottom + 4 }, sizeMenu(title, size, onSet));
+    open({ x: r.left, y: r.bottom + 4 }, sizeMenu(title, size, onSet, sizes));
   };
   return (
     <button type="button" className={cls} tabIndex={tabIndex} title={`${hover}. Click to change`} aria-label={`Size ${size ?? "not set"} (${hours}), change`} aria-haspopup="menu" onClick={show} onDoubleClick={(e) => e.stopPropagation()}>

@@ -14,7 +14,7 @@ import type { IsoDate } from "../week/types.ts";
 export function weekMusts(data: WeekLoadData, weekStart: IsoDate, now: string | null) {
   const features = data.weekFeatures.filter((f) => f.weekStart === weekStart);
   const loaded = data.weekStart === weekStart;
-  const list = weekList(features, data.devops, [], loaded ? pickDoneFrom(data.plan) : undefined, resolvedOf(loaded ? data.planBits : null));
+  const list = weekList(features, data.devops, data.planning.sizes, [], loaded ? pickDoneFrom(data.plan) : undefined, resolvedOf(loaded ? data.planBits : null));
   // PL-1: the same budget as Commit (planBudget), so the two never disagree.
   const fits = loaded ? boardFits(data, features) : [];
   const names = new Map([...(data.devops ?? []).map((c) => [c.clientKey, c.clientName] as const), ...fits.map((f) => [f.clientKey, f.clientName] as const), ...data.planClients.map((c) => [c.clientKey, c.clientName] as const)]);
@@ -28,6 +28,6 @@ export function weekMusts(data: WeekLoadData, weekStart: IsoDate, now: string | 
 }
 
 /** PL-1: the Board's budget for the loaded week: planBudget on that week's list. */
-export const boardFits = (data: WeekLoadData, features: readonly WeekFeature[]) => planBudget(data.week, features, { borrowed: data.borrowed, weekStart: data.weekStart, work: data.devops, bits: data.planBits, planShare: data.guidance?.planShare });
+export const boardFits = (data: WeekLoadData, features: readonly WeekFeature[]) => planBudget(data.week, features, { sizes: data.planning.sizes, borrowed: data.borrowed, weekStart: data.weekStart, work: data.devops, bits: data.planBits, planShare: data.guidance?.planShare });
 /** PL-1: Commit's budget for the loaded week: planBudget on its list plus the draft features typed there. */
-export const commitFits = (data: WeekLoadData, features: readonly WeekFeature[], drafts: readonly WeekFeature[] = []) => planBudget(data.week, [...features, ...drafts], { borrowed: data.borrowed, weekStart: data.weekStart, work: data.devops, bits: data.planBits, planShare: data.guidance?.planShare });
+export const commitFits = (data: WeekLoadData, features: readonly WeekFeature[], drafts: readonly WeekFeature[] = []) => planBudget(data.week, [...features, ...drafts], { sizes: data.planning.sizes, borrowed: data.borrowed, weekStart: data.weekStart, work: data.devops, bits: data.planBits, planShare: data.guidance?.planShare });

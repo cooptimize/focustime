@@ -8,6 +8,7 @@
 // + Must and Nice, everything else folded, and the type box (Enter a draft feature as a must, Shift+Enter a nice to
 // have). DevOps health, a feature and a client's budget open in the shared detail panel. DevOps is read-only; the
 // week plan lives only in the local plan store. A past week is a review.
+import { PlanCtx } from "./planview.ts";
 import { ResolvedMark, TypeIcon } from "./TypeIcon.tsx";
 import { ModeArea } from "./ModeSwitch.tsx";
 import { planWeekParts } from "./nav.ts";
@@ -182,7 +183,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   const work = weekReady ? data.devops : null;
   const portfolios = st?.portfolios ?? [];
   const bits = weekReady ? (data.planBits ?? null) : null;
-  const list = useMemo(() => weekList(raw, work, portfolios, pickDoneFrom(data.plan), resolvedOf(bits)), [raw, work, portfolios, data.plan, bits]);
+  const list = useMemo(() => weekList(raw, work, data.planning.sizes, portfolios, pickDoneFrom(data.plan), resolvedOf(bits)), [raw, work, data.planning.sizes, portfolios, data.plan, bits]);
   const items = list.items;
   const drafts = st?.drafts ?? [];
   // U6: draft features on the list (typed in the right pane), with their tier.
@@ -628,9 +629,10 @@ function ClientPanel({ k, name, color, fit, progress, items, reordered, past, on
 
 /** U4: a feature in the panel: dates, its stories in DevOps, drafts, Draft stories and the Coop brief. */
 function FeaturePanel({ k, itemId, info, item, color, name, drafts, listed, clientItems, past, ops, tz, onClose }: { k: string; itemId: number; info: Info | null; item: Item | null; color: string; name: string; drafts: DraftStory[]; listed: ReadonlySet<number>; clientItems: Item[]; past: boolean; ops: Ops; tz: string; onClose: () => void }) {
+  const { sizes } = useContext(PlanCtx);
   const f = info?.feature ?? null;
   // E2: on the list, its load in hours: the stepper, or its stories' sizes (each with its chip).
-  const envl = item ? (estimate(clientItems).envelopes.find((e) => e.feature.id === item.id) ?? null) : null;
+  const envl = item ? (estimate(clientItems, sizes).envelopes.find((e) => e.feature.id === item.id) ?? null) : null;
   const title = item?.title ?? f?.title ?? `#${itemId}`;
   const stories = (f?.children ?? []).filter((c) => c.level === "story");
   const { weekStart } = useContext(WeekDates);
@@ -868,11 +870,12 @@ type CardProps = {
  * client (Done on the last).
  */
 function ClientCard(p: CardProps) {
+  const { sizes } = useContext(PlanCtx);
   const { k, fit } = p;
   const port = p.st.portfolios.find((x) => x.clientKey === k);
   // Step 16.4: features are envelopes; a story under a listed feature shows inside its row and takes its tier.
   const mineAll = p.items.filter((i) => i.clientKey === k);
-  const est = estimate(mineAll);
+  const est = estimate(mineAll, sizes);
   const envOf = new Map(est.envelopes.map((e) => [e.feature.id, e] as const));
   const nested = new Set(est.envelopes.flatMap((e) => e.stories.map((x) => x.id)));
   const listedFeatures = new Set(est.envelopes.map((e) => e.feature.itemId));
@@ -1141,6 +1144,7 @@ function ItemRow({ i, ptoPinned = false, first, last, past, info, drafts, places
     itemId: i.itemId, title: i.title, clientName: ops.nameOf(k), tier: i.tier, level: i.level, first, last, past, done: i.done ? (i.done === "local" ? "local" : "other") : null, minutes: envl ? envl.minutes : (i.estimate ?? DEFAULT_FEATURE_MINUTES), derived, size: i.size, nested: !!nestedIn,
     places: places.map((pl) => ({ date: pl.date, half: pl.half, label: pl.label })), pinned: i.slots, openStories, targetDate: feature?.targetDate ?? null, drafts: drafts.length, canWrite: !!dw?.can(k),
   };
+  const { sizes } = useContext(PlanCtx);
   const wops: WeekItemOps = {
     move: (by) => ops.move(i, by),
     tier: () => ops.tier(i, other),
@@ -1167,7 +1171,7 @@ function ItemRow({ i, ptoPinned = false, first, last, past, info, drafts, places
     <PlanRow
       className={`pw-row${i.done ? " done" : ""}${needs ? " needs" : ""}${nestedIn ? " nested" : ""}`}
       draggable={!past}
-      onContextMenu={(e) => show(e, weekItemMenu(facts, wops))}
+      onContextMenu={(e) => show(e, weekItemMenu(facts, wops, sizes))}
       onDragStart={(e) => {
         e.stopPropagation();
         const d: Drag = { clientKey: k, itemId: i.itemId, tier: i.tier };
@@ -1234,7 +1238,7 @@ function ItemRow({ i, ptoPinned = false, first, last, past, info, drafts, places
       }
       hover={
         env ? (
-          <button type="button" className="more" aria-label={`More for ${i.title}`} onClick={(e) => show(e, weekItemMenu(facts, wops))}>
+          <button type="button" className="more" aria-label={`More for ${i.title}`} onClick={(e) => show(e, weekItemMenu(facts, wops, sizes))}>
             ⋯
           </button>
         ) : undefined

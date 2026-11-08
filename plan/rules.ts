@@ -3,7 +3,8 @@ import { pickNeed } from "./types.ts";
 import { isResolved } from "./process.ts";
 import { freeMinutes } from "../week/free.ts";
 import type { Half, IsoDate, WorkItem } from "../week/types.ts";
-import { SIZE_MINUTES, type Pick, type Size } from "./types.ts";
+import type { Pick } from "./types.ts";
+import type { SizeScale } from "./estimate.ts";
 
 
 /**
@@ -15,7 +16,7 @@ export function capacityMinutes(slot: Parameters<typeof freeMinutes>[0], now: st
 }
 
 /** Planned minutes of the picks still to do (planned); done, moved and dropped don't use capacity. */
-export function plannedMinutes(picks: readonly Pick[], sizes: Readonly<Record<Size, number>> = SIZE_MINUTES): number {
+export function plannedMinutes(picks: readonly Pick[], sizes: SizeScale): number {
   return picks.filter((p) => p.status === "planned").reduce((sum, p) => sum + pickNeed(p, sizes), 0);
 }
 

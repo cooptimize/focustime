@@ -1,6 +1,7 @@
 // Timeboxes (step 12): a stretch of a day's timeline given to a client and (usually) a pick or week list item. Stored
 // locally; optionally put on Outlook as a Busy event FocusTime owns. Pure: validation, the event's fields, planned time
 // with timeboxes, whether Outlook needs a change, which Outlook events are FocusTime's own, and how a write is undone.
+import type { SizeScale } from "./estimate.ts";
 import type { CalEvent, IsoDate } from "../week/types.ts";
 import { pickNeed } from "./types.ts";
 
@@ -143,7 +144,7 @@ type PickLike = { id: number; status: string; size: string | null; minutes?: num
  * size; every live timebox in the half-day counts its minutes inside it (clipped), whether tied to a pick or not, unless
  * its pick is done, moved or dropped. Picks without a timebox count their size as before.
  */
-export function plannedWithTimeboxes(picks: readonly PickLike[], sizes: Readonly<Record<string, number>>, timeboxes: readonly Pick<Timebox, "pickId" | "start" | "end" | "removedAt">[], slot: { start: string; end: string }, allPicks: readonly PickLike[] = picks): number {
+export function plannedWithTimeboxes(picks: readonly PickLike[], sizes: SizeScale, timeboxes: readonly Pick<Timebox, "pickId" | "start" | "end" | "removedAt">[], slot: { start: string; end: string }, allPicks: readonly PickLike[] = picks): number {
   const live = timeboxes.filter((t) => !t.removedAt);
   const boxed = new Set(live.map((t) => t.pickId).filter((x): x is number => x !== null));
   // PL-1: a pick whose item is resolved counts zero, timed or not (it shows as done).
@@ -154,7 +155,7 @@ export function plannedWithTimeboxes(picks: readonly PickLike[], sizes: Readonly
 }
 
 /** A half-day's planned minutes with that day's timeboxes (see plannedWithTimeboxes). */
-export function slotPlanned(picks: readonly PickLike[], sizes: Readonly<Record<string, number>>, timeboxes: readonly Pick<Timebox, "date" | "pickId" | "start" | "end" | "removedAt">[] | undefined, slot: { date: IsoDate; start: string; end: string }, allPicks: readonly PickLike[] = picks): number {
+export function slotPlanned(picks: readonly PickLike[], sizes: SizeScale, timeboxes: readonly Pick<Timebox, "date" | "pickId" | "start" | "end" | "removedAt">[] | undefined, slot: { date: IsoDate; start: string; end: string }, allPicks: readonly PickLike[] = picks): number {
   return plannedWithTimeboxes(picks, sizes, (timeboxes ?? []).filter((t) => t.date === slot.date), slot, allPicks);
 }
 /** Timeboxed minutes per pick (live timeboxes), or null for a pick without one: its need instead of its size. */

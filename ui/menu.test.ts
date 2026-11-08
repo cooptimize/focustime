@@ -42,7 +42,7 @@ function env(over: Partial<MenuEnv> = {}) {
     openTimebox: (t) => calls.push(["timebox", t]),
     connectWrite: () => calls.push(["connectWrite"]),
     theme: "cooptimize-dark",
-    planning: { sizes: { S: 60, M: 120, L: 210 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false },
+    planning: { sizes: { S: 60, M: 120, L: 210, unsized: 60 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false },
     setTheme: (t) => calls.push(["theme", t]),
     viewRange: "business",
     setViewRange: (r) => calls.push(["range", r]),
@@ -357,7 +357,7 @@ describe("Timebox a pick into a free gap (step 13.6, D245)", () => {
     ]);
   });
   it("one click adds the timebox at the gap start for the pick's size, trimmed to the gap", async () => {
-    const { e, calls } = env({ timeboxes: [tbx], planning: { sizes: { S: 60, M: 240, L: 300 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false } });
+    const { e, calls } = env({ timeboxes: [tbx], planning: { sizes: { S: 60, M: 240, L: 300, unsized: 60 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false } });
     const gap = items(timeboxStep(e, pick))[0]!;
     expect(gap.hint).toBe("trimmed to 2h 30m");
     await gap.run?.();

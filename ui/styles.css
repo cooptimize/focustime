@@ -6121,6 +6121,9 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .ib-phone .ib-row.new { padding-left: 10px; }
 .ib-phone .ib-new-dot { left: 1px; top: 18px; }
 
+/* SZ-1: Count unsized work as, with the fixed S, M and L beside it. */
+.set-unsized { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
 /* TY-1: Today's timeline: Week's cards and hour timeline (.half, .card-head, .timeline, .event, .tbox), one column. */
 .today-body.with-tl, .today-view.wide .today-body.with-tl { grid-template-columns: minmax(0, 1fr); }
 /* --tl-hour: the Board's hour at 1920 (about 94 px), so the two read as one system. */

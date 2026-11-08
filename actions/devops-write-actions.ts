@@ -853,7 +853,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const description = publishDescription(p, draft.proposals) || null;
       const acceptance = publishAcceptance(p) || null;
       const ops = createOps({ org, title: p.title, description, acceptance, acField, assignedTo: env.me.email, areaPath: area, iterationPath: iteration, parentId: parent.id, timeZone: tz });
-      const after: Record<string, string | null> = { Type: type, Title: p.title, Description: description, ...(acField ? { "Acceptance criteria": acceptance } : {}), "Assigned to": `${env.me.name} <${env.me.email}>`, Area: area, Iteration: iteration, Parent: `#${parent.id} ${parent.title}`, "Size in FocusTime": `${sizeChipText(p.size)} (not written to DevOps)` };
+      const after: Record<string, string | null> = { Type: type, Title: p.title, Description: description, ...(acField ? { "Acceptance criteria": acceptance } : {}), "Assigned to": `${env.me.name} <${env.me.email}>`, Area: area, Iteration: iteration, Parent: `#${parent.id} ${parent.title}`, "Size in FocusTime": `${sizeChipText(p.size, env.cfg.plan.sizes)} (not written to DevOps)` };
       return { ...base(env), ...none, op: "create", itemId: null, parentId: parent.id, title: p.title, ops, rev: null, before: {}, after, type, proposal: { draftId, proposalId } };
     }
     case "request_create": {

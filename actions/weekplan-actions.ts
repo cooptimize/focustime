@@ -98,7 +98,7 @@ function size(v: unknown): StorySize {
   if (!validStorySize(v)) throw new Invalid("size must be S, M or L");
   return v;
 }
-/** A size, or null to clear it (E2: unsized counts as 2h). */
+/** A size, or null to clear it (E2: unsized counts as the person's assumption). */
 const sizeOrNull = (v: unknown): StorySize | null => (v === null ? null : size(v));
 function bool(v: unknown, name: string): boolean {
   if (typeof v !== "boolean") throw new Invalid(`${name} must be true or false`);

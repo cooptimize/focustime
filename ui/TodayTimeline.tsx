@@ -434,6 +434,7 @@ export function TodayTimeline(props: Props) {
 }
 
 function ProposalBar({ p, env, count, onAcceptAll, onDiscard, onOutlook }: { p: Proposals; env: TimeboxEnv | null; count: number; onAcceptAll: () => void; onDiscard: () => void; onOutlook: (on: boolean) => void }) {
+  const { sizes } = useContext(PlanCtx);
   const a = env?.access ?? null;
   const canWrite = a?.access === "write";
   return (
@@ -441,7 +442,7 @@ function ProposalBar({ p, env, count, onAcceptAll, onDiscard, onOutlook }: { p: 
       <strong>{count} suggestion{count === 1 ? "" : "s"}</strong>
       {count > 0 && <button type="button" className="primary" onClick={onAcceptAll}>Accept all</button>}
       <button type="button" onClick={onDiscard}>Discard</button>
-      {p.unplaced.length > 0 && <span className="tt-bar-left muted" title={p.unplaced.map((u) => `${u.title}: ${u.reason}`).join("\n")}>{didntFitText(p.unplaced)}</span>}
+      {p.unplaced.length > 0 && <span className="tt-bar-left muted" title={p.unplaced.map((u) => `${u.title}: ${u.reason}`).join("\n")}>{didntFitText(p.unplaced, sizes)}</span>}
       {count > 0 && (
         <label className="tt-bar-outlook" title="A Busy event only you are on, titled with the client and item. You'll see every Outlook event in one preview before anything is written">
           <input type="checkbox" checked={p.outlook} onChange={(e) => onOutlook(e.target.checked)} /> Put on Outlook
