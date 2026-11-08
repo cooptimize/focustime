@@ -13,6 +13,7 @@ import { pickMenu } from "./menu.ts";
 import { MenuCtx, useMenu } from "./Menus.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
 import { PickTime } from "./PickTime.tsx";
+import { DeployIcon, WindowChip } from "./Deploy.tsx";
 import { pickTime } from "../plan/picktime.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import { useFocused } from "./planview.ts";
@@ -61,7 +62,9 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
   const week = density === "week";
   const planD = density === "plan";
   const tbs = useTimeboxes();
-  const timed = (week || planD) && !!tbs && tbs.settings.enabled && pickTime(pick.id, tbs.timeboxes).state !== "untimed";
+  // WK-3: a Deployment always shows its window, where a timed to-do shows its time.
+  const dep = pick.todoKind === "deployment";
+  const timed = dep || ((week || planD) && !!tbs && tbs.settings.enabled && pickTime(pick.id, tbs.timeboxes).state !== "untimed");
   const menu = useMenu((env) => pickMenu(env, pick));
   // MB-1: on the phone ⋯ opens the to-do's sheet (the same as Today's); elsewhere the menu, as before.
   const sheet = useTodoSheet();
@@ -84,7 +87,8 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
   const workAll = useContext(DevOpsWork).get(pick.clientKey);
   const seen = pick.itemId !== null && workAll ? [...workAll.items, ...workAll.children, ...(workAll.watched ?? [])].find((i) => i.id === pick.itemId) : undefined;
   const resolved = seen && isResolved(seen.stateCategory) ? seen : null;
-  const sizeChip = (
+  // WK-3: a Deployment's length is its window; it has no size chip.
+  const sizeChip = dep ? null : (
     <SizeChip size={pick.size} title={pick.title} wide={planD} tabIndex={tabIndex} note={focused ? `${focused} focused` : null}
       {...(readOnly || pick.status !== "planned" || !env ? {} : { onSet: (size) => void env.runPlan("pick.set_size", { id: pick.id, size }) })} />
   );
@@ -98,7 +102,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
         {resolved && <ResolvedMark state={resolved.state} />}
         {badge}
         {actions}
-        <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />
+        <TodoTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />
         {sizeChip}
         {more}
       </span>
@@ -107,7 +111,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
       return (
         <PlanRow data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""} dens-plan ph-row ${className}`} onContextMenu={menu.onContextMenu} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}
           handle={pick.status === "done" ? "✓" : "⋮⋮"} titleText={pick.title}
-          icon={pick.itemType ? <TypeIcon clientKey={pick.clientKey} type={pick.itemType} /> : undefined}
+          icon={dep ? <DeployIcon /> : pick.itemType ? <TypeIcon clientKey={pick.clientKey} type={pick.itemType} /> : undefined}
           title={titleNode}>
           {line2}
         </PlanRow>
@@ -115,7 +119,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
     return (
       <li data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""}${today ? " dens-today" : ""}${week ? " dens-week" : ""}${next ? " next" : ""} ph-row ${className}`} onContextMenu={menu.onContextMenu} {...(dragProps ?? {})} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
         <input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} disabled={!canTick || pick.status === "dropped"} onChange={(e) => toggle(pick.id, e.target.checked)} onClick={stop} onDoubleClick={stop} aria-label={`Done: ${pick.title}`} />
-        {typeIcon && pick.itemType && <TypeIcon clientKey={pick.clientKey} type={pick.itemType} />}
+        {dep ? <DeployIcon /> : typeIcon && pick.itemType && <TypeIcon clientKey={pick.clientKey} type={pick.itemType} />}
         <span className="pr-title" title={pick.title}>
           {titleNode}
         </span>
@@ -128,16 +132,16 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
     return (
       <PlanRow data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""} dens-plan ${className}`} onContextMenu={menu.onContextMenu} draggable={draggable} onDragStart={draggable ? onDrag : undefined} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}
         handle={pick.status === "done" ? "✓" : "⋮⋮"} titleText={pick.title}
-        icon={pick.itemType ? <TypeIcon clientKey={pick.clientKey} type={pick.itemType} /> : undefined}
+        icon={dep ? <DeployIcon /> : pick.itemType ? <TypeIcon clientKey={pick.clientKey} type={pick.itemType} /> : undefined}
         title={link && pick.itemUrl ? <WorkLink clientKey={pick.clientKey} url={pick.itemUrl}>{pick.title}</WorkLink> : pick.title}
         badges={<>{resolved && <ResolvedMark state={resolved.state} />}{extra}{badge}</>}
-        right={<>{timed && <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}{sizeChip}</>}
-        hover={<>{!timed && <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}{more}</>} />
+        right={<>{timed && <TodoTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}{sizeChip}</>}
+        hover={<>{!timed && <TodoTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}{more}</>} />
     );
   return (
     <li data-pick={pick.id} data-tour={week ? "wk-todo" : undefined} className={`pick-row ${pick.status}${highlight ? " trim" : ""}${today ? " dens-today" : ""}${week ? " dens-week" : ""}${next ? " next" : ""} ${className}`} onContextMenu={menu.onContextMenu} {...(dragProps ?? { draggable, onDragStart: draggable ? onDrag : undefined })} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
       <input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} disabled={!canTick || pick.status === "dropped"} onChange={(e) => toggle(pick.id, e.target.checked)} onClick={stop} onDoubleClick={stop} aria-label={`Done: ${pick.title}`} />
-      {typeIcon && pick.itemType && <TypeIcon clientKey={pick.clientKey} type={pick.itemType} />}
+      {dep ? <DeployIcon /> : typeIcon && pick.itemType && <TypeIcon clientKey={pick.clientKey} type={pick.itemType} />}
       <span className="pr-title" title={pick.title}>
         {link && pick.itemUrl ? (
           <WorkLink clientKey={pick.clientKey} url={pick.itemUrl} className={today ? "pr-link pr-cue" : undefined} title={today ? `${pick.title}\nOpen #${pick.itemId ?? ""} in DevOps` : undefined}>
@@ -154,27 +158,32 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
           {badge}
           {actions}
           <span className="pr-hover">
-            <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />
+            <TodoTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />
             {more}
           </span>
         </>
       ) : week ? (
         <>
           {badge}
-          {timed && <PickTime pick={pick} editable={timeEditable && !readOnly} />}
+          {timed && <TodoTime pick={pick} editable={timeEditable && !readOnly} />}
           <span className="pr-hover">
             {sizeChip}
-            {!timed && <PickTime pick={pick} editable={timeEditable && !readOnly} />}
+            {!timed && <TodoTime pick={pick} editable={timeEditable && !readOnly} />}
             {more}
           </span>
         </>
       ) : (
         <>
           {sizeChip}
-          <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />
+          <TodoTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />
           {more}
         </>
       )}
     </li>
   );
+}
+
+/** WK-3: a Deployment's window chip in place of the to-do's time (its window is changed from Deployment details). */
+function TodoTime(props: Parameters<typeof PickTime>[0]) {
+  return props.pick.todoKind === "deployment" ? <WindowChip pick={props.pick} /> : <PickTime {...props} />;
 }

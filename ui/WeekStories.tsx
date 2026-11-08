@@ -63,11 +63,16 @@ function wholeCatchUp(day: Day): boolean {
 }
 
 /** The week's blocks: AM and PM of each day, one block for a PTO day and one for Friday's catch-up. */
+/** The last minute of a date in the week's zone (a weekend drop is open all day, not only in the nominal morning). */
+const endOfDay = (date: IsoDate, timeZone: string) => Temporal.PlainDate.from(date).toZonedDateTime({ timeZone, plainTime: "23:59" }).toInstant().toString();
+
 export function weekBlocks(week: Week): Block[] {
   const out: Block[] = [];
   for (const d of week.days) {
     const day = Temporal.PlainDate.from(d.date).toLocaleString("en-US", { weekday: "short" });
-    if (d.pto) out.push({ date: d.date, half: "AM", label: `${day} (PTO)`, slot: d.am, ptoDay: true, catchUp: false });
+    // WK-3: a weekend day is one drop target too, with no fit (D947: it takes the move with its note).
+    if (d.kind === "weekend") out.push({ date: d.date, half: "AM", label: Temporal.PlainDate.from(d.date).toLocaleString("en-US", { weekday: "long" }), slot: { ...d.am, end: endOfDay(d.date, week.timeZone) }, ptoDay: !!d.pto, catchUp: true });
+    else if (d.pto) out.push({ date: d.date, half: "AM", label: `${day} (PTO)`, slot: d.am, ptoDay: true, catchUp: false });
     else if (wholeCatchUp(d)) out.push({ date: d.date, half: "AM", label: `${day} catch-up`, slot: d.am, ptoDay: false, catchUp: true });
     else for (const s of [d.am, d.pm]) out.push({ date: d.date, half: s.half, label: blockLabel(s), slot: s, ptoDay: false, catchUp: false });
   }
@@ -204,7 +209,7 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
       {children}
       {touch && dragging && (
         <div className="touch-ghost" style={{ left: touch.x, top: touch.y }} aria-hidden="true">
-          #{dragging.itemId} {dragging.title}
+          {dragging.itemId > 0 ? `#${dragging.itemId} ` : ""}{dragging.title}
         </div>
       )}
       {toast && (
@@ -281,7 +286,11 @@ export function useDragSource(d: Dragged | null): HTMLAttributes<HTMLElement> {
 
 /** The pick's drag (a planned DevOps story, still to do) on Week's cards and the panel's Plan list. */
 export function pickDragged(p: Pick): Dragged | null {
-  return p.kind === "item" && p.itemId !== null && p.status === "planned" ? { clientKey: p.clientKey, itemId: p.itemId, size: p.size, title: p.title, pickId: p.id } : null;
+  if (p.status !== "planned") return null;
+  if (p.kind === "item" && p.itemId !== null) return { clientKey: p.clientKey, itemId: p.itemId, size: p.size, title: p.title, pickId: p.id };
+  // WK-3: a to-do with no DevOps item (a Deployment, an intention, a draft) moves by drag too; a negative id never
+  // matches a real item in the "already planned here" check.
+  return { clientKey: p.clientKey, itemId: -p.id, size: p.size, title: p.title, pickId: p.id };
 }
 
 /** "Move to…" for a planned pick: a small button that opens the blocks with their fit. */

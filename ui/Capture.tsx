@@ -6,6 +6,7 @@ import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type
 import type { CaptureFeatures, WeekLoadData } from "../actions/types.ts";
 import { boxKind, suggest, tagCompletions, takeTag, type BoxKind, type CaptureClient, type CaptureKind } from "../plan/capture.ts";
 import { CLOSE_HOW, type Capture, type Size } from "../plan/types.ts";
+import { windowProblem, windowText } from "../plan/deploy.ts";
 import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
 import { Fading, formClients, HOW_LABEL } from "./FollowUps.tsx";
@@ -18,6 +19,8 @@ import { CreateDraftCtx } from "./createdraft-ctx.ts";
 const KIND_NAME: Record<CaptureKind, string> = { follow_up: "Promise", draft: "Draft story", draft_feature: "Draft feature" };
 const SAVE_AS: Record<CaptureKind, string> = { follow_up: "Save as promise", draft: "Save as draft story", draft_feature: "Save as draft feature" };
 const plainDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
+/** WK-3: a Deployment's usual day when nothing else says: the coming Saturday (today when it is one). */
+const nextSaturday = (today: IsoDate) => Temporal.PlainDate.from(today).add({ days: (6 - Temporal.PlainDate.from(today).dayOfWeek + 7) % 7 }).toString();
 const when = (z: string, tz: string) => {
   const t = Temporal.ZonedDateTime.from(z).withTimeZone(tz);
   return `${t.toPlainDate().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })}, ${t.toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}`;
@@ -53,8 +56,9 @@ function ClientSelect({ value, clients, onChange, required, label }: { value: st
 /** Sorting one capture in the Inbox; onCancel (U5) folds it back into its row, which has Dismiss in its ⋯. */
 export function SortCapture({ capture, clients, today, onDone, onCancel }: { capture: Capture; clients: CaptureClient[]; today: IsoDate; onDone: (msg: string) => void; onCancel?: () => void }) {
   const s = useMemo(() => suggest(capture.text, capture.clientKey, today, clients), [capture.text, capture.clientKey, today, clients]);
-  const suggested = useMemo(() => boxKind(capture.text, capture.clientKey, today, clients), [capture.text, capture.clientKey, today, clients]);
-  const [chosen, setChosen] = useState<BoxKind | null>(null);
+  // WK-3: a Deployment is planned from the box, not sorted from a capture (it needs a date and a window).
+  const suggested = useMemo((): SortKind => { const k = boxKind(capture.text, capture.clientKey, today, clients); return k === "deployment" ? "later" : k; }, [capture.text, capture.clientKey, today, clients]);
+  const [chosen, setChosen] = useState<SortKind | null>(null);
   const kind = chosen ?? suggested;
   const [client, setClient] = useState<string | null>(capture.clientKey);
   // CV-3: Who through the PersonPicker; the rules' name starts it as plain text (it offers to link an exact match).
@@ -96,7 +100,7 @@ export function SortCapture({ capture, clients, today, onDone, onCancel }: { cap
   return (
     <div className="cap-sort">
       <div className="cap-kinds cap-box-kinds" role="radiogroup" aria-label="Sort as">
-        {BOX_KINDS.map((k) => (
+        {SORT_KINDS.map((k) => (
           <button key={k} type="button" role="radio" className="chip-btn" aria-checked={kind === k} data-kind={k} onClick={() => setChosen(k)} title={k === suggested && !chosen ? "Suggested by the rules" : undefined}>
             {BOX_NAME[k]}
             {k === suggested && !chosen && k !== "later" && <span className="cap-suggested">suggested</span>}
@@ -185,9 +189,11 @@ export function useClientFeatures(client: string | null, on: boolean): CaptureFe
 }
 
 const NO_POOL = { items: [], children: [] };
-const BOX_KINDS: readonly BoxKind[] = ["later", "follow_up", "draft", "draft_feature"];
-/** QF-1: Sort later is called Decide later (the kind stays "later"). */
-export const BOX_NAME: Record<BoxKind, string> = { later: "Decide later", ...KIND_NAME };
+const BOX_KINDS: readonly BoxKind[] = ["later", "follow_up", "draft", "draft_feature", "deployment"];
+type SortKind = Exclude<BoxKind, "deployment">;
+const SORT_KINDS: readonly SortKind[] = ["later", "follow_up", "draft", "draft_feature"];
+/** QF-1: Sort later is called Decide later (the kind stays "later"). WK-3: Deployment makes a to-do, not a capture. */
+export const BOX_NAME: Record<BoxKind, string> = { later: "Decide later", ...KIND_NAME, deployment: "Deployment" };
 
 /**
  * The capture box (step 15.3: the one way to add something new). Enter saves at once; Shift+Enter is a new line (CP-1:
@@ -215,8 +221,13 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
   const [parent, setParent] = useState<ItemValue>(NO_ITEM);
   const [size, setSize] = useState<Size>("M");
   const [target, setTarget] = useState("");
+  // WK-3: a Deployment's date and window (start and end) and its note of what's going.
+  const [depDate, setDepDate] = useState(() => nextSaturday(data.planDay.date));
+  const [depStart, setDepStart] = useState("19:00");
+  const [depEnd, setDepEnd] = useState("21:00");
+  const [depNote, setDepNote] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
-  const [saved, setSaved] = useState<{ captureId: number; text: string; body: string; client: string | null } | null>(null);
+  const [saved, setSaved] = useState<{ captureId: number; text: string; body: string; client: string | null; pickId?: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pick, setPick] = useState(0);
@@ -281,11 +292,12 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
     setParent(NO_ITEM);
     setSize("M");
     setTarget("");
+    setDepNote("");
   };
   const whoNow: PersonValue = who ?? { who: s.who, whoRef: null };
   const whoName = whoNow.who.trim();
   const dueNow = due ?? s.due ?? "";
-  const blocked = (kind === "draft" || kind === "draft_feature") && !client ? `A ${BOX_NAME[kind].toLowerCase()} needs a client: choose one with the client chip or type @` : null;
+  const blocked = (kind === "draft" || kind === "draft_feature" || kind === "deployment") && !client ? `A ${BOX_NAME[kind].toLowerCase()} needs a client: choose one with the client chip or type @` : kind === "deployment" ? (depDate ? windowProblem({ start: depStart, end: depEnd }) : "A deployment needs a date") : null;
 
   const submit = async (open = false) => {
     const body = text.trim();
@@ -295,6 +307,21 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
     if (blocked) return void setError(blocked);
     setBusy(true);
     setError(null);
+    if (kind === "deployment" && key) {
+      // WK-3: a Deployment is a to-do on its date and window (no capture row); Undo removes it.
+      try {
+        const r = await call<{ pick: { id: number }; note: string | null }>("deploy.add", { clientKey: key, date: depDate, start: depStart, end: depEnd, title: body.slice(0, 200), ...(depNote.trim() ? { note: depNote.trim() } : {}), ...(item.itemId ? { itemIds: [item.itemId] } : {}) });
+        reset();
+        setSaved({ captureId: 0, pickId: r.pick.id, text: `${savedText("deployment", clientName(key))} · ${plainDay(depDate)} ${windowText({ start: depStart, end: depEnd })}${r.note ? ` · ${r.note}` : ""}`, body, client: key });
+        onChanged();
+        input.current?.focus();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not save");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     try {
       const r = await call<{ capture: Capture }>("capture.add", { text: body, ...(key ? { clientKey: key } : {}) });
       const cn = key ? clientName(key) : null;
@@ -339,7 +366,8 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
     if (!sv) return;
     setSaved(null);
     try {
-      await call("capture.undo", { id: sv.captureId });
+      if (sv.pickId) await call("pick.remove", { id: sv.pickId });
+      else await call("capture.undo", { id: sv.captureId });
       setText((t) => t || sv.body);
       if (sv.client !== client) setClient(sv.client);
       setNotice("Undone");
@@ -486,6 +514,15 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
                   <button key={z} type="button" className="mini" aria-pressed={size === z} onClick={() => setSize(z)}>{z}</button>
                 ))}
               </span>
+            </>
+          )}
+          {kind === "deployment" && (
+            <>
+              <label>Date <input type="date" aria-label="Deployment date" value={depDate} min={data.planDay.date} onChange={(e) => setDepDate(e.target.value)} /></label>
+              <label>Starts <input type="time" aria-label="Starts at" value={depStart} onChange={(e) => setDepStart(e.target.value)} /></label>
+              <label>Ends <input type="time" aria-label="Ends at" value={depEnd} onChange={(e) => setDepEnd(e.target.value)} /></label>
+              <label className="wide">What's going <input type="text" aria-label="What's going" value={depNote} maxLength={2000} placeholder="code, SQL objects, the semantic model, reports" onChange={(e) => setDepNote(e.target.value)} /></label>
+              <label className="wide">Linked item <ItemLookup clientKey={client} value={item} onChange={setItem} label="Linked item" /></label>
             </>
           )}
           {kind === "draft_feature" && (
