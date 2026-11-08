@@ -802,3 +802,10 @@ The pages are `docs/technical/*.md` (how FocusTime works, for engineers and IT);
 - Running it: `FOCUSTIME_STANDARDS_SYNC=off` turns the sync off; a `FOCUSTIME_DEMO` server never reaches GitHub.
 - Tests: `plan/standards.test.ts`, `store/standards-sync.test.ts`, `actions/story-actions.test.ts`, `actions/draft-prepare.test.ts`, `plan/capture-prepare.test.ts`, `assistant/answers.test.ts`, `actions/admin-actions.test.ts`; `e2e/kb1-shots.test.ts`. Fakes in `test/builders/standards.ts`.
 
+
+## GD-3: held messages re-checked (Nov 8)
+
+- `actions/held-recheck.ts`: `recheckHeld` (every held message, or one client's, through the normal pipeline; counts only in logs), `heldRecheckOnce` (first start of a build, marker `meta/held_recheck_v1`), started from `server/main.ts`; `AdminOps.recheckHeld` runs it when a client's names change.
+- `actions/request-poll.ts` `pipelineDepsOf`: one chat's pipeline dependencies, shared by the poll and the re-check.
+- `plan/boundary.ts` `mentionMatches`, `highlightMatches`; `conversation_messages.held_match_json` keeps what a held message matched.
+- `conversations.held_bulk` (`actions/conversation-actions.ts`), and the held list's bulk lines (`ui/inbox/HeldBack.tsx`).

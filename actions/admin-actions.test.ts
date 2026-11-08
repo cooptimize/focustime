@@ -232,6 +232,16 @@ describe("admin actions", () => {
     const plain = (await s.run(s.admin, "admin.load", { section: "clients" })) as typeof r;
     expect(plain.data.clients.find((c) => c.key === "fabrikam")!.process).toEqual({ ok: false, message: "DevOps can't be read from here" });
   });
+
+  it("GD-3: editing a client's aliases or Match only as written re-checks its held messages; other settings don't", async () => {
+    const { ops, admin, run } = await setup();
+    const asked: string[] = [];
+    ops.recheckHeld = async (k) => void asked.push(k);
+    await run(admin, "admin.set", { scope: "client:contoso", key: "aliases", value: ["CTS"] });
+    await run(admin, "admin.set", { scope: "client:contoso", key: "exact_case", value: true });
+    await run(admin, "admin.set", { scope: "client:contoso", key: "allow_ai", value: true });
+    expect(asked).toEqual(["contoso", "contoso"]);
+  });
 });
 
 

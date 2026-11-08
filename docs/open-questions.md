@@ -476,3 +476,6 @@ What DS-1 learned, and what is still open:
 - Q-KB1-4: `AGENTS.md` in the standards repo has unresolved merge conflict markers in "Structure and routing" (`<<<<<<< Updated upstream`). FocusTime doesn't read that file, so nothing here depends on it; worth fixing in the repo.
 - Q-KB1-5: GitHub allows 60 anonymous API requests an hour per IP. Two a check is well inside it, but the Container App shares an outbound IP. If that ever bites, a token goes through the Key Vault scripts.
 
+- Q-GD3-1. Step 0's database counts (held by chat, audience and reason) weren't read: dev's database takes connections only from Azure services, and running a read inside the dev container was refused in this session. The re-check logs them when it first runs (`held_recheck`, `all:before:<audience>:<reason>`, `all:released`, `all:still_held`) and keeps them in `org_settings` `meta/held_recheck_v1`.
+- Q-GD3-2. Should bulk Sort all and Mark all have an Undo? Neither single action has one today (This is work brings a message back from Chatter).
+- Q-GD3-3. Should a chat with reading off still have its held messages re-checked? They are skipped for now, as nothing else works on such a chat, and may show "Reason unknown" until they expire.

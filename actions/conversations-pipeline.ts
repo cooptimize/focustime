@@ -24,9 +24,9 @@ import { AiError } from "../ai/types.ts";
 import { askTitle, DEFAULT_ASK_SETTINGS, matchAsk, type AskSettings, type IncomingMessage } from "../plan/asks.ts";
 import { isExternal } from "../plan/chats.ts";
 import type { ClientEntry } from "../ai/guard.ts";
-import { mentionedClients, replaceMentions, type Audience } from "../plan/boundary.ts";
+import { mentionedClients, mentionMatches, replaceMentions, type Audience } from "../plan/boundary.ts";
 import {
-  BadAnswer, buildUpdate, CLIENT_REFUSED, HELD_MENTION, LEGACY_CLIENT_REFUSED, checkDue, checkImageDescriptions, IMAGE_INSTRUCTIONS, UPDATE_SCHEMA_WITH_IMAGES, checkUpdate, dueFromText, dueOf, hintFor, mergeByGroup, messageGroups, NEAR_MINUTES, oneLine, promisePhrase, promiseWhatWithoutAi, ruleVerdict, statusOf, UPDATE_INSTRUCTIONS, UPDATE_SCHEMA, UPDATE_TASK,
+  BadAnswer, buildUpdate, CLIENT_REFUSED, HELD_MENTION, LEGACY_CLIENT_REFUSED, NO_BOUNDARY, checkDue, checkImageDescriptions, IMAGE_INSTRUCTIONS, UPDATE_SCHEMA_WITH_IMAGES, checkUpdate, dueFromText, dueOf, hintFor, mergeByGroup, messageGroups, NEAR_MINUTES, oneLine, promisePhrase, promiseWhatWithoutAi, ruleVerdict, statusOf, UPDATE_INSTRUCTIONS, UPDATE_SCHEMA, UPDATE_TASK,
   type BatchMessage, type Commitment, type Conversation, type Hint, type OpenConversation, type Participant, type UpdateAnswer,
 } from "../plan/conversations.ts";
 import type { ClientChat, FocusUser, TeamsMessage } from "../plan/requests.ts";
@@ -109,12 +109,14 @@ const firstName = (n: string) => n.split(/\s+/)[0] ?? n;
  * only known by trying, so it is never tried on its own). Guard holds and transient reasons are never picked here.
  */
 export const SWITCH_REASONS = ["off", "client_off", "not_set_up"] as const;
+/** GD-3: reasons tried again once the chat's boundary reads (`boundaryKnown`); before that the guard would refuse again. */
+export const AFTER_BOUNDARY_REASONS = [NO_BOUNDARY] as const;
 export const BUDGET_REASONS = ["zero_budget", "over_budget"] as const;
 export async function parkedBySwitch(
-  convs: Pick<ConversationStore, "placesByRole">, teams: Pick<TeamsStore, "message">, chatId: string, o: { available: boolean; withNew: boolean },
+  convs: Pick<ConversationStore, "placesByRole">, teams: Pick<TeamsStore, "message">, chatId: string, o: { available: boolean; withNew: boolean; boundaryKnown?: boolean },
 ): Promise<TeamsMessage[]> {
   if (!o.available) return [];
-  const pick = new Set<string>([...SWITCH_REASONS, ...(o.withNew ? BUDGET_REASONS : [])]);
+  const pick = new Set<string>([...SWITCH_REASONS, ...(o.withNew ? BUDGET_REASONS : []), ...(o.boundaryKnown ? AFTER_BOUNDARY_REASONS : [])]);
   const out: TeamsMessage[] = [];
   for (const p of (await convs.placesByRole([chatId], "unsorted")).filter((x) => x.reason !== null && pick.has(x.reason))) {
     const m = await teams.message(p.chatId, p.messageId);
@@ -227,9 +229,11 @@ async function sortBatch(d: PipelineDeps, chat: ClientChat, batchIn: readonly Te
   const facing = !b || b.audience !== "internal";
   if (b && facing && !b.internal && b.directory.length) {
     for (const m of [...work]) {
-      if (!mentionedClients(m.text, chat.clientKey, b.directory).length) continue;
+      // GD-3: what it matched is recorded, so the list can say why, the same for everyone who sees the chat.
+      const matched = mentionMatches(m.text, chat.clientKey, b.directory);
+      if (!matched.length) continue;
       work.splice(work.indexOf(m), 1);
-      await d.convs.place([{ chatId: chat.chatId, messageId: m.messageId, conversationId: null, role: "unsorted", reason: HELD_MENTION, placedBy: "rule", at: m.createdAt }]);
+      await d.convs.place([{ chatId: chat.chatId, messageId: m.messageId, conversationId: null, role: "unsorted", reason: HELD_MENTION, placedBy: "rule", at: m.createdAt, matched }]);
       out.unsorted++;
       out.held++;
     }
@@ -336,7 +340,10 @@ async function sortBatch(d: PipelineDeps, chat: ClientChat, batchIn: readonly Te
       : await d.ai.run<UpdateAnswer>({ name: UPDATE_TASK, client: chat.clientKey, instructions: UPDATE_INSTRUCTIONS, ...(mentions ? { mentions } : {}) }, built.text, UPDATE_SCHEMA);
     if (!r.ok) {
       reason = r.error instanceof AiError ? r.error.kind : "provider";
-      if (reason === LEGACY_CLIENT_REFUSED) reason = CLIENT_REFUSED;
+      // GD-3: with the boundary known the guard's client rule doesn't run on a chat's words ("words"), so a client
+      // refusal means the boundary couldn't be read. Nothing was matched (it may be a number that equals an item id):
+      // it waits to be sorted, and is never listed as held.
+      if (reason === LEGACY_CLIENT_REFUSED) reason = NO_BOUNDARY;
     }
     else {
       try {

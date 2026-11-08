@@ -1983,6 +1983,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "conversations.unlink":
     case "conversations.held":
     case "conversations.held_not_work":
+    case "conversations.held_bulk":
     case "my_promises.unlink":
       return conversationAction(await conversationContext(ctx), action, req.input);
     case "inbox.list":

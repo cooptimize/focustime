@@ -98,6 +98,7 @@ import { meetingJob } from "./meeting-job.ts";
 import { inviteDomains } from "../config/schema.ts";
 import type { MeetingUser } from "../actions/meeting-actions.ts";
 import { whoRepair, type WhoRepairPerson } from "./who-repair.ts";
+import { heldRecheckOnce, recheckHeld } from "../actions/held-recheck.ts";
 import { upkeep as upkeepConversations } from "../actions/conversation-upkeep.ts";
 import { backfillRequests } from "../actions/conversation-backfill.ts";
 import { weekConfig } from "../config/defaults.ts";
@@ -1228,6 +1229,11 @@ void whoRepair({
   },
   commitments: () => conversations.clearSelfTo(),
 }).catch(() => log({ source: "plan", op: "who_repair", kind: "failed" }));
+
+// GD-3: every held message checked once under GD-2's rules, at the first start of this build; and a client's again when
+// an admin edits its names.
+void heldRecheckOnce({ store: adminStore, log, run: () => recheckHeld(pollDeps) }).catch(() => log({ source: "plan", op: "held_recheck", kind: "failed" }));
+adminOps.recheckHeld = async (clientKey) => void (await recheckHeld(pollDeps, { clientKey }));
 
 // Everyone who has signed in before gets their background work back (a timer that was running ends on time), all of it
 // run by one scheduler (server/scheduler.ts) that reads what is due from each person's rows. A3, the idle rule: the
