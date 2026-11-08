@@ -56,16 +56,18 @@ type Props = {
   typeIcon?: boolean;
   /** PV-1: Week's drag and drop (drag to another block, long-press on touch) instead of `draggable`. */
   dragProps?: HTMLAttributes<HTMLLIElement> | undefined;
+  /** TY-2: Today's checklist beside the timeline: the "today" row with its time, or else its size, always shown. */
+  checklist?: boolean;
 };
 
-export function PickRow({ pick, toggle, link = false, canTick = true, timeEditable = true, hint = false, highlight = false, extra, readOnly = false, draggable = false, tabIndex, className = "", density = "default", next = false, badge, actions, typeIcon = false, dragProps }: Props) {
+export function PickRow({ pick, toggle, link = false, canTick = true, timeEditable = true, hint = false, highlight = false, extra, readOnly = false, draggable = false, tabIndex, className = "", density = "default", next = false, badge, actions, typeIcon = false, dragProps, checklist = false }: Props) {
   const today = density === "today";
   const week = density === "week";
   const planD = density === "plan";
   const tbs = useTimeboxes();
   // WK-3: a Deployment always shows its window, where a timed to-do shows its time.
   const dep = pick.todoKind === "deployment";
-  const timed = dep || ((week || planD) && !!tbs && tbs.settings.enabled && pickTime(pick.id, tbs.timeboxes).state !== "untimed");
+  const timed = dep || ((week || planD || checklist) && !!tbs && tbs.settings.enabled && pickTime(pick.id, tbs.timeboxes).state !== "untimed");
   const menu = useMenu((env) => pickMenu(env, pick));
   // MB-1: on the phone ⋯ opens the to-do's sheet (the same as Today's); elsewhere the menu, as before.
   const sheet = useTodoSheet();
@@ -90,7 +92,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
   const resolved = seen && isResolved(seen.stateCategory) ? seen : null;
   // WK-3: a Deployment's length is its window; it has no size chip.
   const sizeChip = dep ? null : (
-    <SizeChip size={pick.size} title={pick.title} wide={planD} tabIndex={tabIndex} note={focused ? `${focused} focused` : null}
+    <SizeChip size={pick.size} title={pick.title} wide={planD || checklist} tabIndex={tabIndex} note={focused ? `${focused} focused` : null}
       {...(readOnly || pick.status !== "planned" || !env ? {} : { onSet: (size) => void env.runPlan("pick.set_size", { id: pick.id, size }) })} />
   );
   // MB-1: on the phone (the sheet is there only on the phone) every to-do row puts its title on its own line (two at
@@ -160,9 +162,10 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
           {actions}
           {dep && <><WindowChip pick={pick} /><DeployItemsChip pick={pick} /></>}
           <span className="pr-hover">
-            {!dep && <TodoTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}
+            {!dep && !(checklist && timed) && <TodoTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}
             {more}
           </span>
+          {checklist && !dep && (timed ? <TodoTime pick={pick} editable={timeEditable && !readOnly} /> : sizeChip)}
         </>
       ) : week ? (
         <>

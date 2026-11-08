@@ -49,7 +49,8 @@ const center = async (l: ReturnType<Page["locator"]>) => {
   const b = (await l.boundingBox())!;
   return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
 };
-const trayRow = (page: Page, title: string) => page.locator(".tt-tray-row", { hasText: title });
+/** A to-do with no time yet: TY-1's tray on the phone, TY-2's checklist elsewhere. */
+const trayRow = (page: Page, title: string) => page.locator(".tt-tray-row, .tt-check-rest .tt-check-row", { hasText: title });
 const band = (page: Page, title: string) => page.locator(".today-tl .tbox:not(.tt-ph)", { hasText: title });
 const placeholder = (page: Page, title: string) => page.locator(".today-tl .tt-ph", { hasText: title });
 
@@ -199,7 +200,7 @@ describe.skipIf(!CHROMIUM)("TY-1: Today's timeline", () => {
     // Back to the tray takes the time away.
     await page.waitForTimeout(200);
     c = await center(b);
-    await drag(page, c, await center(page.locator(".tt-tray").nth(1)));
+    await drag(page, c, await center(page.locator(".tt-check").nth(1)));
     await expect.poll(() => boxes(page)).toEqual({});
     await trayRow(page, "Write the export notes").waitFor();
     await undo(page);
@@ -285,12 +286,13 @@ describe.skipIf(!CHROMIUM)("TY-1: Today's timeline", () => {
     expect(await page.getByRole("dialog").count()).toBe(0);
     expect(await bar.textContent()).toMatch(/3 suggestions/);
     expect(await page.locator(".today-tl .tt-ph").count()).toBe(3);
-    expect(await trayRow(page, "Draft the rollout note").count()).toBe(0);
+    // TY-2: a to-do with a suggestion stays on the checklist, marked.
+    await trayRow(page, "Draft the rollout note").locator(".tt-suggested").waitFor();
     await shot(page, "05-timebox-placeholders", true);
-    // ✕ drops one, which goes back to its tray (and frees the half hour after the next one).
+    // ✕ drops one, which loses its mark on the checklist (and frees the half hour after the next one).
     await page.getByRole("button", { name: "Drop Review the mapping" }).click();
     expect(await page.locator(".today-tl .tt-ph").count()).toBe(2);
-    await trayRow(page, "Review the mapping").waitFor();
+    await expect.poll(() => trayRow(page, "Review the mapping").locator(".tt-suggested").count()).toBe(0);
     // Drag a placeholder before accepting: the new time is kept when accepted.
     const ph = placeholder(page, "Draft the rollout note");
     const before = await ph.getAttribute("aria-label");

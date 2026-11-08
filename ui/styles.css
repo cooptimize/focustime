@@ -6127,7 +6127,8 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 /* TY-1: Today's timeline: Week's cards and hour timeline (.half, .card-head, .timeline, .event, .tbox), one column. */
 .today-body.with-tl, .today-view.wide .today-body.with-tl { grid-template-columns: minmax(0, 1fr); }
 /* --tl-hour: the Board's hour at 1920 (about 94 px), so the two read as one system. */
-.today-tl { --tl-hour: calc(94px * var(--text-scale)); display: flex; flex-direction: column; gap: 10px; min-width: 0; max-width: 1200px; }
+.today-tl { --tl-hour: calc(94px * var(--text-scale)); display: flex; flex-direction: column; gap: 10px; min-width: 0; max-width: 2400px; }
+.today-tl.phone { max-width: 1200px; }
 .today-tl .day-allday.empty, .today-tl .day-out.empty { display: none; }
 .half.tt-block { flex-direction: column; flex: none; overflow: visible; }
 .half.tt-block.focus { background: color-mix(in oklab, var(--c) 5%, var(--surface)); }
@@ -6147,7 +6148,11 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .tt-hours .tbox.done { opacity: 0.55; }
 .tt-hours .tbox.done .tbox-label { text-decoration: line-through; }
 .tt-hours .tbox:focus-visible, .tt-hours .tbox.selected { outline: 2px solid var(--selected); outline-offset: 1px; }
-.tt-ghost { pointer-events: none; opacity: 0.85; z-index: 3; border-style: dashed; --c: var(--accent); }
+/* TY-2: a to-do with a time is a solid band in its client's colour, as on Week's rail. :where keeps an out-of-step or
+   conflict border winning; only a suggestion (.tt-ph) is dashed. */
+.tt-hours :where(.tbox:not(.tt-ph)) { border-style: solid; border-left: 3px solid var(--c); background: color-mix(in oklab, var(--c) 30%, var(--surface)); }
+.tt-ghost { pointer-events: none; opacity: 0.85; z-index: 3; --c: var(--accent); }
+.tt-hours .tbox.linked { outline: 2px solid var(--selected); outline-offset: 1px; }
 .tt-ph { z-index: 3; display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; border: 2px dashed color-mix(in oklab, var(--c) 75%, transparent); background: color-mix(in oklab, var(--c) 8%, var(--surface)); }
 .tt-ph-text { min-width: 0; flex: 1 1 auto; }
 .tt-ph-acts { display: inline-flex; gap: 4px; flex: none; }
@@ -6173,8 +6178,35 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .today-tl.phone .tbox { right: 44px; }
 .today-tl.phone .gap { right: 46px !important; }
 /* TY-1: a drag from the tray must not select text: the next press on the selection would start the browser's own drag. */
-.today-tl:not(.phone) .tt-tray-row, .tt-hours .tbox { user-select: none; -webkit-user-select: none; }
-.today-body.with-tl .today-tools { max-width: 1200px; }
+.today-tl:not(.phone) .tt-tray-row, .tt-check-row.can-drag, .tt-hours .tbox { user-select: none; -webkit-user-select: none; }
+/* TY-2: the timeline about 60%, its checklist about 40%, below the block's header and level with the hours. Hour labels
+   in a left gutter, Outlook's way, in Week's type. */
+.tt-split { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: stretch; }
+.tt-split .timeline.tt-hours { border-radius: 0 0 0 7px; --gutter: calc(52px * var(--text-scale)); }
+.tt-split .tt-hours .hour span { right: auto; left: 8px; }
+.tt-split .tt-hours .lanes { inset: 0 8px 0 var(--gutter); }
+.tt-split .tt-hours .tbox { left: var(--gutter); right: 8px; }
+.tt-split .tt-hours .gap { left: var(--gutter); right: 8px !important; }
+.tt-check { position: sticky; top: 8px; align-self: start; max-height: calc(100vh - 110px * var(--text-scale)); overflow-y: auto; box-sizing: border-box; padding: 6px 10px 10px; display: grid; gap: 4px; border-top: 1px solid var(--border); border-left: 1px solid var(--border); }
+.today-tl.has-bar .tt-check { top: calc(56px * var(--text-scale)); }
+.tt-check-body { display: grid; gap: 4px; min-width: 0; }
+.tt-check-toggle { display: none; }
+.tt-check .today-picks { list-style: none; margin: 0; padding: 0; display: grid; }
+.tt-check-row { border-radius: 6px; cursor: pointer; }
+.tt-check-row.can-drag { touch-action: none; cursor: grab; }
+.tt-check-row:focus-visible { outline: 2px solid var(--selected); outline-offset: -2px; }
+.tt-check-row.linked { background: color-mix(in oklab, var(--c) 16%, var(--surface)); }
+.tt-suggested { flex: none; padding: 0 6px; border: 1px dashed color-mix(in oklab, var(--c) 75%, transparent); border-radius: 6px; font-size: var(--fs-1); font-weight: 500; color: var(--text-muted); white-space: nowrap; }
+.tt-check .tt-tray-label { margin-top: 6px; }
+.tt-check .tt-tray-label:first-child { margin-top: 0; }
+.ev-overlap { flex: none; margin-left: auto; padding: 0 5px; border-radius: 5px; font-size: var(--fs-1); font-weight: 600; color: var(--watch); background: color-mix(in oklab, var(--watch) 16%, var(--surface)); white-space: nowrap; }
+@media (max-width: 1099px) {
+  .tt-split { grid-template-columns: minmax(0, 1fr); }
+  .tt-check { order: -1; position: static; max-height: none; overflow: visible; border-left: 0; }
+  .tt-check-toggle { display: inline-flex; gap: 6px; align-items: baseline; justify-self: start; padding: 2px 4px; border: 0; background: none; color: var(--text-muted); font: inherit; font-size: var(--fs-2); font-weight: 600; cursor: pointer; }
+  .tt-check.folded .tt-check-body { display: none; }
+}
+.today-body.with-tl .today-tools { max-width: 2400px; }
 /* The phone: the client's name in full, what's left of the header wraps under it. */
 .app.phone .today-tl.phone .tt-head, .app.phone .today-tl.phone .tt-head:has(> .late-chip) { flex-wrap: wrap; overflow: visible; row-gap: 4px; }
 .app.phone .today-tl.phone .tt-head .card-client, .app.phone .today-tl.phone .tt-head:has(> .late-chip) .card-client { flex: 0 1 auto; display: block; min-width: 0; max-width: 100%; white-space: normal; overflow: visible; }

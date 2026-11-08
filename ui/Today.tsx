@@ -546,6 +546,7 @@ export function Today(props: Props) {
                 now={now}
                 tz={tz}
                 editable={!past && !ptoDay && workday}
+                readOnly={!!readOnly}
                 phone={phone}
                 proposals={proposals}
                 setProposals={setProposals}

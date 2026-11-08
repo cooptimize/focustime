@@ -4,6 +4,17 @@ export type Positioned = { placed: PlacedEvent; top: number; height: number; lan
 
 const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
 
+/**
+ * TY-2: the ids of events that share time with another one in this block. Back to back isn't an overlap. A show-as-free
+ * event and unavailable time don't book you, so they neither get the marker nor give it to anything else.
+ */
+export function overlappingIds(events: readonly PlacedEvent[]): Set<string> {
+  const booked = events.filter((p) => !p.event.unavailable && p.event.showAs !== "free").map((p) => ({ id: p.event.id, a: ms(p.clipStart), b: ms(p.clipEnd) }));
+  const out = new Set<string>();
+  for (const x of booked) for (const y of booked) if (x.id !== y.id && x.a < y.b && y.a < x.b) out.add(x.id);
+  return out;
+}
+
 /** Vertical position (fractions of the slot) and side-by-side lanes for overlapping events. */
 export function layoutEvents(events: readonly PlacedEvent[], slotStart: string, slotEnd: string): Positioned[] {
   const s0 = ms(slotStart);
@@ -35,13 +46,14 @@ export function layoutEvents(events: readonly PlacedEvent[], slotStart: string, 
 }
 
 /** Full hours strictly inside the slot, as fractions, for gridlines. */
-export function hourMarks(slotStart: string, slotEnd: string, timeZone: string): { at: number; label: string }[] {
+export function hourMarks(slotStart: string, slotEnd: string, timeZone: string, includeStart = false): { at: number; label: string }[] {
   const a = Temporal.Instant.from(slotStart).toZonedDateTimeISO(timeZone);
   const b = Temporal.Instant.from(slotEnd).toZonedDateTimeISO(timeZone);
   const span = b.epochMilliseconds - a.epochMilliseconds;
   const marks: { at: number; label: string }[] = [];
   let t = a.round({ smallestUnit: "hour", roundingMode: "ceil" });
-  if (Temporal.ZonedDateTime.compare(t, a) === 0) t = t.add({ hours: 1 });
+  // Week's cards start on a line of their own; Today's left-hand labels (TY-2) name that first hour too.
+  if (!includeStart && Temporal.ZonedDateTime.compare(t, a) === 0) t = t.add({ hours: 1 });
   while (Temporal.ZonedDateTime.compare(t, b) < 0) {
     const h = t.hour % 12 || 12;
     marks.push({ at: (t.epochMilliseconds - a.epochMilliseconds) / span, label: `${h} ${t.hour < 12 ? "AM" : "PM"}` });

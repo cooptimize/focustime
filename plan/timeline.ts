@@ -16,6 +16,25 @@ const snapMs = TIMEBOX_SNAP * 60_000;
 const zoned = (x: number, tz: string) => Temporal.Instant.fromEpochMilliseconds(x).toZonedDateTimeISO(tz).toString({ timeZoneName: "never", smallestUnit: "second" });
 
 /**
+ * TY-2: a block's checklist. The to-dos with a time first, earliest first (a to-do's first timebox places it), then the
+ * rest in plan order. Dropped and moved to-dos aren't on it, as on the list view.
+ */
+export function checklistRows<P extends { id: number; status: string }, B extends { pickId: number | null; start: string }>(picks: readonly P[], boxes: readonly B[]): { timed: { pick: P; box: B }[]; rest: P[] } {
+  const first = new Map<number, B>();
+  for (const b of boxes) {
+    if (b.pickId === null) continue;
+    const had = first.get(b.pickId);
+    if (!had || ms(b.start) < ms(had.start)) first.set(b.pickId, b);
+  }
+  const live = picks.filter((p) => p.status === "planned" || p.status === "done");
+  const timed = live.flatMap((pick) => {
+    const box = first.get(pick.id);
+    return box ? [{ pick, box }] : [];
+  });
+  return { timed: timed.sort((x, y) => ms(x.box.start) - ms(y.box.start)), rest: live.filter((p) => !first.has(p.id)) };
+}
+
+/**
  * A drop at `frac` of a block's hours (0 its top, 1 its bottom): starts on the nearest quarter hour, keeps `minutes` of
  * length, and stays whole inside the hours shown (moved up from the bottom edge; cut only when longer than the block).
  */
