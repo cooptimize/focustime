@@ -346,11 +346,14 @@ const weekdayLong = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("e
 
 /** A menu move with Undo (WK-3): back where it was, or the carried copy undone when it came from a past day. */
 function movePick(env: MenuEnv, p: Pick, date: IsoDate, half: Half, label: string) {
-  if (!env.undoable) return env.runPlan("pick.move", { id: p.id, date, half });
-  return env.runPlan("pick.move", { id: p.id, date, half }).then((ok) => {
-    if (!ok) return false;
+  if (!env.undoable || !env.planAction) return env.runPlan("pick.move", { id: p.id, date, half });
+  // A move to another day leaves a copy there (the original marked moved): Undo takes the copy back (pick.uncarry, as
+  // the assistant's Undo does); a move within the day moves the same to-do back.
+  return env.planAction("pick.move", { id: p.id, date, half }).then((r) => {
+    const moved = (r as { pick?: Pick } | null)?.pick;
+    if (!moved) return false;
     const note = date !== p.date && Temporal.PlainDate.from(date).dayOfWeek >= 6 ? ` · ${placeNote(date, { pto: false, hasHours: false })}` : "";
-    env.undoable!(`Moved to ${label}${note}`, () => (p.date < env.today ? Promise.resolve(false) : env.runPlan("pick.move", { id: p.id, date: p.date, half: p.half })));
+    env.undoable!(`Moved to ${label}${note}`, () => (moved.id !== p.id ? env.runPlan("pick.uncarry", { id: moved.id }) : env.runPlan("pick.move", { id: p.id, date: p.date, half: p.half })));
     return true;
   });
 }
@@ -366,6 +369,9 @@ export function sizeStep(env: MenuEnv, p: Pick): MenuStep {
 }
 
 /** The "⋯" menu of a pick. */
+/** WK-3: a Deployment's length is its window: no size, timebox or make-up time on its menu. */
+const DEPLOY_HIDDEN = new Set(["size", "timebox", "makeup"]);
+
 export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
   const past = isPast(env, p.date);
   return {
@@ -390,7 +396,7 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
       { id: "kind", label: "Kind", hint: p.todoKind === "deployment" ? DEPLOYMENT : "To-do", action: "pick.set_kind", ...(past ? { disabled: PAST } : p.status !== "planned" && p.status !== "done" ? { disabled: "Only a planned or done to-do", expected: true } : {}), next: () => kindStep(env, p) },
       { id: "makeup", label: "I'll make it up…", hint: "tonight, Friday, another day", action: "pick.make_up", ...(p.status !== "planned" ? { disabled: "Only a planned to-do can be made up" } : {}), next: () => makeUpStep(env, p) },
       { id: "drop", label: "Drop", danger: true, action: "pick.remove", ...(past && p.status !== "planned" ? { disabled: "Only a planned to-do can be dropped on a past day" } : {}), run: () => env.runPlan("pick.remove", { id: p.id }) },
-    ],
+    ].filter((it) => !(p.todoKind === "deployment" && DEPLOY_HIDDEN.has(it.id))),
   };
 }
 

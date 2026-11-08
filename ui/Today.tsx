@@ -1456,6 +1456,7 @@ function DayTimeline({ day, blocks, data, picks, now, nowMs, events, onNotice }:
 function WeekendToday({ day, date, past, data, picks }: { day: Day | null; date: IsoDate; past: boolean; data: WeekLoadData; picks: readonly Pick[] }) {
   const view = useContext(PlanCtx);
   const tz = userZone(data);
+  const nameOf = clientNames(data);
   const rows = day ? weekendRows(day, picks, []) : { events: [], picks: sortByTime(picks.filter(live)), due: [] };
   const empty = !rows.events.length && !rows.picks.length;
   return (
@@ -1473,7 +1474,7 @@ function WeekendToday({ day, date, past, data, picks }: { day: Day | null; date:
       )}
       {rows.picks.length > 0 && (
         <ul className="checklist we-todos" aria-label="To-dos">
-          {rows.picks.map((p) => <PickRow key={p.id} pick={p} toggle={view.toggle} density="today" readOnly={past} canTick={!past || p.status !== "dropped"} />)}
+          {rows.picks.map((p) => <PickRow key={p.id} pick={p} toggle={view.toggle} density="today" readOnly={past} canTick={!past || p.status !== "dropped"} extra={<span className="we-client muted">{nameOf(p.clientKey)}</span>} />)}
         </ul>
       )}
     </section>

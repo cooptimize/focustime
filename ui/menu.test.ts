@@ -137,7 +137,7 @@ describe("⋯ menus", () => {
   it("a pick: open in Edge, size, move, start focus, done, drop", async () => {
     const t = env();
     const m = pickMenu(t.e, pick);
-    expect(items(m).map((i) => i.label)).toEqual(["Open in browser", "Set size", "Move", "Start focus", "Timebox", "Ask to collaborate", "Mark done", "I'll make it up…", "Drop"]);
+    expect(items(m).map((i) => i.label)).toEqual(["Open in browser", "Set size", "Move", "Start focus", "Timebox", "Ask to collaborate", "Mark done", "Kind", "I'll make it up…", "Drop"]);
     await find(m, "Open in browser").run!();
     await find(find(m, "Set size").next!(), "S · 1h").run!();
     expect(t.calls).toEqual([["link", "internal", pick.itemUrl], ["pick.set_size", { id: 7, size: "S" }]]);
@@ -148,6 +148,21 @@ describe("⋯ menus", () => {
     expect(items(m)[1]!.label).toBe("To Friday (catch-up)");
     const thu = items(m).filter((i) => i.label.startsWith("To Thu, Nov 5"));
     expect(thu.map((i) => [i.disabled, i.hint])).toEqual([[undefined, "You're on PTO that day"], [undefined, "You're on PTO that day"]]);
+  });
+  it("WK-3: a Deployment's menu has its details and Kind, and no size, timebox or make-up time", () => {
+    const dep: Pick = { ...pick, kind: "intention", itemId: null, itemUrl: null, size: null, title: "Release 4.2", todoKind: "deployment", window: { start: "19:00", end: "21:00" } };
+    const labels = items(pickMenu(env().e, dep)).map((i) => i.label);
+    expect(labels).toContain("Deployment details…");
+    expect(find(pickMenu(env().e, dep), "Deployment details…").hint).toBe("19:00–21:00");
+    expect(labels).not.toContain("Set size");
+    expect(labels).not.toContain("Timebox");
+    expect(labels).not.toContain("I'll make it up…");
+    expect(find(pickMenu(env().e, dep), "Kind").hint).toBe("Deployment");
+  });
+  it("WK-3: Move offers Saturday and Sunday with the weekend note, and no weekday-only list hides them (D947)", () => {
+    const m = find(pickMenu(env().e, pick), "Move").next!();
+    const we = items(m).filter((i) => /^To (Saturday|Sunday)$/.test(i.label));
+    expect(we.map((i) => [i.label, i.disabled, i.hint])).toEqual([["To Saturday", undefined, "Saturday isn't a working day: this is flex time"], ["To Sunday", undefined, "Sunday isn't a working day: this is flex time"]]);
   });
   it("a work item: open, add to the plan (stories only), draft story for an empty feature", () => {
     const story = itemMenu(env().e, "internal", item(1));

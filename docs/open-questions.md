@@ -387,3 +387,9 @@ What DS-1 learned, and what is still open:
 - Q-AH6-8: Stale sits in the Readiness group. Is it better as its own group, or should it count as a fifth readiness kind ("Untouched")?
 - Q-AH6-9: Backlog's level picks which backlog is listed rather than folding a tree. Should Backlog instead show the chosen level's items with their children folded under them, like the other modes?
 
+
+## WK-3
+
+- Q-WK3-1: should Week › Plan show a weekend cell too (pins to Saturday, a deployment's must)? WK-3 keeps Plan Monday to Friday: a weekend has no budget, and the Board, Today and the menu already place work there.
+- Q-WK3-2: AH-7 (Ahead Readiness) runs in parallel; if it also adds a migration or raises the Export schema version, the second to merge renumbers its schema version (WK-3 uses 33) and keeps its migration's timestamp.
+- Q-WK3-3: should the after-hours total count calendar events I organize myself after hours (a call I set at 19:00)? WK-3 counts only what I placed in FocusTime, so a meeting someone else set never reads as time I chose.

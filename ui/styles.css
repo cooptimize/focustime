@@ -5867,3 +5867,18 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .deployed-ask .muted { margin: 0; overflow-wrap: anywhere; }
 .deployed-who { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); }
 .app-undo { z-index: 60; }
+/* WK-3: a weekend column is narrow: its date always shows, and a to-do's time sits above its title, which wraps. */
+.day.weekend.quiet .weekend-head .date { display: inline; }
+.weekend-cell .pick-row:not(.ph-row) { flex-wrap: wrap; row-gap: 2px; }
+.weekend-cell .pick-row:not(.ph-row) .deploy-window, .weekend-cell .pick-row:not(.ph-row) .pick-time { order: 2; }
+.weekend-cell .pick-row:not(.ph-row) .pr-title { order: 3; flex: 1 1 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.weekend-cell .pick-row:not(.ph-row) .pr-hover { order: 2; margin-left: auto; }
+.today-weekend { display: flex; flex-direction: column; gap: 10px; max-width: 760px; }
+.today-weekend-head { margin: 0; font-size: var(--fs-4); }
+.today-weekend .we-client { font-size: var(--fs-2); margin-left: 6px; }
+/* WK-3: on the phone a chip stacks its weekday over its date, so six or seven days (a weekend) fit at 360 px. */
+.app.phone .day-tab { flex-direction: column; align-items: center; gap: 0; line-height: 1.15; padding: 3px 1px; font-size: var(--fs-2); overflow: hidden; }
+.app.phone .day-tab .tab-date { font-size: var(--fs-2); }
+/* WK-3: on the phone the after-hours total sits on its own line under the week's title, never squeezing it. */
+.app.phone .week-head .ph-title .after-hours-chip { order: 3; margin-right: 100%; flex: none; white-space: nowrap; }
+.app.phone .half.whole.weekend-cell, .grid.narrow .half.whole.weekend-cell { height: auto; min-height: 96px; max-height: none; overflow: visible; flex: none; }
