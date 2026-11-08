@@ -176,11 +176,11 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
   for (const [i, week] of weeks.slice(0, PLAN_WEEKS).entries()) {
     const w = weekStarts[i]!;
     const items = (await plan.weekPlan(w)).features;
-    for (const b of weekBudget(week, items, { borrowedMinutes: borrowedForWeek(borrowed, w) })) {
+    for (const b of weekBudget(week, items, { sizes: cfg.plan.sizes, borrowedMinutes: borrowedForWeek(borrowed, w) })) {
       capOf(b.clientKey, b.clientName).weeks.push({ weekStart: w, freeMinutes: b.freeMinutes, plannedMinutes: b.plannedMinutes, nicePlannedMinutes: b.nicePlannedMinutes, borrowedMinutes: b.borrowedMinutes, status: b.status, text: b.text, over: b.over });
     }
     // Each feature's load that week: from its stories on that week's list once one is sized, else its estimate (E2).
-    const est = estimate(items.map((f) => ({ ...f, level: f.level ?? "feature", tier: f.tier ?? "must" })));
+    const est = estimate(items.map((f) => ({ ...f, level: f.level ?? "feature", tier: f.tier ?? "must" })), cfg.plan.sizes);
     for (const env of est.envelopes) cells.push({ clientKey: env.feature.clientKey, itemId: env.feature.itemId, weekStart: w, minutes: env.minutes, derived: env.derived, unsized: env.unsized, exact: !loadText(env).startsWith("about"), tier: env.feature.tier, weekItemId: env.feature.id, stories: env.stories.length });
   }
   // Weeks 5 to 12: free time per month column (patterns and PTO; meetings aren't known that far ahead).
@@ -190,7 +190,7 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
     for (const w of col.weeks) {
       const week = weeks[weekStarts.indexOf(w)];
       if (!week) continue;
-      for (const b of weekBudget(week, [], { borrowedMinutes: {} })) {
+      for (const b of weekBudget(week, [], { sizes: cfg.plan.sizes, borrowedMinutes: {} })) {
         const x = per.get(b.clientKey) ?? { name: b.clientName, n: 0 };
         x.n += b.freeMinutes;
         per.set(b.clientKey, x);
@@ -207,7 +207,7 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
   // The last 2 weeks: each feature's hours on that week's plan against the focused time on its picks (slice 3).
   const pastOut: AheadState["past"] = await mapSeq(past, async (w) => {
     const wp = (await plan.weekPlan(w));
-    const est = estimate(wp.features.map((f) => ({ ...f, level: f.level ?? "feature", tier: f.tier ?? "must" })));
+    const est = estimate(wp.features.map((f) => ({ ...f, level: f.level ?? "feature", tier: f.tier ?? "must" })), cfg.plan.sizes);
     const picks = (await plan.picksBetween(w, Temporal.PlainDate.from(w).add({ days: 6 }).toString()));
     const secs = (await plan.focusedSeconds(picks.map((p) => p.id)));
     const worked = new Map<string, number>();

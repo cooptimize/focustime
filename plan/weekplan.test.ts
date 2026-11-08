@@ -1,3 +1,4 @@
+import { DEFAULT_SIZE_SCALE } from "./estimate.ts";
 import { describe, expect, it } from "vitest";
 import { buildWeek } from "../week/build.ts";
 import { fourDayWeekConfig as weekConfig } from "../fixtures/four-day-week.ts";
@@ -41,7 +42,7 @@ describe("a client's blocks next week (step 8)", () => {
 describe("the budget per client (E2): real free time in its blocks, in hours", () => {
   const H = 60;
   const ev = (start: string, end: string, personal = false) => ({ id: start, source: (personal ? "google" : "outlook") as "outlook", title: "Busy", start, end, allDay: false, showAs: "busy" as const, isPersonal: personal, responseStatus: "accepted" as const });
-  const tw = (w: ReturnType<typeof week>, items: WeekFeature[] = [], borrowed: Record<string, number> = {}) => weekBudget(w, items, { borrowedMinutes: borrowed }).find((f) => f.clientKey === "T&W")!;
+  const tw = (w: ReturnType<typeof week>, items: WeekFeature[] = [], borrowed: Record<string, number> = {}) => weekBudget(w, items, { sizes: DEFAULT_SIZE_SCALE, borrowedMinutes: borrowed }).find((f) => f.clientKey === "T&W")!;
   /** What Plan the day's fit uses per block (plan/fit.ts planFit: week/free.ts), summed over T&W's blocks. */
   const planDayFree = (w: ReturnType<typeof week>) => w.days.flatMap((d) => [d.am, d.pm]).filter((s) => s.focus[0]?.clientKey === "T&W").reduce((n, s) => n + freeMinutes(s), 0);
   it("equals the sum of Plan the day's free time for its blocks, with meetings, a day off and personal events, shown or hidden", () => {
@@ -76,12 +77,12 @@ describe("the budget per client (E2): real free time in its blocks, in hours", (
     expect(open.open).toBe(true);
     expect(tw(w, [feature({ slots: [{ date: "2026-11-12", half: "AM" }] })]).freeMinutes).toBe(tw(w).freeMinutes + freeMinutes(open));
   });
-  it("a feature with stories under it takes their load (unsized as 2h); a loose story counts its own size", () => {
+  it("a feature with stories under it takes their load (unsized as 1h); a loose story counts its own size", () => {
     const items = [feature({ itemId: 210, estimate: 8 * H }), feature({ id: 2, itemId: 211, level: "story", estimate: null, size: "L", parentId: 210 }), feature({ id: 3, itemId: 212, level: "story", estimate: null, size: null, parentId: 210 }), feature({ id: 4, itemId: 213, level: "story", estimate: null, size: "M", parentId: null })];
-    expect(tw(week(), items).plannedMinutes).toBe(4 * H + 2 * H + 2 * H);
+    expect(tw(week(), items).plannedMinutes).toBe(4 * H + 1 * H + 2 * H);
   });
   it("shows every client with blocks or commitments", () => {
-    expect(weekBudget(week(), [], { borrowedMinutes: {} }).map((f) => [f.clientKey, f.status])).toEqual([["internal", "none"], ["T&W", "none"], ["Adatum", "none"]]);
+    expect(weekBudget(week(), [], { sizes: DEFAULT_SIZE_SCALE, borrowedMinutes: {} }).map((f) => [f.clientKey, f.status])).toEqual([["internal", "none"], ["T&W", "none"], ["Adatum", "none"]]);
   });
 });
 
@@ -169,7 +170,7 @@ describe("readiness ladder", () => {
 
 describe("the budget counts musts only (step 11)", () => {
   it("nice-to-haves are listed but don't count against the client's free time", () => {
-    const b = weekBudget(week(), [feature({ itemId: 1, estimate: 8 * 60 }), { ...feature({ itemId: 2, estimate: 12 * 60 }), tier: "nice" }], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&W")!;
+    const b = weekBudget(week(), [feature({ itemId: 1, estimate: 8 * 60 }), { ...feature({ itemId: 2, estimate: 12 * 60 }), tier: "nice" }], { sizes: DEFAULT_SIZE_SCALE, borrowedMinutes: {} }).find((f) => f.clientKey === "T&W")!;
     expect(b).toMatchObject({ plannedMinutes: 8 * 60, nicePlannedMinutes: 12 * 60 });
   });
 });

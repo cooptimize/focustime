@@ -11,7 +11,7 @@ import { windowText } from "../plan/deploy.ts";
 import type { InboxListData } from "../plan/inbox-items.ts";
 import type { MeetingNudgeView } from "../plan/meeting-views.ts";
 import type { StatusLoad } from "../plan/status-types.ts";
-import { sizeMinutes, type Pick } from "../plan/types.ts";
+import { SIZE_MINUTES, sizeMinutes, type Pick } from "../plan/types.ts";
 import type { Link } from "./types.ts";
 
 export type PeriodKind = "today" | "tomorrow" | "this_week" | "next_week" | "weekend" | "last_week" | "day";
@@ -119,7 +119,7 @@ export async function buildContext(d: ContextDeps, period: Period, client: strin
       continue;
     }
     ctx.confirmed[weekStart] = !!w.weekCommitted?.[weekStart];
-    const sizes = w.planning?.sizes;
+    const sizes = w.planning?.sizes ?? SIZE_MINUTES;
     for (const day of w.week.days) {
       if (!inP(period, day.date)) continue;
       const dayPicks = (w.plan?.[day.date]?.picks ?? []).filter((p) => ok(p.clientKey) && (p.status === "planned" || p.status === "done"));

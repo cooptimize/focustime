@@ -1,3 +1,4 @@
+import { SIZE_MINUTES } from "../plan/types.ts";
 import { describe, expect, it, vi } from "vitest";
 import { estimateStep, weekItemMenu, type WeekItemFacts, type WeekItemOps } from "./menu.ts";
 
@@ -12,13 +13,13 @@ const item = (s: ReturnType<typeof weekItemMenu>, id: string) => items(s).find((
 
 describe("weekItemMenu (Plan the week row ⋯, D267)", () => {
   it("holds every action that left the row, in order", () => {
-    expect(items(weekItemMenu(facts(), ops())).map((i) => i.id)).toEqual(["up", "down", "tier", "estimate", "pin", "done", "help", "target", "brief", "remove"]);
-    expect(items(weekItemMenu(facts({ level: "story" }), ops())).map((i) => i.id)).not.toContain("brief");
-    expect(items(weekItemMenu(facts({ drafts: 3 }), ops())).find((i) => i.id === "create")?.label).toBe("Create 3 drafts in DevOps");
+    expect(items(weekItemMenu(facts(), ops(), SIZE_MINUTES)).map((i) => i.id)).toEqual(["up", "down", "tier", "estimate", "pin", "done", "help", "target", "brief", "remove"]);
+    expect(items(weekItemMenu(facts({ level: "story" }), ops(), SIZE_MINUTES)).map((i) => i.id)).not.toContain("brief");
+    expect(items(weekItemMenu(facts({ drafts: 3 }), ops(), SIZE_MINUTES)).find((i) => i.id === "create")?.label).toBe("Create 3 drafts in DevOps");
   });
   it("runs the right operation for each", () => {
     const o = ops();
-    const m = weekItemMenu(facts(), o);
+    const m = weekItemMenu(facts(), o, SIZE_MINUTES);
     item(m, "up").run!();
     item(m, "down").run!();
     item(m, "tier").run!();
@@ -32,11 +33,11 @@ describe("weekItemMenu (Plan the week row ⋯, D267)", () => {
     expect(o.done).toHaveBeenCalledWith(true);
     for (const k of ["help", "targetDate", "brief", "remove"]) expect(o[k]).toHaveBeenCalledOnce();
     expect(item(m, "tier").label).toBe("Make it a nice to have");
-    expect(item(weekItemMenu(facts({ tier: "nice" }), o), "tier").label).toBe("Make it a must");
+    expect(item(weekItemMenu(facts({ tier: "nice" }), o, SIZE_MINUTES), "tier").label).toBe("Make it a must");
   });
   it("pins and unpins from its step, the pinned one checked", () => {
     const o = ops();
-    const step = item(weekItemMenu(facts(), o), "pin").next!();
+    const step = item(weekItemMenu(facts(), o, SIZE_MINUTES), "pin").next!();
     const pins = "items" in step ? step.items : [];
     expect(pins.map((p) => [p.label, p.checked])).toEqual([["Mon PM", false], ["Wed AM", true]]);
     pins[0]!.run!();
@@ -45,7 +46,7 @@ describe("weekItemMenu (Plan the week row ⋯, D267)", () => {
   });
   it("sets the estimate in whole hours, 1 to 80 (E2; was half blocks in E1)", () => {
     const o = ops();
-    expect(item(weekItemMenu(facts(), o), "estimate").hint).toBe("about 8h");
+    expect(item(weekItemMenu(facts(), o, SIZE_MINUTES), "estimate").hint).toBe("about 8h");
     const step = estimateStep(facts(), o);
     if (!("submit" in step)) throw new Error("a prompt");
     expect(step.value).toBe("8");
@@ -55,14 +56,14 @@ describe("weekItemMenu (Plan the week row ⋯, D267)", () => {
     expect(o.hours.mock.calls).toEqual([[6]]);
   });
   it("a feature whose load comes from its stories has no estimate to set", () => {
-    const m = weekItemMenu({ ...facts(), derived: true }, ops());
+    const m = weekItemMenu({ ...facts(), derived: true }, ops(), SIZE_MINUTES);
     const est = ("items" in m ? m.items : []).find((i) => i.id === "estimate");
     expect(est?.disabled).toMatch(/From its stories/);
     expect(est?.hint).toBe("8h");
   });
   it("a story has a size, not an estimate; nested under its feature it takes the feature's tier", () => {
     const o = { ...ops(), size: vi.fn() };
-    const m = weekItemMenu(facts({ level: "story", size: "S", nested: true }), o);
+    const m = weekItemMenu(facts({ level: "story", size: "S", nested: true }), o, SIZE_MINUTES);
     expect(items(m).map((i) => i.id)).toContain("size");
     expect(items(m).map((i) => i.id)).not.toContain("estimate");
     expect(item(m, "tier").disabled).toBe("Stories take their feature's tier");
@@ -76,22 +77,22 @@ describe("weekItemMenu (Plan the week row ⋯, D267)", () => {
     expect(o.size).toHaveBeenCalledWith("L");
   });
   it("can't move past the ends, and done in DevOps can't be undone here", () => {
-    const m = weekItemMenu(facts({ first: true, done: "other" }), ops());
+    const m = weekItemMenu(facts({ first: true, done: "other" }), ops(), SIZE_MINUTES);
     expect(item(m, "up").disabled).toBe("Already first");
     expect(item(m, "down").disabled).toBeUndefined();
     expect(item(m, "done").disabled).toMatch(/DevOps/);
-    expect(item(weekItemMenu(facts({ done: "local" }), ops()), "done").label).toBe("Mark not done");
+    expect(item(weekItemMenu(facts({ done: "local" }), ops(), SIZE_MINUTES), "done").label).toBe("Mark not done");
   });
   it("without write access, target date opens Enable DevOps writes", () => {
     const o = ops();
-    const t = item(weekItemMenu(facts({ canWrite: false }), o), "target");
+    const t = item(weekItemMenu(facts({ canWrite: false }), o, SIZE_MINUTES), "target");
     expect(t.hint).toBe("Enable DevOps writes first");
     t.run!();
     expect(o.enableWrites).toHaveBeenCalledOnce();
     expect(o.targetDate).not.toHaveBeenCalled();
   });
   it("a past week is a review: everything that changes is disabled", () => {
-    const m = weekItemMenu(facts({ past: true }), ops());
+    const m = weekItemMenu(facts({ past: true }), ops(), SIZE_MINUTES);
     for (const id of ["up", "down", "tier", "estimate", "pin", "done", "help", "target", "remove"]) expect(item(m, id).disabled, id).toBeTruthy();
     expect(item(m, "brief").disabled).toBeUndefined();
   });

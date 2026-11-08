@@ -427,7 +427,7 @@ function dueOf(p: Pick, followUps: readonly FollowUpView[]): ReactNode {
 
 /** A short note after a pick's title: another client's pick, carried from an earlier day, focused time. */
 function RowNote({ p, bc, name }: { p: Pick; bc: string | null; name: (k: string | null) => string }) {
-  const focused = focusLabel(useFocused()(p.id), p.size);
+  const focused = focusLabel(useFocused()(p.id), p.size, useContext(PlanCtx).sizes);
   const bits = [p.kind === "intention" && p.followUpId === null ? "not in DevOps" : "", p.clientKey !== bc ? name(p.clientKey) : "", p.carriedFromDate ? `from ${shortDate(p.carriedFromDate)}` : "", focused ? `${focused} focused` : ""].filter(Boolean);
   return bits.length ? <span className="pr-note">{bits.join(" · ")}</span> : null;
 }
@@ -461,7 +461,8 @@ function AddPaneDay({ slot, picks, overflow, state, picked, here, clients, color
   // U4: the feature a typed story goes under (Enter in the type box); none means the client, no parent yet.
   const [feature, setFeature] = useState<number | null>(focus);
   const name = (k: string | null) => clients.find((c) => c.clientKey === k)?.clientName ?? k ?? "";
-  const listed = useMemo(() => weekList(state.weekFeatures, work ? [work] : null).items.map((f) => ({ ...f, clientKey: f.clientKey, done: !!f.done })), [state.weekFeatures, work]);
+  const { sizes } = useContext(PlanCtx);
+  const listed = useMemo(() => weekList(state.weekFeatures, work ? [work] : null, sizes).items.map((f) => ({ ...f, clientKey: f.clientKey, done: !!f.done })), [state.weekFeatures, work, sizes]);
   const fus = clientKey ? dueOrder((pv.followUps ?? []).filter((f) => f.clientKey === clientKey), slot.date, (f) => f.due, (f) => f.openedAt) : [];
   const s = clientKey ? addSections({ clientKey, date: slot.date, half: slot.half, work, week: listed, followUps: fus, drafts: state.drafts, picked, here, focus, query }) : null;
   const add = (input: Record<string, unknown>) => act("pick.add", { date: slot.date, half: slot.half, clientKey, ...input });

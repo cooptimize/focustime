@@ -6,7 +6,7 @@
 // no parent under "No feature" last. A feature on this week's plan with no open stories of mine still shows, with my
 // teammates' open stories in it (for Take one). Pure: no I/O.
 import { isOpen } from "./process.ts";
-import { aboutText, storyMinutes, type StorySize } from "./estimate.ts";
+import { aboutText, storyMinutes, type SizeScale, type StorySize } from "./estimate.ts";
 import { orderList } from "./weeklist.ts";
 import type { ClientWork, Half, IsoDate, TypeLook, WorkItem } from "../week/types.ts";
 
@@ -15,7 +15,7 @@ export type PlannedAt = { date: IsoDate; half: Half; pickId: number };
 
 export type StoryRow = {
   item: WorkItem;
-  /** The FocusTime size: its pick's this week, else its size on the week list; null counts as 2h. */
+  /** The FocusTime size: its pick's this week, else its size on the week list; null counts as the person's assumption. */
   size: StorySize | null;
   minutes: number;
   /** Planned in this block (a pick here). */
@@ -64,6 +64,8 @@ export function workPool(work: Pick<ClientWork, "items" | "children" | "committe
 export const byBacklog = (a: Pick<WorkItem, "order" | "id">, b: Pick<WorkItem, "order" | "id">) => (a.order ?? Number.POSITIVE_INFINITY) - (b.order ?? Number.POSITIVE_INFINITY) || a.id - b.id;
 
 export function blockStories(i: {
+  /** SZ-1: S, M, L and what this person counts unsized work as. */
+  sizes: SizeScale;
   work: Pick<ClientWork, "clientKey" | "items" | "children" | "committed" | "parents" | "types">;
   /** This week's list (any client; only this client's, this week's, are used). */
   list: readonly ListLike[];
@@ -88,7 +90,7 @@ export function blockStories(i: {
     const other = mineHere.filter((p) => p !== hereP).sort((a, b) => a.date.localeCompare(b.date) || halfRank(a.half) - halfRank(b.half))[0] ?? null;
     const size = hereP?.size ?? other?.size ?? listSize.get(item.id) ?? null;
     const at = (p: PickLike | null): PlannedAt | null => (p ? { date: p.date, half: p.half, pickId: p.id } : null);
-    return { item, size, minutes: storyMinutes(size), here: at(hereP), elsewhere: at(other) };
+    return { item, size, minutes: storyMinutes(size, i.sizes), here: at(hereP), elsewhere: at(other) };
   };
 
   // A story's group: its parent when that is a portfolio item we know; else "No feature".

@@ -98,6 +98,7 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "plan-share", section: "planning", label: "Plan up to (% of free time)", old: ["Plan up to"], keywords: ["over line", "guidance"] },
   { id: "break-down-offered", section: "planning", label: "Offer Break down", old: ["Break down", "Draft stories"] },
   { id: "readiness-nudges", section: "planning", label: "Readiness nudges", keywords: ["flags"] },
+  { id: "count-unsized", section: "planning", label: "Count unsized work as", old: ["Unsized", "Size? hours"] },
   { id: "shortest-useful-time", section: "planning", label: "Shortest useful time per size", old: ["Shortest useful time, S", "Shortest useful time, M", "Shortest useful time, L"], keywords: ["timebox my day", "minimum"] },
   { id: "carry-over", section: "planning", label: "Carry-over (days back)", old: ["Carry-over"], keywords: ["unfinished"] },
   { id: "plan-reminder", section: "planning", label: "Plan today reminder", old: ["Reminder"], keywords: ["minutes after the day starts"] },

@@ -1,3 +1,4 @@
+import { SIZE_MINUTES } from "../plan/types.ts";
 import { describe, expect, it } from "vitest";
 import type { Pick, PlanWeek, Size } from "../plan/types.ts";
 import { buildWeek } from "../week/build.ts";
@@ -18,44 +19,44 @@ const plan = (picks: Pick[], committed = true): PlanWeek => ({ "2026-11-02": { c
 
 describe("a card's plan (step 6.1)", () => {
   it("PV-1: before commit the card shows its picks and their fit too (stories are dragged onto Week first)", () => {
-    const cp = cardPlan(plan([pick({ itemId: 2, size: "M" })], false), slot, "Adatum", ITEMS, NOW);
+    const cp = cardPlan(plan([pick({ itemId: 2, size: "M" })], false), slot, "Adatum", ITEMS, NOW, SIZE_MINUTES);
     expect(cp.picks.map((p) => p.itemId)).toEqual([2]);
     expect(cp.fit).toEqual({ kind: "fits", spare: 90 });
-    expect(cardPlan(plan([], false), slot, "Adatum", ITEMS, NOW)).toEqual({ picks: [], fit: null, items: ITEMS, collapsed: false });
-    expect(cardPlan(null, slot, "Adatum", ITEMS, NOW).collapsed).toBe(false);
+    expect(cardPlan(plan([], false), slot, "Adatum", ITEMS, NOW, SIZE_MINUTES)).toEqual({ picks: [], fit: null, items: ITEMS, collapsed: false });
+    expect(cardPlan(null, slot, "Adatum", ITEMS, NOW, SIZE_MINUTES).collapsed).toBe(false);
   });
 
   it("committed: the picks, their fit against the block's free time, and the list collapsed", () => {
-    const cp = cardPlan(plan([pick({ itemId: 2, size: "M" }), pick({ kind: "intention", itemId: null, size: "S" })]), slot, "Adatum", ITEMS, NOW);
+    const cp = cardPlan(plan([pick({ itemId: 2, size: "M" }), pick({ kind: "intention", itemId: null, size: "S" })]), slot, "Adatum", ITEMS, NOW, SIZE_MINUTES);
     expect(cp.picks).toHaveLength(2);
     expect(cp.fit).toEqual({ kind: "fits", spare: 30 }); // 210 free − (120 + 60)
     expect(fitLabel(cp.fit!)).toBe("fits, 30m to spare");
     expect(cp.collapsed).toBe(true);
   });
 
-  it("over by the excess; an unsized pick counts as 2h (E2: L is 4h)", () => {
-    expect(fitLabel(cardPlan(plan([pick({ size: "L" })]), slot, "Adatum", ITEMS, NOW).fit!)).toBe("too much: 30m more than the free time"); // 240 of 210
-    expect(cardPlan(plan([pick({ size: null }), pick({ itemId: 3, size: "S" })]), slot, "Adatum", ITEMS, NOW).fit).toEqual({ kind: "fits", spare: 30 });
+  it("over by the excess; an unsized pick counts as 1h by default (SZ-1; L is 4h)", () => {
+    expect(fitLabel(cardPlan(plan([pick({ size: "L" })]), slot, "Adatum", ITEMS, NOW, SIZE_MINUTES).fit!)).toBe("too much: 30m more than the free time"); // 240 of 210
+    expect(cardPlan(plan([pick({ size: null }), pick({ itemId: 3, size: "S" })]), slot, "Adatum", ITEMS, NOW, SIZE_MINUTES).fit).toEqual({ kind: "fits", spare: 90 });
   });
 
   it("an item picked here is not listed again; another client's pick with the same id is", () => {
-    const cp = cardPlan(plan([pick({ itemId: 2 }), pick({ itemId: 4, clientKey: "T&W" })]), slot, "Adatum", ITEMS, NOW);
+    const cp = cardPlan(plan([pick({ itemId: 2 }), pick({ itemId: 4, clientKey: "T&W" })]), slot, "Adatum", ITEMS, NOW, SIZE_MINUTES);
     expect(cp.items.map((i) => i.id)).toEqual([1, 3, 4, 5]);
   });
 
   it("done picks still count as picked; dropped and moved ones do not show", () => {
-    const cp = cardPlan(plan([pick({ itemId: 2, status: "done" }), pick({ itemId: 3, status: "dropped" }), pick({ itemId: 5, status: "moved" })]), slot, "Adatum", ITEMS, NOW);
+    const cp = cardPlan(plan([pick({ itemId: 2, status: "done" }), pick({ itemId: 3, status: "dropped" }), pick({ itemId: 5, status: "moved" })]), slot, "Adatum", ITEMS, NOW, SIZE_MINUTES);
     expect(cp.picks.map((p) => p.itemId)).toEqual([2]);
     expect(cp.items.map((i) => i.id)).toEqual([1, 3, 4, 5]);
     expect(cp.fit).toBeNull(); // nothing left to do, so no fit to show
   });
 
   it("a block that has ended shows no fit (a past day)", () => {
-    expect(cardPlan(plan([pick({ size: "L" }), pick({ itemId: 3, size: "S" })]), slot, "Adatum", ITEMS, "2026-11-03T13:00:00Z").fit).toBeNull();
+    expect(cardPlan(plan([pick({ size: "L" }), pick({ itemId: 3, size: "S" })]), slot, "Adatum", ITEMS, "2026-11-03T13:00:00Z", SIZE_MINUTES).fit).toBeNull();
   });
 
   it("committed with no picks in this half: no fit, the list still collapses", () => {
-    const cp = cardPlan(plan([pick({ half: "PM" })]), slot, "Adatum", ITEMS, NOW);
+    const cp = cardPlan(plan([pick({ half: "PM" })]), slot, "Adatum", ITEMS, NOW, SIZE_MINUTES);
     expect(cp).toMatchObject({ picks: [], fit: null, collapsed: true, items: ITEMS });
   });
 });

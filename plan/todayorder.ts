@@ -1,6 +1,7 @@
 // U2: one block's rows on Today in time order. Meetings at their start; a timed pick at its timebox; a done pick at
 // the block's start (it happened); each untimed planned pick, in plan order, where it would go if worked in turn
 // through the free time from now on. Pure: the UI passes the block's free gaps, the clock and the sizes.
+import { storyMinutes, type SizeScale } from "./estimate.ts";
 import type { FreeGap } from "../week/types.ts";
 
 export type RowPick = { id: number; status: string; size: string | null; position: number; minutes?: number | null };
@@ -11,7 +12,7 @@ const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
 export function blockRows<E extends { start: string }, P extends RowPick>(
   events: readonly E[],
   picks: readonly P[],
-  o: { start: string; end: string; freeGaps: readonly FreeGap[]; now: string; sizes: Readonly<Record<string, number>>; boxStart: (pickId: number) => string | null },
+  o: { start: string; end: string; freeGaps: readonly FreeGap[]; now: string; sizes: SizeScale; boxStart: (pickId: number) => string | null },
 ): BlockRow<E, P>[] {
   const rows: BlockRow<E, P>[] = events.map((e) => ({ kind: "event", at: ms(e.start), event: e }));
   const from = Math.max(ms(o.start), ms(o.now));
@@ -36,7 +37,7 @@ export function blockRows<E extends { start: string }, P extends RowPick>(
       cursor = gaps[gi]?.[0] ?? ms(o.end);
     }
     rows.push({ kind: "pick", at: gi < gaps.length ? cursor : ms(o.end), pick: p });
-    cursor += (p.minutes ?? o.sizes[p.size ?? "M"] ?? 120) * 60_000;
+    cursor += (p.minutes ?? storyMinutes(p.size, o.sizes)) * 60_000;
   }
   // Same time: a meeting first (it is fixed), then picks in plan order.
   return rows.sort((a, b) => a.at - b.at || (a.kind === b.kind ? 0 : a.kind === "event" ? -1 : 1) || (a.kind === "pick" && b.kind === "pick" ? a.pick.position - b.pick.position : 0));

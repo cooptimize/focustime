@@ -1,4 +1,5 @@
 // Step 16, slice 1: roadmap.load (D278 to D282). Fictional clients and people only.
+import { SIZE_MINUTES } from "../plan/types.ts";
 import { describe, expect, it } from "vitest";
 import { roadmapAction, type RoadmapContext } from "./roadmap-actions.ts";
 import { createPlanStore } from "../store/plan-store.ts";
@@ -8,7 +9,7 @@ import type { AheadState, RoadmapClient } from "./types.ts";
 import { buildWeek } from "../week/build.ts";
 import { weekConfig } from "../config/defaults.ts";
 
-const cfg = { week: { hours: { timeZone: "America/Chicago" } } } as unknown as AppConfig;
+const cfg = { week: { hours: { timeZone: "America/Chicago" } }, plan: { sizes: SIZE_MINUTES } } as unknown as AppConfig;
 const kid = (id: number, extra: Partial<PortfolioChild> = {}): PortfolioChild => ({ id, title: `Story ${id}`, type: "User Story", state: "Active", stateCategory: "InProgress", open: true, level: "story", order: id, url: `https://dev.azure.com/fabrikam/P/_workitems/edit/${id}`, assignedTo: "Alex Rivera", mine: false, changedAt: "2026-10-30T12:00:00Z", size: 2, ...extra });
 const item = (id: number, extra: Partial<PortfolioItem> = {}): PortfolioItem => ({ id, title: `Feature ${id}`, type: "Feature", state: "Active", stateCategory: "InProgress", tier: "feature", order: id, parentId: null, url: `https://dev.azure.com/fabrikam/P/_workitems/edit/${id}`, targetDate: "2026-11-30", assignedTo: "Me", mine: true, why: ["assigned"], children: [], ...extra });
 

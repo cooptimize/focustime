@@ -1,3 +1,4 @@
+import { storyMinutes } from "../plan/estimate.ts";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Meetings } from "./meetings/Meetings.tsx";
 import { addWeeks, mondayOf } from "../week/dates.ts";
@@ -2282,7 +2283,7 @@ export function App() {
       />
       {tbTarget && (() => {
         const pick = "pickId" in tbTarget ? Object.values(data.plan ?? {}).flatMap((d) => d.picks).concat(pd?.picks ?? []).find((p) => p.id === tbTarget.pickId) : null;
-        return <TimeboxDialog target={tbTarget} env={tbEnv} title={pick ? pick.title : "title" in tbTarget ? tbTarget.title : "To-do"} defaultMinutes={pick ? data.planning.sizes[pick.size ?? "M"] : 60} onClose={() => setTbTarget(null)} />;
+        return <TimeboxDialog target={tbTarget} env={tbEnv} title={pick ? pick.title : "title" in tbTarget ? tbTarget.title : "To-do"} defaultMinutes={pick ? storyMinutes(pick.size, data.planning.sizes) : 60} onClose={() => setTbTarget(null)} />;
       })()}
       {helpTarget && (
         <HelpFinder

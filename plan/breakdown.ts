@@ -1,15 +1,15 @@
 // BD-1: Break down, pure. The label follows the parent's type (from the process model, never a fixed word), the
-// review's running total in hours (unsized as 2h, dropped cards out), and moving a card for drag or keyboard reorder.
-import { aboutText, storyMinutes, type StorySize } from "./estimate.ts";
+// review's running total in hours (unsized as the person's assumption, dropped cards out), and moving a card for drag or keyboard reorder.
+import { aboutText, storyMinutes, type SizeScale, type StorySize } from "./estimate.ts";
 
 /** "Break down Feature", "Break down Recurring": the parent's type name as DevOps has it. */
 export const breakdownLabel = (type: string | null | undefined) => `Break down ${type?.trim() || "item"}`;
 
 /** "5 items · about 9h" for the kept proposals; none kept says so. */
-export function reviewTotal(cards: readonly { keep: boolean; size: StorySize | null }[]): string {
+export function reviewTotal(cards: readonly { keep: boolean; size: StorySize | null }[], sizes: SizeScale): string {
   const kept = cards.filter((c) => c.keep);
   if (!kept.length) return "Nothing kept";
-  const minutes = kept.reduce((n, c) => n + storyMinutes(c.size), 0);
+  const minutes = kept.reduce((n, c) => n + storyMinutes(c.size, sizes), 0);
   return `${kept.length} ${kept.length === 1 ? "item" : "items"} · ${aboutText(minutes)}`;
 }
 

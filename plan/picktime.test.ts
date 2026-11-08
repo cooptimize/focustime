@@ -12,7 +12,7 @@ const am: Slot = {
   longestFreeMinutes: 150, freeGaps: [{ start: T("08:00"), end: T("09:00"), minutes: 60 }, { start: T("09:30"), end: T("12:00"), minutes: 150 }], busyMeetingMinutes: 30, pto: false,
 };
 const tb = (id: number, a: string, b: string, extra: Partial<AgendaTimebox & { outlook: boolean }> = {}) => ({ id, date: "2026-11-02", start: T(a), end: T(b), title: `tb${id}`, clientKey: "w", pickId: null, removedAt: null, outlook: false, ...extra });
-const SIZES = { S: 30, M: 90, L: 180 } as const;
+const SIZES = { S: 30, M: 90, L: 180, unsized: 60 } as const;
 
 describe("pickTime: the three row states (D259)", () => {
   it("untimed, timed, and timed with Put on Outlook on", () => {

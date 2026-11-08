@@ -17,7 +17,7 @@ import { DeployIcon, WindowChip } from "./Deploy.tsx";
 import { DeployItemsChip } from "./DeployItems.tsx";
 import { pickTime } from "../plan/picktime.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
-import { useFocused } from "./planview.ts";
+import { PlanCtx, useFocused } from "./planview.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { PlanRow } from "./plan/PlanRow.tsx";
 import { useTodoSheet } from "./TodoSheet.tsx";
@@ -77,7 +77,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
     menu.button(`More for ${pick.title}`)
   );
   const { env } = useContext(MenuCtx);
-  const focused = focusLabel(useFocused()(pick.id), pick.size);
+  const focused = focusLabel(useFocused()(pick.id), pick.size, useContext(PlanCtx).sizes);
   const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
   const onDrag = (e: DragEvent) => {
     e.dataTransfer.setData(PICK_DRAG, String(pick.id));

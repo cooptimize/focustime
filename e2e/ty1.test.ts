@@ -210,6 +210,38 @@ describe.skipIf(!CHROMIUM)("TY-1: Today's timeline", () => {
     await page.close();
   }, T);
 
+  it("SZ-1: an unsized to-do reads the setting in the tray and gets its length when dragged onto the timeline", async () => {
+    const { page, errors } = await freshPage(h, TALL);
+    const id = await addPick(page, "Unsized export notes", null);
+    await call(page, "pick.set_size", { id, size: null });
+    await onTimeline(page);
+    const row = trayRow(page, "Unsized export notes");
+    await row.waitFor();
+    const chip = row.locator(".size-chip");
+    await expect.poll(() => chip.textContent()).toBe("Size? · 1h");
+    const dropAt2 = async () => {
+      const hb = await hoursBox(page);
+      await drag(page, await center(row), { x: hb.x + 200, y: yAt(hb, 92) });
+    };
+    await dropAt2();
+    await expect.poll(async () => (await boxes(page))[id]).toBe("14:00-15:00");
+    await undo(page);
+    await expect.poll(async () => (await boxes(page))[id]).toBeUndefined();
+    // Counted as 2h instead: the same to-do, the chip and the length follow.
+    expect((await call(page, "settings.save", { section: "planning", values: { unsizedMinutes: 120 } })).ok).toBe(true);
+    await open(page);
+    await row.waitFor();
+    await expect.poll(() => chip.textContent()).toBe("Size? · 2h");
+    await dropAt2();
+    await expect.poll(async () => (await boxes(page))[id]).toBe("14:00-16:00");
+    await undo(page);
+    await expect.poll(async () => (await boxes(page))[id]).toBeUndefined();
+    expect((await call(page, "settings.save", { section: "planning", values: { unsizedMinutes: 60 } })).ok).toBe(true);
+    await call(page, "pick.remove", { id });
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
   it("keyboard: T at the next free slot, Up and Down move, Shift resizes, Backspace un-timeboxes", async () => {
     const { page } = await freshPage(h);
     const id = await addPick(page, "Tidy the mapping sheet", "S");

@@ -1,6 +1,7 @@
 // A block's agenda and its free gaps (step 13.6, D244 to D246): what Plan the day shows per block, where a pick can be
 // timeboxed with one click, and "Timebox my day". Pure: the caller passes the slot (from the week build), the
 // timeboxes and, on today, the clock.
+import { namedSize, storyMinutes, unsizedText, type SizeScale } from "./estimate.ts";
 import type { FreeGap, Half, IsoDate, ShowAs, Slot } from "../week/types.ts";
 import type { Pick, Size } from "./types.ts";
 import { TIMEBOX_MIN, TIMEBOX_STEP } from "./timebox.ts";
@@ -101,20 +102,20 @@ const dur = (m: number) => (m < 60 ? `${m}m` : m % 60 ? `${Math.floor(m / 60)}h 
  * into its own block: the first gap that fits it whole, else the largest gap left of at least its shortest useful
  * time (trimmed down to no less than that, D273), else not placed.
  */
-export function planMyDay(picks: readonly Pick[], blocks: Partial<Record<Half, Slot>>, timeboxes: readonly AgendaTimebox[], sizes: Readonly<Record<Size, number>>, musts: ReadonlySet<number>, now?: string, minSizes: Readonly<Record<Size, number>> = DEFAULT_MIN_SIZES): { placed: DayPlacement[]; unplaced: Unplaced[] } {
+export function planMyDay(picks: readonly Pick[], blocks: Partial<Record<Half, Slot>>, timeboxes: readonly AgendaTimebox[], sizes: SizeScale, musts: ReadonlySet<number>, now?: string, minSizes: Readonly<Record<Size, number>> = DEFAULT_MIN_SIZES): { placed: DayPlacement[]; unplaced: Unplaced[] } {
   const boxed = new Set(timeboxes.filter((t) => !t.removedAt && t.pickId !== null).map((t) => t.pickId));
   const todo = picks
     .filter((p) => p.status === "planned" && !boxed.has(p.id) && blocks[p.half])
-    .sort((a, b) => Number(musts.has(b.id)) - Number(musts.has(a.id)) || SIZE_RANK[a.size ?? "M"] - SIZE_RANK[b.size ?? "M"] || a.position - b.position || a.id - b.id);
+    .sort((a, b) => Number(musts.has(b.id)) - Number(musts.has(a.id)) || SIZE_RANK[namedSize(a.size, sizes)] - SIZE_RANK[namedSize(b.size, sizes)] || a.position - b.position || a.id - b.id);
   const gaps = new Map<Half, FreeGap[]>();
   for (const [h, s] of Object.entries(blocks) as [Half, Slot][]) gaps.set(h, openGaps(s, timeboxes, now));
   const placed: DayPlacement[] = [];
   const unplaced: Unplaced[] = [];
   for (const p of todo) {
     const list = gaps.get(p.half)!;
-    // E2: an unsized pick takes 2h, like M (never left out for having no size).
-    const want = p.minutes ?? sizes[p.size ?? "M"];
-    const min = Math.min(minSizes[p.size ?? "M"], want);
+    // E2, SZ-1: an unsized pick takes the person's assumption (never left out for having no size).
+    const want = p.minutes ?? storyMinutes(p.size, sizes);
+    const min = Math.min(minSizes[namedSize(p.size, sizes)], want);
     let i = list.findIndex((g) => placeInGap(g, want, min)?.trimmed === false);
     if (i < 0) i = list.reduce((best, g, k) => (placeInGap(g, want, min) && (best < 0 || g.minutes > list[best]!.minutes) ? k : best), -1);
     const at = i >= 0 ? placeInGap(list[i]!, want, min) : null;
@@ -132,7 +133,7 @@ export function planMyDay(picks: readonly Pick[], blocks: Partial<Record<Half, S
 }
 
 /** What didn't fit, said plainly (D274): "2 picks didn't fit: Export spec draft (M), Delay alerts (S)." */
-export function didntFitText(picks: readonly { title: string; size: Size | null }[]): string {
+export function didntFitText(picks: readonly { title: string; size: Size | null }[], sizes: SizeScale): string {
   if (!picks.length) return "";
-  return `${picks.length} ${picks.length === 1 ? "to-do" : "to-dos"} didn't fit: ${picks.map((p) => `${p.title} (${p.size ?? "not sized, 2h"})`).join(", ")}.`;
+  return `${picks.length} ${picks.length === 1 ? "to-do" : "to-dos"} didn't fit: ${picks.map((p) => `${p.title} (${p.size ?? `not sized, ${unsizedText(sizes)}`})`).join(", ")}.`;
 }

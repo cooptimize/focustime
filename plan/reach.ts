@@ -1,16 +1,16 @@
-// AH-1 (D663): can a feature's open work reach its target date? Its open stories' hours (FocusTime's size, unsized as
-// 2h; a DevOps size field is in its own unit, so it isn't hours) against the free focus time before the target in the
+// AH-1 (D663): can a feature's open work reach its target date? Its open stories' hours (FocusTime's size, or the person's
+// assumption when unsized, SZ-1; a DevOps size field is in its own unit, so it isn't hours) against the free focus time before the target in the
 // blocks of the people they're assigned to. Only my own blocks are known to FocusTime, so a story assigned to someone
 // else (or to nobody) means it can't be checked, and that is said, never guessed. Pure; minutes in.
 import type { IsoDate } from "../week/types.ts";
-
-export const UNSIZED_MINUTES = 120;
 
 export type ReachInput = {
   target: IsoDate | null;
   today: IsoDate;
   /** My DevOps email for this client. */
   me: string | null;
+  /** SZ-1: what this person counts an unsized story as. */
+  unsizedMinutes: number;
   stories: { assigneeEmail: string | null; assigneeName: string | null; minutes: number | null }[];
   /** My free focus minutes for this client: weeks 1 to 4 (each from its Monday) and month columns after (from, to exclusive). */
   weeks: readonly { weekStart: IsoDate; freeMinutes: number }[];
@@ -48,7 +48,7 @@ export function reach(i: ReachInput): Reach {
   if (others.length) return { kind: "unknown", text: `Can't check: ${others.length === 1 ? `${others[0]}'s blocks aren't` : `${others.slice(0, -1).join(", ")} and ${others.at(-1)}'s blocks aren't`} known` };
   const loose = i.stories.filter((s) => !s.assigneeEmail).length;
   if (loose) return { kind: "unknown", text: `Can't check: ${loose === 1 ? "1 story isn't" : `${loose} stories aren't`} assigned` };
-  const need = i.stories.reduce((n, s) => n + (s.minutes ?? UNSIZED_MINUTES), 0);
+  const need = i.stories.reduce((n, s) => n + (s.minutes ?? i.unsizedMinutes), 0);
   const free = freeBefore(i, i.target);
   return need > free ? { kind: "short", needMinutes: need, freeMinutes: free } : { kind: "ok", needMinutes: need, freeMinutes: free };
 }

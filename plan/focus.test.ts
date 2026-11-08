@@ -1,9 +1,10 @@
+import { DEFAULT_SIZE_SCALE } from "./estimate.ts";
 import { describe, expect, it } from "vitest";
 import { dayFocus, focusLabel, liveFocused } from "./focus.ts";
 import type { Pick } from "./types.ts";
 
 const pick = (id: number, size: Pick["size"], status: Pick["status"] = "planned") => ({ id, size, status }) as Pick;
-const SIZES = { S: 60, M: 120, L: 210 };
+const SIZES = { S: 60, M: 120, L: 210, unsized: 60 };
 
 describe("focused time on picks (step 6d)", () => {
   it("adds the running stretch of a live session on that pick to what is logged", () => {
@@ -17,10 +18,10 @@ describe("focused time on picks (step 6d)", () => {
   });
 
   it("labels it next to the size, from a whole minute on", () => {
-    expect(focusLabel(2700, "M")).toBe("45m of M");
-    expect(focusLabel(4500, "S")).toBe("1h 15m of S");
-    expect(focusLabel(59, "S")).toBeNull();
-    expect(focusLabel(0, "L")).toBeNull();
+    expect(focusLabel(2700, "M", DEFAULT_SIZE_SCALE)).toBe("45m of M");
+    expect(focusLabel(4500, "S", DEFAULT_SIZE_SCALE)).toBe("1h 15m of S");
+    expect(focusLabel(59, "S", DEFAULT_SIZE_SCALE)).toBeNull();
+    expect(focusLabel(0, "L", DEFAULT_SIZE_SCALE)).toBeNull();
   });
 
   it("totals a day: focused over every pick, planned over picks not dropped", () => {

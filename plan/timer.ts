@@ -1,5 +1,6 @@
 // The focus timer (step 6c). Pure: plain data the server stores (so it survives window close and restarts), and
 // the rules for pausing, ending, extending and the 5-minute warnings. Time comes in as an Instant.
+import { storyMinutes, type SizeScale } from "./estimate.ts";
 import { formatTime } from "../week/format.ts";
 import type { Day, Slot } from "../week/types.ts";
 import type { Size } from "./types.ts";
@@ -82,8 +83,8 @@ export function extendTimer(s: TimerState, now: Temporal.Instant, minutes: numbe
 }
 
 /** A pick's suggested length: its size's minutes, to the 5-minute step below, within 5 to 240. */
-export function suggestMinutes(size: Size | null, sizes: Readonly<Record<Size, number>>): number {
-  return Math.max(5, Math.min(MAX_MINUTES, Math.floor(sizes[size ?? "M"] / 5) * 5));
+export function suggestMinutes(size: Size | null, sizes: SizeScale): number {
+  return Math.max(5, Math.min(MAX_MINUTES, Math.floor(storyMinutes(size, sizes) / 5) * 5));
 }
 
 // ---- warnings ----

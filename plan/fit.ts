@@ -1,5 +1,6 @@
 // Fit while planning (step 15, D266): picks against a block's whole free time, in calm words. Pure.
 // Check-in alone compares against the time left (capacityMinutes with now); everything else uses this.
+import type { SizeScale } from "./estimate.ts";
 import { pickNeed } from "./types.ts";
 import { freeMinutes } from "../week/free.ts";
 import type { FreeGap, IsoDate } from "../week/types.ts";
@@ -11,11 +12,11 @@ type BoxLike = { date: IsoDate; pickId: number | null; start: string; end: strin
 type SlotLike = { date: IsoDate; start: string; end: string; pto: boolean; freeGaps: FreeGap[]; longestFreeMinutes: number };
 
 /** Planned and done picks (timebox minutes when timed) against the block's whole free time. */
-export function planFit(picks: readonly PickLike[], sizes: Readonly<Record<string, number>>, timeboxes: readonly BoxLike[] | undefined, slot: SlotLike): Fit {
+export function planFit(picks: readonly PickLike[], sizes: SizeScale, timeboxes: readonly BoxLike[] | undefined, slot: SlotLike): Fit {
   return fitOf(planMinutes(picks, sizes, timeboxes, slot), freeMinutes(slot));
 }
 /** Minutes of planned and done picks in a block (timed ones by their timebox). */
-export function planMinutes(picks: readonly PickLike[], sizes: Readonly<Record<string, number>>, timeboxes: readonly BoxLike[] | undefined, slot: Pick<SlotLike, "date" | "start" | "end">): number {
+export function planMinutes(picks: readonly PickLike[], sizes: SizeScale, timeboxes: readonly BoxLike[] | undefined, slot: Pick<SlotLike, "date" | "start" | "end">): number {
   const live = picks.filter((p) => p.status === "planned" || p.status === "done").map((p) => ({ ...p, status: "planned" }));
   return slotPlanned(live, sizes, timeboxes, slot);
 }
@@ -61,7 +62,7 @@ export function fitWords(f: Fit | null): FitWords {
  * Picks to shrink or move so a block fits: the fewest planned picks whose sizes cover the overage. Musts last, larger
  * first, untimed before timed, later in the list first. Empty when nothing is over.
  */
-export function trimCandidates<P extends PickLike>(picks: readonly P[], overBy: number, sizes: Readonly<Record<string, number>>, opts: { musts?: ReadonlySet<number>; timed?: ReadonlySet<number> } = {}): number[] {
+export function trimCandidates<P extends PickLike>(picks: readonly P[], overBy: number, sizes: SizeScale, opts: { musts?: ReadonlySet<number>; timed?: ReadonlySet<number> } = {}): number[] {
   if (overBy <= OVER_GRACE) return [];
   const musts = opts.musts ?? new Set<number>();
   const timed = opts.timed ?? new Set<number>();

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { checkIn } from "./checkin.ts";
 import type { Pick } from "./types.ts";
 
-const SIZES = { S: 60, M: 120, L: 210 };
+const SIZES = { S: 60, M: 120, L: 210, unsized: 60 };
 const Z = (hm: string) => Temporal.ZonedDateTime.from(`2026-11-02T${hm}[America/New_York]`).toInstant().toString();
 const pick = (id: number, half: Pick["half"], size: Pick["size"], status: Pick["status"] = "planned") => ({ id, half, size, status, position: id }) as Pick;
 // Afternoon 12:30 to 5:00 with a meeting 2:00 to 3:00: free 12:30-2:00 and 3:00-5:00.

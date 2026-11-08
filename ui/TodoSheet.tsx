@@ -28,7 +28,7 @@ export const useTodoSheet = () => useContext(TodoSheetCtx);
 export function todoLine(p: Pick, data: WeekLoadData, o: { client?: boolean } = {}): string {
   const tz = userZone(data);
   const box = data.timeboxes.find((t) => t.pickId === p.id && !t.removedAt);
-  const size = p.size ? `${p.size} ${formatDuration(data.planning.sizes[p.size])}` : `Size? ${formatDuration(data.planning.sizes.M)}`;
+  const size = p.size ? `${p.size} ${formatDuration(data.planning.sizes[p.size])}` : `Size? ${formatDuration(data.planning.sizes.unsized)}`;
   const client = data.planClients.find((c) => c.clientKey === p.clientKey)?.clientName ?? p.clientKey;
   return [box ? `${startClock(box.start, tz)}–${startClock(box.end, tz)}` : null, size, o.client === false ? null : client].filter(Boolean).join(" · ");
 }

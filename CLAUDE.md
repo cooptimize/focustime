@@ -111,7 +111,7 @@ Run: `focustime-open` (the service), `npm run dev`, `npm test` (with `npm run db
 | House style | How a client's features are usually split into stories, learned weekly from its own features and editable in Settings › Clients; sent with Draft stories (D528) |
 | PTO | Time off from Dataverse Time Off Tracker rows (the user's only). Every PTO day is a whole day off: no risks, no to-dos, skipped as a planning target. Hours are not used |
 | Command menu | Ctrl+K (or ⋯ > Commands): every action from the action registry with its shortcut; the base for the chat panel |
-| To-do | A planned piece of work on a half-day block (code name: pick): a DevOps item, a draft story or an intention, sized S/M/L or not yet (counts as 2h). Called a pick until TD-1; the command menu and the assistant still understand pick |
+| To-do | A planned piece of work on a half-day block (code name: pick): a DevOps item, a draft story or an intention, sized S/M/L or not yet (counts as the person's Count unsized work as, 1h by default; SZ-1). Called a pick until TD-1; the command menu and the assistant still understand pick |
 | Source | Dataverse, Outlook or Google; each reports its own status |
 | Pattern | A Focus Time row: recurring weekly AM/PM/All Day per weekday between start and (optional) end date |
 | Open | A Mon–Thu half-day with no focus block; free for client or internal work (offered clients: those followed) |
@@ -149,9 +149,9 @@ Run: `focustime-open` (the service), `npm run dev`, `npm test` (with `npm run db
 | Focus timer | A countdown for focus or a break, plain or timeboxing a to-do; server-side, so it survives closing the window. Focus time on a to-do is recorded for Close out (D138 to D140) |
 | Block | Where the work happens: one half-day of client focus time (the calendar unit, the week grid's cell). Never an amount of work: how much is always hours (E2, D446) |
 | Estimate | How much work, in hours: minutes inside, whole hours shown, "about" where estimated ("about 6h"). No fractions, decimals or blocks. A feature's estimate is whole hours 1 to 80 (4h by default), set with the shared stepper "− 6h +" (E2, D446, D448) |
-| Story size | S 1h, M 2h, L 4h: fixed shortcuts for hours (D447). Optional: an unsized story counts as 2h everywhere ("Size? · 2h", muted) and never blocks anything (D448) |
+| Story size | S 1h, M 2h, L 4h: fixed shortcuts for hours (D447). Optional: an unsized story counts as the person's own assumption everywhere (Settings › Planning, Count unsized work as: 30 min, 1h by default, 2h or 3h; SZ-1; "Size? · 1h", muted) and never blocks anything (D448) |
 | Budget | A client's real free time in a week: the free focus time in its blocks (Plan the day's, after meetings, personal events, unavailable time and PTO), plus pinned Open half-days, minus borrowed time. "Northwind · 7h free · 9h planned", amber "about 2h over" (E2, D449) |
-| Envelope | A feature on the week list with its stories nested under it (they take its tier). Its load: with at least one story sized, the sum of its stories' hours (unsized as 2h; "from its stories", no stepper); otherwise its estimate. Loose stories count their own size (E2, D448) |
+| Envelope | A feature on the week list with its stories nested under it (they take its tier). Its load: with at least one story sized, the sum of its stories' hours (unsized as the person's assumption; "from its stories", no stepper); otherwise its estimate. Loose stories count their own size (E2, D448) |
 | Photo | A Cooptimizer's or the user's Entra profile photo with the presence mark on its corner; initials when there is none (step 16.4) |
 | Must | A week list item that should be completed this week and definitely touched. Counts against the client's budget. A target, not a contract: one click to move it |
 | Nice to have | A week list item worked on if there's room. Doesn't count against fit |

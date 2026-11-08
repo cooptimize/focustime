@@ -160,7 +160,7 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
       if (e.status === "confirmed" && e.itemId) return { state: "created", itemId: e.itemId, url: workUrl(e) };
       return { state: e.status === "confirmed" ? "pending" : e.status, message: e.message ?? "Not confirmed yet", writeId: w };
     };
-    const cards = d.proposals.map((p) => ({ ...p, status: statusOf(p), after: p.dependsOn.filter((x) => d.proposals.some((q) => q.id === x && q.keep)).map((x) => d.proposals.find((q) => q.id === x)!.title), sizeText: sizeChipText(p.size) }));
+    const cards = d.proposals.map((p) => ({ ...p, status: statusOf(p), after: p.dependsOn.filter((x) => d.proposals.some((q) => q.id === x && q.keep)).map((x) => d.proposals.find((q) => q.id === x)!.title), sizeText: sizeChipText(p.size, cfg.plan.sizes) }));
     const published = cards.filter((c) => c.status.state === "created").length;
     const left = cards.filter((c) => c.keep && c.status.state !== "created").length;
     const { costMicros, ...rest } = d;

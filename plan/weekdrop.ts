@@ -6,7 +6,7 @@
 // already has it refuse. Pure.
 import { overNote, placeNote } from "./days.ts";
 import { freeMinutes } from "../week/free.ts";
-import { hoursText, storyMinutes, type StorySize } from "./estimate.ts";
+import { hoursText, storyMinutes, type SizeScale, type StorySize } from "./estimate.ts";
 import { planMinutes } from "./fit.ts";
 import type { FreeGap, Half, IsoDate } from "../week/types.ts";
 
@@ -30,7 +30,7 @@ export function dropCheck(i: {
   today: IsoDate;
   /** That block's picks. */
   picks: readonly PickLike[];
-  sizes: Readonly<Record<string, number>>;
+  sizes: SizeScale;
   timeboxes?: readonly BoxLike[] | undefined;
   dragged: Dragged;
 }): DropCheck {
@@ -46,7 +46,7 @@ export function dropCheck(i: {
   if (note) return { ok: true, text: note, over: false };
   const free = freeMinutes(slot);
   const left = Math.max(0, free - planMinutes(live, i.sizes, i.timeboxes, slot));
-  const need = storyMinutes(dragged.size);
+  const need = storyMinutes(dragged.size, i.sizes);
   if (need <= left) return { ok: true, text: `${hoursText(need)} of ${hoursText(left)} free`, over: false };
   return { ok: true, text: overNote(slot.date, slot.half, hoursText(need - left)), over: true };
 }

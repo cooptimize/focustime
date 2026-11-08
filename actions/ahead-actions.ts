@@ -7,7 +7,7 @@ import type { AppConfig } from "../config/schema.ts";
 import { KINDS, RANGES } from "../plan/ahead-view.ts";
 import type { AheadGapKind, AheadRange } from "../plan/ahead-edit.ts";
 import { byItem, canEdit, CHANGE_FIELDS, checkValue, conflictOf, sameValue, type ChangeField, type ChangeValue, type DayHalf, type EditRight, type StagedChange, type AheadFilters, type AheadOwner } from "../plan/ahead-edit.ts";
-import { aboutText, hoursText, storyMinutes } from "../plan/estimate.ts";
+import { aboutText, hoursText, storyMinutes, unsizedText, type SizeScale } from "../plan/estimate.ts";
 import { aheadWeeks, PLAN_WEEKS } from "../plan/ahead.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import type { PlanStore } from "../store/plan-store.ts";
@@ -148,7 +148,7 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     // AH-2: "Show the whole project" is remembered with my filters; without it, only Cooptimize's scope (and my items).
     const whole = (await plan.getState<AheadFilters>(FILTERS_KEY))?.whole === true;
     const clients = read && refs.length ? await read(refs, { ...(o.refresh === true ? { refresh: true } : {}), ...(whole ? { whole: true } : {}) }) : [];
-    const hints = await hintsOf(plan, today);
+    const hints = await hintsOf(plan, today, cfg.plan.sizes);
     const out: AheadLoad["clients"] = [];
     const fr = (await ctx.fixRules?.().catch(() => null)) ?? { topN: TOP_N, gaps: () => [...GAP_KINDS] };
     const ix = await idx();
@@ -395,13 +395,13 @@ async function keptHalves(plan: PlanStore, clients: readonly AheadClient[]): Pro
 }
 
 /** FocusTime's own size per item, from weeks 1 to 4 of my week plans: a story's S/M/L, a feature's estimate. */
-async function hintsOf(plan: PlanStore, today: IsoDate): Promise<Map<string, Record<number, { text: string; minutes: number }>>> {
+async function hintsOf(plan: PlanStore, today: IsoDate, sizes: SizeScale): Promise<Map<string, Record<number, { text: string; minutes: number }>>> {
   const out = new Map<string, Record<number, { text: string; minutes: number }>>();
   for (const w of aheadWeeks(mondayOf(today)).slice(0, PLAN_WEEKS)) {
     for (const f of (await plan.weekPlan(w)).features) {
       const m = out.get(f.clientKey) ?? {};
       if (m[f.itemId]) continue;
-      if (f.level === "story") m[f.itemId] = { text: f.size ? `FocusTime: ${f.size}, about ${hoursText(storyMinutes(f.size))}` : `FocusTime: no size (counts ${hoursText(storyMinutes(null))})`, minutes: storyMinutes(f.size) };
+      if (f.level === "story") m[f.itemId] = { text: f.size ? `FocusTime: ${f.size}, about ${hoursText(storyMinutes(f.size, sizes))}` : `FocusTime: no size (counts ${unsizedText(sizes)})`, minutes: storyMinutes(f.size, sizes) };
       else if (f.estimate !== null) m[f.itemId] = { text: `FocusTime: ${aboutText(f.estimate)}`, minutes: f.estimate };
       out.set(f.clientKey, m);
     }

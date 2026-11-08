@@ -1,5 +1,5 @@
 // The week plan per client (musts, nice to haves, a pin), committed. E2: a feature's load comes from its stories on the
-// list once one is sized (Harbor's S and S: 2h; Northwind 1110's L and an unsized one: 4h + 2h), else its estimate in
+// list once one is sized (Harbor's S and S: 2h; Northwind 1110's L and an unsized one: 4h + 1h), else its estimate in
 // hours (Northwind 1120: 4h, none set); stories S, M, L or not sized yet. Northwind needs about 2h more than its free
 // time (the amber line); the others fit.
 import type { DemoSeed } from "./types.ts";

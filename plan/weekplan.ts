@@ -1,6 +1,7 @@
 // Plan the week (step 8): the week plan commits features, the day plan commits stories. Pure: fit per client
 // (E2: the musts' hours against that client's real free time in its blocks), the readiness ladder, the Coop brief and the week
 // nudges. No I/O; the server and UI hand in the week, DevOps results and the plan.
+import type { SizeScale } from "./estimate.ts";
 import { freeMinutes } from "../week/free.ts";
 import { budgetWords, estimate, plannedMinutesOf, type StorySize } from "./estimate.ts";
 import { keepOpenOf, resolvedOf, type PlanBits } from "./carry.ts";
@@ -89,9 +90,10 @@ export type ClientBudget = {
  * PL-1: the one budget Commit, the Board and Today's This week line show: weekBudget with the same inputs everywhere
  * (WT-1's background types, the plan share, Keep open, what DevOps resolved, the Watching check-ins).
  */
-export function planBudget(week: Week, items: readonly FeatureLike[], o: { borrowed: Parameters<typeof borrowedForWeek>[0]; weekStart: IsoDate; work: Parameters<typeof countsFor>[0]; bits: PlanBits | null | undefined; planShare?: number | undefined }): ClientBudget[] {
+export function planBudget(week: Week, items: readonly FeatureLike[], o: { borrowed: Parameters<typeof borrowedForWeek>[0]; weekStart: IsoDate; work: Parameters<typeof countsFor>[0]; bits: PlanBits | null | undefined; planShare?: number | undefined; sizes: SizeScale }): ClientBudget[] {
   const bits = o.bits;
   return weekBudget(week, items, {
+    sizes: o.sizes,
     borrowedMinutes: borrowedForWeek(o.borrowed, o.weekStart),
     counts: countsFor(o.work),
     planShare: bits?.planShare ?? o.planShare ?? 100,
@@ -129,6 +131,8 @@ export function withCurrentTitles<T extends { clientKey: string; itemId: number;
  * features as envelopes (plan/estimate.ts).
  */
 export type BudgetOptions = {
+  /** SZ-1: S, M, L and what this person counts unsized work as. */
+  sizes: SizeScale;
   borrowedMinutes: Readonly<Record<string, number>>;
   /** WT-1: false for a background type (no hours). */
   counts?: (clientKey: string, itemType: string | null | undefined) => boolean;
@@ -151,7 +155,7 @@ export function weekBudget(week: Week, all: readonly FeatureLike[], o: BudgetOpt
     const d = week.days.find((x) => x.date === date);
     return d ? (half === "AM" ? d.am : d.pm) : null;
   };
-  const est = estimate(items.map((i) => ({ ...i, level: i.level ?? "feature", tier: i.tier ?? "must", done: !!o.resolved?.(i.clientKey, i.itemId) })));
+  const est = estimate(items.map((i) => ({ ...i, level: i.level ?? "feature", tier: i.tier ?? "must", done: !!o.resolved?.(i.clientKey, i.itemId) })), o.sizes);
   for (const k of Object.keys(o.checkins ?? {})) if (!names.has(k)) names.set(k, k);
   return [...names].map(([clientKey, clientName]) => {
     const mine = items.filter((f) => f.clientKey === clientKey);

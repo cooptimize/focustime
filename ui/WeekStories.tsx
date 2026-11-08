@@ -320,7 +320,7 @@ function openAt(e: ReactMouseEvent | ReactKeyboardEvent, open: (at: { x: number;
 export function YourStories({ data, work, clientName, slot, onChanged }: { data: WeekLoadData; work: ClientWork; clientName: string; slot: Slot; onChanged: () => void }) {
   const weekPicks = useMemo(() => Object.values(data.plan ?? {}).flatMap((d) => d.picks).filter(live), [data.plan]);
   const weekStart = data.weekStart;
-  const groups = useMemo(() => blockStories({ work, list: data.weekFeatures, weekStart, picks: weekPicks, date: slot.date, half: slot.half }), [work, data.weekFeatures, weekStart, weekPicks, slot.date, slot.half]);
+  const groups = useMemo(() => blockStories({ sizes: data.planning.sizes, work, list: data.weekFeatures, weekStart, picks: weekPicks, date: slot.date, half: slot.half }), [work, data.weekFeatures, weekStart, weekPicks, slot.date, slot.half]);
   const emails = [...new Set(groups.flatMap((g) => g.others.map((o) => o.assignedToEmail).filter((e): e is string => !!e)))];
   const photos = usePhotos({ emails });
   return (

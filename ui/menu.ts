@@ -3,7 +3,7 @@
 // or opens the next step. The command menu is built from the action registry, so every action appears.
 import type { CheckinGhost } from "../plan/carry.ts";
 import { alreadyPlanned } from "../plan/dup.ts";
-import { aboutText, hoursText, parseHours, sizeChipText, storyMinutes, MAX_ESTIMATE_HOURS, MIN_ESTIMATE_HOURS } from "../plan/estimate.ts";
+import { aboutText, hoursText, namedSize, parseHours, sizeChipText, storyMinutes, unsizedText, type SizeScale, MAX_ESTIMATE_HOURS, MIN_ESTIMATE_HOURS } from "../plan/estimate.ts";
 import { addTargets, type AddTarget, type TargetBlock, type TargetGroup } from "../plan/addtargets.ts";
 import { freeMinutes } from "../week/free.ts";
 import { parseItemRef } from "../plan/lookup.ts";
@@ -375,8 +375,8 @@ export function sizeStep(env: MenuEnv, p: Pick): MenuStep {
   return {
     title: `Size of "${p.title}"`,
     items: [
-      ...SIZES.map<MenuItem>((s) => ({ id: `size-${s}`, label: sizeChipText(s), checked: p.size === s, action: "pick.set_size", run: () => env.runPlan("pick.set_size", { id: p.id, size: s }) })),
-      { id: "size-clear", label: "Clear", hint: "counts as 2h", checked: p.size === null, action: "pick.set_size", run: () => env.runPlan("pick.set_size", { id: p.id, size: null }) },
+      ...SIZES.map<MenuItem>((s) => ({ id: `size-${s}`, label: sizeChipText(s, env.planning.sizes), checked: p.size === s, action: "pick.set_size", run: () => env.runPlan("pick.set_size", { id: p.id, size: s }) })),
+      { id: "size-clear", label: "Clear", hint: `counts as ${unsizedText(env.planning.sizes)}`, checked: p.size === null, action: "pick.set_size", run: () => env.runPlan("pick.set_size", { id: p.id, size: null }) },
     ],
   };
 }
@@ -859,7 +859,7 @@ export function timeStep(env: MenuEnv, p: Pick): MenuStep {
     const gaps: MenuItem[] = choices.map((c, i) => ({ id: `gap${i}`, label: `Free ${spanText(c.gapStart, c.gapEnd, tz)} · ${formatDuration(c.gapMinutes)}`, hint: c.trimmed ? `trimmed to ${formatDuration(c.minutes)}` : `${formatDuration(c.minutes)} from ${spanText(c.start, c.end, tz).split("–")[0]}`, action: "timebox.add", run: () => env.timeboxChange("timebox.add", { pickId: p.id, date: p.date, start: c.start, end: c.end }) }));
     return {
       title: `Time for "${p.title}"`,
-      items: [...(gaps.length ? gaps : [{ id: "none", label: !slot ? "This day isn't in the week shown" : openGaps(slot, all, p.date === env.today ? env.now : undefined).length ? `No free stretch of ${formatDuration(Math.min((env.planning.minSizes ?? DEFAULT_MIN_SIZES)[p.size ?? "M"], storyMinutes(p.size)))} or more` : "No free time left in this block", action: "timebox.add", disabled: "Use Custom time, or free up the block" } satisfies MenuItem]), custom],
+      items: [...(gaps.length ? gaps : [{ id: "none", label: !slot ? "This day isn't in the week shown" : openGaps(slot, all, p.date === env.today ? env.now : undefined).length ? `No free stretch of ${formatDuration(Math.min((env.planning.minSizes ?? DEFAULT_MIN_SIZES)[namedSize(p.size, env.planning.sizes)], storyMinutes(p.size, env.planning.sizes)))} or more` : "No free time left in this block", action: "timebox.add", disabled: "Use Custom time, or free up the block" } satisfies MenuItem]), custom],
     };
   }
   const len = minutesOfBox(t);
@@ -1752,12 +1752,12 @@ export type WeekItemOps = {
   remove: () => void;
 };
 
-export function storySizeStep(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
+export function storySizeStep(f: WeekItemFacts, ops: WeekItemOps, sizes: SizeScale): MenuStep {
   return {
     title: `Size of "${f.title}"`,
     items: [
-      ...(["S", "M", "L"] as const).map<MenuItem>((z) => ({ id: `s${z}`, label: sizeChipText(z), checked: f.size === z, action: "weekplan.set_size", run: () => ops.size?.(z) })),
-      { id: "sclear", label: "Clear", hint: "counts as 2h", checked: !f.size, action: "weekplan.set_size", run: () => ops.size?.(null) },
+      ...(["S", "M", "L"] as const).map<MenuItem>((z) => ({ id: `s${z}`, label: sizeChipText(z, sizes), checked: f.size === z, action: "weekplan.set_size", run: () => ops.size?.(z) })),
+      { id: "sclear", label: "Clear", hint: `counts as ${unsizedText(sizes)}`, checked: !f.size, action: "weekplan.set_size", run: () => ops.size?.(null) },
     ],
   };
 }
@@ -1777,7 +1777,7 @@ export function estimateStep(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
 }
 
 /** Everything a week row does besides its title, state, story count, blocks and pin (D267). */
-export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
+export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps, sizes: SizeScale): MenuStep {
   const closed = f.past ? { disabled: "A past week is a review" } : {};
   const isPinned = (p: { date: IsoDate; half: string }) => f.pinned.some((x) => x.date === p.date && x.half === p.half);
   const writes = (_why: string) => (f.canWrite ? {} : { hint: "Enable DevOps writes first" });
@@ -1790,7 +1790,7 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
       { id: "down", label: "Move down", action: "weekplan.reorder", ...(f.past ? closed : f.last ? { disabled: "Already last" } : {}), run: () => ops.move(1) },
       { id: "tier", label: other === "nice" ? "Make it a nice to have" : "Make it a must", action: "weekplan.set_tier", ...(f.past ? closed : f.nested ? { disabled: "Stories take their feature's tier" } : {}), run: () => ops.tier(other) },
       f.level === "story"
-        ? { id: "size", label: "Size", hint: f.size ?? "not sized", action: "weekplan.set_size", ...closed, next: () => storySizeStep(f, ops) }
+        ? { id: "size", label: "Size", hint: f.size ?? "not sized", action: "weekplan.set_size", ...closed, next: () => storySizeStep(f, ops, sizes) }
         : { id: "estimate", label: "Estimate", hint: f.derived ? hoursText(f.minutes) : aboutText(f.minutes), action: "weekplan.set_estimate", ...(f.derived ? { disabled: "From its stories: size them to change it" } : closed), next: () => estimateStep(f, ops) },
       {
         id: "pin",

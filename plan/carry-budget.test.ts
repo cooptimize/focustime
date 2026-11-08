@@ -1,4 +1,5 @@
 // PL-1: Keep open, resolved musts and Watching check-ins in the one budget Commit, the Board and Today share.
+import { DEFAULT_SIZE_SCALE } from "./estimate.ts";
 import { describe, expect, it } from "vitest";
 import { aClient, aFocusBlock, aPick, aWeek, aWeekFeature, WEEK } from "../test/builders/index.ts";
 import { budgetWords } from "./estimate.ts";
@@ -8,11 +9,11 @@ import { pickNeed } from "./types.ts";
 import { planBudget } from "./weekplan.ts";
 
 const H = 60;
-const SIZES = { S: 60, M: 120, L: 240 };
+const SIZES = { S: 60, M: 120, L: 240, unsized: 60 };
 const week = aWeek({ patterns: [aFocusBlock({ client: aClient({ name: "Adatum" }), days: { Tue: "PM", Wed: "AM" } })] });
 const bits = (o: Partial<PlanBits> = {}): PlanBits => ({ planShare: 100, keepOpenDefault: 0, keepOpen: {}, resolved: [], checkins: {}, ...o });
 const adatum = (b: PlanBits | null, items = [aWeekFeature({ itemId: 11, estimate: 4 * H })]) =>
-  planBudget(week, items, { borrowed: [], weekStart: WEEK, work: null, bits: b }).find((c) => c.clientKey === "adatum")!;
+  planBudget(week, items, { sizes: DEFAULT_SIZE_SCALE, borrowed: [], weekStart: WEEK, work: null, bits: b }).find((c) => c.clientKey === "adatum")!;
 
 describe("Keep open (PL-1)", () => {
   it("plans up to free × share × (1 − keep open), and the over line uses the reduced hours", () => {
@@ -58,7 +59,7 @@ describe("a resolved must counts zero everywhere (PL-1)", () => {
 describe("Watching check-ins in the budget (PL-1)", () => {
   it("count their minutes at once, even for a client with no list", () => {
     expect(adatum(bits({ checkins: { adatum: 30 } })).plannedMinutes).toBe(4 * H + 30);
-    const only = planBudget(week, [], { borrowed: [], weekStart: WEEK, work: null, bits: bits({ checkins: { fabrikam: 30 } }) });
+    const only = planBudget(week, [], { sizes: DEFAULT_SIZE_SCALE, borrowed: [], weekStart: WEEK, work: null, bits: bits({ checkins: { fabrikam: 30 } }) });
     expect(only.find((c) => c.clientKey === "fabrikam")).toMatchObject({ plannedMinutes: 30, checkinMinutes: 30 });
   });
 });

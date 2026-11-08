@@ -1,4 +1,5 @@
 // S1 (D453): one PTO answer per half, shared by Week, Plan the week and Plan the day. Built on the shared builders.
+import { DEFAULT_SIZE_SCALE } from "../plan/estimate.ts";
 import { describe, expect, it } from "vitest";
 import { aClient, aFocusBlock, anOutOfOffice, aPto, aWeek } from "../test/builders/index.ts";
 import { NO_TIME, pinnedToPto, weekBudget } from "../plan/weekplan.ts";
@@ -58,8 +59,8 @@ describe("PTO in Plan the week's budget", () => {
   const item = (clientKey: string, itemId: number, slots: { date: string; half: "AM" | "PM" }[] = []) => ({ clientKey, itemId, title: `Feature ${itemId}`, tier: "must" as const, level: "feature" as const, estimate: 240, parentId: null, slots });
 
   it("PTO adds no free hours and is left out of the client's blocks", () => {
-    const plain = weekBudget(aWeek({ patterns: blocks }), [], { borrowedMinutes: {} }).find((b) => b.clientKey === "adatum")!;
-    const off = weekBudget(aWeek({ patterns: blocks, events: [anOutOfOffice()] }), [], { borrowedMinutes: {} }).find((b) => b.clientKey === "adatum")!;
+    const plain = weekBudget(aWeek({ patterns: blocks }), [], { sizes: DEFAULT_SIZE_SCALE, borrowedMinutes: {} }).find((b) => b.clientKey === "adatum")!;
+    const off = weekBudget(aWeek({ patterns: blocks, events: [anOutOfOffice()] }), [], { sizes: DEFAULT_SIZE_SCALE, borrowedMinutes: {} }).find((b) => b.clientKey === "adatum")!;
     expect(plain.blocks).toHaveLength(2);
     expect(off.blocks.map((b) => b.date)).toEqual(["2026-11-02"]);
     expect(off.ptoBlocks).toEqual([{ date: THU, half: "AM" }]);
@@ -68,7 +69,7 @@ describe("PTO in Plan the week's budget", () => {
 
   it("a client with only PTO that week: No time this week, a line kept, not in the header count", () => {
     const week = aWeek({ patterns: blocks, events: [anOutOfOffice({ start: `${THU}T12:30`, end: `${THU}T17:00` })] });
-    const fits = weekBudget(week, [item("northwind", 7)], { borrowedMinutes: {} });
+    const fits = weekBudget(week, [item("northwind", 7)], { sizes: DEFAULT_SIZE_SCALE, borrowedMinutes: {} });
     const nw = fits.find((b) => b.clientKey === "northwind")!;
     expect([nw.free, nw.freeMinutes, nw.blocks.length]).toEqual([NO_TIME, 0, 0]);
     expect(nw.text).toBe("No time this week · 4h planned");
@@ -81,7 +82,7 @@ describe("PTO in Plan the week's budget", () => {
     const week = aWeek({ patterns: blocks, pto: [aPto({ date: THU })] });
     const pinned = item("adatum", 9, [{ date: THU, half: "AM" }]);
     expect(pinnedToPto(week, pinned.slots)).toEqual([{ date: THU, half: "AM" }]);
-    weekBudget(week, [pinned], { borrowedMinutes: {} });
+    weekBudget(week, [pinned], { sizes: DEFAULT_SIZE_SCALE, borrowedMinutes: {} });
     expect(pinned.slots).toEqual([{ date: THU, half: "AM" }]);
     expect(pinnedToPto(aWeek({ patterns: blocks }), pinned.slots)).toEqual([]);
   });
