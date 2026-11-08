@@ -241,6 +241,7 @@ export const ACTIONS = [
   { name: "conversations.link", title: "Link a conversation to a DevOps item", group: "Conversations", target: "conversation", summary: "Tracked as that item for everyone on the chat" },
   { name: "conversations.take_over", title: "Take it over", group: "Conversations", target: "commitment", summary: "Makes a waiting commitment yours; whoever had it is told quietly" },
   { name: "conversations.held", title: "Show held-back messages", group: "Conversations", target: "none", summary: "Messages held back because they mention another client in a chat with people outside Cooptimize, to sort by hand" },
+  { name: "conversations.held_bulk", title: "Sort or file all held messages of a client", group: "Conversations", target: "none", summary: "Every held-back message of one client, sorted by hand or marked not work-related, after a confirm that shows the count" },
   { name: "conversations.held_not_work", title: "Mark a held message not work-related", group: "Conversations", target: "conversation", summary: "Moves one held-back message to Chatter" },
   { name: "conversations.sort_unsorted", title: "Sort unsorted messages", group: "Conversations", target: "none", summary: "Sorts the messages that waited for AI (budget, AI off or a failure), when AI is available again" },
   // CV-5's Link to item search and the two unlinks (AS-2: registered, so the dispatcher, the UI and the assistant reach them).

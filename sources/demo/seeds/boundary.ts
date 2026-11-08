@@ -16,10 +16,16 @@ export const boundarySeed: DemoSeed = {
     const [jordan, priya] = DEMO_PEOPLE;
     // Held: a client-facing chat, a message naming another client.
     const nc = "19:demo-northwind-collab@thread.v2";
-    const at = e.ago(30);
-    const text = "Dana, the date filter fix is the same one we shipped for Harbor last month, so it should be quick.";
-    await e.teams.saveMessages([{ chatId: nc, messageId: "gd2-held-1", clientKey: "Northwind", senderId: member(nc, jordan!.name).userId, senderName: jordan!.name, senderTenant: member(nc, jordan!.name).tenantId, createdAt: at, modifiedAt: at, html: `<p>${text}</p>`, text, hasImage: false, hasFile: false, replyToId: null, mentions: [], fetchedAt: at }]);
-    await e.conversations.place([{ chatId: nc, messageId: "gd2-held-1", conversationId: null, role: "unsorted", reason: HELD_MENTION, placedBy: "rule", at }]);
+    const held = [
+      { id: "gd2-held-1", minutesAgo: 30, text: "Dana, the date filter fix is the same one we shipped for Harbor last month, so it should be quick.", matched: [{ key: "Harbor", word: "Harbor" }] },
+      // GD-3: a name as matched: the alias whole, and a second held message for the bulk actions.
+      { id: "gd3-held-2", minutesAgo: 45, text: "We can reuse the Harbor Health intake mapping for this one.", matched: [{ key: "Harbor", word: "Harbor Health" }] },
+    ];
+    for (const h of held) {
+      const at = e.ago(h.minutesAgo);
+      await e.teams.saveMessages([{ chatId: nc, messageId: h.id, clientKey: "Northwind", senderId: member(nc, jordan!.name).userId, senderName: jordan!.name, senderTenant: member(nc, jordan!.name).tenantId, createdAt: at, modifiedAt: at, html: `<p>${h.text}</p>`, text: h.text, hasImage: false, hasFile: false, replyToId: null, mentions: [], fetchedAt: at }]);
+      await e.conversations.place([{ chatId: nc, messageId: h.id, conversationId: null, role: "unsorted", reason: HELD_MENTION, placedBy: "rule", at, matched: h.matched }]);
+    }
     // Sorted, with the tag: an internal chat.
     const nd = "19:demo-northwind-delivery@thread.v2";
     const id = await thread(e, nd, "Northwind", "Reuse the intake export approach for loyalty points", "Priya suggests building the loyalty points export the way the Harbor intake export works.\nJordan will check the field mapping first.", [

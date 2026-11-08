@@ -792,3 +792,10 @@ The pages are `docs/technical/*.md` (how FocusTime works, for engineers and IT);
 - `actions/inbox-actions.ts`: `inbox.looked`, `lastLooked` and `now` on `inbox.list`, closed promises for the Closed shown days Rule. `plan/inbox-items.ts`: `statusOf`, `STATUS_ORDER`, `InboxPlace`. `config/schema.ts`: `inbox_sort`, `inbox_statuses`, `inbox_grouping`.
 - `store/migrations/20261123T0900_follow_up_changed_at.ts`: a promise's last change. e2e: `e2e/ib2-everything.test.ts`.
 
+
+## GD-3: held messages re-checked (Nov 8)
+
+- `actions/held-recheck.ts`: `recheckHeld` (every held message, or one client's, through the normal pipeline; counts only in logs), `heldRecheckOnce` (first start of a build, marker `meta/held_recheck_v1`), started from `server/main.ts`; `AdminOps.recheckHeld` runs it when a client's names change.
+- `actions/request-poll.ts` `pipelineDepsOf`: one chat's pipeline dependencies, shared by the poll and the re-check.
+- `plan/boundary.ts` `mentionMatches`, `highlightMatches`; `conversation_messages.held_match_json` keeps what a held message matched.
+- `conversations.held_bulk` (`actions/conversation-actions.ts`), and the held list's bulk lines (`ui/inbox/HeldBack.tsx`).

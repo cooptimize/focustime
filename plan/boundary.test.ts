@@ -4,7 +4,7 @@
 // Fictional clients only.
 import { describe, expect, it } from "vitest";
 import { aChatMember, aClientEntry, HOME_TENANT } from "../test/builders/index.ts";
-import { ANOTHER, chatAudience, exitCheck, mentionedClients, nameList, replaceMentions, type AudienceRules } from "./boundary.ts";
+import { ANOTHER, chatAudience, exitCheck, highlightMatches, mentionedClients, mentionMatches, nameList, replaceMentions, type AudienceRules } from "./boundary.ts";
 
 const rules: AudienceRules = { homeTenant: HOME_TENANT, automation: [], domains: ["contoso.example"] };
 const dir = [
@@ -71,6 +71,23 @@ describe("the matcher", () => {
     expect(names("off by 4410 rows in Fab Ops", { records: true })).toEqual(["Northwind", "Fabrikam"]);
     // A date, a time, an amount or a version isn't an item id.
     expect(names("on 2026-4410, $4410, v1.4410", { records: true })).toEqual([]);
+  });
+});
+
+describe("GD-3: what a held message matched", () => {
+  const dir = [aClientEntry({ key: "contoso", names: ["Contoso"], projects: [], itemIds: [] }), aClientEntry({ key: "Harbor", names: ["Harbor Health"], aliases: ["HH"], projects: ["Wing Portal"], itemIds: [4410], exactCase: true })];
+  it("gives the word as the message has it, the longer name winning", () => {
+    expect(mentionMatches("Same as Harbor Health last month", "contoso", dir)).toEqual([{ key: "Harbor", word: "Harbor Health" }]);
+    expect(mentionMatches("harbor health, as written only", "contoso", dir)).toEqual([]);
+  });
+  it("never matches item ids, projects, codes or text in links", () => {
+    for (const t of ["01J has weight on the other lines", "This screenshot is 04JS", "Image attached", "off by 4410 and #4410", "see https://x.example/Harbor%20Health/a", "Wing Portal"]) expect(mentionMatches(t, "contoso", dir)).toEqual([]);
+  });
+  it("its own names never count", () => expect(mentionMatches("Contoso again", "contoso", dir)).toEqual([]));
+  it("marks only text between tags, whole words, and keeps entities", () => {
+    expect(highlightMatches('<p>Harbor Health &amp; <a href="https://x.example/Harbor Health">Harbor Healthy</a></p>', ["Harbor Health"])).toBe('<p><mark class="held-match">Harbor Health</mark> &amp; <a href="https://x.example/Harbor Health">Harbor Healthy</a></p>');
+    expect(highlightMatches("<p>AT&amp;T says</p>", ["AT&T"])).toBe('<p><mark class="held-match">AT&amp;T</mark> says</p>');
+    expect(highlightMatches("<p>plain</p>", [])).toBe("<p>plain</p>");
   });
 });
 

@@ -339,8 +339,8 @@ describe("Cooptimize Internal and the client rule", () => {
       expect(l.fix, k).toMatch(/FocusTime admin/);
     }
     expect(unsortedLine("client_off", "Contoso")).toMatchObject({ text: "AI isn't allowed for Contoso", fix: expect.stringContaining("Admin › AI") });
-    expect(unsortedLine(CLIENT_REFUSED, "Contoso")).toEqual({ text: "held back because they mention another client", does: "held", fix: "They're checked again with the chat's next messages." });
-    expect(unsortedLine(HELD_MENTION, "Contoso")).toEqual({ text: "held back: they mention another client in a chat with people outside Cooptimize", does: "held", fix: "Open them to sort by hand." });
+    expect(unsortedLine(CLIENT_REFUSED, "Contoso")).toEqual({ text: "held back because they mention another client", does: "held", fix: expect.stringContaining("They stay held") });
+    expect(unsortedLine(HELD_MENTION, "Contoso")).toEqual({ text: "held back: they mention another client in a chat with people outside Cooptimize", does: "held", fix: expect.stringContaining("Open them to sort by hand.") });
     expect(unsortedLine("refused_secret", "Contoso")).toMatchObject({ does: "held", text: expect.stringMatching(/^held back because they contain something that looks like a key/) });
     expect(unsortedLine("refused_email", "Contoso")).toMatchObject({ does: "held", text: "held back because they contain an email address" });
     // MB-1: one plain sentence, no colon for a hold; one message reads "it".

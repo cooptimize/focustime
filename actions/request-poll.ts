@@ -26,7 +26,7 @@ import type { WorkItem } from "../week/types.ts";
 import { classifyAsk, extractPromise, type AskAiDeps } from "./ask-ai.ts";
 import { mapSeq } from "./seq.ts";
 import { imagesForAi } from "./chat-images.ts";
-import { CHAT_DAILY_AI_CALLS, legacyRefused, parkedBySwitch, runPipeline } from "./conversations-pipeline.ts";
+import { CHAT_DAILY_AI_CALLS, legacyRefused, parkedBySwitch, runPipeline, type PipelineDeps } from "./conversations-pipeline.ts";
 import type { ClientEntry } from "../ai/guard.ts";
 import { chatAudience, type AudienceRules } from "../plan/boundary.ts";
 import type { ConversationStore } from "../store/conversation-store.ts";
@@ -98,7 +98,7 @@ const toShared = (m: GraphMessage, fetchedAt: string): TeamsMessage => ({
 });
 
 /** People for one cycle: each built once, then dropped with the cycle (their tokens with them). */
-function peopleOnce(deps: PollDeps) {
+export function peopleOnce(deps: Pick<PollDeps, "person">) {
   const memo = new Map<string, Promise<PollPerson | null>>();
   return (uid: string) => memo.get(uid) ?? memo.set(uid, deps.person(uid).catch(() => null)).get(uid)!;
 }
@@ -199,6 +199,26 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
   return out;
 }
 
+/** The pipeline's dependencies for one chat under one person's switches (the poll's step, and GD-3's re-check). */
+export function pipelineDepsOf(
+  deps: Pick<PollDeps, "teams">,
+  convs: ConversationStore,
+  c: ClientChat,
+  x: { p: PollPerson; config: AppConfig; ai: AiService | null; items: WorkItem[] | null; home: string | null; users: readonly FocusUser[]; person: (uid: string) => Promise<PollPerson | null>; now: string; boundary?: PipelineDeps["boundary"] },
+): PipelineDeps {
+  const cfg = x.config;
+  return {
+    teams: deps.teams, convs, users: x.users, homeTenant: x.home, now: x.now, clientName: cfg.clientSettings[c.clientKey]?.name ?? c.clientKey, ai: x.ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, chatCap: cfg.org?.rules.chatAiDailyCap ?? CHAT_DAILY_AI_CALLS, ...groupingRules(cfg, c.clientKey), items: x.items,
+    // CV-4: only with the client's "Send attachments to AI" on, read with the same token that read the chat.
+    ...(cfg.org?.clients[c.clientKey]?.attachmentsAi && x.p.chatMessages ? { images: (ids: readonly string[]) => imagesForAi(deps.teams, x.p.chatMessages!, c.chatId, ids) } : {}),
+    author: async (uid) => {
+      const a = await x.person(uid);
+      return a?.config ? { zone: userZone(a.config), promisePhrases: a.config.asks.promisePhrases } : null;
+    },
+    ...(x.boundary ? { boundary: x.boundary } : {}),
+  };
+}
+
 /** CV-1: one chat's new messages through the conversations pipeline, under the token owner's switches and the app's cap. */
 async function conversationsStep(
   deps: PollDeps,
@@ -220,23 +240,11 @@ async function conversationsStep(
   const ai = x.p.pipelineAi ? await x.p.pipelineAi().catch(() => null) : null;
   // IB-1 slice 3: messages a switch held back are sorted once it passes; nothing to press.
   const available = !!ai && (await ai.availability(c.clientKey).catch(() => "off")) === "ok";
-  const parked = await parkedBySwitch(convs, deps.teams, c.chatId, { available, withNew: added.length > 0 });
+  const parked = await parkedBySwitch(convs, deps.teams, c.chatId, { available, withNew: added.length > 0, boundaryKnown: !!bound });
   if (!added.length && !retry.length && !parked.length) return;
   const items = await x.p.openItems(cfg, c.clientKey).catch(() => null);
-  const run = (batch: readonly TeamsMessage[]) => runPipeline(
-    {
-      teams: deps.teams, convs, users: x.users, homeTenant: x.home, now: x.now, clientName: cfg.clientSettings[c.clientKey]?.name ?? c.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, chatCap: cfg.org?.rules.chatAiDailyCap ?? CHAT_DAILY_AI_CALLS, ...groupingRules(cfg, c.clientKey), items,
-      // CV-4: only with the client's "Send attachments to AI" on, read with the same token that read the chat.
-      ...(cfg.org?.clients[c.clientKey]?.attachmentsAi && x.p.chatMessages ? { images: (ids: readonly string[]) => imagesForAi(deps.teams, x.p.chatMessages!, c.chatId, ids) } : {}),
-      author: async (uid) => {
-        const a = await x.person(uid);
-        return a?.config ? { zone: userZone(a.config), promisePhrases: a.config.asks.promisePhrases } : null;
-      },
-      ...(boundary ? { boundary } : {}),
-    },
-    c,
-    batch,
-  );
+  const pipeline = pipelineDepsOf(deps, convs, c, { p: x.p, config: cfg, ai, items, home: x.home, users: x.users, person: x.person, now: x.now, boundary });
+  const run = (batch: readonly TeamsMessage[]) => runPipeline(pipeline, c, batch);
   for (const batch of [added, retry, parked]) {
     if (!batch.length) continue;
     const r = await run(batch);
