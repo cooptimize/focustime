@@ -108,6 +108,11 @@ import { scopeDepsOf } from "../actions/scope-deps.ts";
 import { assigneesOf } from "../actions/identities.ts";
 import type { ClientScopeFacts } from "../actions/admin-actions.ts";
 import { createAdminOps } from "./admin-ops.ts";
+import { standardsJob } from "./standards-job.ts";
+import { createStandardsReader } from "../sources/github/standards.ts";
+import { standardsStoreOn } from "../store/standards-store.ts";
+import { parseRepoUrl } from "../plan/standards.ts";
+import type { StandardsPort } from "../actions/standards.ts";
 import { createDevOpsPoller, createLimiter, devopsStatusSource, NO_SNAPSHOTS, pollAccounts, type DevOpsPoller } from "../actions/devops-poll.ts";
 import { clientAccountsStatusSource } from "../actions/client-accounts-status.ts";
 import { createStatusRegistry } from "../actions/status-rows.ts";
@@ -932,6 +937,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     requests: requestsPort,
     org,
     adminOps,
+    standards: standardsPort,
     links: host.links,
     media,
     // A2: no `secrets`: the app's client secrets (Dataverse, Google, Entra) are set up outside FocusTime
@@ -1061,7 +1067,14 @@ const storeOf = (userId: string, zone: string | null): PlanStore => plans.get(us
 const directorySource = app.dataverse
   ? createDataverseSource({ config: { ...app.dataverse, myEmail: "", mySystemUserId: null }, timeZone: host.clock.zone(), getSecret: () => host.secrets.get("dataverse-client-secret"), fetch, snapshots: host.snapshotsFor("focustime-app"), log })
   : null;
+// KB-1: Cooptimize's standards, read from public GitHub (GET only, no token) and kept as data. FOCUSTIME_DEMO servers
+// (the e2e harness) and FOCUSTIME_STANDARDS_SYNC=off make no outside request; demo sessions have their own library.
+const standardsStore = standardsStoreOn(db);
+const standardsSyncOn = process.env.FOCUSTIME_STANDARDS_SYNC !== "off" && !process.env.FOCUSTIME_DEMO;
+const standards = standardsJob({ store: standardsStore, reader: createStandardsReader({ fetch }), source: async () => (await org.rules()).standards, now: instantNow, log });
+const standardsPort: StandardsPort = { library: () => standardsStore.library(parseRepoUrl), state: () => standardsStore.state(), syncNow: () => (standardsSyncOn ? standards.syncNow() : Promise.resolve({ ok: false, changed: false, error: "The sync is off on this server" })) };
 const adminOps = createAdminOps({
+  standards: standardsPort,
   statusRows,
   check: adminCheck,
   org,
@@ -1276,6 +1289,7 @@ const scheduler = createScheduler({
     peopleJob,
     retention,
     { name: meetings.name, run: () => jobs("meeting_capture", {}, () => meetings.run()), wake: meetings.wake },
+    ...(standardsSyncOn ? [{ name: standards.name, run: () => standards.run(), wake: standards.wake }] : []),
     ...(devopsPoller ? [{ name: "devops_poll", run: async () => void (await devopsPoller!.tick()), wake: () => devopsPoller!.wake() }] : []),
     ...(pollInBackground
       ? [{
@@ -1307,6 +1321,8 @@ const scheduler = createScheduler({
   },
 });
 const stopScheduler = scheduler.start();
+// KB-1: once at startup; a failure is recorded for Admin and the last good copy stays.
+if (standardsSyncOn) void standards.run().catch(() => log({ source: "server", op: "sync", kind: "failed" }));
 
 server.on("error", (e: NodeJS.ErrnoException) => {
   if (e.code === "EADDRINUSE") {

@@ -20,7 +20,9 @@ import type { AppConfig } from "../config/schema.ts";
 import { askTitle, messageLink } from "../plan/asks.ts";
 import { CHAT_ID, isExternal, teamsLink } from "../plan/chats.ts";
 import { chatAudience, mentionedClients, HELD_LINE, NO_OTHER_CLIENTS } from "../plan/boundary.ts";
-import { DRAFT_INSTRUCTIONS, DRAFT_SCHEMA, DRAFT_TASK, draftFrom, draftInput, emptyDraft, type DraftAnswer } from "../plan/conversation-draft.ts";
+import { DRAFT_INSTRUCTIONS, DRAFT_SCHEMA, DRAFT_SCHEMA_STANDARDS, DRAFT_TASK, draftFrom, draftInput, emptyDraft, withStandards, type DraftAnswer } from "../plan/conversation-draft.ts";
+import { STANDARDS_DRAFT } from "../plan/standards.ts";
+import type { StandardsLookup } from "./standards.ts";
 import { isClosed } from "../plan/process.ts";
 import { chatImageSrc, type CardCommitment, type CardItem, type CardSuggestion, type ConversationCard, type ConversationMessage, type ConversationsData, type DayPromise, type HeldData, type MessageImageView, type MyPromisesData, type Primary, type PromiseCard } from "../plan/conversation-views.ts";
 import { CLIENT_REFUSED, HELD_MENTION, LEGACY_CLIENT_REFUSED, daysWaiting, oneLine, statusLine, unsortedLine, unsortedText, type Commitment, type UnsortedLine, type Conversation, type ItemDraft } from "../plan/conversations.ts";
@@ -68,6 +70,8 @@ export const NOT_WORK = "Not work-related";
 const NOT_WORK_PLACE = "not_work:";
 
 export type ConversationContext = RequestContext & {
+  /** KB-1: the standards that fit a piece of work; absent where none are synced. */
+  standards?: StandardsLookup;
   conversations?: ConversationStore | undefined;
   /** Whether I lead this client: Dataverse's leads with admins' overrides (actions/client-lead.ts, ADM-1). */
   isLead: (clientKey: string) => Promise<boolean>;
@@ -569,8 +573,11 @@ async function draftFor(ctx: ConversationContext, v: Seen, cfg: AppConfig, c: Co
     // GD-2 point 5: the conversation's words may name another client (an internal chat, a message sorted by hand);
     // the draft never does: the instructions say so, and the check after replaces any other client's name.
     const internal = ctx.boundary ? !!(await ctx.boundary(c.clientKey).catch(() => null))?.internal : false;
-    const r = await ai.run<DraftAnswer>({ name: DRAFT_TASK, client: c.clientKey, instructions: internal ? DRAFT_INSTRUCTIONS : `${DRAFT_INSTRUCTIONS}\n${NO_OTHER_CLIENTS}`, mentions: { input: "words", answer: "scrub" } }, draftInput({ clientName: cfg.clientSettings[c.clientKey]?.name ?? c.clientKey, title: c.title, summary: c.summary, messages, features, items }), DRAFT_SCHEMA);
+    // KB-1: the standards that fit this conversation, as data.
+    const std = (await ctx.standards?.(c.clientKey, [c.title, c.summary]).catch(() => null)) ?? null;
+    const r = await ai.run<DraftAnswer>({ name: DRAFT_TASK, client: c.clientKey, instructions: [DRAFT_INSTRUCTIONS, ...(internal ? [] : [NO_OTHER_CLIENTS]), ...(std ? [STANDARDS_DRAFT] : [])].join("\n"), mentions: { input: "words", answer: "scrub" } }, draftInput({ clientName: cfg.clientSettings[c.clientKey]?.name ?? c.clientKey, title: c.title, summary: c.summary, messages, features, items, ...(std ? { standards: std.input } : {}) }), std ? DRAFT_SCHEMA_STANDARDS : DRAFT_SCHEMA);
     if (r.ok) draft = draftFrom(r.value, { featureIds: features.map((f) => f.id), itemIds: items.map((i) => i.id) });
+    if (r.ok && draft && std) draft = withStandards(draft, r.value.standards_note, std.used);
     if (r.ok && draft && r.namesRemoved) draft = { ...draft, namesRemoved: true };
     if (!r.ok) notSorted = unsortedText(r.error instanceof AiError ? r.error.kind : "provider", cfg.clientSettings[c.clientKey]?.name ?? c.clientKey);
     if (r.ok && !draft) notSorted = unsortedText("unknown_ref", "");

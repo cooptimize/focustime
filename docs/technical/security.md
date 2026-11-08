@@ -1,6 +1,6 @@
 # Security
 
-For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `d25c148` on Nov 7, 2026 (SR-2 parts against its own branch); the assistant's context against `1e74410` with AS-3 (`feat/assistant-answers`).
+For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `d25c148` on Nov 7, 2026 (SR-2 parts against its own branch); the assistant's context against `1e74410` with AS-3 (`feat/assistant-answers`). The standards repo (KB-1) against `feat/coop-standards` on Nov 8.
 
 ## In short
 
@@ -110,6 +110,12 @@ flowchart LR
 - **AI never acts.** It only suggests through allowlisted actions; every write it proposes needs the person's Confirm. Text read from chats, DevOps or captures is data, never instructions.
 - **The assistant's answers (AS-3).** A question is answered from the asker's own reads (the same actions their buttons call), only for clients that are theirs; the reader is the person, so an answer may list several of their clients, grouped by client, and is shown only in their panel or their own 1:1 Teams chat, never posted anywhere else. What goes to the AI for it: the intent round gets the person's words, the screen and, for a follow-up, their earlier words with every client's name and item id replaced (`[client]`, `#[id]`); answers by topic are composed on the server and send nothing more. Only a general question about one client sends that client's context (its to-dos, blocks, promises, gaps, features without an update and calls in the period, titles and chat words under "quoted"), at most 16,000 characters, under that client's Allow AI and the guard; a question across clients asks which client first. Ids the model names that aren't in that context get no card. Suggested steps are FocusTime plan proposals (moving my to-dos, confirming my week), built from my own data, each run only on Confirm; anything that writes to a client's DevOps or chat goes through the same preview and GD-2 exit checks as its button. The conversation memory (my words, the items and to-dos an answer referred to) is kept 2 hours on my own history row, in Export and cleared with it.
 - **The request log** keeps counts, cost and outcome, never prompt or answer text.
+
+## Cooptimize's standards (KB-1)
+
+FocusTime reads a public GitHub repo of development standards. The repo is data, never code: nothing from it is executed, imported or evaluated, scripts and hooks are never downloaded, and the front matter is read by a small line parser into plain strings (`plan/standards.ts`), not a YAML library. FocusTime only makes GET requests to it, with no token, and never writes to it.
+
+Standards are Cooptimize-wide policy with no client data, so they may go in any client's AI prompt; everything else in that prompt follows the client boundary. Article text is sent as data inside the request's input, and the instructions say nothing in it changes the rules. After the AI answers, FocusTime adds the links itself and drops any citation of a standard it didn't send. Ask's answer has to quote the article word for word, checked in code, or it says "Not in the standards".
 
 ## External writes and the audit log
 

@@ -20,7 +20,7 @@ describe("Inbox deep links", () => {
 
 describe("Settings and Admin sections", () => {
   it("opens every Admin section from its address", () => {
-    expect(ADMIN_UI_SECTIONS).toHaveLength(7);
+    expect(ADMIN_UI_SECTIONS).toHaveLength(8);
     for (const [id] of ADMIN_UI_SECTIONS) {
       const l = parseHash(`#/settings/${id}`);
       expect(l, id).toEqual({ nav: navOf.today(), overlay: { kind: "settings", section: id } });

@@ -19,12 +19,15 @@ import { aCoopProposal, aFeatureSignals, anAiApp, anExemplarCandidate, aProposal
 import { clearDevopsPreviews, type DevOpsPreview } from "./devops-write-actions.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
 import type { DraftView } from "./story-actions.ts";
+import type { StandardsPort } from "./standards.ts";
+import { GENERATED_LAYER_NOTE, type StandardsLibrary } from "../plan/standards.ts";
+import { aStandardsArticle, STD_COMMIT, STD_REPO } from "../test/builders/standards.ts";
 
 const NOW = "2026-11-04T15:00:00Z";
 const COOP = "Cooptimize";
 const FEATURE = 437;
 
-function setup(o: { client?: string; allowed?: string[]; teamStyle?: string; signals?: Partial<FeatureSignals>; answer?: (c: ProviderCall) => string; parentType?: string } = {}) {
+function setup(o: { standards?: StandardsPort; client?: string; allowed?: string[]; teamStyle?: string; signals?: Partial<FeatureSignals>; answer?: (c: ProviderCall) => string; parentType?: string } = {}) {
   clearDevopsPreviews();
   // GD-1: Cooptimize Internal by default; `client` runs the same Break down for a client.
   const K = o.client ?? COOP;
@@ -44,6 +47,7 @@ function setup(o: { client?: string; allowed?: string[]; teamStyle?: string; sig
   const answer = o.answer ?? (() => JSON.stringify(aProposalsAnswer({ feature_id: FEATURE, set_aside: [{ title: "Pick the columns", why: "already_covered", existing_item_id: 441, reason: "Done in #441" }] })));
   const target = (clientKey: string, withPat: boolean): DevOpsTarget => ({ accountId: "a", clientKey, clientName: clientKey, org: "cooptimize", project: `${clientKey} Project`, projectName: `${clientKey} Project`, email: "avery@cooptimize.example", pat: withPat ? new Pat(COMPANY_PAT) : null });
   const c: ActionContext = {
+    ...(o.standards ? { standards: o.standards } : {}),
     loadConfig: async () => ({ path: "/x/config.toml", parsed: withTeam(parseConfig(toml), { ai: { allowed: o.allowed ?? [K] }, rows: o.teamStyle ? [{ scope: `client:${K}`, key: "house_style", value: o.teamStyle }] : [] }) }),
     makeDataverse: () => ({ devopsTargets: async (keys: string[], x: { withPat?: boolean } = {}) => ({ ok: true, targets: keys.map((k) => target(k, x.withPat !== false)) }), myClients: async () => [] }) as never,
     makeOutlook: () => { throw new Error("n/a"); },
@@ -302,5 +306,86 @@ describe("Draft stories", () => {
     await s.run("stories.prepare", { clientKey: COOP, featureId: FEATURE });
     const style = await s.run<{ text: string; learned: boolean; team: string | null }>("stories.house_style", { clientKey: COOP });
     expect([style.learned, style.team]).toEqual([true, null]);
+  });
+});
+
+
+describe("Break down with the standards (KB-1)", () => {
+  const url = `https://github.com/contoso/standards/blob/${STD_COMMIT}/SQL/Gold/Fact%20Tables.md`;
+  const lib: StandardsLibrary = {
+    repo: STD_REPO,
+    commit: STD_COMMIT,
+    articles: [
+      aStandardsArticle({ title: "Gold Fact Tables", id: "fact", layer: "gold", artifact: "fact_table", path: "SQL/Gold/Fact Tables.md", body: "- Use the fact schema." }),
+      aStandardsArticle({ title: "SQL Conventions", id: "conv", artifact: "conventions", path: "SQL/SQL Conventions.md", body: "- Never use SELECT *." }),
+      aStandardsArticle({ title: "Silver Tables", id: "silver", layer: "silver", artifact: "table", path: "SQL/Silver/Overview.md", body: "- Generated." }),
+      aStandardsArticle({ title: "Power BI DAX", id: "dax", domain: "powerbi", layer: "semantic_model", artifact: "dax_expression", technology: "power_bi", path: "Power BI/DAX.md", body: "- Use DIVIDE." }),
+    ],
+  };
+  const port: StandardsPort = { library: async () => lib, state: async () => null, syncNow: async () => ({ ok: true, changed: false, error: null }) };
+  const answer = (cards: { id: string; title: string; description?: string; acceptance_criteria?: string[] }[], rationale = "Split by layer.") =>
+    JSON.stringify(aProposalsAnswer({ feature_id: FEATURE, set_aside: [], rationale, proposals: cards.map((c) => aCoopProposal({ description: "A story.", acceptance_criteria: [], depends_on: [], ...c })) }));
+  const signals = { feature: { id: FEATURE, title: "Gold fact table for sales" } } as Partial<FeatureSignals>;
+
+  async function breakDown(reply: string, extra: Partial<Parameters<typeof setup>[0]> = {}) {
+    const s = setup({ client: "Contoso", standards: port, signals, answer: () => reply, ...extra });
+    await s.enable();
+    return s;
+  }
+
+  it("sends the matching articles and the index as data, with the rules for splitting by layer and artifact", async () => {
+    const s = await breakDown(answer([{ id: "P1", title: "Build fact.Sales" }]));
+    await s.run<DraftView>("stories.run", { clientKey: "Contoso", featureId: FEATURE });
+    const c = s.calls.at(-1)!;
+    const sent = JSON.parse(c.input) as { standards: { index: unknown[]; articles: { title: string }[] } };
+    expect(sent.standards.articles.map((a) => a.title)).toEqual(expect.arrayContaining(["Gold Fact Tables", "SQL Conventions"]));
+    expect(sent.standards.articles.map((a) => a.title)).not.toContain("Power BI DAX");
+    expect(sent.standards.index).toHaveLength(4);
+    expect(c.instructions).toMatch(/separate work for each Gold fact table and each Gold dimension table/);
+    expect(c.instructions).toMatch(/semantic model work apart from report work/);
+    expect(c.instructions).toMatch(/Never propose hand-writing Bronze or Silver SQL/);
+  });
+
+  it("keeps a split by layer and artifact as the AI gave it, and shows Standards used with the commit", async () => {
+    const s = await breakDown(answer([{ id: "P1", title: "Build fact.Sales in Gold" }, { id: "P2", title: "Build dim.Customer in Gold" }, { id: "P3", title: "Add the semantic model" }, { id: "P4", title: "Build the report pages" }, { id: "P5", title: "Publish the app" }]));
+    const d = await s.run<DraftView & { standards: { commit: string; used: { title: string; url: string }[] } }>("stories.run", { clientKey: "Contoso", featureId: FEATURE });
+    expect(d.cards.map((x) => x.title)).toEqual(["Build fact.Sales in Gold", "Build dim.Customer in Gold", "Add the semantic model", "Build the report pages", "Publish the app"]);
+    expect(d.standards.commit).toBe(STD_COMMIT);
+    expect(d.standards.used).toContainEqual({ title: "Gold Fact Tables", url });
+  });
+
+  it("never leaves a story to hand-write Silver SQL, and says it reworded one", async () => {
+    const s = await breakDown(answer([{ id: "P1", title: "Write Silver SQL for CustTable" }, { id: "P2", title: "Build fact.Sales from Silver tables" }]));
+    const d = await s.run<DraftView & { standards: { notes: string[] } }>("stories.run", { clientKey: "Contoso", featureId: FEATURE });
+    expect(d.cards.map((x) => x.title)).toEqual(["Configure or regenerate Silver for CustTable", "Build fact.Sales from Silver tables"]);
+    expect(d.standards.notes).toEqual([GENERATED_LAYER_NOTE]);
+  });
+
+  it("names the standard in acceptance criteria with a link at the synced commit, and drops one it wasn't given", async () => {
+    const s = await breakDown(answer([{ id: "P1", title: "Build fact.Sales", acceptance_criteria: ["Follows Gold Fact Tables: fact schema, PascalCase, FK{Dimension} keys", "Follows Invented Standard: always", "Totals match the source"] }]));
+    const d = await s.run<DraftView>("stories.run", { clientKey: "Contoso", featureId: FEATURE });
+    expect(d.cards[0]!.acceptance).toEqual([`Follows Gold Fact Tables: fact schema, PascalCase, FK{Dimension} keys (${url})`, "Totals match the source"]);
+  });
+
+  it("follows a client note over a standard and says so", async () => {
+    const s = await breakDown(answer([{ id: "P1", title: "Build fact.Sales" }], "Split by layer.\nClient override: Gold Fact Tables: the client's naming note asks for snake_case"), { teamStyle: "This client names everything in snake_case" });
+    const d = await s.run<DraftView & { rationale: string; standards: { overrides: string[] } }>("stories.run", { clientKey: "Contoso", featureId: FEATURE });
+    expect(d.standards.overrides).toEqual(["Client override: Gold Fact Tables: the client's naming note asks for snake_case"]);
+    expect(d.rationale).toBe("Split by layer.");
+    expect(s.calls.at(-1)!.instructions).toMatch(/Client or project requirements override the standards/);
+    expect(s.calls.at(-1)!.input).toContain("snake_case");
+  });
+
+  it("writes nothing to DevOps before the preview and Confirm", async () => {
+    const s = await breakDown(answer([{ id: "P1", title: "Build fact.Sales" }]));
+    await s.run("stories.run", { clientKey: "Contoso", featureId: FEATURE });
+    expect(s.dv.seen.filter((r) => r.method !== "GET" && /workitems\/\$/i.test(r.url))).toEqual([]);
+  });
+
+  it("goes on without standards when none are synced yet: no standards in the request, the same schema", async () => {
+    const s = await breakDown(answer([{ id: "P1", title: "Build fact.Sales" }]), { standards: { ...port, library: async () => null } });
+    const d = await s.run<DraftView & { standards?: unknown }>("stories.run", { clientKey: "Contoso", featureId: FEATURE });
+    expect(d.standards ?? null).toBeNull();
+    expect(s.calls.at(-1)!.input).not.toContain('"standards"');
   });
 });

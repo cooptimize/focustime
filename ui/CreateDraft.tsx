@@ -2,6 +2,7 @@
 // the AI version side by side (Use this on either, and the chosen side is editable), the parent picked or confirmed,
 // then Preview in DevOps opens the write framework's preview (confirm, read back, audit log, undo). Nothing is created
 // here. While AI is still writing it says so and keeps my text usable; AI off is a plain draft, no error.
+import { StandardsNote } from "./StandardsNote.tsx";
 import { TextBox } from "./TextBox.tsx";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { DraftAiView, WeekLoadData } from "../actions/types.ts";
@@ -159,6 +160,7 @@ export function CreateDraftDialog({ draftId, data, onClose, onChanged }: { draft
           )}
         </header>
         {/* GD-2: the check after generation replaced another client's name in the AI version. */}
+        {s === "ai" && ai && <StandardsNote s={draft?.ai?.standards} />}
         {s === "ai" && ai && draft?.ai?.note === "Another client's name was removed" && <p className="names-removed">Another client's name was removed: "another client" is written instead. Edit freely.</p>}
         {s === "ai" && !ai ? (
           <p className="muted cd-ai-note" role="status">{running || state === "writing" ? "AI still writing…" : draft && state ? draftRowText(state === "no_pat" ? "plain" : state, draft, clientName) : ""}</p>

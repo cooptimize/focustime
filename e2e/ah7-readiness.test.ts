@@ -61,7 +61,7 @@ describe.skipIf(!CHROMIUM)("AH-7: Readiness you can finish (browser, demo mode)"
     const { page, errors } = await open();
     const n = async (word: string) => Number((await kind(page, word).locator("strong").textContent())!.trim());
     const counts = { stories: await n("Needs stories"), dates: await n("No target date"), sized: await n("Unsized") };
-    expect(counts).toEqual({ stories: 3, dates: 4, sized: 2 });
+    expect(counts).toEqual({ stories: 4, dates: 5, sized: 2 });
     await expect(kind(page, "Unassigned").getAttribute("aria-disabled")).resolves.toBe("true");
     await kind(page, "No target date").click();
     await expect.poll(() => kind(page, "No target date").getAttribute("aria-pressed")).toBe("true");
@@ -73,7 +73,7 @@ describe.skipIf(!CHROMIUM)("AH-7: Readiness you can finish (browser, demo mode)"
     await shot(page, "counts");
     await kind(page, "No target date").click();
     await expect.poll(() => kind(page, "No target date").getAttribute("aria-pressed")).toBe("false");
-    await expect.poll(() => listed(page).count()).toBe(7);
+    await expect.poll(() => listed(page).count()).toBe(8);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

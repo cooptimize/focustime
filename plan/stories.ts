@@ -6,6 +6,7 @@ import type { JsonSchema } from "../ai/types.ts";
 import type { Prices } from "../ai/cost.ts";
 import { costMicros } from "../ai/cost.ts";
 import type { StorySize } from "./estimate.ts";
+import type { StandardsUsed } from "./standards.ts";
 
 // ---------- signals ----------
 
@@ -180,6 +181,8 @@ export type DraftRequestInput = {
   exemplars: readonly Exemplar[];
   style: string;
   note: string;
+  /** KB-1: the standards that apply, as data. */
+  standards?: unknown;
   /** For Regenerate one: the cards kept as they are (the AI writes one that fits beside them). */
   keep?: readonly { id: string; title: string }[];
   /** For Regenerate one: the card to replace. */
@@ -202,6 +205,7 @@ export function draftInput(r: DraftRequestInput): string {
     house_style: t(r.style),
     examples: r.exemplars.map((e) => ({ title: t(e.title), summary: t(e.summary), stories: e.stories.map((s) => ({ title: t(s.title), summary: t(s.summary) })) })),
     note_from_the_person: t(r.note.trim()),
+    ...(r.standards ? { standards: r.standards } : {}),
     ...(r.replace ? { regenerate_only: { id: r.replace.id, previous_title: t(r.replace.title), keep_as_they_are: (r.keep ?? []).map((k) => ({ id: k.id, title: t(k.title) })), rule: "Answer with exactly one proposal, with this id, that fits beside the kept ones." } } : {}),
   };
   return JSON.stringify(body, null, 1);
@@ -373,6 +377,8 @@ export type StoryDraft = {
   costMicros: number; createdAt: string; updatedAt: string;
   /** GD-2: the AI's cards had another client's name replaced by "another client" (the draft shows it). */
   namesRemoved?: boolean;
+  /** KB-1: "Standards used" under the draft. */
+  standards?: StandardsUsed | null;
 };
 export type StoryDraftBody = Omit<StoryDraft, "id" | "clientKey" | "featureId" | "createdAt" | "updatedAt">;
 /** A client's house style: the computed one (cached a week) and the person's edit, which wins until reset. */
@@ -387,6 +393,8 @@ export type SentSummaryInput = {
   examples: number;
   clientName: string;
   style: Pick<HouseStyle, "learned" | "edited"> | null;
+  /** KB-1: how many standards articles go, and the commit; absent before the first sync. */
+  standards?: { articles: number; commit: string } | null;
 };
 
 /**
@@ -411,6 +419,7 @@ export function sentSummary(r: SentSummaryInput): string[] {
     kids === 0 ? "No existing children (there are none)" : `${kids} existing ${kids === 1 ? "child" : "children"}: titles and states, so they aren't proposed again`,
     r.examples === 0 ? `No examples: too few of ${r.clientName}'s own items with children to learn from` : `${r.examples} ${r.examples === 1 ? "example" : "examples"} from ${r.clientName}'s own items, with their children`,
     s?.edited ? `House style: set for ${r.clientName} by a FocusTime admin` : s?.learned ? `House style: learned from ${r.clientName}'s own items` : "House style: the default",
+    ...(r.standards ? [r.standards.articles ? `${r.standards.articles} of Cooptimize's standards that fit this work, and the titles of the rest (commit ${r.standards.commit.slice(0, 7)})` : `The titles of Cooptimize's standards (commit ${r.standards.commit.slice(0, 7)}); none fit this work`] : []),
     "Your note, if you write one",
     "Text only. Email addresses are left out, and everything goes as data, never as instructions",
   ];

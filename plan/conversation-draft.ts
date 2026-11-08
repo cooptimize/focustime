@@ -6,6 +6,7 @@
 import type { JsonSchema } from "../ai/types.ts";
 import { withoutEmails } from "./asks-ai.ts";
 import { oneLine, type ItemDraft } from "./conversations.ts";
+import { GENERATED_LAYER_NOTE, shapeItem, splitOverrides, type StandardsUsed } from "./standards.ts";
 
 export const DRAFT_TASK = "conversations.draft_item";
 export const COMMENT_TASK = "conversations.comment";
@@ -35,17 +36,28 @@ export const DRAFT_SCHEMA: JsonSchema = {
   required: ["title", "asked", "check_first", "likely_change", "open_questions", "level", "parent_feature", "likely_item", "acceptance_criteria"],
   additionalProperties: false,
 };
-export type DraftAnswer = { title: string; asked: string; check_first: string[]; likely_change: string; open_questions: string[]; level: "bug" | "story" | "feature"; parent_feature: number | null; likely_item: number | null; acceptance_criteria: string[] };
+export type DraftAnswer = { /** KB-1: only when standards were sent. */ standards_note?: string | null; title: string; asked: string; check_first: string[]; likely_change: string; open_questions: string[]; level: "bug" | "story" | "feature"; parent_feature: number | null; likely_item: number | null; acceptance_criteria: string[] };
+
+/** KB-1: the schema with standards_note, only when standards go with the request. */
+export const DRAFT_SCHEMA_STANDARDS: JsonSchema = { ...DRAFT_SCHEMA, properties: { ...(DRAFT_SCHEMA.properties as Record<string, JsonSchema>), standards_note: { type: ["string", "null"] } }, required: [...(DRAFT_SCHEMA.required as string[]), "standards_note"] };
+
+/** KB-1: links on citations, Bronze and Silver reworded, the override stated, what was used recorded. */
+export function withStandards(d: ItemDraft, note: string | null | undefined, used: StandardsUsed): ItemDraft {
+  const x = shapeItem({ title: d.title, description: d.likelyChange, acceptance: d.acceptance ?? [] }, used.used);
+  const asked = shapeItem({ title: d.asked, description: "", acceptance: [] });
+  return { ...d, title: x.title, asked: asked.title, likelyChange: x.description, acceptance: x.acceptance, standards: { ...used, overrides: splitOverrides(note ?? "").overrides, notes: x.changed || asked.changed ? [GENERATED_LAYER_NOTE] : [] } };
+}
 
 export type DraftMessage = { ref: string; from: string; side: "client" | "Cooptimize"; at: string; text: string };
 
 /** The draft request's input: the conversation (title, summary, messages as text) and the client's open features and items. */
-export function draftInput(o: { clientName: string; title: string; summary: string; messages: readonly DraftMessage[]; features: readonly { id: number; title: string }[]; items: readonly { id: number; title: string; type: string }[] }): string {
+export function draftInput(o: { clientName: string; title: string; summary: string; messages: readonly DraftMessage[]; features: readonly { id: number; title: string }[]; items: readonly { id: number; title: string; type: string }[]; standards?: unknown }): string {
   return JSON.stringify({
     client: o.clientName,
     conversation: { title: withoutEmails(o.title), summary: withoutEmails(o.summary), messages: o.messages.map((m) => ({ ...m, text: withoutEmails(m.text.slice(0, 2000)) })) },
     open_features: o.features.slice(0, 40).map((f) => ({ id: f.id, title: withoutEmails(f.title.slice(0, 200)) })),
     open_items: o.items.slice(0, 50).map((i) => ({ id: i.id, title: withoutEmails(i.title.slice(0, 200)), type: i.type })),
+    ...(o.standards ? { standards: o.standards } : {}),
   });
 }
 

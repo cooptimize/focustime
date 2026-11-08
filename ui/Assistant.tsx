@@ -92,7 +92,8 @@ export function AssistantPanel(props: {
   }, [text, busy, context]);
 
   const replaceProposal = (p: Proposal) => setEntries((xs) => (xs ?? []).map((x) => ({ ...x, proposals: x.proposals.map((q) => (q.id === p.id ? p : q)) })));
-  const open = (href: string) => (href === COMMANDS_HREF ? onOpen(href) : (onOpen(href), phone && onClose()));
+  // KB-1: a standards article is on GitHub: a new tab, the panel stays.
+  const open = (href: string) => (/^https?:/.test(href) ? void window.open(href, "_blank", "noopener") : href === COMMANDS_HREF ? onOpen(href) : (onOpen(href), phone && onClose()));
 
   const off = gate && gate.assistant !== "ok";
   return (

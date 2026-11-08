@@ -1,6 +1,6 @@
 # Architecture
 
-For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `4088995` on Nov 7, 2026 (SR-2 parts against its own branch; Status's SR-3 parts against `feat/report-finish` on Nov 8); the assistant against `1e74410` with AS-3 (`feat/assistant-answers`); Deployment items against `feat/deployment-items` on Nov 8; the Inbox against `feat/inbox-everything` on Nov 8.
+For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `4088995` on Nov 7, 2026 (SR-2 parts against its own branch; Status's SR-3 parts against `feat/report-finish` on Nov 8); the assistant against `1e74410` with AS-3 (`feat/assistant-answers`); Deployment items against `feat/deployment-items` on Nov 8; the Inbox against `feat/inbox-everything` on Nov 8. Cooptimize's standards (KB-1) against `feat/coop-standards` on Nov 8.
 
 FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a React app and a JSON action API, keeps its data in one SQL database, and talks to Microsoft Graph, Dataverse, Azure DevOps, Google Calendar, Azure Resource Manager and OpenAI. The per-folder detail is in [docs/architecture.md](../architecture.md); this page is the overview.
 
@@ -41,6 +41,7 @@ App jobs run at the start of each slow pass, each with its own next-due time (`s
 | `retention` | The daily purge (see [Data](data.md#retention)) |
 | `meeting_capture` | Registered client calls: occurrences, transcripts after each call, the AI pass |
 | `devops_poll` | Central DevOps reads: changed items per client, the change log |
+| `standards_sync` | KB-1: Cooptimize's standards from GitHub: at startup, then hourly while FocusTime is in use; never wakes an idle server |
 | `requests_poll` | Shared polling of registered client chats, every 5 minutes in followers' working hours; also records their co-working calls (CW-1, `chat_calls`) |
 
 A job that must run once per period claims it with a unique insert in `job_claims` (`store/retention.ts` `claimPeriod`), so a restart or a second replica can't run it twice; a failed run gives its claim back. Hourly maintenance hard-deletes accounts past their 30 days and sweeps expired sessions.
@@ -94,6 +95,16 @@ The week, risks, free time, budgets and estimates are pure code in `week/` and `
 - **Finishing the report (SR-3).** Upcoming PTO and Holidays is the next 14 days: the team's Time Off Tracker days and Dataverse's Working Days Calendar rows with Holiday Observed = Yes (`sources/dataverse/holidays.ts`), each source failing on its own with a note (`ptoSection`, `upcomingRows`). "You worked on this" is `contributions` in `plan/status-report.ts`: since the watermark, a story under the feature assigned to me and changed, my state change or comment from DV-1's change log, a story I created through FocusTime (the write log), my to-do or timebox, or my comment on the feature; no new DevOps read. Such features with no comment of mine are Needs your update (`needsYou` on `status.load` and `status.report`) and get a suggested line from `status.suggest`: one standard-tier AI request per client through `ai/` (GD-2 scrub, Internal exempt, held in memory 6 hours), or the template "Worked on: …" with AI off. The client report takes `added` feature ids (Add a feature over `catalog`, the client's feature tier in backlog order). Lines are typed and kept in the browser (`ui/status-lines.ts`, `localStorage`) until Push all. The nudge counts Needs your update first and opens `#/week/status/needs`.
 
 A card shows one status: At risk with its short reason, Too much planned, Fits just or Fits (`plan/blockstatus.ts`). Budgets and estimates are in hours (`plan/weekplan.ts`, `plan/estimate.ts`).
+
+## Cooptimize's standards in the AI (KB-1)
+
+`server/standards-job.ts` runs the sync (`sources/github/standards.ts`, GET only) into `standards_articles` (`store/standards-store.ts`). `plan/standards.ts` is the pure part: the contract, retrieval, what goes with a request, and what happens to the answer. `actions/standards.ts` gives the draft paths one lookup, with the client's data platform and source systems from its Rules.
+
+**Retrieval** (`retrieveStandards`). Match keys are exact, in snake_case: the text's words and runs of up to three words against each article's `layer`, `artifact` and `technology`, plus title words. A domain joins only through a specific key, so ordinary words don't bring one in. In a domain that's in play, an article matches by artifact or a title word, then layer, then technology; the domain's layer-agnostic articles are its general ones. The client's platform adds that platform's articles. `domain: source` articles ride on any SQL or Power BI work when the client's Source systems name them (`d365` serves both; None excludes them). The title index of every active article always goes. Matched articles go whole up to 6,000 tokens, narrowest scope first; the rest are listed as left out.
+
+**Drafts.** `stories.draft`, `capture.prepare` and `conversations.draft_item` get `standards` in their input and the rules in their instructions. In code afterwards (`shapeItem`): "Follows <title>: ..." acceptance lines get the article's link at the synced commit, citations of anything not sent are dropped, and hand-written Bronze or Silver SQL is reworded as configure or regenerate. The draft keeps `standards` (`StandardsUsed`: commit, titles and links, left out, overrides, notes), shown by `ui/StandardsNote.tsx`.
+
+**Ask.** The intent round's `standards` topic goes to `standardsAnswer` in `assistant/service.ts`: the matching articles only, no client, one `assistant.standards` request. The answer is shown only if its quote is really in the article it names; otherwise "Not in the standards".
 
 ## A normal request
 

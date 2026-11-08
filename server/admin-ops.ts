@@ -1,6 +1,7 @@
 // ADM-1: what the admin console reads and does on this FocusTime (server/main.ts hands in the stores; the demo has
 // its own in server/demo.ts). Names, dates, counts and yes or no only: never anyone's plan, picks, follow-ups,
 // captures, focus sessions, tokens, PATs, AI request text, or chat messages. Each read below is a count or a flag.
+import type { StandardsPort } from "../actions/standards.ts";
 import type { StatusRegistry } from "../actions/status-rows.ts";
 import type { AdminCheck } from "../actions/admin.ts";
 import type { AdminOps, PersonHealth } from "../actions/admin-actions.ts";
@@ -15,6 +16,8 @@ import type { BuildInfo } from "./buildinfo.ts";
 import type { Logger } from "../log/logger.ts";
 
 export type AdminOpsDeps = {
+  /** KB-1: the synced standards. */
+  standards?: StandardsPort;
   /** DV-1: the status rows registry Admin › Status renders (DevOps polling, and later sources). */
   statusRows?: StatusRegistry;
   check: AdminCheck;
@@ -66,6 +69,7 @@ const writePat = (clientKey: string): UserSecretAccount => `devops-write-pat:${c
 export function createAdminOps(d: AdminOpsDeps): AdminOps {
   let lastDirectory: { ok: boolean; message: string | null } = { ok: true, message: null };
   const ops: AdminOps = {
+    ...(d.standards ? { standards: d.standards } : {}),
     ...(d.statusRows ? { statusRows: d.statusRows } : {}),
     ...(d.scope ? { scope: d.scope } : {}),
     ...(d.assignees ? { assignees: d.assignees } : {}),

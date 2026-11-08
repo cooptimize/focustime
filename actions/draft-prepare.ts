@@ -8,6 +8,8 @@ import type { AppConfig } from "../config/schema.ts";
 import { NAME_REMOVED, NO_OTHER_CLIENTS } from "../plan/boundary.ts";
 import { MAX_CANDIDATES, MAX_EXAMPLES, offeredTypes, PREPARE_INSTRUCTIONS, PREPARE_TASK, prepareInput, prepareSchema, toDraftAi, WRITING_MS, type Candidate, type Example, type PrepareAnswer } from "../plan/capture-prepare.ts";
 import { typeOf, type ProcessModel } from "../plan/process.ts";
+import { STANDARDS_DRAFT } from "../plan/standards.ts";
+import type { StandardsLookup } from "./standards.ts";
 import { rankExemplars, type ExemplarCandidate } from "../plan/stories.ts";
 import type { DraftAi, DraftStory } from "../plan/types.ts";
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
@@ -30,6 +32,8 @@ export type PrepareContext = {
   /** The client's own past items for examples, or null. */
   pool: (cfg: AppConfig, clientKey: string) => Promise<ExemplarCandidate[] | null>;
   now: () => string;
+  /** KB-1: the standards that fit a piece of work; absent where none are synced. */
+  standards?: StandardsLookup;
   /** IB-1: whether a client key is Cooptimize Internal (clientAccounts' why "internal"). */
   isInternal?: (clientKey: string) => Promise<boolean>;
 };
@@ -123,9 +127,11 @@ async function prepare(ctx: PrepareContext, plan: PlanStore, draft: DraftStory):
     // GD-2 point 5: my note may name another client (my own words); the AI's version never does: the instructions say
     // so, and the check after it replaces any other client's name with "another client" and marks the draft.
     const internal = !!(await ctx.isInternal?.(draft.clientKey).catch(() => false));
-    const r = await ai.run<PrepareAnswer>({ name: PREPARE_TASK, client: draft.clientKey, instructions: internal ? PREPARE_INSTRUCTIONS : `${PREPARE_INSTRUCTIONS}\n${NO_OTHER_CLIENTS}`, mentions: { input: "words", answer: "scrub" } }, prepareInput({ level, clientName, note, title: draft.title, types, candidates, examples, style }), prepareSchema(types, ids));
+    // KB-1: the standards that fit this note and its parent, as data.
+    const std = (await ctx.standards?.(draft.clientKey, [note, draft.title, parent?.title ?? ""]).catch(() => null)) ?? null;
+    const r = await ai.run<PrepareAnswer>({ name: PREPARE_TASK, client: draft.clientKey, instructions: [PREPARE_INSTRUCTIONS, ...(internal ? [] : [NO_OTHER_CLIENTS]), ...(std ? [STANDARDS_DRAFT] : [])].join("\n"), mentions: { input: "words", answer: "scrub" } }, prepareInput({ level, clientName, note, title: draft.title, types, candidates, examples, style, ...(std ? { standards: std.input } : {}) }), prepareSchema(types, ids, { standards: !!std }));
     if (!r.ok) return plan.setDraftAi(draft.id, plain(OFF_KINDS.has(r.error.kind) ? "off" : "failed", r.error.kind === "refused_client" ? DRAFT_HELD : r.error.message, ranAt));
-    const made = toDraftAi(r.value, { level, types, candidateIds: ids, hasParent: draft.parentItemId !== null, ranAt });
+    const made = toDraftAi(r.value, { level, types, candidateIds: ids, hasParent: draft.parentItemId !== null, ranAt, ...(std ? { standards: std.used } : {}) });
     if ("problem" in made) return plan.setDraftAi(draft.id, plain("failed", "The AI's answer wasn't usable", ranAt));
     return plan.setDraftAi(draft.id, r.namesRemoved ? { ...made, note: NAME_REMOVED } : made);
   } catch {

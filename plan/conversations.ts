@@ -6,6 +6,7 @@
 // promise at most). Status is decided here from facts, never by the AI: New until a Cooptimizer answers, then In
 // discussion, <Name> committed while a commitment is open, Tracked #id once an item is linked, Resolved and Closed only
 // by a person. Nothing here does I/O or logs.
+import type { StandardsUsed } from "./standards.ts";
 import { userZone } from "../week/zone.ts";
 import type { JsonSchema } from "../ai/types.ts";
 import { hasPhrase, isAcknowledgement } from "./asks.ts";
@@ -123,6 +124,8 @@ export type Commitment = {
 
 /** A DevOps item drafted from a whole conversation: a path of action, a suggested type and parent. */
 export type ItemDraft = {
+  /** KB-1: "Standards used" under the draft. */
+  standards?: StandardsUsed | null;
   title: string;
   asked: string;
   checkFirst: string[];

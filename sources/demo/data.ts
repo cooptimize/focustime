@@ -175,6 +175,8 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
     [1113, "User Story", "New", 1110, "Export button on the order page", "Priya Shah"],
     [1114, "User Story", "Closed", 1110, "Order export API endpoint", ME],
     [1120, "Feature", "New", 1100, "Supplier onboarding", ME, null],
+    // KB-1: a data feature, for Break down with the standards.
+    [1160, "Feature", "New", 1100, "Sales reporting: Gold fact and dimensions, semantic model and report", ME, null],
     [1130, "User Story", "Active", null, "Fix login timeout on mobile", ME],
     [1131, "Bug", "Active", null, "Invoice PDF totals round wrong", ME],
     // Step 17: two more features targeting December (a crowded month in Plan ahead).
@@ -235,6 +237,7 @@ const UNSIZED = new Set([1113, 2213]);
 /** DM-1: descriptions where the demo shows them (Break down reads Supplier onboarding's; the rest are one line). */
 const DESCRIPTIONS: Record<number, string> = {
   1120: "<div>Suppliers sign up through the portal instead of emailing the purchasing team. They enter company details, upload their certificates and choose payment terms; purchasing reviews and approves each one.</div><div>Today onboarding takes about two weeks of back and forth.</div>",
+  1160: "<div>Sales numbers in one place: a Gold fact table for sales orders, a customer dimension, a semantic model over them and a sales report in Power BI.</div>",
   1110: "<div>Customers export their order history from the portal, filtered by date, as CSV.</div>",
   2210: "<div>Patients complete the intake form before their first visit, on a phone or at home.</div>",
 };

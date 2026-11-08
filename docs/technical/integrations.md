@@ -1,6 +1,6 @@
 # Integrations
 
-For engineers working on a source and IT reviewing what FocusTime asks for. Checked against `bc72446` on Nov 7, 2026 (with IN-2 on `feat/invite-send`; the holidays read against `feat/report-finish` on Nov 8).
+For engineers working on a source and IT reviewing what FocusTime asks for. Checked against `bc72446` on Nov 7, 2026 (with IN-2 on `feat/invite-send`; the holidays read against `feat/report-finish` on Nov 8). GitHub (KB-1) against `feat/coop-standards` on Nov 8.
 
 Every outside system is read only, except the named writes listed for each one below. Each source reports its own status (`ok`, `auth_required`, `unreachable`, `misconfigured` or `error`, `week/types.ts`). When one fails, people see that source's last good data with its age, or a plain message and the fix ("Connect Google Calendar", "Open Settings"), and the rest of FocusTime keeps working. Nothing stands in for a failed source: a real session never shows demo data.
 
@@ -88,6 +88,16 @@ Every outside system is read only, except the named writes listed for each one b
 **Sent.** Only through `ai/` after the guard (see [Security](security.md#ai-the-guard-and-redaction)): one client per request, structured output only.
 
 **Failure.** A typed error with a plain reason (AI isn't set up, a cap is reached, the client doesn't allow AI, the guard refused it; `ai/types.ts`); an answer that fails its schema is never shown and never retried.
+
+## GitHub (Cooptimize's standards)
+
+KB-1. FocusTime reads Cooptimize's public standards repo (`cooptimize/coop-standards` by default; repo and branch in Admin › Standards) so AI drafts and Ask can use it. `sources/github/standards.ts`.
+
+- **Read only and anonymous.** Every request is a GET with no token, no cookies and no redirects, to `api.github.com` (the default branch, its head commit, the file list) or `raw.githubusercontent.com` (one Markdown file at that commit). FocusTime never writes to the repo in any way: no commits, branches, pull requests, issues or comments.
+- **Data only.** Only paths that can be articles are fetched. Scripts, hooks, `standards.yml` and the retired `standards/` and `deprecation/` folders are never downloaded, and nothing from the repo is executed, imported or evaluated.
+- **What's kept.** Active articles (`status: active` front matter) with their path, front matter, SHA-256 and the repo commit, in the app tables `standards_articles` and `standards_sync`.
+- **When.** Once at startup, hourly while FocusTime is in use, and on Sync now. An unchanged commit reads no files. A failure keeps the last good copy and shows the error in Admin › Standards.
+- **Limits.** 60 anonymous API requests an hour per IP on GitHub's side; a check uses two.
 
 ## The Teams bot
 

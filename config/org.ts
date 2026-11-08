@@ -15,6 +15,7 @@ import { parseScope, ScopeInputError, type DevOpsScope } from "../plan/devops-sc
 import { GAP_KINDS, type GapKind } from "../plan/fixnext.ts";
 import { DeployItemsInputError, parseDeployItems, parsePlatform, type DeployItemsRule } from "../plan/deploy-items.ts";
 import type { DataPlatform } from "./deploy-catalog.ts";
+import { DEFAULT_STANDARDS_REPO, parseRepoUrl, SOURCE_SYSTEMS, validBranch, type SourceSystem } from "../plan/standards.ts";
 
 export type SettingKind = "rule" | "default" | "level" | "personal";
 export const KIND_NAMES: Record<SettingKind, string> = { rule: "Rule", default: "Default", level: "Default by level", personal: "Personal" };
@@ -91,6 +92,19 @@ const domains = (v: unknown): string[] => {
  * stored name a newer or older build doesn't know is ignored rather than making the whole value unreadable.
  */
 const standardTasks = (v: unknown): string[] => list(20, 64)(v).filter((x) => (FLEX_TASKS as readonly string[]).includes(x)).sort();
+/** KB-1: only a https://github.com/<owner>/<repo> address; requests are built from those two names. */
+const standardsRepo = (v: unknown): string => {
+  if (typeof v !== "string" || !parseRepoUrl(v)) throw new OrgInputError("Must be a https://github.com/<owner>/<repo> address");
+  return v.trim();
+};
+const standardsBranch = (v: unknown): string => {
+  if (typeof v !== "string" || !validBranch(v.trim())) throw new OrgInputError("Must be a branch name, or empty for the repo's default branch");
+  return v.trim();
+};
+const sourceSystems = (v: unknown): SourceSystem[] => {
+  if (!Array.isArray(v) || v.some((x) => !(SOURCE_SYSTEMS as readonly unknown[]).includes(x))) throw new OrgInputError("Must be D365 Finance and Operations, D365 Dataverse, or None");
+  return SOURCE_SYSTEMS.filter((s) => v.includes(s));
+};
 const orNull = <T>(p: (v: unknown) => T) => (v: unknown): T | null => (v === null ? null : p(v));
 /** DP-2: a deployment setting's parser, its plain words an admin input error. */
 const deployInput = <T>(p: (v: unknown) => T) => (v: unknown): T => {
@@ -258,6 +272,9 @@ export const ORG_SPECS = {
   // AH-3: Fix next looks at the top N of each backlog (epics, features, stories, each on its own), plus what's dated in
   // the next 4 weeks and what I own or lead.
   "ahead.fix_top_n": { kind: "rule", area: "organization", label: "Fix next looks at the top N of each backlog", builtin: 30, parse: intIn(10, 100, "items") },
+  // KB-1: where the standards are read from (public GitHub, read only). An empty branch is the repo's default branch.
+  "standards.repo_url": { kind: "rule", area: "organization", label: "Standards repo", builtin: DEFAULT_STANDARDS_REPO, parse: standardsRepo },
+  "standards.branch": { kind: "rule", area: "organization", label: "Standards branch", builtin: "", parse: standardsBranch },
   "org.new_person": { kind: "default", area: "organization", label: "Working week for new people", builtin: BUILTIN_NEW_PERSON, parse: newPerson },
 } satisfies Record<string, Spec>;
 export type OrgKey = keyof typeof ORG_SPECS;
@@ -285,6 +302,9 @@ export const CLIENT_SPECS = {
   // DP-2: the client's data platform (which list Quick capture offers; null: not set, both lists) and its own version
   // of the list. An older build reads neither key and ignores the rows.
   data_platform: { kind: "rule", area: "clients", label: "Data platform", builtin: null as DataPlatform | null, parse: orNull(deployInput(parsePlatform)) },
+  // KB-1: which D365 systems the client's data comes from (d365 articles serve both). Null: not set, both, like Coop's
+  // default for a project without source_systems. [] is None.
+  source_systems: { kind: "rule", area: "clients", label: "Source systems", builtin: null as SourceSystem[] | null, parse: orNull(sourceSystems) },
   deploy_items: { kind: "rule", area: "clients", label: "Deployment items", builtin: null as DeployItemsRule | null, parse: orNull(deployInput(parseDeployItems)) },
   // WT-1's process overrides, one switch per type in Admin › Clients (type names; matched without case).
   no_breakdown: { kind: "rule", area: "clients", label: "Types that don't need breakdown", builtin: [] as string[], parse: list(40, 100) },
@@ -361,6 +381,8 @@ export type OrgRules = {
   devops: { pollMinutes: number };
   /** AH-3: Fix next's Rule. */
   ahead: { fixTopN: number };
+  /** KB-1: where the standards are read from. */
+  standards: { repoUrl: string; branch: string };
   clients: Record<string, ClientRules>;
   levels: Record<Level, Guidance>;
   /** ADM-2: ids an admin flagged as automation accounts. */
@@ -368,8 +390,8 @@ export type OrgRules = {
   /** ADM-2 (D604): team values stored that no longer validate, each read as its built-in value (Status shows them). */
   problems: { key: string; label: string; fallback: unknown }[];
 };
-export type ClientRules = { color: string | null; allowAi: boolean; /** CV-3: rules-only grouping while AI is off (on by default). */ groupWithoutAi: boolean; attachmentsAi: boolean; openStates: string[]; /** GD-2: other names for the client, for the boundary's match. */ aliases: string[]; /** HK-7: match names only as written; null is the default rule. */ exactCase: boolean | null; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean; /** AH-2: null is automatic. */ devopsScope: DevOpsScope | null; /** AH-3: the gaps Fix next counts. */ fixGaps: GapKind[]; /** DP-2: null is not set. */ dataPlatform: DataPlatform | null; /** DP-2: null follows the catalog. */ deployItems: DeployItemsRule | null };
-export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, groupWithoutAi: true, attachmentsAi: false, openStates: [], aliases: [], exactCase: null, noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false, devopsScope: null, fixGaps: [...GAP_KINDS], dataPlatform: null, deployItems: null };
+export type ClientRules = { color: string | null; allowAi: boolean; /** CV-3: rules-only grouping while AI is off (on by default). */ groupWithoutAi: boolean; attachmentsAi: boolean; openStates: string[]; /** GD-2: other names for the client, for the boundary's match. */ aliases: string[]; /** HK-7: match names only as written; null is the default rule. */ exactCase: boolean | null; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean; /** AH-2: null is automatic. */ devopsScope: DevOpsScope | null; /** AH-3: the gaps Fix next counts. */ fixGaps: GapKind[]; /** DP-2: null is not set. */ dataPlatform: DataPlatform | null; /** KB-1: null is not set (both D365 systems), [] is None. */ sourceSystems: SourceSystem[] | null; /** DP-2: null follows the catalog. */ deployItems: DeployItemsRule | null };
+export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, groupWithoutAi: true, attachmentsAi: false, openStates: [], aliases: [], exactCase: null, noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false, devopsScope: null, fixGaps: [...GAP_KINDS], dataPlatform: null, sourceSystems: null, deployItems: null };
 
 const parsed = (r: OrgRow): unknown => {
   try {
@@ -409,7 +431,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
   for (const k of clientKeys) {
     const s = `client:${k}`;
     const c = <K extends ClientKeyName>(key: K) => valueOf(m, s, key, CLIENT_SPECS[key] as Spec, CLIENT_SPECS[key].builtin) as (typeof CLIENT_SPECS)[K]["builtin"];
-    clients[k] = { color: c("color"), allowAi: c("allow_ai"), groupWithoutAi: c("group_without_ai"), attachmentsAi: c("attachments_ai"), openStates: c("open_states"), aliases: c("aliases"), exactCase: c("exact_case"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden"), devopsScope: c("devops_scope"), fixGaps: c("fix_gaps"), dataPlatform: c("data_platform"), deployItems: c("deploy_items") };
+    clients[k] = { color: c("color"), allowAi: c("allow_ai"), groupWithoutAi: c("group_without_ai"), attachmentsAi: c("attachments_ai"), openStates: c("open_states"), aliases: c("aliases"), exactCase: c("exact_case"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden"), devopsScope: c("devops_scope"), fixGaps: c("fix_gaps"), dataPlatform: c("data_platform"), sourceSystems: c("source_systems"), deployItems: c("deploy_items") };
   }
   const levels = Object.fromEntries(
     LEVELS.map((l) => {
@@ -442,6 +464,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
       idleMinutes: o("org.idle_minutes"),
     },
     devops: { pollMinutes: o("devops.poll_minutes") },
+    standards: { repoUrl: o("standards.repo_url"), branch: o("standards.branch") },
     ahead: { fixTopN: o("ahead.fix_top_n") },
     clients,
     levels,

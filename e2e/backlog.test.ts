@@ -99,7 +99,7 @@ describe.skipIf(!CHROMIUM)("Ahead › Backlog (browser, demo mode)", () => {
     await page.getByRole("group", { name: "Clients" }).getByRole("button", { name: "Northwind Foods" }).click();
     await expect(page.locator(".bl-head h3").allTextContents()).resolves.toEqual(["Northwind Foods", "Atlas Freight"]);
     await page.locator(".ah-toolbar .ah-levels").getByRole("button", { name: "Features" }).click();
-    await expect(titles(page, "Northwind Foods")).resolves.toEqual(["Order history export", "Supplier onboarding", "Loyalty points", "Store locator"]);
+    await expect(titles(page, "Northwind Foods")).resolves.toEqual(["Order history export", "Supplier onboarding", "Sales reporting: Gold fact and dimensions, semantic model and report", "Loyalty points", "Store locator"]);
     await page.locator(".ah-toolbar .ah-levels").getByRole("button", { name: "Stories" }).click();
     await page.getByRole("group", { name: "Clients" }).getByRole("button", { name: "Atlas Freight" }).click();
     await page.getByRole("group", { name: "Clients" }).getByRole("button", { name: "Northwind Foods" }).click();

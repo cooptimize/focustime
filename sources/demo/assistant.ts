@@ -96,6 +96,7 @@ export function demoQuestion(said: string, today: string | null): { topic: strin
   const period = /\bnext week\b/.test(s) ? "next_week" : /\blast week\b/.test(s) ? "last_week" : /\btomorrow\b/.test(s) ? "tomorrow" : /\bweekend\b/.test(s) ? "weekend" : /\btoday\b/.test(s) ? "today" : "this_week";
   const q = (topic: string, lateOnly = false) => ({ topic, period, date: null, lateOnly });
   void today;
+  if (/\bstandards?\b|\bformatted\b/.test(s)) return q("standards");
   if (/\b(help me with|can you do|can you help|what can you)\b/.test(s)) return q("capabilities");
   if (/\blook out for\b|\bwatch out\b|\bplanning\b.*\?|\banything i should know\b/.test(s)) return q("plan_check");
   if (/\bpromises?\b/.test(s)) return q("promises", /\blate\b|\boverdue\b/.test(s));

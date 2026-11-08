@@ -3,6 +3,7 @@
 // draft row shows. One client per request: everything offered here comes from that client's own DevOps reads.
 import type { JsonSchema } from "../ai/types.ts";
 import type { DraftAi, DraftStory } from "./types.ts";
+import { GENERATED_LAYER_NOTE, shapeItem, splitOverrides, type StandardsUsed } from "./standards.ts";
 
 /** The task name the AI log keeps (never the input or the answer). */
 export const PREPARE_TASK = "capture.prepare";
@@ -36,11 +37,13 @@ export type PrepareInput = {
   candidates: Candidate[];
   examples: Example[];
   style: string | null;
+  /** KB-1: the standards that apply, as data. */
+  standards?: unknown;
 };
-export type PrepareAnswer = { title: string; description: string; acceptance_criteria: string; type: string | null; parent_id: number | null; parent_reason: string };
+export type PrepareAnswer = { title: string; description: string; acceptance_criteria: string; type: string | null; parent_id: number | null; parent_reason: string; /** KB-1: only when standards were sent. */ standards_note?: string | null };
 
 /** The strict schema for this request: the type and the parent can only be what was offered (or null). */
-export function prepareSchema(types: readonly string[], candidateIds: readonly number[]): JsonSchema {
+export function prepareSchema(types: readonly string[], candidateIds: readonly number[], o: { standards?: boolean } = {}): JsonSchema {
   const nullable = (values: readonly (string | number)[], t: "string" | "integer"): JsonSchema => (values.length ? { anyOf: [{ type: t, enum: [...values] }, { type: "null" }] } : { type: "null" });
   return {
     type: "object",
@@ -51,8 +54,9 @@ export function prepareSchema(types: readonly string[], candidateIds: readonly n
       type: nullable(types, "string"),
       parent_id: nullable(candidateIds, "integer"),
       parent_reason: { type: "string" },
+      ...(o.standards ? { standards_note: { type: ["string", "null"] } } : {}),
     },
-    required: ["title", "description", "acceptance_criteria", "type", "parent_id", "parent_reason"],
+    required: ["title", "description", "acceptance_criteria", "type", "parent_id", "parent_reason", ...(o.standards ? ["standards_note"] : [])],
     additionalProperties: false,
   };
 }
@@ -70,6 +74,7 @@ export function prepareInput(p: PrepareInput): string {
     offered_parents: p.candidates.slice(0, MAX_CANDIDATES).map((c) => ({ id: c.id, type: c.type, title: clip(c.title, 160) })),
     examples: p.examples.slice(0, MAX_EXAMPLES).map((e) => ({ title: clip(e.title, 160), summary: clip(e.summary, 300) })),
     house_style: p.style ? clip(p.style, 1200) : null,
+    ...(p.standards ? { standards: p.standards } : {}),
   });
 }
 
@@ -86,7 +91,9 @@ export function offeredTypes(o: { level: "story" | "feature"; levelTypes: readon
 }
 
 /** The answer as the draft's AI version, or why it can't be used. Trimmed; acceptance dropped for a feature. */
-export function toDraftAi(a: PrepareAnswer, o: { level: "story" | "feature"; types: readonly string[]; candidateIds: readonly number[]; hasParent: boolean; ranAt: string }): DraftAi | { problem: string } {
+export function toDraftAi(ans: PrepareAnswer, o: { level: "story" | "feature"; types: readonly string[]; candidateIds: readonly number[]; hasParent: boolean; ranAt: string; standards?: StandardsUsed | null }): DraftAi | { problem: string } {
+  const std = o.standards ? shapeItem({ title: ans.title, description: ans.description, acceptance: ans.acceptance_criteria.split(/\r?\n/) }, o.standards.used) : null;
+  const a = std ? { ...ans, title: std.title, description: std.description, acceptance_criteria: std.acceptance.join("\n") } : ans;
   const title = a.title.trim();
   if (!title) return { problem: "empty title" };
   if (title.length > 200) return { problem: "title too long" };
@@ -97,12 +104,14 @@ export function toDraftAi(a: PrepareAnswer, o: { level: "story" | "feature"; typ
     state: parentId !== null || o.hasParent ? "ready" : "needs_parent",
     title,
     description: clip(a.description.trim(), 8000) || null,
-    acceptance: o.level === "story" ? clip(a.acceptance_criteria.trim(), 8000) || null : null,
+    // KB-1: a feature keeps only its "Follows" lines, which are there only when standards were sent.
+    acceptance: o.level === "story" || o.standards ? clip(a.acceptance_criteria.trim(), 8000) || null : null,
     type: a.type,
     parentId,
     parentReason: clip(a.parent_reason.trim(), 300) || null,
     note: null,
     ranAt: o.ranAt,
+    ...(o.standards ? { standards: { ...o.standards, overrides: splitOverrides(a.standards_note ?? "").overrides, notes: std?.changed ? [GENERATED_LAYER_NOTE] : [] } } : {}),
   };
 }
 

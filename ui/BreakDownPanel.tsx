@@ -7,6 +7,8 @@
 // created and what wasn't, with Retry for the rest. Run never creates anything; nothing reaches DevOps before Create
 // all. With AI off for the client the panel says so; with no write PAT nothing is sent, not even the AI request.
 // Opened by focustime:break-down, DS-1's focustime:draft-stories, and PV-1's focustime:breakdown ({ clientKey, itemId }).
+import { StandardsNote } from "./StandardsNote.tsx";
+import type { StandardsUsed } from "../plan/standards.ts";
 import { MentionFlag } from "./DevOpsWrite.tsx";
 import { TextBox } from "./TextBox.tsx";
 import { CloseButton } from "./CloseButton.tsx";
@@ -22,7 +24,7 @@ import { WorkLink } from "./WorkLink.tsx";
 type Size = "S" | "M" | "L" | null;
 type CardStatus = { state: "not_sent" } | { state: "created"; itemId: number; url: string | null } | { state: "pending" | "unconfirmed" | "failed" | "refused" | "undone"; message: string; writeId: number };
 type Card = { id: string; title: string; description: string; acceptance: string[]; dependsOn: string[]; size: Size; evidence: string[]; questions: string[]; keep: boolean; status: CardStatus; after: string[]; sizeText: string };
-type Draft = { id: string; clientKey: string; featureId: number; featureTitle: string; storyType: string; note: string; /** GD-2: the AI's answer named another client and the check replaced it. */ namesRemoved?: boolean; cards: Card[]; rationale: string; setAside: { title: string; why: "out_of_scope" | "already_covered"; existing_item_id: number | null; reason: string }[]; published: number; left: number };
+type Draft = { id: string; clientKey: string; featureId: number; featureTitle: string; storyType: string; note: string; /** GD-2: the AI's answer named another client and the check replaced it. */ namesRemoved?: boolean; /** KB-1. */ standards?: StandardsUsed | null; cards: Card[]; rationale: string; setAside: { title: string; why: "out_of_scope" | "already_covered"; existing_item_id: number | null; reason: string }[]; published: number; left: number };
 type Prepared = {
   clientKey: string; clientName: string; featureId: number; featureTitle: string; featureType: string; storyType: string; childTypes: string[]; url: string;
   item: { state: string; priority: number | null; description: string };
@@ -565,6 +567,7 @@ function ReviewStep({ clientKey, draft, busy, onEdit, onRegenerate }: { clientKe
   return (
     <>
       {draft.namesRemoved && <p className="names-removed">Another client's name was removed: the AI's text had one, and "another client" is written instead. Edit freely.</p>}
+      <StandardsNote s={draft.standards} />
       {(draft.rationale || whyCount > 0) && (
         <details className="bd-why">
           <summary>Why these{whyCount ? `, and ${whyCount} left out` : ""}</summary>
