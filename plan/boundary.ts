@@ -107,6 +107,43 @@ export function mentionedClients(text: string, client: string, directory: readon
   return out;
 }
 
+/** GD-3: what a held message matched: the client's key, and the word exactly as the message has it. */
+export type HeldMatch = { key: string; word: string };
+
+/**
+ * GD-3: the words that make a message a mention, as the message has them (the same rule as mentionedClients without
+ * `records`: whole words, names and aliases only, outside links and email addresses, HK-7's Match only as written).
+ * A longer name wins over a shorter one inside it ("Harbor Health", not also "Harbor"). Never logged.
+ */
+export function mentionMatches(text: string, client: string, directory: readonly ClientEntry[]): HeldMatch[] {
+  const { list, ownWords } = others(client, directory);
+  const out: HeldMatch[] = [];
+  const seen = new Set<string>();
+  for (const c of list) {
+    if (seen.has(low(c.key))) continue;
+    seen.add(low(c.key));
+    let t = withoutLinks(text);
+    const words = wordsOf(c).filter((w) => !ownWords.has(low(w))).sort((a, b) => b.length - a.length);
+    for (const w of words) {
+      t = t.replace(nameRe(c, w, true), (m: string, pre: string) => {
+        const word = m.slice(pre.length);
+        if (!out.some((x) => x.key === c.key && x.word === word)) out.push({ key: c.key, word });
+        return " ".repeat(m.length);
+      });
+    }
+  }
+  return out;
+}
+
+/** GD-3: the words a held message matched, marked in its sanitized HTML; only text between tags is touched. */
+export function highlightMatches(html: string, words: readonly string[]): string {
+  const sorted = [...new Set(words)].filter(Boolean).sort((a, b) => b.length - a.length);
+  if (!sorted.length) return html;
+  const enc = (w: string) => w.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const re = new RegExp(`(^|[^\\p{L}\\p{N}])(${sorted.map((w) => esc(enc(w).trim()).replace(/\s+/g, "\\s+")).join("|")})(?=$|[^\\p{L}\\p{N}])`, "gu");
+  return html.split(/(<[^>]*>)/).map((part, i) => (i % 2 ? part : part.replace(re, (_m, pre: string, w: string) => `${pre}<mark class="held-match">${w}</mark>`))).join("");
+}
+
 /**
  * The text with each other client's words as "another client" (longest first, so "Fab Labs" goes before "Fab"),
  * outside links and email addresses, with how many were replaced. `records`: also their projects and known item ids.

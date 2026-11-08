@@ -468,3 +468,6 @@ What DS-1 learned, and what is still open:
 - Q-IB2-3. The audit log's When (`whenText`) and Notifications' "5 min ago" keep their words. Should they move to the shared format?
 - Q-IB2-4. Done reaches back 14 days (the Rule). Should a person be able to scroll further back than that?
 
+- Q-GD3-1. Step 0's database counts (held by chat, audience and reason) weren't read: dev's database takes connections only from Azure services, and running a read inside the dev container was refused in this session. The re-check logs them when it first runs (`held_recheck`, `all:before:<audience>:<reason>`, `all:released`, `all:still_held`) and keeps them in `org_settings` `meta/held_recheck_v1`.
+- Q-GD3-2. Should bulk Sort all and Mark all have an Undo? Neither single action has one today (This is work brings a message back from Chatter).
+- Q-GD3-3. Should a chat with reading off still have its held messages re-checked? They are skipped for now, as nothing else works on such a chat, and may show "Reason unknown" until they expire.

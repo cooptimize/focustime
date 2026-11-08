@@ -105,6 +105,8 @@ export type AdminOps = {
   breakGlass: readonly string[];
   tenantId: string | null;
   people(): Promise<PersonHealth[]>;
+  /** GD-3: check a client's held messages again after its aliases or Match only as written changed. */
+  recheckHeld?: (clientKey: string) => Promise<void>;
   /** IN-1: what an invite links to here: the app's public URL and, where the Teams app is set up, its page in Teams. */
   invite?: { appUrl: string; teamsAppLink: string | null };
   /** Clients FocusTime knows of for this team (registered chats, Dataverse's directory), for Admin › Clients. */
@@ -530,6 +532,8 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
       }
       const r = await ops.org.store.setOrg({ scope: i.scope, key: i.key, value, actor, area: spec.area, target });
       ops.org.invalidate();
+      // GD-3: a client's names changed: its held messages are checked again, in the background.
+      if ((i.key === "aliases" || i.key === "exact_case") && i.scope.startsWith("client:")) void ops.recheckHeld?.(i.scope.slice(7)).catch(() => undefined);
       const next = await ops.org.rules();
       const warning =
         (i.key === "ai.person_cap_usd" || i.key === "ai.app_cap_usd") && value === 0

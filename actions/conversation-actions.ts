@@ -19,11 +19,11 @@ import { AiError } from "../ai/types.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { askTitle, messageLink } from "../plan/asks.ts";
 import { CHAT_ID, isExternal, teamsLink } from "../plan/chats.ts";
-import { chatAudience, mentionedClients, HELD_LINE, NO_OTHER_CLIENTS } from "../plan/boundary.ts";
+import { chatAudience, highlightMatches, mentionedClients, nameList, HELD_LINE, NO_OTHER_CLIENTS } from "../plan/boundary.ts";
 import { DRAFT_INSTRUCTIONS, DRAFT_SCHEMA, DRAFT_TASK, draftFrom, draftInput, emptyDraft, type DraftAnswer } from "../plan/conversation-draft.ts";
 import { isClosed } from "../plan/process.ts";
 import { chatImageSrc, type CardCommitment, type CardItem, type CardSuggestion, type ConversationCard, type ConversationMessage, type ConversationsData, type DayPromise, type HeldData, type MessageImageView, type MyPromisesData, type Primary, type PromiseCard } from "../plan/conversation-views.ts";
-import { CLIENT_REFUSED, HELD_MENTION, LEGACY_CLIENT_REFUSED, daysWaiting, oneLine, statusLine, unsortedLine, unsortedText, type Commitment, type UnsortedLine, type Conversation, type ItemDraft } from "../plan/conversations.ts";
+import { HELD_REASONS, daysWaiting, oneLine, statusLine, unsortedLine, unsortedText, type Commitment, type UnsortedLine, type Conversation, type ItemDraft } from "../plan/conversations.ts";
 import type { ClientChat, FocusUser } from "../plan/requests.ts";
 import { hostedImageIds, sanitizeMessageHtml } from "../plan/sanitize.ts";
 import type { MessageImage } from "../store/teams-store.ts";
@@ -58,10 +58,10 @@ export const CONVERSATION_ACTIONS = [
   "conversations.search_items", "conversations.unlink", "my_promises.unlink",
   // GD-2: the held-back list and Not work-related for one held message.
   "conversations.held", "conversations.held_not_work",
+  // GD-3: every held message of one client, sorted by hand or marked not work-related.
+  "conversations.held_bulk",
 ] as const;
 export type ConversationAction = (typeof CONVERSATION_ACTIONS)[number];
-/** GD-2: the reasons the Held back list shows: GD-2's own, and GD-1's older holds until they're sorted again. */
-const HELD_REASONS = new Set<string>([HELD_MENTION, CLIENT_REFUSED, LEGACY_CLIENT_REFUSED]);
 
 /** QF-1: the close reason of Not work-related, and the mark on its messages' places (so Undo finds them). */
 export const NOT_WORK = "Not work-related";
@@ -915,30 +915,67 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         return respond();
       }
       case "conversations.held": {
-        // GD-2 Part 2: the messages held back in my chats, newest first, as Teams shows them to me. The matched name
-        // only for members of that chat (the viewer's chats); never logged.
+        // GD-2 Part 2, GD-3: the messages held back in my chats, newest first, as Teams shows them to me, each with what
+        // it matched and that word marked. Only for members of that chat (the viewer's chats); never logged.
         if (!only(input, [])) return bad("conversations.held takes {}");
-        const data: HeldData = { messages: [], conversations: {} };
+        const data: HeldData = { messages: [], conversations: {}, clients: [] };
         if (!v) return { ok: true, data };
         const home = await ctx.homeTenant();
         const places = (await v.convs.placesByRole(v.chats.map((c) => c.chatId), "unsorted")).filter((p) => HELD_REASONS.has(p.reason ?? ""));
-        const bounds = new Map<string, Awaited<ReturnType<NonNullable<ConversationContext["boundary"]>>> | null>();
+        const nameOf = (key: string) => cfg.clientSettings[key]?.name ?? key;
+        const perClient = new Map<string, number>();
+        for (const p of places) {
+          const key = v.byId.get(p.chatId)?.clientKey;
+          if (key) perClient.set(key, (perClient.get(key) ?? 0) + 1);
+        }
+        data.clients = [...perClient].map(([clientKey, count]) => ({ clientKey, clientName: nameOf(clientKey), count })).sort((a, b) => b.count - a.count || a.clientName.localeCompare(b.clientName));
         const aliases = new Map<string, string>();
+        let unknown = 0;
         for (const p of [...places].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200)) {
           const chat = v.byId.get(p.chatId);
           const m = chat ? await v.teams.message(p.chatId, p.messageId) : null;
           if (!chat || !m) continue;
-          if (!bounds.has(chat.clientKey)) bounds.set(chat.clientKey, ctx.boundary ? await ctx.boundary(chat.clientKey).catch(() => null) : null);
-          const b = bounds.get(chat.clientKey);
           const view = await messageView(m, { chat, home, me: v.me, teams: v.teams, aliases });
+          const words = [...new Set((p.matched ?? []).map((x) => x.word))];
+          if (!words.length) unknown++;
           data.messages.push({
-            chatId: chat.chatId, chatName: chat.displayName, clientKey: chat.clientKey, clientName: cfg.clientSettings[chat.clientKey]?.name ?? chat.clientKey,
-            messageId: m.messageId, author: view.author, at: m.createdAt, matched: b && !b.internal ? mentionedClients(m.text, chat.clientKey, b.directory).map((x) => x.name) : [],
-            html: view.html, text: m.text, why: HELD_LINE,
+            chatId: chat.chatId, chatName: chat.displayName, clientKey: chat.clientKey, clientName: nameOf(chat.clientKey),
+            messageId: m.messageId, author: view.author, at: m.createdAt, matched: words, reason: words.length ? `Mentions ${nameList(words)}` : "Reason unknown",
+            html: highlightMatches(view.html, words), text: m.text, why: HELD_LINE,
           });
           if (!data.conversations[chat.chatId]) data.conversations[chat.chatId] = (await v.convs.conversations([chat.chatId])).filter((c) => !c.closedAt).slice(0, 30).map((c) => ({ id: c.id, title: c.title }));
         }
+        // GD-3: the re-check leaves none of these; one that appears is logged (a count, never the text).
+        if (unknown) ctx.log({ source: "plan", op: "held_reason_unknown", count: unknown });
         return { ok: true, data };
+      }
+      case "conversations.held_bulk": {
+        // GD-3: every held message of one client that I can see. `count` is what the confirm showed: a list that has
+        // changed since is refused, so nobody confirms a number that isn't the real one. Never calls AI.
+        const o = only(input, ["clientKey", "mode", "count"]);
+        if (!o || !v || typeof o.clientKey !== "string" || (o.mode !== "sort" && o.mode !== "not_work") || !posInt(o.count)) return bad("conversations.held_bulk takes { clientKey, mode: \"sort\" | \"not_work\", count }");
+        const chats = v.chats.filter((c) => same(c.clientKey, o.clientKey as string));
+        const places = (await v.convs.placesByRole(chats.map((c) => c.chatId), "unsorted")).filter((p) => HELD_REASONS.has(p.reason ?? ""));
+        if (places.length !== o.count) return bad("The held messages changed. Look at the list again.", 409, "changed");
+        const home = await ctx.homeTenant();
+        for (const chat of chats) {
+          const here = places.filter((p) => p.chatId === chat.chatId);
+          const ms = (await mapSeq(here, (p) => v.teams.message(p.chatId, p.messageId))).filter((m): m is NonNullable<typeof m> => !!m).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+          if (!ms.length) continue;
+          if (o.mode === "not_work") {
+            await v.convs.place(ms.map((m) => ({ chatId: chat.chatId, messageId: m.messageId, conversationId: null, role: "chatter" as const, reason: "person", placedBy: "person" as const, at: m.createdAt })));
+            continue;
+          }
+          // One new conversation per chat, its title from the first message; each named client tags it (GD-2 point 7).
+          const first = ms[0]!, last = ms.at(-1)!;
+          const created = await v.convs.addConversation({ chatId: chat.chatId, clientKey: chat.clientKey, title: askTitle(first.text), summary: oneLine(first.text, 300), participants: withParticipants([], ms.map((m) => participantOf(batchOf(m, chat, home)))), firstAt: first.createdAt, lastAt: last.createdAt, lastWorkAt: last.createdAt, changeNote: "Sorted by hand from held messages" });
+          await v.convs.place(ms.map((m) => ({ chatId: chat.chatId, messageId: m.messageId, conversationId: created.id, role: "work" as const, reason: null, placedBy: "person" as const, at: m.createdAt })));
+          const mentions = [...new Set(here.flatMap((p) => (p.matched ?? []).map((x) => x.key)))];
+          if (mentions.length) await v.convs.updateConversation(created.id, { mentions });
+          await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: home }, created.id);
+        }
+        ctx.log({ source: "plan", op: "held_bulk", kind: o.mode, count: places.length });
+        return respond();
       }
       case "conversations.held_not_work": {
         // GD-2 Part 2: a held message isn't work: it goes to Chatter (This is work brings it back), placed by me.

@@ -8,6 +8,7 @@
 // by a person. Nothing here does I/O or logs.
 import { userZone } from "../week/zone.ts";
 import type { JsonSchema } from "../ai/types.ts";
+import type { HeldMatch } from "./boundary.ts";
 import { hasPhrase, isAcknowledgement } from "./asks.ts";
 import { withoutEmails } from "./asks-ai.ts";
 import { bodyKind } from "./sanitize.ts";
@@ -80,7 +81,7 @@ export type ConversationMerge = {
 export type MergeState = Pick<Conversation, "title" | "summary" | "participants" | "firstAt" | "lastAt" | "lastWorkAt" | "ownerId" | "itemId" | "itemUrl" | "itemTitle" | "likelyItem">;
 
 /** A message's place in conversations (conversation_messages). */
-export type MessagePlace = { chatId: string; messageId: string; conversationId: number | null; role: MessageRole; reason: string | null; placedBy: "ai" | "rule" | "person"; at: string };
+export type MessagePlace = { chatId: string; messageId: string; conversationId: number | null; role: MessageRole; reason: string | null; placedBy: "ai" | "rule" | "person"; at: string; /** GD-3: on a held message, what it matched (never logged). */ matched?: HeldMatch[] | null };
 
 /** A commitment someone made in a conversation (commitments, an app table). My own open ones are My promises. */
 export type Commitment = {
@@ -732,6 +733,15 @@ export const LEGACY_CLIENT_REFUSED = "refused_client";
  * Never sent to AI; listed in Inbox (Held back) for the chat's members, who sort it by hand or mark it not work.
  */
 export const HELD_MENTION = "mentions_client";
+/** GD-2, GD-3: the reasons the Held back list shows: GD-2's own, and GD-1's older holds until the re-check sorts them. */
+export const HELD_REASONS: ReadonlySet<string> = new Set([HELD_MENTION, CLIENT_REFUSED, LEGACY_CLIENT_REFUSED]);
+/**
+ * GD-3: the AI guard's client rule refused a batch because the chat's boundary couldn't be worked out (a Dataverse or
+ * settings read failed). No client was matched, so nothing is held: it waits and is sorted again once the boundary reads.
+ */
+export const NO_BOUNDARY = "no_boundary";
+/** GD-3: how long a held message stays held, in the Inbox's words. */
+export const HELD_STAYS = "They stay held until someone sorts them or marks them not work-related, or a client's names change.";
 
 /**
  * IB-1 slice 3, the retry rule: what the unsorted line says for a reason and what can be done. `retry` only for what
@@ -748,9 +758,10 @@ export function unsortedLine(k: string | null, clientName: string): UnsortedLine
     case "not_set_up": return { text: "AI isn't set up", does: "switch", fix: "A FocusTime admin adds the AI key. They're sorted once it's set up." };
     case "zero_budget": return { text: "the AI budget is $0", does: "switch", fix: `${admin("sets the budget")} They're sorted with the chat's next messages.` };
     case "over_budget": return { text: "this month's AI budget is used up", does: "switch", fix: `${admin("can raise it")} They're sorted with the chat's next messages.` };
-    case HELD_MENTION: return { text: "held back: they mention another client in a chat with people outside Cooptimize", does: "held", fix: "Open them to sort by hand." };
+    case HELD_MENTION: return { text: "held back: they mention another client in a chat with people outside Cooptimize", does: "held", fix: `Open them to sort by hand. ${HELD_STAYS}` };
     case "refused_client":
-    case CLIENT_REFUSED: return { text: "held back because they mention another client", does: "held", fix: "They're checked again with the chat's next messages." };
+    case CLIENT_REFUSED: return { text: "held back because they mention another client", does: "held", fix: `Open them to sort by hand. ${HELD_STAYS}` };
+    case NO_BOUNDARY: return { text: "they couldn't be checked against other clients' names", does: "retry", fix: null };
     case "refused_secret": return { text: "held back because they contain something that looks like a key or secret", does: "held", fix: null };
     case "refused_email": return { text: "held back because they contain an email address", does: "held", fix: null };
     case "chat_cap": return { text: "this chat reached its AI limit for today", does: "retry", fix: null };
@@ -788,6 +799,7 @@ export function unsortedText(k: string | null, clientName: string): string {
     case HELD_MENTION: return "it mentions another client in a chat with people outside Cooptimize";
     case "refused_client":
     case CLIENT_REFUSED: return "it mentions another client";
+    case NO_BOUNDARY: return "it couldn't be checked against other clients' names";
     case "refused_secret": return "it contains something that looks like a key or secret";
     case "refused_email": return "it contains an email address";
     case "invalid_output":

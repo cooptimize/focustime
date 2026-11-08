@@ -29,11 +29,16 @@ describe.skipIf(!CHROMIUM)("GD-2: held back, sorted by hand, tagged and flagged"
     await page.locator(".held-toggle").click({ timeout: 30_000 });
     const row = page.locator(".held-row").first();
     await row.waitFor();
-    expect(await row.locator(".mention-tag").textContent()).toBe("mentions Harbor");
+    expect(await row.locator(".mention-tag").textContent()).toBe("Mentions Harbor");
+    expect(await row.locator("mark.held-match").first().textContent()).toBe("Harbor");
     expect(await page.locator(".held-why").textContent()).toContain("Held back: mentions another client in a chat with people outside Cooptimize.");
     await row.getByRole("button", { name: "Sort for Northwind by hand" }).click();
     await row.locator("select").selectOption({ label: "A new conversation" });
     await row.getByRole("button", { name: "Sort here" }).click();
+    // GD-3: the bulk action asks first, with the count, then the list is empty.
+    await page.locator(".held-bulk").getByRole("button", { name: "Mark all not work-related" }).click({ timeout: 20_000 });
+    await page.locator(".held-bulk-ask").getByText("Mark 1 message for Northwind not work-related?").waitFor();
+    await page.locator(".held-bulk").getByRole("button", { name: "Mark 1 message" }).click();
     await page.locator(".held-list").getByText("Nothing held back now.").waitFor({ timeout: 20_000 });
 
     // The internal conversation's tag, in the list and the detail pane.

@@ -2,9 +2,12 @@
 // here, never sent to AI. Each shows its chat, sender, time, the client it names (only to people in that chat, which is
 // who can list it) and the message as Teams shows it. Sort for <client> by hand (into an open conversation or a new
 // one, no AI), Not work-related (to Chatter), or Leave held (nothing changes; retention purges it as any message).
+// GD-3: each row says what it matched, with the word marked in the message; the bulk actions sit at the top, one line
+// per client, each behind a confirm that shows the count.
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { HeldData, HeldMessage } from "../../plan/conversation-views.ts";
 import { HELD_LINE } from "../../plan/boundary.ts";
+import { HELD_STAYS } from "../../plan/conversations.ts";
 import { call } from "../api.ts";
 import { Stamp } from "../Stamp.tsx";
 
@@ -42,9 +45,16 @@ export function HeldBack({ count, tz, today, onChanged }: { count: number; tz: s
       </button>
       {open && (
         <div className="held-list">
-          <p className="muted held-why">{HELD_LINE} Sort them by hand: nothing is sent to AI.</p>
+          <p className="muted held-why">{HELD_LINE} {HELD_STAYS} Sorting by hand sends nothing to AI.</p>
           {error && <p className="error" role="alert">{error}</p>}
           {data && !data.messages.length && <p className="muted">Nothing held back now.</p>}
+          {!!data?.clients.length && (
+            <div className="held-bulk">
+              {data.clients.map((c) => (
+                <BulkLine key={c.clientKey} client={c} act={done} />
+              ))}
+            </div>
+          )}
           <ul>
             {data?.messages.map((m) => (
               <HeldRow key={`${m.chatId}:${m.messageId}`} m={m} tz={tz} today={today} conversations={data.conversations[m.chatId] ?? []} act={done} />
@@ -53,6 +63,47 @@ export function HeldBack({ count, tz, today, onChanged }: { count: number; tz: s
         </div>
       )}
     </section>
+  );
+}
+
+/** GD-3: one client's bulk actions; each asks first, with the count it will act on. */
+function BulkLine({ client, act }: { client: HeldData["clients"][number]; act: (action: string, input: unknown) => Promise<void> }): ReactNode {
+  const [asking, setAsking] = useState<"sort" | "not_work" | null>(null);
+  const { clientKey, clientName, count } = client;
+  const run = async (mode: "sort" | "not_work") => {
+    setAsking(null);
+    await act("conversations.held_bulk", { clientKey, mode, count });
+  };
+  if (asking)
+    return (
+      <div className="held-bulk-line" role="group" aria-label={`Confirm for ${clientName}`}>
+        <p className="held-bulk-ask">
+          {asking === "sort" ? `Sort ${n(count)} for ${clientName} by hand? Each chat's go into one new conversation. Nothing is sent to AI.` : `Mark ${n(count)} for ${clientName} not work-related? They move to Chatter.`}
+        </p>
+        <p className="held-acts">
+          <button type="button" className="mini primary" onClick={() => void run(asking)}>
+            {asking === "sort" ? `Sort ${n(count)}` : `Mark ${n(count)}`}
+          </button>
+          <button type="button" className="mini quiet" onClick={() => setAsking(null)}>
+            Cancel
+          </button>
+        </p>
+      </div>
+    );
+  return (
+    <div className="held-bulk-line">
+      <strong>
+        {clientName} · {count}
+      </strong>
+      <p className="held-acts">
+        <button type="button" className="mini" onClick={() => setAsking("sort")}>
+          Sort all for {clientName} by hand
+        </button>
+        <button type="button" className="mini" onClick={() => setAsking("not_work")}>
+          Mark all not work-related
+        </button>
+      </p>
+    </div>
   );
 }
 
@@ -66,11 +117,7 @@ function HeldRow({ m, tz, today, conversations, act }: { m: HeldMessage; tz: str
         <strong>{m.chatName}</strong>
         <span>{m.author}</span>
         <Stamp at={m.at} tz={tz} today={today} />
-        {m.matched.map((x) => (
-          <span key={x} className="ib-tag tone-soon mention-tag">
-            mentions {x}
-          </span>
-        ))}
+        <span className={`ib-tag mention-tag ${m.matched.length ? "tone-soon" : "held-unknown"}`}>{m.reason}</span>
       </p>
       {/* The server's sanitized message HTML (messageView), as the Inbox shows every message. */}
       <div className="conv-msg-body held-text" dangerouslySetInnerHTML={{ __html: m.html }} />

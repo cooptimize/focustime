@@ -6,6 +6,7 @@
 // expiry only. Every write runs in a transaction. Nothing here logs; message text never comes through here.
 import type { AiLogEntry } from "../ai/types.ts";
 import { COMMITMENT_STATES, CONVERSATION_STATUSES, MESSAGE_ROLES, type Commitment, type ConversationMerge, type CommitmentState, type Conversation, type ConversationStatus, type ItemChange, type MessagePlace, type MessageRole, type Participant, type Suggestion } from "../plan/conversations.ts";
+import type { HeldMatch } from "../plan/boundary.ts";
 import { isMember } from "../plan/requests.ts";
 import { PlanError } from "./plan-store.ts";
 import type { Conn, Param, Row } from "./sql/conn.ts";
@@ -52,6 +53,17 @@ const toConversation = (r: Row): Conversation => ({
   updatedAt: instant(r.updated_at)!,
 });
 
+/** GD-3: a held message's recorded matches; anything unreadable is no record (the list says "Reason unknown"). */
+function parseHeldMatch(v: unknown): HeldMatch[] | null {
+  if (typeof v !== "string" || !v) return null;
+  try {
+    const a = JSON.parse(v) as unknown;
+    return Array.isArray(a) ? a.filter((x): x is HeldMatch => !!x && typeof (x as HeldMatch).key === "string" && typeof (x as HeldMatch).word === "string") : null;
+  } catch {
+    return null;
+  }
+}
+
 const toPlace = (r: Row): MessagePlace => ({
   chatId: r.chat_id as string,
   messageId: r.message_id as string,
@@ -60,6 +72,7 @@ const toPlace = (r: Row): MessagePlace => ({
   reason: (r.reason as string | null) ?? null,
   placedBy: r.placed_by as MessagePlace["placedBy"],
   at: instant(r.at)!,
+  matched: parseHeldMatch(r.held_match_json),
 });
 
 const toCommitment = (r: Row): Commitment => ({
@@ -336,8 +349,8 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         for (const p of ps) {
           if (!MESSAGE_ROLES.includes(p.role)) throw new PlanError("Not a role");
           const had = await db.get("SELECT 1 AS x FROM conversation_messages WHERE chat_id = ? AND message_id = ?", [p.chatId, p.messageId]);
-          if (had) await db.run("UPDATE conversation_messages SET conversation_id = ?, role = ?, reason = ?, placed_by = ?, placed_by_user = ?, at = ?, updated_at = ? WHERE chat_id = ? AND message_id = ?", [p.conversationId, p.role, p.reason?.slice(0, 40) ?? null, p.placedBy, p.byUser ?? null, p.at, t, p.chatId, p.messageId]);
-          else await db.run("INSERT INTO conversation_messages (chat_id, message_id, conversation_id, role, reason, placed_by, placed_by_user, at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [p.chatId, p.messageId, p.conversationId, p.role, p.reason?.slice(0, 40) ?? null, p.placedBy, p.byUser ?? null, p.at, t]);
+          if (had) await db.run("UPDATE conversation_messages SET conversation_id = ?, role = ?, reason = ?, placed_by = ?, placed_by_user = ?, at = ?, updated_at = ?, held_match_json = ? WHERE chat_id = ? AND message_id = ?", [p.conversationId, p.role, p.reason?.slice(0, 40) ?? null, p.placedBy, p.byUser ?? null, p.at, t, p.matched?.length ? JSON.stringify(p.matched) : null, p.chatId, p.messageId]);
+          else await db.run("INSERT INTO conversation_messages (chat_id, message_id, conversation_id, role, reason, placed_by, placed_by_user, at, updated_at, held_match_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [p.chatId, p.messageId, p.conversationId, p.role, p.reason?.slice(0, 40) ?? null, p.placedBy, p.byUser ?? null, p.at, t, p.matched?.length ? JSON.stringify(p.matched) : null]);
         }
       });
     },

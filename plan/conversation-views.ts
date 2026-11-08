@@ -98,14 +98,16 @@ export type HeldMessage = {
   messageId: string;
   author: string;
   at: string;
-  /** The other clients' names it matched (empty for an old hold that no longer matches: it is sorted again soon). */
+  /** GD-3: the words it matched, as the message has them (marked in `html`). Empty: no record, `reason` says so. */
   matched: string[];
+  /** GD-3: "Mentions Harbor Health", or "Reason unknown". */
+  reason: string;
   html: string;
   text: string;
   /** Why, in plain words. */
   why: string;
 };
-export type HeldData = { messages: HeldMessage[]; /** Each chat's open conversations, to sort a message into by hand. */ conversations: Record<string, { id: number; title: string }[]> };
+export type HeldData = { messages: HeldMessage[]; /** Each chat's open conversations, to sort a message into by hand. */ conversations: Record<string, { id: number; title: string }[]>; /** GD-3: how many are held per client, for the bulk actions (all of them, even past the list's limit). */ clients: { clientKey: string; clientName: string; count: number }[] };
 
 /**
  * One message under Show messages (CV-2: rendered like Teams). `authorKey` groups consecutive messages (an alias for
