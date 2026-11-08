@@ -1,6 +1,6 @@
 # Data
 
-For engineers adding a table and IT checking what FocusTime keeps. Checked against `13cd461` on Nov 7, 2026.
+For engineers adding a table and IT checking what FocusTime keeps. Checked against `6a31e85` on Nov 7, 2026.
 
 ## One database, two kinds of table
 
@@ -70,6 +70,8 @@ FocusTime keeps everything in one database, its plan store: Azure SQL in dev and
 | `people_directory`, `directory_accounts`, `people_clients`, `client_leads`, `people_overrides`, `client_logins`, `people_invites` | App | People, their levels and clients, client leads, client DevOps logins an admin confirmed, invites |
 | `sends`, `week_commitments`, `client_priorities`, `look_asks` | App | Send to…, Team's commit snapshots (no hours, to-dos or notes), client priorities, Ask to look |
 | `scheduler_state`, `job_claims`, `schema_migrations`, `schema_version`, `schema_migration_names` | App | The scheduler's next due time, job claims, migrations |
+
+**Small per-person values in `kv`** (a user table: key, JSON value, updated at), each read and written only through `getState` and `setState` on the person's own store: the focus timer's state, Ahead's filters (`ahead_filters`, AH-1), Readiness's skips (`ahead_skips`: "client:id" → the day skipped, each dropped 14 days later when skips are next read or written, AH-7) and Readiness's saved fixes (`ahead_fixed`: "client:id", the kind and when, for "N fixed this week", at most 14 days, AH-7). No item titles or other DevOps text. Not in Export; removed with Delete my data.
 
 ## Retention
 

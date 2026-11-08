@@ -30,9 +30,12 @@ import { DEFAULT_LEVEL, fromQuery, toQuery, withQuery } from "../../plan/ahead-v
 import { atLevel, isFold, levelNames, type Fold } from "../../plan/gantt-tree.ts";
 import { isBool, usePref } from "./prefs.ts";
 import { Toolbar, type AheadViewState } from "./Toolbar.tsx";
+import { progressText, type Skips } from "../../plan/readiness.ts";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const BATCH = 10;
+/** AH-7: how long a just-fixed entry fades out before it leaves Readiness. */
+const LEAVE_MS = 900;
 
 /** What every mode needs: the model, staging, the side panels. */
 export type AheadEnv = {
@@ -65,7 +68,10 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState(false);
-  const [skipped, setSkipped] = useState<Set<string>>(new Set());
+  // AH-7: my skips live in the plan store (2 weeks each), so they follow me; entries just fixed fade out with Undo.
+  const [skipOverride, setSkipOverride] = useState<Skips | null>(null);
+  const [leaving, setLeaving] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<{ id: number; text: string; undo: (() => Promise<void>) | null } | null>(null);
   const head = useRef<HTMLHeadingElement>(null);
   const dw = useDevOpsWrite();
   // AH-6: one view for every mode: the level and carets and Show callouts (remembered in this browser), and the
@@ -100,6 +106,8 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
     }
   }, []);
   useEffect(() => void reload(), [reload, dw?.version]);
+  // AH-7: a fresh read brings my skips (and this week's fixes) from the server again.
+  useEffect(() => setSkipOverride(null), [load?.skips]);
   useEffect(() => {
     const fromLink = (mine: AheadFilters) => {
       const f = withQuery(mine, DEFAULT_FILTERS, linked.current);
@@ -164,7 +172,60 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   // AH-6: what every mode would show with no filters (all clients, everyone): the summary's "of N".
   const everything = useMemo<AheadFilters>(() => ({ ...DEFAULT_FILTERS, owner: Object.fromEntries((load?.clients ?? []).map((c) => [c.clientKey, "all" as const])), ...(f.whole ? { whole: true } : {}) }), [load, f.whole]);
   // AH-3: Readiness for every client, ranked by each client's backlog; AH-6: Ahead's filters apply to it too.
-  const fix = useMemo(() => (load ? fixGroups(load, { readOnly, skipped, f, staleWeeks }) : []), [load, skipped, readOnly, f, staleWeeks]);
+  const skips = skipOverride ?? load?.skips ?? {};
+  const skipped = useMemo(() => new Set(Object.keys(skips)), [skips]);
+  const fix = useMemo(() => (load ? fixGroups(load, { readOnly, skipped, leaving, f, staleWeeks }) : []), [load, skipped, leaving, readOnly, f, staleWeeks]);
+  // AH-7: with no filters, for my progress ("N pending save") and to see which entries a change just fixed.
+  const fixAll = useMemo(() => (load ? fixGroups(load, { readOnly, skipped }) : []), [load, skipped, readOnly]);
+  const pendingFixes = fixAll.reduce((k, x) => k + (x.group.pending?.length ?? 0), 0);
+  const before = useRef<{ keys: Map<string, string[]>; changes: StagedChange[] } | null>(null);
+  useEffect(() => {
+    if (!load) return;
+    const keys = new Map(fixAll.flatMap((x) => x.group.entries.map((e) => [e.key, e.gaps as string[]] as const)));
+    const filled = new Set(fixAll.flatMap((x) => (x.group.pending ?? []).map((p) => `${p.key}|${p.gap}`)));
+    const was = before.current;
+    before.current = { keys, changes: load.changes };
+    if (!was || mode !== "fix") return;
+    // Gone because every gap it had is filled in my change set (not because a new date moved it out of view).
+    const gone = [...was.keys].filter(([k, gs]) => !keys.has(k) && !skipped.has(k) && gs.every((g) => filled.has(`${k}|${g}`))).map(([k]) => k);
+    // A change of mine made it ready: it fades out, and Undo takes back just those changes.
+    const fixed = gone.flatMap((k) => {
+      const [clientKey, id] = [k.slice(0, k.lastIndexOf(":")), Number(k.slice(k.lastIndexOf(":") + 1))];
+      const added = load.changes.filter((c) => c.clientKey === clientKey && c.itemId === id && !was.changes.some((p) => p.clientKey === clientKey && p.itemId === id && p.field === c.field && JSON.stringify(p.value) === JSON.stringify(c.value)));
+      return added.length ? [{ k, clientKey, id, fields: added.map((c) => c.field) }] : [];
+    });
+    if (!fixed.length) return;
+    setLeaving((s) => new Set([...s, ...fixed.map((x) => x.k)]));
+    window.setTimeout(() => setLeaving((s) => new Set([...s].filter((k) => !fixed.some((x) => x.k === k)))), LEAVE_MS);
+    const one = fixed[0]!;
+    setToast({
+      id: Date.now(),
+      text: fixed.length === 1 ? `#${one.id} is ready. Saved to your changes; nothing is written until you save.` : `${fixed.length} items are ready. Saved to your changes.`,
+      undo: async () => {
+        let changes: StagedChange[] | null = null;
+        for (const x of fixed) for (const field of x.fields) changes = (await call<{ changes: StagedChange[] }>("ahead.unstage", { clientKey: x.clientKey, itemId: x.id, field })).changes;
+        if (changes) setLoad((l) => (l ? { ...l, changes: changes! } : l));
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fixAll]);
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast((x) => (x?.id === toast.id ? null : x)), 8000);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+  const skipOne = (key: string, on: boolean) => {
+    const clientKey = key.slice(0, key.lastIndexOf(":"));
+    const itemId = Number(key.slice(key.lastIndexOf(":") + 1));
+    const next = { ...skips };
+    if (on) next[key] = load?.today ?? "";
+    else delete next[key];
+    setSkipOverride(next);
+    void call<{ skips: Skips }>(on ? "ahead.skip" : "ahead.unskip", { clientKey, itemId }).then((r) => setSkipOverride(r.skips), (e: unknown) => {
+      setSkipOverride(skips);
+      setError(e instanceof Error ? e.message : "That skip couldn't be kept");
+    });
+  };
   const fixN = fixCount(fix.map((x) => x.group));
   // AH-6: Backlog's level is the shared one (BH-1's own tier is kept but no longer read).
   const tier = fold.level;
@@ -208,6 +269,11 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
           </button>
         </div>
       )}
+      {load && mode === "fix" && progressText(load.fixedWeek ?? 0, pendingFixes) && (
+        <p className="muted ah-fx-progress" role="status">
+          {progressText(load.fixedWeek ?? 0, pendingFixes)}
+        </p>
+      )}
       {readOnly && load && <p className="muted ah-ro-note">Read only on a phone. Open FocusTime on a computer to change dates, sizes or owners.</p>}
       {load && filters && <Toolbar mode={mode} load={load} f={f} set={setFilters} setWhole={(w) => void setWhole(w)} view={view} counts={counts} color={color} />}
       {load && <ScopeNote load={load} whole={!!f.whole} />}
@@ -222,9 +288,19 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
               {mode === "grid" && <Grid groups={shown} layout={layout} />}
               {mode === "gantt" && <Gantt data={data} groups={shown} onChanged={onChanged} />}
               {mode === "backlog" && <Backlog groups={backlog} tier={tier} onChanged={onChanged} />}
-              {mode === "fix" && <FixNext groups={fix} skip={(k) => setSkipped((s) => new Set(s).add(k))} dots={layout === "cards" || layout === "dots"} filtered={anyFilter} />}
+              {mode === "fix" && <FixNext groups={fix} skip={(k) => skipOne(k, true)} unskip={(k) => skipOne(k, false)} skips={skips} f={f} setFilters={setFilters} dots={layout === "cards" || layout === "dots"} filtered={anyFilter} />}
             </div>
           </div>
+          {toast && mode === "fix" && (
+            <div className="undo-toast" role="status" aria-live="polite">
+              <span>{toast.text}</span>
+              {toast.undo && (
+                <button type="button" className="mini" onClick={() => void toast.undo!().then(() => setToast({ id: Date.now(), text: "Undone", undo: null }), (e: unknown) => setToast({ id: Date.now(), text: e instanceof Error ? e.message : "Couldn't undo", undo: null }))}>
+                  Undo
+                </button>
+              )}
+            </div>
+          )}
           {review && <Review onClose={() => setReview(false)} onDone={() => void reload()} />}
         </AheadCtx.Provider>
       )}

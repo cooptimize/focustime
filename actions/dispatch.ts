@@ -1989,6 +1989,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "ahead.resolve":
     case "ahead.filters":
     case "ahead.set_filters":
+    case "ahead.skip":
+    case "ahead.unskip":
       return aheadAction(await aheadContext(ctx), req.action as AheadAction, req.input);
     case "roadmap.load":
     case "roadmap.ahead":
