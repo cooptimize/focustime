@@ -125,13 +125,16 @@ describe("weekend columns", () => {
     expect(sat.am.off).toBe(true);
   });
 
-  it("adds a weekend day with working hours, unavailable time or picks, and not a weekend meeting alone", () => {
+  it("adds a weekend day with working hours, unavailable time, picks or (WK-3) a calendar event", () => {
     const withHours = buildWeek({ weekStart: WEEK, patterns: [], events: [], config: cfg(model({ weekdays: { ...model().weekdays, sun: [{ start: "10:00", end: "14:00" }] } })) });
     expect(withHours.days.at(-1)!.weekday).toBe("Sun");
     expect(withHours.days.at(-1)!.am.windows).toHaveLength(1);
     expect(buildWeek({ weekStart: WEEK, patterns: [], events: [], config: cfg(model()), unavailable: [unavailable(1, "2026-11-08", "10:00", "11:00")] }).days).toHaveLength(6);
     expect(buildWeek({ weekStart: WEEK, patterns: [], events: [], config: cfg(model()), weekendPlanned: new Set(["2026-11-07"]) }).days).toHaveLength(6);
-    expect(buildWeek({ weekStart: WEEK, patterns: [], events: [meeting("2026-11-07T10:00", "2026-11-07T11:00")], config: cfg(model()) }).days).toHaveLength(5);
+    expect(buildWeek({ weekStart: WEEK, patterns: [], events: [meeting("2026-11-07T10:00", "2026-11-07T11:00")], config: cfg(model()) }).days.map((d) => d.weekday)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]);
+    // A declined weekend meeting doesn't open the day; nothing at all leaves Mon to Fri.
+    expect(buildWeek({ weekStart: WEEK, patterns: [], events: [{ ...meeting("2026-11-08T10:00", "2026-11-08T11:00"), responseStatus: "declined" }], config: cfg(model()) }).days).toHaveLength(5);
+    expect(buildWeek({ weekStart: WEEK, patterns: [], events: [], config: cfg(model()) }).days).toHaveLength(5);
   });
 });
 

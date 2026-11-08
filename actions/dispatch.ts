@@ -1,5 +1,8 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
+import type { DayPromise } from "../plan/conversation-views.ts";
+import { afterHours } from "../plan/deploy.ts";
+import { pickNeed } from "../plan/types.ts";
 import { scopeDepsOf } from "./scope-deps.ts";
 import { TEAMS_KINDS, type TeamsKind } from "../plan/teams-rhythm.ts";
 import { checkinGhosts } from "../plan/carry.ts";
@@ -43,7 +46,7 @@ import { followedKeys } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
 import { guideAction } from "./guide-actions.ts";
 import { docsAccessAction } from "./docs-actions.ts";
-import { defaultWeekStart, localToday, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
+import { defaultWeekStart, localToday, minutesOn, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
 import { hoursOn, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
 import type { CalEvent, ClientWork, FocusPattern, IsoDate, SourceResult, Week, WorkItem } from "../week/types.ts";
@@ -229,12 +232,14 @@ type WeekLoadInput = {
   quiet?: boolean;
   /** Step 15 (D271): this session's view range, not saved. */
   viewRange?: ViewRange;
+  /** WK-3: Show weekend (the viewer's switch, kept in their browser): Saturday and Sunday always. */
+  weekend?: boolean;
 };
 
 function validateWeekLoad(input: unknown): WeekLoadInput | string {
   if (typeof input !== "object" || input === null || Array.isArray(input)) return "input must be an object";
   const o = input as Record<string, unknown>;
-  for (const k of Object.keys(o)) if (!["weekStart", "now", "refresh", "quiet", "viewRange"].includes(k)) return `unknown input field ${k}`;
+  for (const k of Object.keys(o)) if (!["weekStart", "now", "refresh", "quiet", "viewRange", "weekend"].includes(k)) return `unknown input field ${k}`;
   const out: WeekLoadInput = {};
   if (o.weekStart !== undefined) {
     if (typeof o.weekStart !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(o.weekStart)) return "weekStart must be YYYY-MM-DD";
@@ -261,6 +266,10 @@ function validateWeekLoad(input: unknown): WeekLoadInput | string {
   if (o.quiet !== undefined) {
     if (typeof o.quiet !== "boolean") return "quiet must be true or false";
     out.quiet = o.quiet;
+  }
+  if (o.weekend !== undefined) {
+    if (typeof o.weekend !== "boolean") return "weekend must be true or false";
+    out.weekend = o.weekend;
   }
   if (o.viewRange !== undefined) {
     if (typeof o.viewRange !== "string" || !(VIEW_RANGES as readonly string[]).includes(o.viewRange)) return `viewRange must be one of ${VIEW_RANGES.join(", ")}`;
@@ -511,7 +520,19 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const unavailable = (await ctx.plan?.unavailableBetween(weekStart, sunday)) ?? [];
   const flex = (await ctx.plan?.flexBetween(weekStart, sunday)) ?? [];
   const weekendPicks = (await ctx.plan?.picksBetween(weekDates7(weekStart)[5]!, sunday)) ?? [];
-  const weekendPlanned = new Set(weekDates7(weekStart).slice(5).filter((d) => weekendPicks.some((p) => p.date === d && (p.status === "planned" || p.status === "done"))));
+  // WK-3: a weekend day shows when something lands on it: a to-do (a Deployment too), a timebox, a promise due (one
+  // I added or one from a chat), or always with Show weekend on. Calendar events count inside buildWeek.
+  const chatPromises: DayPromise[] = cfg && ctx.requests?.conversations ? await conversationContext(ctx).then((c) => dayPromises(c, cfg)).catch(() => []) : [];
+  const weekendBoxes = (await ctx.plan?.timeboxesBetween(weekDates7(weekStart)[5]!, sunday)) ?? [];
+  const weekendFollowUps = ctx.plan ? (await ctx.plan.openFollowUps()).filter((f) => !!f.due && f.due >= weekDates7(weekStart)[5]! && f.due <= sunday) : [];
+  const weekendPlanned = new Set(
+    weekDates7(weekStart).slice(5).filter((d) =>
+      input.weekend ||
+      weekendPicks.some((p) => p.date === d && (p.status === "planned" || p.status === "done")) ||
+      weekendBoxes.some((t) => t.date === d && !t.removedAt) ||
+      weekendFollowUps.some((f) => f.due === d) ||
+      chatPromises.some((k) => k.dueDate === d)),
+  );
   // FocusTime's own Outlook events show once, as timeboxes, and never count as meetings in risk rules (step 12).
   const own = ctx.plan ? ownEventIds((await ctx.plan.ownEvents())) : new Set<string>();
   const week = buildWeek({ weekStart, patterns: dataverse.items, events: withoutOwn([...outlook.items, ...google.items], own), config: weekConfig, pto, unavailable, flex, viewRange: input.viewRange ?? cfg?.ui.viewRange ?? DEFAULT_UI.viewRange, weekendPlanned });
@@ -554,9 +575,24 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const aheadSeen = plan ? await plan.markedDates(AHEAD_SEEN_MARK) : new Set<IsoDate>();
   const clientName = nameOf(cfg, (k) => names.get(k));
   const writeLog = plan ? await plan.writeLog(1000) : [];
+  // WK-3: the week's after-hours time (plan/deploy.ts afterHours: deployment windows outside the day shape, to-dos I
+  // put in an evening or on a weekend, FocusTime's own timeboxes after hours; never calendar events).
+  const weekBoxes = plan ? await timeboxesFor(plan, weekStart, sunday) : [];
+  const local = (t: { date: IsoDate; start: string; end: string }) => ({ start: Math.max(0, minutesOn(t.date, t.start, tz)), end: Math.min(1440, minutesOn(t.date, t.end, tz)) });
+  const sizes = planningOf(cfg).sizes;
+  const after = afterHours({
+    model,
+    dates: weekDates7(weekStart),
+    picks: plan ? await plan.picksBetween(weekStart, sunday) : [],
+    pickSpans: new Map(weekBoxes.filter((t) => t.pickId !== null).map((t) => [t.pickId!, local(t)])),
+    looseSpans: weekBoxes.filter((t) => t.pickId === null).map((t) => ({ date: t.date, title: t.title, span: local(t) })),
+    pto: new Set(Object.entries(pto).filter(([, v]) => !v.half).map(([d]) => d)),
+    minutesOf: (p) => pickNeed(p, sizes),
+  });
   return {
     weekStart,
     week,
+    afterHours: after,
     today: columnOf(todayTarget(now, model, { todayHasPlans: todayPlans, hasEve: !!todayDay?.eve }), week),
     plan: weekPlans,
     planClients,
@@ -601,7 +637,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     // Step 14.5 (D256): write PATs and app secrets that expire within 14 days, for Today.
     expiring: (await expiringFor(ctx.plan, cfg, serverToday, (k) => names.get(k))),
     requests: await urgentFor(ctx, now, tz, (k) => names.get(k) ?? cfg?.clientSettings[k]?.name ?? k).catch(() => ({ urgent: [], pastUrgency: 0 })),
-    promises: cfg && ctx.requests?.conversations ? await conversationContext(ctx).then((c) => dayPromises(c, cfg)).catch(() => []) : [],
+    promises: chatPromises,
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
     demo: !!ctx.demo?.on,
@@ -2092,6 +2128,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "pick.set_size":
     case "pick.move":
     case "pick.mark_done":
+    case "deploy.add":
+    case "pick.set_kind":
     case "pick.uncarry":
     case "pick.undrop":
     case "planday.carry_hint":

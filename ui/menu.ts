@@ -19,6 +19,8 @@ import { formatDuration } from "../week/format.ts";
 import { isPickable } from "../plan/rules.ts";
 import { typeNeedsBreakdown } from "../plan/process.ts";
 import { SIZES, type Pick, type PlanDayState, type PlanWeek } from "../plan/types.ts";
+import { DEPLOYMENT, windowText } from "../plan/deploy.ts";
+import { placeNote } from "../plan/days.ts";
 import type { ClientWork, Half, IsoDate, Week, WorkItem } from "../week/types.ts";
 import type { PlanningSettings, TimerView, BorrowedView, TimeboxView, InviteView } from "../actions/types.ts";
 import { eventEdit, type EditAction, type EditFacts } from "../plan/caltier.ts";
@@ -112,6 +114,8 @@ export type MenuEnv = {
   work: ReadonlyMap<string, ClientWork>;
   calendars: { outlook: boolean; google: boolean };
   runPlan: (action: string, input: Record<string, unknown>) => Promise<boolean>;
+  /** WK-3: a plan action whose answer the menu reads (the new deployment's id for Undo); null on refusal (with a notice). */
+  planAction?: (action: string, input: Record<string, unknown>) => Promise<unknown>;
   openPlanDay: (date?: IsoDate) => void;
   /** QF-1: Timebox my day on a date (confirming the day first when it isn't). */
   timeboxDay?: (date: IsoDate) => void;
@@ -155,6 +159,11 @@ export type MenuEnv = {
   /** WK-2: the Board's Timeline toggle (B), the hour rail beside each card's to-dos. */
   showTimelines: boolean;
   saveShowTimelines: (show: boolean) => void;
+  /** WK-3: Saturday and Sunday on Week always (remembered per viewer in this browser), not only when something is there. */
+  showWeekend?: boolean;
+  saveShowWeekend?: (show: boolean) => void;
+  /** WK-3: a change to my plan with an Undo toast (a menu move, a deployment added or changed). */
+  undoable?: (text: string, undo: () => Promise<unknown>) => void;
   hours: TimeModel;
   /** Runs a time model action (hours for a day, unavailable time, flex sessions); false with a notice on refusal. */
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
@@ -322,9 +331,28 @@ export function moveStep(env: MenuEnv, p: Pick): MenuStep {
     ...(p.date !== fri && !isPast(env, fri) ? [{ id: "to-fri", label: "To Friday (catch-up)", action: "pick.move", run: () => env.runPlan("pick.move", { id: p.id, date: fri, half: "AM" }) } as MenuItem] : []),
   ];
   const days = halfDays(env, { date: p.date, half: p.half })
-    .filter((h) => h.date !== p.date)
-    .map<MenuItem>((h) => ({ id: `to-${h.date}-${h.half}`, label: `To ${h.label}`, action: "pick.move", ...(h.disabled ? { disabled: h.disabled } : {}), ...(h.hint ? { hint: h.hint } : {}), run: () => env.runPlan("pick.move", { id: p.id, date: h.date, half: h.half }) }));
-  return { title: `Move "${p.title}"`, items: [...quick, ...days] };
+    .filter((h) => h.date !== p.date && Temporal.PlainDate.from(h.date).dayOfWeek < 6)
+    .map<MenuItem>((h) => ({ id: `to-${h.date}-${h.half}`, label: `To ${h.label}`, action: "pick.move", ...(h.disabled ? { disabled: h.disabled } : {}), ...(h.hint ? { hint: h.hint } : {}), run: () => movePick(env, p, h.date, h.half, h.label) }));
+  // WK-3 (D947): Saturday and Sunday always take a move, shown on the week or not, with the day's note.
+  const weekend = weekendDates(env.week.weekStart)
+    .filter((d) => d !== p.date)
+    .map<MenuItem>((d) => ({ id: `to-${d}`, label: `To ${weekdayLong(d)}`, hint: placeNote(d, { pto: false, hasHours: false }) ?? "weekend", action: "pick.move", ...(isPast(env, d) ? { disabled: PAST } : {}), run: () => movePick(env, p, d, "AM", weekdayLong(d)) }));
+  return { title: `Move "${p.title}"`, items: [...quick, ...days, ...weekend] };
+}
+
+/** WK-3: the week's Saturday and Sunday. */
+export const weekendDates = (weekStart: IsoDate): IsoDate[] => [5, 6].map((n) => Temporal.PlainDate.from(weekStart).add({ days: n }).toString());
+const weekdayLong = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "long" });
+
+/** A menu move with Undo (WK-3): back where it was, or the carried copy undone when it came from a past day. */
+function movePick(env: MenuEnv, p: Pick, date: IsoDate, half: Half, label: string) {
+  if (!env.undoable) return env.runPlan("pick.move", { id: p.id, date, half });
+  return env.runPlan("pick.move", { id: p.id, date, half }).then((ok) => {
+    if (!ok) return false;
+    const note = date !== p.date && Temporal.PlainDate.from(date).dayOfWeek >= 6 ? ` · ${placeNote(date, { pto: false, hasHours: false })}` : "";
+    env.undoable!(`Moved to ${label}${note}`, () => (p.date < env.today ? Promise.resolve(false) : env.runPlan("pick.move", { id: p.id, date: p.date, half: p.half })));
+    return true;
+  });
 }
 
 export function sizeStep(env: MenuEnv, p: Pick): MenuStep {
@@ -358,9 +386,93 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
       { id: "timebox", label: "Timebox", hint: "a free gap in its block", action: "timebox.add", ...(p.status !== "planned" ? { disabled: "Only a planned to-do can be timeboxed" } : past ? { disabled: PAST } : {}), next: () => timeboxStep(env, p) },
       { id: "help", label: "Ask to collaborate", hint: "who is free", action: "collab.candidates", ...(past ? { disabled: PAST } : {}), run: () => env.openHelp({ clientKey: p.clientKey, title: p.title, url: p.itemUrl, itemId: p.itemId, pickId: p.id, pinned: p.date }) },
       { id: "done", label: p.status === "done" ? "Mark not done" : "Mark done", action: "pick.mark_done", run: () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" }) },
+      ...(p.todoKind === "deployment" ? [{ id: "deploy-edit", label: "Deployment details…", hint: p.window ? windowText(p.window) : "its window", action: "pick.set_kind", ...(past ? { disabled: PAST } : {}), next: () => deployForm(env, { pick: p }) } satisfies MenuItem] : []),
+      { id: "kind", label: "Kind", hint: p.todoKind === "deployment" ? DEPLOYMENT : "To-do", action: "pick.set_kind", ...(past ? { disabled: PAST } : p.status !== "planned" && p.status !== "done" ? { disabled: "Only a planned or done to-do", expected: true } : {}), next: () => kindStep(env, p) },
       { id: "makeup", label: "I'll make it up…", hint: "tonight, Friday, another day", action: "pick.make_up", ...(p.status !== "planned" ? { disabled: "Only a planned to-do can be made up" } : {}), next: () => makeUpStep(env, p) },
       { id: "drop", label: "Drop", danger: true, action: "pick.remove", ...(past && p.status !== "planned" ? { disabled: "Only a planned to-do can be dropped on a past day" } : {}), run: () => env.runPlan("pick.remove", { id: p.id }) },
     ],
+  };
+}
+
+/** WK-3: the to-do's kind: a plain to-do or a Deployment (which asks for its window first). */
+export function kindStep(env: MenuEnv, p: Pick): MenuStep {
+  const dep = p.todoKind === "deployment";
+  return {
+    title: `Kind of "${p.title}"`,
+    items: [
+      { id: "kind-todo", label: "To-do", checked: !dep, action: "pick.set_kind", run: () => (dep ? setKind(env, p, { kind: "todo" }, "Now a plain to-do") : undefined) },
+      { id: "kind-deployment", label: DEPLOYMENT, ...(dep ? {} : { hint: "needs a window" }), checked: dep, action: "pick.set_kind", next: () => deployForm(env, { pick: p }) },
+    ],
+  };
+}
+
+/** pick.set_kind with Undo: the to-do's kind, window, items and note go back as they were. */
+function setKind(env: MenuEnv, p: Pick, input: Record<string, unknown>, done: string) {
+  return env.runPlan("pick.set_kind", { id: p.id, ...input }).then((ok) => {
+    if (ok && env.undoable) {
+      const back = p.todoKind === "deployment" && p.window
+        ? { kind: "deployment", start: p.window.start, end: p.window.end, itemIds: (p.links ?? []).map((l) => l.id), note: p.notes ?? "" }
+        : { kind: "todo", note: p.notes ?? "" };
+      env.undoable(done, () => env.runPlan("pick.set_kind", { id: p.id, ...back }));
+    }
+    return ok;
+  });
+}
+
+/** WK-3: the clients a deployment can be for: the week's focus clients and every client with DevOps work, then Internal. */
+function deployClients(env: MenuEnv): { value: string; label: string }[] {
+  const seen = new Map<string, string>();
+  for (const d of env.week.days) for (const s of [d.am, d.pm]) for (const f of s.focus) seen.set(f.clientKey, f.clientName);
+  for (const [k, w] of env.work) if (!seen.has(k)) seen.set(k, w.clientName);
+  return [...seen].map(([value, label]) => ({ value, label }));
+}
+
+/** The next Saturday on or after today (a deployment's usual day when nothing else says). */
+function nextSaturday(today: IsoDate): IsoDate {
+  const d = Temporal.PlainDate.from(today);
+  return d.add({ days: (6 - d.dayOfWeek + 7) % 7 }).toString();
+}
+
+/**
+ * WK-3 (DP-0): Plan a deployment, or a to-do's Deployment details: client, date, window (start and end), what (the
+ * title), the DevOps item it covers and a note of what's going. Local only, with Undo. No runbook or checklist: the
+ * runbook and the execution stay in Coop.
+ */
+export function deployForm(env: MenuEnv, o: { pick?: Pick; date?: IsoDate; clientKey?: string | null } = {}): MenuStep {
+  const p = o.pick;
+  const clients = deployClients(env);
+  const client = p?.clientKey ?? o.clientKey ?? env.selection.clientKey ?? clients[0]?.value ?? "";
+  const link = p?.links?.find((l) => l.id !== p.itemId) ?? null;
+  return {
+    title: p ? (p.todoKind === "deployment" ? `Deployment: ${p.title}` : `Make "${p.title}" a deployment`) : "Plan a deployment",
+    button: p ? "Save" : "Plan it",
+    fields: [
+      ...(p ? [] : [
+        { key: "client", label: "Client", type: "select", value: client, options: clients.length ? clients : [{ value: "", label: "No clients on this week" }] } satisfies FormField,
+        { key: "title", label: "What", type: "text", value: "", placeholder: "e.g. Release 4.2 to production", optional: true } satisfies FormField,
+        { key: "date", label: "Date", type: "date", value: o.date ?? nextSaturday(env.today) } satisfies FormField,
+      ]),
+      { key: "start", label: "Starts at", type: "time", value: p?.window?.start ?? "19:00" },
+      { key: "end", label: "Ends at", type: "time", value: p?.window?.end ?? "21:00" },
+      ...(p?.itemId == null ? [{ key: "item", label: "DevOps item", type: "item", client: "client", optional: true, value: link ? String(link.id) : "" } satisfies FormField] : []),
+      { key: "note", label: "What's going", type: "text", value: p?.notes ?? "", placeholder: "code, SQL objects, the semantic model, reports", optional: true },
+    ],
+    save: (v) => {
+      // The server refuses a bad window in the same words (windowProblem); the form stays open with the notice.
+      const itemIds = v.item ? [Number(v.item)] : [];
+      if (p) {
+        const input = { kind: "deployment", start: v.start, end: v.end, note: v.note ?? "", ...(p.itemId == null ? { itemIds } : {}) };
+        return setKind(env, p, input, p.todoKind === "deployment" ? `Deployment saved · ${windowText({ start: v.start!, end: v.end! })}` : `Now a deployment · ${windowText({ start: v.start!, end: v.end! })}`);
+      }
+      return env.planAction
+        ? env.planAction("deploy.add", { clientKey: v.client, date: v.date, start: v.start, end: v.end, ...(v.title ? { title: v.title } : {}), ...(v.note ? { note: v.note } : {}), ...(itemIds.length ? { itemIds } : {}) }).then((r) => {
+            const id = (r as { pick?: { id: number } } | null)?.pick?.id;
+            const note = (r as { note?: string | null } | null)?.note;
+            if (id && env.undoable) env.undoable(`Deployment planned for ${weekdayLong(v.date!)} ${windowText({ start: v.start!, end: v.end! })}${note ? ` · ${note}` : ""}`, () => env.runPlan("pick.remove", { id }));
+            return !!r;
+          })
+        : env.runPlan("deploy.add", { clientKey: v.client, date: v.date, start: v.start, end: v.end, ...(v.title ? { title: v.title } : {}), ...(v.note ? { note: v.note } : {}), ...(itemIds.length ? { itemIds } : {}) });
+    },
   };
 }
 
@@ -789,6 +901,7 @@ export function dayMenu(env: MenuEnv, date: IsoDate): MenuStep {
       { id: "am", label: "Details of AM", action: "ui.details", run: () => env.openDetails(date, "AM") },
       { id: "pm", label: "Details of PM", action: "ui.details", run: () => env.openDetails(date, "PM") },
       ...(day?.eve ? [{ id: "eve", label: "Details of the evening", action: "ui.details", run: () => env.openDetails(date, "EVE") } as MenuItem] : []),
+      { id: "deploy", label: "Plan a deployment…", hint: "a window this day", action: "deploy.add", ...(isPast(env, date) ? { disabled: PAST } : {}), next: () => deployForm(env, { date }) },
       ...timeItems(env, date),
     ],
   };
@@ -1046,6 +1159,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "pick.move": return { next: () => choosePick(env, "Move which to-do?", (p) => moveStep(env, p)) };
     case "pick.mark_done": return { next: () => choosePick(env, "Mark which to-do done or not done?", (p) => () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" })) };
     case "pick.remove": return { next: () => choosePick(env, "Drop which to-do?", (p) => () => env.runPlan("pick.remove", { id: p.id })) };
+    case "deploy.add": return { next: () => deployForm(env, env.selection.date >= env.today ? { date: env.selection.date } : {}) };
+    case "pick.set_kind": return { next: () => choosePick(env, "Change the kind of which to-do?", (p) => kindStep(env, p)) };
     case "pick.uncarry":
     case "pick.undrop": return { disabled: "Use Undo right after Keep, Move or Drop on a suggested to-do" };
     case "planday.carry_hint": return { run: () => env.setView("week") };
