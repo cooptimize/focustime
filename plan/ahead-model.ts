@@ -203,13 +203,13 @@ export function fixGroups(load: AheadLoad, o: { readOnly: boolean; skipped?: Rea
         })),
       };
       const group = fixClient(input, { today: load.today, topN: load.fixTopN, ...(o.skipped ? { skipped: o.skipped } : {}), ...(o.leaving ? { leaving: o.leaving } : {}) });
-      if (!f) return { client: c, group, rows, total: group.entries.length, unkinded: group.entries };
+      if (!f) return { client: c, group, rows, total: group.entries.filter((e) => !e.leaving).length, unkinded: group.entries };
       // Every row the filters keep (Not ready is what Readiness is; the kinds narrow which gaps count).
       const kept = new Set(filterRows(rows, c, { ...f, gaps: false, kinds: [] }, { stories: true, today: load.today, ...(o.staleWeeks !== undefined ? { staleWeeks: o.staleWeeks } : {}) }).filter((r) => !r.context).map((r) => r.item.id));
       const kinds = f.kinds ?? [];
       const keep = (e: FixEntry) => kept.has(e.itemId) && (!kinds.length || e.gaps.some((g) => kinds.includes(g)));
       // AH-7: the counts by kind are what each kind would show, so they're counted before the kinds narrow it.
       const unkinded = group.entries.filter((e) => kept.has(e.itemId));
-      return { client: c, group: { ...group, entries: group.entries.filter(keep), skipped: (group.skipped ?? []).filter(keep) }, rows, total: group.entries.length, unkinded };
+      return { client: c, group: { ...group, entries: group.entries.filter(keep), skipped: (group.skipped ?? []).filter(keep) }, rows, total: group.entries.filter((e) => !e.leaving).length, unkinded };
     });
 }

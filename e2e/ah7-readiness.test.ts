@@ -154,6 +154,15 @@ describe.skipIf(!CHROMIUM)("AH-7: Readiness you can finish (browser, demo mode)"
     await confirm.waitFor({ timeout: 15_000 });
     await confirm.click();
     await expect.poll(() => page.locator(".ah-fx-progress").textContent(), { timeout: 30_000 }).toBe("1 fixed this week");
+    if (await panel.count()) await panel.getByRole("button", { name: "Close" }).click();
+    await expect.poll(() => panel.count()).toBe(0);
+    // A second fix, pending: both numbers.
+    await listRow(page, "Export button on the order page").getByRole("button", { name: "Size: Export button on the order page" }).click();
+    await page.getByRole("textbox", { name: "Story Points" }).fill("2");
+    await page.locator(".cell-pop").getByRole("button", { name: "Save" }).click();
+    await expect.poll(() => page.locator(".ah-fx-progress").textContent()).toBe("1 fixed this week · 1 pending save");
+    await page.waitForTimeout(1200);
+    await page.evaluate(() => window.scrollTo(0, 0));
     await shot(page, "progress");
     expect(errors).toEqual([]);
     await page.close();
