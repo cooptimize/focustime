@@ -1,8 +1,9 @@
 // TY-1: Today as an hour timeline, Week's look and Week's parts (ui/Timeline.tsx): each block a client-coloured band with
-// its header and a "Not timeboxed yet" tray, its hours underneath, the Evening band below. A to-do gets its time here:
-// drag from the tray, drag or resize the band, drag it back to the tray, or the keyboard. Timebox my day shows its
-// suggestions as dashed placeholders to accept, drop or move. On the phone it is all by tap. Own-plan changes run at once
-// with Undo. A timebox on Outlook goes through the usual preview; nothing else leaves FocusTime.
+// its header, its hours underneath, the Evening band below. TY-2: beside the hours (above them under 1100 px) the block's
+// checklist, the list view's own rows: the timed to-dos in time order, then "Not timeboxed yet". A to-do gets its time
+// here: drag from the checklist, drag or resize the band, drag it back to the checklist, or the keyboard. Timebox my day
+// shows its suggestions as dashed placeholders to accept, drop or move. The phone keeps TY-1's in-block tray, all by tap.
+// Own-plan changes run at once with Undo. A timebox on Outlook goes through the usual preview; nothing else leaves FocusTime.
 import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { TimeboxView, WeekLoadData } from "../actions/types.ts";
 import { didntFitText, type DayPlacement, type Unplaced, type AgendaTimebox } from "../plan/agenda.ts";
@@ -12,13 +13,14 @@ import { planFit } from "../plan/fit.ts";
 import { railItems, type InboxItemView } from "../plan/inbox-items.ts";
 import { nowClock, nowSpot } from "../plan/nowline.ts";
 import { lateOnCards } from "../plan/rail-promises.ts";
-import { dropSpan, nextFreeSpan, nudgeSpan, placeholderFits, quarterStarts, type Span } from "../plan/timeline.ts";
+import { checklistRows, dropSpan, nextFreeSpan, nudgeSpan, placeholderFits, quarterStarts, type Span } from "../plan/timeline.ts";
 import { minutesOf, TIMEBOX_MIN } from "../plan/timebox.ts";
 import { pickNeed, type Pick } from "../plan/types.ts";
 import type { DragMode } from "../plan/picktime.ts";
 import type { Day, Half, IsoDate, Slot } from "../week/types.ts";
 import { worstSeverity } from "../week/risks.ts";
 import { call } from "./api.ts";
+import { DueBadge } from "./FollowUps.tsx";
 import { clientColor, halfName, slotRange, startClock } from "./labels.ts";
 import { PickRow } from "./PickRow.tsx";
 import { PhoneSheet } from "./PhoneShell.tsx";
@@ -41,6 +43,8 @@ type Props = {
   tz: string;
   /** The day can be changed here: not past, not PTO, Use timeboxing on. */
   editable: boolean;
+  /** A day only to look at: the checkboxes don't work, as on the list view. */
+  readOnly: boolean;
   phone: boolean;
   proposals: Proposals | null;
   setProposals: (p: Proposals | null) => void;
@@ -77,6 +81,8 @@ export function TodayTimeline(props: Props) {
   const hours = useRef(new Map<Half, HTMLDivElement>());
   const trays = useRef(new Map<Half, HTMLElement>());
   const [sel, setSel] = useState<string | null>(null);
+  // TY-2: the to-do under the mouse, on either side: its row and its band light up together.
+  const [linked, setLinked] = useState<number | null>(null);
   const wantFocus = useRef<string | null>(null);
   const [drag, setDrag] = useState<TrayDrag | null>(null);
   const [sheet, setSheet] = useState<SheetTarget | null>(null);
@@ -98,6 +104,12 @@ export function TodayTimeline(props: Props) {
   const slotOfBox = (t: { start: string; pickId: number | null }) => (t.pickId !== null ? slotOfHalf(picks.find((p) => p.id === t.pickId)?.half ?? "AM") : null) ?? blocks.find((s) => ms(t.start) >= ms(s.view.start) && ms(t.start) < ms(s.view.end)) ?? null;
   const note = (t: string, undo: (() => Promise<void>) | null = null) => dnd?.note(t, undo);
 
+  // TY-2: a to-do with a suggestion is still on the checklist; once it gets a real time the suggestion has done its job.
+  useEffect(() => {
+    if (!proposals || proposals.date !== date) return;
+    const items = proposals.items.filter((x) => !boxedIds.has(x.pickId));
+    if (items.length !== proposals.items.length) setProposals(items.length ? { ...proposals, items } : null);
+  }, [boxedIds]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     setHeld((o) => {
       const ids = Object.keys(o).map(Number);
@@ -111,6 +123,8 @@ export function TodayTimeline(props: Props) {
   // After a key changes what's selected (T makes a band, Backspace a tray row), the keyboard stays on it.
   useEffect(() => {
     if (!wantFocus.current) return;
+    // TY-2: the row moves to Not timeboxed yet when the reload has the change; waiting for that keeps the keyboard on it.
+    if (wantFocus.current[0] === "p" && boxedIds.has(Number(wantFocus.current.slice(1)))) return;
     const el = root.current?.querySelector<HTMLElement>(`[data-tt="${wantFocus.current}"]`);
     if (!el) return;
     el.focus({ preventScroll: false });
@@ -147,12 +161,25 @@ export function TodayTimeline(props: Props) {
   };
   const unbox = async (t: TimeboxView): Promise<void> => {
     if (!env) return;
-    if (!(await timeboxRun(env, "timebox.remove", { id: t.id }))) return;
+    if (!(await timeboxRun(env, "timebox.remove", { id: t.id }))) {
+      wantFocus.current = null;
+      return;
+    }
     const back = t.pickId !== null ? { pickId: t.pickId } : { clientKey: t.clientKey, title: t.title, ...(t.itemId !== null ? { itemId: t.itemId } : {}), ...(t.url ? { url: t.url } : {}) };
     note(`No time: ${t.title}`, async () => void (await timeboxRun(env, "timebox.add", { ...back, date, start: t.start, end: t.end, outlook: t.outlook })));
   };
 
-  // ---- drag from the tray ----
+  /** TY-2: a click on a checklist row brings its band (or suggestion) into view. */
+  const reveal = (p: Pick) => {
+    const box = boxes.find((x) => x.pickId === p.id);
+    const key = box ? `t${box.id}` : placedIds.has(p.id) ? `g${p.id}` : null;
+    if (!key) return setSel(`p${p.id}`);
+    setSel(key);
+    const calm = document.documentElement.hasAttribute("data-reduce-motion") || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    root.current?.querySelector(`[data-tt="${key}"]`)?.scrollIntoView({ block: "center", behavior: calm ? "auto" : "smooth" });
+  };
+
+  // ---- drag from the tray or the checklist ----
   const hit = (x: number, y: number): { half: Half; frac: number } | null => {
     for (const [half, el] of hours.current) {
       const r = el.getBoundingClientRect();
@@ -241,10 +268,17 @@ export function TodayTimeline(props: Props) {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const at = (e.target as HTMLElement).closest<HTMLElement>("[data-tt]")?.dataset.tt;
     if (!at) return;
-    const id = Number(at.slice(1));
     const dir = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : null;
     const stop = () => (e.preventDefault(), e.stopPropagation());
-    if (at[0] === "t") {
+    // TY-2: on a checklist row, Up, Down and Backspace act on that to-do's band or suggestion.
+    let kind = at[0];
+    let id = Number(at.slice(1));
+    if (kind === "p" && (dir || e.key === "Backspace")) {
+      const box = boxes.find((x) => x.pickId === id);
+      if (box) (kind = "t"), (id = box.id);
+      else if (placedIds.has(id)) kind = "g";
+    }
+    if (kind === "t") {
       const t = boxes.find((x) => x.id === id);
       const s = t ? slotOfBox(t) : null;
       if (!t || !s || !canChange(s)) return;
@@ -257,7 +291,7 @@ export function TodayTimeline(props: Props) {
         if (t.pickId !== null) wantFocus.current = `p${t.pickId}`;
         void unbox(t);
       }
-    } else if (at[0] === "g") {
+    } else if (kind === "g") {
       const p = placed.find((x) => x.pickId === id);
       const s = p ? slotOfHalf(p.half) : null;
       if (!p || !s) return;
@@ -269,7 +303,7 @@ export function TodayTimeline(props: Props) {
         stop();
         dropOne(id);
       }
-    } else if (at[0] === "p" && (e.key === "t" || e.key === "T") && !e.shiftKey) {
+    } else if (kind === "p" && (e.key === "t" || e.key === "T") && !e.shiftKey && !boxedIds.has(id)) {
       const p = picks.find((x) => x.id === id);
       const s = p ? slotOfHalf(p.half) : null;
       if (!p || !s || !canChange(s)) return;
@@ -304,6 +338,8 @@ export function TodayTimeline(props: Props) {
     selected: (t) => sel === `t${t.id}`,
     select: (t) => setSel(`t${t.id}`),
     done: (t) => picks.find((p) => p.id === t.pickId)?.status === "done",
+    linked: (t) => t.pickId !== null && t.pickId === linked,
+    hover: (t) => setLinked(t?.pickId ?? null),
   };
 
   // ---- what's around the hours ----
@@ -322,7 +358,7 @@ export function TodayTimeline(props: Props) {
   return (
     <RulerCtx.Provider value={rulerCtx}>
       <BandEditCtx.Provider value={edit}>
-        <section ref={root} className={`today-tl${phone ? " phone" : ""}`} aria-label="Timeline" onKeyDown={onKeyDown}>
+        <section ref={root} className={`today-tl${phone ? " phone" : ""}${offered ? " has-bar" : ""}`} aria-label="Timeline" onKeyDown={onKeyDown}>
           {proposals && proposals.date === date && (
             <ProposalBar p={proposals} env={env} count={offered} onAcceptAll={() => void acceptAll()} onDiscard={() => setProposals(null)} onOutlook={(on) => setProposals({ ...proposals, outlook: on })} />
           )}
@@ -335,6 +371,7 @@ export function TodayTimeline(props: Props) {
           ) : (
             blocks.map((s) => {
               const untimed = picks.filter((p) => p.half === s.half && p.status === "planned" && !inBand.has(p.id) && !boxedIds.has(p.id) && !placedIds.has(p.id));
+              const checklist = checklistRows(picks.filter((p) => p.half === s.half && !inBand.has(p.id)), boxes);
               const held0 = placed.filter((p) => p.half === s.half);
               return (
                 <TimelineBlock
@@ -348,6 +385,11 @@ export function TodayTimeline(props: Props) {
                   nowLine={railNowOf(day, s.half, spot, now, label, () => {})}
                   name={s.focus[0] ? props.nameOf(s.focus[0].clientKey) : s.half === "EVE" ? "Evening" : s.open ? "Open" : halfName(s.half)}
                   untimed={untimed}
+                  checklist={checklist}
+                  tickable={!!data.plan?.[date]?.committedAt && !props.readOnly && !s.pto}
+                  linked={linked}
+                  setLinked={setLinked}
+                  onReveal={reveal}
                   canChange={canChange(s)}
                   timing={timing}
                   phone={phone}
@@ -424,6 +466,12 @@ type BlockProps = {
   nowLine: ReturnType<typeof railNowOf>;
   name: string;
   untimed: Pick[];
+  checklist: ReturnType<typeof checklistRows<Pick, TimeboxView>>;
+  /** The checkboxes work: a confirmed day that isn't past or off, as on the list view. */
+  tickable: boolean;
+  linked: number | null;
+  setLinked: (id: number | null) => void;
+  onReveal: (p: Pick) => void;
   canChange: boolean;
   timing: boolean;
   phone: boolean;
@@ -445,7 +493,7 @@ type BlockProps = {
   onOpen?: ((focus?: PanelFocus) => void) | undefined;
 };
 
-/** One block: the client-coloured band with Week's card header, the tray, then Week's hour timeline. */
+/** One block: the client-coloured band with Week's card header, then Week's hour timeline with the checklist beside it (the phone: TY-1's tray above it). */
 function TimelineBlock(b: BlockProps) {
   const { slot, day, data, picks, tz, name, untimed } = b;
   const pv = useContext(PlanCtx);
@@ -463,7 +511,21 @@ function TimelineBlock(b: BlockProps) {
   const minutes = span / 60_000;
   const earlier = new Set(slot.half === "PM" ? day.am.events.map((p) => p.event.id) : slot.half === "EVE" ? day.pm.events.map((p) => p.event.id) : []);
   const openHead = b.onOpen;
-  const showTray = b.timing && !slot.pto && (untimed.length > 0 || b.canChange);
+  const showTray = b.phone && b.timing && !slot.pto && (untimed.length > 0 || b.canChange);
+  const hours = (
+    <Timeline slot={slot} tz={tz} earlier={earlier} showGaps={!slot.open} minFocusWindow={data.thresholds.minFocusWindowMinutes} now={b.nowLine} className="tt-hours" style={{ height: `calc(${minutes} * var(--tl-hour) / 60)` }} rootRef={b.hoursRef} firstHour={!b.phone} markOverlaps={!b.phone}>
+      <RulerPromises rail={{ key: `${slot.date}|${slot.half}`, start: slot.view.start, end: slot.view.end }} tz={tz} />
+      {b.ghost && (
+        <div className="tbox tt-ghost" style={{ top: pct(pos(b.ghost.start)), height: pct((ms(b.ghost.end) - ms(b.ghost.start)) / span) }} aria-hidden="true">
+          <span className="tbox-label">{b.ghostTitle}</span>
+          <span className="tbox-time">{spanWords(b.ghost, tz)}</span>
+        </div>
+      )}
+      {b.placeholders.map((p) => (
+        <Placeholder key={p.pickId} p={p} slot={slot} tz={tz} pos={pos} span={span} phone={b.phone} client={p.clientKey} colors={data.clients} selected={b.sel === `g${p.pickId}`} linked={b.linked === p.pickId} onHover={b.setLinked} onSelect={() => b.setSel(`g${p.pickId}`)} onMove={(next) => b.onMovePlaceholder(p, next)} onAccept={() => b.onAccept(p)} onDrop={() => b.onDrop(p.pickId)} />
+      ))}
+    </Timeline>
+  );
   return (
     <article className={`half ${state} tt-block${sev ? ` ${sev}` : ""}${ended ? " ended" : ""}`} style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties} aria-label={`${name}, ${slotRange(slot, tz)}`}>
       <header className="tt-head card-head" onClick={openHead ? () => openHead() : undefined}>
@@ -491,23 +553,78 @@ function TimelineBlock(b: BlockProps) {
           )}
         </section>
       )}
-      <Timeline slot={slot} tz={tz} earlier={earlier} showGaps={!slot.open} minFocusWindow={data.thresholds.minFocusWindowMinutes} now={b.nowLine} className="tt-hours" style={{ height: `calc(${minutes} * var(--tl-hour) / 60)` }} rootRef={b.hoursRef}>
-        <RulerPromises rail={{ key: `${slot.date}|${slot.half}`, start: slot.view.start, end: slot.view.end }} tz={tz} />
-        {b.ghost && (
-          <div className="tbox tt-ghost" style={{ top: pct(pos(b.ghost.start)), height: pct((ms(b.ghost.end) - ms(b.ghost.start)) / span) }} aria-hidden="true">
-            <span className="tbox-label">{b.ghostTitle}</span>
-            <span className="tbox-time">{spanWords(b.ghost, tz)}</span>
-          </div>
-        )}
-        {b.placeholders.map((p) => (
-          <Placeholder key={p.pickId} p={p} slot={slot} tz={tz} pos={pos} span={span} phone={b.phone} client={p.clientKey} colors={data.clients} selected={b.sel === `g${p.pickId}`} onSelect={() => b.setSel(`g${p.pickId}`)} onMove={(next) => b.onMovePlaceholder(p, next)} onAccept={() => b.onAccept(p)} onDrop={() => b.onDrop(p.pickId)} />
-        ))}
-      </Timeline>
+      {b.phone ? hours : (
+        <div className="tt-split">
+          {hours}
+          <TodoChecklist b={b} />
+        </div>
+      )}
     </article>
   );
 }
 
-/** A tray row: Plan today's row, with its size chip always shown and a drag handle (a tap on the phone). */
+/**
+ * TY-2: the block's to-dos beside its hours, on the list view's own row: the ones with a time in time order, then "Not
+ * timeboxed yet". The whole column is where a band is dropped to take its time off. Sticky while the block scrolls by;
+ * under 1100 px it sits above the hours and folds.
+ */
+function TodoChecklist({ b }: { b: BlockProps }) {
+  const { slot, checklist } = b;
+  const [folded, setFolded] = useState(false);
+  const { timed, rest } = checklist;
+  const count = timed.length + rest.length;
+  const row = (p: Pick, group: "timed" | "rest") => <CheckRow key={p.id} pick={p} group={group} b={b} />;
+  const heading = b.timing && !slot.pto && (rest.length > 0 || (b.canChange && timed.length > 0));
+  return (
+    <aside ref={b.trayRef} className={`tt-check${folded ? " folded" : ""}`} aria-label={`To-dos, ${halfName(slot.half)}`}>
+      <button type="button" className="tt-check-toggle" aria-expanded={!folded} onClick={() => setFolded((f) => !f)}>
+        <span aria-hidden="true">{folded ? "▸" : "▾"}</span> To-dos · {count}
+      </button>
+      <div className="tt-check-body">
+        {timed.length > 0 && <ul className="today-picks tt-check-timed">{timed.map((t) => row(t.pick, "timed"))}</ul>}
+        {heading && <h3 className="tt-tray-label">Not timeboxed yet</h3>}
+        {rest.length > 0 && <ul className="today-picks tt-check-rest">{rest.map((p) => row(p, "rest"))}</ul>}
+        {rest.length === 0 && heading && <p className="tt-tray-empty muted">Everything here has a time. Drag one back here to take its time off.</p>}
+        {count === 0 && <p className="tt-tray-empty muted">Nothing planned here.</p>}
+      </div>
+    </aside>
+  );
+}
+
+/** One checklist row: PickRow as the list view draws it, plus the link to its band, the drag and the keyboard. */
+function CheckRow({ pick, group, b }: { pick: Pick; group: "timed" | "rest"; b: BlockProps }) {
+  const { slot, data, tz } = b;
+  const pv = useContext(PlanCtx);
+  const suggestion = b.placeholders.find((p) => p.pickId === pick.id) ?? null;
+  const planned = pick.status === "planned";
+  const canDrag = group === "rest" && planned && b.canChange;
+  const committed = !!data.plan?.[slot.date]?.committedAt;
+  const followUp = pick.followUpId !== null ? data.followUps.find((f) => f.id === pick.followUpId) ?? null : null;
+  const box = b.checklist.timed.find((t) => t.pick.id === pick.id)?.box ?? null;
+  const selected = b.sel === `p${pick.id}` || (!!box && b.sel === `t${box.id}`) || (!!suggestion && b.sel === `g${pick.id}`);
+  const rowProps = {
+    tabIndex: 0,
+    "data-tt": `p${pick.id}`,
+    onFocus: () => b.setSel(`p${pick.id}`),
+    onMouseEnter: () => b.setLinked(pick.id),
+    onMouseLeave: () => b.setLinked(null),
+    ...(canDrag ? { onPointerDown: b.trayDown(pick, slot) } : {}),
+    onDragStart: (e: { preventDefault: () => void }) => e.preventDefault(),
+    onClick: (e: { target: EventTarget }) => {
+      if (!(e.target as HTMLElement).closest("button, input, a")) b.onReveal(pick);
+    },
+  } as unknown as HTMLAttributes<HTMLLIElement>;
+  const cls = `tt-check-row${canDrag ? " can-drag" : ""}${selected ? " selected" : ""}${b.linked === pick.id ? " linked" : ""}`;
+  const tags = (
+    <>
+      {!committed && planned && <span className="draft-tag">draft</span>}
+      {suggestion && <span className="tt-suggested">Suggested {spanWords(suggestion, tz)}</span>}
+    </>
+  );
+  return <PickRow pick={pick} toggle={pv.toggle} link density="today" checklist canTick={b.tickable} timeEditable={b.canChange} readOnly={!b.canChange} tabIndex={0} className={cls} extra={tags} badge={followUp ? <DueBadge l={followUp} /> : undefined} dragProps={rowProps} />;
+}
+
+/** A tray row (the phone): Plan today's row, with its size chip always shown (a tap for a time). */
 function TrayRow({ pick, slot, canChange, phone, selected, onSelect, trayDown, onTap }: { pick: Pick; slot: Slot; canChange: boolean; phone: boolean; selected: boolean; onSelect: () => void; trayDown: BlockProps["trayDown"]; onTap: () => void }) {
   const pv = useContext(PlanCtx);
   const rowProps = {
@@ -526,19 +643,21 @@ function TrayRow({ pick, slot, canChange, phone, selected, onSelect, trayDown, o
 }
 
 /** Timebox my day's suggestion: dashed until accepted; drag or resize it first if you like. Never saved until ✓. */
-function Placeholder({ p, slot, tz, pos, span, phone, client, colors, selected, onSelect, onMove, onAccept, onDrop }: { p: DayPlacement; slot: Slot; tz: string; pos: (iso: string) => number; span: number; phone: boolean; client: string; colors: Record<string, string>; selected: boolean; onSelect: () => void; onMove: (next: Span) => void; onAccept: () => void; onDrop: () => void }) {
+function Placeholder({ p, slot, tz, pos, span, phone, client, colors, selected, linked, onHover, onSelect, onMove, onAccept, onDrop }: { p: DayPlacement; slot: Slot; tz: string; pos: (iso: string) => number; span: number; phone: boolean; client: string; colors: Record<string, string>; selected: boolean; linked: boolean; onHover: (id: number | null) => void; onSelect: () => void; onMove: (next: Span) => void; onAccept: () => void; onDrop: () => void }) {
   const { drag, live, down, move, up, cancel } = useBandDrag({ start: p.start, end: p.end, bounds: slot.view, inside: true, enabled: !phone, onCommit: onMove });
   const words = spanWords(live, tz);
   const noDrag = (e: { stopPropagation: () => void }) => e.stopPropagation();
   return (
     <div
-      className={`tbox tt-ph${drag ? " dragging" : ""}${selected ? " selected" : ""}`}
+      className={`tbox tt-ph${drag ? " dragging" : ""}${selected ? " selected" : ""}${linked ? " linked" : ""}`}
       style={{ top: pct(pos(live.start)), height: pct((ms(live.end) - ms(live.start)) / span), "--c": clientColor(client, colors) } as CSSProperties}
       data-tt={`g${p.pickId}`}
       role="group"
       tabIndex={0}
       aria-label={`Suggestion: ${p.title}, ${words}`}
       onFocus={onSelect}
+      onMouseEnter={() => onHover(p.pickId)}
+      onMouseLeave={() => onHover(null)}
       onPointerDown={(ev) => (onSelect(), down(ev, "move"))}
       onPointerMove={move}
       onPointerUp={up}

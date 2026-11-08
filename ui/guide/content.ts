@@ -450,7 +450,7 @@ export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "capture" | "a
       { title: "The urgent strip", text: "Under what's next: conversations that need you now, promises late or due within 2 hours, and work sent to you. It shows the 3 most urgent, then \"N more in Inbox\"." },
       { title: "One moment card", text: "Plan today in the morning, Midday check-in after lunch, Close out at the end of the day. Each opens its flow; done, it's a small line with Reopen." },
       { title: "Any day", text: "‹ › step to other days, read only, and Back to today comes back. A PTO day just says you're off." },
-      { title: "The timeline", text: "Timeline at the top right, or {key:ui.set_today_timeline}, shows the day as hours, like Week. Drag a to-do onto them, move or resize it, each with Undo. Timebox my day adds dashed suggestions to accept." },
+      { title: "The timeline", text: "Timeline at the top right, or {key:ui.set_today_timeline}, shows the day as hours, like Week. Each block's to-dos are listed beside its hours with their checkboxes, the ones with a time first. Drag one from Not timeboxed yet onto the hours, move or resize it, or drag it back to take its time off, each with Undo. Timebox my day adds dashed suggestions to accept." },
     ],
     extras: ["urgent"],
     faqs: ["How do I use the timeline with the keyboard?", "How does the timeline work on a phone?", "Does Timebox my day write to my calendar?", "What is the moment card?", "What's on Today on a phone?", "What's in Today's urgent strip?", "Can I look at another day?", "Does checking off a to-do change DevOps?", "What is the line across today?", "How does FocusTime know I'm off?", "Why can't I move some of my old timeboxes?"],

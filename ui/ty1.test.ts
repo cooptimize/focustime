@@ -15,6 +15,11 @@ describe("the shared timeline", () => {
     expect(read("./Timeline.tsx")).toMatch(/layoutEvents/);
     expect(read("./TodayTimeline.tsx")).not.toMatch(/layoutEvents|hourMarks/);
   });
+  it("Today draws the checklist with the list view's row, and Today alone asks for overlaps and the first hour", () => {
+    expect(read("./TodayTimeline.tsx")).toMatch(/<PickRow[^>]*density="today"[^>]*checklist/);
+    expect(read("./TodayTimeline.tsx")).toMatch(/firstHour=\{!b\.phone\} markOverlaps=\{!b\.phone\}/);
+    expect(read("./WeekGrid.tsx")).not.toMatch(/firstHour|markOverlaps/);
+  });
   it("the Timebox my day popup is gone", () => {
     expect(read("./PlanDay.tsx")).not.toMatch(/TimeboxMyDay|MyDayBlock/);
     expect(read("./styles.css")).not.toMatch(/\.myday\b/);

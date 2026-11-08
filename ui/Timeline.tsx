@@ -8,7 +8,7 @@ import type { CalEvent, Day, Half, PlacedEvent, Slot } from "../week/types.ts";
 import type { NowSpot } from "../plan/nowline.ts";
 import { eventMenu } from "./menu.ts";
 import { useMenu } from "./Menus.tsx";
-import { hourMarks, labelHere, layoutEvents } from "./layout.ts";
+import { hourMarks, labelHere, layoutEvents, overlappingIds } from "./layout.ts";
 import { eventRange, SampleSources, showAsLabel, sourceName } from "./labels.ts";
 import { slotOf } from "./halves.ts";
 import { NowLine, NowPast } from "./NowLine.tsx";
@@ -45,10 +45,11 @@ export function offHours(slot: Slot): { start: number; end: number }[] {
   return out;
 }
 
-export function Timeline({ slot, tz, showGaps, minFocusWindow, earlier, now, children, className = "", style, rootRef }: { slot: Slot; tz: string; showGaps: boolean; minFocusWindow: number; earlier: ReadonlySet<string>; now: RailNow | null; /** TY-1: Today's extras over the hours (placeholders, a drag's ghost, promises). */ children?: ReactNode; className?: string; style?: CSSProperties; rootRef?: Ref<HTMLDivElement> }) {
+export function Timeline({ slot, tz, showGaps, minFocusWindow, earlier, now, children, className = "", style, rootRef, firstHour = false, markOverlaps = false }: { slot: Slot; tz: string; showGaps: boolean; minFocusWindow: number; earlier: ReadonlySet<string>; now: RailNow | null; /** TY-1: Today's extras over the hours (placeholders, a drag's ghost, promises). */ children?: ReactNode; className?: string; style?: CSSProperties; rootRef?: Ref<HTMLDivElement>; /** TY-2: a label on the line the view starts on, too. */ firstHour?: boolean; /** TY-2: "Overlaps" on events that share time. */ markOverlaps?: boolean }) {
   const { start, end } = slot.view;
-  const marks = hourMarks(start, end, tz);
+  const marks = hourMarks(start, end, tz, firstHour);
   const laid = layoutEvents(slot.events, start, end);
+  const clash = markOverlaps ? overlappingIds(slot.events) : null;
   const min = minFocusWindow;
   const span = Math.max(1, ms(end) - ms(start));
   const posMs = (n: number) => (n - ms(start)) / span;
@@ -79,7 +80,7 @@ export function Timeline({ slot, tz, showGaps, minFocusWindow, earlier, now, chi
       {now && <NowPast at={now.past} />}
       <div className="lanes">
         {laid.map(({ placed, top, height, lane, lanes }) => (
-          <EventCard key={placed.event.id} placed={placed} tz={tz} label={labelHere(placed, earlier)} style={{ top: pct(top), height: pct(height), left: `calc(${pct(lane / lanes)} + 4px)`, width: `calc(${pct(1 / lanes)} - 8px)` }} />
+          <EventCard key={placed.event.id} placed={placed} tz={tz} label={labelHere(placed, earlier)} overlaps={!!clash?.has(placed.event.id)} style={{ top: pct(top), height: pct(height), left: `calc(${pct(lane / lanes)} + 4px)`, width: `calc(${pct(1 / lanes)} - 8px)` }} />
         ))}
       </div>
       {children}
@@ -103,7 +104,7 @@ export function useEventMenu(e: CalEvent) {
     : {};
 }
 
-export function EventCard({ placed, tz, style, label = true }: { placed: PlacedEvent; tz: string; style: CSSProperties; label?: boolean }) {
+export function EventCard({ placed, tz, style, label = true, overlaps = false }: { placed: PlacedEvent; tz: string; style: CSSProperties; label?: boolean; overlaps?: boolean }) {
   const e = placed.event;
   const samples = useContext(SampleSources);
   const kind = e.isPersonal ? "personal" : "meeting";
@@ -119,6 +120,7 @@ export function EventCard({ placed, tz, style, label = true }: { placed: PlacedE
       {label && <><span className="ev-line">
         <span className="ev-time">{eventRange(e, tz)}</span>
         <span className="ev-title">{e.title}</span>
+        {overlaps && <span className="ev-overlap" title="Another event is booked at the same time">Overlaps</span>}
       </span>
       <span className="ev-meta">
         {e.unavailable ? "Unavailable" : sourceName(e, samples)}

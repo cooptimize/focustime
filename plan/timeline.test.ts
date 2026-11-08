@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import type { Slot } from "../week/types.ts";
 import type { AgendaTimebox } from "./agenda.ts";
-import { clampSpan, dropSpan, nextFreeSpan, nudgeSpan, placeholderFits, quarterStarts } from "./timeline.ts";
+import { checklistRows, clampSpan, dropSpan, nextFreeSpan, nudgeSpan, placeholderFits, quarterStarts } from "./timeline.ts";
 import { SIZE_MINUTES } from "./types.ts";
 
 const TZ = "America/Chicago";
@@ -73,5 +73,24 @@ describe("placeholderFits", () => {
     expect(placeholderFits(slot, [], { start: at("09:00"), end: at("10:00") })).toBe(true);
     expect(placeholderFits(slot, [], { start: at("09:30"), end: at("10:30") })).toBe(false);
     expect(placeholderFits(slot, [box(9, "11:00", "11:30")], { start: at("11:15"), end: at("11:45") })).toBe(false);
+  });
+});
+
+describe("checklistRows (TY-2)", () => {
+  const box = (pickId: number | null, start: string) => ({ pickId, start: `2026-11-02T${start}:00-05:00` });
+  const pick = (id: number, status = "planned") => ({ id, status });
+  it("puts the timed to-dos first in time order, then the rest in plan order", () => {
+    const { timed, rest } = checklistRows([pick(1), pick(2), pick(3), pick(4)], [box(3, "11:00"), box(2, "09:30")]);
+    expect(timed.map((t) => t.pick.id)).toEqual([2, 3]);
+    expect(rest.map((p) => p.id)).toEqual([1, 4]);
+  });
+  it("keeps done to-dos and leaves out dropped and moved ones", () => {
+    const { timed, rest } = checklistRows([pick(1, "done"), pick(2, "dropped"), pick(3, "moved"), pick(4, "done")], [box(1, "10:00"), box(2, "11:00")]);
+    expect(timed.map((t) => t.pick.id)).toEqual([1]);
+    expect(rest.map((p) => p.id)).toEqual([4]);
+  });
+  it("places a to-do by its earliest timebox, once; a timebox with no to-do isn't a row", () => {
+    const { timed } = checklistRows([pick(1), pick(2)], [box(1, "14:00"), box(2, "13:00"), box(1, "12:00"), box(null, "09:00")]);
+    expect(timed.map((t) => [t.pick.id, t.box.start.slice(11, 16)])).toEqual([[1, "12:00"], [2, "13:00"]]);
   });
 });

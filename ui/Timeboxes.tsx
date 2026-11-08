@@ -664,6 +664,9 @@ export type BandEdit = {
   selected: (t: TimeboxView) => boolean;
   select: (t: TimeboxView) => void;
   done: (t: TimeboxView) => boolean;
+  /** TY-2: the checklist row of this band is hovered (and the other way round). */
+  linked: (t: TimeboxView) => boolean;
+  hover: (t: TimeboxView | null) => void;
 };
 export const BandEditCtx = createContext<BandEdit | null>(null);
 
@@ -721,7 +724,7 @@ function Band({ t, env, bounds, pos }: { t: TimeboxView; env: TimeboxEnv; bounds
     inside: !!edit,
     enabled: !edit || edit.canDrag(t),
     onCommit: (next, mode) => (edit ? edit.commit(t, next, mode) : void timeboxChange(env, "timebox.update", { id: t.id, start: next.start, end: next.end })),
-    // TY-1: dropped on the tray: the time comes off.
+    // TY-1: dropped on the tray (TY-2: the checklist, on a computer): the time comes off.
     onRelease: edit ? (ev, mode) => {
       if (mode !== "move" || !edit.overTray(ev.clientX, ev.clientY)) return false;
       moved.current = true;
@@ -734,7 +737,7 @@ function Band({ t, env, bounds, pos }: { t: TimeboxView; env: TimeboxEnv; bounds
   const label = `${t.pickId !== null ? "" : "Timebox: "}${t.title}, ${range(t, env.tz)}${t.onOutlook ? ", on Outlook" : ""}${t.conflict ? ", changed in both places" : t.outlookNote ? `, ${t.outlookNote}` : ""}`;
   return (
     <div
-      className={`tbox${drag ? " dragging" : ""}${t.conflict ? " conflict" : ""}${t.sync ? " out-of-step" : ""}${t.outlook ? " on-outlook" : ""}${edit?.selected(t) ? " selected" : ""}${edit?.done(t) ? " done" : ""}`}
+      className={`tbox${drag ? " dragging" : ""}${t.conflict ? " conflict" : ""}${t.sync ? " out-of-step" : ""}${t.outlook ? " on-outlook" : ""}${edit?.selected(t) ? " selected" : ""}${edit?.done(t) ? " done" : ""}${edit?.linked(t) ? " linked" : ""}`}
       data-tt={edit ? `t${t.id}` : undefined}
       role="button"
       tabIndex={0}
@@ -746,6 +749,8 @@ function Band({ t, env, bounds, pos }: { t: TimeboxView; env: TimeboxEnv; bounds
       onPointerUp={up}
       onPointerCancel={cancel}
       onFocus={edit ? () => edit.select(t) : undefined}
+      onMouseEnter={edit ? () => edit.hover(t) : undefined}
+      onMouseLeave={edit ? () => edit.hover(null) : undefined}
       onClick={(ev) => {
         ev.stopPropagation();
         if (moved.current) moved.current = false;
