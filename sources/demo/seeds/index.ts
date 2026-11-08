@@ -6,6 +6,7 @@ import { assistantSeed } from "./assistant.ts";
 import { boundarySeed } from "./boundary.ts";
 import { capturesSeed } from "./captures.ts";
 import { conversationsSeed } from "./conversations.ts";
+import { coworkSeed } from "./cowork.ts";
 import { followupsSeed } from "./followups.ts";
 import { historySeed } from "./history.ts";
 import { inboxSeed } from "./inbox.ts";
@@ -32,6 +33,7 @@ export const DEMO_SEEDS: readonly DemoSeed[] = [
   historySeed,
   conversationsSeed,
   boundarySeed,
+  coworkSeed,
   inboxSeed,
   assistantSeed,
   statusSeed,

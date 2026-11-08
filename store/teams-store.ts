@@ -9,6 +9,7 @@ import type { AskSort, NotSorted } from "../plan/asks-ai.ts";
 import type { ChatKind, ChatMember } from "../plan/chats.ts";
 import { isMember, type ClientChat, type Mention, type PollState, type Reaction, type Request, type TeamsMessage } from "../plan/requests.ts";
 import { hostedImageIds } from "../plan/sanitize.ts";
+import type { CallEvent, StoredCall } from "../plan/cowork.ts";
 import { PlanError } from "./plan-store.ts";
 import type { Conn, Param, Row } from "./sql/conn.ts";
 
@@ -215,6 +216,7 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
           [chatId],
         );
         await db.run(ORPHAN_IMAGES);
+        await db.run("DELETE FROM chat_calls WHERE chat_id = ?", [chatId]);
         await db.run("DELETE FROM client_chats WHERE chat_id = ?", [chatId]);
         await log(by, c.clientKey, chatId, "removed");
       });
@@ -322,8 +324,53 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
           params,
         )).changes;
         await db.run(ORPHAN_IMAGES);
+        await db.run(`DELETE FROM chat_calls WHERE chat_id IN (${list})`, params);
         return gone;
       });
+    },
+
+    // ---- co-working calls (CW-1) ----
+    /**
+     * Records call started and ended events of a registered chat, once per call id: a start sets when and who (kept
+     * from the first one seen), an end sets when it ended (and when it started, from its duration, if the start was
+     * never seen). Events of an unregistered chat are dropped.
+     */
+    async saveCalls(chatId: string, events: readonly CallEvent[]): Promise<number> {
+      if (!events.length) return 0;
+      return db.tx(async () => {
+        const c = await store.chat(chatId);
+        if (!c) return 0;
+        let n = 0;
+        for (const e of events) {
+          if (e.chatId !== chatId) continue;
+          const r = await db.get("SELECT started_at, ended_at FROM chat_calls WHERE chat_id = ? AND call_id = ?", [chatId, e.callId]);
+          if (!r) {
+            await db.run(
+              "INSERT INTO chat_calls (chat_id, call_id, client_key, started_at, ended_at, started_by, started_by_tenant, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+              [chatId, e.callId, c.clientKey, e.startedAt, e.kind === "ended" ? e.at : null, e.initiatorId, e.initiatorTenant, stamp()],
+            );
+            n++;
+          } else if (e.kind === "ended" && !r.ended_at) {
+            await db.run("UPDATE chat_calls SET ended_at = ?, started_at = COALESCE(started_at, ?), updated_at = ? WHERE chat_id = ? AND call_id = ?", [e.at, e.startedAt, stamp(), chatId, e.callId]);
+            n++;
+          } else if (e.kind === "started" && !r.started_at) {
+            await db.run("UPDATE chat_calls SET started_at = ?, started_by = ?, started_by_tenant = ?, updated_at = ? WHERE chat_id = ? AND call_id = ?", [e.at, e.initiatorId, e.initiatorTenant, stamp(), chatId, e.callId]);
+            n++;
+          }
+        }
+        return n;
+      });
+    },
+    /** The calls of these chats that haven't ended and started after `since` (the live rule is plan/cowork.ts's). */
+    async openCalls(chatIds: readonly string[], since: string): Promise<StoredCall[]> {
+      if (!chatIds.length) return [];
+      const [list, params] = inList(chatIds);
+      const rows = await db.all(`SELECT chat_id, call_id, started_at, ended_at, started_by, started_by_tenant FROM chat_calls WHERE chat_id IN (${list}) AND ended_at IS NULL AND started_at > ?`, [...params, since]);
+      return rows.map((r) => ({ chatId: r.chat_id as string, callId: r.call_id as string, startedAt: instant(r.started_at), endedAt: instant(r.ended_at), startedBy: (r.started_by as string | null) ?? null, startedByTenant: (r.started_by_tenant as string | null) ?? null }));
+    },
+    /** Calls that started (or, never seen starting, were last changed) before `olderThan` are forgotten. */
+    async expireCalls(olderThan: string): Promise<number> {
+      return db.tx(async () => (await db.run("DELETE FROM chat_calls WHERE COALESCE(started_at, updated_at) < ?", [olderThan])).changes);
     },
 
     // ---- images (CV-2) ----

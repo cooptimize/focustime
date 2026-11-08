@@ -268,6 +268,9 @@ export const CLIENT_SPECS = {
   open_states: { kind: "rule", area: "clients", label: "States treated as open", builtin: [] as string[], parse: list(20, 60) },
   // GD-2: other names people use for the client in chats ("WT", "the Wingtip team"), for the client boundary's match.
   aliases: { kind: "rule", area: "clients", label: "Other names (aliases)", builtin: [] as string[], parse: list(10, 60) },
+  // HK-7 (Q-GD2-4): match the client's name and aliases only with the casing written ("Atlas", not "atlas"). Null: the
+  // default rule (plan/common-words.ts: on for a name that is an ordinary word, off otherwise).
+  exact_case: { kind: "rule", area: "clients", label: "Match only as written", builtin: null as boolean | null, parse: orNull(bool) },
   // WT-1's process overrides, one switch per type in Admin › Clients (type names; matched without case).
   no_breakdown: { kind: "rule", area: "clients", label: "Types that don't need breakdown", builtin: [] as string[], parse: list(40, 100) },
   background: { kind: "rule", area: "clients", label: "Background types", builtin: [] as string[], parse: list(40, 100) },
@@ -350,8 +353,8 @@ export type OrgRules = {
   /** ADM-2 (D604): team values stored that no longer validate, each read as its built-in value (Status shows them). */
   problems: { key: string; label: string; fallback: unknown }[];
 };
-export type ClientRules = { color: string | null; allowAi: boolean; /** CV-3: rules-only grouping while AI is off (on by default). */ groupWithoutAi: boolean; attachmentsAi: boolean; openStates: string[]; /** GD-2: other names for the client, for the boundary's match. */ aliases: string[]; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean; /** AH-2: null is automatic. */ devopsScope: DevOpsScope | null; /** AH-3: the gaps Fix next counts. */ fixGaps: GapKind[] };
-export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, groupWithoutAi: true, attachmentsAi: false, openStates: [], aliases: [], noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false, devopsScope: null, fixGaps: [...GAP_KINDS] };
+export type ClientRules = { color: string | null; allowAi: boolean; /** CV-3: rules-only grouping while AI is off (on by default). */ groupWithoutAi: boolean; attachmentsAi: boolean; openStates: string[]; /** GD-2: other names for the client, for the boundary's match. */ aliases: string[]; /** HK-7: match names only as written; null is the default rule. */ exactCase: boolean | null; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean; /** AH-2: null is automatic. */ devopsScope: DevOpsScope | null; /** AH-3: the gaps Fix next counts. */ fixGaps: GapKind[] };
+export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, groupWithoutAi: true, attachmentsAi: false, openStates: [], aliases: [], exactCase: null, noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false, devopsScope: null, fixGaps: [...GAP_KINDS] };
 
 const parsed = (r: OrgRow): unknown => {
   try {
@@ -391,7 +394,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
   for (const k of clientKeys) {
     const s = `client:${k}`;
     const c = <K extends ClientKeyName>(key: K) => valueOf(m, s, key, CLIENT_SPECS[key] as Spec, CLIENT_SPECS[key].builtin) as (typeof CLIENT_SPECS)[K]["builtin"];
-    clients[k] = { color: c("color"), allowAi: c("allow_ai"), groupWithoutAi: c("group_without_ai"), attachmentsAi: c("attachments_ai"), openStates: c("open_states"), aliases: c("aliases"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden"), devopsScope: c("devops_scope"), fixGaps: c("fix_gaps") };
+    clients[k] = { color: c("color"), allowAi: c("allow_ai"), groupWithoutAi: c("group_without_ai"), attachmentsAi: c("attachments_ai"), openStates: c("open_states"), aliases: c("aliases"), exactCase: c("exact_case"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden"), devopsScope: c("devops_scope"), fixGaps: c("fix_gaps") };
   }
   const levels = Object.fromEntries(
     LEVELS.map((l) => {

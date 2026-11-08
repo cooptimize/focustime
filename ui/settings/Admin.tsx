@@ -182,7 +182,7 @@ const colorVar = (c: string | null) => (c ? (c.startsWith("#") ? c : `var(--clie
 
 // ---------- Clients ----------
 
-type ClientRow = { key: string; isClient: boolean; whyText: string; names: string[]; types: string[]; treatAsClient: boolean; hidden: boolean; hasSettings: boolean; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; /** GD-2 */ aliases?: string[]; houseStyle: string | null; fixGaps?: GapKind[]; process: ClientProcess; scope: ClientScopeRow | null; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
+type ClientRow = { key: string; isClient: boolean; whyText: string; names: string[]; types: string[]; treatAsClient: boolean; hidden: boolean; hasSettings: boolean; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; /** GD-2 */ aliases?: string[]; /** HK-7 */ exactCase?: boolean; exactCaseDefault?: boolean; houseStyle: string | null; fixGaps?: GapKind[]; process: ClientProcess; scope: ClientScopeRow | null; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
 type ClientFilterValue = "customers" | "all";
 type ClientCounts = { customers: number; all: number };
 type ClientsData = { palette: string[]; suggested: string[]; filter: ClientFilterValue; accountsRead: boolean; counts: ClientCounts; clients: ClientRow[] };
@@ -341,6 +341,12 @@ function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: Clie
         <div className="set-form">
           <AField label="Other names (aliases)" kind="Rule" s={saver.status(scope, "aliases")} retry={() => void saver.save(scope, "aliases", c.aliases ?? [], `${c.key}: other names`)} hint="Other names people use for this client, like a short name or an old company name. FocusTime holds back a message that names it in another client's chat with people outside Cooptimize, and flags it in text going to another client. Commas between them.">
             <ListInput label={`${c.key}: other names`} value={saver.shown(scope, "aliases", c.aliases ?? [])} onSave={(v) => void saver.save(scope, "aliases", v, `${c.key}: other names`)} />
+          </AField>
+          {/* HK-7 (Q-GD2-4): a name that is an ordinary word ("Atlas", "Summit") matches only with its casing. */}
+          <AField label="Match only as written" kind="Rule" s={saver.status(scope, "exact_case")} retry={() => void saver.save(scope, "exact_case", c.exactCase ?? false, `${c.key}: match only as written`)} hint={`Matches the name and other names only with the capitals as written, so "${c.key}" counts and "${c.key.toLowerCase()}" doesn't. For a name that is also an ordinary word. ${c.exactCaseDefault ? "On by default for this name." : "Off by default for this name."}`}>
+            <label className="set-check">
+              <input type="checkbox" role="switch" checked={saver.shown(scope, "exact_case", c.exactCase ?? false)} aria-label={`${c.key}: match only as written`} onChange={(e) => void saver.save(scope, "exact_case", e.target.checked, `${c.key}: match only as written`)} /> {saver.shown(scope, "exact_case", c.exactCase ?? false) ? "On" : "Off"}
+            </label>
           </AField>
         </div>
       )}

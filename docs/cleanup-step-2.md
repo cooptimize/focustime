@@ -43,7 +43,7 @@ Not on the list yet:
   Settings › Client chats and the command menu still read them. Waiting on the product owner's decision (D910,
   Q-HK4-3).
 - **The person's old `[ai]` keys** (`use`, `monthly_cap_usd`, `allowed_clients`): settings text, not a column. Still
-  parsed for the one-time org bootstrap; see the CL-1 decision. Removing them from the settings model later needs no
+  parsed for the one-time org bootstrap; see D1043 (CL-1). Removing them from the settings model later needs no
   migration (BH-1's loader ignores unknown keys).
 
 ## The migration (text for step 2b, not a file)

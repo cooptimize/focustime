@@ -13,6 +13,7 @@ import { formatDuration } from "../week/format.ts";
 import { countdown, timerLeft } from "./NowStrip.tsx";
 import { todoLine, useTodoSheet } from "./TodoSheet.tsx";
 import { userZone } from "../week/zone.ts";
+import { LiveCalls, liveOf, useCoworkData } from "./cowork.tsx";
 
 const ms = (iso: string) => Date.parse(iso.replace(/\[.*\]$/, ""));
 const live = (p: Pick) => p.status === "planned" || p.status === "done";
@@ -38,6 +39,7 @@ export function PhoneNowCard({ card, data, pick, nowMs, nameOf, committed, onSta
   onTimer: (a: "timer.done" | "timer.extend") => void;
   onFocusScreen: () => void;
 }): ReactNode {
+  const cowork = useCoworkData();
   if (card.kind === "none") return null;
   const tz = userZone(data);
   const t = data.timer;
@@ -57,6 +59,8 @@ export function PhoneNowCard({ card, data, pick, nowMs, nameOf, committed, onSta
       <p className="ph-now-tag">{head.tag}</p>
       <h2 className="ph-now-title">{head.title}</h2>
       <p className="ph-now-line">{head.line}</p>
+      {/* CW-1: a call live in this client's delivery chat, with Join. */}
+      <LiveCalls chats={liveOf(cowork, client)} zone={tz} className="now-live" />
       {meeting && (
         <p className={`ph-now-meet${meeting.underWay ? " on" : ""}`}>
           <span className="pnm-tag">{meeting.underWay ? "In a meeting" : "Next meeting"}</span>

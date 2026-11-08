@@ -1,6 +1,6 @@
 # Architecture
 
-For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `d25c148` on Nov 7, 2026 (SR-2 parts against its own branch).
+For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `4088995` on Nov 7, 2026 (SR-2 parts against its own branch).
 
 FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a React app and a JSON action API, keeps its data in one SQL database, and talks to Microsoft Graph, Dataverse, Azure DevOps, Google Calendar, Azure Resource Manager and OpenAI. The per-folder detail is in [docs/architecture.md](../architecture.md); this page is the overview.
 
@@ -41,7 +41,7 @@ App jobs run at the start of each slow pass, each with its own next-due time (`s
 | `retention` | The daily purge (see [Data](data.md#retention)) |
 | `meeting_capture` | Registered client calls: occurrences, transcripts after each call, the AI pass |
 | `devops_poll` | Central DevOps reads: changed items per client, the change log |
-| `requests_poll` | Shared polling of registered client chats, every 5 minutes in followers' working hours |
+| `requests_poll` | Shared polling of registered client chats, every 5 minutes in followers' working hours; also records their co-working calls (CW-1, `chat_calls`) |
 
 A job that must run once per period claims it with a unique insert in `job_claims` (`store/retention.ts` `claimPeriod`), so a restart or a second replica can't run it twice; a failed run gives its claim back. Hourly maintenance hard-deletes accounts past their 30 days and sweeps expired sessions.
 

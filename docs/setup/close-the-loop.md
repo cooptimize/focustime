@@ -9,6 +9,9 @@ or Outlook with the message prefilled, you send it there and press Mark sent.
 
 ## The permissions
 
+IN-2 uses the same permissions, the same way, for an admin's invite from Admin › People › Who's set up (a Teams 1:1
+message or an Outlook draft or email to Cooptimizers who haven't signed in). Nothing new is asked for.
+
 All are **delegated** Microsoft Graph permissions on the existing "FocusTime" app registration: FocusTime acts as the
 signed-in person, with what that person can already do in Teams and Outlook. None is application (app-only), and none
 requires admin consent by default.

@@ -22,7 +22,8 @@ export type SetupRow = SetupMarks & {
   me: boolean;
   /** The day they were last active (the admin's day), never a time. */
   lastActiveDay: string | null;
-  invited: { day: string; byName: string } | null;
+  /** How: IN-1's own opens and copies, or IN-2's sends from FocusTime (teams_sent, email_draft, email_sent). */
+  invited: { day: string; byName: string; via?: string } | null;
 };
 
 export type SetupFilter = "all" | "not_signed_in" | "partly";
@@ -103,6 +104,15 @@ export function mailtoLink(emails: readonly string[], subject: string, body: str
   const to = emails.filter(validEmail).map((e) => e.trim());
   if (!to.length) throw new Error("No email address");
   return `mailto:${to.map(enc).join(",")}?subject=${enc(subject)}&body=${enc(body)}`;
+}
+
+/** IN-2: LP-1's admin note (plan/loop.ts), its second sentence for an invite: there's no Mark sent; opening records it. */
+export const INVITE_ADMIN_NOTE = "Sending from FocusTime needs an admin to approve access. Until then, open it in Teams or Outlook prefilled and send it there.";
+
+/** IN-2: "Invited by Ada via Teams, Nov 7" for a send from FocusTime; IN-1's "Invited Nov 7 by Ada" otherwise. */
+export function invitedLine(inv: { day: string; byName: string; via?: string }, day: (d: string) => string): string {
+  const how = inv.via === "teams_sent" ? "Teams" : inv.via === "email_sent" ? "Email" : inv.via === "email_draft" ? "Email (Outlook draft)" : null;
+  return how ? `Invited by ${inv.byName} via ${how}, ${day(inv.day)}` : `Invited ${day(inv.day)} by ${inv.byName}`;
 }
 
 /** The Teams app's page in the Teams store of this organization, from the environment's app id (when it's set up). */

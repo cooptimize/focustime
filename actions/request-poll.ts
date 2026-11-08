@@ -8,7 +8,8 @@
 // run here with the token owner's settings, so Requests appear without anyone opening FocusTime; the AI sorts each new
 // one under the token owner's switches and caps; a FocusTime user's own message with promise phrasing becomes their
 // promise under their own settings. Tokens live only inside each person's account (memory, then gone); this file never
-// sees one. Each cycle logs counts and the token owners by name: never a chat id, topic, member or message text.
+// sees one. CW-1: the call started and ended events on the same pages are recorded apart (never a message, never sent to
+// the AI). Each cycle logs counts and the token owners by name: never a chat id, topic, member or message text.
 import { groupingRules } from "./conversations-pipeline.ts";
 import type { AiService } from "../ai/service.ts";
 import type { AppConfig } from "../config/schema.ts";
@@ -73,7 +74,10 @@ export type PollDeps = {
   audienceRules?: (homeTenant: string | null) => Promise<AudienceRules>;
 };
 
-export type CycleResult = { polled: number; messages: number; updated: number; candidates: number; promises: number; failures: number; conversations?: number; unsorted?: number; aiCalls?: number; /** CV-4: images sent to the AI, and images in AI batches that weren't (switch off, a limit, unreadable). */ imagesSent?: number; imagesNotSent?: number };
+/** CW-1: a call's row is kept this long after it started (long past the live limit, then gone). */
+const CALL_KEEP_HOURS = 48;
+
+export type CycleResult = { /** CW-1: call started and ended events recorded. */ calls?: number; polled: number; messages: number; updated: number; candidates: number; promises: number; failures: number; conversations?: number; unsorted?: number; aiCalls?: number; /** CV-4: images sent to the AI, and images in AI batches that weren't (switch off, a limit, unreadable). */ imagesSent?: number; imagesNotSent?: number };
 
 const later = (a: string, b: string) => Date.parse(a) > Date.parse(b);
 const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
@@ -152,6 +156,9 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
         out.messages += saved.added.length;
         out.updated += saved.updated;
         const added = fresh.filter((m) => saved.added.some((a) => a.messageId === m.messageId));
+        // CW-1: call started and ended events, kept apart from messages (never a conversation, chatter or AI input).
+        const calls = (read.calls ?? []).filter((e) => later(e.at, c.readSince));
+        if (calls.length) out.calls = (out.calls ?? 0) + (await deps.teams.saveCalls(c.chatId, calls));
         if (deps.conversations) await conversationsStep(deps, deps.conversations, c, saved.added, { p, home, users, person, out, now });
         else await rules(deps, c, added, { p, uid, home, users, person, out });
         // CV-4: images are no longer fetched here; they are read when someone views one, or for the AI step above.
@@ -171,10 +178,12 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
   });
 
   if (out.polled) await deps.teams.expire(instant.subtract({ hours: live.retentionDays * 24 }).toString()).catch(() => 0);
+  if (out.polled) await deps.teams.expireCalls(instant.subtract({ hours: CALL_KEEP_HOURS }).toString()).catch(() => 0);
   if (deps.upkeep) await deps.upkeep(now).catch(() => deps.log({ source: "plan", op: "conversations_upkeep", kind: "failed" }));
   deps.log({ source: "plan", op: "requests_poll", kind: o.force ? "refresh" : "cycle", count: out.polled });
   deps.log({ source: "plan", op: "requests_poll_messages", count: out.messages });
   deps.log({ source: "plan", op: "requests_poll_candidates", count: out.candidates });
+  if (out.calls) deps.log({ source: "plan", op: "requests_poll_calls", count: out.calls });
   for (const [name, count] of tokenUsers) deps.log({ source: "plan", op: "requests_poll_token", kind: name, count });
   if (out.failures) deps.log({ source: "plan", op: "requests_poll_failures", count: out.failures });
   // CV-4: images sent to the AI and described, or not sent (switch off, over a limit, unreadable): counts only.

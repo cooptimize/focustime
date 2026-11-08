@@ -71,7 +71,7 @@ App secrets live only in Key Vault (RBAC mode, soft delete and purge protection 
 
 Unchanged: admins never see others' content, client views only show that client's records, and FocusTime never posts to a client chat by itself.
 
-Names come only from the client directory: each client's key, its Dataverse and settings names, and the aliases an admin sets in Admin › Clients (a Rule). The match is whole words, any case, and ignores links and email addresses; numbers and projects count only at an exit. GD-2 logs only counts for its scrub and holds (`ai scrub`, `held_not_work`), never the matched name or the text.
+Names come only from the client directory: each client's key, its Dataverse and settings names, and the aliases an admin sets in Admin › Clients (a Rule). The match is whole words, any case, and ignores links and email addresses; a client set to "Match only as written" (Admin › Clients, on by default when its name is an ordinary word like "Atlas", `plan/common-words.ts`) matches its names and aliases only with their casing, so "atlas" in a sentence isn't a mention (HK-7); numbers and projects count only at an exit. GD-2 logs only counts for its scrub and holds (`ai scrub`, `held_not_work`), never the matched name or the text.
 
 ```mermaid
 flowchart LR
