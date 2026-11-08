@@ -100,7 +100,8 @@ export function sortComments(list: readonly RawReportComment[], w: Pick<ReportWi
 
 /** An item of the client's store as Ahead reads it (only what selection needs). */
 export type ReportItem = { id: number; title: string; type: string; state: string; stateCategory: string; level: "top" | "parent" | "child" | "task" | null; parentId: number | null; assigneeEmail: string | null; url: string; order: number | null };
-export type FeatureWhy = "planned" | "touched" | "assigned";
+/** SR-2 adds "report": on the client report because it has a comment in the window. */
+export type FeatureWhy = "planned" | "touched" | "assigned" | "report";
 
 export type SelectInput = {
   items: readonly ReportItem[];
@@ -248,4 +249,138 @@ export function nextStatusNudge(now: Temporal.ZonedDateTime, s: StatusNudgeSetti
     return Temporal.Instant.compare(at(from), nowI) > 0 ? at(from) : nowI.add({ minutes: 30 });
   }
   return null;
+}
+
+// ---- SR-2: the client's report, as Kat will send it ----
+
+/** Kat's rule for a client never sent: an empty watermark counts every comment (1900-01-01). */
+export const KAT_EPOCH = "1900-01-01T00:00:00Z";
+
+export type ClientReportWindow = {
+  /** Comments modified at or after this instant are in Monday's report. */
+  since: string;
+  /** "kat": the watermark as Dataverse has it; "never": empty, so everything; "unknown": it couldn't be read. */
+  source: "kat" | "never" | "unknown";
+  katSentAt: string | null;
+};
+
+/**
+ * The client report's window, exactly as Kat counts it: the watermark as it is (no 35-day or future check: Kat doesn't
+ * make one), an empty one as 1900-01-01. Only when Dataverse couldn't be read (or the value isn't a date) does it fall
+ * back to Monday 7:00 AM ET, and the report says so.
+ */
+export function clientReportWindow(read: { ok: true; sentAt: string | null } | { ok: false }, now: Temporal.Instant): ClientReportWindow {
+  if (!read.ok) return { since: lastKatRun(now).toString(), source: "unknown", katSentAt: null };
+  if (!read.sentAt) return { since: KAT_EPOCH, source: "never", katSentAt: null };
+  const t = at(read.sentAt);
+  if (!t) return { since: lastKatRun(now).toString(), source: "unknown", katSentAt: null };
+  return { since: t.toString(), source: "kat", katSentAt: t.toString() };
+}
+
+/** "Draft for Monday, Nov 9 · Kat sends it at 7:00 AM · last sent Nov 2" (the watermark's date in my zone). */
+export function reportHeader(reportDate: IsoDate, w: ClientReportWindow, zone: string): string {
+  const d = Temporal.PlainDate.from(reportDate);
+  const day = (p: Temporal.PlainDate) => `${p.toLocaleString("en-US", { month: "short" })} ${p.day}`;
+  const last = w.source === "kat" && w.katSentAt ? `last sent ${day(Temporal.Instant.from(w.katSentAt).toZonedDateTimeISO(zone).toPlainDate())}` : w.source === "never" ? "not sent yet" : "last send unknown";
+  return `Draft for Monday, ${day(d)} · Kat sends it at 7:00 AM · ${last}`;
+}
+
+/**
+ * Which features to read comments for (at most `cap`): those active this week first, then any feature DevOps changed
+ * since the watermark (a new comment changes the item), then the other open features in backlog order (an edited older
+ * comment may not change the item). Features only.
+ */
+export function reportCandidates(items: readonly (ReportItem & { changedAt?: string | null })[], since: string, active: ReadonlySet<number>, cap = 60): number[] {
+  const s = Temporal.Instant.from(since);
+  const features = items.filter((i) => i.level === "parent");
+  const wrap = (i: ReportItem) => ({ item: i });
+  const changed = (i: { changedAt?: string | null }) => {
+    const t = i.changedAt ? at(i.changedAt) : null;
+    return !!t && Temporal.Instant.compare(t, s) >= 0;
+  };
+  const tiers = [features.filter((i) => active.has(i.id)), features.filter((i) => !active.has(i.id) && changed(i)), features.filter((i) => !active.has(i.id) && !changed(i) && !closed(i.stateCategory))];
+  const out: number[] = [];
+  for (const t of tiers) for (const x of t.map(wrap).sort(backlog)) if (out.length < cap && !out.includes(x.item.id)) out.push(x.item.id);
+  return out;
+}
+
+/**
+ * The report's body: every feature with at least one comment counted (modified, else created) at or after `since`, in
+ * backlog stack-rank order, each with those comments oldest first. Comments are not filtered by who wrote them: Kat
+ * lists every feature-level comment, Coop's included.
+ */
+export function reportBody(items: readonly ReportItem[], comments: Readonly<Record<number, readonly RawReportComment[]>>, since: string, mine: (unique: string | null) => boolean, canWrite: boolean): { item: ReportItem; comments: ReportComment[] }[] {
+  const out: { item: ReportItem; comments: ReportComment[] }[] = [];
+  for (const item of items) {
+    if (item.level !== "parent") continue;
+    const raw = comments[item.id];
+    if (!raw) continue;
+    const { thisWeek } = sortComments(raw, { since, prevSince: since }, mine, canWrite);
+    if (thisWeek.length) out.push({ item, comments: thisWeek });
+  }
+  return out.sort(backlog);
+}
+
+/**
+ * "No update yet": features active this week (on anyone's committed week for the client, on my own plan, or with story
+ * activity in DevOps) that the report doesn't have. Each with its owner (the feature's assignee as DevOps shows it).
+ */
+export function noUpdateYet(i: { items: readonly ReportItem[]; inReport: ReadonlySet<number>; planned: readonly number[]; activity: readonly number[]; ownerName: (id: number) => string | null }): { item: ReportItem; owner: string | null; why: "planned" | "activity" }[] {
+  const byId = new Map(i.items.map((x) => [x.id, x] as const));
+  const featureOf = (id: number, depth = 0): ReportItem | null => {
+    const x = byId.get(id);
+    if (!x || depth > 6) return null;
+    if (x.level === "parent") return x;
+    if (x.level === "top" || x.parentId === null) return null;
+    return featureOf(x.parentId, depth + 1);
+  };
+  const why = new Map<number, "planned" | "activity">();
+  for (const id of i.planned) {
+    const f = featureOf(id);
+    if (f) why.set(f.id, "planned");
+  }
+  for (const id of i.activity) {
+    const f = featureOf(id);
+    if (f && !why.has(f.id)) why.set(f.id, "activity");
+  }
+  return [...why]
+    .filter(([id]) => !i.inReport.has(id))
+    .map(([id, w]) => ({ item: byId.get(id)!, owner: i.ownerName(id), why: w }))
+    .sort(backlog);
+}
+
+/**
+ * "Upcoming PTO and Holidays": each person's days away in the range as runs of consecutive weekdays (a weekend between
+ * two away days doesn't break a run), sorted by the first day, then name. Dates only: never a title or a message.
+ */
+export function ptoRuns(away: readonly { name: string; date: IsoDate }[]): { name: string; from: IsoDate; to: IsoDate; days: number }[] {
+  const byName = new Map<string, Set<IsoDate>>();
+  for (const a of away) (byName.get(a.name) ?? byName.set(a.name, new Set()).get(a.name)!).add(a.date);
+  const out: { name: string; from: IsoDate; to: IsoDate; days: number }[] = [];
+  for (const [name, set] of byName) {
+    const dates = [...set].sort();
+    let run: { name: string; from: IsoDate; to: IsoDate; days: number } | null = null;
+    for (const d of dates) {
+      const p = Temporal.PlainDate.from(d);
+      if (run) {
+        let next = Temporal.PlainDate.from(run.to).add({ days: 1 });
+        while (next.dayOfWeek > 5) next = next.add({ days: 1 });
+        if (Temporal.PlainDate.compare(p, next) <= 0) {
+          run.to = d;
+          run.days++;
+          continue;
+        }
+        out.push(run);
+      }
+      run = { name, from: p.toString(), to: d, days: 1 };
+    }
+    if (run) out.push(run);
+  }
+  return out.sort((a, b) => a.from.localeCompare(b.from) || a.name.localeCompare(b.name));
+}
+
+/** "Mon, Nov 9" or "Mon, Nov 9 to Wed, Nov 11". */
+export function ptoWhen(r: { from: IsoDate; to: IsoDate }): string {
+  const f = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  return r.from === r.to ? f(r.from) : `${f(r.from)} to ${f(r.to)}`;
 }
