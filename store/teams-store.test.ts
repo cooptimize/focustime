@@ -200,6 +200,30 @@ await forEachDriver("the shared Teams store", ({ open }) => {
     expect(await teams.message(CHAT, m.messageId)).toBeNull();
     expect((await teams.changes()).map((c) => [c.change, c.byUser])).toEqual([["added", ANA], ["removed", BEN]]);
   });
+
+  it("CW-1: a call is one row per call id: a start, then its end; open calls, expiry, purge and removal", async () => {
+    const { teams } = await store();
+    const start = { chatId: CHAT, callId: "call-1", kind: "started" as const, at: "2026-11-20T14:10:00.000Z", startedAt: "2026-11-20T14:10:00.000Z", initiatorId: ANA, initiatorTenant: "home" };
+    expect(await teams.saveCalls(CHAT, [start, start])).toBe(1);
+    expect(await teams.openCalls([CHAT], "2026-11-20T04:00:00Z")).toEqual([{ chatId: CHAT, callId: "call-1", startedAt: "2026-11-20T14:10:00Z", endedAt: null, startedBy: ANA, startedByTenant: "home" }]);
+    expect(await teams.saveCalls(CHAT, [{ ...start, kind: "ended", at: "2026-11-20T15:00:00.000Z", startedAt: "2026-11-20T14:10:00.000Z" }])).toBe(1);
+    expect(await teams.openCalls([CHAT], "2026-11-20T04:00:00Z")).toEqual([]);
+    // An end seen before its start (the start missed): one row, ended; a later start doesn't reopen it.
+    await teams.saveCalls(CHAT, [{ ...start, callId: "call-2", kind: "ended", at: "2026-11-20T14:50:00.000Z", startedAt: "2026-11-20T14:20:00.000Z" }, { ...start, callId: "call-2" }]);
+    expect(await teams.openCalls([CHAT], "2026-11-20T04:00:00Z")).toEqual([]);
+    // Another chat's events, or an unregistered chat's, aren't recorded under this one.
+    expect(await teams.saveCalls(CHAT, [{ ...start, chatId: CHAT2, callId: "call-3" }])).toBe(0);
+    expect(await teams.saveCalls(CHAT2, [{ ...start, chatId: CHAT2, callId: "call-3" }])).toBe(0);
+    await teams.saveCalls(CHAT, [{ ...start, callId: "call-4" }]);
+    expect(await teams.expireCalls("2026-11-20T14:00:00Z")).toBe(0);
+    expect(await teams.expireCalls("2026-11-20T14:15:00Z")).toBe(2);
+    await teams.saveCalls(CHAT, [{ ...start, callId: "call-5" }]);
+    await teams.purgeChats([CHAT]);
+    expect(await teams.openCalls([CHAT], "2026-11-20T04:00:00Z")).toEqual([]);
+    await teams.saveCalls(CHAT, [{ ...start, callId: "call-6" }]);
+    await teams.removeChat(CHAT, ANA);
+    expect(await teams.openCalls([CHAT], "2026-11-20T04:00:00Z")).toEqual([]);
+  });
 });
 
 // The migration: per-user rows from before shared polling, for two people on one chat.

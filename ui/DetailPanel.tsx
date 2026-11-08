@@ -29,6 +29,7 @@ import type { PanelFocus } from "./WeekGrid.tsx";
 import { userZone } from "../week/zone.ts";
 import { usePhone } from "./viewport.ts";
 import { MoveTo, pickDragged, useDragSource, YourStories } from "./WeekStories.tsx";
+import { BlockCalls, chatsOf, useCoworkData } from "./cowork.tsx";
 
 const live = (p: Pick) => p.status === "planned" || p.status === "done";
 
@@ -86,6 +87,7 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
   const unplanned = (work?.items ?? []).filter((i) => !planned.has(i.id));
   const note = client ? data.resumeNotes[client] : undefined;
   const area = useRef<HTMLTextAreaElement>(null);
+  const cowork = useCoworkData();
 
   usePanelEsc(ref, onClose);
 
@@ -137,6 +139,8 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
             Also booked: {b.clientName}
           </p>
         ))}
+        {/* CW-1: the client's delivery chats: a live call with Join, else Start a call (both open Teams). */}
+        {!day.pto && slot.date >= data.planDay.date && <BlockCalls chats={chatsOf(cowork, client)} zone={tz} today={isToday} />}
 
         {!day.pto && (
           <section className="dp-section" aria-label="Agenda">

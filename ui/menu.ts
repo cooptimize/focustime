@@ -33,6 +33,7 @@ import { openSend, sendLevel } from "./send-event.ts";
 import { TOURS } from "./guide/tours.ts";
 import { SECTIONS as GUIDE_SECTIONS } from "./guide/sections.ts";
 import { DOC_PAGES } from "./docs/pages.ts";
+import type { CoworkChatView, CoworkData } from "../plan/cowork.ts";
 
 export type MenuItem = {
   id: string;
@@ -97,6 +98,10 @@ export type View = import("./nav.ts").ViewName;
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
+  /** CW-1: my clients' registered chats with their live calls (absent or null: not loaded, or not available here). */
+  cowork?: CoworkData | null;
+  /** CW-1: open a chat in Teams (Join, Start a call). */
+  openChat?: (link: string) => void;
   /** AS-1: open the assistant panel (with an optional first text). */
   openAssistant?: (text?: string) => void;
   /** Inbox › Requests is open (its keys work there). */
@@ -792,8 +797,21 @@ export function slotMenu(env: MenuEnv, date: IsoDate, half: Half, clientKey: str
         ...(off ? { disabled: off } : !pickable.length ? { disabled: clientKey ? `No story-level items loaded for ${clientName}` : "Open half-day: plan it in Plan the day to choose a client" } : {}),
         next: () => ({ title: `Add to ${dayName(date)} ${half}`, items: pickable.map((i) => ({ id: `i${i.id}`, label: i.title, hint: `#${i.id}`, ...(clientKey ? { typeIcon: { clientKey, type: i.type } } : {}), action: "pick.add", ...(clientKey ? plannedHere(env, date, half, clientKey, i.id) : {}), run: () => env.runPlan("pick.add", { date, half, clientKey, itemId: i.id }) })) }),
       },
+      ...callItems(env, clientKey),
     ],
   };
+}
+
+/**
+ * CW-1: "Start a call in <chat>" for each of the client's registered chats I can see ("Join the call in <chat>" while
+ * one is live there). Each opens the chat in Teams; FocusTime never starts the call or posts anything.
+ */
+export function callItems(env: { cowork?: CoworkData | null; openChat?: (link: string) => void }, clientKey: string | null): MenuItem[] {
+  const chats = clientKey && env.cowork && env.openChat ? env.cowork.chats.filter((c) => c.clientKey === clientKey) : [];
+  return [...chats.filter((c) => c.live), ...chats.filter((c) => !c.live)].map((c) => callItem(env, c, "Teams"));
+}
+function callItem(env: { openChat?: (link: string) => void }, c: CoworkChatView, group?: string): MenuItem {
+  return { id: `call-${c.chatId}`, label: c.live ? `Join the call in ${c.name}` : `Start a call in ${c.name}`, hint: c.live ? "live now" : "opens Teams", ...(group ? { group } : {}), action: "chats.calls", run: () => env.openChat?.(c.link) };
 }
 
 /** "9:00–11:00" in the configured zone, no AM or PM (the agenda's short form). */
@@ -1206,6 +1224,12 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     // Step 16.3: deep focus switches the running session; Teams status lives in Settings > Focus; presence shows where Cooptimizers are listed.
     case "timer.deep": return env.timer?.kind === "focus" ? { run: () => env.runTimer("timer.deep", { on: !env.timer!.deep }) } : { next: () => ({ title: "Start deep focus", items: [{ id: "deep", label: "Deep focus", hint: `${env.planning.focusMinutes} min · Teams: Do not disturb`, action: "timer.start", run: () => env.runTimer("timer.start", { deep: true }) }] }) };
     case "presence.status": return { run: () => env.openSettings("focus", "teams-status") };
+    case "chats.calls": {
+      const chats = env.cowork?.chats ?? [];
+      if (!env.openChat || !env.cowork) return { disabled: "Client chats aren't available here" };
+      if (!chats.length) return { disabled: "None of your clients has a delivery chat you're in" };
+      return { next: () => ({ title: "Start a call", items: chats.map((c) => ({ ...callItem(env, c), hint: c.live ? `live now · ${clientNameOf(env, c.clientKey)}` : clientNameOf(env, c.clientKey) })) }) };
+    }
     case "chats.registered":
     case "chats.list":
     case "chats.add":
