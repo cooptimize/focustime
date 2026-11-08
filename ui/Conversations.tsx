@@ -13,7 +13,7 @@ import type { ItemDraft } from "../plan/conversations.ts";
 import { acceptanceText, pathOfAction } from "../plan/conversation-draft.ts";
 import { call } from "./api.ts";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
-import { whenText } from "./labels.ts";
+import { Stamp } from "./Stamp.tsx";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 type Suggest = ConversationCard["suggestions"][number];
@@ -84,7 +84,7 @@ export function LinkedItem({ item, tz, lead }: { item: NonNullable<ConversationC
         <span className="muted">
           {" "}
           · {item.state} · {item.assignee ?? "Unassigned"}
-          {item.changedAt ? <> · changed {whenText(item.changedAt, tz)}</> : null}
+          {item.changedAt ? <> · changed <Stamp at={item.changedAt} tz={tz} /></> : null}
         </span>
       )}
     </p>

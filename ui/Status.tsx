@@ -12,7 +12,7 @@
 // the features I worked on with no update of mine float to Needs your update with an "AI suggests" line (or a plain
 // "Worked on" line with AI off) to Use, Edit or Dismiss; holidays join the PTO; the phone can do all of it.
 import { TextBox } from "./TextBox.tsx";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ComponentProps, type KeyboardEvent } from "react";
 import type { CatalogFeature, NoUpdateFeature, ReportClientRef, ReportFeature, StatusClient, StatusComment, StatusFeature, StatusLoad, StatusReport, StatusReportAnswer } from "../plan/status-types.ts";
 import type { DevOpsPreview, DevOpsResult } from "../actions/types.ts";
 import { call } from "./api.ts";
@@ -20,6 +20,8 @@ import { CellPopover, FilterList } from "./CellPopover.tsx";
 import { CloseButton } from "./CloseButton.tsx";
 import { MentionFlag, Modal } from "./DevOpsWrite.tsx";
 import { clientColor } from "./labels.ts";
+import { Stamp } from "./Stamp.tsx";
+import { stampText } from "./stamp.ts";
 import { ModeArea } from "./ModeSwitch.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 import { byRank, closeLine, enterLine, needsLabel, pendingLabel, pendingLines, previewFeatures, type Line } from "./status-lines.ts";
@@ -104,13 +106,9 @@ function savedDismissed(report: string): string[] {
 let seq = 0;
 const newKey = () => `l${Date.now().toString(36)}${(seq++).toString(36)}`;
 
-const when = (iso: string, zone?: string) => {
-  try {
-    return Temporal.Instant.from(iso).toZonedDateTimeISO(zone ?? Temporal.Now.timeZoneId()).toPlainDateTime().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-  } catch {
-    return "";
-  }
-};
+/** IB-2: when it happened, in the shared words, in the person's own time zone (ZoneCtx, from Week). */
+const ZoneCtx = createContext<string | undefined>(undefined);
+const when = (iso: string, zone?: string) => stampText(iso, zone ?? Temporal.Now.timeZoneId());
 
 /** SR-3: Tab from a line box (or a + Add a line) goes to the next feature's + Add a line; Shift+Tab to the previous. */
 function moveToAdd(from: HTMLElement, back: boolean): boolean {
@@ -142,7 +140,15 @@ export type LineOps = {
 /** SR-3: the suggestion state the rows read: by "client:item", and which are dismissed. */
 type SuggestView = { by: Record<string, Suggestion>; loading: Record<string, boolean>; dismissed: ReadonlySet<string>; onDismiss: (clientKey: string, itemId: number) => void };
 
-export function StatusView({ switcher, colors, readOnly, version, onChanged, group, phone }: { switcher?: React.ReactNode; colors: Record<string, string>; readOnly: boolean; version: unknown; onChanged: () => void; /** SR-3: open on Needs your update (the nudge). */ group?: "needs" | undefined; phone?: boolean }) {
+export function StatusView(p: ComponentProps<typeof StatusBody>) {
+  return (
+    <ZoneCtx.Provider value={p.tz}>
+      <StatusBody {...p} />
+    </ZoneCtx.Provider>
+  );
+}
+
+function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group, phone }: { /** IB-2: the person's time zone. */ tz: string; switcher?: React.ReactNode; colors: Record<string, string>; readOnly: boolean; version: unknown; onChanged: () => void; /** SR-3: open on Needs your update (the nudge). */ group?: "needs" | undefined; phone?: boolean }) {
   const [data, setData] = useState<StatusLoad | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"edit" | "preview">(readOnly ? "preview" : "edit");
@@ -500,7 +506,7 @@ export function StatusView({ switcher, colors, readOnly, version, onChanged, gro
                 {needsN > 0 && <span className="st-needs-count"> · {needsLabel(needsN)}</span>}
               </p>
               <span className="st-push">
-                <span className="muted st-fresh">Refreshed {when(r.refreshedAt)}</span>
+                <span className="muted st-fresh">Refreshed {when(r.refreshedAt, tz)}</span>
                 <button type="button" className="mini quiet" disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "Refreshing…" : "Refresh"}</button>
                 {pushBar}
               </span>
@@ -726,7 +732,8 @@ function liveCounts(d: StatusLoad, _lines: Line[]): { line: string } {
 function ClientSection({ c, color, mode, lines, drafting, draftNote, ops, sugg, suggNote, onDraft }: {
   c: StatusClient; color: string; mode: "edit" | "preview"; lines: Line[]; drafting: Record<string, boolean>; draftNote: string; ops: LineOps; sugg: SuggestView; suggNote: string; onDraft: (ids: number[] | null) => void;
 }) {
-  const sent = c.window.source === "kat" && c.window.katSentAt ? `Kat last sent ${c.clientName}'s report ${when(c.window.katSentAt)}` : c.window.note;
+  const zone = useContext(ZoneCtx);
+  const sent = c.window.source === "kat" && c.window.katSentAt ? `Kat last sent ${c.clientName}'s report ${when(c.window.katSentAt, zone)}` : c.window.note;
   const canDraft = mode === "edit" && c.canWrite && c.ai === "ok" && c.features.length > 0;
   const needs = mode === "edit" ? c.features.filter((f) => f.needsYou) : [];
   const rest = mode === "edit" ? c.features.filter((f) => !f.needsYou) : c.features;
@@ -787,6 +794,7 @@ function FeatureBlock({ c, f, mode, lines, drafting, ops, onDraft, report, writa
   added?: boolean;
   sugg?: SuggestView;
 }) {
+  const zone = useContext(ZoneCtx);
   const comments = f.thisWeek ?? [];
   const newLines = lines.filter((l) => l.kind === "comment");
   const editOf = (id: number) => lines.find((l) => l.kind === "comment_edit" && l.commentId === id);
@@ -849,7 +857,7 @@ function FeatureBlock({ c, f, mode, lines, drafting, ops, onDraft, report, writa
                     )}
                     <span className="st-by">
                       <span className="st-author">{report ? `${cm.author}${cm.who === "mine" ? " (you)" : ""}` : cm.who === "mine" ? "You" : cm.author}{cm.who === "coop" ? " · Coop" : ""}</span>
-                      <span className="muted"> · {when(cm.at)}</span>
+                      <span className="muted"> · <Stamp at={cm.at} tz={zone ?? Temporal.Now.timeZoneId()} /></span>
                       {e && <span className="st-pending-tag">Edited, not pushed yet</span>}
                       {d && <span className="st-pending-tag">Deleted when you push</span>}
                       {mineEditable && !d && <button type="button" className="link-btn" onClick={() => ops.edit(c, f, cm)}>Edit</button>}

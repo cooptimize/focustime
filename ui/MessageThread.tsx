@@ -8,7 +8,7 @@
 import { useState } from "react";
 import type { ConversationMessage } from "../plan/conversation-views.ts";
 import { Avatar } from "./Presence.tsx";
-import { whenText } from "./labels.ts";
+import { Stamp } from "./Stamp.tsx";
 
 /** A new group starts with another person, or after this long between one person's messages. */
 export const GROUP_GAP_MINUTES = 10;
@@ -55,9 +55,7 @@ export function MessageThread({ messages, tz, photoFor, earlier, loadingEarlier 
               <p className="tm-head">
                 {!g.mine && <span className="tm-name">{g.author}</span>}
                 {g.external && <span className="ask-ext">External</span>}
-                <time className="muted" dateTime={g.at}>
-                  {whenText(g.at, tz)}
-                </time>
+                <Stamp className="muted" at={g.at} tz={tz} />
               </p>
               {g.messages.map((m) => (
                 <div key={m.messageId} className="tm-bubble" data-message={m.messageId}>

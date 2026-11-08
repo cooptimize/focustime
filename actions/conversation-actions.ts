@@ -99,7 +99,6 @@ export type ConversationContext = RequestContext & {
 const CLOSED_SHOWN_DAYS = 14;
 /** How long ago a conversation may have closed and still be listed (and counted). */
 const closedShownMs = (cfg: AppConfig) => (cfg.org?.rules.closedShownDays ?? CLOSED_SHOWN_DAYS) * 24 * 3600_000;
-const DONE_SHOWN_MS = 24 * 3600_000;
 
 const bad = (error: string, status = 400, code?: string): ActionResponse => ({ ok: false, status, error, ...(code ? { code } : {}) });
 const only = (input: unknown, required: readonly string[], optional: readonly string[] = []): Record<string, unknown> | null => {
@@ -446,7 +445,7 @@ export async function inboxFacts(ctx: ConversationContext, cfg: AppConfig): Prom
     // A promise made into a follow-up before IB-1 shows once, as that follow-up (f<id>).
     if (k.state === "followup" && k.followUpId !== null) continue;
     const done = k.state === "done" || k.state === "not_needed";
-    if (done && (!k.updatedAt || now - Date.parse(k.updatedAt) >= DONE_SHOWN_MS)) continue;
+    if (done && (!k.updatedAt || now - Date.parse(k.updatedAt) >= closedShownMs(cfg))) continue;
     out.push({
       key: itemKey("chatPromise", k.id), kind: "promise", clientKey: k.clientKey, at: k.updatedAt ?? k.createdAt, done,
       due: k.dueDate ?? (k.dueAt ? localToday(k.dueAt, userZone(cfg)) : null), dueAt: k.dueAt, linked: k.itemId !== null, onWeek: !!k.onToday,
@@ -471,7 +470,7 @@ async function promiseCards(ctx: ConversationContext, v: Seen, cfg: AppConfig): 
   const home = await ctx.homeTenant();
   const zone = userZone(cfg);
   const today = localToday(now, zone);
-  const mine = (await v.convs.commitmentsBy(v.promiseChatIds)).filter((k) => !["done", "not_needed"].includes(k.state) || (k.updatedAt && Date.parse(now) - Date.parse(k.updatedAt) < DONE_SHOWN_MS));
+  const mine = (await v.convs.commitmentsBy(v.promiseChatIds)).filter((k) => !["done", "not_needed"].includes(k.state) || (k.updatedAt && Date.parse(now) - Date.parse(k.updatedAt) < closedShownMs(cfg)));
   const convIds = [...new Set(mine.map((k) => k.conversationId).filter((x): x is number => x !== null))];
   const convs = new Map((await v.convs.conversations(v.chats.map((c) => c.chatId))).filter((c) => convIds.includes(c.id)).map((c) => [c.id, c]));
   const suggestions = (await v.convs.suggestionsIn(convIds)).filter((s) => s.state === "open" && same(s.forUser, v.me));

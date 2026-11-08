@@ -99,8 +99,12 @@ export type TextSize = (typeof TEXT_SIZES)[number];
 /** IB-1: the Inbox's remembered view, clients (none: all) and grouping. */
 export const INBOX_VIEW_NAMES = ["needs_you", "promises", "waiting", "in_progress", "captures", "teammates", "done", "chatter"] as const;
 export const INBOX_GROUPS = ["client", "due", "kind"] as const;
-export type InboxPrefs = { view: (typeof INBOX_VIEW_NAMES)[number]; clients: string[]; group: (typeof INBOX_GROUPS)[number] };
-export const DEFAULT_INBOX: InboxPrefs = { view: "needs_you", clients: [], group: "client" };
+/** IB-2: the timeline's order, grouping and status chips. New keys, so an older build skips them (BH-1); `view` and `group` stay read for it. */
+export const INBOX_SORTS = ["newest", "oldest"] as const;
+export const INBOX_GROUPINGS = ["day", "client", "due", "status"] as const;
+export const DEFAULT_INBOX_STATUSES: readonly (typeof INBOX_VIEW_NAMES)[number][] = ["needs_you", "promises", "waiting", "in_progress", "captures", "teammates", "done"];
+export type InboxPrefs = { view: (typeof INBOX_VIEW_NAMES)[number]; clients: string[]; group: (typeof INBOX_GROUPS)[number]; sort: (typeof INBOX_SORTS)[number]; statuses: (typeof INBOX_VIEW_NAMES)[number][]; grouping: (typeof INBOX_GROUPINGS)[number] };
+export const DEFAULT_INBOX: InboxPrefs = { view: "needs_you", clients: [], group: "client", sort: "newest", statuses: [...DEFAULT_INBOX_STATUSES], grouping: "day" };
 export type UiConfig = { theme: Theme; viewRange: ViewRange; showTimelines: boolean; reduceMotion: boolean; textSize: TextSize; showPersonal: boolean; inbox: InboxPrefs };
 export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business", showTimelines: true, reduceMotion: false, textSize: "default", showPersonal: true, inbox: DEFAULT_INBOX };
 
@@ -446,10 +450,10 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
   for (const k of ["edge", "chromium"] as const) if (raw[k] !== undefined && !isTable(raw[k])) err(k, `Must be a [${k}] table`);
 
   // [ui] (optional): theme
-  const ui: UiConfig = { ...DEFAULT_UI, inbox: { ...DEFAULT_INBOX, clients: [] } };
+  const ui: UiConfig = { ...DEFAULT_UI, inbox: { ...DEFAULT_INBOX, clients: [], statuses: [...DEFAULT_INBOX_STATUSES] } };
   if (raw.ui !== undefined) {
     const t = isTable(raw.ui) ? raw.ui : (err("ui", "Must be a [ui] table"), null);
-    if (t) for (const k of Object.keys(t)) if (!["theme", "view_range", "show_timelines", "reduce_motion", "text_size", "show_personal", "inbox_view", "inbox_clients", "inbox_group"].includes(k)) err(`ui.${k}`, "Unknown field");
+    if (t) for (const k of Object.keys(t)) if (!["theme", "view_range", "show_timelines", "reduce_motion", "text_size", "show_personal", "inbox_view", "inbox_clients", "inbox_group", "inbox_sort", "inbox_statuses", "inbox_grouping"].includes(k)) err(`ui.${k}`, "Unknown field");
     const rm = t?.reduce_motion;
     if (rm !== undefined) {
       if (typeof rm !== "boolean") err("ui.reduce_motion", "Must be true or false");
@@ -470,6 +474,22 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
     if (ic !== undefined) {
       if (!Array.isArray(ic) || ic.length > 50 || ic.some((x) => typeof x !== "string" || !x || x.length > 100)) err("ui.inbox_clients", "Must be a list of client keys");
       else ui.inbox.clients = [...new Set(ic as string[])];
+    }
+    // IB-2: the timeline's sort, status chips and grouping, remembered per person.
+    const so = t?.inbox_sort;
+    if (so !== undefined) {
+      if (typeof so !== "string" || !(INBOX_SORTS as readonly string[]).includes(so)) err("ui.inbox_sort", 'Must be "newest" or "oldest"');
+      else ui.inbox.sort = so as InboxPrefs["sort"];
+    }
+    const ist = t?.inbox_statuses;
+    if (ist !== undefined) {
+      if (!Array.isArray(ist) || ist.some((x) => typeof x !== "string" || !(INBOX_VIEW_NAMES as readonly string[]).includes(x))) err("ui.inbox_statuses", "Must be a list of the Inbox's views");
+      else ui.inbox.statuses = [...new Set(ist as InboxPrefs["statuses"])];
+    }
+    const gg = t?.inbox_grouping;
+    if (gg !== undefined) {
+      if (typeof gg !== "string" || !(INBOX_GROUPINGS as readonly string[]).includes(gg)) err("ui.inbox_grouping", 'Must be "day", "client", "due" or "status"');
+      else ui.inbox.grouping = gg as InboxPrefs["grouping"];
     }
     const ig = t?.inbox_group;
     if (ig !== undefined) {

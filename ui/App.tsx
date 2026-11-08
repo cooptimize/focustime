@@ -1912,7 +1912,7 @@ export function App() {
         <PhoneGate phone={phone} onBack={leavePlanning} backLabel="Back to Week"><PlanWeek openClient={planWeekClient} onOpenClientSeen={clearPlanWeekClient} switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} onOpenDay={(d, h) => goNav(navOf.planDay(d, h))} /></PhoneGate>
       ) : nav.tab === "week" && nav.mode === "status" ? (
         // SR-1: Week › Status. SR-3: the phone can write too (Add a line, suggestions, Push all).
-        <StatusView switcher={switches.week} colors={data.clients} readOnly={false} phone={phone} group={nav.tab === "week" ? nav.group : undefined} version={planWeekVersion} onChanged={reloadQuiet} />
+        <StatusView tz={userZone(data)} switcher={switches.week} colors={data.clients} readOnly={false} phone={phone} group={nav.tab === "week" ? nav.group : undefined} version={planWeekVersion} onChanged={reloadQuiet} />
       ) : nav.tab === "week" && nav.mode === "team" ? (
         // SW-1: Week › Team, read-only on the phone (allowed there, no gate).
         <TeamView switcher={switches.week} weekStart={nav.week ?? data.today.weekStart} thisWeek={data.today.weekStart} colors={data.clients} readOnly={phone} onWeek={(w) => goNav(navOf.week("team", w))} version={planWeekVersion} onChanged={reloadQuiet} />

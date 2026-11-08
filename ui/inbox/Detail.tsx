@@ -18,7 +18,9 @@ import { WRITING_POLL_MS } from "../createdraft-ctx.ts";
 import { draftRowState, draftRowText } from "../../plan/capture-prepare.ts";
 import { CLOSE_HOW, type CloseHow, type DraftStory } from "../../plan/types.ts";
 import { FollowUpForm } from "../FollowUps.tsx";
-import { clientColor, whenText } from "../labels.ts";
+import { clientColor } from "../labels.ts";
+import { Stamp } from "../Stamp.tsx";
+import { stampText } from "../stamp.ts";
 import { PromiseLink } from "../MyPromises.tsx";
 import { PersonPicker, type PersonValue } from "../PersonPicker.tsx";
 import { IncomingRow } from "../Team.tsx";
@@ -91,7 +93,7 @@ export function Detail(p: DetailProps): ReactNode {
               {m}
             </span>
           ))}
-          <time dateTime={r.at}>{whenText(r.at, p.tz)}</time>
+          <Stamp at={r.at} tz={p.tz} today={p.today} />
         </p>
         <Pill entry={e} today={p.today} />
       </header>
@@ -118,7 +120,7 @@ export function Detail(p: DetailProps): ReactNode {
 }
 
 /** Under the title: a conversation's summary, my own words for a chat promise, a capture's text. */
-function Lead({ entry: e, tz }: DetailProps): ReactNode {
+function Lead({ entry: e, tz, today }: DetailProps): ReactNode {
   if (e.kind === "conversation" && e.card) {
     const c = e.card;
     return (
@@ -131,7 +133,7 @@ function Lead({ entry: e, tz }: DetailProps): ReactNode {
   if (e.kind === "chatPromise" && e.promise?.messages.length)
     return (
       <blockquote className="ib-said">
-        <span className="muted">You said, {whenText(e.promise.messages[0]!.at, tz)}</span> “{e.promise.messages.map((m) => m.text).join(" ")}”
+        <span className="muted">You said, <Stamp at={e.promise.messages[0]!.at} tz={tz} today={today} /></span> “{e.promise.messages.map((m) => m.text).join(" ")}”
       </blockquote>
     );
   return null;
@@ -376,7 +378,7 @@ function Body(p: DetailProps): ReactNode {
             {c.updated && c.updated !== "Updated" && <p className="muted">Updated: {c.updated}</p>}
             {c.closed && (
               <p className="muted">
-                {c.closed.kind === "resolved" ? "Resolved" : "Not a request"} by {c.closed.by} · {whenText(c.closed.at, tz)}
+                {c.closed.kind === "resolved" ? "Resolved" : "Not a request"} by {c.closed.by} · <Stamp at={c.closed.at} tz={tz} today={p.today} />
                 {c.closed.reason ? `: ${c.closed.reason}` : ""}
               </p>
             )}
@@ -406,7 +408,7 @@ function Body(p: DetailProps): ReactNode {
           <h3 className="ib-section">Where it came from</h3>
           <p>
             {pr.chatName}
-            {pr.conversationTitle ? ` · ${pr.conversationTitle}` : ""} · {whenText(pr.createdAt, tz)}
+            {pr.conversationTitle ? ` · ${pr.conversationTitle}` : ""} · <Stamp at={pr.createdAt} tz={tz} today={p.today} />
           </p>
           {pr.reason && <p className="muted">Why it's a promise: {pr.reason}</p>}
           <a href={pr.link} target="_blank" rel="noopener noreferrer">
@@ -416,7 +418,7 @@ function Body(p: DetailProps): ReactNode {
         {pr.suggestions.map((s) => (
           <SuggestionBox key={s.id} s={s} onPost={(inc) => void writes?.begin(pr.clientKey, [s.kind === "comment" ? { kind: "conversation_comment", suggestionId: s.id, ...(inc ? { includeInternal: true } : {}) } : { kind: "description_update", suggestionId: s.id }])} onSkip={() => void p.run("suggestions.skip", { id: s.id }, "Skipped")} />
         ))}
-        {(pr.state === "done" || pr.state === "not_needed") && <p className="muted">{pr.state === "done" ? "Done" : "Not needed"} · {whenText(pr.createdAt, tz)}</p>}
+        {(pr.state === "done" || pr.state === "not_needed") && <p className="muted">{pr.state === "done" ? "Done" : "Not needed"} · <Stamp at={pr.createdAt} tz={tz} today={p.today} /></p>}
       </div>
     );
   }
@@ -439,7 +441,7 @@ function Body(p: DetailProps): ReactNode {
         </section>
         <section className="ib-card" aria-label="Where it came from">
           <h3 className="ib-section">Where it came from</h3>
-          <p>{f.byHand ? `You added it, ${whenText(f.openedAt, tz)}` : `Opened ${whenText(f.openedAt, tz)}`}</p>
+          <p>{f.byHand ? "You added it, " : "Opened "}<Stamp at={f.openedAt} tz={tz} today={p.today} /></p>
           {f.origin && (
             <p className="muted">
               Why: {f.origin.trigger}
@@ -448,7 +450,7 @@ function Body(p: DetailProps): ReactNode {
           )}
           {f.draft && <pre className="ib-draft">{f.draft}</pre>}
         </section>
-        {f.closedAt && <p className="muted">{f.outcome === "not_needed" ? "Not needed" : "Loop closed"} · {whenText(f.closedAt, tz)}{f.closeNote ? `: ${f.closeNote}` : ""}</p>}
+        {f.closedAt && <p className="muted">{f.outcome === "not_needed" ? "Not needed" : "Loop closed"} · <Stamp at={f.closedAt} tz={tz} today={p.today} />{f.closeNote ? `: ${f.closeNote}` : ""}</p>}
       </div>
     );
   }
@@ -459,7 +461,7 @@ function Body(p: DetailProps): ReactNode {
     return (
       <div className="ib-body">
         <p className="ib-summary">{e.capture.text}</p>
-        <p className="muted">Captured {whenText(e.capture.createdAt, tz)}. Sort it into a promise, a draft story or a draft feature.</p>
+        <p className="muted">Captured {stampText(e.capture.createdAt, tz, p.today)}. Sort it into a promise, a draft story or a draft feature.</p>
       </div>
     );
   }
@@ -542,7 +544,7 @@ export function ChatterDetail({ row, tz, color, onWork, chat, admin, onSocial }:
             {row.clientName}
           </span>
           <span>
-            {whenText(row.messages[0]!.at, tz)} to {whenText(row.lastAt, tz)}
+            <Stamp at={row.messages[0]!.at} tz={tz} /> to <Stamp at={row.lastAt} tz={tz} />
           </span>
         </p>
       </header>
@@ -574,7 +576,7 @@ export function ChatterDetail({ row, tz, color, onWork, chat, admin, onSocial }:
         <ul className="ib-chatter">
           {row.messages.slice(-8).map((m) => (
             <li key={m.messageId}>
-              <strong>{m.author}</strong> <span className="muted">{whenText(m.at, tz)}</span>
+              <strong>{m.author}</strong> <Stamp className="muted" at={m.at} tz={tz} />
               <p>{m.text}</p>
               <button type="button" className="mini" onClick={() => onWork(m)}>
                 This is work

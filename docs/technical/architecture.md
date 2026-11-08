@@ -1,6 +1,6 @@
 # Architecture
 
-For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `4088995` on Nov 7, 2026 (SR-2 parts against its own branch; Status's SR-3 parts against `feat/report-finish` on Nov 8); the assistant against `1e74410` with AS-3 (`feat/assistant-answers`); Deployment items against `feat/deployment-items` on Nov 8.
+For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `4088995` on Nov 7, 2026 (SR-2 parts against its own branch; Status's SR-3 parts against `feat/report-finish` on Nov 8); the assistant against `1e74410` with AS-3 (`feat/assistant-answers`); Deployment items against `feat/deployment-items` on Nov 8; the Inbox against `feat/inbox-everything` on Nov 8.
 
 FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a React app and a JSON action API, keeps its data in one SQL database, and talks to Microsoft Graph, Dataverse, Azure DevOps, Google Calendar, Azure Resource Manager and OpenAI. The per-folder detail is in [docs/architecture.md](../architecture.md); this page is the overview.
 
@@ -131,6 +131,17 @@ sequenceDiagram
 - **Undo** is itself a previewed, confirmed and logged write, refused when the target changed after FocusTime's change.
 
 Exceptions are listed in [Security](security.md#external-writes-and-the-audit-log): Teams presence during focus has no preview, the VM start has no undo, and plan store changes from the bot's buttons run at once with Undo.
+
+## The Inbox
+
+One read model, one list. `actions/inbox-actions.ts` gathers conversations, promises, sends, captures and drafts (`inbox.list`), and the pure rules in `plan/inbox-items.ts` decide which views each item is in; the badge, the rail and every count read that.
+
+**Everything** (IB-2, `ui/inbox/InboxPage.tsx`, `ui/inbox/model.ts`) is the default: every row by its latest activity, grouped by day, newest or oldest first. The left-hand views are the same list with only that status on, so there is one model. The address says where I am (`#/inbox/everything`, `#/inbox/needs-you`, and the older ones); an item's address carries no view, so the page holds the place while one is open. A row can be in several views (a late linked promise is in Needs you, Promises and In progress): a chip matches any of them, and its one tag is the first in `STATUS_ORDER`. A chat's chatter joins the list as rows with status Chatter, off by default.
+
+- **Remembered per person** in settings rows: `[ui] inbox_sort`, `inbox_statuses`, `inbox_grouping`, `inbox_clients`. New keys, so an older build skips them. The older `inbox_view` is no longer read for the default and is no longer written.
+- **New since you last looked.** `inbox.list` returns `lastLooked` and `now`. The page holds the marker for the visit, so a reload doesn't move the divider under me, and calls `inbox.looked` with that `now` once the divider has come into view (at once when there is none to reach). See [Data](data.md).
+- **Long lists.** All rows arrive in one read (one person's Inbox is thousands at most). The page draws 120 and adds 120 as the end comes near, each row is memoized, and CSS `content-visibility` skips the layout of rows out of view. No windowing library, so day headings stay plain `position: sticky`.
+- **Timestamps.** `ui/stamp.ts` is the one formatter ("Today 4:07 PM", "Yesterday 6:58 PM", "Fri, Nov 6, 4:07 PM"), always in the person's zone; `ui/Stamp.tsx` adds the full time on hover. Which screens use it is listed in `docs/ux/ib2/date-inventory.md`.
 
 ## The assistant
 

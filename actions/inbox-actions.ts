@@ -12,7 +12,7 @@ import type { IsoDate } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
 import type { ActionResponse, UrgentAsk } from "./types.ts";
 
-export const INBOX_ACTIONS = ["inbox.list", "inbox.count", "inbox.today", "inbox.seen", "inbox.hide", "inbox.snooze"] as const;
+export const INBOX_ACTIONS = ["inbox.list", "inbox.count", "inbox.today", "inbox.seen", "inbox.hide", "inbox.snooze", "inbox.looked"] as const;
 export type InboxAction = (typeof INBOX_ACTIONS)[number];
 
 export type InboxContext = {
@@ -35,20 +35,25 @@ export type InboxContext = {
 
 
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, error, status });
-const DONE_SHOWN_MS = 24 * 3600_000;
+/** IB-2: how long a closed promise stays in the Inbox: the same Rule conversations follow, so Everything's Done holds them together. */
+const CLOSED_SHOWN_DAYS = 14;
+const closedShownMs = (cfg: AppConfig) => (cfg.org?.rules.closedShownDays ?? CLOSED_SHOWN_DAYS) * 24 * 3600_000;
+/** IB-2: when I last looked at Everything, in my kv row (the plan store), so it follows me across devices. */
+const LAST_LOOKED_KEY = "inbox_last_looked";
+const instant = (s: string) => Date.parse(s.replace(/\[.*\]$/, ""));
 
 /** My promises from follow_ups: open ones, and the ones closed in the last day (Done). */
-async function promiseFacts(plan: PlanStore, now: string, withDone: boolean): Promise<{ facts: InboxFacts[]; snoozed: Map<string, IsoDate> }> {
+async function promiseFacts(plan: PlanStore, now: string, withDone: boolean, closedMs: number): Promise<{ facts: InboxFacts[]; snoozed: Map<string, IsoDate> }> {
   const snoozed = new Map<string, IsoDate>();
   const facts: InboxFacts[] = [];
   const open = await plan.openFollowUps();
   for (const f of open) {
     const key = itemKey("followUp", f.id);
     if (f.snoozedUntil) snoozed.set(key, f.snoozedUntil);
-    facts.push({ key, kind: "promise", clientKey: f.clientKey, at: f.openedAt, done: false, due: f.due, linked: f.itemId !== null, byMe: f.byHand, title: f.what, who: f.who || null, where: null, itemId: f.itemId });
+    facts.push({ key, kind: "promise", clientKey: f.clientKey, at: f.changedAt ?? f.openedAt, done: false, due: f.due, linked: f.itemId !== null, byMe: f.byHand, title: f.what, who: f.who || null, where: null, itemId: f.itemId });
   }
-  for (const f of withDone ? await plan.recentlyClosedFollowUps(new Date(Date.parse(now) - DONE_SHOWN_MS).toISOString()) : []) {
-    facts.push({ key: itemKey("followUp", f.id), kind: "promise", clientKey: f.clientKey, at: f.closedAt ?? f.openedAt, done: true, due: f.due, linked: f.itemId !== null, byMe: f.byHand, title: f.what, who: f.who || null, where: null, itemId: f.itemId });
+  for (const f of withDone ? await plan.recentlyClosedFollowUps(new Date(Date.parse(now) - closedMs).toISOString()) : []) {
+    facts.push({ key: itemKey("followUp", f.id), kind: "promise", clientKey: f.clientKey, at: f.changedAt ?? f.closedAt ?? f.openedAt, done: true, due: f.due, linked: f.itemId !== null, byMe: f.byHand, title: f.what, who: f.who || null, where: null, itemId: f.itemId });
   }
   return { facts, snoozed };
 }
@@ -62,7 +67,7 @@ async function gather(ctx: InboxContext, cfg: AppConfig, withDone = true): Promi
   const [convs, sends, promises, captures, drafts, marks, urgent] = await Promise.all([
     ctx.conversations(cfg).catch((): InboxFacts[] => []),
     ctx.sends().catch((): InboxFacts[] => []),
-    promiseFacts(plan, now, withDone),
+    promiseFacts(plan, now, withDone, closedShownMs(cfg)),
     plan.inbox(),
     plan.drafts(),
     plan.inboxMarks(),
@@ -80,7 +85,7 @@ async function gather(ctx: InboxContext, cfg: AppConfig, withDone = true): Promi
     ...promises.facts,
     ...sends,
     ...captures.map((c): InboxFacts => ({ key: itemKey("capture", c.id), kind: "capture", clientKey: c.clientKey, at: c.createdAt, done: false, title: c.text, where: "Your capture" })),
-    ...drafts.map((d): InboxFacts => ({ key: itemKey("draft", d.id), kind: "draft", clientKey: d.clientKey, at: d.createdAt, done: false, title: d.title, where: d.level === "feature" ? "Draft feature" : "Draft story" })),
+    ...drafts.map((d): InboxFacts => ({ key: itemKey("draft", d.id), kind: "draft", clientKey: d.clientKey, at: d.updatedAt ?? d.createdAt, done: false, title: d.title, where: d.level === "feature" ? "Draft feature" : "Draft story" })),
   ];
   const items = facts.map((f) => {
     const m = marks.get(f.key);
@@ -132,8 +137,19 @@ export async function inboxAction(ctx: InboxContext, action: InboxAction, input:
       const g = await gather(ctx, cfg);
       const items = g.items.map((i) => rowOf(i, g.today, g.now));
       const day = await ctx.snoozeDay().catch(() => null);
-      const data: InboxListData = { today: g.today, items, counts: viewCounts(g.items, g.today, g.now), needsYou: needsYouCount(g.items, g.today, g.now), snoozeChoices: day ? snoozeChoices(g.now, day) : ["tomorrow", "next_week"] };
+      const data: InboxListData = { today: g.today, items, counts: viewCounts(g.items, g.today, g.now), needsYou: needsYouCount(g.items, g.today, g.now), now: g.now, lastLooked: await ctx.plan.getState<string>(LAST_LOOKED_KEY), snoozeChoices: day ? snoozeChoices(g.now, day) : ["tomorrow", "next_week"] };
       return { ok: true, data };
+    }
+    case "inbox.looked": {
+      // IB-2: I've looked at Everything as of `at` (the list's own `now`, so what arrives after it stays new). Only moves forward.
+      const at = typeof o.at === "string" && Object.keys(o).length === 1 && o.at.length <= 60 ? o.at : null;
+      const t = at === null ? NaN : instant(at);
+      if (at === null || !Number.isFinite(t)) return bad("inbox.looked takes { at: an instant }");
+      if (t > instant(ctx.now()) + 60_000) return bad("That's in the future");
+      const had = await ctx.plan.getState<string>(LAST_LOOKED_KEY);
+      if (had && instant(had) >= t) return { ok: true, data: { lastLooked: had } };
+      await ctx.plan.setState(LAST_LOOKED_KEY, at);
+      return { ok: true, data: { lastLooked: at } };
     }
     case "inbox.seen": {
       // Seen: a promise stops being New. Only keys of items I have (the list decides); others are refused.

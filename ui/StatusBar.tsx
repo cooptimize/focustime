@@ -4,7 +4,7 @@ import type { ClientWork } from "../week/types.ts";
 import { hoursSummary, type TimeModel } from "../week/hours.ts";
 import { devopsSummary, workStatusLabel } from "./work.ts";
 import { causeLines, notConnected, SOURCE_NAMES, sourceActions, stateOf, type Calendar, type Fix } from "./status.ts";
-import { shortDate } from "./labels.ts";
+import { stampText } from "./stamp.ts";
 import { updatedAgo } from "./refresh.ts";
 import { userZone } from "../week/zone.ts";
 
@@ -24,12 +24,7 @@ type Props = {
   onDisconnect: (s: Calendar) => void;
 };
 
-function when(iso: string, tz: string): string {
-  const z = Temporal.Instant.from(iso).toZonedDateTimeISO(tz);
-  const today = Temporal.Now.plainDateISO(tz);
-  const t = `${z.hour % 12 || 12}:${String(z.minute).padStart(2, "0")} ${z.hour < 12 ? "AM" : "PM"}`;
-  return z.toPlainDate().equals(today) ? t : `${shortDate(z.toPlainDate().toString())} ${t}`;
-}
+const when = (iso: string, tz: string): string => stampText(iso, tz);
 
 export function StatusBar({ sources, devops, hours, loading, busy, notice, extra, clock, onRefresh, onConnect, onDisconnect }: Props) {
   const shape = { timeZone: userZone({ hours }) };

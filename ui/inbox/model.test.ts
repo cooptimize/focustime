@@ -7,6 +7,8 @@ import type { FollowUpView } from "../../actions/types.ts";
 import { actsFor, ITEM_KEYS, type ActEnv } from "./ItemActions.tsx";
 import { byUrgency, clientCounts, dueBucket, groupRows, inView, lateText, rowTag } from "./model.ts";
 
+const G = { tz: "UTC", sort: "newest" as const };
+
 const TODAY = "2026-11-05";
 const row = (o: Partial<InboxItemView> & { key: string }): InboxItemView => ({
   kind: "promise", clientKey: "contoso", at: "2026-11-04T12:00:00Z", views: ["promises"], title: "A promise", who: null, where: null,
@@ -25,12 +27,11 @@ describe("the list", () => {
     expect(inView(items, "needs_you", ["contoso"]).map((i) => i.key)).toEqual(["c2", "v3"]);
     expect(clientCounts(items, "needs_you")).toEqual(new Map([["fabrikam", 1], ["contoso", 2]]));
   });
-  it("groups by client with late clients first, by due date, or by kind; late first inside", () => {
+  it("groups by client with late clients first and by due date, late first inside a due date group", () => {
     const name = (k: string) => k[0]!.toUpperCase() + k.slice(1);
     const rows = inView(items, "needs_you", []);
-    expect(groupRows(rows, "client", name, TODAY).map((g) => [g.label, g.rows.map((r) => r.key)])).toEqual([["Fabrikam", ["f1"]], ["Contoso", ["c2", "v3"]]]);
-    expect(groupRows(rows, "due", name, TODAY).map((g) => g.label)).toEqual(["Late", "Today", "No due date"]);
-    expect(groupRows(items, "kind", name, TODAY).map((g) => g.label)).toEqual(["Conversations", "Promises", "Captures"]);
+    expect(groupRows(rows, "client", name, TODAY, G).map((g) => [g.label, g.rows.map((r) => r.key)])).toEqual([["Fabrikam", ["f1"]], ["Contoso", ["v3", "c2"]]]);
+    expect(groupRows(rows, "due", name, TODAY, G).map((g) => g.label)).toEqual(["Late", "Today", "No due date"]);
     expect([...items].sort(byUrgency)[0]!.key).toBe("f1");
   });
   it("due buckets and late words", () => {

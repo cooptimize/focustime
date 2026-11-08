@@ -39,7 +39,7 @@ import type { Logger } from "../log/logger.ts";
 import type { PhotoCache } from "../host/types.ts";
 import { expiringSoon } from "../plan/expiry.ts";
 import { clients as defaultClients, weekConfig as defaultWeekConfig } from "../config/defaults.ts";
-import { colorCss, DEFAULT_PLAN, DEFAULT_TIMEBOX, DEFAULT_UI, INBOX_GROUPS, INBOX_VIEW_NAMES, TEXT_SIZES, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";
+import { colorCss, DEFAULT_PLAN, DEFAULT_TIMEBOX, DEFAULT_UI, INBOX_GROUPINGS, INBOX_GROUPS, INBOX_SORTS, INBOX_VIEW_NAMES, TEXT_SIZES, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";
 import { setValue, type WriteResult } from "../config/edit.ts";
 import type { CalendarSource } from "../sources/calendar/source.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
@@ -1794,13 +1794,19 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "ui.set_inbox": {
       // IB-1: the Inbox's view, clients and grouping, remembered per person ([ui] inbox_view, inbox_clients, inbox_group).
       const i = req.input as Record<string, unknown> | null;
-      if (typeof i !== "object" || i === null || Array.isArray(i) || !Object.keys(i).length || Object.keys(i).some((k) => !["view", "clients", "group"].includes(k))) return bad("input must be { view?, clients?, group? }");
+      if (typeof i !== "object" || i === null || Array.isArray(i) || !Object.keys(i).length || Object.keys(i).some((k) => !["view", "clients", "group", "sort", "statuses", "grouping"].includes(k))) return bad("input must be { view?, clients?, group?, sort?, statuses?, grouping? }");
       if (i.view !== undefined && !(INBOX_VIEW_NAMES as readonly unknown[]).includes(i.view)) return bad("view is one of the Inbox's views");
       if (i.group !== undefined && !(INBOX_GROUPS as readonly unknown[]).includes(i.group)) return bad("group is client, due or kind");
       if (i.clients !== undefined && (!Array.isArray(i.clients) || i.clients.length > 50 || i.clients.some((x) => typeof x !== "string" || !x || x.length > 100))) return bad("clients is a list of client keys");
+      if (i.sort !== undefined && !(INBOX_SORTS as readonly unknown[]).includes(i.sort)) return bad("sort is newest or oldest");
+      if (i.grouping !== undefined && !(INBOX_GROUPINGS as readonly unknown[]).includes(i.grouping)) return bad("grouping is day, client, due or status");
+      if (i.statuses !== undefined && (!Array.isArray(i.statuses) || i.statuses.some((x) => !(INBOX_VIEW_NAMES as readonly unknown[]).includes(x)))) return bad("statuses is a list of the Inbox's views");
       if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
       const r = await ctx.writeConfig((text) => {
         let t = text;
+        if (i.sort !== undefined) t = setValue(t, "ui", "inbox_sort", i.sort as string);
+        if (i.statuses !== undefined) t = setValue(t, "ui", "inbox_statuses", [...new Set(i.statuses as string[])]);
+        if (i.grouping !== undefined) t = setValue(t, "ui", "inbox_grouping", i.grouping as string);
         if (i.view !== undefined) t = setValue(t, "ui", "inbox_view", i.view as string, "Inbox (IB-1): the view, clients and grouping last used.");
         if (i.clients !== undefined) t = setValue(t, "ui", "inbox_clients", [...new Set(i.clients as string[])]);
         if (i.group !== undefined) t = setValue(t, "ui", "inbox_group", i.group as string);
@@ -1969,6 +1975,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "inbox.seen":
     case "inbox.hide":
     case "inbox.snooze":
+    case "inbox.looked":
       return inboxAction(
         {
           plan: ctx.plan,

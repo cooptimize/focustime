@@ -1291,6 +1291,8 @@ export type NewFlex = { date: IsoDate; clientKey: string; start: string; end: st
 /** Something owed to someone (D92). Opened by a rule (step 7, plan/followups.ts), a flex session or by hand. */
 export type FollowUp = {
   id: number;
+  /** IB-2: when it last changed (null: not since this was added); the Inbox's timeline orders by it. */
+  changedAt?: string | null;
   kind: string;
   clientKey: string | null;
   /** Who it is owed to (a client name, or what I typed). */
@@ -1453,7 +1455,7 @@ const toWatch = (r: Row): WeekWatch => ({
   checkinPickId: (r.checkin_pick_id as number | null) ?? null,
 });
 const toPlan = (r: Row): DayPlan => ({ date: r.date as string, committedAt: (r.committed_at as string | null) ?? null, closedOutAt: (r.closed_out_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string });
-const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: r.size as Size, level: ((r.level as string | null) ?? "story") as DraftStory["level"], createdAt: r.created_at as string, description: (r.description as string | null) ?? null, acceptance: (r.acceptance as string | null) ?? null, startDate: (r.start_date as string | null) ?? null, targetDate: (r.target_date as string | null) ?? null, ...(r.devops_id != null ? { devopsId: r.devops_id as number, devopsUrl: (r.devops_url as string | null) ?? null } : {}), ai: toDraftAi(r) });
+const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: r.size as Size, level: ((r.level as string | null) ?? "story") as DraftStory["level"], createdAt: r.created_at as string, updatedAt: (r.updated_at as string | null) ?? (r.created_at as string), description: (r.description as string | null) ?? null, acceptance: (r.acceptance as string | null) ?? null, startDate: (r.start_date as string | null) ?? null, targetDate: (r.target_date as string | null) ?? null, ...(r.devops_id != null ? { devopsId: r.devops_id as number, devopsUrl: (r.devops_url as string | null) ?? null } : {}), ai: toDraftAi(r) });
 const toDraftAi = (r: Row): DraftAi | null =>
   r.ai_state == null ? null : { state: r.ai_state as DraftAiState, title: (r.ai_title as string | null) ?? null, description: (r.ai_description as string | null) ?? null, acceptance: (r.ai_acceptance as string | null) ?? null, type: (r.ai_type as string | null) ?? null, parentId: (r.ai_parent_id as number | null) ?? null, parentReason: (r.ai_parent_reason as string | null) ?? null, note: (r.ai_note as string | null) ?? null, ranAt: (r.ai_ran_at as string | null) ?? null };
 export type DevOpsIdentityRow = { clientKey: string; org: string; id: string; name: string; email: string; validatedAt: string; expires: string | null };
@@ -1567,6 +1569,7 @@ const toFollowUp = (r: Row): FollowUp => ({
   sourceKind: (r.source_kind as string | null) ?? null,
   sourceId: (r.source_id as number | null) ?? null,
   itemId: (r.item_id as number | null) ?? null,
+  changedAt: (r.changed_at as string | null) ?? null,
   ruleKey: (r.rule_key as string | null) ?? null,
   refAt: (r.ref_at as string | null) ?? null,
   draft: (r.draft as string | null) ?? null,
@@ -1839,7 +1842,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         (await db.run("UPDATE picks SET status = ?, updated_at = ? WHERE id = ?", done ? "done" : "planned", stamp(), id));
         // Step 13.5: ticking a follow-up pick done closes the loop.
         const fu = ((await db.get("SELECT follow_up_id FROM picks WHERE id = ?", id)) as Row).follow_up_id as number | null;
-        if (done && fu !== null) (await db.run("UPDATE follow_ups SET closed_at = ?, closed_by = 'me', outcome = 'done', close_note = COALESCE(close_note, 'Done as a pick'), snoozed_until = NULL WHERE id = ? AND closed_at IS NULL", stamp(), fu));
+        if (done && fu !== null) { const at = stamp(); await db.run("UPDATE follow_ups SET closed_at = ?, changed_at = ?, closed_by = 'me', outcome = 'done', close_note = COALESCE(close_note, 'Done as a pick'), snoozed_until = NULL WHERE id = ? AND closed_at IS NULL", at, at, fu); }
         return (await mustPick(id));
       });
     },
@@ -2062,7 +2065,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         const r = (await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row | undefined;
         if (!r) throw new PlanError(`No follow-up ${id}`);
         if (r.closed_at) throw new PlanError("That follow-up is already closed");
-        (await db.run("UPDATE follow_ups SET closed_at = ?, close_note = ?, closed_by = ?, outcome = ?, close_how = ?, snoozed_until = NULL WHERE id = ?", stamp(), note, by, o.outcome ?? "done", o.how ?? null, id));
+        { const at = stamp(); await db.run("UPDATE follow_ups SET closed_at = ?, changed_at = ?, close_note = ?, closed_by = ?, outcome = ?, close_how = ?, snoozed_until = NULL WHERE id = ?", at, at, note, by, o.outcome ?? "done", o.how ?? null, id); }
         return toFollowUp((await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row);
       });
     },
@@ -2072,14 +2075,14 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         const r = (await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row | undefined;
         if (!r) throw new PlanError(`No follow-up ${id}`);
         if (!r.closed_at) throw new PlanError("That follow-up is already open");
-        (await db.run("UPDATE follow_ups SET closed_at = NULL, close_note = NULL, closed_by = NULL, outcome = NULL, close_how = NULL WHERE id = ?", id));
+        (await db.run("UPDATE follow_ups SET closed_at = NULL, changed_at = ?, close_note = NULL, closed_by = NULL, outcome = NULL, close_how = NULL WHERE id = ?", stamp(), id));
         return toFollowUp((await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row);
       });
     },
     /** Hidden from lists until that day (null wakes it now). */
     async snoozeFollowUp(id: number, until: IsoDate | null): Promise<FollowUp> {
       return tx(async () => {
-        const r = (await db.run("UPDATE follow_ups SET snoozed_until = ? WHERE id = ? AND closed_at IS NULL", until, id));
+        const r = (await db.run("UPDATE follow_ups SET snoozed_until = ?, changed_at = ? WHERE id = ? AND closed_at IS NULL", until, stamp(), id));
         if (!Number(r.changes)) throw new PlanError((await db.get("SELECT 1 FROM follow_ups WHERE id = ?", id)) ? "That follow-up is already closed" : `No follow-up ${id}`);
         return toFollowUp((await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row);
       });
@@ -2109,7 +2112,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         const n = { clientKey: f.clientKey, who: f.who, what: f.what, channel: f.channel, due: f.due, itemId: moved ? null : f.itemId, ...patch, whoRef };
         if (!n.what.trim()) throw new PlanError("Say what you owe");
         if (n.itemId && !n.clientKey) throw new PlanError("A work item needs the client it belongs to");
-        (await db.run("UPDATE follow_ups SET client_key = ?, who = ?, who_ref = ?, what = ?, channel = ?, due = ?, item_id = ? WHERE id = ?", n.clientKey, n.who, refJson(n.who ? n.whoRef : null), n.what, n.channel, n.due, n.itemId, id));
+        (await db.run("UPDATE follow_ups SET client_key = ?, who = ?, who_ref = ?, what = ?, channel = ?, due = ?, item_id = ?, changed_at = ? WHERE id = ?", n.clientKey, n.who, refJson(n.who ? n.whoRef : null), n.what, n.channel, n.due, n.itemId, stamp(), id));
         return toFollowUp((await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row);
       });
     },
@@ -2151,7 +2154,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     },
     /** A slip follow-up that is still open takes more slipped picks: its draft and the picks it covers. */
     async updateFollowUpDraft(id: number, what: string, draft: string, detail: { picks: number[] }, origin?: FollowUpOrigin | null): Promise<void> {
-      (await db.run("UPDATE follow_ups SET what = ?, draft = ?, detail = ?, origin = COALESCE(?, origin) WHERE id = ? AND closed_at IS NULL", what, draft, JSON.stringify(detail), origin ? JSON.stringify(origin) : null, id));
+      (await db.run("UPDATE follow_ups SET what = ?, draft = ?, detail = ?, origin = COALESCE(?, origin), changed_at = ? WHERE id = ? AND closed_at IS NULL", what, draft, JSON.stringify(detail), origin ? JSON.stringify(origin) : null, stamp(), id));
     },
     /** A follow-up added by hand: who, what, optional due date. */
     // ---- quick capture (step 9) ----

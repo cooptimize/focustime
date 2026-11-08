@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import type { ConversationCard } from "../../plan/conversation-views.ts";
 import { contentsLine, movesLines, type MergePreview, type MergeSide } from "../../plan/merge-preview.ts";
 import { call } from "../api.ts";
-import { whenText } from "../labels.ts";
+import { Stamp } from "../Stamp.tsx";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 
@@ -53,7 +53,7 @@ export function MergePane({ c, others, tz, onMerge, onCancel }: { c: Conversatio
           {others.map((o, i) => (
             <li key={o.id}>
               <button type="button" className="mg-choice" autoFocus={i === 0} onClick={() => setOther(o)}>
-                <strong>{o.title}</strong> <span className="muted">· {o.statusLine} · {whenText(o.lastAt, tz)}</span>
+                <strong>{o.title}</strong> <span className="muted">· {o.statusLine} · <Stamp at={o.lastAt} tz={tz} /></span>
               </button>
             </li>
           ))}

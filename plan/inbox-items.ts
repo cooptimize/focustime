@@ -20,6 +20,8 @@ export type InboxKind = (typeof INBOX_KINDS)[number];
 
 export const INBOX_VIEWS = ["needs_you", "promises", "waiting", "in_progress", "captures", "teammates", "done", "chatter"] as const;
 export type InboxView = (typeof INBOX_VIEWS)[number];
+/** IB-2: where the Inbox is looking: Everything (the timeline), or one view as a shortcut for Everything with only that status on. */
+export type InboxPlace = "everything" | InboxView;
 
 /** The one lifecycle: New, Needs you, In progress (an item linked or on my week), Waiting on someone, Done. */
 export type Lifecycle = "new" | "needs_you" | "in_progress" | "waiting" | "teammates" | "open" | "done";
@@ -206,9 +208,22 @@ export type InboxListData = {
   items: InboxItemView[];
   counts: Record<InboxView, number>;
   needsYou: number;
+  /** IB-2: the instant the server read this, and when I last looked at Everything (null: never); server-side, so it follows me across devices. */
+  now?: string;
+  lastLooked?: string | null;
   /** Slice 3: the Snooze choices to offer now (Later today only with an hour or more of my day left). */
   snoozeChoices?: ("later" | "tomorrow" | "next_week")[];
 };
+
+// ---- IB-2: the Everything timeline's one status per row ----
+
+/** A row's one status tag when it's in several views: the first of these it's in. */
+export const STATUS_ORDER: readonly InboxView[] = ["done", "needs_you", "teammates", "waiting", "in_progress", "promises", "captures", "chatter"];
+
+/** The status a row's tag shows, the same whichever filter is on. */
+export function statusOf(views: readonly InboxView[]): InboxView | null {
+  return STATUS_ORDER.find((v) => views.includes(v)) ?? null;
+}
 
 // ---- Slice 3: why it needs me ----
 

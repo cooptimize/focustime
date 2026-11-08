@@ -188,7 +188,8 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
     await page.locator(".ib-row").first().waitFor();
     const rows = await page.locator(".ib-row").evaluateAll((rs) => rs.map((r) => r.querySelectorAll(".ib-tag").length));
     expect(rows.length).toBeGreaterThan(1);
-    for (const n of rows) expect(n).toBeLessThanOrEqual(1);
+    // IB-2: the status tag, and at most one more that says what it doesn't (late, due, an item).
+    for (const n of rows) expect(n).toBeLessThanOrEqual(2);
     await page.locator(".ib-row").first().click();
     await expect(page.locator(".ib-pane .ib-acts .ib-act.primary").count()).resolves.toBe(1);
     const text = (await page.locator("main.ib").textContent()) ?? "";

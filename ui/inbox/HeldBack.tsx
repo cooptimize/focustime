@@ -6,11 +6,11 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { HeldData, HeldMessage } from "../../plan/conversation-views.ts";
 import { HELD_LINE } from "../../plan/boundary.ts";
 import { call } from "../api.ts";
-import { whenText } from "../labels.ts";
+import { Stamp } from "../Stamp.tsx";
 
 const n = (c: number) => (c === 1 ? "1 message" : `${c} messages`);
 
-export function HeldBack({ count, tz, onChanged }: { count: number; tz: string; onChanged: () => void }): ReactNode {
+export function HeldBack({ count, tz, today, onChanged }: { count: number; tz: string; today?: string; onChanged: () => void }): ReactNode {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<HeldData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +47,7 @@ export function HeldBack({ count, tz, onChanged }: { count: number; tz: string; 
           {data && !data.messages.length && <p className="muted">Nothing held back now.</p>}
           <ul>
             {data?.messages.map((m) => (
-              <HeldRow key={`${m.chatId}:${m.messageId}`} m={m} tz={tz} conversations={data.conversations[m.chatId] ?? []} act={done} />
+              <HeldRow key={`${m.chatId}:${m.messageId}`} m={m} tz={tz} today={today} conversations={data.conversations[m.chatId] ?? []} act={done} />
             ))}
           </ul>
         </div>
@@ -56,7 +56,7 @@ export function HeldBack({ count, tz, onChanged }: { count: number; tz: string; 
   );
 }
 
-function HeldRow({ m, tz, conversations, act }: { m: HeldMessage; tz: string; conversations: { id: number; title: string }[]; act: (action: string, input: unknown) => Promise<void> }): ReactNode {
+function HeldRow({ m, tz, today, conversations, act }: { m: HeldMessage; tz: string; today?: string | undefined; conversations: { id: number; title: string }[]; act: (action: string, input: unknown) => Promise<void> }): ReactNode {
   const [sorting, setSorting] = useState(false);
   const [to, setTo] = useState<string>(conversations[0] ? String(conversations[0].id) : "new");
   const [left, setLeft] = useState(false);
@@ -65,7 +65,7 @@ function HeldRow({ m, tz, conversations, act }: { m: HeldMessage; tz: string; co
       <p className="held-meta">
         <strong>{m.chatName}</strong>
         <span>{m.author}</span>
-        <time dateTime={m.at}>{whenText(m.at, tz)}</time>
+        <Stamp at={m.at} tz={tz} today={today} />
         {m.matched.map((x) => (
           <span key={x} className="ib-tag tone-soon mention-tag">
             mentions {x}

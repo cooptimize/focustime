@@ -83,6 +83,11 @@ export function entryOf(row: InboxItemView, s: InboxSources): Entry {
 
 /** Chatter: the messages filtered as chatter, one row per chat (never counted, never in Needs you). */
 export type ChatterRow = { key: string; clientKey: string; clientName: string; chatId: string; title: string; messages: ConversationsData["chatter"][number]["messages"]; lastAt: string };
+/** IB-2: a chat's chatter as a row of the timeline, status Chatter. Its key stays in the page and never reaches an address. */
+export function chatterItem(r: ChatterRow): InboxItemView {
+  return { key: r.key, kind: "conversation", clientKey: r.clientKey, at: r.lastAt, views: ["chatter"], title: r.title, who: null, where: `${r.messages.length} ${r.messages.length === 1 ? "message" : "messages"}`, due: null, dueAt: null, itemId: null, late: false, done: false, snoozedUntil: null };
+}
+
 export function chatterRows(convs: ConversationsData | null, clients: readonly string[]): ChatterRow[] {
   if (!convs) return [];
   const pick = new Set(clients);
