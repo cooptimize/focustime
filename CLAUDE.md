@@ -162,7 +162,7 @@ Run: `focustime-open` (the service), `npm run dev`, `npm test` (with `npm run db
 | Add pane | The right pane of a planning mode: "Add to <client>" with a count, search (week), the offered rows, "▸ Everything else" and the type box at its foot (U6, D412) |
 | Type box | The input at the foot of the Add pane. Plan the day: "Type a story for <client>, then Enter": Enter saves a draft story under the chosen feature and plans it; Shift+Enter a plain note, "not in DevOps" (U4, D398). Plan the week: "Type a feature for <client>, then Enter": a draft feature as a must, Shift+Enter as a nice to have (U6, D413) |
 | Agenda | A block's meetings, personal events, unavailable time and timeboxes in time order, with the free gaps between ("Free · 2h"), in Plan the day |
-| Timebox my day | After commit: every planned to-do without a timebox placed into its block's free gaps (musts first, then larger sizes), shown as the resulting agenda first; Outlook events go through one combined preview |
+| Timebox my day | After confirming: every planned to-do without a timebox placed into its block's free gaps (musts first, then larger sizes), shown as dashed placeholders on Today's timeline with ✓, ✕ and Accept all, no popup (TY-1); Outlook events go through one combined preview |
 | Write framework | The only path for external writes: named action, preview, confirm, read back, audit log, undo |
 | Audit log | Settings > Data: every external write with where, when, result and prior values, with Undo and Retry |
 | Marker | The extended property (CoopilotId) on every FocusTime-created Outlook event; FocusTime refuses to change events without it. CoopilotId is the historical marker name; renaming it would orphan events (R1) |

@@ -8,7 +8,7 @@ import type { CalEvent } from "../week/types.ts";
 import type { DayEvent } from "../plan/todaycal.ts";
 import { showAsLabel } from "./labels.ts";
 import { spanText } from "./menu.ts";
-import { useEventMenu } from "./WeekGrid.tsx";
+import { useEventMenu } from "./Timeline.tsx";
 
 /** One meeting row: time, title, Now / Next, and the show-as word when it isn't busy. */
 export function DayEventRow({ e, tz }: { e: DayEvent; tz: string }) {

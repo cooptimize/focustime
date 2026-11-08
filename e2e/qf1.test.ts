@@ -84,7 +84,7 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("Timebox my day from Today (Confirm and timebox when not confirmed) and from the Board's day menu; the same preview", async () => {
+  it("Timebox my day from Today (Confirm and timebox when not confirmed) and from the Board's day menu; the same proposals on the timeline", async () => {
     const { page } = await freshPage(h);
     // Today with a plan that isn't confirmed and a story without a time.
     await call(page, "pick.add", { date: "2026-11-02", half: "PM", clientKey: "Northwind", intention: "Write the export notes", size: "S" });
@@ -95,11 +95,12 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     await expect.poll(() => offer.textContent(), { timeout: 10_000 }).toMatch(/^(Confirm and timebox|Timebox my day)$/);
     await shots(page, "today-timebox");
     await offer.click();
-    const dialog = page.getByRole("dialog", { name: "Timebox my day" });
-    await dialog.waitFor();
-    await expect.poll(() => hash(page)).toMatch(/^#\/week\/day\/2026-11-02/);
+    // TY-1: no popup: the same proposals, as placeholders on the day's timeline (with the day confirmed first).
+    await page.getByRole("group", { name: "Timebox my day" }).waitFor();
+    expect(await page.getByRole("dialog", { name: "Timebox my day" }).count()).toBe(0);
+    await expect.poll(() => hash(page)).toMatch(/^#\/today/);
     await expect((await call(page, "planday.start", { date: "2026-11-02" })).data.plan.committedAt).toBeTruthy();
-    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await page.getByRole("button", { name: "Discard" }).click();
     // The Board's day header menu, on Tuesday: Confirm and timebox (nothing confirmed there yet).
     await call(page, "pick.add", { date: "2026-11-03", half: "AM", clientKey: "Cooptimize", intention: "Draft the onboarding checklist", size: "S" });
     await page.evaluate(() => (location.hash = "#/week"));
@@ -107,8 +108,8 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     await page.locator(".day-head").nth(1).click({ button: "right" });
     const item = page.getByRole("menuitem", { name: /Confirm and timebox|Timebox my day/ });
     await item.click();
-    await page.getByRole("dialog", { name: "Timebox my day" }).waitFor();
-    await expect.poll(() => hash(page)).toMatch(/^#\/week\/day\/2026-11-03/);
+    await page.getByRole("group", { name: "Timebox my day" }).waitFor();
+    await expect.poll(() => hash(page)).toMatch(/^#\/today\/2026-11-03/);
     await page.close();
   }, T);
 

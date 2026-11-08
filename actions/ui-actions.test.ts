@@ -28,7 +28,7 @@ describe("ui.set_theme (step 6b)", () => {
   it("saves the theme in [ui] and returns it; the file keeps its comments", async () => {
     const t = setup();
     const r = await dispatch(t.c, { action: "ui.set_theme", input: { theme: "cooptimize-light" } });
-    expect(r).toEqual({ ok: true, data: { ui: { theme: "cooptimize-light", viewRange: "business", showTimelines: true, reduceMotion: false, textSize: "default", showPersonal: true, inbox: DEFAULT_INBOX } } });
+    expect(r).toEqual({ ok: true, data: { ui: { theme: "cooptimize-light", viewRange: "business", showTimelines: true, todayTimeline: false, todayTimelinePhone: false, reduceMotion: false, textSize: "default", showPersonal: true, inbox: DEFAULT_INBOX } } });
     const text = readFileSync(t.path, "utf8");
     expect(text).toContain('[ui]\ntheme = "cooptimize-light"');
     expect(text).toContain("# FocusTime configuration.");
