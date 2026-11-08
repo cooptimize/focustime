@@ -1969,10 +1969,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .ag-ol { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); flex: none; }
 
 /* Timebox my day and the combined Outlook preview (D246, D247). */
-.myday { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; overscroll-behavior: contain; }
-.myday-block { display: grid; gap: 6px; padding: 8px 0; border-top: 1px solid var(--border); }
-.myday-block h3 { margin: 0; font-size: var(--fs-3); display: flex; align-items: center; gap: 8px; }
-.myday-all { display: flex; align-items: center; gap: 6px; font-size: var(--fs-3); }
 .write-dialog.batch { max-height: calc(100vh - 48px); overflow-y: auto; overscroll-behavior: contain; }
 .wd-batch { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .wd-batch > li { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; }
@@ -1987,7 +1983,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .write-dialog.devops { max-height: calc(100vh - 48px); overflow-y: auto; overscroll-behavior: contain; }
 /* DM-1: the tall dialogs (up to the window less 48 px) start near the top; at 12vh down, a long preview ran past the
    window's bottom with its Confirm out of reach. */
-.cap-backdrop:has(> .write-dialog.devops, > .write-dialog.batch, > .myday) { padding-top: 24px; }
+.cap-backdrop:has(> .write-dialog.devops, > .write-dialog.batch) { padding-top: 24px; }
 .dw-rows { display: grid; gap: 10px; }
 .dw-row { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; display: grid; gap: 6px; }
 .dw-row.done { border-color: color-mix(in oklab, var(--ok) 50%, var(--border)); }
@@ -2184,12 +2180,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .view-controls { display: inline-flex; align-items: center; gap: 6px; }
 .statusbar.quiet .view-controls { margin-left: auto; margin-right: 8px; }
 /* Step 15.1 (D274): what didn't fit after Timebox my day, with one-click fixes. */
-.pd-didnt-fit { margin: 10px 20px 0; padding: 10px 14px; border: 1px solid color-mix(in oklab, var(--watch) 45%, var(--border)); border-radius: 10px; background: var(--raised); display: grid; gap: 6px; }
-.pd-didnt-fit p { margin: 0; font-size: var(--fs-3); }
-.pd-didnt-fit ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.pd-didnt-fit li { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: var(--fs-3); }
-.pd-didnt-fit .df-title { flex: 0 1 auto; min-width: 0; margin-right: 6px; }
-.pd-didnt-fit .df-close { justify-self: start; }
 
 /* Roadmap (step 16, D278 to D282) */
 .roadmap { flex: 1; overflow: auto; padding: 8px 24px 32px; }
@@ -3152,8 +3142,8 @@ button.pw-kids:hover, button.pw-kids:focus-visible { text-decoration: underline;
 .pd2-feature > ul { margin: 2px 0 4px 14px; }
 .pd2-group-title { font-size: var(--fs-2); }
 .pd2-type input { width: 100%; font-size: var(--fs-3); }
-.pd2 .pd-committed, .pd2 .pd-didnt-fit { font-size: var(--fs-3); }
-.pd2 .pd-committed button, .pd2 .pd-didnt-fit .mini { font-size: var(--fs-3); font-weight: 500; }
+.pd2 .pd-committed { font-size: var(--fs-3); }
+.pd2 .pd-committed button { font-size: var(--fs-3); font-weight: 500; }
 .pd2-weekstrip { font-size: var(--fs-2); }
 .intention.pd2-type { display: block; }
 .pd2-type .item-lookup { display: block; width: 100%; }
@@ -3220,7 +3210,7 @@ section.day > .day-allday .chip { display: block; min-width: 0; overflow: hidden
 .pl-secondary > button:not(.link-btn) { padding: 5px 12px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-3); font-weight: 500; cursor: pointer; }
 .pl-secondary > .link-btn { font-size: var(--fs-3); font-weight: 500; }
 .pl-more { font-size: var(--fs-4); font-weight: 600; }
-.pl-frame > .pd-didnt-fit, .pl-frame > .pd-committed, .pl-frame > .pd-error, .pl-frame > .set-problem, .pl-frame > .co-notice, .pl-frame > .pw-brief { margin: 0 24px 10px; }
+.pl-frame > .pd-committed, .pl-frame > .pd-error, .pl-frame > .set-problem, .pl-frame > .co-notice, .pl-frame > .pw-brief { margin: 0 24px 10px; }
 .pl-panes { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) var(--pl-right); gap: 20px; padding: 0 24px; }
 .pl-panes.single { grid-template-columns: minmax(0, 1fr); }
 .pl-left { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 12px; padding: 2px 2px 24px; }
@@ -6123,3 +6113,58 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .ib-phone .ib-row-line { align-items: flex-start; }
 .ib-phone .ib-row.new { padding-left: 10px; }
 .ib-phone .ib-new-dot { left: 1px; top: 18px; }
+
+/* TY-1: Today's timeline: Week's cards and hour timeline (.half, .card-head, .timeline, .event, .tbox), one column. */
+.today-body.with-tl, .today-view.wide .today-body.with-tl { grid-template-columns: minmax(0, 1fr); }
+/* --tl-hour: the Board's hour at 1920 (about 94 px), so the two read as one system. */
+.today-tl { --tl-hour: calc(94px * var(--text-scale)); display: flex; flex-direction: column; gap: 10px; min-width: 0; max-width: 1200px; }
+.today-tl .day-allday.empty, .today-tl .day-out.empty { display: none; }
+.half.tt-block { flex-direction: column; flex: none; overflow: visible; }
+.half.tt-block.focus { background: color-mix(in oklab, var(--c) 5%, var(--surface)); }
+.half.tt-block.ended { opacity: 0.75; }
+.tt-head { display: flex; align-items: baseline; gap: 10px; padding: 8px 12px; cursor: pointer; }
+.tt-head .status-pill { margin-left: auto; }
+.tt-head .late-chip { flex: none; }
+.tt-head .card-client { font-size: var(--fs-4); font-weight: 600; }
+.tt-tray { padding: 4px 12px 8px; display: grid; gap: 2px; border-top: 1px solid var(--border); }
+.tt-tray-label { margin: 0; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+.tt-tray-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.tt-tray-empty { margin: 0; font-size: var(--fs-2); }
+.tt-tray-row { touch-action: none; cursor: grab; border-radius: 6px; }
+.tt-tray-row:focus-visible, .tt-tray-row.selected { outline: 2px solid var(--selected); outline-offset: -2px; }
+.timeline.tt-hours { flex: none; border-top: 1px solid var(--border); border-radius: 0 0 11px 7px; }
+.tt-hours .tbox { z-index: 2; }
+.tt-hours .tbox.done { opacity: 0.55; }
+.tt-hours .tbox.done .tbox-label { text-decoration: line-through; }
+.tt-hours .tbox:focus-visible, .tt-hours .tbox.selected { outline: 2px solid var(--selected); outline-offset: 1px; }
+.tt-ghost { pointer-events: none; opacity: 0.85; z-index: 3; border-style: dashed; --c: var(--accent); }
+.tt-ph { z-index: 3; display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; border: 2px dashed color-mix(in oklab, var(--c) 75%, transparent); background: color-mix(in oklab, var(--c) 8%, var(--surface)); }
+.tt-ph-text { min-width: 0; flex: 1 1 auto; }
+.tt-ph-acts { display: inline-flex; gap: 4px; flex: none; }
+.tt-ph-acts button { width: calc(24px * var(--text-scale)); height: calc(24px * var(--text-scale)); padding: 0; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-2); cursor: pointer; }
+.tt-ph-acts button:hover { border-color: var(--focus); }
+.tt-bar { position: sticky; top: 0; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow-1); font-size: var(--fs-3); }
+.tt-bar button { font: inherit; padding: 3px 10px; border-radius: 7px; border: 1px solid var(--border-strong); background: transparent; color: var(--text); cursor: pointer; }
+.tt-bar button.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
+.tt-bar-outlook { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.tt-bar-left { min-width: 0; font-size: var(--fs-2); }
+.tt-drag-chip { position: fixed; z-index: 40; max-width: 280px; padding: 3px 8px; border-radius: 6px; background: var(--raised); border: 1px solid var(--border-strong); box-shadow: var(--shadow-dialog); font-size: var(--fs-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.tt-off .half.whole { min-height: calc(160px * var(--text-scale)); }
+.tt-times { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 50vh; overflow-y: auto; }
+.tt-times button { width: 100%; min-height: 44px; font: inherit; border: 1px solid var(--border); border-radius: 8px; background: var(--raised); color: var(--text); }
+.today-tl.phone .tt-tray-row { touch-action: auto; min-height: 44px; cursor: default; }
+.today-tl.phone .tbox { touch-action: auto; cursor: default; }
+.today-tl.phone .tbox-edge { display: none; }
+.today-tl.phone .tt-bar { position: static; }
+.today-tl.phone .tt-bar button { min-height: 44px; padding: 0 14px; }
+.today-tl.phone .tt-ph { min-height: 48px; }
+.today-tl.phone .tt-ph-acts button { width: 44px; height: 44px; }
+.today-tl.phone .lanes { inset: 0 44px 0 2px; }
+.today-tl.phone .tbox { right: 44px; }
+.today-tl.phone .gap { right: 46px !important; }
+/* TY-1: a drag from the tray must not select text: the next press on the selection would start the browser's own drag. */
+.today-tl:not(.phone) .tt-tray-row, .tt-hours .tbox { user-select: none; -webkit-user-select: none; }
+.today-body.with-tl .today-tools { max-width: 1200px; }
+/* The phone: the client's name in full, what's left of the header wraps under it. */
+.app.phone .today-tl.phone .tt-head, .app.phone .today-tl.phone .tt-head:has(> .late-chip) { flex-wrap: wrap; overflow: visible; row-gap: 4px; }
+.app.phone .today-tl.phone .tt-head .card-client, .app.phone .today-tl.phone .tt-head:has(> .late-chip) .card-client { flex: 0 1 auto; display: block; min-width: 0; max-width: 100%; white-space: normal; overflow: visible; }

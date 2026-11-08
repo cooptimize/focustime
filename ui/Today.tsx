@@ -10,7 +10,7 @@
 // the cards. Lumen never appears here.
 import type { SetupStep } from "../plan/setup.ts";
 import { useTextScale } from "./textsize.ts";
-import { ModeArea } from "./ModeSwitch.tsx";
+import { ModeArea, TimelineToggle } from "./ModeSwitch.tsx";
 import type React from "react";
 import { DueBadge, Fading, FollowUpRow } from "./FollowUps.tsx";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
@@ -52,7 +52,10 @@ import { DevOpsWork } from "./work.ts";
 import { dayName, FlexOfferBar, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
 import { spanText } from "./menu.ts";
 import { MenuCtx, MoreButton, PopupMenu } from "./Menus.tsx";
-import { DEFAULT_MIN_SIZES, openGaps } from "../plan/agenda.ts";
+import { DEFAULT_MIN_SIZES, openGaps, planMyDay } from "../plan/agenda.ts";
+import { TodayTimeline, type Proposals } from "./TodayTimeline.tsx";
+import { useTimeboxes } from "./Timeboxes.tsx";
+import { mustPicks } from "../plan/musts.ts";
 import { agendaNowIndex, nowClock, ownsNow } from "../plan/nowline.ts";
 import { NowRow } from "./NowLine.tsx";
 import { timeChoices } from "../plan/picktime.ts";
@@ -82,6 +85,11 @@ type Props = {
   showWeekend?: boolean;
   /** QF-1: Timebox my day (Confirm and timebox while the day isn't confirmed). */
   onTimebox?: (date: IsoDate) => void;
+  /** TY-1: Timebox my day was asked for (from here or anywhere else): show its placeholders on this day's timeline. */
+  timeboxAsk?: { date: IsoDate; n: number } | null;
+  /** TY-1: the Timeline switch (saved for the person). */
+  timeline?: boolean;
+  onTimeline?: (show: boolean) => void;
   /** QF-1: a past day's Close out. */
   onCloseOutOn?: (date: IsoDate) => void;
   data: WeekLoadData;
@@ -200,6 +208,8 @@ export function Today(props: Props) {
   // IB-1 slice 4: the strip reads the Inbox's rows; the attention line leaves out whatever the strip already shows.
   const urgentSources: UrgentSource[] = [inboxSource(target.isToday && nudges ? (props.inbox ?? []) : [], { today: date, dayEnd }), ...(props.urgentSources ?? [])];
   const inStrip = new Set(urgentLines(urgentSources, clockNow, tz).map((l) => l.key));
+  const tbEnv = useTimeboxes();
+  const workItems = useContext(DevOpsWork);
   const untimed = untimedDue(todayPromises, { now: clockNow, today: date, dayEnd }).filter((p) => !inStrip.has(`c${p.id}`));
   const focused = useFocused();
   const [error, setError] = useState<string | null>(null);
@@ -209,6 +219,9 @@ export function Today(props: Props) {
   // U3: the shared detail panel, opened from a block card (the pick it opened on, if any).
   const [panel, setPanel] = useState<{ half: Half; focus: PanelFocus | null } | null>(null);
   const closePanel = useCallback(() => setPanel(null), []);
+  // TY-1: Timebox my day's placeholders; they show the timeline for this visit even with the switch off.
+  const [proposals, setProposals] = useState<Proposals | null>(null);
+  const [tlForced, setTlForced] = useState(false);
   const clearNotice = useCallback(() => setNotice(null), []);
   const nextDay = data.week.days.find((d) => d.date > date && d.hours.segments.length > 0 && !d.pto)?.date ?? null;
 
@@ -349,13 +362,43 @@ export function Today(props: Props) {
   // QF-1: Timebox my day from Today, beside the day's plan (Confirm and timebox while it isn't confirmed).
   const boxedIds = new Set(data.timeboxes.filter((t) => t.date === date && !t.removedAt).map((t) => t.pickId));
   const unboxed = picks.filter((p) => p.status === "planned" && !boxedIds.has(p.id)).length;
-  const timeboxOffer = mode === "now" && !past && workday && !ptoDay && unboxed > 0 && data.timeboxSettings.enabled !== false && props.onTimebox ? (
-    <button type="button" className="mini today-timebox" onClick={() => props.onTimebox!(date)} title="Give every planned to-do a time in its block's free time">
+  const timeboxOffer = mode === "now" && !past && workday && !ptoDay && unboxed > 0 && data.timeboxSettings.enabled !== false && props.onTimebox && !proposals ? (
+    <button type="button" className="mini today-timebox" onClick={() => props.onTimebox!(date)} title="Suggest a time for every planned to-do, on the timeline, to accept or change">
       {committed ? "Timebox my day" : "Confirm and timebox"}
     </button>
   ) : null;
 
+  // TY-1: the timeline shows in Now on a day with blocks or PTO (a weekend day stays its plain list; so does Check-in).
+  const timelineShown = mode === "now" && !weekendDay && !!day && (!!props.timeline || tlForced) && (workday || ptoDay);
+  const canTimebox = !past && workday && !ptoDay && data.timeboxSettings.enabled !== false;
+  const startTimebox = () => {
+    if (!day || !canTimebox) return;
+    const slots: Partial<Record<Half, Slot>> = {};
+    for (const s of blocks) if (!s.off && !s.pto) slots[s.half] = s;
+    const r = planMyDay(picks, slots, data.timeboxes, view.sizes, mustPicks(picks, data.weekFeatures, workItems), isToday ? now : undefined, view.minSizes);
+    tbEnv?.loadAccess();
+    setTlForced(true);
+    if (!r.placed.length && !r.unplaced.length) return setNotice("Every planned to-do already has a timebox");
+    setProposals({ date, items: r.placed, unplaced: r.unplaced, outlook: !!tbEnv?.settings.outlookDefault });
+  };
+  // Timebox my day was asked for (this button, the day menu, Plan today, the command menu): once per ask, once the day is here.
+  const askedRef = useRef(0);
+  useEffect(() => {
+    const ask = props.timeboxAsk;
+    if (ask && ask.n !== askedRef.current && ask.date === date && day) {
+      askedRef.current = ask.n;
+      startTimebox();
+    }
+  }, [props.timeboxAsk?.n, date, !!day]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => setProposals((p) => (p && p.date !== date ? null : p)), [date]);
+
   const attention = mode === "now" && nudges ? <Attention noDue={phone} promises={untimed} inStrip={inStrip} onItem={props.onItem} onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
+  const toggleTimeline = () => {
+    const show = !timelineShown;
+    setTlForced(false);
+    if (!show) setProposals(null);
+    props.onTimeline?.(show);
+  };
   const panelSlot = panel ? blocks.find((s) => s.half === panel.half) ?? null : null;
 
   return (
@@ -384,13 +427,17 @@ export function Today(props: Props) {
               : null
           }
         >
+          {mode === "now" && !weekendDay && props.onTimeline && <TimelineToggle shown={timelineShown} onToggle={toggleTimeline} />}
           {switcher}
         </ModeArea>
       </header>
       {moreAt && (
         <PopupMenu
           at={moreAt}
-          step={{ title: "Today", items: [{ id: "personal", label: "Personal events", group: "Show", checked: props.showPersonal, hint: "G", run: () => props.onShowPersonal(!props.showPersonal) }] }}
+          step={{ title: "Today", items: [
+            { id: "personal", label: "Personal events", group: "Show", checked: props.showPersonal, hint: "G", run: () => props.onShowPersonal(!props.showPersonal) },
+            ...(mode === "now" && !weekendDay && props.onTimeline ? [{ id: "timeline", label: "Timeline", group: "Show", checked: timelineShown, hint: "B", run: () => toggleTimeline() }] : []),
+          ] }}
           onClose={() => setMoreAt(null)}
         />
       )}
@@ -467,7 +514,7 @@ export function Today(props: Props) {
         <WeekendToday day={day} date={date} past={past} data={data} picks={picks} />
       ) : !day ? (
         <p className="muted today-loading">Opening {longDate(date)}…</p>
-      ) : ptoDay && !blocks.length ? null : !workday && !ptoDay ? (
+      ) : ptoDay && !blocks.length && !timelineShown ? null : !workday && !ptoDay ? (
         <p className="today-off">
           {!isToday ? `Nothing scheduled ${dayWord}.` : target.isToday ? "Nothing scheduled today." : `No work today. Next workday is ${longDate(target.date).replace(/,\s*\d{4}$/, "")}.`}{" "}
           {(isToday || !past) && (
@@ -477,19 +524,38 @@ export function Today(props: Props) {
           )}
         </p>
       ) : (
-        phoneToday ? (
+        phoneToday && !timelineShown ? (
           <div className="today-body ph-today">
             <PhoneTodos blocks={blocks} picks={picks} data={data} nameOf={nameOf} committed={committed} now={now} onTick={(p, d) => tickWithUndo(p, d)} />
             <PhoneNextUp blocks={blocks} events={cal?.timed ?? []} data={data} nameOf={nameOf} now={clockNow} />
           </div>
         ) : (
-        <div className="today-body">
-          {wide && day && mode !== "closeout" && !readOnly && <DayTimeline day={day} blocks={blocks} data={data} picks={picks} now={now} nowMs={nowMs} events={cal?.timed ?? []} onNotice={setNotice} />}
+        <div className={`today-body${timelineShown ? " with-tl" : ""}`}>
+          {wide && day && mode !== "closeout" && !readOnly && !timelineShown && <DayTimeline day={day} blocks={blocks} data={data} picks={picks} now={now} nowMs={nowMs} events={cal?.timed ?? []} onNotice={setNotice} />}
           <div className="today-main">
-            {mode !== "checkin" && cal && <AllDayRow events={cal.allDay} />}
-            {mode !== "checkin" && split && <OutsideLine label="Before your blocks" events={wide ? [] : split.before} tz={tz} promises={spots.before} onPromise={onPromise} />}
-            {mode === "now" && phone && blocks.length > 0 && <h2 className="section-label phone-agenda">Agenda</h2>}
+            {mode !== "checkin" && cal && !timelineShown && <AllDayRow events={cal.allDay} />}
+            {mode !== "checkin" && split && !timelineShown && <OutsideLine label="Before your blocks" events={wide ? [] : split.before} tz={tz} promises={spots.before} onPromise={onPromise} />}
+            {mode === "now" && phone && blocks.length > 0 && !timelineShown && <h2 className="section-label phone-agenda">Agenda</h2>}
             {timeboxOffer && <div className="today-tools">{timeboxOffer}</div>}
+            {timelineShown && day ? (
+              <TodayTimeline
+                day={day}
+                blocks={blocks}
+                data={data}
+                picks={picks}
+                now={now}
+                tz={tz}
+                editable={!past && !ptoDay && workday}
+                phone={phone}
+                proposals={proposals}
+                setProposals={setProposals}
+                inbox={props.inbox ?? []}
+                onPromise={props.onItem ?? (() => props.onInbox())}
+                onLate={() => (props.onNeedsYou ?? props.onInbox)()}
+                onOpen={readOnly ? undefined : (half, focus) => setPanel({ half, focus: focus ?? null })}
+                nameOf={nameOf}
+              />
+            ) : (
             <section data-tour="today-blocks" className={`today-blocks${blocks.length === 1 ? " one" : ""}`} style={{ "--blocks": blocks.length } as CSSProperties} aria-label="Today's blocks">
               {blocks.map((s) => (
                 <BlockCard
@@ -522,7 +588,8 @@ export function Today(props: Props) {
                 />
               ))}
             </section>
-            {mode !== "checkin" && split && <OutsideLine label="After your blocks" events={wide ? [] : split.after} tz={tz} promises={spots.after} onPromise={onPromise} />}
+            )}
+            {mode !== "checkin" && split && !timelineShown && <OutsideLine label="After your blocks" events={wide ? [] : split.after} tz={tz} promises={spots.after} onPromise={onPromise} />}
             {mode === "now" && phone && nudges && <PhoneFollowUps data={data} date={date} onChanged={(m) => (m && setNotice(m), props.onChanged())} />}
             {mode === "now" && !phone && !ptoDay && <ThisWeek data={data} blocks={blocks} picks={picks} nameOf={nameOf} />}
             {mode === "checkin" && <CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} now={now} act={act} onReview={props.onPlanWeek} onAsks={props.onAsks ?? props.onInbox} />}

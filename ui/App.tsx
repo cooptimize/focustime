@@ -368,7 +368,9 @@ export function App() {
   const [justCommitted, setJustCommitted] = useState(false);
   useEffect(() => setJustCommitted(false), [pd?.date]);
   // Step 13.6: "+ Add work" and A open Plan the day on one block's picker.
-  const [pdStart, setPdStart] = useState<{ half: Half; n: number; focus?: number | null; timebox?: boolean } | null>(null);
+  const [pdStart, setPdStart] = useState<{ half: Half; n: number; focus?: number | null } | null>(null);
+  // TY-1: Timebox my day asked for: Today shows its placeholders for this date, once per ask.
+  const [timeboxAsk, setTimeboxAsk] = useState<{ date: IsoDate; n: number } | null>(null);
   const [pdError, setPdError] = useState<string | null>(null);
   const cellRefs = useRef(new Map<string, HTMLDivElement>());
   // The week the window is on (or moving to), and a counter so a slow older response never overwrites a newer one.
@@ -520,6 +522,23 @@ export function App() {
       setNotice(`Not saved: ${e instanceof Error ? e.message : "unknown error"}`);
     }
   }, []);
+  // TY-1: Today's Timeline switch; the phone keeps its own, off until asked, so it keeps MB-1's layout.
+  const [todayTimeline, setTodayTimeline] = useState(false);
+  const todayTimelineRef = useRef(todayTimeline);
+  todayTimelineRef.current = todayTimeline;
+  const savedTodayTimeline = phone ? data?.ui.todayTimelinePhone : data?.ui.todayTimeline;
+  useEffect(() => {
+    if (savedTodayTimeline !== undefined) setTodayTimeline(savedTodayTimeline);
+  }, [savedTodayTimeline]);
+  const saveTodayTimeline = useCallback(async (show: boolean) => {
+    setTodayTimeline(show);
+    try {
+      await call("ui.set_today_timeline", { show, phone });
+    } catch (e) {
+      setTodayTimeline(!show);
+      setNotice(`Not saved: ${e instanceof Error ? e.message : "unknown error"}`);
+    }
+  }, [phone]);
   // Ctrl+plus, Ctrl+minus, Ctrl+0: step the text size, only when no text field has focus and no dialog is on top
   // (then the browser's own zoom keys do what they always do).
   useEffect(() => {
@@ -783,24 +802,22 @@ export function App() {
   );
 
   /**
-   * QF-1: Timebox my day from Today or the Board's day menu: confirms the day first when it isn't ("Confirm and
-   * timebox"), then opens Plan today on it with the same Timebox my day preview (and its one Outlook preview).
+   * QF-1, TY-1: Timebox my day from anywhere: confirms the day first when it isn't ("Confirm and timebox"), then goes to
+   * that day on Today, whose timeline shows the suggestions as placeholders.
    */
   const timeboxDay = useCallback(
     async (date: IsoDate) => {
       if (!data || !data.planDay.available) return void setNotice("The local plan store isn't available, so planning is off");
       try {
         if (!data.plan?.[date]?.committedAt) await planAction("planday.commit", { date });
-        await showPlanDay(await planAction("planday.start", { date }));
         reloadQuiet();
-        const d = data.week.days.find((x) => x.date === date);
-        setPdStart((s) => ({ half: d ? cardHalves(d)[0]! : "AM", n: (s?.n ?? 0) + 1, focus: null, timebox: true }));
-        goNav(planDayNav(date));
+        setTimeboxAsk((s) => ({ date, n: (s?.n ?? 0) + 1 }));
+        goNav(navOf.todayOn(date !== data.planDay.date ? date : null));
       } catch (e) {
         setNotice(e instanceof Error ? e.message : "Couldn't open Timebox my day");
       }
     },
-    [data, showPlanDay, reloadQuiet, goNav],
+    [data, reloadQuiet, goNav],
   );
 
   /**
@@ -1226,6 +1243,10 @@ export function App() {
         // WK-2: show or hide the Board's timeline (saved for the person).
         e.preventDefault();
         void saveShowTimelines(!showTimelinesRef.current);
+      } else if ((k === "b" || k === "B") && free && settingsAt === null && !loc.overlay && nav.tab === "today" && !nav.flow && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        // TY-1: Today's Timeline switch.
+        e.preventDefault();
+        void saveTodayTimeline(!todayTimelineRef.current);
       } else if ((k === "l" || k === "L") && free && settingsAt === null) {
         e.preventDefault();
         openTab("inbox");
@@ -1396,6 +1417,8 @@ export function App() {
       saveShowPersonal: (show) => void saveShowPersonal(show),
       showTimelines,
       saveShowTimelines: (show) => void saveShowTimelines(show),
+      todayTimeline,
+      saveTodayTimeline: (show) => void saveTodayTimeline(show),
       showWeekend,
       saveShowWeekend,
       undoable: (text, undo) => setUndoToast({ id: Date.now(), text, undo }),
@@ -1941,12 +1964,7 @@ export function App() {
                       which={pd.date === target.date && !target.isToday ? "Next workday" : null}
                       today={localToday}
                       friday={fri === pd.date ? null : fri}
-                      nextDay={(() => {
-                        const next = stepDay(pd.date, 1, new Set([...data.ptoAhead, ...week.days.filter((d) => d.pto).map((d) => d.date)]), hasHours);
-                        if (!next) return null;
-                        const label = Temporal.PlainDate.from(pd.date).add({ days: 1 }).toString() === next ? "tomorrow" : Temporal.PlainDate.from(next).toLocaleString("en-US", { weekday: "short" });
-                        return { date: next, label };
-                      })()}
+                      onTimebox={(d) => void timeboxDay(d)}
                       now={now ?? new Date(clock).toISOString()}
                       tz={userZone(week)}
                       colors={data.clients}
@@ -1984,6 +2002,9 @@ export function App() {
           showWeekend={showWeekend}
           onDay={(d) => goNav(navOf.todayOn(d && d !== data.planDay.date ? d : null))}
           onTimebox={(d) => void timeboxDay(d)}
+          timeboxAsk={timeboxAsk}
+          timeline={todayTimeline}
+          onTimeline={(show) => void saveTodayTimeline(show)}
           onCloseOutOn={(d) => goNav(navOf.today("closeout", d))}
           data={shownData ?? data}
           strip={strip}

@@ -11,6 +11,7 @@ import { REMOVED_IN_OUTLOOK } from "../plan/outlooksync.ts";
 import { useMenu } from "./Menus.tsx";
 import { timeboxMenu, timeStep, type HelpTarget } from "./menu.ts";
 import { dragTimes, type DragMode } from "../plan/picktime.ts";
+import { clampSpan } from "../plan/timeline.ts";
 import type { IsoDate, Slot } from "../week/types.ts";
 import { formatDuration } from "../week/format.ts";
 import { call } from "./api.ts";
@@ -57,18 +58,22 @@ function at(date: IsoDate, minutes: number, tz: string): string {
   return Temporal.PlainDate.from(date).toZonedDateTime({ timeZone: tz }).add({ minutes }).toString({ timeZoneName: "never", smallestUnit: "second" });
 }
 
-/** Run a timebox action, then bring Outlook along when the timebox is (or was) on it. */
-export async function timeboxChange(env: TimeboxEnv, action: string, input: Record<string, unknown>): Promise<TimeboxView | null> {
+/** Run a timebox action, then bring Outlook along when the timebox is (or was) on it. Null when it didn't work (it says why). */
+export async function timeboxRun(env: TimeboxEnv, action: string, input: Record<string, unknown>): Promise<{ timebox: TimeboxView | null } | null> {
   try {
     const r = await call<{ timebox: TimeboxView | null; uid?: string; sync: string | null }>(action, input);
     env.changed();
     const uid = r.timebox?.uid ?? r.uid;
     if (r.sync && uid) await env.sync(uid);
-    return r.timebox;
+    return { timebox: r.timebox };
   } catch (e) {
     notify(errText(e));
     return null;
   }
+}
+
+export async function timeboxChange(env: TimeboxEnv, action: string, input: Record<string, unknown>): Promise<TimeboxView | null> {
+  return (await timeboxRun(env, action, input))?.timebox ?? null;
 }
 
 // ---------- the write flow ----------
@@ -643,42 +648,94 @@ export function TimeboxBands({ slot, pos, bounds = slot.view }: { slot: Slot; po
   return here.map((t) => <Band key={`tb-${t.id}`} t={t} env={env} bounds={bounds} pos={pos} />);
 }
 
-function Band({ t, env, bounds, pos }: { t: TimeboxView; env: TimeboxEnv; bounds: { start: string; end: string }; pos: (iso: string) => number }) {
-  // Step 14.5 (D259): a pick's timebox opens the same time editor as its row; others keep the timebox menu.
-  const menu = useMenu((m) => {
-    const p = t.pickId !== null ? m.planWeek?.[t.date]?.picks.find((x) => x.id === t.pickId) : undefined;
-    return p ? timeStep(m, p) : timeboxMenu(m, t);
-  });
+/**
+ * TY-1: how a band behaves on Today's timeline (absent on Week, where a click opens the time editor and a drag saves at
+ * once). Times stay inside the block, a change gets Undo, a drop on the tray takes the time away, a click selects.
+ */
+export type BandEdit = {
+  canDrag: (t: TimeboxView) => boolean;
+  /** The time being saved, shown until the reload has it. */
+  timeOf: (t: TimeboxView) => { start: string; end: string } | null;
+  commit: (t: TimeboxView, next: { start: string; end: string }, mode: DragMode) => void;
+  overTray: (x: number, y: number) => boolean;
+  unbox: (t: TimeboxView) => void;
+  /** True when it handled the click (select on a computer, the sheet on a phone). */
+  click: (t: TimeboxView) => boolean;
+  selected: (t: TimeboxView) => boolean;
+  select: (t: TimeboxView) => void;
+  done: (t: TimeboxView) => boolean;
+};
+export const BandEditCtx = createContext<BandEdit | null>(null);
+
+/** A band's drag: which edge or the whole, the live times while it moves, and what happens on release (Week's bands and Today's placeholders). */
+export function useBandDrag(o: { start: string; end: string; bounds: { start: string; end: string }; inside: boolean; enabled: boolean; onCommit: (next: { start: string; end: string }, mode: DragMode) => void; onRelease?: ((ev: PointerEvent, mode: DragMode) => boolean) | undefined }) {
   const [drag, setDrag] = useState<{ mode: DragMode; y0: number; h: number; d: number } | null>(null);
   const moved = useRef(false);
-  const a = ms(bounds.start), b = ms(bounds.end);
-  const spanMin = (b - a) / 60_000;
-  const live = drag ? dragTimes(drag.mode, t.start, t.end, drag.d) ?? { start: t.start, end: t.end } : { start: t.start, end: t.end };
-  const top = pos(new Date(Math.max(ms(live.start), a)).toISOString()), bottom = pos(new Date(Math.min(ms(live.end), b)).toISOString());
+  const spanMin = (ms(o.bounds.end) - ms(o.bounds.start)) / 60_000;
+  const nextOf = (mode: DragMode, d: number) => {
+    const n = dragTimes(mode, o.start, o.end, d);
+    return n && o.inside ? clampSpan(o.bounds, n, mode) : n;
+  };
+  const live = drag ? nextOf(drag.mode, drag.d) ?? { start: o.start, end: o.end } : { start: o.start, end: o.end };
   const down = (ev: PointerEvent, mode: DragMode) => {
-    if (ev.button !== 0) return;
+    if (ev.button !== 0 || !o.enabled) return;
     ev.stopPropagation();
     moved.current = false;
     const parent = (ev.currentTarget as HTMLElement).closest(".timeline, .ruler") as HTMLElement | null;
     (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
     setDrag({ mode, y0: ev.clientY, h: parent?.getBoundingClientRect().height ?? 1, d: 0 });
   };
+  const deltaAt = (ev: PointerEvent, from: { y0: number; h: number }) => ((ev.clientY - from.y0) / from.h) * spanMin;
   const move = (ev: PointerEvent) => {
     if (!drag) return;
-    const d = ((ev.clientY - drag.y0) / drag.h) * spanMin;
+    const d = deltaAt(ev, drag);
     if (Math.abs(d) >= TIMEBOX_SNAP / 2) moved.current = true;
     setDrag({ ...drag, d });
   };
-  const up = () => {
+  const up = (ev: PointerEvent) => {
     if (!drag) return;
-    const next = dragTimes(drag.mode, t.start, t.end, drag.d);
+    // From the release itself: a quick flick lets go before the last move has rendered.
+    const d = deltaAt(ev, drag);
+    if (Math.abs(d) >= TIMEBOX_SNAP / 2) moved.current = true;
+    const next = nextOf(drag.mode, d);
+    const mode = drag.mode;
     setDrag(null);
-    if (next) void timeboxChange(env, "timebox.update", { id: t.id, start: next.start, end: next.end });
+    if (o.onRelease?.(ev, mode)) return;
+    if (next) o.onCommit(next, mode);
   };
+  return { drag, live, moved, down, move, up, cancel: () => setDrag(null) };
+}
+
+function Band({ t, env, bounds, pos }: { t: TimeboxView; env: TimeboxEnv; bounds: { start: string; end: string }; pos: (iso: string) => number }) {
+  // Step 14.5 (D259): a pick's timebox opens the same time editor as its row; others keep the timebox menu.
+  const menu = useMenu((m) => {
+    const p = t.pickId !== null ? m.planWeek?.[t.date]?.picks.find((x) => x.id === t.pickId) : undefined;
+    return p ? timeStep(m, p) : timeboxMenu(m, t);
+  });
+  const edit = useContext(BandEditCtx);
+  const held = edit?.timeOf(t) ?? null;
+  const { drag, live, moved, down, move, up, cancel } = useBandDrag({
+    start: held?.start ?? t.start,
+    end: held?.end ?? t.end,
+    bounds,
+    inside: !!edit,
+    enabled: !edit || edit.canDrag(t),
+    onCommit: (next, mode) => (edit ? edit.commit(t, next, mode) : void timeboxChange(env, "timebox.update", { id: t.id, start: next.start, end: next.end })),
+    // TY-1: dropped on the tray: the time comes off.
+    onRelease: edit ? (ev, mode) => {
+      if (mode !== "move" || !edit.overTray(ev.clientX, ev.clientY)) return false;
+      moved.current = true;
+      edit.unbox(t);
+      return true;
+    } : undefined,
+  });
+  const a = ms(bounds.start), b = ms(bounds.end);
+  const top = pos(new Date(Math.max(ms(live.start), a)).toISOString()), bottom = pos(new Date(Math.min(ms(live.end), b)).toISOString());
   const label = `${t.pickId !== null ? "" : "Timebox: "}${t.title}, ${range(t, env.tz)}${t.onOutlook ? ", on Outlook" : ""}${t.conflict ? ", changed in both places" : t.outlookNote ? `, ${t.outlookNote}` : ""}`;
   return (
     <div
-      className={`tbox${drag ? " dragging" : ""}${t.conflict ? " conflict" : ""}${t.sync ? " out-of-step" : ""}${t.outlook ? " on-outlook" : ""}`}
+      className={`tbox${drag ? " dragging" : ""}${t.conflict ? " conflict" : ""}${t.sync ? " out-of-step" : ""}${t.outlook ? " on-outlook" : ""}${edit?.selected(t) ? " selected" : ""}${edit?.done(t) ? " done" : ""}`}
+      data-tt={edit ? `t${t.id}` : undefined}
       role="button"
       tabIndex={0}
       aria-label={label}
@@ -687,11 +744,12 @@ function Band({ t, env, bounds, pos }: { t: TimeboxView; env: TimeboxEnv; bounds
       onPointerDown={(ev) => down(ev, "move")}
       onPointerMove={move}
       onPointerUp={up}
-      onPointerCancel={() => setDrag(null)}
+      onPointerCancel={cancel}
+      onFocus={edit ? () => edit.select(t) : undefined}
       onClick={(ev) => {
         ev.stopPropagation();
         if (moved.current) moved.current = false;
-        else menu.onContextMenu(ev);
+        else if (!edit?.click(t)) menu.onContextMenu(ev);
       }}
       onDoubleClick={(ev) => ev.stopPropagation()}
       onContextMenu={menu.onContextMenu}
@@ -709,7 +767,7 @@ function Band({ t, env, bounds, pos }: { t: TimeboxView; env: TimeboxEnv; bounds
         {t.conflict ? "⚠ " : ""}
         {t.title}
       </span>
-      {(drag || t.outlook) && <span className="tbox-time">{drag ? range(live, env.tz) : "Outlook"}</span>}
+      {(drag || t.outlook || edit) && <span className="tbox-time">{drag || edit ? range(live, env.tz) : "Outlook"}{edit && t.outlook ? " · Outlook" : ""}</span>}
       <span className="tbox-edge" onPointerDown={(ev) => down(ev, "end")} aria-hidden="true" />
     </div>
   );
