@@ -488,11 +488,11 @@ export function aReportComment(o: Partial<import("../../plan/status-report.ts").
 }
 
 /** SR-1: what status.load answers for one client, with features that have `updates[i]` comments this week each. */
-export function aStatusLoad(o: { clientKey?: string; clientName?: string; updates?: number[]; ids?: number[] } = {}): import("../../plan/status-types.ts").StatusLoad {
+export function aStatusLoad(o: { clientKey?: string; clientName?: string; updates?: number[]; ids?: number[]; /** SR-3: which features I worked on with no line of mine (Needs your update). */ needs?: boolean[] } = {}): import("../../plan/status-types.ts").StatusLoad {
   const updates = o.updates ?? [0, 1, 0];
   const features = updates.map((n, i) => {
     const id = o.ids?.[i] ?? next();
-    return { id, title: `Feature ${id}`, type: "Feature", state: "Active", url: `https://dev.azure.com/contoso/p/_workitems/edit/${id}`, why: "planned" as const, thisWeek: Array.from({ length: n }, (_, j) => ({ id: id * 10 + j, text: `Update ${j}`, author: "Dana Teammate", at: "2026-11-03T15:00:00Z", who: "teammate" as const, editable: false })), lastWeek: [], hints: [], order: i };
+    return { id, title: `Feature ${id}`, type: "Feature", state: "Active", url: `https://dev.azure.com/contoso/p/_workitems/edit/${id}`, why: "planned" as const, thisWeek: Array.from({ length: n }, (_, j) => ({ id: id * 10 + j, text: `Update ${j}`, author: "Dana Teammate", at: "2026-11-03T15:00:00Z", who: "teammate" as const, editable: false })), lastWeek: [], hints: [], order: i, ...(o.needs?.[i] ? { needsYou: true, you: { kinds: ["todo" as const], stories: [], line: "your to-dos", template: `Worked on: Feature ${id}` } } : {}) };
   });
   const without = updates.filter((n) => n === 0).length;
   return {
@@ -501,6 +501,7 @@ export function aStatusLoad(o: { clientKey?: string; clientName?: string; update
     sends: "Kat sends it Monday 7:00 AM",
     counts: { features: updates.length, withUpdate: updates.length - without, without },
     countLine: `${updates.length} features`,
+    needsYou: (o.needs ?? []).filter(Boolean).length,
     clients: [{ clientKey: o.clientKey ?? "Contoso", clientName: o.clientName ?? "Contoso", status: "ok", window: { since: "2026-11-02T12:04:00Z", source: "kat", katSentAt: "2026-11-02T12:04:00Z", prevSince: "2026-10-26T12:04:00Z", note: null }, canWrite: true, ai: "off", aiNote: null, features: features.map(({ order: _o, ...f }) => f), also: [] }],
   };
 }

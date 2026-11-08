@@ -43,9 +43,9 @@ describe("the client report on the demo (SR-2)", () => {
     ]);
     // Active this week with nothing since Kat's send: my planned Supplier onboarding, and Store locator (Sam moved its story).
     expect(r.noUpdate.map((f) => [f.title, f.owner, f.active])).toEqual([["Supplier onboarding", "Alex Rivera", "planned"], ["Store locator", "Alex Rivera", "activity"]]);
-    expect(r.pto).toMatchObject({ status: "ok", source: PTO_SOURCE });
-    if (r.pto.status !== "ok") throw new Error("pto");
-    expect(r.pto.rows.map((x) => `${x.name} · ${x.when}`)).toEqual(["Priya Shah · Tue, Nov 10 to Wed, Nov 11", "Alex Rivera · Fri, Nov 13", "Sam Ortiz · Fri, Nov 20"]);
+    expect(r.pto).toMatchObject({ source: PTO_SOURCE, ptoRead: true, holidaysRead: true, notes: [] });
+    // SR-3: the demo's observed holidays sit among the team's PTO in date order.
+    expect(r.pto.rows.map((x) => `${x.name} · ${x.when}`)).toEqual(["Priya Shah · Tue, Nov 10 to Wed, Nov 11", "Founders Day (observed) · Thu, Nov 12", "Alex Rivera · Fri, Nov 13", "Holiday · Mon, Nov 16", "Sam Ortiz · Fri, Nov 20"]);
     expect(JSON.stringify(r)).not.toMatch(/@example\.com/);
     net.expectNone();
   });

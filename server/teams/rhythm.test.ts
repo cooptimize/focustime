@@ -364,6 +364,19 @@ expect(t.logs.map((l) => JSON.stringify(l)).join()).not.toContain("Import mappin
     expect(JSON.stringify(t.logs)).not.toContain("Feature ");
   });
 
+  it("SR-3: the nudge counts the features I worked on first, marks them, and opens Status on Needs your update", async () => {
+    const load = aStatusLoad({ clientName: "Fabrikam", updates: [0, 0, 1], needs: [true, false, false] });
+    const t = await setup(d, { toml: "\n[notify]\nteams_messages = true\nteams_status = true\n", status: () => load });
+    t.atOn("2026-11-06", "15:00");
+    await t.rhythm.tick(ANA, await t.facts());
+    const card = t.cardsSent()[0]!;
+    expect(card).toContain("1 feature you worked on needs an update for Monday · 1 more has no update yet");
+    expect(card).toContain(`${load.clients[0]!.features[0]!.title}](`);
+    expect(card).toContain("you worked on this");
+    expect(card).toContain("Open Needs your update");
+    expect(card).toContain("#/week/status/needs");
+  });
+
   it("SR-1: no status nudge with its switch off, on PTO, after my day ends, or on Sunday unless asked", async () => {
     const load = aStatusLoad({ updates: [0, 0] });
     const off = await setup(d, { toml: "\n[notify]\nteams_messages = true\nteams_nudges = true\n", status: () => load });

@@ -94,7 +94,7 @@ export const DEFAULT_NOTIFY: NotifySettings = {
 
 /** Where clicking a notification opens FocusTime. */
 export type Route =
-  | { view: "today" | "planday" | "checkin" | "closeout" | "focus" | "vm" | "inbox" | "ahead" | "asks" | "requests" | "conversations" | "my_promises" | "week" | "team" | "status" }
+  | { view: "today" | "planday" | "checkin" | "closeout" | "focus" | "vm" | "inbox" | "ahead" | "asks" | "requests" | "conversations" | "my_promises" | "week" | "team" | "status" | "status_needs" }
   | { view: "planweek"; weekStart: string }
   | { view: "followup"; id: number }
   | { view: "aheaditem"; id: number }
@@ -103,7 +103,7 @@ export type Route =
   | { view: "meeting"; id: number };
 
 // "asks": notifications sent before the rename to Requests still open the tab.
-const SIMPLE = new Set(["today", "planday", "checkin", "closeout", "focus", "vm", "inbox", "ahead", "asks", "requests", "conversations", "my_promises", "week", "team", "status"]);
+const SIMPLE = new Set(["today", "planday", "checkin", "closeout", "focus", "vm", "inbox", "ahead", "asks", "requests", "conversations", "my_promises", "week", "team", "status", "status_needs"]);
 const SECTION = /^[a-z]{2,20}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -289,7 +289,8 @@ export const notices = {
   assigned: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "assigned", key, title: itemIds.length === 1 ? `${byName} assigned you #${itemIds[0]}` : `${byName} assigned you ${itemIds.length} items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to open it in Ahead.`, buttons: [open("Open Ahead")], route: `aheaditem:${itemIds[0]}`, at }),
   datesMoved: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "dates_moved", key, title: itemIds.length === 1 ? `${byName} moved the dates of #${itemIds[0]}` : `${byName} moved the dates of ${itemIds.length} of your items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to see them in Ahead.`, buttons: [open("Open Ahead")], route: `aheaditem:${itemIds[0]}`, at }),
   /** SR-1: Friday afternoon or Sunday evening, once per occasion, when features have no update yet. */
-  statusReport: (occasion: string, line: string, at: string): Notice => ({ kind: "status_report", key: occasion, title: "Monday's status report", body: `${line}.\nClick to open Week › Status.`, buttons: [open("Open Status")], route: "status", at, ref: occasion }),
+  // SR-3: with features I worked on, the click opens Status on Needs your update.
+  statusReport: (occasion: string, line: string, at: string, needsYou = false): Notice => ({ kind: "status_report", key: occasion, title: "Monday's status report", body: `${line}.\nClick to open Week › Status.`, buttons: [open(needsYou ? "Open Needs your update" : "Open Status")], route: needsYou ? "status_needs" : "status", at, ref: occasion }),
   /** MC-1: a call I review, once per occurrence: proposals ready, or a transcript to upload. The call's name, never its words. */
   meetingReview: (key: string, occurrenceId: number, upload: boolean, clientName: string, meeting: string, dateLabel: string, at: string): Notice => ({
     kind: "meeting_review",

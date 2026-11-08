@@ -1,6 +1,6 @@
 # Integrations
 
-For engineers working on a source and IT reviewing what FocusTime asks for. Checked against `bc72446` on Nov 7, 2026 (with IN-2 on `feat/invite-send`).
+For engineers working on a source and IT reviewing what FocusTime asks for. Checked against `bc72446` on Nov 7, 2026 (with IN-2 on `feat/invite-send`; the holidays read against `feat/report-finish` on Nov 8).
 
 Every outside system is read only, except the named writes listed for each one below. Each source reports its own status (`ok`, `auth_required`, `unreachable`, `misconfigured` or `error`, `week/types.ts`). When one fails, people see that source's last good data with its age, or a plain message and the fix ("Connect Google Calendar", "Open Settings"), and the rest of FocusTime keeps working. Nothing stands in for a failed source: a real session never shows demo data.
 
@@ -55,7 +55,7 @@ Every outside system is read only, except the named writes listed for each one b
 
 **Auth.** Client credentials on a separate read-only app registration with a Dataverse application user (`sources/dataverse/source.ts`, scope `<environment>/.default`). The secret is the Key Vault secret `ft-dataverse-client-secret`.
 
-**Read.** Focus Time rows (each person's recurring focus blocks), accounts (clients), account workers (who is on which client), users, time off (Time Off Tracker details; each person's own as PTO, teammates' only as "away"), the company read PAT per client at DevOps fetch time, and the status report's last send time. **Not verified:** the full column list per table; see `sources/dataverse/`.
+**Read.** Focus Time rows (each person's recurring focus blocks), accounts (clients), account workers (who is on which client), users, time off (Time Off Tracker details; each person's own as PTO, teammates' only as "away"), the company read PAT per client at DevOps fetch time, the status report's last send time, and Cooptimize's observed holidays (the Working Days Calendar, `coop_workingdayscalendars`: date, name and the observed flag only, SR-3; the reader role still needs Read on it). **Not verified:** the full column list per table; see `sources/dataverse/`.
 
 **Written.** Nothing.
 

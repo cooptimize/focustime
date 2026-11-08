@@ -8,7 +8,7 @@
 import type { ActionContext } from "../actions/dispatch.ts";
 import { dispatch, presenceContext, vmContext, expiringFor } from "../actions/dispatch.ts";
 import { withoutUpdate } from "../actions/status-actions.ts";
-import { nextStatusNudge, nudgeLine, statusNudgeDue } from "../plan/status-report.ts";
+import { nextStatusNudge, nudgeLineFor, statusNudgeDue } from "../plan/status-report.ts";
 import type { StatusLoad } from "../plan/status-types.ts";
 import { syncTeamsStatus, TEAMS_STATUS_KEY } from "../actions/presence-actions.ts";
 import { requestContext, teamCtx } from "../actions/dispatch.ts";
@@ -322,7 +322,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const w = r.ok ? withoutUpdate(r.data as StatusLoad) : null;
     if (!w) return void log({ source: "plan", op: "status_nudge", kind: "unavailable" });
     if (!(await store.markOnce("status_notice", date))) return;
-    if (w.without) await send(notices.statusReport(due.occasion, nudgeLine(w.without), instantNow().toString()));
+    if (w.without) await send(notices.statusReport(due.occasion, nudgeLineFor(w.needsYou, w.rest), instantNow().toString(), w.needsYou > 0));
     else log({ source: "plan", op: "status_nudge", kind: "skipped" });
   };
   // Once a workday from work start (working hours, not PTO): follow-ups due or overdue, and expiring secrets.

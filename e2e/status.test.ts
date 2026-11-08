@@ -27,7 +27,7 @@ describe.skipIf(!CHROMIUM)("Status (SR-1)", () => {
   it("adds a line to a feature with no update yet and pushes it, one preview for all", async () => {
     const { page, errors } = await freshPage(h);
     await openStatus(page);
-    await expect.poll(() => page.locator(".st-count").textContent()).toBe("5 features · 2 with an update · 3 without");
+    await expect.poll(() => page.locator(".st-count").textContent()).toBe("5 features · 2 with an update · 3 without · 3 features need your update");
     // The mode switch has the fourth segment, current.
     await expect.poll(() => page.locator('.mode-switch .ms-btn[aria-current="page"]').textContent()).toBe("Status");
     if (SHOTS) await shotBoth(page, "sr1-status-1920");
@@ -35,7 +35,7 @@ describe.skipIf(!CHROMIUM)("Status (SR-1)", () => {
     await expect.poll(() => supplier.locator(".st-badge").textContent()).toBe("No update yet");
     await supplier.getByRole("button", { name: "+ Add a line" }).click();
     await supplier.getByRole("textbox", { name: "New line for Supplier onboarding" }).fill("Sign-up form designed; review with purchasing on Friday.");
-    await expect.poll(() => page.locator(".st-push .muted").textContent()).toBe("1 line to push");
+    await expect.poll(() => page.locator(".st-pending-count").textContent()).toBe("1 line to push");
     await page.getByRole("button", { name: "Push all" }).click();
     const dialog = page.getByRole("dialog", { name: "Push 1 line to DevOps" });
     await dialog.waitFor();
@@ -44,7 +44,7 @@ describe.skipIf(!CHROMIUM)("Status (SR-1)", () => {
     await dialog.getByRole("button", { name: "Push 1 line to DevOps" }).click();
     await dialog.locator(".dw-ok").waitFor({ timeout: 30_000 });
     await dialog.getByRole("button", { name: "Close", exact: true }).last().click();
-    await expect.poll(() => page.locator(".st-count").textContent()).toBe("5 features · 3 with an update · 2 without");
+    await expect.poll(() => page.locator(".st-count").textContent()).toBe("5 features · 3 with an update · 2 without · 3 features need your update");
     await page.locator(".st-pushed").getByRole("button", { name: "Undo" }).waitFor();
     // Preview reads like the email: the line is a bullet under its heading, with its author.
     await page.getByRole("button", { name: "Preview", exact: true }).click();

@@ -5205,12 +5205,51 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .st-nu { display: grid; gap: 4px; padding: 4px 8px; border-left: 2px solid color-mix(in oklab, var(--watch) 55%, transparent); }
 .st-nu-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; font-size: var(--fs-3); }
 .st-nu-head .st-title { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+/* SR-3: Needs your update, the "AI suggests" line, pending lines, click-to-edit, holidays, Add a feature. */
+.st-needs { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent); border-radius: 8px; background: color-mix(in oklab, var(--accent) 5%, transparent); }
+.st-needs-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.st-needs-head h4 { margin: 0; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); }
+.st-needs-head .muted { font-size: var(--fs-2); }
+.st-needs .st-feature.st-empty { background: var(--surface); }
+.st-needs-count { color: var(--accent); }
+.st-pending-count { color: var(--text-muted); font-weight: 500; white-space: nowrap; }
+.st-worked { padding: 0 8px; border-radius: 999px; background: color-mix(in oklab, var(--accent) 14%, transparent); color: var(--accent); font-size: var(--fs-2); font-weight: 500; white-space: nowrap; }
+.st-why { margin: 0; font-size: var(--fs-2); }
+.st-sugg { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 4px 10px; padding: 6px 8px; border: 1px dashed var(--accent); border-radius: 6px; }
+.st-sugg-template { border-color: var(--border-strong); }
+.st-sugg-label { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); white-space: nowrap; }
+.st-sugg-template .st-sugg-label { color: var(--text-muted); }
+.st-sugg-text { margin: 0; font-size: var(--fs-3); white-space: pre-wrap; overflow-wrap: anywhere; }
+.st-sugg-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.st-sugg-loading { grid-template-columns: auto minmax(0, 1fr); font-size: var(--fs-2); }
+.st-pending-line { display: grid; gap: 2px; padding: 4px 8px; border-left: 2px dashed var(--accent); }
+.st-pending-line.st-suggested { border-left-color: var(--watch); }
+.st-pending-tag { color: var(--accent); font-size: var(--fs-2); font-weight: 500; }
+.st-text-edit { display: block; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: text; border-radius: 4px; }
+.st-text-edit:hover { background: var(--sunken); }
+.st-text-edit:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.st-comment.st-deleting .st-text { text-decoration: line-through; color: var(--text-muted); }
+.st-holiday { font-style: italic; }
+.st-push-feature { display: grid; gap: 4px; padding: 4px 0 4px 10px; border-left: 2px solid var(--border-strong); }
+.st-push-op { margin: 0; font-size: var(--fs-2); }
+.st-deleted-text { text-decoration: line-through; color: var(--text-muted); }
+.st-add-feature { white-space: nowrap; }
 @media (max-width: 700px) {
   .status-view { padding: 8px 16px 24px; }
   .app.phone .status-view .page-head { grid-template-columns: minmax(0, 1fr); padding: 4px 0; }
   .status-view .ph-title { row-gap: 2px; }
   .st-bar { top: 0; }
+  .st-sugg { grid-template-columns: minmax(0, 1fr); }
+  .st-box-foot { flex-wrap: wrap; }
 }
+/* SR-3: the phone writes too: 44px targets on Add a line, the suggestion's buttons, Push all and the line actions. */
+.app.phone .status-view .st-add, .app.phone .status-view .st-sugg-actions button, .app.phone .status-view .st-push .commit,
+.app.phone .status-view .st-box-foot .link-btn, .app.phone .status-view .st-by .link-btn, .app.phone .status-view .st-pending-line .link-btn,
+.app.phone .status-view .st-add-feature, .app.phone .status-view .st-adds .link-btn, .app.phone .status-view .st-toggle .ms-btn, .app.phone .status-view .st-scope .ms-btn { min-height: 44px; min-width: 44px; }
+.app.phone .status-view .st-text-edit { min-height: 44px; }
+.app.phone .status-view .st-client { padding: 8px; }
+.app.phone .status-view .st-feature { padding: 6px 4px; }
+.app.phone .status-view .st-needs { padding: 6px; }
 
 /* QF-1: Today on any day (‹ › and Back to today), a PTO day, a PTO half muted, and Timebox my day beside the plan. */
 .today-step { align-items: center; }
