@@ -57,7 +57,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await expect(page.locator(".cap-box .cap-box-fields[aria-label='Draft story details']").count()).resolves.toBe(1);
     await kindChip(page, "Draft feature").click();
     await expect(checked(page)).resolves.toContain("Draft feature");
-    await expect(page.locator(".cap-box .cap-box-fields input[aria-label='Target date']").count()).resolves.toBe(1);
+    await expect(page.locator(".cap-box .cap-box-fields button[aria-label^='Target date']").count()).resolves.toBe(1);
     await box(page).fill("feature: bulk import");
     await expect(checked(page)).resolves.toContain("Draft feature"); // my choice sticks while I type
     await page.close();
@@ -71,7 +71,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await expect.poll(() => checked(page)).toContain("Promise");
     const f = page.locator(".cap-box .cap-box-fields");
     await expect(f.getByLabel("Who").inputValue()).resolves.toBe("Dana");
-    await expect(f.getByLabel("Due").inputValue()).resolves.toBe("2026-11-06");
+    await expect(f.getByRole("button", { name: /^Due:/ }).getAttribute("aria-label")).resolves.toContain("November 6, 2026");
     await f.getByLabel("Channel").selectOption("email");
     const look = f.locator(".item-lookup input");
     await look.fill("export");
@@ -121,7 +121,10 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await chooseClient(page, "Atlas");
     await box(page).fill("feature: carrier rate cards");
     await expect.poll(() => checked(page)).toContain("Draft feature");
-    await page.locator(".cap-box .cap-box-fields").getByLabel("Target date").fill("2026-11-27");
+    await page.locator(".cap-box .cap-box-fields").getByRole("button", { name: /^Target date:/ }).click();
+    await page.locator(".dp-pop input.dp-box").fill("2026-11-27");
+    await page.locator(".dp-pop input.dp-box").press("Enter");
+    await page.locator(".dp-pop").waitFor({ state: "detached" });
     await box(page).press("Enter");
     await expect.poll(async () => (await drafts(page)).find((d) => d.title.toLowerCase() === "carrier rate cards")).toMatchObject({ level: "feature", targetDate: "2026-11-27" });
     await box(page).fill("pallet labels look odd");

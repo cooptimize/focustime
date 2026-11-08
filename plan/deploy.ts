@@ -3,6 +3,7 @@
 // after-hours part and offers to tell the client once it's done. Pure: no store, no network.
 import { firstName } from "./loop.ts";
 import type { Pick, TodoLink, TodoWindow } from "./types.ts";
+import type { DeployItem } from "./deploy-items.ts";
 import { hoursOn, nominalHours, toHm, toMin, type DayHours, type Span, type TimeModel } from "../week/hours.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 
@@ -134,15 +135,22 @@ export function inEvening(p: Pick, shape: Span | null): boolean {
  * The draft for "Tell <client> it's deployed" (LP-1's Close the loop): who, what went (the note) and the items, then a
  * sign-off. Plain text, always editable in the draft step.
  */
-export function deployedText(o: { who: string | null; clientName: string; title: string; note: string | null; links: readonly TodoLink[]; myName: string | null }): string {
+export function deployedText(o: { who: string | null; clientName: string; title: string; note: string | null; links: readonly TodoLink[]; items?: readonly DeployItem[]; when?: string; myName: string | null }): string {
   const hi = o.who ? `Hi ${firstName(o.who)},` : "Hi,";
-  const lines = [hi, "", `${o.title.trim().replace(/[.!]+$/, "")} is deployed.`];
   const note = o.note?.trim();
-  if (note) lines.push("", `What went: ${note}`);
+  // DP-2: the ticked items, then the Note. A deployment with none (every one from before DP-2) reads as it always did.
+  const went = o.items?.length ? [`Deployed ${o.when ?? "today"}: ${o.items.map((i) => i.name).join(", ")}.${note ? ` Also: ${note}` : ""}`] : [`${o.title.trim().replace(/[.!]+$/, "")} is deployed.`, ...(note ? ["", `What went: ${note}`] : [])];
+  const lines = [hi, "", ...went];
   if (o.links.length) lines.push("", "Items:", ...o.links.map((l) => `- #${l.id} ${l.title.trim()}`));
   lines.push("", "Let me know if you see anything off.");
   if (o.myName) lines.push("", firstName(o.myName));
   return lines.join("\n");
+}
+
+/** "tonight" for an evening window ticked that day, "today", or the day it ran ("on Saturday") when ticked later. */
+export function deployedWhen(p: Pick, today: IsoDate): string {
+  if (p.date !== today) return `on ${Temporal.PlainDate.from(p.date).toLocaleString("en-US", { weekday: "long" })}`;
+  return p.window && toMin(p.window.start) >= 17 * 60 ? "tonight" : "today";
 }
 
 /** The promise "Tell <client> it's deployed" opens (a follow-up of mine, kept until the loop is closed or deleted). */

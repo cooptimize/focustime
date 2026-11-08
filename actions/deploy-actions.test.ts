@@ -14,6 +14,8 @@ import { createDevOpsSource } from "../sources/devops/source.ts";
 import { fakeDevOps } from "../sources/devops/test-fakes.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
+import { resolveRules, type OrgRow } from "../config/org.ts";
+import { IDENTITY_KEY } from "./account.ts";
 import type { WeekLoadData } from "./types.ts";
 
 const text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"')
@@ -127,3 +129,107 @@ describe("weekend columns on week.load", () => {
     expect((await t.fail("week.load", { weekend: "yes" })).error).toMatch(/weekend must be true or false/);
   });
 });
+
+// DP-2: what a deployment moves, through the actions: a client's platform and list, who may change them, and the
+// snapshot a planned deployment keeps.
+describe("DP-2: deployment items", () => {
+  const SAT = "2026-11-07";
+  type View = { platform: string | null; groups: { label: string; items: { key: string; name: string; on: boolean }[] }[]; canEdit: boolean };
+  type Added = { pick: Pick };
+  const BOOT = { model: "m", appCapUsd: 100, inviteDomains: [], feedback: null };
+  /** One client's org rows, a real resolveRules over them, and who is who. */
+  function withOrg(o: { admin?: boolean; lead?: boolean } = {}) {
+    const t = setup();
+    const rows = new Map<string, OrgRow>();
+    const audit: string[] = [];
+    (t.c as ActionContext).org = {
+      rules: async () => resolveRules([...rows.values()], BOOT),
+      isClientLead: async () => !!o.lead,
+      invalidate: () => {},
+      store: {
+        setOrg: async (x: { scope: string; key: string; value: unknown }) => {
+          audit.push(x.key);
+          if (x.value === undefined) rows.delete(x.key);
+          else rows.set(x.key, { scope: x.scope, key: x.key, value: JSON.stringify(x.value) } as OrgRow);
+          return { old: null, next: null };
+        },
+      },
+    } as never;
+    (t.c as ActionContext).admins = o.admin ? ["me"] : [];
+    (t.c as ActionContext).adminOps = { check: { isAdmin: async () => !!o.admin } } as never;
+    return { ...t, audit, rows };
+  }
+  const fabric = (t: ReturnType<typeof withOrg>) => t.run<View>("deploy.config_save", { clientKey: "Adatum", platform: "fabric" });
+  const named = (p: Pick) => (p.deployItems ?? []).map((i) => i.name);
+  const add = (t: ReturnType<typeof withOrg>, x: object = {}) => t.run<Added>("deploy.add", { clientKey: "Adatum", date: SAT, start: "09:00", end: "11:00", title: "Release", ...x });
+
+  async function signedIn(t: ReturnType<typeof withOrg>) {
+    await t.plan.setAccountState(IDENTITY_KEY, { oid: "me", name: "Me", username: "me@example.com" });
+  }
+
+  it("the platform saves and picks the list; a new deployment takes its defaults", async () => {
+    const t = withOrg({ admin: true });
+    await signedIn(t);
+    expect((await fabric(t)).platform).toBe("fabric");
+    expect((await t.run<View>("deploy.items", { clientKey: "Adatum" })).groups.map((g) => g.label)).toEqual(["Fabric"]);
+    expect(named((await add(t)).pick)).toEqual(["Warehouse SQL", "Framework Tables", "Semantic Models", "Reports"]);
+  });
+  it("with no platform, both lists and nothing ticked", async () => {
+    const t = withOrg({ admin: true });
+    await signedIn(t);
+    expect((await t.run<View>("deploy.items", { clientKey: "Adatum" })).groups.map((g) => g.label)).toEqual(["Fabric", "Azure"]);
+    expect((await add(t)).pick.deployItems ?? null).toBeNull();
+  });
+  it("only an admin or the client's lead may change them", async () => {
+    const other = withOrg({});
+    await signedIn(other);
+    expect((await other.fail("deploy.config_save", { clientKey: "Adatum", platform: "fabric" })).status).toBe(403);
+    expect((await other.run<View>("deploy.items", { clientKey: "Adatum" })).canEdit).toBe(false);
+    expect(other.audit).toEqual([]);
+    const lead = withOrg({ lead: true });
+    await signedIn(lead);
+    expect((await fabric(lead)).platform).toBe("fabric");
+    expect((await lead.run<View>("deploy.items", { clientKey: "Adatum" })).canEdit).toBe(true);
+  });
+  it("list changes reach new deployments only; a planned one keeps its ticks", async () => {
+    const t = withOrg({ admin: true });
+    await signedIn(t);
+    await fabric(t);
+    const planned = (await add(t)).pick;
+    await t.run("deploy.config_save", { clientKey: "Adatum", items: { fabric: [{ key: "fabric.reports", on: false, hidden: true }, { key: "own.dataflows", name: "Dataflows", on: true }] } });
+    const before = named(planned);
+    const reread = (await t.plan.getPick(planned.id))!;
+    expect(named(reread)).toEqual(before);
+    expect(named((await add(t)).pick)).toEqual(["Dataflows", "Warehouse SQL", "Framework Tables", "Semantic Models"]);
+    // Editing it keeps the item since hidden, and doesn't pick up the new defaults.
+    const kept = (await t.run<Added>("pick.set_kind", { id: planned.id, kind: "deployment", start: "09:00", end: "12:00" })).pick;
+    expect(named(kept)).toEqual(before);
+    const edited = (await t.run<Added>("pick.set_kind", { id: planned.id, kind: "deployment", start: "09:00", end: "12:00", items: ["fabric.reports"] })).pick;
+    expect(named(edited)).toEqual(["Reports"]);
+  });
+  it("refuses a key that isn't on the client's list", async () => {
+    const t = withOrg({ admin: true });
+    await signedIn(t);
+    await fabric(t);
+    expect((await t.fail("deploy.add", { clientKey: "Adatum", date: SAT, start: "09:00", end: "11:00", items: ["azure.reports"] })).status).toBe(409);
+  });
+  it("a WK-3 deployment keeps its text as the Note and gains no ticks", async () => {
+    const t = withOrg({ admin: true });
+    await signedIn(t);
+    const old = await t.plan.addPick({ date: SAT, half: "EVE", clientKey: "Adatum", kind: "intention", title: "Old", itemType: "Deployment", size: null, todoKind: "deployment", window: { start: "09:00", end: "11:00" }, notes: "code, SQL objects" });
+    await fabric(t);
+    expect(old.deployItems ?? null).toBeNull();
+    const saved = (await t.run<Added>("pick.set_kind", { id: old.id, kind: "deployment", start: "09:00", end: "11:00", note: "code, SQL objects", items: [] })).pick;
+    expect(saved.notes).toBe("code, SQL objects");
+    expect(saved.deployItems ?? null).toBeNull();
+  });
+  it("a move to another day keeps the ticks", async () => {
+    const t = withOrg({ admin: true });
+    await signedIn(t);
+    await fabric(t);
+    const { pick } = await add(t);
+    const r = await t.run<{ pick: Pick }>("pick.move", { id: pick.id, date: "2026-11-08", half: "AM" });
+    expect(named(r.pick)).toEqual(named(pick));
+  });
+});
+

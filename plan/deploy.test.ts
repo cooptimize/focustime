@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { aDeployment, aPick, aWeekConfig, WEEK } from "../test/builders/index.ts";
 import { hoursOn } from "../week/hours.ts";
 import { weekDates7 } from "../week/dates.ts";
-import { afterHours, afterHoursText, deployedText, windowHalf, windowProblem, windowText } from "./deploy.ts";
+import { afterHours, afterHoursText, deployedText, deployedWhen, windowHalf, windowProblem, windowText } from "./deploy.ts";
 import { pickNeed, SIZE_MINUTES } from "./types.ts";
 
 const model = aWeekConfig().hours;
@@ -88,5 +88,24 @@ describe("Tell <client> it's deployed", () => {
 
   it("drafts a plain one without who, a note or items", () => {
     expect(deployedText({ who: null, clientName: "Northwind", title: "Deployment", note: null, links: [], myName: null })).toBe("Hi,\n\nDeployment is deployed.\n\nLet me know if you see anything off.");
+  });
+});
+
+describe("DP-2: Tell <client> it's deployed", () => {
+  const items = ["Warehouse SQL", "Framework Tables", "Semantic Models", "Reports"].map((name, i) => ({ key: `k${i}`, name }));
+  it("lists the ticked items and the Note", () => {
+    const t = deployedText({ who: "Jordan Lee", clientName: "Northwind", title: "Release 4.2", note: "date dimension fix", links: [], items, when: "tonight", myName: null });
+    expect(t).toContain("Deployed tonight: Warehouse SQL, Framework Tables, Semantic Models, Reports. Also: date dimension fix");
+    expect(t).not.toContain("What went");
+  });
+  it("a deployment from before DP-2 reads as it did", () => {
+    expect(deployedText({ who: null, clientName: "Northwind", title: "Release", note: "code", links: [], items: [], myName: null })).toContain("Release is deployed.\n\nWhat went: code");
+  });
+  it("says when: tonight for an evening window, today, or the day it ran", () => {
+    const evening = aDeployment({ date: "2026-11-07", window: { start: "19:00", end: "21:00" } });
+    const morning = aDeployment({ date: "2026-11-07", window: { start: "09:00", end: "11:00" } });
+    expect(deployedWhen(evening, "2026-11-07")).toBe("tonight");
+    expect(deployedWhen(morning, "2026-11-07")).toBe("today");
+    expect(deployedWhen(evening, "2026-11-08")).toBe("on Saturday");
   });
 });

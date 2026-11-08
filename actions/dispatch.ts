@@ -4,6 +4,7 @@ import { exactCaseDefault } from "../plan/common-words.ts";
 import { boundaryCheck } from "./boundary-actions.ts";
 import type { DayPromise } from "../plan/conversation-views.ts";
 import { afterHours } from "../plan/deploy.ts";
+import { deployItemAction, type DeployItemAction } from "./deploy-item-actions.ts";
 import { pickNeed } from "../plan/types.ts";
 import { scopeDepsOf } from "./scope-deps.ts";
 import { TEAMS_KINDS, type TeamsKind } from "../plan/teams-rhythm.ts";
@@ -2175,6 +2176,20 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "look.ask":
     case "look.reply":
       return teamAction(teamCtx(ctx), action satisfies TeamAction, req.input);
+    case "deploy.items":
+    case "deploy.config_save":
+      return deployItemAction(
+        {
+          org: ctx.org,
+          me: async () => {
+            const me = await storedIdentity(ctx.plan);
+            return me ? { id: me.oid, name: me.name || me.username || "Someone" } : null;
+          },
+          isAdmin: () => amAdmin(ctx),
+        },
+        action satisfies DeployItemAction,
+        req.input,
+      );
     case "planday.start":
     case "planday.carry":
     case "planday.commit":
@@ -2199,6 +2214,10 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
           devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
           pto: (cfg, date) => ptoOn(ctx, cfg, date),
           ptoAhead: (cfg, monday) => ptoAheadOf(ctx, cfg, monday),
+          clientDeploy: async (clientKey) => {
+            const rule = (await ctx.org?.rules())?.clients[clientKey];
+            return rule ? { dataPlatform: rule.dataPlatform, deployItems: rule.deployItems } : null;
+          },
           now: ctx.now,
           resolved: (cfg, items) => resolvedKeys(ctx.makeDevOps(cfg.dataverse, userZone(cfg)), [...new Set(items.map((i) => i.clientKey))].map((clientKey) => ({ clientKey, clientName: clientKey })), idsByClient(items)),
           openParents: async (clientKey, tier) => {

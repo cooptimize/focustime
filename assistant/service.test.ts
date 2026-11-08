@@ -138,7 +138,7 @@ function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnTyp
     handlers,
     setNow: (t: string) => void (now = t),
     setDescription: (d: string) => void (description = d),
-    writes: () => ran.filter((r) => !["week.load", "ahead.load", "conversations.list", "team.commit", "send.people", "send.today", "devops.preview", "status.load"].includes(r.action)),
+    writes: () => ran.filter((r) => !["week.load", "ahead.load", "conversations.list", "team.commit", "send.people", "send.today", "devops.preview", "status.load", "deploy.items"].includes(r.action)),
   };
 }
 
@@ -915,10 +915,10 @@ describe("WK-3", () => {
   it("plans a deployment only on Confirm, with its window, note and items in the preview", async () => {
     let s!: ReturnType<typeof setup>;
     s = setup({ handlers: { "deploy.add": (i) => deployFake(s)(i) } });
-    s.script(["item", "plan_deployment"], call(["item", { id: 4417 }]), call(["plan_deployment", { date: SAT, start: "09:00", end: "11:00", title: "Release 4.2", note: "code and the sales model", itemIds: [4417] }]), say("Here's the deployment to confirm."));
+    s.script(["item", "plan_deployment"], call(["item", { id: 4417 }]), call(["plan_deployment", { date: SAT, start: "09:00", end: "11:00", title: "Release 4.2", note: "code and the sales model", items: [], itemIds: [4417] }]), say("Here's the deployment to confirm."));
     const r = await s.a.handle("Plan a Fabrikam deployment of #4417 Saturday 9 to 11");
     expect(r.proposals[0]).toMatchObject({ action: "deploy.add", clientKey: FAB, title: "Plan \"Release 4.2\" on Sat, Nov 7 9:00–11:00", whoSees: "Only you" });
-    expect(r.proposals[0]!.preview.rows.map((x) => x.label)).toEqual(["When", "What's going", "Items"]);
+    expect(r.proposals[0]!.preview.rows.map((x) => x.label)).toEqual(["When", "What's moving", "Note", "Items"]);
     expect(r.proposals[0]!.preview.notes.join(" ")).toMatch(/Saturday isn't a working day/);
     expect(s.writes()).toEqual([]);
     const c = (await s.a.confirm(r.proposals[0]!.id)) as Extract<ConfirmResult, { ok: true }>;
@@ -926,11 +926,36 @@ describe("WK-3", () => {
     expect(s.writes()).toEqual([{ action: "deploy.add", input: { clientKey: FAB, date: SAT, start: "09:00", end: "11:00", title: "Release 4.2", note: "code and the sales model", itemIds: [4417] } }]);
   });
 
+  // DP-2: the items I name, matched on the server against the client's own list, or its defaults; Confirm only.
+  const ITEMS = { ok: true as const, data: { groups: [{ platform: "fabric", label: "Fabric", items: [{ key: "fabric.warehouse_sql", name: "Warehouse SQL", on: true, hidden: false, own: false }, { key: "fabric.lakehouse", name: "Lakehouse", on: false, hidden: false, own: false }, { key: "fabric.reports", name: "Reports", on: true, hidden: false, own: false }] }] } };
+  it("maps the items I name onto the client's list, on Confirm only", async () => {
+    let s!: ReturnType<typeof setup>;
+    s = setup({ handlers: { "deploy.add": (i) => deployFake(s)(i), "deploy.items": async () => ITEMS } });
+    s.script(["plan_deployment"], call(["plan_deployment", { date: SAT, start: "09:00", end: "11:00", title: null, note: null, items: ["warehouse sql", "report"], itemIds: [] }]), say("Here it is."));
+    const r = await s.a.handle("Plan a Fabrikam deployment Saturday 9 to 11 with warehouse SQL and reports");
+    expect(r.proposals[0]!.preview.rows.find((x: { label: string }) => x.label === "What's moving")!.after).toBe("Warehouse SQL, Reports");
+    expect(s.writes()).toEqual([]);
+    await s.a.confirm(r.proposals[0]!.id);
+    expect(s.writes()[0]).toMatchObject({ action: "deploy.add", input: { items: ["fabric.warehouse_sql", "fabric.reports"] } });
+  });
+  it("falls back to the request's own words, then to the defaults, and says what it couldn't match", async () => {
+    let s!: ReturnType<typeof setup>;
+    s = setup({ handlers: { "deploy.add": (i) => deployFake(s)(i), "deploy.items": async () => ITEMS } });
+    s.script(["plan_deployment"], call(["plan_deployment", { date: SAT, start: "09:00", end: "11:00", title: null, note: null, items: [], itemIds: [] }]), say("Here."));
+    const words = await s.a.handle("Plan a Fabrikam deployment Saturday 9 to 11 with lakehouse and spreadsheets");
+    expect(words.proposals[0]!.preview.rows.find((x: { label: string }) => x.label === "What's moving")!.after).toBe("Lakehouse");
+    expect(words.proposals[0]!.preview.notes.join(" ")).toContain("spreadsheets");
+    s.script(["plan_deployment"], call(["plan_deployment", { date: SAT, start: "09:00", end: "11:00", title: null, note: null, items: [], itemIds: [] }]), say("Here."));
+    const none = await s.a.handle("Plan a Fabrikam deployment Saturday 9 to 11");
+    expect(none.proposals[0]!.preview.rows.find((x: { label: string }) => x.label === "What's moving")!.after).toBe("Warehouse SQL, Reports (the client's defaults)");
+    await s.a.confirm(none.proposals[0]!.id);
+    expect(s.writes().at(-1)).toMatchObject({ input: { items: ["fabric.warehouse_sql", "fabric.reports"] } });
+  });
   it("refuses a deployment without a valid window or with an item nobody named", async () => {
     const s = setup();
-    s.script(["plan_deployment"], call(["plan_deployment", { date: SAT, start: "11:00", end: "09:00", title: null, note: null, itemIds: [] }]), say("I couldn't."));
+    s.script(["plan_deployment"], call(["plan_deployment", { date: SAT, start: "11:00", end: "09:00", title: null, note: null, items: [], itemIds: [] }]), say("I couldn't."));
     expect((await s.a.handle("Plan a Fabrikam deployment Saturday")).proposals).toEqual([]);
-    s.script(["plan_deployment"], call(["plan_deployment", { date: SAT, start: "09:00", end: "11:00", title: null, note: null, itemIds: [4418] }]), say("I couldn't."));
+    s.script(["plan_deployment"], call(["plan_deployment", { date: SAT, start: "09:00", end: "11:00", title: null, note: null, items: [], itemIds: [4418] }]), say("I couldn't."));
     expect((await s.a.handle("Plan a Fabrikam deployment Saturday 9 to 11")).proposals).toEqual([]);
     expect(s.writes()).toEqual([]);
   });

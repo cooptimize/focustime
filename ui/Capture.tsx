@@ -16,6 +16,10 @@ import { ItemLookup, NO_ITEM, parentPool, type ItemValue } from "./ItemLookup.ts
 import { clientColor } from "./labels.ts";
 import { keyAction, onLastLine, savedText, TOAST_MS } from "./capturebox.ts";
 import { CreateDraftCtx } from "./createdraft-ctx.ts";
+import { DateField } from "./DatePicker.tsx";
+import { TimeField } from "./TimeField.tsx";
+import { DeployChecks } from "./DeployItems.tsx";
+import { itemsSummary, type DeployItem } from "../plan/deploy-items.ts";
 
 const KIND_NAME: Record<CaptureKind, string> = { follow_up: "Promise", draft: "Draft story", draft_feature: "Draft feature" };
 const SAVE_AS: Record<CaptureKind, string> = { follow_up: "Save as promise", draft: "Save as draft story", draft_feature: "Save as draft feature" };
@@ -222,7 +226,10 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
   const [parent, setParent] = useState<ItemValue>(NO_ITEM);
   const [size, setSize] = useState<Size>("M");
   const [target, setTarget] = useState("");
-  // WK-3: a Deployment's date and window (start and end) and its note of what's going.
+  // WK-3: a Deployment's date and window (start and end). DP-2: its ticked items (null until the list has loaded: the
+  // server then uses the client's defaults), the Note, and a counter that puts the ticks back to the defaults after a save.
+  const [depItems, setDepItems] = useState<string[] | null>(null);
+  const [depRound, setDepRound] = useState(0);
   const [depDate, setDepDate] = useState(() => nextSaturday(data.planDay.date));
   const [depStart, setDepStart] = useState("19:00");
   const [depEnd, setDepEnd] = useState("21:00");
@@ -287,11 +294,12 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
     setSize("M");
     setTarget("");
     setDepNote("");
+    setDepRound((n) => n + 1);
   };
   const whoNow: PersonValue = who ?? { who: s.who, whoRef: null };
   const whoName = whoNow.who.trim();
   const dueNow = due ?? s.due ?? "";
-  const blocked = (kind === "draft" || kind === "draft_feature" || kind === "deployment") && !client ? `A ${BOX_NAME[kind].toLowerCase()} needs a client: choose one with the client chip or type @` : kind === "deployment" ? (depDate ? windowProblem({ start: depStart, end: depEnd }) : "A deployment needs a date") : null;
+  const blocked = (kind === "draft" || kind === "draft_feature" || kind === "deployment") && !client ? `A ${BOX_NAME[kind].toLowerCase()} needs a client: choose one with the client chip or type @` : kind === "deployment" ? (!depDate ? "A deployment needs a date" : depDate < today ? "Choose today or a later day" : windowProblem({ start: depStart, end: depEnd })) : null;
 
   const submit = async (open = false) => {
     const body = text.trim();
@@ -304,9 +312,10 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
     if (kind === "deployment" && key) {
       // WK-3: a Deployment is a to-do on its date and window (no capture row); Undo removes it.
       try {
-        const r = await call<{ pick: { id: number }; note: string | null }>("deploy.add", { clientKey: key, date: depDate, start: depStart, end: depEnd, title: body.slice(0, 200), ...(depNote.trim() ? { note: depNote.trim() } : {}), ...(item.itemId ? { itemIds: [item.itemId] } : {}) });
+        const r = await call<{ pick: { id: number; deployItems?: DeployItem[] | null }; note: string | null }>("deploy.add", { clientKey: key, date: depDate, start: depStart, end: depEnd, title: body.slice(0, 200), ...(depNote.trim() ? { note: depNote.trim() } : {}), ...(item.itemId ? { itemIds: [item.itemId] } : {}), ...(depItems ? { items: depItems } : {}) });
+        const moving = itemsSummary(r.pick.deployItems);
         reset();
-        setSaved({ captureId: 0, pickId: r.pick.id, text: `${savedText("deployment", clientName(key))} · ${plainDay(depDate)} ${windowText({ start: depStart, end: depEnd })}${r.note ? ` · ${r.note}` : ""}`, body, client: key });
+        setSaved({ captureId: 0, pickId: r.pick.id, text: `${savedText("deployment", clientName(key))} · ${plainDay(depDate)} ${windowText({ start: depStart, end: depEnd })}${moving ? ` · ${moving}` : ""}${r.note ? ` · ${r.note}` : ""}`, body, client: key });
         onChanged();
         input.current?.focus();
       } catch (e) {
@@ -495,7 +504,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
                   {CLOSE_HOW.map((h) => <option key={h} value={h}>{HOW_LABEL[h]}</option>)}
                 </select>
               </label>
-              <label>Due <input type="date" aria-label="Due" value={dueNow} onChange={(e) => setDue(e.target.value)} /></label>
+              <div className="cap-cell"><span>Due</span><DateField label="Due" value={dueNow || null} today={today} placeholder="No date" onChange={(d) => setDue(d ?? "")} /></div>
               <label className="wide">Linked item <ItemLookup clientKey={client} value={item} onChange={setItem} label="Linked item" /></label>
             </>
           )}
@@ -514,10 +523,11 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
           )}
           {kind === "deployment" && (
             <>
-              <label>Date <input type="date" aria-label="Deployment date" value={depDate} min={data.planDay.date} onChange={(e) => setDepDate(e.target.value)} /></label>
-              <label>Starts <input type="time" aria-label="Starts at" value={depStart} onChange={(e) => setDepStart(e.target.value)} /></label>
-              <label>Ends <input type="time" aria-label="Ends at" value={depEnd} onChange={(e) => setDepEnd(e.target.value)} /></label>
-              <label className="wide">What's going <input type="text" aria-label="What's going" value={depNote} maxLength={2000} placeholder="code, SQL objects, the semantic model, reports" onChange={(e) => setDepNote(e.target.value)} /></label>
+              <div className="cap-cell"><span>Date</span><DateField label="Deployment date" value={depDate} today={today} clearable={false} onChange={(d) => d && setDepDate(d)} /></div>
+              <div className="cap-cell"><span>Starts</span><TimeField label="Starts at" value={depStart} onChange={setDepStart} /></div>
+              <div className="cap-cell"><span>Ends</span><TimeField label="Ends at" value={depEnd} onChange={setDepEnd} /></div>
+              <DeployChecks key={depRound} clientKey={client} clientName={client ? clientName(client) : ""} onChange={setDepItems} {...(onOpenedDraft ? { onLeave: onOpenedDraft } : {})} />
+              <label className="wide">Note <TextBox aria-label="Note" minRows={1} maxRows={4} maxLength={2000} value={depNote} placeholder="Anything else that's going" onChange={(e) => setDepNote(e.target.value)} onEnter={() => void submit()} /></label>
               <label className="wide">Linked item <ItemLookup clientKey={client} value={item} onChange={setItem} label="Linked item" /></label>
             </>
           )}
@@ -527,10 +537,10 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
                 Under epic{" "}
                 <ItemLookup clientKey={client} value={parent} onChange={setParent} label="Parent epic" pool={(features?.status === "ok" ? pool : undefined) ?? NO_POOL} placeholder={!client ? undefined : !features ? "Loading epics…" : features.status !== "ok" ? "No epic (DevOps unavailable)" : "Search open epics, or leave empty"} />
               </label>
-              <label>Target date <input type="date" aria-label="Target date" value={target} onChange={(e) => setTarget(e.target.value)} /></label>
+              <div className="cap-cell"><span>Target date</span><DateField label="Target date" value={target || null} today={today} placeholder="No date" onChange={(d) => setTarget(d ?? "")} /></div>
             </>
           )}
-          {blocked && <span className="muted cap-blocked">{blocked}</span>}
+          {blocked && <span className={kind === "deployment" ? "cap-blocked dep-warn" : "muted cap-blocked"} role={kind === "deployment" ? "status" : undefined}>{blocked}</span>}
         </div>
       )}
       {tip && (

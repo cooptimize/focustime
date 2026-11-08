@@ -6043,3 +6043,49 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .app.phone .live-call .lc-join, .app.phone .dp-calls .lc-start { min-height: 44px; min-width: 44px; justify-content: center; }
 .app.phone .dp-calls .lc-start { display: inline-flex; align-items: center; }
 :root[data-reduce-motion] .live-call .lc-dot { animation: none; }
+
+/* DP-2: what a deployment moves: the checkboxes, the row's chip, the list editor and the time picker. */
+.cap-cell { display: grid; gap: 3px; font-size: var(--fs-2); color: var(--text-muted); }
+.cap-cell .date-field { width: 100%; color: var(--text); }
+.dep-items { grid-column: 1 / -1; border: 0; margin: 0; padding: 0; min-width: 0; font-size: var(--fs-2); color: var(--text-muted); display: grid; gap: 6px; }
+.dep-items legend { padding: 0; margin-bottom: 3px; }
+.dep-group { display: grid; gap: 3px; min-width: 0; }
+.dep-group-label { font-weight: 600; color: var(--text-muted); }
+.dep-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr)); gap: 2px 12px; }
+.cap-fields .dep-check, .dep-check { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 24px; font-size: var(--fs-3); color: var(--text); cursor: pointer; }
+.dep-check input { flex: none; margin: 0; }
+.cap-fields textarea, .dep-add input { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 9px; width: 100%; }
+.dep-set-platform { justify-self: start; font-size: var(--fs-2); }
+.dep-warn { color: var(--watch); }
+.menu-form .field.checks, .menu-form .field.textbox, .menu-form .field.item { grid-column: 1 / -1; min-width: 0; }
+.menu-prompt label.dep-check { flex: none; flex-direction: row; align-items: center; gap: 6px; font-size: var(--fs-3); color: var(--text); }
+.menu-form .item-lookup { flex: none; } /* A form field stacks in a column: the lookup's flex-basis would be a 260 px height. */
+.menu-form .field.textbox textarea { width: 100%; font: inherit; color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 9px; }
+.deploy-items-wrap { display: inline-flex; flex: none; }
+.deploy-items-chip { font: inherit; font-size: var(--fs-1); color: var(--text-muted); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; cursor: pointer; white-space: nowrap; }
+.deploy-items-chip:hover, .deploy-items-chip[aria-expanded="true"] { color: var(--text); border-color: var(--border-strong); }
+.deploy-items-pop { position: fixed; inset: auto; margin: 0; max-width: min(320px, calc(100vw - 32px)); padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); color: var(--text); font-size: var(--fs-2); box-shadow: var(--shadow-menu); }
+.deploy-items-pop ul { margin: 0; padding-left: 16px; }
+.deploy-items-pop p { margin: 6px 0 0; color: var(--text-muted); }
+.deploy-items-pop ul + p { border-top: 1px solid var(--border); padding-top: 6px; }
+.tp-pop { width: 15em; }
+.tp-list { list-style: none; margin: 6px 0 0; padding: 0; max-height: 14em; overflow-y: auto; }
+.tp-step { width: 100%; display: flex; justify-content: space-between; font: inherit; color: inherit; background: none; border: 0; border-radius: 5px; padding: 3px 7px; cursor: pointer; }
+.tp-step:hover { background: color-mix(in oklab, var(--accent) 14%, var(--surface)); }
+.tp-step.on { outline: 1px solid var(--border-strong); }
+.dep-settings { display: grid; gap: 8px; }
+.dep-list ul { list-style: none; margin: 0 0 6px; padding: 0; }
+.dep-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 2px 0; }
+.dep-list li.hidden-item .dep-name { color: var(--text-muted); }
+.dep-move { display: inline-flex; gap: 2px; }
+.dep-on { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); }
+.dep-add { display: flex; gap: 6px; max-width: 26em; }
+.dep-add input { flex: 1; min-width: 0; }
+.dep-list h4 { margin: 4px 0; }
+@media (max-width: 600px) {
+  .cap-fields .dep-check, .dep-check { min-height: 44px; }
+  .deploy-items-chip { padding: 2px 9px; }
+  .tp-step { min-height: 44px; align-items: center; }
+  .dep-list li { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .dep-list li > button { grid-column: 3; }
+}

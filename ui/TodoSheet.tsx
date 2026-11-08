@@ -8,7 +8,7 @@ import type { Half, IsoDate } from "../week/types.ts";
 import type { Pick } from "../plan/types.ts";
 import { planAction } from "./api.ts";
 import { MenuCtx } from "./Menus.tsx";
-import { timeStep } from "./menu.ts";
+import { deployForm, timeStep } from "./menu.ts";
 import { PlanCtx } from "./planview.ts";
 import { WeekDnd } from "./WeekStories.tsx";
 import { PhoneSheet } from "./PhoneShell.tsx";
@@ -106,6 +106,16 @@ export function TodoSheet({ pick, data, now, onClose, onChanged }: { pick: Pick;
         {timeOn && (
           <button type="button" aria-haspopup="menu" onClick={addTime}>
             {data.timeboxes.some((t) => t.pickId === pick.id && !t.removedAt) ? "Change time" : "Add time"}
+          </button>
+        )}
+        {/* DP-2: a Deployment's window, what's going and its Note: the same form as the ⋯ menu. */}
+        {pick.todoKind === "deployment" && editable && menu.env && (
+          <button type="button" aria-haspopup="menu" onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            onClose();
+            menu.open({ x: r.left, y: r.top }, deployForm(menu.env!, { pick }));
+          }}>
+            Deployment details
           </button>
         )}
         {pick.itemUrl && menu.env && (

@@ -3,6 +3,8 @@
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { DeployChecks } from "./DeployItems.tsx";
+import { TextBox } from "./TextBox.tsx";
 import { filterCommands, type FormField, type MenuEnv, type MenuHead, type MenuItem, type MenuStep } from "./menu.ts";
 import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
@@ -87,7 +89,7 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList, pop
 
   if ("fields" in step) {
     const esc = (e: KeyboardEvent) => e.key === "Escape" && (e.preventDefault(), canBack ? back() : onDone());
-    const clientOf = (f: FormField) => (f.client ? (formClients[f.client] ?? step.fields.find((x) => x.key === f.client)?.value ?? null) : null) || null;
+    const clientOf = (f: FormField) => f.clientKey ?? ((f.client ? (formClients[f.client] ?? step.fields.find((x) => x.key === f.client)?.value ?? null) : null) || null);
     return (
       <form
         ref={formRef}
@@ -102,7 +104,12 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList, pop
           if (r !== false) onDone();
         }}
       >
-        {step.fields.map((f) => (
+        {step.fields.map((f) => f.type === "checks" ? (
+          // DP-2: a group of checkboxes can't sit inside one label.
+          <div key={f.key} className="field checks">
+            <DeployChecks name={f.key} clientKey={clientOf(f)} clientName={clientOf(f) ?? ""} {...(f.existing !== undefined ? { existing: f.existing } : {})} onLeave={onDone} />
+          </div>
+        ) : (
           <label key={f.key} className={`field ${f.type}`}>
             <span>
               {f.label}
@@ -110,6 +117,8 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList, pop
             </span>
             {f.type === "item" ? (
               <ItemLookup name={f.key} label={f.label} clientKey={clientOf(f)} value={itemValues[f.key] ?? NO_ITEM} onChange={(v) => setItemValues((m) => ({ ...m, [f.key]: v }))} />
+            ) : f.type === "textbox" ? (
+              <TextBox name={f.key} defaultValue={f.value ?? ""} minRows={1} maxRows={4} maxLength={2000} placeholder={f.placeholder ?? ""} onKeyDown={esc} onEnter={(e) => e.currentTarget.form?.requestSubmit()} />
             ) : f.type === "select" ? (
               <select name={f.key} defaultValue={f.value ?? ""} required={!f.optional} onKeyDown={esc} onChange={(e) => setFormClients((m) => ({ ...m, [f.key]: e.target.value }))}>
                 {(f.options ?? []).map((o) => (
@@ -242,8 +251,15 @@ export function PopupMenu({ at, step: first, onClose }: { at: { x: number; y: nu
     if (!el) return;
     // A popover sits in the top layer, so it shows above the details dialog too.
     if (!el.matches(":popover-open")) el.showPopover?.();
-    const r = el.getBoundingClientRect();
-    setPos({ x: Math.max(8, Math.min(at.x - (at.x + r.width > innerWidth ? r.width : 0), innerWidth - r.width - 8)), y: Math.max(8, Math.min(at.y, innerHeight - r.height - 8)) });
+    const place = () => {
+      const r = el.getBoundingClientRect();
+      setPos({ x: Math.max(8, Math.min(at.x - (at.x + r.width > innerWidth ? r.width : 0), innerWidth - r.width - 8)), y: Math.max(8, Math.min(at.y, innerHeight - r.height - 8)) });
+    };
+    place();
+    // DP-2: a form's content can arrive after it opens (a deployment's checkboxes): keep it on screen as it grows.
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(place) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
   }, [at, step]);
   useEffect(() => {
     const away = (e: Event) => !ref.current?.contains(e.target as Node) && onClose();

@@ -118,6 +118,9 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     await adminStore.setOrg({ scope: "org", key: "ai.on", value: true, actor: FOCUSTIME, area: "ai", target: "ai.on", note: "demo" });
     await adminStore.setOrg({ scope: "org", key: "ai.person_cap_usd", value: 1, actor: FOCUSTIME, area: "ai", target: "ai.person_cap_usd", note: "demo" });
     for (const c of DEMO_CLIENTS) await adminStore.setOrg({ scope: clientScope(c.key), key: "allow_ai", value: true, actor: FOCUSTIME, area: "ai", target: c.key, note: "demo" });
+    // DP-2: Northwind runs on Fabric and Harbor on Azure; Atlas and Cooptimize are left unset, so all three states show.
+    await adminStore.setOrg({ scope: clientScope("Northwind"), key: "data_platform", value: "fabric", actor: FOCUSTIME, area: "clients", target: "Northwind", note: "demo" });
+    await adminStore.setOrg({ scope: clientScope("Harbor"), key: "data_platform", value: "azure", actor: FOCUSTIME, area: "clients", target: "Harbor", note: "demo" });
     // IN-1: the helper bot is flagged as an automation account (ADM-2 meant it as one), so it is never a Cooptimizer.
     await adminStore.setOrg({ scope: `person:${DEMO_BOT.personId}`, key: "automation", value: true, actor: FOCUSTIME, area: "people", target: DEMO_BOT.name, note: "demo" });
   })();

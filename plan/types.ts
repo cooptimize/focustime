@@ -55,6 +55,8 @@ export type Pick = {
   window?: TodoWindow | null;
   /** WK-3: the DevOps items a deployment covers. */
   links?: TodoLink[] | null;
+  /** DP-2: what it moves: a snapshot of the ticked items, as planned. Absent on a WK-3 deployment (its text is its note). */
+  deployItems?: import("./deploy-items.ts").DeployItem[] | null;
   position: number;
   createdAt: ZonedStamp;
   updatedAt: ZonedStamp;

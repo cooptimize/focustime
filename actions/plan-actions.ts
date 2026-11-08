@@ -9,6 +9,7 @@ import { alreadyPlanned } from "../plan/dup.ts";
 import { sessionEnd, unpickableReason } from "../plan/rules.ts";
 import { DEFAULT_SIZE, SIZES, type Pick as PlanPick, type PlanDayState, type Size, type TodoLink, type TodoWindow } from "../plan/types.ts";
 import { DEPLOYMENT, windowHalf, windowMinutes, windowProblem } from "../plan/deploy.ts";
+import { defaultKeys, groupsFor, resolveTicked, type ClientDeploy, type DeployItem } from "../plan/deploy-items.ts";
 import { PlanError, type DraftPatch, type NewPick, type PlanStore } from "../store/plan-store.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
 import { dayEndOf, hoursOn, nominalHours, type TimeModel } from "../week/hours.ts";
@@ -40,6 +41,8 @@ export type PlanContext = {
    * capture.features), for a parent the Week hasn't loaded (someone else's feature). Null when DevOps can't say.
    */
   openParents?: (clientKey: string, tier: "feature" | "epic") => Promise<readonly number[] | null>;
+  /** DP-2: the client's data platform and its list of deployment items (Admin › Clients); absent: not set. */
+  clientDeploy?: (clientKey: string) => Promise<ClientDeploy | null>;
 };
 
 /**
@@ -210,6 +213,20 @@ async function deployLinks(ctx: PlanContext, key: string, v: unknown, own: numbe
     out.push({ id: i, title: item.title });
   }
   return out;
+}
+
+/**
+ * DP-2: the items a deployment ticks, as a snapshot: the keys sent, or with none sent this client's defaults (only for a
+ * new deployment; one already planned keeps what it has). A string is the refusal.
+ */
+async function deployTicks(ctx: PlanContext, key: string, v: unknown, before: PlanPick | null): Promise<DeployItem[] | null | string> {
+  if (v !== undefined && v !== null && (!Array.isArray(v) || v.length > 40 || v.some((k) => typeof k !== "string"))) throw new Invalid("items must be a list of at most 40 item keys");
+  const existing = before?.todoKind === "deployment" ? (before.deployItems ?? null) : null;
+  if ((v === undefined || v === null) && before?.todoKind === "deployment") return existing;
+  const c = (await ctx.clientDeploy?.(key)) ?? null;
+  const { items, unknown } = resolveTicked((v as string[] | undefined | null) ?? defaultKeys(groupsFor(c)), c, existing);
+  if (unknown.length) return "That item isn't on this client's deployment list any more. Reload and try again";
+  return items.length ? items : null;
 }
 
 /** The carry-over day: the earliest upcoming, plannable, uncommitted day (plan/days.ts). */
@@ -396,7 +413,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
       }
       case "deploy.add": {
         // WK-3 (DP-0): a Deployment to-do: a client, a date and a window; items and a note optional. Local only.
-        const o = fields(input, ["clientKey", "date", "start", "end"], ["title", "note", "itemIds"]);
+        const o = fields(input, ["clientKey", "date", "start", "end"], ["title", "note", "itemIds", "items"]);
         const key = clientKey(o.clientKey);
         const d = date(o.date);
         const w = deployWindow(o);
@@ -404,25 +421,27 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         if (past) return bad(past, 409);
         const links = await deployLinks(ctx, key, o.itemIds);
         if (typeof links === "string") return bad(links, 409);
+        const deployItems = await deployTicks(ctx, key, o.items, null);
+        if (typeof deployItems === "string") return bad(deployItems, 409);
         const clk = await clock(ctx);
         const note = placeNote(d, { pto: !!(await ptoOf(ctx, clk.cfg, d)), hasHours: await clk.hasHours(d) });
         const title = o.title === undefined || o.title === null || o.title === "" ? DEPLOYMENT : text(o.title, "title");
         const pick = await plan.addPick({
           date: d, half: windowHalf(hoursOn(clk.model, d), w), clientKey: key, kind: "intention", title, itemType: DEPLOYMENT, size: null,
-          minutes: Math.min(480, windowMinutes(w)), todoKind: "deployment", window: w, links, notes: deployNote(o.note),
+          minutes: Math.min(480, windowMinutes(w)), todoKind: "deployment", window: w, links, deployItems, notes: deployNote(o.note),
         });
         return { ok: true, data: { pick, state: await state(ctx, plan, pick.date), note } };
       }
       case "pick.set_kind": {
         // WK-3: change a to-do's kind (to-do menu › Kind): a Deployment needs its window; back to a to-do clears it.
-        const o = fields(input, ["id", "kind"], ["start", "end", "note", "itemIds"]);
+        const o = fields(input, ["id", "kind"], ["start", "end", "note", "itemIds", "items"]);
         const pid = id(o.id);
         const before = await plan.getPick(pid);
         if (!before) return bad(`No to-do ${pid}`, 404);
         const past = await pastRefusal(ctx, before.date);
         if (past) return bad(past, 409);
         if (o.kind === "todo") {
-          if (o.start !== undefined || o.end !== undefined || o.itemIds !== undefined) throw new Invalid("a plain to-do has no window or items");
+          if (o.start !== undefined || o.end !== undefined || o.itemIds !== undefined || o.items !== undefined) throw new Invalid("a plain to-do has no window or items");
           const pick = await plan.setTodoKind(pid, { todoKind: null, window: null, links: null, ...(before.itemType === DEPLOYMENT ? { itemType: null } : {}), minutes: null, ...(o.note !== undefined ? { notes: deployNote(o.note) } : {}) });
           return { ok: true, data: { pick, state: await state(ctx, plan, pick.date) } };
         }
@@ -430,9 +449,11 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const w = deployWindow(o);
         const links = o.itemIds === undefined && before.todoKind === "deployment" ? (before.links ?? null) : await deployLinks(ctx, before.clientKey, o.itemIds, before.itemId);
         if (typeof links === "string") return bad(links, 409);
+        const deployItems = await deployTicks(ctx, before.clientKey, o.items, before);
+        if (typeof deployItems === "string") return bad(deployItems, 409);
         const { model } = await clock(ctx);
         const pick = await plan.setTodoKind(pid, {
-          todoKind: "deployment", window: w, links, half: windowHalf(hoursOn(model, before.date), w), minutes: Math.min(480, windowMinutes(w)),
+          todoKind: "deployment", window: w, links, deployItems, half: windowHalf(hoursOn(model, before.date), w), minutes: Math.min(480, windowMinutes(w)),
           ...(before.kind === "intention" && !before.followUpId ? { itemType: DEPLOYMENT } : {}),
           ...(o.note !== undefined ? { notes: deployNote(o.note) } : {}),
         });

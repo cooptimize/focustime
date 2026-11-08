@@ -3,6 +3,7 @@
 // "Saved" and an Undo toast; turning AI off for everyone and removing a person confirm first. Nothing here shows
 // anyone's plan, picks, follow-ups, captures, focus sessions, PATs, AI request text or chat messages: the server's
 // sections carry names, dates, counts and yes or no only.
+import { DeploySettings } from "../DeployItems.tsx";
 import { TextBox } from "../TextBox.tsx";
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { call } from "../api.ts";
@@ -337,6 +338,7 @@ function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: Clie
       <ProcessView c={c} saver={saver} onRefresh={onRefresh} refreshing={refreshing} />
       {c.scope && <ScopeField clientKey={c.key} project={c.process.ok ? c.process.project : null} s={c.scope} save={(v) => saver.save(scope, "devops_scope", v, `${c.key}: Cooptimize's work`)} status={saver.status(scope, "devops_scope")} retry={() => void saver.save(scope, "devops_scope", c.scope?.rule ?? undefined, `${c.key}: Cooptimize's work`)} />}
       {c.isClient && <FixGapsField c={c} saver={saver} />}
+      {c.isClient && <DeploySettings clientKey={c.key} clientName={c.key} />}
       {c.isClient && (
         <div className="set-form">
           <AField label="Other names (aliases)" kind="Rule" s={saver.status(scope, "aliases")} retry={() => void saver.save(scope, "aliases", c.aliases ?? [], `${c.key}: other names`)} hint="Other names people use for this client, like a short name or an old company name. FocusTime holds back a message that names it in another client's chat with people outside Cooptimize, and flags it in text going to another client. Commas between them.">

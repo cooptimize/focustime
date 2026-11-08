@@ -14,6 +14,7 @@ import { MenuCtx, useMenu } from "./Menus.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
 import { PickTime } from "./PickTime.tsx";
 import { DeployIcon, WindowChip } from "./Deploy.tsx";
+import { DeployItemsChip } from "./DeployItems.tsx";
 import { pickTime } from "../plan/picktime.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import { useFocused } from "./planview.ts";
@@ -157,7 +158,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
         <>
           {badge}
           {actions}
-          {dep && <WindowChip pick={pick} />}
+          {dep && <><WindowChip pick={pick} /><DeployItemsChip pick={pick} /></>}
           <span className="pr-hover">
             {!dep && <TodoTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}
             {more}
@@ -186,5 +187,5 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
 
 /** WK-3: a Deployment's window chip in place of the to-do's time (its window is changed from Deployment details). */
 function TodoTime(props: Parameters<typeof PickTime>[0]) {
-  return props.pick.todoKind === "deployment" ? <WindowChip pick={props.pick} /> : <PickTime {...props} />;
+  return props.pick.todoKind === "deployment" ? <><WindowChip pick={props.pick} /><DeployItemsChip pick={props.pick} /></> : <PickTime {...props} />;
 }
