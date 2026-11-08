@@ -3,6 +3,8 @@
 // "Saved" and an Undo toast; turning AI off for everyone and removing a person confirm first. Nothing here shows
 // anyone's plan, picks, follow-ups, captures, focus sessions, PATs, AI request text or chat messages: the server's
 // sections carry names, dates, counts and yes or no only.
+import { Stamp } from "../Stamp.tsx";
+import { SOURCE_SYSTEM_LABEL, type SourceSystem } from "../../plan/standards.ts";
 import { DeploySettings } from "../DeployItems.tsx";
 import { TextBox } from "../TextBox.tsx";
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
@@ -27,6 +29,7 @@ export const ADMIN_UI_SECTIONS = [
   ["admin-conversations", "Conversations"],
   ["admin-people", "People"],
   ["admin-organization", "Organization"],
+  ["admin-standards", "Standards"],
   ["admin-status", "Status"],
   ["admin-audit", "Audit"],
 ] as const;
@@ -183,7 +186,7 @@ const colorVar = (c: string | null) => (c ? (c.startsWith("#") ? c : `var(--clie
 
 // ---------- Clients ----------
 
-type ClientRow = { key: string; isClient: boolean; whyText: string; names: string[]; types: string[]; treatAsClient: boolean; hidden: boolean; hasSettings: boolean; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; /** GD-2 */ aliases?: string[]; /** HK-7 */ exactCase?: boolean; exactCaseDefault?: boolean; houseStyle: string | null; fixGaps?: GapKind[]; process: ClientProcess; scope: ClientScopeRow | null; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
+type ClientRow = { /** KB-1. */ sourceSystems?: SourceSystem[] | null; key: string; isClient: boolean; whyText: string; names: string[]; types: string[]; treatAsClient: boolean; hidden: boolean; hasSettings: boolean; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; /** GD-2 */ aliases?: string[]; /** HK-7 */ exactCase?: boolean; exactCaseDefault?: boolean; houseStyle: string | null; fixGaps?: GapKind[]; process: ClientProcess; scope: ClientScopeRow | null; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
 type ClientFilterValue = "customers" | "all";
 type ClientCounts = { customers: number; all: number };
 type ClientsData = { palette: string[]; suggested: string[]; filter: ClientFilterValue; accountsRead: boolean; counts: ClientCounts; clients: ClientRow[] };
@@ -339,6 +342,7 @@ function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: Clie
       {c.scope && <ScopeField clientKey={c.key} project={c.process.ok ? c.process.project : null} s={c.scope} save={(v) => saver.save(scope, "devops_scope", v, `${c.key}: Cooptimize's work`)} status={saver.status(scope, "devops_scope")} retry={() => void saver.save(scope, "devops_scope", c.scope?.rule ?? undefined, `${c.key}: Cooptimize's work`)} />}
       {c.isClient && <FixGapsField c={c} saver={saver} />}
       {c.isClient && <DeploySettings clientKey={c.key} clientName={c.key} />}
+      {c.isClient && <SourceSystemsField c={c} saver={saver} />}
       {c.isClient && (
         <div className="set-form">
           <AField label="Other names (aliases)" kind="Rule" s={saver.status(scope, "aliases")} retry={() => void saver.save(scope, "aliases", c.aliases ?? [], `${c.key}: other names`)} hint="Other names people use for this client, like a short name or an old company name. FocusTime holds back a message that names it in another client's chat with people outside Cooptimize, and flags it in text going to another client. Commas between them.">
@@ -370,6 +374,31 @@ function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: Clie
 }
 
 /** AH-3: the gaps Ahead's Fix next and Readiness count for this client (all four by default). */
+/** KB-1: which D365 systems the client's data comes from: picks the source-system standards its AI drafts use. */
+const SOURCE_CHOICES: readonly (readonly [string, string, SourceSystem[] | null])[] = [
+  ["both", "Both D365 systems (default)", null],
+  ["d365_fo", SOURCE_SYSTEM_LABEL.d365_fo, ["d365_fo"]],
+  ["d365_dataverse", SOURCE_SYSTEM_LABEL.d365_dataverse, ["d365_dataverse"]],
+  ["none", "None", []],
+];
+function SourceSystemsField({ c, saver }: { c: ClientRow; saver: Saver }) {
+  const scope = `client:${c.key}`;
+  const shown = saver.shown(scope, "source_systems", c.sourceSystems ?? null);
+  const current = SOURCE_CHOICES.find(([, , v]) => JSON.stringify(v) === JSON.stringify(shown ?? null))?.[0] ?? "both";
+  const save = (v: SourceSystem[] | null) => void saver.save(scope, "source_systems", v, `${c.key}: source systems`);
+  return (
+    <div className="set-form">
+      <AField label="Source systems" kind="Rule" s={saver.status(scope, "source_systems")} retry={() => save(shown ?? null)} hint="Which source-system standards go with this client's AI drafts.">
+        <select aria-label={`${c.key}: source systems`} value={current} onChange={(e) => save(SOURCE_CHOICES.find(([id]) => id === e.target.value)![2])}>
+          {SOURCE_CHOICES.map(([id, label]) => (
+            <option key={id} value={id}>{label}</option>
+          ))}
+        </select>
+      </AField>
+    </div>
+  );
+}
+
 function FixGapsField({ c, saver }: { c: ClientRow; saver: Saver }) {
   const scope = `client:${c.key}`;
   const on = saver.shown(scope, "fix_gaps", c.fixGaps ?? [...GAP_KINDS]);
@@ -1481,6 +1510,93 @@ function AdminAudit() {
 }
 
 /** One Admin section, by its Settings id. A non-admin who lands here sees why, not the section. */
+type StandardsData = {
+  available: boolean; repoUrl: string; branch: string; defaults: { repoUrl: string; branch: string }; everyMinutes: number; budget: number; syncedFrom: { repoUrl: string; branch: string } | null;
+  commit: string | null; syncedAt: string | null; checkedAt: string | null; error: string | null; errorAt: string | null;
+  warnings: ({ kind: "duplicate_id"; id: string; paths: string[] } | { kind: "incomplete"; path: string; missing: string[] })[];
+  articles: { id: string; title: string; domain: string; layer: string; artifact: string; technology: string; path: string; url: string }[];
+};
+
+/** KB-1: Admin › Standards: the repo and branch (Rules), the last sync, Sync now, the warnings and the articles. Read only on GitHub. */
+function AdminStandards() {
+  const { data, error, load } = useSection<StandardsData>("standards");
+  const saver = useAdminSave(load);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  if (error) return <p className="set-problem">{error}</p>;
+  if (!data) return <p className="muted">Loading…</p>;
+  const o = "org";
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const syncNow = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await call<{ ok: boolean; changed: boolean; error: string | null }>("admin.standards_sync", {});
+      setMsg(r.ok ? (r.changed ? "Synced: a new copy is in use." : "Checked: nothing new.") : (r.error ?? "The sync failed. The last good copy is still in use."));
+    } catch (e) {
+      setMsg(e instanceof Error ? plain(e.message) : "The sync failed");
+    }
+    setBusy(false);
+    await load();
+  };
+  return (
+    <div className="adm-standards">
+      <p className="muted">FocusTime reads Cooptimize's development standards from GitHub and uses them in AI drafts and Ask. It only ever reads the repo, with no token, and runs nothing from it. It looks for a new commit every {data.everyMinutes} minutes while FocusTime is in use.</p>
+      <div className="set-form">
+        <AField label="Repo" kind="Rule" s={saver.status(o, "standards.repo_url")} retry={() => void saver.save(o, "standards.repo_url", data.repoUrl, "Standards repo")} hint="A public https://github.com/<owner>/<repo> address.">
+          <TextInput label="Standards repo" value={saver.shown(o, "standards.repo_url", data.repoUrl)} maxLength={300} onSave={(v) => void saver.save(o, "standards.repo_url", v, "Standards repo")} />
+        </AField>
+        <AField label="Branch" kind="Rule" s={saver.status(o, "standards.branch")} retry={() => void saver.save(o, "standards.branch", data.branch, "Standards branch")} hint="Empty means the repo's default branch.">
+          <TextInput label="Standards branch" placeholder="The default branch" value={saver.shown(o, "standards.branch", data.branch)} maxLength={200} onSave={(v) => void saver.save(o, "standards.branch", v, "Standards branch")} />
+        </AField>
+        <div className="set-field">
+          <span className="set-label">Last synced</span>
+          <span>{data.syncedAt ? <><Stamp at={data.syncedAt} tz={zone} /> · commit <code>{data.commit?.slice(0, 7)}</code></> : "Not synced yet"}</span>
+        </div>
+        {data.checkedAt && (
+          <div className="set-field">
+            <span className="set-label">Last checked</span>
+            <span><Stamp at={data.checkedAt} tz={zone} /></span>
+          </div>
+        )}
+        <div className="set-field">
+          <span className="set-label">Budget</span>
+          <span>{data.budget.toLocaleString()} tokens of matched articles per AI request</span>
+        </div>
+        <div className="set-field">
+          <span className="set-inline">
+            <button type="button" className="mini" disabled={busy || !data.available} onClick={() => void syncNow()}>{busy ? "Syncing…" : "Sync now"}</button>
+            {msg && <span className="muted" role="status">{msg}</span>}
+          </span>
+        </div>
+      </div>
+      {data.error && (
+        <p className="set-problem" role="alert">The last sync failed{data.errorAt ? <> (<Stamp at={data.errorAt} tz={zone} />)</> : null}: {data.error}. The last good copy is still in use.</p>
+      )}
+      {data.warnings.map((w) => (
+        <p key={w.kind === "duplicate_id" ? w.id : w.path} className="set-problem">
+          {w.kind === "duplicate_id" ? <>Two active articles share the id <code>{w.id}</code>: {w.paths.join(" and ")}. Both are in use.</> : <>{w.path} is active but its front matter is missing {w.missing.join(", ")}, so it isn't used.</>}
+        </p>
+      ))}
+      <h3 className="set-sub">Active articles ({data.articles.length})</h3>
+      {data.articles.length === 0 ? <p className="muted">None yet.</p> : (
+        <table className="adm-standards-table">
+          <thead><tr><th>Title</th><th>Domain</th><th>Layer</th><th>Artifact</th><th>Technology</th><th>Path</th></tr></thead>
+          <tbody>
+            {data.articles.map((a) => (
+              <tr key={a.path}>
+                <td><a href={a.url} target="_blank" rel="noreferrer">{a.title}</a></td>
+                <td>{a.domain}</td><td>{a.layer}</td><td>{a.artifact}</td><td>{a.technology}</td>
+                <td className="adm-standards-path">{a.path}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 export function AdminSection({ id, admin }: { id: AdminUiSection; admin: boolean | null }) {
   if (admin === null) return <p className="muted">Loading…</p>;
   if (!admin) return <p className="muted">Admin is only for FocusTime admins (the "FocusTime Admins" group in Entra). Settings shows the team's values as "Set by your FocusTime admin".</p>;
@@ -1495,6 +1611,8 @@ export function AdminSection({ id, admin }: { id: AdminUiSection; admin: boolean
       return <AdminPeople />;
     case "admin-organization":
       return <AdminOrganization />;
+    case "admin-standards":
+      return <AdminStandards />;
     case "admin-status":
       return <AdminStatus />;
     case "admin-audit":

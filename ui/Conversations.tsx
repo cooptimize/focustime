@@ -2,6 +2,7 @@
 // ui/MessageThread.tsx: grouped by person with avatars, mine on the other side, quotes, reactions, the latest 20 with
 // Show earlier), Link to item, Create DevOps item (the draft), Not a request, Merge into…, a suggested update, and the
 // linked item with its live state. Nothing is posted in Teams. Chat text shows only on its own client's item.
+import { StandardsNote } from "./StandardsNote.tsx";
 import { TextBox } from "./TextBox.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -215,6 +216,7 @@ export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<Con
       {d && (
         <>
           {d.notSorted && <p className="muted">{d.draft.byAi ? null : <>Not drafted by AI ({d.notSorted}). Fill it in below.</>}</p>}
+          <StandardsNote s={d.draft.standards} />
           {d.draft.namesRemoved && <p className="names-removed">Another client's name was removed: the AI's draft had one, and "another client" is written instead. Edit freely.</p>}
           {!canSend && (
             <p className="conv-turn-on" role="status">

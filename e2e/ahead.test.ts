@@ -348,7 +348,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await expect(row(page, "Finance close automation").count()).resolves.toBe(0);
     await expect(row(page, "Order history export").count()).resolves.toBe(1);
     const whole = page.getByRole("button", { name: "Show the whole project" });
-    await expect(whole.getAttribute("title")).resolves.toBe("Northwind Foods: 13 of 18 open items are Cooptimize's work");
+    await expect(whole.getAttribute("title")).resolves.toBe("Northwind Foods: 14 of 19 open items are Cooptimize's work");
     await whole.click();
     await row(page, "Finance close automation").waitFor();
     await expect(row(page, "Month-end journal import").locator(".ah-ro").allTextContents()).resolves.toContain("Outside scope");
@@ -367,10 +367,10 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     const card = page.locator(".adm-client", { has: page.getByRole("heading", { name: "Northwind" }) });
     const scope = card.locator(".adm-scope");
     await scope.waitFor({ timeout: 30_000 });
-    await expect(scope.textContent()).resolves.toContain("Automatic: 13 of 18 open items.");
+    await expect(scope.textContent()).resolves.toContain("Automatic: 14 of 19 open items.");
     await scope.getByRole("radio", { name: /By area path/ }).check();
     await scope.getByRole("row", { name: /Finance/ }).getByRole("checkbox").first().check();
-    await expect(scope.textContent()).resolves.toContain("Shows 5 of 18 open items");
+    await expect(scope.textContent()).resolves.toContain("Shows 5 of 19 open items");
     await shotBoth(page, "admin-scope", scope);
     await scope.getByRole("button", { name: "Save scope" }).click();
     await expect.poll(() => scope.textContent()).toContain("Now: Area Portal\\Finance and sub-areas.");

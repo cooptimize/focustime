@@ -13,6 +13,9 @@ import { aClientEntry, anAiApp, anAiRules, aWorkItem } from "../test/builders/in
 import { allianceAnswer, BLAKE, CHAT, EVAN, SAM, world } from "../test/conversations.ts";
 import { people, type W } from "../test/conversation-people.ts";
 import type { WorkItem } from "../week/types.ts";
+import { standardsLookup, type StandardsPort } from "./standards.ts";
+import type { StandardsLibrary } from "../plan/standards.ts";
+import { aStandardsArticle, STD_COMMIT, STD_REPO } from "../test/builders/standards.ts";
 
 const DASHBOARD = aWorkItem({ id: 4101, title: "Movement dashboard refresh", state: "Active", stateCategory: "InProgress", assignedTo: "Evan Ford" });
 const FEATURE = aWorkItem({ id: 4102, title: "BOM bridging", tier: "feature", level: "portfolio" });
@@ -195,3 +198,46 @@ describe("GD-2: the AI draft names no other client", () => {
     expect(d.draft.namesRemoved).toBeTruthy();
   });
 });
+
+describe("Create DevOps item with the standards (KB-1)", () => {
+  const lib: StandardsLibrary = { repo: STD_REPO, commit: STD_COMMIT, articles: [aStandardsArticle({ title: "Gold Fact Tables", id: "fact", layer: "gold", artifact: "fact_table", path: "SQL/Gold/Fact Tables.md", body: "- Use the fact schema." }), aStandardsArticle({ title: "SQL Conventions", id: "conv", artifact: "conventions", path: "SQL/SQL Conventions.md", body: "- Never use SELECT *." })] };
+  const port: StandardsPort = { library: async () => lib, state: async () => null, syncNow: async () => ({ ok: true, changed: false, error: null }) };
+  const lookup = standardsLookup(port, async () => ({ dataPlatform: null, sourceSystems: [] }))!;
+  // The fake AI's conversation is about something else; the path under test is what happens once articles match.
+  const standards: typeof lookup = (client) => lookup(client, ["Gold fact table for sales"]);
+  type Drafted = { title: string; likelyChange: string; acceptance: string[]; standards: { commit: string; used: { title: string; url: string }[]; overrides: string[]; notes: string[] } };
+
+  async function draft(answer: Record<string, unknown>) {
+    const w = world({ respond: allianceAnswer });
+    const c = await w.say(CHAT, BLAKE, "2026-11-04T19:02:00Z", "We need a Gold fact table for sales, Evan", { mentions: [{ id: EVAN.userId!, name: "Evan Ford", at: 0 }] });
+    await w.run(CHAT, [c, await w.say(CHAT, EVAN, "2026-11-04T19:10:00Z", "Looking into the Gold fact table now")]);
+    const conv = (await w.convs.conversations([CHAT.chatId]))[0]!;
+    const calls: ProviderCall[] = [];
+    const full = { title: "Sales fact", asked: "A Gold fact table for sales", check_first: [], likely_change: "Add fact.Sales.", open_questions: [], level: "story", parent_feature: null, likely_item: null, acceptance_criteria: [], standards_note: null, ...answer };
+    const ai = createAi({ provider: async () => stubProvider({ respond: (x) => (calls.push(x), JSON.stringify(full)) }), app: anAiApp({ provider: "openai", appCapUsd: 100 }), rules: async () => anAiRules({ on: true, allowedClients: ["contoso"] }), guard: async () => ({ directory: [], homeDomains: ["contoso.example"], forbidden: [] }), log: w.convs.appAiLog, appSpend: { get: async () => 0, add: async () => {} }, now: w.now });
+    const d = await (await people(w, { ai, more: { standards } })).as(EVAN).run<{ draft: Drafted }>("conversations.draft", { id: conv.id });
+    return { d: d.draft, sent: JSON.parse(calls[0]!.input) as { standards?: { articles: { title: string }[] } } };
+  }
+
+  it("sends the articles that fit, links a citation at the synced commit and lists what was used", async () => {
+    const { d, sent } = await draft({ acceptance_criteria: ["Follows Gold Fact Tables: fact schema, PascalCase"] });
+    expect(sent.standards!.articles.map((a) => a.title)).toContain("Gold Fact Tables");
+    expect(d.acceptance[0]).toContain(`https://github.com/contoso/standards/blob/${STD_COMMIT}/SQL/Gold/Fact%20Tables.md`);
+    expect(d.standards.commit).toBe(STD_COMMIT);
+    expect(d.standards.used.map((u) => u.title)).toContain("Gold Fact Tables");
+  });
+
+  it("drops a citation of a standard that wasn't sent, and a client note overrides with its reason", async () => {
+    const { d } = await draft({ acceptance_criteria: ["Follows Made Up Standard: anything"], standards_note: "Client override: their warehouse uses the rpt schema, so the table isn't in fact." });
+    expect(d.acceptance.join(" ")).not.toContain("Made Up Standard");
+    expect(d.standards.overrides.join(" ")).toContain("rpt schema");
+  });
+
+  it("rewords hand-written Silver SQL as configure or regenerate and says so", async () => {
+    const { d } = await draft({ title: "Write Silver SQL for customers" });
+    expect(d.title).not.toMatch(/^Write Silver SQL/);
+    expect(d.title).toMatch(/configure or regenerate/i);
+    expect(d.standards.notes.length).toBe(1);
+  });
+});
+

@@ -63,7 +63,9 @@ export type StateInfo = { name: string; category: string };
 const test = (rev: number): PatchOp => ({ op: "test", path: "/rev", value: rev });
 const html = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 /** Plain text as the HTML DevOps stores in rich text fields: one <div> per line. */
-export const textToHtml = (s: string) => s.split(/\r?\n/).map((l) => `<div>${html(l) || "<br>"}</div>`).join("");
+/** KB-1: a link to a GitHub article (a standards citation) is clickable in DevOps. */
+const linked = (s: string) => s.replace(/https:\/\/github\.com\/[^\s<)]+/g, (u) => `<a href="${u}">${u}</a>`);
+export const textToHtml = (s: string) => s.split(/\r?\n/).map((l) => `<div>${linked(html(l)) || "<br>"}</div>`).join("");
 
 export function stateOps(rev: number, state: string, comment?: string | null): PatchOp[] {
   return [test(rev), { op: "replace", path: "/fields/System.State", value: state }, ...(comment ? [{ op: "add" as const, path: "/fields/System.History", value: textToHtml(comment) }] : [])];

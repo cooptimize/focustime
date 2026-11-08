@@ -6018,6 +6018,13 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .held-meta, .held-text, .held-bulk-ask { overflow-wrap: anywhere; }
 .mention-flag { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0; padding: 8px 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--watch) 45%, transparent); background: color-mix(in srgb, var(--watch) 12%, transparent); }
 .mention-flag p { margin: 0; flex: 1 1 260px; }
+.standards-used { margin: 6px 0; font-size: var(--fs-2); color: var(--text-muted); }
+.standards-used a { color: inherit; text-decoration: underline; }
+.standards-used p { margin: 4px 0 0; }
+.adm-standards-table { width: 100%; border-collapse: collapse; font-size: var(--fs-2); }
+.adm-standards-table th { text-align: left; font-weight: 500; color: var(--text-muted); }
+.adm-standards-table th, .adm-standards-table td { padding: 4px 8px 4px 0; vertical-align: top; }
+.adm-standards-path { color: var(--text-muted); overflow-wrap: anywhere; }
 .names-removed { margin: 6px 0; font-size: var(--fs-2); color: var(--text-muted); }
 .names-removed::before { content: "ⓘ "; }
 /* CW-1: a co-working call live in a client's delivery chat: one line, who started it, Join (opens Teams). */

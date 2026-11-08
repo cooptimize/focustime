@@ -7,7 +7,7 @@
 import type { AnswerContext, CtxBlock, CtxDay, CtxTodo } from "./context.ts";
 import type { Link } from "./types.ts";
 
-export const TOPICS = ["plan_check", "capabilities", "agenda", "promises", "waiting", "readiness", "deployments", "status_updates", "done", "calls", "items", "general"] as const;
+export const TOPICS = ["plan_check", "capabilities", "agenda", "promises", "waiting", "readiness", "deployments", "status_updates", "done", "calls", "items", "standards", "general"] as const;
 export type Topic = (typeof TOPICS)[number];
 
 export type Line = { text: string; link?: Link };
@@ -275,8 +275,9 @@ export function compose(topic: Topic, ctx: AnswerContext, link: LinkFn, o: { lat
     case "status_updates": return statusUpdates(ctx, link);
     case "done": return done(ctx, link);
     case "calls": return calls(ctx, link);
-    // items and general are the service's (they need the resolver or the model).
+    // items, standards and general are the service's (they need the resolver or the model).
     case "items":
+    case "standards":
     case "general": return planCheck(ctx, link);
   }
 }

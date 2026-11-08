@@ -3,6 +3,7 @@
 // provider isn't there, is off, is slow (about 6 seconds) or answers with something that doesn't fit the schema, a
 // stored sample answer for the same task is used instead, so the demo never stalls. The guard runs before this
 // provider is ever called (ai/service.ts), so a refused request is refused and never gets a sample.
+import { demoStandardsAnswer } from "./standards.ts";
 import { demoMeetingAnswer } from "./meetings.ts";
 import type { AiProvider, ProviderCall, ProviderReply, TranscribeReply } from "../../ai/types.ts";
 import { costMicros, micros, type Prices } from "../../ai/cost.ts";
@@ -130,6 +131,8 @@ async function samples(c: ProviderCall, script: AiProvider): Promise<ProviderRep
     // AS-3: a general question about one client, when the real model isn't there: say so plainly, never a made-up fact.
     case "assistant_question":
       return reply({ reply: "In the demo I can't answer that one without the real model. Ask what to look out for next week, which promises are late, or what's not ready next week.", itemIds: [] });
+    case "assistant_standards":
+      return reply(demoStandardsAnswer(c.input));
     case "loop_draft":
       return reply({ text: loopDraft(c.input) });
     case "conversations_merge_summary": {
@@ -158,6 +161,26 @@ function capturePrepare(c: ProviderCall) {
     type: types[0] ?? null,
     parent_id: best?.id ?? null,
     parent_reason: best ? `It is part of "${best.title}"` : "No open feature fits it yet",
+    ...("standards_note" in props ? { standards_note: null } : {}),
+  };
+}
+
+/** KB-1: a data feature, split the way the standards say: Gold tables apart, Silver regenerated, model, report, then the app. */
+function demoDataBreakdown(_c: ProviderCall, featureId: number, card: (id: string, title: string, description: string, acceptance: string[], size: "S" | "M" | "L" | null, depends?: string[]) => unknown) {
+  return {
+    kind: "story_proposals",
+    version: 1,
+    feature_id: featureId,
+    proposals: [
+      card("p1", "Configure or regenerate Silver for the sales source tables", "Bring the sales order tables into Silver through the generator's configuration.", ["The sales order tables are present in Silver and match the source"], "S"),
+      card("p2", "Build fact.Sales in Gold", "One row per sales order line, keyed to the customer and date dimensions.", ["Follows Gold Fact Tables: fact schema, PascalCase, FK{Dimension} keys", "Follows SQL Conventions: no SELECT *, every column named"], "L", ["p1"]),
+      card("p3", "Build dim.Customer in Gold", "One row per customer with a surrogate key.", ["Follows Gold Dimension Tables: dim schema, one surrogate key"], "M", ["p1"]),
+      card("p4", "Add the sales semantic model", "Tables and relationships over fact.Sales and dim.Customer, with base measures.", ["Follows Power BI Fact Tables: foreign keys hidden from report authors"], "M", ["p2", "p3"]),
+      card("p5", "Build the sales report pages", "An overview page and a customer page.", ["Follows Power BI Report Visuals: every visual titled with its measure"], "M", ["p4"]),
+      card("p6", "Publish the app with the sales report", "Update the workspace app so people see the new report.", ["Follows Power BI App Deployment: published through the workspace app"], "S", ["p5"]),
+    ],
+    rationale: "Split along the standards' layers: Silver is regenerated, each Gold table is its own story, then the model, the report and the app.\nClient override: Gold Dimension Tables: Northwind keeps its existing dim.Customer key name, because its finance reports read it.",
+    set_aside: [],
   };
 }
 
@@ -165,6 +188,7 @@ function capturePrepare(c: ProviderCall) {
 function breakDown(c: ProviderCall) {
   const i = JSON.parse(c.input) as { feature: { id: number; title: string }; regenerate_only?: { id: string; previous_title: string } };
   const card = (id: string, title: string, description: string, acceptance: string[], size: "S" | "M" | "L" | null, depends: string[] = []) => ({ id, title, description, acceptance_criteria: acceptance, depends_on: depends, size, evidence: ["From the feature's description"], open_questions: [] as string[] });
+  if (/gold|semantic model/i.test(i.feature.title)) return demoDataBreakdown(c, i.feature.id, card);
   const supplier = /supplier/i.test(i.feature.title);
   const all = supplier
     ? [
@@ -190,6 +214,8 @@ function conversationDraft(c: ProviderCall) {
   const parent = [...i.open_features].sort((a, b) => overlap(b.title, `${t} ${i.conversation.summary}`) - overlap(a.title, `${t} ${i.conversation.summary}`))[0];
   const fee = /delivery fee/i.test(t);
   return {
+    // KB-1: the field exists only when standards went with the request.
+    ...("standards" in i ? { standards_note: null } : {}),
     title: fee ? "Add the delivery fee as its own column in the order export" : sentence(t),
     asked: fee ? "Finance wants the delivery fee as a separate column in the order history export, before the month-end close." : sentence(i.conversation.summary.split("\n")[0] ?? t),
     check_first: fee ? ["Where the fee is stored on an order today", "Whether refunds change the fee"] : ["What the client expects to see"],

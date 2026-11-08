@@ -5,6 +5,7 @@
 // (sources/demo/devops.ts, outlook.ts), so preview, confirm, read back, the audit log and undo are the real ones and
 // nothing leaves FocusTime. Its AI is the app's real provider on this fictional data when the app has one, with stored
 // sample answers when it hasn't or is slow (sources/demo/ai.ts). Its starting data comes from sources/demo/seeds/.
+import { demoStandards } from "../sources/demo/standards.ts";
 import { parseConfig } from "../config/schema.ts";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { dispatch } from "../actions/dispatch.ts";
@@ -121,6 +122,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     // DP-2: Northwind runs on Fabric and Harbor on Azure; Atlas and Cooptimize are left unset, so all three states show.
     await adminStore.setOrg({ scope: clientScope("Northwind"), key: "data_platform", value: "fabric", actor: FOCUSTIME, area: "clients", target: "Northwind", note: "demo" });
     await adminStore.setOrg({ scope: clientScope("Harbor"), key: "data_platform", value: "azure", actor: FOCUSTIME, area: "clients", target: "Harbor", note: "demo" });
+    await adminStore.setOrg({ scope: clientScope("Harbor"), key: "source_systems", value: ["d365_dataverse"], actor: FOCUSTIME, area: "clients", target: "Harbor", note: "demo" });
     // IN-1: the helper bot is flagged as an automation account (ADM-2 meant it as one), so it is never a Cooptimizer.
     await adminStore.setOrg({ scope: `person:${DEMO_BOT.personId}`, key: "automation", value: true, actor: FOCUSTIME, area: "people", target: DEMO_BOT.name, note: "demo" });
   })();
@@ -136,7 +138,9 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   };
   const statusRows = createStatusRegistry();
   statusRows.register(devopsStatusSource(demoPoll));
+  const standards = demoStandards(opts.now);
   const adminOps: AdminOps = {
+    standards,
     statusRows,
     check: demoAdminCheck(DEMO_PERSON.oid),
     org,
@@ -243,6 +247,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     // D522, ADM-1: the demo's person is an admin of the demo only (its own store), so the demo shows the admin console.
     org,
     adminOps,
+    standards,
     demo: { ...opts.demo, status: () => ({ ai: { realProvider: ai.real(), real: ai.log.real, samples: ai.log.samples, lastReason: ai.log.lastReason } }) },
     // DM-1: every AI feature runs in the demo: the app's real provider on this fictional data, else the stored samples.
     ai: aiRuntime,

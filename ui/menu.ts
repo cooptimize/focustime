@@ -1332,6 +1332,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "admin.invite_preview":
     case "admin.invite_send":
     case "admin.invite_retry":
+    case "admin.standards_sync": return env.admin ? { run: () => env.openSettings("admin-standards") } : { disabled: "Only for FocusTime admins" };
     case "admin.invited": return env.admin ? { run: () => env.openSettings("admin-people", "whos-set-up") } : { disabled: "Only for FocusTime admins" };
     case "admin.audit": return env.admin ? { run: () => env.openSettings("admin-audit") } : { disabled: "Only for FocusTime admins" };
     case "admin.status_action": return env.admin ? { run: () => env.openSettings("admin-status") } : { disabled: "Only for FocusTime admins" };

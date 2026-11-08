@@ -18,7 +18,7 @@ const code = (p: string) => readFileSync(p, "utf8").replace(/\/\*[\s\S]*?\*\//g,
 const walk = (d: string): string[] => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? walk(p) : /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f) ? [p] : []; });
 const WORD = /\bcommit(ted|ting|s)?\b/i;
 /** Conversation commitments and the build's git commit keep their words; the Guide's Renamed table names the old one. */
-const KEEP = [/committed in\b/, /\$\{committer\} committed/, /someone commits/, /The commit on GitHub/, /who committed to what/, /<Name> committed/, /the pull request, the commit\b/, /^Committed$/, /^Commit \(in Week\)$/];
+const KEEP = [/committed in\b/, /\$\{committer\} committed/, /someone commits/, /The commit on GitHub/, /who committed to what/, /<Name> committed/, /the pull request, the commit\b/, /^Committed$/, /^Commit \(in Week\)$/, /a new commit every/, /^· commit$/];
 const STR = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g;
 /** JSX text after a tag, up to the next tag or expression. */
 const JSX_TEXT = /(?<![=-])>([^<>{}();=\n]+)[<{]/g;

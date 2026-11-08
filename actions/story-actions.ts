@@ -16,6 +16,8 @@ import {
   COOP_PROPOSALS_V1, draftInput, publishOrder, sentSummary, DRAFT_INSTRUCTIONS, editProblem, exemplarView, houseStyle, houseStyleStale, MAX_PROPOSALS, NOTE_MAX, proposalProblems, rankExemplars, styleText, toProposal,
   EXEMPLAR_MAX, type CoopProposals, type ExemplarCandidate, type FeatureSignals, type HouseStyle, type Proposal, type StoryDraft,
 } from "../plan/stories.ts";
+import { GENERATED_LAYER_NOTE, shapeItem, splitOverrides, STANDARDS_BREAKDOWN, type StandardsUsed } from "../plan/standards.ts";
+import type { StandardsLookup } from "./standards.ts";
 import type { DevOpsWriteEntry } from "../plan/devopswrite.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
 import type { PlanStore } from "../store/plan-store.ts";
@@ -29,7 +31,28 @@ export const DRAFT_TASK = "stories.draft";
 /** Look back this many months for examples unless the person's [ai] draft_months says otherwise. */
 export const DEFAULT_DRAFT_MONTHS = 12;
 
+/** KB-1: links on citations, Bronze and Silver reworded, "Client override:" lines lifted out of the rationale. */
+function shapeAnswer(v: CoopProposals, used: StandardsUsed): { value: CoopProposals; standards: StandardsUsed } {
+  let changed = false;
+  const proposals = v.proposals.map((p) => {
+    const x = shapeItem({ title: p.title, description: p.description, acceptance: p.acceptance_criteria }, used.used);
+    changed ||= x.changed;
+    return { ...p, title: x.title, description: x.description, acceptance_criteria: x.acceptance };
+  });
+  const { rest, overrides } = splitOverrides(v.rationale);
+  return { value: { ...v, proposals, rationale: rest }, standards: { ...used, overrides, notes: changed ? [GENERATED_LAYER_NOTE] : [] } };
+}
+
+/** Regenerate one keeps the draft's other cards, so what they used still counts. */
+function mergeUsed(old: StandardsUsed | null, next: StandardsUsed): StandardsUsed {
+  if (!old) return next;
+  const used = [...next.used, ...old.used.filter((u) => !next.used.some((n) => n.title === u.title))];
+  return { ...next, used, overrides: [...new Set([...old.overrides, ...next.overrides])], notes: [...new Set([...old.notes, ...next.notes])] };
+}
+
 export type StoryContext = {
+  /** KB-1: the standards that fit a piece of work; absent where none are synced. */
+  standards?: StandardsLookup;
   plan: PlanStore | undefined;
   config: () => Promise<AppConfig | null>;
   /** The read-only DevOps source (the company read PAT, from Dataverse at fetch time). */
@@ -179,15 +202,22 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
     return d;
   };
 
+  const standardsOf = async (signals: FeatureSignals, clientKey: string, note: string) => {
+    const f = signals.feature;
+    return (await ctx.standards?.(clientKey, [f.title, f.description, f.acceptance, f.tags.join(" "), signals.epic?.title ?? "", note]).catch(() => null)) ?? null;
+  };
+
   /** One AI request for the set (or one card), its answer checked; the cards, or a plain error. */
   const ask = async (signals: FeatureSignals, clientKey: string, exemplars: ExemplarCandidate[], style: string, note: string, one: { keep: Proposal[]; replace: Proposal } | null) => {
     const ai = await ctx.ai();
     const st = await aiState(ctx, cfg, clientKey);
     if (!ai || st !== "on") throw new Refused(AI_WORDS[st === "on" ? "not_set_up" : st](nameOf(clientKey)), 409, "ai_off");
-    const payload = draftInput({ signals, exemplars: exemplars.map(exemplarView), style, note, ...(one ? { keep: one.keep, replace: one.replace } : {}) });
+    // KB-1: the standards that fit this item, as data; the instructions say how to use them.
+    const std = await standardsOf(signals, clientKey, note);
+    const payload = draftInput({ signals, exemplars: exemplars.map(exemplarView), style, note, ...(one ? { keep: one.keep, replace: one.replace } : {}), ...(std ? { standards: std.input } : {}) });
     // GD-2 point 5: the cards never name another client (the instructions say so; the check after replaces any name).
     const internal = ctx.isInternal ? await ctx.isInternal(clientKey).catch(() => false) : false;
-    const r = await ai.run<CoopProposals>({ name: DRAFT_TASK, client: clientKey, instructions: internal ? DRAFT_INSTRUCTIONS : `${DRAFT_INSTRUCTIONS}\n${NO_OTHER_CLIENTS}`, mentions: { input: "words", answer: "scrub" } }, payload, COOP_PROPOSALS_V1);
+    const r = await ai.run<CoopProposals>({ name: DRAFT_TASK, client: clientKey, instructions: [DRAFT_INSTRUCTIONS, ...(internal ? [] : [NO_OTHER_CLIENTS]), ...(std ? [STANDARDS_BREAKDOWN] : [])].join("\n"), mentions: { input: "words", answer: "scrub" } }, payload, COOP_PROPOSALS_V1);
     if (!r.ok) throw new Refused(r.error.kind === "invalid_output" ? "The AI's answer wasn't usable, so nothing is shown. Try again" : r.error.message, r.error.kind === "invalid_output" ? 422 : 409, r.error.kind);
     // Beyond the schema: the feature, unique ids, real dependencies, existing children. Any problem: nothing shown.
     const childIds = signals.children.map((c) => c.id);
@@ -195,7 +225,8 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
     const problems = validate(r.value, COOP_PROPOSALS_V1).length ? ["schema"] : proposalProblems(answer, { featureId: signals.feature.id, childIds });
     if (one && (r.value.proposals.length !== 1 || r.value.proposals[0]!.id !== one.replace.id)) problems.push("$.proposals: not exactly the one card asked for");
     if (problems.length) throw new Refused("The AI's answer wasn't usable, so nothing is shown. Try again", 422, "invalid_output");
-    return { value: r.value, costMicros: Math.round(r.costUsd * 1_000_000), namesRemoved: !!r.namesRemoved };
+    const shaped = std ? shapeAnswer(r.value, std.used) : { value: r.value, standards: null };
+    return { value: shaped.value, costMicros: Math.round(r.costUsd * 1_000_000), namesRemoved: !!r.namesRemoved, standards: shaped.standards };
   };
 
   switch (action) {
@@ -228,7 +259,7 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
           item: { state: f.state, priority: f.priority, description: f.description },
           parent: signals.epic ? { id: signals.epic.id, title: signals.epic.title, type: signals.epic.type, url: f.url.replace(/\/\d+$/, `/${signals.epic.id}`) } : null,
           children: signals.children,
-          sent: sentSummary({ signals, examples: Math.min(ranked.length, EXEMPLAR_MAX), clientName: nameOf(clientKey), style }),
+          sent: sentSummary({ signals, examples: Math.min(ranked.length, EXEMPLAR_MAX), clientName: nameOf(clientKey), style, standards: await standardsOf(signals, clientKey, "").then((x) => (x ? { articles: x.used.used.length, commit: x.used.commit } : null)) }),
           ai: st, aiMessage: st === "on" ? null : AI_WORDS[st](nameOf(clientKey)),
           write, writeMessage: write ? null : NO_PAT(nameOf(clientKey)),
           latest: latest ? await view(latest) : null,
@@ -253,8 +284,8 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
       const wanted = o.exemplarIds as number[] | undefined;
       const exemplars = wanted ? wanted.map((id) => pool.find((c) => c.id === id && c.id !== featureId)).filter((c): c is ExemplarCandidate => !!c) : rankExemplars(signals.feature, pool);
       const style = styleText(await styleFor(clientKey, pool.length ? pool : null));
-      const { value, costMicros, namesRemoved } = await ask(signals, clientKey, exemplars, style, note, null);
-      const d = await plan.addStoryDraft(clientKey, featureId, { featureTitle: signals.feature.title, storyType: signals.storyType, note, exemplarIds: exemplars.map((e) => e.id), proposals: value.proposals.map(toProposal), rationale: value.rationale, setAside: value.set_aside, costMicros, ...(namesRemoved ? { namesRemoved } : {}) });
+      const { value, costMicros, namesRemoved, standards } = await ask(signals, clientKey, exemplars, style, note, null);
+      const d = await plan.addStoryDraft(clientKey, featureId, { featureTitle: signals.feature.title, storyType: signals.storyType, note, exemplarIds: exemplars.map((e) => e.id), proposals: value.proposals.map(toProposal), rationale: value.rationale, setAside: value.set_aside, costMicros, ...(namesRemoved ? { namesRemoved } : {}), ...(standards ? { standards } : {}) });
       return { ok: true, data: await view(d) };
     }
     case "stories.regenerate": {
@@ -276,14 +307,14 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
         if (!target) throw new Refused("That card isn't in this draft", 404);
         if (writes.has(pid)) throw new Refused("That story was already sent to DevOps", 409);
         const keep = d.proposals.filter((p) => p.id !== pid && p.keep);
-        const { value, costMicros, namesRemoved } = await ask(signals, d.clientKey, exemplars, style, note || d.note, { keep, replace: target });
+        const { value, costMicros, namesRemoved, standards } = await ask(signals, d.clientKey, exemplars, style, note || d.note, { keep, replace: target });
         const fresh = { ...toProposal(value.proposals[0]!), keep: true };
-        const saved = await plan.saveStoryDraft(d.id, { ...d, proposals: d.proposals.map((p) => (p.id === pid ? fresh : p)), costMicros: d.costMicros + costMicros, ...(namesRemoved || d.namesRemoved ? { namesRemoved: true } : {}) });
+        const saved = await plan.saveStoryDraft(d.id, { ...d, proposals: d.proposals.map((p) => (p.id === pid ? fresh : p)), costMicros: d.costMicros + costMicros, ...(namesRemoved || d.namesRemoved ? { namesRemoved: true } : {}), ...(standards ? { standards: mergeUsed(d.standards ?? null, standards) } : {}) });
         return { ok: true, data: await view(saved) };
       }
       if (writes.size) throw new Refused("Some of these stories are in DevOps already, so the set can't be drafted again. Regenerate one card instead", 409);
-      const { value, costMicros, namesRemoved } = await ask(signals, d.clientKey, exemplars, style, note || d.note, null);
-      const saved = await plan.saveStoryDraft(d.id, { ...d, note: note || d.note, proposals: value.proposals.map(toProposal), rationale: value.rationale, setAside: value.set_aside, costMicros: d.costMicros + costMicros, namesRemoved });
+      const { value, costMicros, namesRemoved, standards } = await ask(signals, d.clientKey, exemplars, style, note || d.note, null);
+      const saved = await plan.saveStoryDraft(d.id, { ...d, note: note || d.note, proposals: value.proposals.map(toProposal), rationale: value.rationale, setAside: value.set_aside, costMicros: d.costMicros + costMicros, namesRemoved, standards });
       return { ok: true, data: await view(saved) };
     }
     case "stories.save": {

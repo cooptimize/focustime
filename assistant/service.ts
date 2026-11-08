@@ -23,6 +23,7 @@ import { dropCheck } from "../plan/weekdrop.ts";
 import { placeNote } from "../plan/days.ts";
 import type { InboxListData, InboxView } from "../plan/inbox-items.ts";
 import { resolve, type MatchedPick, type Resolved } from "./resolve.ts";
+import { NOT_IN_STANDARDS, shortCommit, STANDARDS_ASK_INSTRUCTIONS, STANDARDS_ASK_SCHEMA, STANDARDS_ASK_TASK, standardsAskInput, standardsReply, type Retrieved, type StandardsAskAnswer, type StandardsLibrary } from "../plan/standards.ts";
 import { compose, TOPICS, type Composed, type Refs, type Suggestion, type Topic } from "./answer.ts";
 import { buildContext, forClient, periodOf, type PeriodKind, type Want } from "./context.ts";
 import { clientsNamed, type ClientEntry } from "../ai/guard.ts";
@@ -53,6 +54,8 @@ export type AssistantEnv = {
   channel: Channel;
   /** The app's public URL, for Teams links (absolute). */
   publicUrl: string | null;
+  /** KB-1: the standards articles that fit a question; null before the first sync. */
+  standards?: (question: string) => Promise<{ library: StandardsLibrary; retrieved: Retrieved } | null>;
 };
 
 const COMMANDS: Link = { label: "Open the command menu", href: "#/commands" };
@@ -67,7 +70,7 @@ Words: a to-do is a planned piece of work on a half-day block (code name pick). 
 For a move of to-dos by day or block ("move those to Friday", "everything from Wednesday PM to Friday AM", "push today to tomorrow"), name move_plan, even when the to-dos are with different clients. For two or three changes to one item in one request (done and a comment, a date), name item_update.
 ${GLOSSARY}
 Tools: today (what's next, due today, due tonight), day (what I did or planned on a day), item (a work item's state, owner, dates, children), gaps (features with readiness gaps), commitments (what someone committed to in a conversation), sends (my sends and their states), status (Monday's status report: writing my status updates, or finding the feature an update goes on; with comment when they give the update's words), inbox (a view of my Inbox: needs you, promises, waiting, in progress, captures, done), link_search (items to link a conversation or promise to), move_pick, drop_pick, keep_pick, move_picks (several to-dos at once, by id), move_plan (to-dos by day or block), close_day (close out a day: to-dos done, the rest moved on, the day closed out), confirm_day, confirm_week, add_must, ahead_change (start, target, size or owner of an item), send (send work to a teammate's week), comment (a comment on a DevOps item), description (a new description for a DevOps item), item_update (done, a comment and a target date on one item), unlink, link_comment, inbox_seen, snooze, capture, close_loop, plan_deployment (plan a deployment, release or go-live with a time window).
-Questions (AS-3): when the request asks something rather than asking for a change, set ask and name no tools: topic is plan_check (what to look out for, planning a period, risks, "anything I should know"), capabilities (what you can help with, what you can do here), agenda (what's on a day or period, my plate, my schedule), promises (promises late or due; lateOnly true when it asks only about late ones), waiting (what I'm waiting on), readiness (what's not ready, gaps, missing stories, dates or owners for a period or a client's work), deployments (deployments, releases, go-lives, after-hours or weekend work), status_updates (features that still need an update for Monday's status report), done (what I got done or finished), calls (client calls or meeting proposals to review), items (about named features, stories or items: what's under a feature, their state), general (any other question about my plan or FocusTime). period is today, tomorrow, this_week, next_week, weekend, last_week, or day with date (YYYY-MM-DD; null otherwise); this_week when it doesn't say. A question about one item by #id may name item instead; who committed to something, commitments; my sends, sends. A request for a change sets ask to null.
+Questions (AS-3): when the request asks something rather than asking for a change, set ask and name no tools: topic is plan_check (what to look out for, planning a period, risks, "anything I should know"), capabilities (what you can help with, what you can do here), agenda (what's on a day or period, my plate, my schedule), promises (promises late or due; lateOnly true when it asks only about late ones), waiting (what I'm waiting on), readiness (what's not ready, gaps, missing stories, dates or owners for a period or a client's work), deployments (deployments, releases, go-lives, after-hours or weekend work), status_updates (features that still need an update for Monday's status report), done (what I got done or finished), calls (client calls or meeting proposals to review), standards (what Cooptimize's development standards say: naming, formatting or design rules for SQL, DAX, semantic models or reports, such as "what's our standard for fact table naming?" or "how should DAX measures be formatted?"), items (about named features, stories or items: what's under a feature, their state), general (any other question about my plan or FocusTime). period is today, tomorrow, this_week, next_week, weekend, last_week, or day with date (YYYY-MM-DD; null otherwise); this_week when it doesn't say. A question about one item by #id may name item instead; who committed to something, commitments; my sends, sends. A request for a change sets ask to null.
 followUp is true when the request continues or corrects the earlier request shown ("those", "they", "it", "that feature", "I meant", "no,", "can't you", or a missing detail); then route it as the two together would be. Otherwise false.
 How people ask:
 ${examples}`;
@@ -482,6 +485,7 @@ export function createAssistant(env: AssistantEnv) {
 
   /** Which reads a topic needs (each is the person's own action; Ahead and the week are store reads). */
   const WANT: Record<Topic, Want> = {
+    standards: { ahead: false, status: false, inbox: false, calls: false },
     plan_check: { ahead: true, status: true, inbox: true, calls: true },
     capabilities: { ahead: true, status: true, inbox: true, calls: false },
     agenda: { ahead: true, status: false, inbox: false, calls: false },
@@ -504,6 +508,7 @@ export function createAssistant(env: AssistantEnv) {
    * general question about one client sends that client's context, quoted, in one AI request (assistant.question).
    */
   async function answerPath(turnId: number, a: AnswerOpts): Promise<HandleResult> {
+    if (a.topic === "standards") return standardsAnswer(turnId, a);
     const d = readDeps();
     const period = periodOf(a.period, today(), a.date);
     const scope = a.named ? a.client : null;
@@ -542,6 +547,30 @@ export function createAssistant(env: AssistantEnv) {
 
     const c = compose(a.topic, ctx, d.link, { lateOnly: a.lateOnly });
     return answered(turnId, c, memoryOf(c.refs));
+  }
+
+  /**
+   * KB-1: a question about the standards: the one place the AI phrases an answer from text. Only the matching articles
+   * go (no client's data, no client in the request); a quote that isn't in the article, or no match, is "Not in the
+   * standards". Nothing else is ever said about policy.
+   */
+  async function standardsAnswer(turnId: number, a: AnswerOpts): Promise<HandleResult> {
+    const found = await env.standards?.(a.said).catch(() => null);
+    if (!found) return finish(turnId, "ok", "The standards haven't been read yet, so I can't answer that. A FocusTime admin can check Admin › Standards.", [], [], []);
+    if (!found.retrieved.included.length) return finish(turnId, "ok", NOT_IN_STANDARDS, [], [], []);
+    if (!env.ai) return finish(turnId, "not_set_up", statusReply("not_set_up", null), [], [], [COMMANDS]);
+    const r = await env.ai.run<StandardsAskAnswer>({ name: STANDARDS_ASK_TASK, client: NO_CLIENT, instructions: STANDARDS_ASK_INSTRUCTIONS, mentions: { input: "words", answer: "allow" } }, standardsAskInput(a.said, found.retrieved), STANDARDS_ASK_SCHEMA);
+    if (!r.ok) {
+      const k = r.error.kind;
+      if (k === "off" || k === "client_off" || k === "not_set_up" || k === "over_budget" || k === "zero_budget" || k.startsWith("refused_")) {
+        const st = statusOf(k);
+        return finish(turnId, st, statusReply(st as Exclude<HandleStatus, "ok">, null, k), [], [], [COMMANDS]);
+      }
+      return finish(turnId, "ok", `${r.error.message}. Try again, or use the command menu.`, [], [], [COMMANDS]);
+    }
+    const ans = standardsReply(r.value, found.library, found.retrieved);
+    if (!ans.found) return finish(turnId, "ok", ans.text, [], [], []);
+    return finish(turnId, "ok", ans.text, [{ kind: "section", title: `From ${ans.title} (commit ${shortCommit(found.library.commit)})`, lines: [{ text: `"${ans.quote.replace(/`/g, "")}"`, link: { label: "Open the article", href: ans.url } }] }], [], []);
   }
 
   /** A composed answer as cards: its sections, then its suggestions as one card of choices (kept for a tap). */

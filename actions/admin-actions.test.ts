@@ -14,12 +14,15 @@ import { createAdminCheck } from "./admin.ts";
 import { ADMIN_ACTIONS, ADMIN_SECTIONS, adminAction, type AdminContext } from "./admin-actions.ts";
 import { createOrgRuntime } from "./org.ts";
 import { buildProcessModel, type ProcessOverrides } from "../plan/process.ts";
+import { aStandardsArticle, STD_COMMIT, STD_REPO } from "../test/builders/standards.ts";
 
 const NOW = "2026-11-04T15:00:00Z";
 const ADMIN = "00000000-0000-4000-8000-0000000000a1";
 const BEN = "00000000-0000-4000-8000-0000000000b2";
 const CY = "00000000-0000-4000-8000-0000000000c3";
 const PRIVATE = ["PRIVATE-CAPTURE-TEXT", "PRIVATE-FOLLOWUP-TEXT", "PRIVATE-RESUME-NOTE", "PRIVATE-PAT-VALUE", "PRIVATE-CHAT-MESSAGE"];
+
+const synced = { n: 0 };
 
 async function setup() {
   const db = sqliteDb().conn;
@@ -68,6 +71,11 @@ async function setup() {
       await hardDeleteUser(db, id, now());
     },
     log: () => {},
+    standards: {
+      library: async () => ({ repo: STD_REPO, commit: STD_COMMIT, articles: [aStandardsArticle({ title: "Gold Fact Tables", layer: "gold", artifact: "fact_table", path: "SQL/Gold/Fact Tables.md", body: "- SECRET-ARTICLE-TEXT" })] }),
+      state: async () => ({ repoUrl: "https://github.com/contoso/standards", branch: "", commit: STD_COMMIT, syncedAt: NOW, checkedAt: NOW, error: "GitHub answered 503", errorAt: NOW, warnings: [{ kind: "duplicate_id", id: "dup", paths: ["SQL/A.md", "SQL/B.md"] }] }),
+      syncNow: async () => { synced.n++; return { ok: true, changed: true, error: null }; },
+    },
   });
   const as = (id: string, name: string): AdminContext => ({ ops, me: async () => ({ id, name }) });
   const run = (who: AdminContext, action: (typeof ADMIN_ACTIONS)[number], input: unknown = {}) => adminAction(who, action, input);
@@ -233,5 +241,38 @@ describe("admin actions", () => {
     await run(admin, "admin.set", { scope: "client:contoso", key: "exact_case", value: true });
     await run(admin, "admin.set", { scope: "client:contoso", key: "allow_ai", value: true });
     expect(asked).toEqual(["contoso", "contoso"]);
+  });
+});
+
+
+describe("Admin › Standards (KB-1)", () => {
+  it("shows the repo, the sync, the article list (never its text) and the warnings", async () => {
+    const s = await setup();
+    const r = (await s.run(s.admin, "admin.load", { section: "standards" })) as { ok: true; data: Record<string, unknown> & { articles: { title: string; url: string }[] } };
+    expect(r.data).toMatchObject({ repoUrl: "https://github.com/cooptimize/coop-standards", branch: "", commit: STD_COMMIT, error: "GitHub answered 503", warnings: [{ kind: "duplicate_id", id: "dup" }], everyMinutes: 60, budget: 6000 });
+    expect(r.data.articles[0]).toMatchObject({ title: "Gold Fact Tables", layer: "gold", artifact: "fact_table", path: "SQL/Gold/Fact Tables.md", url: `https://github.com/contoso/standards/blob/${STD_COMMIT}/SQL/Gold/Fact%20Tables.md` });
+    expect(JSON.stringify(r.data)).not.toContain("SECRET-ARTICLE-TEXT");
+  });
+
+  it("Sync now works for an admin and is refused for anyone else", async () => {
+    const s = await setup();
+    const before = synced.n;
+    expect(await s.run(s.admin, "admin.standards_sync")).toMatchObject({ ok: true, data: { ok: true, changed: true } });
+    expect(synced.n).toBe(before + 1);
+    expect((await s.run(s.ben, "admin.standards_sync")).ok).toBe(false);
+    expect(synced.n).toBe(before + 1);
+    expect((await s.run(s.ben, "admin.load", { section: "standards" })).ok).toBe(false);
+  });
+
+  it("takes a repo address and branch through the Rules, only valid ones, and a client's Source systems", async () => {
+    const s = await setup();
+    expect((await s.run(s.admin, "admin.set", { scope: "org", key: "standards.repo_url", value: "https://evil.example/a/b" })).ok).toBe(false);
+    expect((await s.run(s.admin, "admin.set", { scope: "org", key: "standards.repo_url", value: "https://github.com/contoso/other" })).ok).toBe(true);
+    expect((await s.org.rules()).standards.repoUrl).toBe("https://github.com/contoso/other");
+    expect((await s.run(s.admin, "admin.set", { scope: "client:fabrikam", key: "source_systems", value: ["sap"] })).ok).toBe(false);
+    expect((await s.run(s.admin, "admin.set", { scope: "client:fabrikam", key: "source_systems", value: [] })).ok).toBe(true);
+    expect((await s.org.rules()).clients.fabrikam?.sourceSystems).toEqual([]);
+    expect((await s.run(s.admin, "admin.set", { scope: "client:fabrikam", key: "source_systems", value: ["d365_fo"] })).ok).toBe(true);
+    expect((await s.org.rules()).clients.fabrikam?.sourceSystems).toEqual(["d365_fo"]);
   });
 });

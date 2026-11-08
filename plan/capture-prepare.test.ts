@@ -71,3 +71,25 @@ describe("draft row states (CP-1)", () => {
     expect(draftRowState(d({ ai: ai({ state: "writing", ranAt: NOW }) }), { canWrite: true, now: late })).toBe("plain");
   });
 });
+
+
+describe("KB-1: the standards on a captured draft", () => {
+  const used = { commit: "0123456789abcdef0123456789abcdef01234567", used: [{ title: "Gold Fact Tables", url: "https://github.com/contoso/standards/blob/x/SQL/Gold/Fact%20Tables.md" }], leftOut: [], overrides: [], notes: [] };
+  const ans = { title: "Write Silver SQL for sales", description: "Why", acceptance_criteria: "- Follows Gold Fact Tables: fact schema\n- Follows Made Up: x\n- Totals match", type: null, parent_id: null, parent_reason: "None fits", standards_note: "Client override: Gold Fact Tables: the client asked for snake_case" };
+  const base = { types: [], candidateIds: [], hasParent: true, ranAt: "2026-11-08T15:00:00Z" };
+  it("links citations, rewords Silver, states the override and keeps the record", () => {
+    const d = toDraftAi(ans, { ...base, level: "story", standards: used }) as DraftAi;
+    expect(d.title).toBe("Configure or regenerate Silver for sales");
+    expect(d.acceptance).toBe(`- Follows Gold Fact Tables: fact schema (${used.used[0]!.url})\n- Totals match`);
+    expect(d.standards?.overrides).toEqual(["Client override: Gold Fact Tables: the client asked for snake_case"]);
+    expect(d.standards?.notes).toHaveLength(1);
+  });
+  it("keeps a feature's Follows lines only when standards were sent", () => {
+    expect((toDraftAi({ ...ans, title: "T" }, { ...base, level: "feature", standards: used }) as DraftAi).acceptance).toContain("Follows Gold Fact Tables");
+    expect((toDraftAi({ ...ans, title: "T" }, { ...base, level: "feature" }) as DraftAi).acceptance).toBeNull();
+  });
+  it("asks for standards_note only when standards go with the request", () => {
+    expect(prepareSchema([], [], { standards: true }).required).toContain("standards_note");
+    expect(prepareSchema([], []).required).not.toContain("standards_note");
+  });
+});

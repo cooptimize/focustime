@@ -15,6 +15,8 @@ import { aClient, aClientEntry, aFocusBlock, aMeeting, anAheadClient, anAheadIte
 import { SIZE_MINUTES } from "../plan/types.ts";
 import { SUGGEST_TOOLS, TOOLS } from "./allowlist.ts";
 import { createAssistant, type AssistantEnv } from "./service.ts";
+import { NOT_IN_STANDARDS, retrieveStandards } from "../plan/standards.ts";
+import { aStandardsArticle, STD_COMMIT, STD_REPO } from "../test/builders/standards.ts";
 import { teamsAssistant } from "../server/teams/assistant.ts";
 import type { Card, ConfirmResult, HandleResult } from "./types.ts";
 
@@ -33,7 +35,7 @@ const call = (...calls: [string, Record<string, unknown>][]): ProviderReply => (
 
 type Ask = { topic: string; period?: string; date?: string | null; lateOnly?: boolean };
 
-function setup(o: { rules?: Partial<AiRules>; channel?: "panel" | "teams"; noAi?: boolean } = {}) {
+function setup(o: { rules?: Partial<AiRules>; channel?: "panel" | "teams"; noAi?: boolean; standards?: AssistantEnv["standards"] } = {}) {
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO(ZONE) });
   const ran: { action: ActionName; input: unknown }[] = [];
   const calls: ProviderCall[] = [];
@@ -129,6 +131,7 @@ function setup(o: { rules?: Partial<AiRules>; channel?: "panel" | "teams"; noAi?
     "devops.confirm": () => ({ ok: true, data: { entry: { id: 77 }, confirmed: true, message: "Written in DevOps" } }),
   };
   const env: AssistantEnv = {
+    ...(o.standards ? { standards: o.standards } : {}),
     run: async (action, input) => {
       ran.push({ action, input });
       const h = handlers[action];
@@ -526,5 +529,52 @@ describe("AS-3 rules", () => {
     expect(r.cards[1]!.links!.every((l) => l.url.startsWith("https://focustime.example.com/#/"))).toBe(true);
     expect(r.question).toMatchObject({ suggest: true, choices: [{ label: "Move the Tailspin to-dos from Wed PM to Fri AM" }, { label: "Confirm next week" }] });
     expect(JSON.stringify(r)).not.toMatch(/Initech/);
+  });
+});
+
+
+describe("Ask about the standards (KB-1)", () => {
+  const articles = [
+    aStandardsArticle({ title: "Gold Fact Tables", layer: "gold", artifact: "fact_table", path: "SQL/Gold/Fact Tables.md", body: "# Gold Fact Tables\n\n- Use `fact` and PascalCase table and column names." }),
+    aStandardsArticle({ title: "Power BI DAX", domain: "powerbi", layer: "semantic_model", artifact: "dax_expression", technology: "power_bi", path: "Power BI/DAX.md", body: "- Use DIVIDE instead of the division operator." }),
+  ];
+  const library = { repo: STD_REPO, commit: STD_COMMIT, articles };
+  const standards: AssistantEnv["standards"] = async (q) => ({ library, retrieved: retrieveStandards(articles, { text: [q], dataPlatform: null, sourceSystems: [], question: true }) });
+  const reply = (v: object): ProviderReply => ({ ok: true, text: JSON.stringify(v), usage, model: "test-model" });
+
+  it("answers from the matching article: the rule, a quote checked against it, and a link at the synced commit", async () => {
+    const s = setup({ standards });
+    s.question({ topic: "standards" }, {}, reply({ found: true, article_title: "Gold Fact Tables", answer: "Use the fact schema with PascalCase names.", quote: "Use fact and PascalCase table and column names." }));
+    const r = await s.a.handle("What's our standard for fact table naming?");
+    expect(r.reply).toBe("Use the fact schema with PascalCase names.");
+    const line = sections(r)[0]!.lines[0]!;
+    expect(line.text).toContain("PascalCase");
+    expect(line.link?.href).toBe(`https://github.com/contoso/standards/blob/${STD_COMMIT}/SQL/Gold/Fact%20Tables.md`);
+    const c = s.calls.find((x) => x.schemaName === "assistant_standards")!;
+    expect(c.input).toContain("Gold Fact Tables");
+    expect(c.input).not.toContain("Power BI DAX");
+    expectNoLeak(r, s);
+  });
+
+  it("says Not in the standards when no article matches, without asking the AI", async () => {
+    const s = setup({ standards });
+    s.question({ topic: "standards" });
+    const r = await s.a.handle("What's our standard for expense reports?");
+    expect(r.reply).toBe(NOT_IN_STANDARDS);
+    expect(s.calls.some((x) => x.schemaName === "assistant_standards")).toBe(false);
+  });
+
+  it("says Not in the standards when the model finds no answer or quotes something that isn't there", async () => {
+    const s = setup({ standards });
+    s.question({ topic: "standards" }, {}, reply({ found: false, article_title: null, answer: "", quote: "" }));
+    expect((await s.a.handle("What's our standard for fact table colors?")).reply).toBe(NOT_IN_STANDARDS);
+    s.question({ topic: "standards" }, {}, reply({ found: true, article_title: "Gold Fact Tables", answer: "Use snake_case.", quote: "Always use snake_case for facts." }));
+    expect((await s.a.handle("What's our standard for fact table naming?")).reply).toBe(NOT_IN_STANDARDS);
+  });
+
+  it("says when the standards haven't been read yet instead of guessing", async () => {
+    const s = setup({ standards: async () => null });
+    s.question({ topic: "standards" });
+    expect((await s.a.handle("What's our standard for fact table naming?")).reply).toMatch(/haven't been read yet/);
   });
 });

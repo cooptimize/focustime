@@ -4,6 +4,8 @@
 // picks, follow-ups, captures, focus sessions, write PATs, AI request content or chat messages: a person's health is
 // names, dates and yes or no (AdminOps.people), and the store has no read for anything else. Every change is audited
 // (store/admin-store.ts) with who, when, what, old and new value; secrets are never settings.
+import { articleUrl, DEFAULT_STANDARDS_REPO, STANDARDS_EVERY_MS, STANDARDS_TOKEN_BUDGET } from "../plan/standards.ts";
+import type { StandardsPort } from "./standards.ts";
 import { exactCaseDefault } from "../plan/common-words.ts";
 import { FLEX_TASKS, STANDARD_TASKS, isFlexTask, tierFor, type AiTier } from "../ai/tiers.ts";
 import { GAP_KINDS } from "../plan/fixnext.ts";
@@ -30,9 +32,9 @@ import { INVITE_VIA, type InviteVia } from "../store/admin-store.ts";
 import { INVITE_SEND_ACTIONS, inviteSendAction, type InviteSendAction, type InviteSendPort } from "./invite-send.ts";
 export type { ClientScopeFacts };
 
-export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit", "admin.status_action", "admin.identity", "admin.invited", ...INVITE_SEND_ACTIONS] as const;
+export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit", "admin.status_action", "admin.identity", "admin.invited", "admin.standards_sync", ...INVITE_SEND_ACTIONS] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
-export const ADMIN_SECTIONS = ["clients", "ai", "conversations", "people", "setup", "organization", "status", "audit"] as const;
+export const ADMIN_SECTIONS = ["clients", "ai", "conversations", "people", "setup", "organization", "standards", "status", "audit"] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
 
 /** A person's health for Admin › People: names, dates and yes or no only. Never plan content or secrets. */
@@ -98,6 +100,8 @@ export function statusJobs(rules: OrgRules, st: Pick<AdminStatus, "lastPoll" | "
 
 /** What the server gives the admin console (server/main.ts; the demo's in server/demo.ts, over the demo's store only). */
 export type AdminOps = {
+  /** KB-1: the synced standards (Admin › Standards). Absent: none here. */
+  standards?: StandardsPort;
   check: AdminCheck;
   org: OrgRuntime;
   /** The "FocusTime Admins" group's id, the break-glass ids and the tenant (for the Entra link). */
@@ -230,6 +234,7 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
         exactCaseDefault: exactCaseDefault([k, ...(row?.names ?? [])]),
         houseStyle: c?.houseStyle ?? null,
         fixGaps: c?.fixGaps ?? [...GAP_KINDS],
+        sourceSystems: c?.sourceSystems ?? null,
         process: isClient ? processOf(k) : { ok: false, message: "Not a client" },
         scope: isClient ? { rule: c?.devopsScope ?? null, words: scopeWords(c?.devopsScope ?? null), facts: facts?.[k] ?? null, polled: !!ops.scope } : null,
         leads: isClient ? lv.clientLeads(k).map((l) => ({ personId: l.personId, name: nameOf(l.personId), primary: l.primary, why: l.why.map((w) => LEAD_WHY_NAMES[w]) })) : [],
@@ -417,6 +422,7 @@ const TASK_LABELS: Record<string, string> = {
   "assistant.intent": "Assistant: understanding the request",
   "assistant.answer": "Assistant: the answer",
   "assistant.question": "Assistant: a question about one client",
+  "assistant.standards": "Assistant: a question about the standards",
   "assistant_transcribe": "Assistant: push-to-talk",
   "stories.draft": "Break down",
   "status_draft": "Status drafts",
@@ -434,9 +440,32 @@ export function aiTasks(standard: readonly string[]): { name: string; label: str
 
 const specList = (specs: Record<string, { kind: keyof typeof KIND_NAMES; label: string; area: AdminArea }>) => Object.entries(specs).map(([key, s]) => ({ key, label: s.label, kind: s.kind, kindName: KIND_NAMES[s.kind], area: s.area }));
 
+/** KB-1: Admin › Standards: where they come from, the last sync, each article (never its text) and the warnings. */
+async function standardsSection(ops: AdminOps, rules: OrgRules) {
+  const [state, library] = await Promise.all([ops.standards?.state().catch(() => null) ?? null, ops.standards?.library().catch(() => null) ?? null]);
+  return {
+    available: !!ops.standards,
+    repoUrl: rules.standards.repoUrl,
+    branch: rules.standards.branch,
+    defaults: { repoUrl: DEFAULT_STANDARDS_REPO, branch: "" },
+    everyMinutes: STANDARDS_EVERY_MS / 60_000,
+    budget: STANDARDS_TOKEN_BUDGET,
+    syncedFrom: state ? { repoUrl: state.repoUrl, branch: state.branch } : null,
+    commit: state?.commit ?? null,
+    syncedAt: state?.syncedAt ?? null,
+    checkedAt: state?.checkedAt ?? null,
+    error: state?.error ?? null,
+    errorAt: state?.errorAt ?? null,
+    warnings: state?.warnings ?? [],
+    articles: library ? library.articles.map((a) => ({ id: a.id, title: a.title, domain: a.domain, layer: a.layer, artifact: a.artifact, technology: a.technology, path: a.path, url: articleUrl(library.repo, library.commit, a.path) })) : [],
+  };
+}
+
 async function section(ops: AdminOps, s: AdminSection, meId: string, input: Record<string, unknown>, process?: AdminContext["process"], today?: AdminContext["today"], me?: { name: string }, zone?: AdminContext["zone"]): Promise<unknown> {
   const rules = await ops.org.rules();
   switch (s) {
+    case "standards":
+      return standardsSection(ops, rules);
     case "clients":
       return clientsSection(ops, rules, process, input.refresh === true, input.filter === "all");
     case "ai": {
@@ -498,6 +527,12 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
       if (extra) return bad(`unknown input field ${extra}`);
       if (typeof i.section !== "string" || !(ADMIN_SECTIONS as readonly string[]).includes(i.section)) return bad(`section must be one of ${ADMIN_SECTIONS.join(", ")}`);
       return { ok: true, data: await section(ops, i.section as AdminSection, me.id, i, ctx.process, ctx.today, me, ctx.zone) };
+    }
+    case "admin.standards_sync": {
+      const extra = only(i, []);
+      if (extra) return bad(`unknown input field ${extra}`);
+      if (!ops.standards) return bad("Standards aren't available here", 404);
+      return { ok: true, data: await ops.standards.syncNow() };
     }
     case "admin.audit": {
       const extra = only(i, ["area", "text"]);

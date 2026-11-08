@@ -21,7 +21,7 @@ const NOW = "2026-11-05T15:00:00Z";
 const CLIENT = "contoso";
 const OTHER = "fabrikam";
 
-function setup(o: { client?: string; allowed?: string[]; on?: boolean; write?: string[]; answer?: (c: ProviderCall) => PrepareAnswer | string; spent?: number; noAi?: boolean } = {}) {
+function setup(o: { standards?: PrepareContext["standards"]; client?: string; allowed?: string[]; on?: boolean; write?: string[]; answer?: (c: ProviderCall) => PrepareAnswer | string; spent?: number; noAi?: boolean } = {}) {
   let now = NOW;
   // GD-1: the draft's client (Contoso by default; Cooptimize Internal for the Internal tests).
   const K = o.client ?? CLIENT;
@@ -41,6 +41,7 @@ function setup(o: { client?: string; allowed?: string[]; on?: boolean; write?: s
   };
   const reads: string[] = [];
   const ctx: PrepareContext = {
+    ...(o.standards ? { standards: o.standards } : {}),
     plan,
     config: async () => cfg,
     ai: async () =>
@@ -267,5 +268,31 @@ describe("a refusal from before GD-1 (IB-1 slice 3)", () => {
     expect(t.calls).toHaveLength(2);
     await t.run("draft.get", { id });
     expect(t.calls).toHaveLength(2);
+  });
+});
+
+
+describe("draft.prepare with the standards (KB-1)", () => {
+  const url = "https://github.com/contoso/standards/blob/0123456/SQL/Gold/Fact%20Tables.md";
+  const std: PrepareContext["standards"] = async () => ({ library: {} as never, retrieved: {} as never, input: { about: "x", index: [{ title: "Gold Fact Tables", domain: "sql", layer: "gold", artifact: "fact_table" }], articles: [{ title: "Gold Fact Tables", domain: "sql", layer: "gold", artifact: "fact_table", technology: "agnostic", text: "- Use fact" }], left_out_for_size: [] }, used: { commit: "0123456789", used: [{ title: "Gold Fact Tables", url }], leftOut: [], overrides: [], notes: [] } });
+  const ok: PrepareAnswer = { title: "Build fact.Sales", description: "Why", acceptance_criteria: "- Follows Gold Fact Tables: fact schema", type: "User Story", parent_id: 437, parent_reason: "Fits", standards_note: "Client override: Gold Fact Tables: the client wants snake_case" };
+
+  it("sends the standards as data, keeps Standards used, the link and the override, and writes nothing", async () => {
+    const t = setup({ standards: std, answer: () => ok });
+    const id = await t.capture("gold fact table for sales");
+    const v = await t.run("draft.prepare", { id });
+    expect(JSON.parse(t.calls[0]!.input).standards.articles[0].title).toBe("Gold Fact Tables");
+    expect(t.calls[0]!.instructions).toMatch(/Never propose hand-writing Bronze or Silver SQL/);
+    expect(v.draft.ai?.acceptance).toBe(`- Follows Gold Fact Tables: fact schema (${url})`);
+    expect(v.draft.ai?.standards).toMatchObject({ commit: "0123456789", used: [{ title: "Gold Fact Tables", url }], overrides: ["Client override: Gold Fact Tables: the client wants snake_case"] });
+    expect((await t.run("draft.get", { id })).draft.ai?.standards?.used).toHaveLength(1);
+  });
+
+  it("a draft feature gets Standards used and its Follows lines", async () => {
+    const t = setup({ standards: std, answer: () => ({ ...ok, parent_id: null, type: null }) });
+    const id = await t.capture("gold reporting", "draft_feature");
+    const v = await t.run("draft.prepare", { id });
+    expect(v.draft.ai?.acceptance).toContain("Follows Gold Fact Tables");
+    expect(v.draft.ai?.standards?.commit).toBe("0123456789");
   });
 });

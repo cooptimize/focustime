@@ -80,6 +80,7 @@ import { pastUrgency } from "../plan/asks-ai.ts";
 import { isActionName, type ActionName } from "./registry.ts";
 import { captureAction, featuresOf, type CaptureContext } from "./capture-actions.ts";
 import { draftAiAction, type PrepareContext } from "./draft-prepare.ts";
+import { standardsForQuestion, standardsLookup, type StandardsLookup, type StandardsPort } from "./standards.ts";
 import { followUpAction } from "./followup-actions.ts";
 import { roadmapAction } from "./roadmap-actions.ts";
 import { aheadAction, type AheadAction, type AheadContext } from "./ahead-actions.ts";
@@ -131,6 +132,8 @@ const TOUR_MARK = "tour_offer";
 export type { ActionResponse, SourceSummary, WeekLoadData };
 
 export type ActionContext = {
+  /** KB-1: the synced standards. Absent: none here. */
+  standards?: StandardsPort;
   /** AI-0: the app's AI runtime (settings, provider, the app's spend). Absent: AI isn't available here (demo). */
   ai?: AiRuntime;
   /** Shared polling (D514): the shared Teams store and the poll job's Refresh. Absent: no client chats or Requests. */
@@ -855,7 +858,7 @@ export async function assistantFor(ctx: ActionContext, channel: Channel, publicU
   // GD-1's rule for Internal: clientAccounts()'s why "internal" (isInternalKey), never a name.
   const accounts = ca ?? clientAccounts({ accounts: [], overrides: {}, internal: INTERNAL_CLIENT });
   const isInternal = (k: string) => accounts.row(k)?.why === "internal";
-  const service = createAssistant({ run, plan, ai: await assistantAiFor(ctx), directory, isMine, isInternal, clientName, now: ctx.now, zone, channel, publicUrl });
+  const service = createAssistant({ run, plan, ai: await assistantAiFor(ctx), directory, isMine, isInternal, clientName, now: ctx.now, zone, channel, publicUrl, standards: (question) => standardsForQuestion(ctx.standards, question) });
   const today = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(zone).toPlainDate().toString();
   const link = (href: string, label: string) => ({ label, href: channel === "teams" && publicUrl ? `${publicUrl.replace(/\/$/, "")}/${href}` : href });
   return { service, reads: { run, today, now: ctx.now(), zone, isMine, clientName, link } };
@@ -1134,6 +1137,15 @@ function captureContext(ctx: ActionContext): CaptureContext {
 }
 
 /** CP-1: a captured draft's AI version: reads with the company read PAT, AI through ai/ on my own cap. */
+/** KB-1: the standards lookup a draft path takes: the client's data platform and source systems come from its Rules. */
+function standardsOption(ctx: ActionContext): { standards?: StandardsLookup } {
+  const standards = standardsLookup(ctx.standards, async (clientKey) => {
+    const rule = (await ctx.org?.rules())?.clients[clientKey];
+    return rule ? { dataPlatform: rule.dataPlatform, sourceSystems: rule.sourceSystems } : null;
+  });
+  return standards ? { standards } : {};
+}
+
 function prepareContext(ctx: ActionContext): PrepareContext {
   const cap = captureContext(ctx);
   return {
@@ -1152,6 +1164,7 @@ function prepareContext(ctx: ActionContext): PrepareContext {
       return r.ok ? r.value : null;
     },
     now: ctx.now,
+    ...standardsOption(ctx),
   };
 }
 
@@ -1167,6 +1180,7 @@ export function storyContext(ctx: ActionContext): StoryContext {
     devopsWrite: async (action, input) => devopsWriteAction(await devopsWriteContext(ctx), action, input),
     now: ctx.now,
     isInternal: (clientKey) => isInternalKey(ctx.org, clientKey),
+    ...standardsOption(ctx),
   };
 }
 
@@ -1310,6 +1324,7 @@ export async function requestContext(ctx: ActionContext): Promise<RequestContext
     // GD-2: the client boundary (Internal, the other clients' names and aliases) and the Cooptimizer rule for a chat's audience.
     boundary: (clientKey) => boundaryOf(ctx, clientKey),
     audienceRules: async () => audienceRulesOf(ctx.org, await chats.homeTenant()),
+    ...standardsOption(ctx),
   };
 }
 
@@ -1909,6 +1924,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "admin.status_action":
     case "admin.identity":
     case "admin.invited":
+    case "admin.standards_sync":
     case "admin.invite_access":
     case "admin.invite_preview":
     case "admin.invite_send":

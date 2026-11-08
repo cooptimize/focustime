@@ -1,4 +1,5 @@
 // Plan layer types (step 5, Plan the day). Pure data shared by the store, actions and UI.
+import type { StandardsUsed } from "./standards.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import type { DayAccess } from "./days.ts";
 import { STORY_MINUTES, UNSIZED_MINUTES, type StorySize } from "./estimate.ts";
@@ -67,7 +68,7 @@ export type Pick = {
 export type DraftStory = { id: number; clientKey: string; parentItemId: number | null; title: string; size: Size; level: "story" | "feature"; createdAt: ZonedStamp; /** IB-2: its last change, for the Inbox's timeline. */ updatedAt?: ZonedStamp; /** Step 15.3: written by Create in DevOps. Acceptance criteria for stories, dates for features. */ description?: string | null; acceptance?: string | null; startDate?: string | null; targetDate?: string | null; /** Step 14: set once created in DevOps (the draft then leaves draft lists). */ devopsId?: number; devopsUrl?: string | null; /** CP-1: the AI-prepared version (never my own text), or null when prepare hasn't run. */ ai?: DraftAi | null };
 /** CP-1: what AI prepared for a captured draft. My own title stays the draft's until I accept this. */
 export type DraftAiState = "writing" | "ready" | "needs_parent" | "off" | "failed";
-export type DraftAi = { state: DraftAiState; title: string | null; description: string | null; acceptance: string | null; type: string | null; parentId: number | null; parentReason: string | null; /** Why it is a plain draft, in plain words. */ note: string | null; ranAt: string | null };
+export type DraftAi = { /** KB-1: "Standards used" under the draft. */ standards?: StandardsUsed | null; state: DraftAiState; title: string | null; description: string | null; acceptance: string | null; type: string | null; parentId: number | null; parentReason: string | null; /** Why it is a plain draft, in plain words. */ note: string | null; ranAt: string | null };
 
 /** A quick capture (step 9): in the inbox until routed to a follow-up, a draft story or a note (or dismissed). */
 export type Capture = { id: number; text: string; clientKey: string | null; createdAt: ZonedStamp; routedAt: ZonedStamp | null; routedAs: "follow_up" | "draft" | "draft_feature" | "left_off" | "dismissed" | null; routedId: number | null };
