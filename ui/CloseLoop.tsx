@@ -3,6 +3,7 @@
 // The seam for LP-1 is `onSubmit`: it gets the choice and the note and says whether it worked, so a later sender can
 // draft, preview and send without this form changing shape. The channels wrap (four across when wide, two by two when
 // narrow) and the note has its own full-width row, so the form never makes its container scroll sideways.
+import { TextBox } from "./TextBox.tsx";
 import { useId, useState } from "react";
 import { CLOSE_HOW, type CloseHow } from "../plan/types.ts";
 
@@ -50,16 +51,17 @@ export function CloseLoop({ who, initialHow = null, onSubmit, onCancel, compact 
       </fieldset>
       <label className="close-loop-note" htmlFor={`${id}-note`}>
         <span className="close-loop-label">Note (optional)</span>
-        <textarea
+        <TextBox
           id={`${id}-note`}
           autoFocus
           value={note}
           maxLength={500}
-          rows={2}
+          minRows={2}
+          maxRows={6}
           placeholder="What you told them"
           onChange={(e) => setNote(e.target.value)}
-          // Enter closes it, as the one-line note did; Shift+Enter starts a new line.
-          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), e.currentTarget.form?.requestSubmit())}
+          // Enter closes it, as the one-line note did; Shift+Enter starts a new line (never while composing, UI-10).
+          onEnter={(e) => e.currentTarget.form?.requestSubmit()}
         />
       </label>
       <div className="close-loop-buttons">

@@ -9,6 +9,7 @@ import { applyTheme, initialTheme } from "./theme.ts";
 import { applyReduceMotion } from "./brand/motion.ts";
 import { applyTextSize, storedTextSize } from "./textsize.ts";
 import { startPwa } from "./pwa.ts";
+import { startKeyboardInset } from "./keyboard.ts";
 import { OfflineLine } from "./Offline.tsx";
 
 // The style guide renders fixture data, so it exists only in development builds (no-demo-leak): Vite drops this
@@ -19,6 +20,7 @@ applyTheme(initialTheme());
 applyReduceMotion();
 applyTextSize(storedTextSize());
 startPwa();
+startKeyboardInset();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

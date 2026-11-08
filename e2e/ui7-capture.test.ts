@@ -6,7 +6,7 @@ import type { Locator, Page } from "playwright-core";
 import { CHROMIUM, freshPage, openApp, startDemo, type Harness, openCaptures } from "./harness.ts";
 import { SHOTS } from "./shots.ts";
 
-const LINES = "Follow up with the data team about the export\nCheck the mapping for the two date fields\nAsk whether the nightly run can move earlier\nThen update the story with what we agreed\nAnd one more line so it scrolls";
+const LINES = "Follow up with the data team about the export\nCheck the mapping for the two date fields\nAsk whether the nightly run can move earlier\nThen update the story with what we agreed\nThen tell the team in the chat\nAnd another for the record\nAnd one more line so it scrolls";
 
 type Box = { x: number; y: number; width: number; height: number };
 const rect = (l: Locator) => l.evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; }) as Promise<Box>;
@@ -21,10 +21,10 @@ async function checkLayout(page: Page, scope: string) {
   // ↵ is outside the box (and so clear of its scrollbar), and doesn't sit on the chip.
   expect(overlaps(b, s)).toBe(false);
   expect(overlaps(s, c)).toBe(false);
-  // The box scrolls past about four lines.
+  // The box scrolls past six lines (UI-10; UI-7 had about four).
   const m = await box.evaluate((el) => ({ h: el.clientHeight, sh: el.scrollHeight, lh: parseFloat(getComputedStyle(el).lineHeight) }));
   expect(m.sh).toBeGreaterThan(m.h);
-  expect(m.h).toBeLessThan(m.lh * 5 + 30);
+  expect(m.h).toBeLessThan(m.lh * 7 + 30);
   // ↵ and the chip are one line tall (a pill, not stretched with the box).
   expect(Math.abs(s.height - c.height)).toBeLessThan(1.5);
   expect(c.height).toBeLessThan(b.height / 2);

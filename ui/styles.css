@@ -1357,7 +1357,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .close-loop-choice { min-width: 0; padding: 6px 10px; font: inherit; font-size: var(--fs-3); color: var(--text); text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; overflow-wrap: anywhere; }
 .close-loop-choice[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 500; }
 .close-loop-note { display: grid; gap: 4px; min-width: 0; }
-.close-loop-note textarea { width: 100%; box-sizing: border-box; min-width: 0; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; resize: vertical; }
+.close-loop-note textarea { width: 100%; box-sizing: border-box; min-width: 0; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 .close-loop-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 /* LP-1: Close the loop by sending: Draft › Preview › Sent, in the same box. Everything wraps; nothing scrolls sideways. */
 .send-loop { min-width: 0; max-width: 640px; overflow-wrap: anywhere; }
@@ -1472,7 +1472,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .follow-up-new { font-size: var(--fs-2); color: var(--accent); font-weight: 500; }
 .follow-up-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .follow-up-draft { flex-basis: 100%; }
-.follow-up-draft textarea { width: 100%; max-width: 760px; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; resize: vertical; }
+.follow-up-draft textarea { width: 100%; max-width: 760px; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 .follow-up-add { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin: 4px 0 10px; }
 .follow-up-add label { display: grid; gap: 2px; font-size: var(--fs-2); color: var(--text-muted); }
 .follow-up-add input { min-width: 180px; }
@@ -2257,7 +2257,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Step 15.3: the draft editor. */
 .draft-editor form { display: grid; gap: 10px; }
-.draft-editor textarea { font: inherit; font-size: var(--fs-3); color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 8px; resize: vertical; }
+.draft-editor textarea { font: inherit; font-size: var(--fs-3); color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 8px; }
 .draft-editor textarea:focus-visible, .draft-editor input:focus-visible, .draft-editor select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .draft-editor .set-field { display: grid; gap: 4px; }
 .draft-editor .item-lookup:not(.linked) { display: block; }
@@ -3473,7 +3473,7 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .feedback-kinds label { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; }
 .feedback-kinds label.on { border-color: var(--accent); }
 .feedback-kinds input { margin: 0; }
-.feedback-text textarea { width: 100%; box-sizing: border-box; min-height: 7.5em; resize: vertical; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: inherit; }
+.feedback-text textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: inherit; }
 .feedback-where { display: flex; align-items: baseline; gap: 6px; }
 .feedback-hint { margin: 0; font-size: var(--fs-2); }
 .feedback-note { margin: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); }
@@ -3940,7 +3940,6 @@ button.ask-label { cursor: pointer; }
 .brief-status.warn { color: var(--watch); font-weight: 600; }
 .bd-note { display: grid; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); }
 .bd-note textarea, .bd-field textarea, .bd-title, .bd-ac input, .bd-regen input { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 5px 8px; min-width: 0; }
-.bd-note textarea, .bd-field textarea { resize: vertical; }
 .bd-run-line, .bd-latest, .bd-off, .bd-empty, .bd-busy, .bd-where, .bd-total { margin: 0; }
 .bd-run-line { font-size: var(--fs-2); color: var(--text-muted); }
 .bd-busy { color: var(--text-muted); }
@@ -4020,7 +4019,7 @@ button.ask-label { cursor: pointer; }
   .bd-title { flex-basis: 100%; order: 5; }
 }
 /* DS-1: Settings › Clients, the house style. */
-.set-house-style textarea { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 5px 8px; resize: vertical; }
+.set-house-style textarea { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 5px 8px; }
 .set-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 
 /* ADM-1: the Admin part of Settings (ui/settings/Admin.tsx): its own nav under the Settings nav, one sticky sidebar. */
@@ -4052,7 +4051,7 @@ button.ask-label { cursor: pointer; }
 .adm-setup-bar .adm-filter { margin-bottom: 0; }
 .adm-setup-table td:first-child, .adm-setup-table th:first-child { width: 1.5em; }
 .invite-note { margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--raised); font-size: var(--fs-3); }
-.invite-message { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; resize: vertical; width: 100%; box-sizing: border-box; }
+.invite-message { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; width: 100%; box-sizing: border-box; }
 .invite-sheet .set-field input { width: 100%; box-sizing: border-box; }
 .set-pre { white-space: pre-wrap; }
 .set-team-color { flex-basis: 100%; }
@@ -4323,7 +4322,7 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .send-subject { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-3); }
 .send-done { margin: 0; }
 .send-hint { font-size: var(--fs-2); }
-.send-note { width: 100%; min-width: 0; font: inherit; font-size: var(--fs-3); resize: vertical; }
+.send-note { width: 100%; min-width: 0; font: inherit; font-size: var(--fs-3); }
 .send-check { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: var(--fs-3); }
 .send-check .muted { font-size: var(--fs-2); }
 .send-priority { margin-right: auto; font-size: var(--fs-2); }
@@ -4652,12 +4651,11 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 @media (prefers-reduced-motion: reduce) { .now-line, .now-past { transition: none; } }
 
 /* ---- CP-1: Capture to DevOps ---- */
-/* The box is a small textarea that grows to about four lines, then scrolls with a thin scrollbar; ↵ beside it saves (UI-7). */
+/* The box is the shared TextBox (UI-10): one line, grows to six, then scrolls with the thin scrollbar; ↵ beside it saves (UI-7). */
 .cap-field { position: relative; min-width: 0; display: grid; }
 .cap-field > textarea {
   font: inherit; color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px;
-  resize: none; overflow-y: auto; scrollbar-width: thin; min-height: 0; box-sizing: border-box; width: 100%;
-  line-height: 1.4; max-height: calc(4lh + 18px); field-sizing: content;
+  min-height: 0; box-sizing: border-box; width: 100%; line-height: 1.4;
 }
 .cap-field > textarea::placeholder { color: var(--text-faint); }
 .cap-field > textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
@@ -4689,7 +4687,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .cd-side-head > :last-child { margin-left: auto; }
 .cd-using { font-size: var(--fs-2); color: var(--accent); font-weight: 500; }
 .cd-side .set-field { display: grid; gap: 4px; }
-.cd-side textarea { font: inherit; font-size: var(--fs-3); color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 8px; resize: vertical; }
+.cd-side textarea { font: inherit; font-size: var(--fs-3); color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 8px; }
 .cd-side textarea:focus-visible, .cd-side input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .cd-read { margin: 0; display: grid; gap: 2px 0; font-size: var(--fs-3); }
 .cd-read dt { font-size: var(--fs-2); color: var(--text-muted); margin-top: 6px; }
@@ -4816,7 +4814,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .as-off p { margin: 0; }
 .as-compose { padding: 10px 16px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
 .as-row { display: flex; align-items: flex-end; gap: 6px; }
-.as-row textarea { flex: 1; min-width: 0; resize: vertical; font: inherit; font-size: var(--fs-3); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--sunken); color: var(--text); }
+.as-row textarea { flex: 1; min-width: 0; font: inherit; font-size: var(--fs-3); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--sunken); color: var(--text); }
 .as-mic { flex: none; display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--raised); color: var(--text); cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; }
 .as-mic:disabled { color: var(--text-faint); cursor: default; }
 .as-mic.on { border-color: var(--risk); color: var(--risk); box-shadow: 0 0 0 3px color-mix(in oklab, var(--risk) 25%, transparent); }
@@ -5137,7 +5135,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .st-new { display: grid; gap: 6px; }
 .st-adds { display: inline-flex; gap: 8px; flex-wrap: wrap; }
 .st-box { display: grid; gap: 2px; }
-.st-box textarea { width: 100%; min-height: 3.2em; resize: vertical; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; font-size: var(--fs-3); box-sizing: border-box; }
+.st-box textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; font-size: var(--fs-3); box-sizing: border-box; }
 .st-box textarea:focus { outline: 2px solid var(--focus); outline-offset: 0; }
 .st-box.st-suggested textarea { border-style: dashed; border-color: var(--accent); }
 .st-box.st-editing textarea { border-color: var(--accent); }
@@ -5305,7 +5303,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .mtg-prop.skipped { opacity: 0.6; }
 .mtg-prop.confirmed .mtg-state-line { color: var(--ok); }
 .mtg-prop-body { display: grid; gap: 4px; min-width: 0; }
-.mtg-prop-body input, .mtg-prop-body textarea { width: 100%; box-sizing: border-box; min-width: 0; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; resize: vertical; }
+.mtg-prop-body input, .mtg-prop-body textarea { width: 100%; box-sizing: border-box; min-width: 0; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; }
 .mtg-tick { padding-top: 4px; }
 .mtg-main { margin: 0; font-weight: 500; }
 .mtg-where, .mtg-desc, .mtg-report, .mtg-state-line { margin: 0; font-size: var(--fs-2); }
@@ -5904,3 +5902,25 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 /* WK-3: on the phone the after-hours total sits on its own line under the week's title, never squeezing it. */
 .app.phone .week-head .ph-title .after-hours-chip { order: 3; margin-right: 100%; flex: none; white-space: nowrap; }
 .app.phone .half.whole.weekend-cell, .grid.narrow .half.whole.weekend-cell { height: auto; min-height: 96px; max-height: none; overflow: visible; flex: none; }
+
+/* ---- UI-10: text boxes that grow instead of scrolling ---- */
+/* No textarea anywhere shows a resize handle; the shared TextBox (ui/TextBox.tsx) sets its own height from its text. */
+textarea { resize: none; }
+.text-box { box-sizing: border-box; max-width: 100%; min-width: 0; overflow-y: hidden; overflow-x: hidden; overflow-wrap: anywhere; }
+/* Every textarea (the read-only copy boxes too) gets the same scrollbar. In a TextBox it shows only while there is something to scroll (TextBox sets overflow then): thin, rounded, no arrows.
+   Chromium and Safari take the ::-webkit-scrollbar styles (setting scrollbar-width or scrollbar-color would make
+   Chromium ignore them and draw its native bar with arrows); Firefox takes the standard properties. */
+textarea::-webkit-scrollbar { width: 10px; height: 0; }
+textarea::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+textarea::-webkit-scrollbar-track, textarea::-webkit-scrollbar-corner { background: transparent; }
+textarea::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--text-muted) 45%, transparent); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
+textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, var(--text-muted) 70%, transparent); }
+@supports not selector(::-webkit-scrollbar) {
+  textarea { scrollbar-width: thin; scrollbar-color: color-mix(in oklab, var(--text-muted) 45%, transparent) transparent; }
+}
+/* The phone: a sheet with a text box rests on the bottom bar, or on the on-screen keyboard while it is open
+   (--kb-inset, ui/keyboard.ts), so the box and its ↵ or Send stay above the keyboard and the home indicator. */
+@media (max-width: 599.98px) {
+  .cap-backdrop, .ib-sheet-back { bottom: max(var(--bb-h, 0px), var(--kb-inset, 0px)); }
+  .assistant-panel.assistant-sheet { bottom: max(var(--bb-h, 0px), var(--kb-inset, 0px)); }
+}

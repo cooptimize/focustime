@@ -2,6 +2,7 @@
 // ui/MessageThread.tsx: grouped by person with avatars, mine on the other side, quotes, reactions, the latest 20 with
 // Show earlier), Link to item, Create DevOps item (the draft), Not a request, Merge into…, a suggested update, and the
 // linked item with its live state. Nothing is posted in Teams. Chat text shows only on its own client's item.
+import { TextBox } from "./TextBox.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ConversationCard, ConversationMessage, ConversationMessages } from "../plan/conversation-views.ts";
@@ -260,11 +261,11 @@ export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<Con
           )}
           <label>
             Description <span className="muted">(the conversation's messages, who and when, and the Teams link are added below it)</span>
-            <textarea rows={8} maxLength={8000} value={path} onChange={(e) => setPath(e.target.value)} />
+            <TextBox minRows={8} maxRows={16} maxLength={8000} value={path} onChange={(e) => setPath(e.target.value)} />
           </label>
           <label>
             Acceptance criteria <span className="muted">(one per line; only where the type has them)</span>
-            <textarea rows={4} maxLength={8000} value={acceptance} onChange={(e) => setAcceptance(e.target.value)} />
+            <TextBox minRows={4} maxRows={12} maxLength={8000} value={acceptance} onChange={(e) => setAcceptance(e.target.value)} />
           </label>
           <label className="conv-internal-toggle">
             <input type="checkbox" checked={assignMe} onChange={(e) => setAssignMe(e.target.checked)} /> Assign it to me (otherwise unassigned)

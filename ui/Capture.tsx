@@ -1,8 +1,9 @@
 // Quick capture (step 9): one text box, Enter saves at once to the local store (works offline). Rules (no AI)
 // suggest a follow-up, a draft story or a draft feature (step 13.5); one click confirms, or change it first. Unsorted
 // captures wait in the Inbox.
+import { TextBox } from "./TextBox.tsx";
 import { CloseButton } from "./CloseButton.tsx";
-import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import type { CaptureFeatures, WeekLoadData } from "../actions/types.ts";
 import { boxKind, suggest, tagCompletions, takeTag, type BoxKind, type CaptureClient, type CaptureKind } from "../plan/capture.ts";
 import { CLOSE_HOW, type Capture, type Size } from "../plan/types.ts";
@@ -245,13 +246,6 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
     if (autoFocus) input.current?.focus();
   }, [autoFocus]);
   useEffect(() => setPick(0), [done.length]);
-  // CP-1: the box grows with its text up to its max height (CSS), then scrolls.
-  useLayoutEffect(() => {
-    const el = input.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [text]);
   useEffect(() => {
     if (!saved) return;
     const t = setTimeout(() => setSaved(null), TOAST_MS);
@@ -411,9 +405,11 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
     <div className={`cap-box${large ? " large" : ""}`}>
       <div className="cap-input">
         <div className="cap-field">
-        <textarea
+        {/* UI-10: the shared TextBox: one line, grows to six, then scrolls; Enter saves through onKey (keyAction), never while composing. */}
+        <TextBox
           ref={input}
-          rows={1}
+          minRows={1}
+          maxRows={6}
           value={text}
           onChange={(e) => (onText(e.target.value), setError(null))}
           onKeyDown={onKey}
