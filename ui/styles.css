@@ -5864,3 +5864,43 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .pa-rollup-line::before { left: 0; }
 .pa-rollup-line::after { right: 0; }
 .ah-gantt .pa-bar.early .pa-inner { padding-left: 18px; }
+
+/* WK-3: weekend columns, narrow and quiet: a muted header ("Sat 14 · weekend"), events and to-dos as plain rows. */
+.day.weekend.quiet .weekend-head { gap: 4px; flex-wrap: wrap; }
+.day.weekend.quiet .weekend-head .dow, .day.weekend.quiet .weekend-head .date { color: var(--text-muted); font-weight: 500; }
+.weekend-word { color: var(--text-faint); font-size: var(--fs-2); white-space: nowrap; }
+.half.whole.weekend-cell { background: transparent; border: 1px dotted var(--border-strong); gap: 6px; padding: 8px; min-width: 0; }
+.grid.medium .half.whole.weekend-cell { grid-row: span 4; }
+.grid.medium.has-eve .half.whole.weekend-cell { grid-row: span 5; }
+.we-empty { font-size: var(--fs-2); margin: 0; }
+.we-due { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); }
+.we-due li { overflow-wrap: anywhere; }
+.day-tab.kind-weekend { color: var(--text-faint); border-style: dotted; }
+/* WK-3: the Evening band under a weekday's PM: what's after the day shape's end, only when there is something. */
+.evening-band { min-width: 0; display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: color-mix(in oklab, var(--accent) 5%, var(--sunken)); }
+.eb-label { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.evening-band .checklist { margin: 0; }
+/* WK-3: a Deployment to-do's icon and window, the week's after-hours chip and the Done offer. */
+.deploy-icon { flex: none; color: var(--accent); vertical-align: -0.15em; }
+.deploy-window { font-size: var(--fs-2); color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.after-hours-chip { margin-left: 8px; padding: 1px 10px; font-size: var(--fs-2); border-radius: 99px; border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--border)); color: var(--text); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.deployed-ask { display: flex; flex-direction: column; gap: 10px; padding: 4px 16px 16px; }
+.deployed-done { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 600; }
+.deployed-ask .muted { margin: 0; overflow-wrap: anywhere; }
+.deployed-who { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); }
+.app-undo { z-index: 60; }
+/* WK-3: a weekend column is narrow: its date always shows, and a to-do's time sits above its title, which wraps. */
+.day.weekend.quiet .weekend-head .date { display: inline; }
+.weekend-cell .pick-row:not(.ph-row) { flex-wrap: wrap; row-gap: 2px; }
+.weekend-cell .pick-row:not(.ph-row) .deploy-window, .weekend-cell .pick-row:not(.ph-row) .pick-time { order: 2; }
+.weekend-cell .pick-row:not(.ph-row) .pr-title { order: 3; flex: 1 1 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.weekend-cell .pick-row:not(.ph-row) .pr-hover { order: 2; margin-left: auto; }
+.today-weekend { display: flex; flex-direction: column; gap: 10px; max-width: 760px; }
+.today-weekend-head { margin: 0; font-size: var(--fs-4); }
+.today-weekend .we-client { font-size: var(--fs-2); margin-left: 6px; }
+/* WK-3: on the phone a chip stacks its weekday over its date, so six or seven days (a weekend) fit at 360 px. */
+.app.phone .day-tab { flex-direction: column; align-items: center; gap: 0; line-height: 1.15; padding: 3px 1px; font-size: var(--fs-2); overflow: hidden; }
+.app.phone .day-tab .tab-date { font-size: var(--fs-2); }
+/* WK-3: on the phone the after-hours total sits on its own line under the week's title, never squeezing it. */
+.app.phone .week-head .ph-title .after-hours-chip { order: 3; margin-right: 100%; flex: none; white-space: nowrap; }
+.app.phone .half.whole.weekend-cell, .grid.narrow .half.whole.weekend-cell { height: auto; min-height: 96px; max-height: none; overflow: visible; flex: none; }

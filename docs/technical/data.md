@@ -1,6 +1,6 @@
 # Data
 
-For engineers adding a table and IT checking what FocusTime keeps. Checked against `6a31e85` on Nov 7, 2026.
+For engineers adding a table and IT checking what FocusTime keeps. Checked against `31b0d32` on Nov 7, 2026.
 
 ## One database, two kinds of table
 
@@ -34,7 +34,7 @@ FocusTime keeps everything in one database, its plan store: Azure SQL in dev and
 | Table | Kind | Per client | Holds |
 |---|---|---|---|
 | `week_plans`, `week_features`, `week_feature_slots`, `week_drafts`, `week_quiet`, `week_carry`, `week_watch` | User | Mostly | A week's lists per client, pins, carry decisions, watches |
-| `day_plans`, `picks`, `timeboxes`, `unavailable`, `borrowed`, `flex_sessions`, `resume_notes`, `focus_log` | User | Picks, timeboxes and notes yes | Day plans, to-dos (code name picks), their times, focus records |
+| `day_plans`, `picks`, `timeboxes`, `unavailable`, `borrowed`, `flex_sessions`, `resume_notes`, `focus_log` | User | Picks, timeboxes and notes yes | Day plans, to-dos (code name picks), their times, focus records. A to-do's kind (`picks.todo_kind`: null, or `deployment` since WK-3) and a Deployment's window (`window_start`, `window_end`, local "HH:MM" on its date), linked DevOps items (`links`, JSON of ids and titles, the same client's only) and what's going (`notes`) |
 | `follow_ups`, `promises`, `captures`, `draft_stories`, `story_drafts`, `story_draft_writes`, `breakdown_marks`, `house_styles` | User | Yes | Promises, captures, drafts, Break down's work |
 | `roadmap_dates`, `ahead_changes`, `ahead_halves`, `delivery_snapshots` | User | Yes | Ahead's dates, staged change sets, daily counts for trends |
 | `inbox_marks`, `conversation_views` | User | No | What a person has seen or hidden in the Inbox |

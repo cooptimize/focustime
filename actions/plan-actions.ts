@@ -7,7 +7,8 @@ import type { AppConfig } from "../config/schema.ts";
 import { carryTarget, dayLabel, dayRule, placeNote, SCAN_DAYS, upcomingStart, type DayRule, type HasHours } from "../plan/days.ts";
 import { alreadyPlanned } from "../plan/dup.ts";
 import { sessionEnd, unpickableReason } from "../plan/rules.ts";
-import { DEFAULT_SIZE, SIZES, type Pick as PlanPick, type PlanDayState, type Size } from "../plan/types.ts";
+import { DEFAULT_SIZE, SIZES, type Pick as PlanPick, type PlanDayState, type Size, type TodoLink, type TodoWindow } from "../plan/types.ts";
+import { DEPLOYMENT, windowHalf, windowMinutes, windowProblem } from "../plan/deploy.ts";
 import { PlanError, type DraftPatch, type NewPick, type PlanStore } from "../store/plan-store.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
 import { dayEndOf, hoursOn, nominalHours, type TimeModel } from "../week/hours.ts";
@@ -16,7 +17,7 @@ import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
-export const PLAN_ACTIONS = ["planday.start", "planday.carry", "planday.commit", "pick.add", "pick.remove", "pick.set_size", "pick.move", "pick.mark_done", "pick.uncarry", "pick.undrop", "planday.carry_hint", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
+export const PLAN_ACTIONS = ["planday.start", "planday.carry", "planday.commit", "pick.add", "pick.remove", "pick.set_size", "pick.move", "pick.mark_done", "deploy.add", "pick.set_kind", "pick.uncarry", "pick.undrop", "planday.carry_hint", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
 /** UI-B: the marker kind for the suggested-cards hint, dismissed once. */
 export const CARRY_HINT = "carry_hint";
 
@@ -179,6 +180,37 @@ const bool = (v: unknown, name: string) => {
   if (typeof v !== "boolean") throw new Invalid(`${name} must be true or false`);
   return v;
 };
+
+/** WK-3: a deployment's window from { start, end } ("HH:MM"); a missing or bad one is refused in plain words. */
+function deployWindow(o: Obj): TodoWindow {
+  const problem = windowProblem({ start: o.start, end: o.end });
+  if (problem) throw new Invalid(problem);
+  return { start: o.start as string, end: o.end as string };
+}
+const deployNote = (v: unknown): string | null => {
+  if (v === undefined || v === null || v === "") return null;
+  if (typeof v !== "string" || v.length > 2000) throw new Invalid("note must be text of at most 2000 characters");
+  return v.trim() || null;
+};
+/**
+ * WK-3: the DevOps items a deployment covers: ids of the to-do's own client's loaded items (never another client's),
+ * at most 20, with their titles; the to-do's own item first when it has one. A string is the refusal.
+ */
+async function deployLinks(ctx: PlanContext, key: string, v: unknown, own: number | null = null): Promise<TodoLink[] | null | string> {
+  if (v !== undefined && v !== null && (!Array.isArray(v) || v.length > 20)) throw new Invalid("itemIds must be a list of at most 20 ids");
+  const ids = [...new Set([...(own !== null ? [own] : []), ...((v as unknown[] | undefined) ?? []).map((x) => id(x, "itemIds"))])];
+  if (!ids.length) return null;
+  const cfg = await ctx.config();
+  if (!cfg) return "Fix the config first";
+  const dv = ctx.devops(cfg);
+  const out: TodoLink[] = [];
+  for (const i of ids) {
+    const item = dv.lookup(key, i);
+    if (!item) return `#${i} isn't among this client's loaded DevOps items. Refresh and try again`;
+    out.push({ id: i, title: item.title });
+  }
+  return out;
+}
 
 /** The carry-over day: the earliest upcoming, plannable, uncommitted day (plan/days.ts). */
 async function carryDay(ctx: PlanContext, plan: PlanStore): Promise<{ target: IsoDate | null; upcoming: IsoDate }> {
@@ -346,7 +378,8 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         if (!before) return bad(`No to-do ${pid}`, 404);
         const to = date(o.date);
         if (o.anyway !== undefined && typeof o.anyway !== "boolean") throw new Invalid("anyway must be true or false");
-        const h = half(o.half);
+        // WK-3: a deployment's window decides its half on the new day (its times stay; Edit changes them).
+        const h = before.todoKind === "deployment" && before.window ? windowHalf(hoursOn((await clock(ctx)).model, to), before.window) : half(o.half);
         // AS-2: into a time that has ended never (out of a past day only forward: that is carrying it). Any other day
         // takes it, with a note: PTO, a weekend, Friday's catch-up, no working hours. `anyway` is still accepted.
         const at = await placeAt(ctx, to, h);
@@ -360,6 +393,50 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const o = fields(input, ["id", "done"]);
         const pick = (await plan.setDone(id(o.id), bool(o.done, "done")));
         return { ok: true, data: { pick } };
+      }
+      case "deploy.add": {
+        // WK-3 (DP-0): a Deployment to-do: a client, a date and a window; items and a note optional. Local only.
+        const o = fields(input, ["clientKey", "date", "start", "end"], ["title", "note", "itemIds"]);
+        const key = clientKey(o.clientKey);
+        const d = date(o.date);
+        const w = deployWindow(o);
+        const past = await pastRefusal(ctx, d);
+        if (past) return bad(past, 409);
+        const links = await deployLinks(ctx, key, o.itemIds);
+        if (typeof links === "string") return bad(links, 409);
+        const clk = await clock(ctx);
+        const note = placeNote(d, { pto: !!(await ptoOf(ctx, clk.cfg, d)), hasHours: await clk.hasHours(d) });
+        const title = o.title === undefined || o.title === null || o.title === "" ? DEPLOYMENT : text(o.title, "title");
+        const pick = await plan.addPick({
+          date: d, half: windowHalf(hoursOn(clk.model, d), w), clientKey: key, kind: "intention", title, itemType: DEPLOYMENT, size: null,
+          minutes: Math.min(480, windowMinutes(w)), todoKind: "deployment", window: w, links, notes: deployNote(o.note),
+        });
+        return { ok: true, data: { pick, state: await state(ctx, plan, pick.date), note } };
+      }
+      case "pick.set_kind": {
+        // WK-3: change a to-do's kind (to-do menu › Kind): a Deployment needs its window; back to a to-do clears it.
+        const o = fields(input, ["id", "kind"], ["start", "end", "note", "itemIds"]);
+        const pid = id(o.id);
+        const before = await plan.getPick(pid);
+        if (!before) return bad(`No to-do ${pid}`, 404);
+        const past = await pastRefusal(ctx, before.date);
+        if (past) return bad(past, 409);
+        if (o.kind === "todo") {
+          if (o.start !== undefined || o.end !== undefined || o.itemIds !== undefined) throw new Invalid("a plain to-do has no window or items");
+          const pick = await plan.setTodoKind(pid, { todoKind: null, window: null, links: null, ...(before.itemType === DEPLOYMENT ? { itemType: null } : {}), minutes: null, ...(o.note !== undefined ? { notes: deployNote(o.note) } : {}) });
+          return { ok: true, data: { pick, state: await state(ctx, plan, pick.date) } };
+        }
+        if (o.kind !== "deployment") throw new Invalid("kind must be todo or deployment");
+        const w = deployWindow(o);
+        const links = o.itemIds === undefined && before.todoKind === "deployment" ? (before.links ?? null) : await deployLinks(ctx, before.clientKey, o.itemIds, before.itemId);
+        if (typeof links === "string") return bad(links, 409);
+        const { model } = await clock(ctx);
+        const pick = await plan.setTodoKind(pid, {
+          todoKind: "deployment", window: w, links, half: windowHalf(hoursOn(model, before.date), w), minutes: Math.min(480, windowMinutes(w)),
+          ...(before.kind === "intention" && !before.followUpId ? { itemType: DEPLOYMENT } : {}),
+          ...(o.note !== undefined ? { notes: deployNote(o.note) } : {}),
+        });
+        return { ok: true, data: { pick, state: await state(ctx, plan, pick.date) } };
       }
       case "draft.add_story": {
         const o = fields(input, ["clientKey", "parentItemId", "title"], ["size"]);

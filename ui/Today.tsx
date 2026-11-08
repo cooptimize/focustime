@@ -21,8 +21,9 @@ import { aboutHours, planFit } from "../plan/fit.ts";
 import { PICK_DRAG, PickRow } from "./PickRow.tsx";
 import { urgentFollowUps } from "../plan/today.ts";
 import type { Pick } from "../plan/types.ts";
+import { sortByTime, weekendRows } from "../plan/evening.ts";
 import type { Day, FreeGap, Half, IsoDate, Slot } from "../week/types.ts";
-import { clientColor, halfName, longDate, slotRange } from "./labels.ts";
+import { clientColor, halfName, longDate, slotRange, startClock } from "./labels.ts";
 import { wasDueText } from "../plan/due.ts";
 import { countdown, timerLeft } from "./NowStrip.tsx";
 import { clientNames, featuresOn, PlanCtx, useFocused } from "./planview.ts";
@@ -30,7 +31,7 @@ import { causeLines } from "./status.ts";
 import { NOTICE_EVENT, WorkLink } from "./WorkLink.tsx";
 import { weekMusts } from "./WeekMusts.tsx";
 import { mondayOf } from "../week/dates.ts";
-import { stepWeekday } from "./nav.ts";
+import { stepWeekday, weekendStops } from "./nav.ts";
 import { nextWorkingDay, todayShape } from "../plan/todayday.ts";
 import { hoursOn } from "../week/hours.ts";
 import { dayCalendar, placePromises, splitByBlocks, type DayEvent } from "../plan/todaycal.ts";
@@ -77,6 +78,8 @@ type Props = {
   viewDate?: IsoDate | null;
   /** QF-1: ‹ › and Back to today (null: today). */
   onDay?: (date: IsoDate | null) => void;
+  /** WK-3: Show weekend (‹ › step onto Saturday and Sunday always, not only when something is on them). */
+  showWeekend?: boolean;
   /** QF-1: Timebox my day (Confirm and timebox while the day isn't confirmed). */
   onTimebox?: (date: IsoDate) => void;
   /** QF-1: a past day's Close out. */
@@ -160,6 +163,8 @@ export function Today(props: Props) {
   // QF-1: today, or another day shown read-only (a past day's Close out, a later day's Plan link out).
   const isToday = date === realToday;
   const past = date < realToday;
+  // WK-3: a Saturday or Sunday is a "Weekend" day: its calendar and to-dos as plain rows, no planning prompts.
+  const weekendDay = Temporal.PlainDate.from(date).dayOfWeek >= 6;
   const tz = userZone(data);
   // P1: on the phone, Now leads with one card (the block under way, its next pick, Start focus or the timer).
   const phone = usePhone();
@@ -325,11 +330,13 @@ export function Today(props: Props) {
         {Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" })} <span className="muted">{longDate(date).replace(/^\w+,\s*/, "")} · {past ? "past" : "ahead"}</span>
       </h1>
     );
+  // WK-3: ‹ › step onto a weekend day that has something (or any, with Show weekend on).
+  const stops = weekendStops({ showWeekend: !!props.showWeekend, days: data.week.days });
   // QF-1: ‹ › (and [ ]) to another day; Back to today when away from it.
   const dayStep = mode === "now" && props.onDay ? (
     <span className="pd-step today-step" data-tour="today-days" role="group" aria-label="Day">
-      <button type="button" onClick={() => props.onDay!(stepWeekday(date, -1))} aria-label="Previous day" title="Previous day ([)">‹</button>
-      <button type="button" onClick={() => props.onDay!(stepWeekday(date, 1))} aria-label="Next day" title="Next day (])">›</button>
+      <button type="button" onClick={() => props.onDay!(stepWeekday(date, -1, stops))} aria-label="Previous day" title="Previous day ([)">‹</button>
+      <button type="button" onClick={() => props.onDay!(stepWeekday(date, 1, stops))} aria-label="Next day" title="Next day (])">›</button>
       {!isToday && (
         <button type="button" className="mini today-back" onClick={() => props.onDay!(null)}>
           Back to today
@@ -442,7 +449,7 @@ export function Today(props: Props) {
           )}
         </p>
       )}
-      {mode === "now" && !isToday && !ptoDay && day && (
+      {mode === "now" && !isToday && !ptoDay && day && !weekendDay && (
         <p className="today-other muted">
           {past ? "A past day, read only." : "A day ahead: its plan so far."}{" "}
           {past && props.onCloseOutOn ? (
@@ -456,7 +463,9 @@ export function Today(props: Props) {
           ) : null}
         </p>
       )}
-      {!day ? (
+      {weekendDay && mode === "now" ? (
+        <WeekendToday day={day} date={date} past={past} data={data} picks={picks} />
+      ) : !day ? (
         <p className="muted today-loading">Opening {longDate(date)}…</p>
       ) : ptoDay && !blocks.length ? null : !workday && !ptoDay ? (
         <p className="today-off">
@@ -1438,3 +1447,36 @@ function DayTimeline({ day, blocks, data, picks, now, nowMs, events, onNotice }:
   );
 }
 
+
+/**
+ * WK-3: Today on a Saturday or Sunday: "Weekend", then the day's calendar items and to-dos (a Deployment with its icon
+ * and window) as plain rows. To-dos tick done as anywhere (a Deployment then offers to tell the client). No Plan link,
+ * no blocks, no moment card: nothing asks to plan a weekend.
+ */
+function WeekendToday({ day, date, past, data, picks }: { day: Day | null; date: IsoDate; past: boolean; data: WeekLoadData; picks: readonly Pick[] }) {
+  const view = useContext(PlanCtx);
+  const tz = userZone(data);
+  const nameOf = clientNames(data);
+  const rows = day ? weekendRows(day, picks, []) : { events: [], picks: sortByTime(picks.filter(live)), due: [] };
+  const empty = !rows.events.length && !rows.picks.length;
+  return (
+    <section className="today-weekend" aria-label="Weekend">
+      <p className="today-weekend-head"><strong>Weekend</strong>{past ? <span className="muted"> · past, read only</span> : null}</p>
+      {empty && <p className="muted">Nothing on {Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" })}.</p>}
+      {rows.events.length > 0 && (
+        <ul className="whole-lines we-events" aria-label="Calendar">
+          {rows.events.map((e) => (
+            <li key={e.id} className={e.isPersonal ? "personal" : undefined}>
+              <span className="out-time">{startClock(e.start, tz)}</span> <span className="ev-title">{e.title}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {rows.picks.length > 0 && (
+        <ul className="checklist we-todos" aria-label="To-dos">
+          {rows.picks.map((p) => <PickRow key={p.id} pick={p} toggle={view.toggle} density="today" readOnly={past} canTick={!past || p.status !== "dropped"} extra={<span className="we-client muted">{nameOf(p.clientKey)}</span>} />)}
+        </ul>
+      )}
+    </section>
+  );
+}

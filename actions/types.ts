@@ -13,6 +13,8 @@ export type SourceSummary = Omit<SourceResult<unknown>, "items"> & { itemCount: 
 export type WeekLoadData = {
   weekStart: string;
   week: Week;
+  /** WK-3: after-hours time this week (plan/deploy.ts afterHours), with what makes it up. Absent from older servers. */
+  afterHours?: { minutes: number; parts: import("../plan/deploy.ts").AfterHoursPart[] };
   today: TodayTarget;
   sources: SourceSummary[];
   /** Assigned DevOps work per client with a block this week; null when Dataverse is not usable. */
