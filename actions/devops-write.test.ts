@@ -1,4 +1,5 @@
 // Step 14: DevOps writes through the write framework, against a fake dev.azure.com. Client orgs are fakes only.
+import { FIXED_KEY } from "../plan/readiness.ts";
 import { beforeEach, describe, expect, it } from "vitest";
 import { jpegWithMetadata } from "../test/images.ts";
 import { parseConfig } from "../config/schema.ts";
@@ -844,6 +845,17 @@ describe("AH-1: Ahead's change set as one fields write per item (D657 to D660)",
     expect(s.stored).toEqual([expect.objectContaining({ clientKey: COOP, id: 437 })]);
     expect(s.stored[0]!.fields["System.Rev"]).toBe(4);
     expect(r.entry).toMatchObject({ op: "fields", status: "confirmed" });
+  });
+  it("AH-7: a saved field that fills a Readiness gap counts as fixed (a start alone doesn't); its undo takes it back", async () => {
+    await stage(437, "start", "2026-11-16");
+    await stage(437, "target", "2026-12-11");
+    await stage(500, "size", 5);
+    const r = await s.confirm(await s.preview({ kind: "fields", itemId: 437 }));
+    await s.confirm(await s.preview({ kind: "fields", itemId: 500 }));
+    const log = (await s.plan.getState<{ k: string; g: string }[]>(FIXED_KEY))!;
+    expect(log.map((x) => `${x.k} ${x.g}`)).toEqual([`${COOP}:437 no_dates`, `${COOP}:500 unsized`]);
+    await s.write({ kind: "undo", writeId: r.entry.id });
+    expect((await s.plan.getState<{ k: string; g: string }[]>(FIXED_KEY))!.map((x) => `${x.k} ${x.g}`)).toEqual([`${COOP}:500 unsized`]);
   });
   it("the size in the type's own field, labelled with its name; Effort in another process", async () => {
     await stage(500, "size", 5);

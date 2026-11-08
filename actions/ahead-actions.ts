@@ -18,8 +18,9 @@ import type { ActionResponse, AheadClient, AheadItem, AheadLoad } from "./types.
 import { GAP_KINDS, TOP_N, type GapKind } from "../plan/fixnext.ts";
 import { bulkDecide, DEFAULT_AHEAD, type BulkOp } from "../plan/backlog.ts";
 import { assignPeople, type AssignPerson } from "../plan/ahead-people.ts";
+import { FIXED_KEY, fixedSince, liveSkips, readFixed, SKIPS_KEY } from "../plan/readiness.ts";
 
-export const AHEAD_ACTIONS = ["ahead.load", "ahead.people", "ahead.stage", "ahead.stage_bulk", "ahead.unstage", "ahead.discard", "ahead.resolve", "ahead.filters", "ahead.set_filters"] as const;
+export const AHEAD_ACTIONS = ["ahead.load", "ahead.people", "ahead.stage", "ahead.stage_bulk", "ahead.unstage", "ahead.discard", "ahead.resolve", "ahead.filters", "ahead.set_filters", "ahead.skip", "ahead.unskip"] as const;
 export type AheadAction = (typeof AHEAD_ACTIONS)[number];
 
 export type AheadContext = {
@@ -116,6 +117,18 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
   const today = localToday(ctx.now(), userZone(cfg));
   const automation = await ctx.automation().catch(() => false);
 
+  // AH-7: Readiness's Skip, remembered in my plan store for 2 weeks (so it follows me to another device).
+  if (action === "ahead.skip" || action === "ahead.unskip") {
+    const o = obj(input, ["clientKey", "itemId"]);
+    if (!o || !isKey(o.clientKey) || !isId(o.itemId)) return bad(`${action} takes { clientKey, itemId }`);
+    const skips = liveSkips(await plan.getState<unknown>(SKIPS_KEY), today);
+    const key = `${o.clientKey}:${o.itemId}`;
+    if (action === "ahead.skip") skips[key] = today;
+    else delete skips[key];
+    await plan.setState(SKIPS_KEY, skips);
+    return { ok: true, data: { skips } };
+  }
+
   let held: Promise<AheadIdentities | null> | null = null;
   const idx = () => (held ??= ctx.identities ? ctx.identities().catch(() => null) : Promise.resolve(null));
   /** One client's items (the store read is cheap). */
@@ -150,7 +163,10 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     await moveOldDrags(plan, out);
     await reconcile(plan, out);
     const halves = await keptHalves(plan, out);
-    return { ok: true, data: { today, clients: out, changes: await plan.aheadChanges(), halves, automation, fixTopN: fr.topN, staleWeeks: cfg.ahead?.staleWeeks ?? DEFAULT_AHEAD.staleWeeks } satisfies AheadLoad };
+    const skips = liveSkips(await plan.getState<unknown>(SKIPS_KEY), today);
+    const monday = Temporal.PlainDate.from(mondayOf(today)).toZonedDateTime({ timeZone: userZone(cfg) }).toInstant().toString();
+    const fixedWeek = fixedSince(readFixed(await plan.getState<unknown>(FIXED_KEY)), monday);
+    return { ok: true, data: { today, clients: out, changes: await plan.aheadChanges(), halves, automation, fixTopN: fr.topN, staleWeeks: cfg.ahead?.staleWeeks ?? DEFAULT_AHEAD.staleWeeks, skips, fixedWeek } satisfies AheadLoad };
   }
 
   /**
