@@ -316,7 +316,7 @@ describe.skipIf(!CHROMIUM)("TY-1: Today's timeline", () => {
     await page.waitForTimeout(500);
     const right = await page.locator(".day").first().screenshot();
     await page.close();
-    const sheet = await h.browser.newPage({ viewport: { width: 1640, height: 1160 } });
+    const sheet = await h.browser.newPage({ viewport: { width: 1900, height: 1160 } });
     const img = (b: Buffer) => `<img src="data:image/png;base64,${b.toString("base64")}" style="display:block">`;
     await sheet.setContent(`<body style="margin:0;background:#0b1118;display:flex;gap:24px;padding:20px;align-items:flex-start">${img(left)}${img(right)}</body>`);
     await sheet.screenshot({ path: `${SHOTS}/03-today-beside-week.png` });
