@@ -10,6 +10,7 @@ import { Pat } from "../devops/pat.ts";
 import type { DevOpsTarget, TargetsResult } from "../devops/types.ts";
 import { buildDirectory, type DirectoryRead, type DvAccount, type DvFocus, type DvPosition, type DvUser, type DvWorker } from "./directory.ts";
 import { clientKeyOf, normalizeFocusTimes, type AccountRow, type FocusTimeRow } from "./normalize.ts";
+import { HOLIDAY_COLUMNS, holidayDays, type HolidayDay, type HolidayRow } from "./holidays.ts";
 
 export type DataverseSourceDeps = {
   config: DataverseConfig;
@@ -721,6 +722,27 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
   }
 
   /**
+   * SR-3 (AS-3's planned reader): Cooptimize's observed holidays in [from, to] from the Working Days Calendar
+   * (`coop_workingdayscalendars`, one row per calendar day): only rows with Holiday Observed = Yes, on exactly their
+   * `coop_date` (Cooptimize observes holidays on its own dates), with the Holiday Name. Nothing limits a holiday to some
+   * people, so each is a day off for everyone. Read with the app's access; until the reader role can read the rows
+   * (Q-AS3-6) this answers ok: false and the report says "Holidays couldn't be read".
+   */
+  async function holidays(from: string, to: string): Promise<{ ok: true; days: HolidayDay[] } | TeamFailure> {
+    try {
+      return await memo(`holidays:${from}:${to}`, async () => {
+        const filter = `coop_observedholidayflag eq true and coop_date ge ${Temporal.PlainDate.from(from)} and coop_date le ${Temporal.PlainDate.from(to)}`;
+        const rows = await getAll<HolidayRow>("holidays", `coop_workingdayscalendars?$select=${HOLIDAY_COLUMNS.join(",")}&$filter=${encodeURIComponent(filter)}`);
+        const days = holidayDays(rows, from, to);
+        log({ source: "dataverse", op: "holidays", count: days.length });
+        return { ok: true as const, days };
+      });
+    } catch (e) {
+      return fail(e, "holidays");
+    }
+  }
+
+  /**
    * ADM-1: everyone's level and each client's leads (sources/dataverse/directory.ts), read once a day by the app's job
    * with the shared reader. Names, emails, Entra ids and client keys only.
    */
@@ -743,7 +765,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     }
   }
 
-  return { load, following, resolveUserId, devopsTargets, accountTargets, statusSent, myClients, pto, teammates, clientTeam, teamPto, directory };
+  return { load, following, resolveUserId, devopsTargets, accountTargets, statusSent, myClients, pto, teammates, clientTeam, teamPto, holidays, directory };
 }
 
 export type TeamFailure = { ok: false; message: string };

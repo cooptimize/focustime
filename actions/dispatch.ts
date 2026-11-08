@@ -2157,6 +2157,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "status.load":
     case "status.draft":
     case "status.report":
+    case "status.suggest":
       return statusAction(await statusCtx(ctx), action satisfies StatusAction, req.input);
     case "send.people":
     case "send.create":
@@ -2286,6 +2287,11 @@ async function statusCtx(ctx: ActionContext): Promise<StatusContext> {
       return dv.teamPto ? dv.teamPto(from, to) : { ok: false as const, message: "PTO can't be read here" };
     },
     writeName: async (k) => (await ctx.plan?.devopsIdentities().catch(() => []))?.find((w) => w.clientKey === k)?.name ?? null,
+    // SR-3: Cooptimize's observed holidays (the Working Days Calendar), read with the app's Dataverse access.
+    holidays: async (cfg, from, to) => {
+      const dv = ctx.makeDataverse(cfg.dataverse, userZone(cfg));
+      return dv.holidays ? dv.holidays(from, to) : { ok: false as const, message: "Holidays can't be read here" };
+    },
   };
 }
 

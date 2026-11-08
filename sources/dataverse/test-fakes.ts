@@ -81,7 +81,22 @@ export const PTO_TRACKERS = {
 };
 export const PTO_DETAILS = { value: [{ _coop_timeofftracker_value: "aaaaaaaa-0000-4000-8000-000000000005", coop_date: "2026-11-05" }] };
 
-export function fakeFetch(scenario: Scenario, extra: { users?: unknown[]; devopsAccounts?: unknown; pto?: "ok" | "none" | "forbidden"; missing?: string } = {}) {
+/**
+ * SR-3: Working Days Calendar rows. Thanksgiving observed on its own date; the Friday after it observed as a named
+ * holiday; Veterans Day not observed (Holiday Observed = No); one observed day with no name; Christmas observed on the
+ * Friday before (Dec 24), a date other than the traditional one.
+ */
+export const HOLIDAY_ROWS = {
+  value: [
+    { coop_date: "2026-11-11", coop_holidayname: "Veterans Day", coop_observedholidayflag: false },
+    { coop_date: "2026-11-26", coop_holidayname: "Thanksgiving Day", coop_observedholidayflag: true },
+    { coop_date: "2026-11-27", coop_holidayname: "Day after Thanksgiving", coop_observedholidayflag: true },
+    { coop_date: "2026-12-07", coop_holidayname: null, coop_observedholidayflag: true },
+    { coop_date: "2026-12-24", coop_holidayname: "Christmas Day", coop_observedholidayflag: true },
+  ],
+};
+
+export function fakeFetch(scenario: Scenario, extra: { users?: unknown[]; devopsAccounts?: unknown; pto?: "ok" | "none" | "forbidden"; missing?: string; holidays?: "ok" | "forbidden" } = {}) {
   const calls: Call[] = [];
   const fn = async (input: string | URL | Request, init: RequestInit = {}): Promise<Response> => {
     const url = String(input);
@@ -124,6 +139,15 @@ export function fakeFetch(scenario: Scenario, extra: { users?: unknown[]; devops
       // Only my rows: the filter must name my systemuserid.
       if (path.startsWith("coop_timeofftrackers?")) return json(200, decodeURIComponent(path).includes(`_coop_employee_value eq ${ME}`) ? PTO_TRACKERS : { value: [] });
       return json(200, PTO_DETAILS);
+    }
+    // SR-3: the Working Days Calendar (AS-3: the reader role can't read its rows yet, so "forbidden" is today's answer).
+    if (path.startsWith("coop_workingdayscalendars")) {
+      if (extra.holidays === "forbidden") return leakyError(403, "0x80040220");
+      const q = decodeURIComponent(path);
+      const ge = /coop_date ge (\d{4}-\d{2}-\d{2})/.exec(q)?.[1] ?? "0000-00-00";
+      const le = /coop_date le (\d{4}-\d{2}-\d{2})/.exec(q)?.[1] ?? "9999-99-99";
+      const onlyObserved = q.includes("coop_observedholidayflag eq true");
+      return json(200, { value: HOLIDAY_ROWS.value.filter((r) => r.coop_date >= ge && r.coop_date <= le && (!onlyObserved || r.coop_observedholidayflag)) });
     }
     if (path.startsWith("coop_focustimes")) {
       const paged = scenario === "paged" || scenario === "paged_foreign_next" || scenario === "page_fails";

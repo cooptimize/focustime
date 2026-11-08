@@ -11,7 +11,7 @@
 // 403 MessageWritesBlocked turns Teams messages off for the person. Nothing here logs text, people or chat ids.
 import type { ActionResponse, WeekLoadData } from "../../actions/types.ts";
 import { withoutUpdate } from "../../actions/status-actions.ts";
-import { nextStatusNudge, nudgeLine, statusNudgeDue } from "../../plan/status-report.ts";
+import { nextStatusNudge, nudgeLineFor, statusNudgeDue } from "../../plan/status-report.ts";
 import type { StatusLoad } from "../../plan/status-types.ts";
 import type { AppConfig } from "../../config/schema.ts";
 import type { LogRecord } from "../../log/logger.ts";
@@ -341,7 +341,7 @@ export function createRhythm(d: RhythmDeps) {
       left -= features.length;
       return { name: c.name, features };
     }).filter((c) => c.features.length);
-    return { kind: "status", occasion, test, line: w.without ? nudgeLine(w.without) : "Every feature has an update for Monday's report", reportLabel: l.title.replace(/^Status report · /, ""), clients, more: Math.max(0, w.without - MAX_ROWS) };
+    return { kind: "status", occasion, test, line: w.without ? nudgeLineFor(w.needsYou, w.rest) : "Every feature has an update for Monday's report", needsYou: w.needsYou, reportLabel: l.title.replace(/^Status report · /, ""), clients, more: Math.max(0, w.without - MAX_ROWS) };
   }
 
   /**

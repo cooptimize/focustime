@@ -36,8 +36,8 @@ export function onOrg(url: string, org: string): boolean {
 export const itemApiUrl = (org: string, id: number) => `${orgBase(org)}/_apis/wit/workItems/${id}`;
 
 export type PatchOp = { op: "add" | "replace" | "remove" | "test"; path: string; value?: unknown };
-export type ChangeKind = "state" | "comment" | "create" | "target_date" | "description" | "assign" | "fields" | "comment_edit";
-export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description" | "undo_assign" | "undo_fields" | "undo_comment_edit" | "feedback";
+export type ChangeKind = "state" | "comment" | "create" | "target_date" | "description" | "assign" | "fields" | "comment_edit" | "comment_delete";
+export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description" | "undo_assign" | "undo_fields" | "undo_comment_edit" | "undo_comment_delete" | "feedback";
 
 /** One identity as connectionData reports it. */
 export type DevOpsIdentity = { id: string; name: string; email: string };
@@ -158,7 +158,9 @@ export type DevOpsWriteEntry = {
 export function stackKey(e: Pick<DevOpsWriteEntry, "org" | "itemId" | "op" | "id" | "ops">): string {
   const base = `${e.org.toLowerCase()}#${e.itemId}`;
   if (e.op === "comment" || e.op === "undo_comment") return `${base}#new${e.id}`;
-  if (e.op === "comment_edit" || e.op === "undo_comment_edit") return `${base}#c${editedComment(e.ops) ?? 0}`;
+  if (e.op === "comment_edit" || e.op === "undo_comment_edit" || e.op === "comment_delete") return `${base}#c${editedComment(e.ops) ?? 0}`;
+  // SR-3: putting a deleted comment back stacks with the delete it undoes (its own new comment has a new id).
+  if (e.op === "undo_comment_delete") return `${base}#undel${e.id}`;
   return base;
 }
 /** SR-1: an edit's comment id, kept in its ops (never in the comment_id column: an older build would read that as a comment to delete). */

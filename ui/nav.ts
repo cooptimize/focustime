@@ -43,7 +43,7 @@ export type DayFocus = { date: IsoDate | null; half: Half | null };
  */
 export type Nav =
   | { tab: "today"; flow: TodayFlow | null; date: IsoDate | null }
-  | { tab: "week"; mode: WeekMode; week: IsoDate | null; focus: DayFocus | null }
+  | { tab: "week"; mode: WeekMode; week: IsoDate | null; focus: DayFocus | null; /** SR-3: Status opened on Needs your update (#/week/status/needs). */ group?: "needs" }
   | { tab: "ahead"; mode: AheadMode; item?: number }
   /**
    * IB-1: one list with views. `view` null is the bare #/inbox (the view I last used, Needs you the first time);
@@ -70,6 +70,8 @@ export const navOf = {
   ahead: (mode: AheadMode = "grid"): Nav => ({ tab: "ahead", mode }),
   /** AH-1: one item, selected in the Grid (#/ahead/item/<id>), from a notice. */
   aheadItem: (id: number): Nav => ({ tab: "ahead", mode: "grid", item: id }),
+  /** SR-3: Week › Status on its Needs your update group (the nudge's click). */
+  statusNeeds: (): Nav => ({ tab: "week", mode: "status", week: null, focus: null, group: "needs" }),
   /** The bare Inbox (the view I last used), or a promise I added or a rule opened, open in the detail pane (was #/inbox/<id>). */
   inbox: (followUp: number | null = null): Nav => ({ tab: "inbox", view: null, item: followUp ? `f${followUp}` : null }),
   /** IB-1: one view of the Inbox (#/inbox/<view>). */
@@ -177,7 +179,7 @@ export function hashOf(l: Loc): string {
     // SW-1: the client team view.
     if (n.mode === "team") return ["#/week/team", n.week].filter(Boolean).join("/");
     // SR-1: always this week's report (the one Kat sends next Monday).
-    if (n.mode === "status") return "#/week/status";
+    if (n.mode === "status") return n.group === "needs" ? "#/week/status/needs" : "#/week/status";
     if (n.focus) return ["#/week/day", n.focus.date, n.focus.date ? n.focus.half : null].filter(Boolean).join("/");
     return ["#/week", n.week].filter(Boolean).join("/");
   }
@@ -273,7 +275,7 @@ export function parseHash(full: string): Loc | null {
       if (a === "day") return day(b, c);
       if (a === "commit" || a === "plan") return week("commit", b, c);
       if (a === "team") return week("team", b, c);
-      if (a === "status") return b === undefined ? plain(navOf.week("status")) : null;
+      if (a === "status") return b === undefined ? plain(navOf.week("status")) : b === "needs" && c === undefined ? plain(navOf.statusNeeds()) : null;
       return b === undefined && validDate(a) ? plain(navOf.week("board", a)) : null;
     }
     case "ahead":
@@ -351,6 +353,7 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
     case "aheaditem": return plain(navOf.aheadItem(r.id));
     case "team": return plain(navOf.week("team"));
     case "status": return plain(navOf.week("status"));
+    case "status_needs": return plain(navOf.statusNeeds());
     case "planweek": return plain(navOf.week("commit", r.weekStart));
     case "followup": return plain(navOf.inbox(r.id));
     case "settings": return { loc: { nav: navOf.today(), overlay: { kind: "settings", section: r.section } }, vmMenu: false };

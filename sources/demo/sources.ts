@@ -43,6 +43,14 @@ export function createDemoSources(world: DemoDevOps, cal: DemoOutlook, now: () =
       const away = [{ userId: priya!.id, date: day(1) }, { userId: priya!.id, date: day(2) }, { userId: sam!.id, date: day(11) }, ...demoPto(from, day(6), demoToday()).map((p) => ({ userId: DEMO_ME, date: p.date }))];
       return { ok: true, away: away.filter((a) => a.date >= from && a.date <= to) };
     },
+    // SR-3: Cooptimize's observed holidays (fictional, from the asked range's Monday): "Founders Day" observed on the
+    // first week's Thursday, and an unnamed observed day the Monday after.
+    holidays: async (from: string, to: string) => {
+      const m = Temporal.PlainDate.from(from);
+      const monday = m.subtract({ days: m.dayOfWeek - 1 });
+      const days = [{ date: monday.add({ days: 3 }).toString(), name: "Founders Day" }, { date: monday.add({ days: 7 }).toString(), name: null }];
+      return { ok: true, days: days.filter((d) => d.date >= from && d.date <= to) };
+    },
     // ADM-1: fictional levels and client leads (Admin › People in the demo).
     directory: async () => ({ ok: true, read: demoDirectory() }),
     // SR-1: Kat sent each demo client's report last Monday a few minutes after 7:00 AM ET (seeds/status.ts).

@@ -85,7 +85,7 @@ export type DevOpsWriteContext = {
 };
 
 /** Batch previews where one refused change doesn't stop the rest: AH-1's change set, SR-1's Push all lines. */
-const PER_ITEM = new Set(["fields", "comment", "comment_edit", "state"]);
+const PER_ITEM = new Set(["fields", "comment", "comment_edit", "comment_delete", "state"]);
 /** CV-4: images attached to one item at most, and the largest one (as read from Teams, after stripping). */
 export const ATTACH_LIMIT = 10;
 /** One image the create preview offers: from a message being included, with who sent it and when. */
@@ -185,6 +185,7 @@ const SUMMARY: Record<WriteOp, string> = {
   fields: "Change dates, state, size or owner in DevOps", undo_fields: "Undo: put the dates, state, size and owner back",
   feedback: "Send feedback to the FocusTime backlog",
   comment_edit: "Edit your comment on a DevOps item", undo_comment_edit: "Undo: put your comment's earlier text back",
+  comment_delete: "Delete your comment on a DevOps item", undo_comment_delete: "Undo: post your deleted comment's text again",
 };
 
 export async function devopsWriteAction(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
@@ -517,7 +518,8 @@ const TEXT_PATHS = new Set(["/fields/System.Title", "/fields/System.Description"
 
 /** The text a held change would write into DevOps (undos only put back what was there, so they carry none). */
 export function writtenText(h: Pick<HeldIn, "op" | "ops">): string[] {
-  if (h.op.startsWith("undo_") || !h.ops) return [];
+  // SR-3: a delete writes no text (the comment's old text is only kept for Undo).
+  if (h.op.startsWith("undo_") || h.op === "comment_delete" || !h.ops) return [];
   if (!Array.isArray(h.ops)) return [h.ops.text];
   return h.ops.filter((p) => p.op !== "test" && p.op !== "remove" && TEXT_PATHS.has(p.path) && typeof p.value === "string").map((p) => htmlToText(p.value as string) || (p.value as string));
 }
@@ -645,6 +647,22 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const was = htmlToText(cm.text).trim() || cm.text.trim();
       if (sameText(cm.text, text)) return "That comment already says that";
       return { ...base(env), ...none, op: "comment_edit", itemId: item.id, title: item.title, ops: { text, commentId }, rev: null, before: { Comment: was }, after: { Comment: text }, type: item.type };
+    }
+    case "comment_delete": {
+      // SR-3: my own comment, inside this client's status report window, the same checks as an edit. The full text is
+      // shown in the preview and kept in the audit log; Undo posts it again as a new comment (DevOps has no undelete).
+      if (!env.reportSince) throw new Refused("Deleting comments isn't available here", 409);
+      const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));
+      const commentId = posId(o.commentId, "commentId");
+      const cm = await writer.getComment(org, pat, project, item.id, commentId);
+      if (cm.isDeleted) return "That comment is already deleted";
+      if (!cm.createdBy || cm.createdBy.toLowerCase() !== env.me.email.toLowerCase()) throw new Refused("Only your own comments can be deleted. DevOps doesn't let anyone delete someone else's", 409);
+      if (isCoopComment(cm.text)) throw new Refused("Coop's comments aren't deleted from FocusTime", 409);
+      const since = await env.reportSince(env.cfg, env.clientKey);
+      const counted = cm.modifiedDate || cm.createdDate;
+      if (!counted || Temporal.Instant.compare(Temporal.Instant.from(counted), Temporal.Instant.from(since)) < 0) throw new Refused("Only comments in this week's status report can be deleted here", 409);
+      const was = htmlToText(cm.text).trim() || cm.text.trim();
+      return { ...base(env), ...none, op: "comment_delete", itemId: item.id, title: item.title, ops: { text: was, commentId }, rev: null, before: { Comment: was }, after: { Comment: "(deleted)" }, type: item.type, notes: ["Undo posts the same text again as a new comment, dated when you undo"] };
     }
     case "target_date": {
       const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));
@@ -1090,6 +1108,12 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
         if (!sameText(cm.text, entry.after.Comment ?? "")) throw new Refused("The comment changed in DevOps since FocusTime's edit. Undo would overwrite that; change it in DevOps", 409, "changed");
         return { ...u, op: "undo_comment_edit", ops: { text: entry.before.Comment ?? "", commentId: cid }, rev: null, before: { Comment: entry.after.Comment ?? null }, after: { Comment: entry.before.Comment ?? null } };
       }
+      if (entry.op === "comment_delete") {
+        // SR-3: the deleted comment's text, posted again as a new comment of mine.
+        const text = entry.before.Comment ?? "";
+        if (!text.trim()) throw new Refused("The deleted comment's text wasn't recorded, so it can't be put back from here", 409);
+        return { ...u, op: "undo_comment_delete", ops: { text }, rev: null, before: { Comment: "(deleted)" }, after: { Comment: text }, notes: ["Posted as a new comment, dated now. DevOps has no way to bring back the deleted one"] };
+      }
       if (entry.op === "comment") {
         if (entry.commentId === null) throw new Refused("The comment's id wasn't recorded, so it can't be deleted from here", 409);
         const cm = await writer.getComment(org, pat, project, item.id, entry.commentId);
@@ -1114,7 +1138,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       };
     }
     default:
-      throw new Invalid("kind must be state, comment, comment_edit, create, request_create, proposal_create, conversation_create, conversation_comment, description_update, description_edit, target_date, assign, fields or undo");
+      throw new Invalid("kind must be state, comment, comment_edit, comment_delete, create, request_create, proposal_create, conversation_create, conversation_comment, description_update, description_edit, target_date, assign, fields or undo");
   }
 }
 
@@ -1280,6 +1304,27 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       if (entry.op === "undo_comment_edit") await plan.markDevopsUndone(entry.undoOf!, entry.id);
       forget();
       return settle("confirmed", entry.op === "undo_comment_edit" ? "Comment put back in DevOps" : "Comment edited in DevOps");
+    }
+    if (entry.op === "comment_delete") {
+      const { commentId } = entry.ops as { commentId: number };
+      const now = await writer.getComment(org, pat, project, entry.itemId!, commentId);
+      if (!now.isDeleted) await writer.deleteComment(org, pat, project, entry.itemId!, commentId);
+      const back = await again(() => writer.getComment(org, pat, project, entry.itemId!, commentId));
+      if (!back.isDeleted) return settle("unconfirmed", "DevOps still shows the comment. Retry checks first");
+      forget();
+      return settle("confirmed", "Comment deleted in DevOps");
+    }
+    if (entry.op === "undo_comment_delete") {
+      const text = (entry.ops as { text: string }).text;
+      // As for a new comment: a retry adopts the one that landed rather than posting twice.
+      const posted = retry ? ((await writer.comments(org, pat, project, entry.itemId!)).find((c) => !c.isDeleted && c.createdBy?.toLowerCase() === env.me.email.toLowerCase() && sameText(c.text, text) && (!c.createdDate || Temporal.Instant.compare(Temporal.Instant.from(c.createdDate), Temporal.Instant.from(entry.at).subtract({ hours: 1 })) >= 0)) ?? null) : null;
+      const made = posted ?? (await writer.addComment(org, pat, project, entry.itemId!, text));
+      (await plan.settleDevopsWrite(entry.id, { status: "pending", commentId: made.id }));
+      const back = await again(() => writer.getComment(org, pat, project, entry.itemId!, made.id));
+      if (back.isDeleted || !sameText(back.text, text)) return settle("unconfirmed", "DevOps didn't show the comment yet. Retry checks first and won't post it twice", { commentId: made.id });
+      await plan.markDevopsUndone(entry.undoOf!, entry.id);
+      forget();
+      return settle("confirmed", "Comment posted again in DevOps", { commentId: made.id });
     }
     if (entry.op === "undo_comment") {
       const before = await writer.getComment(org, pat, project, entry.itemId!, entry.commentId!);

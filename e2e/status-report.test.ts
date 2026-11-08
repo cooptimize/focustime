@@ -1,7 +1,7 @@
 // SR-2: the client report in Week › Status on the demo, Thursday Nov 5: the switch (My features · <Client> report),
 // Northwind's report as Kat will send it, No update yet, a line added on a feature there with who it shows as, Push
 // all, and the report reading it back. The phone at 390 (17px and 21px root fonts, as on iPhone): the report reads
-// with no horizontal scroll, view only. With FOCUSTIME_SHOTS: the report, No update yet, adding a line, the phone.
+// with no horizontal scroll (SR-3: and can be written). With FOCUSTIME_SHOTS: the report, No update yet, adding a line, the phone.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, startDemo, freshPage, type Harness } from "./harness.ts";
@@ -35,7 +35,7 @@ describe.skipIf(!CHROMIUM)("the client report (SR-2)", () => {
     const titles = page.locator(".st-report .st-feature h4");
     await expect.poll(() => titles.allTextContents()).toEqual(["Order history export", "Loyalty points"]);
     await expect.poll(() => page.getByRole("article", { name: "Loyalty points" }).locator(".st-bullets li").first().textContent()).toContain("· Sam Ortiz");
-    await expect.poll(() => page.locator(".st-pto li").allTextContents()).toEqual(["Priya Shah · Tue, Nov 10 to Wed, Nov 11", "Alex Rivera · Fri, Nov 13", "Sam Ortiz · Fri, Nov 20"]);
+    await expect.poll(() => page.locator(".st-pto li").allTextContents()).toEqual(["Priya Shah · Tue, Nov 10 to Wed, Nov 11", "Founders Day (observed) · Thu, Nov 12", "Alex Rivera · Fri, Nov 13", "Holiday · Mon, Nov 16", "Sam Ortiz · Fri, Nov 20"]);
     await page.locator(".st-pto .st-note").waitFor();
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/sr2-report-1920.png`, fullPage: true });
     await shotBoth(page, "sr2-report-view-1920", page.locator(".st-report"));
@@ -67,7 +67,7 @@ describe.skipIf(!CHROMIUM)("the client report (SR-2)", () => {
     await page.close();
   }, T);
 
-  it("on the phone at 390 the report reads with no horizontal scroll, view only", async () => {
+  it("on the phone at 390 the report reads with no horizontal scroll", async () => {
     const page = await h.browser.newPage({ viewport: { width: 390, height: 844 }, bypassCSP: true });
     await page.addInitScript(() => {
       localStorage.setItem("focustime.hint.flow", "dismissed");
@@ -91,9 +91,9 @@ describe.skipIf(!CHROMIUM)("the client report (SR-2)", () => {
       expect(m.right, `${px}px root font: something reaches past the screen`).toBeLessThanOrEqual(0);
       if (SHOTS) await page.screenshot({ path: `${SHOTS}/sr2-phone-390-${px}px.png`, fullPage: true });
     }
-    // View only on the phone: no boxes, no Push all; the report and No update yet still read.
-    expect(await page.getByRole("button", { name: "Push all" }).count()).toBe(0);
-    expect(await page.getByRole("button", { name: "+ Add a line" }).count()).toBe(0);
+    // SR-3: the phone writes too (Add a line and Push all are there); No update yet still reads.
+    expect(await page.getByRole("button", { name: "Push all" }).count()).toBe(1);
+    expect(await page.getByRole("button", { name: "+ Add a line" }).count()).toBeGreaterThan(0);
     await page.locator(".st-noupdate summary").waitFor();
     await page.close();
   }, T);

@@ -418,6 +418,7 @@ const TASK_LABELS: Record<string, string> = {
   "assistant_transcribe": "Assistant: push-to-talk",
   "stories.draft": "Break down",
   "status_draft": "Status drafts",
+  "status_suggest": "Status suggestions",
   "conversations.draft_item": "Draft a DevOps item from a conversation",
   "conversations.merge_summary": "Merging conversations",
   "conversations.comment": "Follow-through comments",

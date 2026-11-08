@@ -1455,7 +1455,7 @@ const toDraftAi = (r: Row): DraftAi | null =>
 export type DevOpsIdentityRow = { clientKey: string; org: string; id: string; name: string; email: string; validatedAt: string; expires: string | null };
 const toIdentity = (r: Row): DevOpsIdentityRow => ({ clientKey: r.client_key as string, org: r.org as string, id: r.identity_id as string, name: r.name as string, email: r.email as string, validatedAt: r.validated_at as string, expires: (r.expires as string | null) ?? null });
 const toDevopsWrite = (r: Row): DevOpsWriteEntry => ({
-  id: r.id as number, at: r.at as string, clientKey: r.client_key as string, org: r.org as string, project: r.project as string, op: ((r.write_kind as string | null) ?? r.op) as DevOpsWriteEntry["op"],
+  id: r.id as number, at: r.at as string, clientKey: r.client_key as string, org: r.org as string, project: r.project as string, op: storedOp(r),
   itemId: (r.item_id as number | null) ?? null, parentId: (r.parent_id as number | null) ?? null, title: r.title as string, identity: r.identity as string,
   before: json<Record<string, string | null>>(r.before) ?? {}, after: json<Record<string, string | null>>(r.after) ?? {}, ops: json<DevOpsWriteEntry["ops"]>(r.ops),
   revBefore: (r.rev_before as number | null) ?? null, revAfter: (r.rev_after as number | null) ?? null, commentId: (r.comment_id as number | null) ?? null, draftId: (r.draft_id as number | null) ?? null,
@@ -1464,6 +1464,20 @@ const toDevopsWrite = (r: Row): DevOpsWriteEntry => ({
   ask: typeof r.ask_chat_id === "string" && typeof r.ask_message_id === "string" ? { chatId: r.ask_chat_id, messageId: r.ask_message_id } : null,
   conv: typeof r.conversation_id === "number" ? { conversationId: r.conversation_id, commitmentId: (r.commitment_id as number | null) ?? null, suggestionId: (r.suggestion_id as number | null) ?? null } : null,
 });
+/**
+ * SR-3: a comment delete is kept as a comment_edit whose ops say `deleted` (rollback safe: the previous build reads it
+ * as an edit, and its Undo of an edit is refused because the comment is deleted, so it never treats it as a create).
+ */
+const storedOp = (r: Row): DevOpsWriteEntry["op"] => {
+  const kind = ((r.write_kind as string | null) ?? r.op) as DevOpsWriteEntry["op"];
+  if (kind !== "comment_edit" || typeof r.ops !== "string") return kind;
+  try {
+    return (JSON.parse(r.ops) as { deleted?: unknown } | null)?.deleted === true ? "comment_delete" : kind;
+  } catch {
+    return kind;
+  }
+};
+const opsToStore = (w: { op: string; ops: DevOpsWriteEntry["ops"] }) => (w.op === "comment_delete" && w.ops && !Array.isArray(w.ops) ? { ...w.ops, deleted: true } : w.ops);
 /** The write log's op CHECK (fixed before CV-1; newer ops go in write_kind). */
 const OLD_WRITE_OPS = ["state", "comment", "create", "target_date", "undo_state", "undo_comment", "undo_create", "undo_target_date"] as const;
 export type NewDevOpsWrite = Omit<DevOpsWriteEntry, "id" | "at" | "status" | "message" | "undoneBy" | "attempts" | "updatedAt" | "pickIds"> & { pickIds?: number[] };
@@ -1939,7 +1953,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         // "comment" in op: an older build reading the log refuses to undo a comment without a comment id (add-only).
         const legacy = (OLD_WRITE_OPS as readonly string[]).includes(w.op);
         const r = (await db.run(`INSERT INTO devops_write_log (at, client_key, org, project, op, item_id, parent_id, title, identity, before, after, ops, rev_before, rev_after, comment_id, draft_id, pick_ids, follow_up_id, status, message, undo_of, undone_by, attempts, updated_at, ask_chat_id, ask_message_id, conversation_id, commitment_id, suggestion_id, write_kind)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, NULL, 1, ?, ?, ?, ?, ?, ?, ?)`, at, w.clientKey, w.org, w.project, legacy ? w.op : "comment", w.itemId, w.parentId, w.title, w.identity, JSON.stringify(w.before), JSON.stringify(w.after), w.ops ? JSON.stringify(w.ops) : null, w.revBefore, w.revAfter, w.commentId, w.draftId, JSON.stringify(w.pickIds ?? []), w.followUpId, w.undoOf, at, w.ask?.chatId ?? null, w.ask?.messageId ?? null, w.conv?.conversationId ?? null, w.conv?.commitmentId ?? null, w.conv?.suggestionId ?? null, legacy ? null : w.op));
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, NULL, 1, ?, ?, ?, ?, ?, ?, ?)`, at, w.clientKey, w.org, w.project, legacy ? w.op : "comment", w.itemId, w.parentId, w.title, w.identity, JSON.stringify(w.before), JSON.stringify(w.after), w.ops ? JSON.stringify(opsToStore(w)) : null, w.revBefore, w.revAfter, w.commentId, w.draftId, JSON.stringify(w.pickIds ?? []), w.followUpId, w.undoOf, at, w.ask?.chatId ?? null, w.ask?.messageId ?? null, w.conv?.conversationId ?? null, w.conv?.commitmentId ?? null, w.conv?.suggestionId ?? null, legacy ? null : w.op === "comment_delete" ? "comment_edit" : w.op));
         return (await this.devopsWrite(r.lastId!))!;
       });
     },

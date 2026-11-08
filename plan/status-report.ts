@@ -101,7 +101,7 @@ export function sortComments(list: readonly RawReportComment[], w: Pick<ReportWi
 /** An item of the client's store as Ahead reads it (only what selection needs). */
 export type ReportItem = { id: number; title: string; type: string; state: string; stateCategory: string; level: "top" | "parent" | "child" | "task" | null; parentId: number | null; assigneeEmail: string | null; url: string; order: number | null };
 /** SR-2 adds "report": on the client report because it has a comment in the window. */
-export type FeatureWhy = "planned" | "touched" | "assigned" | "report";
+export type FeatureWhy = "planned" | "touched" | "assigned" | "report" | "added";
 
 export type SelectInput = {
   items: readonly ReportItem[];
@@ -160,6 +160,8 @@ export type StoryFact =
   | { kind: "state"; itemId: number; title: string; from: string | null; to: string | null }
   | { kind: "comments"; itemId: number; title: string; count: number }
   | { kind: "done_pick"; itemId: number; title: string }
+  /** SR-3: a to-do of mine on the item, not done yet. */
+  | { kind: "todo"; itemId: number; title: string }
   | { kind: "note"; date: IsoDate; text: string }
   | { kind: "capture"; text: string };
 
@@ -172,6 +174,7 @@ export function hintLines(facts: readonly StoryFact[]): string[] {
       f.kind === "state" ? `#${f.itemId} ${f.title}: ${f.from ? `${f.from} → ` : ""}${f.to ?? "changed"}`
       : f.kind === "comments" ? `#${f.itemId} ${f.title}: ${f.count === 1 ? "1 new comment" : `${f.count} new comments`}`
       : f.kind === "done_pick" ? `Done in FocusTime: #${f.itemId} ${f.title}`
+      : f.kind === "todo" ? `To-do in FocusTime: #${f.itemId} ${f.title}`
       : f.kind === "note" ? `Where you left off (${f.date}): ${f.text}`
       : `Captured: ${f.text}`;
     if (seen.has(line)) continue;
@@ -383,4 +386,122 @@ export function ptoRuns(away: readonly { name: string; date: IsoDate }[]): { nam
 export function ptoWhen(r: { from: IsoDate; to: IsoDate }): string {
   const f = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
   return r.from === r.to ? f(r.from) : `${f(r.from)} to ${f(r.to)}`;
+}
+
+// ---- SR-3: Upcoming PTO and Holidays, with holidays ----
+
+/**
+ * How far "Upcoming PTO and Holidays" looks: FocusTime doesn't know Kat's window (no flow notes say), so the next two
+ * weeks from the report's Monday (Monday through the Sunday thirteen days later), as the SR-3 brief says to use.
+ */
+export const UPCOMING_DAYS = 14;
+export type UpcomingRow = { kind: "pto" | "holiday"; name: string; when: string; from: IsoDate; days: number };
+
+/**
+ * The section's rows: each holiday on its own date (everyone's day off, named as given) and each person's runs of days
+ * away, in date order; on one date a holiday comes first, then people by name. Names and dates only.
+ */
+export function upcomingRows(away: readonly { name: string; date: IsoDate }[], holidays: readonly { date: IsoDate; label: string }[]): UpcomingRow[] {
+  const people: UpcomingRow[] = ptoRuns(away).map((r) => ({ kind: "pto", name: r.name, when: ptoWhen(r), from: r.from, days: r.days }));
+  const hols: UpcomingRow[] = holidays.map((h) => ({ kind: "holiday", name: h.label, when: ptoWhen({ from: h.date, to: h.date }), from: h.date, days: 1 }));
+  return [...hols, ...people].sort((a, b) => a.from.localeCompare(b.from) || (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "holiday" ? -1 : 1));
+}
+
+// ---- SR-3: "You worked on this" ----
+
+/** How I contributed to a feature since the window opened (each kind found at least once). */
+export type ContributionKind = "assigned" | "state" | "comment" | "created" | "todo" | "time" | "feature_comment";
+export type Contribution = { kinds: ContributionKind[]; /** The stories and tasks under it I worked on, by title, in backlog order. */ stories: { id: number; title: string }[] };
+
+export type ContributionInput = {
+  items: readonly (ReportItem & { changedAt?: string | null })[];
+  /** My emails on this client, lowercase. */
+  myEmails: ReadonlySet<string>;
+  /** The window's start: the client's report window (SR-1's, from Kat's watermark). */
+  since: string;
+  /** DV-1's change log since the window (only rows marked mine count). */
+  activity: readonly { itemId: number; kind: "state" | "comments"; changedAt: string; mine: boolean }[];
+  /** My FocusTime to-dos in the window (not dropped), by DevOps item. */
+  todos: readonly number[];
+  /** My timeboxes in the window, by DevOps item. */
+  timeboxes: readonly number[];
+  /** Items I created through FocusTime (the write log's confirmed creates) in the window. */
+  created: readonly number[];
+  /** Features with a feature-level comment of mine in the window. */
+  featureComments: ReadonlySet<number>;
+};
+
+/**
+ * SR-3's rule: I worked on a feature since the window opened when any of these is true.
+ *  - A story or task under it (or the feature itself) is assigned to me and DevOps changed it since the window opened.
+ *  - I changed a story's state or commented on it (DV-1's change log, rows marked mine).
+ *  - I created a story under it through FocusTime (the write log; DevOps' own creator isn't read).
+ *  - A FocusTime to-do or timebox of mine in the window is on the feature or an item under it.
+ *  - I commented on the feature itself.
+ * Data FocusTime already has; no new DevOps read. Features only (the feature tier).
+ */
+export function contributions(i: ContributionInput): Map<number, Contribution> {
+  const byId = new Map(i.items.map((x) => [x.id, x] as const));
+  const since = at(i.since);
+  const featureOf = (id: number | null, depth = 0): ReportItem | null => {
+    if (id === null || depth > 6) return null;
+    const x = byId.get(id);
+    if (!x) return null;
+    if (x.level === "parent") return x;
+    if (x.level === "top") return null;
+    return featureOf(x.parentId, depth + 1);
+  };
+  const out = new Map<number, { kinds: Set<ContributionKind>; stories: Map<number, ReportItem> }>();
+  const mark = (id: number, kind: ContributionKind) => {
+    const f = featureOf(id);
+    if (!f) return;
+    const e = out.get(f.id) ?? out.set(f.id, { kinds: new Set(), stories: new Map() }).get(f.id)!;
+    e.kinds.add(kind);
+    const x = byId.get(id);
+    if (x && x.id !== f.id) e.stories.set(x.id, x);
+  };
+  const after = (s: string | null | undefined) => {
+    const t = s ? at(s) : null;
+    return !!t && !!since && Temporal.Instant.compare(t, since) >= 0;
+  };
+  for (const x of i.items) if (x.assigneeEmail && i.myEmails.has(x.assigneeEmail.toLowerCase()) && after(x.changedAt) && x.level !== "top") mark(x.id, "assigned");
+  for (const r of i.activity) if (r.mine && after(r.changedAt)) mark(r.itemId, r.kind === "state" ? "state" : featureOf(r.itemId)?.id === r.itemId ? "feature_comment" : "comment");
+  for (const id of i.created) mark(id, "created");
+  for (const id of i.todos) mark(id, "todo");
+  for (const id of i.timeboxes) mark(id, "time");
+  for (const id of i.featureComments) mark(id, "feature_comment");
+  const ORDER: ContributionKind[] = ["assigned", "state", "comment", "created", "todo", "time", "feature_comment"];
+  return new Map([...out].map(([id, e]) => [id, { kinds: ORDER.filter((k) => e.kinds.has(k)), stories: [...e.stories.values()].map((item) => ({ item })).sort(backlog).map((s) => ({ id: s.item.id, title: s.item.title })) }]));
+}
+
+/**
+ * Needs my update: I worked on it and there's no feature-level comment of mine counted in the window. A comment of mine
+ * since the watermark clears it. Others' comments don't.
+ */
+export const needsMyUpdate = (c: Contribution | undefined, iCommented: boolean) => !!c && !iCommented;
+
+/** "2 stories · a to-do · time on the calendar": the badge's line, short. */
+export function contributionLine(c: Contribution): string {
+  const parts: string[] = [];
+  const n = c.stories.length;
+  if (n) parts.push(n === 1 ? "1 story" : `${n} stories`);
+  if (c.kinds.includes("todo")) parts.push("your to-dos");
+  if (c.kinds.includes("time")) parts.push("time on your calendar");
+  if (!n && c.kinds.includes("assigned")) parts.push("assigned to you");
+  if (c.kinds.includes("feature_comment") && !parts.length) parts.push("your comment");
+  return parts.join(" · ") || "your work";
+}
+
+/** With AI off or not allowed for the client: the plain line offered instead of a suggestion. */
+export function templateLine(c: Contribution, featureTitle: string): string {
+  const titles = c.stories.slice(0, 4).map((s) => s.title);
+  const more = c.stories.length > 4 ? ` and ${c.stories.length - 4} more` : "";
+  return `Worked on: ${titles.length ? titles.join(", ") : featureTitle}${more}`;
+}
+
+/** SR-3's nudge: the features I worked on first, then the other features with no update yet. */
+export function nudgeLineFor(needsYou: number, rest: number): string {
+  if (needsYou <= 0) return nudgeLine(rest);
+  const first = `${needsYou === 1 ? "1 feature you worked on needs" : `${needsYou} features you worked on need`} an update for Monday`;
+  return rest > 0 ? `${first} · ${rest === 1 ? "1 more has" : `${rest} more have`} no update yet` : first;
 }

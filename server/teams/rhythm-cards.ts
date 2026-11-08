@@ -28,7 +28,7 @@ export type CheckinModel = Base & { kind: "checkin"; picks: PickRow[]; destinati
 export type CloseoutModel = Base & { kind: "closeout"; picks: PickRow[]; closed: boolean };
 export type NudgeModel = { kind: "nudges"; occasion: string; items: Nudge[]; test?: boolean };
 /** SR-1: Monday's status report, the features with no update yet (titles of my own clients' features, to me only). */
-export type StatusModel = { kind: "status"; occasion: string; line: string; reportLabel: string; clients: { name: string; features: { title: string; url: string | null }[] }[]; more: number; test?: boolean };
+export type StatusModel = { kind: "status"; occasion: string; line: string; reportLabel: string; clients: { name: string; features: { title: string; url: string | null; needsYou?: boolean }[] }[]; more: number; test?: boolean; /** SR-3: features I worked on need my update: the card opens Status on that group. */ needsYou?: number };
 /** MC-1: client calls I review: Update the plan (proposals ready) or Upload the transcript, each with its review link. */
 export type MeetingsModel = { kind: "meetings"; occasion: string; items: { clientName: string; meeting: string; dateLabel: string; upload: boolean; route: string }[]; test?: boolean };
 export type RhythmModel = BriefModel | CheckinModel | CloseoutModel | NudgeModel | StatusModel | MeetingsModel;
@@ -192,13 +192,16 @@ export function statusCard(m: StatusModel, publicUrl: string): Card {
   const body: unknown[] = [header("status", m.reportLabel, m.test), text(`${m.line}.`, { spacing: "Small" })];
   for (const c of m.clients) {
     body.push(text(c.name, { weight: "Bolder", spacing: "Medium" }));
-    for (const f of c.features) body.push(text(`• ${f.url ? `[${f.title}](${f.url})` : f.title}`, { spacing: "Small" }));
+    for (const f of c.features) body.push(text(`• ${f.url ? `[${f.title}](${f.url})` : f.title}${f.needsYou ? " · you worked on this" : ""}`, { spacing: "Small" }));
   }
   if (m.more) body.push(muted(`and ${m.more} more`));
   body.push(muted("Kat sends the report Monday 7:00 AM. Add a line in Status and push it to DevOps."));
   body.push(footer(publicUrl));
-  return card(body, [openUrl({ label: ROUTE.status[1], url: abs(publicUrl, ROUTE.status[0]) })]);
+  // SR-3: with features I worked on, the link opens Status on Needs your update.
+  return card(body, [openUrl({ label: m.needsYou ? "Open Needs your update" : ROUTE.status[1], url: abs(publicUrl, m.needsYou ? STATUS_NEEDS_ROUTE : ROUTE.status[0]) })]);
 }
+/** SR-3: Week › Status opened on the Needs your update group. */
+export const STATUS_NEEDS_ROUTE = "#/week/status/needs";
 
 /** MC-1: "Update Contoso's plan · Contoso sync · Tue, Nov 10", a button each; the call's name, never its words. */
 export function meetingsCard(m: MeetingsModel, publicUrl: string): Card {

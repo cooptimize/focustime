@@ -1465,6 +1465,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "status.load":
     case "status.draft":
     case "status.report":
+    case "status.suggest":
       return { run: () => env.setView("status") };
     // AS-1: everything the assistant does starts in its panel.
     case "assistant.ask":

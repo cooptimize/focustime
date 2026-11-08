@@ -586,6 +586,32 @@ everyone on the client's team. Decisions under "SR-2" in `docs/decisions.md`.
 - **Tests.** `plan/status-report-client.test.ts`, `actions/status-report.test.ts` (who sees it),
   `server/demo-status-report.test.ts`; e2e `e2e/status-report.test.ts` (screenshots in `docs/ux/sr2/`).
 
+## SR-3: a report preview you can finish (Nov 8)
+
+Week › Status: Upcoming PTO and Holidays, lines typed in place, any feature, "You worked on this" with a suggested
+line, and the phone writing. Decisions under "SR-3" in `docs/decisions.md`.
+
+- **Rules.** `plan/status-report.ts`: `UPCOMING_DAYS`, `upcomingRows`, `contributions` (the rule), `needsMyUpdate`,
+  `contributionLine`, `templateLine`, `nudgeLineFor`. `ui/status-lines.ts` (pure): `enterLine`, `closeLine`,
+  `pendingLines`, `byRank`, `previewFeatures`. Types: `YouWorked`, `CatalogFeature`, `PtoSection` (rows, notes),
+  `needsYou` and `added` in `plan/status-types.ts`.
+- **Actions.** `actions/status-actions.ts`: `status.suggest` (one AI request per client, `status_suggest`, standard
+  tier, GD-2 scrub, the template with AI off, held in memory), `myWork` and `myFacts`, `needsYou` on `status.load` and
+  `status.report`, `added` and `catalog` on `status.report`, `ptoSection` with holidays. `comment_delete` and
+  `undo_comment_delete` in `actions/devops-write-actions.ts` and `plan/devopswrite.ts`; stored as a comment edit in
+  `store/plan-store.ts` (`storedOp`, `opsToStore`).
+- **Sources.** `sources/dataverse/holidays.ts` and `holidays` in `sources/dataverse/source.ts`
+  (`coop_workingdayscalendars`); the demo's `holidays` in `sources/demo/sources.ts`, `status_suggest` in
+  `sources/demo/ai.ts`.
+- **Nudge.** `status_needs` route (`plan/notify.ts`, `ui/nav.ts` `#/week/status/needs`), `server/ticks.ts`,
+  `server/teams/rhythm.ts` and `rhythm-cards.ts` (Open Needs your update).
+- **UI.** `ui/Status.tsx`: `NeedsGroup`, `SuggestionCard`, `AddFeature`, `AddLineButton`, `LineRow`, `LineBox`
+  (Enter, Esc, Tab), click-to-edit and Delete on my comments, `PushDialog` grouped by client and feature; `ui/App.tsx`
+  passes `phone` and `group`. Styles in `ui/styles.css` (SR-3 block). Guide: "Finish your status update before Monday".
+- **Tests.** `plan/status-sr3.test.ts`, `sources/dataverse/holidays.test.ts`, `actions/status-report.test.ts`
+  (holidays), `server/demo-status-sr3.test.ts`, `server/teams/rhythm.test.ts` (the nudge); e2e
+  `e2e/status-sr3.test.ts` (screenshots in `docs/ux/sr3/`).
+
 ## DX-1: Diagnostics, counts only (Nov 6)
 
 - **Pure.** `plan/diagnostics.ts`: the promise reasons (`promiseReason`: shown, someone else, no open commitment, no

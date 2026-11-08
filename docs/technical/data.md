@@ -1,6 +1,6 @@
 # Data
 
-For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026.
+For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026; SR-3's parts against `feat/report-finish` on Nov 8.
 
 ## One database, two kinds of table
 
@@ -47,6 +47,8 @@ FocusTime keeps everything in one database, its plan store: Azure SQL in dev and
 |---|---|---|---|
 | `outlook_events`, `markers`, `invites` | User | Invites | FocusTime's own Outlook events and help invites |
 | `write_log`, `devops_write_log`, `azure_write_log`, `teams_status_log` | User | DevOps log | The audit logs (see [Security](security.md#external-writes-and-the-audit-log)) |
+
+Newer DevOps write kinds than the `op` column's CHECK are kept in `write_kind`, with `op` "comment", so an older build still reads the row. SR-3's delete of one's own comment is stored as `write_kind` "comment_edit" with `deleted: true` in `ops`, and the old text in `before` for Undo. No migration.
 | `devops_identities`, `devops_item_clients` | User | Yes | A person's checked DevOps identity per client (never the PAT), item to client links |
 | `devops_items`, `devops_changes`, `devops_poll` | App | Yes | Central DevOps reads, the change log, the poll's watermarks |
 | `devops_takes`, `devops_notes` | App | No | Quiet notes to someone whose item was taken or changed |
@@ -111,6 +113,7 @@ Kept elsewhere:
 - **Chat images.** Never stored: fetched from Teams on view (held in memory 5 minutes), for the AI step or for a DevOps create.
 - **Voice.** Push-to-talk audio is held in memory for one request and never stored or logged.
 - **AI prompts and answers.** The request log keeps counts, cost and outcome only.
+- **Status report drafts and suggestions (SR-1, SR-3).** Feature comments are read live from DevOps and never stored. AI suggestions are held in server memory for 6 hours and never written to the plan store. Lines not pushed yet, features added by hand and dismissed suggestions stay only in that browser (`localStorage`). Upcoming PTO and Holidays is read from Dataverse each time (names and dates only).
 - **Teams chat previews** (`lastMessagePreview`), status messages, out of office notes and work location are never read.
 
 ## Who can see what

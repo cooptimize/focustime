@@ -121,6 +121,12 @@ async function samples(c: ProviderCall, script: AiProvider): Promise<ProviderRep
       return reply(demoMeetingAnswer(c.input));
     case "status_draft":
       return reply({ drafts: statusDraft(c.input) });
+    case "status_suggest": {
+      // A fictional slip so GD-2's check after generation shows: Harbor's names Northwind (replaced), Internal's keeps it.
+      const drafts = statusSuggest(c.input);
+      if (/^Client: (Harbor|Cooptimize)/m.test(c.input) && drafts[0]?.text) drafts[0].text = `${drafts[0].text} Same pattern as Northwind's.`;
+      return reply({ drafts });
+    }
     // AS-3: a general question about one client, when the real model isn't there: say so plainly, never a made-up fact.
     case "assistant_question":
       return reply({ reply: "In the demo I can't answer that one without the real model. Ask what to look out for next week, which promises are late, or what's not ready next week.", itemIds: [] });
@@ -219,6 +225,33 @@ function loopDraft(input: string): string {
   const thing = what.replace(/\.$/, "").replace(new RegExp(`^\\w+ (?:${to.split(" ")[0]} )?`, "i"), "");
   const body = told ? `${sentence(told[1]!)}.` : `Closing the loop on ${thing}: it's done.`;
   return `Hi ${to},\n\n${body}${state} Let me know if anything looks off.${from ? `\n\n${from}` : ""}`;
+}
+
+/**
+ * SR-3: the demo's "AI suggests" lines for the features I worked on: what moved (state changes), what I'm on (to-dos and
+ * stories worked on), in one or two short sentences. Fictional data only; the real model writes better ones.
+ */
+function statusSuggest(input: string): { itemId: number; text: string }[] {
+  const out: { itemId: number; text: string }[] = [];
+  let cur: { itemId: number; facts: string[] } | null = null;
+  const name = (f: string) => f.replace(/^(Worked on |To-do in FocusTime: |Done in FocusTime: )?#\d+ /, "").replace(/:.*$/, "");
+  const flush = () => {
+    if (!cur) return;
+    const done = [...new Set(cur.facts.filter((f) => /→ (Resolved|Closed|Done)/.test(f) || f.startsWith("Done in FocusTime: ")).map(name))];
+    const review = [...new Set(cur.facts.filter((f) => /→ (In Review|Review|Testing)/.test(f)).map(name))];
+    const on = [...new Set(cur.facts.filter((f) => /→ Active/.test(f) || f.startsWith("To-do in FocusTime: ") || f.startsWith("Worked on ")).map(name))].filter((t) => !done.includes(t) && !review.includes(t));
+    const parts = [...(done.length ? [`Finished ${done.slice(0, 2).join(" and ")}`] : []), ...(review.length ? [`moved ${review.slice(0, 2).join(" and ")} to review`] : []), ...(on.length ? [`${done.length || review.length ? "next is" : "Working on"} ${on.slice(0, 2).join(" and ")}`] : [])];
+    out.push({ itemId: cur.itemId, text: parts.length ? `${sentence(parts.join("; "))}.` : "" });
+  };
+  for (const line of input.split("\n")) {
+    const m = /^Feature #(\d+): /.exec(line);
+    if (m) {
+      flush();
+      cur = { itemId: Number(m[1]), facts: [] };
+    } else if (cur && line.startsWith("- fact: ")) cur.facts.push(line.slice(8));
+  }
+  flush();
+  return out;
 }
 
 function statusDraft(input: string): { itemId: number; text: string }[] {

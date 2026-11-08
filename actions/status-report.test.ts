@@ -34,7 +34,7 @@ const bot = aDirectoryPerson({ name: "Helper bot", email: "bot@contoso.example" 
 const everyone = [lead, dana, sam, fay, ada, guest, bot];
 const workers = [dana, sam, guest, bot].map((p) => ({ personId: p.personId, clientKey: ADATUM, worker: true })).concat([{ personId: fay.personId, clientKey: FABRIKAM, worker: true }]);
 
-function world() {
+function world(extra: Partial<StatusContext> = {}) {
   const dir = mkdtempSync(join(tmpdir(), "c-sr2-"));
   const now = () => Temporal.Instant.from(NOW).toZonedDateTimeISO(ZONE);
   const team = teamStore(sqliteConn(openPlanDb({ path: join(dir, "app.db"), now })), () => Temporal.Instant.from(NOW));
@@ -82,6 +82,7 @@ function world() {
       team: () => reportTeam({ me: async () => p.personId, org, team, onFocusTime: () => true }),
       teamPto: async () => ({ ok: true, away: [{ userId: sam.systemUserId, date: "2026-11-10" }, { userId: fay.systemUserId, date: "2026-11-10" }, { userId: guest.systemUserId, date: "2026-11-11" }] }),
       writeName: async () => "Dana Reyes",
+      ...extra,
     };
   };
   const as = (p: typeof dana) => ({
@@ -128,7 +129,8 @@ describe("the client report through the action (SR-2)", () => {
     expect(rep.features.map((f) => [f.id, f.owner, f.thisWeek!.map((c) => [c.author, c.who, c.editable])])).toEqual([[701, "Dana Reyes", [["Dana Reyes", "mine", true]]]]);
     expect(rep.noUpdate.map((f) => [f.id, f.owner, f.active])).toEqual([[702, "Sam Park", "planned"], [703, null, "activity"]]);
     // The team only: Fay (another client) and the guest aren't listed.
-    expect(rep.pto).toEqual({ status: "ok", rows: [{ name: "Sam Park", when: "Tue, Nov 10", days: 1 }], source: PTO_SOURCE, range: "Mon, Nov 9 to Sun, Dec 6" });
+    // SR-3: the next two weeks from the report's Monday; this context has no holidays reader, which says so.
+    expect(rep.pto).toEqual({ rows: [{ kind: "pto", name: "Sam Park", when: "Tue, Nov 10", from: "2026-11-10", days: 1 }], source: PTO_SOURCE, range: "Mon, Nov 9 to Sun, Nov 22", ptoRead: true, holidaysRead: false, notes: ["Holidays couldn't be read (not available here)"] });
     expect(rep.authorAs).toBe("Dana Reyes");
     expect(JSON.stringify(r.data)).not.toMatch(/@contoso\.example/);
   });
@@ -137,5 +139,32 @@ describe("the client report through the action (SR-2)", () => {
     const r = await w.as(sam).run({ clientKey: ADATUM, refresh: true });
     if (!r.ok) throw new Error(r.error);
     expect((r.data as StatusReportAnswer).report!.features[0]!.thisWeek!.map((c) => [c.who, c.editable])).toEqual([["teammate", false]]);
+  });
+});
+
+describe("Upcoming PTO and Holidays (SR-3)", () => {
+  const holidays: StatusContext["holidays"] = async (_cfg, from, to) => ({ ok: true, days: [{ date: "2026-11-10", name: "Founders Day" }, { date: "2026-11-16", name: null }, { date: "2026-11-26", name: "Thanksgiving Day" }].filter((d) => d.date >= from && d.date <= to) });
+  it("holidays in the next two weeks, named '(observed)' or 'Holiday', before the team's PTO on the same day; past the window left out", async () => {
+    const w = world({ holidays });
+    const r = await w.as(dana).run({ clientKey: ADATUM });
+    if (!r.ok) throw new Error(r.error);
+    const pto = (r.data as StatusReportAnswer).report!.pto;
+    expect(pto.rows.map((x) => `${x.name} · ${x.when}`)).toEqual(["Founders Day (observed) · Tue, Nov 10", "Sam Park · Tue, Nov 10", "Holiday · Mon, Nov 16"]);
+    expect(pto.notes).toEqual([]);
+    expect([pto.ptoRead, pto.holidaysRead]).toEqual([true, true]);
+  });
+  it("a source that can't be read says so and the rest still shows", async () => {
+    const w = world({ holidays, teamPto: async () => ({ ok: false, message: "Dataverse said 403" }) });
+    const r = await w.as(dana).run({ clientKey: ADATUM });
+    if (!r.ok) throw new Error(r.error);
+    const rep = (r.data as StatusReportAnswer).report!;
+    expect(rep.pto.notes).toEqual(["PTO couldn't be read (Dataverse said 403)"]);
+    expect(rep.pto.rows.map((x) => x.kind)).toEqual(["holiday", "holiday"]);
+    expect(rep.features.map((f) => f.id)).toEqual([701]);
+    const w2 = world({ holidays: async () => { throw new Error("boom"); } });
+    const r2 = await w2.as(dana).run({ clientKey: ADATUM });
+    if (!r2.ok) throw new Error(r2.error);
+    expect((r2.data as StatusReportAnswer).report!.pto.notes).toEqual(["Holidays couldn't be read (Dataverse read failed)"]);
+    expect((r2.data as StatusReportAnswer).report!.pto.rows.map((x) => x.name)).toEqual(["Sam Park"]);
   });
 });
