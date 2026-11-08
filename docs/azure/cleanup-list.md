@@ -31,7 +31,7 @@ back to the step 1 release still works against the database.
 
 ## Status after CL-1 (Nov 7)
 
-Step 1 is done where an item was dead; details and the reasons for each choice are under "CL-1" in `docs/decisions.md`,
+Step 1 is done where an item was dead; details and the reasons for each choice are under "CL-1" (D1037 to D1047) in `docs/decisions.md`,
 and step 2's list with the drop SQL is `docs/cleanup-step-2.md`.
 
 | # | Step 1 | Notes |

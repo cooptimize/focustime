@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { call } from "../api.ts";
 import { copy } from "../FollowUps.tsx";
 import { diagnosticsText, extractionWords, PROMISE_REASON_WORDS, PROMISE_REASONS, type Diagnostics } from "../../plan/diagnostics.ts";
-import { CONVERSATION_STATUSES, STATUS_WORD, unsortedLine } from "../../plan/conversations.ts";
+import { CONVERSATION_STATUSES, STATUS_WORD, unsortedCount } from "../../plan/conversations.ts";
 import { KIND_NAME, type ChatKind } from "../../plan/chats.ts";
 
 const kindName = (k: string) => KIND_NAME[k as ChatKind] ?? k;
@@ -137,7 +137,7 @@ export function DiagnosticsPanel() {
                         <td className="num">{o.chatter.ai}</td>
                         <td className="num">{o.chatter.social}</td>
                         <td className="num">{o.chatter.notWork}</td>
-                        <td>{unsorted.length ? unsorted.map(([k, n]) => `${unsortedLine(k, c.clientName).text} ${n}`).join(", ") : "0"}</td>
+                        <td>{unsorted.length ? unsorted.map(([k, n]) => unsortedCount(n, k, c.clientName)).join(", ") : "0"}</td>
                         <td className="num">{o.notPlaced}</td>
                         <td>
                           This is work {c.marks.thisIsWork} · moved {c.marks.movedByMe} · Not work-related {c.marks.notWorkConversations}
@@ -159,7 +159,7 @@ export function DiagnosticsPanel() {
                     <p><span className="dx-client">{c.clientName}</span> {c.chatName}<span className="muted"> · {kindName(c.kind)}{c.social ? " · Social chat" : ""}</span></p>
                     <p>{c.total} messages · to a conversation: AI {o.sorted.ai}, rules {o.sorted.rules}, person {o.sorted.person}{o.workNoConversation ? `, loose ${o.workNoConversation}` : ""}</p>
                     <p>Chatter: rule {o.chatter.rule} · AI {o.chatter.ai} · Social chat {o.chatter.social} · Not work-related {o.chatter.notWork}</p>
-                    <p>Unsorted: {unsorted.length ? unsorted.map(([k, n]) => `${unsortedLine(k, c.clientName).text} ${n}`).join(", ") : "0"} · not placed {o.notPlaced}</p>
+                    <p>Unsorted: {unsorted.length ? unsorted.map(([k, n]) => unsortedCount(n, k, c.clientName)).join(", ") : "0"} · not placed {o.notPlaced}</p>
                     <p className="muted">My marks: This is work {c.marks.thisIsWork} · moved {c.marks.movedByMe} · Not work-related {c.marks.notWorkConversations}</p>
                   </li>
                 );

@@ -12,6 +12,7 @@ import { FollowUpRow } from "./FollowUps.tsx";
 import { clientColor, slotRange } from "./labels.ts";
 import { countdown, timerLeft } from "./NowStrip.tsx";
 import { userZone } from "../week/zone.ts";
+import { LiveCalls, liveOf, useCoworkData } from "./cowork.tsx";
 
 /**
  * MB-1: the phone's bar: Today, Week, Capture (the raised + in the middle), Inbox and Ask. Ahead is made for a bigger
@@ -147,6 +148,7 @@ export function PhoneNow({ data, block, pick, nowMs, nameOf, onStart, onTimer, o
 }) {
   const t = data.timer;
   const tz = userZone(data);
+  const cowork = useCoworkData();
   if (!block && !t) return null;
   const client = block?.focus[0]?.clientKey ?? pick?.clientKey ?? null;
   const running = t && (!pick || t.pickId === pick.id);
@@ -158,6 +160,8 @@ export function PhoneNow({ data, block, pick, nowMs, nameOf, onStart, onTimer, o
         <h2>{title}</h2>
         {block && <span className="pn-when">{slotRange(block, tz)}</span>}
       </header>
+      {/* CW-1: a call live in this client's delivery chat, with Join. */}
+      <LiveCalls chats={liveOf(cowork, client)} zone={tz} className="now-live" />
       {pick ? <p className="pn-pick">{pick.title}</p> : !running && <p className="pn-pick muted">Nothing planned for this block.</p>}
       {running && t ? (
         <div className="pn-timer">

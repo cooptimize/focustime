@@ -8,6 +8,7 @@
 // chat or a person.
 import { CHAT_ID, CHAT_KINDS, chatName, flagMembers, isExternal, kindWarning, membersStale, suggestKind, teamsLink, type ChatAccess, type ChatKind, type ChatPickerData, type ChatsData, type ChatSummary, type DeliveryChatView } from "../plan/chats.ts";
 import type { ClientChat } from "../plan/requests.ts";
+import { chatCallLink, liveCall, STALE_CALL_HOURS, type CoworkData, type LiveCallView } from "../plan/cowork.ts";
 import type { TeamsStore } from "../store/teams-store.ts";
 import { chatStatus } from "./request-actions.ts";
 export type { ChatAccess, ChatPickerData, ChatsData, DeliveryChatView } from "../plan/chats.ts";
@@ -20,7 +21,7 @@ import { storedIdentity, type MicrosoftAccount } from "./account.ts";
 import { mapSeq } from "./seq.ts";
 import type { ActionResponse } from "./types.ts";
 
-export type ChatAction = "chats.registered" | "chats.list" | "chats.add" | "chats.remove" | "chats.kind" | "chats.reading" | "chats.social" | "chats.refresh" | "permissions.status";
+export type ChatAction = "chats.calls" | "chats.registered" | "chats.list" | "chats.add" | "chats.remove" | "chats.kind" | "chats.reading" | "chats.social" | "chats.refresh" | "permissions.status";
 
 export type ChatContext = {
   plan?: PlanStore | undefined;
@@ -129,6 +130,34 @@ async function registered(ctx: ChatContext, teams: TeamsStore, refresh: false | 
   return { available: reason === null, reason, homeTenant: home, chats: chats.map((c) => view(c, names(c.clientKey), home, errors.get(c.chatId) ?? null)), admin: (await ctx.isAdmin?.()) ?? false };
 }
 
+/**
+ * CW-1: my registered chats (I'm in each now and follow its client, D515, D521) for Start a call, each with its live
+ * call: started, no end event, under STALE_CALL_HOURS old. Who started it by name only for someone at Cooptimize in
+ * the chat's cached members; anyone else is "someone outside Cooptimize", never named. A chat with reading off has no
+ * live call (nothing is read), but can still start one.
+ */
+async function coworkChats(ctx: ChatContext, teams: TeamsStore): Promise<CoworkData> {
+  const chats = await mine(ctx, teams);
+  const home = await ctx.homeTenant().catch(() => null);
+  const now = ctx.now();
+  const since = Temporal.Instant.from(now).subtract({ hours: STALE_CALL_HOURS }).toString();
+  const open = await teams.openCalls(chats.filter((c) => c.readOn).map((c) => c.chatId), since);
+  const sameId = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+  return {
+    available: true,
+    chats: chats.map((c) => {
+      const call = liveCall(open.filter((x) => x.chatId === c.chatId), now);
+      let live: LiveCallView | null = null;
+      if (call?.startedAt) {
+        const m = c.members?.find((x) => sameId(x.userId, call.startedBy));
+        const outside = m && home ? isExternal(m, home) : !!call.startedByTenant && !!home && !sameId(call.startedByTenant, home);
+        live = { startedAt: call.startedAt, by: outside ? null : (m?.displayName ?? null), byOutside: outside };
+      }
+      return { clientKey: c.clientKey, chatId: c.chatId, name: c.displayName, link: chatCallLink(c), live };
+    }),
+  };
+}
+
 const only = (input: unknown, keys: readonly string[]): Record<string, unknown> | null => {
   if (input === undefined || input === null) return {};
   if (typeof input !== "object" || Array.isArray(input) || Object.keys(input).some((k) => !keys.includes(k))) return null;
@@ -151,6 +180,10 @@ export async function chatAction(ctx: ChatContext, action: ChatAction, input: un
   if (ADMIN_ONLY.includes(action) && !((await ctx.isAdmin?.()) ?? false)) return bad("Only a FocusTime admin adds or changes client chats", 403, "admin");
   try {
     switch (action) {
+      case "chats.calls": {
+        if (!only(input, [])) return bad("chats.calls takes {}");
+        return { ok: true, data: await coworkChats(ctx, teams) };
+      }
       case "chats.registered": {
         const o = only(input, ["refresh"]);
         if (!o || (o.refresh !== undefined && typeof o.refresh !== "boolean")) return bad("chats.registered takes { refresh? }");

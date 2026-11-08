@@ -8,7 +8,7 @@
 import type { AiErrorKind } from "./types.ts";
 
 /** One client as the guard knows it: its key, the names people call it, its DevOps projects and work item ids. */
-export type ClientEntry = { key: string; names: string[]; projects: string[]; itemIds: number[]; /** GD-2: other names an admin set for the client (Admin › Clients › Aliases). */ aliases?: string[] };
+export type ClientEntry = { key: string; names: string[]; projects: string[]; itemIds: number[]; /** GD-2: other names an admin set for the client (Admin › Clients › Aliases). */ aliases?: string[]; /** HK-7: match its key, names and aliases only as written (the casing given), for a name that is an ordinary word. */ exactCase?: boolean };
 
 export type GuardInput = {
   /** The task's client key, or "none". */
@@ -32,7 +32,7 @@ export type GuardHit = {
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** A whole word or phrase, any case, spaces flexible: "Fabrikam" in "for Fabrikam's" but not in "Fabrikamish". */
-const phrase = (p: string) => new RegExp(`(^|[^\\p{L}\\p{N}])${esc(p.trim()).replace(/\s+/g, "\\s+")}(?=$|[^\\p{L}\\p{N}])`, "iu");
+const phrase = (p: string, exact = false) => new RegExp(`(^|[^\\p{L}\\p{N}])${esc(p.trim()).replace(/\s+/g, "\\s+")}(?=$|[^\\p{L}\\p{N}])`, exact ? "u" : "iu");
 
 /** Shapes of things that are never sent (name: what the log says). */
 export const SECRET_SHAPES: readonly [string, RegExp][] = [
@@ -90,7 +90,8 @@ export function otherClientMatch(text: string, client: string, directory: readon
   for (const c of directory) {
     if (own(c.key)) continue;
     const name = c.names[0] ?? c.key;
-    for (const w of [c.key, ...c.names, ...(c.aliases ?? [])]) if (w.trim().length >= 3 && !ownWords.has(w.trim().toLowerCase()) && phrase(w).test(text)) return { key: c.key, name, rule: "client_name" };
+    // HK-7: a client whose name is an ordinary word matches only as written; its projects and ids are unchanged.
+    for (const w of [c.key, ...c.names, ...(c.aliases ?? [])]) if (w.trim().length >= 3 && !ownWords.has(w.trim().toLowerCase()) && phrase(w, c.exactCase).test(text)) return { key: c.key, name, rule: "client_name" };
     for (const p of c.projects) if (p.trim().length >= 3 && !ownWords.has(p.trim().toLowerCase()) && phrase(p).test(text)) return { key: c.key, name, rule: "devops_project" };
     for (const id of c.itemIds) if (!ownIds.has(id) && numbers.has(id)) return { key: c.key, name, rule: "work_item" };
   }

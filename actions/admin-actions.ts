@@ -4,6 +4,7 @@
 // picks, follow-ups, captures, focus sessions, write PATs, AI request content or chat messages: a person's health is
 // names, dates and yes or no (AdminOps.people), and the store has no read for anything else. Every change is audited
 // (store/admin-store.ts) with who, when, what, old and new value; secrets are never settings.
+import { exactCaseDefault } from "../plan/common-words.ts";
 import { FLEX_TASKS, STANDARD_TASKS, isFlexTask, tierFor, type AiTier } from "../ai/tiers.ts";
 import { GAP_KINDS } from "../plan/fixnext.ts";
 import { emailOfRef, identitiesView } from "./identities.ts";
@@ -222,6 +223,9 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
         noBreakdown: c?.noBreakdown ?? [],
         background: c?.background ?? [],
         aliases: c?.aliases ?? [],
+        // HK-7: "Match only as written": the admin's choice, else the default rule for this client's names.
+        exactCase: c?.exactCase ?? exactCaseDefault([k, ...(row?.names ?? [])]),
+        exactCaseDefault: exactCaseDefault([k, ...(row?.names ?? [])]),
         houseStyle: c?.houseStyle ?? null,
         fixGaps: c?.fixGaps ?? [...GAP_KINDS],
         process: isClient ? processOf(k) : { ok: false, message: "Not a client" },

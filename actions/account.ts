@@ -1,8 +1,10 @@
-// The app's user (step 15.4): one Microsoft sign-in (the "Coopilot Desktop" app registration in Entra, its display name kept in R1, delegated, PKCE over
-// loopback) is who FocusTime works for. Its refresh token stays in the keyring (account outlook-refresh-token, kept
-// from step 3 so an existing Outlook connection carries over); who signed in (name, username, ids) and the Dataverse
-// user found for them are kept in the plan store's account state. "Me" comes from the sign-in; config's my_email and
-// my_systemuserid stay as the fallback while signed out. The launch token and Host/Origin checks still apply.
+// The app's user (step 15.4, A2): one Microsoft sign-in is who FocusTime works for. Sign-in is Entra OpenID Connect on
+// the FocusTime web registration (server/auth/entra.ts); the ID token is validated there and never stored, and the
+// refresh token is sealed in the person's `user_secrets` under the app data key (store/user-secrets.ts), never in a
+// keyring. Who signed in (name, username, ids) and the Dataverse user found for them are kept in the plan store's
+// account state. "Me" comes from the sign-in; config's my_email and my_systemuserid stay as the fallback while signed
+// out. The Host/Origin checks and the session's X-CSRF token still apply. (HK-7, Q-DOC1-3: was the desktop-era PKCE
+// over loopback and the keyring.)
 import type { ParseResult } from "../config/schema.ts";
 import { workEmail, type IdClaims } from "../sources/oauth/idtoken.ts";
 import type { MeetingsClient } from "../sources/graph/meetings.ts";

@@ -189,6 +189,7 @@ export const ACTIONS = [
   { name: "timer.next", title: "Next to-do", group: "Focus", target: "none", summary: "End the session and timebox today's next planned to-do" },
   { name: "timer.deep", title: "Deep focus", group: "Focus", target: "none", summary: "Switch the running session to deep focus (Teams: Do not disturb) or back to plain focus (Busy)" },
   { name: "presence.status", title: "Teams status during focus", group: "Focus", target: "none", summary: "Whether focus sets your Teams status, what it set and until when" },
+  { name: "chats.calls", title: "Start a call", group: "Week", target: "none", summary: "Opens a client's delivery chat in Teams, ready to start a call; shows a call live there with Join (FocusTime never starts, joins or records it)" },
   { name: "chats.registered", title: "Client chats", group: "Settings", target: "none", summary: "Each client's Teams chats (Delivery team or Customer collaboration), with their members, external people flagged" },
   { name: "chats.list", title: "Pick a client chat", group: "Settings", target: "none", summary: "Your Teams group chats to add to a client: names and members, never messages" },
   { name: "chats.add", title: "Add a client chat", group: "Settings", target: "none", summary: "Add one of your Teams group chats to a client; a client can have several, a chat belongs to one client" },

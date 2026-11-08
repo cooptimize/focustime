@@ -331,7 +331,7 @@ describe("Cooptimize Internal and the client rule", () => {
   });
 
   it("IB-1: the unsorted line in plain words; Sort again only for what passes on its own; holds have no button", async () => {
-    const { unsortedLine, unsortedSentence } = await import("../plan/conversations.ts");
+    const { unsortedLine, unsortedSentence, unsortedCount } = await import("../plan/conversations.ts");
     for (const k of ["rate_limited", "timeout", "quota", "invalid_output", "unknown_ref", "chat_cap"]) expect(unsortedLine(k, "Contoso").does, k).toBe("retry");
     for (const k of ["off", "client_off", "not_set_up", "zero_budget", "over_budget"]) {
       const l = unsortedLine(k, "Contoso");
@@ -346,6 +346,9 @@ describe("Cooptimize Internal and the client rule", () => {
     // MB-1: one plain sentence, no colon for a hold; one message reads "it".
     expect(unsortedSentence(20, unsortedLine(CLIENT_REFUSED, "Contoso"))).toBe("20 messages held back because they mention another client.");
     expect(unsortedSentence(1, unsortedLine("refused_email", "Contoso"))).toBe("1 message held back because it contains an email address.");
+    // HK-7 (Q-MB1-5): Diagnostics' cell reads count first, without the full stop.
+    expect(unsortedCount(20, CLIENT_REFUSED, "Contoso")).toBe("20 messages held back because they mention another client");
+    expect(unsortedCount(3, "rate_limited", "Contoso")).toMatch(/^3 messages: /);
     expect(unsortedSentence(3, unsortedLine("rate_limited", "Contoso"))).toBe("3 messages: the AI service was busy.");
     for (const k of ["off", CLIENT_REFUSED, "rate_limited"]) expect(unsortedLine(k, "Contoso").text, k).not.toMatch(/\u2014/);
   });
