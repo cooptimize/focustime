@@ -10,6 +10,8 @@ export const ME_EMAIL = "you@example.com";
 export const ME_NAME = "Alex Rivera";
 
 export type DemoItem = {
+  /** TX-1: DevOps Remaining Work, once written. */
+  remainingWork?: number | null;
   clientKey: DemoClientKey;
   id: number;
   rev: number;
@@ -47,7 +49,7 @@ const S = "Microsoft.VSTS.Scheduling.StartDate";
 const AC = "Microsoft.VSTS.Common.AcceptanceCriteria";
 export const sizeRefOf = (k: DemoClientKey) => (k === "Harbor" ? "Microsoft.VSTS.Scheduling.Effort" : "Microsoft.VSTS.Scheduling.StoryPoints");
 const PORTFOLIO = new Set(["Epic", "Feature"]);
-const typeFields = (k: DemoClientKey, type: string) => ["System.Title", "System.Description", "System.AssignedTo", "System.State", T, ...(PORTFOLIO.has(type) ? [S] : [AC, sizeRefOf(k)]), ...(type === "Bug" ? ["Microsoft.VSTS.TCM.ReproSteps"] : [])];
+const typeFields = (k: DemoClientKey, type: string) => ["System.Title", "System.Description", "System.AssignedTo", "System.State", T, ...(PORTFOLIO.has(type) ? [S] : [AC, sizeRefOf(k)]), /* TX-1: one client whose stories have Remaining Work, and others that take a comment instead. */ ...(k === "Cooptimize" && !PORTFOLIO.has(type) ? ["Microsoft.VSTS.Scheduling.RemainingWork"] : []), ...(type === "Bug" ? ["Microsoft.VSTS.TCM.ReproSteps"] : [])];
 const FIELDS = [
   { referenceName: "System.Title", name: "Title", type: "string" },
   { referenceName: T, name: "Target Date", type: "dateTime" },
@@ -111,6 +113,7 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
     if (i.start) f[S] = dateField(i.start);
     if (i.size !== null) f[sizeRefOf(i.clientKey)] = i.size;
     if (i.acceptance) f[AC] = i.acceptance;
+    if (i.remainingWork != null) f["Microsoft.VSTS.Scheduling.RemainingWork"] = i.remainingWork;
     if (i.createdBy) f["System.CreatedBy"] = i.createdBy;
     return f;
   }
@@ -128,6 +131,7 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
     else if (k === AC) i.acceptance = remove ? "" : String(v ?? "");
     else if (k === T) i.target = remove ? null : day(v);
     else if (k === S) i.start = remove ? null : day(v);
+    else if (k === "Microsoft.VSTS.Scheduling.RemainingWork") i.remainingWork = remove || v === null ? null : Number(v);
     else if (k === sizeRefOf(i.clientKey)) i.size = remove || v === null || v === "" ? null : Number(v);
     else if (k === "System.AreaPath") i.area = String(v ?? i.area);
     else if (k === "System.IterationPath") i.iteration = String(v ?? i.iteration);

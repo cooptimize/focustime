@@ -48,6 +48,9 @@ export type Pick = {
   followUpId: number | null;
   /** PL-1: the pick's own minutes instead of its size (a Watching check-in's 30). Absent: its size. */
   minutes?: number | null;
+  /** TX-1: time left and spent, from check-ins (plan/progress.ts). Absent: no progress yet, the size is what's left. */
+  remainingMinutes?: number | null;
+  spentMinutes?: number | null;
   /** PL-1: read models only. Its DevOps item is resolved, closed or removed: counts zero minutes and shows as done. */
   resolved?: boolean;
   /** WK-3: a Deployment (absent or null: a plain to-do). */
@@ -99,16 +102,17 @@ export type PlanDayState = {
 /** Step 16.2: closedOutAt too, for the ✓ on Today's Close out mode on any day of the week. */
 export type PlanWeek = Record<IsoDate, { committedAt: ZonedStamp | null; closedOutAt?: ZonedStamp | null; picks: Pick[] }>;
 
-/** E2: S 1h, M 2h, L 4h, fixed for everyone (plan/estimate.ts); SZ-1's default for unsized work. A person's own scale is `planning.sizes`. */
+/** E2, TX-1: XS 30 min, S 1h, M 2h, L 4h, fixed for everyone (plan/estimate.ts); SZ-1's default for unsized work. A person's own scale is `planning.sizes`. */
 export const SIZE_MINUTES: SizeScale = DEFAULT_SIZE_SCALE;
 /** A pick's minutes by its size, or the person's assumption when unsized (Timebox my day, fit and budgets alike). */
 export const sizeMinutes = (size: Size | null | undefined, sizes: SizeScale) => storyMinutes(size, sizes);
 /**
- * PL-1: the minutes a pick needs: zero when its DevOps item is resolved, closed or removed (it shows as done), its own
- * minutes when it has them (a Watching check-in's 30), else its size (or the person's assumption when unsized).
+ * PL-1: the minutes a pick needs: zero when its DevOps item is resolved, closed or removed (it shows as done); TX-1: the
+ * time left once a check-in has said; its own minutes when it has them (a Watching check-in's 30), else its size (or the
+ * person's assumption when unsized).
  */
-export const pickNeed = (p: { size: string | null; minutes?: number | null; resolved?: boolean }, sizes: SizeScale): number => (p.resolved ? 0 : (p.minutes ?? storyMinutes(p.size, sizes)));
-export const SIZES: readonly Size[] = ["S", "M", "L"];
+export const pickNeed = (p: { size: string | null; minutes?: number | null; remainingMinutes?: number | null; resolved?: boolean }, sizes: SizeScale): number => (p.resolved ? 0 : (p.remainingMinutes ?? p.minutes ?? storyMinutes(p.size, sizes)));
+export const SIZES: readonly Size[] = ["XS", "S", "M", "L"];
 export const DEFAULT_SIZE: Size = "M";
 
 /** A feature committed to a week (step 8): a number of my blocks for its client, some maybe placed on specific blocks. */
@@ -125,8 +129,10 @@ export type WeekFeature = {
   tier: "must" | "nice";
   /** E2: a feature's estimate in minutes (whole hours), or null for 4h (its stories on the list win once one is sized); null for a story. */
   estimate: number | null;
-  /** Step 16.4: a story's size (S, M or L); null for a feature. */
-  size: "S" | "M" | "L" | null;
+  /** Step 16.4: a story's size (XS, S, M or L); null for a feature. */
+  size: Size | null;
+  /** TX-1: time left on a story, from its to-dos' check-ins; absent: none yet. */
+  remainingMinutes?: number | null;
   /** Step 16.4: a story's parent feature in DevOps, when known (nests it under that feature on the list). */
   parentId: number | null;
   /** Pins: specific blocks (morning or afternoon) it is tied to, in date order. Optional. */

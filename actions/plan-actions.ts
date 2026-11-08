@@ -1,6 +1,8 @@
 // Plan the day actions (step 5). Local only: they read DevOps results already in memory to check a pick,
 // and write only to the local plan store. Nothing here calls DevOps, Outlook, Google or Dataverse.
 import { markResolved, materializeCheckins } from "./carry-actions.ts";
+import { resizedRemaining } from "../plan/progress.ts";
+import { SIZE_MINUTES } from "../plan/types.ts";
 import { isOpen, typeNeedsBreakdown } from "../plan/process.ts";
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
@@ -163,11 +165,11 @@ function id(v: unknown, name = "id"): number {
   if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0) throw new Invalid(`${name} must be a positive whole number`);
   return v;
 }
-/** A pick's size: S, M or L, or none (E2: not sized yet, counts as the person's assumption; sizing is optional). */
+/** A pick's size: XS, S, M or L, or none (E2: not sized yet, counts as the person's assumption; sizing is optional). */
 function size(v: unknown): Size | null {
   if (v === undefined || v === null) return null;
   if (typeof v === "string" && (SIZES as readonly string[]).includes(v)) return v as Size;
-  throw new Invalid("size must be S, M or L. Nothing above L: split it first");
+  throw new Invalid("size must be XS, S, M or L. Nothing above L: split it first");
 }
 /** A draft story keeps a size (M when not given). */
 const draftSize = (v: unknown): Size => size(v) ?? DEFAULT_SIZE;
@@ -385,6 +387,10 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         if (!before) return bad(`No to-do ${pid}`, 404);
         const past = await pastRefusal(ctx, before.date);
         if (past) return bad(past, 409);
+        // TX-1: re-sizing work that's under way moves its time left by the same amount.
+        const cfg = await ctx.config();
+        const left = resizedRemaining(before.remainingMinutes, before.size, sz, cfg?.plan.sizes ?? SIZE_MINUTES);
+        if (left !== null) await plan.setRemaining(pid, left);
         const pick = (await plan.setSize(pid, sz));
         return { ok: true, data: { pick, state: await state(ctx, plan, pick.date) } };
       }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { capacityMinutes } from "./rules.ts";
 import { blockFitWords, dayHeadline, dayTotals, fitWords, planFit, trimCandidates } from "./fit.ts";
 
-const SIZES = { S: 60, M: 120, L: 210, unsized: 60 };
+const SIZES = { XS: 30, S: 60, M: 120, L: 210, unsized: 60 };
 const at = (hm: string) => `2026-11-02T${hm}:00-05:00`;
 const slot = { date: "2026-11-02", start: at("09:00"), end: at("12:30"), pto: false, longestFreeMinutes: 90, freeGaps: [{ start: at("09:00"), end: at("10:00"), minutes: 60 }, { start: at("11:00"), end: at("12:30"), minutes: 90 }] };
 const pick = (id: number, size: string, status = "planned") => ({ id, size, status });

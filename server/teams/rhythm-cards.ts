@@ -5,6 +5,7 @@
 // data is trusted, and every id is checked against the person's own store when it runs.
 import type { Nudge } from "../../plan/teams-rhythm.ts";
 import { card, muted, openUrl, shown, text, type Card } from "./cards.ts";
+import { durationText, progressAsk } from "../../plan/progress.ts";
 
 export type PickState = "open" | "done" | "not_yet" | "moved";
 export type PickRow = { id: number; title: string; client: string | null; state: PickState; note?: string | null };
@@ -24,8 +25,11 @@ export type BriefBlock = { label: string; client: string | null; meetings: strin
 
 type Base = { occasion: string; date: string; dateLabel: string; test?: boolean; proposal?: InlineProposal | null; notice?: string | null };
 export type BriefModel = Base & { kind: "brief"; blocks: BriefBlock[]; promises: string[]; sends: string[]; committed: boolean; destinations: Choice[]; more: number };
-export type CheckinModel = Base & { kind: "checkin"; picks: PickRow[]; destinations: Choice[] };
-export type CloseoutModel = Base & { kind: "closeout"; picks: PickRow[]; closed: boolean };
+/** TX-1: one to-do whose timebox ended: asked with Done, Partly and Didn't get to it, then its answer and Undo. */
+export type SessionCard = { pickId: number; title: string; client: string | null; minutes: number; state: "open" | "asking" | "done" | "partly" | "none"; note?: string | null; undoIds?: number[] };
+type Sessions = { sessions?: SessionCard[]; /** End of day: how many stories can be updated in DevOps (the offer is made in Close out). */ progressOffer?: { remaining: number; comment: number } | null };
+export type CheckinModel = Base & Sessions & { kind: "checkin"; picks: PickRow[]; destinations: Choice[] };
+export type CloseoutModel = Base & Sessions & { kind: "closeout"; picks: PickRow[]; closed: boolean };
 export type NudgeModel = { kind: "nudges"; occasion: string; items: Nudge[]; test?: boolean };
 /** SR-1: Monday's status report, the features with no update yet (titles of my own clients' features, to me only). */
 export type StatusModel = { kind: "status"; occasion: string; line: string; reportLabel: string; clients: { name: string; features: { title: string; url: string | null; needsYou?: boolean }[] }[]; more: number; test?: boolean; /** SR-3: features I worked on need my update: the card opens Status on that group. */ needsYou?: number };
@@ -33,10 +37,10 @@ export type StatusModel = { kind: "status"; occasion: string; line: string; repo
 export type MeetingsModel = { kind: "meetings"; occasion: string; items: { clientName: string; meeting: string; dateLabel: string; upload: boolean; route: string }[]; test?: boolean };
 export type RhythmModel = BriefModel | CheckinModel | CloseoutModel | NudgeModel | StatusModel | MeetingsModel;
 
-export type RhythmOp = "done" | "undone" | "not_yet" | "confirm_today" | "move" | "move_rest" | "close_out" | "closeout_text" | "confirm" | "cancel";
-export const RHYTHM_OPS: readonly RhythmOp[] = ["done", "undone", "not_yet", "confirm_today", "move", "move_rest", "close_out", "closeout_text", "confirm", "cancel"];
+export type RhythmOp = "done" | "undone" | "not_yet" | "confirm_today" | "move" | "move_rest" | "close_out" | "closeout_text" | "confirm" | "cancel" | "session_done" | "session_partly" | "session_left" | "session_none" | "session_all" | "session_undo" | "session_back";
+export const RHYTHM_OPS: readonly RhythmOp[] = ["done", "undone", "not_yet", "confirm_today", "move", "move_rest", "close_out", "closeout_text", "confirm", "cancel", "session_done", "session_partly", "session_left", "session_none", "session_all", "session_undo", "session_back"];
 /** What a rhythm tap sends: the card's occasion, the op, a pick or proposal, and the card's inputs by id. */
-export type RhythmTap = { ft: "rhythm"; occasion: string; op: RhythmOp; pickId?: number; proposalId?: string; movePick?: string; moveTo?: string; closeoutText?: string };
+export type RhythmTap = { ft: "rhythm"; occasion: string; op: RhythmOp; pickId?: number; proposalId?: string; movePick?: string; moveTo?: string; closeoutText?: string; left?: number; sessionLeft?: string };
 export type CaptureTap = { ft: "capture_undo"; captureId: number };
 
 const MAX = { blocks: 3, picks: 5, meetings: 3, list: 3, closeoutText: 1000 } as const;
@@ -142,11 +146,44 @@ export function briefCard(m: BriefModel, publicUrl: string): Card {
   return card(body, actions);
 }
 
+/** TX-1: the to-dos a session row is already asking about don't show twice. */
+export const plainRows = (m: { picks: PickRow[]; sessions?: SessionCard[] }) => {
+  const asked = new Set((m.sessions ?? []).map((s) => s.pickId));
+  return m.picks.filter((p) => !asked.has(p.id));
+};
+const LEFT_PICKS: readonly [number, string][] = [[30, "30m"], [60, "1h"], [90, "1.5h"], [120, "2h"]];
+
+/** TX-1: the check-in: All went to plan, then each to-do with the same three answers as the app, then Undo. */
+function sessionsPart(m: { occasion: string } & Sessions, settled: boolean): unknown[] {
+  const rows = m.sessions ?? [];
+  if (!rows.length) return [];
+  const body: unknown[] = [text("Timeboxes that ended", { weight: "Bolder", spacing: "Medium" })];
+  if (!settled && rows.some((r) => r.state === "open")) body.push(actionSet([exec("All went to plan", tapOn(m, "session_all"), "positive")]));
+  for (const r of rows.slice(0, 8)) {
+    const answered = r.state === "done" || r.state === "partly" || r.state === "none";
+    body.push(text(`${answered ? (r.state === "done" ? "✓" : "○") : "•"} ${r.title}${r.client ? ` (${r.client})` : ""} · ${durationText(r.minutes)}${r.note ? ` · ${r.note}` : ""}`, { spacing: "Small", ...(answered ? { isSubtle: true } : {}) }));
+    if (settled) continue;
+    if (answered) {
+      if (r.undoIds?.length) body.push(actionSet([exec("Undo", tapOn(m, "session_undo", { pickId: r.pickId }))]));
+    } else if (r.state === "asking") {
+      body.push(muted("How much is left?"));
+      body.push(actionSet(LEFT_PICKS.map(([left, label]) => exec(label, tapOn(m, "session_left", { pickId: r.pickId, left })))));
+      body.push({ type: "Input.Text", id: "sessionLeft", maxLength: 12, placeholder: "Or type: 45m, 2.5h", label: "Time left" });
+      body.push(actionSet([exec("Set", tapOn(m, "session_left", { pickId: r.pickId })), exec("Back", tapOn(m, "session_back", { pickId: r.pickId }))]));
+    } else body.push(actionSet([exec("Done", tapOn(m, "session_done", { pickId: r.pickId }), "positive"), exec("Partly", tapOn(m, "session_partly", { pickId: r.pickId })), exec("Didn't get to it", tapOn(m, "session_none", { pickId: r.pickId }))]));
+  }
+  if (rows.length > 8) body.push(muted(`${rows.length - 8} more in FocusTime`));
+  return body;
+}
+
 export function checkinCard(m: CheckinModel, publicUrl: string): Card {
-  const body: unknown[] = [header("checkin", m.dateLabel, m.test), muted("This morning's to-dos. Tap Done for what's finished.")];
-  if (!m.picks.length) body.push(text("Nothing was planned this morning.", { spacing: "Small" }));
+  const plain = plainRows(m);
+  const body: unknown[] = [header("checkin", m.dateLabel, m.test)];
   const settled = openProposal(m);
-  for (const p of m.picks.slice(0, 10)) body.push(pickLine(p, ["done", "not_yet"], m, settled));
+  body.push(...sessionsPart(m, settled));
+  if (plain.length || !m.sessions?.length) body.push(muted("This morning's to-dos. Tap Done for what's finished."));
+  if (!m.picks.length && !m.sessions?.length) body.push(text("Nothing was planned this morning.", { spacing: "Small" }));
+  for (const p of plain.slice(0, 10)) body.push(pickLine(p, ["done", "not_yet"], m, settled));
   if (m.notice) body.push(text(m.notice, { color: "Warning", spacing: "Small" }));
   if (m.proposal) body.push(...proposalPart(m, m.proposal));
   body.push(footer(publicUrl));
@@ -159,10 +196,13 @@ export function checkinCard(m: CheckinModel, publicUrl: string): Card {
 }
 
 export function closeoutCard(m: CloseoutModel, publicUrl: string): Card {
-  const body: unknown[] = [header("closeout", m.dateLabel, m.test), text("What got done today?", { spacing: "Small" })];
-  if (!m.picks.length) body.push(muted("Nothing was planned today."));
+  const body: unknown[] = [header("closeout", m.dateLabel, m.test)];
   const settled = openProposal(m) || m.closed;
-  for (const p of m.picks.slice(0, 12)) body.push(pickLine(p, ["done"], m, settled));
+  body.push(...sessionsPart(m, settled));
+  body.push(text("What got done today?", { spacing: "Small" }));
+  if (!m.picks.length) body.push(muted("Nothing was planned today."));
+  const plain = plainRows(m);
+  for (const p of plain.slice(0, 12)) body.push(pickLine(p, ["done"], m, settled));
   if (!settled) body.push({ type: "Input.Text", id: "closeoutText", isMultiline: true, maxLength: MAX.closeoutText, placeholder: "Or tell me: \"the export and the login fix\", \"all\", \"1 and 3\"", label: "In your words" });
   if (m.closed && !m.proposal) body.push(text("The day is closed out.", { color: "Good", spacing: "Small" }));
   if (m.notice) body.push(text(m.notice, { color: "Warning", spacing: "Small" }));
@@ -172,6 +212,10 @@ export function closeoutCard(m: CloseoutModel, publicUrl: string): Card {
   if (!settled) {
     actions.push(exec("Close out the day…", tapOn(m, "close_out"), "positive"));
     actions.push(exec("Send", tapOn(m, "closeout_text")));
+  }
+  // TX-1: DevOps stays previewed and confirmed: the offer is made in Close out, where the batch preview is.
+  if (m.progressOffer && !m.closed) {
+    body.splice(-1, 0, text(`${progressAsk(m.progressOffer.remaining, m.progressOffer.comment)} Review it in Close out.`, { spacing: "Small" }));
   }
   actions.push(openUrl({ label: ROUTE.closeout[1], url: abs(publicUrl, ROUTE.closeout[0]) }));
   return card(body, actions);
@@ -267,5 +311,9 @@ export function rhythmTapOf(value: unknown): RhythmTap | CaptureTap | null {
   if (mt) out.moveTo = mt;
   const ct = short(d.closeoutText, MAX.closeoutText);
   if (ct !== undefined) out.closeoutText = ct;
+  const left = posInt(d.left);
+  if (left) out.left = left;
+  const typed = short(d.sessionLeft, 12);
+  if (typed !== undefined) out.sessionLeft = typed;
   return out;
 }

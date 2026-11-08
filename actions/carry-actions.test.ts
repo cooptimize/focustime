@@ -19,7 +19,7 @@ import type { OrgRuntime } from "./org.ts";
 const THIS_WEEK = "2026-11-02";
 const LAST_WEEK = "2026-10-26";
 const NOW = "2026-11-03T14:00:00Z"; // Tue 9:00 New York
-const SIZES = { S: 60, M: 120, L: 240, unsized: 60 };
+const SIZES = { XS: 30, S: 60, M: 120, L: 240, unsized: 60 };
 
 const me = aDirectoryPerson({ name: "Me", email: "me@contoso.example" });
 const dana = aDirectoryPerson({ name: "Dana", email: "dana@contoso.example" });

@@ -1380,6 +1380,9 @@ export type NewPick = {
   followUpId?: number | null;
   /** PL-1: the pick's own minutes instead of its size (a Watching check-in's 30). */
   minutes?: number | null;
+  /** TX-1: a carried copy's time left and spent. */
+  remainingMinutes?: number | null;
+  spentMinutes?: number | null;
   /** WK-3: a deployment, its window, the items it covers and a note of what's going. */
   todoKind?: TodoKind | null;
   window?: TodoWindow | null;
@@ -1391,9 +1394,22 @@ export type NewPick = {
 
 type Row = Record<string, string | number | null>;
 
+/** TX-1: XS is a flag beside the size column (which only takes S, M and L, and an older build reads it as S). */
+const sizeOfRow = (r: Row): Size | null => (r.size_xs ? "XS" : ((r.size as Size | null) ?? null));
+const sizeColumn = <T extends Size | null | undefined>(s: T) => (s === "XS" ? "S" : s) as T;
+const xsFlag = (s: Size | null | undefined) => (s === "XS" ? 1 : null);
+
+/** TX-1: a timebox answered partly or not got to is a past session: the to-do is free to get another. */
+const settledOf = (r: Row): Pick2<Timebox, "settled" | "sessionPickId"> & { pickId?: number | null } => {
+  const as = (r.settled_as as Timebox["settled"]) ?? null;
+  return as ? { settled: as, sessionPickId: (r.pick_id as number | null) ?? null, ...(as === "done" ? {} : { pickId: null }) } : {};
+};
+type Pick2<T, K extends keyof T> = { [P in K]?: T[P] };
+
 const toTimebox = (r: Row): Timebox => ({
   id: r.id as number, uid: r.uid as string, date: r.date as string, clientKey: r.client_key as string, pickId: (r.pick_id as number | null) ?? null, itemId: (r.item_id as number | null) ?? null,
   title: r.title as string, url: (r.url as string | null) ?? null, start: r.start_at as string, end: r.end_at as string, outlook: r.outlook === 1,
+  ...settledOf(r),
   showAs: ((r.show_as as string | null) ?? "busy") as Timebox["showAs"], outlookNote: (r.outlook_note as string | null) ?? null, conflict: json<Timebox["conflict"]>(r.conflict),
   removedAt: (r.removed_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
 });
@@ -1429,13 +1445,14 @@ const toPick = (r: Row): Pick => ({
   title: r.title as string,
   itemType: (r.item_type as string | null) ?? null,
   itemUrl: (r.item_url as string | null) ?? null,
-  size: (r.size as Size | null) ?? null,
+  size: sizeOfRow(r),
   status: r.status as Pick["status"],
   carriedFrom: (r.carried_from as number | null) ?? null,
   carriedFromDate: (r.carried_from_date as string | null) ?? null,
   notes: (r.notes as string | null) ?? null,
   followUpId: (r.follow_up_id as number | null) ?? null,
   ...(r.minutes != null ? { minutes: r.minutes as number } : {}),
+  ...(r.remaining_minutes != null ? { remainingMinutes: r.remaining_minutes as number, spentMinutes: (r.spent_minutes as number | null) ?? 0 } : {}),
   ...(r.todo_kind === "deployment" ? { todoKind: "deployment" as const } : {}),
   ...(r.window_start != null && r.window_end != null ? { window: { start: r.window_start as string, end: r.window_end as string } } : {}),
   ...(r.links != null ? { links: json<TodoLink[]>(r.links) ?? [] } : {}),
@@ -1456,7 +1473,7 @@ const toWatch = (r: Row): WeekWatch => ({
   checkinPickId: (r.checkin_pick_id as number | null) ?? null,
 });
 const toPlan = (r: Row): DayPlan => ({ date: r.date as string, committedAt: (r.committed_at as string | null) ?? null, closedOutAt: (r.closed_out_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string });
-const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: r.size as Size, level: ((r.level as string | null) ?? "story") as DraftStory["level"], createdAt: r.created_at as string, updatedAt: (r.updated_at as string | null) ?? (r.created_at as string), description: (r.description as string | null) ?? null, acceptance: (r.acceptance as string | null) ?? null, startDate: (r.start_date as string | null) ?? null, targetDate: (r.target_date as string | null) ?? null, ...(r.devops_id != null ? { devopsId: r.devops_id as number, devopsUrl: (r.devops_url as string | null) ?? null } : {}), ai: toDraftAi(r) });
+const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: sizeOfRow(r) as Size, level: ((r.level as string | null) ?? "story") as DraftStory["level"], createdAt: r.created_at as string, updatedAt: (r.updated_at as string | null) ?? (r.created_at as string), description: (r.description as string | null) ?? null, acceptance: (r.acceptance as string | null) ?? null, startDate: (r.start_date as string | null) ?? null, targetDate: (r.target_date as string | null) ?? null, ...(r.devops_id != null ? { devopsId: r.devops_id as number, devopsUrl: (r.devops_url as string | null) ?? null } : {}), ai: toDraftAi(r) });
 const toDraftAi = (r: Row): DraftAi | null =>
   r.ai_state == null ? null : { ...(r.ai_standards ? { standards: JSON.parse(r.ai_standards as string) as StandardsUsed } : {}), state: r.ai_state as DraftAiState, title: (r.ai_title as string | null) ?? null, description: (r.ai_description as string | null) ?? null, acceptance: (r.ai_acceptance as string | null) ?? null, type: (r.ai_type as string | null) ?? null, parentId: (r.ai_parent_id as number | null) ?? null, parentReason: (r.ai_parent_reason as string | null) ?? null, note: (r.ai_note as string | null) ?? null, ranAt: (r.ai_ran_at as string | null) ?? null };
 export type DevOpsIdentityRow = { clientKey: string; org: string; id: string; name: string; email: string; validatedAt: string; expires: string | null };
@@ -1695,14 +1712,23 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     (await ensurePlan(p.date));
     const at = stamp();
     const r = (await db.run(`INSERT INTO picks (date, half, client_key, kind, item_id, draft_id, title, item_type, item_url, size, status, carried_from, notes, position, created_at, updated_at, follow_up_id, minutes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?)`, p.date, p.half, p.clientKey, p.kind, p.itemId ?? null, p.draftId ?? null, p.title, p.itemType ?? null, p.itemUrl ?? null, p.size, carriedFrom, p.notes ?? null, (await nextPosition(p.date, p.half)), at, at, p.followUpId ?? null, p.minutes ?? null));
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?)`, p.date, p.half, p.clientKey, p.kind, p.itemId ?? null, p.draftId ?? null, p.title, p.itemType ?? null, p.itemUrl ?? null, sizeColumn(p.size), carriedFrom, p.notes ?? null, (await nextPosition(p.date, p.half)), at, at, p.followUpId ?? null, p.minutes ?? null));
     // WK-3: the deployment columns only when set, so a plain to-do's insert is the statement it always was.
     if (p.todoKind || p.window || p.links) (await writeTodoKind(r.lastId!, p));
+    if (p.size === "XS") (await db.run("UPDATE picks SET size_xs = 1 WHERE id = ?", r.lastId!));
+    // TX-1: progress follows the item: a carried copy brings its own, a DevOps item picked again takes what it had left.
+    const had = p.remainingMinutes != null ? { remaining_minutes: p.remainingMinutes, spent_minutes: p.spentMinutes ?? 0 } : p.itemId != null ? ((await db.get("SELECT remaining_minutes, spent_minutes FROM picks WHERE client_key = ? AND item_id = ? AND remaining_minutes > 0 AND id <> ?", p.clientKey, p.itemId, r.lastId!)) as Row | undefined) : undefined;
+    if (had) (await db.run("UPDATE picks SET remaining_minutes = ?, spent_minutes = ? WHERE id = ?", had.remaining_minutes as number, had.spent_minutes as number | null, r.lastId!));
     return (await getPick(r.lastId!))!;
   }
   /** WK-3: a deployment's kind, window and links (null clears them: back to a plain to-do). */
   async function writeTodoKind(id: number, p: { todoKind?: NewPick["todoKind"]; window?: NewPick["window"]; links?: NewPick["links"]; deployItems?: NewPick["deployItems"] }): Promise<void> {
     (await db.run("UPDATE picks SET todo_kind = ?, window_start = ?, window_end = ?, links = ?, deploy_items = ?, updated_at = ? WHERE id = ?", p.todoKind ?? null, p.window?.start ?? null, p.window?.end ?? null, p.links?.length ? JSON.stringify(p.links) : null, p.deployItems?.length ? JSON.stringify(p.deployItems) : null, stamp(), id));
+  }
+  /** TX-1: an item's time spent and left, on every to-do of it. A plain to-do has only itself (its carried copies copied it). */
+  async function writeProgress(p: Pick, spent: number | null, remaining: number | null): Promise<void> {
+    if (p.itemId !== null) (await db.run("UPDATE picks SET spent_minutes = ?, remaining_minutes = ? WHERE client_key = ? AND item_id = ?", spent, remaining, p.clientKey, p.itemId));
+    else (await db.run("UPDATE picks SET spent_minutes = ?, remaining_minutes = ? WHERE id = ?", spent, remaining, p.id));
   }
   /** A pick's copy for a move or make up to another day: what it points at, its size, minutes, and a deployment's parts. */
   function copyOf(p: Pick, date: IsoDate, half: Half): NewPick {
@@ -1711,6 +1737,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     if (p.draftId !== null) base.draftId = p.draftId;
     if (p.followUpId !== null) base.followUpId = p.followUpId;
     if (p.minutes != null) base.minutes = p.minutes;
+    if (p.remainingMinutes != null) Object.assign(base, { remainingMinutes: p.remainingMinutes, spentMinutes: p.spentMinutes ?? 0 });
     if (p.todoKind) Object.assign(base, { todoKind: p.todoKind, window: p.window ?? null, links: p.links ?? null, deployItems: p.deployItems ?? null, notes: p.notes });
     return base;
   }
@@ -1794,7 +1821,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async setSize(id: number, size: Size | null): Promise<Pick> {
       return tx(async () => {
         (await mustPick(id));
-        (await db.run("UPDATE picks SET size = ?, updated_at = ? WHERE id = ?", size, stamp(), id));
+        (await db.run("UPDATE picks SET size = ?, size_xs = ?, updated_at = ? WHERE id = ?", sizeColumn(size), xsFlag(size), stamp(), id));
         return (await mustPick(id));
       });
     },
@@ -1847,10 +1874,63 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return (await mustPick(id));
       });
     },
+    /**
+     * TX-1: a check-in answer, in one transaction: the timeboxes it covers remember what was true before (for Undo), the
+     * to-do's time spent and left is written on every to-do of the same DevOps item, Done ticks it, and "none" on a
+     * timebox that isn't on Outlook takes it off (one on Outlook stays as it is: nothing external changes from a check-in).
+     */
+    async settleSessions(o: { pickId: number; timeboxIds: readonly number[]; as: "done" | "partly" | "none"; spent: number; remaining: number }): Promise<void> {
+      return tx(async () => {
+        const p = await mustPick(o.pickId);
+        const before = JSON.stringify({ status: p.status, spent: p.spentMinutes ?? null, remaining: p.remainingMinutes ?? null });
+        const at = stamp();
+        for (const id of o.timeboxIds) {
+          const t = (await db.get("SELECT pick_id, settled_as, outlook FROM timeboxes WHERE id = ? AND removed_at IS NULL", id)) as Row | undefined;
+          if (!t || t.pick_id !== o.pickId || t.settled_as) throw new PlanError("That timebox was already answered");
+          await db.run("UPDATE timeboxes SET settled_as = ?, settled_at = ?, settle_before = ?, removed_at = ?, updated_at = ? WHERE id = ?", o.as, at, before, o.as === "none" && t.outlook !== 1 ? at : null, at, id);
+        }
+        if (o.as !== "none") await writeProgress(p, o.spent, o.remaining);
+        if (o.as === "done") await this.setDone(o.pickId, true);
+      });
+    },
+    /** TX-1: Undo of check-in answers: each timebox as it was, its to-do's status, spent and left put back. */
+    async unsettleSessions(timeboxIds: readonly number[]): Promise<number[]> {
+      return tx(async () => {
+        const picks = new Map<number, { status: string; spent: number | null; remaining: number | null }>();
+        for (const id of timeboxIds) {
+          const t = (await db.get("SELECT pick_id, settled_as, settle_before FROM timeboxes WHERE id = ?", id)) as Row | undefined;
+          if (!t?.settled_as) continue;
+          if (t.pick_id !== null && !picks.has(t.pick_id as number)) picks.set(t.pick_id as number, json<{ status: string; spent: number | null; remaining: number | null }>(t.settle_before)!);
+          await db.run("UPDATE timeboxes SET settled_as = NULL, settled_at = NULL, settle_before = NULL, removed_at = NULL, updated_at = ? WHERE id = ?", stamp(), id);
+        }
+        for (const [pickId, b] of picks) {
+          const p = await mustPick(pickId);
+          await writeProgress(p, b.spent, b.remaining);
+          if (p.status === "done" && b.status === "planned") await this.setDone(pickId, false);
+        }
+        return [...picks.keys()];
+      });
+    },
+    /** TX-1: the time left moved with a re-size (plan/progress.ts resizedRemaining). */
+    async setRemaining(pickId: number, remaining: number): Promise<void> {
+      return tx(async () => {
+        const p = await mustPick(pickId);
+        await writeProgress(p, p.spentMinutes ?? 0, remaining);
+      });
+    },
+    /** TX-1: the same, from the week list, where a story is known by its DevOps id. */
+    async setItemRemaining(clientKey: string, itemId: number, remaining: number): Promise<void> {
+      return tx(async () => {
+        const r = (await db.get("SELECT id FROM picks WHERE client_key = ? AND item_id = ? AND remaining_minutes IS NOT NULL ORDER BY id DESC", clientKey, itemId)) as Row | undefined;
+        if (!r) return;
+        const p = await mustPick(r.id as number);
+        await writeProgress(p, p.spentMinutes ?? 0, remaining);
+      });
+    },
     async addDraft(d: { clientKey: string; parentItemId: number | null; title: string; size: Size; level?: "story" | "feature" }): Promise<DraftStory> {
       return tx(async () => {
         const at = stamp();
-        const r = (await db.run("INSERT INTO draft_stories (client_key, parent_item_id, title, size, level, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", d.clientKey, d.parentItemId, d.title, d.size, d.level ?? "story", at, at));
+        const r = (await db.run("INSERT INTO draft_stories (client_key, parent_item_id, title, size, size_xs, level, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", d.clientKey, d.parentItemId, d.title, sizeColumn(d.size), xsFlag(d.size), d.level ?? "story", at, at));
         return toDraft((await db.get("SELECT * FROM draft_stories WHERE id = ?", r.lastId!)) as Row);
       });
     },
@@ -1876,7 +1956,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         if (moved && ((await db.get("SELECT COUNT(*) AS n FROM picks WHERE draft_id = ? AND status IN ('planned','done')", id)) as { n: number }).n > 0)
           throw new PlanError("A to-do uses this draft. Drop the to-do first, then change the client");
         const n = { ...d, parentItemId: moved && patch.parentItemId === undefined ? null : d.parentItemId, ...patch };
-        (await db.run("UPDATE draft_stories SET client_key = ?, parent_item_id = ?, title = ?, size = ?, description = ?, acceptance = ?, start_date = ?, target_date = ?, updated_at = ? WHERE id = ?", n.clientKey, n.parentItemId, n.title, n.size, n.description ?? null, n.acceptance ?? null, n.startDate ?? null, n.targetDate ?? null, stamp(), id));
+        (await db.run("UPDATE draft_stories SET client_key = ?, parent_item_id = ?, title = ?, size = ?, size_xs = ?, description = ?, acceptance = ?, start_date = ?, target_date = ?, updated_at = ? WHERE id = ?", n.clientKey, n.parentItemId, n.title, sizeColumn(n.size), xsFlag(n.size), n.description ?? null, n.acceptance ?? null, n.startDate ?? null, n.targetDate ?? null, stamp(), id));
         if (moved) (await db.run("UPDATE picks SET client_key = ? WHERE draft_id = ?", n.clientKey, id));
         // A planned pick of the draft shows its new title.
         if (n.title !== d.title) (await db.run("UPDATE picks SET title = ?, updated_at = ? WHERE draft_id = ? AND status = 'planned'", n.title, stamp(), id));
@@ -2227,7 +2307,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
           routedId = Number((await db.run("INSERT INTO follow_ups (kind, client_key, who, who_ref, what, due, channel, item_id, opened_at) VALUES ('capture', ?, ?, ?, ?, ?, ?, ?, ?)", r.clientKey, r.who.trim() || null, refJson(r.who.trim() ? (r.whoRef ?? null) : null), r.what.trim(), r.due, r.channel ?? null, r.clientKey ? (r.itemId ?? null) : null, at)).lastId);
         } else if (r.as === "draft") {
           if (!r.title.trim()) throw new PlanError("A draft story needs a title");
-          routedId = Number((await db.run("INSERT INTO draft_stories (client_key, parent_item_id, title, size, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", r.clientKey, r.parentItemId, r.title.trim(), r.size, at, at)).lastId);
+          routedId = Number((await db.run("INSERT INTO draft_stories (client_key, parent_item_id, title, size, size_xs, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", r.clientKey, r.parentItemId, r.title.trim(), sizeColumn(r.size), xsFlag(r.size), at, at)).lastId);
         } else if (r.as === "draft_feature") {
           if (!r.title.trim()) throw new PlanError("A draft feature needs a title");
           routedId = Number((await db.run("INSERT INTO draft_stories (client_key, parent_item_id, title, size, level, target_date, created_at, updated_at) VALUES (?, ?, ?, 'M', 'feature', ?, ?, ?)", r.clientKey, r.parentItemId, r.title.trim(), r.targetDate ?? null, at, at)).lastId);
@@ -2443,6 +2523,8 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       const plan = (await db.get("SELECT * FROM week_plans WHERE week_start = ?", weekStart)) as Row | undefined;
       const rows = (await db.all("SELECT * FROM week_features WHERE week_start = ? ORDER BY id", weekStart)) as Row[];
       const slots = (await db.all("SELECT s.* FROM week_feature_slots s JOIN week_features f ON f.id = s.feature_id WHERE f.week_start = ? ORDER BY s.date, s.half", weekStart)) as Row[];
+      // TX-1: a story's time left comes from its to-dos (every to-do of an item carries the same value).
+      const left = new Map(rows.length ? ((await db.all("SELECT client_key, item_id, MIN(remaining_minutes) AS m FROM picks WHERE remaining_minutes IS NOT NULL AND item_id IS NOT NULL GROUP BY client_key, item_id")) as Row[]).map((r) => [`${r.client_key}\u0000${r.item_id}`, r.m as number]) : []);
       const features = rows.map((r): WeekFeature => ({
         id: r.id as number,
         weekStart: r.week_start as string,
@@ -2454,7 +2536,8 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         itemType: (r.item_type as string | null) ?? null,
         url: (r.url as string | null) ?? null,
         estimate: (r.estimate as number | null) ?? null,
-        size: (r.size as StorySize | null) ?? null,
+        size: sizeOfRow(r),
+        ...(left.has(`${r.client_key}\u0000${r.item_id}`) ? { remainingMinutes: left.get(`${r.client_key}\u0000${r.item_id}`)! } : {}),
         parentId: (r.parent_id as number | null) ?? null,
         slots: slots.filter((x) => x.feature_id === r.id).map((x) => ({ date: x.date as string, half: x.half as "AM" | "PM" })),
         doneAt: (r.done_at as string | null) ?? null,
@@ -2482,7 +2565,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
      */
     async addWeekItem(f: NewWeekItem): Promise<WeekFeature> {
       if (f.level === "feature" && f.estimate != null && !validEstimateMinutes(f.estimate)) throw new PlanError(ESTIMATE_ERROR);
-      if (f.level === "story" && f.size != null && !validStorySize(f.size)) throw new PlanError("size must be S, M or L");
+      if (f.level === "story" && f.size != null && !validStorySize(f.size)) throw new PlanError("size must be XS, S, M or L");
       return tx(async () => {
         const at = stamp();
         // U3 (D388): never a second row for the same item, even under a client key in another letter case.
@@ -2494,14 +2577,14 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         if (row) {
           id = row.id as number;
           (await db.run("UPDATE week_features SET title = ?, item_type = ?, url = ?, level = ?, updated_at = ? WHERE id = ?", f.title, f.itemType, f.url, f.level, at, id));
-          if (row.level !== f.level) (await db.run("UPDATE week_features SET estimate = ?, size = ? WHERE id = ?", estimate, size, id));
+          if (row.level !== f.level) (await db.run("UPDATE week_features SET estimate = ?, size = ?, size_xs = ? WHERE id = ?", estimate, sizeColumn(size), xsFlag(size), id));
           else if (f.level === "feature" && f.estimate !== undefined) (await db.run("UPDATE week_features SET estimate = ? WHERE id = ?", estimate, id));
-          else if (f.level === "story" && f.size !== undefined) (await db.run("UPDATE week_features SET size = ? WHERE id = ?", size, id));
+          else if (f.level === "story" && f.size !== undefined) (await db.run("UPDATE week_features SET size = ?, size_xs = ? WHERE id = ?", sizeColumn(size), xsFlag(size), id));
           if (f.parentId !== undefined) (await db.run("UPDATE week_features SET parent_id = ? WHERE id = ?", f.parentId, id));
           if (f.tier && f.tier !== row.tier) (await db.run("UPDATE week_features SET tier = ?, position = NULL WHERE id = ?", f.tier, id));
         } else {
           id = Number(
-            (await db.run("INSERT INTO week_features (week_start, client_key, item_id, level, tier, title, item_type, url, estimate, size, parent_id, position, done_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)", f.weekStart, f.clientKey, f.itemId, f.level, f.tier ?? "must", f.title, f.itemType, f.url, estimate, size, f.parentId ?? null, at, at)).lastId,
+            (await db.run("INSERT INTO week_features (week_start, client_key, item_id, level, tier, title, item_type, url, estimate, size, size_xs, parent_id, position, done_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)", f.weekStart, f.clientKey, f.itemId, f.level, f.tier ?? "must", f.title, f.itemType, f.url, estimate, sizeColumn(size), xsFlag(size), f.parentId ?? null, at, at)).lastId,
           );
         }
         return (await this.weekPlan(f.weekStart)).features.find((x) => x.id === id)!;
@@ -2519,7 +2602,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       return tx(async () => {
         if (minutes !== null && !validEstimateMinutes(minutes)) throw new PlanError(ESTIMATE_ERROR);
         const row = (await db.get("SELECT level FROM week_features WHERE id = ?", id)) as Row | undefined;
-        if (row && row.level !== "feature") throw new PlanError("A story has a size (S, M or L), not an estimate");
+        if (row && row.level !== "feature") throw new PlanError("A story has a size (XS, S, M or L), not an estimate");
         const w = (await weekItemChange(id, async (at) => (await db.run("UPDATE week_features SET estimate = ?, updated_at = ? WHERE id = ?", minutes, at, id))));
         return (await this.weekPlan(w)).features.find((x) => x.id === id)!;
       });
@@ -2527,10 +2610,10 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     /** A story's size on the week list (step 16.4), or null to clear it (E2: unsized counts as the person's assumption). */
     async setWeekItemSize(id: number, size: StorySize | null): Promise<WeekFeature> {
       return tx(async () => {
-        if (size !== null && !validStorySize(size)) throw new PlanError("size must be S, M or L");
+        if (size !== null && !validStorySize(size)) throw new PlanError("size must be XS, S, M or L");
         const row = (await db.get("SELECT level FROM week_features WHERE id = ?", id)) as Row | undefined;
         if (row && row.level !== "story") throw new PlanError("A feature has an estimate, not a size");
-        const w = (await weekItemChange(id, async (at) => (await db.run("UPDATE week_features SET size = ?, updated_at = ? WHERE id = ?", size, at, id))));
+        const w = (await weekItemChange(id, async (at) => (await db.run("UPDATE week_features SET size = ?, size_xs = ?, updated_at = ? WHERE id = ?", sizeColumn(size), xsFlag(size), at, id))));
         return (await this.weekPlan(w)).features.find((x) => x.id === id)!;
       });
     },

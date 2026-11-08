@@ -6,6 +6,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import type { Pick } from "../plan/types.ts";
+import { progressChip } from "../plan/progress.ts";
 import { planAction } from "./api.ts";
 import { MenuCtx } from "./Menus.tsx";
 import { deployForm, timeStep } from "./menu.ts";
@@ -28,7 +29,8 @@ export const useTodoSheet = () => useContext(TodoSheetCtx);
 export function todoLine(p: Pick, data: WeekLoadData, o: { client?: boolean } = {}): string {
   const tz = userZone(data);
   const box = data.timeboxes.find((t) => t.pickId === p.id && !t.removedAt);
-  const size = p.size ? `${p.size} ${formatDuration(data.planning.sizes[p.size])}` : `Size? ${formatDuration(data.planning.sizes.unsized)}`;
+  // TX-1: once there's progress, what's left instead of the size.
+  const size = progressChip(p, data.planning.sizes) ?? (p.size ? `${p.size} ${formatDuration(data.planning.sizes[p.size])}` : `Size? ${formatDuration(data.planning.sizes.unsized)}`);
   const client = data.planClients.find((c) => c.clientKey === p.clientKey)?.clientName ?? p.clientKey;
   return [box ? `${startClock(box.start, tz)}–${startClock(box.end, tz)}` : null, size, o.client === false ? null : client].filter(Boolean).join(" · ");
 }

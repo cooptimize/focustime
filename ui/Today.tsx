@@ -48,6 +48,7 @@ import { call, planAction } from "./api.ts";
 import { captureClients } from "./Capture.tsx";
 import { DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { DoneBatch } from "./DoneOffer.tsx";
+import { ProgressOfferCard, TimeboxCheckin } from "./TimeboxCheckin.tsx";
 import { DevOpsWork } from "./work.ts";
 import { dayName, FlexOfferBar, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
 import { spanText } from "./menu.ts";
@@ -484,6 +485,7 @@ export function Today(props: Props) {
       <Fading text={notice} onGone={clearNotice} />
       {offer && <FlexOfferBar offer={offer.offer} clientKey={offer.pick.clientKey} clientName={nameOf(offer.pick.clientKey)} title={offer.pick.title} onDone={(m) => { setOffer(null); setNotice(m); props.onChanged(); }} />}
       {mode === "checkin" && !committed && workday && <p className="co-notice">Today isn't planned yet. Plan (P) to make the most of the afternoon.</p>}
+      {mode === "checkin" && <TimeboxCheckin date={date} moment="midday" color={(k) => clientColor(k, data.clients)} onChanged={props.onChanged} onError={setError} />}
 
       {mode === "now" && ptoDay && (
         <p className="today-pto" role="status">
@@ -1201,6 +1203,8 @@ function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onError, onD
 }) {
   const head = useRef<HTMLHeadingElement>(null);
   const [extra, setExtra] = useState<string[]>([]);
+  /** TX-1: bumped by a check-in answer, so the end of day DevOps offer reads again. */
+  const [progressAt, setProgressAt] = useState(0);
   const [adding, setAdding] = useState(false);
   const work = useContext(DevOpsWork);
   const devopsWrite = useDevOpsWrite();
@@ -1264,6 +1268,8 @@ function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onError, onD
           <span><strong>{formatDuration(totals.focusedMinutes) || "0m"}</strong> focused</span>
         </p>
         {st.closedOutAt && <p className="co-done">Closed out {clock(st.closedOutAt, tz)}</p>}
+        <TimeboxCheckin date={date} moment="end" color={(k) => clientColor(k, data.clients)} onChanged={() => { setProgressAt((n) => n + 1); rowDone(); }} onError={onError} />
+        <ProgressOfferCard date={date} version={progressAt} onDone={rowDone} />
         {onShown && st.picks.some((p) => p.status === "planned") && (
           <section className="cp-section" aria-label="Not done">
             <h3>Not done</h3>

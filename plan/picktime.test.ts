@@ -12,7 +12,7 @@ const am: Slot = {
   longestFreeMinutes: 150, freeGaps: [{ start: T("08:00"), end: T("09:00"), minutes: 60 }, { start: T("09:30"), end: T("12:00"), minutes: 150 }], busyMeetingMinutes: 30, pto: false,
 };
 const tb = (id: number, a: string, b: string, extra: Partial<AgendaTimebox & { outlook: boolean }> = {}) => ({ id, date: "2026-11-02", start: T(a), end: T(b), title: `tb${id}`, clientKey: "w", pickId: null, removedAt: null, outlook: false, ...extra });
-const SIZES = { S: 30, M: 90, L: 180, unsized: 60 } as const;
+const SIZES = { XS: 30, S: 30, M: 90, L: 180, unsized: 60 } as const;
 
 describe("pickTime: the three row states (D259)", () => {
   it("untimed, timed, and timed with Put on Outlook on", () => {
@@ -48,13 +48,13 @@ describe("timeChoices: + time and the editor's gap list", () => {
   it("never offers a gap shorter than the pick's shortest useful time, and never trims below it (step 16, D285)", () => {
     // Free 8:00–9:00 (60m) and 9:30–12:00 (150m), with a timebox at 8:00–8:15: 8:15–9:00 is 45m.
     const busy = [tb(2, "08:00", "08:15")];
-    const M = timeChoices(am, busy, { id: 7, size: "M" }, SIZES, undefined, { S: 30, M: 60, L: 90 });
+    const M = timeChoices(am, busy, { id: 7, size: "M" }, SIZES, undefined, { XS: 15, S: 30, M: 60, L: 90 });
     expect(M.map((x) => [hm(x.start), hm(x.end), x.trimmed])).toEqual([["09:30", "11:00", false]]);
     // An S pick (30m minimum) still gets the 45 minute gap.
-    const S = timeChoices(am, busy, { id: 7, size: "S" }, SIZES, undefined, { S: 30, M: 60, L: 90 });
+    const S = timeChoices(am, busy, { id: 7, size: "S" }, SIZES, undefined, { XS: 15, S: 30, M: 60, L: 90 });
     expect(S.map((x) => hm(x.start))).toEqual(["08:15", "09:30"]);
     // An L pick (180m, minimum 90) is trimmed to the 150 minute gap, not offered the 45 minute one.
-    const L = timeChoices(am, busy, { id: 7, size: "L" }, SIZES, undefined, { S: 30, M: 60, L: 90 });
+    const L = timeChoices(am, busy, { id: 7, size: "L" }, SIZES, undefined, { XS: 15, S: 30, M: 60, L: 90 });
     expect(L.map((x) => [hm(x.start), hm(x.end), x.trimmed])).toEqual([["09:30", "12:00", true]]);
   });
   it("from now on today", () => {

@@ -207,7 +207,7 @@ describe("[plan] planning settings (step 6c, Q36)", () => {
   it("SZ-1: unsized_minutes is read, one of 30, 60, 120 and 180; S, M and L don't move", () => {
     for (const v of [30, 60, 120, 180]) {
       const r = parseConfig(`${valid}\n[plan]\nunsized_minutes = ${v}\n`);
-      expect(r.ok && r.config.plan.sizes).toEqual({ S: 60, M: 120, L: 240, unsized: v });
+      expect(r.ok && r.config.plan.sizes).toEqual({ XS: 30, S: 60, M: 120, L: 240, unsized: v });
     }
     const bad = parseConfig(`${valid}\n[plan]\nunsized_minutes = 45\n`);
     expect(bad.ok ? [] : bad.errors.map((e) => e.field)).toEqual(["plan.unsized_minutes"]);
@@ -219,7 +219,7 @@ describe("[plan] planning settings (step 6c, Q36)", () => {
   });
   it("reads carry-over days, the reminder offset and timer defaults; sizes are fixed at 1h, 2h and 4h (E2)", () => {
     const r = parseConfig(`${valid}\n[plan]\nsize_s = 45\nsize_m = 90\nsize_l = 180\ncarry_days = 0\nreminder_offset_minutes = 30\nfocus_minutes = 25\nbreak_minutes = 5\nend_sound = true\ndevops_on_done = "never"\nfollow_grace_days = 30\ncloseout_reminder_minutes = 30\ncheckin_reminder_minutes = 15\nweek_nudge_thu = "15:30"\nweek_nudge_fri = ""\nweek_nudge_mon = "08:00"\n`);
-    expect(r.ok && r.config.plan).toEqual({ pickablePortfolioTypes: [], backgroundTypes: [], sizes: { S: 60, M: 120, L: 240, unsized: 60 }, minSizes: { S: 30, M: 60, L: 90 }, carryDays: 0, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true, devopsOnDone: "never", followGraceDays: 30, closeoutReminderMinutes: 30, checkinReminderMinutes: 15, weekNudgeThu: "15:30", weekNudgeFri: "", weekNudgeMon: "08:00" });
+    expect(r.ok && r.config.plan).toEqual({ pickablePortfolioTypes: [], backgroundTypes: [], sizes: { XS: 30, S: 60, M: 120, L: 240, unsized: 60 }, minSizes: { XS: 15, S: 30, M: 60, L: 90 }, carryDays: 0, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true, devopsOnDone: "never", progressOffer: true, followGraceDays: 30, closeoutReminderMinutes: 30, checkinReminderMinutes: 15, weekNudgeThu: "15:30", weekNudgeFri: "", weekNudgeMon: "08:00" });
     // Old configs get 14 days of grace.
     expect(parseConfig(valid).ok && (parseConfig(valid) as { config: { plan: { followGraceDays: number } } }).config.plan.followGraceDays).toBe(14);
   });

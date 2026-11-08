@@ -97,13 +97,13 @@ describe("every place reads the setting (1h by default, then 2h)", () => {
   });
 
   it("where a size has to be named, unsized is the smallest size that holds the assumption", () => {
-    expect([HALF, ONE, TWO, THREE].map((s) => namedSize(null, s))).toEqual(["S", "S", "M", "L"]);
+    expect([HALF, ONE, TWO, THREE].map((s) => namedSize(null, s))).toEqual(["XS", "S", "M", "L"]);
     expect(namedSize("L", ONE)).toBe("L");
   });
 
   it("a 30 minute assumption is never asked for a longer stretch than it needs", () => {
     const narrow = { ...(slot as object), freeGaps: [{ start: iso("08:00"), end: iso("08:30"), minutes: 30 }], windows: [{ start: iso("08:00"), end: iso("08:30") }], end: iso("08:30") } as never;
-    expect(timeChoices(narrow, [], { id: 1, size: null }, HALF, undefined, { S: 60, M: 60, L: 90 }).map((c) => c.minutes)).toEqual([30]);
+    expect(timeChoices(narrow, [], { id: 1, size: null }, HALF, undefined, { XS: 15, S: 60, M: 60, L: 90 }).map((c) => c.minutes)).toEqual([30]);
     expect(didntFitText([{ title: "A", size: null }], HALF)).toBe("1 to-do didn't fit: A (not sized, 30 min).");
   });
 });

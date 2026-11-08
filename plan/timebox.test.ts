@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { outlookFields, ownEventIds, plannedWithTimeboxes, syncNeed, timeboxProblem, undoOf, withoutOwn, type OwnEvent } from "./timebox.ts";
 
 const SLOT = { start: "2026-11-03T08:00:00-06:00", end: "2026-11-03T12:00:00-06:00" };
-const SIZES = { S: 60, M: 120, L: 180, unsized: 60 };
+const SIZES = { XS: 30, S: 60, M: 120, L: 180, unsized: 60 };
 const tb = (start: string, end: string, pickId: number | null = null, removedAt: string | null = null) => ({ pickId, start: `2026-11-03T${start}:00-06:00`, end: `2026-11-03T${end}:00-06:00`, removedAt });
 
 describe("timebox validation", () => {

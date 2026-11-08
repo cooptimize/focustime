@@ -1,4 +1,3 @@
-import { storyMinutes } from "../plan/estimate.ts";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Meetings } from "./meetings/Meetings.tsx";
 import { addWeeks, mondayOf } from "../week/dates.ts";
@@ -53,7 +52,7 @@ import { useInboxToday } from "./inboxcount.ts";
 import { railItems } from "../plan/inbox-items.ts";
 import { Ahead } from "./ahead/Ahead.tsx";
 import { Today } from "./Today.tsx";
-import type { DraftStory, Pick } from "../plan/types.ts";
+import { pickNeed, type DraftStory, type Pick } from "../plan/types.ts";
 import { PlanWeek } from "./PlanWeek.tsx";
 import { weekMusts } from "./WeekMusts.tsx";
 import { CaptureDialog, captureClients } from "./Capture.tsx";
@@ -2283,7 +2282,7 @@ export function App() {
       />
       {tbTarget && (() => {
         const pick = "pickId" in tbTarget ? Object.values(data.plan ?? {}).flatMap((d) => d.picks).concat(pd?.picks ?? []).find((p) => p.id === tbTarget.pickId) : null;
-        return <TimeboxDialog target={tbTarget} env={tbEnv} title={pick ? pick.title : "title" in tbTarget ? tbTarget.title : "To-do"} defaultMinutes={pick ? storyMinutes(pick.size, data.planning.sizes) : 60} onClose={() => setTbTarget(null)} />;
+        return <TimeboxDialog target={tbTarget} env={tbEnv} title={pick ? pick.title : "title" in tbTarget ? tbTarget.title : "To-do"} defaultMinutes={pick ? pickNeed(pick, data.planning.sizes) : 60} onClose={() => setTbTarget(null)} />;
       })()}
       {helpTarget && (
         <HelpFinder

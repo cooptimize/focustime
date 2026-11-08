@@ -9,7 +9,7 @@ import { pickNeed } from "./types.ts";
 import { planBudget } from "./weekplan.ts";
 
 const H = 60;
-const SIZES = { S: 60, M: 120, L: 240, unsized: 60 };
+const SIZES = { XS: 30, S: 60, M: 120, L: 240, unsized: 60 };
 const week = aWeek({ patterns: [aFocusBlock({ client: aClient({ name: "Adatum" }), days: { Tue: "PM", Wed: "AM" } })] });
 const bits = (o: Partial<PlanBits> = {}): PlanBits => ({ planShare: 100, keepOpenDefault: 0, keepOpen: {}, resolved: [], checkins: {}, ...o });
 const adatum = (b: PlanBits | null, items = [aWeekFeature({ itemId: 11, estimate: 4 * H })]) =>

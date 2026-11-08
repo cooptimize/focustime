@@ -4,7 +4,7 @@
 // midweek on-track question and when a dropped must offers a heads-up. No I/O.
 import { isCompleted, isRemoved, isResolved } from "./process.ts";
 import type { ClientWork, IsoDate } from "../week/types.ts";
-import { estimate, hoursText, storyMinutes, validEstimateHours, type SizeScale } from "./estimate.ts";
+import { estimate, hoursText, storyLoad, validEstimateHours, type SizeScale } from "./estimate.ts";
 import type { StorySize } from "./estimate.ts";
 
 export type Tier = "must" | "nice";
@@ -137,7 +137,7 @@ export function progress<T extends Pick<ListItem, "clientKey" | "itemId" | "tier
       if (s.done) p.done++;
       else {
         p.left++;
-        p.leftMinutes += storyMinutes(s.size as StorySize | null | undefined, sizes);
+        p.leftMinutes += storyLoad(s as { size?: string | null; remainingMinutes?: number | null }, sizes);
       }
     }
   }

@@ -10,7 +10,7 @@ export const weekPlanSeed: DemoSeed = {
   seed: async ({ run, weekStart }) => {
     await run("week.load", { weekStart });
     await run("weekplan.load", { weekStart });
-    const list: [string, number, "must" | "nice", { hours?: number; size?: "S" | "M" | "L" }][] = [
+    const list: [string, number, "must" | "nice", { hours?: number; size?: "XS" | "S" | "M" | "L" }][] = [
       ["Cooptimize", 4410, "must", { hours: 4 }],
       ["Cooptimize", 4411, "must", { size: "S" }],
       ["Cooptimize", 4412, "must", { size: "S" }],

@@ -70,7 +70,7 @@ describe("weekItemMenu (Plan the week row ⋯, D267)", () => {
     const step = item(m, "size").next!();
     const list = "items" in step ? step.items : [];
     expect(list.find((i) => i.checked)?.label).toBe("S · 1h");
-    expect(list.map((i) => i.label)).toEqual(["S · 1h", "M · 2h", "L · 4h", "Clear"]);
+    expect(list.map((i) => i.label)).toEqual(["XS · 30 min", "S · 1h", "M · 2h", "L · 4h", "Clear"]);
     list.find((i) => i.id === "sclear")!.run!();
     expect(o.size).toHaveBeenCalledWith(null);
     list.find((i) => i.id === "sL")!.run!();

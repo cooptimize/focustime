@@ -166,7 +166,7 @@ function capturePrepare(c: ProviderCall) {
 }
 
 /** KB-1: a data feature, split the way the standards say: Gold tables apart, Silver regenerated, model, report, then the app. */
-function demoDataBreakdown(_c: ProviderCall, featureId: number, card: (id: string, title: string, description: string, acceptance: string[], size: "S" | "M" | "L" | null, depends?: string[]) => unknown) {
+function demoDataBreakdown(_c: ProviderCall, featureId: number, card: (id: string, title: string, description: string, acceptance: string[], size: "XS" | "S" | "M" | "L" | null, depends?: string[]) => unknown) {
   return {
     kind: "story_proposals",
     version: 1,
@@ -187,7 +187,7 @@ function demoDataBreakdown(_c: ProviderCall, featureId: number, card: (id: strin
 /** BD-1: proposals for the feature asked about (Supplier onboarding has its own; others get a general split). */
 function breakDown(c: ProviderCall) {
   const i = JSON.parse(c.input) as { feature: { id: number; title: string }; regenerate_only?: { id: string; previous_title: string } };
-  const card = (id: string, title: string, description: string, acceptance: string[], size: "S" | "M" | "L" | null, depends: string[] = []) => ({ id, title, description, acceptance_criteria: acceptance, depends_on: depends, size, evidence: ["From the feature's description"], open_questions: [] as string[] });
+  const card = (id: string, title: string, description: string, acceptance: string[], size: "XS" | "S" | "M" | "L" | null, depends: string[] = []) => ({ id, title, description, acceptance_criteria: acceptance, depends_on: depends, size, evidence: ["From the feature's description"], open_questions: [] as string[] });
   if (/gold|semantic model/i.test(i.feature.title)) return demoDataBreakdown(c, i.feature.id, card);
   const supplier = /supplier/i.test(i.feature.title);
   const all = supplier

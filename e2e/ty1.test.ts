@@ -228,13 +228,14 @@ describe.skipIf(!CHROMIUM)("TY-1: Today's timeline", () => {
     await expect.poll(async () => (await boxes(page))[id]).toBe("14:00-15:00");
     await undo(page);
     await expect.poll(async () => (await boxes(page))[id]).toBeUndefined();
-    // Counted as 2h instead: the same to-do, the chip and the length follow.
-    expect((await call(page, "settings.save", { section: "planning", values: { unsizedMinutes: 120 } })).ok).toBe(true);
+    // Counted as 30 minutes instead: the same to-do, the chip and the length follow. (A longer one would be trimmed to
+    // the free gap before the 3:00 meeting, TX-1.)
+    expect((await call(page, "settings.save", { section: "planning", values: { unsizedMinutes: 30 } })).ok).toBe(true);
     await open(page);
     await row.waitFor();
-    await expect.poll(() => chip.textContent()).toBe("Size? · 2h");
+    await expect.poll(() => chip.textContent()).toBe("Size? · 30 min");
     await dropAt2();
-    await expect.poll(async () => (await boxes(page))[id]).toBe("14:00-16:00");
+    await expect.poll(async () => (await boxes(page))[id]).toBe("14:00-14:30");
     await undo(page);
     await expect.poll(async () => (await boxes(page))[id]).toBeUndefined();
     expect((await call(page, "settings.save", { section: "planning", values: { unsizedMinutes: 60 } })).ok).toBe(true);

@@ -291,10 +291,10 @@ export function useDragSource(d: Dragged | null): HTMLAttributes<HTMLElement> {
 /** The pick's drag (a planned DevOps story, still to do) on Week's cards and the panel's Plan list. */
 export function pickDragged(p: Pick): Dragged | null {
   if (p.status !== "planned") return null;
-  if (p.kind === "item" && p.itemId !== null) return { clientKey: p.clientKey, itemId: p.itemId, size: p.size, title: p.title, pickId: p.id };
+  if (p.kind === "item" && p.itemId !== null) return { clientKey: p.clientKey, itemId: p.itemId, size: p.size, title: p.title, pickId: p.id, remainingMinutes: p.remainingMinutes };
   // WK-3: a to-do with no DevOps item (a Deployment, an intention, a draft) moves by drag too; a negative id never
   // matches a real item in the "already planned here" check.
-  return { clientKey: p.clientKey, itemId: -p.id, size: p.size, title: p.title, pickId: p.id };
+  return { clientKey: p.clientKey, itemId: -p.id, size: p.size, title: p.title, pickId: p.id, remainingMinutes: p.remainingMinutes };
 }
 
 /** "Move to…" for a planned pick: a small button that opens the blocks with their fit. */

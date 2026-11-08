@@ -1,11 +1,11 @@
 // One row per pick (step 14.5, D259): a pick is untimed, timed in FocusTime, or timed and on Outlook. "+ time" and the
 // time editor offer the block's free gaps; an already-timed pick's own timebox counts as free, so the list never says
 // "no free time" because of it, and "Keep current" comes first. Drag math for the card timelines. Pure.
-import { namedSize, storyMinutes, type SizeScale } from "./estimate.ts";
+import { namedSize, type SizeScale } from "./estimate.ts";
 import type { Slot } from "../week/types.ts";
 import { DEFAULT_MIN_SIZES, openGaps, placeInGap, type AgendaTimebox } from "./agenda.ts";
 import { minutesOf, TIMEBOX_MIN, TIMEBOX_SNAP } from "./timebox.ts";
-import type { Size } from "./types.ts";
+import { pickNeed, type Size } from "./types.ts";
 
 export type TimeState = "untimed" | "timed" | "outlook";
 type Box = AgendaTimebox & { outlook: boolean };
@@ -24,10 +24,10 @@ export type TimeChoice = { kind: "keep" | "gap"; start: string; end: string; min
  * size from Settings. From `now` on today. Step 16 (D285): a gap shorter than the pick's shortest useful time (the same
  * rule as Timebox my day, D273) isn't offered, and a pick is never trimmed below it. Custom time stays free.
  */
-export function timeChoices(slot: Slot, timeboxes: readonly Box[], pick: { id: number; size: Size | null; minutes?: number | null }, sizes: SizeScale, now?: string, minSizes: Readonly<Record<Size, number>> = DEFAULT_MIN_SIZES): TimeChoice[] {
+export function timeChoices(slot: Slot, timeboxes: readonly Box[], pick: { id: number; size: Size | null; minutes?: number | null; remainingMinutes?: number | null }, sizes: SizeScale, now?: string, minSizes: Readonly<Record<Size, number>> = DEFAULT_MIN_SIZES): TimeChoice[] {
   const own = timeboxes.find((t) => t.pickId === pick.id && !t.removedAt) ?? null;
   const others = timeboxes.filter((t) => t !== own);
-  const want = own ? minutesOf(own) : (pick.minutes ?? storyMinutes(pick.size, sizes));
+  const want = own ? minutesOf(own) : pickNeed(pick, sizes);
   const out: TimeChoice[] = own ? [{ kind: "keep", start: own.start, end: own.end, minutes: want, trimmed: false, gapStart: own.start, gapEnd: own.end, gapMinutes: want }] : [];
   const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
   const seen = new Set<number>(own ? [ms(own.start)] : []);

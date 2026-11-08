@@ -204,7 +204,7 @@ export type ReadinessFlag = {
   /** Intention not in DevOps (step 11): the typed pick, its day and size. */
   pickId?: number;
   date?: IsoDate;
-  size?: "S" | "M" | "L";
+  size?: StorySize;
 };
 
 export type WorkLike = { clientKey: string; status: string; fromCache: boolean; items: readonly WorkItem[] };
@@ -223,7 +223,7 @@ export type ReadinessInput = {
   /** Captures not sorted yet (step 9). */
   captures?: number;
   /** Typed intention picks around the week (step 11), to nudge them into DevOps as draft stories. */
-  intentions?: readonly { id: number; clientKey: string; title: string; date: IsoDate; size: "S" | "M" | "L"; status: string; followUpId?: number | null }[];
+  intentions?: readonly { id: number; clientKey: string; title: string; date: IsoDate; size: StorySize; status: string; followUpId?: number | null }[];
 };
 
 /** "Break down #id …" picks are about a DevOps feature already; they aren't intentions to move into DevOps. */

@@ -510,7 +510,7 @@ type FormProps = Props & { data: SettingsData; onSavedData: (d: SettingsData) =>
 /** ST-1: a field's key → its setting id in the registry, where the two differ only in name. */
 const SID: Record<string, string> = {
   lunch: "lunch", tz: "time-zone", planShare: "plan-share", draftStories: "break-down-offered", readinessNudges: "readiness-nudges", carryDays: "carry-over",
-  reminderOffsetMinutes: "plan-reminder", devopsOnDone: "devops-on-done", checkinReminderMinutes: "checkin-reminder", closeoutReminderMinutes: "closeout-reminder",
+  reminderOffsetMinutes: "plan-reminder", devopsOnDone: "devops-on-done", progressOffer: "progress-offer", checkinReminderMinutes: "checkin-reminder", closeoutReminderMinutes: "closeout-reminder",
   followGraceDays: "follow-grace", focusMinutes: "focus-length", breakMinutes: "break-length", endSound: "end-sound", enabled: "timeboxing", outlookDefault: "outlook-default",
   confirmOwn: "confirm-own", meetingMinutes: "help-length", teams: "help-teams", daysAhead: "help-days", exclude: "exclude", teamsStatus: "teams-status",
   plainFocusStatus: "plain-focus-status", sound: "sound", volume: "volume", fadeSeconds: "fade", onBreak: "on-break", pauseMedia: "pause-media", staleWeeks: "stale-weeks",
@@ -629,7 +629,7 @@ function StandingForm(p: FormProps) {
 const PLANNING_LABELS: Record<string, string> = {
   minS: "Shortest useful time, S", minM: "Shortest useful time, M", minL: "Shortest useful time, L", carryDays: "Carry-over",
   unsizedMinutes: "Count unsized work as", reminderOffsetMinutes: "Reminder", checkinReminderMinutes: "Check-in reminder", closeoutReminderMinutes: "Close out reminder", weekNudgeThu: "Thursday nudge",
-  weekNudgeFri: "Friday nudge", weekNudgeMon: "Monday nudge", followGraceDays: "Keep following", focusMinutes: "Focus length", breakMinutes: "Break length", endSound: "End sound", devopsOnDone: "When I check off a to-do",
+  weekNudgeFri: "Friday nudge", weekNudgeMon: "Monday nudge", followGraceDays: "Keep following", focusMinutes: "Focus length", breakMinutes: "Break length", endSound: "End sound", devopsOnDone: "When I check off a to-do", progressOffer: "Offer DevOps updates at end of day",
 };
 
 /** The [plan] keys a form edits: each form saves only its own (the server takes any subset). */
@@ -637,7 +637,7 @@ function usePlan<K extends keyof PlanValues>(p: FormProps, keys: readonly K[]) {
   const pl = p.data.planning;
   const all: PlanValues = {
     unsizedMinutes: pl.sizes.unsized, minS: pl.minSizes.S, minM: pl.minSizes.M, minL: pl.minSizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes,
-    focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, devopsOnDone: pl.devopsOnDone, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes,
+    focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, devopsOnDone: pl.devopsOnDone, progressOffer: pl.progressOffer, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes,
     checkinReminderMinutes: pl.checkinReminderMinutes, weekNudgeThu: pl.weekNudgeThu, weekNudgeFri: pl.weekNudgeFri, weekNudgeMon: pl.weekNudgeMon,
   };
   return useAutoSave({
@@ -653,7 +653,7 @@ function usePlan<K extends keyof PlanValues>(p: FormProps, keys: readonly K[]) {
 }
 type PlanValues = {
   unsizedMinutes: number; minS: number; minM: number; minL: number; carryDays: number; reminderOffsetMinutes: number; focusMinutes: number; breakMinutes: number; endSound: boolean;
-  devopsOnDone: "ask" | "never"; followGraceDays: number; closeoutReminderMinutes: number; checkinReminderMinutes: number; weekNudgeThu: string; weekNudgeFri: string; weekNudgeMon: string;
+  devopsOnDone: "ask" | "never"; progressOffer: boolean; followGraceDays: number; closeoutReminderMinutes: number; checkinReminderMinutes: number; weekNudgeThu: string; weekNudgeFri: string; weekNudgeMon: string;
 };
 type NumKey = "minS" | "minM" | "minL" | "carryDays" | "reminderOffsetMinutes" | "focusMinutes" | "breakMinutes" | "followGraceDays" | "closeoutReminderMinutes" | "checkinReminderMinutes";
 function numField<V>(a: AutoSave<V>, k: NumKey & keyof V, label: string, hint: string, step = 5, max = 480) {
@@ -667,7 +667,7 @@ function numField<V>(a: AutoSave<V>, k: NumKey & keyof V, label: string, hint: s
 
 /** ST-1: Today and Week's to-dos, rituals and nudges (the focus timer is under Focus, following under Clients). */
 function PlanningForm(p: FormProps) {
-  const a = usePlan(p, ["unsizedMinutes", "minS", "minM", "minL", "carryDays", "reminderOffsetMinutes", "devopsOnDone", "checkinReminderMinutes", "closeoutReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"] as const);
+  const a = usePlan(p, ["unsizedMinutes", "minS", "minM", "minL", "carryDays", "reminderOffsetMinutes", "devopsOnDone", "progressOffer", "checkinReminderMinutes", "closeoutReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"] as const);
   return (
     <>
       <Group title="To-dos">
@@ -679,7 +679,7 @@ function PlanningForm(p: FormProps) {
                   <option key={m} value={m}>{unsizedText({ ...p.data.planning.sizes, unsized: m })}</option>
                 ))}
               </select>
-              <span className="set-hint" data-size-scale>{STORY_SIZES.map((z) => `${z} ${hoursText(p.data.planning.sizes[z])}`).join(" · ")}</span>
+              <span className="set-hint" data-size-scale>{STORY_SIZES.map((z) => `${z} ${p.data.planning.sizes[z] < 60 ? `${p.data.planning.sizes[z]} min` : hoursText(p.data.planning.sizes[z])}`).join(" · ")}</span>
             </span>
           </AutoField>
         </div>
@@ -700,6 +700,11 @@ function PlanningForm(p: FormProps) {
               <input type="radio" name="devops-on-done" checked={a.v.devopsOnDone === "never"} onChange={() => a.change("devopsOnDone", "never")} /> Never ask
             </label>
           </div>
+        </AutoField>
+        <AutoField a={a} k="progressOffer" label="Offer DevOps updates at end of day" hint="After the end of day check-in: Remaining Work where the process has it, else a short comment. Always previewed; nothing is written without Confirm.">
+          <label className="set-check">
+            <input type="checkbox" checked={a.v.progressOffer} onChange={(e) => a.change("progressOffer", e.target.checked)} /> Offer
+          </label>
         </AutoField>
       </Group>
       <Group title="Reminders" intro="Each comes as a notification; switch the kinds in Notifications.">

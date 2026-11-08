@@ -27,7 +27,9 @@ import { userZone } from "../../week/zone.ts";
 import type { AssistantService, ConfirmResult, Proposal } from "./assistant.ts";
 import type { Address, InvokeBody, OutActivity, Sender } from "./bot.ts";
 import { attach, CARD_TYPE, type Card } from "./cards.ts";
-import { captureCard, rhythmCard, rhythmTapOf, type BriefModel, type CaptureTap, type CheckinModel, type Choice, type CloseoutModel, type InlineProposal, type NudgeModel, type PickRow, type RhythmModel, type RhythmTap, type StatusModel, type MeetingsModel } from "./rhythm-cards.ts";
+import { durationText, parseLeft, validLeft } from "../../plan/progress.ts";
+import type { SessionView } from "../../actions/types.ts";
+import { captureCard, plainRows, rhythmCard, rhythmTapOf, type SessionCard, type BriefModel, type CaptureTap, type CheckinModel, type Choice, type CloseoutModel, type InlineProposal, type NudgeModel, type PickRow, type RhythmModel, type RhythmTap, type StatusModel, type MeetingsModel } from "./rhythm-cards.ts";
 
 /** The facts a person's pass already has (the notifier's gate facts and their settings). */
 export type PassFacts = { config: AppConfig; inHours: boolean; pto: boolean; focusRunning: boolean };
@@ -230,12 +232,18 @@ export function createRhythm(d: RhythmDeps) {
     };
   }
 
+  /** TX-1: what the moment's check-in asks about (nothing when nothing qualifies: then the card has no such section). */
+  async function sessionCards(userId: string, date: string, moment: "midday" | "end"): Promise<SessionCard[]> {
+    const rows = dataOf<{ rows: SessionView[] }>(await d.run(userId, "checkin.sessions", { date, moment }))?.rows ?? [];
+    return rows.map((r) => ({ pickId: r.pickId, title: r.title.slice(0, 200), client: r.clientName, minutes: r.minutes, state: "open" }));
+  }
+
   async function checkinModel(userId: string, occasion: string, date: string, test: boolean): Promise<CheckinModel | null> {
     const w = await week(userId, date);
     if (!w) return null;
     const name = names(w);
     const picks = picksOn(w, date).filter((p) => p.half === "AM" && p.status !== "moved").sort((a, b) => a.position - b.position).map((p) => rowOf(p, name));
-    return { kind: "checkin", occasion, date, dateLabel: dayLabel(date), test, picks, destinations: destinationsOf(w.week.days, d.now(), date) };
+    return { kind: "checkin", occasion, date, dateLabel: dayLabel(date), test, picks, destinations: destinationsOf(w.week.days, d.now(), date), sessions: test ? [] : await sessionCards(userId, date, "midday") };
   }
 
   async function closeoutModel(userId: string, occasion: string, date: string, test: boolean): Promise<CloseoutModel | null> {
@@ -245,7 +253,7 @@ export function createRhythm(d: RhythmDeps) {
     const order = ["AM", "PM", "EVE"];
     const picks = picksOn(w, date).filter((p) => p.status !== "moved").sort((a, b) => order.indexOf(a.half) - order.indexOf(b.half) || a.position - b.position).map((p) => rowOf(p, name));
     const plan = await d.plan(userId);
-    return { kind: "closeout", occasion, date, dateLabel: dayLabel(date), test, picks, closed: !!(await plan?.day(date))?.closedOutAt };
+    return { kind: "closeout", occasion, date, dateLabel: dayLabel(date), test, picks, closed: !!(await plan?.day(date))?.closedOutAt, sessions: test ? [] : await sessionCards(userId, date, "end") };
   }
 
   const modelFor = (kind: RhythmKind, userId: string, occasion: string, date: string, test: boolean) => (kind === "brief" ? briefModel(userId, occasion, date, test) : kind === "checkin" ? checkinModel(userId, occasion, date, test) : closeoutModel(userId, occasion, date, test));
@@ -310,7 +318,7 @@ export function createRhythm(d: RhythmDeps) {
         log({ op: "rhythm", kind: `${x.kind}_unavailable` });
         continue;
       }
-      if (model.kind === "checkin" && !model.picks.some((p) => p.state !== "done")) {
+      if (model.kind === "checkin" && !model.picks.some((p) => p.state !== "done") && !model.sessions?.length) {
         // Nothing to tick: everything this morning is done, or nothing was planned.
         await store.settle(x.occasion, "skipped");
         log({ op: "rhythm", kind: "checkin_skipped" });
@@ -528,6 +536,15 @@ export function createRhythm(d: RhythmDeps) {
         if (r.ok && m.kind !== "brief" && m.proposal?.state !== "open") m = await offerDevOps(userId, m, t.op === "done" ? "item_done" : "item_undo", p.id);
         break;
       }
+      case "session_done":
+      case "session_partly":
+      case "session_left":
+      case "session_none":
+      case "session_back":
+      case "session_undo":
+      case "session_all":
+        if (m.kind === "checkin" || m.kind === "closeout") m = await sessionTap(userId, m, t);
+        break;
       case "not_yet": {
         const p = onCard(t.pickId);
         if (p) setPick(p.id, "not_yet");
@@ -581,10 +598,93 @@ export function createRhythm(d: RhythmDeps) {
     return { model: m, card: rhythmCard(m, d.publicUrl) };
   }
 
+  /** TX-1: a check-in answer from the card: the app's own actions, at once, with Undo. Done offers the DevOps state as Done does. */
+  async function sessionTap(userId: string, m0: CheckinModel | CloseoutModel, t: RhythmTap): Promise<CheckinModel | CloseoutModel> {
+    let m = m0;
+    const moment = m.kind === "checkin" ? "midday" : "end";
+    const rows = m.sessions ?? [];
+    const row = rows.find((r) => r.pickId === t.pickId);
+    const put = (pickId: number, f: (r: SessionCard) => SessionCard) => (m = { ...m, sessions: (m.sessions ?? []).map((r) => (r.pickId === pickId ? f(r) : r)) } as typeof m);
+    const setPicks = (ids: readonly number[], state: PickRow["state"]) => (m = { ...m, picks: m.picks.map((p) => (ids.includes(p.id) ? { ...p, state } : p)) } as typeof m);
+    const answer = async (answer: "done" | "partly" | "none", left?: number) => {
+      if (!row) return;
+      const r = await d.run(userId, "checkin.answer", { date: m.date, moment, pickId: row.pickId, answer, ...(left ? { left } : {}) });
+      if (!r.ok) {
+        m = { ...m, notice: r.error };
+        return;
+      }
+      const ids = (r.data as { timeboxIds: number[] }).timeboxIds;
+      put(row.pickId, (x) => ({ ...x, state: answer, undoIds: ids, note: answer === "done" ? "done" : answer === "partly" ? `${durationText(left!)} left` : "back to not timeboxed" }));
+      m = { ...m, notice: null };
+      if (answer === "done") {
+        setPicks([row.pickId], "done");
+        if (m.proposal?.state !== "open") m = (await offerDevOps(userId, m, "item_done", row.pickId)) as typeof m;
+      }
+    };
+    switch (t.op) {
+      case "session_done":
+        await answer("done");
+        break;
+      case "session_partly":
+        if (row) put(row.pickId, (x) => ({ ...x, state: "asking" }));
+        break;
+      case "session_back":
+        if (row) put(row.pickId, (x) => ({ ...x, state: "open" }));
+        break;
+      case "session_left": {
+        const left = t.left ?? (t.sessionLeft ? parseLeft(t.sessionLeft) : null);
+        if (left && validLeft(left)) await answer("partly", left);
+        else m = { ...m, notice: "Type the time left like 45m or 2.5h" };
+        break;
+      }
+      case "session_none":
+        await answer("none");
+        break;
+      case "session_undo": {
+        if (!row?.undoIds?.length) break;
+        const r = await d.run(userId, "checkin.undo", { timeboxIds: row.undoIds });
+        if (r.ok) {
+          const wasDone = row.state === "done";
+          put(row.pickId, (x) => ({ ...x, state: "open", note: null, undoIds: [] }));
+          if (wasDone) setPicks([row.pickId], "open");
+        }
+        m = { ...m, notice: r.ok ? null : r.error };
+        break;
+      }
+      case "session_all": {
+        const r = await d.run(userId, "checkin.all_to_plan", { date: m.date, moment });
+        if (!r.ok) {
+          m = { ...m, notice: r.error };
+          break;
+        }
+        const data = r.data as { timeboxIds: number[]; done: number[] };
+        // The undo ids aren't per to-do in the answer, so each row reads its own from the store.
+        const plan = await d.plan(userId);
+        const boxes = plan ? await plan.timeboxesBetween(m.date, m.date) : [];
+        for (const x of rows.filter((q) => q.state === "open" || q.state === "asking")) {
+          const mine = boxes.filter((b) => data.timeboxIds.includes(b.id) && b.sessionPickId === x.pickId).map((b) => b.id);
+          const done = data.done.includes(x.pickId);
+          const left = done ? null : (await plan?.getPick(x.pickId).catch(() => null))?.remainingMinutes ?? null;
+          put(x.pickId, (q) => ({ ...q, state: done ? "done" : "partly", undoIds: mine, note: done ? "done" : left !== null ? `${durationText(left)} left` : null }));
+        }
+        setPicks(data.done, "done");
+        m = { ...m, notice: null };
+        break;
+      }
+    }
+    // End of day, once everything is answered: say what could go to DevOps (the offer itself is previewed in Close out).
+    if (m.kind === "closeout" && !(m.sessions ?? []).some((r) => r.state === "open" || r.state === "asking")) {
+      const offers = dataOf<{ offers: { mode: string }[] }>(await d.run(userId, "devops.progress_offer", { date: m.date }))?.offers ?? [];
+      const remaining = offers.filter((o) => o.mode === "remaining").length;
+      m = { ...m, progressOffer: offers.length ? { remaining, comment: offers.length - remaining } : null };
+    }
+    return m;
+  }
+
   /** Close out in my words: the picks they name (no AI), then one close_day proposal for the whole day. */
   async function closeoutFromWords(userId: string, m: CloseoutModel, words: string): Promise<CloseoutModel> {
     if (!words.trim()) return { ...m, notice: "Tell me what got done, or tick the to-dos above" };
-    const ids = doneFromWords(words, m.picks);
+    const ids = doneFromWords(words, plainRows(m));
     const open = new Set(m.picks.filter((p) => p.state !== "done" && p.state !== "moved").map((p) => p.id));
     const next = (await propose(userId, m, "close_day", { date: m.date, donePickIds: ids.filter((id) => open.has(id)) })) as CloseoutModel;
     return ids.length || !next.proposal ? next : { ...next, notice: "I couldn't match that to a to-do, so nothing is marked done. Tick them above, or confirm to move them on." };

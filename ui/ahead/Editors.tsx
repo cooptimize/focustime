@@ -165,9 +165,9 @@ function AssigneeEditor({ r, anchor, done }: { r: Row; anchor: HTMLElement | nul
   );
 }
 
-/** A few common values for the process's size field: points by Fibonacci, hours by doubling. */
+/** A few common values for the process's size field: points by Fibonacci, hours by doubling; TX-1: 0.5, the XS end of either. */
 export function sizeChoices(label: string | null): number[] {
-  return /effort|estimate|hour|work/i.test(label ?? "") ? [1, 2, 4, 8, 16, 24] : [1, 2, 3, 5, 8, 13];
+  return /effort|estimate|hour|work/i.test(label ?? "") ? [0.5, 1, 2, 4, 8, 16, 24] : [0.5, 1, 2, 3, 5, 8, 13];
 }
 
 /** The process's own number (Story Points, Effort, Size), typed or one of the common values; Clear leaves it empty. */

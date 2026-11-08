@@ -44,8 +44,10 @@ export function checkIn(slots: readonly { half: Half; slot: SlotIn }[], picks: r
     const out = mine.map((p): CheckPick => {
       const focusedMinutes = Math.floor(focused(p.id) / 60);
       if (p.status === "done") return { pick: p, needMinutes: 0, focusedMinutes, fits: true };
-      // A timeboxed pick needs its timeboxed time (step 12), else its size.
-      const need = p.resolved ? 0 : Math.max(0, (boxed(p.id) ?? pickNeed(p, sizes)) - focusedMinutes);
+      // A timeboxed pick needs its timeboxed time (step 12), else what's left.
+      // TX-1: once a check-in has said what's left, focus time before it is already in that number.
+      const spent = p.remainingMinutes == null ? focusedMinutes : 0;
+      const need = p.resolved ? 0 : Math.max(0, (boxed(p.id) ?? pickNeed(p, sizes)) - spent);
       used += need;
       if (used > left) broken = true;
       return { pick: p, needMinutes: need, focusedMinutes, fits: !broken };

@@ -31,6 +31,10 @@ export type Timebox = {
   /** Both sides changed since the last sync (step 13): Outlook's version (null: deleted there), until I choose. */
   conflict: { outlook: Fields | null; changed: string[]; at: string } | null;
   removedAt: string | null;
+  /** TX-1: the check-in answer that covered it. "partly" and "none" read back with pickId null: a past work session, the to-do is free for another. */
+  settled?: "done" | "partly" | "none" | null;
+  /** TX-1: the to-do a settled timebox was for (pickId is null then). */
+  sessionPickId?: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -138,14 +142,17 @@ export function clippedMinutes(tb: { start: string; end: string }, w: { start: s
   return b > a ? Math.round((b - a) / 60_000) : 0;
 }
 
-type PickLike = { id: number; status: string; size: string | null; minutes?: number | null; resolved?: boolean };
+type PickLike = { id: number; status: string; size: string | null; minutes?: number | null; remainingMinutes?: number | null; resolved?: boolean };
+type Settled = { settled?: string | null };
+/** TX-1: a session a check-in answered as partly or not got to is past: it no longer counts as planned time. */
+const stillPlanned = (t: Settled) => t.settled !== "partly" && t.settled !== "none";
 /**
  * Planned minutes of a half-day with timeboxes: a planned pick with a timebox counts its timeboxed time instead of its
  * size; every live timebox in the half-day counts its minutes inside it (clipped), whether tied to a pick or not, unless
- * its pick is done, moved or dropped. Picks without a timebox count their size as before.
+ * its pick is done, moved or dropped. Picks without a timebox count their size, or TX-1's time left, as before.
  */
-export function plannedWithTimeboxes(picks: readonly PickLike[], sizes: SizeScale, timeboxes: readonly Pick<Timebox, "pickId" | "start" | "end" | "removedAt">[], slot: { start: string; end: string }, allPicks: readonly PickLike[] = picks): number {
-  const live = timeboxes.filter((t) => !t.removedAt);
+export function plannedWithTimeboxes(picks: readonly PickLike[], sizes: SizeScale, timeboxes: readonly (Pick<Timebox, "pickId" | "start" | "end" | "removedAt"> & Settled)[], slot: { start: string; end: string }, allPicks: readonly PickLike[] = picks): number {
+  const live = timeboxes.filter((t) => !t.removedAt && stillPlanned(t));
   const boxed = new Set(live.map((t) => t.pickId).filter((x): x is number => x !== null));
   // PL-1: a pick whose item is resolved counts zero, timed or not (it shows as done).
   const status = new Map(allPicks.map((p) => [p.id, p.resolved ? "done" : p.status]));
@@ -155,13 +162,13 @@ export function plannedWithTimeboxes(picks: readonly PickLike[], sizes: SizeScal
 }
 
 /** A half-day's planned minutes with that day's timeboxes (see plannedWithTimeboxes). */
-export function slotPlanned(picks: readonly PickLike[], sizes: SizeScale, timeboxes: readonly Pick<Timebox, "date" | "pickId" | "start" | "end" | "removedAt">[] | undefined, slot: { date: IsoDate; start: string; end: string }, allPicks: readonly PickLike[] = picks): number {
+export function slotPlanned(picks: readonly PickLike[], sizes: SizeScale, timeboxes: readonly (Pick<Timebox, "date" | "pickId" | "start" | "end" | "removedAt"> & Settled)[] | undefined, slot: { date: IsoDate; start: string; end: string }, allPicks: readonly PickLike[] = picks): number {
   return plannedWithTimeboxes(picks, sizes, (timeboxes ?? []).filter((t) => t.date === slot.date), slot, allPicks);
 }
 /** Timeboxed minutes per pick (live timeboxes), or null for a pick without one: its need instead of its size. */
-export function boxedMinutes(timeboxes: readonly Pick<Timebox, "pickId" | "start" | "end" | "removedAt">[] | undefined): (pickId: number) => number | null {
+export function boxedMinutes(timeboxes: readonly (Pick<Timebox, "pickId" | "start" | "end" | "removedAt"> & Settled)[] | undefined): (pickId: number) => number | null {
   const m = new Map<number, number>();
-  for (const t of timeboxes ?? []) if (!t.removedAt && t.pickId !== null) m.set(t.pickId, (m.get(t.pickId) ?? 0) + minutesOf(t));
+  for (const t of timeboxes ?? []) if (!t.removedAt && stillPlanned(t) && t.pickId !== null) m.set(t.pickId, (m.get(t.pickId) ?? 0) + minutesOf(t));
   return (id) => m.get(id) ?? null;
 }
 

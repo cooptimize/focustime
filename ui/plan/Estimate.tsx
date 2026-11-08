@@ -1,7 +1,7 @@
 // E2 (D446): the two estimate controls, shared by Plan the week, Plan ahead, Plan the day and the detail panel.
 // - HoursStepper: "− 6h +". The arrows step 1h (2h above 8h); a click on the value makes it a box: Enter saves,
 //   Esc cancels, whole hours 1 to 80. A feature whose load comes from its stories shows the hours without a stepper.
-// - SizeChip: S, M, L, or a muted "Size?" when unsized (never amber). "M · 2h" where the row has room, else "M" with
+// - SizeChip: XS, S, M, L, or a muted "Size?" when unsized (never amber). "M · 2h" where the row has room, else "M" with
 //   "2h" on hover. A click opens a tiny menu: S, M, L, Clear. Sizing is optional: an unsized story counts as the person's assumption (SZ-1).
 import { PlanCtx } from "../planview.ts";
 import { useContext, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
@@ -82,7 +82,7 @@ export function HoursStepper({ minutes, onSet, onClear, derived = false, about =
   );
 }
 
-/** The tiny size menu: S, M, L, Clear. */
+/** The tiny size menu: XS, S, M, L, Clear. */
 export function sizeMenu(title: string, size: StorySize | null, onSet: (s: StorySize | null) => void, sizes: SizeScale): MenuStep {
   return {
     title: `Size of "${title}"`,
@@ -105,13 +105,15 @@ type ChipProps = {
   note?: string | null | undefined;
   className?: string | undefined;
   tabIndex?: number | undefined;
+  /** TX-1: once there's progress the chip reads "1h of 2h left" instead of the size. */
+  left?: string | null | undefined;
 };
 
-export function SizeChip({ size, title, onSet, wide = false, disabled = false, note = null, className = "", tabIndex }: ChipProps) {
+export function SizeChip({ size, title, onSet, wide = false, disabled = false, note = null, className = "", tabIndex, left = null }: ChipProps) {
   const { open } = useContext(MenuCtx);
   const { sizes } = useContext(PlanCtx);
   const hours = size ? hoursText(storyMinutes(size, sizes)) : unsizedText(sizes);
-  const text = wide ? sizeChipText(size, sizes) : (size ?? "Size?");
+  const text = left ?? (wide ? sizeChipText(size, sizes) : (size ?? "Size?"));
   const hover = note ?? (size ? `${size} is ${hours}` : `Not sized: counts as ${hours}`);
   const cls = `size-chip${size ? "" : " unsized"} ${className}`;
   if (!onSet || disabled)

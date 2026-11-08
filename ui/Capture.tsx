@@ -6,7 +6,7 @@ import { CloseButton } from "./CloseButton.tsx";
 import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import type { CaptureFeatures, WeekLoadData } from "../actions/types.ts";
 import { boxKind, suggest, tagCompletions, takeTag, type BoxKind, type CaptureClient, type CaptureKind } from "../plan/capture.ts";
-import { CLOSE_HOW, type Capture, type Size } from "../plan/types.ts";
+import { CLOSE_HOW, SIZES, type Capture, type Size } from "../plan/types.ts";
 import { windowProblem, windowText } from "../plan/deploy.ts";
 import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
@@ -138,7 +138,7 @@ export function SortCapture({ capture, clients, today, onDone, onCancel }: { cap
               </label>
               {kind === "draft" ? (
                 <span className="cap-size" role="group" aria-label="Size">
-                  {(["S", "M", "L"] as const).map((z) => (
+                  {SIZES.map((z) => (
                     <button key={z} type="button" className="mini" aria-pressed={size === z} onClick={() => setSize(z)}>{z}</button>
                   ))}
                 </span>
@@ -515,7 +515,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
                 <ItemLookup clientKey={client} value={parent} onChange={setParent} label="Parent feature" pool={(features?.status === "ok" ? pool : undefined) ?? NO_POOL} placeholder={!client ? undefined : !features ? "Loading features…" : features.status !== "ok" ? "No feature (DevOps unavailable)" : "Search open features, or leave empty"} />
               </label>
               <span className="cap-size" role="group" aria-label="Size">
-                {(["S", "M", "L"] as const).map((z) => (
+                {SIZES.map((z) => (
                   <button key={z} type="button" className="mini" aria-pressed={size === z} onClick={() => setSize(z)}>{z}</button>
                 ))}
               </span>

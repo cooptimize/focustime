@@ -58,7 +58,7 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     await expect(feature.locator(".pw-nested > li .size-chip").allTextContents()).resolves.toEqual(["S · 1h", "S · 1h"]);
     // The first S becomes an L: 5h.
     await feature.locator(".pw-nested > li").first().locator(".size-chip").click();
-    await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringContaining("S · 1h"), expect.stringContaining("M · 2h"), expect.stringContaining("L · 4h"), expect.stringContaining("Clear")]);
+    await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringContaining("XS · 30 min"), expect.stringContaining("S · 1h"), expect.stringContaining("M · 2h"), expect.stringContaining("L · 4h"), expect.stringContaining("Clear")]);
     await page.getByRole("menuitem", { name: /^L · 4h/ }).click();
     await expect.poll(() => load.textContent()).toBe("5h");
     await expect.poll(() => harbor.locator(".pw-card-head .pw-fit2").textContent()).toBe("2h free · 5h planned · about 3h over");
@@ -122,7 +122,7 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     const select = page.getByRole("combobox", { name: "Count unsized work as" });
     await expect.poll(() => select.inputValue()).toBe("60");
     await expect(select.locator("option").allTextContents()).resolves.toEqual(["30 min", "1h", "2h", "3h"]);
-    await expect(page.locator("[data-size-scale]").textContent()).resolves.toBe("S 1h · M 2h · L 4h");
+    await expect(page.locator("[data-size-scale]").textContent()).resolves.toBe("XS 30 min · S 1h · M 2h · L 4h");
     await select.selectOption("120");
     await page.getByText("Saved").first().waitFor();
     await page.keyboard.press("Escape");
