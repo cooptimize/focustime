@@ -6,7 +6,9 @@ Read before changing code: this file, `docs/technical/` (how FocusTime works: ar
 
 ## Current milestone
 
-Steps 1 to U6 and R1 are done, each authorized separately; what each delivered is in `docs/spec.md` and `docs/decisions.md`. The Azure move follows `docs/azure/A0-plan.md`: A0 (inventory and plan), A1 (the host boundary, per-user settings instead of machine defaults, per-user time zone groundwork; `docs/azure/A1-report.md`) and A2 (Entra web sign-in and sessions, user ids on every table with one filter, settings rows, per-user encrypted secrets, the scheduler; `docs/azure/A2-report.md`) A3 (the plan store on SQL Server: Azure SQL hosted, a local container here; export JSON as the migration format; the idle rule; `docs/azure/A3-report.md`) A4 (Azure infrastructure as Bicep, the image, CI and the dev deploy over OIDC, Key Vault secrets and the data key; `docs/azure/A4-report.md`, `docs/azure/runbook.md`) and A5 (prod in FocusTime with a clean database, manual deploys by SHA that promote dev's tested image, migrations only add, the local app retired, the pilot; `docs/azure/A5-report.md`) are done; AH-1 (Ahead as Grid, Gantt and Fix next with a committed change set, D653 to D666), TB-1 (the FocusTime bot in Teams), TB-2 (the bot's daily rhythm in Teams: brief, check-in, close out, nudges, "capture:", decisions under "TB-2"), AS-1 (the assistant: the in-app panel and push-to-talk on the same service as the bot, D750 to D762), AS-2 (the assistant asks with choices instead of giving up, moves to-dos across clients with one Confirm and one Undo, compound item updates; D946 to D955), SR-1 (Week › Status, Monday's status report) and MC-1 (meeting capture: a client's registered weekly call becomes proposals its reviewers confirm, decisions under "MC-1", `docs/setup/meeting-capture.md`) are merged, with the other steps recorded in `docs/decisions.md`; LP-1 (Close the loop by Teams, Email, DevOps comment or Call, decisions under "LP-1", `docs/setup/close-the-loop.md`) is in review; CW-1 (co-working calls: Call live · Join and Start a call from registered client chats, decisions under "CW-1") is in review; DOC-1 (the technical docs in `docs/technical/`, readable in the app beside the Guide) is in review; A6 follows, authorized separately. Only the work in `docs/spec.md`, `docs/azure/A0-plan.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
+FocusTime is hosted on Azure: prod in the FocusTime resource group (deployed by hand by SHA through `deploy-prod.yml`, promoting dev's tested image) and dev deployed from main; the local app is retired and developers run the developer loop. The Azure move follows `docs/azure/A0-plan.md` (A0 to A5 done, reports in `docs/azure/`; A6 follows, authorized separately).
+Work goes one step per pull request: a step code (like LP-1, GD-2 or HK-7), its decisions under that code in `docs/decisions.md` (numbered at merge), its open questions in `docs/open-questions.md`, each step authorized separately. What each delivered is in `docs/spec.md` and `docs/decisions.md`; `docs/technical/` is the reference for how FocusTime works now.
+Only the work in `docs/spec.md`, `docs/azure/A0-plan.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
 
 ## Principles
 
@@ -42,7 +44,7 @@ Steps 1 to U6 and R1 are done, each authorized separately; what each delivered i
      - Internal (Cooptimize) work is the exception and may name clients
   6. Every exit to client eyes is checked: Close the loop posts and emails, DevOps writes into a client's org, and text that feeds the client status report.
      - If another client's name appears, the preview flags it with one click to replace it with "another client".
-     - Text the person typed can still be sent after they've seen the flag; AI-generated text follows point 5.
+     - Text the person typed can still be sent after they've seen the flag; AI-generated text follows point 5 (AI-written DevOps text).
   7. A conversation that mentions another client shows a small "mentions <client>" tag to whoever can already see that conversation.
 
   Unchanged: admins never see others' content, client views only show that client's records, no automatic posting to client chats.
@@ -234,6 +236,7 @@ Run: `focustime-open` (the service), `npm run dev`, `npm test` (with `npm run db
 
 ## Working style
 
+- Never run anything in ~/Code/focustime except git fetch, and never rebuild or restart the local service, unless the product owner asks.
 - Small end-to-end steps. Define behavior first; failing test where it matters (normalization, risk rules, secret handling, failure isolation, persistence); implement; refactor.
 - No tests for trivial styling or that mirror implementation.
 - Type-check before calling a step done. Inspect the real UI (screenshot) for UI changes.

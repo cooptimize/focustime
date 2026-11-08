@@ -1,7 +1,8 @@
 // A2: the one scheduler for everyone's background work (server/ticks.ts): a fast pass every 5 seconds and a slow one
 // every 30, each over every known person, reading what is due from their rows. A pass never overlaps one of its own
-// kind; people run side by side, and one person's failure doesn't stop the others'. (A4: one replica holds a lease
-// before running passes.)
+// kind; people run side by side, and one person's failure doesn't stop the others'. There is no lease: hosted
+// FocusTime runs one replica (`maxReplicas: 1`), the daily jobs claim their period in `job_claims`, and running more
+// than one replica needs a lease here first (HK-7, Q-DOC1-1; docs/technical/operations.md).
 //
 // A3, the idle rule: the passes run only while someone is using FocusTime (a signed-in request in the last 15
 // minutes). Otherwise the scheduler sleeps until the next moment anyone's work could be due (plan/wake.ts), kept in

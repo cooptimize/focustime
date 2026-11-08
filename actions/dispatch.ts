@@ -1,5 +1,6 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
+import { exactCaseDefault } from "../plan/common-words.ts";
 import { boundaryCheck } from "./boundary-actions.ts";
 import type { DayPromise } from "../plan/conversation-views.ts";
 import { afterHours } from "../plan/deploy.ts";
@@ -767,7 +768,9 @@ async function aiDirectory(ctx: ActionContext, cfg: AppConfig): Promise<ClientEn
     const names = [mine.find((c) => c.clientKey === key)?.clientName, cfg.clientSettings[key]?.name].filter((n): n is string => !!n && n !== key);
     // GD-2: an admin's aliases for the client (Admin › Clients), matched like its names.
     const aliases = cfg.org?.clients[key]?.aliases ?? [];
-    return { key, names: [...new Set(names)], ...(aliases.length ? { aliases: [...aliases] } : {}), projects: [...new Set(items.map((i) => projectOf(i.url)).filter((p): p is string => !!p))], itemIds: [...new Set([...items.map((i) => i.id), ...(remembered.get(key) ?? [])])] };
+    // HK-7: "Match only as written", the admin's choice or the default rule (on for a name that is an ordinary word).
+    const exactCase = cfg.org?.clients[key]?.exactCase ?? exactCaseDefault([key, ...names]);
+    return { key, names: [...new Set(names)], ...(aliases.length ? { aliases: [...aliases] } : {}), ...(exactCase ? { exactCase: true } : {}), projects: [...new Set(items.map((i) => projectOf(i.url)).filter((p): p is string => !!p))], itemIds: [...new Set([...items.map((i) => i.id), ...(remembered.get(key) ?? [])])] };
   });
 }
 
