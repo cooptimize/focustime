@@ -2,6 +2,7 @@
 // account, or the config file in the developer loop); each field saves itself (ui/settings/autosave.tsx). Values
 // owned by Dataverse are shown read-only with where to change them. Secrets are entered in masked fields that go
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
+import { hoursText, STORY_SIZES, UNSIZED_CHOICES, unsizedText } from "../plan/estimate.ts";
 import { AzureWriteLog, LoopSendsLog, TeamsAccessLine, TeamsStatusLog, YouAccount } from "./Account.tsx";
 import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
@@ -627,7 +628,7 @@ function StandingForm(p: FormProps) {
 
 const PLANNING_LABELS: Record<string, string> = {
   minS: "Shortest useful time, S", minM: "Shortest useful time, M", minL: "Shortest useful time, L", carryDays: "Carry-over",
-  reminderOffsetMinutes: "Reminder", checkinReminderMinutes: "Check-in reminder", closeoutReminderMinutes: "Close out reminder", weekNudgeThu: "Thursday nudge",
+  unsizedMinutes: "Count unsized work as", reminderOffsetMinutes: "Reminder", checkinReminderMinutes: "Check-in reminder", closeoutReminderMinutes: "Close out reminder", weekNudgeThu: "Thursday nudge",
   weekNudgeFri: "Friday nudge", weekNudgeMon: "Monday nudge", followGraceDays: "Keep following", focusMinutes: "Focus length", breakMinutes: "Break length", endSound: "End sound", devopsOnDone: "When I check off a to-do",
 };
 
@@ -635,7 +636,7 @@ const PLANNING_LABELS: Record<string, string> = {
 function usePlan<K extends keyof PlanValues>(p: FormProps, keys: readonly K[]) {
   const pl = p.data.planning;
   const all: PlanValues = {
-    minS: pl.minSizes.S, minM: pl.minSizes.M, minL: pl.minSizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes,
+    unsizedMinutes: pl.sizes.unsized, minS: pl.minSizes.S, minM: pl.minSizes.M, minL: pl.minSizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes,
     focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, devopsOnDone: pl.devopsOnDone, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes,
     checkinReminderMinutes: pl.checkinReminderMinutes, weekNudgeThu: pl.weekNudgeThu, weekNudgeFri: pl.weekNudgeFri, weekNudgeMon: pl.weekNudgeMon,
   };
@@ -651,7 +652,7 @@ function usePlan<K extends keyof PlanValues>(p: FormProps, keys: readonly K[]) {
   });
 }
 type PlanValues = {
-  minS: number; minM: number; minL: number; carryDays: number; reminderOffsetMinutes: number; focusMinutes: number; breakMinutes: number; endSound: boolean;
+  unsizedMinutes: number; minS: number; minM: number; minL: number; carryDays: number; reminderOffsetMinutes: number; focusMinutes: number; breakMinutes: number; endSound: boolean;
   devopsOnDone: "ask" | "never"; followGraceDays: number; closeoutReminderMinutes: number; checkinReminderMinutes: number; weekNudgeThu: string; weekNudgeFri: string; weekNudgeMon: string;
 };
 type NumKey = "minS" | "minM" | "minL" | "carryDays" | "reminderOffsetMinutes" | "focusMinutes" | "breakMinutes" | "followGraceDays" | "closeoutReminderMinutes" | "checkinReminderMinutes";
@@ -666,10 +667,22 @@ function numField<V>(a: AutoSave<V>, k: NumKey & keyof V, label: string, hint: s
 
 /** ST-1: Today and Week's to-dos, rituals and nudges (the focus timer is under Focus, following under Clients). */
 function PlanningForm(p: FormProps) {
-  const a = usePlan(p, ["minS", "minM", "minL", "carryDays", "reminderOffsetMinutes", "devopsOnDone", "checkinReminderMinutes", "closeoutReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"] as const);
+  const a = usePlan(p, ["unsizedMinutes", "minS", "minM", "minL", "carryDays", "reminderOffsetMinutes", "devopsOnDone", "checkinReminderMinutes", "closeoutReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"] as const);
   return (
     <>
       <Group title="To-dos">
+        <div className="set-grid">
+          <AutoField a={a} k="unsizedMinutes" sid="count-unsized" label="Count unsized work as" hint="Used wherever a to-do or story has no size yet, in every fit and budget. Nothing is written to DevOps.">
+            <span className="set-unsized">
+              <select aria-label="Count unsized work as" value={a.v.unsizedMinutes} onChange={(e) => a.change("unsizedMinutes", Number(e.target.value))}>
+                {UNSIZED_CHOICES.map((m) => (
+                  <option key={m} value={m}>{unsizedText({ ...p.data.planning.sizes, unsized: m })}</option>
+                ))}
+              </select>
+              <span className="set-hint" data-size-scale>{STORY_SIZES.map((z) => `${z} ${hoursText(p.data.planning.sizes[z])}`).join(" · ")}</span>
+            </span>
+          </AutoField>
+        </div>
         <div className="set-grid" data-setting="shortest-useful-time">
           {numField(a, "minS", "Shortest useful time, S (minutes)", "The least Timebox my day gives an S to-do (S is 1h, M 2h, L 4h).")}
           {numField(a, "minM", "Shortest useful time, M (minutes)", "The same for M.")}

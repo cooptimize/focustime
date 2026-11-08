@@ -67,6 +67,8 @@ type Env = {
   names: Record<"epic" | "feature" | "story", string>;
   callouts: boolean;
   nudges: boolean;
+  /** SZ-1: what this person counts an unsized story as. */
+  unsizedMinutes: number;
   setHours: (k: string, id: number, w: string, hours: number) => Promise<void>;
   onChanged: () => void;
   /** The row the keyboard is on (one tab stop for the whole tree). */
@@ -168,7 +170,7 @@ export function Gantt({ data, groups: incoming, onChanged }: { data: WeekLoadDat
     if (first?.dataset.key) setCursor(first.dataset.key);
   });
 
-  const env: Env | null = ahead && scale ? { ahead, scale, cols, fold, setFold, names, callouts, nudges: data.guidance?.readinessNudges !== false, setHours, onChanged, cursor, setCursor, frozen, begin, end } : null;
+  const env: Env | null = ahead && scale ? { ahead, scale, cols, fold, setFold, names, callouts, nudges: data.guidance?.readinessNudges !== false, unsizedMinutes: data.planning.sizes.unsized, setHours, onChanged, cursor, setCursor, frozen, begin, end } : null;
   return (
     <div className="ah-gantt-wrap">
       <div className="ah-gantt-bar">
@@ -364,7 +366,7 @@ function ClientGroup({ g, env }: { g: Group; env: Env }) {
         list.push({ key: `gap:${k}`, text: GAP_WORDS[k], row: r, fix });
       }
       if (isFeature) {
-        const reachIt: Reach = reach({ target: r.eff.target, today: ahead.today, me: c.me, stories: g.rows.filter((x) => x.item.parentId === r.item.id && x.tier === "story").map((x) => ({ assigneeEmail: x.eff.assignee?.email ?? null, assigneeName: x.eff.assignee?.name ?? null, minutes: c.hints[x.item.id]?.minutes ?? null })), weeks: cap?.weeks ?? [], months: cap?.months.map((m) => { const col = cols.find((k) => k.kind === "month" && k.month === m.month); return { from: col?.from ?? ahead.today, to: col?.to ?? ahead.today, available: m.available }; }) ?? [] });
+        const reachIt: Reach = reach({ target: r.eff.target, today: ahead.today, me: c.me, unsizedMinutes: env.unsizedMinutes, stories: g.rows.filter((x) => x.item.parentId === r.item.id && x.tier === "story").map((x) => ({ assigneeEmail: x.eff.assignee?.email ?? null, assigneeName: x.eff.assignee?.name ?? null, minutes: c.hints[x.item.id]?.minutes ?? null })), weeks: cap?.weeks ?? [], months: cap?.months.map((m) => { const col = cols.find((k) => k.kind === "month" && k.month === m.month); return { from: col?.from ?? ahead.today, to: col?.to ?? ahead.today, available: m.available }; }) ?? [] });
         if (reachIt.kind === "short") list.push({ key: "reach", text: "Can't reach the target in the blocks known", row: r, fix: null });
         if (reachIt.kind === "unknown") list.push({ key: "reach", text: reachIt.text, row: r, fix: null });
       }

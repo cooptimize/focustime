@@ -1,21 +1,28 @@
 // Estimating in hours (E2, D446; was half blocks, E1). A block is only the calendar unit: the half-day where the work
 // happens. How much work is always time, kept in minutes and shown as whole hours ("about 6h"), never a fraction, a
-// decimal or a block. S, M and L are shortcuts: 1h, 2h and 4h. Sizing is optional: an unsized story counts as M (2h) in
-// every fit and budget, marked as an assumption, never an error.
+// decimal or a block. S, M and L are shortcuts: 1h, 2h and 4h. Sizing is optional: an unsized story counts as the
+// person's own assumption (SZ-1: Settings › Planning, 1h by default) in every fit and budget, marked as an assumption,
+// never an error. That one value travels in the SizeScale; no other code holds the number.
 //
 // A feature's load this week:
 // - from its stories: when stories under it are on the week list and at least one is sized, the sum of all of them
-//   (unsized ones as 2h). Its typed estimate is ignored then (and its stepper hidden: "from its stories").
+//   (unsized ones as the person's assumption). Its typed estimate is ignored then (and its stepper hidden: "from its stories").
 // - its estimate: otherwise, the person's estimate in whole hours (1 to 80), 4h when none was set.
-// A story on the list without its feature counts its own size (unsized as 2h). Nested stories never add to the client's
+// A story on the list without its feature counts its own size (or the assumption). Nested stories never add to the client's
 // total beyond their feature's load. Pure: no I/O.
 
 export type StorySize = "S" | "M" | "L";
 export const STORY_SIZES: readonly StorySize[] = ["S", "M", "L"];
 /** The one table of sizes: S 1h, M 2h, L 4h, in minutes. */
 export const STORY_MINUTES: Readonly<Record<StorySize, number>> = { S: 60, M: 120, L: 240 };
-/** An unsized story counts as M until it is sized. */
-export const UNSIZED_MINUTES = STORY_MINUTES.M;
+/** SZ-1: what a person may count unsized work as, in minutes (Settings › Planning, `[plan] unsized_minutes`). */
+export const UNSIZED_CHOICES: readonly number[] = [30, 60, 120, 180];
+/** SZ-1: the one default for unsized work: 1h. The only place this number is written. */
+export const DEFAULT_UNSIZED_MINUTES = 60;
+export const validUnsizedMinutes = (n: unknown): n is number => typeof n === "number" && UNSIZED_CHOICES.includes(n);
+/** The scale every fit, budget and chip reads: the fixed S, M and L, and what this person counts unsized work as. */
+export type SizeScale = Readonly<Record<StorySize, number> & { unsized: number }>;
+export const DEFAULT_SIZE_SCALE: SizeScale = { ...STORY_MINUTES, unsized: DEFAULT_UNSIZED_MINUTES };
 /** A feature with no estimate and no sized stories: 4h. */
 export const DEFAULT_FEATURE_MINUTES = 240;
 /** A feature estimate in whole hours: 1 to 80. */
@@ -28,8 +35,13 @@ export const validEstimateHours = (n: unknown): n is number => typeof n === "num
 /** A stored estimate: whole hours in minutes, 60 to 4800. */
 export const validEstimateMinutes = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n % 60 === 0 && validEstimateHours(n / 60);
 
-/** A story's minutes: its size, or 2h when unsized. */
-export const storyMinutes = (size: StorySize | null | undefined): number => (size && validStorySize(size) ? STORY_MINUTES[size] : UNSIZED_MINUTES);
+/** A story's or a to-do's minutes: its size, or the person's assumption when unsized. */
+export const storyMinutes = (size: string | null | undefined, scale: SizeScale): number => (size && validStorySize(size) ? scale[size] : scale.unsized);
+/**
+ * The named size unsized work stands in for where a size has to be named (shortest useful time, sort order, Make
+ * smaller): the smallest one that holds the assumption. 30 min and 1h are S, 2h is M, 3h is L.
+ */
+export const namedSize = (size: StorySize | null | undefined, scale: SizeScale): StorySize => size ?? STORY_SIZES.find((z) => scale.unsized <= scale[z]) ?? "L";
 
 /** Whole hours: "6h". More than nothing but under half an hour reads "under 1h"; nothing is "0h". */
 export function hoursText(minutes: number): string {
@@ -39,8 +51,10 @@ export function hoursText(minutes: number): string {
 }
 /** An estimate: "about 6h". */
 export const aboutText = (minutes: number) => `about ${hoursText(minutes)}`;
-/** A size chip: "M · 2h", or "Size? · 2h" for an unsized story. */
-export const sizeChipText = (size: StorySize | null | undefined) => `${size && validStorySize(size) ? size : "Size?"} · ${hoursText(storyMinutes(size))}`;
+/** The assumption in words: "30 min", "1h", "2h", "3h" (under an hour is the one place a size isn't whole hours). */
+export const unsizedText = (scale: SizeScale) => (scale.unsized < 60 ? `${scale.unsized} min` : hoursText(scale.unsized));
+/** A size chip: "M · 2h", or "Size? · 1h" for an unsized story (the words say it is an assumption). */
+export const sizeChipText = (size: StorySize | null | undefined, scale: SizeScale) => (size && validStorySize(size) ? `${size} · ${hoursText(scale[size])}` : `Size? · ${unsizedText(scale)}`);
 
 /**
  * The shared stepper (Plan the week, Plan ahead, the detail panel): 1h steps up to 8h, 2h above, within 1 and 80.
@@ -86,13 +100,13 @@ export type Envelope<T> = {
   /** Minutes done: all when the feature is done, else its done stories' share. */
   doneMinutes: number;
 };
-export type Estimate<T> = { envelopes: Envelope<T>[]; loose: T[] };
+export type Estimate<T> = { envelopes: Envelope<T>[]; loose: T[]; /** SZ-1: the scale it was made with. */ scale: SizeScale };
 
 /**
  * Features as envelopes: each listed story whose parent feature is on the same client's list nests under it; the rest
  * stay loose (their own rows). A feature's load comes from its stories when one is sized, else its estimate.
  */
-export function estimate<T extends EstItem>(items: readonly T[]): Estimate<T> {
+export function estimate<T extends EstItem>(items: readonly T[], scale: SizeScale): Estimate<T> {
   const features = items.filter((i) => i.level === "feature");
   const key = (k: string, id: number) => `${k}:${id}`;
   const byFeature = new Map<string, T[]>(features.map((f) => [key(f.clientKey, f.itemId), []]));
@@ -106,18 +120,18 @@ export function estimate<T extends EstItem>(items: readonly T[]): Estimate<T> {
     const stories = byFeature.get(key(f.clientKey, f.itemId))!;
     const sized = stories.filter((s) => validStorySize(s.size)).length;
     const derived = sized > 0;
-    const minutes = derived ? stories.reduce((n, s) => n + storyMinutes(s.size), 0) : f.estimate != null && validEstimateMinutes(f.estimate) ? f.estimate : DEFAULT_FEATURE_MINUTES;
+    const minutes = derived ? stories.reduce((n, s) => n + storyMinutes(s.size, scale), 0) : f.estimate != null && validEstimateMinutes(f.estimate) ? f.estimate : DEFAULT_FEATURE_MINUTES;
     const doneStories = stories.filter((s) => !!s.done);
     const doneMinutes = f.done
       ? minutes
       : derived
-        ? Math.min(minutes, doneStories.reduce((n, s) => n + storyMinutes(s.size), 0))
+        ? Math.min(minutes, doneStories.reduce((n, s) => n + storyMinutes(s.size, scale), 0))
         : stories.length
           ? Math.round((minutes * doneStories.length) / stories.length)
           : 0;
     return { feature: f, stories, minutes, derived, unsized: stories.length > 0 && stories.length - sized > stories.length / 2, doneMinutes };
   });
-  return { envelopes, loose };
+  return { envelopes, loose, scale };
 }
 
 /** A story's tier: its feature's when nested (no separate rule), else its own. */
@@ -127,13 +141,13 @@ export function tierOf<T extends EstItem>(e: Estimate<T>, item: T): "must" | "ni
 }
 
 /**
- * Minutes planned per client and tier: each feature's load, plus loose stories by size (unsized as 2h). PL-1: work marked
+ * Minutes planned per client and tier: each feature's load, plus loose stories by size (unsized as the assumption). PL-1: work marked
  * done in the estimate (weekBudget marks what DevOps has resolved, closed or removed) counts zero: a resolved feature
  * all of it, a resolved story under a feature its share, a resolved loose story its size.
  */
 export function plannedMinutesOf<T extends EstItem>(e: Estimate<T>, clientKey: string, tier: "must" | "nice"): number {
   const features = e.envelopes.filter((x) => x.feature.clientKey === clientKey && x.feature.tier === tier).reduce((n, x) => n + Math.max(0, x.minutes - x.doneMinutes), 0);
-  return features + e.loose.filter((s) => s.clientKey === clientKey && s.tier === tier && !s.done).reduce((n, s) => n + storyMinutes(s.size), 0);
+  return features + e.loose.filter((s) => s.clientKey === clientKey && s.tier === tier && !s.done).reduce((n, s) => n + storyMinutes(s.size, e.scale), 0);
 }
 
 /** A feature's load in words: "6h" when every story under it is sized, else "about 6h". */

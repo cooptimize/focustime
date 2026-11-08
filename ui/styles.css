@@ -6123,3 +6123,6 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .ib-phone .ib-row-line { align-items: flex-start; }
 .ib-phone .ib-row.new { padding-left: 10px; }
 .ib-phone .ib-new-dot { left: 1px; top: 18px; }
+
+/* SZ-1: Count unsized work as, with the fixed S, M and L beside it. */
+.set-unsized { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }

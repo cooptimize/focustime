@@ -1,5 +1,6 @@
 // BD-1: Break down's label follows the parent's type from the process model; the review's running total counts kept
-// proposals in hours (unsized as 2h); moving a card for drag and keyboard reorder.
+// proposals in hours (unsized as the assumption, 1h by default); moving a card for drag and keyboard reorder.
+import { DEFAULT_SIZE_SCALE } from "./estimate.ts";
 import { describe, expect, it } from "vitest";
 import { breakdownLabel, moveCard, reviewTotal } from "./breakdown.ts";
 
@@ -10,10 +11,10 @@ describe("Break down", () => {
     expect(breakdownLabel(null)).toBe("Break down item");
   });
 
-  it("totals the kept proposals in hours, unsized as 2h, dropped ones out", () => {
-    expect(reviewTotal([{ keep: true, size: "S" }, { keep: true, size: "L" }, { keep: true, size: null }, { keep: false, size: "L" }, { keep: true, size: "M" }])).toBe("4 items · about 9h");
-    expect(reviewTotal([{ keep: true, size: "S" }])).toBe("1 item · about 1h");
-    expect(reviewTotal([{ keep: false, size: "S" }])).toBe("Nothing kept");
+  it("totals the kept proposals in hours, unsized as 1h, dropped ones out", () => {
+    expect(reviewTotal([{ keep: true, size: "S" }, { keep: true, size: "L" }, { keep: true, size: null }, { keep: false, size: "L" }, { keep: true, size: "M" }], DEFAULT_SIZE_SCALE)).toBe("4 items · about 8h");
+    expect(reviewTotal([{ keep: true, size: "S" }], DEFAULT_SIZE_SCALE)).toBe("1 item · about 1h");
+    expect(reviewTotal([{ keep: false, size: "S" }], DEFAULT_SIZE_SCALE)).toBe("Nothing kept");
   });
 
   it("moves a card up, down, or to a dropped-on place, clamped", () => {

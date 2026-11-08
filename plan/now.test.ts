@@ -1,3 +1,4 @@
+import { DEFAULT_SIZE_SCALE } from "./estimate.ts";
 import { describe, expect, it } from "vitest";
 import { buildWeek } from "../week/build.ts";
 import type { TimeModel } from "../week/hours.ts";
@@ -35,7 +36,7 @@ const pick = (half: Pick["half"], title: string, over: Partial<Pick> = {}): Pick
 const at = (local: string) => Temporal.PlainDateTime.from(local).toZonedDateTime(NY);
 const input = (local: string, over: Partial<NowInput> = {}): NowInput => {
   const now = at(local);
-  return { now, day: day(now.toPlainDate().toString()), picks: [], committed: false, pto: false, nextWorkday: null, clientName: (k) => k.toUpperCase(), ...over };
+  return { sizes: DEFAULT_SIZE_SCALE, now, day: day(now.toPlainDate().toString()), picks: [], committed: false, pto: false, nextWorkday: null, clientName: (k) => k.toUpperCase(), ...over };
 };
 
 describe("Now strip", () => {

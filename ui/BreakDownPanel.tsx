@@ -13,6 +13,8 @@ import { CloseButton } from "./CloseButton.tsx";
 import { openSend } from "./send-event.ts";
 import { useCallback, useContext, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { breakdownLabel, moveCard, reviewTotal } from "../plan/breakdown.ts";
+import { sizeChipText } from "../plan/estimate.ts";
+import { PlanCtx } from "./planview.ts";
 import { call } from "./api.ts";
 import { BREAK_DOWN_EVENT, COOP_BRIEF_EVENT, DRAFT_STORIES_EVENT, openBreakDown, PV_BREAKDOWN_EVENT, type BreakDownTarget, type PanelAction } from "./menu.ts";
 import { TypeIcon } from "./TypeIcon.tsx";
@@ -530,9 +532,9 @@ function PrepareStep({ prep, childType, setChildType, onOpenLatest }: { prep: Pr
 // ---------- 2. Review ----------
 
 const SIZES: Size[] = ["S", "M", "L", null];
-const SIZE_HOURS: Record<string, string> = { S: "1h", M: "2h", L: "4h" };
 
 function ReviewStep({ clientKey, draft, busy, onEdit, onRegenerate }: { clientKey: string; draft: Draft; busy: boolean; onEdit: (cards: Card[], now?: boolean) => void; onRegenerate: (note: string, id?: string) => Promise<boolean> }) {
+  const { sizes } = useContext(PlanCtx);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [regen, setRegen] = useState<{ id: string; note: string } | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -642,7 +644,7 @@ function ReviewStep({ clientKey, draft, busy, onEdit, onRegenerate }: { clientKe
                 <span className="bd-sizes" role="group" aria-label="Size">
                   {SIZES.map((s) => (
                     <button key={String(s)} type="button" className={`size-chip${c.size === s ? " on" : ""}`} aria-pressed={c.size === s} disabled={sent} onClick={() => set(c.id, { size: s }, true)}>
-                      {s ? `${s} · ${SIZE_HOURS[s]}` : "Size? · 2h"}
+                      {sizeChipText(s, sizes)}
                     </button>
                   ))}
                 </span>
@@ -692,7 +694,7 @@ function ReviewStep({ clientKey, draft, busy, onEdit, onRegenerate }: { clientKe
           );
         })}
       </ol>
-      <p className="bd-total" aria-live="polite">{reviewTotal(draft.cards)}</p>
+      <p className="bd-total" aria-live="polite">{reviewTotal(draft.cards, sizes)}</p>
     </>
   );
 }

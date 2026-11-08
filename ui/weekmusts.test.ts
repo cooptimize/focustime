@@ -1,4 +1,5 @@
 // PL-1: Commit and the Board read one budget (planBudget), so they never disagree.
+import { SIZE_MINUTES } from "../plan/types.ts";
 import { describe, expect, it } from "vitest";
 import type { WeekLoadData } from "../actions/types.ts";
 import type { PlanBits } from "../plan/carry.ts";
@@ -19,6 +20,7 @@ describe("Commit and the Board show the same numbers (PL-1)", () => {
       borrowed: [{ clientKey: "adatum", minutes: 30, paidAt: null, paybackDate: null }],
       devops: null,
       guidance: { planShare: 80 },
+      planning: { sizes: SIZE_MINUTES },
       planBits: bits({ planShare: 80, keepOpen: { adatum: 20 }, resolved: ["adatum\u000012"], checkins: { adatum: 30 } }),
     } as unknown as WeekLoadData;
     const board = boardFits(data, features);

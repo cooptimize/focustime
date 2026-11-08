@@ -17,7 +17,7 @@ function slot(half: "AM" | "PM", gaps: [string, string][]): Slot {
   return { date: "2026-11-02", half, start: T(s), end: T(e), view: { start: T(s), end: T(e) }, windows: [{ start: T(s), end: T(e) }], focus: [], events: [], risks: [], freeGaps: gaps.map(([a, b]) => gap(a, b)), freeMinutes: 0, longestFreeMinutes: 0, open: false, off: false, flex: [], unavailable: [] } as unknown as Slot;
 }
 const pick = (id: number, half: "AM" | "PM", size: "S" | "M" | "L", extra: Partial<Pick> = {}): Pick => ({ id, date: "2026-11-02", half, clientKey: "Fabrikam", kind: "item", itemId: 7000 + id, draftId: null, title: `Pick ${id}`, itemType: "User Story", itemUrl: null, size, status: "planned", carriedFrom: null, carriedFromDate: null, notes: null, followUpId: null, position: id, createdAt: "", updatedAt: "", ...extra });
-const SIZES = { S: 60, M: 120, L: 210 };
+const SIZES = { S: 60, M: 120, L: 210, unsized: 60 };
 
 describe("shortest useful time (D273)", () => {
   it("defaults to 30, 60 and 90 minutes", () => {
@@ -35,10 +35,10 @@ describe("shortest useful time (D273)", () => {
     expect(r.placed).toEqual([]);
     expect(r.unplaced).toEqual([{ pickId: 1, half: "AM", title: "Pick 1", size: "M", reason: "No gap of 1h or more left in the morning" }]);
   });
-  it("E2: an unsized pick is placed as 2h, never left out for having no size", () => {
+  it("E2: an unsized pick is placed as the assumption (1h by default), never left out for having no size", () => {
     const am = slot("AM", [["09:00", "12:00"]]);
     const r = planMyDay([pick(1, "AM", "M", { size: null })], { AM: am }, [], SIZES, new Set(), undefined, DEFAULT_MIN_SIZES);
-    expect(r.placed.map((p) => [p.pickId, p.start.slice(11, 16), p.end.slice(11, 16)])).toEqual([[1, "09:00", "11:00"]]);
+    expect(r.placed.map((p) => [p.pickId, p.start.slice(11, 16), p.end.slice(11, 16)])).toEqual([[1, "09:00", "10:00"]]);
     expect(r.unplaced).toEqual([]);
   });
   it("prefers a gap that holds the pick whole, then the largest gap of at least the minimum", () => {
@@ -70,23 +70,23 @@ describe("shortest useful time (D273)", () => {
 
 describe("didn't fit, said plainly (D274)", () => {
   it("names each pick with its size", () => {
-    expect(didntFitText([])).toBe("");
-    expect(didntFitText([{ title: "Export spec draft", size: "M" }])).toBe("1 to-do didn't fit: Export spec draft (M).");
-    expect(didntFitText([{ title: "Export spec draft", size: "M" }, { title: "Delay alerts", size: "S" }])).toBe("2 to-dos didn't fit: Export spec draft (M), Delay alerts (S).");
+    expect(didntFitText([], SIZES)).toBe("");
+    expect(didntFitText([{ title: "Export spec draft", size: "M" }], SIZES)).toBe("1 to-do didn't fit: Export spec draft (M).");
+    expect(didntFitText([{ title: "Export spec draft", size: "M" }, { title: "Delay alerts", size: "S" }], SIZES)).toBe("2 to-dos didn't fit: Export spec draft (M), Delay alerts (S).");
   });
   it("makes a pick one size smaller, and S has nothing smaller", () => {
-    expect(smallerSize("L")).toBe("M");
-    expect(smallerSize("M")).toBe("S");
-    expect(smallerSize("S")).toBeNull();
+    expect(smallerSize("L", SIZES)).toBe("M");
+    expect(smallerSize("M", SIZES)).toBe("S");
+    expect(smallerSize("S", SIZES)).toBeNull();
   });
   it("clears the 'no time yet' offer once the summary is shown, and says so when everything fit", () => {
-    expect(offerAfterTimebox({ placed: 3, unplaced: [] })).toEqual({ offer: false, summary: null, notice: "Timeboxed 3 to-dos" });
-    expect(offerAfterTimebox({ placed: 1, unplaced: [{ pickId: 2, title: "Delay alerts", size: "S" }] })).toEqual({
+    expect(offerAfterTimebox({ placed: 3, unplaced: [] }, SIZES)).toEqual({ offer: false, summary: null, notice: "Timeboxed 3 to-dos" });
+    expect(offerAfterTimebox({ placed: 1, unplaced: [{ pickId: 2, title: "Delay alerts", size: "S" }] }, SIZES)).toEqual({
       offer: false,
       summary: { text: "1 to-do didn't fit: Delay alerts (S).", picks: [{ pickId: 2, title: "Delay alerts", size: "S" }] },
       notice: "Timeboxed 1 to-do",
     });
-    expect(offerAfterTimebox({ placed: 0, unplaced: [{ pickId: 2, title: "Delay alerts", size: "S" }] }).notice).toBeNull();
+    expect(offerAfterTimebox({ placed: 0, unplaced: [{ pickId: 2, title: "Delay alerts", size: "S" }] }, SIZES).notice).toBeNull();
   });
 });
 

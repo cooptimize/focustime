@@ -1,3 +1,4 @@
+import { DEFAULT_SIZE_SCALE } from "./estimate.ts";
 import { describe, expect, it } from "vitest";
 import { blockLabel, blockStories, cardGroups, groupLine, isChildLevel } from "./blockstories.ts";
 import { aClientWork, aFeature, aPick, aWeekFeature, aWorkItem, TYPE_LOOKS, WEEK } from "../test/builders/index.ts";
@@ -13,7 +14,7 @@ describe("blockStories (PV-1)", () => {
     const bug = aWorkItem({ id: 101, parentId: 10, type: "Bug" });
     const task = aWorkItem({ id: 102, parentId: 100, type: "Task" });
     const theirs = aWorkItem({ id: 103, parentId: 10, assignedToMe: false, assignedTo: "Sam" });
-    const gs = blockStories({ ...at, work: aClientWork({ items: [epic, f, mine, bug, task], children: [theirs] }), list: [], picks: [] });
+    const gs = blockStories({ sizes: DEFAULT_SIZE_SCALE, ...at, work: aClientWork({ items: [epic, f, mine, bug, task], children: [theirs] }), list: [], picks: [] });
     expect(titles(gs)).toEqual([[10, [100, 101]]]);
     // A group with my stories doesn't list teammates' ones.
     expect(gs[0]!.others).toEqual([]);
@@ -29,7 +30,7 @@ describe("blockStories (PV-1)", () => {
     const work = aClientWork({ items: [fa, fb, fc, fd, s(200, 12, 9), s(201, 12, 2), s(202, 10, 1), s(203, 11, null), s(204, null, 1), s(205, 13, 1), s(206, 11, 4)] });
     // The plan: fa placed first by hand, then fc (must, by rank); fd is a nice to have.
     const list = [aWeekFeature({ itemId: 12 }), aWeekFeature({ itemId: 10, position: 1 }), aWeekFeature({ itemId: 13, tier: "nice" })];
-    const gs = blockStories({ ...at, work, list, picks: [] });
+    const gs = blockStories({ sizes: DEFAULT_SIZE_SCALE, ...at, work, list, picks: [] });
     expect(titles(gs)).toEqual([
       [10, [202]],
       [12, [201, 200]],
@@ -45,7 +46,7 @@ describe("blockStories (PV-1)", () => {
     const here = aWorkItem({ id: 100, parentId: 10 });
     const there = aWorkItem({ id: 101, parentId: 10 });
     const picks = [aPick({ id: 1, itemId: 100, size: "L" }), aPick({ id: 2, itemId: 101, date: "2026-11-05", half: "AM" }), aPick({ id: 3, itemId: 101, date: "2026-11-04", half: "PM", size: "S" })];
-    const [g] = blockStories({ ...at, work: aClientWork({ items: [f, here, there] }), list: [], picks });
+    const [g] = blockStories({ sizes: DEFAULT_SIZE_SCALE, ...at, work: aClientWork({ items: [f, here, there] }), list: [], picks });
     expect(g!.stories.map((r) => [r.item.id, r.here?.pickId ?? null, r.elsewhere?.pickId ?? null, r.size])).toEqual([
       [100, 1, null, "L"],
       [101, null, 3, "S"],
@@ -57,14 +58,14 @@ describe("blockStories (PV-1)", () => {
   it("leaves out resolved and closed stories (state categories from the process)", () => {
     const f = aFeature({ id: 10 });
     const items = [f, aWorkItem({ id: 100, parentId: 10, stateCategory: "Resolved" }), aWorkItem({ id: 101, parentId: 10, stateCategory: "Completed" }), aWorkItem({ id: 102, parentId: 10, stateCategory: "Proposed" })];
-    expect(titles(blockStories({ ...at, work: aClientWork({ items }), list: [], picks: [] }))).toEqual([[10, [102]]]);
+    expect(titles(blockStories({ sizes: DEFAULT_SIZE_SCALE, ...at, work: aClientWork({ items }), list: [], picks: [] }))).toEqual([[10, [102]]]);
   });
 
   it("shows a committed feature with no stories of mine, with teammates' open stories", () => {
     const f = aFeature({ id: 10, assignedToMe: false });
     const theirs = aWorkItem({ id: 103, parentId: 10, assignedToMe: false, assignedTo: "Sam", assignedToEmail: "sam@contoso.example" });
     const closed = aWorkItem({ id: 104, parentId: 10, assignedToMe: false, stateCategory: "Completed" });
-    const [g] = blockStories({ ...at, work: aClientWork({ committed: [f], children: [theirs, closed] }), list: [aWeekFeature({ itemId: 10 })], picks: [] });
+    const [g] = blockStories({ sizes: DEFAULT_SIZE_SCALE, ...at, work: aClientWork({ committed: [f], children: [theirs, closed] }), list: [aWeekFeature({ itemId: 10 })], picks: [] });
     expect(g!.committed).toBe(true);
     expect(g!.stories).toEqual([]);
     expect(g!.others.map((o) => o.id)).toEqual([103]);
@@ -73,7 +74,7 @@ describe("blockStories (PV-1)", () => {
   it("groups a story under a parent read by id; another client's list and weeks don't count", () => {
     const f = aFeature({ id: 10, assignedToMe: false });
     const work = aClientWork({ items: [aWorkItem({ id: 100, parentId: 10 })], parents: [f] });
-    const gs = blockStories({ ...at, work, list: [aWeekFeature({ itemId: 10, clientKey: "fabrikam" }), aWeekFeature({ itemId: 10, weekStart: "2026-11-09" })], picks: [] });
+    const gs = blockStories({ sizes: DEFAULT_SIZE_SCALE, ...at, work, list: [aWeekFeature({ itemId: 10, clientKey: "fabrikam" }), aWeekFeature({ itemId: 10, weekStart: "2026-11-09" })], picks: [] });
     expect(titles(gs)).toEqual([[10, [100]]]);
     expect(gs[0]!.committed).toBe(false);
   });

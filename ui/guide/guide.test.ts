@@ -1,6 +1,6 @@
 // G1, UI-5: the Guide's keys are ui/keys.ts's, its sandbox is the app's own fit math, and its address round-trips.
 import { describe, expect, it } from "vitest";
-import { storyMinutes, type StorySize } from "../../plan/estimate.ts";
+import { DEFAULT_SIZE_SCALE, storyMinutes, type StorySize } from "../../plan/estimate.ts";
 import { blockFitWords } from "../../plan/fit.ts";
 import { fitOf } from "../../plan/rules.ts";
 import { KEYS } from "../keys.ts";
@@ -55,19 +55,19 @@ describe("the sizing sandbox uses plan/estimate.ts and plan/fit.ts (E2: hours)",
   it("its fit words are Plan today's for every S, M, L and unsized combination", () => {
     expect(combos.length).toBeGreaterThan(100);
     for (const c of combos) {
-      const minutes = c.reduce((n, s) => n + storyMinutes(s), 0);
+      const minutes = c.reduce((n, s) => n + storyMinutes(s, DEFAULT_SIZE_SCALE), 0);
       const sb = sandbox(c, block);
       expect(sb.fit, c.join("")).toEqual(blockFitWords(fitOf(minutes, block.freeMinutes)));
       expect(sb.minutes, c.join("")).toBe(minutes);
     }
   });
-  it("reads as the legend says: S 1h, M 2h, L 4h, unsized 2h; over is amber, never red", () => {
+  it("reads as the legend says: S 1h, M 2h, L 4h, unsized 1h; over is amber, never red", () => {
     expect(block.free).toBe("4h free after meetings");
     expect(sandbox(["M", "S"], block)).toMatchObject({ load: { planned: "3h", free: "4h" }, filled: 3, spill: 0, chips: ["M · 2h", "S · 1h"] });
     expect(C.SIZING.load("3h", "4h")).toBe("3h of 4h");
-    expect(sandbox([null], block).chips).toEqual(["Size? · 2h"]);
+    expect(sandbox([null], block).chips).toEqual(["Size? · 1h"]);
     expect(sandbox([null, null], block).fit.kind).not.toBe("over");
-    for (const c of [["S", "S", "S", "S"], ["M", "M"], ["L"], ["M", null]] as (StorySize | null)[][]) expect(sandbox(c, block)).toMatchObject({ filled: 4, spill: 0 });
+    for (const c of [["S", "S", "S", "S"], ["M", "M"], ["L"], ["M", null, null]] as (StorySize | null)[][]) expect(sandbox(c, block)).toMatchObject({ filled: 4, spill: 0 });
     expect(sandbox(["L", "M"], block)).toMatchObject({ spill: 2, fit: { kind: "over", tone: "watch" } });
     expect(sandbox([], block).fit.kind).toBe("none");
     for (const c of combos) expect(sandbox(c, block).fit.tone).not.toBe("risk");
@@ -76,7 +76,7 @@ describe("the sizing sandbox uses plan/estimate.ts and plan/fit.ts (E2: hours)",
   it("the legend is exactly its four lines", () => {
     expect(C.SIZING.legend.map((l) => l.replace(/\{b:([^}]*)\}/g, "$1"))).toEqual([
       "S 1h · M 2h · L 4h",
-      "Sizing is optional. An unsized story counts as 2h until you size it.",
+      "Sizing is optional. An unsized story counts as 1h until you size it. Change that in Settings › Planning.",
       "Too much? It turns amber. Move something, or keep it. Your call.",
       "Features are their stories added up, or your estimate until they're sized.",
     ]);
@@ -92,7 +92,7 @@ describe("estimates in the Guide are hours (E2)", () => {
   });
   it("the new questions are there", () => {
     const qs = Object.fromEntries(C.QUESTION_POOL.map((x) => [x.q, x.a]));
-    expect(qs["Do I have to size everything?"]).toBe("No. Unsized stories count as 2h so the plan still adds up, and nothing waits on a size. Size them when you know.");
+    expect(qs["Do I have to size everything?"]).toBe("No. Unsized stories count as 1h so the plan still adds up (change that in Settings › Planning), and nothing waits on a size. Size them when you know.");
     expect(qs["What's a block, then?"]).toBe("Where you work: a half-day set aside for a client in Focus Time. How much work fits is measured in hours.");
     expect(C.FOOTER).toBe("FocusTime by Cooptimize. Questions or ideas? ⋯ › Send feedback, or message the FocusTime team in Teams.");
     expect(qs["How do I send an idea, a problem or a question?"]).toMatch(/^⋯ › Send feedback, .*message the FocusTime team in Teams\.$/);

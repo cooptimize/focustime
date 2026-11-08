@@ -1,6 +1,8 @@
 // Close out (step 7, end of day) and the actions it shares with Check-in: make up a pick (borrowed time), resume
 // notes, add a follow-up, pay borrowed time. Local only: they write to the plan store and read DevOps results already in
 // memory. Nothing here calls or writes DevOps, Outlook, Google or Dataverse.
+import { storyMinutes } from "../plan/estimate.ts";
+import { SIZE_MINUTES } from "../plan/types.ts";
 import { dueOrder } from "../plan/due.ts";
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
@@ -176,8 +178,7 @@ export async function closeoutAction(ctx: CloseoutContext, action: CloseoutActio
         if (typeof slot === "string") return bad(slot, 422);
         const pto = await ptoSet(ctx, cfg, slot.date);
         if (pto.has(slot.date)) return bad(`${dayLabel(slot.date)} is a PTO day. Choose another day`, 422);
-        const sizes = cfg?.plan.sizes ?? { S: 60, M: 120, L: 210 };
-        let minutes = borrowMinutes(sizes[p.size ?? "M"], (await plan.focusedSeconds([pid]))[pid] ?? 0);
+        let minutes = borrowMinutes(storyMinutes(p.size, cfg?.plan.sizes ?? SIZE_MINUTES), (await plan.focusedSeconds([pid]))[pid] ?? 0);
         if (o.minutes !== undefined) {
           if (typeof o.minutes !== "number" || !Number.isInteger(o.minutes) || o.minutes < 5 || o.minutes > 480) throw new Invalid("minutes must be a whole number from 5 to 480");
           minutes = o.minutes;

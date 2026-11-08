@@ -1,7 +1,7 @@
 // Plan layer types (step 5, Plan the day). Pure data shared by the store, actions and UI.
 import type { Half, IsoDate } from "../week/types.ts";
 import type { DayAccess } from "./days.ts";
-import { STORY_MINUTES, UNSIZED_MINUTES, type StorySize } from "./estimate.ts";
+import { DEFAULT_SIZE_SCALE, storyMinutes, type SizeScale, type StorySize } from "./estimate.ts";
 
 export type Size = StorySize;
 export type PickStatus = "planned" | "done" | "moved" | "dropped";
@@ -33,7 +33,7 @@ export type Pick = {
   title: string;
   itemType: string | null;
   itemUrl: string | null;
-  /** E2: S, M or L, or null when not sized yet (counts as 2h everywhere, never blocks anything). */
+  /** E2: S, M or L, or null when not sized yet (counts as the person's assumption everywhere, SZ-1; never blocks anything). */
   size: Size | null;
   status: PickStatus;
   /** The pick this one was carried or moved from. */
@@ -98,15 +98,15 @@ export type PlanDayState = {
 /** Step 16.2: closedOutAt too, for the ✓ on Today's Close out mode on any day of the week. */
 export type PlanWeek = Record<IsoDate, { committedAt: ZonedStamp | null; closedOutAt?: ZonedStamp | null; picks: Pick[] }>;
 
-/** E2: S 1h, M 2h, L 4h, fixed for everyone (plan/estimate.ts). Nothing above L: split it first. */
-export const SIZE_MINUTES: Readonly<Record<Size, number>> = STORY_MINUTES;
-/** A pick's minutes by its size: 2h when unsized (Timebox my day, fit and budgets alike). */
-export const sizeMinutes = (size: Size | null | undefined, sizes: Readonly<Record<Size, number>> = SIZE_MINUTES) => (size ? sizes[size] : UNSIZED_MINUTES);
+/** E2: S 1h, M 2h, L 4h, fixed for everyone (plan/estimate.ts); SZ-1's default for unsized work. A person's own scale is `planning.sizes`. */
+export const SIZE_MINUTES: SizeScale = DEFAULT_SIZE_SCALE;
+/** A pick's minutes by its size, or the person's assumption when unsized (Timebox my day, fit and budgets alike). */
+export const sizeMinutes = (size: Size | null | undefined, sizes: SizeScale) => storyMinutes(size, sizes);
 /**
  * PL-1: the minutes a pick needs: zero when its DevOps item is resolved, closed or removed (it shows as done), its own
- * minutes when it has them (a Watching check-in's 30), else its size (unsized as M, as before).
+ * minutes when it has them (a Watching check-in's 30), else its size (or the person's assumption when unsized).
  */
-export const pickNeed = (p: { size: string | null; minutes?: number | null; resolved?: boolean }, sizes: Readonly<Record<string, number>>): number => (p.resolved ? 0 : (p.minutes ?? sizes[p.size ?? "M"] ?? 0));
+export const pickNeed = (p: { size: string | null; minutes?: number | null; resolved?: boolean }, sizes: SizeScale): number => (p.resolved ? 0 : (p.minutes ?? storyMinutes(p.size, sizes)));
 export const SIZES: readonly Size[] = ["S", "M", "L"];
 export const DEFAULT_SIZE: Size = "M";
 

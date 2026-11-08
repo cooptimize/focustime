@@ -1,4 +1,5 @@
 // The committed plan as the week view sees it: picks per day, and ticking one done (local status only).
+import type { SizeScale } from "../plan/estimate.ts";
 import type { FollowUpView } from "../actions/types.ts";
 import { createContext, useContext } from "react";
 import { liveFocused } from "../plan/focus.ts";
@@ -14,7 +15,7 @@ import { planFit } from "../plan/fit.ts";
 export type PlanView = {
   week: PlanWeek | null;
   toggle: (id: number, done: boolean) => void;
-  sizes: Readonly<Record<Size, number>>;
+  sizes: SizeScale;
   /** Step 15.1 (D273): the shortest useful time per size, for Timebox my day. */
   minSizes?: Readonly<Record<Size, number>>;
   focused: Readonly<Record<number, number>>;
@@ -99,7 +100,7 @@ export type CardPlan = {
  * not, since stories are dragged onto blocks on Week before the day is planned. With no picks: every item, collapsed
  * only on a committed day.
  */
-export function cardPlan(week: PlanWeek | null, slot: Slot, clientKey: string | null, items: readonly WorkItem[], now: string, sizes: Readonly<Record<Size, number>> = SIZE_MINUTES, timeboxes: readonly TimeboxLike[] = []): CardPlan {
+export function cardPlan(week: PlanWeek | null, slot: Slot, clientKey: string | null, items: readonly WorkItem[], now: string, sizes: SizeScale , timeboxes: readonly TimeboxLike[] = []): CardPlan {
   const picks = (week?.[slot.date]?.picks ?? []).filter((p) => p.half === slot.half && (p.status === "planned" || p.status === "done"));
   if (!picks.length) return { picks: [], fit: null, items: [...items], collapsed: !!week?.[slot.date]?.committedAt };
   const picked = new Set(picks.filter((p) => p.kind === "item" && p.clientKey === clientKey && p.itemId !== null).map((p) => p.itemId));

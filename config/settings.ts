@@ -88,7 +88,7 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
     }
     case "planning": {
       // WT-1, ADM-1: which types need breakdown or count hours are Rules per client in Admin › Clients now.
-      const keys = ["minSizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound", "followGraceDays", "closeoutReminderMinutes", "checkinReminderMinutes", "devopsOnDone", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"];
+      const keys = ["unsizedMinutes", "minSizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound", "followGraceDays", "closeoutReminderMinutes", "checkinReminderMinutes", "devopsOnDone", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"];
       only(v, keys, "plan");
       // Each value is written as given; parseConfig checks ranges per field (plan.min_m etc.). Sizes are fixed (E2).
       const values: [string, TomlValue][] = [];
@@ -97,7 +97,7 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
         only(mz, ["S", "M", "L"], "plan.min_sizes");
         for (const k of ["S", "M", "L"] as const) if (mz[k] !== undefined) values.push([`min_${k.toLowerCase()}`, int(mz[k], `plan.min_${k.toLowerCase()}`)]);
       }
-      const num: [string, string][] = [["carryDays", "carry_days"], ["reminderOffsetMinutes", "reminder_offset_minutes"], ["focusMinutes", "focus_minutes"], ["breakMinutes", "break_minutes"], ["followGraceDays", "follow_grace_days"], ["closeoutReminderMinutes", "closeout_reminder_minutes"], ["checkinReminderMinutes", "checkin_reminder_minutes"]];
+      const num: [string, string][] = [["unsizedMinutes", "unsized_minutes"], ["carryDays", "carry_days"], ["reminderOffsetMinutes", "reminder_offset_minutes"], ["focusMinutes", "focus_minutes"], ["breakMinutes", "break_minutes"], ["followGraceDays", "follow_grace_days"], ["closeoutReminderMinutes", "closeout_reminder_minutes"], ["checkinReminderMinutes", "checkin_reminder_minutes"]];
       for (const [k, toml] of num) if (v[k] !== undefined) values.push([toml, int(v[k], `plan.${toml}`)]);
       // Week nudge times (step 8): written as given ("" is off); parseConfig checks the format.
       for (const [k, toml] of [["weekNudgeThu", "week_nudge_thu"], ["weekNudgeFri", "week_nudge_fri"], ["weekNudgeMon", "week_nudge_mon"]] as const) if (v[k] !== undefined) values.push([toml, str(v[k], `plan.${toml}`, 5)]);

@@ -212,7 +212,7 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
       // again), move the first down and back with the keys, size the first L; the total follows.
       const card = (t: string) => panel.getByRole("listitem", { name: `Card ${t}` });
       await card("Email the export to finance").getByText("after Add the date filter to the export").waitFor();
-      await panel.getByText("3 items · about 5h").waitFor();
+      await panel.getByText("3 items · about 4h").waitFor();
       await card("Add the date filter to the export").getByLabel("Title").fill("Add a month filter to the export");
       await card("Email the export to finance").getByText("after Add a month filter to the export").waitFor();
       await card("Review the export with finance").getByRole("button", { name: "Drop" }).click();

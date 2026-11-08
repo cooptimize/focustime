@@ -163,7 +163,7 @@ function id(v: unknown, name = "id"): number {
   if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0) throw new Invalid(`${name} must be a positive whole number`);
   return v;
 }
-/** A pick's size: S, M or L, or none (E2: not sized yet, counts as 2h; sizing is optional). */
+/** A pick's size: S, M or L, or none (E2: not sized yet, counts as the person's assumption; sizing is optional). */
 function size(v: unknown): Size | null {
   if (v === undefined || v === null) return null;
   if (typeof v === "string" && (SIZES as readonly string[]).includes(v)) return v as Size;

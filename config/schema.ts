@@ -1,4 +1,5 @@
 // Parse and validate ~/.config/focustime/config.toml. Pure: text in, config or per-field errors out.
+import { DEFAULT_SIZE_SCALE, UNSIZED_CHOICES, validUnsizedMinutes, type SizeScale } from "../plan/estimate.ts";
 import { parse, TomlError } from "smol-toml";
 import type { MainHalf, StandingBlock, WeekConfig, WorkWeekday } from "../week/types.ts";
 import { DEFAULT_THRESHOLDS, type RoadmapThresholds } from "../plan/roadmap.ts";
@@ -133,8 +134,8 @@ export type PlanConfig = {
    */
   pickablePortfolioTypes: string[];
   backgroundTypes: string[];
-  /** Minutes per pick size: fixed since E2 (S 1h, M 2h, L 4h, D446); old size_s/m/l values are read and ignored. */
-  sizes: { S: number; M: number; L: number };
+  /** Minutes per pick size: S, M and L fixed since E2 (1h, 2h, 4h, D446; old size_s/m/l values are read and ignored); `unsized` is the person's own (SZ-1, `[plan] unsized_minutes`). */
+  sizes: SizeScale;
   /** Shortest useful time per size (step 15.1, D273): Timebox my day never places or trims a pick below it. */
   minSizes: { S: number; M: number; L: number };
   /** How many days back unfinished picks are offered again; 0 turns carry-over off. */
@@ -160,8 +161,8 @@ export type PlanConfig = {
   weekNudgeMon: string;
 };
 
-export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes" | "backgroundTypes"> = { sizes: { S: 60, M: 120, L: 240 }, minSizes: { S: 30, M: 60, L: 90 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false, devopsOnDone: "ask", followGraceDays: 14, closeoutReminderMinutes: 15, checkinReminderMinutes: 0, weekNudgeThu: "14:00", weekNudgeFri: "09:00", weekNudgeMon: "08:30" };
-const PLAN_KEYS = ["pickable_portfolio_types", "background_types", "size_s", "size_m", "size_l", "min_s", "min_m", "min_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound", "devops_on_done", "follow_grace_days", "closeout_reminder_minutes", "checkin_reminder_minutes", "week_nudge_thu", "week_nudge_fri", "week_nudge_mon"];
+export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes" | "backgroundTypes"> = { sizes: DEFAULT_SIZE_SCALE, minSizes: { S: 30, M: 60, L: 90 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false, devopsOnDone: "ask", followGraceDays: 14, closeoutReminderMinutes: 15, checkinReminderMinutes: 0, weekNudgeThu: "14:00", weekNudgeFri: "09:00", weekNudgeMon: "08:30" };
+const PLAN_KEYS = ["pickable_portfolio_types", "background_types", "size_s", "size_m", "size_l", "unsized_minutes", "min_s", "min_m", "min_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound", "devops_on_done", "follow_grace_days", "closeout_reminder_minutes", "checkin_reminder_minutes", "week_nudge_thu", "week_nudge_fri", "week_nudge_mon"];
 
 export type FieldError = { field: string; message: string };
 /** `legacyDayShape`: the file still has the old [day_shape] section (read as hours; migrated on load, D124). */
@@ -390,6 +391,11 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
     };
     // E2 (D446): S, M and L are fixed shortcuts for 1h, 2h and 4h. Sizes a person set before stay in their settings
     // text, unread: never an error, never used.
+    // SZ-1: what this person counts unsized work as. Absent (every older file): the default, 1h.
+    if (t?.unsized_minutes !== undefined) {
+      if (validUnsizedMinutes(t.unsized_minutes)) planOpts.sizes = { ...planOpts.sizes, unsized: t.unsized_minutes };
+      else err("plan.unsized_minutes", `Must be one of ${UNSIZED_CHOICES.join(", ")}`);
+    }
     for (const z of ["S", "M", "L"] as const) {
       const key = `min_${z.toLowerCase()}`;
       const v = minutes(key, 15, 480);

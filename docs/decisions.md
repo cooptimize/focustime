@@ -1671,3 +1671,20 @@ Unnumbered until merge.
 | - | Done | GD-3: wording. "They're checked again with the chat's next messages" is gone. A held message "stays held until someone sorts it or marks it not work-related, or a client's names change" (`HELD_STAYS`), in the Inbox line, the list and the Guide. |
 | - | Done | GD-3: editing a client's Other names or Match only as written re-checks, in the background, the held messages that concern that client: those in its own chats and those matched against it. An added alias doesn't re-hold anything already sorted; holding only happens as a message is first sorted. |
 | - | Done | GD-3: bulk actions, per client, one line each at the top of the list (`conversations.held_bulk`): "Sort all for <client> by hand" makes one new conversation per chat (a conversation belongs to one chat), first message's title, each named client tagged, no AI; "Mark all not work-related" moves them to Chatter, placed by a person. Each asks first with the count, inline so it works on the phone, and the action sends that count: if the list changed since, it is refused and nothing moves. They act on every held message I can see, past the list's 200. |
+
+
+## SZ-1: unsized work counts as 1 hour, a setting (Nov 8)
+
+Unnumbered until merge. Changes D448's "an unsized story counts as 2h everywhere".
+
+| # | Status | Decision |
+|---|---|---|
+| - | Done | SZ-1: the one value. `plan/estimate.ts` holds `DEFAULT_UNSIZED_MINUTES` (60) and `UNSIZED_CHOICES` (30, 60, 120, 180). The person's value travels in the existing `sizes` scale as `sizes.unsized` (`SizeScale`, in `cfg.plan.sizes` and `planning.sizes`), read through `storyMinutes(size, scale)`. Every function that counts unsized work now requires the scale, with no default argument, so the type-checker finds a caller that forgets it. |
+| - | Done | SZ-1: the copies removed: `UNSIZED_MINUTES` in `plan/estimate.ts` and a second 120 in `plan/reach.ts`, every `sizes[size ?? "M"]` (agenda, picktime, timer, todayorder, pickNeed, Close out's borrow, the timebox dialog), `?? 120` in todayorder, Close out's stale `{ S: 60, M: 120, L: 210 }` fallback, `sizes.M` on the phone's to-do sheet, BreakDownPanel's own hours table, and the text "2h" in focus labels, Didn't fit, Clear's hint, Ahead's size hint and the Guide. `plan/unsized.test.ts` scans the code so a new copy fails. |
+| - | Done | SZ-1: S, M and L stay fixed (E2, D446), so they are shown read-only beside the choice ("S 1h · M 2h · L 4h"). |
+| - | Done | SZ-1: where a size has to be named (shortest useful time, Timebox my day's sort, Make smaller), unsized is the smallest size that holds the assumption (`namedSize`): 30 min and 1h are S, 2h is M, 3h is L. So at 1h Make smaller offers nothing, since S wouldn't be smaller, and a short assumption is never asked for a stretch longer than itself. |
+| - | Done | SZ-1: 30 min is the one value not in whole hours, on the chip and in Clear's hint ("Size? · 30 min"), because "1h" would misstate the setting. Totals stay whole hours as E2 says, so one 30 minute story reads "about 1h". |
+| - | Done | SZ-1: `[plan] unsized_minutes`, a person's setting (settings rows, no migration). A file without it loads as 1h. An older build skips it as an unknown `[plan]` key (BH-1) and saving there keeps it. A value outside the four choices is refused like any other bad setting. |
+| - | Done | SZ-1: not changed: a draft story with no size chosen is still created as M (`DEFAULT_SIZE`): that is a real size on the draft, not an assumption. Readiness and Gaps read the DevOps size field only, so unsized items stay Unsized; nothing here reaches DevOps. Timeboxes and a to-do's own minutes win over the assumption as before. |
+| - | Done | SZ-1: effect on existing plans: anyone who never changed the setting sees unsized work count 1h less the next time their week loads, so some "A little over" warnings go away. It is display only; nothing stored changes. |
+

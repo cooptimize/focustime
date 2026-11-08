@@ -15,6 +15,7 @@
 //   to-dos, which item) asks one short question with choices; my next message answers it for 10 minutes.
 //   4. confirm() re-checks everything (mine, open, not expired, still allowlisted, the client still mine and the
 //      proposal's own, nothing changed since: a fresh preview) and then dispatches the same action the button does.
+import { SIZE_MINUTES } from "../plan/types.ts";
 import type { ActionName } from "../actions/registry.ts";
 import { DEPLOYMENT, windowProblem, windowText } from "../plan/deploy.ts";
 import { matchNamed, namedInRequest, type ItemGroup } from "../plan/deploy-items.ts";
@@ -969,7 +970,7 @@ export function createAssistant(env: AssistantEnv) {
           if (day && wd) {
             const slot = half === "AM" ? day.am : day.pm;
             const inBlock = Object.values(wd.plan ?? {}).flatMap((x) => x.picks).filter((q) => q.date === toDate && q.half === half);
-            const c = dropCheck({ slot, ptoDay: !!day.pto, catchUp: single && !day.pto, now: env.now(), today: today(), picks: inBlock, sizes: wd.planning?.sizes ?? {}, timeboxes: wd.timeboxes, dragged: { clientKey: p.clientKey, itemId: p.itemId ?? -p.id, size: (p.size as never) ?? null, title: p.title, pickId: p.id } });
+            const c = dropCheck({ slot, ptoDay: !!day.pto, catchUp: single && !day.pto, now: env.now(), today: today(), picks: inBlock, sizes: wd.planning?.sizes ?? SIZE_MINUTES, timeboxes: wd.timeboxes, dragged: { clientKey: p.clientKey, itemId: p.itemId ?? -p.id, size: (p.size as never) ?? null, title: p.title, pickId: p.id } });
             if (!c.ok) {
               stays.push(`"${p.title}" stays: ${words[c.why] ?? c.why.replace(/^(.+)'s block$/, "that's $1's block")}`);
               continue;

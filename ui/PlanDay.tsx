@@ -5,6 +5,7 @@
 // agenda open only on the selected block; Enter in the type box makes a draft story under the chosen feature and plans
 // it, Shift+Enter a plain intention ("not in DevOps"); features aren't picks, so they offer Draft stories instead.
 // Everything here is local: the actions only write FocusTime's plan store.
+import { unsizedText } from "../plan/estimate.ts";
 import { usePhone } from "./viewport.ts";
 import { CloseButton } from "./CloseButton.tsx";
 import { countsFor } from "../plan/process.ts";
@@ -135,6 +136,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
   }, [start?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => onSelectBlock?.(sel), [sel]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onSelectBlock?.(null), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const { sizes } = useContext(PlanCtx);
   const [myDay, setMyDay] = useState(false);
   /** U6: bumped by /, so the right pane opens its list and focuses the search. */
   const [slash, setSlash] = useState(0);
@@ -142,7 +144,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
   const [didntFit, setDidntFit] = useState<{ text: string; picks: DidntFit[] } | null>(null);
   const settle = (pickId: number) => setDidntFit((d) => {
     const picks = d?.picks.filter((x) => x.pickId !== pickId) ?? [];
-    return picks.length ? { ...offerAfterTimebox({ placed: 0, unplaced: picks }).summary! } : null;
+    return picks.length ? { ...offerAfterTimebox({ placed: 0, unplaced: picks }, sizes).summary! } : null;
   });
   const boxed = new Set((tbEnv?.timeboxes ?? []).filter((t) => t.date === day.date && !t.removedAt).map((t) => t.pickId));
   const unboxed = dayPicks.filter((p) => p.status === "planned" && !boxed.has(p.id)).length;
@@ -233,11 +235,11 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
             </p>
             <ul>
               {didntFit.picks.map((u) => {
-                const smaller = smallerSize(u.size);
+                const smaller = smallerSize(u.size, sizes);
                 return (
                   <li key={u.pickId}>
                     <span className="df-title">
-                      {u.title} <span className="muted">({u.size ?? "not sized, 2h"})</span>
+                      {u.title} <span className="muted">({u.size ?? `not sized, ${unsizedText(sizes)}`})</span>
                     </span>
                     {nextDay && (
                       <button type="button" className="mini" onClick={() => void act("pick.move", { id: u.pickId, date: nextDay.date, half: dayPicks.find((p) => p.id === u.pickId)?.half ?? "AM" }).then((ok) => ok && settle(u.pickId))}>
@@ -334,7 +336,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
             onClose={() => setMyDay(false)}
             onRan={(r) => {
               // Step 15.1 (D274): the "no time yet" offer is done once this summary is shown.
-              const after = offerAfterTimebox(r);
+              const after = offerAfterTimebox(r, sizes);
               onCommitSeen?.();
               setDidntFit(after.summary);
               if (after.notice) window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: after.notice }));
@@ -490,7 +492,7 @@ function dueOf(p: Pick, followUps: readonly FollowUpView[]): ReactNode {
 
 /** A short note after a pick's title: another client's pick, carried from an earlier day, focused time. */
 function RowNote({ p, bc, name }: { p: Pick; bc: string | null; name: (k: string | null) => string }) {
-  const focused = focusLabel(useFocused()(p.id), p.size);
+  const focused = focusLabel(useFocused()(p.id), p.size, useContext(PlanCtx).sizes);
   const bits = [p.kind === "intention" && p.followUpId === null ? "not in DevOps" : "", p.clientKey !== bc ? name(p.clientKey) : "", p.carriedFromDate ? `from ${shortDate(p.carriedFromDate)}` : "", focused ? `${focused} focused` : ""].filter(Boolean);
   return bits.length ? <span className="pr-note">{bits.join(" · ")}</span> : null;
 }
@@ -524,7 +526,8 @@ function AddPaneDay({ slot, picks, overflow, state, picked, here, clients, color
   // U4: the feature a typed story goes under (Enter in the type box); none means the client, no parent yet.
   const [feature, setFeature] = useState<number | null>(focus);
   const name = (k: string | null) => clients.find((c) => c.clientKey === k)?.clientName ?? k ?? "";
-  const listed = useMemo(() => weekList(state.weekFeatures, work ? [work] : null).items.map((f) => ({ ...f, clientKey: f.clientKey, done: !!f.done })), [state.weekFeatures, work]);
+  const { sizes } = useContext(PlanCtx);
+  const listed = useMemo(() => weekList(state.weekFeatures, work ? [work] : null, sizes).items.map((f) => ({ ...f, clientKey: f.clientKey, done: !!f.done })), [state.weekFeatures, work, sizes]);
   const fus = clientKey ? dueOrder((pv.followUps ?? []).filter((f) => f.clientKey === clientKey), slot.date, (f) => f.due, (f) => f.openedAt) : [];
   const s = clientKey ? addSections({ clientKey, date: slot.date, half: slot.half, work, week: listed, followUps: fus, drafts: state.drafts, picked, here, focus, query }) : null;
   const add = (input: Record<string, unknown>) => act("pick.add", { date: slot.date, half: slot.half, clientKey, ...input });

@@ -1,9 +1,10 @@
 // Check-in (step 7, midday): for today, what each block or slot has left after meetings, and which picks no longer
 // fit. Pure; the UI passes the week's slots, today's picks, focused time and the clock.
+import type { SizeScale } from "./estimate.ts";
 import { pickNeed } from "./types.ts";
 import { freeMinutes } from "../week/free.ts";
 import type { Half, Slot } from "../week/types.ts";
-import type { Pick, Size } from "./types.ts";
+import type { Pick } from "./types.ts";
 
 export type CheckPick = {
   pick: Pick;
@@ -32,7 +33,7 @@ type SlotIn = { start: Slot["start"]; end: Slot["end"]; freeGaps: Slot["freeGaps
  * Picks keep their order: in turn, each planned pick takes its remaining need from what is left; the first one that
  * no longer fits and every one after it are flagged. Done picks are shown, never flagged.
  */
-export function checkIn(slots: readonly { half: Half; slot: SlotIn }[], picks: readonly Pick[], focused: (id: number) => number, sizes: Readonly<Record<Size, number>>, now: string, boxed: (pickId: number) => number | null = () => null): CheckSlot[] {
+export function checkIn(slots: readonly { half: Half; slot: SlotIn }[], picks: readonly Pick[], focused: (id: number) => number, sizes: SizeScale, now: string, boxed: (pickId: number) => number | null = () => null): CheckSlot[] {
   const t = Temporal.Instant.from(now).epochMilliseconds;
   return slots.map(({ half, slot }) => {
     const ended = Temporal.Instant.from(slot.end).epochMilliseconds <= t;

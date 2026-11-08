@@ -3,7 +3,8 @@
 import type { Day, Half, IsoDate, PlacedEvent, Slot } from "../week/types.ts";
 import { capacityMinutes, fitOf } from "./rules.ts";
 import { slotPlanned } from "./timebox.ts";
-import { SIZE_MINUTES, type Pick } from "./types.ts";
+import type { Pick } from "./types.ts";
+import type { SizeScale } from "./estimate.ts";
 
 export type NowInput = {
   now: Temporal.ZonedDateTime;
@@ -18,7 +19,8 @@ export type NowInput = {
   nextWorkday: IsoDate | null;
   clientName: (clientKey: string) => string;
   /** Minutes per size from Settings > Planning (defaults when absent). */
-  sizes?: Readonly<Record<"S" | "M" | "L", number>>;
+  /** SZ-1: S, M, L and what this person counts unsized work as. */
+  sizes: SizeScale;
   /** Timeboxes (step 12): they count as planned time. */
   timeboxes?: readonly { date: IsoDate; pickId: number | null; start: string; end: string; removedAt: string | null }[];
   /** Today has no working hours in the time model (used when today isn't on the loaded week, e.g. a quiet weekend). */
@@ -106,7 +108,7 @@ export function nowStrip(i: NowInput): NowStrip {
     if (!w) continue;
     const fx = s.flex.find((f) => ms(f.start) <= t && t < ms(f.end));
     const mine = todo.filter((p) => p.half === s.half);
-    const fit = mine.length ? fitOf(slotPlanned(mine, i.sizes ?? SIZE_MINUTES, i.timeboxes, s), capacityMinutes(s, nowIso)) : null;
+    const fit = mine.length ? fitOf(slotPlanned(mine, i.sizes, i.timeboxes, s), capacityMinutes(s, nowIso)) : null;
     const focus = s.focus[0];
     const title = fx ? `Flex session: ${i.clientName(fx.clientKey)}` : focus ? `${focus.clientName} focus` : s.open ? "Open" : HALF_NAMES[s.half];
     return {

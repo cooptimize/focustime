@@ -1198,7 +1198,7 @@ export const MIGRATIONS: readonly string[] = [
    CREATE INDEX week_features_user ON week_features(user_id);`,
   // 28: E2 (D446), estimates in hours. A feature's estimate becomes minutes (whole hours, 1h to 80h): what E1 (half
   // blocks) and step 16.4 (whole blocks) stored converts at 1 block = 4h, to the nearest hour. A pick's size may be
-  // empty (not sized yet; it counts as 2h). Both tables are rebuilt with the same rows and ids.
+  // empty (not sized yet; it counts as the person's assumption). Both tables are rebuilt with the same rows and ids.
   `${FK_OFF}
    CREATE TABLE week_features_v28 (
         user_id TEXT NOT NULL,
@@ -1373,7 +1373,7 @@ export type NewPick = {
   title: string;
   itemType?: string | null;
   itemUrl?: string | null;
-  /** E2: null when not sized yet (counts as 2h). */
+  /** E2: null when not sized yet (counts as the person's assumption). */
   size: Size | null;
   /** Step 13.5: a follow-up picked into a block (an intention pick tied to it). */
   followUpId?: number | null;
@@ -2523,7 +2523,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return (await this.weekPlan(w)).features.find((x) => x.id === id)!;
       });
     },
-    /** A story's size on the week list (step 16.4), or null to clear it (E2: unsized counts as 2h). */
+    /** A story's size on the week list (step 16.4), or null to clear it (E2: unsized counts as the person's assumption). */
     async setWeekItemSize(id: number, size: StorySize | null): Promise<WeekFeature> {
       return tx(async () => {
         if (size !== null && !validStorySize(size)) throw new PlanError("size must be S, M or L");

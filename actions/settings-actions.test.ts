@@ -92,13 +92,16 @@ describe("Settings (step 6b)", () => {
     expect((await t.run("settings.save", { section: "planning", values: { minSizes: { S: 30, M: 60, L: 120 }, carryDays: 3, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true, devopsOnDone: "ask", followGraceDays: 21, closeoutReminderMinutes: 30, checkinReminderMinutes: 10, weekNudgeThu: "15:30", weekNudgeFri: "" } })).ok).toBe(true);
     // E2: S, M and L are fixed (1h, 2h, 4h); there is nothing to save for them.
     expect((await t.run("settings.save", { section: "planning", values: { sizes: { S: 60, M: 50, L: 180 } } })).ok).toBe(false);
+    // SZ-1: Count unsized work as: saved per person, only the four choices.
+    expect((await t.run("settings.save", { section: "planning", values: { unsizedMinutes: 120 } })).ok).toBe(true);
+    expect((await t.run("settings.save", { section: "planning", values: { unsizedMinutes: 45 } })).ok).toBe(false);
     expect((await t.run("settings.save", { section: "display", values: { theme: "neutral", viewRange: "12h", showTimelines: false } })).ok).toBe(true);
     const cfg = parseConfig(readFileSync(t.path, "utf8"));
     if (!cfg.ok) throw new Error(JSON.stringify(cfg.errors));
     expect(cfg.config.week.hours.timeZone).toBe("America/Chicago");
     expect(cfg.config.week.hours.weekdays.thu).toHaveLength(2);
     expect(cfg.config.week.standingBlocks).toEqual([{ day: "Tue", half: "PM", clientKey: "Internal", clientName: "Internal" }]);
-    expect(cfg.config.plan).toEqual({ pickablePortfolioTypes: [], backgroundTypes: [], sizes: { S: 60, M: 120, L: 240 }, minSizes: { S: 30, M: 60, L: 120 }, carryDays: 3, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true, devopsOnDone: "ask", followGraceDays: 21, closeoutReminderMinutes: 30, checkinReminderMinutes: 10, weekNudgeThu: "15:30", weekNudgeFri: "", weekNudgeMon: "08:30" });
+    expect(cfg.config.plan).toEqual({ pickablePortfolioTypes: [], backgroundTypes: [], sizes: { S: 60, M: 120, L: 240, unsized: 120 }, minSizes: { S: 30, M: 60, L: 120 }, carryDays: 3, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true, devopsOnDone: "ask", followGraceDays: 21, closeoutReminderMinutes: 30, checkinReminderMinutes: 10, weekNudgeThu: "15:30", weekNudgeFri: "", weekNudgeMon: "08:30" });
     expect(cfg.config.ui).toEqual({ theme: "neutral", viewRange: "12h", showTimelines: false, reduceMotion: false, textSize: "default", showPersonal: true, inbox: DEFAULT_INBOX });
     expect(readFileSync(t.path, "utf8")).toContain("# my own note at the top");
   });
