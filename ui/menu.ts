@@ -1208,6 +1208,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ui.set_inbox":
     case "inbox.hide":
     case "inbox.snooze":
+    case "inbox.looked":
       return { run: () => env.setView("inbox") };
     case "ui.set_show_personal": return { run: () => env.saveShowPersonal(!env.showPersonal) };
     case "ui.set_show_timelines": return { run: () => env.saveShowTimelines(!env.showTimelines) };

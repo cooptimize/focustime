@@ -3,7 +3,7 @@
 // and reopening land in the same place. Pure: no DOM, no React; App applies it.
 import type { Half, IsoDate } from "../week/types.ts";
 import type { Route } from "../plan/notify.ts";
-import type { InboxView } from "../plan/inbox-items.ts";
+import type { InboxPlace } from "../plan/inbox-items.ts";
 import { tourById } from "./guide/tours.ts";
 import { DOC_ANCHOR, DOC_CONTENTS, DOC_PAGES, docPageLabel } from "./docs/pages.ts";
 
@@ -27,8 +27,8 @@ export type ModeName = keyof typeof MODE_NAMES;
 export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: ["board", "commit", "team", "status"], ahead: ["grid", "gantt", "fix", "backlog"], inbox: [] };
 
 /** IB-1: the Inbox's views in its address (#/inbox/needs-you …). */
-export const INBOX_VIEW_SLUGS: Record<InboxView, string> = { needs_you: "needs-you", promises: "promises", waiting: "waiting", in_progress: "in-progress", captures: "captures", teammates: "teammates", done: "done", chatter: "chatter" };
-const viewOfSlug = (slug: string): InboxView | null => (Object.keys(INBOX_VIEW_SLUGS) as InboxView[]).find((v) => INBOX_VIEW_SLUGS[v] === slug) ?? null;
+export const INBOX_VIEW_SLUGS: Record<InboxPlace, string> = { everything: "everything", needs_you: "needs-you", promises: "promises", waiting: "waiting", in_progress: "in-progress", captures: "captures", teammates: "teammates", done: "done", chatter: "chatter" };
+const viewOfSlug = (slug: string): InboxPlace | null => (Object.keys(INBOX_VIEW_SLUGS) as InboxPlace[]).find((v) => INBOX_VIEW_SLUGS[v] === slug) ?? null;
 /** An Inbox item key (plan/inbox-items.ts): v conversation, c chat promise, f promise, s send, k capture, d draft. */
 const ITEM_KEY = /^[vcfskd][1-9]\d{0,9}$/;
 
@@ -46,10 +46,10 @@ export type Nav =
   | { tab: "week"; mode: WeekMode; week: IsoDate | null; focus: DayFocus | null; /** SR-3: Status opened on Needs your update (#/week/status/needs). */ group?: "needs" }
   | { tab: "ahead"; mode: AheadMode; item?: number }
   /**
-   * IB-1: one list with views. `view` null is the bare #/inbox (the view I last used, Needs you the first time);
+   * IB-1: one list with views. `view` null is the bare #/inbox (IB-2: Everything);
    * `item` is the item open in the detail pane (#/inbox/item/<key>), which picks a view it's in when `view` is null.
    */
-  | { tab: "inbox"; view: InboxView | null; item: string | null; late?: LateFilter; /** LP-1: open the item's Close the loop draft (#/inbox/item/<key>/loop: the assistant's link). */ loop?: true };
+  | { tab: "inbox"; view: InboxPlace | null; item: string | null; late?: LateFilter; /** LP-1: open the item's Close the loop draft (#/inbox/item/<key>/loop: the assistant's link). */ loop?: true };
 
 /** UI-9: Promises narrowed to late ones (from a Week card's "N late" chip), for one client (null: any), not saved. */
 export type LateFilter = { client: string | null };
@@ -72,14 +72,14 @@ export const navOf = {
   aheadItem: (id: number): Nav => ({ tab: "ahead", mode: "grid", item: id }),
   /** SR-3: Week › Status on its Needs your update group (the nudge's click). */
   statusNeeds: (): Nav => ({ tab: "week", mode: "status", week: null, focus: null, group: "needs" }),
-  /** The bare Inbox (the view I last used), or a promise I added or a rule opened, open in the detail pane (was #/inbox/<id>). */
+  /** The bare Inbox (IB-2: Everything), or a promise I added or a rule opened, open in the detail pane (was #/inbox/<id>). */
   inbox: (followUp: number | null = null): Nav => ({ tab: "inbox", view: null, item: followUp ? `f${followUp}` : null }),
   /** IB-1: one view of the Inbox (#/inbox/<view>). */
-  inboxView: (view: InboxView): Nav => ({ tab: "inbox", view, item: null }),
+  inboxView: (view: InboxPlace): Nav => ({ tab: "inbox", view, item: null }),
   /** UI-9: the Promises view, late ones only, for one client (#/inbox/promises/late/<client>; null: any client). */
   inboxLate: (client: string | null): Nav => ({ tab: "inbox", view: "promises", item: null, late: { client } }),
   /** IB-1: one item open in the detail pane (#/inbox/item/<key>). */
-  inboxItem: (key: string, view: InboxView | null = null): Nav => ({ tab: "inbox", view, item: key }),
+  inboxItem: (key: string, view: InboxPlace | null = null): Nav => ({ tab: "inbox", view, item: key }),
   /** Captures and drafts (was Inbox › Captures). */
   captures: (): Nav => ({ tab: "inbox", view: "captures", item: null }),
   /** Needs you (was Inbox › Conversations). */
@@ -139,7 +139,7 @@ export function modeNav(tab: Tab, mode: ModeName): Nav {
 }
 
 /** IB-1: the Inbox's views by name (the rail, headers, the Guide). */
-export const INBOX_VIEW_NAMES: Record<InboxView, string> = { needs_you: "Needs you", promises: "Promises", waiting: "Waiting on", in_progress: "In progress", captures: "Captures and drafts", teammates: "Handled by teammates", done: "Done", chatter: "Chatter" };
+export const INBOX_VIEW_NAMES: Record<InboxPlace, string> = { everything: "Everything", needs_you: "Needs you", promises: "Promises", waiting: "Waiting on", in_progress: "In progress", captures: "Captures and drafts", teammates: "Handled by teammates", done: "Done", chatter: "Chatter" };
 
 // ---- Addresses ----
 

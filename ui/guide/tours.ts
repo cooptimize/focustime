@@ -153,8 +153,8 @@ const INBOX: Tour = {
   start: { tab: "inbox", view: "needs_you", item: null },
   section: "inbox",
   steps: [
-    { target: "ib-rail", title: "Views and clients", text: "Needs you, Promises, Waiting on and the rest, with counts. Tick the clients you want to see.", phone: { text: "View and Clients at the top open one picker: the views, with counts, and the clients you want to see." } },
-    { target: "ib-list", title: "Why it's here", text: "Grouped by client, late first. Each row says why it needs you: due, late, new, or waiting on you." },
+    { target: "ib-rail", title: "Views and clients", text: "Everything first: every item in time order. Needs you, Promises and the rest are shortcuts to one status. Tick the clients you want to see.", phone: { text: "View and Clients at the top open one picker: the views, with counts, and the clients you want to see." } },
+    { target: "ib-list", title: "Why it's here", text: "Each row says why it needs you: due, late, new, or waiting on you." },
     { target: "ib-pane", title: "The open item", text: "Its summary, the messages, the linked DevOps item and where it came from.", example: "ib-item", phone: "skip" },
     { target: "ib-acts", title: "Every action, the main one first", text: "Create DevOps item, Link, Close the loop or Accept leads, with the rest beside it. Anything outside FocusTime shows a preview first.", example: "ib-item" },
     { target: "ib-keys", title: "Close the loop", text: "When you've done what you promised, Close the loop (L): send the update by Teams, email, a DevOps comment or a call, after a preview of who sees it. Not needed closes it quietly. J and K move, Enter opens.", phone: "skip" },

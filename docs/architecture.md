@@ -784,3 +784,11 @@ The pages are `docs/technical/*.md` (how FocusTime works, for engineers and IT);
 - **UI.** `ui/cowork.tsx` (`useCowork`, every minute; `CoworkCtx`; `LiveCalls`; `BlockCalls` for the detail panel), provided in `ui/App.tsx`; Week's card (`LiveOnCard` in `ui/WeekGrid.tsx`), Today's Now card (`ui/Phone.tsx` `PhoneNow`, `ui/PhoneToday.tsx` `PhoneNowCard`), the detail panel (`ui/DetailPanel.tsx`), the block's ⋯ and the command menu (`callItems` and `chats.calls` in `ui/menu.ts`); styles at the end of `ui/styles.css`.
 - **Demo.** `sources/demo/seeds/cowork.ts`.
 - **Tests.** `plan/cowork.test.ts`, `actions/cowork.test.ts` (the real Graph client on fake data through the poll, the pipeline and the stub AI; visibility), the CW-1 parts of `store/teams-store.test.ts` and `ui/menu.test.ts`; e2e `e2e/cw1.test.ts` (screenshots with `FOCUSTIME_SHOTS`).
+
+## IB-2: Everything timeline (Nov 8)
+
+- `ui/stamp.ts`, `ui/Stamp.tsx`: the one timestamp formatter and its `<time>`; `ui/stamp.test.ts` holds every listed screen to it (`docs/ux/ib2/date-inventory.md`).
+- `ui/inbox/model.ts`: `byActivity`, `inStatuses`, `statusCounts`, `groupRows` by Day and Status, `dividerBefore`, `sliceGroups`; tests in `ui/inbox/timeline.test.ts`. `ui/inbox/InboxPage.tsx`: one list for every view, status chips, the sort toggle, the marker, progressive drawing. `ui/nav.ts`: `#/inbox/everything`.
+- `actions/inbox-actions.ts`: `inbox.looked`, `lastLooked` and `now` on `inbox.list`, closed promises for the Closed shown days Rule. `plan/inbox-items.ts`: `statusOf`, `STATUS_ORDER`, `InboxPlace`. `config/schema.ts`: `inbox_sort`, `inbox_statuses`, `inbox_grouping`.
+- `store/migrations/20261123T0900_follow_up_changed_at.ts`: a promise's last change. e2e: `e2e/ib2-everything.test.ts`.
+

@@ -6,6 +6,7 @@ import { writeConfig } from "../host/local/config-file.ts";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import { createPlanStore } from "../store/plan-store.ts";
+import { DEFAULT_INBOX } from "../config/schema.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
 
 function setup() {
@@ -57,7 +58,7 @@ describe("time model actions (step 6b)", () => {
 
   it("saves the view range in [ui]", async () => {
     const t = setup();
-    expect(await t.run("ui.set_view_range", { range: "24h" })).toEqual({ ok: true, data: { ui: { theme: "cooptimize-dark", viewRange: "24h", showTimelines: true, reduceMotion: false, textSize: "default", showPersonal: true, inbox: { view: "needs_you", clients: [], group: "client" } } } });
+    expect(await t.run("ui.set_view_range", { range: "24h" })).toEqual({ ok: true, data: { ui: { theme: "cooptimize-dark", viewRange: "24h", showTimelines: true, reduceMotion: false, textSize: "default", showPersonal: true, inbox: DEFAULT_INBOX } } });
     expect(await t.run("ui.set_view_range", { range: "48h" })).toMatchObject({ ok: false, status: 400 });
   });
 

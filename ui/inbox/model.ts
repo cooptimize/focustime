@@ -1,9 +1,10 @@
 // IB-1 slice 2: the new Inbox's pure rules for the list. inbox.list (actions/inbox-actions.ts) decides each item's
 // views and the counts; this filters by view and clients, groups (client, due date, kind), orders late items first,
 // and says what each row's tag and second line show. No calls, no React: ui/inbox/model.test.ts covers it.
-import type { InboxItemView, InboxListData, InboxView } from "../../plan/inbox-items.ts";
+import { statusOf, type InboxItemView, type InboxListData, type InboxPlace, type InboxView } from "../../plan/inbox-items.ts";
+import { dayHeading, stampDay } from "../stamp.ts";
 
-export type { InboxItemView, InboxListData };
+export type { InboxItemView, InboxListData, InboxPlace };
 
 /** The rail's views, in order, with their names (the same words in every header, key help and the Guide). */
 export const VIEWS: readonly { id: InboxView; label: string }[] = [
@@ -16,16 +17,87 @@ export const VIEWS: readonly { id: InboxView; label: string }[] = [
   { id: "done", label: "Done" },
   { id: "chatter", label: "Chatter" },
 ];
-export const viewLabel = (v: InboxView) => VIEWS.find((x) => x.id === v)?.label ?? "Inbox";
+export const viewLabel = (v: InboxPlace) => (v === "everything" ? "Everything" : (VIEWS.find((x) => x.id === v)?.label ?? "Inbox"));
 
-export type Group = "client" | "due" | "kind";
+/** IB-2: a row's status tag, in the views' own colors (the tones). */
+export const STATUS_TAG: Record<InboxView, { text: string; tone: Tone }> = {
+  needs_you: { text: "Needs you", tone: "ask" },
+  promises: { text: "Promise", tone: "work" },
+  waiting: { text: "Waiting on", tone: "soon" },
+  in_progress: { text: "In progress", tone: "work" },
+  captures: { text: "Capture", tone: "plain" },
+  teammates: { text: "Handled by teammates", tone: "plain" },
+  done: { text: "Done", tone: "done" },
+  chatter: { text: "Chatter", tone: "plain" },
+};
+
+export type Sort = "newest" | "oldest";
+export type Group = "day" | "client" | "due" | "status";
 export const GROUPS: readonly { id: Group; label: string }[] = [
+  { id: "day", label: "Day" },
   { id: "client", label: "Client" },
   { id: "due", label: "Due date" },
-  { id: "kind", label: "Kind" },
+  { id: "status", label: "Status" },
 ];
 
-export const KIND_LABEL: Record<InboxItemView["kind"], string> = { conversation: "Conversations", promise: "Promises", send: "Sent to you", capture: "Captures", draft: "Drafts", commitment: "Promised to you", sent: "You sent", ask: "Your asks to look" };
+const msOf = (stamp: string) => Date.parse(stamp.replace(/\[.*\]$/, ""));
+
+/** Rows by their latest activity, in the chosen direction; the key breaks ties so the order never flickers. */
+export function byActivity(rows: readonly InboxItemView[], sort: Sort): InboxItemView[] {
+  const at = new Map(rows.map((r) => [r, msOf(r.at)]));
+  const dir = sort === "newest" ? -1 : 1;
+  return [...rows].sort((a, b) => dir * (at.get(a)! - at.get(b)!) || a.key.localeCompare(b.key));
+}
+
+/** Rows in any of the statuses, for the chosen clients (none chosen: all). */
+export function inStatuses(rows: readonly InboxItemView[], statuses: readonly InboxView[], clients: readonly string[]): InboxItemView[] {
+  const on = new Set(statuses);
+  const pick = new Set(clients);
+  return rows.filter((i) => i.views.some((v) => on.has(v)) && (!pick.size || (i.clientKey !== null && pick.has(i.clientKey))));
+}
+
+/** One count per status chip: the rows that a chip alone would show, for these clients. */
+export function statusCounts(rows: readonly InboxItemView[], clients: readonly string[]): Record<InboxView, number> {
+  const out = Object.fromEntries(VIEWS.map((v) => [v.id, 0])) as Record<InboxView, number>;
+  const pick = new Set(clients);
+  for (const r of rows) if (!pick.size || (r.clientKey !== null && pick.has(r.clientKey))) for (const v of r.views) out[v]++;
+  return out;
+}
+
+/** Per client, how many rows the statuses hold (the rail's client counts). */
+export function clientCountsFor(rows: readonly InboxItemView[], statuses: readonly InboxView[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const i of inStatuses(rows, statuses, [])) if (i.clientKey) out.set(i.clientKey, (out.get(i.clientKey) ?? 0) + 1);
+  return out;
+}
+
+/** Arrived after I last looked (null: never looked, so nothing is new yet). */
+export const isNewSince = (r: Pick<InboxItemView, "at">, since: string | null): boolean => !!since && msOf(r.at) > msOf(since);
+
+/**
+ * The row the "New since you last looked" divider goes above, in a list by day: above the first older row when newest
+ * first, above the first new row when oldest first. Null when nothing is new or everything is (no boundary to mark).
+ */
+export function dividerBefore(order: readonly InboxItemView[], since: string | null, sort: Sort): string | null {
+  if (!since) return null;
+  const firstNew = order.findIndex((r) => isNewSince(r, since));
+  const firstOld = order.findIndex((r) => !isNewSince(r, since));
+  if (firstNew < 0 || firstOld < 0) return null;
+  return order[sort === "newest" ? firstOld : firstNew]!.key;
+}
+
+/** The first `n` rows of the groups, for the list that renders as it's scrolled. */
+export function sliceGroups(groups: readonly RowGroup[], n: number): RowGroup[] {
+  const out: RowGroup[] = [];
+  let left = n;
+  for (const g of groups) {
+    if (left <= 0) break;
+    out.push(g.rows.length <= left ? g : { ...g, rows: g.rows.slice(0, left) });
+    left -= g.rows.length;
+  }
+  return out;
+}
+
 export const KIND_WORD: Record<InboxItemView["kind"], string> = { conversation: "Conversation", promise: "Promise", send: "Sent to you", capture: "Capture", draft: "Draft", commitment: "Promised to you", sent: "You sent", ask: "Ask to look" };
 
 /** Items in a view, for the chosen clients (none chosen: all). */
@@ -66,14 +138,20 @@ export function dueBucket(i: InboxItemView, today: string): { id: string; label:
 }
 
 /**
- * The list's groups. By client: clients with a late item first, then by name; by due date: Late, Today, Tomorrow, This
- * week, Later, No due date; by kind: conversations, promises, sends, captures, drafts. Inside a group: late first.
+ * The list's groups. By day (Today, Yesterday, then the date): days in the chosen direction. By client: clients with a
+ * late item first, then by name. By due date: Late, Today, Tomorrow, This week, Later, No due date. By status: the
+ * rail's order. Inside a group rows follow the sort by latest activity, except by due date: late first, then soonest.
  */
-export function groupRows(rows: readonly InboxItemView[], group: Group, clientName: (k: string) => string, today: string): RowGroup[] {
+export function groupRows(rows: readonly InboxItemView[], group: Group, clientName: (k: string) => string, today: string, o: { tz: string; sort: Sort }): RowGroup[] {
   const map = new Map<string, RowGroup & { order: number | string }>();
+  const statusOrder = VIEWS.map((v) => v.id as InboxView);
   for (const r of rows) {
     let id: string, label: string, order: number | string, clientKey: string | null = null;
-    if (group === "client") {
+    if (group === "day") {
+      id = stampDay(r.at, o.tz) ?? today;
+      label = dayHeading(id, today);
+      order = id;
+    } else if (group === "client") {
       id = r.clientKey ?? "none";
       label = r.clientKey ? clientName(r.clientKey) : "No client";
       clientKey = r.clientKey;
@@ -81,18 +159,23 @@ export function groupRows(rows: readonly InboxItemView[], group: Group, clientNa
     } else if (group === "due") {
       ({ id, label, order } = dueBucket(r, today));
     } else {
-      id = r.kind;
-      label = KIND_LABEL[r.kind];
-      order = ["conversation", "promise", "send", "capture", "draft"].indexOf(r.kind);
+      const st = statusOf(r.views);
+      id = st ?? "none";
+      label = st ? viewLabel(st) : "Other";
+      order = st ? statusOrder.indexOf(st) : statusOrder.length;
     }
     const g = map.get(id) ?? { id, label, clientKey, rows: [], order };
     g.rows.push(r);
     map.set(id, g);
   }
   const out = [...map.values()];
-  for (const g of out) g.rows.sort(byUrgency);
+  for (const g of out) g.rows = group === "due" ? g.rows.sort(byUrgency) : byActivity(g.rows, o.sort);
   const late = (g: RowGroup) => g.rows.some((r) => r.late);
-  out.sort((a, b) => (group === "client" && late(a) !== late(b) ? (late(a) ? -1 : 1) : typeof a.order === "number" && typeof b.order === "number" ? a.order - b.order : String(a.order).localeCompare(String(b.order))));
+  out.sort((a, b) => {
+    if (group === "day") return (o.sort === "newest" ? -1 : 1) * String(a.order).localeCompare(String(b.order));
+    if (group === "client" && late(a) !== late(b)) return late(a) ? -1 : 1;
+    return typeof a.order === "number" && typeof b.order === "number" ? a.order - b.order : String(a.order).localeCompare(String(b.order));
+  });
   return out.map(({ order: _o, ...g }) => g);
 }
 
@@ -115,6 +198,12 @@ export function dueWords(due: string, today: string): string {
   if (due === t.add({ days: 1 }).toString()) return "Due tomorrow";
   if (due > today && due <= t.add({ days: 6 }).toString()) return `Due ${SHORT_DAY(due)}`;
   return `Due ${Temporal.PlainDate.from(due).toLocaleString("en-US", { month: "short", day: "numeric" })}`;
+}
+
+/** IB-2: the extra word beside who and where, when it says more than the status tag (late, due, an item, a Must…). */
+export function detailTag(i: InboxItemView, today: string): { text: string; tone: Tone } | null {
+  const t = rowTag(i, today);
+  return t && !["Done", "Needs you", "Teammates", "In progress", "Waiting", "New"].includes(t.text) ? t : null;
 }
 
 /** The one tag a row shows beside who and when; never more than one. */

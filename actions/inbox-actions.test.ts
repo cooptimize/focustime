@@ -190,3 +190,56 @@ describe("slice 3: Waiting on, reasons and Snooze", () => {
     expect((await run<InboxListData>("inbox.list")).items.find((i) => i.key === `f${f.id}`)?.views).toContain("needs_you");
   });
 });
+
+describe("IB-2: the Everything timeline", () => {
+  it("last looked lives on the server: a second device reads what the first wrote, and it only moves forward", async () => {
+    const { w, run } = await setup();
+    // Two devices are two reads of the same store; nothing is kept in a browser.
+    const deviceA = () => run<InboxListData>("inbox.list");
+    const deviceB = () => run<InboxListData>("inbox.list");
+    expect((await deviceA()).lastLooked).toBeNull();
+    const first = (await deviceA()).now!;
+    expect(first).toBe(w.now());
+    await run("inbox.looked", { at: first });
+    expect((await deviceB()).lastLooked).toBe(first);
+    // An older device can't move it back.
+    expect(await run("inbox.looked", { at: "2020-01-01T00:00:00Z" })).toEqual({ lastLooked: first });
+    expect((await deviceB()).lastLooked).toBe(first);
+    await expect(run("inbox.looked", { at: "2099-01-01T00:00:00Z" })).rejects.toThrow(/future/);
+    await expect(run("inbox.looked", { at: "nope" })).rejects.toThrow(/takes/);
+    await expect(run("inbox.looked", {})).rejects.toThrow(/takes/);
+  });
+
+  it("each person has their own marker", async () => {
+    const { w, plan, run } = await setup();
+    await run("inbox.looked", { at: w.now() });
+    const other = planStoreOn(w.conn, { now: () => Temporal.Instant.from(w.now()).toZonedDateTimeISO(ZONE), userId: LENA.userId! });
+    expect(await plan.getState("inbox_last_looked")).toBe(w.now());
+    expect(await other.getState("inbox_last_looked")).toBeNull();
+  });
+
+  it("a promise's activity is its last change, not when it was opened", async () => {
+    const { plan, run } = await setup();
+    const a = await plan.addFollowUp({ who: "Lena", what: "Send the mapping notes", due: null, clientKey: "contoso" });
+    const before = (await run<InboxListData>("inbox.list")).items.find((i) => i.key === `f${a.id}`)!.at;
+    expect((await plan.openFollowUps()).find((f) => f.id === a.id)?.changedAt ?? null).toBeNull();
+    await plan.snoozeFollowUp(a.id, "2026-12-01");
+    await plan.snoozeFollowUp(a.id, null);
+    const f = (await plan.openFollowUps()).find((x) => x.id === a.id)!;
+    expect(f.changedAt).toBeTruthy();
+    expect(before).toBe(f.openedAt);
+    expect((await run<InboxListData>("inbox.list")).items.find((i) => i.key === `f${a.id}`)!.at).toBe(f.changedAt);
+  });
+
+  it("a closed promise stays in Done for the Closed shown days rule (14 by default), not just a day", async () => {
+    const { w, plan, run } = await setup();
+    const a = await plan.addFollowUp({ who: null, what: "Told them", due: null, clientKey: "contoso" });
+    await plan.closeFollowUp(a.id, null);
+    const closed = Date.parse(w.now());
+    const at = (days: number) => new Date(closed + days * 86_400_000).toISOString();
+    w.setNow(at(3));
+    expect((await run<InboxListData>("inbox.list")).items.find((i) => i.key === `f${a.id}`)?.views).toEqual(["done"]);
+    w.setNow(at(15));
+    expect((await run<InboxListData>("inbox.list")).items.some((i) => i.key === `f${a.id}`)).toBe(false);
+  });
+});

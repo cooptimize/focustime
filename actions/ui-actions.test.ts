@@ -6,6 +6,7 @@ import { writeConfig } from "../host/local/config-file.ts";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import { createPlanStore } from "../store/plan-store.ts";
+import { DEFAULT_INBOX } from "../config/schema.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
 
 function setup(write = true) {
@@ -27,7 +28,7 @@ describe("ui.set_theme (step 6b)", () => {
   it("saves the theme in [ui] and returns it; the file keeps its comments", async () => {
     const t = setup();
     const r = await dispatch(t.c, { action: "ui.set_theme", input: { theme: "cooptimize-light" } });
-    expect(r).toEqual({ ok: true, data: { ui: { theme: "cooptimize-light", viewRange: "business", showTimelines: true, reduceMotion: false, textSize: "default", showPersonal: true, inbox: { view: "needs_you", clients: [], group: "client" } } } });
+    expect(r).toEqual({ ok: true, data: { ui: { theme: "cooptimize-light", viewRange: "business", showTimelines: true, reduceMotion: false, textSize: "default", showPersonal: true, inbox: DEFAULT_INBOX } } });
     const text = readFileSync(t.path, "utf8");
     expect(text).toContain('[ui]\ntheme = "cooptimize-light"');
     expect(text).toContain("# FocusTime configuration.");

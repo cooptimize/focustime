@@ -18,15 +18,13 @@ import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
 import { HOW_LABEL } from "./CloseLoop.tsx";
 import { SendLoop } from "./SendLoop.tsx";
+import { stampText } from "./stamp.ts";
 export { HOW_LABEL };
 
 const zoned = (iso: string, tz: string) => (iso.includes("[") ? Temporal.ZonedDateTime.from(iso) : Temporal.Instant.from(iso).toZonedDateTimeISO(tz)).withTimeZone(tz);
 const dayOf = (z: Temporal.ZonedDateTime) => z.toPlainDate().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
 const clock = (z: Temporal.ZonedDateTime) => `${z.hour % 12 || 12}:${String(z.minute).padStart(2, "0")} ${z.hour < 12 ? "AM" : "PM"}`;
-const when = (iso: string, tz: string) => {
-  const z = zoned(iso, tz);
-  return `${dayOf(z)}, ${clock(z)}`;
-};
+const when = (iso: string, tz: string) => stampText(iso, tz);
 const plainDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
 /** "Tue, Nov 3, 3:00 PM to 6:00 PM": the session a follow-up came from. */
 const span = (s: { start: string; end: string }, tz: string) => {
