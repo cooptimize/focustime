@@ -2,6 +2,7 @@
 // the AI version side by side (Use this on either, and the chosen side is editable), the parent picked or confirmed,
 // then Preview in DevOps opens the write framework's preview (confirm, read back, audit log, undo). Nothing is created
 // here. While AI is still writing it says so and keeps my text usable; AI off is a plain draft, no error.
+import { TextBox } from "./TextBox.tsx";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { DraftAiView, WeekLoadData } from "../actions/types.ts";
 import { draftRowState, draftRowText, prepareAgain } from "../plan/capture-prepare.ts";
@@ -162,8 +163,8 @@ export function CreateDraftDialog({ draftId, data, onClose, onChanged }: { draft
         ) : here && fields ? (
           <>
             <label className="set-field"><span className="set-label">Title</span><input value={fields.title} maxLength={200} onChange={(e) => set("title")(e.target.value)} /></label>
-            <label className="set-field"><span className="set-label">Description</span><textarea rows={4} maxLength={8000} value={fields.description} onChange={(e) => set("description")(e.target.value)} /></label>
-            {!feature && <label className="set-field"><span className="set-label">Acceptance criteria</span><textarea rows={4} maxLength={8000} value={fields.acceptance} onChange={(e) => set("acceptance")(e.target.value)} /></label>}
+            <label className="set-field"><span className="set-label">Description</span><TextBox minRows={4} maxRows={14} maxLength={8000} value={fields.description} onChange={(e) => set("description")(e.target.value)} /></label>
+            {!feature && <label className="set-field"><span className="set-label">Acceptance criteria</span><TextBox minRows={4} maxRows={12} maxLength={8000} value={fields.acceptance} onChange={(e) => set("acceptance")(e.target.value)} /></label>}
             <p className="muted cd-type">Type: {s === "ai" && draft?.ai?.type ? draft.ai.type : "the process default"}</p>
           </>
         ) : words ? (

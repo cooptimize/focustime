@@ -7,6 +7,7 @@
 // Keys: Enter in the text box goes to the preview (Shift+Enter is a new line); Ctrl+Enter sends from the preview.
 // UI-8: UI-3's header on every screen: ‹ Back at the top left on the preview and the error (back to the text), the ×
 // at the top right always, Esc closes. The header never scrolls away; only the body scrolls.
+import { TextBox } from "./TextBox.tsx";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { aboutLine, type Build } from "./About.tsx";
@@ -129,15 +130,16 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
             </div>
             <label className="feedback-text">
               <span className="sr-only">Your feedback</span>
-              <textarea
+              <TextBox
                 ref={box}
-                rows={5}
+                minRows={5}
+                maxRows={12}
                 maxLength={4000}
                 placeholder={kind === "problem" ? "What happened, and what did you expect?" : kind === "question" ? "What would you like to know?" : "What would make FocusTime better?"}
                 value={text}
                 onChange={(e) => (setText(e.target.value), setProblem(null), setCopied(false))}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                  if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();
                     void toPreview();
                   }

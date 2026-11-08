@@ -4,6 +4,7 @@
 // message: Open in Teams (a 1:1 chat, one person at a time with Next), Open in Outlook (one email to all), Copy
 // message. FocusTime sends nothing: it opens Teams or Outlook for the admin to send, and records only "Invited <day>
 // by <admin>" (admin.invited). The server checks every read and write again.
+import { TextBox } from "../TextBox.tsx";
 import { useEffect, useMemo, useState } from "react";
 import { call } from "../api.ts";
 import { CloseButton, useReturnFocus } from "../CloseButton.tsx";
@@ -246,7 +247,7 @@ export function InviteSheet({ people, invite, onClose, onInvited }: { people: Se
         </label>
         <label className="set-field">
           <span className="set-label">Message</span>
-          <textarea className="invite-message" rows={14} maxLength={1500} value={message} onChange={(e) => setMessage(e.target.value)} autoFocus />
+          <TextBox className="invite-message" minRows={14} maxRows={20} maxLength={1500} value={message} onChange={(e) => setMessage(e.target.value)} autoFocus />
           <span className="set-hint">
             {NAME_TOKEN} becomes each person's first name{several ? ` in Teams, and "all" in one email` : ""}.
           </span>

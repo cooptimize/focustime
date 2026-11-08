@@ -708,3 +708,10 @@ The pages are `docs/technical/*.md` (how FocusTime works, for engineers and IT);
 - **People.** `plan/ahead-people.ts` (`teamPeople`, `assignPeople`, `searchPeople`, `shortName`); `sources/devops/source.ts` reads team members with the teams (`ProjectAreas.people`) and `projectPeople(client)`; the `ahead.people` action.
 - **State.** `ahead_state_changes` (migration `20261119T1000_ahead_state_changes`), `plan/ahead-edit.ts` and the `fields` write take `state`; `AheadClient.states`.
 - **Tests.** `ui/dateinput.test.ts`, `plan/ahead-people.test.ts`, the AH-5 parts of `actions/ahead-actions.test.ts` and `actions/devops-write.test.ts`, e2e `e2e/ahead.test.ts` and `e2e/backlog.test.ts`. Screenshots: `scripts/screenshot-ah5.ts <outDir> before|after` (demo only).
+
+## UI-10: text boxes that grow (Nov 7)
+
+- **The box.** `ui/TextBox.tsx` (`TextBox`: `minRows`, `maxRows`, `onEnter`; sets its own height and overflow, refits on input, width and text size or theme changes); `ui/textbox.ts` (`boxSize`, `lineHeightPx`, `submitsOnEnter`: pure). Every editable multi-line input uses it; only three read-only copy boxes stay plain textareas (DetailPanel, BreakDownPanel's Coop brief, Diagnostics).
+- **Styles.** The end of `ui/styles.css`: `textarea { resize: none }`, `.text-box`, the `::-webkit-scrollbar` rules for every textarea, the Firefox fallback in `@supports not selector(::-webkit-scrollbar)`, and the phone sheets' `bottom: max(--bb-h, --kb-inset)`.
+- **Keyboard.** `ui/keyboard.ts` (`keyboardInset`, `startKeyboardInset`, started in `ui/main.tsx`): `--kb-inset` from the visual viewport; `index.html`'s viewport meta has `interactive-widget=resizes-content`.
+- **Tests.** `ui/textbox.test.ts` (sizing, keys, the inset, and source checks: no editable `<textarea>` outside TextBox, no resize, no `scrollbar-width`/`-color` outside the fallback); e2e `e2e/ui10-textbox.test.ts` (growth, scrolling, keys, IME, computed styles, phone at 390) with `e2e/ui10-helpers.ts`; `e2e/ui10-shots.test.ts` (docs/ux/ui10, `UI10_WHEN=before|after`). `startDemo`'s `showScrollbars` draws scrollbars in headless Chromium.

@@ -3,6 +3,7 @@
 // "Saved" and an Undo toast; turning AI off for everyone and removing a person confirm first. Nothing here shows
 // anyone's plan, picks, follow-ups, captures, focus sessions, PATs, AI request text or chat messages: the server's
 // sections carry names, dates, counts and yes or no only.
+import { TextBox } from "../TextBox.tsx";
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { call } from "../api.ts";
 import { useReturnFocus } from "../CloseButton.tsx";
@@ -338,9 +339,10 @@ function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: Clie
       {c.isClient && <FixGapsField c={c} saver={saver} />}
       <div className="set-form set-house-style">
         <AField label="House style for Break down" kind="Rule" s={saver.status(scope, "house_style")} retry={() => void saver.save(scope, "house_style", c.houseStyle, `${c.key}: house style`)} hint="Sent with every Break down request for this client. Empty goes back to the style learned from its own features.">
-          <textarea
+          <TextBox
             aria-label={`${c.key}: house style`}
-            rows={3}
+            minRows={3}
+            maxRows={10}
             maxLength={1200}
             value={style}
             onChange={(e) => setStyle(e.target.value)}
