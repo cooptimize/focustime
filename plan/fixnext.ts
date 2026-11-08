@@ -75,12 +75,23 @@ export type FixItem = GapItem & {
   inScope: boolean;
   /** Assigned to me (DevOps or pending). */
   mine: boolean;
+  /** AH-7: DevOps's values when `start`, `target`, `size` and the assignee show my pending changes (what it had). */
+  raw?: Pick<GapItem, "start" | "target" | "size" | "assigneeEmail">;
 };
 export type FixClient = { clientKey: string; /** The process's order field; null: rank by target date. */ orderField: string | null; gaps: readonly GapKind[]; items: readonly FixItem[] };
 
-export type FixEntry = { key: string; clientKey: string; itemId: number; gaps: GapKind[]; action: GapKind; /** Why it's a candidate. */ why: ("top" | "window" | "mine")[] };
+export type FixEntry = {
+  key: string; clientKey: string; itemId: number; gaps: GapKind[]; action: GapKind; /** Why it's a candidate. */ why: ("top" | "window" | "mine")[];
+  /** AH-7: its target, else its start (Start here's "dated soonest"). */ due?: string | null;
+  /** AH-7: assigned to me. */ mine?: boolean;
+  /** AH-7: just fixed in the change set, shown fading out (its gaps are the ones it had). */ leaving?: boolean;
+};
 export type FixRow = { key: string; itemId: number; depth: number; /** null: shown only as the header of what's under it. */ entry: FixEntry | null };
-export type FixGroup = { clientKey: string; rankedBy: "backlog" | "target"; entries: FixEntry[] };
+export type FixGroup = {
+  clientKey: string; rankedBy: "backlog" | "target"; entries: FixEntry[];
+  /** AH-7: skipped entries still not ready, in the same order. */ skipped?: FixEntry[];
+  /** AH-7: pieces my change set fills on candidates (each pending save). */ pending?: { key: string; gap: GapKind }[];
+};
 
 export const entryKey = (clientKey: string, itemId: number) => `${clientKey}:${itemId}`;
 
@@ -108,28 +119,40 @@ export function inWindow(i: Pick<FixItem, "start" | "target">, today: string, da
   return a <= end && b >= today;
 }
 
-/** One client's Fix next, ranked, without the skipped items. */
-export function fixClient(c: FixClient, o: { today: string; topN?: number; pending?: Pending; skipped?: ReadonlySet<string> }): FixGroup {
+/**
+ * One client's Fix next, ranked, without the skipped items (AH-7: those come back as `skipped`). AH-7: `leaving` keeps an
+ * entry my change set just fixed, with the gaps it had, so it can fade out; `pending` lists the pieces the change set fills.
+ */
+export function fixClient(c: FixClient, o: { today: string; topN?: number; pending?: Pending; skipped?: ReadonlySet<string>; leaving?: ReadonlySet<string> }): FixGroup {
   const top = topOf(c, o.topN ?? TOP_N);
   const ownEpics = new Set(c.items.filter((i) => i.tier === "epic" && i.mine).map((i) => i.id));
   const entries: (FixEntry & { item: FixItem })[] = [];
+  const skipped: (FixEntry & { item: FixItem })[] = [];
+  const pending: { key: string; gap: GapKind }[] = [];
   for (const i of c.items) {
     if (!i.inScope) continue;
-    const gaps = gapsOf(i, o.pending ?? [], c.gaps);
-    if (!gaps.length) continue;
+    const had = gapsOf(i.raw ? { ...i, ...i.raw } : i, [], c.gaps);
+    if (!had.length) continue;
+    const now = gapsOf(i, o.pending ?? [], c.gaps);
     const key = entryKey(c.clientKey, i.id);
-    if (o.skipped?.has(key)) continue;
     const why: FixEntry["why"] = [];
     if (top.has(i.id)) why.push("top");
     if (inWindow(i, o.today)) why.push("window");
     if ((i.tier !== "story" && i.mine) || (i.tier === "feature" && i.parentId !== null && ownEpics.has(i.parentId))) why.push("mine");
     if (!why.length) continue;
-    entries.push({ key, clientKey: c.clientKey, itemId: i.id, gaps, action: gaps[0]!, why, item: i });
+    for (const g of had) if (!now.includes(g)) pending.push({ key, gap: g });
+    const leaving = !now.length && o.leaving?.has(key) === true;
+    const gaps = leaving ? had : now;
+    if (!gaps.length) continue;
+    const e = { key, clientKey: c.clientKey, itemId: i.id, gaps, action: gaps[0]!, why, due: i.target ?? i.start, mine: i.mine, ...(leaving ? { leaving: true } : {}), item: i };
+    (o.skipped?.has(key) ? skipped : entries).push(e);
   }
-  const ranked = c.orderField
-    ? entries.sort((a, b) => cmpOrder(a.item.order, b.item.order) || cmpDate(a.item.target, b.item.target) || a.itemId - b.itemId)
-    : entries.sort((a, b) => cmpDate(a.item.target, b.item.target) || a.itemId - b.itemId);
-  return { clientKey: c.clientKey, rankedBy: c.orderField ? "backlog" : "target", entries: ranked.map(({ item: _i, ...e }) => e) };
+  const sort = (xs: typeof entries) =>
+    c.orderField
+      ? xs.sort((a, b) => cmpOrder(a.item.order, b.item.order) || cmpDate(a.item.target, b.item.target) || a.itemId - b.itemId)
+      : xs.sort((a, b) => cmpDate(a.item.target, b.item.target) || a.itemId - b.itemId);
+  const strip = (xs: typeof entries) => sort(xs).map(({ item: _i, ...e }) => e);
+  return { clientKey: c.clientKey, rankedBy: c.orderField ? "backlog" : "target", entries: strip(entries), skipped: strip(skipped), pending };
 }
 
 /**
@@ -171,4 +194,4 @@ export function fixRows(g: FixGroup, items: readonly Pick<FixItem, "id" | "paren
 }
 
 /** How many entries across clients (the header's "Fix next · N"). */
-export const fixCount = (groups: readonly FixGroup[]) => groups.reduce((n, g) => n + g.entries.length, 0);
+export const fixCount = (groups: readonly FixGroup[]) => groups.reduce((n, g) => n + g.entries.filter((e) => !e.leaving).length, 0);

@@ -1386,6 +1386,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ahead.filters":
     case "ahead.people":
     case "ahead.set_filters":
+    case "ahead.skip":
+    case "ahead.unskip":
     case "ahead.stage":
     case "ahead.unstage":
     case "ahead.resolve":

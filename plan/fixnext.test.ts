@@ -99,3 +99,20 @@ describe("Fix next's rows: client › epic › feature (AH-3)", () => {
     expect(fixRows(g, items, 2).map((r) => r.itemId)).toEqual([1, 11, 101, 10, 102]);
   });
 });
+
+describe("AH-7: what my change set fills, skipped entries, and a just-fixed entry leaving", () => {
+  // 1: unsized (DevOps), sized in my change set; 2: unsized and unassigned, only assigned in my change set; 3: skipped.
+  const items = [
+    fx({ id: 1, order: 1, size: 3, raw: { start: null, target: null, size: null, assigneeEmail: "a@example.com" } }),
+    fx({ id: 2, order: 2, size: null, raw: { start: null, target: null, size: null, assigneeEmail: null } }),
+    fx({ id: 3, order: 3, size: null }),
+  ];
+  it("pending lists each piece my changes fill; a fully fixed entry leaves (or stays to fade out when asked)", () => {
+    const g = fixClient(client(items), { today: TODAY, skipped: new Set(["k:3"]) });
+    expect(g.pending).toEqual([{ key: "k:1", gap: "unsized" }, { key: "k:2", gap: "unassigned" }]);
+    expect(g.entries.map((e) => [e.itemId, e.gaps])).toEqual([[2, ["unsized"]]]);
+    expect(g.skipped!.map((e) => e.itemId)).toEqual([3]);
+    const fading = fixClient(client(items), { today: TODAY, leaving: new Set(["k:1"]) });
+    expect(fading.entries.find((e) => e.itemId === 1)).toMatchObject({ leaving: true, gaps: ["unsized"] });
+  });
+});

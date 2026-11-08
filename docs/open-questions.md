@@ -388,8 +388,15 @@ What DS-1 learned, and what is still open:
 - Q-AH6-9: Backlog's level picks which backlog is listed rather than folding a tree. Should Backlog instead show the chosen level's items with their children folded under them, like the other modes?
 
 
+## Readiness you can finish (AH-7, Nov 7)
+
+- Q-AH7-1: Break down fixes Needs stories in DevOps directly (it publishes on its own), so it isn't counted in "fixed this week". Should a Break down publish count as one fixed piece?
+- Q-AH7-2: progress counts pieces (an item missing a target and a size is two). Would items read more naturally ("5 items ready this week")?
+- Q-AH7-3: Start here is 5 across every client shown. Should it be per client when several are shown, or follow the toolbar's level (only features at Features)?
+- Q-AH7-4: a skip lasts 2 weeks from the day it was made. Should Skip offer "until a date" or "until it changes in DevOps" instead?
+
 ## WK-3
 
 - Q-WK3-1: should Week › Plan show a weekend cell too (pins to Saturday, a deployment's must)? WK-3 keeps Plan Monday to Friday: a weekend has no budget, and the Board, Today and the menu already place work there.
-- Q-WK3-2: AH-7 (Ahead Readiness) runs in parallel; if it also adds a migration or raises the Export schema version, the second to merge renumbers its schema version (WK-3 uses 33) and keeps its migration's timestamp.
+- Q-WK3-2 (resolved Nov 7): AH-7 merged first with no migration and no Export schema change, so WK-3 keeps schema version 33 and its migration as they are.
 - Q-WK3-3: should the after-hours total count calendar events I organize myself after hours (a call I set at 19:00)? WK-3 counts only what I placed in FocusTime, so a meeting someone else set never reads as time I chose.

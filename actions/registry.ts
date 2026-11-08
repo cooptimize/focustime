@@ -87,6 +87,8 @@ export const ACTIONS = [
   { name: "ahead.resolve", title: "Resolve a conflict", group: "Work items", target: "item", summary: "Keep mine (apply on the new revision) or take theirs (drop my change)" },
   { name: "ahead.filters", title: "Ahead filters", group: "Work items", target: "none", summary: "Your remembered filters for Ahead" },
   { name: "ahead.set_filters", title: "Remember Ahead filters", group: "Work items", target: "none", summary: "Keep your Ahead filters for next time" },
+  { name: "ahead.skip", title: "Skip in Readiness", group: "Work items", target: "item", summary: "Put an item aside in Readiness for 2 weeks; it comes back on its own" },
+  { name: "ahead.unskip", title: "Unskip in Readiness", group: "Work items", target: "item", summary: "Bring a skipped item back into Readiness" },
   { name: "weekplan.load", title: "Plan the week", group: "Plan the week", target: "week", shortcut: "W", summary: "Each client's week: musts and nice to haves from DevOps (next week by default); a past week is a review" },
   { name: "weekplan.set_feature", aka: ["commit"], title: "Plan a feature for the week", group: "Plan the week", target: "feature", summary: "Give a feature an estimate in hours; 0 takes it off" },
   { name: "weekplan.place", title: "Pin to a block", group: "Plan the week", target: "feature", summary: "Pin a week item to one of its client's blocks or an Open half-day (optional, for dependencies)" },

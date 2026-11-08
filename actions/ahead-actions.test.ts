@@ -8,6 +8,7 @@ import { STARTER_TOML } from "../fixtures/starter.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import { anAheadClient, anAheadItem, anAssignee } from "../test/builders/index.ts";
 import { aheadAction, checkFilters, type AheadContext } from "./ahead-actions.ts";
+import { FIXED_KEY, SKIPS_KEY } from "../plan/readiness.ts";
 import type { AheadClient, AheadLoad } from "./types.ts";
 
 const NOW = "2026-11-02T14:00:00Z";
@@ -236,5 +237,35 @@ describe("AH-6: the filter check", () => {
     expect(checkFilters({ q: "x", someday: true })).toEqual(checkFilters({ q: "x" }));
     expect(checkFilters({ range: "soon" })).toBeNull();
     expect(checkFilters({ kinds: ["late"] })).toBeNull();
+  });
+});
+
+describe("AH-7: Readiness's skips and progress, kept on the server", () => {
+  it("Skip and Unskip are kept in my plan store, so another device (a new session on the same store) has them", async () => {
+    const s = setup();
+    await expect(s.run("ahead.skip", { clientKey: "Northwind", itemId: 120 })).resolves.toEqual({ skips: { "Northwind:120": "2026-11-02" } });
+    await expect(s.plan.getState(SKIPS_KEY)).resolves.toEqual({ "Northwind:120": "2026-11-02" });
+    expect((await load(s)).skips).toEqual({ "Northwind:120": "2026-11-02" });
+    await expect(s.run("ahead.unskip", { clientKey: "Northwind", itemId: 120 })).resolves.toEqual({ skips: {} });
+    expect((await load(s)).skips).toEqual({});
+    await s.fail("ahead.skip", { clientKey: "Northwind" });
+    await s.fail("ahead.skip", { clientKey: "Northwind", itemId: -1, extra: 1 });
+  });
+  it("a skip lasts 2 weeks: one from Oct 19 is gone on Nov 2, one from Oct 20 still on", async () => {
+    const s = setup();
+    await s.plan.setState(SKIPS_KEY, { "Northwind:110": "2026-10-19", "Northwind:120": "2026-10-20", junk: 3 });
+    expect((await load(s)).skips).toEqual({ "Northwind:120": "2026-10-20" });
+    // The next skip writes back only what's still on.
+    await s.run("ahead.skip", { clientKey: "Northwind", itemId: 111 });
+    await expect(s.plan.getState(SKIPS_KEY)).resolves.toEqual({ "Northwind:120": "2026-10-20", "Northwind:111": "2026-11-02" });
+  });
+  it("fixed this week counts the pieces saved since Monday in my zone", async () => {
+    const s = setup();
+    await s.plan.setState(FIXED_KEY, [
+      { k: "Northwind:110", g: "no_dates", at: "2026-11-02T06:00:00Z" }, // Mon 1:00 AM in New York: this week
+      { k: "Northwind:111", g: "unsized", at: "2026-11-02T04:00:00Z" }, // Sun 11:00 PM in New York: last week
+      { k: "Northwind:120", g: "unassigned", at: "2026-11-02T13:00:00Z" },
+    ]);
+    expect((await load(s)).fixedWeek).toBe(2);
   });
 });
