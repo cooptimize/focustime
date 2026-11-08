@@ -3,7 +3,7 @@
 // entry points, and notification and command routes.
 import { describe, expect, it } from "vitest";
 import { notices, parseRoute, type Notice } from "../plan/notify.ts";
-import { afterDone, focusOf, hashOf, HOME, isPlanning, MODE_NAMES, MODES, modeNav, navOf, parseHash, planDayNav, planDayTitle, planWeekOf, planWeekTitle, routeLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type Nav, type ViewName } from "./nav.ts";
+import { afterDone, focusOf, hashOf, HOME, isPlanning, MODE_NAMES, MODES, modeNav, navOf, parseHash, planDayNav, planDayTitle, planWeekOf, planWeekTitle, routeLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type Nav, type ViewName, queryOf, setAheadQuery } from "./nav.ts";
 
 const loc = (nav: Nav): Loc => ({ nav, overlay: null });
 
@@ -165,7 +165,7 @@ describe("entry points", () => {
     expect(viewName(loc(navOf.week("commit")))).toBe("Week › Plan");
     expect(viewName(loc(navOf.ahead()))).toBe("Ahead › Grid");
     expect(viewName(loc(navOf.ahead("gantt")))).toBe("Ahead › Gantt");
-    expect(viewName(loc(navOf.ahead("fix")))).toBe("Ahead › Gaps");
+    expect(viewName(loc(navOf.ahead("fix")))).toBe("Ahead › Readiness");
     expect(viewName(loc(navOf.conversations()))).toBe("Inbox › Needs you");
   });
 });
@@ -260,5 +260,22 @@ describe("Inbox views and items (IB-1)", () => {
     expect(viewName(loc(navOf.captures()))).toBe("Inbox › Captures and drafts");
     expect(viewName(loc(navOf.myPromises()))).toBe("Inbox › Promises");
     expect(toggleP(navOf.myPromises())).toEqual(navOf.myPromises());
+  });
+});
+
+describe("AH-6: Ahead's address carries its view", () => {
+  it("an Ahead address may have a query; other addresses may not; hashOf adds Ahead's current query", () => {
+    expect(parseHash("#/ahead/gantt?c=northwind&l=epic")?.nav).toEqual(navOf.ahead("gantt"));
+    expect(parseHash("#/ahead?r=next4")?.nav).toEqual(navOf.ahead());
+    expect(parseHash("#/ahead/fix?k=unsized")?.nav).toEqual(navOf.ahead("fix"));
+    expect(parseHash("#/week?c=northwind")).toBeNull();
+    expect(queryOf("#/ahead/gantt?c=northwind")).toBe("c=northwind");
+    setAheadQuery("c=northwind");
+    try {
+      expect(hashOf({ nav: navOf.ahead("backlog"), overlay: null })).toBe("#/ahead/backlog?c=northwind");
+      expect(hashOf({ nav: navOf.week(), overlay: null })).toBe("#/week");
+    } finally {
+      setAheadQuery("");
+    }
   });
 });

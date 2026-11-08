@@ -431,3 +431,11 @@ describe("duplicate picks in menus (step 15.1, D277)", () => {
     expect(inSlot.find((i) => i.id === "i1")!.disabled).toBe("Already planned here");
   });
 });
+
+describe("AH-6: Readiness in the command menu", () => {
+  it("finds Ahead › Readiness by readiness, gaps, get ready and fix next", () => {
+    const list = commandList(env().e);
+    for (const q of ["readiness", "gaps", "get ready", "fix next"]) expect(filterCommands(list, q).map((c) => c.id), q).toContain("view.gaps");
+    expect(list.find((c) => c.id === "view.gaps")?.label).toMatch(/^Ahead › Readiness/);
+  });
+});

@@ -21,7 +21,7 @@ export type WeekMode = "board" | "commit" | "team" | "status";
 /** AH-1 (D653): Ahead is one model in three modes: Grid (was Roadmap), Gantt (was Plan ahead) and Fix next. */
 export type AheadMode = "grid" | "gantt" | "fix" | "backlog";
 
-export const MODE_NAMES = { board: "Board", commit: "Plan", team: "Team", status: "Status", grid: "Grid", gantt: "Gantt", fix: "Gaps", backlog: "Backlog" } as const;
+export const MODE_NAMES = { board: "Board", commit: "Plan", team: "Team", status: "Status", grid: "Grid", gantt: "Gantt", fix: "Readiness", backlog: "Backlog" } as const;
 export type ModeName = keyof typeof MODE_NAMES;
 /** Each tab's modes, in switch order (Today has none, so no switch). IB-1: the Inbox has views in its rail, not modes. */
 export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: ["board", "commit", "team", "status"], ahead: ["grid", "gantt", "fix", "backlog"], inbox: [] };
@@ -181,7 +181,7 @@ export function hashOf(l: Loc): string {
     if (n.focus) return ["#/week/day", n.focus.date, n.focus.date ? n.focus.half : null].filter(Boolean).join("/");
     return ["#/week", n.week].filter(Boolean).join("/");
   }
-  if (n.tab === "ahead") return n.mode === "gantt" ? "#/ahead/gantt" : n.mode === "fix" ? "#/ahead/fix" : n.mode === "backlog" ? "#/ahead/backlog" : n.item ? `#/ahead/item/${n.item}` : "#/ahead";
+  if (n.tab === "ahead") return (n.mode === "gantt" ? "#/ahead/gantt" : n.mode === "fix" ? "#/ahead/fix" : n.mode === "backlog" ? "#/ahead/backlog" : n.item ? `#/ahead/item/${n.item}` : "#/ahead") + (aheadQuery ? `?${aheadQuery}` : "");
   if (n.item) return `#/inbox/item/${n.item}${n.loop ? "/loop" : ""}`;
   if (n.late) return n.late.client ? `#/inbox/promises/late/${encodeURIComponent(n.late.client)}` : "#/inbox/promises/late";
   return n.view ? `#/inbox/${INBOX_VIEW_SLUGS[n.view]}` : "#/inbox";
@@ -193,8 +193,22 @@ export function hashOf(l: Loc): string {
  * on Commit, #/roadmap on Ahead, #/roadmap/ahead on Plan ahead, #/conversations and #/my-promises (and the older
  * requests, asks and promises) in the Inbox. App writes the new address in place of the old one.
  */
-export function parseHash(hash: string): Loc | null {
-  if (typeof hash !== "string" || hash.length > 160) return null;
+/**
+ * AH-6: Ahead's filters and view as its address's query, set by Ahead whenever they change, so every Ahead address
+ * (a mode switch, Back, a copied link) carries them. Other tabs' addresses never do.
+ */
+let aheadQuery = "";
+export const setAheadQuery = (q: string) => void (aheadQuery = q);
+/** The query part of an address ("" when there is none). */
+export const queryOf = (hash: string) => (hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
+
+export function parseHash(full: string): Loc | null {
+  if (typeof full !== "string") return null;
+  // AH-6: only Ahead's addresses carry a query (its filters and view, #/ahead/gantt?c=northwind&l=epic).
+  const qi = full.indexOf("?");
+  const hash = qi < 0 ? full : full.slice(0, qi);
+  if (qi >= 0 && (!/^#\/?ahead(\/|$)/.test(hash) || full.length - qi > 1200)) return null;
+  if (hash.length > 160) return null;
   const parts = hash.replace(/^#\/?/, "").split("/").filter((p) => p !== "");
   const [tab, a, b, c, ...rest] = parts;
   if (rest.length) return null;

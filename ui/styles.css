@@ -4388,6 +4388,37 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .ah-filters { max-width: none; }
 .ah-filters .rm-sort select { max-width: 16em; }
 .ah-filters .rm-search { flex: 1 1 14em; min-width: 10em; max-width: 24em; }
+/* AH-6: Ahead's one toolbar, the same in Grid, Gantt, Readiness and Backlog: filters left, the view right, each group
+   with a small label over it; a control that can't apply in a mode is dimmed with its reason as the tooltip (never
+   removed, so nothing moves). One summary line under it with removable chips. */
+.ah-toolbar { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; }
+.ah-tb-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 24px; }
+.ah-tb-filters, .ah-tb-view { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 16px; min-width: 0; }
+.ah-tb-view { margin-left: auto; }
+.ah-tb-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ah-tb-label { font-size: var(--fs-1); font-weight: 500; color: var(--text-muted); line-height: 1.2; }
+.ah-tb-group .ah-levels-word { display: none; }
+.ah-tb-group .rm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ah-tb-group.off .ah-tb-label { color: var(--text-faint); }
+.ah-toolbar .is-off { opacity: 0.45; cursor: not-allowed; }
+.ah-tb-select { min-width: 9em; max-width: 18em; }
+.ah-tb-select > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ah-tb-search { flex: 1 1 12em; }
+.ah-search { position: relative; display: flex; }
+.ah-search .rm-search { width: 100%; min-width: 10em; max-width: 20em; padding-right: 24px; }
+.ah-search-clear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border: 0; background: none; color: var(--text-muted); font: inherit; cursor: pointer; padding: 0 4px; }
+.ah-callouts-toggle, .ah-whole { min-width: 3.4em; justify-content: center; }
+.ah-tb-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--fs-2); color: var(--text-muted); }
+.ah-tb-chips { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ah-tb-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px solid var(--border-strong); border-radius: 99px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-2); cursor: pointer; }
+.ah-tb-chip:hover { border-color: var(--text-muted); }
+.ah-tb-pop .cell-pop-body { display: flex; flex-direction: column; gap: 12px; }
+.ah-tb-picks, .ah-tb-kinds { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ah-tb-custom { display: flex; flex-direction: column; gap: 8px; }
+.ah-tb-sub, .ah-tb-note { font-size: var(--fs-2); }
+.ah-tb-note { margin: 0; }
+.ah-fx-item .rm-expand, .ah-fx-item .rm-expand-space { flex: none; align-self: flex-start; margin: 0; height: 1.5em; line-height: 1.5em; padding-top: 0; padding-bottom: 0; }
+.ah-fx-item:focus-visible { outline: 2px solid var(--focus, var(--text)); outline-offset: 2px; border-radius: 4px; }
 .ah-client { margin: 0 0 18px; }
 .ah-client-head { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: var(--fs-3); font-weight: 600; }
 .ah-grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--fs-3); }

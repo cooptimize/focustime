@@ -65,7 +65,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     expect(colors).not.toContain(probe);
     // Harbor: I'm not a lead there; All shows a teammate's story, read only with the note.
     await page.getByRole("button", { name: "Harbor Health", exact: true }).click();
-    await page.getByRole("group", { name: "Owner" }).getByRole("button", { name: "All" }).click();
+    await page.getByRole("group", { name: "People" }).getByRole("button", { name: "Everyone" }).click();
     const theirs = page.locator(".ah-row.ro:not(.context)").first();
     await theirs.waitFor();
     await expect(theirs.getAttribute("title")).resolves.toBe("Only Harbor Health's leads and the owner can change this.");
@@ -267,7 +267,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
   it("AH-5: no native select or date input anywhere in Ahead; no horizontal scroll at 1280 and 1440; readiness chips stay in their cells", async () => {
     for (const width of [1280, 1440]) {
       const { page } = await open("#/ahead", { width, height: 900 });
-      await page.getByRole("group", { name: "Owner" }).getByRole("button", { name: "All" }).first().click();
+      await page.getByRole("group", { name: "People" }).getByRole("button", { name: "Everyone" }).first().click();
       for (const hash of ["#/ahead", "#/ahead/gantt", "#/ahead/fix", "#/ahead/backlog"]) {
         await page.evaluate((x) => (location.hash = x), hash);
         await page.waitForTimeout(400);
@@ -343,7 +343,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
   it("AH-2: Cooptimize's scope: the client's own area left out with a note, Show the whole project brings it back marked, Fix next never has it, and an admin's scope applies", async () => {
     const { page, errors } = await open("#/ahead");
     await page.getByRole("button", { name: "Northwind Foods", exact: true }).click();
-    await page.getByRole("group", { name: "Owner" }).getByRole("button", { name: "All" }).click();
+    await page.getByRole("group", { name: "People" }).getByRole("button", { name: "Everyone" }).click();
     await expect(page.locator(".ah-scope-note").textContent()).resolves.toContain("Showing Cooptimize's work (automatic) for Northwind Foods. Set the scope in Admin › Clients.");
     await expect(row(page, "Finance close automation").count()).resolves.toBe(0);
     await expect(row(page, "Order history export").count()).resolves.toBe(1);
@@ -407,8 +407,10 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await page.locator(".pa-pop").getByRole("button", { name: "Set dates" }).waitFor({ timeout: 5_000 });
     await page.keyboard.press("Escape");
     await expect(page.locator(".pa-marker").count()).resolves.toBeGreaterThan(0);
-    // Stories are folded away at the default level (Features).
-    await expect(page.getByRole("link", { name: "Export orders to CSV", exact: true }).count()).resolves.toBe(0);
+    // AH-6 toolbar: Stories by default; at Features the stories fold away.
+    await expect(page.getByRole("link", { name: "Export orders to CSV", exact: true }).count()).resolves.toBe(1);
+    await page.locator(".ah-toolbar .ah-levels").getByRole("button", { name: "Features", exact: true }).click();
+    await expect.poll(() => page.getByRole("link", { name: "Export orders to CSV", exact: true }).count()).toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -475,9 +477,9 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await sections.first().waitFor();
     // The count is in the mode switch and the header, the same number.
     const head = await page.locator(".follow-ups-head h2").textContent();
-    const n = Number(/(\d+) things? to fix/.exec(head ?? "")?.[1]);
+    const n = Number(/(\d+) not ready yet/.exec(head ?? "")?.[1]);
     expect(n).toBeGreaterThan(0);
-    await expect(page.getByRole("navigation", { name: "Ahead modes" }).getByRole("button", { name: /Gaps/ }).textContent()).resolves.toBe(`Gaps · ${n}`);
+    await expect(page.getByRole("navigation", { name: "Ahead modes" }).getByRole("button", { name: /Readiness/ }).textContent()).resolves.toBe(`Readiness · ${n}`);
     // One row per item (AH-1 listed an item once per gap).
     const ids = await page.locator(".ah-fx-row:not(.ctx) .ah-id").allTextContents();
     expect(new Set(ids).size).toBe(ids.length);

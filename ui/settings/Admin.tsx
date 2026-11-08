@@ -1160,8 +1160,8 @@ function AdminOrganization() {
         <AField label="Counts as in use (minutes)" kind="Rule" s={saver.status(o, "org.idle_minutes")} retry={() => void saver.save(o, "org.idle_minutes", data.idleMinutes, "In use")} hint="5 to 60. An open page counts as someone using FocusTime only this long after their last key, click or scroll. Background work waits otherwise.">
           <NumInput label="Counts as in use (minutes)" value={data.idleMinutes} min={5} max={60} onSave={(v) => void saver.save(o, "org.idle_minutes", v, "In use")} />
         </AField>
-        <AField label="Gaps looks at the top N of each backlog" kind="Rule" s={saver.status(o, "ahead.fix_top_n")} retry={() => void saver.save(o, "ahead.fix_top_n", data.fixTopN ?? 30, "Gaps top N")} hint="10 to 100, for epics, features and stories each. Ahead's Gaps also shows what's dated in the next 4 weeks and the features and epics each person owns.">
-          <NumInput label="Gaps looks at the top N of each backlog" value={data.fixTopN ?? 30} min={10} max={100} onSave={(v) => void saver.save(o, "ahead.fix_top_n", v, "Gaps top N")} />
+        <AField label="Readiness looks at the top N of each backlog" kind="Rule" s={saver.status(o, "ahead.fix_top_n")} retry={() => void saver.save(o, "ahead.fix_top_n", data.fixTopN ?? 30, "Readiness top N")} hint="10 to 100, for epics, features and stories each. Ahead's Readiness also shows what's dated in the next 4 weeks and the features and epics each person owns.">
+          <NumInput label="Readiness looks at the top N of each backlog" value={data.fixTopN ?? 30} min={10} max={100} onSave={(v) => void saver.save(o, "ahead.fix_top_n", v, "Readiness top N")} />
         </AField>
       </div>
       <h3>Send feedback</h3>

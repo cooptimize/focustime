@@ -29,7 +29,7 @@ describe.skipIf(!CHROMIUM)("Ahead › Backlog (browser, demo mode)", () => {
   const client = (page: Page, name: string) => page.locator(".bl-client", { has: page.getByRole("heading", { name, exact: true }) });
   const titles = (page: Page, name: string) => client(page, name).locator(".bl-title a").allTextContents();
   const everything = async (page: Page) => {
-    await page.getByRole("group", { name: "Owner" }).getByRole("button", { name: "Everything in scope" }).click();
+    await page.getByRole("group", { name: "People" }).getByRole("button", { name: "Everyone" }).click();
   };
 
   it("each client's stories in its backlog order, side by side; stale counted and filtered; a bulk date and Plan it", async () => {
@@ -45,7 +45,10 @@ describe.skipIf(!CHROMIUM)("Ahead › Backlog (browser, demo mode)", () => {
     await expect(client(page, "Northwind Foods").locator(".bl-counts").textContent()).resolves.toContain("1 stale");
     await expect(client(page, "Northwind Foods").locator(".bl-row.stale .bl-stale").textContent()).resolves.toMatch(/^Stale · \d+ weeks ago$/);
     await shotBoth(page, "bh1-backlog-1920-dark");
+    // AH-6 toolbar: Stale is in Readiness's popover.
+    await page.getByRole("button", { name: /^Readiness:/ }).click();
     await page.getByRole("button", { name: "Stale", exact: true }).click();
+    await page.locator(".cell-pop").getByRole("button", { name: "Done" }).click();
     await expect(titles(page, "Northwind Foods")).resolves.toEqual(["Points balance page"]);
     await expect(page.locator(".bl-row:not(.stale)").count()).resolves.toBe(0);
     // A bulk Set a target date on every stale story: staged where I may change it, skipped with why where I can't.
@@ -95,9 +98,9 @@ describe.skipIf(!CHROMIUM)("Ahead › Backlog (browser, demo mode)", () => {
     await page.getByRole("group", { name: "Clients" }).getByRole("button", { name: "Atlas Freight" }).click();
     await page.getByRole("group", { name: "Clients" }).getByRole("button", { name: "Northwind Foods" }).click();
     await expect(page.locator(".bl-head h3").allTextContents()).resolves.toEqual(["Northwind Foods", "Atlas Freight"]);
-    await page.getByRole("group", { name: "Level" }).getByRole("button", { name: "Features" }).click();
+    await page.locator(".ah-toolbar .ah-levels").getByRole("button", { name: "Features" }).click();
     await expect(titles(page, "Northwind Foods")).resolves.toEqual(["Order history export", "Supplier onboarding", "Loyalty points", "Store locator"]);
-    await page.getByRole("group", { name: "Level" }).getByRole("button", { name: "Stories" }).click();
+    await page.locator(".ah-toolbar .ah-levels").getByRole("button", { name: "Stories" }).click();
     await page.getByRole("group", { name: "Clients" }).getByRole("button", { name: "Atlas Freight" }).click();
     await page.getByRole("group", { name: "Clients" }).getByRole("button", { name: "Northwind Foods" }).click();
     if (SHOTS) {

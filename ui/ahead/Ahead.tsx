@@ -6,7 +6,7 @@
 import { CloseButton, useReturnFocus } from "../CloseButton.tsx";
 import type React from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import type { AheadFilters, AheadOwner } from "../../plan/ahead-edit.ts";
+import type { AheadFilters } from "../../plan/ahead-edit.ts";
 import type { AheadLoad, DevOpsLogView, RoadmapRow, RoadmapState, WeekLoadData } from "../../actions/types.ts";
 import { byItem, pendingText, valueText, type ChangeField, type ChangeValue, type DayHalf, type StagedChange } from "../../plan/ahead-edit.ts";
 import { fixCount } from "../../plan/fixnext.ts";
@@ -18,16 +18,18 @@ import { openSend } from "../send-event.ts";
 import { clientColor } from "../labels.ts";
 import { ModeArea } from "../ModeSwitch.tsx";
 import type { AheadMode } from "../nav.ts";
-import { buildRows, DEFAULT_FILTERS, epicsOf, fixGroups, groups, ownerOf, type Group, type Row } from "./model.ts";
+import { buildRows, DEFAULT_FILTERS, fixGroups, groups, type Group, type Row } from "./model.ts";
 import { Grid } from "./Grid.tsx";
-import { DateField } from "../DatePicker.tsx";
-import { SelectField } from "../SelectField.tsx";
 import { Gantt } from "./Gantt.tsx";
 import { FixNext } from "./FixNext.tsx";
 import { Backlog } from "./Backlog.tsx";
 import { backlogGroups, DEFAULT_AHEAD } from "../../plan/backlog.ts";
 import { gridLayout, useWindowScale } from "./layout.ts";
-import type { ModeName } from "../nav.ts";
+import { queryOf, setAheadQuery, type ModeName } from "../nav.ts";
+import { DEFAULT_LEVEL, fromQuery, toQuery, withQuery } from "../../plan/ahead-view.ts";
+import { atLevel, isFold, levelNames, type Fold } from "../../plan/gantt-tree.ts";
+import { isBool, usePref } from "./prefs.ts";
+import { Toolbar, type AheadViewState } from "./Toolbar.tsx";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const BATCH = 10;
@@ -48,6 +50,8 @@ export type AheadEnv = {
   /** The item a notice opened (#/ahead/item/<id>). */
   focusItem: number | null;
   error: (s: string) => void;
+  /** AH-6: the one level, carets and Show callouts, shared by every mode. */
+  view: AheadViewState;
 };
 export const AheadCtx = createContext<AheadEnv | null>(null);
 export const useAhead = () => useContext(AheadCtx)!;
@@ -64,6 +68,17 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
   const head = useRef<HTMLHeadingElement>(null);
   const dw = useDevOpsWrite();
+  // AH-6: one view for every mode: the level and carets and Show callouts (remembered in this browser), and the
+  // address's query, which wins when it names them (a link opens what its sender saw).
+  const linked = useRef(fromQuery(queryOf(location.hash)));
+  const [fold, setFold] = usePref<Fold>("view.fold", isFold, atLevel(DEFAULT_LEVEL));
+  const [callouts, setCallouts] = usePref("view.callouts", isBool, true);
+  useEffect(() => {
+    const q = linked.current;
+    if (q?.level) setFold(atLevel(q.level));
+    if (q?.callouts !== undefined) setCallouts(q.callouts);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // BH-1: only Backlog asks for the change log's last change per item.
   const wantLast = useRef(mode === "backlog");
@@ -86,7 +101,12 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   }, []);
   useEffect(() => void reload(), [reload, dw?.version]);
   useEffect(() => {
-    call<{ filters: AheadFilters | null }>("ahead.filters", {}).then((r) => setFiltersRaw({ ...DEFAULT_FILTERS, ...(r.filters ?? {}) }), () => setFiltersRaw(DEFAULT_FILTERS));
+    const fromLink = (mine: AheadFilters) => {
+      const f = withQuery(mine, DEFAULT_FILTERS, linked.current);
+      if (f !== mine) void call("ahead.set_filters", { filters: f }).catch(() => null);
+      return f;
+    };
+    call<{ filters: AheadFilters | null }>("ahead.filters", {}).then((r) => setFiltersRaw(fromLink({ ...DEFAULT_FILTERS, ...(r.filters ?? {}) })), () => setFiltersRaw(fromLink(DEFAULT_FILTERS)));
   }, []);
   useEffect(() => head.current?.focus(), [mode]);
   const askedLast = useRef(mode === "backlog");
@@ -131,26 +151,48 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   const breakDown = (r: Row) => openBreakDown(r.clientKey, { id: r.item.id, title: r.item.title, type: r.item.type, actions: panelActions(r) });
 
   const f = filters ?? DEFAULT_FILTERS;
+  // AH-6: the address mirrors the view, so Back, a reload and a copied link open the same thing.
+  useEffect(() => {
+    if (!filters) return;
+    const q = toQuery({ f: filters, level: fold.level, callouts });
+    setAheadQuery(q);
+    const base = location.hash.split("?")[0] ?? "";
+    if (/^#\/?ahead(\/|$)/.test(base) && location.hash !== base + (q ? `?${q}` : "")) history.replaceState(history.state, "", base + (q ? `?${q}` : ""));
+  }, [filters, fold.level, callouts, mode]);
+  const staleWeeks = load?.staleWeeks ?? DEFAULT_AHEAD.staleWeeks;
   const shown: Group[] = useMemo(() => (load ? groups(load, f, { stories: true }) : []), [load, f, mode]);
-  // AH-3: Fix next for every client, whatever the filters (it has none): ranked by each client's backlog.
-  const fix = useMemo(() => (load ? fixGroups(load, { readOnly, skipped }) : []), [load, skipped, readOnly]);
+  // AH-6: what every mode would show with no filters (all clients, everyone): the summary's "of N".
+  const everything = useMemo<AheadFilters>(() => ({ ...DEFAULT_FILTERS, owner: Object.fromEntries((load?.clients ?? []).map((c) => [c.clientKey, "all" as const])), ...(f.whole ? { whole: true } : {}) }), [load, f.whole]);
+  // AH-3: Readiness for every client, ranked by each client's backlog; AH-6: Ahead's filters apply to it too.
+  const fix = useMemo(() => (load ? fixGroups(load, { readOnly, skipped, f, staleWeeks }) : []), [load, skipped, readOnly, f, staleWeeks]);
   const fixN = fixCount(fix.map((x) => x.group));
-  const tier = f.tier ?? "story";
-  const backlog = useMemo(() => (load && mode === "backlog" ? backlogGroups(load, f, { staleWeeks: load.staleWeeks ?? DEFAULT_AHEAD.staleWeeks, last: Object.fromEntries(load.clients.flatMap((c) => (c.last ? [[c.clientKey, c.last] as const] : []))) }) : []), [load, f, mode]);
+  // AH-6: Backlog's level is the shared one (BH-1's own tier is kept but no longer read).
+  const tier = fold.level;
+  const last = useMemo(() => Object.fromEntries((load?.clients ?? []).flatMap((c) => (c.last ? [[c.clientKey, c.last] as const] : []))), [load]);
+  const backlog = useMemo(() => (load && mode === "backlog" ? backlogGroups(load, { ...f, tier }, { staleWeeks, last }) : []), [load, f, mode, tier, staleWeeks, last]);
+  const names = useMemo(() => levelNames(shown), [shown]);
+  const view: AheadViewState = { fold, setFold, names, callouts, setCallouts };
+  const counts = useMemo(() => {
+    if (!load) return { shown: 0, total: 0 };
+    if (mode === "fix") return { shown: fixN, total: fix.reduce((n, x) => n + x.total, 0) };
+    if (mode === "backlog") return { shown: backlog.reduce((k, g) => k + g.rows.length, 0), total: backlogGroups(load, { ...everything, tier }, { staleWeeks }).reduce((k, g) => k + g.rows.length, 0) };
+    const n = (gs: Group[]) => gs.reduce((k, g) => k + g.rows.filter((r) => !r.context).length, 0);
+    return { shown: n(shown), total: n(groups(load, everything, { stories: true })) };
+  }, [load, mode, fix, fixN, backlog, shown, everything, tier, staleWeeks]);
 
   const n = load?.changes.length ?? 0;
   const color = (k: string) => clientColor(k, data.clients);
   const setChanges = (changes: StagedChange[]) => setLoad((l) => (l ? { ...l, changes } : l));
-  const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, setChanges, breakDown, color, focusItem: item, error: setError } : null;
-  const anyFilter = f.clients.length || f.epic || f.gaps || f.from || f.to || f.q.trim();
-  const visible = mode === "backlog" ? backlog.reduce((k, g) => k + g.rows.length, 0) : shown.reduce((k, g) => k + g.rows.filter((r) => !r.context).length, 0);
-  const title = mode === "fix" ? "Gaps" : mode === "gantt" ? "Gantt" : mode === "backlog" ? "Backlog" : "Grid";
+  const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, setChanges, breakDown, color, focusItem: item, error: setError, view } : null;
+  const anyFilter = counts.shown !== counts.total;
+  const visible = counts.shown;
+  const title = mode === "fix" ? "Readiness" : mode === "gantt" ? "Gantt" : mode === "backlog" ? "Backlog" : "Grid";
 
   return (
     <main className={`roadmap ahead ahead-${mode}`} aria-label={`Ahead: ${title}`}>
       <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
-          Ahead <span className="muted">{load ? (mode === "fix" ? plural(fixN, "thing to fix", "things to fix") : plural(visible, "item", "items")) : ""}</span>
+          Ahead <span className="muted">{load ? `· ${mode === "fix" ? `${fixN} not ready yet` : plural(visible, "item", "items")}` : ""}</span>
         </h2>
         <button type="button" className="top-btn" disabled={busy} onClick={() => void reload(true)} title="Read DevOps again">
           {busy ? "Reading…" : "Refresh"}
@@ -167,8 +209,7 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
         </div>
       )}
       {readOnly && load && <p className="muted ah-ro-note">Read only on a phone. Open FocusTime on a computer to change dates, sizes or owners.</p>}
-      {load && filters && mode !== "fix" && mode !== "backlog" && <Filters load={load} f={f} set={setFilters} setWhole={(w) => void setWhole(w)} color={color} anyFilter={!!anyFilter} />}
-      {load && filters && mode === "backlog" && <BacklogFilters load={load} f={f} set={setFilters} color={color} />}
+      {load && filters && <Toolbar mode={mode} load={load} f={f} set={setFilters} setWhole={(w) => void setWhole(w)} view={view} counts={counts} color={color} />}
       {load && <ScopeNote load={load} whole={!!f.whole} />}
       {error && <p className="error" role="alert">{error}</p>}
       {!load && !error && <p className="muted">Reading DevOps…</p>}
@@ -181,7 +222,7 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
               {mode === "grid" && <Grid groups={shown} layout={layout} />}
               {mode === "gantt" && <Gantt data={data} groups={shown} onChanged={onChanged} />}
               {mode === "backlog" && <Backlog groups={backlog} tier={tier} onChanged={onChanged} />}
-              {mode === "fix" && <FixNext groups={fix} skip={(k) => setSkipped((s) => new Set(s).add(k))} dots={layout === "cards" || layout === "dots"} />}
+              {mode === "fix" && <FixNext groups={fix} skip={(k) => setSkipped((s) => new Set(s).add(k))} dots={layout === "cards" || layout === "dots"} filtered={anyFilter} />}
             </div>
           </div>
           {review && <Review onClose={() => setReview(false)} onDone={() => void reload()} />}
@@ -212,106 +253,6 @@ function ScopeNote({ load, whole }: { load: AheadLoad; whole: boolean }) {
           {c.clientName}: {c.scope!.problem}.
         </p>
       ))}
-    </div>
-  );
-}
-
-/**
- * BH-1: Backlog's filters: the clients (as everywhere in Ahead), the owner (Mine, Contributing, Everything in scope;
- * remembered per client with Grid's), the tier and Stale. Saved with Ahead's other filters.
- */
-function BacklogFilters({ load, f, set, color }: { load: AheadLoad; f: AheadFilters; set: (f: AheadFilters) => void; color: (k: string) => string }) {
-  const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
-  const shownClients = load.clients.filter((c) => !f.clients.length || f.clients.includes(c.clientKey));
-  const owners = new Set(shownClients.map((c) => ownerOf(f, c)));
-  const owner: AheadOwner | null = owners.size === 1 ? [...owners][0]! : null;
-  const setOwner = (o: AheadOwner) => set({ ...f, owner: { ...f.owner, ...Object.fromEntries(shownClients.map((c) => [c.clientKey, o])) } });
-  const tier = f.tier ?? "story";
-  return (
-    <div className="rm-filters ah-filters bl-filters">
-      <span className="rm-chips" role="group" aria-label="Clients">
-        {load.clients.map((c) => (
-          <button key={c.clientKey} type="button" className="rm-chip" style={{ "--c": color(c.clientKey) } as CSSProperties} aria-pressed={f.clients.includes(c.clientKey)} onClick={() => set({ ...f, clients: toggle(f.clients, c.clientKey) })}>
-            <span className="dl-swatch" aria-hidden="true" />
-            {c.clientName}
-          </button>
-        ))}
-      </span>
-      <span className="rm-seg" role="group" aria-label="Level">
-        {(["story", "feature", "epic"] as const).map((t) => (
-          <button key={t} type="button" aria-pressed={tier === t} onClick={() => set({ ...f, tier: t })}>
-            {t === "story" ? "Stories" : t === "feature" ? "Features" : "Epics"}
-          </button>
-        ))}
-      </span>
-      <span className="rm-seg" data-tour="ah-owner" role="group" aria-label="Owner" title="Mine: assigned to you and what's under your features and epics. Contributing: the features and epics your stories are under. Remembered per client.">
-        {(["mine", "contributing", "all"] as const).map((o) => (
-          <button key={o} type="button" aria-pressed={owner === o} onClick={() => setOwner(o)}>
-            {o === "mine" ? "Mine" : o === "contributing" ? "Contributing" : "Everything in scope"}
-          </button>
-        ))}
-      </span>
-      <button type="button" className="rm-chip" data-tour="ah-stale" aria-pressed={!!f.stale} onClick={() => set({ ...f, stale: !f.stale })} title={`Only open items with no change in DevOps for ${load.staleWeeks ?? DEFAULT_AHEAD.staleWeeks} weeks or more (Settings › Ahead)`}>
-        Stale
-      </button>
-    </div>
-  );
-}
-
-function Filters({ load, f, set, setWhole, color, anyFilter }: { load: AheadLoad; f: AheadFilters; set: (f: AheadFilters) => void; setWhole: (whole: boolean) => void; color: (k: string) => string; anyFilter: boolean }) {
-  const scoped = load.clients.filter((c) => c.scope && !c.scope.all);
-  const scopeTitle = scoped.map((c) => `${c.clientName}: ${c.scope!.inScope} of ${c.scope!.total} open items are Cooptimize's work`).join("\n");
-  const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
-  const shownClients = load.clients.filter((c) => !f.clients.length || f.clients.includes(c.clientKey));
-  const owners = new Set(shownClients.map((c) => ownerOf(f, c)));
-  const owner: AheadOwner | null = owners.size === 1 ? [...owners][0]! : null;
-  const setOwner = (o: AheadOwner) => set({ ...f, owner: { ...f.owner, ...Object.fromEntries(shownClients.map((c) => [c.clientKey, o])) } });
-  const epics = epicsOf(load, f);
-  return (
-    <div className="rm-filters ah-filters">
-      <span className="rm-chips" role="group" aria-label="Clients">
-        {load.clients.map((c) => (
-          <button key={c.clientKey} type="button" className="rm-chip" style={{ "--c": color(c.clientKey) } as CSSProperties} aria-pressed={f.clients.includes(c.clientKey)} onClick={() => set({ ...f, clients: toggle(f.clients, c.clientKey), epic: null })}>
-            <span className="dl-swatch" aria-hidden="true" />
-            {c.clientName}
-          </button>
-        ))}
-      </span>
-      <span className="rm-seg" data-tour="ah-owner" role="group" aria-label="Owner" title="Mine: assigned to you and what's under your features and epics. Contributing: the features and epics your stories are under. Remembered per client.">
-        {(["mine", "contributing", "all"] as const).map((o) => (
-          <button key={o} type="button" aria-pressed={owner === o} onClick={() => setOwner(o)}>
-            {o === "mine" ? "Mine" : o === "contributing" ? "Contributing" : "All"}
-          </button>
-        ))}
-      </span>
-      {epics.length > 0 && (
-        <span className="rm-sort">
-          Epic
-          <SelectField label="Epic" value={f.epic ?? ""} onChange={(k) => set({ ...f, epic: k || null })} options={[{ key: "", label: "Any" }, ...epics.map((x) => ({ key: x.key, label: x.label }))]} />
-        </span>
-      )}
-      <button type="button" className="rm-chip ah-gaps" aria-pressed={f.gaps} onClick={() => set({ ...f, gaps: !f.gaps })} title="Only items missing dates, an owner, a size or stories">
-        Has gaps
-      </button>
-      <span className="rm-sort">
-        From
-        <DateField label="From" value={f.from} today={load.today} onChange={(d) => set({ ...f, from: d })} />
-      </span>
-      <span className="rm-sort">
-        To
-        <DateField label="To" value={f.to} today={load.today} onChange={(d) => set({ ...f, to: d })} />
-      </span>
-      <input className="rm-search" type="search" placeholder="Search titles or #id" aria-label="Search Ahead" value={f.q} onChange={(e) => set({ ...f, q: e.target.value })} />
-      {(scoped.length > 0 || f.whole) && (
-        <button type="button" className="rm-chip ah-whole" aria-pressed={!!f.whole} onClick={() => setWhole(!f.whole)} title={scopeTitle || "Every item in the project, not only Cooptimize's work"}>
-          Show the whole project
-        </button>
-      )}
-      {anyFilter && (
-        <button type="button" className="mini quiet" onClick={() => set({ ...DEFAULT_FILTERS, owner: f.owner, ...(f.whole ? { whole: true } : {}) })}>
-          Clear filters
-        </button>
-      )}
     </div>
   );
 }
