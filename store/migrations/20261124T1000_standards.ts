@@ -4,7 +4,7 @@
 import type { NamedMigration } from "./named.ts";
 
 export const standards: NamedMigration = {
-  name: "20261124T0900_standards",
+  name: "20261124T1000_standards",
   sqlite: `CREATE TABLE standards_articles (
      path TEXT NOT NULL PRIMARY KEY,
      article_id TEXT NOT NULL,

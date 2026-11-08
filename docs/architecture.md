@@ -795,7 +795,7 @@ The pages are `docs/technical/*.md` (how FocusTime works, for engineers and IT);
 ## KB-1: Cooptimize's standards in the AI
 
 - `plan/standards.ts`: Coop's contract (`isArticlePath`, `parseFrontMatter`, `articleVerdict`, `duplicateIds`), `retrieveStandards`, `titleIndex`, `standardsInput`, the instruction text, `shapeItem`, `linkAcceptance`, `rewordGeneratedLayer`, `splitOverrides`, Ask's schema and `standardsReply`. Pure.
-- `sources/github/standards.ts`: the read (GET only, no token). `store/standards-store.ts`: `standards_articles`, `standards_sync` (migration `20261124T0900_standards`). `draft_stories.ai_standards` (`20261124T0910_draft_ai_standards`).
+- `sources/github/standards.ts`: the read (GET only, no token). `store/standards-store.ts`: `standards_articles`, `standards_sync` (migration `20261124T1000_standards`). `draft_stories.ai_standards` (`20261124T1010_draft_ai_standards`).
 - `server/standards-job.ts`: the job and Sync now. `actions/standards.ts`: `StandardsPort` and the lookup. `sources/demo/standards.ts`: the demo's library.
 - `config/org.ts`: `standards.repo_url`, `standards.branch`, the client's `source_systems`. `actions/admin-actions.ts`: section `standards`, action `admin.standards_sync`.
 - `ui/StandardsNote.tsx` (Standards used), Admin › Standards and Source systems in `ui/settings/Admin.tsx`.

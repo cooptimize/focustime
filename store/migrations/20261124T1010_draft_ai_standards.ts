@@ -3,7 +3,7 @@
 import type { NamedMigration } from "./named.ts";
 
 export const draftAiStandards: NamedMigration = {
-  name: "20261124T0910_draft_ai_standards",
+  name: "20261124T1010_draft_ai_standards",
   sqlite: `ALTER TABLE draft_stories ADD COLUMN ai_standards TEXT;`,
   sqlserver: `ALTER TABLE draft_stories ADD ai_standards nvarchar(max) NULL;`,
 };

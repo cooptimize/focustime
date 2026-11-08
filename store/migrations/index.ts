@@ -45,8 +45,8 @@ import { chatCalls } from "./20261121T1000_chat_calls.ts";
 import { pickDeployItems } from "./20261122T0900_pick_deploy_items.ts";
 import { followUpChangedAt } from "./20261123T0900_follow_up_changed_at.ts";
 import { heldMatch } from "./20261124T0900_held_match.ts";
-import { standards } from "./20261124T0900_standards.ts";
-import { draftAiStandards } from "./20261124T0910_draft_ai_standards.ts";
+import { standards } from "./20261124T1000_standards.ts";
+import { draftAiStandards } from "./20261124T1010_draft_ai_standards.ts";
 import type { NamedMigration } from "./named.ts";
 
 export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll, clientAccounts, weekCarry, conversationMerges, messageReactions, messageImages, followUpWhoRef, teamSends, aheadChanges, draftAi, imagesNoBytes, clientLogins, teamsBot, assistant, teamsBotSeen, inboxMarks, teamsRhythm, commitmentClose, chatSocial, jobClaims, aiTier, meetings, assistantPending, peopleInvites, loopSends, aheadStateChanges, pickDeployments, conversationMentions, chatCalls, pickDeployItems, followUpChangedAt, heldMatch, standards, draftAiStandards];
