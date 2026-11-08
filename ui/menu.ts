@@ -1311,6 +1311,11 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "admin.refresh_people":
     case "admin.remove_person": return env.admin ? { run: () => env.openSettings("admin-people") } : { disabled: "Only for FocusTime admins" };
     // IN-1: Who's set up and the invite sheet live in Admin › People.
+    // IN-2: sending is only ever the invite sheet's preview and Send; these open Who's set up.
+    case "admin.invite_access":
+    case "admin.invite_preview":
+    case "admin.invite_send":
+    case "admin.invite_retry":
     case "admin.invited": return env.admin ? { run: () => env.openSettings("admin-people", "whos-set-up") } : { disabled: "Only for FocusTime admins" };
     case "admin.audit": return env.admin ? { run: () => env.openSettings("admin-audit") } : { disabled: "Only for FocusTime admins" };
     case "admin.status_action": return env.admin ? { run: () => env.openSettings("admin-status") } : { disabled: "Only for FocusTime admins" };

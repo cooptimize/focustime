@@ -2,14 +2,19 @@
 // day they were last active, DevOps connected, Calendar connected, and Teams app added where FocusTime can know it),
 // filters and plain counts. Invite (one person) and Invite several (the ones ticked) open a sheet with an editable
 // message: Open in Teams (a 1:1 chat, one person at a time with Next), Open in Outlook (one email to all), Copy
-// message. FocusTime sends nothing: it opens Teams or Outlook for the admin to send, and records only "Invited <day>
-// by <admin>" (admin.invited). The server checks every read and write again.
+// message; these open Teams or Outlook for the admin to send, and record only "Invited <day> by <admin>"
+// (admin.invited). IN-2: where the admin's sign-in allows it (Close the loop's permissions), Send in Teams (one 1:1
+// per person) and Create Outlook draft or Send email now (one email each, or one to everyone) send from FocusTime as
+// the admin, after a preview of who, how and the final text; each is read back and the row reads "Invited by <admin>
+// via Teams, <day>". Without the permission the sheet keeps the links with LP-1's note. The server checks it all again.
 import { TextBox } from "../TextBox.tsx";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { call } from "../api.ts";
 import { CloseButton, useReturnFocus } from "../CloseButton.tsx";
 import { shortDate } from "../labels.ts";
-import { matchesFilter, NAME_TOKEN, mailtoLink, outlookComposeLink, personalize, SETUP_FILTERS, setupCounts, teamsChatLink, validEmail, type SetupFilter, type SetupRow } from "../../plan/invite.ts";
+import type { InviteAccessView, InvitePreviewView, InviteResultView, EmailSplit } from "../../actions/invite-types.ts";
+import type { ChannelAccess } from "../../actions/loop-types.ts";
+import { invitedLine, matchesFilter, NAME_TOKEN, mailtoLink, outlookComposeLink, personalize, SETUP_FILTERS, setupCounts, teamsChatLink, validEmail, type SetupFilter, type SetupRow } from "../../plan/invite.ts";
 
 type SetupData = {
   people: SetupRow[];
@@ -138,7 +143,7 @@ export function WhoSetUp() {
                       <button type="button" className="mini" disabled={!data.invite} onClick={() => setInviting([p])}>
                         Invite
                       </button>
-                      {p.invited && <span className="set-hint adm-block">Invited {shortDate(p.invited.day)} by {p.invited.byName}</span>}
+                      {p.invited && <span className="set-hint adm-block">{invitedLine(p.invited, shortDate)}</span>}
                     </>
                   )}
                 </td>
@@ -152,8 +157,8 @@ export function WhoSetUp() {
           people={inviting}
           invite={data.invite}
           onClose={() => setInviting(null)}
-          onInvited={async (n) => {
-            setMsg(n === 1 ? "Marked as invited." : `Marked ${n} people as invited.`);
+          onInvited={async (n, sent) => {
+            setMsg(sent ?? (n === 1 ? "Marked as invited." : `Marked ${n} people as invited.`));
             setPicked(new Set());
             await load();
           }}
@@ -176,7 +181,12 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export function InviteSheet({ people, invite, onClose, onInvited }: { people: SetupRow[]; invite: NonNullable<SetupData["invite"]>; onClose: () => void; onInvited: (n: number) => Promise<void> }) {
+type Step = { kind: "compose" } | { kind: "preview"; p: InvitePreviewView } | { kind: "result"; r: InviteResultView };
+const SEND_LABEL = { teams: "Send in Teams", draft: "Create Outlook draft", send: "Send email now" } as const;
+const ready = (a: ChannelAccess | undefined) => a?.state === "ready";
+const errText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Nothing was sent");
+
+export function InviteSheet({ people, invite, onClose, onInvited }: { people: SetupRow[]; invite: NonNullable<SetupData["invite"]>; onClose: () => void; onInvited: (n: number, sent?: string) => Promise<void> }) {
   useReturnFocus();
   const [message, setMessage] = useState(invite.template);
   const [subject, setSubject] = useState(invite.subject);
@@ -185,6 +195,19 @@ export function InviteSheet({ people, invite, onClose, onInvited }: { people: Se
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // IN-2: what this admin's sign-in allows (a probe; nothing is sent), and the send's own steps.
+  const [access, setAccess] = useState<InviteAccessView | null>(null);
+  const [emailMode, setEmailMode] = useState<"draft" | "send">("draft");
+  const [split, setSplit] = useState<EmailSplit>("each");
+  const [step, setStep] = useState<Step>({ kind: "compose" });
+  useEffect(() => {
+    let live = true;
+    call<InviteAccessView>("admin.invite_access", {}).then(
+      (a) => live && setAccess(a),
+      () => live && setAccess(null),
+    );
+    return () => void (live = false);
+  }, []);
   const several = people.length > 1;
   const withEmail = people.filter((p) => validEmail(p.email));
   const noEmail = people.filter((p) => !validEmail(p.email));
@@ -222,25 +245,135 @@ export function InviteSheet({ people, invite, onClose, onInvited }: { people: Se
       setNote("Message copied. Paste it where you like and send it.");
     } else setError("Couldn't copy. Select the message and copy it yourself.");
   };
+
+  // IN-2: Send from FocusTime. Only everyone with an address; the server checks the recipients and the permission again.
+  const canTeams = ready(access?.teams);
+  const canDraft = ready(access?.draft);
+  const canSendNow = canDraft && ready(access?.send);
+  const canSend = (canTeams || canDraft) && withEmail.length > 0 && noEmail.length === 0;
+  const asks = access ? ([access.teams, access.draft, ...(canDraft ? [access.send] : [])].filter((a) => a.state === "consent") as Extract<ChannelAccess, { state: "consent" }>[]) : [];
+  const unavailable = access && !canTeams && !canDraft && [access.teams, access.draft].every((a) => a.state === "unavailable");
+  const preview = async (channel: "teams" | "email") => {
+    setBusy(true);
+    setError(null);
+    try {
+      const p = await call<InvitePreviewView>("admin.invite_preview", {
+        personIds: withEmail.map((x) => x.id),
+        channel,
+        message,
+        ...(channel === "email" ? { subject, mode: canSendNow ? emailMode : "draft", ...(several ? { split } : {}) } : {}),
+      });
+      setStep({ kind: "preview", p });
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const settle = async (r: InviteResultView) => {
+    setStep({ kind: "result", r });
+    if (r.invited) await onInvited(r.invited, r.message);
+  };
+  const send = async (p: InvitePreviewView) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await settle(await call<InviteResultView>("admin.invite_send", { previewId: p.previewId }));
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const retry = async (r: InviteResultView) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await settle(await call<InviteResultView>("admin.invite_retry", { batchId: r.batchId }));
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const title = several ? `Invite ${people.length} people` : `Invite ${people[0]!.name}`;
-  return (
-    <div className="cap-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
-      <div
-        className="cap-dialog invite-sheet"
-        data-overlay="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onKeyDown={(e) => {
-          if (e.key === "Escape" && !busy) (e.stopPropagation(), e.preventDefault(), onClose());
-        }}
-      >
-        <div className="cap-dialog-head">
-          <h2>{title}</h2>
-          {several && <span className="muted">{people.map((p) => p.name).join(", ")}</span>}
-          <CloseButton onClose={onClose} disabled={busy} />
+  const sendLabel = (p: { channel: "teams" | "email"; mode: "draft" | "send" | null }) => (p.channel === "teams" ? SEND_LABEL.teams : SEND_LABEL[p.mode ?? "draft"]);
+  let body: ReactNode;
+  if (step.kind === "preview") {
+    const p = step.p;
+    body = (
+      <section className="invite-preview" aria-label="Preview">
+        <dl className="sl-facts">
+          <dt className="close-loop-label">Send by</dt>
+          <dd>{p.how}</dd>
+          <dt className="close-loop-label">To</dt>
+          <dd>{p.recipients.map((r) => r.name).join(", ")}</dd>
+          {p.subject && (
+            <>
+              <dt className="close-loop-label">Subject</dt>
+              <dd>{p.subject}</dd>
+            </>
+          )}
+        </dl>
+        <ol className="invite-messages" aria-label={p.messages.length === 1 ? "The message" : `The ${p.messages.length} messages`}>
+          {p.messages.map((m, i) => (
+            <li key={i}>
+              {p.messages.length > 1 && <span className="close-loop-label">To {m.to.join(", ")}</span>}
+              <div className="sl-text">{m.text}</div>
+            </li>
+          ))}
+        </ol>
+        <p className="sl-final">{p.note}</p>
+        <div className="wd-actions invite-acts">
+          <button type="button" className="primary" disabled={busy} onClick={() => void send(p)}>
+            {busy ? "Sending…" : sendLabel(p)}
+          </button>
+          <button type="button" disabled={busy} onClick={() => setStep({ kind: "compose" })}>
+            Back to the message
+          </button>
         </div>
-        <p className="invite-note">FocusTime doesn't send this. It opens in Teams or Outlook for you to send.</p>
+      </section>
+    );
+  } else if (step.kind === "result") {
+    const r = step.r;
+    body = (
+      <section className="invite-result" aria-label="Result">
+        <p className={r.ok ? "sl-result" : "sl-result bad"} role={r.ok ? "status" : "alert"}>
+          {r.message}
+        </p>
+        <ul className="sl-parts">
+          {r.items.map((it, i) => (
+            <li key={i} className={it.ok ? "ok" : "bad"}>
+              {it.ok ? "✓ " : "✗ "}
+              <strong>{it.names.join(", ")}</strong>: {it.line}
+              {it.link && it.ok && (
+                <>
+                  {" "}
+                  <a href={it.link} target="_blank" rel="noreferrer">
+                    {r.channel === "teams" ? "Open in Teams" : it.state === "draft" ? "Open draft" : "Open in Outlook"}
+                  </a>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+        <div className="wd-actions invite-acts">
+          {r.retry && (
+            <button type="button" className="primary" disabled={busy} onClick={() => void retry(r)}>
+              {busy ? "Trying again…" : `Retry for ${r.items.filter((x) => !x.ok).flatMap((x) => x.names).length === 1 ? r.items.find((x) => !x.ok)!.names[0] : "the ones not sent"}`}
+            </button>
+          )}
+          <button type="button" className={r.retry ? undefined : "primary"} disabled={busy} onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </section>
+    );
+  } else
+    body = (
+      <>
+        <p className="invite-note">{canSend ? "Send it from FocusTime as you, or open it in Teams or Outlook and send it there." : "FocusTime doesn't send this. It opens in Teams or Outlook for you to send."}</p>
         <label className="set-field">
           <span className="set-label">Subject (email)</span>
           <input value={subject} maxLength={120} onChange={(e) => setSubject(e.target.value)} />
@@ -249,13 +382,63 @@ export function InviteSheet({ people, invite, onClose, onInvited }: { people: Se
           <span className="set-label">Message</span>
           <TextBox className="invite-message" minRows={14} maxRows={20} maxLength={1500} value={message} onChange={(e) => setMessage(e.target.value)} autoFocus />
           <span className="set-hint">
-            {NAME_TOKEN} becomes each person's first name{several ? ` in Teams, and "all" in one email` : ""}.
+            {NAME_TOKEN} becomes each person's first name{several ? (canSend ? `, and "all" in one email to everyone` : ` in Teams, and "all" in one email`) : ""}.
           </span>
         </label>
         {noEmail.length > 0 && <p className="set-problem">FocusTime has no email address for {noEmail.map((p) => p.name).join(", ")}. Copy the message for them instead.</p>}
-        <div className="wd-actions invite-acts">
+        {canSend && (
+          <div className="invite-send" role="group" aria-label="Send from FocusTime">
+            <span className="close-loop-label">Send from FocusTime</span>
+            {canTeams && (
+              <div className="invite-send-way">
+                <button type="button" className="primary" disabled={busy || !message.trim()} onClick={() => void preview("teams")}>
+                  {several ? `Send in Teams (${withEmail.length} chats)` : "Send in Teams"}
+                </button>
+                <span className="set-hint">{several ? "A 1:1 chat with each person, as you" : "A 1:1 chat, as you"}</span>
+              </div>
+            )}
+            {canDraft && (
+              <div className="invite-send-way">
+                <button type="button" className={canTeams ? undefined : "primary"} disabled={busy || !message.trim() || !subject.trim()} onClick={() => void preview("email")}>
+                  {SEND_LABEL[canSendNow ? emailMode : "draft"]}
+                </button>
+                <div className="sl-targets" role="radiogroup" aria-label="Email">
+                  <label>
+                    <input type="radio" name="invite-mode" checked={emailMode === "draft" || !canSendNow} onChange={() => setEmailMode("draft")} /> Outlook draft
+                  </label>
+                  <label title={canSendNow ? undefined : "Sending email now needs one more permission (below)"}>
+                    <input type="radio" name="invite-mode" disabled={!canSendNow} checked={emailMode === "send" && canSendNow} onChange={() => setEmailMode("send")} /> Send now
+                  </label>
+                </div>
+                {several && (
+                  <div className="sl-targets" role="radiogroup" aria-label="Emails">
+                    <label>
+                      <input type="radio" name="invite-split" checked={split === "each"} onChange={() => setSplit("each")} /> One email each
+                    </label>
+                    <label>
+                      <input type="radio" name="invite-split" checked={split === "one"} onChange={() => setSplit("one")} /> One email to everyone
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+            <span className="set-hint">You see who gets it and the final text before anything is sent.</span>
+          </div>
+        )}
+        {(asks.length > 0 || unavailable) && (
+          <div className="sl-fallback invite-fallback">
+            <p>{unavailable ? "Sign in to Microsoft to send from FocusTime. Until then, open it prefilled and send it there." : canSend ? "Send email now needs one more permission, which an admin may need to approve. Until then, create the Outlook draft and send it from Outlook." : access!.note}</p>
+            {access?.canAsk &&
+              asks.map((a) => (
+                <a key={a.consent} className="mini" href={`/auth/microsoft/login?consent=${a.consent}`}>
+                  {a.consent === "teams_send" ? "Allow sending in Teams" : a.consent === "mail_draft" ? "Allow Outlook drafts" : "Allow sending email now"}
+                </a>
+              ))}
+          </div>
+        )}
+        <div className="wd-actions invite-acts" role="group" aria-label="Open it yourself">
           {withEmail.length > 0 && (
-            <button type="button" className="primary" disabled={busy || !teamsPerson} onClick={() => void openTeams()}>
+            <button type="button" className={canSend ? undefined : "primary"} disabled={busy || !teamsPerson} onClick={() => void openTeams()}>
               {!teamsPerson ? "Teams: all opened" : several ? (next === 0 ? `Open in Teams: ${teamsPerson.name} (1 of ${withEmail.length})` : `Next: ${teamsPerson.name} (${next + 1} of ${withEmail.length})`) : "Open in Teams"}
             </button>
           )}
@@ -278,6 +461,30 @@ export function InviteSheet({ people, invite, onClose, onInvited }: { people: Se
             {note}
           </p>
         )}
+      </>
+    );
+  return (
+    <div className="cap-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
+      <div
+        className="cap-dialog invite-sheet"
+        data-overlay="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onKeyDown={(e) => {
+          if (e.key !== "Escape" || busy) return;
+          e.stopPropagation();
+          e.preventDefault();
+          if (step.kind === "preview") setStep({ kind: "compose" });
+          else onClose();
+        }}
+      >
+        <div className="cap-dialog-head">
+          <h2>{title}</h2>
+          {several && <span className="muted">{people.map((p) => p.name).join(", ")}</span>}
+          <CloseButton onClose={onClose} disabled={busy} />
+        </div>
+        {body}
         {error && (
           <p className="error-line" role="alert">
             {error}

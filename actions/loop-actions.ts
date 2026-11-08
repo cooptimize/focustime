@@ -158,7 +158,11 @@ function consentNote(channel: LoopChannel) {
   return channel === "teams" ? "FocusTime isn't allowed to post in Teams for you yet." : "FocusTime isn't allowed to use Outlook for you yet.";
 }
 async function accessOf(ctx: LoopContext, kind: "send" | "mail" | "mail_send", consent: "teams_send" | "mail_draft" | "mail_send", channel: LoopChannel): Promise<ChannelAccess> {
-  const a = await ctx.access(kind).catch(() => "unavailable" as const);
+  return sendAccess(ctx.access, kind, consent, channel);
+}
+/** Whether I can send this way now (a token probe), else the consent to ask for with the admin note. IN-2 shares it. */
+export async function sendAccess(access: LoopContext["access"], kind: "send" | "mail" | "mail_send", consent: "teams_send" | "mail_draft" | "mail_send", channel: LoopChannel): Promise<ChannelAccess> {
+  const a = await access(kind).catch(() => "unavailable" as const);
   if (a === "granted") return { state: "ready" };
   if (a === "consent") return { state: "consent", consent, note: `${consentNote(channel)} ${ADMIN_NOTE}` };
   return { state: "unavailable", reason: "Sign in to Microsoft to send from FocusTime" };

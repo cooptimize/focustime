@@ -941,6 +941,16 @@ async function devopsWriteContext(ctx: ActionContext): Promise<DevOpsWriteContex
  * with its cached members, the directory for a Cooptimizer's address, the item's live state, GD-1's boundary, the AI
  * (a person waits: standard tier, my cap), the Graph sends as me, the consent probes and the DevOps write framework.
  */
+/** LP-1's consent probe for sending as me (a token check; nothing is sent). IN-2's invites use the same one. */
+function sendProbe(ctx: ActionContext): LoopContext["access"] {
+  return async (kind) => {
+    const a = await accountOf(ctx);
+    if (!a?.probe) return "unavailable" as const;
+    const r = await a.probe(kind).catch(() => null);
+    return r?.state === "granted" ? ("granted" as const) : r?.state === "consent" ? ("consent" as const) : ("unavailable" as const);
+  };
+}
+
 export async function loopContext(ctx: ActionContext): Promise<LoopContext> {
   const cc = await conversationContext(ctx);
   const plan = ctx.plan;
@@ -958,12 +968,7 @@ export async function loopContext(ctx: ActionContext): Promise<LoopContext> {
     const id = ref?.kind === "cooptimizer" ? ref.id : ref?.kind === "external" ? ref.memberId : null;
     return (id ? ms.find((m) => (m.userId ?? "").toLowerCase() === id.toLowerCase()) : undefined) ?? ms.find((m) => (m.displayName ?? "").trim().toLowerCase() === name.trim().toLowerCase());
   };
-  const probe = async (kind: "send" | "mail" | "mail_send") => {
-    const a = await accountOf(ctx);
-    if (!a?.probe) return "unavailable" as const;
-    const r = await a.probe(kind).catch(() => null);
-    return r?.state === "granted" ? ("granted" as const) : r?.state === "consent" ? ("consent" as const) : ("unavailable" as const);
-  };
+  const probe = sendProbe(ctx);
   return {
     plan,
     me: async () => {
@@ -1888,6 +1893,10 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "admin.status_action":
     case "admin.identity":
     case "admin.invited":
+    case "admin.invite_access":
+    case "admin.invite_preview":
+    case "admin.invite_send":
+    case "admin.invite_retry":
       return adminAction(
         {
           ops: ctx.adminOps ?? null,
@@ -1908,6 +1917,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
             const cfg = await configured(ctx);
             return cfg ? userZone(cfg) : "UTC";
           },
+          // IN-2: the same sends and consent probes as Close the loop (LP-1), as this admin.
+          send: { sender: async () => (await accountOf(ctx))?.sender ?? null, access: sendProbe(ctx), canAsk: !ctx.demo?.on },
         },
         action as AdminAction,
         req.input,

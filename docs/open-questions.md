@@ -336,6 +336,12 @@ What DS-1 learned, and what is still open:
 - Q-IN1-4: the brief's tests list was cut off after "Non-admins get 403 from the People and". IN-1 checks 403 on the People section, Who's set up and recording an invite. Anything else meant?
 
 
+## Send invites from FocusTime (IN-2, Nov 7)
+
+- Q-IN2-1: a Teams post that gets no answer at all (a timeout after Graph may have taken it) counts as not sent, so Retry posts again and could post twice. LP-1 has the same edge. Reading the chat's last few messages before a retry would need `Chat.Read` on a chat FocusTime didn't register; worth it?
+- Q-IN2-2: a held send (for Retry) lives in the server's memory for 30 minutes, so Retry is gone after a restart or a scale-out to another instance. Persist it (an app table), or is "invite again" enough?
+- Q-IN2-3: a draft counts as invited ("via Email (Outlook draft)") though the admin may never send it. Should a draft row read "Draft for <name>" until the admin says they sent it, as LP-1's "I sent it"?
+
 ## DOC-1
 
 - Q-DOC1-1: the scheduler's comment says a run claims a lease, but `server/scheduler.ts` has no lease: one replica in prod makes this safe today, and `job_claims` stops double runs per job and day. Either add the lease or change the comment before running more than one replica. Noted in docs/technical/operations.md. Answered in HK-7 (D1195): the comment now says there is no lease and one replica is required until one is added.

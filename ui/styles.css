@@ -4053,6 +4053,21 @@ button.ask-label { cursor: pointer; }
 .invite-note { margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--raised); font-size: var(--fs-3); }
 .invite-message { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; width: 100%; box-sizing: border-box; }
 .invite-sheet .set-field input { width: 100%; box-sizing: border-box; }
+/* IN-2: sending from FocusTime in the invite sheet (Close the loop's preview and result styles, sl-*). */
+.invite-send { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); min-width: 0; }
+.invite-send-way { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; min-width: 0; }
+.invite-send-way > button { min-width: 11em; }
+.invite-send .invite-acts, .invite-preview .invite-acts, .invite-result .invite-acts { margin: 0; }
+.invite-sheet button.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.invite-preview, .invite-result { display: grid; gap: 10px; min-width: 0; }
+.invite-messages { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 50vh; overflow-y: auto; min-width: 0; }
+.invite-messages li { display: grid; gap: 4px; min-width: 0; }
+.invite-messages .sl-text { overflow-wrap: anywhere; }
+.invite-result .sl-parts li { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .invite-sheet .invite-acts button { min-height: 44px; }
+  .invite-sheet .sl-facts { grid-template-columns: minmax(0, 1fr); }
+}
 .set-pre { white-space: pre-wrap; }
 .set-team-color { flex-basis: 100%; }
 

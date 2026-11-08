@@ -27,9 +27,10 @@ import { scopeWords, type ClientScopeFacts } from "../plan/devops-scope.ts";
 import { INVITE_SUBJECT, inviteTemplate, setupCounts, validEmail, type SetupRow } from "../plan/invite.ts";
 export type { SetupRow };
 import { INVITE_VIA, type InviteVia } from "../store/admin-store.ts";
+import { INVITE_SEND_ACTIONS, inviteSendAction, type InviteSendAction, type InviteSendPort } from "./invite-send.ts";
 export type { ClientScopeFacts };
 
-export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit", "admin.status_action", "admin.identity", "admin.invited"] as const;
+export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit", "admin.status_action", "admin.identity", "admin.invited", ...INVITE_SEND_ACTIONS] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 export const ADMIN_SECTIONS = ["clients", "ai", "conversations", "people", "setup", "organization", "status", "audit"] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
@@ -134,6 +135,8 @@ export type AdminContext = {
   today?: () => Promise<string>;
   /** IN-1: the admin's time zone, for Who's set up's days. */
   zone?: () => Promise<string>;
+  /** IN-2: the admin's own Graph sends and consent probes (Close the loop's, LP-1); absent: no Microsoft sign-in here. */
+  send?: InviteSendPort;
 };
 
 
@@ -385,7 +388,7 @@ export async function setupRows(ops: AdminOps, meId: string, zone: string): Prom
         devops: !!u && u.sources.devopsWrites > 0,
         calendar: !!u && u.sources.microsoft,
         teams: teamsKnown ? !!u && u.teamsApp === true : null,
-        invited: inv ? { day: dayIn(inv.at, zone) ?? inv.at.slice(0, 10), byName: inv.byName } : null,
+        invited: inv ? { day: dayIn(inv.at, zone) ?? inv.at.slice(0, 10), byName: inv.byName, via: inv.via } : null,
       };
     })
     .sort((a, b) => Number(a.signedIn) - Number(b.signedIn) || a.name.localeCompare(b.name));
@@ -608,6 +611,19 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
       if ((i.via === "teams" || i.via === "outlook" || i.via === "email") && found.some((p) => !validEmail(p.email))) return bad("FocusTime has no email address for them. Copy the message instead.", 422, "no_email");
       await ops.org.store.recordInvites(found, i.via as InviteVia, actor);
       return { ok: true, data: { invited: found.length } };
+    }
+    case "admin.invite_access":
+    case "admin.invite_preview":
+    case "admin.invite_send":
+    case "admin.invite_retry": {
+      // IN-2: sending the invite from FocusTime as this admin, through Close the loop's send path.
+      const port: InviteSendPort = ctx.send ?? { sender: async () => null, access: async () => "unavailable" };
+      const zone = ctx.zone ? await ctx.zone().catch(() => "UTC") : "UTC";
+      return inviteSendAction(
+        { port, store: ops.org.store, actor, rows: () => setupRows(ops, me.id, zone), domains: async () => (await ops.org.rules()).organization.inviteDomains },
+        action as InviteSendAction,
+        i,
+      );
     }
     case "admin.refresh_people": {
       if (Object.keys(i).length) return bad("admin.refresh_people takes {}");
