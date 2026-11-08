@@ -12,7 +12,7 @@ import type { AiService } from "../ai/service.ts";
 import { AI_MESSAGES } from "../ai/types.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { withoutEmails } from "../plan/stories.ts";
-import { countLine, countedAt, hintLines, KAT_ZONE, nextKatRun, reportCounts, reportWindow, selectFeatures, sortComments, type FeatureWhy, type ReportComment, type ReportItem, type ReportWindow, type StoryFact } from "../plan/status-report.ts";
+import { clientReportWindow, countLine, countedAt, hintLines, KAT_ZONE, nextKatRun, noUpdateYet, ptoRuns, ptoWhen, reportBody, reportCandidates, reportCounts, reportHeader, reportWindow, selectFeatures, sortComments, type FeatureWhy, type ReportComment, type ReportItem, type ReportWindow, type StoryFact } from "../plan/status-report.ts";
 import type { AheadItem } from "./types.ts";
 import type { Activity, ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import { htmlToText } from "../sources/devops/normalize.ts";
@@ -21,8 +21,9 @@ import { mondayOf } from "../week/dates.ts";
 import type { IsoDate } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
 import type { ActionResponse } from "./types.ts";
+import type { ReportTeam } from "./team-actions.ts";
 
-export const STATUS_ACTIONS = ["status.load", "status.draft"] as const;
+export const STATUS_ACTIONS = ["status.load", "status.draft", "status.report"] as const;
 export type StatusAction = (typeof STATUS_ACTIONS)[number];
 
 export type StatusContext = {
@@ -39,10 +40,16 @@ export type StatusContext = {
   canWrite: (clientKey: string) => Promise<boolean>;
   ai: () => Promise<AiService | null>;
   now: () => string;
+  /** SR-2: the client teams I'm on, by Week › Team's roster (absent: no client report here). */
+  team?: () => Promise<ReportTeam>;
+  /** SR-2: everyone's PTO days in a range (Dataverse Time Off Tracker, who and which date only). */
+  teamPto?: (cfg: AppConfig, from: IsoDate, to: IsoDate) => Promise<{ ok: true; away: { userId: string; date: string }[] } | { ok: false; message: string }>;
+  /** SR-2: the DevOps display name my write access for a client writes as (the author on Monday's report). */
+  writeName?: (clientKey: string) => Promise<string | null>;
 };
 
 export type { StatusClient, StatusComment, StatusFeature, StatusLoad } from "../plan/status-types.ts";
-import type { StatusClient, StatusComment, StatusFeature, StatusLoad } from "../plan/status-types.ts";
+import type { NoUpdateFeature, PtoSection, ReportClientRef, ReportFeature, StatusClient, StatusComment, StatusFeature, StatusLoad, StatusReport, StatusReportAnswer } from "../plan/status-types.ts";
 
 class Invalid extends Error {}
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
@@ -50,6 +57,7 @@ const bad = (error: string, status = 400): ActionResponse => ({ ok: false, statu
 export async function statusAction(ctx: StatusContext, action: StatusAction, input: unknown): Promise<ActionResponse> {
   try {
     if (action === "status.load") return { ok: true, data: await load(ctx, input) };
+    if (action === "status.report") return await clientReport(ctx, input);
     return await draft(ctx, input);
   } catch (e) {
     if (e instanceof Invalid) return bad(e.message);
@@ -186,6 +194,105 @@ async function load(ctx: StatusContext, input: unknown): Promise<StatusLoad> {
   const cfg = await ctx.config();
   if (!cfg) throw new Invalid("Fix the config first");
   return (await readAll(ctx, cfg)).load;
+}
+
+// ---- SR-2: the client's report, visible to the whole team ----
+
+/** How far "Upcoming PTO and Holidays" looks: from the report's Monday, four weeks. */
+export const PTO_WEEKS = 4;
+/** Where the PTO section comes from, said under it (Kat's own source isn't known to FocusTime). */
+export const PTO_SOURCE = "From FocusTime's PTO source, Dataverse's Time Off Tracker (days away only). Kat's email may list it differently, and FocusTime doesn't read holidays";
+export const NOT_ON_TEAM = "Only people on this client's team see its report";
+
+const isoAtOrAfter = (s: string | null | undefined, since: Temporal.Instant) => {
+  if (!s) return false;
+  const t = instantOf(s);
+  return !!t && Temporal.Instant.compare(t, since) >= 0;
+};
+
+/**
+ * status.report: with no client, the clients whose report I may open (the teams I'm on). With one, that client's
+ * Monday report as Kat will send it, "No update yet" and the PTO section. Checked here on the server for every call:
+ * only someone on the client's team (an Account Worker or a lead, and a Cooptimizer); a guest, an automation account
+ * or an admin who isn't on the team gets 403. Comments are read when asked and never stored; no email leaves here.
+ */
+async function clientReport(ctx: StatusContext, input: unknown): Promise<ActionResponse> {
+  const o = obj(input, ["clientKey", "refresh"]);
+  if (!ctx.plan) throw new Invalid("The plan store isn't available");
+  const cfg = await ctx.config();
+  if (!cfg) return bad("Fix the config first", 409);
+  const team = ctx.team ? await ctx.team().catch(() => null) : null;
+  const now = Temporal.Instant.from(ctx.now());
+  const tz = userZone(cfg);
+  const today = now.toZonedDateTimeISO(tz).toPlainDate().toString();
+  const weekStart = mondayOf(today);
+  const followed = await ctx.clients(cfg, weekStart).catch(() => [] as ClientRef[]);
+  const nameOf = (k: string) => followed.find((r) => r.clientKey === k)?.clientName ?? cfg.clientSettings[k]?.name ?? k;
+  const clients: ReportClientRef[] = (team?.myClients ?? []).map((k) => ({ clientKey: k, clientName: nameOf(k) })).sort((a, b) => a.clientName.localeCompare(b.clientName));
+  if (o.clientKey === undefined) return { ok: true, data: { clients, report: null } satisfies StatusReportAnswer };
+  if (typeof o.clientKey !== "string" || !o.clientKey.trim() || o.clientKey.length > 100) throw new Invalid("clientKey must be text");
+  const k = o.clientKey;
+  if (!team || !team.onClient(k)) return bad(NOT_ON_TEAM, 403);
+  return { ok: true, data: { clients, report: await readReport(ctx, cfg, team, { clientKey: k, clientName: nameOf(k) }, now, weekStart, !!o.refresh) } satisfies StatusReportAnswer };
+}
+
+async function readReport(ctx: StatusContext, cfg: AppConfig, team: ReportTeam, ref: ClientRef, now: Temporal.Instant, weekStart: IsoDate, refresh: boolean): Promise<StatusReport> {
+  const plan = ctx.plan!;
+  const tz = userZone(cfg);
+  const k = ref.clientKey;
+  const kat = await ctx.katSent(cfg, [k]).catch(() => ({ ok: false as const, message: "Dataverse read failed" }));
+  const w = clientReportWindow(kat.ok ? { ok: true, sentAt: kat.sent[k] ?? null } : { ok: false }, now);
+  const note = w.source === "kat" ? null : w.source === "never" ? "Kat hasn't sent this client's report yet, so every comment counts" : `${kat.ok ? "Kat's last send isn't a date in Dataverse" : kat.message}, so this counts from Monday 7:00 AM ET`;
+  const next = nextKatRun(now).toZonedDateTimeISO(KAT_ZONE).toPlainDate();
+  const pto = await ptoSection(ctx, cfg, team, k, next);
+  const base: StatusReport = {
+    clientKey: k, clientName: ref.clientName, reportDate: next.toString(), header: reportHeader(next.toString(), w, tz),
+    window: { ...w, note }, status: "ok", canWrite: false, authorAs: null, features: [], noUpdate: [], pto, refreshedAt: now.toString(),
+  };
+  const src = ctx.devops(cfg);
+  const [ahead] = src.aheadItems ? await src.aheadItems([ref], { whole: true, refresh, closedSince: w.since }).catch(() => [null]) : [null];
+  if (!ahead || ahead.status !== "ok") return { ...base, status: "error", message: ahead?.message ?? `${ref.clientName}'s DevOps can't be read now` };
+  const [emails, canWrite, authorAs] = await Promise.all([ctx.myEmails(k).catch(() => []), ctx.canWrite(k).catch(() => false), ctx.writeName ? ctx.writeName(k).catch(() => null) : Promise.resolve(null)]);
+  const mine = new Set([...emails, ...(ahead.me ? [ahead.me] : [])].map((e) => e.trim().toLowerCase()).filter(Boolean));
+  const isMine = (u: string | null) => !!u && mine.has(u.trim().toLowerCase());
+  const items = ahead.items.map((i) => ({ ...toReportItem(i), changedAt: i.changedAt }));
+  const owner = new Map(ahead.items.map((i) => [i.id, i.assignee?.name ?? null] as const));
+
+  // Active this week: on anyone's committed week (Week › Team's snapshot), on my own plan, or with story activity.
+  const weekFrom = Temporal.PlainDate.from(weekStart).toZonedDateTime({ timeZone: tz }).toInstant();
+  const [committed, myPlan, act] = await Promise.all([
+    team.committed(k, weekStart).catch(() => [] as number[]),
+    plan.weekPlan(weekStart).catch(() => null),
+    src.activity ? src.activity(k, weekFrom.toString(), [...mine]).catch(() => ({ known: false, rows: [] as Activity[] })) : Promise.resolve({ known: false, rows: [] as Activity[] }),
+  ]);
+  const planned = [...committed, ...(myPlan?.features.filter((f) => f.clientKey === k).flatMap((f) => [f.itemId, ...(f.parentId !== null ? [f.parentId] : [])]) ?? [])];
+  const activity = act.rows.map((r) => r.itemId);
+  const active = noUpdateYet({ items, inReport: new Set(), planned, activity, ownerName: () => null });
+  const ids = reportCandidates(items, w.since, new Set(active.map((a) => a.item.id)));
+  const read = src.featureComments && ids.length ? await src.featureComments(k, ids).catch(() => null) : null;
+  const comments = read?.ok ? read.comments : {};
+  const body = reportBody(items, comments, w.since, isMine, canWrite);
+  // Edit (SR-1's comment_edit) is refused outside SR-1's window; offer it only where it will go through.
+  const editSince = Temporal.Instant.from(reportWindow(kat.ok ? (kat.sent[k] ?? null) : null, now).since);
+  const shown = (c: ReportComment): StatusComment => ({ ...view(c), editable: c.editable && isoAtOrAfter(countedAt(c), editSince) });
+  const asFeature = (it: ReportItem, cs: StatusComment[] | null): ReportFeature => ({ id: it.id, title: it.title, type: it.type, state: it.state, url: it.url, why: "report", thisWeek: cs, lastWeek: [], hints: [], owner: owner.get(it.id) ?? null });
+  const features = body.map((b) => asFeature(b.item, b.comments.map(shown)));
+  const inReport = new Set(body.map((b) => b.item.id));
+  const noUpdate: NoUpdateFeature[] = noUpdateYet({ items, inReport, planned, activity, ownerName: (id) => owner.get(id) ?? null }).map((n) => ({ ...asFeature(n.item, read?.ok && comments[n.item.id] ? [] : null), owner: n.owner, active: n.why }));
+  const unread = read && !read.ok ? `Comments couldn't be read from ${ref.clientName}'s DevOps (${read.message})` : read?.ok && read.failed.length ? `${read.failed.length === 1 ? "One feature's comments" : `${read.failed.length} features' comments`} couldn't be read. Try again in a minute` : null;
+  return { ...base, ...(unread ? { message: unread } : {}), canWrite, authorAs, features, noUpdate };
+}
+
+async function ptoSection(ctx: StatusContext, cfg: AppConfig, team: ReportTeam, k: string, monday: Temporal.PlainDate): Promise<PtoSection> {
+  if (!ctx.teamPto) return { status: "error", message: "PTO can't be read here", source: PTO_SOURCE };
+  const from = monday.toString();
+  const to = monday.add({ days: 7 * PTO_WEEKS - 1 }).toString();
+  const r = await ctx.teamPto(cfg, from, to).catch(() => ({ ok: false as const, message: "Dataverse read failed" }));
+  if (!r.ok) return { status: "error", message: `PTO couldn't be read (${r.message})`, source: PTO_SOURCE };
+  const who = new Map(team.members(k).filter((m) => m.systemUserId).map((m) => [m.systemUserId!.toLowerCase(), m.name] as const));
+  const away = r.away.filter((a) => who.has(a.userId.toLowerCase()) && a.date >= from && a.date <= to).map((a) => ({ name: who.get(a.userId.toLowerCase())!, date: a.date }));
+  const range = `${ptoWhen({ from, to: from })} to ${ptoWhen({ from: to, to })}`;
+  return { status: "ok", rows: ptoRuns(away).map((x) => ({ name: x.name, when: ptoWhen(x), days: x.days })), source: PTO_SOURCE, range };
 }
 
 // ---- The AI draft ----

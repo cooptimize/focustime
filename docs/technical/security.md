@@ -1,6 +1,6 @@
 # Security
 
-For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `da0eb07` on Nov 7, 2026.
+For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `d25c148` on Nov 7, 2026 (SR-2 parts against its own branch).
 
 ## In short
 
@@ -93,6 +93,13 @@ flowchart LR
 - **Admins never see** anyone's plan, to-dos, promises, captures, focus sessions, PATs, AI request text, assistant history, or chats they aren't in.
 - **Guests** are refused at sign-in, from the token itself and the domains Rule (`server/people.ts`); a session of someone later found to be a guest is ended, with an audit line. Pickers never list them.
 - **Automation accounts** are flagged by an admin. They never show as Cooptimizers in pickers, the Teams bot refuses them, and FocusTime refuses their DevOps writes (`canEdit`, `actions/ahead-actions.ts`).
+
+## Who sees a client's draft status report (SR-2)
+
+- **Everyone on the client's team, nobody else.** Week › Status's <Client> report shows the whole of that client's Monday report to every Cooptimizer on its team: an Account Worker on the client or one of its leads (Dataverse, read by the directory job), by the same roster as Week › Team (`reportTeam` in `actions/team-actions.ts`). Not guests, not automation accounts, and not admins who aren't on the team: being an admin adds nothing here.
+- **Checked on the server, every call.** `status.report` answers 403 for anyone not on the client's team before anything is read, and lists only the clients the person is on, so the switch doesn't show for anyone else. A person on several clients picks one; one client per report.
+- **What it shows.** DevOps comments on the client's features (text, the author's DevOps display name, the time; never an email address), the features' titles and owners, and the team's days away as dates only (never a PTO title or message). Comments are read when asked and never stored. Who committed which feature comes from Week › Team's published snapshot, never from anyone's plan.
+- **Writing.** Only SR-1's existing writes (a new comment on any feature in the report, an edit of my own comment in the report window) with my own write PAT, through the write framework (preview, Push all, read back, audit log, undo) and GD-2's exit check. Others' comments are read only, as in DevOps. No delete is added.
 
 ## AI: the guard and redaction
 

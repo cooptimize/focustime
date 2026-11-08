@@ -274,9 +274,9 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
     /** SR-1: its comments as Status reads them (author, created and modified), newest first. */
     reportComments: (id: number) => (comments.get(id) ?? []).filter((c) => !c.isDeleted).map((c) => ({ id: c.id, text: c.text, authorName: c.createdByName ?? (c.createdBy.toLowerCase() === ME_EMAIL ? ME_NAME : nameOf(c.createdBy) ?? "Someone"), authorUnique: c.createdBy, createdAt: c.createdDate, modifiedAt: c.modifiedDate ?? c.createdDate })).reverse(),
     /** SR-1 (seeds/status.ts): a comment someone wrote earlier, as DevOps would hold it. */
-    seedComment: (id: number, c: { text: string; by: string; byName: string; at: string }) => {
+    seedComment: (id: number, c: { text: string; by: string; byName: string; at: string; /** SR-2: edited later (Kat counts it by this). */ modifiedAt?: string }) => {
       const list = comments.get(id) ?? comments.set(id, []).get(id)!;
-      list.push({ id: nextComment++, text: c.text, isDeleted: false, createdBy: c.by, createdByName: c.byName, createdDate: c.at, modifiedDate: c.at });
+      list.push({ id: nextComment++, text: c.text, isDeleted: false, createdBy: c.by, createdByName: c.byName, createdDate: c.at, modifiedDate: c.modifiedAt ?? c.at });
     },
     activity: (k: DemoClientKey) => activityRows.filter((r) => r.clientKey === k).map(({ clientKey: _k, ...r }) => r),
     seedActivity: (r: (typeof activityRows)[number]) => void activityRows.push(r),

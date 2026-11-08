@@ -556,6 +556,29 @@ A preview of Monday's status report and an easy way to edit the comments that fe
 - **Tests.** `plan/status-report.test.ts`, `server/demo-status.test.ts`, the SR-1 parts of
   `server/teams/rhythm.test.ts`, `assistant/service.test.ts` and `ui/nav.test.ts`; e2e `e2e/status.test.ts`.
 
+## SR-2: the client's draft status report, for the whole team (Nov 7)
+
+Week › Status's switch, My features · <Client> report: the client's whole Monday report as Kat will send it, for
+everyone on the client's team. Decisions under "SR-2" in `docs/decisions.md`.
+
+- **Rules.** `plan/status-report.ts` (pure): `clientReportWindow` (Kat's watermark as it is, empty as 1900-01-01),
+  `reportHeader`, `reportCandidates` (which features' comments to read, 60 at most), `reportBody` (features with a
+  comment in the window, backlog order, comments oldest first), `noUpdateYet`, `ptoRuns` and `ptoWhen`. Types in
+  `plan/status-types.ts` (`StatusReport`, `StatusReportAnswer`).
+- **Action.** `status.report` in `actions/status-actions.ts` (`clientReport`, `readReport`, `ptoSection`): with no
+  client, the clients I'm on; with one, 403 unless I'm on its team, else the report. The team is `reportTeam` in
+  `actions/team-actions.ts` (Week › Team's roster, members' Dataverse ids, committed features); wired in
+  `actions/dispatch.ts` `statusCtx` (`team`, `teamPto`, `writeName`). Registry entry `status.report`.
+- **Sources.** `aheadItems`' `closedSince` option in `sources/devops/source.ts` (closed features changed since the
+  watermark); Dataverse `teamPto` (dates only).
+- **UI.** `ui/Status.tsx`: `ScopeSwitch`, `ReportSection`, `PtoBlock`, `NoUpdateList`; Push all and Undo shared with
+  My features (only the view's lines are pushed); line boxes say who they show as. Styles in `ui/styles.css` (SR-2
+  block). Guide: "See the whole report before it goes out".
+- **Demo.** `sources/demo/seeds/status.ts` (Priya's update on Appointment reminders, Sam's edited comment, Sam's
+  story activity), the demo's `teamPto` in `sources/demo/sources.ts`, `seedComment`'s `modifiedAt`.
+- **Tests.** `plan/status-report-client.test.ts`, `actions/status-report.test.ts` (who sees it),
+  `server/demo-status-report.test.ts`; e2e `e2e/status-report.test.ts` (screenshots in `docs/ux/sr2/`).
+
 ## DX-1: Diagnostics, counts only (Nov 6)
 
 - **Pure.** `plan/diagnostics.ts`: the promise reasons (`promiseReason`: shown, someone else, no open commitment, no

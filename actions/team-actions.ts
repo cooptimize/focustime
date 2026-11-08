@@ -557,3 +557,28 @@ export async function sendFacts(ctx: TeamContext): Promise<import("../plan/inbox
   }
   return out;
 }
+
+/**
+ * SR-2: who is on a client's team, for Status's client report (Week › Team's own roster, so the rule is one rule):
+ * an Account Worker on the client or one of its leads, and a Cooptimizer (no guests, no automation accounts, nobody
+ * outside the Cooptimize domains). Being an admin adds nothing. With each member's Dataverse user id (for the PTO
+ * section) and the features the team committed for a week (week_commitments, never anyone's picks or hours).
+ */
+export type ReportTeam = {
+  myClients: string[];
+  onClient: (clientKey: string) => boolean;
+  members: (clientKey: string) => { id: string; name: string; systemUserId: string | null }[];
+  committed: (clientKey: string, weekStart: IsoDate) => Promise<number[]>;
+};
+export async function reportTeam(ctx: Pick<TeamContext, "me" | "org" | "team" | "onFocusTime">): Promise<ReportTeam> {
+  const r = await rosterOf(ctx as TeamContext);
+  const dir = ctx.org ? await ctx.org.store.directory().catch(() => []) : [];
+  const sys = new Map(dir.map((d) => [r.canonical(d.personId), d.systemUserId] as const));
+  const me = r.me;
+  return {
+    myClients: r.myClients(),
+    onClient: (k) => !!me && r.onClient(me, k),
+    members: (k) => r.members(k).map((id) => ({ id, name: r.name(id), systemUserId: sys.get(id) ?? null })),
+    committed: async (k, weekStart) => (ctx.team ? (await ctx.team.commitments([k], weekStart).catch(() => [])).filter((c) => !c.watching && r.members(k).includes(r.canonical(c.personId))).map((c) => c.itemId) : []),
+  };
+}

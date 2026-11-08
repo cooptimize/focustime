@@ -1134,7 +1134,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
    * AH-1 (D653): every item of each client the store has that isn't closed, at any level, with its revision, assignee
    * and the fields its type has (start, target, size), plus the parents of those items. For Ahead's grid and Gantt.
    */
-  async function aheadItems(clients: ClientRef[], o: { refresh?: boolean; /** AH-2: "Show the whole project": items outside the scope too (marked). */ whole?: boolean } = {}): Promise<import("../../actions/types.ts").AheadClient[]> {
+  async function aheadItems(clients: ClientRef[], o: { refresh?: boolean; /** AH-2: "Show the whole project": items outside the scope too (marked). */ whole?: boolean; /** SR-2: closed items the store has that changed at or after this instant, too (a feature closed with a comment this week). */ closedSince?: string } = {}): Promise<import("../../actions/types.ts").AheadClient[]> {
     const fail = (ref: ClientRef, status: ClientWorkStatus, message: string): import("../../actions/types.ts").AheadClient => ({ clientKey: ref.clientKey, clientName: ref.clientName, status, message, fetchedAt: null, project: null, me: null, startFields: {}, targetFields: {}, sizeFields: {}, fieldNames: {}, types: [], items: [] });
     if (!d.central) return clients.map((c) => fail(c, "error", "Ahead reads the shared DevOps store, which isn't running here"));
     const targets = await viewerTargets(clients.map((c) => c.clientKey), !!o.refresh);
@@ -1181,6 +1181,10 @@ export function createDevOpsSource(d: DevOpsDeps) {
         const inScope = (id: number) => !sc || sc.all || sc.ids.has(id);
         const open = known.filter((i) => !isClosed(i.stateCategory));
         const keep = new Set(open.filter((i) => o.whole || inScope(i.id)).map((i) => i.id));
+        if (o.closedSince) {
+          const cut = Date.parse(o.closedSince);
+          for (const i of known) if (isClosed(i.stateCategory) && (o.whole || inScope(i.id)) && Number.isFinite(cut) && Date.parse(i.changedAt) >= cut) keep.add(i.id);
+        }
         const byId = new Map(known.map((i) => [i.id, i]));
         for (const id of [...keep]) for (let p = byId.get(id)?.parentId ?? null, n = 0; p !== null && n < 10; p = byId.get(p)?.parentId ?? null, n++) if (byId.has(p)) keep.add(p);
         const items = known.filter((i) => keep.has(i.id)).map((i) => ({ ...i, inScope: inScope(i.id) }));

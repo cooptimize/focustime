@@ -5185,6 +5185,22 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .st-push-client h4 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
 .st-preview-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-3); }
 .st-refused { border-left: 3px solid var(--risk); }
+/* SR-2: My features · <Client> report, and the client report's PTO and No update yet. */
+.st-scope { display: inline-flex; flex-wrap: wrap; justify-self: start; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 9px; background: var(--sunken); max-width: 100%; }
+.st-scope .ms-btn { display: inline-flex; align-items: center; padding: 4px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-3); font-weight: 500; cursor: pointer; }
+.st-scope .ms-btn[aria-pressed="true"] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 0 0 1px var(--border-strong); }
+.st-scope-pick { min-width: 0; max-width: 100%; padding: 4px 8px; border: 0; border-radius: 7px; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-3); font-weight: 500; cursor: pointer; }
+.st-scope-pick.on { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 0 0 1px var(--border-strong); }
+.st-fresh { white-space: nowrap; }
+/* The report's bar holds Refresh beside Push all: it wraps, and Status's one column never grows past the screen. */
+.status-view:has(.st-report) { grid-template-columns: minmax(0, 1fr); }
+.st-report-bar .st-push { flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
+.st-pto { display: grid; gap: 2px; padding: 6px 2px 0; border-top: 1px solid var(--border); }
+.st-pto h4 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.st-nu-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
+.st-nu { display: grid; gap: 4px; padding: 4px 8px; border-left: 2px solid color-mix(in oklab, var(--watch) 55%, transparent); }
+.st-nu-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; font-size: var(--fs-3); }
+.st-nu-head .st-title { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
 @media (max-width: 700px) {
   .status-view { padding: 8px 16px 24px; }
   .app.phone .status-view .page-head { grid-template-columns: minmax(0, 1fr); padding: 4px 0; }
