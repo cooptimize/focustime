@@ -9,7 +9,7 @@ import { createAi } from "../ai/service.ts";
 import { stubProvider } from "../ai/stub.ts";
 import type { ProviderCall } from "../ai/types.ts";
 import type { MyPromisesData } from "../plan/conversation-views.ts";
-import { anAiApp, anAiRules, aWorkItem } from "../test/builders/index.ts";
+import { aClientEntry, anAiApp, anAiRules, aWorkItem } from "../test/builders/index.ts";
 import { allianceAnswer, BLAKE, CHAT, EVAN, SAM, world } from "../test/conversations.ts";
 import { people, type W } from "../test/conversation-people.ts";
 import type { WorkItem } from "../week/types.ts";
@@ -177,5 +177,21 @@ describe("a promise with an item stays actionable", () => {
     await sam.run("my_promises.list");
     expect((await w.convs.commitment(k.id))!.state).toBe("linked");
     expect(await sam.ctx.plan!.accountState("cv5_kept_reopened")).toBeNull();
+  });
+});
+
+// GD-2 point 5: the conversation's draft for a client's DevOps never names another client: the prompt says so and the
+// answer's names are replaced, with the notice on the draft. My edits are mine (the preview's flag covers them).
+describe("GD-2: the AI draft names no other client", () => {
+  it("the answer's other-client name becomes \"another client\" and the draft says so", async () => {
+    const w = world({ respond: allianceAnswer });
+    const c = await discussion(w);
+    const calls: ProviderCall[] = [];
+    const answer = { title: "Fix the gap like Fabrikam's", asked: "Same as Fabrikam", check_first: [], likely_change: "x", open_questions: [], level: "story", parent_feature: null, likely_item: null, acceptance_criteria: ["Matches Fabrikam"] };
+    const ai = createAi({ provider: async () => stubProvider({ respond: (x) => (calls.push(x), JSON.stringify(answer)) }), app: anAiApp({ provider: "openai", appCapUsd: 100 }), rules: async () => anAiRules({ on: true, allowedClients: ["contoso"] }), guard: async () => ({ directory: [aClientEntry({ key: "fabrikam", names: ["Fabrikam"], projects: [], itemIds: [] })], homeDomains: ["contoso.example"], forbidden: [] }), log: w.convs.appAiLog, appSpend: { get: async () => 0, add: async () => {} }, now: w.now });
+    const d = await (await people(w, { ai })).as(EVAN).run<{ draft: { title: string; asked: string; acceptance: string[]; byAi: boolean; namesRemoved?: string } }>("conversations.draft", { id: c.id });
+    expect(calls[0]!.instructions).toContain("Never name any other client");
+    expect(d.draft).toMatchObject({ title: "Fix the gap like another client's", asked: "Same as another client", acceptance: ["Matches another client"], byAi: true });
+    expect(d.draft.namesRemoved).toBeTruthy();
   });
 });

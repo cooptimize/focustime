@@ -107,6 +107,9 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   const ready = (async () => {
     await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients, dir.accounts, dir.identities);
     for (const c of DEMO_CLIENTS) await adminStore.setOrg({ scope: clientScope(c.key), key: "color", value: c.color, actor: FOCUSTIME, area: "clients", target: c.key, note: "demo" });
+    // GD-2: the demo's clients go by their keys, so an admin added each one's full name as an alias (Admin › Clients);
+    // "Harbor Health" in a line is then one mention, replaced whole.
+    for (const c of DEMO_CLIENTS) if (c.name !== c.key && c.key !== "Cooptimize") await adminStore.setOrg({ scope: clientScope(c.key), key: "aliases", value: [c.name], actor: FOCUSTIME, area: "clients", target: c.key, note: "demo" });
     // AH-1: an admin took Alex off Harbor's leads, so Ahead shows a teammate's feature there that only Harbor's leads
     // and its owner can change (the read-only note).
     await adminStore.setOverride({ personId: DEMO_PERSON.oid, personName: DEMO_PERSON.name, kind: "lead_remove", clientKey: "Harbor", actor: FOCUSTIME });

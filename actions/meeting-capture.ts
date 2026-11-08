@@ -8,6 +8,8 @@
 // and parents that are the client's, types the parent takes, a Cooptimizer only when the speaker is a Cooptimize
 // attendee. Nothing is written to DevOps here; proposals wait for a reviewer's Confirm.
 import { maskTranscript, type ClientEntry } from "../ai/guard.ts";
+import { scrubValue } from "../ai/service.ts";
+import { NO_OTHER_CLIENTS } from "../plan/boundary.ts";
 import type { AiService } from "../ai/service.ts";
 import type { AiErrorKind, JsonSchema } from "../ai/types.ts";
 import type { CommentProposal, CommitmentProposal, GapProposal, MeetingRole, ProposalBody, Quote } from "../plan/meetings.ts";
@@ -174,11 +176,17 @@ export async function capturePass(ai: AiService, x: CaptureInput): Promise<Captu
     const m = maskTranscript(`${contextOf(x, speakers)}Transcript:\n${numbered(w)}`, x.clientKey, x.directory, { internal: x.internal });
     masked.client += m.masked.client;
     masked.email += m.masked.email;
-    const r = await ai.run<Answer>({ name: MEETING_CAPTURE_TASK, client: x.clientKey, instructions: MEETING_CAPTURE_INSTRUCTIONS }, m.text, MEETING_CAPTURE_SCHEMA);
+    // GD-2 point 5: a proposal's text goes into the client's DevOps, so another client's name in it is replaced by
+    // "another client" and that proposal is marked, rather than the whole window refused (Internal keeps names).
+    const r = await ai.run<Answer>({ name: MEETING_CAPTURE_TASK, client: x.clientKey, instructions: x.internal ? MEETING_CAPTURE_INSTRUCTIONS : `${MEETING_CAPTURE_INSTRUCTIONS}\n${NO_OTHER_CLIENTS}`, mentions: { answer: "allow" } }, m.text, MEETING_CAPTURE_SCHEMA);
     if (!r.ok) return { ok: false, kind: r.error.kind, message: r.error.message };
     cost += r.costUsd;
     const c = checkAnswer(r.value, x, w, featureTypes);
-    all.push(...c.proposals);
+    all.push(...c.proposals.map((p) => {
+      if (x.internal) return p;
+      const sc = scrubValue(p.body, x.clientKey, x.directory);
+      return sc.count ? { ...p, body: { ...sc.value, namesRemoved: true } } : p;
+    }));
     dropped += c.dropped;
   }
   return { ok: true, proposals: dedupe(all), windows: windows.length, masked, dropped, costUsd: cost };

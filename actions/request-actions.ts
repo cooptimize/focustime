@@ -23,6 +23,8 @@ import { userZone } from "../week/zone.ts";
 import type { CycleResult } from "./request-poll.ts";
 import { mapSeq } from "./seq.ts";
 import type { ActionResponse } from "./types.ts";
+import type { ClientEntry } from "../ai/guard.ts";
+import type { AudienceRules } from "../plan/boundary.ts";
 
 export type { ContextMessage, PromisesData, PromiseView, RequestChatStatus, RequestsData, RequestView } from "../plan/asks.ts";
 export const REQUEST_ACTIONS = [
@@ -61,6 +63,10 @@ export type RequestContext = {
   itemDone?: (cfg: AppConfig, clientKey: string, itemId: number) => boolean | null;
   /** CV-2: my own Chat.Read reader, for an image the poll hasn't fetched yet; null when I'm not signed in with Microsoft. */
   chatMessages?: () => Promise<ChatMessagesClient | null>;
+  /** GD-2: the client boundary for a client: Internal, and the other clients (names, aliases, projects, item ids). */
+  boundary?: (clientKey: string) => Promise<{ internal: boolean; directory: ClientEntry[] }>;
+  /** GD-2: the Cooptimizer rule a chat's members are read against, for its audience. */
+  audienceRules?: () => Promise<AudienceRules>;
 };
 
 /** Resolved requests stay on the tab this long (with Undo), then only open ones show. */

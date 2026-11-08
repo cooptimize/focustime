@@ -102,14 +102,15 @@ export function SendLoop({ promiseKey, who, demo = false, compact = false, onClo
   const canDevops = !!draft.item?.canComment;
   const words = channel === "call" ? note : text;
 
-  const preview = async () => {
+  // GD-2: o is the flag's one click: the same preview with another client's names as "another client".
+  const preview = async (o: { text?: string; subject?: string } = {}) => {
     setBusy(true);
     setError(null);
     try {
       const p = await call<LoopPreviewView>("loop.preview", {
-        key: promiseKey, channel, text: words, kept,
+        key: promiseKey, channel, text: o.text ?? words, kept,
         ...(channel === "teams" && target ? { target } : {}),
-        ...(channel === "email" ? { emailMode, subject } : {}),
+        ...(channel === "email" ? { emailMode, subject: o.subject ?? subject } : {}),
         ...(canDevops && channel !== "devops" && comment ? { comment: true } : {}),
         ...(canDevops && state ? { state } : {}),
       });
@@ -123,7 +124,8 @@ export function SendLoop({ promiseKey, who, demo = false, compact = false, onClo
     setBusy(true);
     setError(null);
     try {
-      const r = await call<LoopResultView>("loop.send", { previewId: p.previewId });
+      // GD-2: my own words go as written once I've seen the flag (the button says so).
+      const r = await call<LoopResultView>("loop.send", { previewId: p.previewId, ...(p.mentions ? { mentionsOk: true } : {}) });
       setStep({ kind: "sent", r });
     } catch (e) {
       setError(errText(e));
@@ -214,6 +216,18 @@ export function SendLoop({ promiseKey, who, demo = false, compact = false, onClo
           )}
         </dl>
         <div className="sl-text" aria-label="The message">{p.text}</div>
+        {p.mentions && (
+          <div className="mention-flag" role="alert">
+            <p>{p.mentions.line}</p>
+            <button type="button" className="mini" disabled={busy} onClick={() => {
+              const m = p.mentions!;
+              if (channel === "call") setNote(m.text);
+              else setText(m.text);
+              if (m.subject !== undefined) setSubject(m.subject);
+              void preview({ text: m.text, ...(m.subject !== undefined ? { subject: m.subject } : {}) });
+            }}>Replace with “another client”</button>
+          </div>
+        )}
         {p.blocked && <p className="sl-blocked" role="alert">{p.blocked}</p>}
         {!p.blocked && (
           <ul className="sl-then">
@@ -245,7 +259,7 @@ export function SendLoop({ promiseKey, who, demo = false, compact = false, onClo
               <button type="button" className="mini" disabled={busy} onClick={() => void markSent({ channel: p.channel })}>Mark sent</button>
             </>
           ) : (
-            <button type="button" className="mini primary sl-send" disabled={busy || !!p.blocked} onClick={() => void send(p)}>{busy ? "Sending…" : SEND_LABEL[p.mode]}</button>
+            <button type="button" className="mini primary sl-send" disabled={busy || !!p.blocked} onClick={() => void send(p)}>{busy ? "Sending…" : p.mentions ? `${SEND_LABEL[p.mode]} as written` : SEND_LABEL[p.mode]}</button>
           )}
           {p.call && <a className="mini" href={p.call} target="_blank" rel="noreferrer">Call in Teams</a>}
           <button type="button" className="mini" onClick={() => setStep({ kind: "draft" })}>Back to the draft</button>
@@ -305,6 +319,7 @@ export function SendLoop({ promiseKey, who, demo = false, compact = false, onClo
           <span className="close-loop-label">Message</span>
           <TextBox id={`${id}-text`} value={text} maxLength={4000} minRows={compact ? 4 : 5} maxRows={12} onChange={(e) => setText(e.target.value)} />
           <span className="sl-from muted">{draft.draftedFrom}{draft.aiNote ? ` ${draft.aiNote}` : ""}</span>
+          {draft.namesRemoved && <span className="names-removed">{draft.namesRemoved}: the AI's draft had one, and "another client" is written instead.</span>}
         </label>
       )}
       <div className="sl-checks">

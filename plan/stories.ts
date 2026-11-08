@@ -371,6 +371,8 @@ export type StoryDraft = {
   proposals: Proposal[]; rationale: string; setAside: CoopProposals["set_aside"];
   /** What the requests for this draft cost so far (the set and any Regenerate one), in millionths of a dollar. */
   costMicros: number; createdAt: string; updatedAt: string;
+  /** GD-2: the AI's cards had another client's name replaced by "another client" (the draft shows it). */
+  namesRemoved?: boolean;
 };
 export type StoryDraftBody = Omit<StoryDraft, "id" | "clientKey" | "featureId" | "createdAt" | "updatedAt">;
 /** A client's house style: the computed one (cached a week) and the person's edit, which wins until reset. */

@@ -18,11 +18,12 @@
 // - loop.sends: one promise's sends, or all of them (the audit entries, Settings › Data).
 // - loop.find: my open promises that match a person or words (the assistant and the command menu open the draft).
 // Nothing here sends without the preview's Send; the assistant only opens the draft. Logs carry ops and counts only.
+import { exitCheck, nameList, NAME_REMOVED, NO_OTHER_CLIENTS } from "../plan/boundary.ts";
 import { isRemoved } from "../plan/process.ts";
 import { randomUUID } from "node:crypto";
 import type { Logger } from "../log/logger.ts";
 import type { AiService } from "../ai/service.ts";
-import { otherClientMatch, type ClientEntry } from "../ai/guard.ts";
+import type { ClientEntry } from "../ai/guard.ts";
 import type { ChatMember } from "../plan/chats.ts";
 import type { PersonRef } from "../plan/person-ref.ts";
 import type { CloseHow } from "../plan/types.ts";
@@ -95,7 +96,7 @@ import type { ChannelAccess, LoopChannelOption, LoopDraftView, LoopPreviewView, 
 export type { ChannelAccess, LoopChannelOption, LoopDraftView, LoopPreviewView, LoopResultView, TeamsTarget };
 
 class Invalid extends Error {}
-const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
+const bad = (error: string, status = 400, code?: string): ActionResponse => ({ ok: false, status, error, ...(code ? { code } : {}) });
 type Obj = Record<string, unknown>;
 function only(input: unknown, required: string[], optional: string[] = []): Obj {
   if (typeof input !== "object" || input === null || Array.isArray(input)) throw new Invalid("input must be an object");
@@ -142,6 +143,10 @@ type Held = {
   devops: { kind: "comment" | "state"; previewId: string }[];
   /** The comment channel's own DevOps preview. */
   commentPreview: string | null;
+  /** GD-2: the other clients the text names; Send needs mentionsOk while any are left. */
+  mentions: string[];
+  /** GD-2: set at Send when I confirmed the flagged text, so the DevOps parts carry it too. */
+  mentionsOk?: boolean;
 };
 const held = new Map<string, Held>();
 export const LOOP_PREVIEW_MS = 5 * 60_000;
@@ -217,7 +222,7 @@ const AI_INSTRUCTIONS = [
 ].join("\n");
 const AI_SCHEMA = { type: "object" as const, properties: { text: { type: "string" as const } }, required: ["text"], additionalProperties: false as const };
 
-async function drafted(ctx: LoopContext, r: Resolved, item: ItemFact | null, me: { name: string | null }): Promise<{ text: string; ai: LoopDraftView["ai"]; note: string | null }> {
+async function drafted(ctx: LoopContext, r: Resolved, item: ItemFact | null, me: { name: string | null }): Promise<{ text: string; ai: LoopDraftView["ai"]; note: string | null; namesRemoved?: boolean }> {
   const plain = templateText({ who: r.recipient?.name ?? r.p.who, what: r.p.what, item, myName: me.name });
   if (!r.p.clientKey) return { text: plain, ai: "off", note: null };
   const ai = await ctx.ai().catch(() => null);
@@ -230,10 +235,13 @@ async function drafted(ctx: LoopContext, r: Resolved, item: ItemFact | null, me:
     ...(r.p.conversation ? [`Conversation: ${r.p.conversation.title}`, `Summary: ${r.p.conversation.summary.slice(0, 1200)}`] : []),
     ...(item ? [`Work item #${item.id}: ${item.title} (${item.type ?? "item"}), state now: ${item.state}`] : []),
   ].join("\n").replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "[address]");
-  const res = await ai.run<{ text: string }>({ name: LOOP_DRAFT_TASK, client: r.p.clientKey, instructions: AI_INSTRUCTIONS }, input, AI_SCHEMA);
+  // GD-2 point 5: the message goes to client eyes, so it never names another client (Internal's may): the instructions
+  // say so, and the check after replaces one with "another client" and marks the draft.
+  const internal = (await ctx.boundary(r.p.clientKey).catch(() => null))?.internal ?? false;
+  const res = await ai.run<{ text: string }>({ name: LOOP_DRAFT_TASK, client: r.p.clientKey, instructions: internal ? AI_INSTRUCTIONS : `${AI_INSTRUCTIONS}\n${NO_OTHER_CLIENTS}`, mentions: { input: "words", answer: "scrub" } }, input, AI_SCHEMA);
   if (!res.ok) return { text: plain, ai: res.error.kind === "off" || res.error.kind === "client_off" || res.error.kind === "not_set_up" ? "off" : "failed", note: res.error.kind === "off" || res.error.kind === "client_off" || res.error.kind === "not_set_up" ? null : `${res.error.message}. A plain draft instead.` };
   const t = res.value.text.trim().slice(0, 4000);
-  return t ? { text: t, ai: "ok", note: null } : { text: plain, ai: "failed", note: "The AI's draft was empty. A plain draft instead." };
+  return t ? { text: t, ai: "ok", note: null, ...(res.namesRemoved ? { namesRemoved: true } : {}) } : { text: plain, ai: "failed", note: "The AI's draft was empty. A plain draft instead." };
 }
 
 /** The open DevOps previews for the parts I ticked; a part that can't be previewed is a note, not a stop. */
@@ -275,7 +283,7 @@ export async function loopAction(ctx: LoopContext, action: LoopAction, input: un
         const data: LoopDraftView = {
           key: r.p.key, clientKey: r.p.clientKey, clientName: r.p.clientName, what: r.p.what,
           recipient: r.recipient ? { name: r.recipient.name, outside: r.recipient.outside } : null, noRecipient: r.noRecipient,
-          text: d.text, subject: subjectOf(r.p.what, r.p.clientName), draftedFrom: draftedFrom({ ai: d.ai === "ok", conversation: r.p.conversation?.title ?? null, item: fact }), ai: d.ai, aiNote: d.note,
+          text: d.text, subject: subjectOf(r.p.what, r.p.clientName), draftedFrom: draftedFrom({ ai: d.ai === "ok", conversation: r.p.conversation?.title ?? null, item: fact }), ai: d.ai, aiNote: d.note, ...(d.namesRemoved ? { namesRemoved: NAME_REMOVED } : {}),
           item, channels, initial: own?.channel ?? "teams", sends: (await plan.loopSends(r.p.key, 5)).map(sendView),
         };
         return { ok: true, data };
@@ -294,10 +302,13 @@ export async function loopAction(ctx: LoopContext, action: LoopAction, input: un
         if (!r.recipient && channel !== "devops") return bad(r.noRecipient ?? "Say who it's for first", 409);
         const rec = r.recipient;
         const clientKey = r.p.clientKey;
-        // GD-1: another client's name, project or work in the text blocks the send; Internal may name clients.
+        // GD-2 point 6 (was GD-1's block): another client's name, alias, project or item in what goes out is flagged
+        // with the text as it would be with each replaced by "another client"; my typed text can still go once I've
+        // seen it and said so (Send with mentionsOk). Internal may name clients.
         const b = await ctx.boundary(clientKey);
-        const hit = !b.internal && clientKey ? otherClientMatch(text, clientKey, b.directory) : null;
-        const blocked = hit ? `This mentions ${hit.name}. Remove it before sending to ${r.p.clientName ?? clientKey}` : null;
+        const subjectIn = channel === "email" && typeof o.subject === "string" ? o.subject : "";
+        const flag = clientKey ? exitCheck([text, subjectIn], clientKey, b.directory, { internal: b.internal }) : null;
+        const blocked: string | null = null;
         const home = await ctx.homeTenant();
         let audience: Audience | null = null;
         let destination = "";
@@ -381,28 +392,31 @@ export async function loopAction(ctx: LoopContext, action: LoopAction, input: un
         for (const [k, v] of held) if (v.expiresAt < Date.now()) held.delete(k);
         held.set(id, {
           id, owner: await owner(ctx), expiresAt, key, channel, mode, destination, recipient: rec?.name ?? null, recipientEmail: rec?.email ?? null, audience, text, subject, target,
-          kept, devops: parts.map((p) => ({ kind: p.kind, previewId: p.preview.previewId })), commentPreview,
+          kept, devops: parts.map((p) => ({ kind: p.kind, previewId: p.preview.previewId })), commentPreview, mentions: flag?.names ?? [],
         });
         ctx.log({ source: "plan", op: "loop_preview", kind: channel, count: audience?.outside ?? 0 });
         const data: LoopPreviewView = {
           previewId: id, expiresAt: new Date(expiresAt).toISOString(), channel, mode, line, destination, audience, audienceNote, text, subject, blocked,
           final: channel === "teams" || (channel === "email" && mode === "send") ? NO_UNDO : null, kept, devops: parts, devopsNotes, fallback: blocked ? null : fallback, call: callHref,
+          ...(flag ? { mentions: { names: flag.names, text: flag.replaced[0]!, ...(subjectIn ? { subject: flag.replaced[1]! } : {}), line: `This mentions ${nameList(flag.names)}${audience?.outside ? ", and people outside Cooptimize will read it" : ""}.` } } : {}),
         };
         return { ok: true, data };
       }
       case "loop.send": {
-        const o = only(input, ["previewId"]);
+        const o = only(input, ["previewId"], ["mentionsOk"]);
         if (typeof o.previewId !== "string") throw new Invalid("previewId must be text");
+        if (o.mentionsOk !== undefined && typeof o.mentionsOk !== "boolean") throw new Invalid("mentionsOk must be true or false");
         const h = held.get(o.previewId);
         if (!h || h.expiresAt < Date.now() || h.owner !== (await owner(ctx))) return bad("That preview has expired. Preview it again", 410);
-        held.delete(h.id);
+        // The text is checked again at send (a preview can't be replayed past the boundary): another client named
+        // goes only with mentionsOk, after the flag was shown. The preview stays, so Send can be pressed again.
+        const b = await ctx.boundary(h.key ? (await resolve(ctx, h.key)).p.clientKey : null);
         const r = await resolve(ctx, h.key);
+        const flag = r.p.clientKey ? exitCheck([h.text, h.subject ?? ""], r.p.clientKey, b.directory, { internal: b.internal }) : null;
+        if (flag && o.mentionsOk !== true) return bad(`This mentions ${nameList(flag.names)}. Replace it with "another client", or confirm you mean to send it to ${r.p.clientName ?? r.p.clientKey}`, 409, "mentions");
+        held.delete(h.id);
         if (r.p.closed) return bad("This promise is closed already", 409);
-        // The text is checked again at send: a preview can't be replayed past GD-1.
-        const b = await ctx.boundary(r.p.clientKey);
-        const hit = !b.internal && r.p.clientKey ? otherClientMatch(h.text, r.p.clientKey, b.directory) : null;
-        if (hit) return bad(`This mentions ${hit.name}. Remove it before sending to ${r.p.clientName ?? r.p.clientKey}`, 409);
-        return { ok: true, data: await runSend(ctx, plan, r.p, h) };
+        return { ok: true, data: await runSend(ctx, plan, r.p, { ...h, mentionsOk: o.mentionsOk === true }) };
       }
       case "loop.retry": {
         const o = only(input, ["sendId"]);
@@ -515,7 +529,7 @@ async function after(ctx: LoopContext, plan: PlanStore, p: LoopPromise, h: Held,
     }
   }
   for (const d of h.devops) {
-    const r = await ctx.devops("devops.confirm", { previewId: d.previewId }).catch((): ActionResponse => ({ ok: false, status: 500, error: "DevOps didn't answer" }));
+    const r = await ctx.devops("devops.confirm", { previewId: d.previewId, ...(h.mentionsOk ? { mentionsOk: true } : {}) }).catch((): ActionResponse => ({ ok: false, status: 500, error: "DevOps didn't answer" }));
     const what = d.kind === "comment" ? "The comment" : "The state change";
     if (!r.ok) {
       parts.push({ kind: d.kind, ok: false, message: `${what} didn't land: ${r.error}` });
@@ -551,7 +565,7 @@ async function runSend(ctx: LoopContext, plan: PlanStore, p: LoopPromise, h: Hel
   if (h.channel === "devops") {
     const s = await plan.addLoopSend({ ...base, mode: "comment", state: "pending" });
     if (!h.commentPreview) return fail(s, new SendFailure("error", "The comment's preview is missing"));
-    const r = await ctx.devops("devops.confirm", { previewId: h.commentPreview }).catch((): ActionResponse => ({ ok: false, status: 500, error: "DevOps didn't answer" }));
+    const r = await ctx.devops("devops.confirm", { previewId: h.commentPreview, ...(h.mentionsOk ? { mentionsOk: true } : {}) }).catch((): ActionResponse => ({ ok: false, status: 500, error: "DevOps didn't answer" }));
     const res = r.ok ? (r.data as DevOpsResult | undefined) ?? null : null;
     if (!r.ok || !res?.entry) return fail(s, new SendFailure("error", !r.ok ? r.error : "DevOps didn't answer"));
     const back = await plan.updateLoopSend(s.id, { state: res.confirmed ? "sent" : "unconfirmed", writeId: res.entry.id, link: res.url ?? null, sentAt: ctx.now(), error: res.confirmed ? null : res.message });

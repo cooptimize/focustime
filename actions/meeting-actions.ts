@@ -376,7 +376,8 @@ async function prepare(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig,
 
 /** One Confirm: the previewed DevOps writes, the shared commitments, and the rest skipped. */
 async function confirm(ctx: MeetingContext, store: MeetingStore, me: string, input: unknown): Promise<ActionResponse> {
-  const o = obj(input, ["occurrenceId", "keep"], ["previews"]);
+  // GD-2: mentionsOk: I saw the flag on my own edited words and confirm them as written.
+  const o = obj(input, ["occurrenceId", "keep"], ["previews", "mentionsOk"]);
   const { o: occ, series } = await store.viewer(me).reviewer(id(o.occurrenceId, "occurrenceId"));
   const keep = new Set(ids(o.keep, "keep"));
   const pairs = o.previews === undefined ? [] : Array.isArray(o.previews) && o.previews.length <= 50 ? o.previews.map((x) => {
@@ -390,7 +391,7 @@ async function confirm(ctx: MeetingContext, store: MeetingStore, me: string, inp
   for (let i = 0; i < pairs.length; i += 10) {
     const batch = pairs.slice(i, i + 10).filter((x) => keep.has(x.proposalId) && ps.some((p) => p.id === x.proposalId));
     if (!batch.length) continue;
-    const r = await ctx.devops("devops.confirm", { previewIds: batch.map((x) => x.previewId) });
+    const r = await ctx.devops("devops.confirm", { previewIds: batch.map((x) => x.previewId), ...(o.mentionsOk === true ? { mentionsOk: true } : {}) });
     const rs = r.ok ? ((r.data as { results: ({ entry: { id: number }; confirmed: boolean; message: string; itemId?: number | null } | { error: string })[] }).results) : batch.map(() => ({ error: r.ok ? "" : r.error }));
     for (const [j, x] of batch.entries()) {
       const p = ps.find((y) => y.id === x.proposalId)!;

@@ -13,6 +13,7 @@ import { createTeamsStore } from "../store/teams-store.ts";
 import { aChatMember, aClientChat, aCommitmentAnswer, aConversationUpdate, anAiApp, anAiRules, anUpdateAnswer, aTeamsMessage, aWorkItem, HOME_TENANT } from "./builders/index.ts";
 import { runPipeline, type PipelineDeps } from "../actions/conversations-pipeline.ts";
 import { isInternalKey } from "../actions/client-accounts.ts";
+import { chatAudience } from "../plan/boundary.ts";
 
 export const NOW = "2026-11-04T21:00:00Z";
 export const ZONE = "America/Chicago";
@@ -42,7 +43,10 @@ export function world(o: { /** GD-1: the clients the guard knows (none by defaul
     cap: "app",
   });
   const users = [EVAN, LENA, SAM].map((m) => ({ id: m.userId!, name: m.displayName!, deleted: false }));
-  const deps = (chat: ClientChat, more: Partial<PipelineDeps> = {}): PipelineDeps => ({
+  // GD-2: the boundary as the poll builds it: the chat's audience from its members, the other clients, Internal.
+  const boundary = async (chat: ClientChat): Promise<NonNullable<PipelineDeps["boundary"]>> => ({ audience: chatAudience(chat.members, { homeTenant: HOME_TENANT, automation: [], domains: [] }), directory: o.directory ?? [], internal: await isInternalKey(null, chat.clientKey) });
+  const deps = async (chat: ClientChat, more: Partial<PipelineDeps> = {}): Promise<PipelineDeps> => ({
+    boundary: await boundary(chat),
     teams, convs, users, homeTenant: HOME_TENANT, now, clientName: chat.clientKey === "contoso" ? "Contoso Supply" : "Fabrikam", ai, zone: ZONE, ackPhrases: [], items: [aWorkItem({ id: 4101, title: "Movement dashboard refresh" })],
     author: async () => ({ zone: ZONE, promisePhrases: ["i'll", "i will", "tonight"] }), ...more,
   });
@@ -52,7 +56,7 @@ export function world(o: { /** GD-1: the clients the guard knows (none by defaul
     await teams.saveMessages([m]);
     return m;
   };
-  return { conn, teams, convs, calls, deps, say, ai, users, now: () => now, setNow: (t: string) => void (now = t), run: (chat: ClientChat, batch: TeamsMessage[], more: Partial<PipelineDeps> = {}) => runPipeline(deps(chat, more), chat, batch) };
+  return { conn, teams, convs, calls, deps, say, ai, users, now: () => now, setNow: (t: string) => void (now = t), run: async (chat: ClientChat, batch: TeamsMessage[], more: Partial<PipelineDeps> = {}) => runPipeline(await deps(chat, more), chat, batch) };
 }
 
 /** The fake provider's answer for the Alliance-shaped example, read from the request's own input (refs only). */

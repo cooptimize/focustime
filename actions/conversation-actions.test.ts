@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 import { weekConfig } from "../config/defaults.ts";
 import type { MyPromisesData } from "../plan/conversation-views.ts";
 import type { ClientChat } from "../plan/requests.ts";
-import { aClientChat, aCommitmentAnswer, aConversationUpdate, anUpdateAnswer, aWorkItem } from "../test/builders/index.ts";
+import { aClientChat, aClientEntry, aCommitmentAnswer, aConversationUpdate, anAiApp, anAiRules, anUpdateAnswer, aWorkItem } from "../test/builders/index.ts";
+import { createAi } from "../ai/service.ts";
+import { stubProvider } from "../ai/stub.ts";
 import { BLAKE, CHAT, allianceAnswer, EVAN, LENA, SAM, world, ZONE } from "../test/conversations.ts";
 import type { WorkItem } from "../week/types.ts";
 import { conversationAction, dayPromises } from "./conversation-actions.ts";
@@ -175,6 +177,25 @@ describe("follow-through", () => {
     await w.convs.updateConversation(c.id, { itemChange: { kind: "decision", note: "Fix goes in next sprint", at: "2026-11-04T21:00:00Z", scope: false } });
     await p.as(EVAN).run("conversations.resolve", { id: c.id });
     expect((await upkeep(upkeepDeps(w, items))).suggestions).toBe(1);
+  });
+
+  it("GD-2: the AI's comment names no other client: replaced, and the suggestion carries the notice", async () => {
+    const w = world({ respond: allianceAnswer });
+    const c = await alliance(w);
+    const p = await people(w);
+    await p.as(EVAN).run("conversations.link", { id: c.id, itemId: 4101 });
+    await w.convs.updateConversation(c.id, { itemChange: { kind: "root_cause", note: "Cause is BOM bridging", at: "2026-11-04T19:55:00Z", scope: false } });
+    const items = [aWorkItem({ id: 4101, title: "Movement dashboard refresh", assignedToEmail: "evan@contoso.example" })];
+    const calls: string[] = [];
+    const ai = createAi({ provider: async () => stubProvider({ respond: (x) => (calls.push(x.instructions), JSON.stringify({ lines: ["Same cause as Wingtip had in March"] })) }), app: anAiApp({ provider: "openai", appCapUsd: 100 }), rules: async () => anAiRules({ on: true, allowedClients: ["contoso"] }), guard: async () => ({ directory: [aClientEntry({ key: "wingtip", names: ["Wingtip"], projects: [], itemIds: [] })], homeDomains: ["contoso.example"], forbidden: [] }), log: w.convs.appAiLog, appSpend: { get: async () => 0, add: async () => {} }, now: w.now });
+    w.setNow("2026-11-04T20:40:00Z");
+    expect((await upkeep({ ...upkeepDeps(w, items), ai: async () => ai })).suggestions).toBe(1);
+    expect(calls[0]).toContain("Never name any other client");
+    const [s] = await w.convs.suggestionsIn([c.id]);
+    expect(s).toMatchObject({ body: "Same cause as another client had in March", namesRemoved: true });
+    const l = await p.as(EVAN).run("conversations.list");
+    const card = [...l.needsYou, ...l.inProgress, ...l.teammates, ...l.closed].find((x) => x.id === c.id)!;
+    expect(card.suggestions[0]?.namesRemoved).toBeTruthy();
   });
 
   it("internal chat lines are flagged and left out of the comment by default; a scope change also suggests a description", async () => {

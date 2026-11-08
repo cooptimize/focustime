@@ -8,7 +8,7 @@
 import type { AiErrorKind } from "./types.ts";
 
 /** One client as the guard knows it: its key, the names people call it, its DevOps projects and work item ids. */
-export type ClientEntry = { key: string; names: string[]; projects: string[]; itemIds: number[] };
+export type ClientEntry = { key: string; names: string[]; projects: string[]; itemIds: number[]; /** GD-2: other names an admin set for the client (Admin › Clients › Aliases). */ aliases?: string[] };
 
 export type GuardInput = {
   /** The task's client key, or "none". */
@@ -82,7 +82,7 @@ export function guard(text: string, g: GuardInput): GuardHit | null {
 export function otherClientMatch(text: string, client: string, directory: readonly ClientEntry[]): { key: string; name: string; rule: "client_name" | "devops_project" | "work_item" } | null {
   const own = (k: string) => k.trim().toLowerCase() === client.trim().toLowerCase();
   const mine = directory.filter((c) => own(c.key));
-  const ownWords = new Set([...mine.flatMap((c) => [...c.names, ...c.projects]), client].map((w) => w.trim().toLowerCase()));
+  const ownWords = new Set([...mine.flatMap((c) => [...c.names, ...(c.aliases ?? []), ...c.projects]), client].map((w) => w.trim().toLowerCase()));
   const ownIds = new Set(mine.flatMap((c) => c.itemIds));
   // Whole numbers that could be work item ids: not part of a date, time, amount, decimal or version (2026-11-06, 10:30,
   // $1,500, 1.5, 15%). Only ids known to be another client's refuse; any other number passes.
@@ -90,7 +90,7 @@ export function otherClientMatch(text: string, client: string, directory: readon
   for (const c of directory) {
     if (own(c.key)) continue;
     const name = c.names[0] ?? c.key;
-    for (const w of [c.key, ...c.names]) if (w.trim().length >= 3 && !ownWords.has(w.trim().toLowerCase()) && phrase(w).test(text)) return { key: c.key, name, rule: "client_name" };
+    for (const w of [c.key, ...c.names, ...(c.aliases ?? [])]) if (w.trim().length >= 3 && !ownWords.has(w.trim().toLowerCase()) && phrase(w).test(text)) return { key: c.key, name, rule: "client_name" };
     for (const p of c.projects) if (p.trim().length >= 3 && !ownWords.has(p.trim().toLowerCase()) && phrase(p).test(text)) return { key: c.key, name, rule: "devops_project" };
     for (const id of c.itemIds) if (!ownIds.has(id) && numbers.has(id)) return { key: c.key, name, rule: "work_item" };
   }
@@ -108,7 +108,7 @@ export function clientsNamed(text: string, directory: readonly ClientEntry[], is
   const out: string[] = [];
   for (const c of directory) {
     if (isInternal(c.key) || out.some((k) => k.toLowerCase() === c.key.toLowerCase())) continue;
-    const words = [c.key, ...c.names, ...c.projects].filter((w) => w.trim().length >= 3);
+    const words = [c.key, ...c.names, ...(c.aliases ?? []), ...c.projects].filter((w) => w.trim().length >= 3);
     if (words.some((w) => phrase(w).test(text)) || c.itemIds.some((id) => numbers.has(id))) out.push(c.key);
   }
   return out;
@@ -134,10 +134,10 @@ export function maskTranscript(text: string, client: string, directory: readonly
   if (!o.internal) {
     const own = (k: string) => k.trim().toLowerCase() === client.trim().toLowerCase();
     const mine = directory.filter((c) => own(c.key));
-    const ownWords = new Set([...mine.flatMap((c) => [...c.names, ...c.projects]), client].map((w) => w.trim().toLowerCase()));
+    const ownWords = new Set([...mine.flatMap((c) => [...c.names, ...(c.aliases ?? []), ...c.projects]), client].map((w) => w.trim().toLowerCase()));
     const ownIds = new Set(mine.flatMap((c) => c.itemIds));
     // Longest first, so "Fab Labs" goes before "Fab".
-    const words = [...new Set(directory.filter((c) => !own(c.key)).flatMap((c) => [c.key, ...c.names, ...c.projects]).map((w) => w.trim()))]
+    const words = [...new Set(directory.filter((c) => !own(c.key)).flatMap((c) => [c.key, ...c.names, ...(c.aliases ?? []), ...c.projects]).map((w) => w.trim()))]
       .filter((w) => w.length >= 3 && !ownWords.has(w.toLowerCase()))
       .sort((a, b) => b.length - a.length);
     for (const w of words) {

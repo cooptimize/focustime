@@ -1,5 +1,6 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
+import { boundaryCheck } from "./boundary-actions.ts";
 import type { DayPromise } from "../plan/conversation-views.ts";
 import { afterHours } from "../plan/deploy.ts";
 import { pickNeed } from "../plan/types.ts";
@@ -30,6 +31,7 @@ import type { ReadDeps } from "../assistant/reads.ts";
 import { createAssistant, type AssistantService } from "../assistant/service.ts";
 import { VOICE_MAX_BYTES, VOICE_MAX_SECONDS, type AssistantContext, type Channel, type TranscribeResult } from "../assistant/types.ts";
 import type { ClientEntry } from "../ai/guard.ts";
+import type { AudienceRules } from "../plan/boundary.ts";
 import type { ChosenVm } from "./account-types.ts";
 import type { Logger } from "../log/logger.ts";
 import type { PhotoCache } from "../host/types.ts";
@@ -763,8 +765,32 @@ async function aiDirectory(ctx: ActionContext, cfg: AppConfig): Promise<ClientEn
     const w = devops.last(key);
     const items = w ? [...w.items, ...w.children, ...(w.watched ?? []), ...(w.committed ?? [])] : [];
     const names = [mine.find((c) => c.clientKey === key)?.clientName, cfg.clientSettings[key]?.name].filter((n): n is string => !!n && n !== key);
-    return { key, names: [...new Set(names)], projects: [...new Set(items.map((i) => projectOf(i.url)).filter((p): p is string => !!p))], itemIds: [...new Set([...items.map((i) => i.id), ...(remembered.get(key) ?? [])])] };
+    // GD-2: an admin's aliases for the client (Admin › Clients), matched like its names.
+    const aliases = cfg.org?.clients[key]?.aliases ?? [];
+    return { key, names: [...new Set(names)], ...(aliases.length ? { aliases: [...aliases] } : {}), projects: [...new Set(items.map((i) => projectOf(i.url)).filter((p): p is string => !!p))], itemIds: [...new Set([...items.map((i) => i.id), ...(remembered.get(key) ?? [])])] };
   });
+}
+
+/**
+ * GD-1, GD-2: the client boundary for one client: Internal (clientAccounts()'s why "internal") may name clients;
+ * any other client gets the person's directory of the rest (names, aliases, projects, item ids) to check against.
+ */
+export async function boundaryOf(ctx: ActionContext, clientKey: string | null): Promise<{ internal: boolean; directory: ClientEntry[] }> {
+  if (clientKey && (await isInternalKey(ctx.org, clientKey))) return { internal: true, directory: [] };
+  const cfg = await configured(ctx);
+  return { internal: false, directory: cfg ? await aiDirectory(ctx, cfg) : [] };
+}
+
+/** GD-2: the Cooptimizer rule a chat's members are read against (the people rule: tenant, guests, automation, domains). */
+export async function audienceRulesOf(org: ActionContext["org"], homeTenant: string | null): Promise<AudienceRules> {
+  if (!org) return { homeTenant, automation: [], domains: [] };
+  const [r, lv] = await Promise.all([org.rules().catch(() => null), org.levels().catch(() => null)]);
+  return {
+    homeTenant,
+    automation: r?.automation ?? [],
+    domains: r?.organization.inviteDomains ?? [],
+    ...(lv ? { notCooptimizer: (id: string) => !!lv.people.entry(id)?.notCooptimizer } : {}),
+  };
 }
 
 /** ADM-1: whether the signed-in person is an admin: the one check (the group or the break-glass list), else a plain list. */
@@ -896,11 +922,7 @@ async function devopsWriteContext(ctx: ActionContext): Promise<DevOpsWriteContex
     ...(ctx.devopsNotes ? { notes: ctx.devopsNotes } : {}),
     ...(ctx.plan ? { ahead: aheadPort(ctx, ctx.plan) } : {}),
     // GD-1: text naming another client never goes into a client's DevOps (Internal may name clients).
-    boundary: async (clientKey) => {
-      if (await isInternalKey(ctx.org, clientKey)) return { internal: true, directory: [] };
-      const cfg = await configured(ctx);
-      return { internal: false, directory: cfg ? await aiDirectory(ctx, cfg) : [] };
-    },
+    boundary: (clientKey) => boundaryOf(ctx, clientKey),
     // CV-4: a conversation's images, read from Teams with my own token when I create the item (never stored).
     ...(ctx.requests ? { chatImages: async () => (await accountOf(ctx))?.chatMessages ?? null } : {}),
     // SR-1: a comment edit only inside the client's status report window (Kat's last send, else Monday 7:00 AM ET).
@@ -982,11 +1004,7 @@ export async function loopContext(ctx: ActionContext): Promise<LoopContext> {
       return hit ? { id: hit.id, title: hit.title, state: hit.state, type: hit.type } : null;
     },
     canComment: async (clientKey) => !!ctx.devopsWriter && !!ctx.writePats && !!plan && (await plan.devopsIdentities()).some((i) => i.clientKey === clientKey),
-    boundary: async (clientKey) => {
-      if (clientKey && (await isInternalKey(ctx.org, clientKey))) return { internal: true, directory: [] };
-      const cfg = await cfgOf();
-      return { internal: false, directory: cfg ? await aiDirectory(ctx, cfg) : [] };
-    },
+    boundary: (clientKey) => boundaryOf(ctx, clientKey),
     ai: () => aiFor(ctx, { waiting: true }),
     sender: async () => (await accountOf(ctx))?.sender ?? null,
     access: probe,
@@ -1139,6 +1157,7 @@ export function storyContext(ctx: ActionContext): StoryContext {
     writeClients: async () => (ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : []),
     devopsWrite: async (action, input) => devopsWriteAction(await devopsWriteContext(ctx), action, input),
     now: ctx.now,
+    isInternal: (clientKey) => isInternalKey(ctx.org, clientKey),
   };
 }
 
@@ -1279,6 +1298,9 @@ export async function requestContext(ctx: ActionContext): Promise<RequestContext
       return hit ? isCompleted(hit.stateCategory) : null;
     },
     chatMessages: async () => (await accountOf(ctx))?.chatMessages ?? null,
+    // GD-2: the client boundary (Internal, the other clients' names and aliases) and the Cooptimizer rule for a chat's audience.
+    boundary: (clientKey) => boundaryOf(ctx, clientKey),
+    audienceRules: async () => audienceRulesOf(ctx.org, await chats.homeTenant()),
   };
 }
 
@@ -1921,6 +1943,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "my_promises.start_draft":
     case "conversations.search_items":
     case "conversations.unlink":
+    case "conversations.held":
+    case "conversations.held_not_work":
     case "my_promises.unlink":
       return conversationAction(await conversationContext(ctx), action, req.input);
     case "inbox.list":
@@ -1995,6 +2019,18 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
           now: ctx.now,
         },
         action,
+        req.input,
+      );
+    case "boundary.check":
+      return boundaryCheck(
+        {
+          boundary: (k) => boundaryOf(ctx, k),
+          isMine: async (k) => {
+            const b = await boundaryOf(ctx, k);
+            if (b.internal) return true;
+            return b.directory.some((c) => c.key.toLowerCase() === k.toLowerCase());
+          },
+        },
         req.input,
       );
     case "loop.draft":

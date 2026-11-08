@@ -14,7 +14,7 @@ import { callLabel, type MineData } from "./calls.ts";
 import { clientColor } from "../labels.ts";
 
 type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; canConfirm: boolean; canWrite: boolean };
-type Preview = Pick<DevOpsPreview, "previewId" | "key" | "op" | "summary" | "item" | "identity" | "fields" | "visibility">;
+type Preview = Pick<DevOpsPreview, "previewId" | "key" | "op" | "summary" | "item" | "identity" | "fields" | "visibility" | "mentions">;
 type Prepared = { previews: Preview[]; refused: { error: string; key?: string }[]; nothing: unknown[]; draftOnly: { proposalId: number; title: string; message: string }[]; commitments: { proposalId: number; who: string; side: string; what: string; due: string | null; shows: string }[]; skip: number[] };
 type Done = { results: { proposalId: number; ok: boolean; message: string }[]; left: number };
 
@@ -131,7 +131,8 @@ function ReviewScreen({ id, colors, onBack }: { id: number; colors: Record<strin
     setPrep({ ...prep, busy: true });
     try {
       const previews = prep.data.previews.filter((p) => p.key?.startsWith("p")).map((p) => ({ proposalId: Number(p.key!.slice(1)), previewId: p.previewId }));
-      setDone(await call<Done>("meeting.confirm", { occurrenceId: o.id, keep: ticked.map((p) => p.id), previews }));
+      const mentionsOk = prep.data.previews.some((p) => p.mentions?.length);
+      setDone(await call<Done>("meeting.confirm", { occurrenceId: o.id, keep: ticked.map((p) => p.id), previews, ...(mentionsOk ? { mentionsOk: true } : {}) }));
       setPrep(null);
       await load();
     } catch (e) {
@@ -234,6 +235,7 @@ function ProposalRow({ p, ticked, editable, onTick, onEdit }: { p: Proposal; tic
           <p className="mtg-main">{main}</p>
         )}
         <p className="muted mtg-where">{where}</p>
+        {"namesRemoved" in b && b.namesRemoved && <p className="names-removed">Another client's name was removed: "another client" is written instead.</p>}
         {b.kind === "gap" && b.description && <p className="mtg-desc">{b.description}</p>}
         {b.kind === "comment" && b.inReport && <p className="mtg-report">Will appear in Kat's Monday report</p>}
         <Quotes qs={p.quotes} />
@@ -267,6 +269,7 @@ function ConfirmDialog({ prep, skipped, onCancel, onConfirm }: { prep: { busy: b
                     <li key={p.previewId}>
                       <strong>{p.summary}</strong> <span className="muted">{p.item} · as {p.identity}</span>
                       <PreviewRows rows={p.fields} />
+                      {p.mentions?.length ? <p className="mention-flag" role="alert">This mentions {p.mentions.join(", ")}, and this client's DevOps can be seen by people outside Cooptimize. Edit the proposal to change it, or confirm to save your words as written.</p> : null}
                       <span className="muted mtg-field">{p.visibility}</span>
                     </li>
                   ))}

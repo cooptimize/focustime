@@ -15,7 +15,8 @@ import type { AppConfig } from "../config/schema.ts";
 import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, assigneeEmail, assigneeText, assignOps, alreadyDone, completedState, createOps, doneChoices, descriptionOps, textToHtml, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, stackKey, editedComment, validOrg, VISIBILITY, FIELD_LABEL, fieldRefsOf, fieldsOps, type FieldSpec, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
 import { dateOnly, detectTargetField, detectTypeSizeField, fieldNames, htmlToText, identityEmail, identityName, TYPE_SIZE_FIELDS, workItemUrl } from "../sources/devops/normalize.ts";
 import type { TakesStore } from "../store/devops-takes.ts";
-import { otherClientMatch, type ClientEntry } from "../ai/guard.ts";
+import type { ClientEntry } from "../ai/guard.ts";
+import { exitCheck, nameList, NAME_REMOVED, replaceMentions } from "../plan/boundary.ts";
 import { isCoopComment } from "../plan/status-report.ts";
 import { breakdownChildTypes, ladderFromProcessConfig, levelsFromProcessConfig } from "../plan/process.ts";
 import { canEdit, rungOf, sameValue, valueText, type ChangeField, type ChangeValue, type EditRight, type StagedChange } from "../plan/ahead-edit.ts";
@@ -140,6 +141,8 @@ type Held = {
   notes?: string[];
   /** CV-4: the conversation's images offered, and the ones ticked (uploaded on confirm with my token). */
   attach?: { offered: AttachOffer[]; ticked: number[] };
+  /** GD-2: the other clients the text names (shown in the preview); Confirm needs mentionsOk while any are left. */
+  mentions?: string[];
 };
 const held = new Map<string, Held>();
 export const clearDevopsPreviews = () => held.clear();
@@ -389,12 +392,14 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       const memo = new Map<string, Promise<unknown>>();
       // AH-1: a change set's items are previewed one by one; one that's refused (a conflict, no right) doesn't stop the rest.
       const refused: { itemId: number | null; error: string; code: string | null; key?: string }[] = [];
-      for (const c of list) {
+      for (const c0 of list) {
+        // GD-2: a change may ask for another client's names to be replaced ("replace", the preview's one click).
+        const { mentions: wants, ...c } = (c0 && typeof c0 === "object" && !Array.isArray(c0) ? c0 : {}) as Obj;
+        if (wants !== undefined && wants !== "replace") throw new Invalid('mentions is "replace"');
         let h: HeldIn | string;
         try {
-          h = await previewOne(env, c, tz, memo);
-          // SR-1: GD-1's refusal of one line is that line's, like any other refusal in a batch.
-          if (typeof h !== "string" && o.changes !== undefined && PER_ITEM.has(h.op)) await checkBoundary(ctx, env, h);
+          h = await previewOne(env, c0 && typeof c0 === "object" && !Array.isArray(c0) ? c : c0, tz, memo);
+          if (typeof h !== "string") h = await withBoundary(ctx, env, h, wants === "replace");
         } catch (e) {
           if (o.changes !== undefined && (e instanceof Refused || e instanceof WriteFailure || e instanceof Invalid) && PER_ITEM.has(String((c as { kind?: unknown })?.kind))) {
             // SR-1: Push all's lines carry a key back, so each refusal lands on its own line.
@@ -406,22 +411,26 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
         }
         const key = typeof (c as { key?: unknown })?.key === "string" ? ((c as { key: string }).key) : null;
         if (typeof h === "string") nothing.push(h);
-        else {
-          if (!(o.changes !== undefined && PER_ITEM.has(h.op))) await checkBoundary(ctx, env, h);
-          previews.push(key ? { ...hold(h, env), key } : hold(h, env));
-        }
+        else previews.push(key ? { ...hold(h, env), key } : hold(h, env));
       }
       return { ok: true, data: o.changes !== undefined ? { previews, nothing, refused } : previews[0] ? { preview: previews[0] } : { nothing: nothing[0] ?? "Nothing to change" } };
     }
     case "devops.confirm": {
-      const o = fields(input, [], ["previewId", "previewIds"]);
+      const o = fields(input, [], ["previewId", "previewIds", "mentionsOk"]);
+      if (o.mentionsOk !== undefined && typeof o.mentionsOk !== "boolean") throw new Invalid("mentionsOk must be true or false");
       if ((o.previewId === undefined) === (o.previewIds === undefined)) throw new Invalid("devops.confirm takes { previewId } or { previewIds }");
       const ids = o.previewIds !== undefined ? o.previewIds : [o.previewId];
       if (!Array.isArray(ids) || ids.length === 0 || ids.length > BATCH_LIMIT) throw new Invalid(`previewIds needs 1 to ${BATCH_LIMIT} previews`);
-      const results: (DevOpsResult | { error: string; status: number })[] = [];
+      const results: (DevOpsResult | { error: string; status: number; code?: string })[] = [];
       for (const id of ids) {
         if (typeof id !== "string") throw new Invalid("previewId must be text");
         const h = held.get(id);
+        // GD-2 point 6: text naming another client goes only once the person has seen the flag and said so (the
+        // preview stays, so Confirm can be pressed again with mentionsOk). AI text was already scrubbed (point 5).
+        if (h && h.expiresAt >= Date.now() && h.mentions?.length && o.mentionsOk !== true) {
+          results.push({ error: `This mentions ${nameList(h.mentions)}. Replace it with "another client", or confirm you mean to save it to ${clientName(h.clientKey)}'s DevOps`, status: 409, code: "mentions" });
+          continue;
+        }
         held.delete(id);
         if (!h || h.expiresAt < Date.now()) {
           results.push({ error: "That preview has expired. Review the change again", status: 410 });
@@ -449,7 +458,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       }
       if (o.previewIds !== undefined) return { ok: true, data: { results } };
       const r = results[0]!;
-      return "error" in r ? bad(r.error, r.status) : { ok: true, data: r };
+      return "error" in r ? bad(r.error, r.status, "code" in r ? r.code : undefined) : { ok: true, data: r };
     }
     case "devops.retry": {
       const o = fields(input, ["id"]);
@@ -495,6 +504,7 @@ function hold(h: HeldIn, env: Env): DevOpsPreview {
     previewId: id, expiresAt: new Date(expiresAt).toISOString(), op: h.op, summary: SUMMARY[h.op], system: "DevOps", org: h.org, project: h.projectName,
     item: h.itemId ? `#${h.itemId} ${h.title}` : `New ${h.type ?? "item"}: ${h.title}`, identity: `${env.me.name} <${env.me.email}>`, fields: fieldsRows, links, notes,
     visibility: VISIBILITY(h.projectName), undo: h.undoOf !== null,
+    ...(h.mentions?.length ? { mentions: h.mentions } : {}),
     ...(h.attach ? { attachments: h.attach.offered.map((a) => ({ id: a.id, src: chatImageSrc(a.id), sender: a.sender, at: a.at, description: a.description, ticked: h.attach!.ticked.includes(a.id) })) } : {}),
   };
 }
@@ -513,20 +523,35 @@ export function writtenText(h: Pick<HeldIn, "op" | "ops">): string[] {
 }
 
 /**
- * GD-1: in a client's DevOps, another client's name, project or item never appears. Text naming one is refused in the
- * preview, with the other client's name shown only here (never logged, never in the audit log: nothing was written).
- * Cooptimize Internal may name clients.
+ * GD-1, GD-2 point 6: text going into a client's DevOps is checked for another client's names, aliases, projects and
+ * known item ids (plan/boundary.ts exitCheck). GD-2: it is no longer refused: the preview flags it (the other client's
+ * name shown only here, never logged or kept in the audit log), `replace` swaps each for "another client", and Confirm
+ * needs mentionsOk while any are left. Cooptimize Internal may name clients. Undos only put back what was there.
  */
+async function withBoundary(ctx: DevOpsWriteContext, env: Env, h: HeldIn, replace: boolean): Promise<HeldIn> {
+  if (!ctx.boundary) return h;
+  const texts = writtenText(h);
+  if (!texts.length) return h;
+  const b = await ctx.boundary(env.clientKey);
+  const flag = exitCheck(texts, env.clientKey, b.directory, { internal: b.internal });
+  if (!flag) return h;
+  if (!replace) return { ...h, mentions: flag.names, notes: [...(h.notes ?? []), `This mentions ${nameList(flag.names)}, and ${env.clientName}'s DevOps can be seen by people outside Cooptimize.`] };
+  const fix = (v: string) => replaceMentions(v, env.clientKey, b.directory, { records: true }).text;
+  const ops = !h.ops ? h.ops : Array.isArray(h.ops) ? h.ops.map((p) => (p.op !== "test" && p.op !== "remove" && TEXT_PATHS.has(p.path) && typeof p.value === "string" ? { ...p, value: fix(p.value) } : p)) : { ...h.ops, text: fix(h.ops.text) };
+  const after = Object.fromEntries(Object.entries(h.after).map(([k, v]) => [k, typeof v === "string" ? fix(v) : v]));
+  const out: HeldIn = { ...h, ops, after, title: fix(h.title), notes: [...(h.notes ?? []), `${NAME_REMOVED}: "another client" is written instead.`] };
+  const left = exitCheck(writtenText(out), env.clientKey, b.directory);
+  return left ? { ...out, mentions: left.names } : out;
+}
+
+/** Feedback's own preview: another client's name still refuses it (feedback goes to FocusTime's own backlog). */
 async function checkBoundary(ctx: DevOpsWriteContext, env: Env, h: HeldIn): Promise<void> {
   if (!ctx.boundary) return;
   const texts = writtenText(h);
   if (!texts.length) return;
   const b = await ctx.boundary(env.clientKey);
-  if (b.internal) return;
-  for (const t of texts) {
-    const m = otherClientMatch(t, env.clientKey, b.directory);
-    if (m) throw new Refused(`This mentions ${m.name}; remove it before saving to ${env.clientName}'s DevOps`, 409, "other_client");
-  }
+  const flag = exitCheck(texts, env.clientKey, b.directory, { internal: b.internal });
+  if (flag) throw new Refused(`This mentions ${nameList(flag.names)}; remove it before saving to ${env.clientName}'s DevOps`, 409, "other_client");
 }
 
 /** CV-5: a time as the preview shows it, in my zone ("2026-11-02 08:00"). */

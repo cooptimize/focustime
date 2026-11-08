@@ -32,6 +32,8 @@ export type LoopDraftView = {
   draftedFrom: string;
   ai: "ok" | "off" | "failed";
   aiNote: string | null;
+  /** GD-2 point 5: the AI's draft had another client's name replaced ("Another client's name was removed"). */
+  namesRemoved?: string;
   /** The linked item: its state now, whether I can write to it, and the other states its type has (from the process). */
   item: (ItemFact & { canComment: boolean; states: string[] }) | null;
   channels: LoopChannelOption[];
@@ -53,8 +55,13 @@ export type LoopPreviewView = {
   audienceNote: string | null;
   text: string;
   subject: string | null;
-  /** GD-1 refused it: the plain reason, and Send is off. */
+  /** GD-1 refused it: the plain reason, and Send is off. Since GD-2 always null (another client is flagged in `mentions`). */
   blocked: string | null;
+  /**
+   * GD-2 point 6: the other clients the text names, with the text (and subject) as they'd be with each replaced by
+   * "another client" (one click), and the line to show. Send needs mentionsOk while the text still names one.
+   */
+  mentions?: { names: string[]; text: string; subject?: string; line: string };
   /** "Sent Teams messages and emails can't be undone." */
   final: string | null;
   kept: boolean;

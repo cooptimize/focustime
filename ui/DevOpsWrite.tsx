@@ -37,6 +37,8 @@ export type DevOpsChange =
   | { kind: "conversation_comment"; conversationId: number; itemId: number; text?: string }
   | { kind: "conversation_comment"; commitmentId: number; itemId: number; text?: string }
   | { kind: "description_update"; suggestionId: number; after?: string };
+/** GD-2: a change sent again with another client's names written as "another client" (the flag's one click). */
+const replaced = (changes: readonly DevOpsChange[]) => changes.map((c) => ({ ...c, mentions: "replace" as const }));
 
 export type DevOpsWriteEnv = {
   /** Clients with a checked write PAT. */
@@ -106,7 +108,9 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
             else rows.push(r);
           }
         } else {
-          const out = await call<{ results: (DevOpsResult | { error: string; status: number })[] }>("devops.confirm", { previewIds: f.rows.map((r) => r.preview.previewId) });
+          // GD-2: a flagged preview goes as I wrote it only once I've seen the flag (the button says so).
+          const flagged = f.rows.some((r) => r.preview.mentions?.length);
+          const out = await call<{ results: (DevOpsResult | { error: string; status: number })[] }>("devops.confirm", { previewIds: f.rows.map((r) => r.preview.previewId), ...(flagged ? { mentionsOk: true } : {}) });
           rows = f.rows.map((r, i) => ({ ...r, result: out.results[i] ?? null }));
         }
         onDone();
@@ -141,7 +145,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
     },
   };
   const dialog = flow ? (
-    <PreviewDialog flow={flow} client={o.client} onConfirm={() => void confirm(flow)} onReload={() => void begin(flow.clientKey, flow.changes, flow.settled)} onImages={(ids) => void begin(flow.clientKey, flow.changes.map((c) => (c.kind === "conversation_create" ? { ...c, images: ids } : c)), flow.settled)} onClose={() => (setFlow(null), flow.settled?.({ confirmed: false, sent: flow.rows.some((r) => r.result && "entry" in r.result) }))} />
+    <PreviewDialog flow={flow} client={o.client} onConfirm={() => void confirm(flow)} onReplace={() => void begin(flow.clientKey, replaced(flow.changes) as DevOpsChange[], flow.settled)} onReload={() => void begin(flow.clientKey, flow.changes, flow.settled)} onImages={(ids) => void begin(flow.clientKey, flow.changes.map((c) => (c.kind === "conversation_create" ? { ...c, images: ids } : c)), flow.settled)} onClose={() => (setFlow(null), flow.settled?.({ confirmed: false, sent: flow.rows.some((r) => r.result && "entry" in r.result) }))} />
   ) : ask ? (
     <AskDialog ask={ask} onClose={() => setAsk(null)} onPreview={(changes) => (setAsk(null), void begin(ask.clientKey, changes))} />
   ) : null;
@@ -180,7 +184,7 @@ export function Modal({ label, busy, onClose, children, wide }: { label: string;
   );
 }
 
-function PreviewDialog({ flow, client, onConfirm, onReload, onImages, onClose }: { flow: Flow; client?: ClientLook | undefined; onConfirm: () => void; onReload: () => void; /** CV-4: ticked images changed: preview again with these. */ onImages: (ids: number[]) => void; onClose: () => void }) {
+function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages, onClose }: { flow: Flow; client?: ClientLook | undefined; onConfirm: () => void; /** GD-2: write "another client" instead. */ onReplace: () => void; onReload: () => void; /** CV-4: ticked images changed: preview again with these. */ onImages: (ids: number[]) => void; onClose: () => void }) {
   const first = useModalFocus<HTMLButtonElement>();
   const { rows, busy, error } = flow;
   const p0 = rows[0]!.preview;
@@ -190,6 +194,7 @@ function PreviewDialog({ flow, client, onConfirm, onReload, onImages, onClose }:
   const retryable = rows.some((r) => r.result && ("error" in r.result ? r.result.status !== 410 && r.result.status !== 409 : !r.result.confirmed && r.result.entry.status !== "refused"));
   const label = rows.length === 1 ? p0.summary : `${rows.length} DevOps changes`;
   const clientWord = client?.name(flow.clientKey) ?? flow.clientKey;
+  const flagged = rows.some((r) => r.preview.mentions?.length);
   return (
     <Modal label={label} busy={busy} onClose={onClose} wide={rows.length > 1}>
       <div className="cap-dialog-head">
@@ -236,7 +241,8 @@ function PreviewDialog({ flow, client, onConfirm, onReload, onImages, onClose }:
               </tbody>
             </table>
             {r.preview.attachments && r.preview.attachments.length > 0 && <AttachPicker list={r.preview.attachments} disabled={busy || tried} onChange={onImages} />}
-            {[...r.preview.links, ...r.preview.notes].map((n) => (
+            {r.preview.mentions?.length ? <MentionFlag names={r.preview.mentions} where={`${clientWord}'s DevOps`} disabled={busy || tried} onReplace={onReplace} /> : null}
+            {[...r.preview.links, ...r.preview.notes.filter((n) => !(r.preview.mentions?.length && n.startsWith("This mentions ")))].map((n) => (
               <p key={n} className="muted dw-note">
                 {n}
               </p>
@@ -260,7 +266,7 @@ function PreviewDialog({ flow, client, onConfirm, onReload, onImages, onClose }:
       <div className="wd-actions">
         {!tried ? (
           <button ref={first} type="button" className="commit" disabled={busy} onClick={onConfirm}>
-            {busy ? "Writing and checking…" : rows.length === 1 ? confirmLabel(p0) : `Make all ${rows.length} changes in DevOps`}
+            {busy ? "Writing and checking…" : flagged ? "Save as written" : rows.length === 1 ? confirmLabel(p0) : `Make all ${rows.length} changes in DevOps`}
           </button>
         ) : changed ? (
           <button ref={first} type="button" className="commit" disabled={busy} onClick={onReload}>
@@ -511,5 +517,23 @@ export function DevOpsWriteLog(): ReactNode {
         </table>
       )}
     </section>
+  );
+}
+
+/**
+ * GD-2 point 6: the flag on an exit to client eyes: which other clients the text names, where it goes, and one click to
+ * write "another client" instead. Text I typed can still go as written once I've seen this.
+ */
+export function MentionFlag({ names, where, disabled, onReplace }: { names: readonly string[]; where: string; disabled?: boolean; onReplace: () => void }): ReactNode {
+  const list = names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+  return (
+    <div className="mention-flag" role="alert">
+      <p>
+        <strong>This mentions {list}.</strong> It goes to {where}, which people outside Cooptimize can see.
+      </p>
+      <button type="button" className="mini" disabled={disabled} onClick={onReplace}>
+        Replace with “another client”
+      </button>
+    </div>
   );
 }

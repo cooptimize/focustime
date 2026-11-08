@@ -6,7 +6,7 @@ import type { ProviderCall } from "../ai/types.ts";
 import { aClientChat, aClientEntry, aChatMember, aCommitmentAnswer, aConversationUpdate, anUpdateAnswer, aWorkItem, CLIENT_TENANT } from "../test/builders/index.ts";
 import { BLAKE, CHAT, allianceAnswer, EVAN, LENA, SAM, world, ZONE } from "../test/conversations.ts";
 import type { TeamsMessage } from "../plan/requests.ts";
-import { CLIENT_REFUSED, LEGACY_CLIENT_REFUSED, statusLine, unsortedText } from "../plan/conversations.ts";
+import { CLIENT_REFUSED, HELD_MENTION, LEGACY_CLIENT_REFUSED, statusLine, unsortedText } from "../plan/conversations.ts";
 import { legacyRefused, parkedBySwitch } from "./conversations-pipeline.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
 
@@ -258,30 +258,65 @@ describe("Cooptimize Internal and the client rule", () => {
     expect(r).toMatchObject({ aiOutcome: "ok", unsorted: 0 });
   });
 
-  it("a client chat naming another client waits unsorted with the new reason, and isn't retried as an old refusal", async () => {
-    const w = world({ directory });
+  it("GD-2: a client-facing chat holds the message that names another client, visible and not sent; the rest of its batch is sorted", async () => {
+    const w = world({ directory, allowed: ["contoso"] });
     const m = await w.say(CHAT, BLAKE, "2026-11-04T15:00:00Z", "Same issue Fabrikam had last month");
-    const r = await w.run(CHAT, [m]);
-    expect(w.calls).toHaveLength(0);
-    expect(r).toMatchObject({ aiOutcome: CLIENT_REFUSED, unsorted: 1 });
-    expect((await w.convs.placesByRole([CHAT.chatId], "unsorted")).map((p) => p.reason)).toEqual([CLIENT_REFUSED]);
-    expect(unsortedText(CLIENT_REFUSED, "Contoso Supply")).toBe("it mentions another client");
+    const ok = await w.say(CHAT, BLAKE, "2026-11-04T15:01:00Z", "Can someone look at the export totals before Friday?");
+    const r = await w.run(CHAT, [m, ok]);
+    expect(r).toMatchObject({ held: 1, unsorted: 1 });
+    expect(w.calls).toHaveLength(1);
+    expect(JSON.stringify(w.calls[0])).not.toMatch(/Fabrikam/i);
+    expect((await w.convs.placesByRole([CHAT.chatId], "unsorted")).map((p) => [p.messageId, p.reason])).toEqual([[m.messageId, HELD_MENTION]]);
+    expect(unsortedText(HELD_MENTION, "Contoso Supply")).toMatch(/another client/);
+    // Held for a mention in a client-facing chat: not retried as an old refusal.
     expect(await legacyRefused(w.convs, w.teams, CHAT.chatId)).toEqual([]);
   });
 
-  it("messages refused before GD-1 are tried once more: an Internal chat's are sorted, a real mention stays refused", async () => {
+  it("GD-2: the same message in an all-Cooptimizer chat is sorted, mention kept", async () => {
+    const w = world({ directory, allowed: ["contoso"] });
+    const team = aClientChat({ chatId: "19:contoso-team@thread.v2", clientKey: "contoso", kind: "delivery", displayName: "Contoso team", members: [EVAN, SAM] });
+    const m = await w.say(team, EVAN, "2026-11-04T15:00:00Z", "Same issue Fabrikam had last month");
+    const r = await w.run(team, [m]);
+    expect(r).toMatchObject({ held: 0, unsorted: 0, aiOutcome: "ok" });
+    expect(w.calls).toHaveLength(1);
+    expect(JSON.stringify(w.calls[0])).toMatch(/Fabrikam/);
+  });
+
+  it("GD-2: a number that matches another client's item id, or a name inside a link or address, doesn't hold a message", async () => {
+    const dir = [aClientEntry({ key: "contoso", names: ["Contoso Supply"], projects: [], itemIds: [] }), aClientEntry({ key: "fabrikam", names: ["Fabrikam"], projects: ["Fab Ops"], itemIds: [4410] })];
+    const w = world({ directory: dir, allowed: ["contoso"] });
+    const m = await w.say(CHAT, BLAKE, "2026-11-04T15:00:00Z", "Totals off by 4410 rows, see https://contoso.example/fabrikam/notes or ask ops@fabrikam.example");
+    expect(await w.run(CHAT, [m])).toMatchObject({ held: 0, unsorted: 0 });
+  });
+
+  it("GD-2 point 4: the sorting prompt for Contoso carries no Fabrikam records, and a client-facing chat's context never names Fabrikam", async () => {
+    const dir = [aClientEntry({ key: "contoso", names: ["Contoso Supply"], projects: ["Contoso ERP"], itemIds: [4101] }), aClientEntry({ key: "fabrikam", names: ["Fabrikam"], projects: ["Fabrikam Portal"], itemIds: [7701] })];
+    const w = world({ directory: dir, allowed: ["contoso"] });
+    // Earlier in the chat: one message naming Fabrikam (held), one plain one.
+    const early = await w.say(CHAT, BLAKE, "2026-11-04T14:30:00Z", "Fabrikam Portal had this too, see 7701");
+    await w.run(CHAT, [early]);
+    const m = await w.say(CHAT, BLAKE, "2026-11-04T15:00:00Z", "Can someone look at the export totals before Friday?");
+    await w.run(CHAT, [m], { items: [aWorkItem({ id: 4101, title: "Export totals" })] });
+    expect(w.calls).toHaveLength(1);
+    const prompt = `${w.calls[0]!.instructions}\n${w.calls[0]!.input}`;
+    expect(prompt).toContain("Export totals");
+    expect(prompt).not.toMatch(/Fabrikam|7701/);
+  });
+
+  it("messages refused before GD-2 are tried once more: an Internal chat's and an all-Cooptimizer chat's are sorted, a real mention in a client-facing chat is held", async () => {
     const w = world({ directory, allowed: [INTERNAL_CLIENT, "contoso"] });
     const a = await w.say(INT, EVAN, "2026-11-04T15:00:00Z", "Contoso Supply wants the export by Friday");
     const b = await w.say(CHAT, BLAKE, "2026-11-04T15:00:00Z", "Same issue Fabrikam had last month");
-    await w.convs.place([a, b].map((m) => ({ chatId: m.chatId, messageId: m.messageId, conversationId: null, role: "unsorted" as const, reason: LEGACY_CLIENT_REFUSED, placedBy: "rule" as const, at: m.createdAt })));
+    await w.convs.place([a, b].map((m) => ({ chatId: m.chatId, messageId: m.messageId, conversationId: null, role: "unsorted" as const, reason: m === a ? LEGACY_CLIENT_REFUSED : CLIENT_REFUSED, placedBy: "rule" as const, at: m.createdAt })));
     const internal = await legacyRefused(w.convs, w.teams, INT.chatId);
     expect(internal.map((m) => m.messageId)).toEqual([a.messageId]);
     expect(await w.run(INT, internal, { items: [] })).toMatchObject({ aiOutcome: "ok", unsorted: 0 });
     expect(await legacyRefused(w.convs, w.teams, INT.chatId)).toEqual([]);
     const client = await legacyRefused(w.convs, w.teams, CHAT.chatId);
-    expect(await w.run(CHAT, client)).toMatchObject({ aiOutcome: CLIENT_REFUSED, unsorted: 1 });
-    // Refused again: kept under the new reason, never tried again.
+    expect(await w.run(CHAT, client)).toMatchObject({ held: 1, unsorted: 1 });
+    // Held under the new reason: never retried while the chat is client-facing, retried once it becomes internal.
     expect(await legacyRefused(w.convs, w.teams, CHAT.chatId)).toEqual([]);
+    expect((await legacyRefused(w.convs, w.teams, CHAT.chatId, { internal: true })).map((m) => m.messageId)).toEqual([b.messageId]);
   });
 
   it("IB-1: messages a switch held back are picked once AI is available (a budget only with new messages); guard holds never", async () => {
@@ -304,7 +339,8 @@ describe("Cooptimize Internal and the client rule", () => {
       expect(l.fix, k).toMatch(/FocusTime admin/);
     }
     expect(unsortedLine("client_off", "Contoso")).toMatchObject({ text: "AI isn't allowed for Contoso", fix: expect.stringContaining("Admin › AI") });
-    expect(unsortedLine(CLIENT_REFUSED, "Contoso")).toEqual({ text: "held back because they mention another client", does: "held", fix: null });
+    expect(unsortedLine(CLIENT_REFUSED, "Contoso")).toEqual({ text: "held back because they mention another client", does: "held", fix: "They're checked again with the chat's next messages." });
+    expect(unsortedLine(HELD_MENTION, "Contoso")).toEqual({ text: "held back: they mention another client in a chat with people outside Cooptimize", does: "held", fix: "Open them to sort by hand." });
     expect(unsortedLine("refused_secret", "Contoso")).toMatchObject({ does: "held", text: expect.stringMatching(/^held back because they contain something that looks like a key/) });
     expect(unsortedLine("refused_email", "Contoso")).toMatchObject({ does: "held", text: "held back because they contain an email address" });
     // MB-1: one plain sentence, no colon for a hold; one message reads "it".

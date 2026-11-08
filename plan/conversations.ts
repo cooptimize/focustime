@@ -58,6 +58,8 @@ export type Conversation = {
   likelyItem: number | null;
   /** CV-2: merged by hand into this conversation (kept for Undo; left out of every list). */
   mergedInto: number | null;
+  /** GD-2: the other clients its messages name (keys), for the "mentions <client>" tag. Empty for most. */
+  mentions?: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -134,6 +136,8 @@ export type ItemDraft = {
   /** CV-5: acceptance criteria (sent only where the chosen type has the field); missing on drafts kept before CV-5. */
   acceptance?: string[];
   byAi: boolean;
+  /** GD-2: the AI's draft had another client's name replaced by "another client" (the form says so). */
+  namesRemoved?: boolean;
 };
 
 export type SuggestionKind = "comment" | "description";
@@ -149,6 +153,8 @@ export type Suggestion = {
   after: string | null;
   /** Lines that came from an internal delivery chat: shown flagged, left out unless included. */
   internal: string[];
+  /** GD-2: the AI's lines had another client's name replaced by "another client". */
+  namesRemoved?: boolean;
   state: "open" | "posted" | "skipped";
   writeId: number | null;
   day: string;
@@ -721,6 +727,11 @@ export const daysWaiting = (escalatedAt: string, now: string) => Math.max(1, 1 +
  */
 export const CLIENT_REFUSED = "other_client";
 export const LEGACY_CLIENT_REFUSED = "refused_client";
+/**
+ * GD-2: one message held back by the boundary rule: it names another client in a chat with people outside Cooptimize.
+ * Never sent to AI; listed in Inbox (Held back) for the chat's members, who sort it by hand or mark it not work.
+ */
+export const HELD_MENTION = "mentions_client";
 
 /**
  * IB-1 slice 3, the retry rule: what the unsorted line says for a reason and what can be done. `retry` only for what
@@ -737,8 +748,9 @@ export function unsortedLine(k: string | null, clientName: string): UnsortedLine
     case "not_set_up": return { text: "AI isn't set up", does: "switch", fix: "A FocusTime admin adds the AI key. They're sorted once it's set up." };
     case "zero_budget": return { text: "the AI budget is $0", does: "switch", fix: `${admin("sets the budget")} They're sorted with the chat's next messages.` };
     case "over_budget": return { text: "this month's AI budget is used up", does: "switch", fix: `${admin("can raise it")} They're sorted with the chat's next messages.` };
+    case HELD_MENTION: return { text: "held back: they mention another client in a chat with people outside Cooptimize", does: "held", fix: "Open them to sort by hand." };
     case "refused_client":
-    case CLIENT_REFUSED: return { text: "held back because they mention another client", does: "held", fix: null };
+    case CLIENT_REFUSED: return { text: "held back because they mention another client", does: "held", fix: "They're checked again with the chat's next messages." };
     case "refused_secret": return { text: "held back because they contain something that looks like a key or secret", does: "held", fix: null };
     case "refused_email": return { text: "held back because they contain an email address", does: "held", fix: null };
     case "chat_cap": return { text: "this chat reached its AI limit for today", does: "retry", fix: null };
@@ -770,6 +782,7 @@ export function unsortedText(k: string | null, clientName: string): string {
     case "zero_budget": return "AI budget is set to $0";
     case "over_budget": return "AI budget reached for this month";
     case "chat_cap": return "This chat reached its AI limit for today";
+    case HELD_MENTION: return "it mentions another client in a chat with people outside Cooptimize";
     case "refused_client":
     case CLIENT_REFUSED: return "it mentions another client";
     case "refused_secret": return "it contains something that looks like a key or secret";
