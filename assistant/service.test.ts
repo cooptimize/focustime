@@ -37,12 +37,15 @@ function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnTyp
   const ran: { action: ActionName; input: unknown }[] = [];
   const calls: ProviderCall[] = [];
   let intent: string[] = [];
+  // AS-3: the intent round also says whether it's a question (its topic and period) and a follow-up.
+  let askOf: unknown = null;
+  let follow = false;
   let answers: Reply[] = [];
   const log: AiLogEntry[] = [];
   const provider = stubProvider({
     respond: (c) => {
       calls.push(c);
-      if (c.schemaName === "assistant_intent") return JSON.stringify({ tools: intent });
+      if (c.schemaName === "assistant_intent") return JSON.stringify({ tools: intent, ask: askOf, followUp: follow });
       const r = answers.shift() ?? say("Done.");
       return typeof r === "function" ? r(c) : r;
     },
@@ -128,7 +131,11 @@ function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnTyp
   const a = createAssistant(env);
   return {
     a, plan, ran, calls, log, mine, rules,
-    script: (tools: string[], ...replies: Reply[]) => ((intent = tools), (answers = replies)),
+    script: (tools: string[], ...replies: Reply[]) => ((intent = tools), (askOf = null), (follow = false), (answers = replies)),
+    /** AS-3: the intent round names a question (no tools), optionally a follow-up; then the model's replies, if any. */
+    question: (ask: { topic: string; period?: string; date?: string | null; lateOnly?: boolean }, o: { followUp?: boolean; tools?: string[] } = {}, ...replies: Reply[]) => ((intent = o.tools ?? []), (askOf = { period: "this_week", date: null, lateOnly: false, ...ask }), (follow = !!o.followUp), (answers = replies)),
+    followUp: (tools: string[], ...replies: Reply[]) => ((intent = tools), (askOf = null), (follow = true), (answers = replies)),
+    handlers,
     setNow: (t: string) => void (now = t),
     setDescription: (d: string) => void (description = d),
     writes: () => ran.filter((r) => !["week.load", "ahead.load", "conversations.list", "team.commit", "send.people", "send.today", "devops.preview", "status.load"].includes(r.action)),

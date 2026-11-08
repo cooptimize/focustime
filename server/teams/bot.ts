@@ -186,7 +186,8 @@ export function createBotCore(d: BotDeps) {
   }
 
   async function reply(to: Address, userId: string, r: HandleResult): Promise<void> {
-    const results = r.cards.slice(0, 5).map((c) => resultCard(c, d.publicUrl));
+    // AS-3: an answer's sections (a client each) can be a few more than a lookup's cards.
+    const results = r.cards.slice(0, 7).map((c) => resultCard(c, d.publicUrl));
     const links = ownLinks(r.links, d.publicUrl);
     if (links.length && !results.length) results.push(resultCard({ title: "In FocusTime", links }, d.publicUrl));
     if (results.length) await cards(to, results, r.reply || undefined);

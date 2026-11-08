@@ -1,6 +1,6 @@
 # Security
 
-For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `da0eb07` on Nov 7, 2026.
+For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `da0eb07` on Nov 7, 2026; the assistant's context against `d25c148` with AS-3 (`feat/assistant-answers`) on Nov 7, 2026.
 
 ## In short
 
@@ -101,6 +101,7 @@ flowchart LR
 - **What is sent** is the task's own input: for chat sorting, the messages that pass the rules with that chat's open conversation summaries, participants' display names (never addresses) and message ids as short aliases; images only with that client's "Send attachments to AI" on. Meeting transcripts are masked for other clients and spoken email addresses first. Requests are sent with `store: false`.
 - **Answers** must match their schema or are dropped; a string that names a secret shape, the VM or an outside address is replaced with "[removed]" (`redact`). An answer naming another client is refused, unless its task says otherwise (GD-2): an internal chat's sorting keeps names, and text for a client's DevOps has them replaced with "another client" and the draft marked.
 - **AI never acts.** It only suggests through allowlisted actions; every write it proposes needs the person's Confirm. Text read from chats, DevOps or captures is data, never instructions.
+- **The assistant's answers (AS-3).** A question is answered from the asker's own reads (the same actions their buttons call), only for clients that are theirs; the reader is the person, so an answer may list several of their clients, grouped by client, and is shown only in their panel or their own 1:1 Teams chat, never posted anywhere else. What goes to the AI for it: the intent round gets the person's words, the screen and, for a follow-up, their earlier words with every client's name and item id replaced (`[client]`, `#[id]`); answers by topic are composed on the server and send nothing more. Only a general question about one client sends that client's context (its to-dos, blocks, promises, gaps, features without an update and calls in the period, titles and chat words under "quoted"), at most 16,000 characters, under that client's Allow AI and the guard; a question across clients asks which client first. Ids the model names that aren't in that context get no card. Suggested steps are FocusTime plan proposals (moving my to-dos, confirming my week), built from my own data, each run only on Confirm; anything that writes to a client's DevOps or chat goes through the same preview and GD-2 exit checks as its button. The conversation memory (my words, the items and to-dos an answer referred to) is kept 30 minutes on my own history row, in Export and cleared with it.
 - **The request log** keeps counts, cost and outcome, never prompt or answer text.
 
 ## External writes and the audit log

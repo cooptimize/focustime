@@ -119,6 +119,12 @@ own small types and reaches it through `teamsAssistant()` in `server/teams/assis
 
 ## Changes
 
+- Nov 7 (AS-3): additions only. Two card kinds: `section` (`{ title, lines: { text, link? }[] }`, one part of an
+  answer to a question, a client's name or "Your days" as its title) and `suggest` (`{ text, choices, expiresAt }`:
+  up to 3 suggested steps or up to 6 example questions; a tap sends the choice's value as `answer`, which builds the
+  usual proposal or asks the example; nothing runs from the tap). `CONVERSATION_MINUTES` (30): how long a follow-up
+  resolves against the last answer and its taps work. `RUNS` adds `status.load` and `meeting.mine` (reads).
+
 - Nov 6 (PK-1): additions only. The tools `item_done` and `item_undo`, in `PROPOSE_TOOLS` and `BUTTON_ONLY`: never
   given to the model (not in the intent enum, the tool list or the allowed list). `ProposeInput["tool"]` adds both.
 

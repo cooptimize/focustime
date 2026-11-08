@@ -18,7 +18,7 @@ const allDoes = [...Object.values(C.AREAS).flatMap((a) => a.does), ...Object.val
 
 describe("the sections", () => {
   it("are in nav order: Start here, Your first day, the four tabs, then the rest, with Renamed last", () => {
-    expect(SECTIONS.map((s) => s.id)).toEqual(["start", "first-day", "today", "week", "ahead", "inbox", "capture", "assistant", "teams", "calls", "settings", "renamed"]);
+    expect(SECTIONS.map((s) => s.id)).toEqual(["start", "first-day", "today", "week", "ahead", "inbox", "capture", "assistant", "ask", "teams", "calls", "settings", "renamed"]);
     for (const s of SECTIONS) expect(C.SECTION_LINES[s.id], s.id).toBeTruthy();
     for (const id of areaIds) expect(SECTIONS.some((s) => s.id === id), id).toBe(true);
   });
@@ -32,7 +32,7 @@ describe("the sections", () => {
     }
   });
   it("stays within the approved budgets (visible words; How it works is folded)", () => {
-    const budget: Record<string, number> = { today: 200, week: 300, ahead: 250, inbox: 350, capture: 150, assistant: 200, teams: 150, calls: 120, settings: 200 };
+    const budget: Record<string, number> = { today: 200, week: 300, ahead: 250, inbox: 350, capture: 150, assistant: 200, ask: 200, teams: 150, calls: 120, settings: 200 };
     for (const id of areaIds) expect(words([C.AREAS[id].lead, C.AREAS[id].does]), id).toBeLessThanOrEqual(budget[id]! * 1.1);
     expect(words(C.START)).toBeLessThanOrEqual(300);
     // Your first day: the checklist and its seven to eight day-one questions, read open.

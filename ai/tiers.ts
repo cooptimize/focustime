@@ -18,7 +18,7 @@ export type FlexTask = (typeof FLEX_TASKS)[number];
  * anyway). conversations.comment (follow-through) runs on a tick but is a draft a person reviews: standard for now.
  */
 export const STANDARD_TASKS = [
-  "test_ai", "assistant.intent", "assistant.answer", "assistant_transcribe", "stories.draft", "status_draft",
+  "test_ai", "assistant.intent", "assistant.answer", "assistant.question", "assistant_transcribe", "stories.draft", "status_draft",
   "conversations.draft_item", "conversations.merge_summary", "conversations.comment", "capture.prepare", "loop_draft",
 ] as const;
 

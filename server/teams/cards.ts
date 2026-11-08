@@ -71,7 +71,9 @@ export function questionCard(q: Question, questionId: string): Card {
     return { type: "Action.Execute", title: c.label.slice(0, 80), verb: "answer", data, fallback: { type: "Action.Submit", title: c.label.slice(0, 80), data } };
   });
   // One ActionSet per choice, so long choices stack instead of running off the card's edge.
-  return card([text(q.text, { weight: "Bolder" }), muted("Tap one, or just type it. This waits 10 minutes."), ...actions.map((x) => ({ type: "ActionSet", actions: [x], spacing: "Small" }))]);
+  // AS-3: a suggested step shows its preview first; nothing changes until Confirm.
+  const hint = q.suggest ? "Tap one to see it. A change shows a preview first; nothing changes until you Confirm." : "Tap one, or just type it. This waits 10 minutes.";
+  return card([text(q.text, { weight: "Bolder" }), muted(hint), ...actions.map((x) => ({ type: "ActionSet", actions: [x], spacing: "Small" }))]);
 }
 export const answeredCard = (q: string, label: string): Card => card([text(q, { isSubtle: true }), text(`You chose: ${label}`, { weight: "Bolder" })]);
 export const undoneCard = (title: string, message: string): Card => card([text(`Undone: ${title}`, { weight: "Bolder" }), text(message, { spacing: "Small" })]);

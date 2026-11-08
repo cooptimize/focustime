@@ -413,3 +413,11 @@ What DS-1 learned, and what is still open:
 - Q-GD2-3: a held message in a client-facing chat waits until someone sorts it or retention purges it (14 days). Should a lead get a quiet note when one waits more than a working day?
 - Q-GD2-4: matching is on names and aliases as whole words. A client whose name is a common word ("Atlas", "Summit") will hold messages that use the word. Is an alias list per client enough, or do we need a "not a mention" button that teaches it?
 - Q-GD2-5: Replace writes "another client". Would people rather choose the words (for example "a retail client")?
+
+## The Assistant answers real questions (AS-3, Nov 7)
+
+- Q-AS3-1: holidays: FocusTime has no holiday source, so a holiday shows only as PTO or out of office. Add a company holiday calendar (a new source, so asked separately)?
+- Q-AS3-2: the planning check's thresholds (over at planned > free + 30 minutes, a day called out at 4 hours of meetings or under 2 hours free) are fixed. Make them Settings, or tune after the pilot?
+- Q-AS3-3: an over block's suggestion moves its extra to-dos to that week's Friday AM. Is Friday right, or should it pick the client's next block with room?
+- Q-AS3-4: answers are composed by FocusTime, not phrased by the AI, so they read the same every time. Would people rather have them phrased by the AI per client (one call per client)?
+- Q-AS3-5: the conversation state lasts 30 minutes. Long enough for a planning session?
