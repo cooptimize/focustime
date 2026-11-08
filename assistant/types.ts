@@ -96,7 +96,20 @@ export type Choice = { label: string; value: string };
  */
 export type QuestionCard = { kind: "question"; text: string; choices: Choice[]; expiresAt: string };
 
-export type Card = ItemCard | BlockCard | PickCard | SendCard | PromiseCard | NoteCard | QuestionCard;
+/**
+ * AS-3: one part of an answer to a question, built on the server from my own data: a heading (a client's name, "Your
+ * days", "Not known") and its lines, each naming a real block, to-do, #id or promise with its link.
+ */
+export type SectionCard = { kind: "section"; title: string; lines: { text: string; link?: Link }[] };
+
+/**
+ * AS-3: up to 3 suggested next steps under an answer (or up to 6 example questions under "what can you do"). A tap
+ * sends the choice's value as `answer`: a step builds the usual proposal (preview, then Confirm); an example asks it.
+ * Nothing runs from the tap itself. Taps work until expiresAt (2 hours).
+ */
+export type SuggestCard = { kind: "suggest"; text: string; choices: Choice[]; expiresAt: string };
+
+export type Card = ItemCard | BlockCard | PickCard | SendCard | PromiseCard | NoteCard | QuestionCard | SectionCard | SuggestCard;
 
 /** One row of a preview: a field and its value before and after (null: none). */
 export type PreviewRow = { label: string; before: string | null; after: string | null };
@@ -203,3 +216,5 @@ export const HISTORY_DAYS = 30;
 export const MAX_TEXT = 2000;
 /** AS-2: how long a question waits for my answer. */
 export const QUESTION_MINUTES = 10;
+/** AS-3: how long a follow-up ("those", "the feature they're under") resolves against my last answer, and its taps work. */
+export const CONVERSATION_MINUTES = 120;

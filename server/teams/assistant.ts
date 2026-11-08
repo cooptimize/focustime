@@ -32,8 +32,11 @@ export type Proposal = {
 
 export type HandleStatus = "ok" | "off" | "client_off" | "refused" | "which_client" | (string & {});
 
-/** AS-2: a question with choices (card buttons in Teams). */
-export type Question = { text: string; choices: readonly { label: string; value: string }[]; expiresAt: string };
+/**
+ * AS-2: a question with choices (card buttons in Teams). AS-3: an answer's suggested steps come the same way, with
+ * `note` saying a tap shows a preview to confirm (`suggest`).
+ */
+export type Question = { text: string; choices: readonly { label: string; value: string }[]; expiresAt: string; suggest?: boolean };
 
 export type HandleResult = {
   turnId: string;
@@ -84,7 +87,14 @@ function cardOf(c: AsCard): AssistantCard {
     case "promise":
       return { title: c.what, lines: [`${c.clientName} · ${c.who}${c.toWhom ? ` to ${c.toWhom}` : ""}${c.due ? ` · due ${c.due}` : ""}`], links: links(c.link) };
     case "question":
+    case "suggest":
       return { title: c.text, lines: c.choices.map((x) => x.label) };
+    // AS-3: one part of an answer: its heading, its lines, and its first two distinct links (more run off a 1:1 card).
+    case "section": {
+      const seen = new Set<string>();
+      const ls = c.lines.flatMap((l) => (l.link && !seen.has(l.link.label) && seen.add(l.link.label) ? [{ label: l.link.label, url: l.link.href }] : [])).slice(0, 3);
+      return { title: c.title, lines: c.lines.map((l) => l.text), links: ls };
+    }
   }
 }
 
@@ -103,8 +113,8 @@ export function teamsAssistant(a: Pick<Assistant, "handle" | "confirm" | "cancel
   return {
     async handle(i) {
       const r = await a.handle({ person: i.person, channel: "teams", text: i.text, context: { screen: "teams" }, ...(i.answer ? { answer: i.answer } : {}) });
-      const q = r.cards.find((c) => c.kind === "question");
-      return { turnId: String(r.turnId), status: r.status, reply: r.reply, cards: r.cards.filter((c) => c.kind !== "question").map(cardOf), proposals: r.proposals.map(proposalOf), links: r.links.map((l) => ({ label: l.label, url: l.href })), question: q && q.kind === "question" ? { text: q.text, choices: q.choices, expiresAt: q.expiresAt } : null };
+      const q = r.cards.find((c) => c.kind === "question" || c.kind === "suggest");
+      return { turnId: String(r.turnId), status: r.status, reply: r.reply, cards: r.cards.filter((c) => c.kind !== "question" && c.kind !== "suggest").map(cardOf), proposals: r.proposals.map(proposalOf), links: r.links.map((l) => ({ label: l.label, url: l.href })), question: q && (q.kind === "question" || q.kind === "suggest") ? { text: q.text, choices: q.choices, expiresAt: q.expiresAt, ...(q.kind === "suggest" ? { suggest: true } : {}) } : null };
     },
     async confirm(i) {
       const edits = Object.fromEntries(Object.entries(i.edits ?? {}).filter(([, v]) => typeof v === "string")) as Record<string, string>;

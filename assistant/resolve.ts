@@ -38,6 +38,32 @@ function namedPhrases(text: string): string[] {
   return out;
 }
 
+/** Words that never name a feature on their own ("the user stories", "the open items"). */
+const STOP = new Set(["user", "my", "the", "all", "those", "these", "them", "open", "other", "same", "new", "next", "last", "this", "that", "items", "item", "stories", "story", "to-dos", "todos", "work", "tasks", "rest", "remaining", "unfinished", "today", "tomorrow", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "am", "pm", "morning", "afternoon", "block", "week", "day"]);
+
+/**
+ * AS-3: phrases that name a feature or epic: "the Data Staleness items", "the items under the Data Staleness
+ * feature", "the feature name they're under is data staleness". Each only counts when it is inside a feature's or
+ * epic's title; generic words alone ("the user stories") never do.
+ */
+export function featurePhrases(text: string): string[] {
+  const out: string[] = [];
+  const w = "[\\p{L}\\p{N}][\\p{L}\\p{N}'’-]*";
+  const phrase = `((?:${w}\\s+){0,4}${w})`;
+  const res = [
+    new RegExp(`\\b(?:under|in|from|of|for)\\s+the\\s+["“]?${phrase}["”]?\\s+(?:feature|epic)\\b`, "giu"),
+    new RegExp(`\\b(?:feature|epic)(?:'s|’s)?\\s+(?:name|title)\\s+(?:(?:they|it|those|these)\\s*(?:'re|’re|'s|’s|are|is)\\s+under\\s+)?(?:is|was|would be)\\s+["“]?${phrase}["”]?(?=\\s*(?:[.,;!?]|$|\\s+(?:and|so|not|but)\\b))`, "giu"),
+    new RegExp(`\\bthe\\s+["“]?${phrase}["”]?\\s+(?:items|stories|story|to-?dos|tasks|work|feature|epic)\\b`, "giu"),
+  ];
+  for (const re of res) for (const m of text.matchAll(re)) {
+    const p = (m[1] ?? "").trim();
+    const ws = words(p);
+    if (!ws.length || ws.every((x) => STOP.has(x)) || p.length < 3) continue;
+    out.push(p);
+  }
+  return [...new Set(out)];
+}
+
 export function resolve(text: string, clients: readonly ResolveClient[], picks: readonly Pick[], isMine: (k: string) => boolean): Resolved {
   const mineClients = clients.filter((c) => isMine(c.clientKey));
   const all = mineClients.flatMap((c) => c.items.map((item) => ({ clientKey: c.clientKey, item })));
@@ -61,6 +87,16 @@ export function resolve(text: string, clients: readonly ResolveClient[], picks: 
     const fresh = fits.filter((x) => !items.has(`${x.clientKey}:${x.item.id}`));
     if (fits.length === 1) add(itemView(fits[0]!));
     else if (fresh.length > 1 && !ambiguous) ambiguous = { phrase, options: fits.slice(0, 6).map(itemView) };
+  }
+  // AS-3: a feature or epic named by part of its title ("the Data Staleness items"): one fits, or two are a question.
+  for (const phrase of featurePhrases(text)) {
+    const p = norm(phrase);
+    const feats = all.filter((x) => { const t = tierOf(x.item); return (t === "feature" || t === "epic") && norm(x.item.title).includes(p); });
+    if ([...items.values()].some((m) => feats.some((f) => f.clientKey === m.clientKey && f.item.id === m.id))) continue;
+    const exact = feats.filter((x) => norm(x.item.title) === p);
+    const fits = exact.length ? exact : feats;
+    if (fits.length === 1) add(itemView(fits[0]!));
+    else if (fits.length > 1 && !ambiguous) ambiguous = { phrase, options: fits.slice(0, 6).map(itemView) };
   }
   // Same title on two items of one client (or two clients) is a question too.
   const byTitle = new Map<string, MatchedItem[]>();

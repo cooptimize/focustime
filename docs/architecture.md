@@ -464,6 +464,13 @@ The bot can come to the person: a morning brief, a midday check-in, a close out 
   `questionCard` and `answer` verb, the done card's Undo (`server/teams/cards.ts`, `server/teams/bot.ts`). The panel:
   chips and per-part results in `ui/Assistant.tsx`. Tests: `assistant/resolve.test.ts`, the AS-2 block of
   `assistant/service.test.ts`, `server/teams/bot.test.ts`, the demo script e2e.
+- **AS-3.** Questions: the intent's `ask` and `followUp`; `assistant/context.ts` (`buildContext`, `CONTEXT_LIMITS`,
+  `forClient`: my own rows from week.load, ahead.load, status.load, inbox.list and meeting.mine) and
+  `assistant/answer.ts` (`compose` per topic: sections by client, up to 3 suggestions from `SUGGEST_TOOLS`); the
+  `assistant.question` AI task for a general question about one client; the 2-hour conversation state in
+  `pending_json` (kinds "context" and "suggest"); feature phrases in `assistant/resolve.ts`. The "section" and
+  "suggest" cards in `ui/Assistant.tsx` and `server/teams/assistant.ts`. Guide › Ask. Tests:
+  `assistant/answers.test.ts` (the golden set), e2e `e2e/as3.test.ts`; `scripts/assistant-eval.ts` by hand.
 - **Settings.** Settings › Notifications › In Teams: the status line (hosted only, blocked, no chat yet), the master
   switch, What FocusTime sends (each kind, its time, Send me a test now, Also on Fridays). Actions `teams.status` and
   `teams.test` (`actions/dispatch.ts`, wired by `server/main.ts` only where the bot runs).

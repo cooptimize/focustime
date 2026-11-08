@@ -108,7 +108,7 @@ export function AssistantPanel(props: {
           <div className="as-empty">
             <p>Try:</p>
             <ul>
-              {["What's next?", "What's due today?", "Move everything from today to tomorrow", "Mark #4417 done and comment that the export is ready"].map((s) => (
+              {["I'm planning next week. What should I look out for?", "What can you help me with here?", "Which promises are late?", "Move everything from today to tomorrow"].map((s) => (
                 <li key={s}><button type="button" className="link-btn" onClick={() => (setText(s), inputRef.current?.focus())}>{s}</button></li>
               ))}
             </ul>
@@ -339,6 +339,33 @@ function CardView({ card, onOpen, onAnswer, skew }: { card: Card; onOpen: (href:
         </div>
       );
     }
+    // AS-3: suggested next steps, or example questions: a tap builds the proposal (Confirm still needed) or asks it.
+    case "suggest": {
+      const live = !!onAnswer && Date.parse(card.expiresAt) > Date.now() + skew;
+      return (
+        <div className="as-card suggest" data-testid="assistant-suggest">
+          <p className="as-meta">{card.text}</p>
+          <div className="as-chips" role="group" aria-label={card.text}>
+            {card.choices.map((c) => (
+              <button key={c.value} type="button" className="as-chip" disabled={!live} onClick={() => onAnswer?.(c)}>{c.label}</button>
+            ))}
+          </div>
+          {card.text === "Suggested next steps" && <p className="as-meta">Each shows a preview first. Nothing changes until you Confirm.</p>}
+        </div>
+      );
+    }
+    // AS-3: one part of an answer (a client, Your days, Not known): each line names a real thing, with its link.
+    case "section":
+      return (
+        <div className="as-card section" data-testid="assistant-section">
+          <p className="as-card-head"><b>{card.title}</b></p>
+          <ul className="as-children">
+            {card.lines.map((l, i) => (
+              <li key={i}>{l.link ? <button type="button" className="link-btn as-line" onClick={() => onOpen(l.link!.href)}>{l.text}</button> : l.text}</li>
+            ))}
+          </ul>
+        </div>
+      );
     case "note":
       return <div className="as-card note"><p>{card.text}</p>{go(card.link)}</div>;
     case "item":

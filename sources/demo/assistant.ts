@@ -90,6 +90,27 @@ function pickFrom(outputs: string[], said: string): number | null {
   return best?.id ?? null;
 }
 
+/** AS-3: the demo's question routing (the real model does this from the instructions): a topic and a period. */
+export function demoQuestion(said: string, today: string | null): { topic: string; period: string; date: string | null; lateOnly: boolean } | null {
+  const s = said.toLowerCase();
+  const period = /\bnext week\b/.test(s) ? "next_week" : /\blast week\b/.test(s) ? "last_week" : /\btomorrow\b/.test(s) ? "tomorrow" : /\bweekend\b/.test(s) ? "weekend" : /\btoday\b/.test(s) ? "today" : "this_week";
+  const q = (topic: string, lateOnly = false) => ({ topic, period, date: null, lateOnly });
+  void today;
+  if (/\b(help me with|can you do|can you help|what can you)\b/.test(s)) return q("capabilities");
+  if (/\blook out for\b|\bwatch out\b|\bplanning\b.*\?|\banything i should know\b/.test(s)) return q("plan_check");
+  if (/\bpromises?\b/.test(s)) return q("promises", /\blate\b|\boverdue\b/.test(s));
+  if (/\bwaiting on\b/.test(s)) return q("waiting");
+  if (/\bnot ready\b|\breadiness\b/.test(s)) return q("readiness");
+  if (/\bdeploy|\brelease|\bgo-live|\bafter hours\b/.test(s)) return q("deployments");
+  if (/\bupdate for monday\b|\bneed an update\b|\bstatus report\b/.test(s)) return q("status_updates");
+  if (/\bget done\b|\bgot done\b|\bfinished\b/.test(s)) return q("done");
+  if (/\bclient calls?\b|\bto review\b/.test(s)) return q("calls");
+  if (/\bon my plate\b|\bschedule\b|\bwhat's on\b/.test(s)) return q("agenda");
+  if (/\bfeature\b.*\b(name|under)\b|\bunder the\b/.test(s)) return q("items");
+  if (/\?\s*$/.test(s) && !/#\d+/.test(s)) return q("general");
+  return null;
+}
+
 const REPLY: Record<string, string> = {
   comment: "Here's the comment. Check it, then Confirm to add it in DevOps.",
   confirm_day: "Here's today's plan to confirm.",
@@ -114,12 +135,16 @@ export function demoAssistantProvider(): AiProvider {
       if (c.schema && typeof c.schema === "object" && "properties" in c.schema && (c.schema.properties as Record<string, unknown>).tools) {
         // The intent round: only the proposals the words ask for (reads are always allowed), or close_loop.
         const s = said.toLowerCase();
-        if (/\bclose\b.*\b(loop|follow-?up)\b/.test(s)) return text(c, { tools: ["close_loop"] });
-        if (planMove(s)) return text(c, { tools: ["move_plan"] });
-        if (compound(s, Number(/#(\d+)/.exec(said)?.[1] ?? 0))) return text(c, { tools: ["item_update"] });
-        if (/\bmove\b/.test(s)) return text(c, { tools: ["move_pick"] });
+        const none = { ask: null, followUp: false };
+        if (/\bclose\b.*\b(loop|follow-?up)\b/.test(s)) return text(c, { tools: ["close_loop"], ...none });
+        if (planMove(s)) return text(c, { tools: ["move_plan"], ...none });
+        if (compound(s, Number(/#(\d+)/.exec(said)?.[1] ?? 0))) return text(c, { tools: ["item_update"], ...none });
+        if (/\bmove\b/.test(s)) return text(c, { tools: ["move_pick"], ...none });
+        // AS-3: a question: its topic and period, answered from my own data on the server.
+        const q = demoQuestion(said, today);
+        if (q) return text(c, { tools: [], ask: q, followUp: /^(can't you|no,|i meant|those|they)\b/i.test(said.trim()) });
         const named = calls.map((x) => x.name);
-        return text(c, { tools: named.length ? named : [] });
+        return text(c, { tools: named.length ? named : [], ...none });
       }
       if (!c.rounds?.length && calls.length) {
         const made: ToolCall[] = calls.map((x, i) => ({ callId: `demo_${i}`, name: x.name, arguments: JSON.stringify(x.arguments) }));

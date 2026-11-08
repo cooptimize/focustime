@@ -414,6 +414,7 @@ const TASK_LABELS: Record<string, string> = {
   "meeting.capture": "Proposals from client call transcripts",
   "assistant.intent": "Assistant: understanding the request",
   "assistant.answer": "Assistant: the answer",
+  "assistant.question": "Assistant: a question about one client",
   "assistant_transcribe": "Assistant: push-to-talk",
   "stories.draft": "Break down",
   "status_draft": "Status drafts",

@@ -1,0 +1,49 @@
+## plan-next-week
+For next week (Mon, Nov 9 to Fri, Nov 13), 12 things to look at, by client.
+
+Your days
+- Fri, Nov 13: PTO
+
+Internal
+- Mon AM: at risk, Dentist 12:00
+- Late promise to Jordan Lee: Reply about the proposal timeline (was due Nov 4)
+- #4410 Internal reporting refresh: no update yet for Monday's report
+
+Northwind
+- Mon PM: at risk, Dentist 12:00
+- Wed AM: at risk, 2h 45m of meetings
+- Wed PM: at risk, Out: school event 1:30
+- Late promise to Marcus Bell: Send Marcus the updated export spec (was due Nov 4)
+- #1120 Supplier onboarding: no update yet for Monday's report
+- Northwind weekly status call on Nov 4: proposals to review
+
+Atlas
+- Tue PM: at risk, 2h 30m of meetings
+- #3310 Shipment tracking dashboard: no update yet for Monday's report
+( Confirm next week )
+
+## what-can-you-do
+I answer questions about your plan and make changes you confirm: moving to-dos, confirming a day or week, updating DevOps items, dates and owners in Ahead, sends, captures, deployments and closing the loop. Nothing changes until you press Confirm. Some things to try, from your week:
+
+Try asking
+- Mark #4411 done and comment that it's ready for review
+- I'm planning next week. What should I look out for?
+- Close the loop with Marcus Bell
+- What's not ready for Harbor next week?
+- Which features still need an update for Monday?
+- What did I get done this week for Internal?
+( Mark #4411 done and comment that it's ready for review )
+( I'm planning next week. What should I look out for? )
+( Close the loop with Marcus Bell )
+( What's not ready for Harbor next week? )
+( Which features still need an update for Monday? )
+( What did I get done this week for Internal? )
+
+## promises-late
+2 promises are late.
+
+Internal
+- Late, to Jordan Lee: Reply about the proposal timeline (was due Nov 4)
+
+Northwind
+- Late, to Marcus Bell: Send Marcus the updated export spec (was due Nov 4)

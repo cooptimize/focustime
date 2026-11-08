@@ -16,6 +16,7 @@ export const SECTIONS = [
   { id: "inbox", name: "Inbox", group: "tabs" },
   { id: "capture", name: "Capture and Break down", group: "more" },
   { id: "assistant", name: "The assistant", group: "more" },
+  { id: "ask", name: "Ask", group: "more" },
   { id: "teams", name: "FocusTime in Teams", group: "more" },
   { id: "calls", name: "Client calls", group: "more" },
   { id: "settings", name: "Settings, phone and keys", group: "more" },

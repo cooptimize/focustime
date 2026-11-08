@@ -83,6 +83,11 @@ export const PICKS_TOOLS: readonly ToolName[] = ["move_picks", "close_day"];
  * confirm check are the same as a proposal the model made.
  */
 export const PROPOSE_TOOLS = ["move_pick", "keep_pick", "drop_pick", "confirm_day", "move_picks", "close_day", "item_done", "item_undo", "move_plan"] as const satisfies readonly ToolName[];
+/**
+ * AS-3: the proposals an answer may suggest as a button (FocusTime's plan only). A tap builds the same proposal the
+ * model would (the button's preview, 15 minutes, every confirm check); it never runs on the tap.
+ */
+export const SUGGEST_TOOLS = ["move_plan", "confirm_week"] as const satisfies readonly ToolName[];
 /** AS-2: proposals that move to-dos, undone together (assistant.undo). */
 export const MOVE_TOOLS: readonly ToolName[] = ["move_picks", "move_plan"];
 
@@ -98,5 +103,5 @@ export const NEVER: readonly string[] = [
  */
 export const RUNS: ReadonlySet<ActionName> = new Set<ActionName>([
   ...Object.values(TOOLS).flatMap((t) => t.actions as readonly ActionName[]),
-  "week.load", "ahead.load", "conversations.list", "pick.mark_done", "closeout.commit", "team.commit", "send.today", "send.people", "devops.preview", "devops.confirm", "capture.route", "draft.prepare", "pick.uncarry",
+  "week.load", "ahead.load", "conversations.list", "status.load", "inbox.list", "meeting.mine", "pick.mark_done", "closeout.commit", "team.commit", "send.today", "send.people", "devops.preview", "devops.confirm", "capture.route", "draft.prepare", "pick.uncarry",
 ]);

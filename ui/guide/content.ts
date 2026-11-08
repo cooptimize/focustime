@@ -385,6 +385,10 @@ const NEW_QUESTIONS = [
   { q: "Can it change several things at once?", a: "Yes. It can move several to-dos at once, across clients (\"Push everything from today to tomorrow\"), with one Confirm and one Undo. On one item it can do up to three things in one card, like mark it done and add a comment. Any it can't put back because you worked on them since are listed." },
   { q: "What happens when it isn't sure what I mean?", a: "It asks one short question with a few choices made from your own clients, blocks and items, plus \"or type it\". Tap one, or answer in your own words." },
   { q: "What does the assistant need?", a: "AI for FocusTime, which your FocusTime admin turns on, and Allow AI for the client it's about. Your history stays 30 days; clear it in Settings › AI and assistant." },
+  { q: "Where do the assistant's answers come from?", a: "Only from what FocusTime already shows you: your blocks and to-dos, your promises and what you're waiting on, your DevOps items in Ahead, Monday's status report and your client calls. FocusTime puts the answer together itself, so another client's details never go to the AI with it. When a source didn't load or doesn't exist (holidays, for one), the answer says so instead of guessing." },
+  { q: "How long does it remember what I asked?", a: "2 hours, so \"the ones under the export feature\" right after a request works. It's yours only, kept with your assistant history, and Clear in Settings › AI and assistant removes it." },
+  { q: "Does it answer about every client?", a: "About every client you can see, grouped by client. Never a client you can't see, and an answer is never posted anywhere: it stays in your panel or your own Teams chat with FocusTime." },
+  { q: "What if AI is off?", a: "It says AI isn't on and points you to the command menu ({key:Ctrl K}), where every action is. Everything else in FocusTime works the same." },
   { q: "What is Diagnostics?", a: "Settings › Your data › Diagnostics, or Diagnostics in {key:Ctrl K}. Counts only, for your own chats: why a conversation where someone said they'd do something has no promise of yours, why messages of yours that sounded like a promise have none, and where your chats' messages were sorted in the last 14 days. It never shows message text, and Copy as text copies only the counts." },
   { q: "What is the demo?", a: "Try the demo, on the sign-in screen, opens FocusTime with made-up clients, work and calendars, so you can click everything. Nothing of yours is in it and nothing reaches DevOps, Outlook or Teams. Starting it signs you out of your own FocusTime; sign in again to come back." },
 ] as const;
@@ -430,7 +434,7 @@ export const AREA_UI = {
   noTour: "Tours run on your own screens. Sign in to see them.",
 };
 
-export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "capture" | "assistant" | "teams" | "calls" | "settings", AreaBody> = {
+export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "capture" | "assistant" | "ask" | "teams" | "calls" | "settings", AreaBody> = {
   today: {
     lead: "Today is your day on one screen: what's next, what's urgent, and the moment of the day.",
     does: [
@@ -576,6 +580,17 @@ export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "capture" | "a
     tryIts: ["assistant"],
     faqs: ["Does the assistant ever change something on its own?", "Can it change several things at once?", "What happens when it isn't sure what I mean?", "What does the assistant need?", "Can I just talk to it?"],
   },
+  ask: {
+    lead: "Ask in your own words: the assistant answers from your own plan, grouped by client, and says plainly what it can't see.",
+    does: [
+      { title: "Plan a week", text: "\"I'm planning next week. What should I look out for?\" Late promises, blocks with too much planned, items not ready, deployments and status updates owed, then up to 3 next steps to tap." },
+      { title: "Find out what it does", text: "\"What can you help me with here?\" Examples made from your own week, each one a tap away." },
+      { title: "Ask about one thing", text: "\"Which promises are late?\", \"What's not ready for Northwind next week?\", \"Do I have any deployments this weekend?\", \"What am I waiting on?\"" },
+      { title: "Follow up", text: "\"The ones under the Data export feature\" right after a request: it remembers what you asked for 2 hours, and asks when a name matches more than one thing." },
+      { title: "Tap a next step", text: "A suggested step shows the same preview as the button. Nothing changes until you Confirm.", tour: "assistant" },
+    ],
+    faqs: ["Where do the assistant's answers come from?", "How long does it remember what I asked?", "Does it answer about every client?", "What if AI is off?"],
+  },
   teams: {
     lead: "FocusTime in a 1:1 chat in Teams: ask it things, and if you like, get your brief, check-in and close out there.",
     does: [
@@ -697,6 +712,7 @@ export const SECTION_LINES: Record<string, string> = {
   inbox: AREAS.inbox.lead,
   capture: AREAS.capture.lead,
   assistant: AREAS.assistant.lead,
+  ask: AREAS.ask.lead,
   teams: AREAS.teams.lead,
   calls: AREAS.calls.lead,
   settings: AREAS.settings.lead,

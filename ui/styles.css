@@ -4820,6 +4820,10 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .as-chip { font: inherit; font-size: var(--fs-2); padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--raised); color: var(--text); cursor: pointer; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
 .as-chip:hover:not(:disabled), .as-chip:focus-visible { border-color: var(--accent); }
 .as-chip:disabled { opacity: 0.55; cursor: default; }
+/* AS-3: an answer's sections and its suggested steps. */
+.as-card.section .as-children li { margin: 2px 0; }
+.as-card.section .as-line { text-align: left; overflow-wrap: anywhere; white-space: normal; }
+.as-card.suggest .as-meta { margin: 0 0 4px; }
 .as-parts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-2); }
 .as-parts li.warn { color: var(--watch); }
 .as-outcome.warn { color: var(--watch); }

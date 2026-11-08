@@ -121,6 +121,9 @@ async function samples(c: ProviderCall, script: AiProvider): Promise<ProviderRep
       return reply(demoMeetingAnswer(c.input));
     case "status_draft":
       return reply({ drafts: statusDraft(c.input) });
+    // AS-3: a general question about one client, when the real model isn't there: say so plainly, never a made-up fact.
+    case "assistant_question":
+      return reply({ reply: "In the demo I can't answer that one without the real model. Ask what to look out for next week, which promises are late, or what's not ready next week.", itemIds: [] });
     case "loop_draft":
       return reply({ text: loopDraft(c.input) });
     case "conversations_merge_summary": {
