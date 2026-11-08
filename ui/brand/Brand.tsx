@@ -8,10 +8,15 @@ import { bandPath, finalFade, lumenAt, RING, SEGMENTS, segmentAt, span, STAGE, U
 import { useReducedMotion } from "./motion.ts";
 import "./brand.css";
 
-/** A generated asset inlined: its own :root token block dropped (the page's brand tokens apply through .brand-svg). */
-function inline(raw: string, uid: string): string {
+/**
+ * A generated asset inlined: its own :root token block dropped (the page's brand tokens apply through .brand-svg), and
+ * every style attribute dropped too (HK-7): the CSP allows no inline style, so the beam's blend comes from brand.css
+ * (`.brand-svg path[fill^="url(#beam"]`), and a style attribute here was only a console warning at sign-in.
+ */
+export function inline(raw: string, uid: string): string {
   return raw
     .replace(/<style>\s*:root\{[^}]*\}\s*<\/style>/, "")
+    .replace(/ style="[^"]*"/g, "")
     .replace(/<title>.*?<\/title><desc>.*?<\/desc>/, "")
     .replace(/ width="\d+" height="\d+"/, "")
     .replace(/id="([\w-]+)"/g, `id="$1-${uid}"`)

@@ -3,7 +3,8 @@
 //                                guest, not an automation account, inside the Cooptimize domains), else "client_facing";
 //                                no members known is client-facing (the safe side)
 //   mentionedClients(text)       which other clients a text names: whole words, any case, each client's key, its names
-//                                and the aliases an admin set (Admin › Clients), never inside a link or an email address
+//                                and the aliases an admin set (Admin › Clients), never inside a link or an email address;
+//                                a client set to "Match only as written" (HK-7) only with the casing given
 //   replaceMentions(text)        the same text with each other client's name (and, for DevOps text, its projects and
 //                                known item ids) as "another client"
 //   exitCheck(texts)             what an exit to client eyes would carry: the names, and the text with them replaced
@@ -70,6 +71,10 @@ const NUMBER = /(?<![\w.,$€£/:-])#?(\d{3,})(?![\w%]|[.,/:-]\d)/g;
 
 /** A client's words that count as a mention of it: its key, names and aliases, 3 letters or more. */
 export const wordsOf = (c: ClientEntry): string[] => [...new Set([c.key, ...c.names, ...(c.aliases ?? [])].map((w) => w.trim()).filter((w) => w.length >= 3))];
+/** HK-7: a client's word as a pattern: any case, or only as written when the client is set to match that way. */
+const nameRe = (c: Pick<ClientEntry, "exactCase">, w: string, global = false) => wordRe(w, `${global ? "g" : ""}${c.exactCase ? "" : "i"}u`);
+/** Inside a link: separators may be spaces, %20, +, _ or -. */
+const linkRe = (c: Pick<ClientEntry, "exactCase">, w: string) => new RegExp(esc(w).replace(/\s+/g, "[\\s%20+_-]+"), c.exactCase ? "u" : "iu");
 
 function others(client: string, directory: readonly ClientEntry[]) {
   const own = (k: string) => low(k) === low(client);
@@ -93,8 +98,10 @@ export function mentionedClients(text: string, client: string, directory: readon
   const out: Mention[] = [];
   for (const c of list) {
     if (out.some((x) => low(x.key) === low(c.key))) continue;
-    const words = [...wordsOf(c), ...(o.records ? c.projects.filter((p) => p.trim().length >= 3) : [])].filter((w) => !ownWords.has(low(w)));
-    const hit = words.some((w) => wordRe(w).test(t)) || (o.records && c.itemIds.some((id) => !ownIds.has(id) && numbers.has(id)));
+    // HK-7: names and aliases as the client is set to match; DevOps projects are names, matched in any case as before.
+    const words = wordsOf(c).filter((w) => !ownWords.has(low(w)));
+    const projects = o.records ? c.projects.filter((p) => p.trim().length >= 3 && !ownWords.has(low(p))) : [];
+    const hit = words.some((w) => nameRe(c, w).test(t)) || projects.some((p) => wordRe(p).test(t)) || (o.records && c.itemIds.some((id) => !ownIds.has(id) && numbers.has(id)));
     if (hit) out.push({ key: c.key, name: c.names[0] ?? c.key });
   }
   return out;
@@ -108,13 +115,14 @@ export function mentionedClients(text: string, client: string, directory: readon
 export function replaceMentions(text: string, client: string, directory: readonly ClientEntry[], o: { records?: boolean; token?: string } = {}): { text: string; count: number } {
   const token = o.token ?? ANOTHER;
   const { list, ownWords, ownIds } = others(client, directory);
-  const words = [...new Set(list.flatMap((c) => [...wordsOf(c), ...(o.records ? c.projects : [])]).map((w) => w.trim()))]
-    .filter((w) => w.length >= 3 && !ownWords.has(low(w)))
-    .sort((a, b) => b.length - a.length);
+  // Each word with how it matches (HK-7: a client's names only as written when it is set so; projects in any case).
+  const all = list.flatMap((c) => [...wordsOf(c).map((w) => ({ w, exact: !!c.exactCase })), ...(o.records ? c.projects.map((p) => ({ w: p.trim(), exact: false })) : [])]);
+  const words = [...new Map(all.filter(({ w }) => w.length >= 3 && !ownWords.has(low(w))).map((x) => [`${x.exact}\u0000${x.exact ? x.w : low(x.w)}`, x])).values()]
+    .sort((a, b) => b.w.length - a.w.length);
   const theirIds = new Set(o.records ? list.flatMap((c) => c.itemIds).filter((id) => !ownIds.has(id)) : []);
   let count = 0;
   // Links first, whole: replacing a word inside one would leave a broken link.
-  const linkNames = (m: string) => words.some((w) => new RegExp(esc(w).replace(/\s+/g, "[\\s%20+_-]+"), "iu").test(m));
+  const linkNames = (m: string) => words.some(({ w, exact }) => linkRe({ exactCase: exact }, w).test(m));
   let out = text.replace(LINK, (m) => (linkNames(m) ? (count++, `${token}'s link`) : m));
   // Then words, outside what's left of links.
   const parts = splitLinks(out);
@@ -122,7 +130,7 @@ export function replaceMentions(text: string, client: string, directory: readonl
     .map((p) => {
       if (p.link) return p.text;
       let s = p.text;
-      for (const w of words) s = s.replace(wordRe(w, "giu"), (_m, pre: string) => (count++, `${pre}${token}`));
+      for (const { w, exact } of words) s = s.replace(nameRe({ exactCase: exact }, w, true), (_m, pre: string) => (count++, `${pre}${token}`));
       if (theirIds.size) s = s.replace(NUMBER, (m, d: string) => (theirIds.has(Number(d)) ? (count++, token) : m));
       return s;
     })
@@ -157,7 +165,7 @@ export function exitCheck(texts: readonly string[], client: string, directory: r
     for (const m of mentionedClients(t, client, directory, { records: true })) if (!names.includes(m.name)) names.push(m.name);
     // A name inside a link counts at the exit: the link goes out with it.
     const linked = [...t.matchAll(LINK)].map((x) => x[0]).join(" ");
-    if (linked) for (const c of others(client, directory).list) if (wordsOf(c).some((w) => new RegExp(esc(w).replace(/\s+/g, "[\\s%20+_-]+"), "iu").test(linked))) {
+    if (linked) for (const c of others(client, directory).list) if (wordsOf(c).some((w) => linkRe(c, w).test(linked))) {
       const n = c.names[0] ?? c.key;
       if (!names.includes(n)) names.push(n);
     }

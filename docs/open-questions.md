@@ -324,9 +324,9 @@ What DS-1 learned, and what is still open:
 - Q-MB1-2: Snooze for a to-do is "Snooze to this afternoon" (a move to PM). Should Snooze instead hide it until a time (as promises do), which needs a new pick field?
 - Q-MB1-3: Open anyway on Ahead lasts the browser session. Should it be remembered per device, or should the phone get a small read-only Ahead summary instead (this week's dated features)?
 - Q-MB1-4: the VM chip moved from the phone header into the status sheet; Today's morning VM prompt still shows. Is the prompt enough on the phone, or should the dot turn amber while the VM is off during working hours?
-- Q-MB1-5: Settings › Data › Diagnostics lists Unsorted reasons as "<reason> <count>" and now reads "held back because they mention another client 20". It is ST-1's screen, so it wasn't changed here; reword to "20 held back because they mention another client"?
+- Q-MB1-5: Settings › Data › Diagnostics lists Unsorted reasons as "<reason> <count>" and now reads "held back because they mention another client 20". It is ST-1's screen, so it wasn't changed here; reword to "20 held back because they mention another client"? Answered in HK-7 (D1180): Diagnostics now reads "20 messages held back because they mention another client".
 - Q-MB1-6: the phone's to-do sheet shows Done only on a confirmed day (as Today's checkboxes do). On an unconfirmed morning, should the sheet offer Confirm today first?
-- Q-MB1-7: UI-9's late chip on the phone moved from the card header to the card's chips line (the status line) at the MB-1 merge. A card with no status now gets that line for the chip, so it is one line taller there; in the header it never was. Keep it on the chips line, or go back to the header for cards with no status? Answered in MB-1b: with no status pill it ends the title line (no extra line); beside a pill it stays on the chips line.
+- Q-MB1-7: UI-9's late chip on the phone moved from the card header to the card's chips line (the status line) at the MB-1 merge. A card with no status now gets that line for the chip, so it is one line taller there; in the header it never was. Keep it on the chips line, or go back to the header for cards with no status? Answered in MB-1b (D1035): with no status pill it ends the title line (no extra line); beside a pill it stays on the chips line.
 
 ## Invite to FocusTime (IN-1, Nov 7)
 
@@ -338,7 +338,7 @@ What DS-1 learned, and what is still open:
 
 ## DOC-1
 
-- Q-DOC1-1: the scheduler's comment says a run claims a lease, but `server/scheduler.ts` has no lease: one replica in prod makes this safe today, and `job_claims` stops double runs per job and day. Either add the lease or change the comment before running more than one replica. Noted in docs/technical/operations.md.
+- Q-DOC1-1: the scheduler's comment says a run claims a lease, but `server/scheduler.ts` has no lease: one replica in prod makes this safe today, and `job_claims` stops double runs per job and day. Either add the lease or change the comment before running more than one replica. Noted in docs/technical/operations.md. Answered in HK-7 (D1181): the comment now says there is no lease and one replica is required until one is added.
 - Q-DOC1-2: "Coopilot" names left in the code on purpose, with where and the risk of renaming each:
   - `CoopilotId` (`MARKER_PROP`, `sources/graph/write.ts`): the marker on every FocusTime Outlook event. Renaming orphans every existing event (FocusTime would refuse to edit its own). Q98 has the migration path. Keep.
   - `LEGACY_BODY_TAG` "Timebox planned in Coopilot." (`plan/timebox.ts`): matched on old events' bodies. Removing it stops recognizing them. Keep.
@@ -346,12 +346,12 @@ What DS-1 learned, and what is still open:
   - `system/install.sh --remove-coopilot`: removes the old service, launcher and icons. Safe to drop once every developer machine ran it.
   - "Coopilot Desktop" and "Coopilot Dataverse Reader" (`config/starter.ts` comments, `infra/scripts/admin-group.sh`'s refusal, `actions/account.ts`): the registrations' real display names in Entra and Dataverse (Q97). Renaming them is an admin task outside the code; the script's refusal must follow any rename.
   - The Guide's Renamed row (`ui/guide/content.ts`): tells people the old name. Keep while anyone remembers it.
-- Q-DOC1-3: `actions/account.ts`'s header comment still describes the desktop sign-in (PKCE over loopback, refresh token in the keyring); the hosted app signs in through Entra OpenID Connect and seals refresh tokens in `user_secrets`. The code wins (docs/technical/security.md); fix the comment with the next change to that file.
+- Q-DOC1-3: `actions/account.ts`'s header comment still describes the desktop sign-in (PKCE over loopback, refresh token in the keyring); the hosted app signs in through Entra OpenID Connect and seals refresh tokens in `user_secrets`. The code wins (docs/technical/security.md); fix the comment with the next change to that file. Answered in HK-7 (D1182): the comment describes the hosted sign-in.
 - Q-DOC1-4: the docs are public to anyone who can reach the app's address, though the panel needs a session. If a page ever needs to hold something only Cooptimizers may read, serve the pages from an authenticated route instead of bundling them.
 - Q-DOC1-5: the "Edit on GitHub" link goes to `main`; a page read in an older build may differ from main. The footer's "This build" says which build it is.
 - Q-DOC1-6: the exact Azure CLI text for an unregistered resource provider in operations.md's troubleshooting is marked Not verified.
-- Q-DOC1-7: on a built UI (with the CSP), signing in to the demo logs one "Applying inline style violates ... style-src 'self'" from the main bundle. It happens on main at `13cd461` too, before the docs load; the docs panel adds none. Find the inline style (likely a library setting a style attribute) in a later step.
-- Q-DOC1-8: `e2e/ui9.test.ts` "keeping or snoozing a promise updates the chip, with no reload" fails now and then in CI: after Done in the Inbox and back to Week, Monday AM's late chip is still there after 20 s. It failed the same way on main (`a6d16c6`) and passes locally. Week's chips come from `inbox.today` (`ui/inboxcount.ts`), read again when the week's data reloads or every 5 minutes; a Done whose week reload doesn't land leaves the chip until then. Look at it in a housekeeping step (re-read `inbox.today` on the Inbox's own changes). Answered in HK-6: the app was right (the chip went within half a second); the test's read was the race, fixed there.
+- Q-DOC1-7: on a built UI (with the CSP), signing in to the demo logs one "Applying inline style violates ... style-src 'self'" from the main bundle. It happens on main at `13cd461` too, before the docs load; the docs panel adds none. Find the inline style (likely a library setting a style attribute) in a later step. Answered in HK-7 (D1176): the bent mark's beam had a style attribute; it is dropped when inlined (brand.css already sets the blend), with a test that sign-in raises no CSP violation.
+- Q-DOC1-8: `e2e/ui9.test.ts` "keeping or snoozing a promise updates the chip, with no reload" fails now and then in CI: after Done in the Inbox and back to Week, Monday AM's late chip is still there after 20 s. It failed the same way on main (`a6d16c6`) and passes locally. Week's chips come from `inbox.today` (`ui/inboxcount.ts`), read again when the week's data reloads or every 5 minutes; a Done whose week reload doesn't land leaves the chip until then. Look at it in a housekeeping step (re-read `inbox.today` on the Inbox's own changes). Answered in HK-6 (D1048): the app was right (the chip went within half a second); the test's read was the race, fixed there.
 
 ## Cleanup step 1 (CL-1, Nov 7)
 
@@ -404,12 +404,12 @@ What DS-1 learned, and what is still open:
 ## Text boxes that grow (UI-10, Nov 7)
 
 - Q-UI10-1: the phone sheets rest on the on-screen keyboard through `--kb-inset` (visualViewport) on iOS and `interactive-widget=resizes-content` on Android. Checked in Chromium with a simulated inset, not on a real iPhone or Android phone yet: does the capture box stay above the keyboard on both?
-- Q-UI10-2: on the phone, the Assistant sheet's × sits 2px past the sheet's right edge (older than UI-10, seen while testing; the page doesn't scroll sideways). Fix in a phone polish step?
+- Q-UI10-2: on the phone, the Assistant sheet's × sits 2px past the sheet's right edge (older than UI-10, seen while testing; the page doesn't scroll sideways). Fix in a phone polish step? Answered in HK-7 (D1183): the sheet's × keeps no right margin, with a test at 390 and 360 px.
 
 ## Client boundary (GD-2, Nov 7)
 
 - Q-GD2-1: a client known only by its key (no display name in my clients) shows its key in the "mentions" tag and the flag. Should the tag fall back to the Dataverse name for clients I don't follow?
 - Q-GD2-2: Status's line box flags as you type and says it goes to "this client's status report". Is the debounce (half a second) right, or should it check only on Push?
 - Q-GD2-3: a held message in a client-facing chat waits until someone sorts it or retention purges it (14 days). Should a lead get a quiet note when one waits more than a working day?
-- Q-GD2-4: matching is on names and aliases as whole words. A client whose name is a common word ("Atlas", "Summit") will hold messages that use the word. Is an alias list per client enough, or do we need a "not a mention" button that teaches it?
+- Q-GD2-4: matching is on names and aliases as whole words. A client whose name is a common word ("Atlas", "Summit") will hold messages that use the word. Is an alias list per client enough, or do we need a "not a mention" button that teaches it? Answered in HK-7 (D1177, D1178): "Match only as written" per client in Admin › Clients, on by default for a name that is an ordinary word; a "not a mention" button was not built.
 - Q-GD2-5: Replace writes "another client". Would people rather choose the words (for example "a retail client")?

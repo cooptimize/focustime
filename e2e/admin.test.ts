@@ -166,6 +166,12 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await adatum.getByRole("switch", { name: "Adatum: Bug is background" }).check();
       await expect.poll(async () => (await team.org.rules()).clients.Adatum?.background).toEqual(["Bug"]);
       await adatum.getByRole("row", { name: /Bug/ }).getByText("No hours").waitFor();
+      // HK-7: Match only as written, off by default for a name that isn't an ordinary word; on is the team's Rule.
+      const exact = adatum.getByRole("switch", { name: "Adatum: match only as written" });
+      expect(await exact.isChecked()).toBe(false);
+      await adatum.getByText("Off by default for this name.", { exact: false }).waitFor();
+      await exact.check();
+      await expect.poll(async () => (await team.org.rules()).clients.Adatum?.exactCase).toBe(true);
       await shotBoth(page, "admin-clients", adatum);
 
       // Admin › AI: on for FocusTime, allowed for Adatum.

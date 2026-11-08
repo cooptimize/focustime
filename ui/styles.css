@@ -4832,6 +4832,8 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   border-left: 0; border-top: 1px solid var(--border-strong); border-radius: 14px 14px 0 0;
 }
 .assistant-sheet .as-head { padding: 8px 8px 8px 16px; }
+/* HK-7 (Q-UI10-2): the sheet's 8 px right padding is less than the ×'s -10 px margin, which put it 2 px past the edge. */
+.assistant-sheet .as-head .x-close { margin-right: 0; }
 .assistant-sheet .as-list { padding: 12px 16px; }
 .assistant-sheet .as-compose { padding: 8px 16px 12px; }
 .assistant-sheet .as-row textarea { font-size: var(--fs-4); }

@@ -81,3 +81,15 @@ describe("GD-2: the mentions tag", () => {
     expect([...out.needsYou, ...out.teammates, ...out.inProgress, ...out.closed].some((x) => x.chatId === team.chatId)).toBe(false);
   });
 });
+
+describe("HK-7: a client named after an ordinary word", () => {
+  it("in a client-facing chat, \"Summit\" holds the message and \"the summit\" doesn't (Match only as written)", async () => {
+    const dir = [aClientEntry({ key: "contoso", names: ["Contoso Supply"], projects: [], itemIds: [] }), aClientEntry({ key: "Summit", names: ["Summit"], projects: [], itemIds: [], exactCase: true })];
+    const w = world({ directory: dir, allowed: ["contoso"], respond: everyWork });
+    const word = await w.say(CHAT, BLAKE, "2026-11-04T15:00:00Z", "The team summit moved the export review to Friday");
+    expect(await w.run(CHAT, [word])).toMatchObject({ held: 0 });
+    const name = await w.say(CHAT, BLAKE, "2026-11-04T15:05:00Z", "Summit had the same export issue last month");
+    expect(await w.run(CHAT, [name])).toMatchObject({ held: 1 });
+  });
+});
+
