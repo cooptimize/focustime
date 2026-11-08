@@ -510,3 +510,33 @@ export function aStatusLoad(o: { clientKey?: string; clientName?: string; update
 export function aDeployment(o: Partial<import("../../plan/types.ts").Pick> = {}): import("../../plan/types.ts").Pick {
   return aPick({ date: "2026-11-07", half: "EVE", kind: "intention", itemId: null, itemUrl: null, title: "Release 4.2", itemType: "Deployment", size: null, minutes: 120, todoKind: "deployment", window: { start: "09:00", end: "11:00" }, ...o });
 }
+
+// ---- CW-1 ----
+
+/**
+ * A Graph chatMessage carrying a call started (default) or call ended event, as GET /chats/{id}/messages returns it
+ * (messageType unknownFutureValue without the Prefer header; systemEventMessage with it).
+ */
+export function aCallEventMessage(o: { kind?: "started" | "ended"; callId?: string; at?: string; initiator?: string | null; tenant?: string | null; duration?: string; callEventType?: string; messageType?: string; participants?: string[] } = {}): Record<string, unknown> {
+  const n = next();
+  const at = o.at ?? "2026-11-04T14:12:00Z";
+  const user = o.initiator === null ? null : { id: o.initiator ?? "00000000-0000-4000-8000-000000000001", displayName: null, userIdentityType: "aadUser", ...(o.tenant === null ? {} : { tenantId: o.tenant ?? HOME_TENANT }) };
+  const ended = o.kind === "ended";
+  return {
+    id: String(1_700_000_000_000 + n), messageType: o.messageType ?? "unknownFutureValue", createdDateTime: at, lastModifiedDateTime: at, deletedDateTime: null, chatId: "19:fabrikam@thread.v2",
+    from: null, body: { contentType: "html", content: "<systemEventMessage/>" }, attachments: [], mentions: [], reactions: [],
+    eventDetail: {
+      "@odata.type": ended ? "#microsoft.graph.callEndedEventMessageDetail" : "#microsoft.graph.callStartedEventMessageDetail",
+      callId: o.callId ?? "9c848c0e-f906-4dfc-b22e-c68a785a587c",
+      callEventType: o.callEventType ?? "call",
+      initiator: { application: null, device: null, user },
+      ...(ended ? { callDuration: o.duration ?? "PT1H", callParticipants: (o.participants ?? ["Person A"]).map((name) => ({ participant: { user: { id: `p-${name}`, displayName: name, userIdentityType: "aadUser" } } })) } : {}),
+    },
+  };
+}
+
+/** A call event as plan/cowork.ts reads it (a start in the fabrikam chat by default). */
+export function aCallEvent(o: Partial<import("../../plan/cowork.ts").CallEvent> = {}): import("../../plan/cowork.ts").CallEvent {
+  const at = o.at ?? "2026-11-04T14:12:00.000Z";
+  return { chatId: "19:fabrikam@thread.v2", callId: "call-1", kind: "started", at, startedAt: o.kind === "ended" ? null : at, initiatorId: "00000000-0000-4000-8000-000000000001", initiatorTenant: HOME_TENANT, ...o };
+}

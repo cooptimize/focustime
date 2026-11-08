@@ -1,5 +1,7 @@
 import { createContext, Fragment, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { callMarks, callsIn, MeetingCalls, useCallMarks, useMine } from "./meetings/calls.ts";
+import { LiveCalls, liveOf, useCoworkData } from "./cowork.tsx";
+import { liveCallCard, type CoworkChatView } from "../plan/cowork.ts";
 import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
 import { freeMinutes } from "../week/free.ts";
@@ -63,6 +65,8 @@ const TimelineCtx = createContext(true);
 /** UI-9: `late` is each card's late promises (by rail key), its chip's count when the card draws no rail; `onLate` opens several. */
 type RulerCtxValue = { layout: Layout; promises: readonly RailItem[]; onPromise?: ((key: string) => void) | undefined; onLate?: ((clientKey: string | null) => void) | undefined; today: string; now: string; home: RailSpan | null; late: ReadonlyMap<string, RailItem[]> };
 const RulerCtx = createContext<RulerCtxValue>({ layout: "wide", promises: [], today: "", now: "", home: null, late: new Map() });
+/** CW-1: the live co-working calls each of today's cards shows (by rail key): a client's on its first card not ended. */
+const LiveOnCard = createContext<ReadonlyMap<string, CoworkChatView[]>>(new Map());
 
 type Props = {
   week: Week;
@@ -115,12 +119,22 @@ export function WeekGrid(props: Props) {
   const late = lateOnCards(props.promises ?? [], cardRails, { today: props.today, now: props.now });
   // MC-1: the registered client calls I review or attend, marked on the card they start in.
   const mine = useMine();
+  // CW-1: a call live in a client's delivery chat, on that client's first card today that hasn't ended.
+  const cowork = useCoworkData();
+  const liveOn = new Map<string, CoworkChatView[]>();
+  const todayCards = cardRails.filter((c) => c.date === props.today).map((c) => ({ key: c.key, clientKey: c.clients[0] ?? null, start: c.start, end: c.end }));
+  for (const k of new Set((cowork?.chats ?? []).filter((c) => c.live).map((c) => c.clientKey))) {
+    const at = liveCallCard(todayCards, k, props.now);
+    if (at) liveOn.set(at, [...(liveOn.get(at) ?? []), ...liveOf(cowork, k)]);
+  }
   return (
     <RulerCtx.Provider value={{ layout: props.layout, promises: props.promises ?? [], onPromise: props.onPromise, onLate: props.onLate, today: props.today, now: props.now, home, late }}>
       <MeetingCalls.Provider value={callMarks(mine)}>
-        <TimelineCtx.Provider value={props.timeline ?? true}>
-          <Grid {...props} />
-        </TimelineCtx.Provider>
+        <LiveOnCard.Provider value={liveOn}>
+          <TimelineCtx.Provider value={props.timeline ?? true}>
+            <Grid {...props} />
+          </TimelineCtx.Provider>
+        </LiveOnCard.Provider>
       </MeetingCalls.Provider>
     </RulerCtx.Provider>
   );
@@ -687,6 +701,8 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   const drop = useDropTarget(eve ? null : { date: slot.date, half: slot.half });
   // MC-1: a registered call starting in this card's hours: its name and what it needs, opening its review.
   const calls = callsIn(useCallMarks(), slot.start, slot.end);
+  // CW-1: a call live in this client's delivery chat (only on today's first card for the client that hasn't ended).
+  const liveCalls = useContext(LiveOnCard).get(`${slot.date}|${slot.half}`) ?? [];
 
   // U3: one line for the client's features this week: "3 features · 1 needs stories", opening the panel there.
   const feats = !eve && (slot.half === "AM" || slot.half === "PM") ? clientFeatures(plan.weekFeatures ?? [], mondayOf(slot.date), primary?.clientKey ?? null) : [];
@@ -753,6 +769,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
           ))}
         </div>
       )}
+      <LiveCalls chats={liveCalls} zone={tz} tabIndex={selected ? 0 : -1} className="card-live" />
       {calls.length > 0 && (
         <div className="card-calls">
           {calls.map((c) => (

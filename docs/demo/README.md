@@ -43,6 +43,7 @@ starts the same.
 | `ahead.ts` | DM-1 (AH-1) | Three staged Ahead changes, one a conflict |
 | `notices.ts`, `history.ts` | DM-1 | Notes and past days |
 | `conversations.ts` | DM-1 (CV-1, CV-5) | Four registered chats; a conversation that needs me, my late promise, my promise due Friday, one tracked as #2211, one a teammate handles, chatter |
+| `cowork.ts` | CW-1 | A co-working call live in Northwind's delivery chat (started 40 minutes ago by Jordan Lee) and one that ended in Atlas's |
 | `status.ts` | SR-1 | Kat's sends last Monday; this week's comments on two features (mine, a teammate's, a Coop update), last week's, and the story changes behind the drafts |
 | `inbox.ts` | IB-1 | What the Inbox needs beyond the other seeds, so every view shows something: Priya's question to me by name on Atlas (Needs you, "Priya asked you by name"; not sorted as urgent, so Today keeps one Start focus), her commitment to me (Waiting on), a conversation resolved this morning and a promise closed today (Done). `server/demo-inbox.test.ts` checks every view on every weekday |
 | `assistant.ts` | AS-2 | Export orders to CSV (#1111) on the coming Wednesday afternoon, so the script's move by feature moves two to-dos |

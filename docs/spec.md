@@ -795,3 +795,15 @@ merge); setup in `docs/setup/meeting-capture.md`; files in `docs/architecture.md
 - **Retention:** transcripts and quotes 30 days; proposals and results kept; reviewers and attendees only.
 - **Store:** one migration, `20261116T0900_meetings` (four app tables; adds only). Not in Export.
 - **Rollback:** revert the PR and redeploy; the tables stay unused (an older build ignores them).
+
+## 49. CW-1: co-working calls (authorized Nov 7)
+
+Cooptimizers co-work on a Teams call in a client's delivery chat. FocusTime makes it visible and one click away. Decisions under "CW-1" (unnumbered until merge); files in `docs/architecture.md` (CW-1).
+
+- **Call live.** A call started in a registered client chat and not ended shows on that client's first block today that hasn't ended (Week) and on Today's Now card: "Call live in <chat> · started 9:12", who started it (a Cooptimizer by name, anyone else as "someone outside Cooptimize"), and Join, which opens the chat in Teams. It clears on the call ended event, or 10 hours after the start.
+- **Start a call.** The block's ⋯, its detail panel and the command menu: "Start a call in <chat>" (or "Join the call in <chat>" while live) opens the chat in Teams. FocusTime never starts, joins or posts in a call.
+- **No new source scope and no new permission.** The shared poll's existing `GET /chats/{id}/messages` (delegated `Chat.Read`) already returns the call system events; they are read off the same pages. Same interval.
+- **Rules.** Call events are never messages, conversations, promises or chatter, and never go to the AI. Nothing is recorded or transcribed; only the call id, its times and the starter's id and tenant are kept (`chat_calls`, 48 hours). Only registered chats count; only someone in the chat who follows its client sees it.
+- **Store:** one migration, `20261121T0900_chat_calls` (an app table; adds only). Not in Export.
+- **Rollback:** revert the PR and redeploy; the table stays unused (an older build ignores it).
+
