@@ -4516,6 +4516,28 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .ah-fx-edit { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-inline-start: 22px; }
 .ah-fx-due { font-size: var(--fs-2); }
 .ah-fx-more { margin-top: 6px; }
+/* AH-7: Readiness you can finish: counts by kind, Start here, rows fading out once fixed, Skipped, progress. */
+.ah-fx-progress { margin: 2px 0 6px; font-size: var(--fs-2); }
+.ah-fx-kinds { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.ah-fx-kind { display: inline-flex; align-items: baseline; gap: 6px; padding: 2px 10px; border: 1px solid var(--border); border-radius: 99px; background: var(--surface); color: var(--text-muted); font: inherit; font-size: var(--fs-2); cursor: pointer; }
+.ah-fx-kind strong { color: var(--text); font-weight: 600; }
+.ah-fx-kind:hover { border-color: var(--border-strong); color: var(--text); }
+.ah-fx-kind[aria-disabled="true"] { opacity: 0.55; cursor: default; }
+.ah-fx-kind.on { border-color: var(--text); color: var(--text); background: var(--raised); box-shadow: inset 0 0 0 1px var(--text); }
+.ah-fx-start { margin: 10px 0 18px; }
+.ah-fx-start .ah-fx-item .rm-expand-space { display: none; }
+.ah-fx-start .ah-client-head { display: flex; align-items: center; gap: 8px; }
+.ah-fx-why { position: relative; display: inline-flex; font-weight: 400; }
+.ah-fx-tip { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; width: min(34em, 80vw); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--raised); color: var(--text); box-shadow: var(--shadow-pop); font-size: var(--fs-2); }
+.ah-fx-tip[hidden] { display: none; }
+.ah-fx-client-name { flex: none; display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: var(--fs-2); min-width: 7em; }
+.ah-fx-row.leaving { animation: ah-fx-leave 0.9s ease-in forwards; }
+@keyframes ah-fx-leave { 0%, 40% { opacity: 1; } 100% { opacity: 0; } }
+:root[data-reduce-motion] .ah-fx-row.leaving { animation: none; opacity: 0.5; }
+@media (prefers-reduced-motion: reduce) { .ah-fx-row.leaving { animation: none; opacity: 0.5; } }
+.ah-fx-ready { font-size: var(--fs-2); color: var(--ok); font-weight: 500; }
+.ah-fx-skipped { margin-top: 18px; }
+.ah-fx-skipped-head { margin-bottom: 6px; }
 /* AH-2: Gantt in Ahead, calmer than Plan ahead's: quiet flags and month cells, the text in the normal color. */
 .ahead .pa-flags { border-color: var(--border-strong); background: transparent; font-weight: 400; }
 .ahead .pa-flags:hover, .ahead .pa-flags:focus-visible { background: var(--raised); }
