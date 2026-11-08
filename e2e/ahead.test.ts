@@ -481,7 +481,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     expect(n).toBeGreaterThan(0);
     await expect(page.getByRole("navigation", { name: "Ahead modes" }).getByRole("button", { name: /Readiness/ }).textContent()).resolves.toBe(`Readiness · ${n}`);
     // One row per item (AH-1 listed an item once per gap).
-    const ids = await page.locator(".ah-fx-row:not(.ctx) .ah-id").allTextContents();
+    const ids = await page.locator(".ah-fx-client .ah-fx-row:not(.ctx) .ah-id").allTextContents();
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.length).toBe(n);
     // Grouped: a story sits under its feature, shown as a header when the feature itself has nothing to fix.
@@ -495,17 +495,17 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await expect(nw.locator(".ah-fx-note").count()).resolves.toBe(0);
     await shotBoth(page, "ahead-fix-next", sections.first());
     // Size one: it goes into the change set and leaves the list.
-    const title = await nw.locator(".ah-fx-row", { has: page.getByRole("button", { name: "Size", exact: true }) }).first().locator(".ah-title a").textContent();
+    const title = await nw.locator(".ah-fx-row", { has: page.getByRole("button", { name: /^Size: / }) }).first().locator(".ah-title a").textContent();
     const sizeRow = nw.locator(".ah-fx-row", { has: page.getByRole("link", { name: title ?? "", exact: true }) });
-    await sizeRow.getByRole("button", { name: "Size", exact: true }).click();
+    await sizeRow.getByRole("button", { name: /^Size: / }).click();
     await page.locator(".cell-pop").getByRole("textbox").first().fill("2");
     await page.locator(".cell-pop").getByRole("button", { name: "Save" }).click();
     await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes to save");
-    await expect.poll(() => page.locator(".ah-fx-row:not(.ctx)", { hasText: title ?? "" }).count()).toBe(0);
+    await expect.poll(() => page.locator(".ah-fx-client .ah-fx-row:not(.ctx)", { hasText: title ?? "" }).count()).toBe(0);
     // Skip puts one aside for the session.
-    const before = await page.locator(".ah-fx-row:not(.ctx)").count();
-    await page.locator(".ah-fx-row:not(.ctx)").first().getByRole("button", { name: /^Skip/ }).click();
-    await expect.poll(() => page.locator(".ah-fx-row:not(.ctx)").count()).toBe(before - 1);
+    const before = await page.locator(".ah-fx-client .ah-fx-row:not(.ctx)").count();
+    await page.locator(".ah-fx-client .ah-fx-row:not(.ctx)").first().getByRole("button", { name: /^Skip/ }).click();
+    await expect.poll(() => page.locator(".ah-fx-client .ah-fx-row:not(.ctx)").count()).toBe(before - 1);
     // An admin turns Needs stories off for Northwind: its rows lose it; Atlas's keep it.
     const unsized = () => nw.locator(".ah-chip", { hasText: "Needs stories" }).count();
     expect(await unsized()).toBeGreaterThan(0);

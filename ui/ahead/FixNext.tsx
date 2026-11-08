@@ -60,7 +60,7 @@ function FixRowView({ r, entry, depth, skip, dots, fold, client }: { r: Row; ent
   };
   return (
     <li data-tour={entry ? "ah-fix-row" : undefined} data-key={entry?.key} className={`ah-fx-row${entry ? "" : " ctx"}${entry?.leaving ? " leaving" : ""}`} style={{ "--ah-depth": depth } as CSSProperties} aria-label={entry ? `${r.item.title}: ${entry.gaps.map((g) => GAP_WORDS[g]).join(", ")}` : undefined}>
-      <span className="ah-fx-item" tabIndex={fold.tab} data-depth={depth} data-key={r.key} aria-expanded={fold.kids ? fold.open : undefined} onKeyDown={(e) => rowKeys(e, fold)}>
+      <span className="ah-fx-item" tabIndex={fold.tab} data-depth={depth} data-key={client ? `start:${r.key}` : r.key} aria-expanded={fold.kids ? fold.open : undefined} onKeyDown={(e) => rowKeys(e, fold)}>
         {fold.kids ? (
           <button type="button" className="rm-expand" tabIndex={-1} aria-expanded={fold.open} aria-label={`${fold.open ? "Hide" : "Show"} what's under ${r.item.title}`} onClick={() => fold.toggle(!fold.open)}>
             {fold.open ? "▾" : "▸"}
