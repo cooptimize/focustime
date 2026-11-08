@@ -103,6 +103,7 @@ const Tour = lazy(() => import("./guide/tour/Tour.tsx"));
 const TechDocs = lazy(() => import("./docs/TechDocs.tsx"));
 import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
 import { userZone } from "../week/zone.ts";
+import { CoworkCtx, openChat, useCowork } from "./cowork.tsx";
 
 const FOCUSABLE = 'button:not(:disabled), a[href], input:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
@@ -1323,6 +1324,8 @@ export function App() {
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
   const weekItems = useMemo(() => (data?.weekFeatures ?? []).filter((f) => f.weekStart === data?.weekStart).map((f) => ({ clientKey: f.clientKey, itemId: f.itemId })), [data?.weekFeatures, data?.weekStart]);
 
+  // CW-1: my clients' delivery chats and their live calls, for Week's cards, Today's Now card and the menus.
+  const cowork = useCowork(!!data);
   const env = useMemo<MenuEnv | null>(() => {
     if (!data || !target) return null;
     const day = data.week.days[Math.min(sel.dayIndex, data.week.days.length - 1)]!;
@@ -1332,6 +1335,8 @@ export function App() {
       return !!s && sourceActions(s).includes("disconnect");
     };
     return {
+      cowork,
+      openChat,
       week: data.week,
       // Step 15.2: while Plan the day is open, its selected block is the selection (⋯ → Add to the plan targets it).
       selection: (() => {
@@ -1497,7 +1502,7 @@ export function App() {
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, openGuide, pd, pdHalf, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, togglePlanning, connectWrite, addWork, timeboxDay, goNav, asksOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, openGuide, pd, pdHalf, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, togglePlanning, connectWrite, addWork, timeboxDay, goNav, asksOpen, cowork]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // AS-1: what the assistant hears about the screen: its address, the client and item in focus, the selected block and
   // today. Nothing else on screen is sent; the server reads what a question needs.
@@ -1643,6 +1648,7 @@ export function App() {
     {welcome && <MomentOverlay line="Welcome to FocusTime. Here's your week." onDone={() => setWelcome(false)} />}
     {closing && <CloseReverse musts={closing.musts} onDone={() => setClosing(null)} />}
     <SampleSources.Provider value={samples}>
+    <CoworkCtx.Provider value={cowork}>
     <DevOpsWork.Provider value={work}>
     <WeekItems.Provider value={weekItems}>
     <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, minSizes: data.planning.minSizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures, timeboxes: data.timeboxes, followUps: data.followUps, today: data.planDay.date, checkins: data.checkins ?? [] }}>
@@ -2306,6 +2312,7 @@ export function App() {
     </PlanCtx.Provider>
     </WeekItems.Provider>
     </DevOpsWork.Provider>
+    </CoworkCtx.Provider>
     </SampleSources.Provider>
     </>
   );

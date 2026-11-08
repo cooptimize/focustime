@@ -1853,6 +1853,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "presence.people":
     case "presence.log":
       return presenceAction(await presenceContext(ctx), action, req.input);
+    case "chats.calls":
     case "chats.registered":
     case "chats.list":
     case "chats.add":

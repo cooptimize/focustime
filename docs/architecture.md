@@ -716,3 +716,14 @@ The pages are `docs/technical/*.md` (how FocusTime works, for engineers and IT);
 - **Styles.** The end of `ui/styles.css`: `textarea { resize: none }`, `.text-box`, the `::-webkit-scrollbar` rules for every textarea, the Firefox fallback in `@supports not selector(::-webkit-scrollbar)`, and the phone sheets' `bottom: max(--bb-h, --kb-inset)`.
 - **Keyboard.** `ui/keyboard.ts` (`keyboardInset`, `startKeyboardInset`, started in `ui/main.tsx`): `--kb-inset` from the visual viewport; `index.html`'s viewport meta has `interactive-widget=resizes-content`.
 - **Tests.** `ui/textbox.test.ts` (sizing, keys, the inset, and source checks: no editable `<textarea>` outside TextBox, no resize, no `scrollbar-width`/`-color` outside the fallback); e2e `e2e/ui10-textbox.test.ts` (growth, scrolling, keys, IME, computed styles, phone at 390) with `e2e/ui10-helpers.ts`; `e2e/ui10-shots.test.ts` (docs/ux/ui10, `UI10_WHEN=before|after`). `startDemo`'s `showScrollbars` draws scrollbars in headless Chromium.
+
+## CW-1: co-working calls (Nov 7)
+
+- **Rules.** `plan/cowork.ts`: `callEventOf` (a Graph chat message's call started or ended `eventDetail`, by its `@odata.type`, call or meeting only), `durationMs`, `isLive` and `liveCall` (`STALE_CALL_HOURS` = 10), `chatCallLink` (the chat's Teams link, `teamsLink`), `liveLine`, `liveCallCard`, and the views (`CoworkData`, `CoworkChatView`, `LiveCallView`).
+- **Source.** `sources/graph/chats.ts` `messagesSince` returns the page's call events apart (`calls`); `messageOf` still drops every system message. No new request.
+- **Store.** `chat_calls` (migration `20261121T1000_chat_calls`, an app table): `saveCalls`, `openCalls`, `expireCalls` in `store/teams-store.ts`; rows go with `removeChat` and `purgeChats`. Not in Export.
+- **Job.** `actions/request-poll.ts` saves each read chat's call events created after registration (`CycleResult.calls`, logged as a count), and expires calls 48 hours after they started.
+- **Action.** `chats.calls` in `actions/chat-actions.ts` (`coworkChats`): my registered chats (in it now, following its client) with their live call and who started it; registry entry "Start a call".
+- **UI.** `ui/cowork.tsx` (`useCowork`, every minute; `CoworkCtx`; `LiveCalls`; `BlockCalls` for the detail panel), provided in `ui/App.tsx`; Week's card (`LiveOnCard` in `ui/WeekGrid.tsx`), Today's Now card (`ui/Phone.tsx` `PhoneNow`, `ui/PhoneToday.tsx` `PhoneNowCard`), the detail panel (`ui/DetailPanel.tsx`), the block's ⋯ and the command menu (`callItems` and `chats.calls` in `ui/menu.ts`); styles at the end of `ui/styles.css`.
+- **Demo.** `sources/demo/seeds/cowork.ts`.
+- **Tests.** `plan/cowork.test.ts`, `actions/cowork.test.ts` (the real Graph client on fake data through the poll, the pipeline and the stub AI; visibility), the CW-1 parts of `store/teams-store.test.ts` and `ui/menu.test.ts`; e2e `e2e/cw1.test.ts` (screenshots with `FOCUSTIME_SHOTS`).
