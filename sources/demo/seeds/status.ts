@@ -48,6 +48,12 @@ export const statusSeed: DemoSeed = {
     // Cooptimize · Internal reporting refresh: last week only.
     devops.seedComment(4410, { ...ME, text: "Timesheet summary query runs in under a second on last month's data.", at: lastWeek("Cooptimize", 2) });
 
+    // SR-2: what only the client report shows. Harbor · Appointment reminders is Priya's, with her update this week;
+    // Northwind · Loyalty points has Sam's comment from last week, edited this week (Kat counts it by its edit).
+    devops.seedComment(2220, { ...PRIYA, text: "Reminder texts go out 24 hours before each visit in the test site; the opt-out wording is with the clinic.", at: thisWeek("Harbor", 0.45) });
+    devops.seedComment(1140, { ...SAM, text: "Points rules agreed with marketing: one point per dollar, shown on the receipt.", at: lastWeek("Northwind", 4), modifiedAt: thisWeek("Northwind", 0.5) });
+    devops.seedActivity({ clientKey: "Northwind", itemId: 1151, kind: "state", oldValue: "New", newValue: "Active", changedAt: thisWeek("Northwind", 0.45), mine: false });
+
     // The story activity the drafts and hints are built from.
     devops.seedActivity({ clientKey: "Northwind", itemId: 1111, kind: "state", oldValue: "Active", newValue: "Resolved", changedAt: thisWeek("Northwind", 0.3), mine: true });
     devops.seedActivity({ clientKey: "Cooptimize", itemId: 4411, kind: "state", oldValue: "New", newValue: "Active", changedAt: thisWeek("Cooptimize", 0.5), mine: true });

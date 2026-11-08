@@ -34,7 +34,15 @@ export function createDemoSources(world: DemoDevOps, cal: DemoOutlook, now: () =
     pto: async (from: string, to: string) => ok("pto", demoPto(from, to, demoToday())),
     teammates: async () => ({ ok: true, people: DEMO_PEOPLE }),
     clientTeam: async () => ({ ok: true, accountId: null, patterns: [], workers: [] }),
-    teamPto: async () => ({ ok: true, away: [] }),
+    // SR-2: the team's days away for the client report's Upcoming PTO (fictional, from the report's Monday): Priya
+    // Tuesday and Wednesday that week, Sam the Friday after, and my own demo day off that week.
+    teamPto: async (from: string, to: string) => {
+      const [, priya, sam] = DEMO_PEOPLE;
+      const m = Temporal.PlainDate.from(from);
+      const day = (n: number) => m.add({ days: n }).toString();
+      const away = [{ userId: priya!.id, date: day(1) }, { userId: priya!.id, date: day(2) }, { userId: sam!.id, date: day(11) }, ...demoPto(from, day(6), demoToday()).map((p) => ({ userId: DEMO_ME, date: p.date }))];
+      return { ok: true, away: away.filter((a) => a.date >= from && a.date <= to) };
+    },
     // ADM-1: fictional levels and client leads (Admin › People in the demo).
     directory: async () => ({ ok: true, read: demoDirectory() }),
     // SR-1: Kat sent each demo client's report last Monday a few minutes after 7:00 AM ET (seeds/status.ts).

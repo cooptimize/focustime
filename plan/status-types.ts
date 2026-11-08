@@ -28,3 +28,32 @@ export type StatusLoad = {
   clients: StatusClient[];
 };
 
+
+// ---- SR-2: the client's report, visible to the whole team ----
+
+/** A client whose report I can open: I'm on its team (an Account Worker or a lead, and a Cooptimizer). */
+export type ReportClientRef = { clientKey: string; clientName: string };
+export type ReportFeature = StatusFeature & {
+  /** The feature's assignee as DevOps shows it, or null. */
+  owner: string | null;
+};
+export type NoUpdateFeature = ReportFeature & { active: "planned" | "activity" };
+export type PtoSection =
+  | { status: "ok"; rows: { name: string; when: string; days: number }[]; source: string; range: string }
+  | { status: "error"; message: string; source: string };
+export type StatusReport = {
+  clientKey: string; clientName: string;
+  /** The Monday the report goes out, and the header line. */
+  reportDate: string; header: string;
+  /** When comments start counting, and why (Kat's watermark, never sent, or unknown with the reason). */
+  window: { since: string; source: "kat" | "never" | "unknown"; katSentAt: string | null; note: string | null };
+  status: "ok" | "error"; message?: string;
+  canWrite: boolean;
+  /** Who a new line will show as in DevOps and the report: my write access's DevOps name. */
+  authorAs: string | null;
+  features: ReportFeature[];
+  noUpdate: NoUpdateFeature[];
+  pto: PtoSection;
+  refreshedAt: string;
+};
+export type StatusReportAnswer = { clients: ReportClientRef[]; report: StatusReport | null };

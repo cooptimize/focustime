@@ -83,7 +83,7 @@ import { roadmapAction } from "./roadmap-actions.ts";
 import { aheadAction, type AheadAction, type AheadContext } from "./ahead-actions.ts";
 import { CHECKIN_DONE_MARK } from "./closeout-actions.ts";
 import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
-import { markScheduled, publishWeek, sendFacts, teamAction, type TeamAction, type TeamContext } from "./team-actions.ts";
+import { markScheduled, publishWeek, reportTeam, sendFacts, teamAction, type TeamAction, type TeamContext } from "./team-actions.ts";
 import { inboxAction } from "./inbox-actions.ts";
 import { diagnosticsAction } from "./diagnostics.ts";
 import { snoozeDayOf } from "../plan/inbox-items.ts";
@@ -2141,6 +2141,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       return assistantAction(async () => (await assistantFor(ctx, "panel"))?.service ?? null, async () => (await assistantFor(ctx, "panel"))?.reads ?? null, action, req.input, (c) => assistantGate(ctx, c));
     case "status.load":
     case "status.draft":
+    case "status.report":
       return statusAction(await statusCtx(ctx), action satisfies StatusAction, req.input);
     case "send.people":
     case "send.create":
@@ -2263,6 +2264,13 @@ async function statusCtx(ctx: ActionContext): Promise<StatusContext> {
     canWrite: ahead.canWrite,
     ai: () => aiFor(ctx),
     now: ctx.now,
+    // SR-2: the client report's team (Week › Team's roster), the team's PTO days and who my lines show as.
+    team: () => reportTeam(teamCtx(ctx)),
+    teamPto: async (cfg, from, to) => {
+      const dv = ctx.makeDataverse(cfg.dataverse, userZone(cfg));
+      return dv.teamPto ? dv.teamPto(from, to) : { ok: false as const, message: "PTO can't be read here" };
+    },
+    writeName: async (k) => (await ctx.plan?.devopsIdentities().catch(() => []))?.find((w) => w.clientKey === k)?.name ?? null,
   };
 }
 

@@ -1435,6 +1435,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     // SR-1: Status opens Week › Status; its drafts start from there.
     case "status.load":
     case "status.draft":
+    case "status.report":
       return { run: () => env.setView("status") };
     // AS-1: everything the assistant does starts in its panel.
     case "assistant.ask":

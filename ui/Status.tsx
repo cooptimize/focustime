@@ -3,9 +3,12 @@
 // bullet on Monday), in-place edits of my own comments in the window, and Draft (AI, one request per client). Preview
 // reads like the email. Nothing is written until Push all: one preview of every line and edit across clients, then the
 // write framework's own writes, each read back, logged and undoable, with a result per line and Retry.
+// SR-2: a switch at the top, My features · <Client> report, for everyone on a client's team: the client's whole Monday
+// report as Kat will send it (status.report, checked on the server), No update yet and Upcoming PTO and Holidays, with
+// the same lines, Push all and Undo.
 import { TextBox } from "./TextBox.tsx";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import type { StatusClient, StatusComment, StatusFeature, StatusLoad } from "../plan/status-types.ts";
+import type { NoUpdateFeature, ReportClientRef, StatusClient, StatusComment, StatusFeature, StatusLoad, StatusReport, StatusReportAnswer } from "../plan/status-types.ts";
 import type { DevOpsPreview, DevOpsResult } from "../actions/types.ts";
 import { call } from "./api.ts";
 import { CloseButton } from "./CloseButton.tsx";
@@ -24,6 +27,31 @@ type Batch = { previews: DevOpsPreview[]; nothing: string[]; refused: Refused[] 
 type Pushed = { key: string; clientKey: string; itemId: number; text: string; kind: Line["kind"]; ok: boolean; message: string; writeId: number | null; undone?: boolean };
 
 const STORE = "focustime.status.lines";
+const SCOPE = "focustime.status.scope";
+
+/** What the push machinery needs to know of the features on screen (either view). */
+type Known = { clients: { clientKey: string; clientName: string; features: StatusFeature[]; also: StatusFeature[] }[] };
+const reportKnown = (r: StatusReport): Known => ({ clients: [{ clientKey: r.clientKey, clientName: r.clientName, features: [...r.features, ...r.noUpdate], also: [] }] });
+/** The client report as SR-1's sections read a client (AI drafting isn't offered on the client report). */
+const reportClient = (r: StatusReport): StatusClient => ({
+  clientKey: r.clientKey, clientName: r.clientName, status: r.status, ...(r.message ? { message: r.message } : {}),
+  window: { since: r.window.since, source: r.window.source === "kat" ? "kat" : "fallback", katSentAt: r.window.katSentAt, prevSince: r.window.since, note: r.window.note },
+  canWrite: r.canWrite, ai: "off", aiNote: null, features: r.features, also: [],
+});
+function savedScope(): string {
+  try {
+    return localStorage.getItem(SCOPE) ?? "mine";
+  } catch {
+    return "mine";
+  }
+}
+function saveScope(v: string) {
+  try {
+    localStorage.setItem(SCOPE, v);
+  } catch {
+    /* a convenience only */
+  }
+}
 const BATCH = 10;
 
 /** Unsent lines survive a reload in this browser only (a convenience; never the record). */
@@ -66,33 +94,70 @@ export function StatusView({ switcher, colors, readOnly, version, onChanged }: {
   const [pushed, setPushed] = useState<Pushed[]>([]);
   const [undoing, setUndoing] = useState<{ p: Pushed; preview: DevOpsPreview | null; busy: boolean; error: string | null; done: string | null } | null>(null);
   const loaded = useRef<string | null>(null);
+  // SR-2: which view, and the clients whose report I may open (none: no switch).
+  const [scope, setScopeState] = useState<string>(savedScope);
+  const [teams, setTeams] = useState<ReportClientRef[] | null>(null);
+  const [report, setReport] = useState<StatusReport | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const onReport = scope !== "mine" && !!teams?.some((t) => t.clientKey === scope);
+  const setScope = (v: string) => {
+    setScopeState(v);
+    saveScope(v);
+  };
 
-  const load = useCallback(async () => {
+  const restore = (reportDate: string) => {
+    if (loaded.current !== reportDate) {
+      loaded.current = reportDate;
+      setLines(savedLines(reportDate));
+    }
+  };
+  // A saved client view waits for the list of my teams before reading anything.
+  const waiting = teams === null && scope !== "mine";
+  const load = useCallback(async (refresh = false) => {
+    if (waiting) return;
     try {
+      if (onReport) {
+        const r = await call<StatusReportAnswer>("status.report", { clientKey: scope, ...(refresh ? { refresh: true } : {}) });
+        setTeams(r.clients);
+        setReport(r.report);
+        setError(null);
+        if (r.report) restore(r.report.reportDate);
+        return;
+      }
       const d = await call<StatusLoad>("status.load", {});
       setData(d);
       setError(null);
-      if (loaded.current !== d.reportDate) {
-        loaded.current = d.reportDate;
-        setLines(savedLines(d.reportDate));
-      }
+      restore(d.reportDate);
     } catch (e) {
       setError(errText(e));
     }
-  }, []);
+  }, [onReport, scope, waiting]);
+  useEffect(() => {
+    void call<StatusReportAnswer>("status.report", {}).then((r) => setTeams(r.clients), () => setTeams([]));
+  }, [version]);
   useEffect(() => {
     void load();
   }, [load, version]);
   useEffect(() => {
-    if (data) saveLines(data.reportDate, lines);
-  }, [data, lines]);
+    const date = onReport ? report?.reportDate : data?.reportDate;
+    if (date) saveLines(date, lines);
+  }, [data, report, onReport, lines]);
+  const refresh = async () => {
+    setRefreshing(true);
+    await load(true);
+    setRefreshing(false);
+  };
+  const shownReport = onReport && report?.clientKey === scope ? report : null;
+  const known: Known | null = onReport ? (shownReport ? reportKnown(shownReport) : null) : data;
 
   const change = (key: string, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const remove = (key: string) => setLines((ls) => ls.filter((l) => l.key !== key));
   const addLine = (c: StatusClient, f: StatusFeature, text = "", from: Line["from"] = "me") => setLines((ls) => [...ls, { key: newKey(), clientKey: c.clientKey, itemId: f.id, kind: "comment", commentId: null, text, from }]);
   const edit = (c: StatusClient, f: StatusFeature, cm: StatusComment) => setLines((ls) => (ls.some((l) => l.kind === "comment_edit" && l.commentId === cm.id) ? ls : [...ls, { key: newKey(), clientKey: c.clientKey, itemId: f.id, kind: "comment_edit", commentId: cm.id, text: cm.text, from: "me" }]));
 
-  const ready = lines.filter((l) => l.text.trim() && !(l.kind === "comment_edit" && sameAsNow(data, l)));
+  // Push all pushes the lines of the view on screen (a line on a feature the other view shows waits there).
+  const onScreen = (l: Line) => !!known?.clients.some((c) => c.clientKey === l.clientKey && [...c.features, ...c.also].some((f) => f.id === l.itemId));
+  const ready = lines.filter((l) => l.text.trim() && onScreen(l) && !(l.kind === "comment_edit" && sameAsNow(known, l)));
 
   // AI: one request per client (Draft on one feature asks for that feature only); a draft lands in a new line.
   const draft = async (c: StatusClient, ids: number[] | null) => {
@@ -222,6 +287,56 @@ export function StatusView({ switcher, colors, readOnly, version, onChanged }: {
   };
 
   const counts = useMemo(() => (data ? liveCounts(data, lines) : null), [data, lines]);
+  const scopeSwitch = teams && teams.length > 0 ? <ScopeSwitch scope={onReport ? scope : "mine"} teams={teams} onPick={(v) => { setScope(v); setPush(null); }} /> : null;
+
+  if (onReport) {
+    const r = shownReport;
+    return (
+      <main className="status-view" aria-label="Status">
+        <header className="page-head">
+          <div className="ph-title">
+            <h2>{r ? `${r.clientName} report` : "Client report"}</h2>
+            {r && <span className="muted st-sends">{r.header}</span>}
+          </div>
+          <ModeArea>
+            {!readOnly && (
+              <span className="st-toggle" data-tour="st-toggle" role="group" aria-label="Show">
+                <button type="button" className="ms-btn" aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>Edit</button>
+                <button type="button" className="ms-btn" aria-pressed={mode === "preview"} onClick={() => setMode("preview")}>Preview</button>
+              </span>
+            )}
+            {switcher}
+          </ModeArea>
+        </header>
+        {scopeSwitch}
+        <p className="muted st-intro">The whole report as Kat will send it Monday, for everyone on the team. Anyone on the team can add lines; Kat sends the email, not FocusTime.</p>
+        {error && <p className="error-line" role="alert">{error}</p>}
+        {!r ? (
+          <p className="muted">Reading the report…</p>
+        ) : (
+          <>
+            <div className="st-bar st-report-bar">
+              <p className="st-count" role="status">{reportCountLine(r)}</p>
+              <span className="st-push">
+                <span className="muted st-fresh">Refreshed {when(r.refreshedAt)}</span>
+                <button type="button" className="mini quiet" disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "Refreshing…" : "Refresh"}</button>
+                {!readOnly && (
+                  <>
+                    {ready.length > 0 && <span className="muted">{ready.length === 1 ? "1 line to push" : `${ready.length} lines to push`}</span>}
+                    <button type="button" className="commit" disabled={!ready.length || !!push} onClick={() => void startPush()}>Push all</button>
+                  </>
+                )}
+              </span>
+            </div>
+            {pushed.length > 0 && <PushedList pushed={pushed} data={known} onRetry={(p) => void retry(p)} onUndo={(p) => void startUndo(p)} onClear={() => setPushed([])} />}
+            <ReportSection r={r} color={clientColor(r.clientKey, colors)} mode={readOnly ? "preview" : mode} readOnly={readOnly} lines={lines.filter((l) => l.clientKey === r.clientKey)} onAdd={addLine} onEdit={edit} onChange={change} onRemove={remove} />
+          </>
+        )}
+        {push && <PushDialog push={push} data={known} onConfirm={() => void confirmPush()} onReplace={(i) => void replacePush(i)} onClose={() => setPush(null)} />}
+        {undoing && <UndoDialog u={undoing} onConfirm={() => void confirmUndo()} onClose={() => setUndoing(null)} />}
+      </main>
+    );
+  }
 
   return (
     <main className="status-view" aria-label="Status">
@@ -240,6 +355,7 @@ export function StatusView({ switcher, colors, readOnly, version, onChanged }: {
           {switcher}
         </ModeArea>
       </header>
+      {scopeSwitch}
       <p className="muted st-intro">What Monday's report will show for your features, a heading each with this week's comments. Add your own lines here; Kat sends the email, not FocusTime.</p>
       {error && <p className="error-line" role="alert">{error}</p>}
       {!data ? (
@@ -255,7 +371,7 @@ export function StatusView({ switcher, colors, readOnly, version, onChanged }: {
               </span>
             )}
           </div>
-          {pushed.length > 0 && <PushedList pushed={pushed} data={data} onRetry={(p) => void retry(p)} onUndo={(p) => void startUndo(p)} onClear={() => setPushed([])} />}
+          {pushed.length > 0 && <PushedList pushed={pushed} data={known ?? data} onRetry={(p) => void retry(p)} onUndo={(p) => void startUndo(p)} onClear={() => setPushed([])} />}
           {!data.clients.length && <p className="muted">No clients with DevOps this week. The features you plan or work on show here.</p>}
           {data.clients.map((c) => (
             <ClientSection key={c.clientKey} c={c} color={clientColor(c.clientKey, colors)} mode={readOnly ? "preview" : mode} lines={lines.filter((l) => l.clientKey === c.clientKey)} drafting={drafting} draftNote={draftNote[c.clientKey] ?? ""}
@@ -269,8 +385,115 @@ export function StatusView({ switcher, colors, readOnly, version, onChanged }: {
   );
 }
 
+/** SR-2: My features · <Client> report. With several clients, the report side is a picker of the clients I'm on. */
+function ScopeSwitch({ scope, teams, onPick }: { scope: string; teams: ReportClientRef[]; onPick: (v: string) => void }) {
+  const current = teams.find((t) => t.clientKey === scope) ?? null;
+  return (
+    <div className="st-scope" role="group" aria-label="Whose report">
+      <button type="button" className="ms-btn" aria-pressed={scope === "mine"} onClick={() => onPick("mine")}>My features</button>
+      {teams.length === 1 ? (
+        <button type="button" className="ms-btn" aria-pressed={!!current} onClick={() => onPick(teams[0]!.clientKey)}>{teams[0]!.clientName} report</button>
+      ) : (
+        <select className={`st-scope-pick${current ? " on" : ""}`} aria-label="Client report" value={current?.clientKey ?? ""} onChange={(e) => e.target.value && onPick(e.target.value)}>
+          {!current && <option value="">Client report…</option>}
+          {teams.map((t) => <option key={t.clientKey} value={t.clientKey}>{t.clientName} report</option>)}
+        </select>
+      )}
+    </div>
+  );
+}
+
+/** "2 features in the report · 2 active with no update yet". */
+function reportCountLine(r: StatusReport): string {
+  const n = r.features.length;
+  const u = r.noUpdate.filter((f) => f.thisWeek !== null).length;
+  return `${n === 1 ? "1 feature" : `${n} features`} in the report · ${u === 1 ? "1 active feature" : `${u} active features`} with no update yet`;
+}
+
+/**
+ * SR-2: the client's report. Preview reads as Kat's email (a heading per feature in backlog order, each comment a
+ * bullet with its author as DevOps shows it, then Upcoming PTO and Holidays). Edit is SR-1's editor on every feature in
+ * it: + Add a line on any, Edit on my own in the window; others' comments are read only, as in DevOps.
+ */
+function ReportSection({ r, color, mode, readOnly, lines, onAdd, onEdit, onChange, onRemove }: {
+  r: StatusReport; color: string; mode: "edit" | "preview"; readOnly: boolean; lines: Line[];
+  onAdd: (c: StatusClient, f: StatusFeature, text?: string) => void; onEdit: (c: StatusClient, f: StatusFeature, cm: StatusComment) => void; onChange: (key: string, patch: Partial<Line>) => void; onRemove: (key: string) => void;
+}) {
+  const c = reportClient(r);
+  const writable = !readOnly && r.canWrite;
+  return (
+    <section className={`st-client st-report${mode === "preview" ? " st-email" : ""}`} style={{ "--c": color } as CSSProperties} aria-label={`${r.clientName} report`}>
+      <header className="st-client-head">
+        <h3 className="carry-client-name">
+          <span className="swatch" aria-hidden="true" />
+          {r.clientName}
+        </h3>
+      </header>
+      {r.window.note && <p className="muted st-sent">{r.window.note}</p>}
+      {r.message && <p className="set-problem">{r.message}</p>}
+      {mode === "edit" && !r.canWrite && r.status === "ok" && <p className="muted st-note">Read only: add your DevOps write access for {r.clientName} in <a href="#/settings/devops/devops-write">Settings › DevOps</a> to add lines here.</p>}
+      {r.status === "ok" && !r.features.length && <p className="muted">No feature has a comment since Kat's last send yet, so Monday's report has no features so far.</p>}
+      <div className="st-features">
+        {r.features.map((f) => (
+          <FeatureBlock key={f.id} c={c} f={f} mode={mode} lines={lines.filter((l) => l.itemId === f.id)} drafting={false} onAdd={onAdd} onEdit={onEdit} onChange={onChange} onRemove={onRemove} onDraft={null} report={{ owner: f.owner, authorAs: r.authorAs }} />
+        ))}
+      </div>
+      <PtoBlock pto={r.pto} />
+      {r.noUpdate.length > 0 && <NoUpdateList r={r} c={c} writable={writable} lines={lines} onAdd={onAdd} onChange={onChange} onRemove={onRemove} />}
+    </section>
+  );
+}
+
+function PtoBlock({ pto }: { pto: StatusReport["pto"] }) {
+  return (
+    <section className="st-pto" aria-label="Upcoming PTO and Holidays">
+      <h4>Upcoming PTO and Holidays</h4>
+      {pto.status === "error" ? (
+        <p className="set-problem st-line">{pto.message}</p>
+      ) : pto.rows.length ? (
+        <ul className="st-bullets">
+          {pto.rows.map((x) => <li key={`${x.name}${x.when}`}>{x.name} <span className="st-author">· {x.when}</span></li>)}
+        </ul>
+      ) : (
+        <p className="st-none">No one on the team is away {pto.range}</p>
+      )}
+      <p className="muted st-note">{pto.source}.</p>
+    </section>
+  );
+}
+
+/** Active this week with nothing in the window: folded, each with its owner and + Add a line (SR-1's editor). */
+function NoUpdateList({ r, c, writable, lines, onAdd, onChange, onRemove }: {
+  r: StatusReport; c: StatusClient; writable: boolean; lines: Line[];
+  onAdd: (c: StatusClient, f: StatusFeature, text?: string) => void; onChange: (key: string, patch: Partial<Line>) => void; onRemove: (key: string) => void;
+}) {
+  const open = lines.some((l) => r.noUpdate.some((f) => f.id === l.itemId));
+  return (
+    <details className="st-also st-noupdate" open={open || undefined}>
+      <summary>No update yet ({r.noUpdate.length})</summary>
+      <p className="muted st-note">Worked on this week (on someone's week or with story activity) but no comment since Kat's last send, so Monday's report leaves them out.</p>
+      <ul className="st-nu-list">
+        {r.noUpdate.map((f: NoUpdateFeature) => {
+          const mine = lines.filter((l) => l.itemId === f.id && l.kind === "comment");
+          return (
+            <li key={f.id} className="st-nu">
+              <span className="st-nu-head">
+                <WorkLink clientKey={r.clientKey} url={f.url} className="st-title">{f.title}</WorkLink>
+                <span className="muted st-meta">#{f.id} · {f.owner ? `Owner ${f.owner}` : "No owner"} · {f.active === "planned" ? "on this week's plan" : "story activity this week"}</span>
+                {writable && f.thisWeek !== null && <button type="button" className="mini" onClick={() => onAdd(c, f)}>+ Add a line</button>}
+              </span>
+              {f.thisWeek === null && <span className="set-problem st-line">Its comments couldn't be read</span>}
+              {mine.map((l) => <LineBox key={l.key} line={l} label={`New line for ${f.title}`} onChange={onChange} onRemove={onRemove} removeLabel="Remove" authorAs={r.authorAs} />)}
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  );
+}
+
 /** An edit that says what the comment says now isn't a change. */
-function sameAsNow(data: StatusLoad | null, l: Line): boolean {
+function sameAsNow(data: Known | null, l: Line): boolean {
   const cm = data?.clients.flatMap((c) => [...c.features, ...c.also]).find((f) => f.id === l.itemId)?.thisWeek?.find((x) => x.id === l.commentId);
   return !!cm && cm.text.trim() === l.text.trim();
 }
@@ -327,9 +550,11 @@ function ClientSection({ c, color, mode, lines, drafting, draftNote, onAdd, onEd
   );
 }
 
-function FeatureBlock({ c, f, mode, lines, drafting, onAdd, onEdit, onChange, onRemove, onDraft }: {
+function FeatureBlock({ c, f, mode, lines, drafting, onAdd, onEdit, onChange, onRemove, onDraft, report }: {
   c: StatusClient; f: StatusFeature; mode: "edit" | "preview"; lines: Line[]; drafting: boolean;
   onAdd: (c: StatusClient, f: StatusFeature, text?: string) => void; onEdit: (c: StatusClient, f: StatusFeature, cm: StatusComment) => void; onChange: (key: string, patch: Partial<Line>) => void; onRemove: (key: string) => void; onDraft: (() => void) | null;
+  /** SR-2: on the client report, authors as DevOps shows them, the owner, and who a new line shows as. */
+  report?: { owner: string | null; authorAs: string | null };
 }) {
   const comments = f.thisWeek ?? [];
   const added = lines.filter((l) => l.kind === "comment");
@@ -350,7 +575,7 @@ function FeatureBlock({ c, f, mode, lines, drafting, onAdd, onEdit, onChange, on
               const e = editOf(cm.id);
               return <li key={cm.id} className={e ? "st-pending" : ""}>{e ? e.text : cm.text} <span className="st-author">· {cm.author}</span></li>;
             })}
-            {added.filter((l) => l.text.trim()).map((l) => <li key={l.key} className="st-pending">{l.text} <span className="st-author">· you, not pushed yet</span></li>)}
+            {added.filter((l) => l.text.trim()).map((l) => <li key={l.key} className="st-pending">{l.text} <span className="st-author">· {report?.authorAs ? `${report.authorAs}, not pushed yet` : "you, not pushed yet"}</span></li>)}
           </ul>
         ) : (
           <p className="st-none">No update yet</p>
@@ -363,7 +588,7 @@ function FeatureBlock({ c, f, mode, lines, drafting, onAdd, onEdit, onChange, on
     <article className={`st-feature${empty ? " st-empty" : ""}`} aria-label={f.title}>
       <div className="st-feature-head">
         <h4><WorkLink clientKey={c.clientKey} url={f.url} className="st-title">{f.title}</WorkLink></h4>
-        <span className="muted st-meta">#{f.id} · {f.state}</span>
+        <span className="muted st-meta">#{f.id} · {f.state}{report ? ` · ${report.owner ? `Owner ${report.owner}` : "No owner"}` : ""}</span>
         {f.thisWeek !== null && (comments.length ? <span className="st-has">{comments.length === 1 ? "1 update" : `${comments.length} updates`}</span> : <span className="st-badge">No update yet</span>)}
       </div>
       {f.thisWeek === null && <p className="set-problem st-line">This feature's comments couldn't be read. Try again in a minute.</p>}
@@ -374,12 +599,12 @@ function FeatureBlock({ c, f, mode, lines, drafting, onAdd, onEdit, onChange, on
             return (
               <li key={cm.id} className={`st-comment who-${cm.who}`}>
                 {e ? (
-                  <LineBox line={e} label={`Edit your comment on ${f.title}`} onChange={onChange} onRemove={onRemove} removeLabel="Cancel edit" />
+                  <LineBox line={e} label={`Edit your comment on ${f.title}`} onChange={onChange} onRemove={onRemove} removeLabel="Cancel edit" {...(report ? { authorAs: report.authorAs } : {})} />
                 ) : (
                   <>
                     <span className="st-text">{cm.text}</span>
                     <span className="st-by">
-                      <span className="st-author">{cm.who === "mine" ? "You" : cm.author}{cm.who === "coop" ? " · Coop" : ""}</span>
+                      <span className="st-author">{report ? `${cm.author}${cm.who === "mine" ? " (you)" : ""}` : cm.who === "mine" ? "You" : cm.author}{cm.who === "coop" ? " · Coop" : ""}</span>
                       <span className="muted"> · {when(cm.at)}</span>
                       {writable && cm.editable && <button type="button" className="link-btn" onClick={() => onEdit(c, f, cm)}>Edit</button>}
                     </span>
@@ -393,7 +618,7 @@ function FeatureBlock({ c, f, mode, lines, drafting, onAdd, onEdit, onChange, on
       {writable && (
         <div className="st-new">
           {added.map((l) => (
-            <LineBox key={l.key} line={l} label={`New line for ${f.title}`} onChange={onChange} onRemove={onRemove} removeLabel="Remove" />
+            <LineBox key={l.key} line={l} label={`New line for ${f.title}`} onChange={onChange} onRemove={onRemove} removeLabel="Remove" {...(report ? { authorAs: report.authorAs } : {})} />
           ))}
           <span className="st-adds">
             <button type="button" className="mini" data-tour="st-add" onClick={() => onAdd(c, f)}>+ Add a line</button>
@@ -422,7 +647,7 @@ function FeatureBlock({ c, f, mode, lines, drafting, onAdd, onEdit, onChange, on
   );
 }
 
-function LineBox({ line, label, onChange, onRemove, removeLabel }: { line: Line; label: string; onChange: (key: string, patch: Partial<Line>) => void; onRemove: (key: string) => void; removeLabel: string }) {
+function LineBox({ line, label, onChange, onRemove, removeLabel, authorAs }: { line: Line; label: string; onChange: (key: string, patch: Partial<Line>) => void; onRemove: (key: string) => void; removeLabel: string; /** SR-2: who the report will show as its author. */ authorAs?: string | null }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (!line.text) ref.current?.focus();
@@ -446,19 +671,19 @@ function LineBox({ line, label, onChange, onRemove, removeLabel }: { line: Line;
       <TextBox ref={ref} aria-label={label} minRows={2} maxRows={10} maxLength={4000} value={line.text} placeholder="What moved this week, and what's next" onChange={(e) => onChange(line.key, { text: e.target.value, from: "me" })} />
       {flag && <MentionFlag names={flag.names} where="this client's status report" onReplace={() => onChange(line.key, { text: flag.replaced, from: "me" })} />}
       <span className="st-box-foot">
-        <span className="muted">{line.kind === "comment_edit" ? "Edits your comment" : line.from === "ai" ? "Suggested: edit it before you push" : "A new comment, its own bullet on Monday"}</span>
+        <span className="muted">{line.kind === "comment_edit" ? "Edits your comment" : line.from === "ai" ? "Suggested: edit it before you push" : "A new comment, its own bullet on Monday"}{authorAs !== undefined ? ` · Shows as ${authorAs ?? "your DevOps name"}` : ""}</span>
         <button type="button" className="link-btn" onClick={() => onRemove(line.key)}>{removeLabel}</button>
       </span>
     </div>
   );
 }
 
-function featureTitle(data: StatusLoad | null, clientKey: string, itemId: number): string {
+function featureTitle(data: Known | null, clientKey: string, itemId: number): string {
   const c = data?.clients.find((x) => x.clientKey === clientKey);
   return [...(c?.features ?? []), ...(c?.also ?? [])].find((f) => f.id === itemId)?.title ?? `#${itemId}`;
 }
 
-function PushDialog({ push, data, onConfirm, onReplace, onClose }: { push: { batches: { clientKey: string; batch: Batch; lines: Line[] }[]; busy: boolean; results: Pushed[] | null }; data: StatusLoad | null; onConfirm: () => void; onReplace: (batch: number) => void; onClose: () => void }) {
+function PushDialog({ push, data, onConfirm, onReplace, onClose }: { push: { batches: { clientKey: string; batch: Batch; lines: Line[] }[]; busy: boolean; results: Pushed[] | null }; data: Known | null; onConfirm: () => void; onReplace: (batch: number) => void; onClose: () => void }) {
   const first = useRef<HTMLButtonElement>(null);
   useEffect(() => first.current?.focus(), [push.busy]);
   const n = push.batches.reduce((s, b) => s + b.batch.previews.length, 0);
@@ -526,7 +751,7 @@ function PushDialog({ push, data, onConfirm, onReplace, onClose }: { push: { bat
   );
 }
 
-function PushedList({ pushed, data, onRetry, onUndo, onClear }: { pushed: Pushed[]; data: StatusLoad; onRetry: (p: Pushed) => void; onUndo: (p: Pushed) => void; onClear: () => void }) {
+function PushedList({ pushed, data, onRetry, onUndo, onClear }: { pushed: Pushed[]; data: Known | null; onRetry: (p: Pushed) => void; onUndo: (p: Pushed) => void; onClear: () => void }) {
   return (
     <section className="st-pushed" aria-label="Pushed">
       <header className="st-pushed-head">
