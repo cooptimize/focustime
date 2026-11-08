@@ -7,7 +7,7 @@
 import type { NamedMigration } from "./named.ts";
 
 export const chatCalls: NamedMigration = {
-  name: "20261121T0900_chat_calls",
+  name: "20261121T1000_chat_calls",
   sqlite: `CREATE TABLE chat_calls (
      chat_id TEXT NOT NULL,
      call_id TEXT NOT NULL,

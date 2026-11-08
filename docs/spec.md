@@ -804,6 +804,6 @@ Cooptimizers co-work on a Teams call in a client's delivery chat. FocusTime make
 - **Start a call.** The block's ⋯, its detail panel and the command menu: "Start a call in <chat>" (or "Join the call in <chat>" while live) opens the chat in Teams. FocusTime never starts, joins or posts in a call.
 - **No new source scope and no new permission.** The shared poll's existing `GET /chats/{id}/messages` (delegated `Chat.Read`) already returns the call system events; they are read off the same pages. Same interval.
 - **Rules.** Call events are never messages, conversations, promises or chatter, and never go to the AI. Nothing is recorded or transcribed; only the call id, its times and the starter's id and tenant are kept (`chat_calls`, 48 hours). Only registered chats count; only someone in the chat who follows its client sees it.
-- **Store:** one migration, `20261121T0900_chat_calls` (an app table; adds only). Not in Export.
+- **Store:** one migration, `20261121T1000_chat_calls` (an app table; adds only). Not in Export.
 - **Rollback:** revert the PR and redeploy; the table stays unused (an older build ignores it).
 

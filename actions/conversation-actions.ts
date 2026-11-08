@@ -19,10 +19,11 @@ import { AiError } from "../ai/types.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { askTitle, messageLink } from "../plan/asks.ts";
 import { CHAT_ID, isExternal, teamsLink } from "../plan/chats.ts";
+import { chatAudience, mentionedClients, HELD_LINE, NO_OTHER_CLIENTS } from "../plan/boundary.ts";
 import { DRAFT_INSTRUCTIONS, DRAFT_SCHEMA, DRAFT_TASK, draftFrom, draftInput, emptyDraft, type DraftAnswer } from "../plan/conversation-draft.ts";
 import { isClosed } from "../plan/process.ts";
-import { chatImageSrc, type CardCommitment, type CardItem, type CardSuggestion, type ConversationCard, type ConversationMessage, type ConversationsData, type DayPromise, type MessageImageView, type MyPromisesData, type Primary, type PromiseCard } from "../plan/conversation-views.ts";
-import { daysWaiting, oneLine, statusLine, unsortedLine, unsortedText, type Commitment, type UnsortedLine, type Conversation, type ItemDraft } from "../plan/conversations.ts";
+import { chatImageSrc, type CardCommitment, type CardItem, type CardSuggestion, type ConversationCard, type ConversationMessage, type ConversationsData, type DayPromise, type HeldData, type MessageImageView, type MyPromisesData, type Primary, type PromiseCard } from "../plan/conversation-views.ts";
+import { CLIENT_REFUSED, HELD_MENTION, LEGACY_CLIENT_REFUSED, daysWaiting, oneLine, statusLine, unsortedLine, unsortedText, type Commitment, type UnsortedLine, type Conversation, type ItemDraft } from "../plan/conversations.ts";
 import type { ClientChat, FocusUser } from "../plan/requests.ts";
 import { hostedImageIds, sanitizeMessageHtml } from "../plan/sanitize.ts";
 import type { MessageImage } from "../store/teams-store.ts";
@@ -43,7 +44,7 @@ import { mapSeq } from "./seq.ts";
 import { mergePreview, type MergeSide } from "../plan/merge-preview.ts";
 import type { ActionResponse } from "./types.ts";
 
-export type { ConversationCard, ConversationMessage, ConversationsData, DayPromise, MyPromisesData, PromiseCard } from "../plan/conversation-views.ts";
+export type { ConversationCard, ConversationMessage, ConversationsData, DayPromise, HeldData, HeldMessage, MyPromisesData, PromiseCard } from "../plan/conversation-views.ts";
 
 export const CONVERSATION_ACTIONS = [
   "conversations.list", "conversations.count", "conversations.refresh", "conversations.messages", "conversations.seen", "conversations.resolve", "conversations.not_request", "conversations.not_work", "conversations.not_work_undo", "conversations.reopen",
@@ -55,8 +56,13 @@ export const CONVERSATION_ACTIONS = [
   "my_promises.search",
   // CV-5: Link to item over the client's items in scope, and its undo.
   "conversations.search_items", "conversations.unlink", "my_promises.unlink",
+  // GD-2: the held-back list and Not work-related for one held message.
+  "conversations.held", "conversations.held_not_work",
 ] as const;
 export type ConversationAction = (typeof CONVERSATION_ACTIONS)[number];
+/** GD-2: the reasons the Held back list shows: GD-2's own, and GD-1's older holds until they're sorted again. */
+const HELD_REASONS = new Set<string>([HELD_MENTION, CLIENT_REFUSED, LEGACY_CLIENT_REFUSED]);
+
 /** QF-1: the close reason of Not work-related, and the mark on its messages' places (so Undo finds them). */
 export const NOT_WORK = "Not work-related";
 const NOT_WORK_PLACE = "not_work:";
@@ -287,6 +293,7 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
     const fromInternal = chat?.kind === "delivery";
     return {
       id: c.id, clientKey: c.clientKey, clientName: name(c.clientKey), chatId: c.chatId, chatName: chat?.displayName ?? "A chat no longer registered", internalChat: fromInternal,
+      ...(c.mentions?.length ? { mentions: c.mentions.filter((k) => k.toLowerCase() !== c.clientKey.toLowerCase()).map(name) } : {}),
       title: c.title, summary: c.summary, status: c.status, statusLine: statusLine(c, committer ? first(committer.whoName) : null, waiting), lastAt: c.lastAt,
       participants: c.participants.map((p) => ({ name: p.name, external: home ? p.external : false, me: same(p.id, v.me) })),
       // Changed since I last looked (never looked: new to me), not for closed ones I haven't opened.
@@ -296,7 +303,7 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
       likely: c.itemId ? null : cardItem(c.likelyItem, its),
       waiting, unclaimed: !!wait && !wait.takenBy, owner: c.ownerId ? (c.participants.find((p) => same(p.id, c.ownerId))?.name ?? null) : null, mentionsMe,
       commitments: cs.map((k): CardCommitment => ({ id: k.id, whoName: k.whoName, mine: same(k.whoId, v.me), what: k.what, dueAt: k.dueAt, dueDate: k.dueDate, state: k.state, impliesItem: k.impliesItem, item: cardItem(k.itemId, null, k.itemUrl, k.itemTitle) })),
-      suggestions: suggestions.filter((s) => s.conversationId === c.id && s.state === "open").map((s): CardSuggestion => ({ id: s.id, kind: s.kind, itemId: s.itemId, body: s.body, internal: s.internal, fromInternalChat: fromInternal, mine: same(s.forUser, v.me) })),
+      suggestions: suggestions.filter((s) => s.conversationId === c.id && s.state === "open").map((s): CardSuggestion => ({ id: s.id, kind: s.kind, itemId: s.itemId, body: s.body, internal: s.internal, fromInternalChat: fromInternal, mine: same(s.forUser, v.me), ...(s.namesRemoved ? { namesRemoved: true } : {}) })),
       closed, hidden: !!view?.hidden, primary, canCreate, link: chat ? teamsLink(chat) : messageLink(c.chatId, places.find((p) => p.conversationId === c.id)?.messageId ?? "0"),
       ...(images ? { images } : {}),
       ...(described ? { imageNote: described } : {}),
@@ -343,6 +350,7 @@ async function list(ctx: ConversationContext, cfg: AppConfig, select: number | n
     const r = reasons.get(line.text);
     reasons.set(line.text, { line, count: (r?.count ?? 0) + 1 });
   }
+  out.heldCount = unsorted.filter((p) => HELD_REASONS.has(p.reason ?? "")).length;
   out.unsorted = { count: unsorted.length, reasons: [...reasons.values()].map(({ line, count }) => ({ text: line.text, count, does: line.does, fix: line.fix })) };
   const chatter = await v.convs.placesByRole(v.chats.map((c) => c.chatId), "chatter");
   const home = await ctx.homeTenant();
@@ -418,7 +426,7 @@ export async function inboxFacts(ctx: ConversationContext, cfg: AppConfig): Prom
     out.push({
       key: itemKey("conversation", card.id), kind: "conversation", clientKey: card.clientKey, at: card.lastAt, done: view === "closed", conversationView: view,
       title: card.title, who: asker, where: card.chatName, itemId: card.item?.id ?? null, mentionsMe: card.mentionsMe,
-      workRequest, needsWhy,
+      workRequest, needsWhy, ...(card.mentions?.length ? { mentions: card.mentions } : {}),
     });
   }
   // Slice 3, Waiting on: someone else's open commitment made to me, or in a conversation I own.
@@ -559,9 +567,13 @@ async function draftFor(ctx: ConversationContext, v: Seen, cfg: AppConfig, c: Co
   let draft: ItemDraft | null = null;
   let notSorted: string | null = null;
   if (ai) {
-    const r = await ai.run<DraftAnswer>({ name: DRAFT_TASK, client: c.clientKey, instructions: DRAFT_INSTRUCTIONS }, draftInput({ clientName: cfg.clientSettings[c.clientKey]?.name ?? c.clientKey, title: c.title, summary: c.summary, messages, features, items }), DRAFT_SCHEMA);
+    // GD-2 point 5: the conversation's words may name another client (an internal chat, a message sorted by hand);
+    // the draft never does: the instructions say so, and the check after replaces any other client's name.
+    const internal = ctx.boundary ? !!(await ctx.boundary(c.clientKey).catch(() => null))?.internal : false;
+    const r = await ai.run<DraftAnswer>({ name: DRAFT_TASK, client: c.clientKey, instructions: internal ? DRAFT_INSTRUCTIONS : `${DRAFT_INSTRUCTIONS}\n${NO_OTHER_CLIENTS}`, mentions: { input: "words", answer: "scrub" } }, draftInput({ clientName: cfg.clientSettings[c.clientKey]?.name ?? c.clientKey, title: c.title, summary: c.summary, messages, features, items }), DRAFT_SCHEMA);
     if (r.ok) draft = draftFrom(r.value, { featureIds: features.map((f) => f.id), itemIds: items.map((i) => i.id) });
-    else notSorted = unsortedText(r.error instanceof AiError ? r.error.kind : "provider", cfg.clientSettings[c.clientKey]?.name ?? c.clientKey);
+    if (r.ok && draft && r.namesRemoved) draft = { ...draft, namesRemoved: true };
+    if (!r.ok) notSorted = unsortedText(r.error instanceof AiError ? r.error.kind : "provider", cfg.clientSettings[c.clientKey]?.name ?? c.clientKey);
     if (r.ok && !draft) notSorted = unsortedText("unknown_ref", "");
   } else notSorted = "AI isn't available here";
   // CV-5: without AI (off, the client's Allow AI off, or the answer unusable) the form is empty for me to fill in, and
@@ -834,7 +846,12 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         // DX-1: This is work marks its place, so Diagnostics counts it apart from Move and Split.
         await v.convs.place([{ chatId: o.chatId, messageId: o.messageId, conversationId: to, role: "work", reason: action === "conversations.this_is_work" ? IS_WORK_PLACE : null, placedBy: "person", at: m.createdAt }]);
         const deps = { convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() };
-        await v.convs.updateConversation(to, { changeNote: "A message was moved here" }, { bump: true });
+        // GD-2 point 7: a message naming another client (a held one sorted by hand) tags the conversation it went to.
+        const b = ctx.boundary ? await ctx.boundary(chat.clientKey).catch(() => null) : null;
+        const named = b && !b.internal ? mentionedClients(m.text, chat.clientKey, b.directory).map((x) => x.key) : [];
+        const tc = named.length ? await v.convs.conversation(to) : null;
+        const mentions = tc ? [...new Set([...(tc.mentions ?? []), ...named])] : null;
+        await v.convs.updateConversation(to, { changeNote: "A message was moved here", ...(mentions ? { mentions } : {}) }, { bump: true });
         await refreshStatus(deps, to);
         if (from !== null && from !== to) await refreshStatus(deps, from);
         ctx.log({ source: "plan", op: "conversation_moved", kind: action === "conversations.this_is_work" ? "work" : o.to === "new" ? "split" : "move" });
@@ -898,6 +915,44 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         ctx.log({ source: "plan", op: "commitment_taken_over" });
         return respond();
       }
+      case "conversations.held": {
+        // GD-2 Part 2: the messages held back in my chats, newest first, as Teams shows them to me. The matched name
+        // only for members of that chat (the viewer's chats); never logged.
+        if (!only(input, [])) return bad("conversations.held takes {}");
+        const data: HeldData = { messages: [], conversations: {} };
+        if (!v) return { ok: true, data };
+        const home = await ctx.homeTenant();
+        const places = (await v.convs.placesByRole(v.chats.map((c) => c.chatId), "unsorted")).filter((p) => HELD_REASONS.has(p.reason ?? ""));
+        const bounds = new Map<string, Awaited<ReturnType<NonNullable<ConversationContext["boundary"]>>> | null>();
+        const aliases = new Map<string, string>();
+        for (const p of [...places].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200)) {
+          const chat = v.byId.get(p.chatId);
+          const m = chat ? await v.teams.message(p.chatId, p.messageId) : null;
+          if (!chat || !m) continue;
+          if (!bounds.has(chat.clientKey)) bounds.set(chat.clientKey, ctx.boundary ? await ctx.boundary(chat.clientKey).catch(() => null) : null);
+          const b = bounds.get(chat.clientKey);
+          const view = await messageView(m, { chat, home, me: v.me, teams: v.teams, aliases });
+          data.messages.push({
+            chatId: chat.chatId, chatName: chat.displayName, clientKey: chat.clientKey, clientName: cfg.clientSettings[chat.clientKey]?.name ?? chat.clientKey,
+            messageId: m.messageId, author: view.author, at: m.createdAt, matched: b && !b.internal ? mentionedClients(m.text, chat.clientKey, b.directory).map((x) => x.name) : [],
+            html: view.html, text: m.text, why: HELD_LINE,
+          });
+          if (!data.conversations[chat.chatId]) data.conversations[chat.chatId] = (await v.convs.conversations([chat.chatId])).filter((c) => !c.closedAt).slice(0, 30).map((c) => ({ id: c.id, title: c.title }));
+        }
+        return { ok: true, data };
+      }
+      case "conversations.held_not_work": {
+        // GD-2 Part 2: a held message isn't work: it goes to Chatter (This is work brings it back), placed by me.
+        const o = only(input, ["chatId", "messageId"]);
+        if (!o || !v || typeof o.chatId !== "string" || !CHAT_ID.test(o.chatId) || typeof o.messageId !== "string" || !MESSAGE_ID.test(o.messageId)) return bad("conversations.held_not_work takes { chatId, messageId }");
+        const chat = v.byId.get(o.chatId);
+        const m = chat ? await v.teams.message(o.chatId, o.messageId) : null;
+        const place = m ? await v.convs.placeOf(o.chatId, o.messageId) : null;
+        if (!chat || !m || !place || place.role !== "unsorted" || !HELD_REASONS.has(place.reason ?? "")) return bad("No such held message", 404);
+        await v.convs.place([{ chatId: o.chatId, messageId: o.messageId, conversationId: null, role: "chatter", reason: "person", placedBy: "person", at: m.createdAt }]);
+        ctx.log({ source: "plan", op: "held_not_work" });
+        return respond();
+      }
       case "conversations.sort_unsorted": {
         if (!only(input, [])) return bad("conversations.sort_unsorted takes {}");
         if (!v || !ctx.requests) return respond();
@@ -909,8 +964,13 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
           const waiting = (await v.convs.placesByRole([chat.chatId], "unsorted")).filter((p) => unsortedLine(p.reason, "").does !== "held");
           if (!waiting.length) continue;
           const ms = (await mapSeq(waiting, (p) => v.teams.message(p.chatId, p.messageId))).filter((m): m is NonNullable<typeof m> => !!m);
+          // GD-2: the same boundary as the poll: the chat's audience now and the client's other clients.
+          const home = await ctx.homeTenant();
+          const bound = ctx.boundary ? await ctx.boundary(chat.clientKey).catch(() => null) : null;
+          const audience = chatAudience(chat.members, (ctx.audienceRules ? await ctx.audienceRules().catch(() => null) : null) ?? { homeTenant: home, automation: [], domains: [] });
           const r = await runPipeline({
-            teams: ctx.requests.teams, convs: v.store, users, homeTenant: await ctx.homeTenant(), now: stamp, clientName: cfg.clientSettings[chat.clientKey]?.name ?? chat.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, chatCap: cfg.org?.rules.chatAiDailyCap ?? CHAT_DAILY_AI_CALLS, ...groupingRules(cfg, chat.clientKey),
+            ...(bound ? { boundary: { audience, directory: bound.directory, internal: bound.internal } } : {}),
+            teams: ctx.requests.teams, convs: v.store, users, homeTenant: home, now: stamp, clientName: cfg.clientSettings[chat.clientKey]?.name ?? chat.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, chatCap: cfg.org?.rules.chatAiDailyCap ?? CHAT_DAILY_AI_CALLS, ...groupingRules(cfg, chat.clientKey),
             items: await ctx.openItems(cfg, chat.clientKey).catch(() => null), author: async (uid) => (same(uid, v.me) ? { zone: userZone(cfg), promisePhrases: cfg.asks.promisePhrases } : null),
           }, chat, ms);
           sorted += r.work + r.chatter;

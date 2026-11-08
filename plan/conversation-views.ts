@@ -15,7 +15,7 @@ export type CardItem = {
   closed?: boolean;
 };
 export type CardCommitment = { id: number; whoName: string; mine: boolean; what: string; dueAt: string | null; dueDate: string | null; state: CommitmentState; impliesItem: boolean; item: CardItem | null };
-export type CardSuggestion = { id: number; kind: "comment" | "description"; itemId: number; body: string; internal: string[]; fromInternalChat: boolean; mine: boolean };
+export type CardSuggestion = { id: number; kind: "comment" | "description"; itemId: number; body: string; internal: string[]; fromInternalChat: boolean; mine: boolean; /** GD-2 */ namesRemoved?: boolean };
 export type Primary = "create" | "link" | "resolve" | "take_over" | "reopen" | "mark_done";
 
 export type ConversationCard = {
@@ -26,6 +26,8 @@ export type ConversationCard = {
   chatName: string;
   /** An internal delivery chat (its content is flagged before it goes to a client's DevOps). */
   internalChat: boolean;
+  /** GD-2 point 7: the other clients its messages name, by name ("mentions Wingtip"), for whoever can see it. */
+  mentions?: string[];
   title: string;
   summary: string;
   status: ConversationStatus;
@@ -80,7 +82,30 @@ export type ConversationsData = {
   writeClients: string[];
   /** CV-2: a deep link's conversation: listed (and in which view), or not here any more (a plain note). */
   selected?: { id: number; found: boolean; where: "needs" | "progress" | "teammates" | "closed" | null };
+  /** GD-2: how many messages the boundary holds back in my chats (opens the Held back list). */
+  heldCount?: number;
 };
+
+/**
+ * GD-2 Part 2: one message the boundary held back, as the chat's members see it: the chat, who wrote it, when, which
+ * other client's name matched (only ever shown to members of that chat), and the message as Teams shows it.
+ */
+export type HeldMessage = {
+  chatId: string;
+  chatName: string;
+  clientKey: string;
+  clientName: string;
+  messageId: string;
+  author: string;
+  at: string;
+  /** The other clients' names it matched (empty for an old hold that no longer matches: it is sorted again soon). */
+  matched: string[];
+  html: string;
+  text: string;
+  /** Why, in plain words. */
+  why: string;
+};
+export type HeldData = { messages: HeldMessage[]; /** Each chat's open conversations, to sort a message into by hand. */ conversations: Record<string, { id: number; title: string }[]> };
 
 /**
  * One message under Show messages (CV-2: rendered like Teams). `authorKey` groups consecutive messages (an alias for

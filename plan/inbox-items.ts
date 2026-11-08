@@ -70,6 +70,8 @@ export type InboxFacts = {
   itemId?: number | null;
   /** Conversation: it names me; a work request with no item yet. Send: a Must. */
   mentionsMe?: boolean;
+  /** GD-2 point 7: the other clients a conversation's messages name ("mentions Wingtip"), by name. */
+  mentions?: string[];
   workRequest?: boolean;
   must?: boolean;
   /** Send: the week it's for. */
@@ -190,6 +192,8 @@ export type InboxItemView = {
   sendState?: InboxFacts["sendState"];
   conversationView?: InboxFacts["conversationView"];
   mentionsMe?: boolean;
+  /** GD-2: "mentions <client>" on the row and in the detail pane. */
+  mentions?: string[];
   workRequest?: boolean;
   must?: boolean;
   weekStart?: IsoDate;

@@ -162,7 +162,8 @@ export type CommitmentProposal = {
   lines: number[];
 };
 export type CommentProposal = { kind: "comment"; itemId: number; itemTitle: string; itemType: string; note: "decision" | "next_step" | "status"; text: string; inReport: boolean; lines: number[] };
-export type ProposalBody = GapProposal | CommitmentProposal | CommentProposal;
+/** GD-2: `namesRemoved` when the AI's text had another client's name replaced by "another client" (the card says so). */
+export type ProposalBody = (GapProposal | CommitmentProposal | CommentProposal) & { namesRemoved?: boolean };
 export const PROPOSAL_KINDS = ["gap", "commitment", "comment"] as const;
 export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
 

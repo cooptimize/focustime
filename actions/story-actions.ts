@@ -11,6 +11,7 @@ import { fmtUsd } from "../ai/cost.ts";
 import { validate } from "../ai/schema.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { sizeChipText, validStorySize } from "../plan/estimate.ts";
+import { NO_OTHER_CLIENTS } from "../plan/boundary.ts";
 import {
   COOP_PROPOSALS_V1, draftInput, publishOrder, sentSummary, DRAFT_INSTRUCTIONS, editProblem, exemplarView, houseStyle, houseStyleStale, MAX_PROPOSALS, NOTE_MAX, proposalProblems, rankExemplars, styleText, toProposal,
   EXEMPLAR_MAX, type CoopProposals, type ExemplarCandidate, type FeatureSignals, type HouseStyle, type Proposal, type StoryDraft,
@@ -41,6 +42,8 @@ export type StoryContext = {
   /** The write framework's own actions (devops.preview, devops.confirm, devops.retry, devops.log). */
   devopsWrite: (action: "devops.preview" | "devops.confirm" | "devops.retry" | "devops.log", input: unknown) => Promise<ActionResponse>;
   now: () => string;
+  /** GD-1, GD-2: whether a client key is Cooptimize Internal (its text may name clients). */
+  isInternal?: (clientKey: string) => Promise<boolean>;
 };
 
 class Invalid extends Error {}
@@ -182,7 +185,9 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
     const st = await aiState(ctx, cfg, clientKey);
     if (!ai || st !== "on") throw new Refused(AI_WORDS[st === "on" ? "not_set_up" : st](nameOf(clientKey)), 409, "ai_off");
     const payload = draftInput({ signals, exemplars: exemplars.map(exemplarView), style, note, ...(one ? { keep: one.keep, replace: one.replace } : {}) });
-    const r = await ai.run<CoopProposals>({ name: DRAFT_TASK, client: clientKey, instructions: DRAFT_INSTRUCTIONS }, payload, COOP_PROPOSALS_V1);
+    // GD-2 point 5: the cards never name another client (the instructions say so; the check after replaces any name).
+    const internal = ctx.isInternal ? await ctx.isInternal(clientKey).catch(() => false) : false;
+    const r = await ai.run<CoopProposals>({ name: DRAFT_TASK, client: clientKey, instructions: internal ? DRAFT_INSTRUCTIONS : `${DRAFT_INSTRUCTIONS}\n${NO_OTHER_CLIENTS}`, mentions: { input: "words", answer: "scrub" } }, payload, COOP_PROPOSALS_V1);
     if (!r.ok) throw new Refused(r.error.kind === "invalid_output" ? "The AI's answer wasn't usable, so nothing is shown. Try again" : r.error.message, r.error.kind === "invalid_output" ? 422 : 409, r.error.kind);
     // Beyond the schema: the feature, unique ids, real dependencies, existing children. Any problem: nothing shown.
     const childIds = signals.children.map((c) => c.id);
@@ -190,7 +195,7 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
     const problems = validate(r.value, COOP_PROPOSALS_V1).length ? ["schema"] : proposalProblems(answer, { featureId: signals.feature.id, childIds });
     if (one && (r.value.proposals.length !== 1 || r.value.proposals[0]!.id !== one.replace.id)) problems.push("$.proposals: not exactly the one card asked for");
     if (problems.length) throw new Refused("The AI's answer wasn't usable, so nothing is shown. Try again", 422, "invalid_output");
-    return { value: r.value, costMicros: Math.round(r.costUsd * 1_000_000) };
+    return { value: r.value, costMicros: Math.round(r.costUsd * 1_000_000), namesRemoved: !!r.namesRemoved };
   };
 
   switch (action) {
@@ -248,8 +253,8 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
       const wanted = o.exemplarIds as number[] | undefined;
       const exemplars = wanted ? wanted.map((id) => pool.find((c) => c.id === id && c.id !== featureId)).filter((c): c is ExemplarCandidate => !!c) : rankExemplars(signals.feature, pool);
       const style = styleText(await styleFor(clientKey, pool.length ? pool : null));
-      const { value, costMicros } = await ask(signals, clientKey, exemplars, style, note, null);
-      const d = await plan.addStoryDraft(clientKey, featureId, { featureTitle: signals.feature.title, storyType: signals.storyType, note, exemplarIds: exemplars.map((e) => e.id), proposals: value.proposals.map(toProposal), rationale: value.rationale, setAside: value.set_aside, costMicros });
+      const { value, costMicros, namesRemoved } = await ask(signals, clientKey, exemplars, style, note, null);
+      const d = await plan.addStoryDraft(clientKey, featureId, { featureTitle: signals.feature.title, storyType: signals.storyType, note, exemplarIds: exemplars.map((e) => e.id), proposals: value.proposals.map(toProposal), rationale: value.rationale, setAside: value.set_aside, costMicros, ...(namesRemoved ? { namesRemoved } : {}) });
       return { ok: true, data: await view(d) };
     }
     case "stories.regenerate": {
@@ -271,14 +276,14 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
         if (!target) throw new Refused("That card isn't in this draft", 404);
         if (writes.has(pid)) throw new Refused("That story was already sent to DevOps", 409);
         const keep = d.proposals.filter((p) => p.id !== pid && p.keep);
-        const { value, costMicros } = await ask(signals, d.clientKey, exemplars, style, note || d.note, { keep, replace: target });
+        const { value, costMicros, namesRemoved } = await ask(signals, d.clientKey, exemplars, style, note || d.note, { keep, replace: target });
         const fresh = { ...toProposal(value.proposals[0]!), keep: true };
-        const saved = await plan.saveStoryDraft(d.id, { ...d, proposals: d.proposals.map((p) => (p.id === pid ? fresh : p)), costMicros: d.costMicros + costMicros });
+        const saved = await plan.saveStoryDraft(d.id, { ...d, proposals: d.proposals.map((p) => (p.id === pid ? fresh : p)), costMicros: d.costMicros + costMicros, ...(namesRemoved || d.namesRemoved ? { namesRemoved: true } : {}) });
         return { ok: true, data: await view(saved) };
       }
       if (writes.size) throw new Refused("Some of these stories are in DevOps already, so the set can't be drafted again. Regenerate one card instead", 409);
-      const { value, costMicros } = await ask(signals, d.clientKey, exemplars, style, note || d.note, null);
-      const saved = await plan.saveStoryDraft(d.id, { ...d, note: note || d.note, proposals: value.proposals.map(toProposal), rationale: value.rationale, setAside: value.set_aside, costMicros: d.costMicros + costMicros });
+      const { value, costMicros, namesRemoved } = await ask(signals, d.clientKey, exemplars, style, note || d.note, null);
+      const saved = await plan.saveStoryDraft(d.id, { ...d, note: note || d.note, proposals: value.proposals.map(toProposal), rationale: value.rationale, setAside: value.set_aside, costMicros: d.costMicros + costMicros, namesRemoved });
       return { ok: true, data: await view(saved) };
     }
     case "stories.save": {
@@ -309,23 +314,25 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
     }
     case "stories.publish_preview": {
       // The exact batch, held by the write framework: one create per kept card not yet sent, in dependency order.
-      const o = fields(input, ["draftId"]);
+      // GD-2: replace: another client's name in my edited cards is written as "another client" (the flag's one click).
+      const o = fields(input, ["draftId"], ["replace"]);
       const d = await owned(o.draftId);
       if (!(await ctx.writeClients()).includes(d.clientKey)) throw new Refused(NO_PAT(nameOf(d.clientKey)), 409, "no_write_pat");
       const writes = await plan.storyDraftWrites(d.id);
       const todo = publishOrder(d.proposals).filter((p) => !writes.has(p.id));
       if (!todo.length) return { ok: true, data: { previews: [], nothing: ["Every kept story is in DevOps already, or waiting for Retry"], order: [] } };
       if (todo.length > MAX_PROPOSALS) throw new Invalid(`At most ${MAX_PROPOSALS} stories at once`);
-      const r = await ctx.devopsWrite("devops.preview", { clientKey: d.clientKey, changes: todo.map((p) => ({ kind: "proposal_create", storyDraftId: d.id, proposalId: p.id })) });
+      const r = await ctx.devopsWrite("devops.preview", { clientKey: d.clientKey, changes: todo.map((p) => ({ kind: "proposal_create", storyDraftId: d.id, proposalId: p.id, ...(o.replace === true ? { mentions: "replace" } : {}) })) });
       if (!r.ok) return r;
       return { ok: true, data: { ...(r.data as object), order: todo.map((p) => p.id) } };
     }
     case "stories.publish": {
       // Confirm the held batch; each create is tied to its proposal before it is sent (devops-write-actions.ts).
-      const o = fields(input, ["draftId", "previewIds"]);
+      // GD-2: mentionsOk: I saw the flag and save my own words as they are.
+      const o = fields(input, ["draftId", "previewIds"], ["mentionsOk"]);
       const d = await owned(o.draftId);
       if (!Array.isArray(o.previewIds) || !o.previewIds.length || o.previewIds.length > MAX_PROPOSALS || o.previewIds.some((x) => typeof x !== "string")) throw new Invalid(`previewIds needs 1 to ${MAX_PROPOSALS} previews`);
-      const r = await ctx.devopsWrite("devops.confirm", { previewIds: o.previewIds });
+      const r = await ctx.devopsWrite("devops.confirm", { previewIds: o.previewIds, ...(o.mentionsOk === true ? { mentionsOk: true } : {}) });
       if (!r.ok) return r;
       const results = (r.data as { results: ({ confirmed: boolean; message: string } | { error: string })[] }).results;
       const v = await view((await plan.storyDraft(d.id))!);

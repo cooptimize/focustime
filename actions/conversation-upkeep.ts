@@ -6,6 +6,8 @@
 // Never reassigns, never notifies the whole team, never writes to DevOps: suggestions wait for Post comment or Skip.
 // Nothing about a chat's content is logged (counts only).
 import type { AiService } from "../ai/service.ts";
+import { NO_OTHER_CLIENTS } from "../plan/boundary.ts";
+import { isInternalKey } from "./client-accounts.ts";
 import { COMMENT_INSTRUCTIONS, COMMENT_SCHEMA, COMMENT_TASK, type CommentAnswer } from "../plan/conversation-draft.ts";
 import { escalateAt, oneLine, suggestionDue, type Conversation } from "../plan/conversations.ts";
 import type { ConversationStore } from "../store/conversation-store.ts";
@@ -55,8 +57,8 @@ export async function upkeep(d: UpkeepDeps): Promise<UpkeepResult> {
       const forUser = await ownerOf(d, c);
       if (!forUser) continue;
       const internal = chat.kind === "delivery";
-      const lines = await commentLines(d, c);
-      await d.convs.addSuggestion({ conversationId: c.id, itemId: c.itemId, kind: "comment", forUser, body: internal ? "" : lines.join("\n"), before: null, after: null, internal: internal ? lines : [], day });
+      const { lines, namesRemoved } = await commentLines(d, c);
+      await d.convs.addSuggestion({ conversationId: c.id, itemId: c.itemId, kind: "comment", forUser, body: internal ? "" : lines.join("\n"), before: null, after: null, internal: internal ? lines : [], day, ...(namesRemoved ? { namesRemoved } : {}) });
       out.suggestions++;
       // A clear scope change: also a description change, appended to the current text (never a rewrite), confirmed by hand.
       if (c.itemChange.scope && !internal) {
@@ -83,13 +85,16 @@ async function ownerOf(d: UpkeepDeps, c: Conversation): Promise<string | null> {
 }
 
 /** The comment's lines: AI's short update (the app's cap) from the summary and the change, else the change itself. */
-async function commentLines(d: UpkeepDeps, c: Conversation): Promise<string[]> {
-  const fallback = [oneLine(c.itemChange?.note ?? c.summary, 400)].filter(Boolean);
+async function commentLines(d: UpkeepDeps, c: Conversation): Promise<{ lines: string[]; namesRemoved?: boolean }> {
+  const fallback = { lines: [oneLine(c.itemChange?.note ?? c.summary, 400)].filter(Boolean) };
   const ai = await d.ai(c.clientKey).catch(() => null);
   if (!ai) return fallback;
   const input = JSON.stringify({ client: await d.clientName(c.clientKey), item: c.itemId, conversation: { title: withoutEmails(c.title), summary: withoutEmails(c.summary) }, change: { kind: c.itemChange?.kind ?? "update", note: withoutEmails(c.itemChange?.note ?? "") }, resolved: c.status === "resolved" });
-  const r = await ai.run<CommentAnswer>({ name: COMMENT_TASK, client: c.clientKey, instructions: COMMENT_INSTRUCTIONS }, input, COMMENT_SCHEMA);
+  // GD-2 point 5: the comment never names another client (the check after replaces one with "another client").
+  // Internal's comments may name clients (the service skips the check after for Internal too).
+  const internal = await isInternalKey(null, c.clientKey).catch(() => false);
+  const r = await ai.run<CommentAnswer>({ name: COMMENT_TASK, client: c.clientKey, instructions: internal ? COMMENT_INSTRUCTIONS : `${COMMENT_INSTRUCTIONS}\n${NO_OTHER_CLIENTS}`, mentions: { input: "words", answer: "scrub" } }, input, COMMENT_SCHEMA);
   if (!r.ok) return fallback;
   const lines = r.value.lines.map((l) => oneLine(l, 300)).filter(Boolean).slice(0, 4);
-  return lines.length ? lines : fallback;
+  return lines.length ? { lines, ...(r.namesRemoved ? { namesRemoved: true } : {}) } : fallback;
 }

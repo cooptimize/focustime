@@ -371,6 +371,8 @@ export type DevOpsPreview = {
   key?: string;
   /** CV-4: a create from a conversation: its images offered as attachments (FocusTime's own address), each ticked or not. */
   attachments?: { id: number; src: string; sender: string; at: string; description: string | null; ticked: boolean }[];
+  /** GD-2: the other clients the text names: the preview flags them, with one click to replace; Confirm needs mentionsOk. */
+  mentions?: string[];
 };
 export type DevOpsResult = { entry: import("../plan/devopswrite.ts").DevOpsWriteEntry; confirmed: boolean; message: string; changed?: { field: string; was: string | null; now: string | null }[]; itemId?: number | null; url?: string | null };
 /** PK-1: one checked-off to-do whose DevOps item FocusTime may offer to set done: its current state and the done choices (Completed first, then Resolved). */

@@ -47,6 +47,7 @@ const toConversation = (r: Row): Conversation => ({
   itemChange: r.item_change_kind ? { kind: r.item_change_kind as ItemChange, note: (r.item_change_note as string | null) ?? "", at: instant(r.item_change_at) ?? instant(r.updated_at)!, scope: !!r.item_change_scope } : null,
   likelyItem: num(r.likely_item),
   mergedInto: num(r.merged_into),
+  mentions: json<string[]>(r.mentions_json, []),
   createdAt: instant(r.created_at)!,
   updatedAt: instant(r.updated_at)!,
 });
@@ -116,6 +117,7 @@ const toSuggestion = (r: Row): Suggestion => ({
   before: (r.before_text as string | null) ?? null,
   after: (r.after_text as string | null) ?? null,
   internal: json<string[]>(r.internal_json, []),
+  ...(r.names_removed ? { namesRemoved: true } : {}),
   state: r.state as Suggestion["state"],
   writeId: num(r.write_id),
   day: r.day as string,
@@ -154,6 +156,8 @@ export type ConversationPatch = Partial<{
   changeNote: string | null;
   itemChange: { kind: ItemChange; note: string; at: string; scope: boolean } | null;
   likelyItem: number | null;
+  /** GD-2: the other clients its messages name (keys). */
+  mentions: string[];
 }>;
 
 export type NewCommitment = Omit<Commitment, "id" | "createdAt" | "updatedAt" | "followUpId" | "itemId" | "itemUrl" | "itemTitle" | "onToday" | "remindedAt" | "escalatedAt" | "takenBy" | "takenFrom" | "takenAt" | "state" | "draft"> & { state?: CommitmentState; fromPromise?: string | null; createdAt?: string };
@@ -230,6 +234,7 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         if (p.changeNote !== undefined) set("change_note", p.changeNote?.slice(0, 200) ?? null);
         if (p.itemChange !== undefined) (set("item_change_kind", p.itemChange?.kind ?? null), set("item_change_note", p.itemChange?.note.slice(0, 400) ?? null), set("item_change_at", p.itemChange?.at ?? null), set("item_change_scope", p.itemChange?.scope ? 1 : 0));
         if (p.likelyItem !== undefined) set("likely_item", p.likelyItem);
+        if (p.mentions !== undefined) set("mentions_json", p.mentions.length ? JSON.stringify(p.mentions.slice(0, 10)) : null);
         if (o.bump) sets.push("version = version + 1");
         set("updated_at", stamp());
         await db.run(`UPDATE conversations SET ${sets.join(", ")} WHERE id = ?`, [...params, id]);
@@ -436,8 +441,8 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
       return db.tx(async () => {
         const t = stamp();
         const r = await db.run(
-          "INSERT INTO conversation_suggestions (conversation_id, item_id, kind, for_user, body, before_text, after_text, internal_json, state, day, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)",
-          [x.conversationId, x.itemId, x.kind, x.forUser, x.body, x.before, x.after, x.internal.length ? JSON.stringify(x.internal) : null, x.day, t, t],
+          "INSERT INTO conversation_suggestions (conversation_id, item_id, kind, for_user, body, before_text, after_text, internal_json, names_removed, state, day, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)",
+          [x.conversationId, x.itemId, x.kind, x.forUser, x.body, x.before, x.after, x.internal.length ? JSON.stringify(x.internal) : null, x.namesRemoved ? 1 : null, x.day, t, t],
         );
         return toSuggestion((await db.get("SELECT * FROM conversation_suggestions WHERE id = ?", [r.lastId!]))!);
       });

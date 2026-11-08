@@ -98,6 +98,15 @@ export function Detail(p: DetailProps): ReactNode {
       <h2 className="ib-detail-title" tabIndex={-1}>
         {r.title || "(no title)"}
       </h2>
+      {r.mentions?.length ? (
+        <p className="ib-mentions" aria-label="Other clients this mentions">
+          {r.mentions.map((n) => (
+            <span key={n} className="ib-tag tone-plain mention-tag" title="Its messages name another client. Only people in this chat see it.">
+              mentions {n}
+            </span>
+          ))}
+        </p>
+      ) : null}
       {r.reason && <p className="ib-reason">{r.reason}</p>}
       {r.snoozedUntil && <p className="ib-snoozed muted">Snoozed until {wakeWords(r.snoozedUntil, p.tz, p.today)}. It's out of your counts until then.</p>}
       <Lead {...p} />

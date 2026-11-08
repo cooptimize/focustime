@@ -158,6 +158,8 @@ export function CreateDraftDialog({ draftId, data, onClose, onChanged }: { draft
             </button>
           )}
         </header>
+        {/* GD-2: the check after generation replaced another client's name in the AI version. */}
+        {s === "ai" && ai && draft?.ai?.note === "Another client's name was removed" && <p className="names-removed">Another client's name was removed: "another client" is written instead. Edit freely.</p>}
         {s === "ai" && !ai ? (
           <p className="muted cd-ai-note" role="status">{running || state === "writing" ? "AI still writing…" : draft && state ? draftRowText(state === "no_pat" ? "plain" : state, draft, clientName) : ""}</p>
         ) : here && fields ? (

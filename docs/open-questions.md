@@ -406,6 +406,13 @@ What DS-1 learned, and what is still open:
 - Q-UI10-1: the phone sheets rest on the on-screen keyboard through `--kb-inset` (visualViewport) on iOS and `interactive-widget=resizes-content` on Android. Checked in Chromium with a simulated inset, not on a real iPhone or Android phone yet: does the capture box stay above the keyboard on both?
 - Q-UI10-2: on the phone, the Assistant sheet's × sits 2px past the sheet's right edge (older than UI-10, seen while testing; the page doesn't scroll sideways). Fix in a phone polish step?
 
+## Client boundary (GD-2, Nov 7)
+
+- Q-GD2-1: a client known only by its key (no display name in my clients) shows its key in the "mentions" tag and the flag. Should the tag fall back to the Dataverse name for clients I don't follow?
+- Q-GD2-2: Status's line box flags as you type and says it goes to "this client's status report". Is the debounce (half a second) right, or should it check only on Push?
+- Q-GD2-3: a held message in a client-facing chat waits until someone sorts it or retention purges it (14 days). Should a lead get a quiet note when one waits more than a working day?
+- Q-GD2-4: matching is on names and aliases as whole words. A client whose name is a common word ("Atlas", "Summit") will hold messages that use the word. Is an alias list per client enough, or do we need a "not a mention" button that teaches it?
+- Q-GD2-5: Replace writes "another client". Would people rather choose the words (for example "a retail client")?
 ## Co-working calls (CW-1, Nov 7)
 
 - Q-CW1-1: "who's on it" while a call is live. Graph's chat messages list participants only in the call ended event; showing who is on a live call would need the calls or online meetings APIs (a new permission, likely application-level). Worth it, or is "started by" enough?

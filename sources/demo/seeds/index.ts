@@ -3,6 +3,7 @@
 // matters only where a seed reads what an earlier one made (the week plan before the unfinished picks, say).
 import { aheadSeed } from "./ahead.ts";
 import { assistantSeed } from "./assistant.ts";
+import { boundarySeed } from "./boundary.ts";
 import { capturesSeed } from "./captures.ts";
 import { conversationsSeed } from "./conversations.ts";
 import { coworkSeed } from "./cowork.ts";
@@ -31,6 +32,7 @@ export const DEMO_SEEDS: readonly DemoSeed[] = [
   noticesSeed,
   historySeed,
   conversationsSeed,
+  boundarySeed,
   coworkSeed,
   inboxSeed,
   assistantSeed,

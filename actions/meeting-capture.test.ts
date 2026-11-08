@@ -91,6 +91,17 @@ describe("meeting capture AI pass (MC-1)", () => {
     expect(r.proposals[3]!.quotes).toEqual([{ n: 4, speaker: "Dana Client", at: "1:35", text: "Decided: CSV only for now, Excel later." }]);
   });
 
+  it("GD-2: a proposal naming another client has it replaced and is marked; the prompt says so; the rest are untouched", async () => {
+    const answer = { gaps: [{ type: "User Story", parentId: 1201, title: "Holiday calendar import like Fabrikam's", description: "Same as Orion does.", lines: [2] }, { type: "User Story", parentId: 1201, title: "Rates CSV", description: "Plain", lines: [4] }], commitments: [], comments: [] };
+    const { ai, calls, input } = setup(answer);
+    const r = await capturePass(ai, input);
+    if (!r.ok) throw new Error(r.message);
+    expect(calls[0]!.instructions).toContain("Never name any other client");
+    const [a, b] = r.proposals.map((p) => p.body as { title: string; description: string; namesRemoved?: boolean });
+    expect(a).toMatchObject({ title: "Holiday calendar import like another client's", description: "Same as another client does.", namesRemoved: true });
+    expect(b!.namesRemoved).toBeUndefined();
+  });
+
   it("lets Cooptimize Internal's meeting name clients (GD-1), still without addresses", async () => {
     const { ai, calls, input } = setup({ gaps: [], commitments: [], comments: [] }, { internal: true });
     const r = await capturePass(ai, input);

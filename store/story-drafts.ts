@@ -15,7 +15,7 @@ const BODY_MAX = 200_000;
 
 export function storyDraftMethods(db: Db, now: () => string) {
   const body = (d: StoryDraftBody) => {
-    const s = JSON.stringify({ featureTitle: d.featureTitle, storyType: d.storyType, note: d.note, exemplarIds: d.exemplarIds, proposals: d.proposals, rationale: d.rationale, setAside: d.setAside, costMicros: d.costMicros } satisfies StoryDraftBody);
+    const s = JSON.stringify({ featureTitle: d.featureTitle, storyType: d.storyType, note: d.note, exemplarIds: d.exemplarIds, proposals: d.proposals, rationale: d.rationale, setAside: d.setAside, costMicros: d.costMicros, ...(d.namesRemoved ? { namesRemoved: true } : {}) } satisfies StoryDraftBody);
     if (s.length > BODY_MAX) throw new Error("This draft is too large to keep");
     return s;
   };

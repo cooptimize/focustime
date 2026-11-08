@@ -26,6 +26,7 @@ export function SuggestionBox({ s, onPost, onSkip }: { s: Suggest; onPost: (incl
   return (
     <div className="conv-suggest" onClick={(e) => e.stopPropagation()}>
       <p className="conv-suggest-head">{s.kind === "comment" ? <>Suggested update for #{s.itemId}</> : <>Description change for #{s.itemId}</>}</p>
+      {s.namesRemoved && <p className="names-removed">Another client's name was removed: "another client" is written instead.</p>}
       {s.kind === "comment" ? (
         <>
           <ul className="conv-suggest-lines">
@@ -214,6 +215,7 @@ export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<Con
       {d && (
         <>
           {d.notSorted && <p className="muted">{d.draft.byAi ? null : <>Not drafted by AI ({d.notSorted}). Fill it in below.</>}</p>}
+          {d.draft.namesRemoved && <p className="names-removed">Another client's name was removed: the AI's draft had one, and "another client" is written instead. Edit freely.</p>}
           {!canSend && (
             <p className="conv-turn-on" role="status">
               Turn on DevOps writes for {c.clientName} to create it. Nothing is sent until you do.{" "}

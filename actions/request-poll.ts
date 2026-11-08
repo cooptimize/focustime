@@ -27,6 +27,8 @@ import { classifyAsk, extractPromise, type AskAiDeps } from "./ask-ai.ts";
 import { mapSeq } from "./seq.ts";
 import { imagesForAi } from "./chat-images.ts";
 import { CHAT_DAILY_AI_CALLS, legacyRefused, parkedBySwitch, runPipeline } from "./conversations-pipeline.ts";
+import type { ClientEntry } from "../ai/guard.ts";
+import { chatAudience, type AudienceRules } from "../plan/boundary.ts";
 import type { ConversationStore } from "../store/conversation-store.ts";
 import { userZone } from "../week/zone.ts";
 
@@ -51,6 +53,8 @@ export type PollPerson = {
   pipelineAi?: (() => Promise<AiService | null>) | null;
   plan: PlanStore | null;
   openItems: (cfg: AppConfig, clientKey: string) => Promise<WorkItem[] | null>;
+  /** GD-2: the client boundary as this person knows it (Internal, the other clients' names and aliases). */
+  boundary?: (clientKey: string) => Promise<{ internal: boolean; directory: ClientEntry[] }>;
 };
 
 export type PollDeps = {
@@ -66,6 +70,8 @@ export type PollDeps = {
   log: (r: LogRecord) => void;
   /** The team's Rules (Admin › Conversations); absent: the built-in values. */
   rules?: () => Promise<PollRules>;
+  /** GD-2: the Cooptimizer rule a chat's members are read against (absent: tenant and guests only). */
+  audienceRules?: (homeTenant: string | null) => Promise<AudienceRules>;
 };
 
 /** CW-1: a call's row is kept this long after it started (long past the live limit, then gone). */
@@ -203,9 +209,14 @@ async function conversationsStep(
 ) {
   const cfg = x.p.config;
   if (!cfg) return;
-  // GD-1: messages refused before GD-1 for naming another client (every Internal chat's were) are tried once more,
-  // as their own batch so they never hold back new ones; any still refused keep the new reason and aren't tried again.
-  const retry = await legacyRefused(convs, deps.teams, c.chatId);
+  // GD-2: the chat's audience from its members now (refreshed above when stale), and the boundary for its client.
+  const rulesNow = deps.audienceRules ? await deps.audienceRules(x.home).catch(() => null) : null;
+  const audience = chatAudience(c.members, rulesNow ?? { homeTenant: x.home, automation: [], domains: [] });
+  const bound = x.p.boundary ? await x.p.boundary(c.clientKey).catch(() => null) : null;
+  const boundary = bound ? { audience, directory: bound.directory, internal: bound.internal } : undefined;
+  // GD-1, GD-2: messages held under the old rule (a whole batch for one mention or a number) are sorted once more, as
+  // their own batch so they never hold back new ones; in an internal chat, GD-2's own holds too.
+  const retry = await legacyRefused(convs, deps.teams, c.chatId, { internal: audience === "internal" || !!bound?.internal });
   const ai = x.p.pipelineAi ? await x.p.pipelineAi().catch(() => null) : null;
   // IB-1 slice 3: messages a switch held back are sorted once it passes; nothing to press.
   const available = !!ai && (await ai.availability(c.clientKey).catch(() => "off")) === "ok";
@@ -221,6 +232,7 @@ async function conversationsStep(
         const a = await x.person(uid);
         return a?.config ? { zone: userZone(a.config), promisePhrases: a.config.asks.promisePhrases } : null;
       },
+      ...(boundary ? { boundary } : {}),
     },
     c,
     batch,

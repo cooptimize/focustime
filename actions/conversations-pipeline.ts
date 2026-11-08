@@ -23,8 +23,10 @@ import { NO_CLIENT_RULES } from "../config/org.ts";
 import { AiError } from "../ai/types.ts";
 import { askTitle, DEFAULT_ASK_SETTINGS, matchAsk, type AskSettings, type IncomingMessage } from "../plan/asks.ts";
 import { isExternal } from "../plan/chats.ts";
+import type { ClientEntry } from "../ai/guard.ts";
+import { mentionedClients, replaceMentions, type Audience } from "../plan/boundary.ts";
 import {
-  BadAnswer, buildUpdate, CLIENT_REFUSED, LEGACY_CLIENT_REFUSED, checkDue, checkImageDescriptions, IMAGE_INSTRUCTIONS, UPDATE_SCHEMA_WITH_IMAGES, checkUpdate, dueFromText, dueOf, hintFor, mergeByGroup, messageGroups, NEAR_MINUTES, oneLine, promisePhrase, promiseWhatWithoutAi, ruleVerdict, statusOf, UPDATE_INSTRUCTIONS, UPDATE_SCHEMA, UPDATE_TASK,
+  BadAnswer, buildUpdate, CLIENT_REFUSED, HELD_MENTION, LEGACY_CLIENT_REFUSED, checkDue, checkImageDescriptions, IMAGE_INSTRUCTIONS, UPDATE_SCHEMA_WITH_IMAGES, checkUpdate, dueFromText, dueOf, hintFor, mergeByGroup, messageGroups, NEAR_MINUTES, oneLine, promisePhrase, promiseWhatWithoutAi, ruleVerdict, statusOf, UPDATE_INSTRUCTIONS, UPDATE_SCHEMA, UPDATE_TASK,
   type BatchMessage, type Commitment, type Conversation, type Hint, type OpenConversation, type Participant, type UpdateAnswer,
 } from "../plan/conversations.ts";
 import type { ClientChat, FocusUser, TeamsMessage } from "../plan/requests.ts";
@@ -67,9 +69,15 @@ export type PipelineDeps = {
    * within the limits). Absent: no image is sent, only counted.
    */
   images?: (messageIds: readonly string[]) => Promise<{ images: AiImage[]; skipped: number }>;
+  /**
+   * GD-2: the client boundary. `audience`: the chat's, from its members now (plan/boundary.ts chatAudience); absent is
+   * client-facing. `directory`: the other clients to match against (names and aliases); `internal`: the chat's client
+   * is Cooptimize Internal (may name clients). Without a directory nothing is held for a mention.
+   */
+  boundary?: { audience: Audience; directory: readonly ClientEntry[]; internal: boolean };
 };
 
-export type PipelineResult = { work: number; chatter: number; acks: number; unsorted: number; conversations: number; commitments: number; aiCalls: number; aiOutcome: string | null; /** CV-4 */ imagesSent: number; imagesNotSent: number; described: number };
+export type PipelineResult = { work: number; chatter: number; acks: number; unsorted: number; /** GD-2: held for naming another client in a client-facing chat (counted in unsorted too). */ held: number; conversations: number; commitments: number; aiCalls: number; aiOutcome: string | null; /** CV-4 */ imagesSent: number; imagesNotSent: number; described: number };
 
 const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
 
@@ -115,8 +123,15 @@ export async function parkedBySwitch(
   return out;
 }
 
-export async function legacyRefused(convs: Pick<ConversationStore, "placesByRole">, teams: Pick<TeamsStore, "message">, chatId: string): Promise<TeamsMessage[]> {
-  const places = (await convs.placesByRole([chatId], "unsorted")).filter((p) => p.reason === LEGACY_CLIENT_REFUSED);
+/**
+ * GD-2: the messages to sort once more under the new rule: GD-1's whole-batch refusals ("refused_client" before GD-1,
+ * "other_client" after; one message's mention held its whole batch, and a number that matched another client's item
+ * id held it too), and, once the chat is internal, the messages GD-2 held for a mention. A retry never stores those
+ * old reasons again (only HELD_MENTION, and only in a client-facing chat), so each is tried once.
+ */
+export async function legacyRefused(convs: Pick<ConversationStore, "placesByRole">, teams: Pick<TeamsStore, "message">, chatId: string, o: { internal?: boolean } = {}): Promise<TeamsMessage[]> {
+  const reasons = new Set<string | null>([LEGACY_CLIENT_REFUSED, CLIENT_REFUSED, ...(o.internal ? [HELD_MENTION] : [])]);
+  const places = (await convs.placesByRole([chatId], "unsorted")).filter((p) => reasons.has(p.reason));
   const out: TeamsMessage[] = [];
   for (const p of places) {
     const m = await teams.message(p.chatId, p.messageId);
@@ -130,7 +145,38 @@ export async function legacyRefused(convs: Pick<ConversationStore, "placesByRole
  * passes the messages waiting as unsorted, which are placed again. Never throws for a message.
  */
 export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: readonly TeamsMessage[]): Promise<PipelineResult> {
-  const out: PipelineResult = { work: 0, chatter: 0, acks: 0, unsorted: 0, conversations: 0, commitments: 0, aiCalls: 0, aiOutcome: null, imagesSent: 0, imagesNotSent: 0, described: 0 };
+  const out = await sortBatch(d, chat, batchIn);
+  await noteMentions(d, chat, batchIn);
+  return out;
+}
+
+/**
+ * GD-2 point 7: each conversation remembers which other clients its work messages name (keys only), for the
+ * "mentions <client>" tag shown to whoever can see it. Added to, never cleared by a later message.
+ */
+async function noteMentions(d: PipelineDeps, chat: ClientChat, batch: readonly TeamsMessage[]) {
+  const b = d.boundary;
+  if (!b || b.internal || !b.directory.length) return;
+  const per = new Map<number, Set<string>>();
+  for (const m of batch) {
+    const keys = mentionedClients(m.text, chat.clientKey, b.directory).map((x) => x.key);
+    if (!keys.length) continue;
+    const p = await d.convs.placeOf(chat.chatId, m.messageId);
+    if (!p || p.role !== "work" || p.conversationId === null) continue;
+    const set = per.get(p.conversationId) ?? new Set<string>();
+    for (const k of keys) set.add(k);
+    per.set(p.conversationId, set);
+  }
+  for (const [id, keys] of per) {
+    const c = await d.convs.conversation(id);
+    if (!c) continue;
+    const merged = [...new Set([...(c.mentions ?? []), ...keys])];
+    if (merged.length !== (c.mentions ?? []).length) await d.convs.updateConversation(id, { mentions: merged });
+  }
+}
+
+async function sortBatch(d: PipelineDeps, chat: ClientChat, batchIn: readonly TeamsMessage[]): Promise<PipelineResult> {
+  const out: PipelineResult = { work: 0, chatter: 0, acks: 0, unsorted: 0, held: 0, conversations: 0, commitments: 0, aiCalls: 0, aiOutcome: null, imagesSent: 0, imagesNotSent: 0, described: 0 };
   if (!batchIn.length) return out;
   const batch = [...batchIn].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((m) => batchOf(m, chat, d.homeTenant));
   const byId = new Map(batch.map((m) => [m.messageId, m]));
@@ -174,6 +220,19 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
       continue;
     }
     work.push(m);
+  }
+  // GD-2 point 3: in a chat with anyone outside Cooptimize, a work message naming another client (a whole name or
+  // alias, outside links) is held back, visible and sortable by hand, and never sent. An internal chat keeps them.
+  const b = d.boundary;
+  const facing = !b || b.audience !== "internal";
+  if (b && facing && !b.internal && b.directory.length) {
+    for (const m of [...work]) {
+      if (!mentionedClients(m.text, chat.clientKey, b.directory).length) continue;
+      work.splice(work.indexOf(m), 1);
+      await d.convs.place([{ chatId: chat.chatId, messageId: m.messageId, conversationId: null, role: "unsorted", reason: HELD_MENTION, placedBy: "rule", at: m.createdAt }]);
+      out.unsorted++;
+      out.held++;
+    }
   }
   if (!work.length) return out;
   const settleLateAcks = async () => {
@@ -249,9 +308,15 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
         const m = await d.teams.message(chat.chatId, id);
         if (m) ms.push(batchOf(m, chat, d.homeTenant));
       }
-      recent.set(c.id, ms);
+      // GD-2: a client-facing chat's context leaves out a message naming another client (one sorted by hand).
+      recent.set(c.id, b && facing && !b.internal ? ms.filter((x) => !mentionedClients(x.text, chat.clientKey, b.directory).length) : ms);
     }
-    const built = buildUpdate({ clientName: d.clientName, chatKind: chat.kind, zone: d.zone, now: d.now, people, open, recent, items: [...(d.items ?? [])].sort((a, b) => (b.changedAt ?? "").localeCompare(a.changedAt ?? "")), batch: work, hints, groups });
+    const built0 = buildUpdate({ clientName: d.clientName, chatKind: chat.kind, zone: d.zone, now: d.now, people, open, recent, items: [...(d.items ?? [])].sort((a, b) => (b.changedAt ?? "").localeCompare(a.changedAt ?? "")), batch: work, hints, groups });
+    // GD-2 point 4: only words travel, and only from this chat (its own conversations, this client's items: never
+    // another client's records). From a client-facing chat nothing naming another client goes (a title or summary from
+    // a message sorted by hand becomes "another client"); an internal chat's words go as they are.
+    const built = b && facing && !b.internal ? { ...built0, text: replaceMentions(built0.text, chat.clientKey, b.directory).text } : built0;
+    const mentions = b ? (b.internal || !facing ? ({ input: "words", answer: "allow" } as const) : ({ input: "words", answer: "scrub" } as const)) : undefined;
     // CV-4: with the client's switch on, the batch's images go in the same request, each labelled with its message.
     const withImages = work.filter((m) => hostedImageIds(m.html ?? null).length).map((m) => m.messageId);
     const pics = withImages.length && d.images ? await d.images(withImages).catch(() => ({ images: [] as AiImage[], skipped: withImages.length })) : { images: [] as AiImage[], skipped: 0 };
@@ -263,12 +328,12 @@ export async function runPipeline(d: PipelineDeps, chat: ClientChat, batchIn: re
     out.aiCalls++;
     const r = sent.length
       ? await d.ai.run<UpdateAnswer & { images: { ref: string; description: string }[] }>(
-          { name: UPDATE_TASK, client: chat.clientKey, instructions: `${UPDATE_INSTRUCTIONS}\n${IMAGE_INSTRUCTIONS}` },
+          { name: UPDATE_TASK, client: chat.clientKey, instructions: `${UPDATE_INSTRUCTIONS}\n${IMAGE_INSTRUCTIONS}`, ...(mentions ? { mentions } : {}) },
           built.text,
           UPDATE_SCHEMA_WITH_IMAGES,
           { images: sent.map((i) => ({ label: `Image ${i.ref}, in message ${refOf.get(i.messageId)}:`, dataUrl: i.dataUrl })) },
         )
-      : await d.ai.run<UpdateAnswer>({ name: UPDATE_TASK, client: chat.clientKey, instructions: UPDATE_INSTRUCTIONS }, built.text, UPDATE_SCHEMA);
+      : await d.ai.run<UpdateAnswer>({ name: UPDATE_TASK, client: chat.clientKey, instructions: UPDATE_INSTRUCTIONS, ...(mentions ? { mentions } : {}) }, built.text, UPDATE_SCHEMA);
     if (!r.ok) {
       reason = r.error instanceof AiError ? r.error.kind : "provider";
       if (reason === LEGACY_CLIENT_REFUSED) reason = CLIENT_REFUSED;

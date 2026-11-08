@@ -25,6 +25,7 @@ import { navOf, type LateFilter, type Nav } from "../nav.ts";
 import { usePhone } from "../viewport.ts";
 import { chatterRows, entryOf, useInboxData, type ChatterRow, type Entry } from "./data.ts";
 import { ChatterDetail, Detail } from "./Detail.tsx";
+import { HeldBack } from "./HeldBack.tsx";
 import { actsFor, ItemActions, ITEM_KEYS, notWorkUndo, type Act, type FormId } from "./ItemActions.tsx";
 import { flatOrder, GROUPS, groupRows, inView, rowSub, rowTag, summaryLine, viewLabel, VIEWS, clientCounts, type Group } from "./model.ts";
 
@@ -335,6 +336,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
       {src.convs && src.convs.unsorted.count > 0 && (view === "needs_you" || view === "chatter") && (
         <Unsorted u={src.convs.unsorted} sort={() => void run("conversations.sort_unsorted", {}, "Sorted again")} {...(onFeedback ? { onFeedback } : {})} />
       )}
+      {src.convs && (src.convs.heldCount ?? 0) > 0 && (view === "needs_you" || view === "chatter") && <HeldBack count={src.convs.heldCount ?? 0} tz={tz} onChanged={() => void reloadAll()} />}
     </>
   );
 
@@ -573,6 +575,11 @@ function ListGroups({ groups, openKey, onOpen, today, tz, colors, phone, group, 
                     <span className="ib-row-main">
                       <span className="ib-row-title">{r.title || "(no title)"}</span>
                       <span className="ib-row-sub">
+                        {r.mentions?.map((n) => (
+                          <span key={n} className="ib-tag tone-plain mention-tag">
+                            mentions {n}
+                          </span>
+                        ))}
                         {phone && tag && <span className={`ib-tag tone-${tag.tone}`}>{tag.text}</span>}
                         <span className="muted">
                           {reasons && r.reason ? r.reason : rowSub(r)}
