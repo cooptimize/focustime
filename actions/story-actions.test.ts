@@ -138,32 +138,43 @@ describe("Draft stories", () => {
     expect(s.calls).toHaveLength(0);
   });
 
-  it("a client: a payload naming another client is refused before anything is sent (the ai/ guard)", async () => {
-    const s = setup({ client: "Fabrikam", signals: { comments: [{ at: "2026-11-03T10:00:00Z", text: "Same as we did for Northwind last spring" }] } });
+  // GD-2: words travel (the feature's own comments may name a client); the answer's names are replaced and marked.
+  it("GD-2: a client: the feature's own words may name another client; the answer's names are replaced and the draft says so", async () => {
+    const answer = () => JSON.stringify(aProposalsAnswer({ feature_id: FEATURE, set_aside: [], proposals: [aCoopProposal({ title: "Reuse the Northwind export", description: "Like Northwind did" })] }));
+    const s = setup({ client: "Fabrikam", answer, signals: { comments: [{ at: "2026-11-03T10:00:00Z", text: "Same as we did for Northwind last spring" }] } });
     await s.enable();
-    const r = await s.fail("stories.run", { clientKey: s.client, featureId: FEATURE });
-    expect(r.error).toBe("Not sent: it mentions another client");
-    expect(s.calls).toHaveLength(0);
-    expect(await s.plan.latestStoryDraft(s.client, FEATURE)).toBeNull();
-  });
-
-  it("a client: an answer naming another client is refused, and no cards are kept", async () => {
-    const answer = () => JSON.stringify(aProposalsAnswer({ feature_id: FEATURE, set_aside: [], proposals: [aCoopProposal({ title: "Reuse the Northwind export" })] }));
-    const s = setup({ client: "Fabrikam", answer });
-    await s.enable();
-    expect((await s.fail("stories.run", { clientKey: s.client, featureId: FEATURE })).error).toBe("The AI's answer mentions another client, so nothing is shown");
+    const d = await s.draft();
     expect(s.calls).toHaveLength(1);
-    expect(await s.plan.latestStoryDraft(s.client, FEATURE)).toBeNull();
+    expect(s.calls[0]!.input).toContain("Northwind last spring");
+    // Never another client's records: Northwind's own items aren't offered as examples.
+    expect(s.calls[0]!.input).not.toMatch(/Northwind secret plan|901/);
+    expect(s.calls[0]!.instructions).toContain("Never name any other client");
+    expect(d.namesRemoved).toBe(true);
+    expect(d.cards.map((c) => [c.title, c.description])).toEqual([["Reuse the another client export", "Like another client did"]]);
   });
 
-  it("a client: a card edited to name another client is blocked in the preview, and nothing is written", async () => {
+  it("GD-2: a client: a card I edited to name another client is flagged in the preview; Replace writes \"another client\"; Save anyway keeps my words", async () => {
     const s = setup({ client: "Fabrikam" });
     await s.enable();
     const d = await s.draft();
     await s.run("stories.save", { draftId: d.id, cards: cardsInput(d, (c) => (c.id === "P2" ? { description: "Like the Northwind Traders one" } : {})) });
-    const r = await s.fail("stories.publish_preview", { draftId: d.id });
-    expect(r).toMatchObject({ status: 409, error: "This mentions Northwind; remove it before saving to Fabrikam's DevOps" });
-    expect(s.created()).toHaveLength(0);
+    const pv = await s.run<{ previews: DevOpsPreview[] }>("stories.publish_preview", { draftId: d.id });
+    expect(pv.previews.find((p) => p.mentions)?.mentions).toEqual(["Northwind"]);
+    // Confirm without seeing it through: refused, nothing written.
+    const no = await s.run<{ created: number; failed: string[] }>("stories.publish", { draftId: d.id, previewIds: pv.previews.map((p) => p.previewId) });
+    expect(no.failed.join(" ")).toMatch(/mentions Northwind/);
+    // Only the flagged card waits; the other one was written.
+    expect(s.created()).toHaveLength(1);
+    expect(JSON.stringify(s.created())).not.toMatch(/Northwind/);
+    // One click: replaced, flag gone.
+    const fixed = await s.run<{ previews: DevOpsPreview[] }>("stories.publish_preview", { draftId: d.id, replace: true });
+    expect(fixed.previews.some((p) => p.mentions)).toBe(false);
+    expect(JSON.stringify(fixed.previews)).not.toMatch(/Northwind/);
+    // My own words can still go after the flag.
+    const again = await s.run<{ previews: DevOpsPreview[] }>("stories.publish_preview", { draftId: d.id });
+    const r = await s.run<{ created: number }>("stories.publish", { draftId: d.id, previewIds: again.previews.map((p) => p.previewId), mentionsOk: true });
+    expect(r.created).toBe(2);
+    expect(JSON.stringify(s.created())).toContain("Northwind Traders");
   });
 
   it("shows no cards for a malformed answer or a dependency on an unknown card", async () => {

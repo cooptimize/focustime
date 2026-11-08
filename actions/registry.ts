@@ -231,6 +231,8 @@ export const ACTIONS = [
   { name: "conversations.this_is_work", title: "This is work", group: "Conversations", target: "conversation", summary: "A message filtered as chatter starts a conversation of its own" },
   { name: "conversations.link", title: "Link a conversation to a DevOps item", group: "Conversations", target: "conversation", summary: "Tracked as that item for everyone on the chat" },
   { name: "conversations.take_over", title: "Take it over", group: "Conversations", target: "commitment", summary: "Makes a waiting commitment yours; whoever had it is told quietly" },
+  { name: "conversations.held", title: "Show held-back messages", group: "Conversations", target: "none", summary: "Messages held back because they mention another client in a chat with people outside Cooptimize, to sort by hand" },
+  { name: "conversations.held_not_work", title: "Mark a held message not work-related", group: "Conversations", target: "conversation", summary: "Moves one held-back message to Chatter" },
   { name: "conversations.sort_unsorted", title: "Sort unsorted messages", group: "Conversations", target: "none", summary: "Sorts the messages that waited for AI (budget, AI off or a failure), when AI is available again" },
   // CV-5's Link to item search and the two unlinks (AS-2: registered, so the dispatcher, the UI and the assistant reach them).
   { name: "conversations.search_items", title: "Find an item to link", group: "Conversations", target: "conversation", summary: "Search the client's open items in scope for a conversation or one of my promises" },
@@ -291,6 +293,7 @@ export const ACTIONS = [
   // LP-1: Close the loop by sending the update. loop.find and loop.draft only read; only loop.send (the preview's Send) sends.
   { name: "loop.find", title: "Close the loop with someone", aka: ["close the loop", "tell", "send the update", "let them know"], group: "Promises", target: "none", summary: "Finds your open promise to that person and opens its draft: Teams, Email, Comment or Call; nothing is sent until you press Send on the preview" },
   { name: "loop.draft", title: "Draft a loop update", group: "Promises", target: "promise", summary: "The message for a promise, from it, its conversation and its item's state (AI when it's on for the client), with where each channel goes (read-only)" },
+  { name: "boundary.check", title: "Check text for another client's name", group: "Promises", target: "none", summary: "Whether text going to a client names another client, and the text with each replaced by \"another client\" (reads only)" },
   { name: "loop.preview", title: "Preview a loop update", group: "Promises", target: "promise", summary: "Where it goes, who sees it (inside and outside Cooptimize) and the final text after the client check; nothing is sent" },
   { name: "loop.send", title: "Send the loop update shown", group: "Promises", target: "promise", summary: "Sends the previewed update as you (Teams, an Outlook draft or email, a DevOps comment, or a call note), reads it back and closes the loop" },
   { name: "loop.retry", title: "Check a loop update again", group: "Promises", target: "promise", summary: "Reads back a send that Teams or Outlook took but didn't show yet; never sends it twice" },

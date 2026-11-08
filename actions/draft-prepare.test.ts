@@ -14,6 +14,7 @@ import { aClientProcess, anAiApp, anExemplarCandidate, withTeam } from "../test/
 import { DRAFT_HELD, draftAiAction, LEGACY_DRAFT_REFUSED, type DraftAiView, type PrepareContext } from "./draft-prepare.ts";
 import type { CaptureFeatures } from "./types.ts";
 import { isInternalKey } from "./client-accounts.ts";
+import { NAME_REMOVED } from "../plan/boundary.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
 
 const NOW = "2026-11-05T15:00:00Z";
@@ -102,17 +103,18 @@ describe("draft.prepare (CP-1)", () => {
     expect(v.draft.ai).toMatchObject({ state: "ready", title: "Compare the Contoso and Fabrikam exports" });
   });
 
-  it("a client: a capture draft naming another client is not sent; an answer naming one is not kept", async () => {
-    const t = setup();
+  it("GD-2: a client's capture draft may name another client in my own words; the answer's names are replaced and the draft says so", async () => {
+    const t = setup({ answer: () => ({ title: "Reuse the Fabrikam export", description: "Same as Fabrikam Web does for #901.", acceptance_criteria: "- Matches Fabrikam", type: "User Story", parent_id: 437, parent_reason: "Export work" }) });
     const id = await t.capture("same as the Fabrikam export");
     const v = await t.run("draft.prepare", { id });
-    expect(t.calls).toHaveLength(0);
-    expect(v.draft.ai?.state).not.toBe("ready");
-    const u = setup({ answer: () => ({ title: "Reuse the Fabrikam export", description: "x", acceptance_criteria: "- y", type: "User Story", parent_id: 437, parent_reason: "z" }) });
-    const v2 = await u.run("draft.prepare", { id: await u.capture("csv export of invoices") });
-    expect(u.calls).toHaveLength(1);
-    expect(v2.draft.ai?.state).not.toBe("ready");
-    expect(v2.draft.ai?.title ?? null).toBeNull();
+    expect(t.calls).toHaveLength(1);
+    // Only my words travel: none of Fabrikam's records went with them.
+    expect(t.calls[0]!.input).not.toMatch(/901|secret roadmap|Fabrikam Web/);
+    expect(t.calls[0]!.instructions).toContain("Never name any other client");
+    expect(v.draft.ai).toMatchObject({ state: "ready", note: NAME_REMOVED, title: "Reuse the another client export" });
+    expect(JSON.stringify(v.draft.ai)).not.toMatch(/Fabrikam|901/);
+    // My own text is untouched.
+    expect(v.draft.title).toContain("Fabrikam");
   });
 
   it("sends only this client's types, parents and examples, and my text", async () => {
@@ -254,15 +256,16 @@ describe("a refusal from before GD-1 (IB-1 slice 3)", () => {
     await t.run("draft.get", { id });
     expect(t.calls).toHaveLength(1);
   });
-  it("a client draft that really names another client stays refused: never re-sent, and a new refusal says Held back", async () => {
-    const t = setup();
+  it("GD-2: a client draft refused for a mention is prepared once more, with the names replaced", async () => {
+    const t = setup({ answer: () => ({ title: "Reuse the Fabrikam export", description: "x", acceptance_criteria: "- y", type: "User Story", parent_id: 437, parent_reason: "z" }) });
     const id = await t.capture("same as the Fabrikam export");
-    await t.plan.setDraftAi(id, legacy);
-    expect((await t.run("draft.get", { id })).draft.ai?.note).toBe(LEGACY_DRAFT_REFUSED);
-    await t.run("draft.prepare", { id });
-    expect(t.calls).toHaveLength(0);
-    const v = await t.run("draft.prepare", { id, again: true });
-    expect(t.calls).toHaveLength(0);
-    expect(v.draft.ai).toMatchObject({ state: "failed", note: DRAFT_HELD });
+    for (const note of [LEGACY_DRAFT_REFUSED, DRAFT_HELD]) {
+      await t.plan.setDraftAi(id, { ...legacy, note });
+      const v = await t.run("draft.get", { id });
+      expect(v.draft.ai).toMatchObject({ state: "ready", note: NAME_REMOVED });
+    }
+    expect(t.calls).toHaveLength(2);
+    await t.run("draft.get", { id });
+    expect(t.calls).toHaveLength(2);
   });
 });

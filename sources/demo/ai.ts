@@ -237,5 +237,9 @@ function statusDraft(input: string): { itemId: number; text: string }[] {
     } else if (cur && line.startsWith("- fact: ")) cur.facts.push(line.slice(8));
   }
   flush();
+  // GD-2: the demo's sample slips once, comparing Northwind's first feature with another demo client, so the check
+  // after generation has something to replace ("Another client's name was removed" on the draft).
+  const first = out.find((d) => d.text);
+  if (first && /Northwind/.test(input)) first.text = `${first.text} Same approach as Harbor Health's intake form.`;
   return out;
 }

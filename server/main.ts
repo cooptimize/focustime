@@ -77,7 +77,7 @@ import type { ActionContext } from "../actions/dispatch.ts";
 import { userZone } from "../week/zone.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { pollCycle, requestsNextDue, type PollDeps, type PollPerson } from "../actions/request-poll.ts";
-import { requestContext, aiFor, escalationHours, dispatch, meetingPerson } from "../actions/dispatch.ts";
+import { requestContext, aiFor, escalationHours, dispatch, meetingPerson, audienceRulesOf } from "../actions/dispatch.ts";
 import type { WeekLoadData } from "../actions/types.ts";
 import { createTeamsEndpoint } from "./teams/sdk.ts";
 import { BLOCKED_KEY, createRhythm, pacedSender, type Rhythm, type Takeover } from "./teams/rhythm.ts";
@@ -403,9 +403,11 @@ const pollDeps: PollDeps = {
     const config = loaded.parsed.ok ? loaded.parsed.config : null;
     const account = config && ctx.account ? ctx.account(config) : null;
     const rc = await requestContext(ctx);
-    return { name: user.displayName || user.upn, config, chatMessages: account?.chatMessages, chats: account?.chats, ai: () => aiFor(ctx), pipelineAi: () => aiFor(ctx, { cap: "app" }), plan: ctx.plan ?? null, openItems: rc.openItems };
+    return { name: user.displayName || user.upn, config, chatMessages: account?.chatMessages, chats: account?.chats, ai: () => aiFor(ctx), pipelineAi: () => aiFor(ctx, { cap: "app" }), plan: ctx.plan ?? null, openItems: rc.openItems, ...(rc.boundary ? { boundary: rc.boundary } : {}) };
   },
   homeTenant: async () => app.entra?.tenantId ?? null,
+  // GD-2: a chat's audience from its members, by the people rule (guests, automation accounts, other domains).
+  audienceRules: (home) => audienceRulesOf(org, home),
   now: () => instantNow().toString(),
   log,
   // ADM-2 (D604): the team's Rules, read each cycle (the org runtime holds them 30 seconds).

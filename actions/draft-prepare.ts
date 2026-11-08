@@ -5,6 +5,7 @@
 // client: nothing is sent (the draft couldn't be created anyway). Nothing here writes to DevOps; my own text is kept.
 import type { AiService } from "../ai/service.ts";
 import type { AppConfig } from "../config/schema.ts";
+import { NAME_REMOVED, NO_OTHER_CLIENTS } from "../plan/boundary.ts";
 import { MAX_CANDIDATES, MAX_EXAMPLES, offeredTypes, PREPARE_INSTRUCTIONS, PREPARE_TASK, prepareInput, prepareSchema, toDraftAi, WRITING_MS, type Candidate, type Example, type PrepareAnswer } from "../plan/capture-prepare.ts";
 import { typeOf, type ProcessModel } from "../plan/process.ts";
 import { rankExemplars, type ExemplarCandidate } from "../plan/stories.ts";
@@ -40,7 +41,9 @@ export type PrepareContext = {
  */
 export const LEGACY_DRAFT_REFUSED = "Not sent: it mentions another client";
 export const DRAFT_HELD = "Held back: it mentions another client";
-const stale = async (ctx: PrepareContext, d: DraftStory) => d.ai?.state === "failed" && d.ai.note === LEGACY_DRAFT_REFUSED && !!(await ctx.isInternal?.(d.clientKey).catch(() => false));
+// GD-2: a draft refused for naming another client (before GD-1, or held since) is prepared once more: my own words
+// may name a client now, and the answer is checked after (names replaced, NAME_REMOVED on the draft).
+const stale = async (_ctx: PrepareContext, d: DraftStory) => d.ai?.state === "failed" && (d.ai.note === LEGACY_DRAFT_REFUSED || d.ai.note === DRAFT_HELD);
 
 
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
@@ -117,11 +120,14 @@ async function prepare(ctx: PrepareContext, plan: PlanStore, draft: DraftStory):
     const style = team ?? learned?.edited ?? learned?.computed ?? null;
     const clientName = cfg.clientSettings[draft.clientKey]?.name ?? draft.clientKey;
     const ids = candidates.map((c) => c.id);
-    const r = await ai.run<PrepareAnswer>({ name: PREPARE_TASK, client: draft.clientKey, instructions: PREPARE_INSTRUCTIONS }, prepareInput({ level, clientName, note, title: draft.title, types, candidates, examples, style }), prepareSchema(types, ids));
+    // GD-2 point 5: my note may name another client (my own words); the AI's version never does: the instructions say
+    // so, and the check after it replaces any other client's name with "another client" and marks the draft.
+    const internal = !!(await ctx.isInternal?.(draft.clientKey).catch(() => false));
+    const r = await ai.run<PrepareAnswer>({ name: PREPARE_TASK, client: draft.clientKey, instructions: internal ? PREPARE_INSTRUCTIONS : `${PREPARE_INSTRUCTIONS}\n${NO_OTHER_CLIENTS}`, mentions: { input: "words", answer: "scrub" } }, prepareInput({ level, clientName, note, title: draft.title, types, candidates, examples, style }), prepareSchema(types, ids));
     if (!r.ok) return plan.setDraftAi(draft.id, plain(OFF_KINDS.has(r.error.kind) ? "off" : "failed", r.error.kind === "refused_client" ? DRAFT_HELD : r.error.message, ranAt));
     const made = toDraftAi(r.value, { level, types, candidateIds: ids, hasParent: draft.parentItemId !== null, ranAt });
     if ("problem" in made) return plan.setDraftAi(draft.id, plain("failed", "The AI's answer wasn't usable", ranAt));
-    return plan.setDraftAi(draft.id, made);
+    return plan.setDraftAi(draft.id, r.namesRemoved ? { ...made, note: NAME_REMOVED } : made);
   } catch {
     // A lost read or a store hiccup: a plain draft, never an error on the capture.
     return plan.setDraftAi(draft.id, plain("failed", "The AI couldn't help this time", ranAt)).catch(() => draft);

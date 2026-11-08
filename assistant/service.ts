@@ -875,8 +875,15 @@ export function createAssistant(env: AssistantEnv) {
     return hits[0]!;
   }
 
+  /**
+   * GD-2 point 5: the assistant's text for a client's DevOps is written by the AI from my words, so another client's
+   * name in it is replaced by "another client" in the write framework's own preview (which says so). Internal's isn't.
+   */
+  const TEXT_KINDS = new Set(["comment", "description_edit", "link_comment"]);
   async function devopsPreview(clientKey: string, change: unknown): Promise<DevOpsPreview> {
-    const r = await env.run("devops.preview", { clientKey, change });
+    const c = change as { kind?: unknown } | null;
+    const scrub = !!c && typeof c === "object" && typeof c.kind === "string" && TEXT_KINDS.has(c.kind) && !(env.isInternal?.(clientKey) ?? false);
+    const r = await env.run("devops.preview", { clientKey, change: scrub ? { ...(c as object), mentions: "replace" } : change });
     if (!r.ok) throw new Refusal(r.error);
     const out = r.data as { preview?: DevOpsPreview; nothing?: string };
     if (!out.preview) throw new Refusal(out.nothing ?? "Nothing to change");

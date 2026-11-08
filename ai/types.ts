@@ -71,7 +71,7 @@ export const AI_MESSAGES: Record<AiErrorKind, string> = {
 
 export type Usage = { inputTokens: number; cachedTokens: number; outputTokens: number };
 
-export type AiOk<T> = { ok: true; value: T; usage: Usage; costUsd: number; latencyMs: number; model: string; /** AI-F1: the tier that answered. */ tier?: AiTier };
+export type AiOk<T> = { ok: true; value: T; usage: Usage; costUsd: number; latencyMs: number; model: string; /** AI-F1: the tier that answered. */ tier?: AiTier; /** GD-2: how many of another client's names a "scrub" task's answer had replaced by "another client". */ namesRemoved?: number };
 export type AiFail = { ok: false; error: AiError };
 export type AiResult<T> = AiOk<T> | AiFail;
 

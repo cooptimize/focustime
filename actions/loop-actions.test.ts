@@ -35,7 +35,7 @@ function fakeSender(c: Calls, o: { postFails?: boolean; readBack?: boolean; mail
   };
 }
 
-type Opts = { promise?: Partial<LoopPromise>; internal?: boolean; access?: "granted" | "consent"; sender?: Parameters<typeof fakeSender>[1]; canComment?: boolean; ai?: boolean };
+type Opts = { promise?: Partial<LoopPromise>; internal?: boolean; access?: "granted" | "consent"; sender?: Parameters<typeof fakeSender>[1]; canComment?: boolean; ai?: boolean; aiRemoved?: number; tasks?: unknown[] };
 
 async function setup(o: Opts = {}) {
   const db = sqliteDb();
@@ -73,7 +73,7 @@ async function setup(o: Opts = {}) {
     item: async () => ({ id: 4417, title: "Salesforce rerun", state: "Active", type: "User Story" }),
     canComment: async () => o.canComment ?? true,
     boundary: async () => ({ internal: !!o.internal, directory: [{ key: "fabrikam", names: ["Fabrikam"], projects: ["Fabrikam"], itemIds: [4417] }, { key: "northwind", names: ["Northwind"], projects: ["Northwind Data"], itemIds: [5120] }] }),
-    ai: async () => (o.ai ? ({ run: async () => ({ ok: true, value: { text: "Hi Dana, the counts match now." } }) } as never) : null),
+    ai: async () => (o.ai ? ({ run: async (task: unknown) => (o.tasks?.push(task), { ok: true, value: { text: "Hi Dana, the counts match now." }, ...(o.aiRemoved ? { namesRemoved: o.aiRemoved } : {}) }) } as never) : null),
     sender: async () => fakeSender(calls, o.sender),
     access: async () => o.access ?? "granted",
     devops: devops as LoopContext["devops"],
@@ -127,6 +127,22 @@ describe("the recipient", () => {
   });
 });
 
+describe("GD-2: the AI draft", () => {
+  it("asks for no other client and the check after; a name the check removed shows the notice; Internal keeps names", async () => {
+    const tasks: { instructions: string; mentions?: unknown }[] = [];
+    const s = await setup({ ai: true, aiRemoved: 1, tasks });
+    const d = await s.run<LoopDraftView>("loop.draft", { key: s.key });
+    expect(tasks[0]).toMatchObject({ mentions: { input: "words", answer: "scrub" } });
+    expect(tasks[0]!.instructions).toContain("Never name any other client");
+    expect(d.namesRemoved).toBe("Another client's name was removed");
+    const it2: { instructions: string; mentions?: unknown }[] = [];
+    const internal = await setup({ ai: true, internal: true, tasks: it2, promise: { clientKey: "internal", clientName: "Cooptimize Internal" } });
+    const e = await internal.run<LoopDraftView>("loop.draft", { key: internal.key });
+    expect(it2[0]!.instructions).not.toContain("Never name any other client");
+    expect(e.namesRemoved).toBeUndefined();
+  });
+});
+
 describe("the state change", () => {
   it("offers only the states the item's type has in its process (never its own, never Removed)", async () => {
     const s = await setup();
@@ -146,16 +162,27 @@ describe("the preview", () => {
     expect(audienceOf([me, lee], HOME_TENANT, ME)).toMatchObject({ total: 2, inside: 1, outside: 0 });
   });
 
-  it("another client's name in the text blocks a send to an external chat; Internal can name clients", async () => {
+  // GD-2 point 6: flagged with one click to replace; my own words can still go once I've seen it; Internal skips it.
+  it("GD-2: another client's name is flagged in the preview with the replaced text; Send needs the flag seen; Internal isn't checked", async () => {
     const s = await setup();
     const p = await s.run<LoopPreviewView>("loop.preview", { key: s.key, channel: "teams", text: "Same fix as we did for Northwind." });
-    expect(p.blocked).toBe("This mentions Northwind. Remove it before sending to Fabrikam");
-    const sent = await loopAction(s.ctx, "loop.send", { previewId: p.previewId });
-    expect(sent.ok).toBe(false);
+    expect(p.blocked).toBeNull();
+    expect(p.mentions).toMatchObject({ names: ["Northwind"], text: "Same fix as we did for another client." });
+    expect(p.mentions?.line).toMatch(/Northwind/);
+    const no = await loopAction(s.ctx, "loop.send", { previewId: p.previewId });
+    expect(no).toMatchObject({ ok: false, status: 409, code: "mentions" });
     expect(s.calls.posts).toHaveLength(0);
+    // Replace: preview the replaced text, nothing left to flag.
+    const fixed = await s.run<LoopPreviewView>("loop.preview", { key: s.key, channel: "teams", text: p.mentions!.text });
+    expect(fixed.mentions).toBeUndefined();
+    // Or send my own words after seeing the flag (the held preview is still there).
+    const sent = await s.run<LoopResultView>("loop.send", { previewId: p.previewId, mentionsOk: true });
+    expect(sent.ok).toBe(true);
+    expect(s.calls.posts).toEqual(["Same fix as we did for Northwind."]);
     const internal = await setup({ internal: true, promise: { clientKey: "internal", clientName: "Cooptimize Internal" } });
     const q = await internal.run<LoopPreviewView>("loop.preview", { key: internal.key, channel: "teams", text: "Same fix as we did for Northwind." });
     expect(q.blocked).toBeNull();
+    expect(q.mentions).toBeUndefined();
   });
 });
 

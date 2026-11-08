@@ -7,6 +7,7 @@
 //
 // Comments are read with the company read PAT when Status asks and never stored; what leaves the server is the text,
 // the author's display name, the time and whether it is mine, never an email address.
+import { NAME_REMOVED, NO_OTHER_CLIENTS } from "../plan/boundary.ts";
 import type { AiService } from "../ai/service.ts";
 import { AI_MESSAGES } from "../ai/types.ts";
 import type { AppConfig } from "../config/schema.ts";
@@ -232,14 +233,15 @@ async function draft(ctx: StatusContext, input: unknown): Promise<ActionResponse
   const ai = await ctx.ai();
   if (!ai) return { ok: true, data: { clientKey: r.out.clientKey, ai: "not_set_up", message: AI_MESSAGES.not_set_up, drafts: [] } };
   const res = await ai.run<{ drafts: { itemId: number; text: string }[] }>(
-    { name: STATUS_DRAFT_TASK, client: r.out.clientKey, instructions: STATUS_DRAFT_INSTRUCTIONS },
+    // GD-2 point 5: the report's lines never name another client; the check after replaces one with "another client".
+    { name: STATUS_DRAFT_TASK, client: r.out.clientKey, instructions: `${STATUS_DRAFT_INSTRUCTIONS}\n${NO_OTHER_CLIENTS}`, mentions: { input: "words", answer: "scrub" } },
     draftInput(r.out.clientName, features.map((f) => ({ id: f.id, title: f.title, facts: f.hints, said: (f.thisWeek ?? []).map((c) => c.text) }))),
     DRAFT_SCHEMA,
   );
   if (!res.ok) return { ok: true, data: { clientKey: r.out.clientKey, ai: res.error.kind, message: res.error.message, drafts: [] } };
   const ids = new Set(features.map((f) => f.id));
   const drafts = res.value.drafts.filter((d) => ids.has(d.itemId)).map((d) => ({ itemId: d.itemId, text: d.text.trim().slice(0, 4000) }));
-  return { ok: true, data: { clientKey: r.out.clientKey, ai: "ok", message: null, drafts } };
+  return { ok: true, data: { clientKey: r.out.clientKey, ai: "ok", message: null, drafts, ...(res.namesRemoved ? { namesRemoved: NAME_REMOVED } : {}) } };
 }
 
 /**

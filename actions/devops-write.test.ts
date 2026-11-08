@@ -1183,25 +1183,39 @@ describe("the client boundary in the preview", () => {
   const clients = `\n[clients.Northwind]\nname = "Northwind Traders"\n`;
   beforeEach(() => clearDevopsPreviews());
 
-  it("a client: a comment naming another client is blocked in the preview, named only there, and nothing is written", async () => {
+  // GD-2 point 6: every write into a client's org is checked; the preview flags it with one click to replace; my
+  // own words can still be saved once I've seen the flag.
+  it("GD-2: a client: a comment naming another client is flagged in the preview; Confirm needs the flag seen; nothing is logged", async () => {
     const s = setup({ toml: clients, adatumEmail: "avery@cooptimize.example", adatumOrg: "cooptimize" });
     await s.run("devops.set_write_pat", { clientKey: Adatum, pat: WRITE_PAT });
-    const r = await s.fail("devops.preview", { clientKey: Adatum, change: { kind: "comment", itemId: 500, text: "Same fix as for Northwind Traders" } });
-    expect(r).toMatchObject({ status: 409, code: "other_client", error: "This mentions Northwind Traders; remove it before saving to Adatum's DevOps" });
-    expect(patches(s)).toHaveLength(0);
+    const p = await s.preview({ kind: "comment", itemId: 500, text: "Same fix as for Northwind Traders" }, Adatum);
+    expect(p.mentions).toEqual(["Northwind Traders"]);
+    expect(p.notes?.join(" ")).toMatch(/This mentions Northwind Traders, and Adatum's DevOps can be seen by people outside Cooptimize/);
+    const no = await s.fail("devops.confirm", { previewId: p.previewId });
+    expect(no).toMatchObject({ status: 409, code: "mentions" });
+    expect(s.dv.writes().filter((w) => w.method === "POST")).toEqual([]);
     expect(JSON.stringify(s.logs)).not.toContain("Northwind");
-    expect(await s.run<{ entries: unknown[] }>("devops.log", {})).toMatchObject({ entries: [] });
-    // Its own name, and plain text, still go.
-    expect((await s.preview({ kind: "comment", itemId: 500, text: "Adatum asked for this" }, Adatum)).op).toBe("comment");
+    // Seen: my own words are saved as I wrote them.
+    expect((await s.run<DevOpsResult>("devops.confirm", { previewId: p.previewId, mentionsOk: true })).confirmed).toBe(true);
+    expect(JSON.stringify(s.dv.writes())).toContain("Northwind Traders");
+    // Its own name, and plain text, aren't flagged.
+    expect((await s.preview({ kind: "comment", itemId: 500, text: "Adatum asked for this" }, Adatum)).mentions).toBeUndefined();
   });
 
-  it("a client: a state change's comment naming another client is blocked too", async () => {
+  it("GD-2: Replace writes \"another client\" in the comment, and a state change's note is checked too", async () => {
     const s = setup({ toml: clients, adatumEmail: "avery@cooptimize.example", adatumOrg: "cooptimize" });
     await s.run("devops.set_write_pat", { clientKey: Adatum, pat: WRITE_PAT });
-    expect((await s.fail("devops.preview", { clientKey: Adatum, change: { kind: "state", itemId: 500, state: "Closed", comment: "Done, like Northwind" } })).code).toBe("other_client");
+    const p = await s.preview({ kind: "comment", itemId: 500, text: "Same fix as for Northwind Traders", mentions: "replace" }, Adatum);
+    expect(p.mentions).toBeUndefined();
+    expect(p.notes?.join(" ")).toContain("Another client's name was removed");
+    expect((await s.confirm(p)).confirmed).toBe(true);
+    const sent = JSON.stringify(s.dv.writes());
+    expect(sent).toContain("Same fix as for another client");
+    expect(sent).not.toContain("Northwind");
+    expect((await s.preview({ kind: "state", itemId: 500, state: "Closed", comment: "Done, like Northwind" }, Adatum)).mentions).toEqual(["Northwind Traders"]);
   });
 
-  it("CV-5: a create from a client's conversation naming another client is blocked at preview; Internal's isn't", async () => {
+  it("CV-5: a create from a client's conversation naming another client is flagged at preview; Internal's isn't", async () => {
     const s = setup({ toml: clients, adatumEmail: "avery@cooptimize.example", adatumOrg: "cooptimize" });
     await s.run("devops.set_write_pat", { clientKey: Adatum, pat: WRITE_PAT });
     await s.enable();
@@ -1213,11 +1227,14 @@ describe("the client boundary in the preview", () => {
       return s.convs.addConversation({ chatId, clientKey, title: "Totals", summary: "s", participants: [], firstAt: NOW, lastAt: NOW, lastWorkAt: NOW });
     };
     const a = await conv(Adatum, "19:adatum-cv5@thread.v2");
-    const r = await s.fail("devops.preview", { clientKey: Adatum, change: { kind: "conversation_create", conversationId: a.id, title: "Same fix as Northwind Traders", description: "d", level: "story" } });
-    expect(r).toMatchObject({ status: 409, code: "other_client" });
+    const p = await s.preview({ kind: "conversation_create", conversationId: a.id, title: "Same fix as Northwind Traders", description: "d", level: "story" }, Adatum);
+    expect(p.mentions).toEqual(["Northwind Traders"]);
+    expect((await s.fail("devops.confirm", { previewId: p.previewId })).code).toBe("mentions");
     expect(s.dv.writes().filter((w) => w.method === "POST")).toEqual([]);
     const i = await conv(COOP, "19:coop-cv5@thread.v2");
-    expect((await s.preview({ kind: "conversation_create", conversationId: i.id, title: "Same fix as Northwind Traders", description: "d", level: "story" })).op).toBe("create");
+    const q = await s.preview({ kind: "conversation_create", conversationId: i.id, title: "Same fix as Northwind Traders", description: "d", level: "story" });
+    expect(q.op).toBe("create");
+    expect(q.mentions).toBeUndefined();
   });
 
   it("Internal: a comment naming two clients is previewed and written", async () => {

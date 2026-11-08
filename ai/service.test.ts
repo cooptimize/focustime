@@ -112,6 +112,32 @@ describe("guards in the service", () => {
     expect(s.records).toContainEqual(expect.objectContaining({ op: "guard", kind: "draft_title:output:client_name" }));
   });
 
+  // GD-2: a task may take words that name a client (mentions.input "words") and have its answer checked after
+  // (mentions.answer "scrub": each other client's name becomes "another client", counted for the draft's notice).
+  it("GD-2: words in: another client's name in the input is sent; secrets and outside addresses still refuse", async () => {
+    const s = setup();
+    const r = await s.ai.run({ ...TASK, mentions: { input: "words", answer: "scrub" } }, `${INPUT}, same as Northwind Traders`, SCHEMA);
+    expect(r.ok).toBe(true);
+    expect(s.calls[0]!.input).toContain("Northwind Traders");
+    const key = await s.ai.run({ ...TASK, mentions: { input: "words" } }, `${INPUT} sk-${"Ab3".repeat(10)}`, SCHEMA);
+    expect(key.ok ? null : key.error.kind).toBe("refused_secret");
+  });
+  it("GD-2: scrub: the answer's other-client names are replaced, the result says how many, the log has only a count", async () => {
+    const s = setup({ replies: [JSON.stringify({ title: "Same fix as Northwind Traders, see #5150", urgency: "now" })] });
+    const r = await s.ai.run<typeof ANSWER>({ ...TASK, mentions: { input: "words", answer: "scrub" } }, INPUT, SCHEMA);
+    expect(r.ok && r.value.title).toBe("Same fix as another client, see another client");
+    expect(r.ok && r.namesRemoved).toBe(2);
+    expect(s.records).toContainEqual(expect.objectContaining({ op: "scrub", count: 2 }));
+    expect(JSON.stringify(s.records)).not.toContain("Northwind");
+  });
+  it("GD-2: allow keeps the names (an internal chat's sorting); without a rule the answer still refuses", async () => {
+    const s = setup({ replies: [JSON.stringify({ title: "Same fix as Northwind Traders", urgency: "now" })] });
+    const r = await s.ai.run<typeof ANSWER>({ ...TASK, mentions: { input: "words", answer: "allow" } }, INPUT, SCHEMA);
+    expect(r.ok && r.value.title).toBe("Same fix as Northwind Traders");
+    const t = setup({ replies: [JSON.stringify({ title: "Same fix as Northwind Traders", urgency: "now" })] });
+    expect(((await t.ai.run(TASK, INPUT, SCHEMA)) as { ok: false; error: { kind: string } }).error.kind).toBe("refused_client");
+  });
+
   // HK-4: per-span redaction. A batch with one secret-shaped item keeps every other item and blanks only the span.
   const BATCH: JsonSchema = { type: "object", properties: { items: { type: "array", items: { type: "object", properties: { ref: { type: "string" }, summary: { type: "string" } }, required: ["ref", "summary"], additionalProperties: false } } }, required: ["items"], additionalProperties: false };
   it("a batch answer with one secret-shaped item and one outside address: only those spans become [removed], every item is kept", async () => {

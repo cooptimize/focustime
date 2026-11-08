@@ -1128,6 +1128,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "conversations.unmerge":
     case "conversations.search_items":
     case "conversations.unlink":
+    case "conversations.held":
+    case "conversations.held_not_work":
       return { run: () => env.setView("conversations") };
     case "conversations.refresh": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.refresh", {})) };
     case "conversations.sort_unsorted": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.sort_unsorted", {})) };
@@ -1233,6 +1235,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     // (the assistant opens a promise's draft directly). Sending is only ever the preview's Send.
     case "loop.find":
       return { run: () => void (window.location.hash = "#/inbox/promises") };
+    case "boundary.check":
     case "loop.draft":
     case "loop.preview":
     case "loop.send":

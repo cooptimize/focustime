@@ -19,7 +19,7 @@ const run = async <T = Record<string, unknown>>(ctx: ActionContext, action: stri
   if (!r.ok) throw new Error(`${action}: ${r.error}`);
   return r.data as T;
 };
-type Preview = { previewId: string; key?: string; op: string; fields: { label: string; before: string | null; after: string | null }[] };
+type Preview = { previewId: string; key?: string; op: string; fields: { label: string; before: string | null; after: string | null }[]; mentions?: string[] };
 type Batch = { previews: Preview[]; nothing: string[]; refused: { itemId: number | null; error: string; code: string | null; key?: string }[] };
 type Result = { confirmed: boolean; message: string; entry: { id: number; status: string } };
 const feature = (l: StatusLoad, id: number) => l.clients.flatMap((c) => [...c.features, ...c.also]).find((f) => f.id === id)!;
@@ -99,13 +99,18 @@ describe("Status (SR-1)", () => {
     expect(h.refused[0]!.error).toBe("Coop's comments aren't edited from FocusTime");
   });
 
-  it("GD-1: a line naming another client is refused on its line; Internal may name clients", async () => {
+  it("GD-2: a line naming another client is flagged on its line, with the replaced text from boundary.check; Internal isn't checked", async () => {
     const { ctx } = await demo();
     const r = await run<Batch>(ctx, "devops.preview", { clientKey: "Northwind", changes: [{ key: "x", kind: "comment", itemId: 1120, text: "Same approach as Harbor Health's intake form." }, { key: "y", kind: "comment", itemId: 1120, text: "Fine" }] });
-    expect(r.refused.map((x) => [x.key, x.code])).toEqual([["x", "other_client"]]);
-    expect(r.previews.map((p) => p.key)).toEqual(["y"]);
+    expect(r.refused).toEqual([]);
+    expect(r.previews.map((p) => [p.key, p.mentions ?? null])).toEqual([["x", ["Harbor"]], ["y", null]]);
+    // The line editor's check, as I type: the names and the one-click text.
+    const c = await run<{ names: string[]; replaced: string[] }>(ctx, "boundary.check", { clientKey: "Northwind", texts: ["Same approach as Harbor Health's intake form."] });
+    expect(c).toEqual({ names: ["Harbor"], replaced: ["Same approach as another client's intake form."] });
+    expect(await run(ctx, "boundary.check", { clientKey: "Northwind", texts: ["Fine"] })).toEqual({ names: [], replaced: ["Fine"] });
     const internal = await run<Batch>(ctx, "devops.preview", { clientKey: "Cooptimize", changes: [{ key: "z", kind: "comment", itemId: 4410, text: "Northwind's report numbers now come from this." }] });
-    expect(internal.previews.map((p) => p.key)).toEqual(["z"]);
+    expect(internal.previews.map((p) => [p.key, p.mentions ?? null])).toEqual([["z", null]]);
+    expect((await run<{ names: string[] }>(ctx, "boundary.check", { clientKey: "Cooptimize", texts: ["Northwind's report numbers"] })).names).toEqual([]);
   });
 
   it("the AI draft carries only that client's facts and features", async () => {
@@ -114,6 +119,10 @@ describe("Status (SR-1)", () => {
     s.ai.spy?.((input: string) => void sent.push(input));
     const r = await run<{ ai: string; drafts: { itemId: number; text: string }[] }>(ctx, "status.draft", { clientKey: "Northwind" });
     expect(r.ai).toBe("ok");
+    // GD-2: the sample named another client; the check after replaced it and the draft says so.
+    expect((r as { namesRemoved?: string }).namesRemoved).toBe("Another client's name was removed");
+    expect(JSON.stringify(r.drafts)).toContain("another client's intake form");
+    expect(JSON.stringify(r.drafts)).not.toMatch(/Harbor/);
     expect(sent).toHaveLength(1);
     expect(sent[0]).toContain("Order history export");
     expect(sent[0]).not.toMatch(/Harbor|Patient intake|Atlas|Shipment|Internal reporting/);

@@ -7,7 +7,8 @@
 export { DEFAULT_AI_PERSON, DEFAULT_AI_RULES, type AiPersonSettings, type AiRules } from "./types.ts";
 import type { Logger } from "../log/logger.ts";
 import { costMicros, micros, monthBounds, monthOf, type Prices } from "./cost.ts";
-import { guard, otherClientMatch, redactValue, type GuardHit, type GuardInput, type Redaction } from "./guard.ts";
+import { guard, otherClientMatch, redactValue, type ClientEntry, type GuardHit, type GuardInput, type Redaction } from "./guard.ts";
+import { replaceMentions } from "../plan/boundary.ts";
 import { strictProblems, validate } from "./schema.ts";
 import { DEFAULT_FLEX, tierFor, type AiTier, type FlexSettings } from "./tiers.ts";
 import { AI_MESSAGES, AiError, NO_CLIENT, type ProviderCall, type ToolRound, type ToolSpec, type AiImageInput, type AiFail, type AiRules, type AiStatus, type AiErrorKind, type AiLogEntry, type AiOutcome, type AiProvider, type AiResult, type JsonSchema, type ProviderReply, type Usage } from "./types.ts";
@@ -68,7 +69,16 @@ export type AiDeps = {
   waiting?: boolean;
 };
 
-export type AiTaskSpec = { name: string; client: string; instructions: string };
+/**
+ * GD-2: what may name another client. `input: "words"`: the text sent is people's own words (an internal chat's
+ * messages, my capture, a message I sorted by hand), checked by the caller, so the guard's client rules don't refuse it
+ * (secrets, the VM and outside addresses still do); the caller never adds another client's records. `answer`:
+ * "allow" keeps names in the answer (an internal chat's summaries, which stay in FocusTime); "scrub" replaces each
+ * other client's name, project and known item id by "another client" and counts it (text for a client's DevOps);
+ * absent refuses an answer that names one (GD-1). Internal (GD-1) skips all of this.
+ */
+export type MentionRule = { input?: "words"; answer?: "allow" | "scrub" };
+export type AiTaskSpec = { name: string; client: string; instructions: string; mentions?: MentionRule };
 /** AS-1: runTools' result: what run() gives, plus the calls that ran and the names refused (not allowed). */
 export type ToolsResult<T> = (AiResult<T>) & { refused: string[]; calls: { name: string; args: unknown }[] };
 
@@ -214,7 +224,8 @@ export function createAi(d: AiDeps) {
     if (!provider) return fail("not_set_up");
 
     const g = { ...(await d.guard(task.client)), client: task.client };
-    const hit = guard(`${task.instructions}\n${input}${(o.images ?? []).map((i) => `\n${i.label}`).join("")}`, g);
+    // GD-2: people's own words may name another client (the caller checked them); everything else is guarded as before.
+    const hit = guard(`${task.instructions}\n${input}${(o.images ?? []).map((i) => `\n${i.label}`).join("")}`, task.mentions?.input === "words" ? { ...g, internal: true } : g);
     if (hit) {
       refusedLine(task, hit, "input");
       await record(task, "refused", hit.kind, ZERO, 0, model);
@@ -267,8 +278,22 @@ export function createAi(d: AiDeps) {
       await record(task, "invalid", "invalid_output", spent, latency, reply.model, used);
       return fail("invalid_output");
     }
-    // GD-1: the answer may not name another client either (Internal may): refused whole, as before.
-    const named = g.internal ? null : otherClientMatch(reply.text, g.client, g.directory);
+    // GD-1: the answer may not name another client either (Internal may): refused whole, as before. GD-2: an internal
+    // chat's sorting keeps names ("allow"); text for a client's DevOps has them replaced ("scrub").
+    let namesRemoved = 0;
+    if (!g.internal && task.mentions?.answer === "scrub") {
+      const s = scrubValue(value, g.client, g.directory);
+      namesRemoved = s.count;
+      if (s.count) {
+        logger({ source: "ai", op: "scrub", kind: `${task.name}:client`, count: s.count });
+        if (validate(s.value, schema).length) {
+          await record(task, "invalid", "invalid_output", spent, latency, reply.model, used);
+          return fail("invalid_output");
+        }
+        value = s.value;
+      }
+    }
+    const named = g.internal || task.mentions?.answer ? null : otherClientMatch(reply.text, g.client, g.directory);
     if (named) {
       refusedLine(task, { kind: "refused_client", rule: named.rule, entry: named.key }, "output");
       await record(task, "refused", "refused_client", spent, latency, reply.model, used);
@@ -282,7 +307,7 @@ export function createAi(d: AiDeps) {
       return fail("invalid_output");
     }
     const cost = await record(task, "ok", null, spent, latency, reply.model, used);
-    return { ok: true, value: clean.value as T, usage: spent, costUsd: cost / 1_000_000, latencyMs: latency, model: reply.model, tier: used };
+    return { ok: true, value: clean.value as T, usage: spent, costUsd: cost / 1_000_000, latencyMs: latency, model: reply.model, tier: used, ...(namesRemoved ? { namesRemoved } : {}) };
   }
 
   /**
@@ -450,6 +475,22 @@ export function createAi(d: AiDeps) {
 export type AiService = ReturnType<typeof createAi>;
 
 const add = (a: Usage, b: Usage): Usage => ({ inputTokens: a.inputTokens + b.inputTokens, cachedTokens: a.cachedTokens + b.cachedTokens, outputTokens: a.outputTokens + b.outputTokens });
+
+/** GD-2: every string of a parsed answer with other clients' names, projects and known item ids as "another client". */
+export function scrubValue<T>(value: T, client: string, directory: readonly ClientEntry[]): { value: T; count: number } {
+  let count = 0;
+  const walk = (v: unknown): unknown => {
+    if (typeof v === "string") {
+      const r = replaceMentions(v, client, directory, { records: true });
+      count += r.count;
+      return r.text;
+    }
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]));
+    return v;
+  };
+  return { value: walk(value) as T, count };
+}
 
 export const TEST_TASK: AiTaskSpec = { name: "test_ai", client: NO_CLIENT, instructions: "You are checking that FocusTime can reach the AI service. Answer with the word ok." };
 export const TEST_SCHEMA: JsonSchema = { type: "object", properties: { reply: { type: "string", enum: ["ok"] } }, required: ["reply"], additionalProperties: false };
