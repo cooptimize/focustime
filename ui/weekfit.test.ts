@@ -121,4 +121,14 @@ describe("dayShare", () => {
     expect(dayShare({ kind: "overflow" }, false)).toBe(0.6);
     expect(dayShare({ kind: "work" }, true)).toBe(2.6);
   });
+
+  it("WK-3: gives a weekend day the narrow share; at 1440 with both weekend days nothing folds and Mon to Thu keep a day strip", () => {
+    expect(dayShare({ kind: "weekend" }, false)).toBe(0.4);
+    const week = ["work", "work", "work", "work", "overflow", "weekend", "weekend"].map((kind) => dayShare({ kind }, false));
+    // 1440 window, no panel: about 1404 px of grid with 12 px gaps.
+    expect(weekFit({ contentPx: 1404, gapPx: 12, shares: week, selected: 0 }).tier).toBe("strip");
+    // Without the weekend the same window keeps the slim ruler, as before.
+    expect(weekFit({ contentPx: 1404, gapPx: 12, shares: week.slice(0, 5), selected: 0 }).tier).toBe("ruler");
+    expect(weekFit({ contentPx: 1404, gapPx: 12, shares: week, selected: 0 }).open.every(Boolean)).toBe(true);
+  });
 });

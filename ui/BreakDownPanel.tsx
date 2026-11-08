@@ -8,6 +8,7 @@
 // all. With AI off for the client the panel says so; with no write PAT nothing is sent, not even the AI request.
 // Opened by focustime:break-down, DS-1's focustime:draft-stories, and PV-1's focustime:breakdown ({ clientKey, itemId }).
 import { MentionFlag } from "./DevOpsWrite.tsx";
+import { TextBox } from "./TextBox.tsx";
 import { CloseButton } from "./CloseButton.tsx";
 import { openSend } from "./send-event.ts";
 import { useCallback, useContext, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
@@ -314,8 +315,9 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
               <>
                 <label className="bd-note">
                   <span>Note for the AI (optional)</span>
-                  <textarea
-                    rows={2}
+                  <TextBox
+                    minRows={2}
+                    maxRows={6}
                     maxLength={600}
                     value={note}
                     placeholder="split by report, skip the data model"
@@ -336,7 +338,7 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
             {step === "review" && draft && allNote !== null && (
               <label className="bd-note">
                 <span>Note for proposing the whole set again (optional)</span>
-                <textarea rows={2} maxLength={600} autoFocus value={allNote} onChange={(e) => setAllNote(e.target.value)} />
+                <TextBox minRows={2} maxRows={6} maxLength={600} autoFocus value={allNote} onChange={(e) => setAllNote(e.target.value)} />
               </label>
             )}
             <div className="bd-buttons">
@@ -633,7 +635,7 @@ function ReviewStep({ clientKey, draft, busy, onEdit, onRegenerate }: { clientKe
               {c.after.length > 0 && <p className="bd-after">{c.after.map((t) => `after ${t}`).join(" · ")}</p>}
               <label className="bd-field">
                 <span>Description</span>
-                <textarea rows={2} value={c.description} disabled={sent} onChange={(e) => set(c.id, { description: e.target.value })} />
+                <TextBox minRows={2} maxRows={10} value={c.description} disabled={sent} onChange={(e) => set(c.id, { description: e.target.value })} />
               </label>
               <Acceptance items={c.acceptance} disabled={sent} onChange={(acceptance) => set(c.id, { acceptance })} />
               <div className="bd-card-foot">

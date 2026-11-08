@@ -6,6 +6,7 @@
 // (what landed, the link, Undo for the promise kept, Retry). One Send button. When FocusTime can't send that way for
 // me yet, the preview offers the message prefilled in Teams or Outlook and Mark sent instead. "Close without sending"
 // is IB-1's form (ui/CloseLoop.tsx), unchanged.
+import { TextBox } from "./TextBox.tsx";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { call } from "./api.ts";
 import { CloseLoop, type CloseLoopValue } from "./CloseLoop.tsx";
@@ -18,7 +19,7 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't w
 
 const SEND_LABEL: Record<LoopPreviewView["mode"], string> = { post: "Send in Teams", draft: "Create Outlook draft", send: "Send email now", comment: "Post comment", note: "Save call note" };
 
-export function SendLoop({ promiseKey, who, demo = false, compact = false, onClosed, onCancel, closeWithout, initialHow = null }: {
+export function SendLoop({ promiseKey, who, demo = false, compact = false, onClosed, onCancel, closeWithout, initialHow = null, initialText = null }: {
   promiseKey: string;
   who: string | null;
   /** Demo mode: the consent link isn't offered (the demo has no sign-in). */
@@ -31,6 +32,8 @@ export function SendLoop({ promiseKey, who, demo = false, compact = false, onClo
   closeWithout: (v: CloseLoopValue) => Promise<string | null>;
   /** Close without sending starts on the promise's own channel (a follow-up's), as before. */
   initialHow?: CloseHow | null;
+  /** WK-3: the draft's text when the caller has a better one (a Deployment's note and items), still editable. */
+  initialText?: { text: string; from: string } | null;
 }) {
   const [draft, setDraft] = useState<LoopDraftView | null>(null);
   const [step, setStep] = useState<Step>({ kind: "draft" });
@@ -53,8 +56,8 @@ export function SendLoop({ promiseKey, who, demo = false, compact = false, onClo
     call<LoopDraftView>("loop.draft", { key: promiseKey })
       .then((d) => {
         if (!live) return;
-        setDraft(d);
-        setText(d.text);
+        setDraft(initialText ? { ...d, text: initialText.text, draftedFrom: initialText.from, aiNote: null } : d);
+        setText(initialText?.text ?? d.text);
         setSubject(d.subject);
         setChannel(d.initial);
         setTarget(d.channels.find((c) => c.channel === "teams")?.targets?.[0]?.kind ?? null);
@@ -309,12 +312,12 @@ export function SendLoop({ promiseKey, who, demo = false, compact = false, onClo
       {channel === "call" ? (
         <label className="close-loop-note" htmlFor={`${id}-note`}>
           <span className="close-loop-label">What you agreed</span>
-          <textarea id={`${id}-note`} value={note} maxLength={4000} rows={3} placeholder={`What you and ${who ? who.split(" ")[0] : "they"} agreed`} onChange={(e) => setNote(e.target.value)} />
+          <TextBox id={`${id}-note`} value={note} maxLength={4000} minRows={3} maxRows={8} placeholder={`What you and ${who ? who.split(" ")[0] : "they"} agreed`} onChange={(e) => setNote(e.target.value)} />
         </label>
       ) : (
         <label className="close-loop-note" htmlFor={`${id}-text`}>
           <span className="close-loop-label">Message</span>
-          <textarea id={`${id}-text`} value={text} maxLength={4000} rows={compact ? 4 : 5} onChange={(e) => setText(e.target.value)} />
+          <TextBox id={`${id}-text`} value={text} maxLength={4000} minRows={compact ? 4 : 5} maxRows={12} onChange={(e) => setText(e.target.value)} />
           <span className="sl-from muted">{draft.draftedFrom}{draft.aiNote ? ` ${draft.aiNote}` : ""}</span>
           {draft.namesRemoved && <span className="names-removed">{draft.namesRemoved}: the AI's draft had one, and "another client" is written instead.</span>}
         </label>

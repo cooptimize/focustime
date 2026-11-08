@@ -2,6 +2,7 @@
 // or attend and their recent occurrences. The review: "Update <client>'s plan · <meeting> <date>", one row per
 // proposal with the words it came from; a reviewer ticks, edits or skips each, then one Confirm shows every change in
 // the usual preview and makes them through the existing writes. An attendee who isn't a reviewer can look, not confirm.
+import { TextBox } from "../TextBox.tsx";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { ActionRefusal, call, uploadMeetingTranscript } from "../api.ts";
@@ -229,7 +230,7 @@ function ProposalRow({ p, ticked, editable, onTick, onEdit }: { p: Proposal; tic
       </label>
       <div className="mtg-prop-body">
         {editable && !decided ? (
-          b.kind === "comment" ? <textarea rows={2} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} onBlur={save} aria-label="Comment" /> : <input value={text} maxLength={200} onChange={(e) => setText(e.target.value)} onBlur={save} aria-label={b.kind === "gap" ? "Title" : "What"} />
+          b.kind === "comment" ? <TextBox minRows={2} maxRows={8} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} onBlur={save} aria-label="Comment" /> : <input value={text} maxLength={200} onChange={(e) => setText(e.target.value)} onBlur={save} aria-label={b.kind === "gap" ? "Title" : "What"} />
         ) : (
           <p className="mtg-main">{main}</p>
         )}

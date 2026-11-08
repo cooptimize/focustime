@@ -16,6 +16,7 @@
 //   4. confirm() re-checks everything (mine, open, not expired, still allowlisted, the client still mine and the
 //      proposal's own, nothing changed since: a fresh preview) and then dispatches the same action the button does.
 import type { ActionName } from "../actions/registry.ts";
+import { DEPLOYMENT, windowProblem, windowText } from "../plan/deploy.ts";
 import type { ActionResponse, AheadLoad, DevOpsPreview, DevOpsResult, DoneOffer, ItemDoneOffer, UndoOffer } from "../actions/types.ts";
 import { dropCheck } from "../plan/weekdrop.ts";
 import { placeNote } from "../plan/days.ts";
@@ -58,11 +59,11 @@ export const GLOSSARY = `FocusTime's words: Week has four modes: Board (the week
 
 const examples = TOOL_NAMES.filter((t) => !BUTTON_ONLY.includes(t)).map((t) => `${t}: ${TOOLS[t].examples.map((e) => `"${e}"`).join(" | ")}`).join("\n");
 
-export const INTENT_INSTRUCTIONS = `You route requests in FocusTime, a planning app for consultants. Read the person's request and the screen they are on, and name the tools the request needs, in order, at most 4. Only name a tool the person's own words ask for: a move, drop, keep, confirm, add, change, send, comment, description, update, unlink, snooze or capture only when they ask for that. If they ask to close a loop or a follow-up, name close_loop. If the request isn't something these tools do, name none.
+export const INTENT_INSTRUCTIONS = `You route requests in FocusTime, a planning app for consultants. Read the person's request and the screen they are on, and name the tools the request needs, in order, at most 4. Only name a tool the person's own words ask for: a move, drop, keep, confirm, add, change, send, comment, description, update, unlink, snooze, capture or plan_deployment only when they ask for that. If they ask to close a loop or a follow-up, name close_loop. If the request isn't something these tools do, name none.
 Words: a to-do is a planned piece of work on a half-day block (code name pick). People may say pick or to-do; both mean the same, and the *_pick and *_picks tools act on to-dos.
 For a move of to-dos by day or block ("move those to Friday", "everything from Wednesday PM to Friday AM", "push today to tomorrow"), name move_plan, even when the to-dos are with different clients. For two or three changes to one item in one request (done and a comment, a date), name item_update.
 ${GLOSSARY}
-Tools: today (what's next, due today, due tonight), day (what I did or planned on a day), item (a work item's state, owner, dates, children), gaps (features with readiness gaps), commitments (what someone committed to in a conversation), sends (my sends and their states), status (Monday's status report: writing my status updates, or finding the feature an update goes on; with comment when they give the update's words), inbox (a view of my Inbox: needs you, promises, waiting, in progress, captures, done), link_search (items to link a conversation or promise to), move_pick, drop_pick, keep_pick, move_picks (several to-dos at once, by id), move_plan (to-dos by day or block), close_day (close out a day: to-dos done, the rest moved on, the day closed out), confirm_day, confirm_week, add_must, ahead_change (start, target, size or owner of an item), send (send work to a teammate's week), comment (a comment on a DevOps item), description (a new description for a DevOps item), item_update (done, a comment and a target date on one item), unlink, link_comment, inbox_seen, snooze, capture, close_loop.
+Tools: today (what's next, due today, due tonight), day (what I did or planned on a day), item (a work item's state, owner, dates, children), gaps (features with readiness gaps), commitments (what someone committed to in a conversation), sends (my sends and their states), status (Monday's status report: writing my status updates, or finding the feature an update goes on; with comment when they give the update's words), inbox (a view of my Inbox: needs you, promises, waiting, in progress, captures, done), link_search (items to link a conversation or promise to), move_pick, drop_pick, keep_pick, move_picks (several to-dos at once, by id), move_plan (to-dos by day or block), close_day (close out a day: to-dos done, the rest moved on, the day closed out), confirm_day, confirm_week, add_must, ahead_change (start, target, size or owner of an item), send (send work to a teammate's week), comment (a comment on a DevOps item), description (a new description for a DevOps item), item_update (done, a comment and a target date on one item), unlink, link_comment, inbox_seen, snooze, capture, close_loop, plan_deployment (plan a deployment, release or go-live with a time window).
 How people ask:
 ${examples}`;
 
@@ -405,6 +406,8 @@ export function createAssistant(env: AssistantEnv) {
           if ((name === "unlink" || name === "link_comment") && !((nullId(args.conversationId) !== null && x.known.conversations.has(nullId(args.conversationId)!)) || (nullId(args.promiseId) !== null && x.known.promises.has(nullId(args.promiseId)!)))) return JSON.stringify({ cannot: "That conversation or promise isn't in anything read for this request" });
           // move_plan never takes ids from the model: the server's matches for "named", or the day's to-dos for "all".
           if (name === "move_plan") delete args.pickIds;
+          // WK-3: a deployment's items, like any item tool's, come from my words, the screen or a read.
+          if (name === "plan_deployment" && !(Array.isArray(args.itemIds) ? args.itemIds.map(Number) : []).every((i) => x.known.items.has(i))) return JSON.stringify({ cannot: "An item there isn't in the request or anything read for it" });
           let b: Built | string;
           try {
             b = await build(name, args, x.client, x.text, x.matched);
@@ -647,6 +650,25 @@ export function createAssistant(env: AssistantEnv) {
         if (as === "draft_story" && !client) throw new Refusal("A draft story needs a client: say which");
         const preview = plain(as === "draft_story" ? "Capture a draft story" : "Capture", text, [{ label: "Goes to", before: null, after: as === "draft_story" ? `Draft story for ${env.clientName(client!)}, prepared for DevOps in the background` : `Inbox › Captures${client ? `, for ${env.clientName(client)}` : ""}, to sort later` }]);
         return { view: base("capture.add", client, as === "draft_story" ? "Capture a draft story" : "Capture it", preview, "Only you"), held: { tool, args: { text, as }, run: { action: "capture.add", input: { text, ...(client ? { clientKey: client } : {}) } } }, snapshot: null };
+      }
+      case "plan_deployment": {
+        // WK-3 (DP-0): the same deploy.add the menu and Capture call, on confirm only. One client; the window is
+        // checked here and again by the action.
+        if (!client) throw new Refusal("A deployment needs a client: say which");
+        const date = String(args.date ?? "");
+        const w = { start: String(args.start ?? ""), end: String(args.end ?? "") };
+        const bad = windowProblem(w);
+        if (bad) throw new Refusal(bad);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today()) throw new Refusal("Say a day from today on");
+        const title = (typeof args.title === "string" && args.title.trim() ? args.title.trim() : DEPLOYMENT).slice(0, 200);
+        const note = typeof args.note === "string" && args.note.trim() ? args.note.trim().slice(0, 2000) : null;
+        const itemIds = [...new Set(Array.isArray(args.itemIds) ? args.itemIds.map(Number).filter((n) => Number.isInteger(n) && n > 0) : [])].slice(0, 20);
+        const rows: PreviewView["rows"] = [{ label: "When", before: null, after: `${dayWords(date)} ${windowText(w)}` }];
+        if (note) rows.push({ label: "What's going", before: null, after: note });
+        if (itemIds.length) rows.push({ label: "Items", before: null, after: itemIds.map((i) => `#${i}`).join(", ") });
+        const weekend = Temporal.PlainDate.from(date).dayOfWeek >= 6;
+        const preview = plain("Plan a deployment", `Deployment: ${title}`, rows, weekend ? [`${Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" })} isn't a working day: it counts as after-hours time`] : []);
+        return { view: base("deploy.add", client, `Plan "${title}" on ${dayWords(date)} ${windowText(w)}`, preview, "Only you"), held: { tool, args: { ...args, title, note, itemIds }, run: { action: "deploy.add", input: { clientKey: client, date, start: w.start, end: w.end, title, ...(note ? { note } : {}), ...(itemIds.length ? { itemIds } : {}) } } }, snapshot: null };
       }
       case "move_plan": {
         // AS-2: moves by day and block, built by the server. The to-dos: the ones the server matched from my words
@@ -978,8 +1000,9 @@ export function createAssistant(env: AssistantEnv) {
       }
       return { ok: true, result: { kind: "note", text: "Captured to sort later", link: link("#/inbox/captures", "Open Captures") }, undo: { kind: "plan", id: cap.id }, message: "Captured" };
     }
-    if (held.tool === "move_pick" || held.tool === "keep_pick") {
+    if (held.tool === "move_pick" || held.tool === "keep_pick" || held.tool === "plan_deployment") {
       const p = (r.data as { pick: Pick }).pick;
+      if (held.tool === "plan_deployment") return { ok: true, result: { kind: "pick", id: p.id, clientKey: p.clientKey, clientName: env.clientName(p.clientKey), title: p.title, date: p.date, half: p.half === "PM" ? "PM" : "AM", time: p.window ? windowText(p.window) : null, done: false, link: link(`#/week/day/${p.date}`, `Open ${dayWords(p.date)}`) }, message: "Deployment planned" };
       return { ok: true, result: { kind: "pick", id: p.id, clientKey: p.clientKey, clientName: env.clientName(p.clientKey), title: p.title, date: p.date, half: p.half === "PM" ? "PM" : "AM", time: null, done: p.status === "done", link: link(`#/week/day/${p.date}/${p.half}`, `Open ${dayWords(p.date)}`) }, message: "Moved" };
     }
     const messages: Partial<Record<ToolName, string>> = { drop_pick: "Dropped", confirm_day: "Day confirmed", confirm_week: "Week confirmed", add_must: "Added as a must", ahead_change: "In your change set. Save it in Ahead to write it to DevOps", send: "Sent", unlink: "Unlinked", inbox_seen: "Marked seen", snooze: "Snoozed" };

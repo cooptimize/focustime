@@ -13,7 +13,7 @@ const T = 120_000;
 const MODES = [
   { hash: "#/ahead", name: "Grid", rows: ".ah-row" },
   { hash: "#/ahead/gantt", name: "Gantt", rows: ".pa-item" },
-  { hash: "#/ahead/fix", name: "Readiness", rows: ".ah-fx-row" },
+  { hash: "#/ahead/fix", name: "Readiness", rows: ".ah-fx-client .ah-fx-row" },
   { hash: "#/ahead/backlog", name: "Backlog", rows: ".bl-row" },
 ] as const;
 
@@ -141,16 +141,16 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead's one toolbar (browser, demo mode)", () 
   it("the search and readiness narrow Readiness and Backlog", async () => {
     const { page, errors } = await open("#/ahead/fix");
     await page.getByRole("group", { name: "People" }).getByRole("button", { name: "Everyone" }).click();
-    const all = await page.locator(".ah-fx-row:not(.ctx)").count();
+    const all = await page.locator(".ah-fx-client .ah-fx-row:not(.ctx)").count();
     expect(all).toBeGreaterThan(1);
     await page.getByRole("textbox", { name: "Search titles or #id" }).fill("supplier onboarding");
-    await expect.poll(() => page.locator(".ah-fx-row:not(.ctx)").count()).toBe(1);
-    await expect(page.locator(".ah-fx-row:not(.ctx) .ah-title a").textContent()).resolves.toBe("Supplier onboarding");
+    await expect.poll(() => page.locator(".ah-fx-client .ah-fx-row:not(.ctx)").count()).toBe(1);
+    await expect(page.locator(".ah-fx-client .ah-fx-row:not(.ctx) .ah-title a").textContent()).resolves.toBe("Supplier onboarding");
     await page.getByRole("button", { name: "Clear the search" }).click();
     await page.getByRole("button", { name: /^Readiness:/ }).click();
     await page.locator(".cell-pop").getByRole("button", { name: "Unassigned" }).click();
     await page.locator(".cell-pop").getByRole("button", { name: "Done" }).click();
-    const rows = await page.locator(".ah-fx-row:not(.ctx)").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label") ?? ""));
+    const rows = await page.locator(".ah-fx-client .ah-fx-row:not(.ctx)").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label") ?? ""));
     for (const r of rows) expect(r).toContain("Unassigned");
     // Backlog: the same filter narrows it.
     await mode(page, "Backlog");

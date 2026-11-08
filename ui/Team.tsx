@@ -7,6 +7,7 @@
 //                     priorities and the watched features. Read-only on the phone. Never day plans, focus, notes or hours
 //   Today's line      one line in the urgent strip when something waits for me ("Priya sent you Loyalty points (Must)")
 // Plain words; nothing here reads as anyone checking on anyone.
+import { TextBox } from "./TextBox.tsx";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import type { PeoplePickerData, PickerPerson } from "../actions/people-picker.ts";
@@ -160,7 +161,7 @@ export function SendDialog({ target, thisWeek, onClose, onSent }: { target: Send
             </div>
             <div className="help-row">
               <span className="help-label">Note</span>
-              <textarea className="send-note" rows={2} maxLength={300} placeholder="Optional: why it matters, or where to start" value={note} onChange={(e) => setNote(e.target.value)} />
+              <TextBox className="send-note" minRows={2} maxRows={6} maxLength={300} placeholder="Optional: why it matters, or where to start" value={note} onChange={(e) => setNote(e.target.value)} />
             </div>
             <label className="send-check">
               <input type="checkbox" checked={askTake} onChange={(e) => setAskTake(e.target.checked)} /> Ask them to take it in DevOps

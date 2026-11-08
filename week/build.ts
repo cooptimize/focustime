@@ -1,7 +1,7 @@
 import { iso, minutesOn, WEEKDAYS_7, weekDates7, zonedAt } from "./dates.ts";
 import { hoursOn, mergeSpans, nominalHours, toHm, toMin, viewRange, type DayHours, type Span, type ViewRange } from "./hours.ts";
 import { expandPatterns, mergeFocus, standingBlocksFor } from "./patterns.ts";
-import { allDayOn, placeTimed, type Bucket } from "./placement.ts";
+import { allDayOn, isIncluded, placeTimed, type Bucket } from "./placement.ts";
 import { OOF_TITLE, type PtoDay } from "./pto.ts";
 import { evaluateRisks } from "./risks.ts";
 import type { CalEvent, Day, FlexSession, FocusPattern, Half, IsoDate, PlacedEvent, Slot, Unavailable, Week, WeekConfig } from "./types.ts";
@@ -70,7 +70,9 @@ export function buildWeek({ weekStart, patterns, events, config, pto = {}, unava
   const startDate = (x: { start: string }) => Temporal.Instant.from(x.start).toZonedDateTimeISO(tz).toPlainDate().toString();
   const flexOn = (d: IsoDate) => flex.filter((f) => startDate(f) === d);
   const unavailableOn = (d: IsoDate) => unavailable.filter((u) => spanOn(d, u.start, u.end, tz));
-  const dates = all7.filter((d, i) => i < 5 || weekendHasPlans(hours.get(d)!, flexOn(d).length, unavailableOn(d).length, weekendPlanned.has(d)));
+  // WK-3: a calendar event on a Saturday or Sunday shows that day too (timed or all-day, meetings and personal ones).
+  const eventOn = (d: IsoDate) => events.some((e) => (e.allDay ? allDayOn([e], d).length > 0 : isIncluded(e) && !!spanOn(d, e.start, e.end, tz)));
+  const dates = all7.filter((d, i) => i < 5 || weekendHasPlans(hours.get(d)!, flexOn(d).length, unavailableOn(d).length, weekendPlanned.has(d)) || eventOn(d));
 
   const dataverse = expandPatterns(patterns, weekStart);
   const standing = standingBlocksFor(config.standingBlocks, weekStart);

@@ -189,15 +189,16 @@ describe("event placement", () => {
     expect(titles(w.days[2]!.early)).toEqual(["Late flight"]);
   });
 
-  it("includes Friday events and drops weekend and other-week events", () => {
+  it("includes Friday events, opens a weekend day for its event (WK-3) and drops other-week events", () => {
     const w = build([
       meeting("2026-11-06T11:00", "2026-11-06T11:30", { title: "All hands" }),
       meeting("2026-11-07T11:00", "2026-11-07T11:30", { title: "Saturday" }),
       meeting("2026-11-10T11:00", "2026-11-10T11:30", { title: "Next week" }),
     ]);
     expect(titles(w.days[4]!.am.events)).toEqual(["All hands"]);
+    expect(w.days.map((d) => d.date)).toEqual(["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07"]);
     const all = w.days.flatMap((d) => [...d.early, ...d.am.events, ...d.pm.events, ...d.evening]);
-    expect(titles(all)).toEqual(["All hands"]);
+    expect(titles(all).sort()).toEqual(["All hands", "Saturday"]);
   });
 
   it("excludes declined Outlook events", () => {

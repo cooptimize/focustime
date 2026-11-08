@@ -214,7 +214,8 @@ describe.skipIf(!CHROMIUM)("WK-2: the Board's Timeline toggle and per-column tie
           await board(page);
           if (panel) await openPanel(page);
           const grid = page.locator("main.grid");
-          const days = grid.locator(":scope > section.day:not(.folded)");
+          // WK-3: a weekend column (a promise due Saturday, the day after this Friday) has no tier: it is one quiet cell.
+          const days = grid.locator(":scope > section.day:not(.folded):not(.weekend)");
           if (shown) {
             // Each open column's tier is the one its own width calls for.
             const tiers = await days.evaluateAll((els) =>

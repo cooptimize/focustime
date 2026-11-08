@@ -3,6 +3,7 @@
 // bullet on Monday), in-place edits of my own comments in the window, and Draft (AI, one request per client). Preview
 // reads like the email. Nothing is written until Push all: one preview of every line and edit across clients, then the
 // write framework's own writes, each read back, logged and undoable, with a result per line and Retry.
+import { TextBox } from "./TextBox.tsx";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { StatusClient, StatusComment, StatusFeature, StatusLoad } from "../plan/status-types.ts";
 import type { DevOpsPreview, DevOpsResult } from "../actions/types.ts";
@@ -442,7 +443,7 @@ function LineBox({ line, label, onChange, onRemove, removeLabel }: { line: Line;
   }, [line.text, line.clientKey]);
   return (
     <div className={`st-box${line.from === "ai" ? " st-suggested" : ""}${line.kind === "comment_edit" ? " st-editing" : ""}`}>
-      <textarea ref={ref} aria-label={label} rows={2} maxLength={4000} value={line.text} placeholder="What moved this week, and what's next" onChange={(e) => onChange(line.key, { text: e.target.value, from: "me" })} />
+      <TextBox ref={ref} aria-label={label} minRows={2} maxRows={10} maxLength={4000} value={line.text} placeholder="What moved this week, and what's next" onChange={(e) => onChange(line.key, { text: e.target.value, from: "me" })} />
       {flag && <MentionFlag names={flag.names} where="this client's status report" onReplace={() => onChange(line.key, { text: flag.replaced, from: "me" })} />}
       <span className="st-box-foot">
         <span className="muted">{line.kind === "comment_edit" ? "Edits your comment" : line.from === "ai" ? "Suggested: edit it before you push" : "A new comment, its own bullet on Monday"}</span>

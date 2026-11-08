@@ -13,7 +13,7 @@ import { sqliteConn } from "./sql/sqlite.ts";
 import { carryOver } from "../plan/rules.ts";
 import { type ItemLevel, type Tier } from "../plan/weeklist.ts";
 import { MAX_ESTIMATE_HOURS, validEstimateMinutes, validStorySize, type StorySize } from "../plan/estimate.ts";
-import type { Capture, DayPlan, DraftAi, DraftAiState, DraftStory, Pick, PickKind, PlanWeek, Size, ZonedStamp } from "../plan/types.ts";
+import type { Capture, DayPlan, DraftAi, DraftAiState, DraftStory, Pick, PickKind, PlanWeek, Size, TodoKind, TodoLink, TodoWindow, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
 import type { Attendee, Fields, LocalState, OwnEvent, SyncOp, Timebox, WriteEntry, WriteKind, WriteStatus } from "../plan/timebox.ts";
 import type { DevOpsWriteEntry, PatchOp } from "../plan/devopswrite.ts";
@@ -1376,6 +1376,11 @@ export type NewPick = {
   followUpId?: number | null;
   /** PL-1: the pick's own minutes instead of its size (a Watching check-in's 30). */
   minutes?: number | null;
+  /** WK-3: a deployment, its window, the items it covers and a note of what's going. */
+  todoKind?: TodoKind | null;
+  window?: TodoWindow | null;
+  links?: TodoLink[] | null;
+  notes?: string | null;
 };
 
 type Row = Record<string, string | number | null>;
@@ -1425,6 +1430,9 @@ const toPick = (r: Row): Pick => ({
   notes: (r.notes as string | null) ?? null,
   followUpId: (r.follow_up_id as number | null) ?? null,
   ...(r.minutes != null ? { minutes: r.minutes as number } : {}),
+  ...(r.todo_kind === "deployment" ? { todoKind: "deployment" as const } : {}),
+  ...(r.window_start != null && r.window_end != null ? { window: { start: r.window_start as string, end: r.window_end as string } } : {}),
+  ...(r.links != null ? { links: json<TodoLink[]>(r.links) ?? [] } : {}),
   position: r.position as number,
   createdAt: r.created_at as string,
   updatedAt: r.updated_at as string,
@@ -1665,8 +1673,24 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     (await ensurePlan(p.date));
     const at = stamp();
     const r = (await db.run(`INSERT INTO picks (date, half, client_key, kind, item_id, draft_id, title, item_type, item_url, size, status, carried_from, notes, position, created_at, updated_at, follow_up_id, minutes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, NULL, ?, ?, ?, ?, ?)`, p.date, p.half, p.clientKey, p.kind, p.itemId ?? null, p.draftId ?? null, p.title, p.itemType ?? null, p.itemUrl ?? null, p.size, carriedFrom, (await nextPosition(p.date, p.half)), at, at, p.followUpId ?? null, p.minutes ?? null));
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?)`, p.date, p.half, p.clientKey, p.kind, p.itemId ?? null, p.draftId ?? null, p.title, p.itemType ?? null, p.itemUrl ?? null, p.size, carriedFrom, p.notes ?? null, (await nextPosition(p.date, p.half)), at, at, p.followUpId ?? null, p.minutes ?? null));
+    // WK-3: the deployment columns only when set, so a plain to-do's insert is the statement it always was.
+    if (p.todoKind || p.window || p.links) (await writeTodoKind(r.lastId!, p));
     return (await getPick(r.lastId!))!;
+  }
+  /** WK-3: a deployment's kind, window and links (null clears them: back to a plain to-do). */
+  async function writeTodoKind(id: number, p: { todoKind?: NewPick["todoKind"]; window?: NewPick["window"]; links?: NewPick["links"] }): Promise<void> {
+    (await db.run("UPDATE picks SET todo_kind = ?, window_start = ?, window_end = ?, links = ?, updated_at = ? WHERE id = ?", p.todoKind ?? null, p.window?.start ?? null, p.window?.end ?? null, p.links?.length ? JSON.stringify(p.links) : null, stamp(), id));
+  }
+  /** A pick's copy for a move or make up to another day: what it points at, its size, minutes, and a deployment's parts. */
+  function copyOf(p: Pick, date: IsoDate, half: Half): NewPick {
+    const base: NewPick = { date, half, clientKey: p.clientKey, kind: p.kind, title: p.title, itemType: p.itemType, itemUrl: p.itemUrl, size: p.size };
+    if (p.itemId !== null) base.itemId = p.itemId;
+    if (p.draftId !== null) base.draftId = p.draftId;
+    if (p.followUpId !== null) base.followUpId = p.followUpId;
+    if (p.minutes != null) base.minutes = p.minutes;
+    if (p.todoKind) Object.assign(base, { todoKind: p.todoKind, window: p.window ?? null, links: p.links ?? null, notes: p.notes });
+    return base;
   }
 
   const picksBetween = async (from: IsoDate, to: IsoDate): Promise<Pick[]> =>
@@ -1763,12 +1787,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
           return (await mustPick(id));
         }
         (await db.run("UPDATE picks SET status = 'moved', updated_at = ? WHERE id = ?", stamp(), id));
-        const base: NewPick = { date, half, clientKey: p.clientKey, kind: p.kind, title: p.title, itemType: p.itemType, itemUrl: p.itemUrl, size: p.size };
-        if (p.itemId !== null) base.itemId = p.itemId;
-        if (p.draftId !== null) base.draftId = p.draftId;
-        if (p.followUpId !== null) base.followUpId = p.followUpId;
-        if (p.minutes != null) base.minutes = p.minutes;
-        return (await insertPick(base, p.id));
+        return (await insertPick(copyOf(p, date, half), p.id));
       });
     },
     async commit(date: IsoDate): Promise<DayPlan> {
@@ -1777,6 +1796,22 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         const at = stamp();
         (await db.run("UPDATE day_plans SET committed_at = ?, updated_at = ? WHERE date = ?", at, at, date));
         return (await getPlan(date))!;
+      });
+    },
+    /**
+     * WK-3: make a planned to-do a Deployment (its window, items and note) or a plain to-do again (todoKind null clears
+     * the window and items; the note stays). `half` is where its window puts it on its date (actions/deploy-actions.ts).
+     */
+    async setTodoKind(id: number, k: { todoKind: NewPick["todoKind"]; window: NewPick["window"]; links: NewPick["links"]; notes?: string | null; half?: Half; itemType?: string | null; minutes?: number | null }): Promise<Pick> {
+      return tx(async () => {
+        const p = (await mustPick(id));
+        if (p.status !== "planned" && p.status !== "done") throw new PlanError("Only a planned or done to-do can change kind");
+        (await writeTodoKind(id, k.todoKind ? k : { todoKind: null, window: null, links: null }));
+        if (k.notes !== undefined) (await db.run("UPDATE picks SET notes = ? WHERE id = ?", k.notes, id));
+        if (k.itemType !== undefined) (await db.run("UPDATE picks SET item_type = ? WHERE id = ?", k.itemType, id));
+        if (k.minutes !== undefined) (await db.run("UPDATE picks SET minutes = ? WHERE id = ?", k.minutes, id));
+        if (k.half && k.half !== p.half) (await db.run("UPDATE picks SET half = ?, position = ? WHERE id = ?", k.half, (await nextPosition(p.date, k.half)), id));
+        return (await mustPick(id));
       });
     },
     async setDone(id: number, done: boolean): Promise<Pick> {
@@ -2234,12 +2269,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
           moved = (await mustPick(id));
         } else {
           (await db.run("UPDATE picks SET status = 'moved', updated_at = ? WHERE id = ?", stamp(), id));
-          const base: NewPick = { date: to.date, half: to.half, clientKey: p.clientKey, kind: p.kind, title: p.title, itemType: p.itemType, itemUrl: p.itemUrl, size: p.size };
-          if (p.itemId !== null) base.itemId = p.itemId;
-          if (p.draftId !== null) base.draftId = p.draftId;
-          if (p.followUpId !== null) base.followUpId = p.followUpId;
-          if (p.minutes != null) base.minutes = p.minutes;
-          moved = (await insertPick(base, p.id));
+          moved = (await insertPick(copyOf(p, to.date, to.half), p.id));
         }
         const r = (await db.run("INSERT INTO borrowed (pick_id, from_pick_id, client_key, title, date, minutes, payback, payback_date, payback_half, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", moved.id, p.id, p.clientKey, p.title, p.date, b.minutes, b.payback, to.date, to.half, stamp()));
         return { pick: moved, borrowed: toBorrowed((await db.get("SELECT * FROM borrowed WHERE id = ?", r.lastId!)) as Row) };

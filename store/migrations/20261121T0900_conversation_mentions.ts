@@ -5,7 +5,7 @@
 import type { NamedMigration } from "./named.ts";
 
 export const conversationMentions: NamedMigration = {
-  name: "20261120T0900_conversation_mentions",
+  name: "20261121T0900_conversation_mentions",
   sqlite: `ALTER TABLE conversations ADD COLUMN mentions_json TEXT;
    ALTER TABLE conversation_suggestions ADD COLUMN names_removed INTEGER;`,
   sqlserver: `ALTER TABLE conversations ADD mentions_json nvarchar(1000) NULL;

@@ -504,3 +504,9 @@ export function aStatusLoad(o: { clientKey?: string; clientName?: string; update
     clients: [{ clientKey: o.clientKey ?? "Contoso", clientName: o.clientName ?? "Contoso", status: "ok", window: { since: "2026-11-02T12:04:00Z", source: "kat", katSentAt: "2026-11-02T12:04:00Z", prevSince: "2026-10-26T12:04:00Z", note: null }, canWrite: true, ai: "off", aiNote: null, features: features.map(({ order: _o, ...f }) => f), also: [] }],
   };
 }
+
+
+/** WK-3: a Deployment to-do: Saturday Nov 7, 9:00 to 11:00, for Northwind. */
+export function aDeployment(o: Partial<import("../../plan/types.ts").Pick> = {}): import("../../plan/types.ts").Pick {
+  return aPick({ date: "2026-11-07", half: "EVE", kind: "intention", itemId: null, itemUrl: null, title: "Release 4.2", itemType: "Deployment", size: null, minutes: 120, todoKind: "deployment", window: { start: "09:00", end: "11:00" }, ...o });
+}

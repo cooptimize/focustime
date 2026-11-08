@@ -392,11 +392,19 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
 }
 
 /** QF-1: Today's ‹ › and [ ]: the weekday before or after (Saturday and Sunday are stepped over). */
-export function stepWeekday(date: IsoDate, dir: 1 | -1): IsoDate {
+export function stepWeekday(date: IsoDate, dir: 1 | -1, weekend: (d: IsoDate) => boolean = () => false): IsoDate {
   let d = Temporal.PlainDate.from(date).add({ days: dir });
-  while (d.dayOfWeek > 5) d = d.add({ days: dir });
+  while (d.dayOfWeek > 5 && !weekend(d.toString())) d = d.add({ days: dir });
   return d.toString();
 }
+
+/**
+ * WK-3: which weekend days Today's ‹ › and [ ] step onto: every one with Show weekend on, else the ones the loaded week
+ * shows (they have something on them). A weekend of another week that isn't loaded is stepped over unless Show
+ * weekend is on: the loaded week is what Today knows.
+ */
+export const weekendStops = (o: { showWeekend: boolean; days: readonly { date: IsoDate; kind: string }[] }) => (d: IsoDate) =>
+  o.showWeekend || o.days.some((x) => x.date === d && x.kind === "weekend");
 
 /** The day header's Plan / Planned ✓ chip in Week, and "+ Add work" on a block: the Board focused on that day (and block). */
 export const planDayNav = (date: IsoDate, half: Half | null = null): Nav => navOf.planDay(date, half);

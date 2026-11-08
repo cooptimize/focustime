@@ -3,6 +3,7 @@
 import type { ActionResponse, FieldProblem, WeekLoadData } from "../actions/types.ts";
 import type { DraftStory, PlanDayState, Pick } from "../plan/types.ts";
 import { pageActivity, USE_HEADER } from "./activity.ts";
+import { DEPLOYED_EVENT } from "./weekend.ts";
 
 /**
  * No live session (signed out, or it ended after 12 idle hours or 7 days): only the server says this, with code
@@ -97,7 +98,11 @@ export const setNoHoursPrompt = (f: typeof askNoHours) => void (askNoHours = f);
 
 export async function call<T>(action: string, input: unknown, opts: CallOptions = {}): Promise<T> {
   try {
-    return await send<T>(action, input, opts);
+    const r = await send<T>(action, input, opts);
+    // WK-3: a Deployment ticked done, from any row or menu: App offers to tell the client (never sends on its own).
+    const done = action === "pick.mark_done" && (input as { done?: unknown } | null)?.done === true ? (r as { pick?: Pick } | null)?.pick : null;
+    if (done?.todoKind === "deployment" && typeof window !== "undefined") window.dispatchEvent(new CustomEvent(DEPLOYED_EVENT, { detail: done }));
+    return r;
   } catch (e) {
     // Any Move (menus, Plan the day, Check-in, Close out) asks the same question: Add hours, or Move anyway.
     if (e instanceof ActionRefusal && e.code === "no_hours" && action === "pick.move" && askNoHours && typeof input === "object" && input) {
@@ -165,7 +170,7 @@ async function send<T>(action: string, input: unknown, opts: CallOptions = {}): 
   return readResponse<T>(res);
 }
 
-export const weekLoad = (input: { weekStart?: string; now?: string; refresh?: boolean; quiet?: boolean; viewRange?: string }, opts: CallOptions = {}) => call<WeekLoadData>("week.load", input, opts);
+export const weekLoad = (input: { weekStart?: string; now?: string; refresh?: boolean; quiet?: boolean; viewRange?: string; weekend?: boolean }, opts: CallOptions = {}) => call<WeekLoadData>("week.load", input, opts);
 
 export type ConnectResult = { status: "connected" | "cancelled" | "failed" | "redirect"; message?: string; url?: string };
 /** Connecting a calendar is a visit to Microsoft or Google and back (A2): the server says where, the page goes there. */

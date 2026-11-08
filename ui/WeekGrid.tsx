@@ -19,6 +19,7 @@ import type { FollowUpView } from "../actions/types.ts";
 import { wasDueText, weekDueBadges } from "../plan/due.ts";
 import { homeRail, lateOnCards, railMarks, type CardRail, type RailSpan } from "../plan/rail-promises.ts";
 import { canAddWork, planButton } from "../plan/days.ts";
+import { bandIds, eveningBand, weekendRows, type EveningBand } from "../plan/evening.ts";
 import { checkinMenu, dayMenu, eventMenu, slotMenu } from "./menu.ts";
 import { MenuRow, useMenu } from "./Menus.tsx";
 import { EyeIcon } from "./Watching.tsx";
@@ -173,6 +174,7 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
       badges={badges}
       own={own}
       grow={!compactIn}
+      band={eveningBand(day, week, pv.week?.[day.date]?.picks ?? [])}
     />
   );
   if (layout === "narrow") {
@@ -288,7 +290,7 @@ function wholeDay(day: Day): Whole {
   return null;
 }
 
-function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boolean; hasEve: boolean; badges: ReadonlyMap<string, FollowUpView[]>; own?: { tier: Tier; railPx: number } | undefined; grow?: boolean } & Omit<Props, "week" | "today">) {
+function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boolean; hasEve: boolean; badges: ReadonlyMap<string, FollowUpView[]>; own?: { tier: Tier; railPx: number } | undefined; grow?: boolean; /** WK-3: the Evening band's items, or null (no band). */ band?: EveningBand | null } & Omit<Props, "week" | "today">) {
   // WK-2: this column's own tier (from its own width) in the medium layout; the grid's otherwise.
   const gridTier = useContext(TierCtx);
   const tier = gridTier && props.own ? props.own.tier : gridTier;
@@ -335,10 +337,28 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
     return { at: on, past: ended ? 1 : spot.kind === "rail" && spot.half === half ? spot.at : 0, label: nowLabel, onClick: toNow };
   };
 
+  // WK-3: a weekend day is a narrow, quiet column: a muted header, then its calendar items and to-dos as plain rows
+  // with their times. No AM/PM blocks, no Open half-days, no capacity or at-risk warnings.
+  if (day.kind === "weekend")
+    return (
+      <section className={`day weekend quiet${isToday ? " today" : ""}${daySelected ? " sel-day" : ""}`} aria-label={`${dayLabel}, weekend`}>
+        <header className="day-head weekend-head" onContextMenu={menu.onContextMenu}>
+          <span className="dow">{day.weekday}</span>
+          <span className="date">{Temporal.PlainDate.from(day.date).day}</span>
+          <span className="weekend-word">· weekend</span>
+          {isToday && <span className="today-pill">Today</span>}
+          <span className="day-gap" />
+          <HalfScope.Provider value={daySelected}>{menu.button(`Actions for ${dayLabel}`)}</HalfScope.Provider>
+        </header>
+        <AllDay events={day.allDay} />
+        <WeekendDay day={day} tz={tz} selected={daySelected} refAm={refFor("AM")} refPm={refFor("PM")} onOpen={(focus) => props.onOpen({ dayIndex, half: "AM" }, focus)} dayLabel={dayLabel} />
+      </section>
+    );
+
   return (
     <TierCtx.Provider value={tier}>
     <section
-      className={`day ${overflow ? "overflow" : day.kind === "weekend" ? "weekend overflow" : "work"} ${isToday ? "today" : ""} ${day.pto ? "pto-full" : ""}${daySelected ? " sel-day" : ""}${tier ? ` tier-${tier}` : ""}`}
+      className={`day ${overflow ? "overflow" : "work"} ${isToday ? "today" : ""} ${day.pto ? "pto-full" : ""}${daySelected ? " sel-day" : ""}${tier ? ` tier-${tier}` : ""}`}
       style={tier && props.own ? ({ "--rail-w": `${props.own.railPx}px` } as CSSProperties) : undefined}
       aria-label={`${dayLabel}${day.pto ? `, ${ptoLabel(day.pto)}` : ""}`}
     >
@@ -372,6 +392,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
       {whole ? (
         <WholeDay
           day={day}
+          band={props.band ?? null}
           kind={whole}
           tz={tz}
           selected={daySelected}
@@ -389,7 +410,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
             <HalfDay
               key={half}
               slot={slotOf(day, half)!}
-              overflow={overflow || day.kind === "weekend"}
+              overflow={overflow}
               span={eveOnly(day)}
               tz={tz}
               colors={colors}
@@ -412,7 +433,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
         )
       )}
 
-      <OutLine kind="late" items={whole ? [] : day.evening.map((p) => p.event)} tz={tz} />
+      {props.band ? <EveningBandView band={props.band} date={day.date} tz={tz} dayLabel={dayLabel} /> : <OutLine kind="late" items={whole ? [] : day.evening.map((p) => p.event)} tz={tz} />}
     </section>
     </TierCtx.Provider>
   );
@@ -451,14 +472,17 @@ function OutLine({ kind, items, tz }: { kind: "early" | "late"; items: readonly 
  * U3 (D387): a PTO day is one hatched cell labeled PTO, with its timed calendar items as plain lines (all-day ones are chips, D406); a day with no working
  * hours (Friday) is one dashed "Catch-up" column with the work moved there and its calendar items.
  */
-function WholeDay({ day, kind, tz, selected, refAm, refPm, onOpen, dayLabel, now }: { day: Day; kind: "pto" | "catchup"; tz: string; selected: boolean; refAm: (el: HTMLDivElement | null) => void; refPm: (el: HTMLDivElement | null) => void; onOpen: (focus?: PanelFocus) => void; dayLabel: string; now: { at: number; label: string; onClick: () => void } | null }) {
+function WholeDay({ day, band, kind, tz, selected, refAm, refPm, onOpen, dayLabel, now }: { day: Day; band: EveningBand | null; kind: "pto" | "catchup"; tz: string; selected: boolean; refAm: (el: HTMLDivElement | null) => void; refPm: (el: HTMLDivElement | null) => void; onOpen: (focus?: PanelFocus) => void; dayLabel: string; now: { at: number; label: string; onClick: () => void } | null }) {
   const plan = useContext(PlanCtx);
   const samples = useContext(SampleSources);
   // All-day events are chips under the day header (D406); the cell lists only timed events.
-  const events = [...day.early, ...day.am.events, ...day.pm.events, ...day.evening].map((p) => ({ e: p.event, start: p.event.start }));
+  // WK-3: what's after the day's end is in the Evening band below, not here.
+  const events = [...day.early, ...day.am.events, ...day.pm.events, ...(band ? [] : day.evening)].map((p) => ({ e: p.event, start: p.event.start }));
   const seen = new Set<string>();
   const lines = events.filter(({ e }) => !seen.has(e.id) && !!seen.add(e.id));
-  const picks = kind === "catchup" ? [...catchUp(plan.week, day.am), ...catchUp(plan.week, day.pm)] : [];
+  // WK-3: every to-do of the day but the band's (a Friday deployment at 2 PM sits in the evening half: Friday has no hours of its own).
+  const inBand = bandIds(band);
+  const picks = kind === "catchup" ? (plan.week?.[day.date]?.picks ?? []).filter((p) => (p.status === "planned" || p.status === "done") && !inBand.has(p.id)) : [];
   const label = kind === "pto" ? "PTO" : "Catch-up";
   // PV-1: the whole day is one drop target (PTO refuses it; catch-up takes it with no fit).
   const drop = useDropTarget({ date: day.date, half: "AM" });
@@ -486,6 +510,93 @@ function WholeDay({ day, kind, tz, selected, refAm, refPm, onOpen, dayLabel, now
               <span className="out-time">{startClock(e.start, tz)}</span> <span className="ev-title">{e.title}</span>
             </li>
           ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * WK-3: a weekend day's one cell: its calendar items and to-dos as plain rows with their times, the promises due that
+ * day, and nothing about blocks, Open half-days, capacity or risk. One drop target for the whole day (D947: a weekend
+ * takes a move, with its note).
+ */
+function WeekendDay({ day, tz, selected, refAm, refPm, onOpen, dayLabel }: { day: Day; tz: string; selected: boolean; refAm: (el: HTMLDivElement | null) => void; refPm: (el: HTMLDivElement | null) => void; onOpen: (focus?: PanelFocus) => void; dayLabel: string }) {
+  const plan = useContext(PlanCtx);
+  const samples = useContext(SampleSources);
+  const rows = weekendRows(day, plan.week?.[day.date]?.picks ?? [], plan.followUps ?? []);
+  const drop = useDropTarget({ date: day.date, half: "AM" });
+  const empty = !rows.events.length && !rows.picks.length && !rows.due.length && !(day.eve?.flex ?? []).length;
+  return (
+    <div
+      ref={(el) => (refAm(el), refPm(el))}
+      {...drop.props}
+      className={`half whole weekend-cell${selected ? " selected" : ""}${drop.cls}`}
+      tabIndex={selected ? 0 : -1}
+      role="button"
+      aria-label={`${dayLabel}, weekend: ${rows.events.length} on the calendar, ${rows.picks.length} to-do${rows.picks.length === 1 ? "" : "s"}`}
+      aria-pressed={selected}
+      onClick={(e) => !interactive(e) && onOpen()}
+    >
+      {drop.tip}
+      {empty && <p className="we-empty muted">Nothing planned</p>}
+      {rows.events.length > 0 && (
+        <ul className="whole-lines we-events" aria-label={`Calendar on ${dayLabel}`}>
+          {rows.events.map((e) => (
+            <li key={e.id} className={e.isPersonal ? "personal" : undefined} title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)}`}>
+              <span className="out-time">{startClock(e.start, tz)}</span> <span className="ev-title">{e.title}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(day.eve?.flex ?? []).length > 0 && (
+        <ul className="whole-lines we-flex" aria-label={`Flex sessions on ${dayLabel}`}>
+          {day.eve!.flex.map((f) => (
+            <li key={f.id} title={`Flex session ${shortRange({ start: f.start, end: f.end }, tz)}`}>
+              <span className="out-time">{startClock(f.start, tz)}</span> <span className="ev-title">Flex session{f.itemTitle ? ` · ${f.itemTitle}` : ""}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {rows.picks.length > 0 && (
+        <ul className="checklist we-todos" aria-label={`To-dos on ${dayLabel}`}>
+          {rows.picks.map((p) => <CardPick key={p.id} pick={p} tabIndex={selected ? 0 : -1} />)}
+        </ul>
+      )}
+      {rows.due.length > 0 && (
+        <ul className="we-due" aria-label={`Promises due on ${dayLabel}`}>
+          {rows.due.map((f) => (
+            <li key={f.id}><DueBadge l={f} /> <span className="ev-title">{f.what}</span></li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * WK-3: the Evening band under a weekday's afternoon: what's after the day shape's end (calendar items past the
+ * card's hours, evening to-dos, deployments whose window starts after the day ends), so the day isn't stretched or
+ * crowded. Only when there is something.
+ */
+function EveningBandView({ band, date, tz, dayLabel }: { band: EveningBand; date: IsoDate; tz: string; dayLabel: string }) {
+  const samples = useContext(SampleSources);
+  void date;
+  return (
+    <div className="evening-band" role="group" aria-label={`${dayLabel} evening`}>
+      <span className="eb-label">Evening</span>
+      {band.events.length > 0 && (
+        <ul className="whole-lines eb-events">
+          {band.events.map((e) => (
+            <li key={e.id} className={e.isPersonal ? "personal" : undefined} title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)}`}>
+              <span className="out-time">{startClock(e.start, tz)}</span> <span className="ev-title">{e.title}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {band.picks.length > 0 && (
+        <ul className="checklist eb-todos" aria-label={`Evening to-dos on ${dayLabel}`}>
+          {band.picks.map((p) => <CardPick key={p.id} pick={p} tabIndex={-1} />)}
         </ul>
       )}
     </div>

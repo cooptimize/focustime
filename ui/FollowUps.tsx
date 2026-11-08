@@ -2,6 +2,7 @@
 // work, a blocked item, a flex session) or by hand; closed by a DevOps signal or "Close the loop" with an optional how
 // and note. Not needed closes one quietly; Snooze hides one until a day; Delete is only for ones I added. Local only:
 // nothing is posted anywhere; heads-up drafts are copied by hand.
+import { TextBox } from "./TextBox.tsx";
 import { DevOpsAction } from "./DevOpsWrite.tsx";
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
@@ -116,7 +117,7 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged, compact = 
         )}
         {l.draft && showDraft && (
           <div className="follow-up-draft">
-            <textarea ref={area} readOnly value={l.draft} rows={Math.min(8, l.draft.split("\n").length + 1)} aria-label="Heads-up draft" />
+            <TextBox ref={area} readOnly value={l.draft} minRows={2} maxRows={8} aria-label="Heads-up draft" />
           </div>
         )}
       </div>

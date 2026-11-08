@@ -20,6 +20,7 @@ import { exitCheck, nameList, NAME_REMOVED, replaceMentions } from "../plan/boun
 import { isCoopComment } from "../plan/status-report.ts";
 import { breakdownChildTypes, ladderFromProcessConfig, levelsFromProcessConfig } from "../plan/process.ts";
 import { canEdit, rungOf, sameValue, valueText, type ChangeField, type ChangeValue, type EditRight, type StagedChange } from "../plan/ahead-edit.ts";
+import { addFixed, dropFixed, fills, FIXED_KEY, readFixed } from "../plan/readiness.ts";
 import type { NotesStore } from "../store/devops-notes.ts";
 /** WT-1: the portfolio tiers from the process model (process configuration on the write path), never type names. */
 const portfolioTiers = (pc: unknown) => levelsFromProcessConfig(pc).tiers;
@@ -1427,6 +1428,18 @@ async function aheadLanded(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWrite
       if (!x) continue;
       if ((f === "start" || f === "target") && typeof x.value === "string") await port.setHalf(env.clientKey, itemId, f, x.value, x.half);
       await port.landed(env.clientKey, itemId, f);
+    }
+  }
+  // AH-7: a gap this save filled (or its undo emptied again) counts in Readiness's "N fixed this week".
+  if (entry.op === "fields" || entry.op === "undo_fields") {
+    const filled = Object.keys(refs).flatMap((k) => {
+      const g = fills(fieldOfLabel(k), entry.op === "fields" ? entry.before[k] : entry.after[k], entry.op === "fields" ? entry.after[k] : entry.before[k]);
+      return g ? [g] : [];
+    });
+    if (filled.length) {
+      const key = `${env.clientKey}:${itemId}`;
+      const log = readFixed(await env.plan.getState<unknown>(FIXED_KEY));
+      await env.plan.setState(FIXED_KEY, entry.op === "fields" ? addFixed(log, key, filled, ctx.now().toString()) : dropFixed(log, key, filled));
     }
   }
   const notes = ctx.notes;

@@ -3,6 +3,7 @@
 // (the shared lookup over the client's open features or epics), size for stories, start and target dates for features,
 // and the area and iteration it will inherit from the parent (read-only). Edits save locally (draft.update); Create in
 // DevOps writes these values after its preview. Plan it adds it to a block (the 15.2 target order); Delete is local.
+import { TextBox } from "./TextBox.tsx";
 import { CloseButton } from "./CloseButton.tsx";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
@@ -134,12 +135,12 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
           </label>
           <label className="set-field">
             <span className="set-label">Description</span>
-            <textarea value={description} rows={4} maxLength={8000} onChange={(e) => setDescription(e.target.value)} />
+            <TextBox value={description} minRows={4} maxRows={14} maxLength={8000} onChange={(e) => setDescription(e.target.value)} />
           </label>
           {showAc && (
             <label className="set-field">
               <span className="set-label">Acceptance criteria{features?.status !== "ok" ? " (written only when the process has the field)" : ""}</span>
-              <textarea value={acceptance} rows={3} maxLength={8000} onChange={(e) => setAcceptance(e.target.value)} />
+              <TextBox value={acceptance} minRows={3} maxRows={12} maxLength={8000} onChange={(e) => setAcceptance(e.target.value)} />
             </label>
           )}
           <div className="draft-row">

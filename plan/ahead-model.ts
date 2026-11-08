@@ -5,7 +5,7 @@
 import type { AheadItem, AheadLoad } from "../actions/types.ts";
 import type { AheadFilters, AheadOwner } from "./ahead-edit.ts";
 import type { Assignee, ChangeField, DayHalf, StagedChange } from "./ahead-edit.ts";
-import { fixClient, gapsOf, GAP_KINDS, type FixClient, type FixGroup, type GapItem, type GapKind } from "./fixnext.ts";
+import { fixClient, gapsOf, GAP_KINDS, type FixClient, type FixEntry, type FixGroup, type GapItem, type GapKind } from "./fixnext.ts";
 import { isOpen as isOpenCategory } from "./process.ts";
 import { rangeDates } from "./ahead-view.ts";
 import { isStale } from "./stale.ts";
@@ -183,7 +183,7 @@ export function dueOfRow(rows: readonly Row[], r: Row): string | null {
  * AH-3: Fix next for every client with DevOps (whatever Grid's filters say: Fix next has none), from the rows Ahead
  * shows: what I see (my pending change first), what I may change, never outside Cooptimize's scope.
  */
-export function fixGroups(load: AheadLoad, o: { readOnly: boolean; skipped?: ReadonlySet<string>; /** AH-6: Ahead's filters apply to Readiness too. */ f?: AheadFilters; staleWeeks?: number }): { client: LoadClient; group: FixGroup; rows: Row[]; /** Entries before the filters. */ total: number }[] {
+export function fixGroups(load: AheadLoad, o: { readOnly: boolean; skipped?: ReadonlySet<string>; /** AH-7: entries just fixed, kept to fade out. */ leaving?: ReadonlySet<string>; /** AH-6: Ahead's filters apply to Readiness too. */ f?: AheadFilters; staleWeeks?: number }): { client: LoadClient; group: FixGroup; rows: Row[]; /** Entries before the filters. */ total: number; /** AH-7: entries with every filter but the kinds (the counts by kind). */ unkinded: FixEntry[] }[] {
   const f = o.f;
   return load.clients
     .filter((c) => c.status === "ok")
@@ -199,14 +199,17 @@ export function fixGroups(load: AheadLoad, o: { readOnly: boolean; skipped?: Rea
           startField: r.has.start ? "s" : null, targetField: r.has.target ? "t" : null, sizeField: r.has.size ? "z" : null, child: r.tier === "story",
           start: r.eff.start, target: r.eff.target, size: r.eff.size, assigneeEmail: r.eff.assignee?.email ?? null, canEdit: r.editable && !o.readOnly,
           tier: r.tier, parentId: r.item.parentId, order: r.item.order ?? null, inScope: r.item.inScope !== false, mine: r.mine,
+          raw: { start: r.item.start, target: r.item.target, size: r.item.size, assigneeEmail: r.item.assignee?.email ?? null },
         })),
       };
-      const group = fixClient(input, { today: load.today, topN: load.fixTopN, ...(o.skipped ? { skipped: o.skipped } : {}) });
-      if (!f) return { client: c, group, rows, total: group.entries.length };
+      const group = fixClient(input, { today: load.today, topN: load.fixTopN, ...(o.skipped ? { skipped: o.skipped } : {}), ...(o.leaving ? { leaving: o.leaving } : {}) });
+      if (!f) return { client: c, group, rows, total: group.entries.filter((e) => !e.leaving).length, unkinded: group.entries };
       // Every row the filters keep (Not ready is what Readiness is; the kinds narrow which gaps count).
       const kept = new Set(filterRows(rows, c, { ...f, gaps: false, kinds: [] }, { stories: true, today: load.today, ...(o.staleWeeks !== undefined ? { staleWeeks: o.staleWeeks } : {}) }).filter((r) => !r.context).map((r) => r.item.id));
       const kinds = f.kinds ?? [];
-      const entries = group.entries.filter((e) => kept.has(e.itemId) && (!kinds.length || e.gaps.some((g) => kinds.includes(g))));
-      return { client: c, group: { ...group, entries }, rows, total: group.entries.length };
+      const keep = (e: FixEntry) => kept.has(e.itemId) && (!kinds.length || e.gaps.some((g) => kinds.includes(g)));
+      // AH-7: the counts by kind are what each kind would show, so they're counted before the kinds narrow it.
+      const unkinded = group.entries.filter((e) => kept.has(e.itemId));
+      return { client: c, group: { ...group, entries: group.entries.filter(keep), skipped: (group.skipped ?? []).filter(keep) }, rows, total: group.entries.filter((e) => !e.leaving).length, unkinded };
     });
 }

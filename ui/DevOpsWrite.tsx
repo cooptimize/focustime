@@ -1,3 +1,4 @@
+import { TextBox } from "./TextBox.tsx";
 import { whenText } from "./labels.ts";
 // DevOps writes in the window (step 14). Every change opens one preview dialog: org, project, item, each field before
 // and after, link changes, the identity it writes as and who can see it. Confirm writes (with the rev test), reads
@@ -369,7 +370,7 @@ function AskDialog({ ask, onClose, onPreview }: { ask: Ask; onClose: () => void;
         {ask.kind === "state" && (
           <label className="set-field">
             <span className="set-label">Comment (optional, shown in the item's discussion)</span>
-            <textarea value={text} maxLength={4000} rows={3} onChange={(e) => setText(e.target.value)} />
+            <TextBox value={text} maxLength={4000} minRows={3} maxRows={10} onChange={(e) => setText(e.target.value)} />
           </label>
         )}
         {ask.kind === "target" && (

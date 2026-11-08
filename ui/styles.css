@@ -1357,7 +1357,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .close-loop-choice { min-width: 0; padding: 6px 10px; font: inherit; font-size: var(--fs-3); color: var(--text); text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; overflow-wrap: anywhere; }
 .close-loop-choice[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 500; }
 .close-loop-note { display: grid; gap: 4px; min-width: 0; }
-.close-loop-note textarea { width: 100%; box-sizing: border-box; min-width: 0; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; resize: vertical; }
+.close-loop-note textarea { width: 100%; box-sizing: border-box; min-width: 0; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 .close-loop-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 /* LP-1: Close the loop by sending: Draft › Preview › Sent, in the same box. Everything wraps; nothing scrolls sideways. */
 .send-loop { min-width: 0; max-width: 640px; overflow-wrap: anywhere; }
@@ -1472,7 +1472,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .follow-up-new { font-size: var(--fs-2); color: var(--accent); font-weight: 500; }
 .follow-up-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .follow-up-draft { flex-basis: 100%; }
-.follow-up-draft textarea { width: 100%; max-width: 760px; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; resize: vertical; }
+.follow-up-draft textarea { width: 100%; max-width: 760px; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 .follow-up-add { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin: 4px 0 10px; }
 .follow-up-add label { display: grid; gap: 2px; font-size: var(--fs-2); color: var(--text-muted); }
 .follow-up-add input { min-width: 180px; }
@@ -2257,7 +2257,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Step 15.3: the draft editor. */
 .draft-editor form { display: grid; gap: 10px; }
-.draft-editor textarea { font: inherit; font-size: var(--fs-3); color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 8px; resize: vertical; }
+.draft-editor textarea { font: inherit; font-size: var(--fs-3); color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 8px; }
 .draft-editor textarea:focus-visible, .draft-editor input:focus-visible, .draft-editor select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .draft-editor .set-field { display: grid; gap: 4px; }
 .draft-editor .item-lookup:not(.linked) { display: block; }
@@ -3473,7 +3473,7 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .feedback-kinds label { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; }
 .feedback-kinds label.on { border-color: var(--accent); }
 .feedback-kinds input { margin: 0; }
-.feedback-text textarea { width: 100%; box-sizing: border-box; min-height: 7.5em; resize: vertical; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: inherit; }
+.feedback-text textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: inherit; }
 .feedback-where { display: flex; align-items: baseline; gap: 6px; }
 .feedback-hint { margin: 0; font-size: var(--fs-2); }
 .feedback-note { margin: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); }
@@ -3940,7 +3940,6 @@ button.ask-label { cursor: pointer; }
 .brief-status.warn { color: var(--watch); font-weight: 600; }
 .bd-note { display: grid; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); }
 .bd-note textarea, .bd-field textarea, .bd-title, .bd-ac input, .bd-regen input { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 5px 8px; min-width: 0; }
-.bd-note textarea, .bd-field textarea { resize: vertical; }
 .bd-run-line, .bd-latest, .bd-off, .bd-empty, .bd-busy, .bd-where, .bd-total { margin: 0; }
 .bd-run-line { font-size: var(--fs-2); color: var(--text-muted); }
 .bd-busy { color: var(--text-muted); }
@@ -4020,7 +4019,7 @@ button.ask-label { cursor: pointer; }
   .bd-title { flex-basis: 100%; order: 5; }
 }
 /* DS-1: Settings › Clients, the house style. */
-.set-house-style textarea { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 5px 8px; resize: vertical; }
+.set-house-style textarea { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 5px 8px; }
 .set-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 
 /* ADM-1: the Admin part of Settings (ui/settings/Admin.tsx): its own nav under the Settings nav, one sticky sidebar. */
@@ -4052,7 +4051,7 @@ button.ask-label { cursor: pointer; }
 .adm-setup-bar .adm-filter { margin-bottom: 0; }
 .adm-setup-table td:first-child, .adm-setup-table th:first-child { width: 1.5em; }
 .invite-note { margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--raised); font-size: var(--fs-3); }
-.invite-message { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; resize: vertical; width: 100%; box-sizing: border-box; }
+.invite-message { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; width: 100%; box-sizing: border-box; }
 .invite-sheet .set-field input { width: 100%; box-sizing: border-box; }
 .set-pre { white-space: pre-wrap; }
 .set-team-color { flex-basis: 100%; }
@@ -4323,7 +4322,7 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .send-subject { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-3); }
 .send-done { margin: 0; }
 .send-hint { font-size: var(--fs-2); }
-.send-note { width: 100%; min-width: 0; font: inherit; font-size: var(--fs-3); resize: vertical; }
+.send-note { width: 100%; min-width: 0; font: inherit; font-size: var(--fs-3); }
 .send-check { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: var(--fs-3); }
 .send-check .muted { font-size: var(--fs-2); }
 .send-priority { margin-right: auto; font-size: var(--fs-2); }
@@ -4516,6 +4515,28 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .ah-fx-edit { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-inline-start: 22px; }
 .ah-fx-due { font-size: var(--fs-2); }
 .ah-fx-more { margin-top: 6px; }
+/* AH-7: Readiness you can finish: counts by kind, Start here, rows fading out once fixed, Skipped, progress. */
+.ah-fx-progress { margin: 2px 0 6px; font-size: var(--fs-2); }
+.ah-fx-kinds { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.ah-fx-kind { display: inline-flex; align-items: baseline; gap: 6px; padding: 2px 10px; border: 1px solid var(--border); border-radius: 99px; background: var(--surface); color: var(--text-muted); font: inherit; font-size: var(--fs-2); cursor: pointer; }
+.ah-fx-kind strong { color: var(--text); font-weight: 600; }
+.ah-fx-kind:hover { border-color: var(--border-strong); color: var(--text); }
+.ah-fx-kind[aria-disabled="true"] { opacity: 0.55; cursor: default; }
+.ah-fx-kind.on { border-color: var(--text); color: var(--text); background: var(--raised); box-shadow: inset 0 0 0 1px var(--text); }
+.ah-fx-start { margin: 10px 0 18px; }
+.ah-fx-start .ah-fx-item .rm-expand-space { display: none; }
+.ah-fx-start .ah-client-head { display: flex; align-items: center; gap: 8px; }
+.ah-fx-why { position: relative; display: inline-flex; font-weight: 400; }
+.ah-fx-tip { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; width: min(34em, 80vw); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--raised); color: var(--text); box-shadow: var(--shadow-pop); font-size: var(--fs-2); }
+.ah-fx-tip[hidden] { display: none; }
+.ah-fx-client-name { flex: none; display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: var(--fs-2); min-width: 7em; }
+.ah-fx-row.leaving { animation: ah-fx-leave 0.9s ease-in forwards; }
+@keyframes ah-fx-leave { 0%, 40% { opacity: 1; } 100% { opacity: 0; } }
+:root[data-reduce-motion] .ah-fx-row.leaving { animation: none; opacity: 0.5; }
+@media (prefers-reduced-motion: reduce) { .ah-fx-row.leaving { animation: none; opacity: 0.5; } }
+.ah-fx-ready { font-size: var(--fs-2); color: var(--ok); font-weight: 500; }
+.ah-fx-skipped { margin-top: 18px; }
+.ah-fx-skipped-head { margin-bottom: 6px; }
 /* AH-2: Gantt in Ahead, calmer than Plan ahead's: quiet flags and month cells, the text in the normal color. */
 .ahead .pa-flags { border-color: var(--border-strong); background: transparent; font-weight: 400; }
 .ahead .pa-flags:hover, .ahead .pa-flags:focus-visible { background: var(--raised); }
@@ -4630,12 +4651,11 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 @media (prefers-reduced-motion: reduce) { .now-line, .now-past { transition: none; } }
 
 /* ---- CP-1: Capture to DevOps ---- */
-/* The box is a small textarea that grows to about four lines, then scrolls with a thin scrollbar; ↵ beside it saves (UI-7). */
+/* The box is the shared TextBox (UI-10): one line, grows to six, then scrolls with the thin scrollbar; ↵ beside it saves (UI-7). */
 .cap-field { position: relative; min-width: 0; display: grid; }
 .cap-field > textarea {
   font: inherit; color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px;
-  resize: none; overflow-y: auto; scrollbar-width: thin; min-height: 0; box-sizing: border-box; width: 100%;
-  line-height: 1.4; max-height: calc(4lh + 18px); field-sizing: content;
+  min-height: 0; box-sizing: border-box; width: 100%; line-height: 1.4;
 }
 .cap-field > textarea::placeholder { color: var(--text-faint); }
 .cap-field > textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
@@ -4667,7 +4687,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .cd-side-head > :last-child { margin-left: auto; }
 .cd-using { font-size: var(--fs-2); color: var(--accent); font-weight: 500; }
 .cd-side .set-field { display: grid; gap: 4px; }
-.cd-side textarea { font: inherit; font-size: var(--fs-3); color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 8px; resize: vertical; }
+.cd-side textarea { font: inherit; font-size: var(--fs-3); color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 8px; }
 .cd-side textarea:focus-visible, .cd-side input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .cd-read { margin: 0; display: grid; gap: 2px 0; font-size: var(--fs-3); }
 .cd-read dt { font-size: var(--fs-2); color: var(--text-muted); margin-top: 6px; }
@@ -4794,7 +4814,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .as-off p { margin: 0; }
 .as-compose { padding: 10px 16px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
 .as-row { display: flex; align-items: flex-end; gap: 6px; }
-.as-row textarea { flex: 1; min-width: 0; resize: vertical; font: inherit; font-size: var(--fs-3); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--sunken); color: var(--text); }
+.as-row textarea { flex: 1; min-width: 0; font: inherit; font-size: var(--fs-3); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--sunken); color: var(--text); }
 .as-mic { flex: none; display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--raised); color: var(--text); cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; }
 .as-mic:disabled { color: var(--text-faint); cursor: default; }
 .as-mic.on { border-color: var(--risk); color: var(--risk); box-shadow: 0 0 0 3px color-mix(in oklab, var(--risk) 25%, transparent); }
@@ -5115,7 +5135,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .st-new { display: grid; gap: 6px; }
 .st-adds { display: inline-flex; gap: 8px; flex-wrap: wrap; }
 .st-box { display: grid; gap: 2px; }
-.st-box textarea { width: 100%; min-height: 3.2em; resize: vertical; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; font-size: var(--fs-3); box-sizing: border-box; }
+.st-box textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; font-size: var(--fs-3); box-sizing: border-box; }
 .st-box textarea:focus { outline: 2px solid var(--focus); outline-offset: 0; }
 .st-box.st-suggested textarea { border-style: dashed; border-color: var(--accent); }
 .st-box.st-editing textarea { border-color: var(--accent); }
@@ -5283,7 +5303,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .mtg-prop.skipped { opacity: 0.6; }
 .mtg-prop.confirmed .mtg-state-line { color: var(--ok); }
 .mtg-prop-body { display: grid; gap: 4px; min-width: 0; }
-.mtg-prop-body input, .mtg-prop-body textarea { width: 100%; box-sizing: border-box; min-width: 0; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; resize: vertical; }
+.mtg-prop-body input, .mtg-prop-body textarea { width: 100%; box-sizing: border-box; min-width: 0; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; }
 .mtg-tick { padding-top: 4px; }
 .mtg-main { margin: 0; font-weight: 500; }
 .mtg-where, .mtg-desc, .mtg-report, .mtg-state-line { margin: 0; font-size: var(--fs-2); }
@@ -5842,6 +5862,68 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .pa-rollup-line::before { left: 0; }
 .pa-rollup-line::after { right: 0; }
 .ah-gantt .pa-bar.early .pa-inner { padding-left: 18px; }
+
+/* WK-3: weekend columns, narrow and quiet: a muted header ("Sat 14 · weekend"), events and to-dos as plain rows. */
+.day.weekend.quiet .weekend-head { gap: 4px; flex-wrap: wrap; }
+.day.weekend.quiet .weekend-head .dow, .day.weekend.quiet .weekend-head .date { color: var(--text-muted); font-weight: 500; }
+.weekend-word { color: var(--text-faint); font-size: var(--fs-2); white-space: nowrap; }
+.half.whole.weekend-cell { background: transparent; border: 1px dotted var(--border-strong); gap: 6px; padding: 8px; min-width: 0; }
+.grid.medium .half.whole.weekend-cell { grid-row: span 4; }
+.grid.medium.has-eve .half.whole.weekend-cell { grid-row: span 5; }
+.we-empty { font-size: var(--fs-2); margin: 0; }
+.we-due { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); }
+.we-due li { overflow-wrap: anywhere; }
+.day-tab.kind-weekend { color: var(--text-faint); border-style: dotted; }
+/* WK-3: the Evening band under a weekday's PM: what's after the day shape's end, only when there is something. */
+.evening-band { min-width: 0; display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: color-mix(in oklab, var(--accent) 5%, var(--sunken)); }
+.eb-label { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.evening-band .checklist { margin: 0; }
+/* WK-3: a Deployment to-do's icon and window, the week's after-hours chip and the Done offer. */
+.deploy-icon { flex: none; color: var(--accent); vertical-align: -0.15em; }
+.deploy-window { font-size: var(--fs-2); color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.after-hours-chip { margin-left: 8px; padding: 1px 10px; font-size: var(--fs-2); border-radius: 99px; border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--border)); color: var(--text); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.deployed-ask { display: flex; flex-direction: column; gap: 10px; padding: 4px 16px 16px; }
+.deployed-done { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 600; }
+.deployed-ask .muted { margin: 0; overflow-wrap: anywhere; }
+.deployed-who { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); }
+.app-undo { z-index: 60; }
+/* WK-3: a weekend column is narrow: its date always shows, and a to-do's time sits above its title, which wraps. */
+.day.weekend.quiet .weekend-head .date { display: inline; }
+.weekend-cell .pick-row:not(.ph-row) { flex-wrap: wrap; row-gap: 2px; }
+.weekend-cell .pick-row:not(.ph-row) .deploy-window, .weekend-cell .pick-row:not(.ph-row) .pick-time { order: 2; }
+.weekend-cell .pick-row:not(.ph-row) .pr-title { order: 3; flex: 1 1 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.weekend-cell .pick-row:not(.ph-row) .pr-hover { order: 2; margin-left: auto; }
+.today-weekend { display: flex; flex-direction: column; gap: 10px; max-width: 760px; }
+.today-weekend-head { margin: 0; font-size: var(--fs-4); }
+.today-weekend .we-client { font-size: var(--fs-2); margin-left: 6px; }
+/* WK-3: on the phone a chip stacks its weekday over its date, so six or seven days (a weekend) fit at 360 px. */
+.app.phone .day-tab { flex-direction: column; align-items: center; gap: 0; line-height: 1.15; padding: 3px 1px; font-size: var(--fs-2); overflow: hidden; }
+.app.phone .day-tab .tab-date { font-size: var(--fs-2); }
+/* WK-3: on the phone the after-hours total sits on its own line under the week's title, never squeezing it. */
+.app.phone .week-head .ph-title .after-hours-chip { order: 3; margin-right: 100%; flex: none; white-space: nowrap; }
+.app.phone .half.whole.weekend-cell, .grid.narrow .half.whole.weekend-cell { height: auto; min-height: 96px; max-height: none; overflow: visible; flex: none; }
+
+/* ---- UI-10: text boxes that grow instead of scrolling ---- */
+/* No textarea anywhere shows a resize handle; the shared TextBox (ui/TextBox.tsx) sets its own height from its text. */
+textarea { resize: none; }
+.text-box { box-sizing: border-box; max-width: 100%; min-width: 0; overflow-y: hidden; overflow-x: hidden; overflow-wrap: anywhere; }
+/* Every textarea (the read-only copy boxes too) gets the same scrollbar. In a TextBox it shows only while there is something to scroll (TextBox sets overflow then): thin, rounded, no arrows.
+   Chromium and Safari take the ::-webkit-scrollbar styles (setting scrollbar-width or scrollbar-color would make
+   Chromium ignore them and draw its native bar with arrows); Firefox takes the standard properties. */
+textarea::-webkit-scrollbar { width: 10px; height: 0; }
+textarea::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+textarea::-webkit-scrollbar-track, textarea::-webkit-scrollbar-corner { background: transparent; }
+textarea::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--text-muted) 45%, transparent); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
+textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, var(--text-muted) 70%, transparent); }
+@supports not selector(::-webkit-scrollbar) {
+  textarea { scrollbar-width: thin; scrollbar-color: color-mix(in oklab, var(--text-muted) 45%, transparent) transparent; }
+}
+/* The phone: a sheet with a text box rests on the bottom bar, or on the on-screen keyboard while it is open
+   (--kb-inset, ui/keyboard.ts), so the box and its ↵ or Send stay above the keyboard and the home indicator. */
+@media (max-width: 599.98px) {
+  .cap-backdrop, .ib-sheet-back { bottom: max(var(--bb-h, 0px), var(--kb-inset, 0px)); }
+  .assistant-panel.assistant-sheet { bottom: max(var(--bb-h, 0px), var(--kb-inset, 0px)); }
+}
 
 /* GD-2: the held-back list and the "mentions <client>" tag. */
 .mention-tag { margin-left: 6px; }

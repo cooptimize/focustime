@@ -13,6 +13,8 @@ export type SourceSummary = Omit<SourceResult<unknown>, "items"> & { itemCount: 
 export type WeekLoadData = {
   weekStart: string;
   week: Week;
+  /** WK-3: after-hours time this week (plan/deploy.ts afterHours), with what makes it up. Absent from older servers. */
+  afterHours?: { minutes: number; parts: import("../plan/deploy.ts").AfterHoursPart[] };
   today: TodayTarget;
   sources: SourceSummary[];
   /** Assigned DevOps work per client with a block this week; null when Dataverse is not usable. */
@@ -574,4 +576,8 @@ export type AheadLoad = {
   automation: boolean;
   /** BH-1: Settings › Ahead: an open item with no change for this many weeks is stale. Missing before BH-1. */
   staleWeeks?: number;
+  /** AH-7: my Readiness skips still on ("client:id" → the day skipped; each lasts 2 weeks). Missing before AH-7. */
+  skips?: import("../plan/readiness.ts").Skips;
+  /** AH-7: Readiness pieces I saved to DevOps since Monday. Missing before AH-7. */
+  fixedWeek?: number;
 };

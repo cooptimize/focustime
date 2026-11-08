@@ -7,6 +7,12 @@ export type Size = StorySize;
 export type PickStatus = "planned" | "done" | "moved" | "dropped";
 /** What a pick points at: a DevOps item, a local draft story, or a typed intention. */
 export type PickKind = "item" | "draft" | "intention";
+/** WK-3 (DP-0): what kind of to-do it is, beside what it points at. Null: a plain to-do. */
+export type TodoKind = "deployment";
+/** WK-3: a to-do's own window on its date, local "HH:MM" in the person's zone (end up to "24:00"). */
+export type TodoWindow = { start: string; end: string };
+/** WK-3: a DevOps item a deployment covers (its own client's only). */
+export type TodoLink = { id: number; title: string };
 
 /** ISO date-time with offset and zone, e.g. "2026-11-02T08:01:00-05:00[Region/City]". */
 export type ZonedStamp = string;
@@ -43,6 +49,12 @@ export type Pick = {
   minutes?: number | null;
   /** PL-1: read models only. Its DevOps item is resolved, closed or removed: counts zero minutes and shows as done. */
   resolved?: boolean;
+  /** WK-3: a Deployment (absent or null: a plain to-do). */
+  todoKind?: TodoKind | null;
+  /** WK-3: a deployment's window on its date (required for one, absent otherwise). */
+  window?: TodoWindow | null;
+  /** WK-3: the DevOps items a deployment covers. */
+  links?: TodoLink[] | null;
   position: number;
   createdAt: ZonedStamp;
   updatedAt: ZonedStamp;

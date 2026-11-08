@@ -2,6 +2,7 @@
 // on this client, anyone else; PTO only as "away"), choose people or let FocusTime choose the top tier, get up to five
 // times when everyone is free inside their own working hours, then preview the invite. Nothing is sent here: the
 // preview (every attendee named, "they will receive an invite") goes to the write flow, which sends on confirm.
+import { TextBox } from "./TextBox.tsx";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useEffect, useRef, useState } from "react";
 import type { CandidatesData, CandidateView, SlotView, SuggestData, WritePreview } from "../actions/types.ts";
@@ -224,7 +225,7 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
           <div className="help-invite">
             <label className="help-note">
               Note <span className="muted">optional, goes in the invite</span>
-              <textarea rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Where you're stuck, what to look at" />
+              <TextBox minRows={2} maxRows={6} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Where you're stuck, what to look at" />
             </label>
             <label>
               <input type="checkbox" checked={teams} onChange={(e) => setTeams(e.target.checked)} /> Teams meeting

@@ -4,6 +4,7 @@
 // calls, run by the server only after Confirm. Esc and × close it; Ctrl+J (or /) opens it (ui/App.tsx).
 // AS-2: a question shows its choices as chips (a tap answers it; typing works too), a change of several parts shows
 // each part's outcome with its own Undo, and moved to-dos have one Undo for all of them (assistant.undo).
+import { TextBox } from "./TextBox.tsx";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { AssistantContext, Card, Choice, ConfirmResult, HandleResult, Link, PartResult, Proposal, Turn, UndoResult } from "../assistant/types.ts";
 import { VOICE_MAX_BYTES, VOICE_MAX_SECONDS } from "../assistant/types.ts";
@@ -169,20 +170,17 @@ function Composer(p: { phone: boolean; text: string; setText: (s: string) => voi
       {voice.problem && <p className="as-problem" role="alert">{voice.problem}</p>}
       {micOff && p.gate?.voice.message && <p className="as-quiet as-mic-off">{p.gate.voice.message}</p>}
       <div className="as-row">
-        <textarea
+        {/* UI-10: one line, grows to six, then scrolls; Enter sends, Shift+Enter a new line, nothing while composing. */}
+        <TextBox
           ref={p.inputRef}
-          rows={p.phone ? 2 : 3}
+          minRows={1}
+          maxRows={6}
           value={p.text}
           maxLength={2000}
           placeholder="Ask, or say what to change"
           aria-label="Ask the assistant"
           onChange={(e) => p.setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              p.onSend();
-            }
-          }}
+          onEnter={() => p.onSend()}
         />
         {!p.phone && mic}
         <button type="button" className="top-btn primary as-send" onClick={p.onSend} disabled={p.busy || !p.text.trim()}>Send</button>
@@ -478,7 +476,7 @@ function ProposalView({ proposal: p, skew, onChange, onChanged }: { proposal: Pr
               ) : k === "date" ? (
                 <input type="date" value={edits[k] ?? ""} onChange={(e) => setEdits({ ...edits, [k]: e.target.value })} />
               ) : (
-                <textarea rows={k === "after" ? 8 : 3} value={edits[k] ?? ""} onChange={(e) => setEdits({ ...edits, [k]: e.target.value })} />
+                <TextBox minRows={k === "after" ? 8 : 3} maxRows={k === "after" ? 16 : 10} value={edits[k] ?? ""} onChange={(e) => setEdits({ ...edits, [k]: e.target.value })} />
               )}
             </label>
           ))}
