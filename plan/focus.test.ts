@@ -4,7 +4,7 @@ import { dayFocus, focusLabel, liveFocused } from "./focus.ts";
 import type { Pick } from "./types.ts";
 
 const pick = (id: number, size: Pick["size"], status: Pick["status"] = "planned") => ({ id, size, status }) as Pick;
-const SIZES = { S: 60, M: 120, L: 210, unsized: 60 };
+const SIZES = { XS: 30, S: 60, M: 120, L: 210, unsized: 60 };
 
 describe("focused time on picks (step 6d)", () => {
   it("adds the running stretch of a live session on that pick to what is logged", () => {

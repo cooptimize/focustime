@@ -487,3 +487,11 @@ What DS-1 learned, and what is still open:
 - Q-TY1-3. Should a drag auto-scroll near the top and bottom of the window? The wheel works during a drag; a to-do's tray sits right above its own hours, so it is rarely needed.
 - Q-TY1-4. Should Accept all write Outlook per suggestion again? The bar has one Put on Outlook for all of them; the per-row choice went with the popup.
 - Q-TY1-5. Should a placeholder be allowed over a show-as-free event visibly marked? It already may (`planMyDay`'s rule), with nothing to say so.
+
+## TX-1
+
+- Real processes weren't read from this environment. The code reads each type's fields at run time, so it follows whatever a client's process has. Worth checking on a real Agile project after the dev deploy: expect the comment on User Story and Remaining Work on Task and Bug.
+- On stock Agile most stories will get the comment, not the field. If that's more noise than value, the choice is to roll Remaining Work into child Tasks or turn the comment off per client.
+- Should a focus session on a to-do pre-fill Partly with the focused time? It doesn't today: only an answer moves time left.
+- Teams shows the DevOps offer as a line pointing to Close out. If people close out from Teams and never open the app, the offer goes unused; an in-card preview would be the next step.
+- A to-do marked done outside a check-in (a tick) with an ended timebox stops being asked about and its timebox stays unanswered. That reads right, but spent time isn't recorded for it.

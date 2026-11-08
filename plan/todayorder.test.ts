@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { blockRows } from "./todayorder.ts";
 
 const T = (h: string) => `2026-11-02T${h}:00-05:00`;
-const sizes = { S: 60, M: 120, L: 240, unsized: 60 };
+const sizes = { XS: 30, S: 60, M: 120, L: 240, unsized: 60 };
 const opts = {
   start: T("09:00"),
   end: T("12:30"),

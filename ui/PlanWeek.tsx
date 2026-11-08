@@ -20,7 +20,7 @@ import { openCoopBrief, weekItemMenu, type MenuStep, type WeekItemFacts, type We
 import { HoursStepper, SizeChip } from "./plan/Estimate.tsx";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from "react";
 import type { WeekLoadData, WeekPlanState } from "../actions/types.ts";
-import type { DraftStory, WeekFeature } from "../plan/types.ts";
+import type { DraftStory, Size, WeekFeature } from "../plan/types.ts";
 import { addPaneRows, type AddRowInfo } from "../plan/weekadd.ts";
 import { needsBreakdown, PINNED_TO_PTO, pinnedToPto, readiness, type ClientBudget, type ReadinessFlag } from "../plan/weekplan.ts";
 import { resolvedOf } from "../plan/carry.ts";
@@ -814,7 +814,7 @@ type Ops = {
   tier: (i: Item, tier: Tier) => void;
   remove: (i: Item) => void;
   hours: (i: Item, n: number) => void;
-  size: (i: Item, z: "S" | "M" | "L" | null) => void;
+  size: (i: Item, z: Size | null) => void;
   done: (i: Item, on: boolean) => void;
   move: (i: Item, by: -1 | 1) => void;
   /** Drag within a list: put `itemId` where `before` is. */

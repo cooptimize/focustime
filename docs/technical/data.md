@@ -1,6 +1,6 @@
 # Data
 
-For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026; SR-3's parts against `feat/report-finish` on Nov 8; DP-2's parts against `feat/deployment-items` on Nov 8; IB-2's against `feat/inbox-everything` on Nov 8.
+For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026; SR-3's parts against `feat/report-finish` on Nov 8; DP-2's parts against `feat/deployment-items` on Nov 8; IB-2's against `feat/inbox-everything` on Nov 8; TX-1's parts against `feat/timebox-progress` on Nov 8.
 
 ## One database, two kinds of table
 
@@ -134,3 +134,17 @@ What a deployment can move depends on the client's data platform. Three places h
 - **A client's platform and its own list** are Rules in the app table `org_settings`, scope `client:<key>`: `data_platform` (`fabric` or `azure`; no row means not set, and both lists show with nothing ticked) and `deploy_items` (per platform, its rows in order: `{ key, on, hidden }`, with `name` for the client's own). A platform never edited has no rows and follows the catalog; a seed added later joins the end of a list that was edited. Changed by a FocusTime admin or the client's lead through `deploy.config_save`, each change in `admin_audit`. An older build reads neither key and ignores the rows.
 - **A planned deployment's ticks** are in `picks.deploy_items`, a snapshot (above). Editing keeps them, including an item since hidden or removed from the list; only a new deployment takes the list's defaults.
 
+## Time spent, time left and check-ins (TX-1)
+
+A timebox is a work session, and an item's size is an estimate. The two are independent; a check-in answer is what connects them.
+
+| Where | Column | What it holds |
+|---|---|---|
+| `picks` | `spent_minutes`, `remaining_minutes` | Time spent and left, null until the first answer. Written on every pick of the same DevOps item, so a carried or re-picked item keeps them. A week story reads its time left from these. |
+| `picks`, `week_features`, `draft_stories` | `size_xs` | 1 when the row is XS (30 minutes). The `size` column holds S then, so an older build reads it as S. |
+| `timeboxes` | `settled_as` | The check-in answer that covered this timebox: `done`, `partly` or `none`. Null while unanswered. |
+| `timeboxes` | `settled_at`, `settle_before` | When it was answered, and the to-do's status, spent and left before the answer as JSON, for Undo. |
+
+These columns are the person's own plan data and are in Export. `timeboxes.settle_before` holds only numbers and a status. `plan/types.ts` `pickNeed` is the one place that says what a to-do still needs; capacity, Today, Timebox my day and the assistant's checks all read it.
+
+Offering the end of day DevOps update once is a day mark (`plan.markOnce("progress_offer", date)`). What a DevOps update wrote is in the audit log as `remaining_work` or a comment, with the prior value for Undo.

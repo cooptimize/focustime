@@ -35,6 +35,10 @@ const nudges = { kind: "nudges" as const, occasion: "nudges:2026-11-05T19", item
   { key: "send:s1", kind: "send_waiting" as const, title: "Export spec", clientName: "Northwind", line: "From Sam, waiting for your answer", route: "#/week/commit" },
   { key: "taken:4417-9", kind: "taken_over" as const, title: "#4417 Login fix", clientName: "Northwind", line: "Sam assigned it to someone else", route: "#/ahead" },
 ] };
+const sessionRows = [
+  { pickId: 1, title: "Fix the login timeout", client: "Northwind", minutes: 60, state: "open" as const },
+  { pickId: 2, title: "Review the export mapping", client: "Northwind", minutes: 30, state: "open" as const },
+];
 const rhythmCards: [string, Card][] = [
   ["brief", briefCard(brief, URL_)],
   ["brief-proposal", briefCard({ ...brief, proposal: ip({ title: "Confirm Thursday, Nov 5", changes: [{ field: "Plan", before: "Draft", after: "Confirmed, 3 to-dos" }] }) }, URL_)],
@@ -48,6 +52,10 @@ const rhythmCards: [string, Card][] = [
   ["checkin-devops-done", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), checkPicks[1]!, checkPicks[2]!], proposal: ip({ title: "Set #4211 to Closed", changes: [{ field: "State", before: "Active", after: "Closed" }], state: "done", message: "#4211 is Closed in DevOps" }) }, URL_)],
   ["closeout-devops-undo", closeoutCard({ ...closeout, proposal: ip({ title: "Put #4211 back to Active", whoSees: "Visible to everyone with access to the Portal project in DevOps.", changes: [{ field: "State", before: "Closed", after: "Active" }] }) }, URL_)],
   ["closeout", closeoutCard(closeout, URL_)],
+  // TX-1: timeboxes that ended, each with Done, Partly and Didn't get to it; Partly asking; the end of day offer.
+  ["checkin-sessions", checkinCard({ ...checkin, picks: [checkPicks[2]!], sessions: sessionRows }, URL_)],
+  ["checkin-sessions-asking", checkinCard({ ...checkin, picks: [], sessions: [{ ...sessionRows[0]!, state: "asking" }, { ...sessionRows[1]!, state: "done", note: "done", undoIds: [2] }] }, URL_)],
+  ["closeout-sessions-offer", closeoutCard({ ...closeout, picks: [checkPicks[2]!], sessions: [{ ...sessionRows[0]!, state: "partly", note: "1h left", undoIds: [1] }, { ...sessionRows[1]!, state: "partly", note: "30m left", undoIds: [2] }], progressOffer: { remaining: 1, comment: 1 } }, URL_)],
   ["closeout-proposal", closeoutCard({ ...closeout, proposal: ip({}) }, URL_)],
   ["closeout-done", closeoutCard({ ...closeout, closed: true, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), pk(2, "Review the export mapping", "Northwind", "done"), pk(3, "Write the onboarding note", "Internal", "moved", "Mon, Nov 9 morning")], proposal: ip({ state: "done", message: "Day closed out." }) }, URL_)],
   ["nudges", nudgeCard(nudges, URL_)],

@@ -107,7 +107,7 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
     return s;
   };
   let deep = false;
-  const startFor = (p: Pick, minutes?: number) => save(startTimer(now, { kind: "focus", pickId: p.id, label: p.title, minutes: minutes ?? suggestMinutes(p.size, planning.sizes), deep }));
+  const startFor = (p: Pick, minutes?: number) => save(startTimer(now, { kind: "focus", pickId: p.id, label: p.title, minutes: minutes ?? suggestMinutes(p.size, planning.sizes, p.remainingMinutes), deep }));
 
   try {
     switch (action) {

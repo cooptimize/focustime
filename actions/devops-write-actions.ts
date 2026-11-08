@@ -12,6 +12,7 @@ import { teamsLink } from "../plan/chats.ts";
 import type { ConversationView } from "../store/conversation-store.ts";
 import { readBack, type Sleep } from "./readback.ts";
 import type { AppConfig } from "../config/schema.ts";
+import { REMAINING_LABEL, REMAINING_WORK, remainingOps } from "../plan/devopswrite.ts";
 import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, assigneeEmail, assigneeText, assignOps, alreadyDone, completedState, createOps, doneChoices, descriptionOps, textToHtml, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, stackKey, editedComment, validOrg, VISIBILITY, FIELD_LABEL, fieldRefsOf, fieldsOps, type FieldSpec, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
 import { dateOnly, detectTargetField, detectTypeSizeField, fieldNames, htmlToText, identityEmail, identityName, TYPE_SIZE_FIELDS, workItemUrl } from "../sources/devops/normalize.ts";
 import type { TakesStore } from "../store/devops-takes.ts";
@@ -34,6 +35,8 @@ import { userZone } from "../week/zone.ts";
 import { askDescription, askTitle, messageLink, type AskItemLevel } from "../plan/asks.ts";
 import { publishAcceptance, publishDescription } from "../plan/stories.ts";
 import { sizeChipText } from "../plan/estimate.ts";
+import { progressComment, remainingHours } from "../plan/progress.ts";
+import { minutesOf } from "../plan/timebox.ts";
 import type { TeamsView } from "../store/teams-store.ts";
 import type { ChatMember } from "../plan/chats.ts";
 import type { ChatMessagesClient } from "../sources/graph/chats.ts";
@@ -41,10 +44,10 @@ import { readImage, type ReadImage } from "./chat-images.ts";
 import { chatImageSrc } from "../plan/conversation-views.ts";
 export type { DevOpsPreview, DevOpsResult };
 
-export const DEVOPS_WRITE_ACTIONS = ["devops.set_write_pat", "devops.clear_write_pat", "devops.write_status", "devops.states", "devops.preview", "devops.confirm", "devops.retry", "devops.log", "devops.done_offer", "devops.undo_offer"] as const;
+export const DEVOPS_WRITE_ACTIONS = ["devops.set_write_pat", "devops.clear_write_pat", "devops.write_status", "devops.states", "devops.preview", "devops.confirm", "devops.retry", "devops.log", "devops.done_offer", "devops.undo_offer", "devops.progress_offer"] as const;
 export type DevOpsWriteAction = (typeof DEVOPS_WRITE_ACTIONS)[number];
 export type { DoneOffer, UndoOffer } from "./types.ts";
-import type { DoneOffer, ItemDoneOffer, UndoOffer } from "./types.ts";
+import type { DoneOffer, ItemDoneOffer, ProgressOffer, UndoOffer } from "./types.ts";
 
 /** The keyring for write PATs (secrets/keyring.ts). A PAT only ever comes back wrapped. */
 export type WritePats = { get: (clientKey: string) => Promise<Pat>; set: (clientKey: string, value: string) => Promise<void>; clear: (clientKey: string) => Promise<void> };
@@ -85,7 +88,7 @@ export type DevOpsWriteContext = {
 };
 
 /** Batch previews where one refused change doesn't stop the rest: AH-1's change set, SR-1's Push all lines. */
-const PER_ITEM = new Set(["fields", "comment", "comment_edit", "comment_delete", "state"]);
+const PER_ITEM = new Set(["fields", "comment", "comment_edit", "comment_delete", "state", "remaining_work"]);
 /** CV-4: images attached to one item at most, and the largest one (as read from Teams, after stripping). */
 export const ATTACH_LIMIT = 10;
 /** One image the create preview offers: from a message being included, with who sent it and when. */
@@ -186,6 +189,7 @@ const SUMMARY: Record<WriteOp, string> = {
   feedback: "Send feedback to the FocusTime backlog",
   comment_edit: "Edit your comment on a DevOps item", undo_comment_edit: "Undo: put your comment's earlier text back",
   comment_delete: "Delete your comment on a DevOps item", undo_comment_delete: "Undo: post your deleted comment's text again",
+  remaining_work: "Update Remaining Work in DevOps", undo_remaining_work: "Undo: put Remaining Work back",
 };
 
 export async function devopsWriteAction(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
@@ -359,6 +363,39 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
             offers.push({ pickId: p.id, clientKey, clientName: env.clientName, itemId: item.id, title: item.title, type: item.type, state: item.state, choices, followUpId });
           } catch {
             // An item DevOps can't read now gets no offer; the tick itself stands.
+          }
+        }
+      }
+      return { ok: true, data: { offers, off: false } };
+    }
+    case "devops.progress_offer": {
+      // TX-1: read only. End of day, once: the stories answered "partly" today (or "went to plan" with time left), each
+      // as Remaining Work where its type has the field, else a short comment. Only items I can change, with my write PAT.
+      const o = fields(input, ["date"]);
+      const date = isoDate(o.date, "date");
+      if (!cfg.plan.progressOffer) return { ok: true, data: { offers: [], off: true } };
+      if ((await plan.marked("progress_offer", date)) || (await plan.day(date))?.closedOutAt) return { ok: true, data: { offers: [], off: false } };
+      const worked = new Map<number, number>();
+      for (const t of await plan.timeboxesBetween(date, date)) if (t.settled === "partly" && t.sessionPickId) worked.set(t.sessionPickId, (worked.get(t.sessionPickId) ?? 0) + minutesOf(t));
+      const picks = (await Promise.all([...worked.keys()].map((i) => plan.getPick(i)))).filter((p): p is NonNullable<typeof p> => !!p && p.kind === "item" && p.itemId !== null && p.status === "planned" && (p.remainingMinutes ?? 0) > 0);
+      const offers: ProgressOffer[] = [];
+      const byClient = new Map<string, typeof picks>();
+      for (const p of picks) byClient.set(p.clientKey, [...(byClient.get(p.clientKey) ?? []), p]);
+      for (const [clientKey, list] of byClient) {
+        const env = await envOf(clientKey).catch(() => null);
+        if (!env) continue;
+        const memo = new Map<string, Promise<unknown>>();
+        for (const p of list) {
+          try {
+            const item = await env.writer.item(env.org, env.pat, env.project, p.itemId!);
+            const states = await env.writer.states(env.org, env.pat, env.project, item.type);
+            if (alreadyDone(states, item.state) || !(await rightsOn(env, item, memo)).ok) continue;
+            const typeHas = await env.writer.typeFields(env.org, env.pat, env.project, item.type);
+            const workedMinutes = worked.get(p.id)!;
+            const leftMinutes = p.remainingMinutes!;
+            offers.push({ pickId: p.id, clientKey, clientName: env.clientName, itemId: item.id, title: item.title, type: item.type, mode: typeHas.has(REMAINING_WORK) ? "remaining" : "comment", workedMinutes, leftMinutes, hours: remainingHours(leftMinutes), text: progressComment(workedMinutes, leftMinutes) });
+          } catch {
+            // An item DevOps can't read now just isn't offered.
           }
         }
       }
@@ -599,7 +636,7 @@ async function linkComment(env: Env, o: Record<string, unknown>): Promise<HeldIn
 
 /** One change → what to hold, or a reason there is nothing to do. Reads the item now (fresh rev). */
 async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Promise<unknown>> = new Map()): Promise<HeldIn | string> {
-  const o = fields(c, ["kind"], ["key", "itemId", "commentId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images", "assign", "pickId", "mention"]);
+  const o = fields(c, ["kind"], ["key", "hours", "itemId", "commentId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images", "assign", "pickId", "mention"]);
   const { writer, org, pat, project, plan } = env;
   switch (o.kind) {
     case "state": {
@@ -618,6 +655,24 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       }
       if (state === item.state && !comment) return `#${item.id} is already ${state}`;
       return { ...base(env), ...none, ...(pickId !== null ? { pickIds: [pickId] } : {}), op: "state", itemId: item.id, title: item.title, ops: stateOps(item.rev, state, comment), rev: item.rev, before: { State: item.state, ...(comment ? { Comment: null } : {}) }, after: { State: state, ...(comment ? { Comment: comment } : {}) }, followUpId, type: item.type };
+    }
+    case "remaining_work": {
+      // TX-1: one named write: Remaining Work in hours, only on a type that has it and an item canEdit allows.
+      const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));
+      const right = await rightsOn(env, item, memo);
+      if (!right.ok) throw new Refused(right.note, 409);
+      const typeHas = await writer.typeFields(org, pat, project, item.type);
+      if (!typeHas.has(REMAINING_WORK)) throw new Refused(`${item.type} has no Remaining Work field in this process`, 409);
+      if (typeof o.hours !== "number" || !Number.isFinite(o.hours) || o.hours < 0 || o.hours > 10_000) throw new Invalid("hours must be a number from 0 to 10000");
+      const pickId = o.pickId === undefined || o.pickId === null ? null : posId(o.pickId, "pickId");
+      if (pickId !== null) {
+        const p = await plan.getPick(pickId);
+        if (!p || p.itemId !== item.id || p.clientKey !== env.clientKey) throw new PlanError("That to-do isn't for this item");
+      }
+      const was = item.fields[REMAINING_WORK];
+      const prior = typeof was === "number" && Number.isFinite(was) ? was : null;
+      if (prior === o.hours) return `#${item.id} already has ${o.hours}h remaining`;
+      return { ...base(env), ...none, ...(pickId !== null ? { pickIds: [pickId] } : {}), op: "remaining_work", itemId: item.id, title: item.title, ops: remainingOps(item.rev, o.hours, prior !== null), rev: item.rev, before: { [REMAINING_LABEL]: prior === null ? null : String(prior) }, after: { [REMAINING_LABEL]: String(o.hours) }, type: item.type };
     }
     case "comment": {
       const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));
@@ -1051,6 +1106,13 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
         if (item.state !== entry.after.State) throw new Refused(`DevOps shows #${item.id} as ${item.state} now, changed after FocusTime's change. Undo would overwrite that; change it in DevOps`, 409, "changed");
         return { ...u, op: "undo_state", ops: stateOps(item.rev, entry.before.State!), rev: item.rev, before: { State: item.state }, after: { State: entry.before.State ?? null }, commentId: entry.commentId };
       }
+      if (entry.op === "remaining_work") {
+        const was = item.fields[REMAINING_WORK];
+        const cur = typeof was === "number" && Number.isFinite(was) ? String(was) : null;
+        if (cur !== entry.after[REMAINING_LABEL]) throw new Refused(`DevOps shows another Remaining Work on #${item.id} now (${cur ?? "none"}). Undo would overwrite it`, 409, "changed");
+        const prior = entry.before[REMAINING_LABEL] ?? null;
+        return { ...u, op: "undo_remaining_work", ops: remainingOps(item.rev, prior === null ? null : Number(prior), cur !== null), rev: item.rev, before: { [REMAINING_LABEL]: cur }, after: { [REMAINING_LABEL]: prior } };
+      }
       if (entry.op === "target_date") {
         const field = fieldOf(entry.ops);
         if (!field) throw new Refused("This change can't be undone (its field isn't recorded)", 409);
@@ -1155,6 +1217,11 @@ function current(e: DevOpsWriteEntry, item: ItemSnapshot, tz: string): Record<st
   if (e.op === "target_date" || e.op === "undo_target_date") {
     const f = fieldOf(e.ops);
     return { ...("Start date" in e.after ? { "Start date": dateOnly(item.fields[START_FIELD], tz) } : {}), "Target date": f ? dateOnly(item.fields[f], tz) : null };
+  }
+  // TX-1: Remaining Work as a number's text.
+  if (e.op === "remaining_work" || e.op === "undo_remaining_work") {
+    const v = item.fields[REMAINING_WORK];
+    return { [REMAINING_LABEL]: typeof v === "number" && Number.isFinite(v) ? String(v) : null };
   }
   // PV-1: an assignee is compared by email.
   if (e.op === "assign" || e.op === "undo_assign") return { "Assigned to": identityEmail(item.fields["System.AssignedTo"]) };

@@ -7,8 +7,8 @@ import type { FreeGap, IsoDate } from "../week/types.ts";
 import { fitOf, type Fit } from "./rules.ts";
 import { slotPlanned } from "./timebox.ts";
 
-type PickLike = { id: number; status: string; size: string | null; minutes?: number | null; resolved?: boolean };
-type BoxLike = { date: IsoDate; pickId: number | null; start: string; end: string; removedAt: string | null };
+type PickLike = { id: number; status: string; size: string | null; minutes?: number | null; remainingMinutes?: number | null; resolved?: boolean };
+type BoxLike = { date: IsoDate; pickId: number | null; start: string; end: string; removedAt: string | null; settled?: string | null };
 type SlotLike = { date: IsoDate; start: string; end: string; pto: boolean; freeGaps: FreeGap[]; longestFreeMinutes: number };
 
 /** Planned and done picks (timebox minutes when timed) against the block's whole free time. */
@@ -17,7 +17,7 @@ export function planFit(picks: readonly PickLike[], sizes: SizeScale, timeboxes:
 }
 /** Minutes of planned and done picks in a block (timed ones by their timebox). */
 export function planMinutes(picks: readonly PickLike[], sizes: SizeScale, timeboxes: readonly BoxLike[] | undefined, slot: Pick<SlotLike, "date" | "start" | "end">): number {
-  const live = picks.filter((p) => p.status === "planned" || p.status === "done").map((p) => ({ ...p, status: "planned" }));
+  const live = picks.filter((p) => p.status === "planned" || p.status === "done").map((p) => ({ ...p, status: "planned", ...(p.status === "done" ? { remainingMinutes: null } : {}) })); // TX-1: done work counts its size here, as a tick always did.
   return slotPlanned(live, sizes, timeboxes, slot);
 }
 

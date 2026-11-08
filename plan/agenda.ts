@@ -1,10 +1,10 @@
 // A block's agenda and its free gaps (step 13.6, D244 to D246): what Plan the day shows per block, where a pick can be
 // timeboxed with one click, and "Timebox my day". Pure: the caller passes the slot (from the week build), the
 // timeboxes and, on today, the clock.
-import { namedSize, storyMinutes, unsizedText, type SizeScale } from "./estimate.ts";
+import { namedSize, unsizedText, type SizeScale } from "./estimate.ts";
 import type { FreeGap, Half, IsoDate, ShowAs, Slot } from "../week/types.ts";
-import type { Pick, Size } from "./types.ts";
-import { TIMEBOX_MIN, TIMEBOX_STEP } from "./timebox.ts";
+import { pickNeed, type Pick, type Size } from "./types.ts";
+import { TIMEBOX_MIN, TIMEBOX_SNAP, TIMEBOX_STEP } from "./timebox.ts";
 
 export type AgendaTimebox = { id: number; date: IsoDate; start: string; end: string; title: string; clientKey: string; pickId: number | null; removedAt: string | null };
 export type AgendaKind = "meeting" | "personal" | "unavailable" | "timebox" | "free";
@@ -82,7 +82,8 @@ export function placeInGap(gap: FreeGap, want: number, min = TIMEBOX_MIN): Place
   const a = Math.ceil(ms(gap.start) / step) * step;
   const b = ms(gap.end);
   const room = Math.floor(minutes(a, b) / TIMEBOX_STEP) * TIMEBOX_STEP;
-  const len = Math.min(want, room);
+  // TX-1: the smaller of what's wanted and the gap; a trimmed length lands on the 15 minute grid.
+  const len = want <= room ? want : Math.floor(room / TIMEBOX_SNAP) * TIMEBOX_SNAP;
   if (len < Math.max(TIMEBOX_MIN, Math.min(min, want))) return null;
   return { start: sameZone(a, gap.start), end: sameZone(a + len * 60_000, gap.start), minutes: len, trimmed: len < want };
 }
@@ -91,9 +92,9 @@ export type DayPlacement = Placement & { pickId: number; half: Half; title: stri
 export type Unplaced = { pickId: number; half: Half; title: string; size: Size | null; reason: string };
 
 /** The shortest useful time per size (D273): Timebox my day never places a pick in less. */
-export const DEFAULT_MIN_SIZES: Readonly<Record<Size, number>> = { S: 30, M: 60, L: 90 };
+export const DEFAULT_MIN_SIZES: Readonly<Record<Size, number>> = { XS: 15, S: 30, M: 60, L: 90 };
 
-const SIZE_RANK: Record<Size, number> = { L: 0, M: 1, S: 2 };
+const SIZE_RANK: Record<Size, number> = { L: 0, M: 1, S: 2, XS: 3 };
 const halfWord = (h: Half) => (h === "AM" ? "the morning" : h === "PM" ? "the afternoon" : "the evening");
 const dur = (m: number) => (m < 60 ? `${m}m` : m % 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m / 60}h`);
 
@@ -114,7 +115,7 @@ export function planMyDay(picks: readonly Pick[], blocks: Partial<Record<Half, S
   for (const p of todo) {
     const list = gaps.get(p.half)!;
     // E2, SZ-1: an unsized pick takes the person's assumption (never left out for having no size).
-    const want = p.minutes ?? storyMinutes(p.size, sizes);
+    const want = pickNeed(p, sizes); // TX-1: what's left, not the full size. The timebox is the smaller of this and the gap.
     const min = Math.min(minSizes[namedSize(p.size, sizes)], want);
     let i = list.findIndex((g) => placeInGap(g, want, min)?.trimmed === false);
     if (i < 0) i = list.reduce((best, g, k) => (placeInGap(g, want, min) && (best < 0 || g.minutes > list[best]!.minutes) ? k : best), -1);

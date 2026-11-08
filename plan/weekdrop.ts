@@ -15,7 +15,7 @@ type PickLike = { id: number; date: IsoDate; half: Half; clientKey: string; item
 type BoxLike = { date: IsoDate; pickId: number | null; start: string; end: string; removedAt: string | null };
 
 /** What's dragged: a story not planned in that block yet, or a planned pick moving. */
-export type Dragged = { clientKey: string; itemId: number; size: StorySize | null; title: string; pickId?: number | undefined };
+export type Dragged = { clientKey: string; itemId: number; size: StorySize | null; title: string; pickId?: number | undefined; /** TX-1: what is left of it, once there is progress. */ remainingMinutes?: number | null | undefined };
 
 export type DropCheck = { ok: true; text: string; over: boolean } | { ok: false; why: string };
 
@@ -46,7 +46,7 @@ export function dropCheck(i: {
   if (note) return { ok: true, text: note, over: false };
   const free = freeMinutes(slot);
   const left = Math.max(0, free - planMinutes(live, i.sizes, i.timeboxes, slot));
-  const need = storyMinutes(dragged.size, i.sizes);
-  if (need <= left) return { ok: true, text: `${hoursText(need)} of ${hoursText(left)} free`, over: false };
+  const need = dragged.remainingMinutes || storyMinutes(dragged.size, i.sizes);
+  if (need <= left) return { ok: true, text: `${need < 60 ? `${need} min` : hoursText(need)} of ${hoursText(left)} free`, over: false };
   return { ok: true, text: overNote(slot.date, slot.half, hoursText(need - left)), over: true };
 }

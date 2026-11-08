@@ -24,11 +24,11 @@ export const SIZING = {
   /** "3h of 4h": the stories' hours against the block's free time. */
   load: (planned: string, free: string) => `${planned} of ${free}`,
   /** The add buttons: S, M and L with their hours, and an unsized story. */
-  add: (size: "S" | "M" | "L" | null) => (size ? `${size} · ${{ S: "1h", M: "2h", L: "4h" }[size]}` : "unsized"),
+  add: (size: "XS" | "S" | "M" | "L" | null) => (size ? `${size} · ${{ XS: "30 min", S: "1h", M: "2h", L: "4h" }[size]}` : "unsized"),
   clear: "Clear",
   stackLabel: "Stories in this block",
   remove: (chip: string) => `Remove ${chip} story`,
-  start: ["M", "S"] as ("S" | "M" | "L" | null)[],
+  start: ["M", "S"] as ("XS" | "S" | "M" | "L" | null)[],
   /** Most the sandbox takes: three blocks' worth of hours (12h). */
   maxMinutes: 720,
   legend: [
@@ -253,6 +253,7 @@ export const QUESTIONS = {
     { q: "How does FocusTime know I'm off?", a: "PTO in Dataverse is a whole day off. Out of office in Outlook over a whole morning or afternoon makes that half PTO. A PTO half has no free time and nothing can be planned on it; a must already pinned there stays, marked \"Pinned to PTO, move it\"." },
     { q: "How do I use the timeline with the keyboard?", a: "Tab to a to-do. On one that has no time yet, T puts it at the next free time that fits. On one with a time, Up and Down move it 15 minutes, Shift with Up or Down changes its length, and Backspace takes the time off. Undo is in the message that follows each mouse or T change." },
     { q: "How does the timeline work on a phone?", a: "Turn it on from ⋯ on Today; the phone remembers this separately from your computer. Tap a to-do without a time, then Pick a time, and choose from the 15-minute list. Tap one with a time for Move or Un-timebox. Timebox my day shows its suggestions with ✓ and ✕ and an Accept all bar." },
+    { q: "Timeboxes and check-ins: how do they work?", a: "A timebox is a work session: it can be shorter than the to-do, and it never changes the to-do's size. At Midday check-in and Close out, any timebox that ended gets Done, Partly (say how much is left) or Didn't get to it, or All went to plan for the lot. What you skip comes back at the next one, and nothing reminds you in between. Once there's progress, the to-do shows \"1h of 2h left\" and planning uses what's left. At Close out you can update DevOps in one preview, or Skip." },
     { q: "Does Timebox my day write to my calendar?", a: "Only if you tick Put on Outlook in its bar. You then see every Outlook event in one preview, and nothing is written until you confirm it. Without that, timeboxes stay in FocusTime. Suggestions stay clear of your meetings; a time you drag yourself can overlap one if you want it to." },
     { q: "Why can't I move some of my old timeboxes?", a: "Timeboxes made by an earlier FocusTime, before you signed in here, show as ordinary Outlook events. FocusTime leaves them alone; change or delete them in Outlook." },
     { q: "How do I add a client's Teams chats?", a: "A FocusTime admin adds them: Admin › Clients, on each client, Delivery chats, then Add a chat (everyone else sees the chats in Settings › Client chats, read-only). Type to search your Teams group chats, then Enter. A client can have several chats; a chat belongs to one client. Each is labelled Delivery team (the internal Cooptimize team) or Customer collaboration (with the client's key people): FocusTime suggests it from who is in the chat, and you can change it. People from other organizations, and guests, are marked External, and FocusTime warns when someone from outside is in a Delivery team chat. A chat added to a client is shared with everyone on it who follows the client, and its new messages are read into conversations (see The Inbox, conversations and promises)." },
@@ -453,7 +454,7 @@ export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "capture" | "a
       { title: "The timeline", text: "Timeline at the top right, or {key:ui.set_today_timeline}, shows the day as hours, like Week. Each block's to-dos are listed beside its hours with their checkboxes, the ones with a time first. Drag one from Not timeboxed yet onto the hours, move or resize it, or drag it back to take its time off, each with Undo. Timebox my day adds dashed suggestions to accept." },
     ],
     extras: ["urgent"],
-    faqs: ["How do I use the timeline with the keyboard?", "How does the timeline work on a phone?", "Does Timebox my day write to my calendar?", "What is the moment card?", "What's on Today on a phone?", "What's in Today's urgent strip?", "Can I look at another day?", "Does checking off a to-do change DevOps?", "What is the line across today?", "How does FocusTime know I'm off?", "Why can't I move some of my old timeboxes?"],
+    faqs: ["Timeboxes and check-ins: how do they work?", "How do I use the timeline with the keyboard?", "How does the timeline work on a phone?", "Does Timebox my day write to my calendar?", "What is the moment card?", "What's on Today on a phone?", "What's in Today's urgent strip?", "Can I look at another day?", "Does checking off a to-do change DevOps?", "What is the line across today?", "How does FocusTime know I'm off?", "Why can't I move some of my old timeboxes?"],
   },
   week: {
     lead: "Week holds your half-day blocks and the plan for them, in four modes: Board, Plan, Team and Status.",

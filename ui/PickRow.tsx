@@ -7,6 +7,7 @@
 import { ResolvedMark, TypeIcon } from "./TypeIcon.tsx";
 import { useContext, type DragEvent, type HTMLAttributes, type ReactNode } from "react";
 import type { Pick } from "../plan/types.ts";
+import { progressChip } from "../plan/progress.ts";
 import { SizeChip } from "./plan/Estimate.tsx";
 import { focusLabel } from "../plan/focus.ts";
 import { pickMenu } from "./menu.ts";
@@ -90,9 +91,11 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
   const workAll = useContext(DevOpsWork).get(pick.clientKey);
   const seen = pick.itemId !== null && workAll ? [...workAll.items, ...workAll.children, ...(workAll.watched ?? [])].find((i) => i.id === pick.itemId) : undefined;
   const resolved = seen && isResolved(seen.stateCategory) ? seen : null;
+  // TX-1: once there's progress, the chip says what's left.
+  const left = progressChip(pick, useContext(PlanCtx).sizes);
   // WK-3: a Deployment's length is its window; it has no size chip.
   const sizeChip = dep ? null : (
-    <SizeChip size={pick.size} title={pick.title} wide={planD || checklist} tabIndex={tabIndex} note={focused ? `${focused} focused` : null}
+    <SizeChip size={pick.size} title={pick.title} wide={planD || checklist} tabIndex={tabIndex} note={focused ? `${focused} focused` : null} left={left}
       {...(readOnly || pick.status !== "planned" || !env ? {} : { onSet: (size) => void env.runPlan("pick.set_size", { id: pick.id, size }) })} />
   );
   // MB-1: on the phone (the sheet is there only on the phone) every to-do row puts its title on its own line (two at
@@ -166,6 +169,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
             {more}
           </span>
           {checklist && !dep && (timed ? <TodoTime pick={pick} editable={timeEditable && !readOnly} /> : sizeChip)}
+          {!checklist && !dep && left && sizeChip}
         </>
       ) : week ? (
         <>

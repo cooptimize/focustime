@@ -56,12 +56,12 @@ describe("focus timer state", () => {
   it("offers presets in 5-minute steps and suggests a pick's length from its size", () => {
     expect(PRESETS.slice(0, 8)).toEqual([5, 10, 15, 20, 25, 30, 45, 60]);
     expect(PRESETS.every((m) => m % 5 === 0)).toBe(true);
-    const sizes = { S: 60, M: 120, L: 210, unsized: 60 };
+    const sizes = { XS: 30, S: 60, M: 120, L: 210, unsized: 60 };
     expect(suggestMinutes("S", sizes)).toBe(60);
     expect(suggestMinutes("L", sizes)).toBe(210);
-    expect(suggestMinutes("S", { S: 47, M: 90, L: 180, unsized: 60 })).toBe(45);
+    expect(suggestMinutes("S", { XS: 30, S: 47, M: 90, L: 180, unsized: 60 })).toBe(45);
     // E2: an unsized pick starts focus like an M, never refused.
-    expect(suggestMinutes(null, { S: 60, M: 120, L: 240, unsized: 120 })).toBe(120);
+    expect(suggestMinutes(null, { XS: 30, S: 60, M: 120, L: 240, unsized: 120 })).toBe(120);
   });
 });
 

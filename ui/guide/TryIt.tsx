@@ -181,7 +181,7 @@ function TimelineTry() {
 function SizingTry() {
   const [stories, setStories] = useState<(StorySize | null)[]>(SIZING.start);
   const sb = useMemo(() => sandbox(stories, SIZING.block), [stories]);
-  const sizes: (StorySize | null)[] = ["S", "M", "L", null];
+  const sizes: (StorySize | null)[] = ["XS", "S", "M", "L", null];
   const freeHours = Math.round(SIZING.block.freeMinutes / 60);
   return (
     <Frame id="sizing" title={SIZING.title} sub={SIZING.sub}>

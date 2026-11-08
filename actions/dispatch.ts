@@ -74,6 +74,7 @@ import { DEFAULT_FOCUS } from "../plan/focussound.ts";
 import { warnPoints, type TimerState } from "../plan/timer.ts";
 import { settingsAction, type SettingsContext } from "./settings-actions.ts";
 import { borrowedView, closeoutAction, noteView } from "./closeout-actions.ts";
+import { progressAction, type ProgressContext } from "./progress-actions.ts";
 import { applyFollowUpRules, followUpView, internalClients, nameOf, workdayOf } from "./followup-rules.ts";
 import { watchedIds } from "../plan/followups.ts";
 import { pastUrgency } from "../plan/asks-ai.ts";
@@ -1437,6 +1438,14 @@ export async function vmContext(ctx: ActionContext): Promise<VmContext> {
   };
 }
 
+/** TX-1: the check-in's answers (local only). */
+const progressContext = (ctx: ActionContext): ProgressContext => ({
+  plan: ctx.plan,
+  config: () => configured(ctx),
+  now: ctx.now,
+  resolved: (cfg, items) => resolvedKeys(ctx.makeDevOps(cfg.dataverse, userZone(cfg)), [...new Set(items.map((i) => i.clientKey))].map((clientKey) => ({ clientKey, clientName: clientKey })), idsByClient(items)),
+});
+
 export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<ActionResponse> {
   const r = await dispatchAction(ctx, req);
   return req.action === "weekplan.commit" || req.action === "weekplan.place" || req.action === "pick.add" ? afterPlanChange(ctx, req.action, req.input, r) : r;
@@ -1536,6 +1545,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "devops.confirm":
     case "devops.retry":
     case "devops.log":
+    case "devops.progress_offer":
     case "devops.done_offer":
     case "devops.undo_offer":
       return devopsWriteAction(await devopsWriteContext(ctx), action, req.input);
@@ -2033,6 +2043,12 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       if (req.input !== undefined && (typeof req.input !== "object" || req.input === null || Object.keys(req.input).length)) return bad("media.status takes {}");
       return { ok: true, data: ctx.media ? await ctx.media.status() : { players: false, spotify: false } };
     }
+    case "checkin.sessions":
+    case "checkin.answer":
+    case "checkin.all_to_plan":
+    case "checkin.undo":
+    case "checkin.offer_close":
+      return progressAction(progressContext(ctx), action, req.input);
     case "closeout.load":
     case "closeout.commit":
     case "checkin.done":

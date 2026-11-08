@@ -18,7 +18,7 @@ import { REMOVED_IN_OUTLOOK } from "../plan/outlooksync.ts";
 import { formatDuration } from "../week/format.ts";
 import { isPickable } from "../plan/rules.ts";
 import { typeNeedsBreakdown } from "../plan/process.ts";
-import { SIZES, type Pick, type PlanDayState, type PlanWeek } from "../plan/types.ts";
+import { SIZES, type Pick, type PlanDayState, type PlanWeek, type Size } from "../plan/types.ts";
 import { DEPLOYMENT, windowText } from "../plan/deploy.ts";
 import { placeNote } from "../plan/days.ts";
 import type { ClientWork, Half, IsoDate, Week, WorkItem } from "../week/types.ts";
@@ -397,10 +397,10 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
       {
         id: "focus",
         label: env.timer?.pickId === p.id ? "Focus timer running" : "Start focus",
-        hint: `${suggestMinutes(p.size, env.planning.sizes)} min`,
+        hint: `${suggestMinutes(p.size, env.planning.sizes, p.remainingMinutes)} min`,
         action: "timer.start",
         ...(p.status !== "planned" ? { disabled: "Only a planned to-do can be timeboxed" } : p.date !== env.today ? { disabled: "Only today's to-dos" } : env.timer?.pickId === p.id ? { disabled: "Already timing this to-do" } : {}),
-        next: () => lengthStep(`Focus on "${p.title}"`, suggestMinutes(p.size, env.planning.sizes), (m) => env.runTimer("timer.start", { pickId: p.id, minutes: m })),
+        next: () => lengthStep(`Focus on "${p.title}"`, suggestMinutes(p.size, env.planning.sizes, p.remainingMinutes), (m) => env.runTimer("timer.start", { pickId: p.id, minutes: m })),
       },
       { id: "timebox", label: "Timebox", hint: "a free gap in its block", action: "timebox.add", ...(p.status !== "planned" ? { disabled: "Only a planned to-do can be timeboxed" } : past ? { disabled: PAST } : {}), next: () => timeboxStep(env, p) },
       { id: "help", label: "Ask to collaborate", hint: "who is free", action: "collab.candidates", ...(past ? { disabled: PAST } : {}), run: () => env.openHelp({ clientKey: p.clientKey, title: p.title, url: p.itemUrl, itemId: p.itemId, pickId: p.id, pinned: p.date }) },
@@ -1147,10 +1147,10 @@ export function timerStep(env: MenuEnv): MenuStep {
     return {
       title: "Start focus",
       items: [
-        ...(nx ? [{ id: "next", label: `Start focus: ${nx.title}`, hint: `${suggestMinutes(nx.size, p.sizes)} min`, action: "timer.start", run: () => env.runTimer("timer.start", { pickId: nx.id }) } as MenuItem] : []),
+        ...(nx ? [{ id: "next", label: `Start focus: ${nx.title}`, hint: `${suggestMinutes(nx.size, p.sizes, nx.remainingMinutes)} min`, action: "timer.start", run: () => env.runTimer("timer.start", { pickId: nx.id }) } as MenuItem] : []),
         { id: "focus", label: nx ? "Plain timer" : "Focus", hint: `${p.focusMinutes} min`, action: "timer.start", next: () => lengthStep("Focus for", p.focusMinutes, (m) => env.runTimer("timer.start", { minutes: m })) },
         // Step 16.3: deep focus sets Teams to Do not disturb (plain focus: Busy). On the next pick when there is one.
-        { id: "deep", label: "Deep focus", hint: "Teams: Do not disturb", action: "timer.start", next: () => lengthStep("Deep focus for", nx ? suggestMinutes(nx.size, p.sizes) : p.focusMinutes, (m) => env.runTimer("timer.start", { minutes: m, deep: true, ...(nx ? { pickId: nx.id } : {}) })) },
+        { id: "deep", label: "Deep focus", hint: "Teams: Do not disturb", action: "timer.start", next: () => lengthStep("Deep focus for", nx ? suggestMinutes(nx.size, p.sizes, nx.remainingMinutes) : p.focusMinutes, (m) => env.runTimer("timer.start", { minutes: m, deep: true, ...(nx ? { pickId: nx.id } : {}) })) },
         { id: "break", label: "Break", hint: p.breakMinutes ? `${p.breakMinutes} min` : "off", action: "timer.start", ...(p.breakMinutes ? {} : { disabled: "Breaks are set to 0 minutes in Settings > Planning" }), run: () => env.runTimer("timer.start", { kind: "break" }) },
         { id: "pick", label: nx ? "Another to-do…" : "Timebox a to-do…", action: "timer.start", next: () => choosePick(env, "Focus on which to-do?", (pk) => () => env.runTimer("timer.start", { pickId: pk.id })) },
       ],
@@ -1555,6 +1555,12 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "devops.log":
       return { run: () => env.openSettings("activity", "devops-log") };
     // PK-1: offered after a tick, never run from the menu.
+    case "checkin.sessions":
+    case "checkin.answer":
+    case "checkin.all_to_plan":
+    case "checkin.undo":
+    case "checkin.offer_close":
+    case "devops.progress_offer":
     case "devops.done_offer":
     case "devops.undo_offer":
       return { disabled: "Check off a to-do with a DevOps item" };
@@ -1720,7 +1726,7 @@ export type WeekItemFacts = {
   minutes: number;
   /** The load comes from its sized stories, so there is no estimate to set. */
   derived?: boolean;
-  size?: "S" | "M" | "L" | null;
+  size?: Size | null;
   /** A story under a listed feature: it takes the feature's tier (no tier choice of its own). */
   nested?: boolean;
   /** Where it can be pinned, and where it is. */
@@ -1740,7 +1746,7 @@ export type WeekItemOps = {
   pin: (date: IsoDate, half: "AM" | "PM", on: boolean) => void;
   /** A feature's estimate in whole hours. */
   hours: (n: number) => void;
-  size?: (s: "S" | "M" | "L" | null) => void;
+  size?: (s: Size | null) => void;
   done: (on: boolean) => void;
   help: () => void;
   /** SW-1: Send to… a teammate's week. */
@@ -1756,7 +1762,7 @@ export function storySizeStep(f: WeekItemFacts, ops: WeekItemOps, sizes: SizeSca
   return {
     title: `Size of "${f.title}"`,
     items: [
-      ...(["S", "M", "L"] as const).map<MenuItem>((z) => ({ id: `s${z}`, label: sizeChipText(z, sizes), checked: f.size === z, action: "weekplan.set_size", run: () => ops.size?.(z) })),
+      ...SIZES.map<MenuItem>((z) => ({ id: `s${z}`, label: sizeChipText(z, sizes), checked: f.size === z, action: "weekplan.set_size", run: () => ops.size?.(z) })),
       { id: "sclear", label: "Clear", hint: `counts as ${unsizedText(sizes)}`, checked: !f.size, action: "weekplan.set_size", run: () => ops.size?.(null) },
     ],
   };

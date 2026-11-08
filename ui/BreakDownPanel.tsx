@@ -23,7 +23,7 @@ import { TypeIcon } from "./TypeIcon.tsx";
 import { DevOpsWork } from "./work.ts";
 import { WorkLink } from "./WorkLink.tsx";
 
-type Size = "S" | "M" | "L" | null;
+type Size = "XS" | "S" | "M" | "L" | null;
 type CardStatus = { state: "not_sent" } | { state: "created"; itemId: number; url: string | null } | { state: "pending" | "unconfirmed" | "failed" | "refused" | "undone"; message: string; writeId: number };
 type Card = { id: string; title: string; description: string; acceptance: string[]; dependsOn: string[]; size: Size; evidence: string[]; questions: string[]; keep: boolean; status: CardStatus; after: string[]; sizeText: string };
 type Draft = { id: string; clientKey: string; featureId: number; featureTitle: string; storyType: string; note: string; /** GD-2: the AI's answer named another client and the check replaced it. */ namesRemoved?: boolean; /** KB-1. */ standards?: StandardsUsed | null; cards: Card[]; rationale: string; setAside: { title: string; why: "out_of_scope" | "already_covered"; existing_item_id: number | null; reason: string }[]; published: number; left: number };
@@ -533,7 +533,7 @@ function PrepareStep({ prep, childType, setChildType, onOpenLatest }: { prep: Pr
 
 // ---------- 2. Review ----------
 
-const SIZES: Size[] = ["S", "M", "L", null];
+const SIZES: Size[] = ["XS", "S", "M", "L", null];
 
 function ReviewStep({ clientKey, draft, busy, onEdit, onRegenerate }: { clientKey: string; draft: Draft; busy: boolean; onEdit: (cards: Card[], now?: boolean) => void; onRegenerate: (note: string, id?: string) => Promise<boolean> }) {
   const { sizes } = useContext(PlanCtx);

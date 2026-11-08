@@ -6210,3 +6210,25 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 /* The phone: the client's name in full, what's left of the header wraps under it. */
 .app.phone .today-tl.phone .tt-head, .app.phone .today-tl.phone .tt-head:has(> .late-chip) { flex-wrap: wrap; overflow: visible; row-gap: 4px; }
 .app.phone .today-tl.phone .tt-head .card-client, .app.phone .today-tl.phone .tt-head:has(> .late-chip) .card-client { flex: 0 1 auto; display: block; min-width: 0; max-width: 100%; white-space: normal; overflow: visible; }
+
+/* TX-1: the progress check-in at Midday check-in and Close out. */
+.tc-box { margin: 8px 0 16px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); max-width: 1100px; }
+.tc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.tc-head h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.tc-rows { list-style: none; margin: 0; padding: 0; }
+.tc-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; padding: 7px 0 7px 10px; border-left: 3px solid var(--c, var(--border)); margin: 4px 0; }
+.tc-row.answered .tc-title { color: var(--text-muted); }
+.tc-what { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 260px; }
+.tc-title { font-weight: 500; overflow-wrap: anywhere; }
+.tc-sub { font-size: var(--fs-2); }
+.tc-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tc-said { font-size: var(--fs-2); color: var(--text-muted); }
+.tc-left { width: 64px; background: var(--surface); color: inherit; }
+.tc-offer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 16px; padding: 8px 12px; border-radius: 8px; background: var(--sunken); }
+.tc-offer > span:first-child { flex: 1 1 200px; }
+.tc-preview { margin: 8px 0 16px; }
+@media (pointer: coarse), (max-width: 600px) {
+  .tc-btn { min-height: 44px; min-width: 44px; padding-inline: 12px; }
+  .tc-left { min-height: 44px; width: 96px; font-size: 16px; }
+  .tc-acts { width: 100%; }
+}

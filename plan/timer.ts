@@ -82,9 +82,9 @@ export function extendTimer(s: TimerState, now: Temporal.Instant, minutes: numbe
   return s.ended ? { ...s, plannedMinutes, ended: false, runningSince: now.toString() } : { ...s, plannedMinutes };
 }
 
-/** A pick's suggested length: its size's minutes, to the 5-minute step below, within 5 to 240. */
-export function suggestMinutes(size: Size | null, sizes: SizeScale): number {
-  return Math.max(5, Math.min(MAX_MINUTES, Math.floor(storyMinutes(size, sizes) / 5) * 5));
+/** A pick's suggested length: what's left of it (TX-1), else its size's minutes, to the 5-minute step below, within 5 to 240. */
+export function suggestMinutes(size: Size | null, sizes: SizeScale, remaining?: number | null): number {
+  return Math.max(5, Math.min(MAX_MINUTES, Math.floor((remaining || storyMinutes(size, sizes)) / 5) * 5));
 }
 
 // ---- warnings ----

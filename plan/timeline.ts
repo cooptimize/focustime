@@ -49,6 +49,22 @@ export function dropSpan(view: View, frac: number, minutes: number, tz: string):
   return { start: zoned(start, tz), end: zoned(start + len, tz) };
 }
 
+/**
+ * TX-1: a drop's default length: the smaller of what's left and the free gap it lands in (15 minute steps, 15 minutes
+ * at least). Landing outside a free gap keeps the length: dragging over a meeting is allowed (TY-1). The person can
+ * stretch or shrink it after.
+ */
+export function fitToGap(span: Span, gaps: readonly { start: string; end: string }[]): Span {
+  const at = ms(span.start);
+  const g = gaps.find((x) => ms(x.start) <= at && at < ms(x.end));
+  if (!g || ms(g.end) >= ms(span.end)) return span;
+  const room = Math.floor((ms(g.end) - at) / snapMs) * snapMs;
+  if (room < snapMs) return span;
+  const off = /([+-]\d{2}:\d{2}|Z)$/.exec(span.start)?.[1] ?? "Z";
+  const end = Temporal.Instant.fromEpochMilliseconds(at + room);
+  return { start: span.start, end: off === "Z" ? end.toString() : end.toZonedDateTimeISO(off).toString({ timeZoneName: "never", smallestUnit: "second" }) };
+}
+
 /** A stretch kept inside the hours shown: a move slides back in whole; a resize is cut at the edge, never under 15 minutes. */
 export function clampSpan(view: View, next: Span, mode: DragMode): Span {
   const [a, b] = [ms(view.start), ms(view.end)];

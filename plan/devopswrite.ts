@@ -36,8 +36,8 @@ export function onOrg(url: string, org: string): boolean {
 export const itemApiUrl = (org: string, id: number) => `${orgBase(org)}/_apis/wit/workItems/${id}`;
 
 export type PatchOp = { op: "add" | "replace" | "remove" | "test"; path: string; value?: unknown };
-export type ChangeKind = "state" | "comment" | "create" | "target_date" | "description" | "assign" | "fields" | "comment_edit" | "comment_delete";
-export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description" | "undo_assign" | "undo_fields" | "undo_comment_edit" | "undo_comment_delete" | "feedback";
+export type ChangeKind = "state" | "comment" | "create" | "target_date" | "description" | "assign" | "fields" | "comment_edit" | "comment_delete" | "remaining_work";
+export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description" | "undo_assign" | "undo_fields" | "undo_comment_edit" | "undo_comment_delete" | "undo_remaining_work" | "feedback";
 
 /** One identity as connectionData reports it. */
 export type DevOpsIdentity = { id: string; name: string; email: string };
@@ -67,6 +67,14 @@ const html = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").repla
 const linked = (s: string) => s.replace(/https:\/\/github\.com\/[^\s<)]+/g, (u) => `<a href="${u}">${u}</a>`);
 export const textToHtml = (s: string) => s.split(/\r?\n/).map((l) => `<div>${linked(html(l)) || "<br>"}</div>`).join("");
 
+/** TX-1: the process field, in hours. Only on types that have it (read from the process, never assumed). */
+export const REMAINING_WORK = "Microsoft.VSTS.Scheduling.RemainingWork";
+export const REMAINING_LABEL = "Remaining Work";
+/** TX-1: Remaining Work in hours, behind test /rev. Null (an undo to no value) removes it. */
+export function remainingOps(rev: number, hours: number | null, had: boolean): PatchOp[] {
+  if (hours === null) return had ? [test(rev), { op: "remove", path: `/fields/${REMAINING_WORK}` }] : [test(rev)];
+  return [test(rev), { op: had ? "replace" : "add", path: `/fields/${REMAINING_WORK}`, value: hours }];
+}
 export function stateOps(rev: number, state: string, comment?: string | null): PatchOp[] {
   return [test(rev), { op: "replace", path: "/fields/System.State", value: state }, ...(comment ? [{ op: "add" as const, path: "/fields/System.History", value: textToHtml(comment) }] : [])];
 }

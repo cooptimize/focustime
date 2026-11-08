@@ -16,12 +16,12 @@ function slot(half: "AM" | "PM", gaps: [string, string][]): Slot {
   return { date: "2026-11-02", half, start: T(s), end: T(e), view: { start: T(s), end: T(e) }, windows: [{ start: T(s), end: T(e) }], focus: [], events: [], risks: [], freeGaps: gaps.map(([a, b]) => gap(a, b)), freeMinutes: 0, longestFreeMinutes: 0, open: false, off: false, flex: [], unavailable: [] } as unknown as Slot;
 }
 const pick = (id: number, half: "AM" | "PM", size: "S" | "M" | "L", extra: Partial<Pick> = {}): Pick => ({ id, date: "2026-11-02", half, clientKey: "Fabrikam", kind: "item", itemId: 7000 + id, draftId: null, title: `Pick ${id}`, itemType: "User Story", itemUrl: null, size, status: "planned", carriedFrom: null, carriedFromDate: null, notes: null, followUpId: null, position: id, createdAt: "", updatedAt: "", ...extra });
-const SIZES = { S: 60, M: 120, L: 210, unsized: 60 };
+const SIZES = { XS: 30, S: 60, M: 120, L: 210, unsized: 60 };
 
 describe("shortest useful time (D273)", () => {
   it("defaults to 30, 60 and 90 minutes", () => {
-    expect(DEFAULT_MIN_SIZES).toEqual({ S: 30, M: 60, L: 90 });
-    expect(DEFAULT_PLAN.minSizes).toEqual({ S: 30, M: 60, L: 90 });
+    expect(DEFAULT_MIN_SIZES).toEqual({ XS: 15, S: 30, M: 60, L: 90 });
+    expect(DEFAULT_PLAN.minSizes).toEqual({ XS: 15, S: 30, M: 60, L: 90 });
   });
   it("placeInGap refuses a gap shorter than the minimum and trims down to it, not below", () => {
     expect(placeInGap(gap("11:45", "12:00"), 120, 60)).toBeNull();
@@ -55,7 +55,7 @@ describe("shortest useful time (D273)", () => {
     const base = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"');
     const plan = (lines: string) => `${base}\n[plan]\n${lines}\n`;
     const ok = parseConfig(plan("min_s = 20\nmin_m = 45\nmin_l = 120"));
-    expect(ok.ok && ok.config.plan.minSizes).toEqual({ S: 20, M: 45, L: 120 });
+    expect(ok.ok && ok.config.plan.minSizes).toEqual({ XS: 15, S: 20, M: 45, L: 120 });
     // E2: sizes are fixed (S 1h); a size_s set before is read and ignored, never an error.
     const bad = parseConfig(plan("size_s = 30\nmin_s = 75\nmin_m = 7"));
     expect(bad.ok).toBe(false);

@@ -8,6 +8,8 @@ import type { AppConfig } from "../config/schema.ts";
 import { briefMarkdown, prioritiesKey, withCurrentTitles } from "../plan/weekplan.ts";
 import { headsUpKey, offersHeadsUp, validHours, weekHeadsUpDraft, type ItemLevel, type Tier } from "../plan/weeklist.ts";
 import { validStorySize, type StorySize } from "../plan/estimate.ts";
+import { resizedRemaining } from "../plan/progress.ts";
+import { SIZE_MINUTES } from "../plan/types.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import { PlanError, type PlanStore, type WeekFeature, type WeekPlanRecord } from "../store/plan-store.ts";
 import { mondayOf } from "../week/dates.ts";
@@ -95,7 +97,7 @@ function hours(v: unknown): number {
   return (v as number) * 60;
 }
 function size(v: unknown): StorySize {
-  if (!validStorySize(v)) throw new Invalid("size must be S, M or L");
+  if (!validStorySize(v)) throw new Invalid("size must be XS, S, M or L");
   return v;
 }
 /** A size, or null to clear it (E2: unsized counts as the person's assumption). */
@@ -285,7 +287,7 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         if (!feature && !story) return bad(`#${itemId} isn't one of ${key}'s features or stories in DevOps`, 422);
         const level: ItemLevel = feature ? "feature" : "story";
         const src = feature ? { title: feature.item.title, type: feature.item.type, url: feature.item.url } : story!;
-        if (level === "story" && b !== undefined) throw new Invalid("A story has a size (S, M or L), not an estimate");
+        if (level === "story" && b !== undefined) throw new Invalid("A story has a size (XS, S, M or L), not an estimate");
         if (level === "feature" && z !== undefined) throw new Invalid("A feature has an estimate, not a size");
         const item = (await plan.addWeekItem({ weekStart, clientKey: key, itemId, title: src.title, itemType: src.type, url: src.url, level, ...(t ? { tier: t } : {}), ...(b !== undefined ? { estimate: b } : {}), ...(z !== undefined ? { size: z } : {}), ...(story ? { parentId: story.parentId } : {}) }));
         return { ok: true, data: { item, plan: weekPlanView((await plan.weekPlan(weekStart))) } };
@@ -313,7 +315,7 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const before = (await plan.weekItem(id(o.id, "id")));
         if (!before) return bad("That item isn't on a week plan", 422);
         editable(before.weekStart);
-        if (before.level !== "feature") return bad("A story has a size (S, M or L), not an estimate", 422);
+        if (before.level !== "feature") return bad("A story has a size (XS, S, M or L), not an estimate", 422);
         const item = (await plan.setWeekItemEstimate(before.id, hours(o.hours)));
         return { ok: true, data: { item, plan: weekPlanView((await plan.weekPlan(before.weekStart))) } };
       }
@@ -323,7 +325,12 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         if (!before) return bad("That item isn't on a week plan", 422);
         editable(before.weekStart);
         if (before.level !== "story") return bad("A feature has an estimate, not a size", 422);
-        const item = (await plan.setWeekItemSize(before.id, sizeOrNull(o.size)));
+        const sz = sizeOrNull(o.size);
+        // TX-1: re-sizing a story that's under way moves its time left, as on its to-do.
+        const was = (await plan.weekPlan(before.weekStart)).features.find((f) => f.id === before.id);
+        const left = resizedRemaining(was?.remainingMinutes, before.size, sz, (await ctx.config())?.plan.sizes ?? SIZE_MINUTES);
+        if (left !== null && before.itemId !== null) await plan.setItemRemaining(before.clientKey, before.itemId, left);
+        const item = (await plan.setWeekItemSize(before.id, sz));
         return { ok: true, data: { item, plan: weekPlanView((await plan.weekPlan(before.weekStart))) } };
       }
       case "weekplan.mark_done": {

@@ -6,14 +6,14 @@
 // Own-plan changes run at once with Undo. A timebox on Outlook goes through the usual preview; nothing else leaves FocusTime.
 import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { TimeboxView, WeekLoadData } from "../actions/types.ts";
-import { didntFitText, type DayPlacement, type Unplaced, type AgendaTimebox } from "../plan/agenda.ts";
+import { didntFitText, openGaps, type DayPlacement, type Unplaced, type AgendaTimebox } from "../plan/agenda.ts";
 import { blockStatus } from "../plan/blockstatus.ts";
 import { bandIds, eveningBand } from "../plan/evening.ts";
 import { planFit } from "../plan/fit.ts";
 import { railItems, type InboxItemView } from "../plan/inbox-items.ts";
 import { nowClock, nowSpot } from "../plan/nowline.ts";
 import { lateOnCards } from "../plan/rail-promises.ts";
-import { checklistRows, dropSpan, nextFreeSpan, nudgeSpan, placeholderFits, quarterStarts, type Span } from "../plan/timeline.ts";
+import { checklistRows, dropSpan, fitToGap, nextFreeSpan, nudgeSpan, placeholderFits, quarterStarts, type Span } from "../plan/timeline.ts";
 import { minutesOf, TIMEBOX_MIN } from "../plan/timebox.ts";
 import { pickNeed, type Pick } from "../plan/types.ts";
 import type { DragMode } from "../plan/picktime.ts";
@@ -198,7 +198,7 @@ export function TodayTimeline(props: Props) {
     let active = false;
     const spanAt = (x: number, y: number) => {
       const h = hit(x, y);
-      return h?.half === p.half ? dropSpan(s.view, h.frac, lengthOf(p), tz) : null;
+      return h?.half === p.half ? fitToGap(dropSpan(s.view, h.frac, lengthOf(p), tz), openGaps(s, boxes)) : null;
     };
     const onMove = (e: PointerEvent) => {
       if (!active && Math.hypot(e.clientX - x0, e.clientY - y0) < 5) return;
@@ -215,7 +215,7 @@ export function TodayTimeline(props: Props) {
       const h = hit(e.clientX, e.clientY);
       if (!h) return;
       if (h.half !== p.half) notice(`That's the ${halfWord(h.half)} block. Move the to-do there first`);
-      else void add(p, dropSpan(s.view, h.frac, lengthOf(p), tz));
+      else void add(p, fitToGap(dropSpan(s.view, h.frac, lengthOf(p), tz), openGaps(s, boxes)));
     };
     const onUp = (e: PointerEvent) => finish(e);
     const onCancel = () => finish(null);

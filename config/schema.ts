@@ -137,7 +137,7 @@ export type PlanConfig = {
   /** Minutes per pick size: S, M and L fixed since E2 (1h, 2h, 4h, D446; old size_s/m/l values are read and ignored); `unsized` is the person's own (SZ-1, `[plan] unsized_minutes`). */
   sizes: SizeScale;
   /** Shortest useful time per size (step 15.1, D273): Timebox my day never places or trims a pick below it. */
-  minSizes: { S: number; M: number; L: number };
+  minSizes: { XS: number; S: number; M: number; L: number };
   /** How many days back unfinished picks are offered again; 0 turns carry-over off. */
   carryDays: number;
   /** The "not planned yet" reminder: minutes after the day's start it can first fire. */
@@ -149,6 +149,8 @@ export type PlanConfig = {
   endSound: boolean;
   /** PK-1: when I check off a to-do with a DevOps item, ask to update DevOps ("ask", the default) or never ask. */
   devopsOnDone: "ask" | "never";
+  /** TX-1: at end of day, offer to update DevOps with the check-in's progress (on by default). */
+  progressOffer: boolean;
   /** Days a client stays followed (DevOps, Open half-days) after its last Focus Time pattern ends (step 6d). */
   followGraceDays: number;
   /** The Close out reminder: minutes before the end of the working day (step 7). */
@@ -161,8 +163,8 @@ export type PlanConfig = {
   weekNudgeMon: string;
 };
 
-export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes" | "backgroundTypes"> = { sizes: DEFAULT_SIZE_SCALE, minSizes: { S: 30, M: 60, L: 90 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false, devopsOnDone: "ask", followGraceDays: 14, closeoutReminderMinutes: 15, checkinReminderMinutes: 0, weekNudgeThu: "14:00", weekNudgeFri: "09:00", weekNudgeMon: "08:30" };
-const PLAN_KEYS = ["pickable_portfolio_types", "background_types", "size_s", "size_m", "size_l", "unsized_minutes", "min_s", "min_m", "min_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound", "devops_on_done", "follow_grace_days", "closeout_reminder_minutes", "checkin_reminder_minutes", "week_nudge_thu", "week_nudge_fri", "week_nudge_mon"];
+export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes" | "backgroundTypes"> = { sizes: DEFAULT_SIZE_SCALE, minSizes: { XS: 15, S: 30, M: 60, L: 90 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false, devopsOnDone: "ask", progressOffer: true, followGraceDays: 14, closeoutReminderMinutes: 15, checkinReminderMinutes: 0, weekNudgeThu: "14:00", weekNudgeFri: "09:00", weekNudgeMon: "08:30" };
+const PLAN_KEYS = ["pickable_portfolio_types", "background_types", "size_s", "size_m", "size_l", "unsized_minutes", "devops_progress_offer", "min_s", "min_m", "min_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound", "devops_on_done", "follow_grace_days", "closeout_reminder_minutes", "checkin_reminder_minutes", "week_nudge_thu", "week_nudge_fri", "week_nudge_mon"];
 
 export type FieldError = { field: string; message: string };
 /** `legacyDayShape`: the file still has the old [day_shape] section (read as hours; migrated on load, D124). */
@@ -430,6 +432,10 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
     if (t?.end_sound !== undefined) {
       if (typeof t.end_sound !== "boolean") err("plan.end_sound", "Must be true or false");
       else planOpts.endSound = t.end_sound;
+    }
+    if (t?.devops_progress_offer !== undefined) {
+      if (typeof t.devops_progress_offer !== "boolean") err("plan.devops_progress_offer", "Must be true or false");
+      else planOpts.progressOffer = t.devops_progress_offer;
     }
     if (t?.devops_on_done !== undefined) {
       if (t.devops_on_done !== "ask" && t.devops_on_done !== "never") err("plan.devops_on_done", 'Must be "ask" or "never"');

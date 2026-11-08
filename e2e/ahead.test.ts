@@ -247,7 +247,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     const sz = story.locator(".ah-col-size");
     await sz.click();
     pop = await inView(sz);
-    await expect(pop.getByRole("radiogroup", { name: /Common Story Points values/ }).getByRole("radio").allTextContents()).resolves.toEqual(["1", "2", "3", "5", "8", "13"]);
+    await expect(pop.getByRole("radiogroup", { name: /Common Story Points values/ }).getByRole("radio").allTextContents()).resolves.toEqual(["0.5", "1", "2", "3", "5", "8", "13"]);
     await page.keyboard.press("Escape");
     const low = page.locator(".ah-row:not(.ro) .ah-col-size.ah-edit").last();
     await low.scrollIntoViewIfNeeded();

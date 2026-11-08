@@ -217,6 +217,62 @@ await forEachDriver("the bot's rhythm in Teams (TB-2)", (d) => {
     expect(t.confirms()).toBe(1);
   });
 
+  it("TX-1: the check-in card lists ended timeboxes with Done, Partly and Didn't get to it; All went to plan; Undo; nothing new, no section", async () => {
+    const t = await setup(d);
+    const box = async (title: string, a: string, b: string, size: "S" | "M") => {
+      const p = await t.add({ title, size });
+      await t.plan.addTimebox({ date: MON, clientKey: p.clientKey, pickId: p.id, title, start: `${MON}T${a}:00-05:00`, end: `${MON}T${b}:00-05:00`, outlook: false });
+      return p;
+    };
+    const a = await box("Import mapping", "09:00", "10:00", "M");
+    const b = await box("Release notes", "10:00", "11:00", "M");
+    const c = await box("Short fix", "11:00", "12:00", "S");
+    t.at("12:10");
+    await t.rhythm.tick(ANA, await t.facts());
+    const occ = `checkin:${MON}`;
+    const sent = t.cardsSent().at(-1)!;
+    for (const w of ["Import mapping", "All went to plan", "Partly", "Didn't get to it"]) expect(sent).toContain(w);
+    // Partly asks how much is left: the quick picks.
+    let card = await t.tap(occ, "session_partly", { pickId: a.id });
+    expect(card).toContain("1.5h");
+    expect((await t.plan.getPick(a.id))?.remainingMinutes).toBeUndefined();
+    card = await t.tap(occ, "session_left", { pickId: a.id, left: 60 });
+    expect(await t.plan.getPick(a.id)).toMatchObject({ remainingMinutes: 60, spentMinutes: 60, status: "planned" });
+    expect(card).toContain("Undo");
+    await t.tap(occ, "session_undo", { pickId: a.id });
+    expect((await t.plan.getPick(a.id))?.remainingMinutes).toBeUndefined();
+    await t.tap(occ, "session_none", { pickId: b.id });
+    expect((await t.plan.getPick(b.id))?.status).toBe("planned");
+    card = await t.tap(occ, "session_all");
+    // The rule: the one whose timebox covered what was left is done; the other counts its timebox as spent.
+    expect((await t.plan.getPick(c.id))?.status).toBe("done");
+    expect(await t.plan.getPick(a.id)).toMatchObject({ remainingMinutes: 60, status: "planned" });
+    expect(card).not.toContain("All went to plan");
+  });
+
+  it("TX-1: no timebox ended, no check-in section on the card", async () => {
+    const t = await setup(d);
+    await t.add({ title: "Fix the login timeout" });
+    t.at("12:10");
+    await t.rhythm.tick(ANA, await t.facts());
+    expect(t.cardsSent().at(-1)).not.toContain("All went to plan");
+  });
+
+  it("TX-1: XS is kept in the store; at close out a partly answer adds one line about DevOps and writes nothing from the card", async () => {
+    const dv = fakeDevOpsWrite({ now: () => MON, remainingWork: ["Task"] });
+    dv.add(500, { "System.WorkItemType": "Task", "System.Title": "Import mapping", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
+    const t = await setup(d, { devops: dv });
+    const xs = await t.add({ title: "Tiny", size: "XS" });
+    expect((await t.plan.getPick(xs.id))?.size).toBe("XS");
+    const a = await t.add({ kind: "item", itemId: 500, title: "Import mapping", itemType: "Task", size: "M" });
+    await t.plan.addTimebox({ date: MON, clientKey: a.clientKey, pickId: a.id, title: "Import mapping", start: `${MON}T09:00:00-05:00`, end: `${MON}T10:00:00-05:00`, outlook: false });
+    t.at("16:40");
+    await t.rhythm.tick(ANA, await t.facts());
+    const card = await t.tap(`closeout:${MON}`, "session_left", { pickId: a.id, left: 60 });
+    expect(card).toContain("Update Remaining Work on 1 story? Review it in Close out.");
+    expect(dv.seen.filter((x) => x.method === "PATCH")).toHaveLength(0);
+  });
+
   it("PK-1: Done on a check-in card offers the item's DevOps done state; a double tap on Confirm writes once; Undo offers the write's undo", async () => {
     const dv = fakeDevOpsWrite({ now: () => MON });
     dv.add(500, { "System.WorkItemType": "User Story", "System.Title": "Import mapping", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });

@@ -11,7 +11,7 @@ import { windowText } from "../plan/deploy.ts";
 import type { InboxListData } from "../plan/inbox-items.ts";
 import type { MeetingNudgeView } from "../plan/meeting-views.ts";
 import type { StatusLoad } from "../plan/status-types.ts";
-import { SIZE_MINUTES, sizeMinutes, type Pick } from "../plan/types.ts";
+import { pickNeed, SIZE_MINUTES, sizeMinutes, type Pick } from "../plan/types.ts";
 import type { Link } from "./types.ts";
 
 export type PeriodKind = "today" | "tomorrow" | "this_week" | "next_week" | "weekend" | "last_week" | "day";
@@ -134,11 +134,11 @@ export async function buildContext(d: ContextDeps, period: Period, client: strin
         free += freeHere;
         const f = slot.focus[0];
         if (!f || !ok(f.clientKey)) continue;
-        const planned = dayPicks.filter((p) => p.half === slot.half && p.clientKey === f.clientKey && p.status === "planned").reduce((n, p) => n + (p.minutes ?? sizeMinutes(p.size, sizes)), 0);
+        const planned = dayPicks.filter((p) => p.half === slot.half && p.clientKey === f.clientKey && p.status === "planned").reduce((n, p) => n + pickNeed(p, sizes), 0);
         const risk = slot.risks.find((r) => r.severity === "at_risk") ?? null;
         blocks.push({ date: day.date, half: slot.half as "AM" | "PM", clientKey: f.clientKey, clientName: d.clientName(f.clientKey), freeMinutes: freeHere, plannedMinutes: planned, meetingMinutes: slot.busyMeetingMinutes, risk: risk ? (risk.short ?? risk.reason) : null, pto: slot.pto });
       }
-      const plannedDay = dayPicks.filter((p) => p.status === "planned").reduce((n, p) => n + (p.minutes ?? sizeMinutes(p.size, sizes)), 0);
+      const plannedDay = dayPicks.filter((p) => p.status === "planned").reduce((n, p) => n + pickNeed(p, sizes), 0);
       ctx.days.push({ date: day.date, label: dayLabel(day.date), kind: day.kind, pto: !!day.pto, ptoHalf: day.ptoHalf?.half ?? null, workMinutes: work, meetingMinutes: meet, freeMinutes: free, plannedMinutes: plannedDay, blocks });
       for (const p of dayPicks) ctx.todos.push({ pickId: p.id, clientKey: p.clientKey, title: p.title, date: p.date, half: p.half === "PM" ? "PM" : p.half === "AM" ? "AM" : "EVE", done: p.status === "done", minutes: p.minutes ?? sizeMinutes(p.size, sizes), size: p.size, itemId: p.itemId, feature: null, deployment: p.todoKind === "deployment" && p.window ? windowText(p.window) : null });
     }

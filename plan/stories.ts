@@ -237,7 +237,7 @@ export const COOP_PROPOSALS_V1: JsonSchema = {
           description: str,
           acceptance_criteria: strs(12),
           depends_on: strs(MAX_PROPOSALS),
-          size: { type: ["string", "null"], enum: ["S", "M", "L", null] },
+          size: { type: ["string", "null"], enum: ["XS", "S", "M", "L", null] },
           evidence: strs(6),
           open_questions: strs(6),
         },

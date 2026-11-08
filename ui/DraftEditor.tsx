@@ -7,7 +7,7 @@ import { TextBox } from "./TextBox.tsx";
 import { CloseButton } from "./CloseButton.tsx";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
-import type { DraftStory, Size } from "../plan/types.ts";
+import { SIZES, type DraftStory, type Size } from "../plan/types.ts";
 import { call } from "./api.ts";
 import { captureClients, useClientFeatures } from "./Capture.tsx";
 import { DevOpsAction } from "./DevOpsWrite.tsx";
@@ -159,7 +159,7 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
               <span className="set-field">
                 <span className="set-label" id={`draft-size-${draft.id}`}>Size</span>
                 <span className="cap-size" role="group" aria-labelledby={`draft-size-${draft.id}`}>
-                  {(["S", "M", "L"] as const).map((z) => (
+                  {SIZES.map((z) => (
                     <button key={z} type="button" className="mini" aria-pressed={size === z} onClick={() => setSize(z)}>
                       {z}
                     </button>

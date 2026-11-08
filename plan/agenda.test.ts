@@ -88,7 +88,7 @@ describe("placeInGap", () => {
 
 describe("planMyDay", () => {
   const pick = (id: number, half: "AM" | "PM", size: "S" | "M" | "L", position = id): Pick => ({ id, date: "2026-11-02", half, clientKey: "w", kind: "item", itemId: id, draftId: null, title: `p${id}`, itemType: null, itemUrl: null, size, status: "planned", carriedFrom: null, carriedFromDate: null, notes: null, followUpId: null, position, createdAt: "", updatedAt: "" });
-  const sizes = { S: 30, M: 60, L: 120, unsized: 60 };
+  const sizes = { XS: 30, S: 30, M: 60, L: 120, unsized: 60 };
   const pm = slot("PM", [], [gap("13:00", "14:00"), gap("15:00", "17:00")], [["13:00", "17:00"]]);
 
   it("places musts first, then larger sizes, then pick order", () => {

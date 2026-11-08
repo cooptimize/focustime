@@ -3,7 +3,7 @@
 // has them too (from an earlier week they are listed as From last week, D677).
 import type { DemoSeed } from "./types.ts";
 
-type Left = [day: number, half: "AM" | "PM", clientKey: string, itemId: number, title: string, size: "S" | "M" | "L" | null];
+type Left = [day: number, half: "AM" | "PM", clientKey: string, itemId: number, title: string, size: "XS" | "S" | "M" | "L" | null];
 
 export const unfinishedSeed: DemoSeed = {
   name: "unfinished",

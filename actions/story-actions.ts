@@ -332,7 +332,7 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
         seen.add(id);
         if (typeof e.keep !== "boolean") throw new Invalid("keep must be true or false");
         if (!Array.isArray(e.acceptance) || e.acceptance.length > 20 || e.acceptance.some((a) => typeof a !== "string" || a.length > 1000)) throw new Invalid("acceptance is a list of lines");
-        if (e.size !== null && !validStorySize(e.size)) throw new Invalid("size is S, M, L or null");
+        if (e.size !== null && !validStorySize(e.size)) throw new Invalid("size is XS, S, M, L or null");
         const edit = { title: text(e.title, "title", 400, true).trim(), description: text(e.description, "description", 8000, true), acceptance: (e.acceptance as string[]).map((a) => a.trim()).filter(Boolean) };
         const problem = editProblem(edit);
         if (problem) throw new Refused(`${cur.title || id}: ${problem}`, 422);

@@ -13,7 +13,7 @@ const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], conf
 const wi = (id: number, title: string): WorkItem => ({ id, title, type: "User Story", state: "New", stateCategory: "Proposed", level: "story", order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/contoso/P/_workitems/edit/${id}` });
 const work = new Map<string, ClientWork>([["northwind", { clientKey: "northwind", clientName: "Northwind", status: "ok", fetchedAt: null, fromCache: false, items: [wi(412, "Northwind - Order export"), wi(413, "Invoice import")], children: [] }]]);
 // Only what the row menus read; the rest of MenuEnv is never touched by them.
-const env = { week, work, today: "2026-11-03", timer: null, planState: null, planning: { sizes: { S: 60, M: 120, L: 240, unsized: 60 }, focusMinutes: 50 } } as unknown as MenuEnv;
+const env = { week, work, today: "2026-11-03", timer: null, planState: null, planning: { sizes: { XS: 30, S: 60, M: 120, L: 240, unsized: 60 }, focusMinutes: 50 } } as unknown as MenuEnv;
 const pick = (id: number, itemId: number | null, title: string): Pick => ({ id, date: "2026-11-03", half: "AM", clientKey: "northwind", kind: itemId ? "item" : "intention", itemId, draftId: null, title, itemType: "User Story", itemUrl: null, size: "M", status: "planned", carriedFrom: null, carriedFromDate: null, followUpId: null, notes: null, position: 1, createdAt: "", updatedAt: "" });
 const facts = (itemId: number, title: string): WeekItemFacts => ({ itemId, title, clientName: "Northwind", tier: "must", level: "feature", first: false, last: false, past: false, done: null, minutes: 240, places: [], pinned: [], openStories: 0, targetDate: null, drafts: 0, canWrite: true });
 const noop = () => {};

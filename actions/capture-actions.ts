@@ -63,7 +63,7 @@ const date = (v: unknown): IsoDate | null => {
 };
 const size = (v: unknown): Size => {
   if (v === undefined) return "M";
-  if (v !== "S" && v !== "M" && v !== "L") throw new Invalid("size must be S, M or L");
+  if (v !== "XS" && v !== "S" && v !== "M" && v !== "L") throw new Invalid("size must be XS, S, M or L");
   return v;
 };
 
