@@ -6223,6 +6223,7 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .tc-sub { font-size: var(--fs-2); }
 .tc-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .tc-said { font-size: var(--fs-2); color: var(--text-muted); }
+.tc-error { margin: 0 0 8px; font-size: var(--fs-2); color: var(--risk); }
 .tc-left { width: 64px; background: var(--surface); color: inherit; }
 .tc-offer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 16px; padding: 8px 12px; border-radius: 8px; background: var(--sunken); }
 .tc-offer > span:first-child { flex: 1 1 200px; }

@@ -329,7 +329,8 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         // TX-1: re-sizing a story that's under way moves its time left, as on its to-do.
         const was = (await plan.weekPlan(before.weekStart)).features.find((f) => f.id === before.id);
         const left = resizedRemaining(was?.remainingMinutes, before.size, sz, (await ctx.config())?.plan.sizes ?? SIZE_MINUTES);
-        if (left !== null && before.itemId !== null) await plan.setItemRemaining(before.clientKey, before.itemId, left);
+        // TX-1b: re-sizing a to-do of it to this size already moved it: once, not twice.
+        if (left !== null && before.itemId !== null && !(await plan.itemAlreadySized(before.clientKey, before.itemId, sz, before.weekStart, { weekItemId: before.id }))) await plan.setItemRemaining(before.clientKey, before.itemId, left);
         const item = (await plan.setWeekItemSize(before.id, sz));
         return { ok: true, data: { item, plan: weekPlanView((await plan.weekPlan(before.weekStart))) } };
       }

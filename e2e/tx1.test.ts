@@ -118,6 +118,49 @@ describe.skipIf(!CHROMIUM)("TX-1 timeboxes and check-ins (browser, demo mode)", 
     await page.close();
   }, T);
 
+  it("TX-1b: All went to plan on a page left open: an error offers Retry, a row answered elsewhere goes, every applied row has Undo, a Done gets PK-1's offer", async () => {
+    const { page, errors } = await freshPage(h);
+    const ids = await monday(page);
+    await go(page, "#/today/checkin");
+    await page.locator(".tc-box").waitFor();
+    await expect.poll(() => page.locator(".tc-row").count()).toBe(3);
+    // Answered in Teams while this page sat open.
+    expect((await call(page, "checkin.answer", { date: MON, moment: "midday", pickId: ids.chart, answer: "partly", left: 60 })).ok).toBe(true);
+    let failOnce = true;
+    const asked: number[][] = [];
+    await page.route("**/api/action", async (r) => {
+      const body = JSON.parse(r.request().postData() ?? "{}") as { action?: string; input?: { pickIds?: number[] } };
+      if (body.action === "checkin.all_to_plan" && failOnce) {
+        failOnce = false;
+        return r.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ ok: false, error: "That timebox was already answered" }) });
+      }
+      if (body.action === "devops.done_offer") {
+        asked.push(body.input?.pickIds ?? []);
+        return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, data: { off: false, offers: [{ pickId: ids.notes, clientKey: "Northwind", clientName: "Northwind", itemId: 900, title: "Write the export notes", type: "User Story", state: "Active", choices: ["Closed"], followUpId: null }] } }) });
+      }
+      return r.continue();
+    });
+    await page.getByRole("button", { name: "All went to plan" }).click();
+    await page.locator(".tc-error", { hasText: "That timebox was already answered" }).waitFor();
+    expect(await page.locator(".tc-said").count()).toBe(0);
+    await shotBoth(page, "tx1b-retry", page.locator(".tc-box"));
+    await page.getByRole("button", { name: "Retry" }).click();
+    await page.locator(".tc-said").first().waitFor();
+    await expect.poll(() => page.locator(".tc-row").count()).toBe(2);
+    expect(await row(page, "Timesheet summary query").getByRole("button", { name: "Undo" }).count()).toBe(1);
+    expect(await row(page, "Write the export notes").getByRole("button", { name: "Undo" }).count()).toBe(1);
+    await expect.poll(() => asked.length).toBe(1);
+    expect(asked[0]).toEqual([ids.notes]);
+    await page.locator(".tc-box ~ .done-batch, .done-batch").first().waitFor();
+    await shotBoth(page, "tx1b-applied-with-offer", page.locator(".tc-box"));
+    // An Undo after a stale list works and takes its offer away.
+    await row(page, "Write the export notes").getByRole("button", { name: "Undo" }).click();
+    await row(page, "Write the export notes").getByRole("button", { name: "Partly" }).waitFor();
+    await expect.poll(() => page.locator(".done-batch").count()).toBe(0);
+    expect(errors.filter((e) => !e.includes("409"))).toEqual([]);
+    await page.close();
+  }, T);
+
   it("phone: one screen, 44px targets, nothing wider than the phone, the page scrolls", async () => {
     const { page, errors } = await freshPage(h, { width: 390, height: 844 });
     await monday(page);

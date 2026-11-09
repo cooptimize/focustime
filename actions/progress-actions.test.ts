@@ -246,3 +246,108 @@ describe("the end of day DevOps offer", () => {
     expect(t.patches()).toHaveLength(0);
   });
 });
+
+describe("TX-1b: fixes from the TX-1 review", () => {
+  const TUE = "2026-11-03";
+  const NEXT_MON = "2026-11-09";
+  type T = ReturnType<typeof setup>;
+  type Applied = { pickId: number; timeboxIds: number[]; as: string; left: number; removed: string[]; notice: string | null };
+  const pickOn = async (t: T, date: string, itemId: number) => {
+    await t.plan.start(date);
+    return t.plan.addPick({ date, half: "AM", clientKey: COOP, kind: "item", itemId, title: "Mapping", itemType: "Task", size: "M" });
+  };
+  const story = (t: T, weekStart: string, itemId = 500) => t.plan.addWeekItem({ weekStart, clientKey: COOP, itemId, title: "Mapping", itemType: "Task", url: null, level: "story", tier: "must", size: "M" });
+  const leftOn = async (t: T, weekStart: string, itemId = 500) => (await t.plan.weekPlan(weekStart)).features.find((f) => f.itemId === itemId)?.remainingMinutes ?? null;
+  const allToPlan = (t: T) => t.run<{ applied: Applied[]; timeboxIds: number[]; done: number[] }>("checkin.all_to_plan", { date: D, moment: "midday" });
+
+  it("bug 1: a drag, an Outlook toggle or a sync on an answered timebox keeps its to-do link, and Undo restores spent and left exactly", async () => {
+    const t = setup();
+    const a = await t.boxed(500, "M", 60);
+    await t.plan.setRemaining(a.pickId, 100);
+    const { timeboxIds } = await t.answer(a.pickId, "partly", 60, "end");
+    await t.plan.updateTimebox(a.timeboxId, { start: at("09:15"), end: at("10:15") });
+    await t.plan.updateTimebox(a.timeboxId, { outlook: false });
+    await t.plan.updateTimebox(a.timeboxId, { pickId: null }); // What Outlook sync passes for a timebox that moved.
+    expect((await t.plan.timebox(a.timeboxId))?.sessionPickId).toBe(a.pickId);
+    await t.enable();
+    expect((await t.offers()).offers.map((o) => o.pickId)).toEqual([a.pickId]);
+    await t.run("checkin.undo", { timeboxIds });
+    expect(await t.plan.getPick(a.pickId)).toMatchObject({ status: "planned", remainingMinutes: 100, spentMinutes: 0 });
+  });
+
+  it("bug 2: Done removes the story's planned to-dos on later days, says so once, and Undo puts them back", async () => {
+    const t = setup();
+    const a = await t.boxed(500, "M", 120);
+    const tue = await pickOn(t, TUE, 500);
+    const box = await t.plan.addTimebox({ date: TUE, clientKey: COOP, pickId: tue.id, title: "Mapping", start: `${TUE}T09:00:00-05:00`, end: `${TUE}T10:00:00-05:00`, outlook: false });
+    const out = (await t.answer(a.pickId, "done")) as unknown as { timeboxIds: number[]; removed: string[]; notice: string };
+    expect(out).toMatchObject({ removed: [TUE], notice: "Removed from Tue, story is done" });
+    expect((await t.plan.getPick(tue.id))?.status).toBe("dropped");
+    expect((await t.plan.timebox(box.id))?.removedAt).toBeTruthy();
+    await t.run("checkin.undo", { timeboxIds: out.timeboxIds });
+    expect(await t.plan.getPick(tue.id)).toMatchObject({ status: "planned" });
+    expect((await t.plan.getPick(tue.id))?.remainingMinutes).toBeUndefined();
+    expect((await t.plan.timebox(box.id))?.removedAt).toBeNull();
+  });
+
+  it("bug 3: a Done in an earlier week never counts as 0h later; the last time left before it, else the size", async () => {
+    const t = setup();
+    const a = await t.boxed(500, "M", 120);
+    await t.plan.setRemaining(a.pickId, 90);
+    await story(t, D);
+    await t.answer(a.pickId, "done");
+    expect(await leftOn(t, D)).toBe(0); // That week it's done.
+    await story(t, NEXT_MON);
+    expect(await leftOn(t, NEXT_MON)).toBe(90);
+    expect((await pickOn(t, NEXT_MON, 500)).remainingMinutes).toBe(90);
+
+    const b = await t.boxed(501, "M", 120);
+    await story(t, NEXT_MON, 501);
+    await t.answer(b.pickId, "done");
+    expect(await leftOn(t, NEXT_MON, 501)).toBeNull();
+    expect((await pickOn(t, NEXT_MON, 501)).remainingMinutes).toBeUndefined();
+  });
+
+  it("bug 7: re-sizing the to-do and its week story together moves the time left once; a timebox's length doesn't move it", async () => {
+    const t = setup();
+    const a = await t.boxed(500, "M", 60);
+    await t.answer(a.pickId, "partly", 60);
+    const w = await story(t, D);
+    await t.plan.updateTimebox(a.timeboxId, { end: at("11:00") });
+    expect((await t.plan.getPick(a.pickId))?.remainingMinutes).toBe(60);
+    await t.run("pick.set_size", { id: a.pickId, size: "L" });
+    expect((await t.plan.getPick(a.pickId))?.remainingMinutes).toBe(180);
+    await t.run("weekplan.set_size", { id: w.id, size: "L" });
+    expect((await t.plan.getPick(a.pickId))?.remainingMinutes).toBe(180);
+  });
+
+  it("bug 8: All went to plan works from the rows as they are now: one answered elsewhere is skipped and every applied row has its Undo", async () => {
+    const t = setup();
+    const a = await t.boxed(500, "M", 60);
+    const b = await t.boxed(501, "M", 60);
+    await t.answer(a.pickId, "partly", 60); // Answered in Teams while this page sat open.
+    const out = await allToPlan(t);
+    expect(out.applied.map((r) => [r.pickId, r.timeboxIds, r.as, r.left])).toEqual([[b.pickId, [b.timeboxId], "partly", 60]]);
+    expect((await t.plan.getPick(a.pickId))?.remainingMinutes).toBe(60);
+    await t.run("checkin.undo", { timeboxIds: out.applied[0]!.timeboxIds });
+    expect((await t.plan.getPick(b.pickId))?.remainingMinutes).toBeUndefined();
+  });
+
+  it("bug 9: All went to plan is all or nothing: a failure partway leaves every row as it was", async () => {
+    const t = setup();
+    const a = await t.boxed(500, "M", 120);
+    const b = await t.boxed(501, "M", 120);
+    const real = t.plan.getPick.bind(t.plan);
+    let raced = false;
+    (t.plan as { getPick: typeof real }).getPick = async (id: number) => {
+      if (id === b.pickId && !raced) {
+        raced = true; // Teams answers the second row between the read and the write.
+        await t.plan.settleSessions({ pickId: b.pickId, timeboxIds: [b.timeboxId], as: "partly", spent: 120, remaining: 30 });
+      }
+      return real(id);
+    };
+    await expect(allToPlan(t)).rejects.toThrow(/409/);
+    expect((await t.plan.getPick(a.pickId))?.status).toBe("planned");
+    expect((await t.sessions()).map((r) => r.pickId)).toEqual([a.pickId]);
+  });
+});

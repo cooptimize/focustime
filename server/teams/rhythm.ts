@@ -28,7 +28,7 @@ import type { AssistantService, ConfirmResult, Proposal } from "./assistant.ts";
 import type { Address, InvokeBody, OutActivity, Sender } from "./bot.ts";
 import { attach, CARD_TYPE, type Card } from "./cards.ts";
 import { durationText, parseLeft, validLeft } from "../../plan/progress.ts";
-import type { SessionView } from "../../actions/types.ts";
+import type { AppliedSession, SessionView } from "../../actions/types.ts";
 import { captureCard, plainRows, rhythmCard, rhythmTapOf, type SessionCard, type BriefModel, type CaptureTap, type CheckinModel, type Choice, type CloseoutModel, type InlineProposal, type NudgeModel, type PickRow, type RhythmModel, type RhythmTap, type StatusModel, type MeetingsModel } from "./rhythm-cards.ts";
 
 /** The facts a person's pass already has (the notifier's gate facts and their settings). */
@@ -613,8 +613,8 @@ export function createRhythm(d: RhythmDeps) {
         m = { ...m, notice: r.error };
         return;
       }
-      const ids = (r.data as { timeboxIds: number[] }).timeboxIds;
-      put(row.pickId, (x) => ({ ...x, state: answer, undoIds: ids, note: answer === "done" ? "done" : answer === "partly" ? `${durationText(left!)} left` : "back to not timeboxed" }));
+      const { timeboxIds: ids, notice } = r.data as { timeboxIds: number[]; notice: string | null };
+      put(row.pickId, (x) => ({ ...x, state: answer, undoIds: ids, note: answer === "done" ? (notice ? `done · ${notice}` : "done") : answer === "partly" ? `${durationText(left!)} left` : "back to not timeboxed" }));
       m = { ...m, notice: null };
       if (answer === "done") {
         setPicks([row.pickId], "done");
@@ -643,32 +643,39 @@ export function createRhythm(d: RhythmDeps) {
       case "session_undo": {
         if (!row?.undoIds?.length) break;
         const r = await d.run(userId, "checkin.undo", { timeboxIds: row.undoIds });
+        m = { ...m, notice: r.ok ? null : r.error };
         if (r.ok) {
           const wasDone = row.state === "done";
           put(row.pickId, (x) => ({ ...x, state: "open", note: null, undoIds: [] }));
-          if (wasDone) setPicks([row.pickId], "open");
+          if (wasDone) {
+            setPicks([row.pickId], "open");
+            // TX-1b: the DevOps change a Done made is offered back, like the plain row's Undo. A change still waiting on the card is the person's to confirm or cancel.
+            if (m.proposal?.state === "open") m = { ...m, notice: "This Undo doesn't change DevOps. Confirm or cancel the change above." };
+            else m = (await offerDevOps(userId, m, "item_undo", row.pickId)) as typeof m;
+          }
         }
-        m = { ...m, notice: r.ok ? null : r.error };
         break;
       }
       case "session_all": {
         const r = await d.run(userId, "checkin.all_to_plan", { date: m.date, moment });
         if (!r.ok) {
-          m = { ...m, notice: r.error };
+          m = { ...m, notice: `${r.error}. Nothing was changed. Tap All went to plan to try again.` };
           break;
         }
-        const data = r.data as { timeboxIds: number[]; done: number[] };
-        // The undo ids aren't per to-do in the answer, so each row reads its own from the store.
-        const plan = await d.plan(userId);
-        const boxes = plan ? await plan.timeboxesBetween(m.date, m.date) : [];
-        for (const x of rows.filter((q) => q.state === "open" || q.state === "asking")) {
-          const mine = boxes.filter((b) => data.timeboxIds.includes(b.id) && b.sessionPickId === x.pickId).map((b) => b.id);
-          const done = data.done.includes(x.pickId);
-          const left = done ? null : (await plan?.getPick(x.pickId).catch(() => null))?.remainingMinutes ?? null;
-          put(x.pickId, (q) => ({ ...q, state: done ? "done" : "partly", undoIds: mine, note: done ? "done" : left !== null ? `${durationText(left)} left` : null }));
-        }
+        const data = r.data as { applied: AppliedSession[]; done: number[] };
+        // TX-1b: the server read the rows afresh. One answered elsewhere leaves the card; one that ended since joins it.
+        const had = m.sessions ?? [];
+        const applied = new Set(data.applied.map((a) => a.pickId));
+        m = { ...m, sessions: [...had.filter((q) => (q.state !== "open" && q.state !== "asking") || applied.has(q.pickId)), ...data.applied.filter((a) => !had.some((q) => q.pickId === a.pickId)).map((a): SessionCard => ({ pickId: a.pickId, title: a.title.slice(0, 200), client: a.clientName, minutes: a.minutes, state: "open" }))] } as typeof m;
+        for (const a of data.applied) put(a.pickId, (q) => ({ ...q, state: a.as === "done" ? "done" : "partly", undoIds: a.timeboxIds, note: a.as === "done" ? (a.notice ? `done · ${a.notice}` : "done") : `${durationText(a.left)} left` }));
         setPicks(data.done, "done");
         m = { ...m, notice: null };
+        // TX-1b: PK-1's offer, as a Done on one row makes it. A card holds one proposal, so any others wait for Close out.
+        const toOffer = data.applied.filter((a) => a.as === "done" && a.itemId !== null);
+        if (toOffer.length && m.proposal?.state !== "open") {
+          m = (await offerDevOps(userId, m, "item_done", toOffer[0]!.pickId)) as typeof m;
+          if (toOffer.length > 1 && m.proposal?.state === "open") m = { ...m, notice: `${toOffer.length - 1} more to set in DevOps: review ${toOffer.length === 2 ? "it" : "them"} in Close out.` };
+        }
         break;
       }
     }

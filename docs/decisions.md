@@ -1778,3 +1778,21 @@ Unnumbered until merge.
 | - | Done | TX-1: Teams: the card has the same three answers plus All went to plan. The DevOps offer is one line pointing at Close out ("Review it in Close out."), because the preview lives in the app and a card never writes to DevOps without one. Done on a card uses PK-1's `offerDevOps`. Partly re-renders the row with quick picks and a text box, since ShowCard can't be used inside an ActionSet here. |
 | - | Done | TX-1: `namedSize` now returns XS for 30 minutes (SZ-1's unsized default can be 30). The focus timer's suggested length uses what's left. Dragging to a block on Week counts what's left. |
 | - | Done | TX-1: The demo gives Cooptimize's stories a Remaining Work field and leaves other clients without one, so both paths can be seen there. |
+
+## TX-1b: fixes from the TX-1 review (Nov 8)
+
+Unnumbered until merge. These change TX-1's rows above where they say so.
+
+| # | Status | Decision |
+|---|---|---|
+| - | Done | TX-1b: An answered timebox keeps its to-do whatever else changes. The store ignores any new link on a settled timebox (a drag, an Outlook toggle or a sync). A read still shows no `pickId` once a partly or none session stopped holding the to-do; `sessionPickId` is always the link. |
+| - | Done | TX-1b: Done means the story is done. A check-in Done takes the story's planned to-dos on later days off the plan (status `dropped`, their timeboxes off unless on Outlook), says so once on the row ("Removed from Tue, story is done") and the row's Undo puts them back. A tick outside a check-in is unchanged: ticking off one day's slice of a story was already a normal thing to do. |
+| - | Done | TX-1b: Replaces TX-1's "written on every pick". Time left is written on the to-do answered and the item's to-dos still planned. A Done writes only its own to-do and keeps the last time left in the column, read as 0 on a done to-do, so a story planned again picks it up; with none before the Done it uses its size. Undo restores each to-do's own values from `settle_before`. |
+| - | Done | TX-1b: A week story's time left is its latest to-do in that week (done: 0), otherwise the last time left it had, otherwise its size. It is read per client for that week's items through a new index, `picks_client_item`, not across the person's history. An open to-do never reads as 0 left, which also repairs rows TX-1 left at 0. |
+| - | Done | TX-1b: All went to plan works from the rows as the server reads them when it's pressed, in one transaction: all of them or none. A row answered elsewhere leaves the list, one that ended since joins it, and each applied row carries its own Undo ids. On a failure the row list stays as it was, with the error and Retry. |
+| - | Done | TX-1b: TX-1's rule says PK-1's offer applies to All went to plan's Done rows, and the code didn't make it, so the code changed. At midday they get PK-1's batch in the app, and on a Teams card the first one's proposal plus a line sending the rest to Close out, since a card holds one proposal. Close out still asks once for the day. The end of day Remaining Work offer is unchanged. |
+| - | Done | TX-1b: Undo of a Done on a Teams card offers to undo the DevOps change it made, the same `item_undo` proposal as the plain row. If a DevOps proposal is still open on the card, the card says the Undo doesn't change DevOps. |
+| - | Done | TX-1b: A re-size moves the time left once: not again when the item's other planned to-do or week story already has that size that week. It never goes past the new size; a number the person set above the old size stays theirs and a re-size leaves it alone. A timebox's length never moves it. |
+| - | Done | TX-1b: The assistant's to-do minutes use `pickNeed` for planned to-dos, matching the day and block totals. A done to-do still reports what it took. |
+| - | Done | TX-1b: Each "How much is left?" box on a Teams card has its own id (`sessionLeft_<pick id>`). A card already in a chat with the old id still works. |
+| - | Done | TX-1b: A jump to one setting no longer takes focus if a new search has started by the time the section's data arrives. That late focus was what made the Settings search browser test fail intermittently. |

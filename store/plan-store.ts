@@ -2,6 +2,7 @@
 // Holds only FocusTime's own plan (day plans, picks, draft stories) and a few one-time markers.
 // Nothing here is ever written to DevOps, Outlook, Google or Dataverse.
 import type { StandardsUsed } from "../plan/standards.ts";
+import { weekStoryLeft, type WeekLeftRow } from "../plan/progress.ts";
 import { isOwner, type Owner } from "../plan/follow-who.ts";
 import type { ChangeField, ChangeValue, DayHalf, StagedChange } from "../plan/ahead-edit.ts";
 import { PROMISE_STATUSES, type NotSorted, type PromiseDraft, type PromiseStatus, type StoredPromise } from "../plan/asks-ai.ts";
@@ -1399,6 +1400,20 @@ const sizeOfRow = (r: Row): Size | null => (r.size_xs ? "XS" : ((r.size as Size 
 const sizeColumn = <T extends Size | null | undefined>(s: T) => (s === "XS" ? "S" : s) as T;
 const xsFlag = (s: Size | null | undefined) => (s === "XS" ? 1 : null);
 
+/**
+ * TX-1b: a to-do's progress as the app reads it. The column keeps the last time left while the work was open, so a story
+ * done and later planned again can pick it up; a done to-do reads as nothing left. An open to-do never reads as 0 left
+ * (rows TX-1's item-wide write left at 0 read as no progress, so they count their size).
+ */
+const progressOf = (r: Row): { remainingMinutes?: number; spentMinutes?: number } => {
+  const left = r.remaining_minutes as number | null;
+  if (left == null || (left === 0 && r.status !== "done")) return {};
+  return { remainingMinutes: r.status === "done" ? 0 : left, spentMinutes: (r.spent_minutes as number | null) ?? 0 };
+};
+/** TX-1b: one client's week stories' to-dos up to that week's end: by item through picks_client_item, never the whole history. */
+export const weekLeftSql = (items: number) => `SELECT item_id, date, id, status, remaining_minutes FROM picks WHERE client_key = ? AND item_id IN (${Array.from({ length: items }, () => "?").join(", ")}) AND date <= ? AND status <> 'dropped' AND remaining_minutes IS NOT NULL`;
+type SettleBefore = { status: string; spent: number | null; remaining: number | null; others?: { id: number; spent: number | null; remaining: number | null }[]; removed?: number[]; removedBoxes?: number[] };
+
 /** TX-1: a timebox answered partly or not got to is a past session: the to-do is free to get another. */
 const settledOf = (r: Row): Pick2<Timebox, "settled" | "sessionPickId"> & { pickId?: number | null } => {
   const as = (r.settled_as as Timebox["settled"]) ?? null;
@@ -1452,7 +1467,7 @@ const toPick = (r: Row): Pick => ({
   notes: (r.notes as string | null) ?? null,
   followUpId: (r.follow_up_id as number | null) ?? null,
   ...(r.minutes != null ? { minutes: r.minutes as number } : {}),
-  ...(r.remaining_minutes != null ? { remainingMinutes: r.remaining_minutes as number, spentMinutes: (r.spent_minutes as number | null) ?? 0 } : {}),
+  ...progressOf(r),
   ...(r.todo_kind === "deployment" ? { todoKind: "deployment" as const } : {}),
   ...(r.window_start != null && r.window_end != null ? { window: { start: r.window_start as string, end: r.window_end as string } } : {}),
   ...(r.links != null ? { links: json<TodoLink[]>(r.links) ?? [] } : {}),
@@ -1717,7 +1732,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     if (p.todoKind || p.window || p.links) (await writeTodoKind(r.lastId!, p));
     if (p.size === "XS") (await db.run("UPDATE picks SET size_xs = 1 WHERE id = ?", r.lastId!));
     // TX-1: progress follows the item: a carried copy brings its own, a DevOps item picked again takes what it had left.
-    const had = p.remainingMinutes != null ? { remaining_minutes: p.remainingMinutes, spent_minutes: p.spentMinutes ?? 0 } : p.itemId != null ? ((await db.get("SELECT remaining_minutes, spent_minutes FROM picks WHERE client_key = ? AND item_id = ? AND remaining_minutes > 0 AND id <> ?", p.clientKey, p.itemId, r.lastId!)) as Row | undefined) : undefined;
+    const had = p.remainingMinutes != null ? { remaining_minutes: p.remainingMinutes, spent_minutes: p.spentMinutes ?? 0 } : p.itemId != null ? ((await db.get("SELECT remaining_minutes, spent_minutes FROM picks WHERE client_key = ? AND item_id = ? AND remaining_minutes > 0 AND id <> ? ORDER BY date DESC, id DESC", p.clientKey, p.itemId, r.lastId!)) as Row | undefined) : undefined;
     if (had) (await db.run("UPDATE picks SET remaining_minutes = ?, spent_minutes = ? WHERE id = ?", had.remaining_minutes as number, had.spent_minutes as number | null, r.lastId!));
     return (await getPick(r.lastId!))!;
   }
@@ -1725,9 +1740,9 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
   async function writeTodoKind(id: number, p: { todoKind?: NewPick["todoKind"]; window?: NewPick["window"]; links?: NewPick["links"]; deployItems?: NewPick["deployItems"] }): Promise<void> {
     (await db.run("UPDATE picks SET todo_kind = ?, window_start = ?, window_end = ?, links = ?, deploy_items = ?, updated_at = ? WHERE id = ?", p.todoKind ?? null, p.window?.start ?? null, p.window?.end ?? null, p.links?.length ? JSON.stringify(p.links) : null, p.deployItems?.length ? JSON.stringify(p.deployItems) : null, stamp(), id));
   }
-  /** TX-1: an item's time spent and left, on every to-do of it. A plain to-do has only itself (its carried copies copied it). */
+  /** TX-1: an item's time spent and left: this to-do and the item's others still planned (TX-1b: never done or earlier ones). A plain to-do has only itself. */
   async function writeProgress(p: Pick, spent: number | null, remaining: number | null): Promise<void> {
-    if (p.itemId !== null) (await db.run("UPDATE picks SET spent_minutes = ?, remaining_minutes = ? WHERE client_key = ? AND item_id = ?", spent, remaining, p.clientKey, p.itemId));
+    if (p.itemId !== null) (await db.run("UPDATE picks SET spent_minutes = ?, remaining_minutes = ? WHERE client_key = ? AND item_id = ? AND (id = ? OR status = 'planned')", spent, remaining, p.clientKey, p.itemId, p.id));
     else (await db.run("UPDATE picks SET spent_minutes = ?, remaining_minutes = ? WHERE id = ?", spent, remaining, p.id));
   }
   /** A pick's copy for a move or make up to another day: what it points at, its size, minutes, and a deployment's parts. */
@@ -1876,40 +1891,77 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     },
     /**
      * TX-1: a check-in answer, in one transaction: the timeboxes it covers remember what was true before (for Undo), the
-     * to-do's time spent and left is written on every to-do of the same DevOps item, Done ticks it, and "none" on a
-     * timebox that isn't on Outlook takes it off (one on Outlook stays as it is: nothing external changes from a check-in).
+     * to-do's time spent and left is written on it and the item's to-dos still planned, Done ticks it and takes the story's
+     * planned to-dos on later days off the plan (TX-1b), and "none" on a timebox that isn't on Outlook takes it off (one on
+     * Outlook stays as it is: nothing external changes from a check-in). Returns the days a Done took to-dos off.
      */
-    async settleSessions(o: { pickId: number; timeboxIds: readonly number[]; as: "done" | "partly" | "none"; spent: number; remaining: number }): Promise<void> {
+    async settleSessions(o: { pickId: number; timeboxIds: readonly number[]; as: "done" | "partly" | "none"; spent: number; remaining: number }): Promise<{ removed: IsoDate[] }> {
       return tx(async () => {
         const p = await mustPick(o.pickId);
-        const before = JSON.stringify({ status: p.status, spent: p.spentMinutes ?? null, remaining: p.remainingMinutes ?? null });
+        const planned = p.itemId === null ? [] : ((await db.all("SELECT id, date, spent_minutes, remaining_minutes FROM picks WHERE client_key = ? AND item_id = ? AND status = 'planned' AND id <> ?", p.clientKey, p.itemId, p.id)) as Row[]);
+        const later = o.as === "done" ? planned.filter((r) => (r.date as string) > p.date) : [];
+        const removedBoxes: number[] = [];
+        for (const r of later) for (const b of (await db.all("SELECT id FROM timeboxes WHERE pick_id = ? AND removed_at IS NULL AND settled_as IS NULL AND outlook = 0", r.id as number)) as Row[]) removedBoxes.push(b.id as number);
+        const snapshot: SettleBefore = { status: p.status, spent: p.spentMinutes ?? null, remaining: p.remainingMinutes ?? null, others: planned.map((r) => ({ id: r.id as number, spent: (r.spent_minutes as number | null) ?? null, remaining: (r.remaining_minutes as number | null) ?? null })), removed: later.map((r) => r.id as number), removedBoxes };
+        const before = JSON.stringify(snapshot);
         const at = stamp();
         for (const id of o.timeboxIds) {
           const t = (await db.get("SELECT pick_id, settled_as, outlook FROM timeboxes WHERE id = ? AND removed_at IS NULL", id)) as Row | undefined;
           if (!t || t.pick_id !== o.pickId || t.settled_as) throw new PlanError("That timebox was already answered");
           await db.run("UPDATE timeboxes SET settled_as = ?, settled_at = ?, settle_before = ?, removed_at = ?, updated_at = ? WHERE id = ?", o.as, at, before, o.as === "none" && t.outlook !== 1 ? at : null, at, id);
         }
-        if (o.as !== "none") await writeProgress(p, o.spent, o.remaining);
+        if (o.as === "partly") await writeProgress(p, o.spent, o.remaining);
+        // TX-1b: a Done touches only its own to-do and keeps the last time left in the column (it reads as 0): a story
+        // planned again picks it up; with none before the Done, 0 means "use its size".
+        if (o.as === "done") await db.run("UPDATE picks SET spent_minutes = ?, remaining_minutes = ? WHERE id = ?", o.spent, p.remainingMinutes ?? 0, p.id);
+        for (const r of later) await db.run("UPDATE picks SET status = 'dropped', updated_at = ? WHERE id = ?", at, r.id as number);
+        for (const b of removedBoxes) await db.run("UPDATE timeboxes SET removed_at = ?, updated_at = ? WHERE id = ?", at, at, b);
         if (o.as === "done") await this.setDone(o.pickId, true);
+        return { removed: [...new Set(later.map((r) => r.date as string))].sort() };
       });
     },
-    /** TX-1: Undo of check-in answers: each timebox as it was, its to-do's status, spent and left put back. */
+    /** TX-1b: several check-in answers together: all of them, or none if one fails. */
+    async settleAll(list: readonly { pickId: number; timeboxIds: readonly number[]; as: "done" | "partly" | "none"; spent: number; remaining: number }[]): Promise<{ removed: IsoDate[] }[]> {
+      return tx(async () => {
+        const out: { removed: IsoDate[] }[] = [];
+        for (const o of list) out.push(await this.settleSessions(o));
+        return out;
+      });
+    },
+    /** TX-1: Undo of check-in answers: each timebox as it was, its to-do's status, spent and left put back, exactly as they were (TX-1b), and a Done's removed to-dos planned again. */
     async unsettleSessions(timeboxIds: readonly number[]): Promise<number[]> {
       return tx(async () => {
-        const picks = new Map<number, { status: string; spent: number | null; remaining: number | null }>();
+        const picks = new Map<number, SettleBefore>();
         for (const id of timeboxIds) {
           const t = (await db.get("SELECT pick_id, settled_as, settle_before FROM timeboxes WHERE id = ?", id)) as Row | undefined;
           if (!t?.settled_as) continue;
-          if (t.pick_id !== null && !picks.has(t.pick_id as number)) picks.set(t.pick_id as number, json<{ status: string; spent: number | null; remaining: number | null }>(t.settle_before)!);
+          if (t.pick_id !== null && !picks.has(t.pick_id as number)) picks.set(t.pick_id as number, json<SettleBefore>(t.settle_before)!);
           await db.run("UPDATE timeboxes SET settled_as = NULL, settled_at = NULL, settle_before = NULL, removed_at = NULL, updated_at = ? WHERE id = ?", stamp(), id);
         }
         for (const [pickId, b] of picks) {
           const p = await mustPick(pickId);
-          await writeProgress(p, b.spent, b.remaining);
+          if (b.others) {
+            await db.run("UPDATE picks SET spent_minutes = ?, remaining_minutes = ? WHERE id = ?", b.spent, b.remaining, pickId);
+            for (const x of b.others) await db.run("UPDATE picks SET spent_minutes = ?, remaining_minutes = ? WHERE id = ?", x.spent, x.remaining, x.id);
+          } else await writeProgress(p, b.spent, b.remaining); // An answer from before TX-1b has only its own values.
+          const at = stamp();
+          for (const id of b.removed ?? []) await db.run("UPDATE picks SET status = 'planned', updated_at = ? WHERE id = ? AND status = 'dropped'", at, id);
+          for (const id of b.removedBoxes ?? []) await db.run("UPDATE timeboxes SET removed_at = NULL, updated_at = ? WHERE id = ?", at, id);
           if (p.status === "done" && b.status === "planned") await this.setDone(pickId, false);
         }
         return [...picks.keys()];
       });
+    },
+    /**
+     * TX-1b: whether a re-size to this size already happened elsewhere this week (the item's other planned to-do or its week
+     * story), so the time left was moved by it and isn't moved twice.
+     */
+    async itemAlreadySized(clientKey: string, itemId: number, size: Size | null, weekStart: IsoDate, not: { pickId?: number; weekItemId?: number }): Promise<boolean> {
+      const weekEnd = Temporal.PlainDate.from(weekStart).add({ days: 6 }).toString();
+      const others = (await db.all("SELECT id, size, size_xs FROM picks WHERE client_key = ? AND item_id = ? AND status = 'planned' AND date >= ? AND date <= ?", clientKey, itemId, weekStart, weekEnd)) as Row[];
+      if (others.some((r) => r.id !== not.pickId && sizeOfRow(r) === size)) return true;
+      const stories = (await db.all("SELECT id, size, size_xs FROM week_features WHERE client_key = ? AND item_id = ? AND week_start = ? AND level = 'story'", clientKey, itemId, weekStart)) as Row[];
+      return stories.some((r) => r.id !== not.weekItemId && sizeOfRow(r) === size);
     },
     /** TX-1: the time left moved with a re-size (plan/progress.ts resizedRemaining). */
     async setRemaining(pickId: number, remaining: number): Promise<void> {
@@ -2524,7 +2576,22 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       const rows = (await db.all("SELECT * FROM week_features WHERE week_start = ? ORDER BY id", weekStart)) as Row[];
       const slots = (await db.all("SELECT s.* FROM week_feature_slots s JOIN week_features f ON f.id = s.feature_id WHERE f.week_start = ? ORDER BY s.date, s.half", weekStart)) as Row[];
       // TX-1: a story's time left comes from its to-dos (every to-do of an item carries the same value).
-      const left = new Map(rows.length ? ((await db.all("SELECT client_key, item_id, MIN(remaining_minutes) AS m FROM picks WHERE remaining_minutes IS NOT NULL AND item_id IS NOT NULL GROUP BY client_key, item_id")) as Row[]).map((r) => [`${r.client_key}\u0000${r.item_id}`, r.m as number]) : []);
+      const left = new Map<string, number>();
+      if (rows.length) {
+        const weekEnd = Temporal.PlainDate.from(weekStart).add({ days: 6 }).toString();
+        const byClient = new Map<string, number[]>();
+        for (const r of rows) byClient.set(r.client_key as string, [...(byClient.get(r.client_key as string) ?? []), r.item_id as number]);
+        const byItem = new Map<string, WeekLeftRow[]>();
+        for (const [client, ids] of byClient)
+          for (const r of (await db.all(weekLeftSql(ids.length), client, ...ids, weekEnd)) as Row[]) {
+            const key = `${client}\u0000${r.item_id}`;
+            byItem.set(key, [...(byItem.get(key) ?? []), { date: r.date as string, id: r.id as number, status: r.status as string, remaining: r.remaining_minutes as number }]);
+          }
+        for (const [key, list] of byItem) {
+          const v = weekStoryLeft(list, weekStart, weekEnd);
+          if (v !== null) left.set(key, v);
+        }
+      }
       const features = rows.map((r): WeekFeature => ({
         id: r.id as number,
         weekStart: r.week_start as string,
@@ -2822,7 +2889,9 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         const t = (await this.timebox(id));
         if (!t) throw new PlanError("No such timebox");
         const n = { ...t, ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) } as Timebox;
-        (await db.run("UPDATE timeboxes SET date = ?, start_at = ?, end_at = ?, title = ?, show_as = ?, outlook = ?, removed_at = ?, outlook_note = ?, conflict = ?, pick_id = ?, updated_at = ? WHERE id = ?", n.date, n.start, n.end, n.title, n.showAs, n.outlook ? 1 : 0, n.removedAt, n.outlookNote, n.conflict ? JSON.stringify(n.conflict) : null, n.pickId, stamp(), id,));
+        // TX-1b: an answered timebox keeps its to-do whatever else changes: a read shows no pickId once it stopped holding the to-do, and Undo and the DevOps offer need the link.
+        const link = t.settled ? (((await db.get("SELECT pick_id FROM timeboxes WHERE id = ?", id)) as Row).pick_id as number | null) : n.pickId;
+        (await db.run("UPDATE timeboxes SET date = ?, start_at = ?, end_at = ?, title = ?, show_as = ?, outlook = ?, removed_at = ?, outlook_note = ?, conflict = ?, pick_id = ?, updated_at = ? WHERE id = ?", n.date, n.start, n.end, n.title, n.showAs, n.outlook ? 1 : 0, n.removedAt, n.outlookNote, n.conflict ? JSON.stringify(n.conflict) : null, link, stamp(), id,));
         return (await this.timebox(id))!;
       });
     },

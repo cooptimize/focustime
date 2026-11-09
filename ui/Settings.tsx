@@ -215,6 +215,8 @@ export function Settings(props: Props) {
   const [data, setData] = useState<SettingsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const searching = useRef(false);
+  searching.current = q.trim() !== "";
   const phone = usePhone();
   const list = useNarrow() || phone;
   const admin = useAdmin();
@@ -242,7 +244,8 @@ export function Settings(props: Props) {
       el.classList.remove("ps-flash");
       void el.offsetWidth;
       el.classList.add("ps-flash");
-      el.querySelector<HTMLElement>("input:not([disabled]), select:not([disabled]), textarea, button:not([disabled]), a[href]")?.focus({ preventScroll: true });
+      // TX-1b: this can land well after the jump (it waits for the section's data). A new search has the focus by then: leave it.
+      if (!searching.current) el.querySelector<HTMLElement>("input:not([disabled]), select:not([disabled]), textarea, button:not([disabled]), a[href]")?.focus({ preventScroll: true });
       setTimeout(() => el.classList.remove("ps-flash"), 2200);
     }, 60);
     return () => clearTimeout(t);

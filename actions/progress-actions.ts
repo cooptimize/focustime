@@ -3,10 +3,10 @@
 // cards); these actions are what those moments call. Every answer applies at once and comes back with what Undo needs.
 import { markResolved } from "./carry-actions.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { outcomeOf, planOutcome, SESSION_ANSWERS, sessionRows, validLeft, type SessionAnswer } from "../plan/progress.ts";
+import { outcomeOf, planOutcome, removedNotice, SESSION_ANSWERS, sessionRows, validLeft, type SessionAnswer } from "../plan/progress.ts";
 import { SIZE_MINUTES } from "../plan/types.ts";
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
-import type { ActionResponse, SessionView } from "./types.ts";
+import type { ActionResponse, AppliedSession, SessionView } from "./types.ts";
 import type { IsoDate } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
@@ -88,22 +88,19 @@ async function run(ctx: ProgressContext, action: ProgressAction, input: unknown)
       if (!row) return { ok: false, status: 409, error: "That timebox was already answered" };
       const p = await plan.getPick(pickId);
       const out = outcomeOf(answer, row, p?.spentMinutes ?? 0, o.left as number | undefined);
-      await plan.settleSessions({ pickId, timeboxIds: row.timeboxIds, as: out.as, spent: out.spent, remaining: out.remaining });
-      return { ok: true, data: { timeboxIds: row.timeboxIds, pick: await plan.getPick(pickId), as: out.as, remaining: out.remaining } };
+      const { removed } = await plan.settleSessions({ pickId, timeboxIds: row.timeboxIds, as: out.as, spent: out.spent, remaining: out.remaining });
+      return { ok: true, data: { timeboxIds: row.timeboxIds, pick: await plan.getPick(pickId), as: out.as, remaining: out.remaining, removed, notice: removedNotice(removed) } };
     }
     case "checkin.all_to_plan": {
+      // TX-1b: from the rows as they are now, whatever an open page shows, and in one transaction: all of them or none.
       const o = fields(input, ["date", "moment"]);
       const rows = await checkinSessions(ctx, plan, dateOf(o.date), momentOf(o.moment));
-      const timeboxIds: number[] = [];
-      const done: number[] = [];
-      for (const row of rows) {
-        const p = await plan.getPick(row.pickId);
-        const out = planOutcome(row, p?.spentMinutes ?? 0);
-        await plan.settleSessions({ pickId: row.pickId, timeboxIds: row.timeboxIds, as: out.as, spent: out.spent, remaining: out.remaining });
-        timeboxIds.push(...row.timeboxIds);
-        if (out.as === "done") done.push(row.pickId);
-      }
-      return { ok: true, data: { timeboxIds, done, partly: rows.length - done.length } };
+      const outcomes = [];
+      for (const row of rows) outcomes.push({ row, out: planOutcome(row, (await plan.getPick(row.pickId))?.spentMinutes ?? 0) });
+      const settled = await plan.settleAll(outcomes.map(({ row, out }) => ({ pickId: row.pickId, timeboxIds: row.timeboxIds, as: out.as, spent: out.spent, remaining: out.remaining })));
+      const applied: AppliedSession[] = outcomes.map(({ row, out }, i) => ({ ...row, as: out.as, left: out.remaining, removed: settled[i]!.removed, notice: removedNotice(settled[i]!.removed) }));
+      const done = applied.filter((a) => a.as === "done").map((a) => a.pickId);
+      return { ok: true, data: { applied, timeboxIds: applied.flatMap((a) => a.timeboxIds), done, partly: applied.length - done.length } };
     }
     case "checkin.undo": {
       const o = fields(input, ["timeboxIds"]);

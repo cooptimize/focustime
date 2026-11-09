@@ -7,7 +7,7 @@ import { createSnapshotStore } from "../../host/local/snapshots.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { assistantFor, dispatch, type ActionContext } from "../../actions/dispatch.ts";
 import type { ActionName } from "../../actions/registry.ts";
 import { parseConfig } from "../../config/schema.ts";
@@ -310,6 +310,75 @@ await forEachDriver("the bot's rhythm in Teams (TB-2)", (d) => {
     expect((await t.plan.getPick(a.id))?.status).toBe("done");
     expect(card).not.toContain("Set #500");
 expect(t.logs.map((l) => JSON.stringify(l)).join()).not.toContain("Import mapping");
+  });
+
+  describe("TX-1b: fixes from the TX-1 review", () => {
+    const ME = "avery@cooptimize.example";
+    const boxOn = async (t: Awaited<ReturnType<typeof setup>>, p: { id: number; clientKey: string; title: string }, a: string, b: string) => t.plan.addTimebox({ date: MON, clientKey: p.clientKey, pickId: p.id, title: p.title, start: `${MON}T${a}:00-05:00`, end: `${MON}T${b}:00-05:00`, outlook: false });
+    const withItem = async () => {
+      const dv = fakeDevOpsWrite({ now: () => MON });
+      dv.add(500, { "System.WorkItemType": "User Story", "System.Title": "Import mapping", "System.State": "Active", "System.AssignedTo": { uniqueName: ME } });
+      const t = await setup(d, { devops: dv });
+      const a = await t.add({ kind: "item", itemId: 500, title: "Import mapping", itemType: "User Story", size: "S" });
+      await boxOn(t, a, "09:00", "10:00");
+      t.at("12:10");
+      await t.rhythm.tick(ANA, await t.facts());
+      return { dv, t, a, occ: `checkin:${MON}` };
+    };
+
+    it("bug 4: two rows asking at once have their own inputs, and the time typed goes to the row it was typed on", async () => {
+      const t = await setup(d);
+      const a = await t.add({ title: "Import mapping" });
+      const b = await t.add({ title: "Release notes" });
+      await boxOn(t, a, "09:00", "10:00");
+      await boxOn(t, b, "10:00", "11:00");
+      t.at("12:10");
+      await t.rhythm.tick(ANA, await t.facts());
+      const occ = `checkin:${MON}`;
+      await t.tap(occ, "session_partly", { pickId: a.id });
+      const card = await t.tap(occ, "session_partly", { pickId: b.id });
+      const ids = [...card.matchAll(/"id":"(sessionLeft[^"]*)"/g)].map((m) => m[1]);
+      expect(ids).toHaveLength(2);
+      expect(new Set(ids).size).toBe(2);
+      await t.tap(occ, "session_left", { pickId: b.id, [`sessionLeft_${a.id}`]: "", [`sessionLeft_${b.id}`]: "45m" });
+      expect((await t.plan.getPick(b.id))?.remainingMinutes).toBe(45);
+      expect((await t.plan.getPick(a.id))?.remainingMinutes).toBeUndefined();
+    });
+
+    it("bug 5: Undo of a Done offers to undo the DevOps change it made, with the same Confirm", async () => {
+      const { dv, t, a, occ } = await withItem();
+      await t.tap(occ, "session_done", { pickId: a.id });
+      const m = (await t.rhythmStore.get(occ))!.model as { proposal: { proposalId: string } };
+      await t.tap(occ, "confirm", { proposalId: m.proposal.proposalId });
+      expect(dv.items.get(500)!.fields["System.State"]).toBe("Closed");
+      const card = await t.tap(occ, "session_undo", { pickId: a.id });
+      expect((await t.plan.getPick(a.id))?.status).toBe("planned");
+      expect(card).toContain("Put #500 back to Active");
+      expect(dv.items.get(500)!.fields["System.State"]).toBe("Closed"); // Nothing written until Confirm.
+    });
+
+    it("bug 5: with a DevOps proposal still open, Undo says DevOps isn't changed by it", async () => {
+      const { t, a, occ } = await withItem();
+      await t.tap(occ, "session_done", { pickId: a.id });
+      const card = await t.tap(occ, "session_undo", { pickId: a.id });
+      expect(card).toContain("This Undo doesn't change DevOps");
+    });
+
+    it("bug 6: All went to plan at midday makes PK-1's offer for a to-do it marks done", async () => {
+      const { dv, t, a, occ } = await withItem();
+      const card = await t.tap(occ, "session_all");
+      expect((await t.plan.getPick(a.id))?.status).toBe("done");
+      expect(card).toContain("Set #500 to Closed");
+      expect(dv.seen.filter((x) => x.method === "PATCH")).toHaveLength(0);
+    });
+
+    it("bug 2: the card says once which later to-dos a Done removed", async () => {
+      const { t, a, occ } = await withItem();
+      await t.plan.start("2026-11-03");
+      await t.plan.addPick({ date: "2026-11-03", half: "AM", clientKey: a.clientKey, kind: "item", itemId: 500, title: "Import mapping", itemType: "User Story", size: "S" });
+      const card = await t.tap(occ, "session_done", { pickId: a.id });
+      expect(card.match(/Removed from Tue, story is done/g)).toHaveLength(1);
+    });
   });
 
   it("close out in my words: one proposal shows done, moved on and closed out; one Confirm does all of it", async () => {

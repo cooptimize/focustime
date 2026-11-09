@@ -1,6 +1,6 @@
 # Architecture
 
-For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `4088995` on Nov 7, 2026 (SR-2 parts against its own branch; Status's SR-3 parts against `feat/report-finish` on Nov 8); the assistant against `1e74410` with AS-3 (`feat/assistant-answers`); Deployment items against `feat/deployment-items` on Nov 8; the Inbox against `feat/inbox-everything` on Nov 8; Today's timeline against `feat/today-timeline` on Nov 8. Cooptimize's standards (KB-1) against `feat/coop-standards` on Nov 8; TX-1's parts against `feat/timebox-progress` on Nov 8.
+For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `4088995` on Nov 7, 2026 (SR-2 parts against its own branch; Status's SR-3 parts against `feat/report-finish` on Nov 8); the assistant against `1e74410` with AS-3 (`feat/assistant-answers`); Deployment items against `feat/deployment-items` on Nov 8; the Inbox against `feat/inbox-everything` on Nov 8; Today's timeline against `feat/today-timeline` on Nov 8. Cooptimize's standards (KB-1) against `feat/coop-standards` on Nov 8; TX-1's parts against `fix/tx1-review` on Nov 8.
 
 FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a React app and a JSON action API, keeps its data in one SQL database, and talks to Microsoft Graph, Dataverse, Azure DevOps, Google Calendar, Azure Resource Manager and OpenAI. The per-folder detail is in [docs/architecture.md](../architecture.md); this page is the overview.
 
@@ -172,6 +172,6 @@ With AI off, not set up or over a cap, any message gets one line saying so and t
 A check-in about timeboxes has no schedule, badge or reminder of its own. It rides on the two moments the day already has: the top of Today's Midday check-in and of Close out, and in Teams the rhythm's check-in and close out cards when that person has them on.
 
 - `plan/progress.ts` (pure): which timeboxes qualify (`sessionRows`), what each answer does (`outcomeOf`, `planOutcome`) and the words.
-- `actions/progress-actions.ts`: `checkin.sessions`, `checkin.answer`, `checkin.all_to_plan`, `checkin.undo` and `checkin.offer_close`. Only the plan store changes.
+- `actions/progress-actions.ts`: `checkin.sessions`, `checkin.answer`, `checkin.all_to_plan`, `checkin.undo` and `checkin.offer_close`. Only the plan store changes. All went to plan reads the rows afresh and settles them in one transaction (`settleAll`).
 - `ui/TimeboxCheckin.tsx` and `server/teams/rhythm.ts` (`sessionCards`, `sessionTap`) call those same actions.
 - `devops.progress_offer` (read only) builds the end of day offer. Writes go through the write framework as `remaining_work` or `comment`, each previewed and confirmed in Close out. A Teams card only points there.
