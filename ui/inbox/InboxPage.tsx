@@ -214,6 +214,10 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
     [onNav],
   );
 
+  // Once there has been something held back it stays mounted: HeldBack itself goes when it's closed and empty, and an
+  // open list can say "Nothing held back now." after the last one goes.
+  const heldEver = useRef(false);
+  if ((src.convs?.heldCount ?? 0) > 0) heldEver.current = true;
   const reloadAll = useCallback(async () => {
     await src.reload();
     onChanged();
@@ -427,7 +431,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
       {src.convs && src.convs.unsorted.count > 0 && (place === "everything" || place === "needs_you" || place === "chatter") && (
         <Unsorted u={src.convs.unsorted} sort={() => void run("conversations.sort_unsorted", {}, "Sorted again")} {...(onFeedback ? { onFeedback } : {})} />
       )}
-      {src.convs && (src.convs.heldCount ?? 0) > 0 && (place === "everything" || place === "needs_you" || place === "chatter") && <HeldBack count={src.convs.heldCount ?? 0} tz={tz} today={today} onChanged={() => void reloadAll()} />}
+      {src.convs && heldEver.current && (place === "everything" || place === "needs_you" || place === "chatter") && <HeldBack count={src.convs.heldCount ?? 0} tz={tz} today={today} onChanged={() => void reloadAll()} />}
     </>
   );
 
