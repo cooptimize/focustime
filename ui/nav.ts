@@ -139,7 +139,7 @@ export function modeNav(tab: Tab, mode: ModeName): Nav {
 }
 
 /** IB-1: the Inbox's views by name (the rail, headers, the Guide). */
-export const INBOX_VIEW_NAMES: Record<InboxPlace, string> = { everything: "Everything", needs_you: "Needs you", promises: "Promises", waiting: "Waiting on", in_progress: "In progress", captures: "Captures and drafts", teammates: "Handled by teammates", done: "Done", chatter: "Chatter" };
+export const INBOX_VIEW_NAMES: Record<InboxPlace, string> = { everything: "Everything", needs_you: "Needs you", promises: "Promises", waiting: "Waiting on", in_progress: "In progress", captures: "Captures and drafts", teammates: "Teammate has it", done: "Done", chatter: "Chatter" };
 
 // ---- Addresses ----
 

@@ -2,7 +2,7 @@
 // and a fake DevOps, with a fake AI provider behind the real ai/ service (the app's cap). A FocusTime admin adds two
 // chats for Adatum in Settings > Clients; messages arrive; Refresh in Inbox › Conversations reads them through the
 // shared job: the Alliance-shaped conversation (a client question, two teammates, my commitment that implies an item) sits
-// in Needs you, a teammate's one under Handled by teammates. Show messages, then Create DevOps item: the draft with only the
+// in Needs you, a teammate's I'll-do-it, unclaimed, Up for grabs. Show messages, then Create DevOps item: the draft with only the
 // valid types under its feature, the preview, Create in DevOps, Tracked #id. A comment suggestion with Post comment or
 // Skip. My promises shows the Wingtip-shaped promise, due today 7:30 PM, and Today shows it under After your blocks.
 // Edge cases are unit tests (actions/conversation*.test.ts, actions/devops-write.test.ts, plan/conversations.test.ts).
@@ -208,12 +208,9 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       const alliance = await openInboxItem(page, TITLE);
       await alliance.getByText(/Sam will add the fix to the development queue/).first().waitFor();
       await alliance.getByRole("button", { name: /^Create DevOps item/ }).first().waitFor();
-      const rail = main.getByRole("navigation", { name: "Inbox views and clients" });
-      await rail.getByRole("button", { name: /^Handled by teammates\s*1/ }).waitFor();
+      // Part 0: Lena said she'd do it, which never claims: until someone takes it, it is Up for grabs for me.
+      await main.locator(".ib-row", { hasText: "Dashboard refresh schedule" }).getByText("Up for grabs").waitFor();
       await shotBoth(page, "conversations-needs-you", main);
-      await rail.getByRole("button", { name: /^Handled by teammates/ }).click();
-      await main.locator(".ib-row", { hasText: "Dashboard refresh schedule" }).waitFor();
-      await shotBoth(page, "conversations-teammates", main);
 
       // The pane: its summary and, below, the messages as Teams shows them.
       await openInboxView(page, "needs-you");

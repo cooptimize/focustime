@@ -30,7 +30,7 @@ import { chatterItem, chatterRows, entryOf, useInboxData, type ChatterRow, type 
 import { ChatterDetail, Detail } from "./Detail.tsx";
 import { HeldBack } from "./HeldBack.tsx";
 import { actsFor, ItemActions, ITEM_KEYS, notWorkUndo, type Act, type FormId } from "./ItemActions.tsx";
-import { clientCountsFor, detailTag, dividerBefore, flatOrder, GROUPS, groupRows, inStatuses, isNewSince, rowSub, sliceGroups, STATUS_TAG, statusCounts, summaryLine, viewLabel, VIEWS, type Group, type Sort } from "./model.ts";
+import { clientCountsFor, ownerTag, detailTag, dividerBefore, flatOrder, GROUPS, groupRows, inStatuses, isNewSince, rowSub, sliceGroups, STATUS_TAG, statusCounts, summaryLine, viewLabel, VIEWS, type Group, type Sort } from "./model.ts";
 
 /** The letters the Inbox's items answer to (ItemActions' keys). */
 const INBOX_LETTERS = new Set(ITEM_KEYS.map((k) => k.key).filter((k) => k.length === 1 && k !== "J" && k !== "K"));
@@ -95,7 +95,10 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
   const chatterAll = useMemo(() => chatterRows(src.convs, []), [src.convs]);
   // One list: the rows from inbox.list and the chats' chatter, each with the statuses it's in.
   const timeline = useMemo(() => [...(src.list?.items ?? []), ...chatterAll.map(chatterItem)], [src.list, chatterAll]);
-  const statuses = useMemo<InboxView[]>(() => (place === "everything" ? prefs.statuses : [place]), [place, prefs.statuses]);
+  // Part 0: Teammate has it is out of Everything's active part, folded at its foot until asked for.
+  const [teammatesOpen, setTeammatesOpen] = useState(false);
+  const activeStatuses = useMemo<InboxView[]>(() => prefs.statuses.filter((v) => v !== "teammates" || teammatesOpen), [prefs.statuses, teammatesOpen]);
+  const statuses = useMemo<InboxView[]>(() => (place === "everything" ? activeStatuses : [place]), [place, activeStatuses]);
   const inStatus = useMemo(() => inStatuses(timeline, statuses, clients).filter((i) => !late || i.late), [timeline, statuses, clients, late]);
   const matches = useCallback((i: InboxItemView, q: string) => `${i.title} ${i.who ?? ""} ${i.where ?? ""} ${clientName(i.clientKey)}`.toLowerCase().includes(q), [clientName]);
   const rows = useMemo(() => {
@@ -125,7 +128,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
   }, [timeline, clients, filter, matches]);
   const railCounts = useMemo(() => statusCounts(timeline, clients), [timeline, clients]);
   const viewCount = (v: InboxView) => railCounts[v];
-  const everythingCount = useMemo(() => inStatuses(timeline, prefs.statuses, clients).length, [timeline, prefs.statuses, clients]);
+  const everythingCount = useMemo(() => inStatuses(timeline, activeStatuses, clients).length, [timeline, activeStatuses, clients]);
   const placeCount = place === "everything" ? everythingCount : viewCount(place);
   const byClient = useMemo(() => clientCountsFor(timeline, statuses), [timeline, statuses]);
 
@@ -211,6 +214,10 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
     [onNav],
   );
 
+  // Once there has been something held back it stays mounted: HeldBack itself goes when it's closed and empty, and an
+  // open list can say "Nothing held back now." after the last one goes.
+  const heldEver = useRef(false);
+  if ((src.convs?.heldCount ?? 0) > 0) heldEver.current = true;
   const reloadAll = useCallback(async () => {
     await src.reload();
     onChanged();
@@ -236,6 +243,8 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
         await reloadAll();
       } catch (e) {
         setError(errText(e));
+        // Part 0: refused because someone got there first ("Eric has this"): show who has it now.
+        void reloadAll();
       }
     },
     [reloadAll],
@@ -291,6 +300,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
         planWeek: () => onNav(navOf.planDay()),
         canMerge: mergeOthers.length > 0,
         today,
+        openItem: open,
       })
     : [];
 
@@ -371,6 +381,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
   const notWork = useCallback((id: number) => void run("conversations.not_work", { id }, "Moved to Chatter for everyone on the chat", notWorkUndo(id)), [run]);
   // A chip changes the remembered set; from a view on the left it lands on Everything. A view's own chip takes me back.
   const toggleStatus = (v: InboxView) => {
+    if (place === "everything" && v === "teammates") return setTeammatesOpen((x) => !x);
     if (place !== "everything" && statuses.includes(v) && statuses.length === 1) return chooseView("everything");
     const next = VIEWS.map((x) => x.id).filter((x) => (x === v ? !statuses.includes(v) : statuses.includes(x)));
     save({ statuses: next });
@@ -420,7 +431,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
       {src.convs && src.convs.unsorted.count > 0 && (place === "everything" || place === "needs_you" || place === "chatter") && (
         <Unsorted u={src.convs.unsorted} sort={() => void run("conversations.sort_unsorted", {}, "Sorted again")} {...(onFeedback ? { onFeedback } : {})} />
       )}
-      {src.convs && (src.convs.heldCount ?? 0) > 0 && (place === "everything" || place === "needs_you" || place === "chatter") && <HeldBack count={src.convs.heldCount ?? 0} tz={tz} today={today} onChanged={() => void reloadAll()} />}
+      {src.convs && heldEver.current && (place === "everything" || place === "needs_you" || place === "chatter") && <HeldBack count={src.convs.heldCount ?? 0} tz={tz} today={today} onChanged={() => void reloadAll()} />}
     </>
   );
 
@@ -461,7 +472,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
           sort={prefs.sort}
           statuses={prefs.statuses}
           clientList={clientList}
-          count={(v, cs) => (v === "everything" ? inStatuses(timeline, prefs.statuses, cs).length : statusCounts(timeline, cs)[v])}
+          count={(v, cs) => (v === "everything" ? inStatuses(timeline, activeStatuses, cs).length : statusCounts(timeline, cs)[v])}
           chips={(cs) => statusCounts(timeline, cs)}
           colors={data.clients}
           onClose={() => setPicker(false)}
@@ -560,8 +571,8 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
         <div className="ib-list-body">{list}</div>
         <p className="ib-list-foot">
           {viewCount("teammates") > 0 && !statuses.includes("teammates") && (
-            <button type="button" className="linkish" onClick={() => chooseView("teammates")}>
-              {viewCount("teammates")} handled by teammates
+            <button type="button" className="linkish" aria-expanded={false} onClick={() => (place === "everything" ? setTeammatesOpen(true) : chooseView("teammates"))}>
+              {viewCount("teammates")} with a teammate
             </button>
           )}
           {viewCount("done") > 0 && !statuses.includes("done") && (
@@ -651,7 +662,7 @@ function RefreshChats({ run }: { run: (a: string, i: Record<string, unknown>, no
 /** IB-2: one row of the timeline; memoized so opening another row doesn't redraw thousands. */
 const Row = memo(function Row({ r, open, isNew, onOpen, today, tz, color, phone, reason, live, onNotWork, menuOpen, setMenuFor }: { r: InboxItemView; open: boolean; isNew: boolean; onOpen: (k: string) => void; today: string; tz: string; color: string; phone: boolean; reason: boolean; live: { id: number; state: string | null; closed: boolean } | undefined; onNotWork?: ((id: number) => void) | undefined; menuOpen: boolean; setMenuFor: (f: (k: string | null) => string | null) => void }): ReactNode {
   const status = statusOf(r.views);
-  const st = status ? STATUS_TAG[status] : null;
+  const st = (r.kind === "conversation" ? ownerTag(r) : null) ?? (status ? STATUS_TAG[status] : null);
   const extra = live ? { text: live.closed ? `#${live.id} closed · Mark done?` : `#${live.id}${live.state ? ` · ${live.state}` : ""}`, tone: live.closed ? ("soon" as const) : ("plain" as const) } : detailTag(r, today);
   const sub = isChatterKey(r.key) ? (r.where ?? "") : reason && r.reason ? r.reason : rowSub(r);
   return (
@@ -776,7 +787,7 @@ const EMPTY: Record<InboxView, string> = {
   waiting: "Nothing you're waiting on.",
   in_progress: "Nothing in progress. Items with a linked DevOps item show here.",
   captures: "Nothing to sort. Capture something above.",
-  teammates: "Nothing handled by teammates.",
+  teammates: "No teammate has anything right now.",
   done: "Nothing done recently.",
   chatter: "No chatter.",
 };

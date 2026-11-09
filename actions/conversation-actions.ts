@@ -1,7 +1,7 @@
 // CV-1: Inbox › Conversations and My promises, the person's view of what the pipeline (actions/conversations-pipeline.ts)
 // keeps for everyone. A chat, its conversations, commitments and suggestions are shown only to a member of that chat
 // (the stores' viewers, D521) who follows its client. Three views: Needs you (new ones on my clients, ones that
-// @mention me, ones I'm on or committed to, and unclaimed ones on clients I lead), Handled by teammates (collapsed,
+// @mention me, ones I'm on or committed to, and unclaimed ones on clients I lead), Teammate has it (collapsed,
 // one line each: visible on purpose) and Closed. Hide for me is mine alone; Not a request, Resolve, Reopen, Move,
 // Split, This is work, Link and Take it over are shared, by name. Nothing resolves by itself: a quiet conversation
 // after thanks only suggests "Looks wrapped up. Resolve?". The DevOps draft for a commitment is made when its
@@ -26,11 +26,12 @@ import type { StandardsLookup } from "./standards.ts";
 import { isClosed } from "../plan/process.ts";
 import { chatImageSrc, type CardCommitment, type CardItem, type CardSuggestion, type ConversationCard, type ConversationMessage, type ConversationsData, type DayPromise, type HeldData, type MessageImageView, type MyPromisesData, type Primary, type PromiseCard } from "../plan/conversation-views.ts";
 import { HELD_REASONS, daysWaiting, oneLine, statusLine, unsortedLine, unsortedText, type Commitment, type UnsortedLine, type Conversation, type ItemDraft } from "../plan/conversations.ts";
-import type { ClientChat, FocusUser } from "../plan/requests.ts";
+import { followersOf, type ClientChat, type FocusUser } from "../plan/requests.ts";
 import { hostedImageIds, sanitizeMessageHtml } from "../plan/sanitize.ts";
 import type { MessageImage } from "../store/teams-store.ts";
 import { joinedSummary, MERGE_INSTRUCTIONS, MERGE_SCHEMA, MERGE_TASK, mergeFrom, mergeInput, type MergeAnswer } from "../plan/conversation-merge.ts";
 import { isMeetingChat, type ConversationStore, type ConversationView } from "../store/conversation-store.ts";
+import { eventLine, firstName, mayHandOff, offerOf, personView, placeOf, sharedState, undoableEvent, type ClaimOffer, type Person } from "../plan/ownership.ts";
 import { PlanError } from "../store/plan-store.ts";
 import { itemKey, type InboxFacts } from "../plan/inbox-items.ts";
 import type { TeamsView } from "../store/teams-store.ts";
@@ -62,6 +63,8 @@ export const CONVERSATION_ACTIONS = [
   "conversations.held", "conversations.held_not_work",
   // GD-3: every held message of one client, sorted by hand or marked not work-related.
   "conversations.held_bulk",
+  // Part 0: the shared owner. Each applies at once, with Undo.
+  "conversations.claim", "conversations.give", "conversations.add_helper", "conversations.release", "conversations.close_out", "conversations.undo_ownership",
 ] as const;
 export type ConversationAction = (typeof CONVERSATION_ACTIONS)[number];
 
@@ -256,6 +259,13 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
   const writeClients = await ctx.writeClients().catch((): string[] => []);
   const name = (k: string) => cfg.clientSettings[k]?.name ?? k;
   const now = ctx.now();
+  // Part 0: the history of these conversations, whether I lead each client, and who on each chat can take it.
+  const events = await v.convs.ownershipEventsIn(ids);
+  const leads = new Map<string, boolean>();
+  const leadOf = async (k: string) => leads.get(k) ?? leads.set(k, await ctx.isLead(k).catch(() => false)).get(k)!;
+  const users = await ctx.users().catch((): FocusUser[] => []);
+  const teams = new Map<string, Person[]>();
+  const teamOf = (chat: ClientChat) => teams.get(chat.chatId) ?? teams.set(chat.chatId, cooptimizersOn(chat, users, home)).get(chat.chatId)!;
   return mapSeq(list, async (c): Promise<ConversationCard> => {
     const chat = v.byId.get(c.chatId);
     const cs = commitments.filter((k) => k.conversationId === c.id);
@@ -263,10 +273,12 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
     // Mentions of me in its work messages.
     let mentionsMe = false;
     let images = 0;
+    let replied = false;
     const withImages: string[] = [];
     for (const p of places.filter((x) => x.conversationId === c.id && x.role === "work")) {
       const m = await v.teams.message(p.chatId, p.messageId);
       if (m?.mentions.some((x) => same(x.id, v.me))) mentionsMe = true;
+      if (same(m?.senderId, v.me)) replied = true;
       const n = hostedImageIds(m?.html ?? null).length;
       images += n;
       if (n) withImages.push(p.messageId);
@@ -294,6 +306,24 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
     else if (!c.itemId && !c.windDown) primary = "create";
     else primary = "resolve";
     const fromInternal = chat?.kind === "delivery";
+    const unclaimed = !!wait && !wait.takenBy;
+    const lead = await leadOf(c.clientKey);
+    const mineOpen = !!openMine;
+    const suggestionForMe = suggestions.some((s) => s.conversationId === c.id && s.state === "open" && same(s.forUser, v.me));
+    // Asked of me: by name, my own promise in it, a suggestion waiting for me, or (leads) nobody picked up a promise.
+    const askedMe = mentionsMe || mineOpen || suggestionForMe || (unclaimed && lead);
+    const state = sharedState(c);
+    const history = events.filter((e) => e.conversationId === c.id && !e.undoneAt);
+    const shared = {
+      state, view: personView(c, v.me, askedMe),
+      owner: c.claimedBy ? { name: c.claimedName ?? "Someone at Cooptimize", me: same(c.claimedBy, v.me) } : null,
+      helpers: c.helpers.map((h) => ({ name: h.name, me: same(h.id, v.me) })),
+      offer: offerOf(state, { replied, committed: mineOpen }),
+      history: history.map((e) => ({ at: e.at, text: eventLine(e, v.me) })),
+      canUndo: !!undoableEvent(history, v.me),
+      mayHandOff: mayHandOff(c.claimedBy, v.me, lead),
+      team: chat ? teamOf(chat).map((p) => ({ ...p, me: same(p.id, v.me) })) : [],
+    };
     return {
       id: c.id, clientKey: c.clientKey, clientName: name(c.clientKey), chatId: c.chatId, chatName: chat?.displayName ?? "A chat no longer registered", internalChat: fromInternal,
       ...(c.mentions?.length ? { mentions: c.mentions.filter((k) => k.toLowerCase() !== c.clientKey.toLowerCase()).map(name) } : {}),
@@ -304,7 +334,7 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
       windDown: c.windDown && !closed,
       item,
       likely: c.itemId ? null : cardItem(c.likelyItem, its),
-      waiting, unclaimed: !!wait && !wait.takenBy, owner: c.ownerId ? (c.participants.find((p) => same(p.id, c.ownerId))?.name ?? null) : null, mentionsMe,
+      shared, waiting, unclaimed, owner: c.ownerId ? (c.participants.find((p) => same(p.id, c.ownerId))?.name ?? null) : null, mentionsMe,
       commitments: cs.map((k): CardCommitment => ({ id: k.id, whoName: k.whoName, mine: same(k.whoId, v.me), what: k.what, dueAt: k.dueAt, dueDate: k.dueDate, state: k.state, impliesItem: k.impliesItem, item: cardItem(k.itemId, null, k.itemUrl, k.itemTitle) })),
       suggestions: suggestions.filter((s) => s.conversationId === c.id && s.state === "open").map((s): CardSuggestion => ({ id: s.id, kind: s.kind, itemId: s.itemId, body: s.body, internal: s.internal, fromInternalChat: fromInternal, mine: same(s.forUser, v.me), ...(s.namesRemoved ? { namesRemoved: true } : {}) })),
       closed, hidden: !!view?.hidden, primary, canCreate, link: chat ? teamsLink(chat) : messageLink(c.chatId, places.find((p) => p.conversationId === c.id)?.messageId ?? "0"),
@@ -314,14 +344,19 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
   });
 }
 
-/** Which view a card belongs to for me. */
-async function viewOf(ctx: ConversationContext, me: string, card: ConversationCard, c: Conversation): Promise<"needs" | "progress" | "teammates" | "closed"> {
-  if (card.closed) return "closed";
-  // CV-5: a linked item moves it to In progress (a suggestion for me still needs me).
-  if (card.item && !card.suggestions.some((s) => s.mine)) return "progress";
-  if (card.status === "new" || card.mentionsMe || same(c.ownerId, me) || card.commitments.some((k) => k.mine && k.state === "open") || card.suggestions.some((s) => s.mine)) return "needs";
-  if (card.unclaimed && (await ctx.isLead(c.clientKey).catch(() => false))) return "needs";
-  return "teammates";
+/** Which view a card belongs to for me: Part 0's person view, in today's Inbox views. */
+const viewOf = (card: ConversationCard) => placeOf(card.shared.view, { hasItem: !!card.item, suggestionForMe: card.suggestions.some((s) => s.mine) });
+
+/** The Cooptimizers of a chat who use FocusTime: the people a conversation can go to (they can all see it). */
+function cooptimizersOn(chat: ClientChat, users: readonly FocusUser[], home: string | null): Person[] {
+  const internal = (id: string) => {
+    const m = chat.members?.find((x) => same(x.userId, id));
+    return !m || !home || !isExternal(m, home);
+  };
+  return followersOf(chat, users).filter(internal).map((id) => {
+    const m = chat.members?.find((x) => same(x.userId, id));
+    return { id, name: m?.displayName ?? users.find((u) => same(u.id, id))?.name ?? "Someone at Cooptimize" };
+  }).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function list(ctx: ConversationContext, cfg: AppConfig, select: number | null = null): Promise<ConversationsData> {
@@ -338,7 +373,7 @@ async function list(ctx: ConversationContext, cfg: AppConfig, select: number | n
       out.hiddenCount++;
       continue;
     }
-    const where = await viewOf(ctx, v.me, card, all.find((c) => c.id === card.id)!);
+    const where = viewOf(card);
     (where === "needs" ? out.needsYou : where === "progress" ? out.inProgress : where === "teammates" ? out.teammates : out.closed).push(card);
   }
   // Needs you: waiting and unclaimed first, then mine, then newest.
@@ -393,7 +428,7 @@ async function counts(ctx: ConversationContext, cfg: AppConfig): Promise<{ needs
   const now = Date.parse(ctx.now());
   const all = (await v.convs.conversations(v.chats.map((c) => c.chatId))).filter((c) => !c.closedAt || now - Date.parse(c.closedAt) < closedShownMs(cfg));
   let needsYou = 0;
-  for (const card of await cards(ctx, v, cfg, all)) if (!card.hidden && (await viewOf(ctx, v.me, card, all.find((c) => c.id === card.id)!)) === "needs") needsYou++;
+  for (const card of await cards(ctx, v, cfg, all)) if (!card.hidden && viewOf(card) === "needs") needsYou++;
   const myPromisesOpen = (await v.convs.commitmentsBy(v.promiseChatIds)).filter((k) => k.state === "open").length;
   return { needsYou, myPromisesOpen };
 }
@@ -411,7 +446,7 @@ export async function inboxFacts(ctx: ConversationContext, cfg: AppConfig): Prom
   // QF-1: a conversation marked not work-related lives in Chatter (its messages), not in Done.
   for (const card of await cards(ctx, v, cfg, all.filter((c) => !(c.closedAt && c.closeReason === NOT_WORK)))) {
     if (card.hidden) continue;
-    const view = await viewOf(ctx, v.me, card, all.find((c) => c.id === card.id)!);
+    const view = viewOf(card);
     // Who it is with: someone in it who isn't me.
     const asker = card.participants.find((p) => !p.me)?.name ?? null;
     const c = all.find((x) => x.id === card.id)!;
@@ -421,7 +456,7 @@ export async function inboxFacts(ctx: ConversationContext, cfg: AppConfig): Prom
       : card.mentionsMe ? "mention"
       : card.commitments.some((k) => k.mine && k.state === "open") ? "committed"
       : card.suggestions.some((x) => x.mine) ? "suggestion"
-      : same(c.ownerId, v.me) ? "owner"
+      : same(c.claimedBy, v.me) ? "owner"
       : card.unclaimed ? "unclaimed"
       : card.windDown ? "wrapped"
       : workRequest ? "work"
@@ -429,12 +464,12 @@ export async function inboxFacts(ctx: ConversationContext, cfg: AppConfig): Prom
     out.push({
       key: itemKey("conversation", card.id), kind: "conversation", clientKey: card.clientKey, at: card.lastAt, done: view === "closed", conversationView: view,
       title: card.title, who: asker, where: card.chatName, itemId: card.item?.id ?? null, mentionsMe: card.mentionsMe,
-      workRequest, needsWhy, ...(card.mentions?.length ? { mentions: card.mentions } : {}),
+      workRequest, needsWhy, ...(card.mentions?.length ? { mentions: card.mentions } : {}), personView: card.shared.view, ownerName: card.shared.owner?.name ?? null,
     });
   }
   // Slice 3, Waiting on: someone else's open commitment made to me, or in a conversation I own.
-  const owned = new Map(all.map((c) => [c.id, same(c.ownerId, v.me)]));
-  const ownedIds = all.filter((c) => same(c.ownerId, v.me)).map((c) => c.id);
+  const owned = new Map(all.map((c) => [c.id, same(c.claimedBy, v.me)]));
+  const ownedIds = all.filter((c) => same(c.claimedBy, v.me)).map((c) => c.id);
   const theirs = new Map<number, Awaited<ReturnType<typeof v.convs.commitmentsIn>>[number]>();
   for (const k of [...(await v.convs.commitmentsTo(v.promiseChatIds)), ...(await v.convs.commitmentsIn(ownedIds))]) theirs.set(k.id, k);
   for (const k of theirs.values()) {
@@ -499,7 +534,7 @@ async function promiseCards(ctx: ConversationContext, v: Seen, cfg: AppConfig): 
     const due = k.dueDate ?? k.onToday;
     const toRef = toRefOf(k, chat, home);
     return {
-      id: k.id, conversationId: k.conversationId, toRef, conversationTitle: c?.title ?? null, clientKey: k.clientKey, clientName: cfg.clientSettings[k.clientKey]?.name ?? k.clientKey, chatName: chat?.displayName ?? "A chat no longer registered",
+      id: k.id, conversationId: k.conversationId, toRef, conversationTitle: c?.title ?? null, ...(c?.closedAt ? { conversationClosed: true } : {}), clientKey: k.clientKey, clientName: cfg.clientSettings[k.clientKey]?.name ?? k.clientKey, chatName: chat?.displayName ?? "A chat no longer registered",
       what: k.what, toName: k.toName, dueAt: k.dueAt, dueDate: k.dueDate, overdue: k.state === "open" && (k.dueAt ? Date.parse(k.dueAt) < Date.parse(now) : !!due && due < today), state: k.state, onToday: k.onToday, followUpId: k.followUpId,
       item: withLive(k.itemId ? { id: k.itemId, title: k.itemTitle, url: k.itemUrl } : null, k.itemId ? live.get(`${k.clientKey}:${k.itemId}`) : undefined), needsItem, draft: k.draft, likely,
       suggestions: suggestions.filter((s) => s.conversationId === k.conversationId).map((s) => ({ id: s.id, kind: s.kind, itemId: s.itemId, body: s.body, internal: s.internal, fromInternalChat: chat?.kind === "delivery", mine: true })),
@@ -668,6 +703,17 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
     return k && v.byId.has(k.chatId) && same(k.whoId, v.me) ? k : null;
   };
   const stamp = ctx.now();
+  /** Me, as the shared record names me. */
+  const actor = async (c: Conversation): Promise<Person> => ({ id: v!.me, name: v!.byId.get(c.chatId)?.members?.find((m) => same(m.userId, v!.me))?.displayName ?? (await ctx.users().catch((): FocusUser[] => [])).find((u) => same(u.id, v!.me))?.name ?? "Someone at Cooptimize" });
+  const refresh = (id: number) => ctx.homeTenant().then((homeTenant) => refreshStatus({ convs: v!.store, teams: ctx.requests!.teams, homeTenant }, id));
+  /** Someone a conversation can go to: a Cooptimizer on this chat who uses FocusTime. */
+  const teammate = async (c: Conversation, id: unknown): Promise<Person | null> => (typeof id === "string" ? (cooptimizersOn(v!.byId.get(c.chatId)!, await ctx.users().catch((): FocusUser[] => []), await ctx.homeTenant()).find((p) => same(p.id, id)) ?? null) : null);
+  /** Why I'm claiming, for the history: I said I'd do it, I wrote in it, or neither. */
+  const claimVia = async (c: Conversation): Promise<ClaimOffer | null> => {
+    if ((await v!.convs.commitmentsIn([c.id])).some((k) => k.state === "open" && same(k.whoId, v!.me))) return "committed";
+    for (const p of (await v!.convs.placesIn([c.id])).filter((x) => x.role === "work")) if (same((await v!.teams.message(p.chatId, p.messageId))?.senderId, v!.me)) return "replied";
+    return null;
+  };
   // CV-1 migration: my AP-2 promises move to the shared commitments the first time I look (idempotent).
   if (v && ctx.plan && ctx.requests && (action === "conversations.list" || action === "my_promises.list" || action === "my_promises.today")) {
     const meName = v.chats.flatMap((c) => c.members ?? []).find((m) => same(m.userId, v.me))?.displayName ?? "You";
@@ -774,15 +820,16 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         return { ok: true, data: { id: c.id } };
       }
       case "conversations.resolve":
+      case "conversations.close_out":
       case "conversations.not_request": {
         const o = only(input, ["id"], ["reason"]);
         const c = o && (await conv(o.id));
         if (!o || !c || !v) return bad("No such conversation", 404);
         if (o.reason !== undefined && o.reason !== null && (typeof o.reason !== "string" || o.reason.length > 400)) return bad("reason is text of at most 400 characters");
-        const status = action === "conversations.resolve" ? "resolved" : "closed";
+        const status = action === "conversations.not_request" ? "closed" : "resolved";
         if (c.status === status) return respond();
         const reason = typeof o.reason === "string" && o.reason.trim() ? o.reason.trim() : null;
-        await v.convs.updateConversation(c.id, { status, closed: { by: v.me, at: stamp, reason }, windDown: false, changeNote: status === "resolved" ? "Resolved" : "Marked not a request" }, { bump: true });
+        await v.convs.applyOwnership(c.id, { kind: "close", by: await actor(c), status, reason, changeNote: status === "resolved" ? "Closed out" : "Marked not a request" });
         ctx.log({ source: "plan", op: "conversation_closed", kind: status });
         return respond();
       }
@@ -795,7 +842,7 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         if (c.closedAt && c.closeReason === NOT_WORK) return respond();
         const work = (await v.convs.placesIn([c.id])).filter((p) => p.role === "work");
         await v.convs.place(work.map((p) => ({ chatId: p.chatId, messageId: p.messageId, conversationId: null, role: "chatter" as const, reason: `${NOT_WORK_PLACE}${c.id}`, placedBy: "person" as const, at: p.at })));
-        await v.convs.updateConversation(c.id, { status: "closed", closed: { by: v.me, at: stamp, reason: NOT_WORK }, windDown: false, changeNote: "Marked not work-related" }, { bump: true });
+        await v.convs.applyOwnership(c.id, { kind: "close", by: await actor(c), status: "closed", reason: NOT_WORK, changeNote: "Marked not work-related" });
         ctx.log({ source: "plan", op: "conversation_not_work", count: work.length });
         return respond();
       }
@@ -805,7 +852,7 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         if (!c || !v) return bad("No such conversation", 404);
         const moved = (await v.convs.placesByRole([c.chatId], "chatter")).filter((p) => p.reason === `${NOT_WORK_PLACE}${c.id}`);
         await v.convs.place(moved.map((p) => ({ chatId: p.chatId, messageId: p.messageId, conversationId: c.id, role: "work" as const, reason: null, placedBy: "person" as const, at: p.at })));
-        if (c.closedAt && c.closeReason === NOT_WORK) await v.convs.updateConversation(c.id, { closed: null, status: "new", changeNote: "Back from Chatter" }, { bump: true });
+        if (c.closedAt && c.closeReason === NOT_WORK) await v.convs.applyOwnership(c.id, { kind: "reopen", by: await actor(c), note: "Back from Chatter", changeNote: "Back from Chatter" });
         await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, c.id);
         ctx.log({ source: "plan", op: "conversation_not_work_undone", count: moved.length });
         return respond();
@@ -815,9 +862,54 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const c = o && (await conv(o.id));
         if (!c || !v) return bad("No such conversation", 404);
         if (!c.closedAt) return respond();
-        await v.convs.updateConversation(c.id, { closed: null, status: "new", changeNote: "Opened again" }, { bump: true });
-        await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, c.id);
+        await v.convs.applyOwnership(c.id, { kind: "reopen", by: await actor(c), changeNote: "Opened again" });
+        await refresh(c.id);
         ctx.log({ source: "plan", op: "conversation_reopened" });
+        return respond();
+      }
+      case "conversations.claim": {
+        // Part 0: I'll take it. Of two at once the first wins; the second is told who has it (the store's conditional update).
+        const o = only(input, ["id"]);
+        const c = o && (await conv(o.id));
+        if (!c || !v) return bad("No such conversation", 404);
+        await v.convs.applyOwnership(c.id, { kind: "claim", by: await actor(c), via: await claimVia(c) });
+        ctx.log({ source: "plan", op: "conversation_claimed" });
+        return respond();
+      }
+      case "conversations.give":
+      case "conversations.add_helper": {
+        // Part 0: to another Cooptimizer on this chat. Give to: its owner or a lead, or anyone while nobody has it.
+        const o = only(input, ["id", "toId"]);
+        const c = o && (await conv(o.id));
+        if (!o || !c || !v) return bad("No such conversation", 404);
+        const to = await teammate(c, o.toId);
+        if (!to) return bad("Choose someone on this chat who uses FocusTime");
+        if (action === "conversations.give") {
+          if (same(to.id, v.me)) return bad("That's you: use I'll take it");
+          if (!mayHandOff(c.claimedBy, v.me, await ctx.isLead(c.clientKey).catch(() => false))) return bad(`${firstName(c.claimedName)} has this. Ask them to hand it over`, 409);
+          await v.convs.applyOwnership(c.id, { kind: "give", by: await actor(c), to });
+        } else await v.convs.applyOwnership(c.id, { kind: "helper", by: await actor(c), to });
+        ctx.log({ source: "plan", op: action === "conversations.give" ? "conversation_given" : "conversation_helper" });
+        return respond();
+      }
+      case "conversations.release": {
+        // Part 0: back to Open, by its owner or a lead.
+        const o = only(input, ["id"]);
+        const c = o && (await conv(o.id));
+        if (!c || !v) return bad("No such conversation", 404);
+        if (c.claimedBy && !same(c.claimedBy, v.me) && !(await ctx.isLead(c.clientKey).catch(() => false))) return bad(`${firstName(c.claimedName)} has this. Ask them to release it`, 409);
+        await v.convs.applyOwnership(c.id, { kind: "release", by: await actor(c) });
+        ctx.log({ source: "plan", op: "conversation_released" });
+        return respond();
+      }
+      case "conversations.undo_ownership": {
+        // Part 0: Undo of my newest change, while it is still the newest.
+        const o = only(input, ["id"]);
+        const c = o && (await conv(o.id));
+        if (!c || !v) return bad("No such conversation", 404);
+        await v.convs.undoOwnership(c.id);
+        await refresh(c.id);
+        ctx.log({ source: "plan", op: "conversation_ownership_undone" });
         return respond();
       }
       case "conversations.hide": {
@@ -917,7 +1009,13 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const meName = v.byId.get(k.chatId)?.members?.find((m) => same(m.userId, v.me))?.displayName ?? "Someone at Cooptimize";
         // I become its committer and the conversation's owner; whoever had it is told quietly, once (their own tick).
         await v.convs.updateCommitment(k.id, { takenFrom: k.whoId, takenBy: v.me, takenAt: stamp, whoId: v.me, whoName: meName, escalatedAt: null, remindedAt: null, reason: `Taken over from ${first(k.whoName)}` });
-        if (k.conversationId !== null) await v.convs.updateConversation(k.conversationId, { ownerId: v.me, changeNote: `${first(meName)} took it over` }, { bump: true });
+        if (k.conversationId !== null) {
+          await v.convs.updateConversation(k.conversationId, { ownerId: v.me, changeNote: `${first(meName)} took it over` }, { bump: true });
+          // Part 0: taking over a promise takes an unowned conversation too; it never moves one a teammate has.
+          await v.convs.applyOwnership(k.conversationId, { kind: "claim", by: { id: v.me, name: meName }, via: "take_over" }).catch((e) => {
+            if (!(e instanceof PlanError)) throw e;
+          });
+        }
         ctx.log({ source: "plan", op: "commitment_taken_over" });
         return respond();
       }

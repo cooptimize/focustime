@@ -56,7 +56,7 @@ export const RETENTION_RULES: readonly RetentionRule[] = [
     source: "MC-1",
     run: del("UPDATE meeting_proposals SET quotes_json = NULL WHERE quotes_json IS NOT NULL AND created_at < ?", (n) => ago(n, days(30))),
   },
-  { name: "job_claims", table: "job_claims", keep: `${CLAIM_DAYS} days`, source: "HK-4", run: del("DELETE FROM job_claims WHERE claimed_at < ?", (n) => ago(n, days(CLAIM_DAYS))) },
+  { name: "job_claims", table: "job_claims", keep: `${CLAIM_DAYS} days`, source: "HK-4", run: del("DELETE FROM job_claims WHERE claimed_at < ? AND job <> 'conversation_ownership_backfill'", (n) => ago(n, days(CLAIM_DAYS))) },
 ];
 
 /** Runs every rule, each in its own transaction (one failing doesn't stop the others); deleted rows per rule. */

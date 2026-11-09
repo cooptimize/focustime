@@ -503,3 +503,10 @@ What DS-1 learned, and what is still open:
 
 - Should Ask's "what's next" show the next meeting, as Today's Now strip does? The bot had that line until TB-3 moved "what's next" onto the Assistant's read. Adding it would change the panel and Teams together.
 - Is "Edit in FocusTime" enough for a change you want to tweak from Teams, or do people want the text boxes on the card? Waiting for use.
+## Part 0 (shared owner)
+
+- Should FocusTime post "I've got this" to the chat when someone takes a conversation? Nothing is posted to Teams today, by the spec.
+- Part 1 and Part 3 weren't in the brief this was built from. The five per-person views are row statuses on today's rail, which Part 1 redesigns. Do Part 1's statuses map one to one?
+- "Each Up for grabs request" assumes requests of their own. The code has only conversations, so the record lives there. Is a separate kind planned?
+- A chat member who doesn't follow the client can't see the conversation, so they aren't offered in Give to. Should the list explain who's missing?
+- An Open item someone said "I'll do it" about now shows as Up for grabs to teammates until they tap. If this adds noise, should the committer's teammates see it quieter?

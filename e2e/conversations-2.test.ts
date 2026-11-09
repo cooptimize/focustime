@@ -271,8 +271,8 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       await page.keyboard.press("Escape");
       await page.getByRole("dialog", { name: /^Image \d of 2/ }).waitFor({ state: "detached" });
 
-      // Merge: Lena's topic (Handled by teammates) into mine, then Undo.
-      await main.getByRole("navigation", { name: "Inbox views and clients" }).getByRole("button", { name: /^Handled by teammates\s*1/ }).click();
+      // Merge: Lena's topic (nobody has claimed it, so it's Up for grabs in Needs you) into mine, then Undo.
+      await openInboxView(page, "needs-you");
       const refresh = await openInboxItem(page, "Dashboard refresh time");
       await refresh.getByRole("button", { name: "More for Dashboard refresh time" }).click();
       await refresh.getByRole("menuitem", { name: "Merge into…" }).click();

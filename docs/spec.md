@@ -807,3 +807,7 @@ Cooptimizers co-work on a Teams call in a client's delivery chat. FocusTime make
 - **Store:** one migration, `20261121T1000_chat_calls` (an app table; adds only). Not in Export.
 - **Rollback:** revert the PR and redeploy; the table stays unused (an older build ignores it).
 
+
+## Part 0: a shared owner and state per conversation
+
+One record per conversation, the same for everyone who can see it: an owner (none, or one Cooptimizer, plus helpers), a state (Open, Owned or Closed) and a history. Each person sees Asked you, Up for grabs, You're on it, Teammate has it or Done, worked out from that record. I'll take it, Give to…, Add helper, Release, Close out and Reopen apply at once with Undo (through the Assistant and Teams, as a proposal with Confirm). A reply or a detected "I'll do it" only offers one tap. The first of two claims wins. Asking again on a Closed one reopens it to its last owner; a new message on an Owned one notifies the owner. Nothing is posted to Teams. Existing conversations are moved once by a backfill. Decisions under "Part 0" in `docs/decisions.md`.

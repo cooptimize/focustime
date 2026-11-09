@@ -30,6 +30,7 @@ import {
   type BatchMessage, type Commitment, type Conversation, type Hint, type OpenConversation, type Participant, type UpdateAnswer,
 } from "../plan/conversations.ts";
 import type { ClientChat, FocusUser, TeamsMessage } from "../plan/requests.ts";
+import { askedAgainBy, reopenedLine } from "../plan/ownership.ts";
 import type { ConversationStore } from "../store/conversation-store.ts";
 import type { TeamsStore } from "../store/teams-store.ts";
 import type { WorkItem } from "../week/types.ts";
@@ -414,7 +415,11 @@ async function sortBatch(d: PipelineDeps, chat: ClientChat, batchIn: readonly Te
     const c = (await d.convs.conversation(id))!;
     const mine = work.filter((m) => placed.get(m.messageId) === id);
     const u = updateFor([...created.entries()].find(([, x]) => x.id === id) ? { newRef: [...created.entries()].find(([, x]) => x.id === id)![0] } : { id });
-    const reopened = !!c.closedAt;
+    // Part 0: a closed one reopens to its last owner when someone else asks again.
+    const asker = c.closedAt ? askedAgainBy(c, mine) : null;
+    const reopened = !!asker;
+    const reopenNote = reopenedLine(asker?.senderName);
+    if (asker) await d.convs.applyOwnership(id, { kind: "reopen", by: null, byName: asker.senderName ?? "Someone", via: "asked_again", note: reopenNote, changeNote: reopenNote });
     const participants = withParticipants(c.participants, mine.map(participantOf));
     const owner = u?.ownerId && participants.some((p) => same(p.id, u.ownerId) && !p.external) ? u.ownerId : c.ownerId;
     const last = mine.at(-1)?.createdAt ?? c.lastAt;
@@ -422,9 +427,8 @@ async function sortBatch(d: PipelineDeps, chat: ClientChat, batchIn: readonly Te
     await d.convs.updateConversation(
       id,
       {
-        ...(u ? { title: u.title || c.title, summary: u.summary || c.summary, changeNote: reopened ? "Opened again by a new message" : u.change || null, likelyItem: u.likelyItem ?? c.likelyItem } : { changeNote: reopened ? "Opened again by a new message" : "New messages" }),
+        ...(u ? { title: u.title || c.title, summary: u.summary || c.summary, changeNote: reopened ? reopenNote : u.change || null, likelyItem: u.likelyItem ?? c.likelyItem } : { changeNote: reopened ? reopenNote : "New messages" }),
         participants, ownerId: owner, lastAt: Date.parse(last) > Date.parse(c.lastAt) ? last : c.lastAt, lastWorkAt: last, windDown: !!u?.wrappedUp || (acked.has(id) && Date.parse(acked.get(id)!) > Date.parse(last)), itemChange,
-        ...(reopened ? { closed: null, status: "new" as const } : {}),
       },
       { bump: true },
     );
@@ -565,7 +569,11 @@ async function joinByRule(d: PipelineDeps, chat: ClientChat, m: BatchMessage, id
   const c = all.find((x) => x.id === id) ?? (await d.convs.conversation(id));
   if (!c) return;
   await d.convs.place([{ chatId: chat.chatId, messageId: m.messageId, conversationId: id, role: "work", reason: null, placedBy: "rule", at: m.createdAt }]);
-  await d.convs.updateConversation(id, { participants: withParticipants(c.participants, [participantOf(m)]), lastAt: m.createdAt, lastWorkAt: m.createdAt, windDown: c.windDown && Date.parse(c.lastAt) > Date.parse(m.createdAt), changeNote: c.closedAt ? "Opened again by a new message" : `New message from ${firstName(m.senderName ?? "someone")}`, ...(c.closedAt ? { closed: null, status: "new" as const } : {}) }, { bump: true });
+  // Part 0: a closed one reopens to its last owner when someone else asks again.
+  const asker = c.closedAt ? askedAgainBy(c, [m]) : null;
+  const note = asker ? reopenedLine(asker.senderName) : null;
+  if (asker) await d.convs.applyOwnership(id, { kind: "reopen", by: null, byName: asker.senderName ?? "Someone", via: "asked_again", note, changeNote: note! });
+  await d.convs.updateConversation(id, { participants: withParticipants(c.participants, [participantOf(m)]), lastAt: m.createdAt, lastWorkAt: m.createdAt, windDown: c.windDown && Date.parse(c.lastAt) > Date.parse(m.createdAt), changeNote: note ?? `New message from ${firstName(m.senderName ?? "someone")}` }, { bump: true });
 }
 
 /** Rules-only promises: a FocusTime user's own message with a promise phrase, one per message group. */

@@ -85,7 +85,7 @@ describe("item actions", () => {
     expect(p({}, { item: { id: 1, title: null, url: null } })).toBe("close");
   });
   it("a work request's primary is Create DevOps item; there is one primary", () => {
-    const card = { id: 3, primary: "create", closed: null, item: null, commitments: [], link: "x", hidden: false } as unknown as ConversationCard;
+    const card = { id: 3, primary: "create", closed: null, item: null, commitments: [], link: "x", hidden: false, shared: { state: "open", view: "up_for_grabs", owner: null, helpers: [], offer: null, history: [], canUndo: false, mayHandOff: true, team: [] } } as unknown as ConversationCard;
     const acts = actsFor({ kind: "conversation", row: row({ key: "v3", kind: "conversation" }), card }, env());
     expect(acts.filter((a) => a.primary).map((a) => a.id)).toEqual(["create"]);
   });

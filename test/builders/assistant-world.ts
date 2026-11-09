@@ -102,6 +102,7 @@ export function setup(o: { rules?: Partial<AiRules>; channel?: "panel" | "teams"
       return { ok: true, data: { ...a, clients: [...named(a, { 8100: "Data Staleness", 8200: "Usage export" }), ...named(b, { 9100: "Claims intake" }), ...named(c, { 7100: "Initech secret migration" })] } };
     },
     "inbox.list": () => ({ ok: true, data: { today: "2026-11-05", counts: {}, needsYou: 0, items: [
+      { key: "v41", kind: "conversation", views: ["needs_you"], clientKey: Tailspin, title: "Invoice export", who: null, due: null, late: false, itemId: null },
       { key: "commitment:51", kind: "commitment", views: ["waiting"], clientKey: Tailspin, title: "Send the sample extract", who: "Dana Reyes", due: "2026-11-04", late: true, itemId: null },
       { key: "commitment:52", kind: "commitment", views: ["waiting"], clientKey: INI, title: "Initech secret file", who: "Bob", due: null, late: false, itemId: null },
       { key: "c42", kind: "chatPromise", views: ["in_progress"], clientKey: Tailspin, title: "Send the linked export", who: "Dana Reyes", due: null, dueAt: null, late: false, done: false, itemId: 8101 },
@@ -138,7 +139,8 @@ export function setup(o: { rules?: Partial<AiRules>; channel?: "panel" | "teams"
     "capture.add": () => ({ ok: true, data: { capture: { id: 5 } } }),
     "capture.route": () => ({ ok: true, data: { capture: { id: 5, routedId: 12 } } }),
     "draft.prepare": () => ({ ok: true, data: {} }),
-    "conversations.list": () => ({ ok: true, data: { needsYou: [], teammates: [], inProgress: [], handled: [], closed: [], chatter: [], unsorted: [] } }),
+    "conversations.claim": () => ({ ok: true, data: {} }),
+    "conversations.list": () => ({ ok: true, data: { needsYou: [{ id: 41, clientKey: Tailspin, clientName: "Tailspin", title: "Invoice export", commitments: [], shared: { state: "open", view: "up_for_grabs", owner: null, helpers: [], offer: null, history: [], canUndo: false, mayHandOff: true, team: [] } }], teammates: [], inProgress: [], handled: [], closed: [], chatter: [], unsorted: [] } }),
     "conversations.search_items": () => ({ ok: true, data: { available: true, items: [{ id: 8101, title: "Flag stale rows", type: "User Story", state: "Active" }] } }),
     "conversations.unlink": () => ({ ok: true, data: {} }),
     "my_promises.unlink": () => ({ ok: true, data: {} }),

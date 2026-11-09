@@ -1,5 +1,6 @@
 // CV-1: what Inbox › Conversations and My promises show (here so the UI never imports server code). A card is a
 // summary, never a transcript; "Show messages" asks for the messages on their own.
+import type { ClaimOffer, PersonView, SharedState } from "./ownership.ts";
 import type { CommitmentState, ConversationStatus, ItemDraft } from "./conversations.ts";
 
 export type CardPerson = { name: string; external: boolean; me: boolean };
@@ -17,6 +18,24 @@ export type CardItem = {
 export type CardCommitment = { id: number; whoName: string; mine: boolean; what: string; dueAt: string | null; dueDate: string | null; state: CommitmentState; impliesItem: boolean; item: CardItem | null };
 export type CardSuggestion = { id: number; kind: "comment" | "description"; itemId: number; body: string; internal: string[]; fromInternalChat: boolean; mine: boolean; /** GD-2 */ namesRemoved?: boolean };
 export type Primary = "create" | "link" | "resolve" | "take_over" | "reopen" | "mark_done";
+
+/** Part 0: the shared record as one person reads it. */
+export type CardShared = {
+  state: SharedState;
+  view: PersonView;
+  owner: { name: string; me: boolean } | null;
+  helpers: { name: string; me: boolean }[];
+  /** "You replied. Take this?": one tap; nothing is claimed until then. */
+  offer: ClaimOffer | null;
+  /** Oldest first, in plain words. */
+  history: { at: string; text: string }[];
+  /** Whether my last change is still the newest (Undo). */
+  canUndo: boolean;
+  /** Whether I may Give to or Release it. */
+  mayHandOff: boolean;
+  /** The Cooptimizers on this chat who use FocusTime (Give to, Add helper). */
+  team: { id: string; name: string; me: boolean }[];
+};
 
 export type ConversationCard = {
   id: number;
@@ -44,6 +63,8 @@ export type ConversationCard = {
   /** Escalated, and nobody took it over: shown to the client's leads in Needs you. */
   unclaimed: boolean;
   owner: string | null;
+  /** Part 0: the shared owner and state, and what they mean for me. */
+  shared: CardShared;
   mentionsMe: boolean;
   commitments: CardCommitment[];
   suggestions: CardSuggestion[];
@@ -147,6 +168,8 @@ export type PromiseCard = {
   /** CV-2: the one it was made to, for the PersonPicker (null: nobody known). */
   toRef: import("./person-ref.ts").PersonRef | null;
   conversationTitle: string | null;
+  /** Part 0: the conversation it came from is Closed; the promise is still mine. */
+  conversationClosed?: boolean;
   clientKey: string;
   clientName: string;
   chatName: string;

@@ -7,7 +7,7 @@ import { DEFAULT_TEAMS_RHYTHM, type TeamsRhythm } from "./teams-rhythm.ts";
 import { DEFAULT_STATUS_TIMES, type StatusTimes } from "./status-report.ts";
 
 /** Every kind of notification FocusTime sends. Each has its own switch in Settings > Notifications, except the test. */
-export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "commitment_item", "taken_over", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "look_ask", "look_reply", "assigned", "dates_moved", "status_report", "meeting_review"] as const;
+export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "commitment_item", "taken_over", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "look_ask", "look_reply", "assigned", "dates_moved", "status_report", "meeting_review", "conversation_given", "conversation_activity"] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 export type AnyKind = NotifyKind | "test" | "held";
 
@@ -37,6 +37,8 @@ export const KIND_LABEL: Record<NotifyKind, string> = {
   dates_moved: "Someone moved your dates",
   status_report: "Monday's status report",
   meeting_review: "Client calls to review",
+  conversation_given: "A conversation handed to you",
+  conversation_activity: "New on a conversation you have",
 };
 export const KIND_HINT: Record<NotifyKind, string> = {
   plan_day: "At the start of a workday when the day isn't planned yet.",
@@ -64,6 +66,8 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   dates_moved: "When a teammate moves the dates of a DevOps item you own from Ahead in FocusTime, once per save.",
   status_report: "Friday afternoon (and Sunday evening if you like) when some of your features have no update yet for Monday's report. Off until you turn it on.",
   meeting_review: "After a client call you review, once: its proposals are ready, or its transcript needs uploading.",
+  conversation_given: "When a teammate gives you a conversation or adds you as a helper.",
+  conversation_activity: "When someone writes in a conversation you have, or asks again on one you closed.",
 };
 /** PV-1: quiet kinds go to the in-app list only, never to push. */
 export const QUIET_KINDS: ReadonlySet<AnyKind> = new Set<AnyKind>(["story_taken", "send_cant_lead", "assigned", "dates_moved"]);
@@ -302,6 +306,10 @@ export const notices = {
     at,
   }),
   takenOver: (id: number, byName: string, what: string, at: string): Notice => ({ kind: "taken_over", key: `taken_over:${id}`, title: `${byName} took it over`, body: `${what}\nNothing more for you to do.`, buttons: [open("Open Conversations")], route: "conversations", at }),
+  /** Part 0: handed to me: given, or added as a helper. */
+  conversationGiven: (eventId: number, byName: string, title: string, helper: boolean, at: string): Notice => ({ kind: "conversation_given", key: `conversation_given:${eventId}`, title: helper ? `${byName} added you as a helper` : `${byName} gave this to you`, body: `${title}\nClick to open it.`, buttons: [open("Open Inbox")], route: "conversations", at }),
+  /** Part 0: something new on one I have (a new message, or someone asking again on one I closed). */
+  conversationActivity: (key: string, heading: string, title: string, at: string): Notice => ({ kind: "conversation_activity", key, title: heading, body: `${title}\nIt stays with you.`, buttons: [open("Open Inbox")], route: "conversations", at }),
   expiry: (date: string, lines: { text: string; section: string }[], at: string): Notice | null =>
     lines.length
       ? { kind: "expiry", key: `expiry:${date}`, title: lines.length === 1 ? "Expiring soon" : `${lines.length} expiring soon`, body: lines.slice(0, 3).map((l) => l.text).join("\n"), buttons: [open("Open Settings")], route: `settings:${lines[0]!.section}`, at }

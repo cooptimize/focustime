@@ -62,7 +62,7 @@ Newer DevOps write kinds than the `op` column's CHECK are kept in `write_kind`, 
 | `client_chats`, `client_chat_changes`, `delivery_chats` | App and user | Yes | Registered client chats, their member lists, who registered them |
 | `teams_messages`, `teams_message_images` | App | Yes | Messages read from registered chats; for images only type, size, a skipped reason and the AI's description (never the bytes) |
 | `chat_calls` | App | Yes | CW-1: calls in registered chats, from their call started and ended events: the call id, when it started and ended, who started it (a user id and tenant). Never the participants or anything said |
-| `conversations`, `conversation_messages`, `commitments`, `conversation_suggestions`, `conversation_merges`, `requests` | App | Yes | Conversations, their summaries and commitments |
+| `conversations`, `conversation_messages`, `commitments`, `conversation_suggestions`, `conversation_merges`, `conversation_events`, `requests` | App | Yes | Conversations, their summaries and commitments |
 | `chat_messages`, `asks`, `dedupe_log` | User | Yes | The older per-person Requests rows (AP-1) |
 | `meeting_series`, `meeting_occurrences`, `meeting_transcripts`, `meeting_proposals` | App | Yes | Registered client calls, transcripts (30 days), proposals |
 

@@ -13,7 +13,7 @@ export const VIEWS: readonly { id: InboxView; label: string }[] = [
   { id: "waiting", label: "Waiting on" },
   { id: "in_progress", label: "In progress" },
   { id: "captures", label: "Captures and drafts" },
-  { id: "teammates", label: "Handled by teammates" },
+  { id: "teammates", label: "Teammate has it" },
   { id: "done", label: "Done" },
   { id: "chatter", label: "Chatter" },
 ];
@@ -26,7 +26,7 @@ export const STATUS_TAG: Record<InboxView, { text: string; tone: Tone }> = {
   waiting: { text: "Waiting on", tone: "soon" },
   in_progress: { text: "In progress", tone: "work" },
   captures: { text: "Capture", tone: "plain" },
-  teammates: { text: "Handled by teammates", tone: "plain" },
+  teammates: { text: "Teammate has it", tone: "plain" },
   done: { text: "Done", tone: "done" },
   chatter: { text: "Chatter", tone: "plain" },
 };
@@ -200,10 +200,21 @@ export function dueWords(due: string, today: string): string {
   return `Due ${Temporal.PlainDate.from(due).toLocaleString("en-US", { month: "short", day: "numeric" })}`;
 }
 
+/** Part 0: a conversation's status tag from the shared owner: the same words wherever the row shows. Null for anything else. */
+export function ownerTag(i: Pick<InboxItemView, "personView" | "ownerName">): { text: string; tone: Tone } | null {
+  switch (i.personView) {
+    case "asked_you": return { text: "Asked you", tone: "ask" };
+    case "up_for_grabs": return { text: "Up for grabs", tone: "work" };
+    case "yours": return { text: "You're on it", tone: "work" };
+    case "teammate": return { text: i.ownerName ? `${i.ownerName.split(/\s+/)[0]} has it` : "Teammate has it", tone: "plain" };
+    default: return null;
+  }
+}
+
 /** IB-2: the extra word beside who and where, when it says more than the status tag (late, due, an item, a Must…). */
 export function detailTag(i: InboxItemView, today: string): { text: string; tone: Tone } | null {
   const t = rowTag(i, today);
-  return t && !["Done", "Needs you", "Teammates", "In progress", "Waiting", "New"].includes(t.text) ? t : null;
+  return t && !["Done", "Needs you", "Teammates", "In progress", "Waiting", "New", "Asked you"].includes(t.text) ? t : null;
 }
 
 /** The one tag a row shows beside who and when; never more than one. */

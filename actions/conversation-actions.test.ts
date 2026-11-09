@@ -39,7 +39,7 @@ const upkeepDeps = (w: W, items: WorkItem[] = []) => ({
 });
 
 describe("views", () => {
-  it("the committer has it in Needs you with one primary action; a teammate sees it in Handled by teammates", async () => {
+  it("the committer has it in Needs you with one primary action; until someone claims it a teammate sees it as Up for grabs", async () => {
     const w = world({ respond: allianceAnswer });
     const p = await people(w);
     await alliance(w);
@@ -48,9 +48,13 @@ describe("views", () => {
     const card = evan.needsYou[0]!;
     expect(card).toMatchObject({ title: "Movement Dashboard quantity gap on 4417001", clientName: "Contoso Supply", chatName: "Contoso Analytics Alliance", status: "committed", statusLine: "Evan committed", windDown: true, primary: "create" });
     expect(card.participants.find((x) => x.name === "Blake Novak")?.external).toBe(true);
-    // Lena isn't mentioned or committed; Sam isn't in it at all. Both see it as handled by teammates.
-    expect((await p.as(LENA).run("conversations.list")).teammates.map((c) => c.id)).toEqual([card.id]);
-    expect((await p.as(SAM).run("conversations.list")).teammates.map((c) => c.id)).toEqual([card.id]);
+    // Part 0: a detected "I'll do it" never claims: Evan is offered it, and for Lena and Sam it is open to the team.
+    expect(card.shared).toMatchObject({ state: "open", view: "asked_you", offer: "committed", owner: null });
+    for (const who of [LENA, SAM]) {
+      const list = await p.as(who).run("conversations.list");
+      expect(list.needsYou.map((c) => [c.id, c.shared.view])).toEqual([[card.id, "up_for_grabs"]]);
+      expect(list.teammates).toEqual([]);
+    }
   });
 
   it("shows only chats I'm in, and only clients I follow", async () => {
@@ -73,7 +77,7 @@ describe("views", () => {
     expect(m.messages[0]!.html).toContain('<span class="mention">Evan Ford</span>');
     expect(m.messages.map((x) => x.author)).toEqual(["Blake Novak", "You", "You"]);
     expect((await p.as(EVAN).run("conversations.list")).needsYou[0]!.updated).toBeNull();
-    expect((await p.as(LENA).run("conversations.list")).teammates[0]!.updated).not.toBeNull();
+    expect((await p.as(LENA).run("conversations.list")).needsYou[0]!.updated).not.toBeNull();
   });
 });
 
@@ -138,7 +142,7 @@ describe("commitments and escalation", () => {
     // Thursday 2:00 PM in Chicago: a working day after Wednesday 1:55 PM.
     w.setNow("2026-11-05T20:00:00Z");
     expect((await upkeep(upkeepDeps(w))).escalated).toBe(1);
-    const lena = (await p.as(LENA).run("conversations.list")).teammates[0]!;
+    const lena = (await p.as(LENA).run("conversations.list")).needsYou[0]!;
     expect(lena).toMatchObject({ waiting: { name: "Evan", days: 1 }, statusLine: "Waiting on Evan · 1 day", primary: "take_over" });
     const sam = await p.as(SAM).run("conversations.list");
     expect(sam.needsYou.map((x) => x.id)).toEqual([c.id]);
