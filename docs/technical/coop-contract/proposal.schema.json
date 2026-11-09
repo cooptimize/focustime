@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.focustime.example/coop-contract/v1/proposal.schema.json",
+  "title": "Coop proposal v1",
+  "description": "kind story_proposals, version 1. The same fields as COOP_PROPOSALS_V1 in plan/stories.ts, with text limits added.",
+  "type": "object",
+  "required": [
+    "kind",
+    "version",
+    "feature_id",
+    "proposals",
+    "rationale",
+    "set_aside"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "story_proposals"
+    },
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "feature_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "proposals": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "description",
+          "acceptance_criteria",
+          "depends_on",
+          "size",
+          "evidence",
+          "open_questions"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,16}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": "\\S"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 8000
+          },
+          "acceptance_criteria": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "string",
+              "maxLength": 600
+            }
+          },
+          "depends_on": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,16}$"
+            }
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "XS",
+              "S",
+              "M",
+              "L",
+              null
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "maxItems": 6,
+            "items": {
+              "type": "string",
+              "maxLength": 300
+            }
+          },
+          "open_questions": {
+            "type": "array",
+            "maxItems": 6,
+            "items": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          }
+        }
+      }
+    },
+    "rationale": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "set_aside": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": [
+          "title",
+          "why",
+          "existing_item_id",
+          "reason"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": "\\S"
+          },
+          "why": {
+            "type": "string",
+            "enum": [
+              "out_of_scope",
+              "already_covered"
+            ]
+          },
+          "existing_item_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
+      }
+    }
+  }
+}
