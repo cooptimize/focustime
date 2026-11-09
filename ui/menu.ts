@@ -1271,6 +1271,12 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "conversations.messages":
     case "conversations.seen":
     case "conversations.resolve":
+    case "conversations.claim":
+    case "conversations.give":
+    case "conversations.add_helper":
+    case "conversations.release":
+    case "conversations.close_out":
+    case "conversations.undo_ownership":
     case "conversations.not_request":
     case "conversations.not_work":
     case "conversations.not_work_undo":

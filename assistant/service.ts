@@ -15,6 +15,7 @@
 //   to-dos, which item) asks one short question with choices; my next message answers it for 10 minutes.
 //   4. confirm() re-checks everything (mine, open, not expired, still allowlisted, the client still mine and the
 //      proposal's own, nothing changed since: a fresh preview) and then dispatches the same action the button does.
+import type { ConversationsData } from "../plan/conversation-views.ts";
 import { removedNotice } from "../plan/progress.ts";
 import { SIZE_MINUTES } from "../plan/types.ts";
 import type { ActionName } from "../actions/registry.ts";
@@ -71,7 +72,7 @@ export const INTENT_INSTRUCTIONS = `You route requests in FocusTime, a planning 
 Words: a to-do is a planned piece of work on a half-day block (code name pick). People may say pick or to-do; both mean the same, and the *_pick and *_picks tools act on to-dos.
 For a move of to-dos by day or block ("move those to Friday", "everything from Wednesday PM to Friday AM", "push today to tomorrow"), name move_plan, even when the to-dos are with different clients. For two or three changes to one item in one request (done and a comment, a date), name item_update.
 ${GLOSSARY}
-Tools: today (what's next, due today, due tonight), day (what I did or planned on a day), item (a work item's state, owner, dates, children), gaps (features with readiness gaps), commitments (what someone committed to in a conversation), sends (my sends and their states), status (Monday's status report: writing my status updates, or finding the feature an update goes on; with comment when they give the update's words), inbox (a view of my Inbox: needs you, promises, waiting, in progress, captures, done), link_search (items to link a conversation or promise to), move_pick, drop_pick, keep_pick, move_picks (several to-dos at once, by id), move_plan (to-dos by day or block), close_day (close out a day: to-dos done, the rest moved on, the day closed out), confirm_day, confirm_week, add_must, ahead_change (start, target, size or owner of an item), send (send work to a teammate's week), comment (a comment on a DevOps item), description (a new description for a DevOps item), item_update (done, a comment and a target date on one item), unlink, link_comment, inbox_seen, snooze, capture, close_loop, plan_deployment (plan a deployment, release or go-live with a time window).
+Tools: today (what's next, due today, due tonight), day (what I did or planned on a day), item (a work item's state, owner, dates, children), gaps (features with readiness gaps), commitments (what someone committed to in a conversation), sends (my sends and their states), status (Monday's status report: writing my status updates, or finding the feature an update goes on; with comment when they give the update's words), inbox (a view of my Inbox: needs you, promises, waiting, in progress, captures, done), link_search (items to link a conversation or promise to), move_pick, drop_pick, keep_pick, move_picks (several to-dos at once, by id), move_plan (to-dos by day or block), close_day (close out a day: to-dos done, the rest moved on, the day closed out), confirm_day, confirm_week, add_must, ahead_change (start, target, size or owner of an item), send (send work to a teammate's week), comment (a comment on a DevOps item), description (a new description for a DevOps item), item_update (done, a comment and a target date on one item), unlink, link_comment, conversation_owner (claim, give, add a helper, release, close out or reopen a conversation), inbox_seen, snooze, capture, close_loop, plan_deployment (plan a deployment, release or go-live with a time window).
 Questions (AS-3): when the request asks something rather than asking for a change, set ask and name no tools: topic is plan_check (what to look out for, planning a period, risks, "anything I should know"), capabilities (what you can help with, what you can do here), agenda (what's on a day or period, my plate, my schedule), promises (promises late or due; lateOnly true when it asks only about late ones), waiting (what I'm waiting on), readiness (what's not ready, gaps, missing stories, dates or owners for a period or a client's work), deployments (deployments, releases, go-lives, after-hours or weekend work), status_updates (features that still need an update for Monday's status report), done (what I got done or finished), calls (client calls or meeting proposals to review), standards (what Cooptimize's development standards say: naming, formatting or design rules for SQL, DAX, semantic models or reports, such as "what's our standard for fact table naming?" or "how should DAX measures be formatted?"), items (about named features, stories or items: what's under a feature, their state), general (any other question about my plan or FocusTime). period is today, tomorrow, this_week, next_week, weekend, last_week, or day with date (YYYY-MM-DD; null otherwise); this_week when it doesn't say. A question about one item by #id may name item instead; who committed to something, commitments; my sends, sends. A request for a change sets ask to null.
 followUp is true when the request continues or corrects the earlier request shown ("those", "they", "it", "that feature", "I meant", "no,", "can't you", or a missing detail); then route it as the two together would be. Otherwise false.
 How people ask:
@@ -654,6 +655,7 @@ export function createAssistant(env: AssistantEnv) {
           if (PICK_TOOLS.includes(name) && !x.known.picks.has(Number(args.pickId))) return JSON.stringify({ cannot: "That to-do isn't in anything read for this request" });
           if (PICKS_TOOLS.includes(name) && !picksIn(name, args).every((p) => x.known.picks.has(p))) return JSON.stringify({ cannot: "A to-do there isn't in anything read for this request" });
           if ((name === "inbox_seen" || name === "snooze") && !(name === "snooze" ? [String(args.key)] : Array.isArray(args.keys) ? args.keys.map(String) : []).every((k) => x.known.keys.has(k))) return JSON.stringify({ cannot: "That Inbox row isn't in anything read for this request" });
+          if (name === "conversation_owner" && !x.known.conversations.has(Number(args.conversationId))) return JSON.stringify({ cannot: "That conversation isn't in anything read for this request" });
           if ((name === "unlink" || name === "link_comment") && !((nullId(args.conversationId) !== null && x.known.conversations.has(nullId(args.conversationId)!)) || (nullId(args.promiseId) !== null && x.known.promises.has(nullId(args.promiseId)!)))) return JSON.stringify({ cannot: "That conversation or promise isn't in anything read for this request" });
           // move_plan never takes ids from the model: the server's matches for "named", or the day's to-dos for "all".
           if (name === "move_plan") delete args.pickIds;
@@ -1099,6 +1101,34 @@ export function createAssistant(env: AssistantEnv) {
         const run = conv !== null ? { action: "conversations.unlink" as const, input: { id: conv } } : { action: "my_promises.unlink" as const, input: { id: prom! } };
         return { view: base(run.action, row.clientKey, `Unlink #${row.itemId}`, preview, conv !== null ? "Everyone on the chat who uses FocusTime" : "Only you"), held: { tool, args: { conversationId: conv, promiseId: prom }, run }, snapshot: { itemId: row.itemId } };
       }
+      case "conversation_owner": {
+        // Part 0: the buttons' own actions. The person comes from the chat's own team list, never from the model.
+        const conversationId = Number(args.conversationId);
+        const change = String(args.change);
+        const row = await inboxRow(`v${conversationId}`, client);
+        const r = await env.run("conversations.list", {});
+        if (!r.ok) throw new Refusal(r.error);
+        const d = r.data as ConversationsData;
+        const card = [...d.needsYou, ...d.inProgress, ...d.teammates, ...d.closed].find((c) => c.id === conversationId);
+        if (!card) throw new Refusal("That isn't in your Inbox");
+        const now = card.shared.state === "closed" ? "Closed" : (card.shared.owner?.name ?? "Nobody");
+        const wanted = typeof args.person === "string" ? args.person.trim().toLowerCase() : "";
+        const hits = wanted ? card.shared.team.filter((p) => !p.me && (p.name.toLowerCase() === wanted || p.name.toLowerCase().split(/\s+/)[0] === wanted)) : [];
+        if ((change === "give" || change === "add_helper") && hits.length !== 1) throw new Refusal(hits.length ? "More than one person has that name on this chat" : "That person isn't a Cooptimizer on this chat who uses FocusTime");
+        const person = hits[0];
+        const words: Record<string, { action: ActionName; title: string; label: string; after: string; input: Record<string, unknown> }> = {
+          claim: { action: "conversations.claim", title: "Take this conversation", label: "Who has it", after: "You", input: { id: conversationId } },
+          give: { action: "conversations.give", title: `Give this to ${person?.name ?? "a teammate"}`, label: "Who has it", after: person?.name ?? "", input: { id: conversationId, toId: person?.id } },
+          add_helper: { action: "conversations.add_helper", title: `Add ${person?.name ?? "a helper"}`, label: "Helpers", after: person?.name ?? "", input: { id: conversationId, toId: person?.id } },
+          release: { action: "conversations.release", title: "Release this conversation", label: "Who has it", after: "Nobody", input: { id: conversationId } },
+          close_out: { action: "conversations.close_out", title: "Close out this conversation", label: "State", after: "Closed", input: { id: conversationId } },
+          reopen: { action: "conversations.reopen", title: "Reopen this conversation", label: "State", after: "Open", input: { id: conversationId } },
+        };
+        const w = words[change];
+        if (!w) throw new Refusal("That isn't a change FocusTime can make");
+        const preview = plain(w.title, row.title, [{ label: w.label, before: change === "add_helper" ? (card.shared.helpers.map((h) => h.name).join(", ") || "None") : now, after: w.after }], ["Nothing is posted to Teams."]);
+        return { view: base(w.action, row.clientKey, w.title, preview, "Everyone on the chat who uses FocusTime"), held: { tool, args: { conversationId, change, person: person?.name ?? null }, run: { action: w.action, input: w.input } }, snapshot: { state: card.shared.state, owner: card.shared.owner?.name ?? null } };
+      }
       case "link_comment": {
         // AS-2: CV-5's manual-link comment on the item linked now (the write framework's preview and GD-1's scan).
         const f = await item(Number(args.itemId), client);
@@ -1224,6 +1254,7 @@ export function createAssistant(env: AssistantEnv) {
     const { done, ...r } = await execute(fresh.held);
     await env.plan.setAssistantProposal(row.id, { state: r.ok ? "confirmed" : "failed" });
     // AS-2: the moves it made, kept so one Undo puts them all back.
+    if (r.ok && fresh.held.tool === "conversation_owner") return { ...r, undo: { kind: "moves", id: row.id } } as ConfirmResult;
     if (r.ok && done?.length) {
       await env.plan.setAssistantProposalInput(row.id, { ...fresh.held, done });
       return { ...r, undo: { kind: "moves", id: row.id } } as ConfirmResult;
@@ -1270,7 +1301,7 @@ export function createAssistant(env: AssistantEnv) {
       if (held.tool === "plan_deployment") return { ok: true, result: { kind: "pick", id: p.id, clientKey: p.clientKey, clientName: env.clientName(p.clientKey), title: p.title, date: p.date, half: p.half === "PM" ? "PM" : "AM", time: p.window ? windowText(p.window) : null, done: false, link: link(`#/week/day/${p.date}`, `Open ${dayWords(p.date)}`) }, message: "Deployment planned" };
       return { ok: true, result: { kind: "pick", id: p.id, clientKey: p.clientKey, clientName: env.clientName(p.clientKey), title: p.title, date: p.date, half: p.half === "PM" ? "PM" : "AM", time: null, done: p.status === "done", link: link(`#/week/day/${p.date}/${p.half}`, `Open ${dayWords(p.date)}`) }, message: "Moved" };
     }
-    const messages: Partial<Record<ToolName, string>> = { drop_pick: "Dropped", confirm_day: "Day confirmed", confirm_week: "Week confirmed", add_must: "Added as a must", ahead_change: "In your change set. Save it in Ahead to write it to DevOps", send: "Sent", unlink: "Unlinked", inbox_seen: "Marked seen", snooze: "Snoozed" };
+    const messages: Partial<Record<ToolName, string>> = { drop_pick: "Dropped", confirm_day: "Day confirmed", confirm_week: "Week confirmed", add_must: "Added as a must", ahead_change: "In your change set. Save it in Ahead to write it to DevOps", send: "Sent", unlink: "Unlinked", conversation_owner: "Done. Nothing was posted to Teams", inbox_seen: "Marked seen", snooze: "Snoozed" };
     const hrefs: Partial<Record<ToolName, [string, string]>> = { drop_pick: ["#/today", "Open Today"], confirm_day: ["#/today", "Open Today"], confirm_week: ["#/week/commit", "Open Plan"], add_must: ["#/week/commit", "Open Plan"], ahead_change: ["#/ahead", "Open Ahead"], send: ["#/week/commit", "Open Plan"], unlink: ["#/inbox", "Open the Inbox"], inbox_seen: ["#/inbox", "Open the Inbox"], snooze: ["#/inbox", "Open the Inbox"] };
     const [h, l] = hrefs[held.tool] ?? ["#/today", "Open Today"];
     return { ok: true, result: { kind: "note", text: messages[held.tool] ?? "Done", link: link(h, l) }, message: messages[held.tool] ?? "Done" };
@@ -1358,6 +1389,13 @@ export function createAssistant(env: AssistantEnv) {
     const row = await env.plan.assistantProposal(proposalId);
     if (!row || row.state !== "confirmed") return { ok: false, message: "There's nothing to undo there" };
     const held = row.input as Held;
+    if (held?.tool === "conversation_owner") {
+      if (held.undone) return { ok: false, message: "That's undone already" };
+      const r = await env.run("conversations.undo_ownership", { id: Number(held.args.conversationId) });
+      if (!r.ok) return { ok: false, message: r.error };
+      await env.plan.setAssistantProposalInput(row.id, { ...held, undone: true });
+      return { ok: true, message: "Undone", notBack: [] };
+    }
     if (!held?.done?.length) return { ok: false, message: "There's nothing to undo there" };
     if (held.undone) return { ok: false, message: "That's undone already" };
     const notBack: { title: string; why: string }[] = [];

@@ -811,3 +811,12 @@ The pages are `docs/technical/*.md` (how FocusTime works, for engineers and IT);
 - `actions/request-poll.ts` `pipelineDepsOf`: one chat's pipeline dependencies, shared by the poll and the re-check.
 - `plan/boundary.ts` `mentionMatches`, `highlightMatches`; `conversation_messages.held_match_json` keeps what a held message matched.
 - `conversations.held_bulk` (`actions/conversation-actions.ts`), and the held list's bulk lines (`ui/inbox/HeldBack.tsx`).
+
+## A shared owner per conversation (Part 0)
+
+- **The record.** Migration `20261127T0900_conversation_ownership` (add-only): `claimed_by`, `claimed_name`, `claimed_at`, `helpers_json` on `conversations`, and the app table `conversation_events` (who did what, and the record before it, for Undo). State is derived: `plan/ownership.ts` (`sharedState`, `personView`, `placeOf`, `offerOf`, `eventLine`, `undoableEvent`, `mayHandOff`, `askedAgainBy`, `backfillOutcome`). `owner_id` stays the AI's guess.
+- **The store.** `store/conversation-store.ts`: `applyOwnership` (conditional update and its event in one transaction), `undoOwnership`, `ownershipEventsIn`, `handedTo`, `backfillOwner`, through `viewer(userId)` for people; merges carry a claim.
+- **Actions.** `conversations.claim`, `give`, `add_helper`, `release`, `close_out`, `undo_ownership` in `actions/conversation-actions.ts`; `conversations.list`'s cards carry `shared` (`CardShared`). `resolve`, `not_request`, `not_work` and `reopen` go through the same record. The Assistant and the Teams bot reach them through the proposal tool `conversation_owner`.
+- **New messages.** `actions/conversations-pipeline.ts` reopens a Closed one only through `askedAgainBy`. `server/ticks.ts` (`conversationsTick`) sends `conversation_given` and `conversation_activity` through the notifier.
+- **Backfill.** `actions/ownership-backfill.ts`, a once-only scheduler job.
+- **UI.** `ui/inbox/Detail.tsx` (`WhoHasIt`, `PersonForm`), `ui/inbox/ItemActions.tsx`, `ui/inbox/model.ts` (`ownerTag`), `ui/inbox/InboxPage.tsx` (Teammate has it folded out of Everything).

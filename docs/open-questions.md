@@ -498,3 +498,11 @@ What DS-1 learned, and what is still open:
 - TX-1b: a later to-do a Done removes keeps its timebox if that timebox is on Outlook, because a check-in changes nothing external. Should it offer to take the event off?
 - TX-1c: a to-do that inherited more than its size before TX-1c keeps that number, because it reads as the person's own.
 - A to-do marked done outside a check-in (a tick) with an ended timebox stops being asked about and its timebox stays unanswered. That reads right, but spent time isn't recorded for it.
+
+## Part 0 (shared owner)
+
+- Should FocusTime post "I've got this" to the chat when someone takes a conversation? Nothing is posted to Teams today, by the spec.
+- Part 1 and Part 3 weren't in the brief this was built from. The five per-person views are row statuses on today's rail, which Part 1 redesigns. Do Part 1's statuses map one to one?
+- "Each Up for grabs request" assumes requests of their own. The code has only conversations, so the record lives there. Is a separate kind planned?
+- A chat member who doesn't follow the client can't see the conversation, so they aren't offered in Give to. Should the list explain who's missing?
+- An Open item someone said "I'll do it" about now shows as Up for grabs to teammates until they tap. If this adds noise, should the committer's teammates see it quieter?

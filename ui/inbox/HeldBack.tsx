@@ -28,7 +28,8 @@ export function HeldBack({ count, tz, today, onChanged }: { count: number; tz: s
   useEffect(() => {
     if (open) void load();
   }, [open, load]);
-  if (!count && !data?.messages.length) return null;
+  // Stays while open, so "Nothing held back now." is there to read after the last one goes.
+  if (!count && !open && !data?.messages.length) return null;
   const done = async (action: string, input: unknown) => {
     try {
       await call(action, input);

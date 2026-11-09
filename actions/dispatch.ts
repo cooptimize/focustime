@@ -1980,6 +1980,12 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "conversations.this_is_work":
     case "conversations.link":
     case "conversations.take_over":
+    case "conversations.claim":
+    case "conversations.give":
+    case "conversations.add_helper":
+    case "conversations.release":
+    case "conversations.close_out":
+    case "conversations.undo_ownership":
     case "conversations.sort_unsorted":
     case "conversations.search":
     case "conversations.draft":

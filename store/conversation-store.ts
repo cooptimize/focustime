@@ -7,6 +7,7 @@
 import type { AiLogEntry } from "../ai/types.ts";
 import { COMMITMENT_STATES, CONVERSATION_STATUSES, MESSAGE_ROLES, type Commitment, type ConversationMerge, type CommitmentState, type Conversation, type ConversationStatus, type ItemChange, type MessagePlace, type MessageRole, type Participant, type Suggestion } from "../plan/conversations.ts";
 import type { HeldMatch } from "../plan/boundary.ts";
+import { firstName, undoableEvent, type EventKind, type EventVia, type OwnershipBefore, type OwnershipEvent, type Person } from "../plan/ownership.ts";
 import { isMember } from "../plan/requests.ts";
 import { PlanError } from "./plan-store.ts";
 import type { Conn, Param, Row } from "./sql/conn.ts";
@@ -32,6 +33,10 @@ const toConversation = (r: Row): Conversation => ({
   summary: (r.summary as string | null) ?? "",
   status: r.status as ConversationStatus,
   ownerId: (r.owner_id as string | null) ?? null,
+  claimedBy: (r.claimed_by as string | null) ?? null,
+  claimedName: (r.claimed_name as string | null) ?? null,
+  claimedAt: instant(r.claimed_at),
+  helpers: json<Person[]>(r.helpers_json, []),
   participants: json<Participant[]>(r.participants_json, []),
   firstAt: instant(r.first_at)!,
   lastAt: instant(r.last_at)!,
@@ -108,6 +113,21 @@ const toCommitment = (r: Row): Commitment => ({
   updatedAt: instant(r.updated_at)!,
 });
 
+const toEvent = (r: Row): OwnershipEvent => ({
+  id: Number(r.id),
+  conversationId: Number(r.conversation_id),
+  kind: r.kind as EventKind,
+  byUser: (r.by_user as string | null) ?? null,
+  byName: r.by_name as string,
+  toUser: (r.to_user as string | null) ?? null,
+  toName: (r.to_name as string | null) ?? null,
+  via: (r.via as EventVia | null) ?? null,
+  note: (r.note as string | null) ?? null,
+  before: json<OwnershipBefore>(r.before_json, null as never),
+  at: instant(r.at)!,
+  undoneAt: instant(r.undone_at),
+});
+
 const toMerge = (r: Row): ConversationMerge => ({
   id: Number(r.id),
   intoId: Number(r.into_id),
@@ -155,6 +175,18 @@ export type NewConversation = {
   changeNote?: string | null;
 };
 
+/**
+ * Part 0: one change to the shared record. `by` is null when nobody did it by hand (a new message reopened it);
+ * `byName` then says who asked.
+ */
+export type OwnershipChange =
+  | { kind: "claim"; by: Person; via?: EventVia | null }
+  | { kind: "give"; by: Person; to: Person }
+  | { kind: "helper"; by: Person; to: Person }
+  | { kind: "release"; by: Person }
+  | { kind: "close"; by: Person; status: "resolved" | "closed"; reason: string | null; note?: string | null; changeNote: string }
+  | { kind: "reopen"; by: Person | null; byName?: string; via?: EventVia | null; note?: string | null; changeNote: string };
+
 export type ConversationPatch = Partial<{
   title: string;
   summary: string;
@@ -194,6 +226,12 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
   const commitmentById = async (id: number) => {
     const r = await db.get("SELECT * FROM commitments WHERE id = ?", [id]);
     return r ? toCommitment(r) : null;
+  };
+
+  const beforeOf = (c: Conversation): OwnershipBefore => ({ claimedBy: c.claimedBy, claimedName: c.claimedName, claimedAt: c.claimedAt, helpers: c.helpers, status: c.status, closedBy: c.closedBy, closedAt: c.closedAt, closeReason: c.closeReason });
+  const addEvent = async (e: Omit<OwnershipEvent, "id" | "undoneAt">): Promise<OwnershipEvent> => {
+    const r = await db.run("INSERT INTO conversation_events (conversation_id, kind, by_user, by_name, to_user, to_name, via, note, before_json, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [e.conversationId, e.kind, e.byUser, e.byName.slice(0, 200), e.toUser, e.toName?.slice(0, 200) ?? null, e.via, e.note?.slice(0, 400) ?? null, JSON.stringify(e.before), e.at]);
+    return toEvent((await db.get("SELECT * FROM conversation_events WHERE id = ?", [r.lastId!]))!);
   };
 
   const store = {
@@ -255,6 +293,137 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
       });
     },
 
+    // ---- Part 0: the shared owner ----
+    /**
+     * One change to the shared record, in a transaction, with its history row. The update only lands while the record
+     * is still what this change read (the owner and whether it's closed), so of two claims at once the first wins and
+     * the second is told who has it. Null event: it was already so.
+     */
+    async applyOwnership(id: number, x: OwnershipChange): Promise<{ conversation: Conversation; event: OwnershipEvent | null }> {
+      return db.tx(async () => {
+        const cur = await conversationById(id);
+        if (!cur || cur.mergedInto !== null) throw new PlanError("No such conversation");
+        const sameId = (a: string | null, b: string | null) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+        const unchanged = { conversation: cur, event: null };
+        const hasThis = () => new PlanError(`${firstName(cur.claimedName)} has this`);
+        const t = stamp();
+        const sets: string[] = [];
+        const params: Param[] = [];
+        const set = (col: string, v: Param) => (sets.push(`${col} = ?`), params.push(v));
+        const setOwner = (p: Person | null) => (set("claimed_by", p?.id ?? null), set("claimed_name", p ? p.name.slice(0, 200) : null), set("claimed_at", p ? t : null));
+        const setHelpers = (hs: readonly Person[]) => set("helpers_json", hs.length ? JSON.stringify(hs) : null);
+        let to: Person | null = null;
+        let note: string | null = null;
+        let via: EventVia | null = null;
+        if (x.kind !== "reopen" && x.kind !== "close" && x.kind !== "release" && cur.closedAt) throw new PlanError("It's closed. Reopen it first");
+        switch (x.kind) {
+          case "claim":
+            if (sameId(cur.claimedBy, x.by.id)) return unchanged;
+            if (cur.claimedBy) throw hasThis();
+            setOwner(x.by);
+            setHelpers(cur.helpers.filter((h) => !sameId(h.id, x.by.id)));
+            set("change_note", `${firstName(x.by.name)} took it`);
+            via = x.via ?? null;
+            to = x.by;
+            break;
+          case "give":
+            if (sameId(cur.claimedBy, x.to.id)) throw new PlanError(`${firstName(x.to.name)} already has it`);
+            setOwner(x.to);
+            setHelpers(cur.helpers.filter((h) => !sameId(h.id, x.to.id)));
+            set("change_note", `${firstName(x.by.name)} gave it to ${firstName(x.to.name)}`);
+            to = x.to;
+            break;
+          case "helper":
+            if (!cur.claimedBy) throw new PlanError("Someone needs to take it first");
+            if (sameId(cur.claimedBy, x.to.id)) throw new PlanError(`${firstName(x.to.name)} already has it`);
+            if (cur.helpers.some((h) => sameId(h.id, x.to.id))) return unchanged;
+            setHelpers([...cur.helpers, { id: x.to.id, name: x.to.name.slice(0, 200) }]);
+            to = x.to;
+            break;
+          case "release":
+            if (!cur.claimedBy) return unchanged;
+            if (cur.closedAt) throw new PlanError("It's closed. Reopen it first");
+            setOwner(null);
+            setHelpers([]);
+            set("change_note", `${firstName(x.by.name)} released it`);
+            break;
+          case "close":
+            if (cur.closedAt) return unchanged;
+            set("status", x.status);
+            set("closed_by", x.by.id);
+            set("closed_at", t);
+            set("close_reason", x.reason?.slice(0, 400) ?? null);
+            set("wind_down", 0);
+            set("change_note", x.changeNote.slice(0, 200));
+            note = x.note ?? x.reason;
+            break;
+          case "reopen":
+            if (!cur.closedAt) return unchanged;
+            set("status", "new");
+            set("closed_by", null);
+            set("closed_at", null);
+            set("close_reason", null);
+            set("change_note", x.changeNote.slice(0, 200));
+            note = x.note ?? null;
+            via = x.via ?? null;
+            // A reopen goes back to its last owner, so that's who hears about it.
+            to = cur.claimedBy ? { id: cur.claimedBy, name: cur.claimedName ?? "" } : null;
+            break;
+        }
+        sets.push("version = version + 1");
+        set("updated_at", t);
+        const r = await db.run(`UPDATE conversations SET ${sets.join(", ")} WHERE id = ? AND ${cur.claimedBy ? "claimed_by = ?" : "claimed_by IS NULL"} AND closed_at IS ${cur.closedAt ? "NOT " : ""}NULL`, [...params, id, ...(cur.claimedBy ? [cur.claimedBy] : [])]);
+        if (r.changes !== 1) {
+          const now = await conversationById(id);
+          throw new PlanError(now?.claimedBy && !sameId(now.claimedBy, x.by?.id ?? null) ? `${firstName(now.claimedName)} has this` : "It just changed. Look again");
+        }
+        const event = await addEvent({ conversationId: id, kind: x.kind, byUser: x.by?.id ?? null, byName: x.by?.name ?? (x.kind === "reopen" ? (x.byName ?? "FocusTime") : "FocusTime"), toUser: to?.id ?? null, toName: to?.name ?? null, via, note, before: beforeOf(cur), at: t });
+        return { conversation: (await conversationById(id))!, event };
+      });
+    },
+    /** Undo of the newest change still in force, only by whoever made it: the record goes back to just before it. */
+    async undoOwnership(id: number, byUser: string): Promise<Conversation> {
+      return db.tx(async () => {
+        const cur = await conversationById(id);
+        if (!cur) throw new PlanError("No such conversation");
+        const latest = undoableEvent((await db.all("SELECT * FROM conversation_events WHERE conversation_id = ? AND undone_at IS NULL ORDER BY id", [id])).map(toEvent), byUser);
+        if (!latest) throw new PlanError("That can't be undone any more: it has changed since");
+        const b = latest.before;
+        const t = stamp();
+        const r = await db.run(
+          "UPDATE conversations SET claimed_by = ?, claimed_name = ?, claimed_at = ?, helpers_json = ?, status = ?, closed_by = ?, closed_at = ?, close_reason = ?, change_note = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ?",
+          [b.claimedBy, b.claimedName, b.claimedAt, b.helpers.length ? JSON.stringify(b.helpers) : null, b.status, b.closedBy, b.closedAt, b.closeReason, "Undone", t, id, cur.version],
+        );
+        if (r.changes !== 1) throw new PlanError("It just changed. Look again");
+        await db.run("UPDATE conversation_events SET undone_at = ? WHERE id = ?", [t, latest.id]);
+        return (await conversationById(id))!;
+      });
+    },
+    async ownershipEventsIn(ids: readonly number[]): Promise<OwnershipEvent[]> {
+      const [list, params] = inList(ids);
+      return (await db.all(`SELECT * FROM conversation_events WHERE conversation_id IN (${list}) ORDER BY id`, params)).map(toEvent);
+    },
+    /** Hand-offs to one person from a time on (the caller keeps it to chats they see): gave, added as helper, reopened. */
+    async handedTo(userId: string, since: string): Promise<OwnershipEvent[]> {
+      return (await db.all("SELECT * FROM conversation_events WHERE LOWER(to_user) = ? AND at >= ? AND undone_at IS NULL AND kind IN ('give', 'helper', 'reopen') ORDER BY id", [userId.toLowerCase(), since])).map(toEvent);
+    },
+    /** The one-time backfill: gives an unclaimed conversation to who had it. False when someone claimed it first. */
+    async backfillOwner(id: number, owner: Person): Promise<boolean> {
+      return db.tx(async () => {
+        const cur = await conversationById(id);
+        if (!cur) return false;
+        const t = stamp();
+        const r = await db.run("UPDATE conversations SET claimed_by = ?, claimed_name = ?, claimed_at = ?, updated_at = ? WHERE id = ? AND claimed_by IS NULL AND closed_at IS NULL", [owner.id, owner.name.slice(0, 200), t, t, id]);
+        if (r.changes !== 1) return false;
+        await addEvent({ conversationId: id, kind: "claim", byUser: null, byName: "FocusTime", toUser: owner.id, toName: owner.name, via: "backfill", note: null, before: beforeOf(cur), at: t });
+        return true;
+      });
+    },
+    /** Every conversation, for the one-time backfill only. */
+    async allConversations(): Promise<Conversation[]> {
+      return (await db.all("SELECT * FROM conversations WHERE merged_into IS NULL ORDER BY id")).map(toConversation);
+    },
+
     // ---- CV-2: Merge into… and its Undo ----
     /**
      * Moves everything of `fromId` (its messages' places, commitments and suggestions) into `intoId`, in one
@@ -286,8 +455,10 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
             carry ? from.itemId : into.itemId, carry ? from.itemUrl : into.itemUrl, carry ? from.itemTitle : into.itemTitle, into.likelyItem ?? from.likelyItem, `Merged with "${from.title}"`.slice(0, 200), t, intoId],
         );
         await db.run("UPDATE conversations SET merged_into = ?, version = version + 1, updated_at = ? WHERE id = ?", [intoId, t, fromId]);
+        // Part 0: the target keeps its owner; with none, it takes the one it's merged with.
+        if (!into.claimedBy && from.claimedBy) await db.run("UPDATE conversations SET claimed_by = ?, claimed_name = ?, claimed_at = ?, helpers_json = ? WHERE id = ?", [from.claimedBy, from.claimedName, from.claimedAt, from.helpers.length ? JSON.stringify(from.helpers) : null, intoId]);
         const before: ConversationMerge["before"] = {
-          into: { title: into.title, summary: into.summary, participants: into.participants, firstAt: into.firstAt, lastAt: into.lastAt, lastWorkAt: into.lastWorkAt, ownerId: into.ownerId, itemId: into.itemId, itemUrl: into.itemUrl, itemTitle: into.itemTitle, likelyItem: into.likelyItem },
+          into: { claimedBy: into.claimedBy, claimedName: into.claimedName, claimedAt: into.claimedAt, helpers: into.helpers, title: into.title, summary: into.summary, participants: into.participants, firstAt: into.firstAt, lastAt: into.lastAt, lastWorkAt: into.lastWorkAt, ownerId: into.ownerId, itemId: into.itemId, itemUrl: into.itemUrl, itemTitle: into.itemTitle, likelyItem: into.likelyItem },
           from: { status: from.status, closedAt: from.closedAt, closedBy: from.closedBy, closeReason: from.closeReason },
         };
         const r = await db.run("INSERT INTO conversation_merges (into_id, from_id, by_user, at, moved_json, before_json, after_summary) VALUES (?, ?, ?, ?, ?, ?, ?)", [intoId, fromId, by, t, JSON.stringify({ messageIds, commitmentIds, suggestionIds }), JSON.stringify(before), summary.summary.slice(0, 1000)]);
@@ -334,6 +505,8 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
           `UPDATE conversations SET ${untouched ? "title = ?, summary = ?, " : ""}participants_json = ?, first_at = ?, last_at = ?, last_work_at = ?, owner_id = ?, item_id = ?, item_url = ?, item_title = ?, likely_item = ?, change_note = ?, version = version + 1, updated_at = ? WHERE id = ?`,
           [...(untouched ? [b.title, b.summary] : []), JSON.stringify(untouched ? b.participants : into.participants), b.firstAt, lastAt, lastWorkAt, b.ownerId, item.id, item.url, item.title, b.likelyItem, "Merge undone", t, m.intoId],
         );
+        // Part 0: an owner the merge carried over goes back with its conversation.
+        if (b.claimedBy === null && into.claimedBy && from.claimedBy && into.claimedBy === from.claimedBy) await db.run("UPDATE conversations SET claimed_by = NULL, claimed_name = NULL, claimed_at = NULL, helpers_json = NULL WHERE id = ?", [m.intoId]);
         await db.run("UPDATE conversations SET merged_into = NULL, version = version + 1, change_note = ?, updated_at = ? WHERE id = ?", ["Merge undone", t, m.fromId]);
         await db.run("UPDATE conversation_merges SET undone_at = ? WHERE id = ?", [t, id]);
         return (await store.mergeRecord(id))!;
@@ -593,6 +766,26 @@ function viewerOf(store: BaseStore, teams: TeamsStore, userId: string, meetingMe
         if (c.chatId !== p.chatId) throw new PlanError("That message is in another chat");
       }
       await store.place(ps.map((p) => ({ ...p, byUser: userId })));
+    },
+    /** Part 0: a change to the shared owner, by someone who can see the conversation. */
+    async applyOwnership(id: number, x: OwnershipChange) {
+      await gate(id);
+      return store.applyOwnership(id, x);
+    },
+    async undoOwnership(id: number): Promise<Conversation> {
+      await gate(id);
+      return store.undoOwnership(id, userId);
+    },
+    async ownershipEventsIn(ids: readonly number[]): Promise<OwnershipEvent[]> {
+      const ok: number[] = [];
+      for (const id of ids) if (await this.conversation(id)) ok.push(id);
+      return store.ownershipEventsIn(ok);
+    },
+    /** Hand-offs to me in conversations I can still see. */
+    async handedToMe(since: string): Promise<OwnershipEvent[]> {
+      const out: OwnershipEvent[] = [];
+      for (const e of await store.handedTo(userId, since)) if (await this.conversation(e.conversationId)) out.push(e);
+      return out;
     },
     async updateConversation(id: number, p: ConversationPatch, o: { bump?: boolean } = {}): Promise<Conversation> {
       await gate(id);

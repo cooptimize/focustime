@@ -10,7 +10,7 @@ let h: Harness;
 const T = 180_000;
 const call = <D,>(page: Page, action: string, input: unknown) =>
   page.evaluate(([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()), [action, input] as const) as Promise<{ ok: boolean; data: D; error?: string }>;
-type Row = { key: string; at: string; views: string[]; title: string };
+type Row = { key: string; at: string; views: string[]; title: string; personView?: string };
 type List = { items: Row[]; now: string; lastLooked: string | null };
 const shot = async (page: Page, name: string) => {
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` });
@@ -45,7 +45,8 @@ describe.skipIf(!CHROMIUM)("Everything (IB-2)", () => {
     await expect.poll(async () => main(page).getByRole("button", { name: /^Everything/ }).getAttribute("aria-current")).toBe("page");
     expect(await page.locator(".ib-group-head.ib-day-head").first().textContent()).toMatch(/^Today|Yesterday|, /);
     const list = (await call<List>(page, "inbox.list", {})).data;
-    const awake = list.items.filter((i) => i.views.length);
+    // Part 0: Teammate has it stays folded out of Everything's active part.
+    const awake = list.items.filter((i) => i.views.length && i.personView !== "teammate");
     const shownRows = await main(page).locator(".ib-row").count();
     expect(shownRows).toBe(awake.length);
     const tags = await main(page).locator(".ib-row-sub .ib-tag").allTextContents();
@@ -137,7 +138,7 @@ describe.skipIf(!CHROMIUM)("Everything (IB-2)", () => {
   it("old deep links open their view, and an item's address keeps the place it was opened from", async () => {
     const { page, errors } = await freshPage(h);
     await page.keyboard.press("4");
-    for (const [slug, label] of [["needs-you", "Needs you"], ["promises", "Promises"], ["waiting", "Waiting on"], ["in-progress", "In progress"], ["captures", "Captures and drafts"], ["teammates", "Handled by teammates"], ["done", "Done"], ["chatter", "Chatter"]] as const) {
+    for (const [slug, label] of [["needs-you", "Needs you"], ["promises", "Promises"], ["waiting", "Waiting on"], ["in-progress", "In progress"], ["captures", "Captures and drafts"], ["teammates", "Teammate has it"], ["done", "Done"], ["chatter", "Chatter"]] as const) {
       const m = await openInboxView(page, slug);
       await expect.poll(async () => (await m.locator(".ib-list-head h2").textContent())?.replace(/\s*\d+$/, "")).toBe(label);
       await expect.poll(() => m.getByRole("group", { name: "Status" }).locator('[aria-pressed="true"]').count()).toBe(1);
@@ -230,7 +231,7 @@ describe.skipIf(!CHROMIUM)("Everything (IB-2)", () => {
     await page.keyboard.press("4");
     await main(page).locator(".ib-row").first().waitFor();
     expect(await main(page).locator(".ib-row").count()).toBeLessThanOrEqual(240);
-    expect(await main(page).locator(".ib-list-head h2").textContent()).toMatch(/3000/);
+    expect(await main(page).locator(".ib-list-head h2").textContent()).toMatch(/2250/); // Part 0: the quarter a teammate has are folded out of the count.
     const r = await page.evaluate(async () => {
       const el = document.querySelector<HTMLElement>(".ib-list-body")!;
       const times: number[] = [];

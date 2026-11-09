@@ -44,6 +44,7 @@ import { copiesOwnerSecrets, copyOwnerSecrets, OWNER_SECRETS_MARK, writePatAccou
 import { personTicks, type PersonTicks } from "./ticks.ts";
 import { createScheduler } from "./scheduler.ts";
 import { retentionJob } from "./retention-job.ts";
+import { ownershipBackfillJob } from "../actions/ownership-backfill.ts";
 import { wakeStoreOn } from "../store/wake-store.ts";
 import { cancelShutdownRestores } from "../store/vm-restores.ts";
 import { keepRoute, takeRoute } from "./open-route.ts";
@@ -1290,10 +1291,12 @@ const meetings = meetingJob({
   users: meetingUsers,
   person: async (uid) => ((await accounts.users.get(uid))?.deletedAt === null ? meetingPerson(await runtimeFor(uid)) : null),
 });
+const ownershipBackfill = ownershipBackfillJob({ db, convs: conversations, teams, homeTenant: async () => app.entra?.tenantId ?? null, now: instantNow, log });
 const scheduler = createScheduler({
   jobs: [
     peopleJob,
     retention,
+    { name: ownershipBackfill.name, run: () => ownershipBackfill.run(), wake: ownershipBackfill.wake },
     { name: meetings.name, run: () => jobs("meeting_capture", {}, () => meetings.run()), wake: meetings.wake },
     ...(standardsSyncOn ? [{ name: standards.name, run: () => standards.run(), wake: standards.wake }] : []),
     ...(devopsPoller ? [{ name: "devops_poll", run: async () => void (await devopsPoller!.tick()), wake: () => devopsPoller!.wake() }] : []),

@@ -93,6 +93,9 @@ export async function thread(e: DemoSeedEnv, chatId: string, clientKey: string, 
   const c = await e.conversations.addConversation({ chatId, clientKey, title, summary, participants: [...people.values()], firstAt: first, lastAt: last, lastWorkAt: lastWork, ownerId: o.ownerId ?? null, ...(o.item ? { item: o.item, status: "tracked" as const } : {}), changeNote: o.item ? `Tracked as #${o.item.id}` : null });
   await e.conversations.place(lines.map((l, i) => ({ chatId, messageId: l.id, conversationId: c.id, role: l.role ?? "work", reason: null, placedBy: "ai" as const, at: msgs[i]!.createdAt })));
   await refreshStatus({ convs: e.conversations, teams: e.teams, homeTenant: DEMO_TENANT }, c.id);
+  // Part 0: a seeded owner is the shared owner, the same as the one-time backfill sets.
+  const owner = o.ownerId ? people.get(o.ownerId) : undefined;
+  if (owner) await e.conversations.backfillOwner(c.id, { id: owner.id, name: owner.name });
   return c.id;
 }
 

@@ -106,7 +106,7 @@ export function rowOf(i: { facts: InboxFacts; mark?: Mark | undefined }, today: 
     key: f.key, kind: f.kind, clientKey: f.clientKey, at: f.at, views: viewsOf(f, i.mark, today, now), reason: reasonOf(f, i.mark, today, now),
     title: f.title ?? "", who: f.who ?? null, where: f.where ?? null, due: f.due ?? null, dueAt: f.dueAt ?? null, itemId: f.itemId ?? null,
     late: isLate(f, today, now), done: f.done, snoozedUntil: asleep,
-    ...(f.sendState ? { sendState: f.sendState } : {}), ...(f.conversationView ? { conversationView: f.conversationView } : {}),
+    ...(f.sendState ? { sendState: f.sendState } : {}), ...(f.conversationView ? { conversationView: f.conversationView } : {}), ...(f.personView ? { personView: f.personView } : {}), ...(f.ownerName ? { ownerName: f.ownerName } : {}),
     ...(f.mentionsMe ? { mentionsMe: true } : {}), ...(f.mentions?.length ? { mentions: f.mentions } : {}), ...(f.workRequest ? { workRequest: true } : {}), ...(f.must ? { must: true } : {}), ...(f.weekStart ? { weekStart: f.weekStart } : {}),
     ...(f.urgent ? { urgent: f.urgent } : {}),
   };

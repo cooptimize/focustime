@@ -9,6 +9,7 @@
 import type { UrgentAsk } from "../actions/types.ts";
 import type { IsoDate } from "../week/types.ts";
 import { hoursOn, type TimeModel } from "../week/hours.ts";
+import type { PersonView } from "./ownership.ts";
 
 /**
  * Slice 3 adds what I wait on, as their own kinds so nothing reads them as mine to answer: `commitment` someone else's
@@ -52,6 +53,9 @@ export type InboxFacts = {
   done: boolean;
   /** Conversation: the view CV-1's rules put it in. */
   conversationView?: "needs" | "progress" | "teammates" | "closed";
+  /** Part 0: what the shared owner and state mean for me, and who has it. */
+  personView?: PersonView;
+  ownerName?: string | null;
   /** Promise: due date (my zone), linked to a DevOps item, on my week (Today or a pick). */
   due?: IsoDate | null;
   linked?: boolean;
@@ -193,6 +197,9 @@ export type InboxItemView = {
   done: boolean;
   sendState?: InboxFacts["sendState"];
   conversationView?: InboxFacts["conversationView"];
+  /** Part 0: Asked you, Up for grabs, You're on it, Teammate has it or Done, and who has it. */
+  personView?: PersonView;
+  ownerName?: string | null;
   mentionsMe?: boolean;
   /** GD-2: "mentions <client>" on the row and in the detail pane. */
   mentions?: string[];

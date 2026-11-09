@@ -51,7 +51,7 @@ export type DetailProps = {
   today: string;
   clientName: (k: string | null) => string;
   /** Runs an action and reloads (the same path ItemActions uses). */
-  run: (action: string, input: Record<string, unknown>, notice: string) => Promise<void>;
+  run: (action: string, input: Record<string, unknown>, notice: string, undo?: { action: string; input: Record<string, unknown> }) => Promise<void>;
   /** A form's own call: returns the error to show, or null when it worked (then the form closes and the Inbox reloads). */
   submit: (action: string, input: Record<string, unknown>, notice: string) => Promise<string | null>;
   /** A conversation's merge candidates (open ones of the same chat) and the merge itself. */
@@ -191,6 +191,11 @@ function FormArea(p: DetailProps): ReactNode {
       </div>
     );
   }
+  if ((form === "give" || form === "helper") && e.kind === "conversation" && e.card) {
+    const c = e.card;
+    const give = form === "give";
+    return <PersonForm verb={give ? "Give to" : "Add helper"} team={c.shared.team.filter((t) => !give || !t.me)} onCancel={cancel} onPick={(t) => void p.run(give ? "conversations.give" : "conversations.add_helper", { id: c.id, toId: t.id }, give ? `Given to ${t.name}, who is notified` : `${t.name} is helping`, { action: "conversations.undo_ownership", input: { id: c.id } })} />;
+  }
   if (form === "merge" && e.kind === "conversation" && e.card && p.merge) {
     const c = e.card;
     return <MergePane c={c} others={p.mergeOthers ?? []} tz={p.tz} onMerge={p.merge} onCancel={cancel} />;
@@ -211,6 +216,67 @@ function FormArea(p: DetailProps): ReactNode {
 }
 
 /** Due: today, tomorrow, next Monday, a date, or none. Snoozing is separate and never changes this. */
+/** Part 0: who has it, the same for everyone who sees it: the offer, the owner and helpers, and a short timeline. */
+function WhoHasIt({ c, tz, today, run }: { c: ConversationCard; tz: string; today: string; run: DetailProps["run"] }): ReactNode {
+  const s = c.shared;
+  const undo = { action: "conversations.undo_ownership", input: { id: c.id } };
+  const owner = s.state === "closed" ? (s.owner ? `Closed. ${s.owner.me ? "You" : s.owner.name} had it` : "Closed") : s.owner ? (s.owner.me ? "You're on it" : `${s.owner.name} has this`) : "Nobody yet";
+  return (
+    <section className="ib-card" aria-label="Who has it">
+      <h3 className="ib-section">Who has it</h3>
+      {s.offer && (
+        <p className="ib-offer">
+          {s.offer === "committed" ? "You said you'd do it." : "You replied."} Take this?{" "}
+          <button type="button" className="ib-act primary" onClick={() => void run("conversations.claim", { id: c.id }, "It's yours", undo)}>
+            I'll take it
+          </button>
+        </p>
+      )}
+      <p>{owner}</p>
+      {s.helpers.length > 0 && <p className="muted">Helping: {s.helpers.map((h) => (h.me ? "You" : h.name)).join(", ")}</p>}
+      {s.history.length > 0 && (
+        <ol className="ib-history" aria-label="History">
+          {s.history.slice(-6).map((h, i) => (
+            <li key={i}>
+              {h.text} · <Stamp at={h.at} tz={tz} today={today} />
+            </li>
+          ))}
+        </ol>
+      )}
+      {s.canUndo && (
+        <button type="button" className="link-btn" onClick={() => void run("conversations.undo_ownership", { id: c.id }, "Undone")}>
+          Undo my last change
+        </button>
+      )}
+    </section>
+  );
+}
+
+/** Part 0: Give to… and Add helper: the Cooptimizers on this chat who use FocusTime. */
+function PersonForm({ verb, team, onPick, onCancel }: { verb: string; team: ConversationCard["shared"]["team"]; onPick: (t: ConversationCard["shared"]["team"][number]) => void; onCancel: () => void }): ReactNode {
+  return (
+    <div className="ib-form">
+      <h3 className="ib-section">{verb}</h3>
+      {team.length ? (
+        <ul className="ib-people">
+          {team.map((t) => (
+            <li key={t.id}>
+              <button type="button" className="ib-act" onClick={() => onPick(t)}>
+                {t.me ? "Me" : t.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">Nobody else on this chat uses FocusTime yet.</p>
+      )}
+      <button type="button" className="mini quiet" onClick={onCancel}>
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 function DueForm(p: DetailProps): ReactNode {
   const { entry: e } = p;
   const [day, setDay] = useState(e.row.due ?? "");
@@ -343,6 +409,7 @@ function Body(p: DetailProps): ReactNode {
           <Messages c={c} tz={tz} />
         </section>
         <aside className="ib-side">
+          <WhoHasIt c={c} tz={tz} today={p.today} run={p.run} />
           <section className="ib-card" aria-label="Linked DevOps item">
             <h3 className="ib-section">Linked DevOps item</h3>
             {c.item ? <LinkedItem item={c.item} tz={tz} lead="Tracked as" /> : <p>None yet.</p>}
@@ -378,7 +445,7 @@ function Body(p: DetailProps): ReactNode {
             {c.updated && c.updated !== "Updated" && <p className="muted">Updated: {c.updated}</p>}
             {c.closed && (
               <p className="muted">
-                {c.closed.kind === "resolved" ? "Resolved" : "Not a request"} by {c.closed.by} · <Stamp at={c.closed.at} tz={tz} today={p.today} />
+                {c.closed.kind === "resolved" ? "Closed out" : "Not a request"} by {c.closed.by} · <Stamp at={c.closed.at} tz={tz} today={p.today} />
                 {c.closed.reason ? `: ${c.closed.reason}` : ""}
               </p>
             )}
@@ -410,6 +477,7 @@ function Body(p: DetailProps): ReactNode {
             {pr.chatName}
             {pr.conversationTitle ? ` · ${pr.conversationTitle}` : ""} · <Stamp at={pr.createdAt} tz={tz} today={p.today} />
           </p>
+          {pr.conversationClosed && <p className="muted">The conversation is closed. This promise is still yours.</p>}
           {pr.reason && <p className="muted">Why it's a promise: {pr.reason}</p>}
           <a href={pr.link} target="_blank" rel="noopener noreferrer">
             Open in Teams

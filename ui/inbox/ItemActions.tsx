@@ -6,8 +6,9 @@ import { useState, type ReactNode } from "react";
 import { PRIMARY_WORD } from "../Conversations.tsx";
 import type { Entry } from "./data.ts";
 
-export type FormId = "close" | "due" | "who" | "link" | "draft" | "not_request" | "sort" | "edit" | "merge" | "snooze";
+export type FormId = "close" | "due" | "who" | "link" | "draft" | "not_request" | "sort" | "edit" | "merge" | "snooze" | "give" | "helper";
 export type ActId =
+  | "claim" | "give" | "helper" | "release" | "loop_first"
   | "create" | "close" | "due" | "who" | "week" | "hide" | "not_needed" | "done" | "link" | "unlink" | "resolve" | "take_over" | "reopen"
   | "teams" | "not_request" | "not_work" | "sort" | "dismiss" | "edit" | "delete" | "merge" | "prepare" | "snooze" | "wake" | "cancel";
 
@@ -22,6 +23,8 @@ export type ActEnv = {
   editDraft: (draftId: number) => void;
   planWeek: () => void;
   today: string;
+  /** Part 0: opens another Inbox item (a conversation's promise, for Close the loop first). */
+  openItem?: (key: string) => void;
   /** Whether the open conversation has another open one in its chat to merge into. */
   canMerge?: boolean;
 };
@@ -64,28 +67,39 @@ function baseActs(e: Entry, env: ActEnv): Act[] {
       const c = e.card;
       if (!c) return [];
       const open = !c.closed;
-      const resolve = () => void env.run("conversations.resolve", { id: c.id }, "Resolved for everyone on the chat", { action: "conversations.reopen", input: { id: c.id } });
+      // Part 0: who has it, the same for everyone who sees it. Each applies at once, with Undo.
+      const sh = c.shared;
+      const undo = { action: "conversations.undo_ownership", input: { id: c.id } };
+      const resolve = () => void env.run("conversations.close_out", { id: c.id }, "Closed out for everyone on the chat", undo);
+      const closeWord = "Close out";
       const primary: Act | null =
         c.primary === "create" ? act("create", PRIMARY_WORD.create, () => env.form("draft"), { primary: true })
         : c.primary === "link" ? act("link", PRIMARY_WORD.link, () => env.form("link"), { primary: true })
-        : c.primary === "resolve" || c.primary === "mark_done" ? act("done", PRIMARY_WORD[c.primary], resolve, { primary: true })
-        : c.primary === "reopen" ? act("reopen", PRIMARY_WORD.reopen, () => void env.run("conversations.reopen", { id: c.id }, "Open again"), { primary: true })
+        : c.primary === "resolve" ? act("done", closeWord, resolve, { primary: true })
+        : c.primary === "mark_done" ? act("done", PRIMARY_WORD.mark_done, resolve, { primary: true })
+        : c.primary === "reopen" ? act("reopen", "Reopen", () => void env.run("conversations.reopen", { id: c.id }, "Reopened", undo), { primary: true })
         : c.primary === "take_over" ? (() => {
             const k = c.commitments.find((x) => x.state === "open" && x.impliesItem && !x.mine);
             return k ? act("take_over", PRIMARY_WORD.take_over, () => void env.run("conversations.take_over", { commitmentId: k.id }, `It's yours now. ${k.whoName.split(" ")[0]} is told quietly.`), { primary: true }) : null;
           })()
         : null;
       if (primary) out.push(primary);
+      if (open && !sh.owner) out.push(act("claim", "I'll take it", () => void env.run("conversations.claim", { id: c.id }, "It's yours", undo)));
+      if (open && sh.mayHandOff) out.push(act("give", "Give to…", () => env.form("give")));
+      if (open && sh.owner) out.push(act("helper", "Add helper", () => env.form("helper"), { more: true }));
+      if (open && sh.owner && sh.mayHandOff) out.push(act("release", "Release", () => void env.run("conversations.release", { id: c.id }, "Released: back to Open", undo), { more: true }));
+      const myPromise = c.commitments.find((k) => k.mine && k.state === "open");
+      if (open && myPromise && env.openItem) out.push(act("loop_first", "Close the loop first", () => env.openItem!(`c${myPromise.id}`), { more: true }));
       if (open && !c.item && c.primary !== "create") out.push(act("create", "Create DevOps item", () => env.form("draft")));
       if (open && !c.item && c.primary !== "link") out.push(act("link", "Link to item", () => env.form("link")));
       out.push(act("teams", "Open in Teams", () => {}, { href: c.link }));
-      if (open && c.primary !== "resolve" && c.primary !== "mark_done") out.push(act("done", "Resolve", resolve, { more: true }));
+      if (open && c.primary !== "resolve" && c.primary !== "mark_done") out.push(act("done", closeWord, resolve, { more: !sh.owner?.me }));
       // QF-1: one click, with Undo: its messages go to Chatter and it closes for everyone; nothing is learned.
       if (open) out.push(act("not_work", "Not work-related", () => void env.run("conversations.not_work", { id: c.id }, "Moved to Chatter for everyone on the chat", notWorkUndo(c.id))));
       if (open) out.push(act("not_needed", "Not a request", () => env.form("not_request"), { more: true }));
       if (open && (env.canMerge ?? false)) out.push(act("merge", "Merge into…", () => env.form("merge"), { more: true }));
       if (c.item) out.push(act("unlink", `Unlink #${c.item.id}`, () => void env.run("conversations.unlink", { id: c.id }, "Unlinked"), { more: true }));
-      if (!open && c.primary !== "reopen") out.push(act("reopen", "Open again", () => void env.run("conversations.reopen", { id: c.id }, "Open again"), { more: true }));
+      if (!open && c.primary !== "reopen") out.push(act("reopen", "Reopen", () => void env.run("conversations.reopen", { id: c.id }, "Reopened", undo), { more: true }));
       out.push(act("hide", c.hidden ? "Show for me" : "Hide for me", () => void env.run("conversations.hide", { id: c.id, hidden: !c.hidden }, c.hidden ? "Shown again" : "Hidden for you. Nobody else's view changes", { action: "conversations.hide", input: { id: c.id, hidden: c.hidden } }), { more: true }));
       return out;
     }

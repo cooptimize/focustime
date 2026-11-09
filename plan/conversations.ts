@@ -36,8 +36,13 @@ export type Conversation = {
   title: string;
   summary: string;
   status: ConversationStatus;
-  /** Who is on it (a Cooptimizer's Entra id), when someone is. */
+  /** The AI's guess at who is driving it (a Cooptimizer's Entra id). Never makes it Owned: see claimedBy. */
   ownerId: string | null;
+  /** Part 0: the shared owner, set only by a person's own action, a Give to, or the backfill. */
+  claimedBy: string | null;
+  claimedName: string | null;
+  claimedAt: string | null;
+  helpers: { id: string; name: string }[];
   participants: Participant[];
   firstAt: string;
   lastAt: string;
@@ -79,7 +84,7 @@ export type ConversationMerge = {
   afterSummary: string | null;
   undoneAt: string | null;
 };
-export type MergeState = Pick<Conversation, "title" | "summary" | "participants" | "firstAt" | "lastAt" | "lastWorkAt" | "ownerId" | "itemId" | "itemUrl" | "itemTitle" | "likelyItem">;
+export type MergeState = Pick<Conversation, "title" | "summary" | "participants" | "firstAt" | "lastAt" | "lastWorkAt" | "ownerId" | "itemId" | "itemUrl" | "itemTitle" | "likelyItem"> & Partial<Pick<Conversation, "claimedBy" | "claimedName" | "claimedAt" | "helpers">>;
 
 /** A message's place in conversations (conversation_messages). */
 export type MessagePlace = { chatId: string; messageId: string; conversationId: number | null; role: MessageRole; reason: string | null; placedBy: "ai" | "rule" | "person"; at: string; /** GD-3: on a held message, what it matched (never logged). */ matched?: HeldMatch[] | null };
