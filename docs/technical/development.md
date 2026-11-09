@@ -1,6 +1,6 @@
 # Development
 
-For engineers changing FocusTime, people and Claude Code alike. Checked against `13cd461` on Nov 7, 2026.
+For engineers changing FocusTime, people and Claude Code alike. Checked against `13cd461` on Nov 7, 2026; local browser runs against `fix/tx1-loose-ends` on Nov 8.
 
 Read first: [CLAUDE.md](../../CLAUDE.md) (the rules), [docs/spec.md](../spec.md) (the slices so far), [docs/decisions.md](../decisions.md), and the rest of these pages.
 
@@ -30,6 +30,8 @@ Read first: [CLAUDE.md](../../CLAUDE.md) (the rules), [docs/spec.md](../spec.md)
 | `npm test` | The full suite: unit, store (SQLite and SQL Server) and browser tests |
 
 - **Browser tests** (`e2e/`) each start their own demo server with a pinned clock (`e2e/harness.ts`), in Chromium and, for the Safari checks, WebKit. One e2e per feature for its main path; edge cases are unit tests.
+- **A full local browser run:** `npx vitest run e2e/` (about 5 minutes on 20 cores; `npm test` adds the unit and store tests in the same time). Each file gets its own demo server, free port and temp folder, the UI is built once per run, and the run's temp folder is removed at the end. `test/workers.ts` picks the worker count from free CPU and memory; `FOCUSTIME_TEST_WORKERS=<n>` overrides it, and `FOCUSTIME_TEST_WORKERS=2` with `taskset -c 0-3` is close to a CI shard. Runs in different worktrees can overlap.
+- **Stopping servers by hand:** stop your own server by its process id, never by a pattern such as `pkill -f server/main.ts`: on a shared machine it also stops other sessions' test servers and the local service. If a run fails with `ERR_CONNECTION_REFUSED` or "The demo server on port N stopped during the test", look for that first.
 - **Test data** comes from the builders in `test/builders`, never hand-written fixtures. A test that starts a server takes its port from `test/ports.ts`.
 - **CI** (`.github/workflows/ci.yml`) runs on pull requests and pushes to `main`: the typecheck, the guards, the unit and store tests with SQL Server, a UI build, the browser tests in six shards, the Bicep build and the image build. There are no retries.
 - **Known flaky tests.** HK-5 found and fixed the causes it could reproduce (D932 to D939: an Ahead test that raced the demo's staged change, the feedback dialog's focus, the admin poller's clock, the Inbox count). A flake is a cause to find, never a retry: rerun it once, and if it fails again, run that file several times at once on fewer cores to reproduce it ([docs/architecture.md, Testing](../architecture.md#testing-hk-5)).

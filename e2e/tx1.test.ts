@@ -161,6 +161,28 @@ describe.skipIf(!CHROMIUM)("TX-1 timeboxes and check-ins (browser, demo mode)", 
     await page.close();
   }, T);
 
+  it("TX-1c: a plain tick takes the story's later to-do off with one notice, and Undo puts it back", async () => {
+    const { page, errors } = await freshPage(h);
+    const ids = await monday(page);
+    const TUE = "2026-11-03";
+    expect((await call(page, "planday.start", { date: TUE })).ok).toBe(true);
+    const tue = (await call(page, "pick.add", { date: TUE, half: "AM", clientKey: "Cooptimize", itemId: 4411 })).data.pick.id as number;
+    await go(page, "#/today");
+    const status = async () => (await call(page, "week.load", {})).data.plan[TUE].picks.find((x: { id: number }) => x.id === tue)?.status as string;
+    await page.locator(".tt-check, .pick-row input[type=checkbox], .pick-check").first().waitFor();
+    await page.getByRole("checkbox", { name: /Timesheet summary query/ }).first().click();
+    const notice = page.locator(".undo-toast, .deploy-undo, [role=status]", { hasText: "Removed from Tue, story is done" });
+    await notice.first().waitFor();
+    await expect.poll(() => page.getByText("Removed from Tue, story is done").count()).toBe(1);
+    await expect.poll(status).toBe("dropped");
+    await shotBoth(page, "tx1c-tick-removed", notice.first());
+    await notice.first().getByRole("button", { name: "Undo" }).click();
+    await expect.poll(status).toBe("planned");
+    expect((await call(page, "week.load", {})).data.plan[MON].picks.find((x: { id: number }) => x.id === ids.query).status).toBe("planned");
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
   it("phone: one screen, 44px targets, nothing wider than the phone, the page scrolls", async () => {
     const { page, errors } = await freshPage(h, { width: 390, height: 844 });
     await monday(page);

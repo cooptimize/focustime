@@ -73,7 +73,8 @@ function noServiceWorkers(b: Browser): Browser {
   return b;
 }
 
-export type Harness = { url: string; browser: Browser; stop: () => Promise<void> };
+/** `gone`: why the demo server isn't running any more, when the test didn't stop it (TX-1c). */
+export type Harness = { url: string; browser: Browser; pid: number; gone: () => string | null; stop: () => Promise<void> };
 
 /**
  * Starts a demo server in its own temp folder (XDG dirs) on a free port. The port is picked by the OS; if another test
@@ -92,7 +93,9 @@ export async function startDemo(engine: "chromium" | "webkit" = "chromium", extr
     // A UI built once for the whole run (test/e2e-build.ts) when there is one; Vite in the server otherwise.
     const built = process.env.FOCUSTIME_E2E_DIST && process.env.FOCUSTIME_E2E_DIST !== "dev" ? process.env.FOCUSTIME_E2E_DIST : null;
     if (built) Object.assign(env, { FOCUSTIME_DIST: built });
-    const child: ChildProcess = spawn(process.execPath, ["server/main.ts", ...(built ? [] : ["--dev"]), "--no-open", "--no-reopen", "--headless", "--port", String(port), "--clock", clock], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
+    // --port first (TX-1c): a cleanup elsewhere on the machine by pattern ("pkill -f 'server/main.ts --no-open ...'",
+    // for a script's own servers) stopped every run's demo servers; see docs/technical/development.md.
+    const child: ChildProcess = spawn(process.execPath, ["server/main.ts", "--port", String(port), ...(built ? [] : ["--dev"]), "--no-open", "--no-reopen", "--headless", "--clock", clock], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     child.stdout?.on("data", (b) => (out += b));
     child.stderr?.on("data", (b) => (out += b));
@@ -123,10 +126,18 @@ export async function startDemo(engine: "chromium" | "webkit" = "chromium", extr
   } else server = await onFreePort((port) => startServer(port, null));
   const launched = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: CHROMIUM!, args: ["--disable-gpu", ...browserArgs], ...(opts.showScrollbars ? { ignoreDefaultArgs: ["--hide-scrollbars"] } : {}) });
   const browser = noServiceWorkers(launched);
+  let stopping = false;
+  let gone: string | null = null;
+  server.child.once("exit", (code, signal) => {
+    if (!stopping) gone = `The demo server on port ${server.port} stopped during the test (exit code ${code}, signal ${signal}). Exit code 0 means it was sent SIGTERM from outside this test: look for a kill by pattern elsewhere on this machine (docs/technical/development.md).`;
+  });
   return {
     url: `${server.url}?now=${encodeURIComponent(clock)}`,
     browser,
+    pid: server.child.pid!,
+    gone: () => gone,
     stop: async () => {
+      stopping = true;
       await browser.close().catch(() => {});
       closeFront();
       server.child.kill("SIGTERM");
@@ -146,6 +157,7 @@ export async function freshPage(h: Harness, viewport = { width: 1920, height: 10
     localStorage.setItem("focustime.hint.flow", "dismissed");
     localStorage.setItem("focustime.hint.picktime", "1");
   });
+  if (h.gone()) throw new Error(h.gone()!);
   await page.goto(h.url);
   await page.getByRole("button", { name: /Try the demo/ }).click({ timeout: 60_000 });
   await page.waitForSelector(".demo-tag", { timeout: 30_000 });

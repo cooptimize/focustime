@@ -64,7 +64,7 @@ import type { BoxKind } from "../plan/capture.ts";
 import { borrowedSummary } from "../plan/borrow.ts";
 import { formatDuration } from "../week/format.ts";
 import { AfterHoursChip, clientNameFor, DeployedOffer } from "./Deploy.tsx";
-import { DEPLOYED_EVENT, readShowWeekend, writeShowWeekend } from "./weekend.ts";
+import { DEPLOYED_EVENT, readShowWeekend, TICK_REMOVED_EVENT, writeShowWeekend } from "./weekend.ts";
 import { MoreButton, PopupMenu } from "./Menus.tsx";
 import { borrowStep, timerStep } from "./menu.ts";
 import { nowStrip } from "../plan/now.ts";
@@ -506,6 +506,16 @@ export function App() {
     const on = (e: Event) => setDeployed((e as CustomEvent<Pick>).detail);
     window.addEventListener(DEPLOYED_EVENT, on);
     return () => window.removeEventListener(DEPLOYED_EVENT, on);
+  }, []);
+  // TX-1c: a tick anywhere that took later to-dos off the plan: one notice, and Undo puts everything back.
+  useEffect(() => {
+    const on = (e: Event) => {
+      const { pickId, notice } = (e as CustomEvent<{ pickId: number; notice: string }>).detail;
+      reloadRef.current();
+      setUndoToast({ id: Date.now(), text: notice, undo: () => call("pick.mark_done", { id: pickId, done: false }).then(() => { tickedRef.current?.(pickId, false); reloadRef.current(); }) });
+    };
+    window.addEventListener(TICK_REMOVED_EVENT, on);
+    return () => window.removeEventListener(TICK_REMOVED_EVENT, on);
   }, []);
   const [showTimelines, setShowTimelines] = useState(true);
   const showTimelinesRef = useRef(showTimelines);
