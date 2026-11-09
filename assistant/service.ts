@@ -15,6 +15,7 @@
 //   to-dos, which item) asks one short question with choices; my next message answers it for 10 minutes.
 //   4. confirm() re-checks everything (mine, open, not expired, still allowlisted, the client still mine and the
 //      proposal's own, nothing changed since: a fresh preview) and then dispatches the same action the button does.
+import { removedNotice } from "../plan/progress.ts";
 import { SIZE_MINUTES } from "../plan/types.ts";
 import type { ActionName } from "../actions/registry.ts";
 import { DEPLOYMENT, windowProblem, windowText } from "../plan/deploy.ts";
@@ -779,6 +780,11 @@ export function createAssistant(env: AssistantEnv) {
         const closed = !!(await env.plan.day(date))?.closedOutAt;
         rows.push({ label: "The day", before: closed ? "Closed out" : "Open", after: "Closed out" });
         steps.push({ action: "closeout.commit", input: { date } });
+        for (const p of picks) {
+          if (!wanted.has(p.id) || p.status === "done") continue;
+          const gone = removedNotice(await env.plan.wouldRemove(p.id));
+          if (gone) notes.push(`${p.title}: ${gone}`);
+        }
         if (listed) notes.push(`${listed === 1 ? "One to-do has" : `${listed} to-dos have`} no ${listed === 1 ? "block" : "blocks"} left for its client this week: ${listed === 1 ? "it waits" : "they wait"} in Unfinished from earlier days.`);
         const counts = [done ? `${done} done` : null, moved ? `${moved} moved on` : null].filter(Boolean).join(", ");
         const preview = plain("Close out the day", `Close out ${dayWords(date)}`, rows, notes);

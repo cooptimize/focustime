@@ -1,6 +1,7 @@
 // Focus timer actions (step 6c). The state lives in the plan store (kv "timer"), so it survives window close and
 // restarts; the server's tick (server/timer.ts) ends it on time and sends the notifications. Picks get their
 // focused time in the focus log. Reset local plan lives here too.
+import { removedNotice } from "../plan/progress.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { extendTimer, MAX_MINUTES, pauseTimer, resumeTimer, startTimer, stopTimer, suggestMinutes, type Segment, type TimerKind, type TimerState } from "../plan/timer.ts";
 import { DEFAULT_PLAN } from "../config/schema.ts";
@@ -184,7 +185,11 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
         // Done ends the session and ticks its pick done; Next pick ends it and timeboxes today's next pick.
         await finish();
         if (action === "timer.done") {
-          if (s.kind === "focus" && s.pickId !== null && (await plan.getPick(s.pickId))?.status === "planned") (await plan.setDone(s.pickId, true));
+          // TX-1c: a plain tick's rule; `tick` carries its notice for the app's Undo.
+          if (s.kind === "focus" && s.pickId !== null && (await plan.getPick(s.pickId))?.status === "planned") {
+            const notice = removedNotice((await plan.tickDone(s.pickId, true)).removed);
+            return respond(null, { tick: notice ? { pickId: s.pickId, notice } : null });
+          }
           return respond(null);
         }
         // Next pick keeps deep focus as it was.

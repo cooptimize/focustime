@@ -63,14 +63,28 @@ export function removedNotice(dates: readonly IsoDate[]): string | null {
   return `Removed from ${days.length > 1 ? `${days.slice(0, -1).join(", ")} and ${days.at(-1)!}` : days[0]!}, story is done`;
 }
 
+export type HadProgress = { date: IsoDate; id: number; size: string | null; minutes: number | null; remaining: number | null; spent: number | null };
+/**
+ * TX-1c: what a new to-do takes from the story's other to-dos, whatever became of them (a removed one keeps its time): its
+ * latest time left and the most time spent. Never more left than the new to-do's size, unless that time left was already
+ * above the size it had, which only the person's own answer can do. Null: no time left on record.
+ */
+export function inheritedProgress(rows: readonly HadProgress[], next: { size: string | null; minutes?: number | null }, sizes: SizeScale): { remaining: number; spent: number } | null {
+  const latest = [...rows].filter((r) => (r.remaining ?? 0) > 0).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id)[0];
+  if (!latest) return null;
+  const remaining = latest.remaining!;
+  return { remaining: remaining > baseMinutes(latest, sizes) ? remaining : Math.min(remaining, baseMinutes(next, sizes)), spent: Math.max(0, ...rows.map((r) => r.spent ?? 0)) };
+}
+
 export type WeekLeftRow = { date: IsoDate; id: number; status: string; remaining: number };
 /**
  * TX-1b: a story's time left on one week's list, from its to-dos up to that week's end. Its latest to-do that week says
  * (done: nothing left); with none that week, or one with no progress, the last time left it had. Null: use its size.
+ * TX-1c: a to-do taken off the plan never says whether the story is done, but the time left on it still counts.
  */
 export function weekStoryLeft(rows: readonly WeekLeftRow[], weekStart: IsoDate, weekEnd: IsoDate): number | null {
   const latest = [...rows].filter((r) => r.date <= weekEnd).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
-  const now = latest.find((r) => r.date >= weekStart);
+  const now = latest.find((r) => r.date >= weekStart && r.status !== "dropped");
   if (now?.status === "done") return 0;
   return latest.find((r) => r.remaining > 0)?.remaining ?? null;
 }

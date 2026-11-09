@@ -3,7 +3,7 @@
 import type { ActionResponse, FieldProblem, WeekLoadData } from "../actions/types.ts";
 import type { DraftStory, PlanDayState, Pick } from "../plan/types.ts";
 import { pageActivity, USE_HEADER } from "./activity.ts";
-import { DEPLOYED_EVENT } from "./weekend.ts";
+import { DEPLOYED_EVENT, TICK_REMOVED_EVENT } from "./weekend.ts";
 
 /**
  * No live session (signed out, or it ended after 12 idle hours or 7 days): only the server says this, with code
@@ -102,6 +102,9 @@ export async function call<T>(action: string, input: unknown, opts: CallOptions 
     // WK-3: a Deployment ticked done, from any row or menu: App offers to tell the client (never sends on its own).
     const done = action === "pick.mark_done" && (input as { done?: unknown } | null)?.done === true ? (r as { pick?: Pick } | null)?.pick : null;
     if (done?.todoKind === "deployment" && typeof window !== "undefined") window.dispatchEvent(new CustomEvent(DEPLOYED_EVENT, { detail: done }));
+    // TX-1c: any tick, from any row, menu or focus's Done, that took later to-dos off the plan.
+    const off = action === "pick.mark_done" && done ? { pickId: done.id, notice: (r as { notice?: string | null }).notice ?? null } : action === "timer.done" ? ((r as { tick?: { pickId: number; notice: string } | null } | null)?.tick ?? null) : null;
+    if (off?.notice && typeof window !== "undefined") window.dispatchEvent(new CustomEvent(TICK_REMOVED_EVENT, { detail: off }));
     return r;
   } catch (e) {
     // Any Move (menus, Plan the day, Check-in, Close out) asks the same question: Add hours, or Move anyway.

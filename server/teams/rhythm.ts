@@ -529,7 +529,7 @@ export function createRhythm(d: RhythmDeps) {
         // The app's own button: pick.mark_done (local, with undo: Undo here is mark_done false).
         const r = await d.run(userId, "pick.mark_done", { id: p.id, done: t.op === "done" });
         if (r.ok) setPick(p.id, t.op === "done" ? "done" : "open");
-        m = { ...m, notice: r.ok ? null : r.error };
+        m = { ...m, notice: r.ok ? ((r.data as { notice?: string | null }).notice ?? null) : r.error };
         log({ op: "rhythm_tap", kind: r.ok ? t.op : `${t.op}_refused` });
         // PK-1: on a check-in or close out card, Done offers the item's DevOps done state and Undo that write's undo,
         // as a proposal in the card (only when none is open there; nothing to offer leaves the card as it is).

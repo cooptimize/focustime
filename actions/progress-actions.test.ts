@@ -33,7 +33,7 @@ function setup(o: { toml?: string } = {}) {
     makeDataverse: () => ({ devopsTargets: async (keys: string[]) => ({ ok: true, targets: keys.map(target) }) }) as never,
     makeOutlook: () => { throw new Error("n/a"); },
     makeGoogle: () => { throw new Error("n/a"); },
-    makeDevOps: () => ({ forget: () => {}, last: () => null, itemStates: async () => new Map() }) as never,
+    makeDevOps: () => ({ forget: () => {}, last: () => null, itemStates: async () => new Map(), lookup: (clientKey: string, id: number) => ({ id, clientKey, title: "Mapping", type: "User Story", level: "story", state: "Active", url: "https://dev.azure.com/cooptimize/x" }) }) as never,
     saveSystemUserId: async () => {},
     now: () => now,
     sleep: async () => {},
@@ -349,5 +349,185 @@ describe("TX-1b: fixes from the TX-1 review", () => {
     await expect(allToPlan(t)).rejects.toThrow(/409/);
     expect((await t.plan.getPick(a.pickId))?.status).toBe("planned");
     expect((await t.sessions()).map((r) => r.pickId)).toEqual([a.pickId]);
+  });
+});
+
+describe("TX-1c: a plain tick, a removed to-do's time, and inherited time left", () => {
+  const TUE = "2026-11-03";
+  const WED = "2026-11-04";
+  type T = ReturnType<typeof setup>;
+  type Tick = { pick: { status: string }; removed: string[]; notice: string | null };
+  const pickOn = async (t: T, date: string, o: { itemId?: number; size?: "S" | "M" | "L" | null; half?: "AM" | "PM" } = {}) => {
+    await t.plan.start(date);
+    return t.plan.addPick({ date, half: o.half ?? "AM", clientKey: COOP, kind: "item", itemId: o.itemId ?? 500, title: "Mapping", itemType: "Task", size: o.size === undefined ? "M" : o.size });
+  };
+  const boxOn = (t: T, date: string, pickId: number, outlook = false) => t.plan.addTimebox({ date, clientKey: COOP, pickId, title: "Mapping", start: `${date}T09:00:00-05:00`, end: `${date}T10:00:00-05:00`, outlook });
+  const tick = (t: T, id: number, done: boolean) => t.run<Tick>("pick.mark_done", { id, done });
+  const story = (t: T, weekStart: string) => t.plan.addWeekItem({ weekStart, clientKey: COOP, itemId: 500, title: "Mapping", itemType: "Task", url: null, level: "story", tier: "must", size: "M" });
+  const leftOn = async (t: T, weekStart: string) => (await t.plan.weekPlan(weekStart)).features.find((f) => f.itemId === 500)?.remainingMinutes ?? null;
+
+  it("item 1: a tick takes the story's later planned to-dos off with one notice; earlier days, the same day and other stories stay", async () => {
+    const t = setup();
+    const mon = await pickOn(t, D);
+    const pm = await pickOn(t, D, { half: "PM" });
+    const tue = await pickOn(t, TUE);
+    const wed = await pickOn(t, WED);
+    const other = await pickOn(t, TUE, { itemId: 501 });
+    const box = await boxOn(t, TUE, tue.id);
+    const outlook = await boxOn(t, WED, wed.id, true);
+    const out = await tick(t, mon.id, true);
+    expect(out).toMatchObject({ removed: [TUE, WED], notice: "Removed from Tue and Wed, story is done" });
+    expect(out.pick.status).toBe("done");
+    expect((await t.plan.getPick(tue.id))?.status).toBe("dropped");
+    expect((await t.plan.getPick(wed.id))?.status).toBe("dropped");
+    expect((await t.plan.getPick(pm.id))?.status).toBe("planned");
+    expect((await t.plan.getPick(other.id))?.status).toBe("planned");
+    expect((await t.plan.timebox(box.id))?.removedAt).toBeTruthy();
+    expect((await t.plan.timebox(outlook.id))?.removedAt).toBeNull(); // Same as the check-in: nothing external changes.
+  });
+
+  it("item 1: Undo puts back the to-dos, their timeboxes and their numbers exactly, and a tick with nothing later says nothing", async () => {
+    const t = setup();
+    const mon = await pickOn(t, D);
+    const tue = await pickOn(t, TUE);
+    await t.plan.setRemaining(tue.id, 75);
+    const box = await boxOn(t, TUE, tue.id);
+    await tick(t, mon.id, true);
+    const back = await tick(t, mon.id, false);
+    expect(back).toMatchObject({ removed: [], notice: null });
+    expect(await t.plan.getPick(mon.id)).toMatchObject({ status: "planned" });
+    expect(await t.plan.getPick(tue.id)).toMatchObject({ status: "planned", remainingMinutes: 75 });
+    expect((await t.plan.timebox(box.id))?.removedAt).toBeNull();
+    // Nothing left to remember: a second Undo and a tick of a lone to-do are quiet.
+    await tick(t, mon.id, false);
+    expect((await t.plan.getPick(tue.id))?.status).toBe("planned");
+    const alone = await pickOn(t, WED, { itemId: 501 });
+    expect(await tick(t, alone.id, true)).toMatchObject({ removed: [], notice: null });
+  });
+
+  it("item 1: Undo doesn't double a to-do planned on that day again meanwhile, or bring back one dropped by hand before the tick", async () => {
+    const t = setup();
+    const mon = await pickOn(t, D);
+    const tue = await pickOn(t, TUE);
+    const wed = await pickOn(t, WED);
+    await t.plan.drop(wed.id);
+    await tick(t, mon.id, true);
+    const again = await pickOn(t, TUE);
+    await tick(t, mon.id, false);
+    expect((await t.plan.getPick(tue.id))?.status).toBe("dropped");
+    expect((await t.plan.getPick(again.id))?.status).toBe("planned");
+    expect((await t.plan.getPick(wed.id))?.status).toBe("dropped");
+  });
+
+  it("item 1: a to-do without a DevOps item touches nothing, and ticking one already done removes nothing new", async () => {
+    const t = setup();
+    await t.plan.start(D);
+    const plain = await t.plan.addPick({ date: D, half: "AM", clientKey: COOP, kind: "intention", title: "Mapping", size: "S" });
+    await t.plan.start(TUE);
+    const tuePlain = await t.plan.addPick({ date: TUE, half: "AM", clientKey: COOP, kind: "intention", title: "Mapping", size: "S" });
+    expect(await tick(t, plain.id, true)).toMatchObject({ removed: [] });
+    expect((await t.plan.getPick(tuePlain.id))?.status).toBe("planned");
+    const mon = await pickOn(t, D);
+    await tick(t, mon.id, true);
+    const tue = await pickOn(t, TUE);
+    expect(await tick(t, mon.id, true)).toMatchObject({ removed: [], notice: null });
+    expect((await t.plan.getPick(tue.id))?.status).toBe("planned");
+  });
+
+  it("item 1: focus's Done follows the rule and says it for the app's notice with Undo", async () => {
+    const t = setup();
+    const mon = await pickOn(t, D);
+    const tue = await pickOn(t, TUE);
+    await t.run("timer.start", { pickId: mon.id });
+    const out = await t.run<{ tick: { pickId: number; notice: string } | null }>("timer.done", {});
+    expect(out.tick).toEqual({ pickId: mon.id, notice: "Removed from Tue, story is done" });
+    expect((await t.plan.getPick(tue.id))?.status).toBe("dropped");
+  });
+
+  it("item 1: unticking a to-do a check-in marked done puts back what that Done removed; the check-in's Undo afterwards changes nothing more", async () => {
+    const t = setup();
+    const a = await t.boxed(500, "M", 120);
+    const tue = await pickOn(t, TUE);
+    const { timeboxIds } = await t.answer(a.pickId, "done");
+    expect((await t.plan.getPick(tue.id))?.status).toBe("dropped");
+    await tick(t, a.pickId, false);
+    expect((await t.plan.getPick(tue.id))?.status).toBe("planned");
+    await t.run("checkin.undo", { timeboxIds });
+    expect((await t.plan.getPick(tue.id))?.status).toBe("planned");
+    expect((await t.plan.getPick(a.pickId))?.status).toBe("planned");
+  });
+
+  it("item 2: removing a to-do leaves its spent and left on the story: others keep theirs, planned again it picks them up", async () => {
+    const t = setup();
+    const a = await t.boxed(500, "M", 60);
+    const tue = await pickOn(t, TUE);
+    await t.answer(a.pickId, "partly", 60);
+    expect(await t.plan.getPick(tue.id)).toMatchObject({ spentMinutes: 60, remainingMinutes: 60 });
+    await t.run("pick.remove", { id: tue.id });
+    expect(await t.plan.getPick(a.pickId)).toMatchObject({ spentMinutes: 60, remainingMinutes: 60 });
+    expect(await pickOn(t, WED)).toMatchObject({ spentMinutes: 60, remainingMinutes: 60 });
+  });
+
+  it("item 2: the story's only to-do, removed before the day is confirmed, keeps its time for the week list and for the next time it's planned", async () => {
+    const t = setup();
+    const a = await t.boxed(500, "M", 60);
+    await story(t, D);
+    await t.answer(a.pickId, "partly", 90);
+    const out = await t.run<{ result: string }>("pick.remove", { id: a.pickId });
+    expect(out.result).toBe("dropped");
+    expect(await t.plan.getPick(a.pickId)).toMatchObject({ status: "dropped", spentMinutes: 60, remainingMinutes: 90 });
+    expect(await leftOn(t, D)).toBe(90);
+    expect(await pickOn(t, TUE)).toMatchObject({ spentMinutes: 60, remainingMinutes: 90 });
+  });
+
+  it("item 2: a to-do with no time on it is still simply deleted before the day is confirmed", async () => {
+    const t = setup();
+    const a = await pickOn(t, D);
+    expect((await t.run<{ result: string }>("pick.remove", { id: a.id })).result).toBe("deleted");
+    expect(await t.plan.getPick(a.id)).toBeFalsy();
+  });
+
+  it("item 2: to-dos a Done removed don't hide that session's spent time: planned again the story has all of it", async () => {
+    const t = setup();
+    const a = await t.boxed(500, "M", 60);
+    await t.plan.setRemaining(a.pickId, 90);
+    const tue = await pickOn(t, TUE);
+    await t.plan.setRemaining(tue.id, 90);
+    await t.answer(a.pickId, "done");
+    expect(await t.plan.getPick(tue.id)).toMatchObject({ status: "dropped", remainingMinutes: 90 });
+    expect(await pickOn(t, WED)).toMatchObject({ spentMinutes: 60, remainingMinutes: 90 });
+  });
+
+  it("item 2: Done's removed to-do never reads as time left on that week's list", async () => {
+    const t = setup();
+    const a = await t.boxed(500, "M", 120);
+    await story(t, D);
+    await t.plan.setRemaining(a.pickId, 90);
+    await pickOn(t, TUE);
+    await t.answer(a.pickId, "done");
+    expect(await leftOn(t, D)).toBe(0);
+  });
+
+  it("item 3: a new to-do inherits at most its size", async () => {
+    const t = setup();
+    const a = await pickOn(t, D, { size: "L" });
+    await t.plan.setRemaining(a.id, 180);
+    expect(await pickOn(t, TUE, { size: "S" })).toMatchObject({ remainingMinutes: 60 });
+  });
+
+  it("item 3: time left the person set above the size stays; time left under the new size is untouched; the size scale is the person's", async () => {
+    const t = setup();
+    const a = await pickOn(t, D, { size: "S" });
+    await t.plan.setRemaining(a.id, 180); // "3h left · was 1h" came from the person's own answer.
+    expect(await pickOn(t, TUE, { size: "S" })).toMatchObject({ remainingMinutes: 180 });
+    const b = await pickOn(t, D, { itemId: 501, size: "L" });
+    await t.plan.setRemaining(b.id, 45);
+    expect(await pickOn(t, TUE, { itemId: 501, size: "S" })).toMatchObject({ remainingMinutes: 45 });
+    const custom = setup({ toml: "\n[plan]\nunsized_minutes = 120\n" });
+    const c = await pickOn(custom, D, { size: "L" });
+    await custom.plan.setRemaining(c.id, 200);
+    await custom.plan.start(TUE);
+    const added = await custom.run<{ pick: { size: string | null; remainingMinutes?: number } }>("pick.add", { date: TUE, half: "AM", clientKey: COOP, itemId: 500 });
+    expect(added.pick).toMatchObject({ size: null, remainingMinutes: 120 }); // Unsized counts as the person's own assumption.
   });
 });

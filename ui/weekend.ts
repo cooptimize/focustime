@@ -21,3 +21,5 @@ export function writeShowWeekend(on: boolean): void {
 
 /** WK-3: a Deployment was just marked done (any path); App offers "Tell <client> it's deployed". */
 export const DEPLOYED_EVENT = "focustime:deployed";
+/** TX-1c: a tick took the story's later to-dos off the plan: App shows the one notice with Undo. */
+export const TICK_REMOVED_EVENT = "focustime:tick-removed";

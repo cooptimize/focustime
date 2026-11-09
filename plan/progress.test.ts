@@ -4,7 +4,7 @@ import { DEFAULT_SIZE_SCALE, estimate, plannedMinutesOf, sizeChipText, storyMinu
 import { fitToGap } from "./timeline.ts";
 import { planMyDay, placeInGap } from "./agenda.ts";
 import { timeChoices } from "./picktime.ts";
-import { durationText, LEFT_CHOICES, outcomeOf, parseLeft, planOutcome, progressAsk, progressChip, progressComment, removedNotice, remainingHours, resizedRemaining, sessionRows, validLeft, weekStoryLeft } from "./progress.ts";
+import { durationText, LEFT_CHOICES, outcomeOf, parseLeft, planOutcome, progressAsk, progressChip, progressComment, inheritedProgress, removedNotice, remainingHours, resizedRemaining, sessionRows, validLeft, weekStoryLeft } from "./progress.ts";
 import { pickNeed, SIZES, type Pick } from "./types.ts";
 import { planMinutes } from "./fit.ts";
 import { dropCheck } from "./weekdrop.ts";
@@ -31,6 +31,29 @@ describe("TX-1b: the rules behind the review's fixes", () => {
     expect(weekStoryLeft([row("2026-11-10", "done", 90), row("2026-11-12", "planned", 45, 2)], ...WEEK)).toBe(45);
     expect(weekStoryLeft([row("2026-11-02", "planned", 0), row("2026-11-03", "planned", 60, 2)], ...WEEK)).toBe(60);
     expect(weekStoryLeft([], ...WEEK)).toBeNull();
+  });
+});
+
+describe("TX-1c: the time of a to-do that's gone, and what a new one inherits", () => {
+  const scale = DEFAULT_SIZE_SCALE;
+  const WEEK = ["2026-11-09", "2026-11-15"] as const;
+  const row = (date: string, status: string, remaining: number, id = 1) => ({ date, id, status, remaining });
+  it("a to-do taken off the plan keeps its time left for the list, but never decides that the story is done or not", () => {
+    expect(weekStoryLeft([row("2026-11-10", "dropped", 90)], ...WEEK)).toBe(90);
+    expect(weekStoryLeft([row("2026-11-09", "done", 90, 1), row("2026-11-10", "dropped", 90, 2)], ...WEEK)).toBe(0);
+    expect(weekStoryLeft([row("2026-11-09", "planned", 45, 1), row("2026-11-10", "dropped", 45, 2)], ...WEEK)).toBe(45);
+  });
+  const had = (date: string, remaining: number | null, spent: number | null, size: "S" | "M" | "L" | null = "M", id = 1) => ({ date, id, size, minutes: null, remaining, spent });
+  it("takes the latest time left and the most time spent, from any of the story's to-dos", () => {
+    expect(inheritedProgress([had("2026-11-02", 60, 120, "M", 1), had("2026-11-03", 90, 60, "M", 2)], { size: "M" }, scale)).toEqual({ remaining: 90, spent: 120 });
+    expect(inheritedProgress([had("2026-11-02", 0, 120), had("2026-11-03", null, null, "M", 2)], { size: "M" }, scale)).toBeNull();
+    expect(inheritedProgress([], { size: "M" }, scale)).toBeNull();
+  });
+  it("never more than the new to-do's size, unless the person said more was left than the size it had", () => {
+    expect(inheritedProgress([had("2026-11-02", 180, 60, "L")], { size: "S" }, scale)).toEqual({ remaining: 60, spent: 60 });
+    expect(inheritedProgress([had("2026-11-02", 180, 60, "S")], { size: "S" }, scale)).toEqual({ remaining: 180, spent: 60 });
+    expect(inheritedProgress([had("2026-11-02", 180, 60, "L")], { size: null }, { ...scale, unsized: 120 })).toEqual({ remaining: 120, spent: 60 });
+    expect(inheritedProgress([had("2026-11-02", 45, 0, "L")], { size: "S" }, scale)).toEqual({ remaining: 45, spent: 0 });
   });
 });
 

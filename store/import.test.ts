@@ -36,8 +36,8 @@ const tablesOf = async (conn: Conn, id: string) => {
   return Object.fromEntries(Object.entries(t).map(([k, rows]) => [k, rows.map(instants).sort()]));
 };
 
-it("the export's schema version is SQLite's newest numbered one plus IB-1's inbox_marks, AS-2's assistant_turns.pending_json LP-1's loop_sends, AH-5's ahead_state_changes WK-3's picks columns, DP-2's picks.deploy_items, IB-2's follow_ups.changed_at, KB-1's draft_stories.ai_standards and TX-1's progress columns; SQL Server's user tables match it at migration 29 (D438)", () => {
-  expect(USER_SCHEMA_VERSION).toBe(MIGRATIONS.length + 9);
+it("the export's schema version is SQLite's newest numbered one plus TX-1c's picks.done_removed, IB-1's inbox_marks, AS-2's assistant_turns.pending_json LP-1's loop_sends, AH-5's ahead_state_changes WK-3's picks columns, DP-2's picks.deploy_items, IB-2's follow_ups.changed_at, KB-1's draft_stories.ai_standards and TX-1's progress columns; SQL Server's user tables match it at migration 29 (D438)", () => {
+  expect(USER_SCHEMA_VERSION).toBe(MIGRATIONS.length + 10);
   expect(BASELINE_VERSION).toBe(26);
   expect(SQLSERVER_MIGRATIONS.find((m) => m.version === 29)?.name).toMatch(/week_features/);
 });

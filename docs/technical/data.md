@@ -1,6 +1,6 @@
 # Data
 
-For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026; SR-3's parts against `feat/report-finish` on Nov 8; DP-2's parts against `feat/deployment-items` on Nov 8; IB-2's against `feat/inbox-everything` on Nov 8; TX-1's parts against `fix/tx1-review` on Nov 8.
+For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026; `picks.done_removed` against `fix/tx1-loose-ends` on Nov 8; SR-3's parts against `feat/report-finish` on Nov 8; DP-2's parts against `feat/deployment-items` on Nov 8; IB-2's against `feat/inbox-everything` on Nov 8; TX-1's parts against `fix/tx1-review` on Nov 8.
 
 ## One database, two kinds of table
 
@@ -141,6 +141,7 @@ A timebox is a work session, and an item's size is an estimate. The two are inde
 | Where | Column | What it holds |
 |---|---|---|
 | `picks` | `spent_minutes`, `remaining_minutes` | Time spent and left, null until the first answer. An answer writes the to-do answered and the item's to-dos still planned, so a carried or re-picked item keeps them. A Done writes only its own row and keeps the last time left in the column (a done to-do reads as 0), so a story planned again picks it up. A week story reads its time left from these through the `picks_client_item` index. |
+| `picks` | `done_removed` | What a Done took off the plan, as JSON (to-do and timebox ids only), so unticking it puts them back. Null otherwise. |
 | `picks`, `week_features`, `draft_stories` | `size_xs` | 1 when the row is XS (30 minutes). The `size` column holds S then, so an older build reads it as S. |
 | `timeboxes` | `settled_as` | The check-in answer that covered this timebox: `done`, `partly` or `none`. Null while unanswered. |
 | `timeboxes` | `settled_at`, `settle_before` | When it was answered, and as JSON for Undo: the to-do's status, spent and left before the answer, the same for the item's other planned to-dos, and which later to-dos and timeboxes a Done removed. |

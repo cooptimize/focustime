@@ -312,6 +312,22 @@ await forEachDriver("the bot's rhythm in Teams (TB-2)", (d) => {
 expect(t.logs.map((l) => JSON.stringify(l)).join()).not.toContain("Import mapping");
   });
 
+  it("TX-1c: Done says once which later to-dos it removed; Undo puts them back and takes the line away", async () => {
+    const t = await setup(d);
+    const a = await t.add({ title: "Fix the login timeout", kind: "item", itemId: 500, itemType: "User Story" });
+    t.at("12:10");
+    await t.rhythm.tick(ANA, await t.facts());
+    const occ = `checkin:${MON}`;
+    await t.plan.start("2026-11-03");
+    const tue = await t.plan.addPick({ date: "2026-11-03", half: "AM", clientKey: a.clientKey, kind: "item", itemId: 500, title: "Fix the login timeout", itemType: "User Story", size: "S" });
+    const card = await t.tap(occ, "done", { pickId: a.id });
+    expect(card.match(/Removed from Tue, story is done/g)).toHaveLength(1);
+    expect((await t.plan.getPick(tue.id))?.status).toBe("dropped");
+    const back = await t.tap(occ, "undone", { pickId: a.id });
+    expect(back).not.toContain("Removed from Tue");
+    expect((await t.plan.getPick(tue.id))?.status).toBe("planned");
+  });
+
   describe("TX-1b: fixes from the TX-1 review", () => {
     const ME = "avery@cooptimize.example";
     const boxOn = async (t: Awaited<ReturnType<typeof setup>>, p: { id: number; clientKey: string; title: string }, a: string, b: string) => t.plan.addTimebox({ date: MON, clientKey: p.clientKey, pickId: p.id, title: p.title, start: `${MON}T${a}:00-05:00`, end: `${MON}T${b}:00-05:00`, outlook: false });

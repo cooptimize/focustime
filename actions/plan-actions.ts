@@ -1,7 +1,7 @@
 // Plan the day actions (step 5). Local only: they read DevOps results already in memory to check a pick,
 // and write only to the local plan store. Nothing here calls DevOps, Outlook, Google or Dataverse.
 import { markResolved, materializeCheckins } from "./carry-actions.ts";
-import { resizedRemaining } from "../plan/progress.ts";
+import { removedNotice, resizedRemaining } from "../plan/progress.ts";
 import { SIZE_MINUTES } from "../plan/types.ts";
 import { isOpen, typeNeedsBreakdown } from "../plan/process.ts";
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
@@ -368,7 +368,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         } else {
           p = { ...base, kind: "intention", title: text(o.intention, "intention") };
         }
-        const pick = (await plan.addPick(p));
+        const pick = (await plan.addPick(p, clk.cfg?.plan.sizes));
         return { ok: true, data: { pick, state: await state(ctx, plan, pick.date), note } };
       }
       case "pick.remove": {
@@ -417,8 +417,9 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
       }
       case "pick.mark_done": {
         const o = fields(input, ["id", "done"]);
-        const pick = (await plan.setDone(id(o.id), bool(o.done, "done")));
-        return { ok: true, data: { pick } };
+        // TX-1c: the same rule as a check-in's Done (later to-dos of the story come off the plan); done: false puts them back.
+        const { pick, removed } = await plan.tickDone(id(o.id), bool(o.done, "done"));
+        return { ok: true, data: { pick, removed, notice: removedNotice(removed) } };
       }
       case "deploy.add": {
         // WK-3 (DP-0): a Deployment to-do: a client, a date and a window; items and a note optional. Local only.

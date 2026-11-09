@@ -5305,6 +5305,8 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   .done-offer .mini, .done-batch .mini { min-height: var(--tap); }
 }
 .app.phone .done-offer { bottom: calc(var(--bb-h) + 8px); }
+/* TX-1c: a tick can bring both; the offer keeps the bottom, the notice with its Undo moves above the page. */
+body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 
 /* BH-1: Ahead › Backlog. Clients side by side (as many columns as fit, each at least ~34 rem), stacked on narrow
    screens; each row two lines: rank, type, title and gap dots, then one quiet meta line. Stale is the muted amber of
