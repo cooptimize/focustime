@@ -215,8 +215,8 @@ export function Settings(props: Props) {
   const [data, setData] = useState<SettingsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const searching = useRef(false);
-  searching.current = q.trim() !== "";
+  // A jump to a setting is owed once, until it lands or the person moves on (see the effect below).
+  const jumpDue = useRef(false);
   const phone = usePhone();
   const list = useNarrow() || phone;
   const admin = useAdmin();
@@ -234,18 +234,31 @@ export function Settings(props: Props) {
   useEffect(() => {
     void reload();
   }, [reload, current]);
-  // A deep link to one setting: into view with a brief highlight, focus on its first control.
+  // Each jump is owed once. The person going anywhere else first (a click, a key, the focus moving) cancels it, so it
+  // never takes the focus back; this effect runs after PanelShell's own focus on the section's heading.
+  useEffect(() => {
+    if (!setting || current === "client") return;
+    jumpDue.current = true;
+    const moved = () => void (jumpDue.current = false);
+    for (const e of ["focusin", "pointerdown", "keydown"]) document.addEventListener(e, moved, true);
+    return () => {
+      for (const e of ["focusin", "pointerdown", "keydown"]) document.removeEventListener(e, moved, true);
+    };
+  }, [current, setting]);
+  // A deep link to one setting: into view with a brief highlight, focus on its first control. Waits for the section's
+  // data the first time; a later reload of that data (a save, a late response) doesn't do it again.
   useEffect(() => {
     if (!data || !setting || current === "client") return;
     const t = setTimeout(() => {
+      if (!jumpDue.current) return;
       const el = document.querySelector<HTMLElement>(`.ps-body [data-setting="${CSS.escape(setting)}"]`);
       if (!el) return;
+      jumpDue.current = false;
       el.scrollIntoView?.({ block: "start" });
       el.classList.remove("ps-flash");
       void el.offsetWidth;
       el.classList.add("ps-flash");
-      // TX-1b: this can land well after the jump (it waits for the section's data). A new search has the focus by then: leave it.
-      if (!searching.current) el.querySelector<HTMLElement>("input:not([disabled]), select:not([disabled]), textarea, button:not([disabled]), a[href]")?.focus({ preventScroll: true });
+      el.querySelector<HTMLElement>("input:not([disabled]), select:not([disabled]), textarea, button:not([disabled]), a[href]")?.focus({ preventScroll: true });
       setTimeout(() => el.classList.remove("ps-flash"), 2200);
     }, 60);
     return () => clearTimeout(t);
