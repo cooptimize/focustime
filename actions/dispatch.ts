@@ -844,7 +844,7 @@ export async function aiFor(ctx: ActionContext, o: { cap?: "person" | "app"; rul
 /** AS-1: the assistant's AI (DM-1: in the demo, the demo's own runtime, like every other AI feature there). */
 const assistantAiFor = (ctx: ActionContext) => aiFor(ctx);
 
-export async function assistantFor(ctx: ActionContext, channel: Channel, publicUrl: string | null = null): Promise<{ service: AssistantService; reads: ReadDeps } | null> {
+export async function assistantFor(ctx: ActionContext, channel: Channel): Promise<{ service: AssistantService; reads: ReadDeps } | null> {
   const plan = ctx.plan;
   if (!plan) return null;
   const cfg = await configured(ctx);
@@ -859,9 +859,9 @@ export async function assistantFor(ctx: ActionContext, channel: Channel, publicU
   // GD-1's rule for Internal: clientAccounts()'s why "internal" (isInternalKey), never a name.
   const accounts = ca ?? clientAccounts({ accounts: [], overrides: {}, internal: INTERNAL_CLIENT });
   const isInternal = (k: string) => accounts.row(k)?.why === "internal";
-  const service = createAssistant({ run, plan, ai: await assistantAiFor(ctx), directory, isMine, isInternal, clientName, now: ctx.now, zone, channel, publicUrl, standards: (question) => standardsForQuestion(ctx.standards, question) });
+  const service = createAssistant({ run, plan, ai: await assistantAiFor(ctx), directory, isMine, isInternal, clientName, now: ctx.now, zone, channel, standards: (question) => standardsForQuestion(ctx.standards, question) });
   const today = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(zone).toPlainDate().toString();
-  const link = (href: string, label: string) => ({ label, href: channel === "teams" && publicUrl ? `${publicUrl.replace(/\/$/, "")}/${href}` : href });
+  const link = (href: string, label: string) => ({ label, href });
   return { service, reads: { run, today, now: ctx.now(), zone, isMine, clientName, link } };
 }
 

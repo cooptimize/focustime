@@ -6,12 +6,17 @@
 // SR-1 adds the status report nudge. MC-1 adds client calls to review.
 // AS-2 adds the question with choices (and after a tap), a move across clients with Undo, and a compound update.
 // PK-1 adds Done's follow-up (Set #id to its done state) and Undo's (put it back), on the check-in and close out cards.
-// Usage: node scripts/teams-card-previews.ts <outDir>
+// TB-3 adds the Ask parity set from the real service on the fictional test world; pass "tb3" as the second argument for
+// only those (docs/ux/tb3).
+// Usage: node scripts/teams-card-previews.ts <outDir> [tb3]
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright-core";
 import { CHROMIUM } from "../e2e/harness.ts";
+import { call, NEXT_FRI, NEXT_WED, say, setup, ZONE } from "../test/builders/assistant-world.ts";
+import { teamsAssistant } from "../server/teams/assistant.ts";
+import { renderAnswer } from "../server/teams/render.ts";
 import { briefCard, captureCard, checkinCard, closeoutCard, meetingsCard, nudgeCard, statusCard, type InlineProposal, type PickRow } from "../server/teams/rhythm-cards.ts";
-import { answeredCard, cancelledCard, doneCard, expiredCard, failedCard, helpCard, proposalCard, questionCard, resultCard, undoneCard, workingCard, type Card } from "../server/teams/cards.ts";
+import { answeredCard, cancelledCard, doneCard, expiredCard, failedCard, proposalCard, questionCard, undoneCard, workingCard, type Card } from "../server/teams/cards.ts";
 
 const out = process.argv[2] ?? "screenshots/teams";
 mkdirSync(out, { recursive: true });
@@ -72,14 +77,11 @@ const cards: [string, Card][] = [
   ...rhythmCards,
   ["proposal", proposalCard(proposal)],
   ["changed", proposalCard({ ...proposal, id: "p-2", changes: [{ field: "Target date", before: "Nov 7", after: "Nov 6" }] }, { again: "Someone changed the target date since. Here's the new preview." })],
-  ["done", doneCard({ title: proposal.title, message: "Target date is Nov 6 now.", undo: { label: "Undo in FocusTime", url: `${URL_}/#/settings/data` }, links: [{ label: "Open in Ahead", url: `${URL_}/#/ahead` }] }, URL_)],
+  ["done", doneCard({ title: proposal.title, message: "Target date is Nov 6 now.", undo: { label: "Undo", proposalId: "p-1", writeId: 77 }, links: [{ label: "Open in Ahead", url: `${URL_}/#/ahead` }] }, URL_)],
   ["failed", failedCard(proposal.title, "Only the feature's owner or a client lead can move its dates.")],
   ["expired", expiredCard(proposal.title)],
   ["cancelled", cancelledCard(proposal.title)],
   ["working", workingCard(proposal.title)],
-  ["today", resultCard({ title: "Today", lines: ["Morning 08:00–12:00: Northwind", "  • Fix the login timeout", "  ✓ Review the export", "Afternoon 13:00–17:00: Internal", "  • Write the onboarding note"], links: [{ label: "Open Today", url: `${URL_}/#/today` }] }, URL_)],
-  ["next", resultCard({ title: "Northwind until 12:00", lines: ["Next to-do: Fix the login timeout", "Next meeting: Standup at 10:30", "1 of 3 to-dos done"], links: [{ label: "Open Today", url: `${URL_}/#/today` }] }, URL_)],
-  ["help", helpCard(URL_)],
   // AS-2.
   ["as2-question", questionCard({ text: "Which to-dos on Thu, Nov 5?", choices: [{ label: "Thu, Nov 5 AM · Northwind · 2 to-dos", value: "b1" }, { label: "Thu, Nov 5 PM · Harbor · 1 to-do", value: "b2" }, { label: "All 3", value: "all" }], expiresAt: "2026-11-05T15:10:00Z" }, "q41")],
   ["as2-answered", answeredCard("Which to-dos on Thu, Nov 5?", "All 3")],
@@ -87,8 +89,39 @@ const cards: [string, Card][] = [
   ["as2-move-done", doneCard({ title: "Move 3 to-dos to Fri, Nov 6", message: "Moved 3 to-dos.", undo: { label: "Undo", proposalId: "12" }, links: [{ label: "Open Week", url: `${URL_}/#/week` }] }, URL_)],
   ["as2-move-undone", undoneCard("Move 3 to-dos to Fri, Nov 6", "Put 3 to-dos back.")],
   ["as2-compound", proposalCard({ id: "13", title: "Update #4211: done and a comment", whoSees: "Visible to everyone with access to the Portal project in DevOps. People following the item may get a notification from DevOps.", changes: [{ field: "State", before: "Active", after: "Closed" }, { field: "Comment", before: "", after: "The stored procedure has the requested fields." }], expiresAt: "2026-11-05T15:15:00Z" })],
-  ["as2-compound-done", doneCard({ title: "Update #4211: done and a comment", message: "Done: state and comment", undo: { label: "Undo in FocusTime", url: `${URL_}/#/settings/data` }, parts: [{ label: "State", ok: true, message: "#4211 is Closed in DevOps" }, { label: "Comment", ok: true, message: "Comment added in DevOps" }] }, URL_)],
-  ["as2-compound-partly", doneCard({ title: "Update #4211: done and a comment", message: "State done. Comment didn't go", undo: { label: "Undo in FocusTime", url: `${URL_}/#/settings/data` }, parts: [{ label: "State", ok: true, message: "#4211 is Closed in DevOps" }, { label: "Comment", ok: false, message: "Someone changed the item since. Ask again for a fresh preview." }] }, URL_)],
+  ["as2-compound-done", doneCard({ title: "Update #4211: done and a comment", message: "Done: state and comment", undo: { label: "Undo", proposalId: "p-1", writeId: 77 }, parts: [{ label: "State", ok: true, message: "#4211 is Closed in DevOps" }, { label: "Comment", ok: true, message: "Comment added in DevOps" }] }, URL_)],
+  ["as2-compound-partly", doneCard({ title: "Update #4211: done and a comment", message: "State done. Comment didn't go", undo: { label: "Undo", proposalId: "p-1", writeId: 77 }, parts: [{ label: "State", ok: true, message: "#4211 is Closed in DevOps" }, { label: "Comment", ok: false, message: "Someone changed the item since. Ask again for a fresh preview." }] }, URL_)],
+];
+
+// TB-3: the same Assistant answers, drawn for Teams.
+const world = setup({ channel: "teams" });
+await world.seed();
+const person = { userId: "u1" };
+const bot = teamsAssistant({ handle: (i) => world.a.handle(i.text, i.context ?? {}, i.answer, i.asked), confirm: (i) => world.a.confirm(i.proposalId, i.edits ?? {}), cancel: (i) => world.a.cancel(i.proposalId), propose: (i) => world.a.propose(i.tool, i.args) }, URL_);
+const ask = async (text: string) => bot.handle({ person, channel: "teams", text, context: { surface: "teams", conversation: "personal", locale: "en-US", timeZone: ZONE } });
+const words = (text: string): Card => ({ type: "AdaptiveCard", version: "1.5", body: [{ type: "TextBlock", text, wrap: true }] }) as unknown as Card;
+const answer = async (text: string): Promise<Card[]> => {
+  const a = await ask(text);
+  const r = renderAnswer({ turnId: Number(a.turnId), reply: a.reply, cards: [...a.cards], links: [...a.links] }, URL_);
+  return [...(r.text && r.text !== r.question?.text ? [words(r.text)] : []), ...r.cards, ...(r.question ? [questionCard(r.question, "q1")] : [])];
+};
+world.question({ topic: "plan_check", period: "next_week" });
+const planning = await answer("I'm planning next week. What should I look out for?");
+world.question({ topic: "capabilities" });
+const can = await answer("What can you help me with here exactly?");
+world.question({ topic: "general", period: "next_week" });
+const choices = await answer("How is next week looking for the main feature?");
+world.action(["move_plan"], {}, call(["move_plan", { fromDate: NEXT_WED, fromHalf: "PM", toDate: NEXT_FRI, toHalf: "AM", which: "all" }]), say("Here's the move."));
+const move = await ask("Move all the items I have on my Wednesday PM block to Friday AM");
+const moved = move.proposals[0]!;
+const done = await bot.confirm({ person, proposalId: moved.id });
+if (done.status !== "ok") throw new Error(done.message);
+const tb3Cards: [string, Card | Card[]][] = [
+  ["planning-answer", planning],
+  ["move-proposal", [words(move.reply), proposalCard(moved, { publicUrl: URL_ })]],
+  ["move-result", doneCard({ title: moved.title, message: done.message, undo: done.undo ?? null, links: done.links ?? [] }, URL_)],
+  ["choices", choices],
+  ["what-can-you-do", can],
 ];
 
 const THEMES = {
@@ -102,7 +135,7 @@ for (const [theme, c] of Object.entries(THEMES)) {
   await page.setContent(`<!doctype html><html><head><style>body{margin:0;padding:20px;background:${c.bg};font-family:"Segoe UI","Noto Sans",sans-serif}#c{width:460px;background:${c.card};border:1px solid ${c.border};border-radius:8px;padding:16px}</style>
     <script src="https://unpkg.com/adaptivecards@3.0.6/dist/adaptivecards.min.js"></script></head><body><div id="c"></div></body></html>`);
   await page.waitForFunction(() => !!(window as unknown as { AdaptiveCards?: unknown }).AdaptiveCards, null, { timeout: 30_000 });
-  for (const [name, card] of cards) {
+  for (const [name, card] of (process.argv[3] === "tb3" ? tb3Cards : cards) as [string, Card | Card[]][]) {
     await page.evaluate(
       ([card, c]) => {
         const AC = (window as unknown as { AdaptiveCards: any }).AdaptiveCards;
@@ -121,10 +154,14 @@ for (const [theme, c] of Object.entries(THEMES)) {
           result.outputHtml = esc.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, `<a href="$2" style="color:${c.accent}">$1</a>`);
           result.didProcess = true;
         };
-        ac.parse(card);
         const el = document.getElementById("c")!;
         el.innerHTML = "";
-        el.appendChild(ac.render());
+        for (const one of Array.isArray(card) ? card : [card]) {
+          ac.parse(one);
+          const drawn = ac.render() as HTMLElement;
+          drawn.style.marginBottom = "12px";
+          el.appendChild(drawn);
+        }
         for (const b of Array.from(el.querySelectorAll("button"))) Object.assign((b as HTMLElement).style, { padding: "6px 14px", borderRadius: "4px", border: `1px solid ${c.border}`, background: b.textContent === "Confirm" ? c.accent : c.card, color: b.textContent === "Confirm" ? "#fff" : c.fg, fontWeight: "600", cursor: "pointer" });
       },
       [card, c] as const,

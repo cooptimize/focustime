@@ -140,6 +140,8 @@ const shortDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-U
 
 /** A5: the address that opens Quick capture (Super+Alt+N on the hosted app). */
 const CAPTURE_HASH = "#/capture";
+/** TB-3: #/ask/<turn> (Open in FocusTime from a Teams card) opens the assistant on that answer, over the last place. */
+const askTurnOf = (hash: string): number | null => (/^#\/ask\/(\d{1,10})$/.test(hash) ? Number(hash.slice(6)) : null);
 
 export function App() {
   const now = useRef(nowOverride()).current;
@@ -222,7 +224,7 @@ export function App() {
    */
   // A5: #/capture (the hosted app's Super+Alt+N) opens Quick capture over the last place, then leaves the address.
   const captureAsked = useRef(location.hash === CAPTURE_HASH);
-  const [loc, setLocState] = useState<Loc>(() => parseHash(location.hash) ?? (location.hash && !captureAsked.current ? HOME : storedLoc()) ?? HOME);
+  const [loc, setLocState] = useState<Loc>(() => parseHash(location.hash) ?? (location.hash && !captureAsked.current && askTurnOf(location.hash) === null ? HOME : storedLoc()) ?? HOME);
   const locRef = useRef(loc);
   locRef.current = loc;
   const go = useCallback((next: Loc | ((l: Loc) => Loc)) => setLocState((l) => {
@@ -234,7 +236,7 @@ export function App() {
     const h = hashOf(loc);
     // NV-1: an older address that lands on the same place (a redirect) is replaced, so Back doesn't loop on it.
     const was = parseHash(location.hash);
-    if (location.hash === CAPTURE_HASH || (was && sameLoc(was, loc))) history.replaceState(null, "", h);
+    if (location.hash === CAPTURE_HASH || askTurnOf(location.hash) !== null || (was && sameLoc(was, loc))) history.replaceState(null, "", h);
     else if (location.hash !== h) history.pushState(null, "", h);
     try {
       localStorage.setItem(LOC_KEY, h);
@@ -247,6 +249,12 @@ export function App() {
       if (location.hash === CAPTURE_HASH) {
         history.replaceState(null, "", hashOf(locRef.current));
         setCaptureOpen(true);
+        return;
+      }
+      const turn = askTurnOf(location.hash);
+      if (turn !== null) {
+        history.replaceState(null, "", hashOf(locRef.current));
+        setAssistantAt({ text: "", turn });
         return;
       }
       const next = parseHash(location.hash) ?? HOME;
@@ -307,7 +315,10 @@ export function App() {
   /** Quick capture (step 9): the box over any view, and the Capture view (inbox and notes) in the week's place. */
   const [captureOpen, setCaptureOpen] = useState(false);
   // AS-1: the assistant panel (Ctrl+J, /, the top bar's Ask), with any text it opens with.
-  const [assistantAt, setAssistantAt] = useState<{ text: string } | null>(null);
+  const [assistantAt, setAssistantAt] = useState<{ text: string; turn?: number } | null>(() => {
+    const turn = askTurnOf(location.hash);
+    return turn === null ? null : { text: "", turn };
+  });
   // Step 15.3: the kind chip to start on (Follow-up from "Add a follow-up"), or the rules' suggestion.
   const [captureKind, setCaptureKind] = useState<BoxKind | null>(null);
   // Step 15.3: the draft open in the draft editor.
@@ -2216,6 +2227,7 @@ export function App() {
           phone={phone}
           skewMs={skew}
           initialText={assistantAt.text}
+          {...(assistantAt.turn ? { atTurn: assistantAt.turn } : {})}
           context={assistantContext}
           onClose={() => setAssistantAt(null)}
           onChanged={reloadQuiet}

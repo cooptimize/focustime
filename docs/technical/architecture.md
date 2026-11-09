@@ -17,7 +17,7 @@ FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a
 | Host | The only code that touches the machine (secrets, keys, caches, notifications): `host/azure` hosted, `host/local` for the developer loop; picked by `FOCUSTIME_HOST` | `host/` |
 | Scheduler and jobs | One in-process scheduler: per-person ticks (timer ends, reminders, notifications) and app jobs (polling, purge) | `server/scheduler.ts`, `server/ticks.ts` |
 | Teams bot | An Azure Bot whose identity is a managed identity, calling `/teams/messages` on the same app; 1:1 chats only | `server/teams/`, `infra/modules/bot.bicep` |
-| Assistant | One service for the in-app panel and the bot; reaches only the actions on its allowlist | `assistant/` |
+| Assistant | One service, two renderers: the in-app panel and the bot draw the same result; reaches only the actions on its allowlist | `assistant/`, `ui/Assistant.tsx`, `server/teams/render.ts` |
 | AI provider | Every AI request goes through `ai/` (guard, budget, request log) to OpenAI; a stub in the developer loop | `ai/` |
 | Infrastructure | Bicep for the Container Apps environment and app, Azure SQL, Key Vault, the registry, monitoring, the bot, budgets | `infra/` |
 
@@ -165,7 +165,19 @@ One service (`assistant/service.ts`) answers the in-app panel and the Teams bot;
 4. **A question** (AS-3) is answered from my own data. `assistant/context.ts` reads the period (one `week.load` per week it touches, and only what the topic needs of `ahead.load`, `status.load`, `inbox.list` and `meeting.mine`), keeps only my clients (`isMine`), and bounds it: at most 14 days, 40 to-dos, 12 promises, 10 waiting, 12 gaps, 12 features without an update, 6 calls and 10 after-hours parts (`CONTEXT_LIMITS`). `assistant/answer.ts` composes the answer on the server, grouped by client: each line names a real block, to-do, `#id` or promise with its link, and what couldn't be read is said ("Not known"). Up to 3 suggested steps are FocusTime plan proposals (`SUGGEST_TOOLS`: `move_plan`, `confirm_week`); a tap builds the proposal with its preview and still needs Confirm. Only a `general` question about one client sends that client's context to the AI (`assistant.question`), as quoted JSON of at most 16,000 characters; a general question across clients asks which client first.
 5. **Memory.** The answer's turn keeps what a follow-up needs (`assistant_turns.pending_json`: my words, the client, the topic and period, the items, to-dos and promises it referred to) for 2 hours (`CONVERSATION_MINUTES`), with its suggestions; a question's choices still wait 10 minutes (AS-2). It is my history: in Export, removed by Clear, pruned at 30 days, never shown to admins.
 
-With AI off, not set up or over a cap, any message gets one line saying so and the command menu; there is no canned list of what the assistant can do. "What can you help me with?" is a question like any other (`capabilities`): what it does, with up to 6 example questions built from my own week, each a tap. The bot shows the same answer: each section a card with its first two links, the suggestions as buttons (`server/teams/assistant.ts`, `server/teams/cards.ts`). `scripts/assistant-eval.ts --url <host>` asks the golden set in a demo session and prints the answers (not in CI).
+With AI off, not set up or over a cap, any message gets one line saying so and the command menu; there is no canned list of what the assistant can do. "What can you help me with?" is a question like any other (`capabilities`): what it does, with up to 6 example questions built from my own week, each a tap. "help" and "open FocusTime" always answer without AI, and "what's next" and "today" do while AI is unavailable, in both channels (`assistant/quick.ts`). `scripts/assistant-eval.ts --url <host>` asks the golden set in a demo session and prints the answers (not in CI).
+
+### One Assistant, two renderers
+
+There is one Assistant. The in-app panel and the Teams bot are two renderers of the same result, and the rule is that nothing else differs:
+
+- **One path.** A Teams 1:1 message reaches `assistant.handle` like the panel's, as the same person, under the same allowlist, client boundary and AI settings. Only two things happen before it, and both only make sense in Teams: `capture:` (TB-2: saved at once, no AI) and the reply to the Close out prompt.
+- **A neutral result.** The Assistant returns the words, cards, links, proposals and choices, with links as app addresses. It knows nothing about a channel's layout.
+- **A renderer per channel.** `ui/Assistant.tsx` for the panel; `server/teams/render.ts` and `server/teams/cards.ts` (Adaptive Cards) for Teams. A renderer draws and adds no logic. Its switch over card kinds is exhaustive, so a new kind doesn't compile until it is drawn.
+- **Same actions.** Confirm, Undo and a refreshed preview call the same service methods from both. Follow-ups share one 2-hour memory across channels.
+- **Where a card can't hold it** (over 24 KB or 9 cards, or a preview over 20 rows or 12,000 characters), Teams shows the first part and "Open in FocusTime", a link to the same answer (`#/ask/<turn>`). A DevOps change that can't be shown whole has no Confirm in Teams.
+
+**The parity test is the rule** (`assistant/parity.test.ts`, in CI). Every Ask topic, every assistant tool, every golden question in `assistant/answers.test.ts` and AS-2's flows run through the panel's entry and through the real bot core on fakes, and must return the same result, draw all of it as cards, and make the same writes. A new capability without a case there fails the build; add the case, and the drawing if it is a new kind of card.
 
 ## The rhythm's check-ins (TX-1)
 

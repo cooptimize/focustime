@@ -1,6 +1,6 @@
-// AS-1 into TB-1: the bot's AssistantService on the real assistant's types. Cards become a title, lines and absolute
-// links; proposals keep their preview rows, who sees it and expiry; ids are strings in the bot and numbers in the
-// service; a DevOps write's undo points at FocusTime's audit log; nothing but "teams" is sent as the context.
+// AS-1 into TB-1, TB-3: the bot's AssistantService on the real assistant's types. The answer's cards and links stay as
+// the Assistant made them (server/teams/render.ts draws them); proposals keep their whole preview; ids are strings in
+// the bot and numbers in the service; a DevOps write's undo is that write's own; only "teams" is sent as the context.
 import { describe, expect, it } from "vitest";
 import type { Assistant, ConfirmResult, HandleResult, Proposal } from "../../assistant/types.ts";
 import { teamsAssistant } from "./assistant.ts";
@@ -17,8 +17,8 @@ function fake(confirm: ConfirmResult) {
   const a: Pick<Assistant, "handle" | "confirm" | "cancel" | "propose"> = {
     handle: async (i) => (seen.push(i), {
       turnId: 3, status: "ok", reply: "Here it is.", proposals: [proposal],
-      cards: [{ kind: "item", clientKey: "fabrikam", clientName: "Fabrikam", id: 4417, title: "Export", type: "Feature", state: "Active", owner: null, start: null, target: "2026-12-04", children: [], link: { label: "Open #4417 in Ahead", href: `${URL}/#/ahead/item/4417` }, devopsUrl: null }],
-      links: [{ label: "Open the command menu", href: `${URL}/#/commands` }],
+      cards: [{ kind: "item", clientKey: "fabrikam", clientName: "Fabrikam", id: 4417, title: "Export", type: "Feature", state: "Active", owner: null, start: null, target: "2026-12-04", children: [], link: { label: "Open #4417 in Ahead", href: "#/ahead/item/4417" }, devopsUrl: null }],
+      links: [{ label: "Open the command menu", href: "#/commands" }],
     } satisfies HandleResult),
     confirm: async (i) => (seen.push(i), confirm),
     cancel: async (i) => (seen.push(i), { ok: true as const }),
@@ -33,13 +33,13 @@ describe("teamsAssistant", () => {
     const r = await teamsAssistant(a, URL).handle({ person: { userId: "u1" }, channel: "teams", text: "What's #4417?", context: { surface: "teams", conversation: "personal", locale: "en-US", timeZone: "America/New_York" } });
     expect(seen[0]).toEqual({ person: { userId: "u1" }, channel: "teams", text: "What's #4417?", context: { screen: "teams" } });
     expect(r.turnId).toBe("3");
-    expect(r.cards[0]).toEqual({ title: "#4417 Export", lines: ["Fabrikam · Feature · Active · Unassigned", "No start to 2026-12-04"], links: [{ label: "Open #4417 in Ahead", url: `${URL}/#/ahead/item/4417` }] });
-    expect(r.proposals[0]).toEqual({ id: "7", title: "Comment on #4417 (Fabrikam)", whoSees: proposal.whoSees, changes: [{ field: "Comment", before: null, after: "Works for March." }], note: "Written only if the item is still at revision 3.", expiresAt: proposal.expiresAt });
-    expect(r.links).toEqual([{ label: "Open the command menu", url: `${URL}/#/commands` }]);
+    expect(r.cards[0]).toMatchObject({ kind: "item", id: 4417, link: { href: "#/ahead/item/4417" } });
+    expect(r.proposals[0]).toEqual({ id: "7", title: "Comment on #4417 (Fabrikam)", whoSees: proposal.whoSees, changes: [{ field: "Comment", before: null, after: "Works for March." }], note: "Written only if the item is still at revision 3.", expiresAt: proposal.expiresAt, summary: "Add a comment to a DevOps item", target: "#4417 Export", system: "DevOps", identity: "Sam <sam@cooptimize.example>", editable: ["text"], turnId: null });
+    expect(r.links).toEqual([{ label: "Open the command menu", href: "#/commands" }]);
   });
-  it("confirm: the id as a number, the undo in the audit log; changed carries the fresh proposal; cancel", async () => {
+  it("confirm: the id as a number, Undo is the write's own; changed carries the fresh proposal; cancel", async () => {
     const ok = fake({ ok: true, result: { kind: "note", text: "Comment added" }, undo: { kind: "devops", id: 12 }, message: "Added the comment to #4417" });
-    expect(await teamsAssistant(ok.a, URL).confirm({ person: { userId: "u1" }, proposalId: "7", edits: { text: "Works.", junk: 4 } })).toEqual({ status: "ok", message: "Added the comment to #4417", undo: { label: "Undo in FocusTime", url: `${URL}/#/settings/data` }, links: [] });
+    expect(await teamsAssistant(ok.a, URL).confirm({ person: { userId: "u1" }, proposalId: "7", edits: { text: "Works.", junk: 4 } })).toEqual({ status: "ok", message: "Added the comment to #4417", undo: { label: "Undo", proposalId: "7", writeId: 12 }, links: [] });
     expect(ok.seen[0]).toEqual({ person: { userId: "u1" }, proposalId: 7, edits: { text: "Works." } });
     const changed = fake({ ok: false, reason: "changed", message: "It changed", proposal });
     expect(await teamsAssistant(changed.a, URL).confirm({ person: { userId: "u1" }, proposalId: "7" })).toMatchObject({ status: "changed", proposal: { id: "7" } });

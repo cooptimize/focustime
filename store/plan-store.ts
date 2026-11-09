@@ -3150,6 +3150,11 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       const rows = (await db.all("SELECT id, at, channel, role, text, cards_json FROM assistant_turns ORDER BY id DESC LIMIT ?", n)) as Row[];
       return rows.reverse().map((r) => ({ id: Number(r.id), at: asInstant(r.at), channel: r.channel as "panel" | "teams", role: r.role as "me" | "assistant", text: String(r.text), cards: JSON.parse(String(r.cards_json)) as unknown[] }));
     },
+    /** TB-3: up to `n` turns starting at one id, oldest first (a link to an answer older than the newest turns). */
+    async assistantTurnsFrom(id: number, n: number): Promise<AssistantTurnRow[]> {
+      const rows = (await db.all("SELECT id, at, channel, role, text, cards_json FROM assistant_turns WHERE id >= ? ORDER BY id ASC", id)) as Row[];
+      return rows.slice(0, Math.max(1, Math.min(Math.floor(n), 50))).map((r) => ({ id: Number(r.id), at: asInstant(r.at), channel: r.channel as "panel" | "teams", role: r.role as "me" | "assistant", text: String(r.text), cards: JSON.parse(String(r.cards_json)) as unknown[] }));
+    },
     /** AS-1: a write the assistant proposed (open until confirmed, cancelled or past its expiry); returns its id. */
     async addAssistantProposal(p: { turnId: number | null; action: string; input: unknown; clientKey: string | null; view: unknown; snapshot: unknown; expiresAt: string }): Promise<number> {
       return tx(async () => {

@@ -71,7 +71,7 @@ async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/co
   const runs: string[] = [];
   let confirms = 0;
   const run = async (_u: string, action: string, input: unknown) => (runs.push(action), action === "status.load" && o.status ? { ok: true as const, data: o.status() } : action === "meeting.mine" && o.meetings ? { ok: true as const, data: o.meetings() } : dispatch(ctx, { action: action as ActionName, input }));
-  const svc = async () => (await assistantFor(ctx, "teams", URL_))!.service;
+  const svc = async () => (await assistantFor(ctx, "teams"))!.service;
   const hub: Pick<Assistant, "handle" | "confirm" | "cancel" | "propose"> = {
     handle: async (i) => (await svc()).handle(i.text, i.context ?? {}),
     confirm: async (i) => (confirms++, (await svc()).confirm(i.proposalId, i.edits ?? {})),

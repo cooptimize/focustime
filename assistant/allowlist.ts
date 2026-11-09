@@ -46,6 +46,8 @@ export const TOOLS = {
   // From buttons only (BUTTON_ONLY): never offered to the model.
   item_done: { kind: "proposal", actions: ["devops.done_offer", "devops.preview", "devops.confirm"], spec: { name: "item_done", description: "Propose setting a checked-off to-do's DevOps item to its done state.", parameters: obj({ pickId: id("The to-do's id, from a read"), state: sn("One of the item's done states, or null for its completed state") }) }, examples: ["(a button only)", "(Done on a Teams check-in card)", "(the to-do's DevOps offer)"] },
   item_undo: { kind: "proposal", actions: ["devops.undo_offer", "devops.preview", "devops.confirm"], spec: { name: "item_undo", description: "Propose undoing the state change FocusTime made to an unchecked to-do's DevOps item.", parameters: obj({ pickId: id("The to-do's id, from a read") }) }, examples: ["(a button only)", "(Undo on a Teams check-in card)", "(the to-do's DevOps undo)"] },
+  // TB-3: Undo on a Teams result card: a write this proposal made, previewed and confirmed. Never offered to the model.
+  write_undo: { kind: "proposal", actions: ["devops.preview", "devops.confirm"], spec: { name: "write_undo", description: "Propose undoing a DevOps write a confirmed proposal made.", parameters: obj({ clientKey: s("The write's client"), writeId: id("The audit log entry"), label: sn("What it was") }) }, examples: ["(a button only)", "(Undo on a Teams result card)", "(the write's own undo)"] },
   capture: { kind: "proposal", actions: ["capture.add", "capture.route", "draft.prepare"], spec: { name: "capture", description: "Propose capturing a line to sort later, or as a draft story for the client.", parameters: obj({ text: s("What to capture, in my words"), as: { type: "string", enum: ["sort_later", "draft_story"] } }) }, examples: ["Capture: call the client about the export", "Remember to check the nightly job", "Draft a story: export to PDF"] },
   // ---- AS-2 ----
   // Moves between days, blocks and halves, built by the server: the model gives only the days and halves from my words;
@@ -76,7 +78,7 @@ export const isTool = (n: string): n is ToolName => Object.hasOwn(TOOLS, n);
 export const ITEM_TOOLS: readonly ToolName[] = ["add_must", "ahead_change", "send", "comment", "description", "item_update", "link_comment"];
 export const PICK_TOOLS: readonly ToolName[] = ["move_pick", "drop_pick", "keep_pick", "item_done", "item_undo"];
 /** PK-1: tools only a button proposes (propose()), never given to the model. */
-export const BUTTON_ONLY: readonly ToolName[] = ["item_done", "item_undo"];
+export const BUTTON_ONLY: readonly ToolName[] = ["item_done", "item_undo", "write_undo"];
 /** TB-2: tools whose arguments carry several pick ids (each must come from a read, like PICK_TOOLS' one). */
 export const PICKS_TOOLS: readonly ToolName[] = ["move_picks", "close_day"];
 /**

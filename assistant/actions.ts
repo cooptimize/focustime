@@ -57,10 +57,10 @@ export async function assistantAction(svc: () => Promise<AssistantService | null
   if (!s) return bad("The assistant isn't available here", 503);
   switch (action) {
     case "assistant.ask": {
-      const o = only(input, ["text", "context", "answer"]);
-      if (!o || typeof o.text !== "string" || o.text.length > MAX_TEXT || (o.answer !== undefined && (typeof o.answer !== "string" || o.answer.length > 40))) return bad(`assistant.ask takes { text (up to ${MAX_TEXT} characters), context?, answer? }`);
+      const o = only(input, ["text", "context", "answer", "asked"]);
+      if (!o || typeof o.text !== "string" || o.text.length > MAX_TEXT || (o.answer !== undefined && (typeof o.answer !== "string" || o.answer.length > 40))) return bad(`assistant.ask takes { text (up to ${MAX_TEXT} characters), context?, answer?, asked? }`);
       // AS-2: answer is a tapped choice's value; text is its label.
-      return { ok: true, data: await s.handle(o.text, contextOf(o.context), typeof o.answer === "string" ? o.answer : undefined) };
+      return { ok: true, data: await s.handle(o.text, contextOf(o.context), typeof o.answer === "string" ? o.answer : undefined, posInt(o.asked) ? o.asked : undefined) };
     }
     case "assistant.confirm": {
       const o = only(input, ["proposalId", "edits"]);
@@ -78,9 +78,9 @@ export async function assistantAction(svc: () => Promise<AssistantService | null
       return { ok: true, data: await s.cancel(o.proposalId) };
     }
     case "assistant.history": {
-      const o = only(input, ["limit", "context"]);
-      if (!o || (o.limit !== undefined && !posInt(o.limit))) return bad("assistant.history takes { limit?, context? }");
-      return { ok: true, data: { turns: await s.history(typeof o.limit === "number" ? Math.min(o.limit, 200) : 50), gate: await gate(contextOf(o.context)) } };
+      const o = only(input, ["limit", "context", "from"]);
+      if (!o || (o.limit !== undefined && !posInt(o.limit)) || (o.from !== undefined && !posInt(o.from))) return bad("assistant.history takes { limit?, context?, from? }");
+      return { ok: true, data: { turns: await s.history(typeof o.limit === "number" ? Math.min(o.limit, 200) : 50, typeof o.from === "number" ? o.from : undefined), gate: await gate(contextOf(o.context)) } };
     }
     case "assistant.clear": {
       const o = only(input, ["confirm"]);

@@ -498,7 +498,8 @@ export function createRhythm(d: RhythmDeps) {
       r = { status: "not_allowed", message: "Something went wrong. Check FocusTime before trying again." };
     }
     if (r.status === "changed") {
-      await bot.settle(proposalId, "replaced", null);
+      // TB-3: the service keeps the proposal's id for its new preview, so its row opens again for the next tap.
+      await bot.reopen(proposalId);
       await bot.cardSent(r.proposal.id, null, r.proposal.expiresAt, r.proposal.title);
       log({ op: "rhythm_tap", kind: "changed" });
       return { ...(await refreshed(userId, m)), proposal: inline(r.proposal, r.message) };
