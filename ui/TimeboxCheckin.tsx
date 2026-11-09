@@ -3,14 +3,16 @@
 // to it, and "All went to plan" at the top. Answers apply at once and stay on screen with Undo. Nothing shows when
 // nothing qualifies, and there are no badges or reminders anywhere else. ProgressOffer is the end of day DevOps offer.
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
-import type { DevOpsPreview, DevOpsResult, ProgressOffer, SessionView } from "../actions/types.ts";
+import type { AppliedSession, DevOpsPreview, DevOpsResult, DoneOffer, ProgressOffer, SessionView } from "../actions/types.ts";
 import { durationText, LEFT_CHOICES, parseLeft, progressAsk } from "../plan/progress.ts";
 import { call } from "./api.ts";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
-import { useDoneOffer } from "./DoneOffer.tsx";
+import { DoneBatch, useDoneOffer } from "./DoneOffer.tsx";
 
 type Answered = { text: string; ids: number[]; done: boolean };
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
+/** A Done's words on its row, with the one line about later to-dos it took off the plan. */
+const doneText = (notice: string | null | undefined) => (notice ? `Done · ${notice}` : "Done");
 
 export function TimeboxCheckin({ date, moment, color, onChanged, onError }: { date: string; moment: "midday" | "end"; color: (clientKey: string) => string; onChanged: () => void; onError: (m: string) => void }) {
   const [rows, setRows] = useState<SessionView[]>([]);
@@ -18,11 +20,15 @@ export function TimeboxCheckin({ date, moment, color, onChanged, onError }: { da
   const [asking, setAsking] = useState<number | null>(null);
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
+  const [allError, setAllError] = useState<string | null>(null);
+  const [batch, setBatch] = useState<DoneOffer[]>([]);
   const { ticked } = useDoneOffer();
   useEffect(() => {
     let live = true;
     setAnswered(new Map());
     setAsking(null);
+    setAllError(null);
+    setBatch([]);
     void call<{ rows: SessionView[] }>("checkin.sessions", { date, moment }).then((r) => live && setRows(r.rows), () => live && setRows([]));
     return () => void (live = false);
   }, [date, moment]);
@@ -36,8 +42,8 @@ export function TimeboxCheckin({ date, moment, color, onChanged, onError }: { da
   const answer = async (r: SessionView, answer: "done" | "partly" | "none", left?: number) => {
     setBusy(true);
     try {
-      const out = await call<{ timeboxIds: number[] }>("checkin.answer", { date, moment, pickId: r.pickId, answer, ...(left ? { left } : {}) });
-      mark(r.pickId, { text: answer === "done" ? "Done" : answer === "partly" ? `${durationText(left!)} left` : "Back to not timeboxed", ids: out.timeboxIds, done: answer === "done" });
+      const out = await call<{ timeboxIds: number[]; notice: string | null }>("checkin.answer", { date, moment, pickId: r.pickId, answer, ...(left ? { left } : {}) });
+      mark(r.pickId, { text: answer === "done" ? doneText(out.notice) : answer === "partly" ? `${durationText(left!)} left` : "Back to not timeboxed", ids: out.timeboxIds, done: answer === "done" });
       setAsking(null);
       setTyped("");
       onChanged();
@@ -55,6 +61,7 @@ export function TimeboxCheckin({ date, moment, color, onChanged, onError }: { da
     try {
       await call("checkin.undo", { timeboxIds: a.ids });
       mark(r.pickId, null);
+      setBatch((b) => b.filter((o) => o.pickId !== r.pickId));
       onChanged();
       if (a.done && moment === "midday") ticked(r.pickId, false, r.clientKey, r.itemId);
     } catch (e) {
@@ -64,21 +71,24 @@ export function TimeboxCheckin({ date, moment, color, onChanged, onError }: { da
   };
   const allToPlan = async () => {
     setBusy(true);
+    setAllError(null);
     try {
-      const out = await call<{ timeboxIds: number[]; done: number[] }>("checkin.all_to_plan", { date, moment });
-      const fresh = rows.filter((r) => !answered.has(r.pickId));
+      const out = await call<{ applied: AppliedSession[]; done: number[] }>("checkin.all_to_plan", { date, moment });
+      // The server read the rows afresh: what stays is what was answered here and what it just applied. A row answered
+      // elsewhere leaves, and a timebox that ended since this page opened joins with its own Undo.
+      const here = rows.filter((r) => answered.has(r.pickId) && !out.applied.some((a) => a.pickId === r.pickId));
+      setRows([...here, ...out.applied]);
       setAnswered((m) => {
         const next = new Map(m);
-        for (const r of fresh) {
-          const done = out.done.includes(r.pickId);
-          const left = r.remaining - r.minutes;
-          next.set(r.pickId, { text: done ? "Done" : `${durationText(left)} left`, ids: out.timeboxIds.filter((id) => r.timeboxIds.includes(id)), done });
-        }
+        for (const a of out.applied) next.set(a.pickId, { text: a.as === "done" ? doneText(a.notice) : `${durationText(a.left)} left`, ids: a.timeboxIds, done: a.as === "done" });
         return next;
       });
       onChanged();
+      // PK-1's offer for what this marked done, one batch; Close out asks once for the whole day instead.
+      if (moment === "midday" && out.done.length)
+        void call<{ offers: DoneOffer[]; off: boolean }>("devops.done_offer", { pickIds: out.done.slice(0, 30) }).then((r) => setBatch(r.off ? [] : r.offers), () => setBatch([]));
     } catch (e) {
-      onError(errText(e));
+      setAllError(errText(e));
     }
     setBusy(false);
   };
@@ -95,6 +105,12 @@ export function TimeboxCheckin({ date, moment, color, onChanged, onError }: { da
           </button>
         )}
       </header>
+      {allError && (
+        <p className="tc-error" role="alert">
+          {allError}. Nothing was changed.{" "}
+          <button type="button" className="mini tc-btn" disabled={busy} onClick={() => void allToPlan()}>Retry</button>
+        </p>
+      )}
       <ul className="tc-rows">
         {rows.map((r) => {
           const a = answered.get(r.pickId);
@@ -129,6 +145,7 @@ export function TimeboxCheckin({ date, moment, color, onChanged, onError }: { da
           );
         })}
       </ul>
+      {batch.length > 0 && <DoneBatch offers={batch} dayWords="today" onDone={onChanged} />}
     </section>
   );
 }

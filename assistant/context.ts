@@ -140,7 +140,7 @@ export async function buildContext(d: ContextDeps, period: Period, client: strin
       }
       const plannedDay = dayPicks.filter((p) => p.status === "planned").reduce((n, p) => n + pickNeed(p, sizes), 0);
       ctx.days.push({ date: day.date, label: dayLabel(day.date), kind: day.kind, pto: !!day.pto, ptoHalf: day.ptoHalf?.half ?? null, workMinutes: work, meetingMinutes: meet, freeMinutes: free, plannedMinutes: plannedDay, blocks });
-      for (const p of dayPicks) ctx.todos.push({ pickId: p.id, clientKey: p.clientKey, title: p.title, date: p.date, half: p.half === "PM" ? "PM" : p.half === "AM" ? "AM" : "EVE", done: p.status === "done", minutes: p.minutes ?? sizeMinutes(p.size, sizes), size: p.size, itemId: p.itemId, feature: null, deployment: p.todoKind === "deployment" && p.window ? windowText(p.window) : null });
+      for (const p of dayPicks) ctx.todos.push({ pickId: p.id, clientKey: p.clientKey, title: p.title, date: p.date, half: p.half === "PM" ? "PM" : p.half === "AM" ? "AM" : "EVE", done: p.status === "done", minutes: p.status === "planned" ? pickNeed(p, sizes) : p.minutes ?? sizeMinutes(p.size, sizes), size: p.size, itemId: p.itemId, feature: null, deployment: p.todoKind === "deployment" && p.window ? windowText(p.window) : null });
     }
     for (const part of w.afterHours?.parts ?? []) {
       if (!inP(period, part.date)) continue;

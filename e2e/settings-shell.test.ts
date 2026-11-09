@@ -149,6 +149,28 @@ describe.skipIf(!CHROMIUM)("Settings shell (ST-1)", () => {
     await page.close();
   }, T);
 
+  it("a jump to a setting that lands late doesn't take focus from a new search (TX-1b: the flake on main)", async () => {
+    const { page, errors } = await freshPage(h);
+    await openAt(page, "#/week", "#/settings/you");
+    // The section's data comes back after the person has moved on, as it did on a slow CI machine.
+    await page.route("**/api/action", async (r) => {
+      if ((r.request().postData() ?? "").includes('"settings.load"')) await new Promise((x) => setTimeout(x, 700));
+      await r.continue();
+    });
+    const box = page.getByLabel("Search settings");
+    const results = page.locator("#settings-search-results");
+    await box.fill("time zone");
+    await results.locator(".ps-hit", { hasText: "Time zone" }).first().click();
+    await expect.poll(() => hash(page)).toBe("#/settings/hours/time-zone");
+    await box.fill("write log");
+    await results.locator(".ps-hit").first().waitFor();
+    await box.press("ArrowDown");
+    await page.waitForTimeout(1200);
+    expect(await page.evaluate(() => document.activeElement?.closest("#settings-search-results") != null)).toBe(true);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
   it("no secret value appears in Settings or in what the server sends it", async () => {
     const { page, errors } = await freshPage(h);
     const fake = "fakepat" + "x".repeat(45);

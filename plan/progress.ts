@@ -47,11 +47,32 @@ export function progressChip(p: { size: string | null; minutes?: number | null; 
 
 /**
  * A size change once there's progress: the time left moves by the same amount, at least 15 minutes. (Spending time never
- * changes a size; this is the other way round, the person re-sizing work that's under way.) Null: no progress to adjust.
+ * changes a size; this is the other way round, the person re-sizing work that's under way.) Never past the new size
+ * (TX-1b). Null: nothing to adjust: no progress, or the person said more was left than the size, which is theirs to change.
  */
 export function resizedRemaining(remaining: number | null | undefined, before: StorySize | null, after: StorySize | null, sizes: SizeScale): number | null {
-  if (remaining == null || remaining === 0) return null;
-  return Math.max(15, remaining + storyMinutes(after, sizes) - storyMinutes(before, sizes));
+  if (remaining == null || remaining === 0 || remaining > storyMinutes(before, sizes)) return null;
+  const size = storyMinutes(after, sizes);
+  return Math.min(size, Math.max(15, remaining + size - storyMinutes(before, sizes)));
+}
+
+/** TX-1b: a Done's one line about the later to-dos it took off the plan: "Removed from Tue, story is done". Null: none. */
+export function removedNotice(dates: readonly IsoDate[]): string | null {
+  if (!dates.length) return null;
+  const days = dates.map((d) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short" }));
+  return `Removed from ${days.length > 1 ? `${days.slice(0, -1).join(", ")} and ${days.at(-1)!}` : days[0]!}, story is done`;
+}
+
+export type WeekLeftRow = { date: IsoDate; id: number; status: string; remaining: number };
+/**
+ * TX-1b: a story's time left on one week's list, from its to-dos up to that week's end. Its latest to-do that week says
+ * (done: nothing left); with none that week, or one with no progress, the last time left it had. Null: use its size.
+ */
+export function weekStoryLeft(rows: readonly WeekLeftRow[], weekStart: IsoDate, weekEnd: IsoDate): number | null {
+  const latest = [...rows].filter((r) => r.date <= weekEnd).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  const now = latest.find((r) => r.date >= weekStart);
+  if (now?.status === "done") return 0;
+  return latest.find((r) => r.remaining > 0)?.remaining ?? null;
 }
 
 export type SessionRow = {

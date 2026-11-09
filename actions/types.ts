@@ -379,6 +379,8 @@ export type DevOpsResult = { entry: import("../plan/devopswrite.ts").DevOpsWrite
 export type DoneOffer = { pickId: number; clientKey: string; clientName: string; itemId: number; title: string; type: string; state: string; choices: string[]; /** The rule's open "Update DevOps" follow-up for it, closed by the write. */ followUpId: number | null };
 /** TX-1: one row of a check-in, with its client's name. */
 export type SessionView = import("../plan/progress.ts").SessionRow & { clientName: string };
+/** TX-1b: one row All went to plan applied: what's on the row, what it became (`left` after it; `remaining` was before), and a Done's removed days. */
+export type AppliedSession = SessionView & { as: "done" | "partly" | "none"; left: number; removed: string[]; notice: string | null };
 /** TX-1: one story for the end of day offer: Remaining Work where its type has the field, else a short comment. */
 export type ProgressOffer = { pickId: number; clientKey: string; clientName: string; itemId: number; title: string; type: string; mode: "remaining" | "comment"; workedMinutes: number; leftMinutes: number; hours: number; text: string };
 /** AS-2: an item's done states by id (devops.done_offer { clientKey, itemIds }), with no to-do. */

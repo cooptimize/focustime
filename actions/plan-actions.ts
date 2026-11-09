@@ -390,7 +390,10 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         // TX-1: re-sizing work that's under way moves its time left by the same amount.
         const cfg = await ctx.config();
         const left = resizedRemaining(before.remainingMinutes, before.size, sz, cfg?.plan.sizes ?? SIZE_MINUTES);
-        if (left !== null) await plan.setRemaining(pid, left);
+        // TX-1b: re-sizing its week story to this size already moved it: once, not twice.
+        const monday = Temporal.PlainDate.from(before.date).subtract({ days: Temporal.PlainDate.from(before.date).dayOfWeek - 1 }).toString();
+        const already = before.itemId !== null && (await plan.itemAlreadySized(before.clientKey, before.itemId, sz, monday, { pickId: pid }));
+        if (left !== null && !already) await plan.setRemaining(pid, left);
         const pick = (await plan.setSize(pid, sz));
         return { ok: true, data: { pick, state: await state(ctx, plan, pick.date) } };
       }

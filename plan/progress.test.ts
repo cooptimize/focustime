@@ -4,11 +4,35 @@ import { DEFAULT_SIZE_SCALE, estimate, plannedMinutesOf, sizeChipText, storyMinu
 import { fitToGap } from "./timeline.ts";
 import { planMyDay, placeInGap } from "./agenda.ts";
 import { timeChoices } from "./picktime.ts";
-import { durationText, LEFT_CHOICES, outcomeOf, parseLeft, planOutcome, progressAsk, progressChip, progressComment, remainingHours, resizedRemaining, sessionRows, validLeft } from "./progress.ts";
+import { durationText, LEFT_CHOICES, outcomeOf, parseLeft, planOutcome, progressAsk, progressChip, progressComment, removedNotice, remainingHours, resizedRemaining, sessionRows, validLeft, weekStoryLeft } from "./progress.ts";
 import { pickNeed, SIZES, type Pick } from "./types.ts";
 import { planMinutes } from "./fit.ts";
 import { dropCheck } from "./weekdrop.ts";
 import { suggestMinutes } from "./timer.ts";
+
+describe("TX-1b: the rules behind the review's fixes", () => {
+  const scale = DEFAULT_SIZE_SCALE;
+  it("bug 7: a re-size never takes the time left past the size, and leaves a number the person set above it alone", () => {
+    expect(resizedRemaining(60, "M", "L", scale)).toBe(180);
+    expect(resizedRemaining(240, "L", "M", scale)).toBe(120);
+    expect(resizedRemaining(180, "M", "L", scale)).toBeNull(); // 3h on a 2h story: the person's own number.
+  });
+  it("bug 2: one notice names every day", () => {
+    expect(removedNotice(["2026-11-03"])).toBe("Removed from Tue, story is done");
+    expect(removedNotice(["2026-11-03", "2026-11-04"])).toBe("Removed from Tue and Wed, story is done");
+    expect(removedNotice([])).toBeNull();
+  });
+  it("bug 3: a story's time left is its current state in that week, then its last time left, then nothing", () => {
+    const WEEK = ["2026-11-09", "2026-11-15"] as const;
+    const row = (date: string, status: string, remaining: number, id = 1) => ({ date, status, remaining, id });
+    expect(weekStoryLeft([row("2026-11-02", "done", 90)], ...WEEK)).toBe(90);
+    expect(weekStoryLeft([row("2026-11-02", "done", 0)], ...WEEK)).toBeNull();
+    expect(weekStoryLeft([row("2026-11-10", "done", 90)], ...WEEK)).toBe(0);
+    expect(weekStoryLeft([row("2026-11-10", "done", 90), row("2026-11-12", "planned", 45, 2)], ...WEEK)).toBe(45);
+    expect(weekStoryLeft([row("2026-11-02", "planned", 0), row("2026-11-03", "planned", 60, 2)], ...WEEK)).toBe(60);
+    expect(weekStoryLeft([], ...WEEK)).toBeNull();
+  });
+});
 
 const S = DEFAULT_SIZE_SCALE;
 const D = "2026-11-02";

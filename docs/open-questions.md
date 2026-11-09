@@ -494,4 +494,7 @@ What DS-1 learned, and what is still open:
 - On stock Agile most stories will get the comment, not the field. If that's more noise than value, the choice is to roll Remaining Work into child Tasks or turn the comment off per client.
 - Should a focus session on a to-do pre-fill Partly with the focused time? It doesn't today: only an answer moves time left.
 - Teams shows the DevOps offer as a line pointing to Close out. If people close out from Teams and never open the app, the offer goes unused; an in-card preview would be the next step.
+- TX-1b: a check-in Done removes the story's later planned to-dos, but a plain tick doesn't, and an earlier day's still-planned to-do stays. Should either change?
+- TX-1b: a later to-do a Done removes keeps its timebox if that timebox is on Outlook, because a check-in changes nothing external. Should it offer to take the event off?
+- TX-1b: a new to-do that inherits the story's time left can show more than its own size ("3h left · was 1h"). Only a re-size is capped.
 - A to-do marked done outside a check-in (a tick) with an ended timebox stops being asked about and its timebox stays unanswered. That reads right, but spent time isn't recorded for it.

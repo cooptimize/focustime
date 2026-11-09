@@ -168,7 +168,7 @@ function sessionsPart(m: { occasion: string } & Sessions, settled: boolean): unk
     } else if (r.state === "asking") {
       body.push(muted("How much is left?"));
       body.push(actionSet(LEFT_PICKS.map(([left, label]) => exec(label, tapOn(m, "session_left", { pickId: r.pickId, left })))));
-      body.push({ type: "Input.Text", id: "sessionLeft", maxLength: 12, placeholder: "Or type: 45m, 2.5h", label: "Time left" });
+      body.push({ type: "Input.Text", id: `sessionLeft_${r.pickId}`, maxLength: 12, placeholder: "Or type: 45m, 2.5h", label: "Time left" });
       body.push(actionSet([exec("Set", tapOn(m, "session_left", { pickId: r.pickId })), exec("Back", tapOn(m, "session_back", { pickId: r.pickId }))]));
     } else body.push(actionSet([exec("Done", tapOn(m, "session_done", { pickId: r.pickId }), "positive"), exec("Partly", tapOn(m, "session_partly", { pickId: r.pickId })), exec("Didn't get to it", tapOn(m, "session_none", { pickId: r.pickId }))]));
   }
@@ -313,7 +313,8 @@ export function rhythmTapOf(value: unknown): RhythmTap | CaptureTap | null {
   if (ct !== undefined) out.closeoutText = ct;
   const left = posInt(d.left);
   if (left) out.left = left;
-  const typed = short(d.sessionLeft, 12);
+  // TX-1b: each row's own box; `sessionLeft` is a card sent before that, still in a chat.
+  const typed = short(pickId ? (d[`sessionLeft_${pickId}`] ?? d.sessionLeft) : d.sessionLeft, 12);
   if (typed !== undefined) out.sessionLeft = typed;
   return out;
 }
