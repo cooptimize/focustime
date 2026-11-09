@@ -8,8 +8,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import type { Page } from "playwright-core";
 import type { HandleResult } from "../assistant/types.ts";
 import { asText } from "../assistant/answer.ts";
-import { teamsAssistant } from "../server/teams/assistant.ts";
-import { questionCard, resultCard } from "../server/teams/cards.ts";
+import { questionCard } from "../server/teams/cards.ts";
+import { renderAnswer } from "../server/teams/render.ts";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
 import { SHOTS, shotBoth } from "./shots.ts";
 
@@ -83,15 +83,13 @@ describe.skipIf(!CHROMIUM)("AS-3: the assistant answers a question", () => {
 
     // Teams: the same results through the bot's adapter and its real cards.
     const URL_ = "https://focustime.example.com";
-    const abs = (r: HandleResult): HandleResult => JSON.parse(JSON.stringify(r).replace(/"href":"#\//g, `"href":"${URL_}/#/`)) as HandleResult;
     const page = await h.browser.newPage({ viewport: { width: 560, height: 900 }, deviceScaleFactor: 2 });
     await page.setContent(`<!doctype html><html><head><style>body{margin:0;padding:20px;background:#f5f5f5;font-family:"Segoe UI","Noto Sans",sans-serif}.c{width:460px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:16px;margin-bottom:12px}p.r{width:460px;font-size:14px;color:#242424;margin:0 0 12px}</style>
       <script src="https://unpkg.com/adaptivecards@3.0.6/dist/adaptivecards.min.js"></script></head><body><div id="all"></div></body></html>`);
     await page.waitForFunction(() => !!(window as unknown as { AdaptiveCards?: unknown }).AdaptiveCards, null, { timeout: 30_000 });
     for (const { name, r } of results) {
-      const bot = teamsAssistant({ handle: async () => abs(r), confirm: async () => ({ ok: false, reason: "gone", message: "" }), cancel: async () => ({ ok: true }), propose: async () => ({ ok: false, message: "" }) }, URL_);
-      const t = await bot.handle({ person: { userId: "demo" }, channel: "teams", text: "", context: { surface: "teams", conversation: "personal", locale: null, timeZone: null } });
-      const cards = [...t.cards.slice(0, 7).map((c) => resultCard(c, URL_)), ...(t.question ? [questionCard(t.question, "q1")] : [])];
+      const t = renderAnswer(r, URL_);
+      const cards = [...t.cards, ...(t.question ? [questionCard(t.question, "q1")] : [])];
       await page.evaluate(
         ([reply, cards]) => {
           const AC = (window as unknown as { AdaptiveCards: any }).AdaptiveCards;
@@ -116,7 +114,7 @@ describe.skipIf(!CHROMIUM)("AS-3: the assistant answers a question", () => {
             all.appendChild(box);
           }
         },
-        [t.reply, cards] as const,
+        [t.text, cards] as const,
       );
       await page.locator("#all").screenshot({ path: `${SHOTS}/as3-teams-${name}.png` });
     }

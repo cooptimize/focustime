@@ -29,7 +29,7 @@ export type AssistantContext = {
  * AS-2: `answer` is a tapped choice's value (a question card's chip or Teams button); `text` is then the choice's
  * label, kept as what I said. Without it, words can still answer the open question.
  */
-export type HandleInput = { person: Person; channel: Channel; text: string; context?: AssistantContext; answer?: string };
+export type HandleInput = { person: Person; channel: Channel; text: string; context?: AssistantContext; answer?: string; /** TB-3: the `asked` of the card that was tapped: an older card's tap answers nothing. */ asked?: number };
 
 /**
  * ok: answered (reply, cards, proposals). off: AI for FocusTime is off. client_off: the client in the request isn't
@@ -42,8 +42,8 @@ export type HandleStatus = "ok" | "off" | "client_off" | "not_set_up" | "over_bu
 
 export type Link = {
   label: string;
-  /** In the panel an app address ("#/ahead?item=4417"); in Teams the same address on the public URL
-   * ("https://focustime.example.com/#/ahead?item=4417"). */
+  /** TB-3: an app address ("#/ahead?item=4417") for every front end (each renderer writes it for its channel), or a
+   * full https address for something outside FocusTime (a DevOps item, a standards article). */
   href: string;
 };
 
@@ -94,7 +94,7 @@ export type Choice = { label: string; value: string };
  * AS-2: the assistant asks instead of giving up. One short question with choices (the panel shows chips, Teams
  * buttons) plus "or just type it"; my next message answers it until expiresAt (10 minutes).
  */
-export type QuestionCard = { kind: "question"; text: string; choices: Choice[]; expiresAt: string };
+export type QuestionCard = { kind: "question"; text: string; choices: Choice[]; expiresAt: string; /** TB-3: the turn that asked; a tap sends it back. */ asked?: number };
 
 /**
  * AS-3: one part of an answer to a question, built on the server from my own data: a heading (a client's name, "Your
@@ -107,7 +107,7 @@ export type SectionCard = { kind: "section"; title: string; lines: { text: strin
  * sends the choice's value as `answer`: a step builds the usual proposal (preview, then Confirm); an example asks it.
  * Nothing runs from the tap itself. Taps work until expiresAt (2 hours).
  */
-export type SuggestCard = { kind: "suggest"; text: string; choices: Choice[]; expiresAt: string };
+export type SuggestCard = { kind: "suggest"; text: string; choices: Choice[]; expiresAt: string; /** TB-3: the turn that asked; a tap sends it back. */ asked?: number };
 
 export type Card = ItemCard | BlockCard | PickCard | SendCard | PromiseCard | NoteCard | QuestionCard | SectionCard | SuggestCard;
 
@@ -149,6 +149,8 @@ export type Proposal = {
   /** Fields confirm() takes in `edits` (a comment's "text", a description's "after", a pick's "date" and "half"). */
   editable: string[];
   state: ProposalState;
+  /** TB-3: the request's turn (Open in FocusTime's link to the same answer). */
+  turnId?: number | null;
 };
 
 export type HandleResult = {
@@ -194,6 +196,11 @@ export type ProposeResult = { ok: true; proposal: Proposal } | { ok: false; mess
 export type TranscribeInput = { person: Person; audio: Uint8Array; mime: string; seconds: number; context?: AssistantContext };
 export type TranscribeResult = { ok: true; text: string } | { ok: false; reason: "off" | "client_off" | "not_set_up" | "over_budget" | "too_long" | "too_large" | "format" | "provider"; message: string };
 
+/** TB-3: a fresh preview of a proposal that timed out, or the preview to undo one DevOps write a confirmed proposal made. */
+export type RefreshInput = { person: Person; proposalId: number };
+export type UndoWriteInput = { person: Person; proposalId: number; writeId: number };
+export type PreviewResult = { ok: true; proposal: Proposal } | { ok: false; message: string };
+
 export type Turn = { id: number; at: string; channel: Channel; role: "me" | "assistant"; text: string; cards: Card[]; proposals: Proposal[] };
 
 /** The service both front ends call. */
@@ -203,8 +210,10 @@ export type Assistant = {
   cancel(i: CancelInput): Promise<{ ok: true }>;
   propose(i: ProposeInput): Promise<ProposeResult>;
   undo(i: UndoInput): Promise<UndoResult>;
+  refresh(i: RefreshInput): Promise<PreviewResult>;
+  undoWrite(i: UndoWriteInput): Promise<PreviewResult>;
   transcribe(i: TranscribeInput): Promise<TranscribeResult>;
-  history(i: { person: Person; limit?: number }): Promise<Turn[]>;
+  history(i: { person: Person; limit?: number; from?: number }): Promise<Turn[]>;
   clear(i: { person: Person }): Promise<{ ok: true; removed: number }>;
 };
 

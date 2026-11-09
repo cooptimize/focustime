@@ -18,6 +18,24 @@ describe.skipIf(!CHROMIUM)("AS-1 the assistant panel", () => {
     await h?.stop();
   }, T);
 
+  it("TB-3: Open in FocusTime's address opens the panel at that answer", async () => {
+    const { page, errors } = await freshPage(h);
+    const panel = page.getByTestId("assistant-panel");
+    await page.keyboard.press("Control+j");
+    const box = panel.getByRole("textbox", { name: "Ask the assistant" });
+    await box.fill("What's #1110?");
+    await box.press("Enter");
+    await panel.locator(".as-card.item", { hasText: "Order history export" }).waitFor({ timeout: 30_000 });
+    const turn = (await panel.locator(".as-turn.assistant").last().getAttribute("data-turn"))!.replace(/^[at]/, "");
+    await page.keyboard.press("Escape");
+    await panel.waitFor({ state: "detached" });
+    await page.evaluate((t) => { location.hash = `#/ask/${t}`; }, turn);
+    await panel.locator(`[data-turn="t${turn}"]`).first().waitFor({ timeout: 30_000 });
+    await panel.locator(".as-card.item", { hasText: "Order history export" }).waitFor({ timeout: 30_000 });
+    expect(new URL(page.url()).hash).not.toContain("/ask/");
+    expect(errors).toEqual([]);
+  }, T);
+
   it("asks, proposes, confirms, talks and clears", async () => {
     const { page, errors } = await freshPage(h);
     const panel = page.getByTestId("assistant-panel");

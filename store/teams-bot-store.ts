@@ -78,6 +78,10 @@ export function createTeamsBotStore(o: { db: Conn; userId: string; now: () => Te
         await db.run("UPDATE teams_bot_cards SET state = 'open', updated_at = ? WHERE proposal_id = ? AND state = 'running'", stamp(), short(proposalId, MAX_ID));
       });
     },
+    /** TB-3: the same proposal has a new preview on this card (changed since, or Refresh): it can be tapped again. */
+    async reopen(proposalId: string): Promise<boolean> {
+      return db.tx(async () => (await db.run("UPDATE teams_bot_cards SET state = 'open', card_json = NULL, updated_at = ? WHERE proposal_id = ? AND state IN ('running', 'expired', 'replaced')", stamp(), short(proposalId, MAX_ID))).changes === 1);
+    },
     /** The card's final state and the card that shows it. */
     async settle(proposalId: string, state: CardState, card: unknown): Promise<void> {
       await db.tx(async () => {

@@ -6,11 +6,9 @@ import { expect, it } from "vitest";
 import { addUsers, forEachDriver } from "../../test/db.ts";
 import type { LogRecord } from "../../log/logger.ts";
 import { createTeamsBotStore } from "../../store/teams-bot-store.ts";
-import type { NowStrip } from "../../plan/now.ts";
 import type { AssistantService, ConfirmResult, HandleResult, Proposal } from "./assistant.ts";
 import { createBotCore, NOT_READY, ON_IT, type BotDeps, type InActivity, type OutActivity, type Sender } from "./bot.ts";
 import { ONLY_PERSONAL, REFUSED } from "./gate.ts";
-import type { TodayFacts } from "./quick.ts";
 
 const TENANT = "abf29d42-0000-0000-0000-000000000001";
 const URL_ = "https://ft-dev-app.example.azurecontainerapps.io";
@@ -27,10 +25,6 @@ const deferred = <T>() => {
 };
 const wait = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 
-function strip(o: Partial<NowStrip> = {}): NowStrip {
-  return { kind: "slot", half: "AM", title: "Northwind until 12:00", until: "12:00", untilMinutes: 90, event: { title: "Standup", at: "10:30", minutes: 20, now: false }, picks: { done: 1, total: 3 }, draft: false, overBy: null, nextPick: "Fix the login timeout", flex: false, next: null, ...o };
-}
-const facts = (): TodayFacts => ({ date: "2026-11-05", strip: strip(), committed: true, blocks: [{ half: "AM", client: "Northwind", start: "08:00", end: "12:00", picks: [{ title: "Fix the login timeout", done: false }, { title: "Review the export", done: true }] }] });
 const proposal = (id: string, o: Partial<Proposal> = {}): Proposal => ({ id, title: "Move #4211 to Thursday", whoSees: "Everyone on Northwind's DevOps project", changes: [{ field: "Target date", before: "Nov 5", after: "Nov 6" }], expiresAt: "2026-11-05T15:15:00Z", ...o });
 const handled = (o: Partial<HandleResult> = {}): HandleResult => ({ turnId: "t1", status: "ok", reply: "", cards: [], proposals: [], links: [], ...o });
 
@@ -42,7 +36,7 @@ async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/co
   const updates: { id: string; a: OutActivity }[] = [];
   const pending: Promise<void>[] = [];
   const logs: LogRecord[] = [];
-  const calls = { handle: [] as string[], confirm: [] as string[], cancel: [] as string[], today: 0 };
+  const calls = { handle: [] as string[], confirm: [] as string[], cancel: [] as string[] };
   let n = 0;
   const sender: Sender = {
     send: async (to, a) => (sent.push({ to: to.conversationId, a }), { id: `msg-${++n}` }),
@@ -67,7 +61,6 @@ async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/co
     publicUrl: URL_,
     gate: { tenantId: TENANT, user: async (oid) => users.get(oid) ?? null, isCooptimizer: async (oid) => oid === ANA },
     assistant,
-    today: async () => (calls.today++, facts()),
     store: (userId) => createTeamsBotStore({ db: db.conn, userId, now: () => now }),
     sender,
     log: (r) => logs.push({ source: "server", ...r }),
@@ -182,21 +175,29 @@ await forEachDriver("the Teams bot (TB-1)", (d) => {
     expect(JSON.stringify(t.logs)).not.toContain("Dana");
   });
 
-  it("answers the quick commands without the assistant", async () => {
-    const t = await setup(d, { assistant: null });
-    for (const q of ["What's next?", "today", "help", "Open FocusTime", "move my 2pm"]) await t.core.activity(t.msg(q));
+  it("TB-3: nothing but capture and a close out stops before the assistant; with none wired it says so", async () => {
+    const t = await setup(d);
+    for (const q of ["What's next?", "today", "help", "Open FocusTime"]) await t.core.activity(t.msg(q));
     await t.settle();
-    const out = t.texts();
-    expect(out[0]).toContain("Next to-do: Fix the login timeout");
-    expect(out[0]).toContain("Next meeting: Standup at 10:30");
-    expect(out[1]).toContain("Morning 08:00–12:00: Northwind");
-    expect(out[1]).toContain("✓ Review the export");
-    expect(out[2]).toContain("what's next");
-    expect(out[3]).toContain(URL_);
-    expect(out[4]).toBe(NOT_READY);
-    expect(t.calls.today).toBe(2);
+    expect(t.calls.handle).toEqual(["What's next?", "today", "help", "Open FocusTime"]);
+    const none = await setup(d, { assistant: null });
+    await none.core.activity(none.msg("move my 2pm"));
+    await none.settle();
+    expect(none.texts()).toEqual([NOT_READY]);
     // A typing indicator before every answer.
-    expect(t.sent.filter((s) => s.a.type === "typing").length).toBe(5);
+    expect(none.sent.filter((s) => s.a.type === "typing").length).toBe(1);
+  });
+
+  it("TB-3: while a Close out card waits, a question or a request is still the assistant's", async () => {
+    const got: string[] = [];
+    const rhythm: NonNullable<BotDeps["rhythm"]> = { tapOf: () => null, tap: async () => ({}) as never, capture: async () => ({}) as never, closeoutReply: async (_u, text) => (got.push(text), "On the card above.") };
+    const t = await setup(d, { rhythm });
+    await t.core.activity(t.msg("what's on my plate tomorrow?"));
+    await t.core.activity(t.msg("Move the export to Friday"));
+    await t.core.activity(t.msg("the login fix and the notes"));
+    await t.settle();
+    expect(t.calls.handle).toEqual(["what's on my plate tomorrow?", "Move the export to Friday"]);
+    expect(got).toEqual(["the login fix and the notes"]);
   });
 
   it("says what the assistant says when AI is off, for FocusTime or a client", async () => {
@@ -232,7 +233,7 @@ await forEachDriver("the Teams bot (TB-1)", (d) => {
     const asked: { text: string; answer?: string }[] = [];
     const t = await setup(d, {
       assistant: {
-        handle: async (i) => (asked.push({ text: i.text, ...(i.answer ? { answer: i.answer } : {}) }), i.answer ? handled({ reply: "Here's the move:", proposals: [proposal("p-9", { title: "Move 1 to-do to Fri, Nov 6" })] }) : handled({ turnId: "41", reply: "", question: { text: "Which to-dos on Thu, Nov 5?", choices: [{ label: "Thu, Nov 5 AM · Fabrikam · 1 to-do", value: "b1" }, { label: "All 2", value: "all" }], expiresAt: "2026-11-05T15:10:00Z" } })),
+        handle: async (i) => (asked.push({ text: i.text, ...(i.answer ? { answer: i.answer } : {}) }), i.answer ? handled({ reply: "Here's the move:", proposals: [proposal("p-9", { title: "Move 1 to-do to Fri, Nov 6" })] }) : handled({ turnId: "41", reply: "", cards: [{ kind: "question",  text: "Which to-dos on Thu, Nov 5?", choices: [{ label: "Thu, Nov 5 AM · Fabrikam · 1 to-do", value: "b1" }, { label: "All 2", value: "all" }], expiresAt: "2026-11-05T15:10:00Z", asked: 41 }] })),
       },
     });
     await t.core.activity(t.msg("move some of today's to-dos to friday"));

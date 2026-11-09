@@ -126,7 +126,6 @@ function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnTyp
     now: () => now,
     zone: ZONE,
     channel: o.channel ?? "panel",
-    publicUrl: "https://focustime.example.com",
   };
   const a = createAssistant(env);
   return {
@@ -174,11 +173,11 @@ describe("look things up", () => {
     expect(r.cards[0]).toMatchObject({ kind: "item", id: 4417, owner: "Sam Tester", target: "2026-11-20", children: [{ id: 4418, owner: "Dana Reyes" }], link: { href: "#/ahead/item/4417" } });
     expect(s.log.every((e) => e.clientKey === FAB)).toBe(true);
   });
-  it("in Teams the links are absolute", async () => {
+  it("TB-3: the result is channel-neutral: an app address for the panel and for Teams alike", async () => {
     const s = setup({ channel: "teams" });
     s.script(["item"], call(["item", { id: 4417 }]), say("Sam has it."));
     const r = await s.a.handle("Who has #4417?");
-    expect(r.cards[0]).toMatchObject({ link: { href: "https://focustime.example.com/#/ahead/item/4417" } });
+    expect(r.cards[0]).toMatchObject({ link: { href: "#/ahead/item/4417" } });
   });
   it("what's next across clients: cards for me, and the model only hears how many were shown", async () => {
     const s = setup();
@@ -242,7 +241,7 @@ describe("one client per request", () => {
 describe("AI off or not allowed", () => {
   it("AI off for FocusTime: says so and links to the command menu; nothing is sent", async () => {
     const s = setup({ rules: { on: false } });
-    const r = await s.a.handle("What's next?");
+    const r = await s.a.handle("Who has #4417?");
     expect(r.status).toBe("off");
     expect(r.reply).toContain("command menu");
     expect(r.links).toEqual([{ label: "Open the command menu", href: "#/commands" }]);
