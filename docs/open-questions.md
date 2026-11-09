@@ -510,3 +510,12 @@ What DS-1 learned, and what is still open:
 - "Each Up for grabs request" assumes requests of their own. The code has only conversations, so the record lives there. Is a separate kind planned?
 - A chat member who doesn't follow the client can't see the conversation, so they aren't offered in Give to. Should the list explain who's missing?
 - An Open item someone said "I'll do it" about now shows as Up for grabs to teammates until they tap. If this adds noise, should the committer's teammates see it quieter?
+
+## MCP-0
+
+- Which remote MCP transport and per-user OAuth callback flow does the actual Coop client support? Prove direct Entra compatibility before considering a separately reviewed broker.
+- Which ChatGPT workspace/product surface, if any, is an approved export recipient with the required OAuth/transport support? Not yet tested.
+- Who approves recipient/application/data-category export per business client? Existing Allow AI is necessary but not consent to a new recipient; default external export off.
+- Approve exact v1 read fields, limits and retention in the [connector plan](mcp-connector-plan.md). Raw chats, transcripts, attachments and personal calendar details are excluded initially.
+- Authorize the pinned SDK dependency and Entra API/client registrations before MCP-1. No new Graph scopes assumed.
+- After read-only pilot, which local-plan proposal and existing DevOps write, if any, should ship? Hosted human approval remains required; no autonomous writes.

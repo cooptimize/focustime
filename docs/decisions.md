@@ -1848,3 +1848,12 @@ Unnumbered until merge. Up for grabs is a person's view here; the spec's Up for 
 | - | Done | Part 0: A promise keeps its own person-owner. A conversation can be Closed while a promise from it is open, and the promise box says so. |
 | - | Done | Part 0: Close out is in the action row when it's mine, and under ⋯ otherwise. Not work-related, Not a request and Resolve now go through the same record, so they appear in the history. |
 | - | Done | Part 0: HeldBack stays on screen while open, so "Nothing held back now." can be read after the last one goes. It used to unmount as soon as the count reached 0. |
+
+## MCP-0: remote connector plan (proposed)
+
+| # | Status | Decision |
+|---|---|---|
+| - | Proposed | MCP-0 is documentation only: [implementation plan](mcp-connector-plan.md). Build a remote HTTPS Streamable HTTP adapter over existing per-person services, beginning with narrow client-scoped reads. Each implementation step needs separate authorization. |
+| - | Proposed | Per-user Entra-backed OAuth protects a distinct MCP resource. Current person/client permissions and recipient-specific external AI export consent apply to every result; browser sessions, Graph tokens and UI visibility are not connector authorization. |
+| - | Proposed | The model may propose, never approve. Authenticated FocusTime-hosted human review approves an immutable fresh preview; shared services retain permission checks, read-back, audit and undo. Client-side confirmation alone is insufficient. |
+| - | Proposed | Coop first; ChatGPT conditional on verified capabilities and approved export. No dependency, registration, permission, deployment or write is enabled by this plan. |
