@@ -146,3 +146,5 @@ own small types and reaches it through `teamsAssistant()` in `server/teams/assis
   every tool has 3 to 5 example phrasings in the fixed instructions, with the glossary. `RUNS` adds `pick.uncarry`,
   `inbox.list`, `inbox.count`, `inbox.seen`, `inbox.snooze`, `conversations.search_items`, `conversations.unlink`
   and `my_promises.unlink`. Teams cards add the verbs `answer` and `undo`.
+
+- Nov 9 (TB-3): one Assistant, two renderers. `handle` takes `asked` (the question a tapped choice answers); question and suggest cards carry `asked`, and a proposal `turnId`. `refresh` (a fresh preview of a proposal that timed out) and `undoWrite` (the preview to undo one of a proposal's DevOps writes) are new; the tool `write_undo` is button only. `history` takes `from`, to bring back an older turn for `#/ask/<turn>`. Links are always neutral (`#/…` or an outside URL), and `publicUrl` is gone from the service's env: each renderer makes its own. Teams' `Verb` adds `refresh`.

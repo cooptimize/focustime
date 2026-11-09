@@ -3,8 +3,9 @@
 // runs after: a typing indicator, then the reply, with "On it…" first when the assistant takes longer than a moment.
 // Teams may deliver an activity again; the same activity id is handled once.
 //
-// A message goes to the gate (server/teams/gate.ts), then a quick command (server/teams/quick.ts) or the assistant
-// (AS-1's handle); the reply is its text, its result cards and one proposal card per write. A tap on Confirm or Cancel
+// A message goes to the gate (server/teams/gate.ts), then the Assistant, the same entry point as the panel; the reply
+// is its result drawn by server/teams/render.ts, and one proposal card per write. Only two things stop before the
+// Assistant, both TB-2's and only meaningful here (TB-3): "capture: …" and a reply to a waiting Close out card. A tap on Confirm or Cancel
 // is an adaptiveCard/action invoke: the card row is claimed once (store/teams-bot-store.ts), the assistant's confirm
 // or cancel runs once, and the card becomes its outcome. When confirm runs long the tap gets "Working on it…" and the
 // card is updated when it finishes. The bot sends only replies and card updates, only in the 1:1 chat it was messaged
@@ -13,9 +14,10 @@ import type { LogRecord } from "../../log/logger.ts";
 import type { TeamsBotStore } from "../../store/teams-bot-store.ts";
 import { SETTLED } from "../../store/teams-bot-store.ts";
 import { PROPOSAL_MINUTES, type AssistantService, type HandleResult, type Proposal, type TeamsContext } from "./assistant.ts";
-import { answeredCard, answerOf, attach, cancelledCard, CARD_TYPE, doneCard, expiredCard, failedCard, helpCard, ownLinks, proposalCard, questionCard, resultCard, tapOf, undoneCard, workingCard, type AnswerTap, type Card } from "./cards.ts";
+import { answeredCard, answerOf, attach, cancelledCard, CARD_TYPE, doneCard, expiredCard, failedCard, proposalCard, questionCard, tapOf, timedOutCard, undoneCard, workingCard, type AnswerTap, type Card, type TapData } from "./cards.ts";
 import { gate, refusalText, type GateDeps } from "./gate.ts";
-import { nextCard, quickOf, todayCard, type TodayFacts } from "./quick.ts";
+import { renderAnswer } from "./render.ts";
+import { looksLikeARequest } from "../../assistant/service.ts";
 import { captureText } from "../../plan/teams-rhythm.ts";
 import type { Rhythm } from "./rhythm.ts";
 
@@ -51,10 +53,8 @@ export type InvokeBody = { statusCode: number; type: string; value: unknown };
 export type BotDeps = {
   publicUrl: string;
   gate: GateDeps;
-  /** AS-1's assistant service; null until it is wired (quick commands still work). */
+  /** AS-1's assistant service; null until it is wired. */
   assistant: AssistantService | null;
-  /** Today for a person, from their own week (week.load); throws when the sources can't be read. */
-  today: (userId: string) => Promise<TodayFacts>;
   store: (userId: string) => TeamsBotStore;
   sender: Sender;
   log: (r: Pick<LogRecord, "op" | "kind" | "count" | "status" | "durationMs">) => void;
@@ -76,9 +76,8 @@ export type BotDeps = {
 };
 
 export const ON_IT = "On it…";
-export const NOT_READY = "I can answer what's next, today, help and open FocusTime for now. The rest comes with FocusTime's assistant.";
+export const NOT_READY = "FocusTime's assistant isn't available right now. Open FocusTime to do it there.";
 export const WENT_WRONG = "Something went wrong on my side. Try again in a minute.";
-export const SOURCES_DOWN = "I couldn't read your week just now. Open FocusTime to see what's wrong.";
 /** Teams' connector hosts (the serviceUrl a Teams activity carries). */
 export const TEAMS_SERVICE = /^(smba\.trafficmanager\.net|[a-z0-9-]+\.botframework\.com|[a-z0-9-]+\.teams\.microsoft\.com)$/;
 
@@ -148,22 +147,9 @@ export function createBotCore(d: BotDeps) {
       await cards(to, [r.card]);
       return d.log({ op: "turn", kind: "capture" });
     }
-    const q = quickOf(text);
-    if (q === "help") return void (await cards(to, [helpCard(d.publicUrl)]), d.log({ op: "turn", kind: "help" }));
-    if (q === "open") return void (await cards(to, [resultCard({ title: "FocusTime", lines: ["Your week, your focus blocks and everything you planned."], links: [{ label: "Open FocusTime", url: d.publicUrl }] }, d.publicUrl)]), d.log({ op: "turn", kind: "open" }));
-    if (q === "next" || q === "today") {
-      let facts: TodayFacts;
-      try {
-        facts = await d.today(userId);
-      } catch {
-        d.log({ op: "turn", kind: `${q}_unavailable` });
-        return void (await say(to, SOURCES_DOWN));
-      }
-      await cards(to, [resultCard(q === "next" ? nextCard(facts, d.publicUrl) : todayCard(facts, d.publicUrl), d.publicUrl)]);
-      return d.log({ op: "turn", kind: q, durationMs: d.now().epochMilliseconds - started });
-    }
     // TB-2: while today's Close out card waits, a plain message is the close out in my words (drawn into that card).
-    const closeout = d.rhythm ? await d.rhythm.closeoutReply(userId, text).catch(() => null) : null;
+    // TB-3: a question or a request is still the Assistant's, card or no card.
+    const closeout = d.rhythm && !text.trim().endsWith("?") && !looksLikeARequest(text) ? await d.rhythm.closeoutReply(userId, text).catch(() => null) : null;
     if (closeout) return void (await say(to, closeout), d.log({ op: "turn", kind: "closeout_reply" }));
     if (!d.assistant) return void (await say(to, NOT_READY), d.log({ op: "turn", kind: "not_ready" }));
 
@@ -186,25 +172,24 @@ export function createBotCore(d: BotDeps) {
   }
 
   async function reply(to: Address, userId: string, r: HandleResult): Promise<void> {
-    // AS-3: an answer's sections (a client each) can be a few more than a lookup's cards.
-    const results = r.cards.slice(0, 7).map((c) => resultCard(c, d.publicUrl));
-    const links = ownLinks(r.links, d.publicUrl);
-    if (links.length && !results.length) results.push(resultCard({ title: "In FocusTime", links }, d.publicUrl));
-    if (results.length) await cards(to, results, r.reply || undefined);
-    else if (r.reply && !r.question) await say(to, r.reply);
+    // TB-3: the Assistant's result, drawn for Teams; what doesn't fit is behind "Open in FocusTime".
+    const shown = renderAnswer({ turnId: Number(r.turnId) || 0, reply: r.reply, cards: [...r.cards], links: [...r.links] }, d.publicUrl);
+    const words = r.reply && r.reply !== shown.question?.text ? r.reply : undefined;
+    if (shown.cards.length) await cards(to, shown.cards, words);
+    else if (words) await say(to, words);
     const store = d.store(userId);
     // AS-2: a question: one button per choice. Its row lets a tap answer it once (a second tap gets the same card).
-    if (r.question) {
+    if (shown.question) {
       const qid = `q${r.turnId.replace(/\D/g, "").slice(0, 12)}`;
-      await store.cardSent(qid, null, r.question.expiresAt, r.question.text.slice(0, 200));
-      const sent = await cards(to, [questionCard(r.question, qid)]);
-      await store.cardSent(qid, sent.id, r.question.expiresAt, r.question.text.slice(0, 200));
+      await store.cardSent(qid, null, shown.question.expiresAt, shown.question.text.slice(0, 200));
+      const sent = await cards(to, [questionCard(shown.question, qid)]);
+      await store.cardSent(qid, sent.id, shown.question.expiresAt, shown.question.text.slice(0, 200));
     }
     for (const p of r.proposals.slice(0, 5)) {
       const expires = expiresOf(p);
       // The row exists before the card does, so a tap can never arrive for a card FocusTime doesn't know.
       await store.cardSent(p.id, null, expires, p.title);
-      const sent = await cards(to, [proposalCard(p)]);
+      const sent = await cards(to, [proposalCard(p, { publicUrl: d.publicUrl })]);
       await store.cardSent(p.id, sent.id, expires, p.title);
     }
   }
@@ -223,13 +208,14 @@ export function createBotCore(d: BotDeps) {
     const store = d.store(userId);
     const row = await store.card(t.proposalId);
     if (!row) return answer(failedCard("this card", "FocusTime doesn't know this card any more. Ask again for a fresh preview."));
-    if (t.ft === "undo") return undoTap(t.proposalId, row.title, row.state, userId);
+    if (t.ft === "undo") return t.writeId !== undefined ? undoWriteTap(t, row.title, row.state, row.activityId ?? a.replyToId ?? null, userId) : undoTap(t.proposalId, row.title, row.state, userId);
+    if (t.ft === "refresh") return refreshTap(t.proposalId, row.title, row.state, row.card as Card | null, row.activityId ?? a.replyToId ?? null, userId);
     const title = row.title;
     if (SETTLED.has(row.state) && row.card) return d.log({ op: "tap", kind: "repeat" }), answer(row.card as Card);
     if (row.state === "running") return d.log({ op: "tap", kind: "in_progress" }), answer(workingCard(title));
     if (d.now().epochMilliseconds > Temporal.Instant.from(row.expiresAt).epochMilliseconds) {
       if (!(await store.claim(t.proposalId))) return answer(workingCard(title));
-      const c = expiredCard(title);
+      const c = expiredCard(title, t.proposalId);
       await store.settle(t.proposalId, "expired", c);
       return d.log({ op: "tap", kind: "expired" }), answer(c);
     }
@@ -260,13 +246,15 @@ export function createBotCore(d: BotDeps) {
         }
         if (r.status === "changed") {
           // The card becomes the new preview, to confirm again; the new proposal is tapped from the same message.
-          const c = proposalCard(r.proposal, { again: r.message });
-          await store.settle(t.proposalId, "replaced", c);
+          // TB-3: the service keeps the proposal's id for its new preview, so that row opens again for the next tap.
+          const c = proposalCard(r.proposal, { again: r.message, publicUrl: d.publicUrl });
+          if (r.proposal.id === t.proposalId) await store.reopen(t.proposalId);
+          else await store.settle(t.proposalId, "replaced", c);
           await store.cardSent(r.proposal.id, row.activityId ?? a.replyToId ?? null, expiresOf(r.proposal), r.proposal.title);
           d.log({ op: "tap", kind: "changed" });
           return c;
         }
-        const c = r.status === "expired" ? expiredCard(title) : failedCard(title, r.message);
+        const c = r.status === "expired" ? expiredCard(title, t.proposalId) : failedCard(title, r.message);
         await store.settle(t.proposalId, r.status === "expired" ? "expired" : "failed", c);
         d.log({ op: "tap", kind: r.status });
         return c;
@@ -318,6 +306,51 @@ export function createBotCore(d: BotDeps) {
     return answer(c);
   }
 
+  /** TB-3: Undo for one DevOps write: the card becomes that undo's own preview, with Confirm. One tap wins. */
+  async function undoWriteTap(t: TapData, title: string, state: string, activityId: string | null, userId: string): Promise<InvokeBody> {
+    const answer = (c: Card): InvokeBody => ({ statusCode: 200, type: CARD_TYPE, value: c });
+    if (state !== "done") return answer(failedCard(`Undo ${title}`, "Only a change that went through can be undone"));
+    const store = d.store(userId);
+    const key = `u${t.proposalId}:${t.writeId}`.slice(0, 100);
+    const seen = await store.card(key);
+    if (seen && SETTLED.has(seen.state) && seen.card) return d.log({ op: "tap", kind: "repeat" }), answer(seen.card as Card);
+    if (!seen) await store.cardSent(key, null, d.now().add({ hours: 24 }).toString(), `Undo ${title}`).catch(() => undefined);
+    if (!(await store.claim(key))) {
+      const now = await store.card(key);
+      return d.log({ op: "tap", kind: "repeat" }), answer(now?.card ? (now.card as Card) : workingCard(`Undo ${title}`));
+    }
+    const r = d.assistant?.undoWrite ? await d.assistant.undoWrite({ person: { userId }, proposalId: t.proposalId, writeId: t.writeId! }).catch(() => ({ ok: false as const, message: WENT_WRONG })) : { ok: false as const, message: "Undo it in FocusTime" };
+    if (!r.ok) {
+      d.log({ op: "tap", kind: "undo_refused" });
+      const c = failedCard(`Undo ${title}`, r.message);
+      await store.settle(key, "failed", c);
+      return answer(c);
+    }
+    const c = proposalCard(r.proposal, { publicUrl: d.publicUrl });
+    await store.cardSent(r.proposal.id, activityId, expiresOf(r.proposal), r.proposal.title);
+    await store.settle(key, "done", c);
+    d.log({ op: "tap", kind: "undo_preview" });
+    return answer(c);
+  }
+
+  /** TB-3: Refresh on an expired card: a new preview from what's there now, on the same card. Nothing runs. */
+  async function refreshTap(proposalId: string, title: string, state: string, shown: Card | null, activityId: string | null, userId: string): Promise<InvokeBody> {
+    const answer = (c: Card): InvokeBody => ({ statusCode: 200, type: CARD_TYPE, value: c });
+    if (state !== "expired") return answer(shown ?? workingCard(title));
+    const store = d.store(userId);
+    if (!(await store.reopen(proposalId))) return answer(workingCard(title));
+    const r = d.assistant?.refresh ? await d.assistant.refresh({ person: { userId }, proposalId }).catch(() => ({ ok: false as const, message: WENT_WRONG })) : { ok: false as const, message: "Ask again for a fresh preview" };
+    if (!r.ok) {
+      const c = failedCard(title, r.message);
+      await store.claim(proposalId);
+      await store.settle(proposalId, "failed", c);
+      return d.log({ op: "tap", kind: "refresh_refused" }), answer(c);
+    }
+    await store.cardSent(r.proposal.id, activityId, expiresOf(r.proposal), r.proposal.title);
+    d.log({ op: "tap", kind: "refreshed" });
+    return answer(proposalCard(r.proposal, { again: "Here's a fresh preview from what's there now.", publicUrl: d.publicUrl }));
+  }
+
   async function answerTap(t: AnswerTap, userId: string, to: Address | null, a: InActivity): Promise<InvokeBody> {
     const answer = (c: Card): InvokeBody => ({ statusCode: 200, type: CARD_TYPE, value: c });
     const store = d.store(userId);
@@ -328,12 +361,13 @@ export function createBotCore(d: BotDeps) {
       const now = await store.card(t.questionId);
       return d.log({ op: "tap", kind: "repeat" }), answer(now?.card ? (now.card as Card) : workingCard(row.title));
     }
-    const chosen = answeredCard(row.title, t.label);
+    const stale = d.now().epochMilliseconds > Temporal.Instant.from(row.expiresAt).epochMilliseconds;
+    const chosen = stale ? timedOutCard(row.title) : answeredCard(row.title, t.label);
     await store.settle(t.questionId, "done", chosen);
     const assistant = d.assistant;
     if (!assistant || !to) return answer(chosen);
     background(
-      assistant.handle({ person: { userId }, channel: "teams", text: t.label, answer: t.value, context: context(a) }).then(
+      assistant.handle({ person: { userId }, channel: "teams", text: t.label, answer: t.value, ...(t.asked !== undefined ? { asked: t.asked } : {}), context: context(a) }).then(
         (r) => reply(to, userId, r),
         () => say(to, WENT_WRONG).then(() => undefined),
       ),

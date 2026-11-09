@@ -32,6 +32,8 @@ export function AssistantPanel(props: {
   skewMs?: number;
   /** AS-2: a confirm or undo changed something: the views behind the panel reload (a moved to-do shows where it went). */
   onChanged?: () => void;
+  /** TB-3: open on this turn (Open in FocusTime from Teams: #/ask/<turn>). */
+  atTurn?: number;
 }): ReactNode {
   const { phone, context, onClose, onOpen } = props;
   const skew = props.skewMs ?? 0;
@@ -43,12 +45,13 @@ export function AssistantPanel(props: {
   const [problem, setProblem] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const loaded = useRef(0);
   const ctxKey = `${context.clientKey ?? ""}|${context.itemId ?? ""}`;
 
   useEffect(() => {
     let live = true;
-    call<{ turns: Turn[]; gate: Gate }>("assistant.history", { limit: 40, context }).then(
-      (r) => live && (setEntries(r.turns.map(fromTurn)), setGate(r.gate)),
+    call<{ turns: Turn[]; gate: Gate }>("assistant.history", { limit: 40, context, ...(props.atTurn ? { from: props.atTurn } : {}) }).then(
+      (r) => live && ((loaded.current = r.turns.length), setEntries(r.turns.map(fromTurn)), setGate(r.gate)),
       (e: Error) => live && (setEntries([]), setGate({ assistant: "not_set_up", voice: { on: false, message: null } }), setProblem(e.message)),
     );
     return () => void (live = false);
@@ -58,8 +61,12 @@ export function AssistantPanel(props: {
   useEffect(() => void inputRef.current?.focus({ preventScroll: true }), []);
   useEffect(() => {
     const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [entries]);
+    if (!el) return;
+    // TB-3: opened from Teams on one answer: that one, until the conversation moves on.
+    const at = props.atTurn && entries?.length === loaded.current ? el.querySelector(`[data-turn="t${props.atTurn}"]`) : null;
+    if (at) at.scrollIntoView({ block: "start" });
+    else el.scrollTop = el.scrollHeight;
+  }, [entries]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Esc closes the panel from anywhere in it, and from the page while nothing modal is on top.
   useEffect(() => {
@@ -73,7 +80,7 @@ export function AssistantPanel(props: {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onClose]);
 
-  const send = useCallback(async (choice?: Choice) => {
+  const send = useCallback(async (choice?: Choice, asked?: number) => {
     const said = choice ? choice.label : text.trim();
     if (!said || busy) return;
     setBusy(true);
@@ -81,7 +88,7 @@ export function AssistantPanel(props: {
     setEntries((xs) => [...(xs ?? []), { id: `me${Date.now()}`, role: "me", text: said, cards: [], proposals: [], links: [] }]);
     if (!choice) setText("");
     try {
-      const r = await call<HandleResult>("assistant.ask", { text: said, context, ...(choice ? { answer: choice.value } : {}) });
+      const r = await call<HandleResult>("assistant.ask", { text: said, context, ...(choice ? { answer: choice.value, ...(asked !== undefined ? { asked } : {}) } : {}) });
       setEntries((xs) => [...(xs ?? []), { id: `a${r.turnId}`, role: "assistant", text: r.reply, cards: r.cards, proposals: r.proposals, links: r.links }]);
     } catch (e) {
       setProblem((e as Error).message);
@@ -117,9 +124,9 @@ export function AssistantPanel(props: {
           </div>
         )}
         {entries?.map((e) => (
-          <div key={e.id} className={`as-turn ${e.role}`}>
+          <div key={e.id} className={`as-turn ${e.role}`} data-turn={e.id}>
             {e.text && <p className="as-text">{e.text}</p>}
-            {e.cards.map((c, i) => <CardView key={i} card={c} onOpen={open} onAnswer={e === entries.at(-1) && !busy ? (ch) => void send(ch) : null} skew={skew} />)}
+            {e.cards.map((c, i) => <CardView key={i} card={c} onOpen={open} onAnswer={e === entries.at(-1) && !busy ? (ch) => void send(ch, c.kind === "question" || c.kind === "suggest" ? c.asked : undefined) : null} skew={skew} />)}
             {e.proposals.map((p) => <ProposalView key={p.id} proposal={p} skew={skew} onChange={replaceProposal} {...(props.onChanged ? { onChanged: props.onChanged } : {})} />)}
             {e.links.length > 0 && (
               <p className="as-links">
@@ -131,14 +138,13 @@ export function AssistantPanel(props: {
         {busy && <p className="as-quiet" role="status">Thinking…</p>}
       </div>
       {problem && <p className="as-problem" role="alert">{problem}</p>}
-      {off ? (
+      {off && (
         <div className="as-off" role="status">
-          <p>{gate.assistant === "off" ? "The assistant is off: AI is off for FocusTime (your FocusTime admin's switch)." : "The assistant isn't set up here."} Everything it does is also in the command menu.</p>
+          <p>{gate.assistant === "off" ? "The assistant is off: AI is off for FocusTime (your FocusTime admin's switch)." : "The assistant isn't set up here."} Everything it does is also in the command menu. "What's next", "today", "help" and "open FocusTime" still answer.</p>
           <button type="button" className="top-btn primary" onClick={() => onOpen(COMMANDS_HREF)}>Open the command menu <kbd>Ctrl K</kbd></button>
         </div>
-      ) : (
-        <Composer phone={phone} text={text} setText={setText} onSend={() => void send()} busy={busy} gate={gate} context={context} inputRef={inputRef} />
       )}
+      <Composer phone={phone} text={text} setText={setText} onSend={() => void send()} busy={busy} gate={gate} context={context} inputRef={inputRef} />
     </aside>
   );
 }

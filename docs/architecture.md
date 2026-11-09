@@ -408,13 +408,16 @@ calls the same allowlisted actions as the buttons. The bot never calls an action
   (`org.levels().people.isCooptimizer`). Refusals are one line each.
 - **Core.** `server/teams/bot.ts` `createBotCore`: a message is answered at once (200) and its turn runs after (typing,
   then the reply, "On it…" when the assistant takes more than 2.5 s); an activity id is handled once (10 minutes in
-  memory; one replica). Quick commands (`server/teams/quick.ts`: what's next, today from `week.load` and
-  `plan/now.ts`, help, open FocusTime) need no AI. Everything else goes to `assistant.handle`: `server/teams/assistant.ts`
+  memory; one replica). Everything but `capture:` and the Close out reply goes to `assistant.handle` (TB-3; the no-AI
+  phrases are `assistant/quick.ts`, for both channels): `server/teams/assistant.ts`
   holds the bot's own small types and `teamsAssistant()`, the adapter onto AS-1's hub (`assistants` in `server/main.ts`). A tap (`adaptiveCard/action`) is
   claimed once in `teams_bot_cards`, runs `assistant.confirm` or `cancel` once, and the card becomes its outcome;
   a confirm over 8 s answers "Working on it…" and updates the card after.
-- **Cards.** `server/teams/cards.ts`: Adaptive Cards 1.5, `Action.Execute` with an `Action.Submit` fallback; links
-  only to FocusTime's own origin. Previews: `scripts/teams-card-previews.ts`, `docs/teams/screens/`.
+- **Cards.** `server/teams/render.ts` draws the Assistant's answer (TB-3; exhaustive over card kinds, 24 KB and 9 cards,
+  then "Open in FocusTime"); `server/teams/cards.ts`: previews and outcomes, Adaptive Cards 1.5, `Action.Execute` with an
+  `Action.Submit` fallback; links only to FocusTime, DevOps and GitHub. Previews: `scripts/teams-card-previews.ts`,
+  `docs/teams/screens/`, `docs/ux/tb3/`. `assistant/parity.test.ts` runs every topic and tool through both channels on
+  `test/builders/assistant-world.ts`.
 - **Store.** `store/teams-bot-store.ts` over the user tables `teams_bot_chats` (where the 1:1 chat is, for later
   proactive steps; TB-2 sends from it) and `teams_bot_cards` (`store/migrations/20261109T1000_teams_bot.ts`),
   both left out of the export.

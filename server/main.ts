@@ -78,14 +78,12 @@ import { userZone } from "../week/zone.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { pollCycle, requestsNextDue, type PollDeps, type PollPerson } from "../actions/request-poll.ts";
 import { requestContext, aiFor, escalationHours, dispatch, meetingPerson, audienceRulesOf } from "../actions/dispatch.ts";
-import type { WeekLoadData } from "../actions/types.ts";
 import { createTeamsEndpoint } from "./teams/sdk.ts";
 import { BLOCKED_KEY, createRhythm, pacedSender, type Rhythm, type Takeover } from "./teams/rhythm.ts";
 import { createTeamsRhythmStore } from "../store/teams-rhythm-store.ts";
 import { takeoversOf } from "../plan/teams-rhythm.ts";
 import type { ActionName } from "../actions/registry.ts";
 import { createBotCore } from "./teams/bot.ts";
-import { todayFacts } from "./teams/quick.ts";
 import { teamsAssistant } from "./teams/assistant.ts";
 import { createTeamsBotStore } from "../store/teams-bot-store.ts";
 import { TEAMS_APP_IDS } from "./teams/app-ids.ts";
@@ -699,7 +697,7 @@ const feedbackTarget = async () => {
 };
 
 /** AS-1: the assistant by person (Entra object id), for TB-1's Teams bot: their own context, absolute links. */
-export const assistants = createAssistantHub({ ctxFor: (userId) => runtimeFor(userId), publicUrl: app.publicUrl });
+export const assistants = createAssistantHub({ ctxFor: (userId) => runtimeFor(userId) });
 
 // TB-1: the FocusTime bot in Teams, in the hosted app only (the Azure Bot reaches the public URL; its identity's token
 // exists only there). FOCUSTIME_BOT_APP_ID is the bot's Microsoft App ID, its user-assigned identity's client id
@@ -755,11 +753,6 @@ const teamsBot =
                 isCooptimizer: async (oid) => (await org.levels()).people.isCooptimizer(oid),
               },
               assistant: teamsAssistant(assistants, app.publicUrl),
-              today: async (userId) => {
-                const r = await dispatch(await runtimeFor(userId), { action: "week.load", input: {} });
-                if (!r.ok) throw new Error("week.load failed");
-                return todayFacts(r.data as WeekLoadData, instantNow());
-              },
               store: (userId) => createTeamsBotStore({ db, userId, now: instantNow }),
               sender,
               log: (r) => log({ source: "server", ...r, op: `teams_${r.op}` }),

@@ -498,3 +498,8 @@ What DS-1 learned, and what is still open:
 - TX-1b: a later to-do a Done removes keeps its timebox if that timebox is on Outlook, because a check-in changes nothing external. Should it offer to take the event off?
 - TX-1c: a to-do that inherited more than its size before TX-1c keeps that number, because it reads as the person's own.
 - A to-do marked done outside a check-in (a tick) with an ended timebox stops being asked about and its timebox stays unanswered. That reads right, but spent time isn't recorded for it.
+
+## TB-3
+
+- Should Ask's "what's next" show the next meeting, as Today's Now strip does? The bot had that line until TB-3 moved "what's next" onto the Assistant's read. Adding it would change the panel and Teams together.
+- Is "Edit in FocusTime" enough for a change you want to tweak from Teams, or do people want the text boxes on the card? Waiting for use.

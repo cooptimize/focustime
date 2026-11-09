@@ -25,6 +25,7 @@ import { dropCheck } from "../plan/weekdrop.ts";
 import { placeNote } from "../plan/days.ts";
 import type { InboxListData, InboxView } from "../plan/inbox-items.ts";
 import { resolve, type MatchedPick, type Resolved } from "./resolve.ts";
+import { quickOf, type Quick } from "./quick.ts";
 import { NOT_IN_STANDARDS, shortCommit, STANDARDS_ASK_INSTRUCTIONS, STANDARDS_ASK_SCHEMA, STANDARDS_ASK_TASK, standardsAskInput, standardsReply, type Retrieved, type StandardsAskAnswer, type StandardsLibrary } from "../plan/standards.ts";
 import { compose, TOPICS, type Composed, type Refs, type Suggestion, type Topic } from "./answer.ts";
 import { buildContext, forClient, periodOf, type PeriodKind, type Want } from "./context.ts";
@@ -53,9 +54,8 @@ export type AssistantEnv = {
   clientName: (clientKey: string) => string;
   now: () => string;
   zone: string;
+  /** TB-3: which front end asked (kept on the turn, for history). The result is the same for both. */
   channel: Channel;
-  /** The app's public URL, for Teams links (absolute). */
-  publicUrl: string | null;
   /** KB-1: the standards articles that fit a question; null before the first sync. */
   standards?: (question: string) => Promise<{ library: StandardsLibrary; retrieved: Retrieved } | null>;
 };
@@ -137,7 +137,7 @@ const idsIn = (text: string) => [...text.matchAll(/(?<![\w.,$€£/:-])#?(\d{2,}
 
 /** What a kept proposal holds to confirm it later: the tool, its arguments, and what to dispatch. */
 type Step = { action: ActionName; input: unknown; /** AS-2: a move's to-do and where it was (for Undo), or a part's label. */ meta?: { title?: string; from?: { date: string; half: string }; label?: string } };
-type Held = { tool: ToolName; args: Record<string, unknown>; run: { action: ActionName; input: unknown }; steps?: Step[]; /** AS-2: after confirm, the moves made (Undo puts them back). */ done?: Moved[]; undone?: boolean };
+type Held = { tool: ToolName; args: Record<string, unknown>; run: { action: ActionName; input: unknown }; steps?: Step[]; /** AS-2: after confirm, the moves made (Undo puts them back). */ done?: Moved[]; undone?: boolean; /** TB-3: after confirm, the DevOps writes it made (Teams' Undo offers only these). */ writes?: { id: number; label: string }[] };
 /** AS-2: one to-do a confirmed proposal moved: the copy it made (or the same to-do, within a day) and where it was. */
 type Moved = { fromId: number; newId: number; from: { date: string; half: string }; title: string };
 
@@ -156,6 +156,8 @@ type Memory = { request: string; client: string | null; topic: Topic | null; per
 type Pending = {
   /** client, item, picks: a question (AS-2). suggest: an answer's suggested steps (AS-3). context: nothing to answer, only memory. */
   kind: "client" | "item" | "picks" | "suggest" | "context";
+  /** TB-3: the turn that asked it: a tap names this, so an older card's tap can't answer a newer question. */
+  asked?: number;
   memory?: Memory;
   text: string;
   question: string;
@@ -176,9 +178,12 @@ class Ask extends Error {
 /** A proposal being built: the person-facing part, what to keep, and what confirm compares against. */
 type Built = { view: Omit<Proposal, "id" | "state" | "expiresAt">; held: Held; snapshot: unknown };
 
+/** A message that clearly asks something new (AS-2); TB-3: also what a waiting Close out card leaves to the assistant. */
+export const looksLikeARequest = (text: string): boolean => text.trim().split(/\s+/).length >= 3 && /^(what|when|where|who|which|how|show|move|push|mark|add|comment|send|confirm|close|plan|drop|capture|set|change|write|open|find|list|tell|give|make|put|take|snooze|unlink|can you|could you|please|i need|remind)\b/i.test(text.trim());
+
 export function createAssistant(env: AssistantEnv) {
   const today = () => Temporal.Instant.from(env.now()).toZonedDateTimeISO(env.zone).toPlainDate().toString();
-  const link = (href: string, label: string): Link => ({ label, href: env.channel === "teams" && env.publicUrl ? `${env.publicUrl.replace(/\/$/, "")}/${href}` : href });
+  const link = (href: string, label: string): Link => ({ label, href });
   const readDeps = (date?: string): ReadDeps => ({ run: env.run, today: date ?? today(), now: env.now(), zone: env.zone, isMine: env.isMine, clientName: env.clientName, link });
   const expiry = () => Temporal.Instant.from(env.now()).add({ minutes: PROPOSAL_MINUTES }).toString();
 
@@ -205,7 +210,7 @@ export function createAssistant(env: AssistantEnv) {
   async function finish(turnId: number, status: HandleStatus, reply: string, cards: Card[], proposals: Proposal[], links: Link[], keepFor?: { memory?: Memory | null; suggest?: PendingChoice[] }): Promise<HandleResult> {
     const memory = keepFor?.memory ?? null;
     const pending: Pending | null = keepFor?.suggest?.length
-      ? { kind: "suggest", text: "", question: "", context: {}, choices: keepFor.suggest, expiresAt: cExpiry(), ...(memory ? { memory } : {}) }
+      ? { kind: "suggest", asked: turnId, text: "", question: "", context: {}, choices: keepFor.suggest, expiresAt: cExpiry(), ...(memory ? { memory } : {}) }
       : memory ? { kind: "context", text: "", question: "", context: {}, choices: [], expiresAt: cExpiry(), memory } : null;
     await env.plan.addAssistantTurn({ channel: env.channel, role: "assistant", text: reply, cards, ...(pending ? { pending } : {}) });
     return { turnId, status, reply, cards, proposals, links };
@@ -228,8 +233,8 @@ export function createAssistant(env: AssistantEnv) {
 
   /** Ask: the question card for me, and what it waits for kept on the assistant's turn. */
   async function ask(turnId: number, status: HandleStatus, q: Omit<Pending, "expiresAt">, proposals: Proposal[] = [], memory: Memory | null = null): Promise<HandleResult> {
-    const pending: Pending = { ...q, expiresAt: qExpiry(), ...(memory ? { memory } : {}) };
-    const card: QuestionCard = { kind: "question", text: q.question, choices: q.choices.map(({ label, value }) => ({ label, value })), expiresAt: pending.expiresAt };
+    const pending: Pending = { ...q, asked: turnId, expiresAt: qExpiry(), ...(memory ? { memory } : {}) };
+    const card: QuestionCard = { kind: "question", text: q.question, choices: q.choices.map(({ label, value }) => ({ label, value })), expiresAt: pending.expiresAt, asked: turnId };
     await env.plan.addAssistantTurn({ channel: env.channel, role: "assistant", text: q.question, cards: [card], pending });
     return { turnId, status, reply: q.question, cards: [card], proposals, links: [] };
   }
@@ -285,9 +290,9 @@ export function createAssistant(env: AssistantEnv) {
   }
 
   /** A message that clearly asks something new starts fresh instead of answering the question. */
-  const looksNew = (text: string) => text.trim().split(/\s+/).length >= 3 && /^(what|when|where|who|which|how|show|move|push|mark|add|comment|send|confirm|close|plan|drop|capture|set|change|write|open|find|list|tell|give|make|put|take|snooze|unlink|can you|could you|please|i need|remind)\b/i.test(text.trim());
+  const looksNew = (text: string) => looksLikeARequest(text);
 
-  async function handle(textIn: string, context: AssistantContext = {}, answer?: string): Promise<HandleResult> {
+  async function handle(textIn: string, context: AssistantContext = {}, answer?: string, asked?: number): Promise<HandleResult> {
     const text = textIn.trim().slice(0, MAX_TEXT);
     await env.plan.pruneAssistant(HISTORY_DAYS).catch(() => 0);
     const turnId = await env.plan.addAssistantTurn({ channel: env.channel, role: "me", text, cards: [] });
@@ -297,10 +302,25 @@ export function createAssistant(env: AssistantEnv) {
     const open = await env.plan.assistantQuestion();
     let last: Pending | null = null;
     let memory: Memory | null = null;
+    // TB-3: a tap on a card that is no longer the open one (answered in the other front end, or a newer question since)
+    // answers nothing: what is open stays open, and the old choice is never applied to it.
+    if (answer !== undefined && asked !== undefined && (open?.pending as Pending | undefined)?.asked !== asked) {
+      const reply = "That question isn't open any more. Ask again if you still need it.";
+      await env.plan.addAssistantTurn({ channel: env.channel, role: "assistant", text: reply, cards: [], ...(open ? { pending: open.pending } : {}) });
+      return { turnId, status: "ok", reply, cards: [], proposals: [], links: [] };
+    }
     if (open) {
       await env.plan.closeAssistantQuestion(open.turnId);
       const p = open.pending as Pending;
       if (p.memory && later(p.memory.expiresAt, env.now())) memory = p.memory;
+      // TB-3: a tap after its time looks again with today's data, instead of applying a choice made from old data.
+      if (answer !== undefined && asked !== undefined && !later(p.expiresAt, env.now())) {
+        const words = p.text || p.memory?.request || "";
+        if (words) {
+          const fresh = await run(turnId, words, p.context, { afterQuestion: false, last: null, memory });
+          return { ...fresh, reply: `That had timed out, so I looked again. ${fresh.reply}`.trim() };
+        }
+      }
       if (p.kind === "suggest" || p.kind === "context") {
         const c = answer ? p.choices.find((x) => x.value === answer) : undefined;
         if (c && later(p.expiresAt, env.now())) return suggested(turnId, c, memory);
@@ -356,7 +376,7 @@ export function createAssistant(env: AssistantEnv) {
   async function keep(turnId: number, b: Built): Promise<Proposal> {
     const expiresAt = expiry();
     const id = await env.plan.addAssistantProposal({ turnId, action: b.held.run.action, input: b.held, clientKey: b.view.clientKey, view: b.view, snapshot: b.snapshot, expiresAt });
-    return { ...b.view, id, state: "open", expiresAt };
+    return { ...b.view, id, state: "open", expiresAt, turnId };
   }
 
   type RunOpts = { client?: string; itemIds?: number[]; afterQuestion: boolean; last: Pending | null; memory?: Memory | null };
@@ -390,6 +410,10 @@ export function createAssistant(env: AssistantEnv) {
 
   async function run(turnId: number, text: string, context: AssistantContext, o: RunOpts): Promise<HandleResult> {
     const prior = o.memory ?? null;
+    // TB-3: the few phrases that need no AI, for both front ends: help and open always, what's next and today when
+    // the AI can't run (below), so AI off answers them the same way in the panel and in Teams.
+    const quick = quickOf(text);
+    if (quick && (quick === "help" || quick === "open" || !env.ai)) return quickAnswer(turnId, quick, context, prior);
     // 1. One client: chosen in a question, named in my words (the guard's rule), matched by the resolver, or the screen's.
     const named = clientsNamed(text, env.directory, env.isInternal).filter(env.isMine);
     if (!o.client && named.length > 1) return ask(turnId, "which_client", { ...clientQuestion(text, context, named, null), question: "That names more than one client. Which one is it about?" }, [], prior);
@@ -419,6 +443,7 @@ export function createAssistant(env: AssistantEnv) {
     const intent = await env.ai.run<Intent>({ name: "assistant.intent", client: aiClient, instructions: INTENT_INSTRUCTIONS }, input, INTENT_SCHEMA);
     if (!intent.ok) {
       const s = statusOf(intent.error.kind);
+      if (quick && ["off", "client_off", "not_set_up", "over_budget", "zero_budget"].includes(intent.error.kind)) return quickAnswer(turnId, quick, context, prior);
       if (intent.error.kind === "invalid_output" || intent.error.kind === "provider" || intent.error.kind === "timeout" || intent.error.kind === "rate_limited" || intent.error.kind === "quota") return finish(turnId, "ok", `${intent.error.message}. Try again, or use the command menu.`, [], [], [COMMANDS]);
       return finish(turnId, s, statusReply(s as Exclude<HandleStatus, "ok">, name, intent.error.kind), [], [], [COMMANDS]);
     }
@@ -481,6 +506,17 @@ export function createAssistant(env: AssistantEnv) {
       return finish(turnId, "ok", cards.length || proposals.length ? "Here's what I found." : `${answer.error.message}. Try again, or use the command menu.`, cards, proposals, [COMMANDS], { memory: mem });
     }
     return finish(turnId, "ok", answer.value.reply.replace(/—/g, ",").slice(0, 1200), cards, proposals, [], { memory: mem });
+  }
+
+  /** TB-3: an answer with no AI call, from the same reads and composers as any other answer. */
+  async function quickAnswer(turnId: number, q: Quick, context: AssistantContext, prior: Memory | null): Promise<HandleResult> {
+    if (q === "open") return finish(turnId, "ok", "", [{ kind: "note", text: "Your week, your focus blocks and everything you planned.", link: link("#/today", "Open FocusTime") }], [], [], prior ? { memory: prior } : undefined);
+    if (q === "next") {
+      const r = await todayRead(readDeps(), "now", null);
+      return finish(turnId, "ok", r.error ?? "", r.error ? [] : r.cards, [], r.error ? [link("#/today", "Open Today")] : [], prior ? { memory: prior } : undefined);
+    }
+    const none: Resolved = { picks: [], items: [], clients: [], ambiguous: null };
+    return answerPath(turnId, { text: q === "help" ? "help" : "today", said: q === "help" ? "help" : "today", context, client: null, named: false, topic: q === "help" ? "capabilities" : "agenda", period: q === "help" ? "this_week" : "today", date: null, lateOnly: false, res: none, prior: null });
   }
 
   type AnswerOpts = { text: string; said: string; context: AssistantContext; client: string | null; named: boolean; topic: Topic; period: PeriodKind; date: string | null; lateOnly: boolean; res: Resolved; prior: Memory | null };
@@ -580,7 +616,7 @@ export function createAssistant(env: AssistantEnv) {
     const cards: Card[] = c.sections.slice(0, MAX_SECTIONS).map((x) => ({ kind: "section", title: x.title, lines: x.lines.slice(0, MAX_LINES) }));
     const choices: PendingChoice[] = c.suggestions.slice(0, 6).map((x: Suggestion, i) => ({ label: x.label, value: `s${turnId}n${i + 1}`.slice(0, 12), match: [], ...("say" in x ? { say: x.say } : { propose: { tool: x.tool, args: x.args } }) }));
     const expiresAt = cExpiry();
-    if (choices.length) cards.push({ kind: "suggest", text: choices.some((x) => x.say) ? "Tap one to ask it" : "Suggested next steps", choices: choices.map(({ label, value }) => ({ label, value })), expiresAt });
+    if (choices.length) cards.push({ kind: "suggest", text: choices.some((x) => x.say) ? "Tap one to ask it" : "Suggested next steps", choices: choices.map(({ label, value }) => ({ label, value })), expiresAt, asked: turnId });
     return finish(turnId, "ok", c.reply, cards, [], c.links, { memory, suggest: choices });
   }
 
@@ -899,6 +935,18 @@ export function createAssistant(env: AssistantEnv) {
           snapshot: { rows: pv.fields.map((x) => [x.label, x.before]) },
         };
       }
+      case "write_undo": {
+        // TB-3: Undo on a Teams result card: that DevOps write's own undo, the one the panel's Undo previews. Only a
+        // write this proposal made (undoWrite checks it); refused when the item changed since.
+        const clientKey = String(args.clientKey);
+        const change = { kind: "undo", writeId: Number(args.writeId) };
+        const pv = await devopsPreview(clientKey, change);
+        return {
+          view: base("devops.confirm", clientKey, `Undo: ${String(args.label ?? "that change")}`, fromDevOps(pv), pv.visibility),
+          held: { tool, args: { clientKey, writeId: change.writeId, label: args.label ?? null }, run: { action: "devops.confirm", input: { clientKey, change } } },
+          snapshot: { rows: pv.fields.map((x) => [x.label, x.before]) },
+        };
+      }
       case "capture": {
         const text = String(args.text).trim().slice(0, 2000);
         if (!text) throw new Refusal("Nothing to capture");
@@ -1181,7 +1229,7 @@ export function createAssistant(env: AssistantEnv) {
     return { summary: p.summary, system: "DevOps", target: p.item, identity: p.identity, rows: p.fields.map((r) => ({ label: r.label, before: r.before, after: r.after })), notes: [...p.links, ...p.notes] };
   }
 
-  const toProposal = (row: AssistantProposalRow): Proposal => ({ ...(row.view as Omit<Proposal, "id" | "state" | "expiresAt">), id: row.id, state: row.state === "open" && row.expiresAt < env.now() ? "expired" : row.state, expiresAt: row.expiresAt });
+  const toProposal = (row: AssistantProposalRow): Proposal => ({ ...(row.view as Omit<Proposal, "id" | "state" | "expiresAt">), id: row.id, state: row.state === "open" && row.expiresAt < env.now() ? "expired" : row.state, expiresAt: row.expiresAt, turnId: row.turnId });
 
   async function confirm(proposalId: number, edits: Record<string, string> = {}): Promise<ConfirmResult> {
     const row = await env.plan.assistantProposal(proposalId);
@@ -1219,10 +1267,17 @@ export function createAssistant(env: AssistantEnv) {
     if (changed) {
       const expiresAt = expiry();
       await env.plan.setAssistantProposal(row.id, { state: "open", view: fresh.view, snapshot: fresh.snapshot, input: fresh.held, expiresAt });
-      return { ok: false, reason: "changed", message: "It changed since the assistant showed it. Here it is as it is now", proposal: { ...fresh.view, id: row.id, state: "open", expiresAt } };
+      return { ok: false, reason: "changed", message: "It changed since the assistant showed it. Here it is as it is now", proposal: { ...fresh.view, id: row.id, state: "open", expiresAt, turnId: row.turnId } };
     }
     const { done, ...r } = await execute(fresh.held);
     await env.plan.setAssistantProposal(row.id, { state: r.ok ? "confirmed" : "failed" });
+    // TB-3: undoing an undo isn't offered; any other DevOps write this proposal made is kept for its Undo.
+    if (r.ok && held.tool === "write_undo") {
+      const { undo: _undo, ...rest } = r;
+      return rest;
+    }
+    const writes = r.ok ? (r.parts?.length ? r.parts.flatMap((x) => (x.undo?.kind === "devops" ? [{ id: x.undo.id, label: x.label }] : [])) : r.undo?.kind === "devops" ? [{ id: r.undo.id, label: view.title }] : []) : [];
+    if (writes.length) await env.plan.setAssistantProposalInput(row.id, { ...fresh.held, writes });
     // AS-2: the moves it made, kept so one Undo puts them all back.
     if (r.ok && done?.length) {
       await env.plan.setAssistantProposalInput(row.id, { ...fresh.held, done });
@@ -1392,15 +1447,60 @@ export function createAssistant(env: AssistantEnv) {
     return { ok: true, proposal };
   }
 
+  /**
+   * TB-3: a fresh preview of a proposal that timed out, from what it was asked to do and what is there now. Nothing
+   * runs; the usual Confirm follows. A proposal that was confirmed, cancelled or failed stays that way.
+   */
+  async function refresh(proposalId: number): Promise<{ ok: true; proposal: Proposal } | { ok: false; message: string }> {
+    const row = await env.plan.assistantProposal(proposalId);
+    if (!row || (row.state !== "open" && row.state !== "expired")) return { ok: false, message: "That change isn't waiting any more. Ask again for a fresh preview" };
+    const held = row.input as Held;
+    if (!held || !isTool(held.tool) || TOOLS[held.tool].kind !== "proposal" || (row.clientKey && !env.isMine(row.clientKey))) return { ok: false, message: "The assistant can't make that change" };
+    let fresh: Built;
+    try {
+      fresh = await build(held.tool, { ...held.args }, row.clientKey, JSON.stringify(held.args), []);
+    } catch (e) {
+      return { ok: false, message: e instanceof Refusal ? e.message : "That change can't be made now. Ask again" };
+    }
+    if (fresh.view.clientKey !== row.clientKey) return { ok: false, message: "That change is about another client now. Ask again" };
+    const expiresAt = expiry();
+    await env.plan.setAssistantProposal(row.id, { state: "open", view: fresh.view, snapshot: fresh.snapshot, input: fresh.held, expiresAt });
+    return { ok: true, proposal: { ...fresh.view, id: row.id, state: "open", expiresAt, turnId: row.turnId } };
+  }
+
+  /**
+   * TB-3: the preview to undo one DevOps write a confirmed proposal made: Undo on a Teams result card. The same undo
+   * the panel's Undo previews (devops.preview with kind undo, then Confirm), only for a write of this proposal.
+   */
+  async function undoWrite(proposalId: number, writeId: number): Promise<{ ok: true; proposal: Proposal } | { ok: false; message: string }> {
+    const row = await env.plan.assistantProposal(proposalId);
+    const held = row?.input as Held | undefined;
+    const write = held?.writes?.find((w) => w.id === writeId);
+    if (!row || row.state !== "confirmed" || !write || !row.clientKey) return { ok: false, message: "There's nothing to undo there" };
+    let b: Built;
+    try {
+      b = await build("write_undo", { clientKey: row.clientKey, writeId, label: write.label }, row.clientKey, "", []);
+    } catch (e) {
+      return { ok: false, message: e instanceof Refusal ? e.message : "That can't be undone now" };
+    }
+    const turnId = await env.plan.addAssistantTurn({ channel: env.channel, role: "me", text: `(button) ${b.view.title}`.slice(0, MAX_TEXT), cards: [] });
+    const proposal = await keep(turnId, b);
+    await env.plan.addAssistantTurn({ channel: env.channel, role: "assistant", text: "Here's the undo to confirm.", cards: [] });
+    return { ok: true, proposal };
+  }
+
   async function cancel(proposalId: number): Promise<{ ok: true }> {
     const row = await env.plan.assistantProposal(proposalId);
     if (row && row.state === "open") await env.plan.setAssistantProposal(row.id, { state: "cancelled" });
     return { ok: true };
   }
 
-  async function history(limit = 50): Promise<Turn[]> {
+  /** TB-3: `from` also returns the turns from that one on (Open in FocusTime's link to the same answer). */
+  async function history(limit = 50, from?: number): Promise<Turn[]> {
     await env.plan.pruneAssistant(HISTORY_DAYS).catch(() => 0);
-    const rows = await env.plan.assistantTurns(limit);
+    const latest = await env.plan.assistantTurns(limit);
+    const older = from !== undefined ? await env.plan.assistantTurnsFrom(from, 12) : [];
+    const rows = [...new Map([...older, ...latest].map((r) => [r.id, r])).values()].sort((a, b) => a.id - b.id);
     const props = await env.plan.assistantProposalsOf(rows.filter((r) => r.role === "me").map((r) => r.id));
     // A proposal is kept with the request it answered; it shows on the answer right after.
     return rows.map((r, i) => {
@@ -1413,7 +1513,7 @@ export function createAssistant(env: AssistantEnv) {
     return { ok: true, removed: await env.plan.clearAssistant() };
   }
 
-  return { handle, confirm, cancel, propose, undo, history, clear };
+  return { handle, confirm, cancel, propose, undo, undoWrite, refresh, history, clear };
 }
 
 export type AssistantService = ReturnType<typeof createAssistant>;
