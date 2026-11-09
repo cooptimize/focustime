@@ -171,6 +171,70 @@ describe.skipIf(!CHROMIUM)("Settings shell (ST-1)", () => {
     await page.close();
   }, T);
 
+  // Main's CI failures (#306, #308): the jump's focus landed after the person, or Playwright, had gone to the search box.
+  const jumpTo = async (page: Page, slow: boolean) => {
+    await openAt(page, "#/week", "#/settings/you");
+    let landed: Promise<unknown> = Promise.resolve();
+    if (slow) {
+      await page.route("**/api/action", async (r) => {
+        if ((r.request().postData() ?? "").includes('"settings.load"')) await new Promise((x) => setTimeout(x, 700));
+        await r.continue();
+      });
+      landed = page.waitForResponse((r) => r.url().includes("/api/action") && (r.request().postData() ?? "").includes('"settings.load"'));
+    }
+    const box = page.getByLabel("Search settings");
+    await box.fill("time zone");
+    await page.locator("#settings-search-results .ps-hit", { hasText: "Time zone" }).first().waitFor();
+    return { box, landed };
+  };
+  const inBox = (page: Page) => page.evaluate(() => (document.activeElement as HTMLElement | null)?.getAttribute("aria-label"));
+  /** Long enough for the jump's 60 ms timer; this only proves nothing more happens, nothing waits on it to pass. */
+  const settled = (page: Page) => page.evaluate(() => new Promise((r) => setTimeout(r, 250)));
+
+  it("going to the search box right after a jump keeps the focus there", async () => {
+    const { page, errors } = await freshPage(h);
+    const { box } = await jumpTo(page, false);
+    // In the page, so nothing can land between the jump and the focus: what a fast machine or a fast person does.
+    await page.evaluate(async () => {
+      const before = location.hash;
+      document.querySelector<HTMLElement>("#settings-search-results .ps-hit")!.click();
+      while (location.hash === before) await new Promise((r) => setTimeout(r, 1));
+      document.querySelector<HTMLElement>('[aria-label="Search settings"]')!.focus();
+    });
+    await settled(page);
+    expect(await inBox(page)).toBe("Search settings");
+    await page.keyboard.insertText("write log");
+    expect(await box.inputValue()).toBe("write log");
+    await page.locator("#settings-search-results .ps-hit").first().waitFor();
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("the section's data landing late doesn't pull the focus out of an empty search box", async () => {
+    const { page, errors } = await freshPage(h);
+    const { box, landed } = await jumpTo(page, true);
+    await page.locator("#settings-search-results .ps-hit", { hasText: "Time zone" }).first().click();
+    await expect.poll(() => hash(page)).toBe("#/settings/hours/time-zone");
+    await box.focus();
+    await landed;
+    await settled(page);
+    expect(await inBox(page)).toBe("Search settings");
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("left alone, a jump puts the focus on the setting, and the late data leaves it there", async () => {
+    const { page, errors } = await freshPage(h);
+    const { landed } = await jumpTo(page, true);
+    await page.locator("#settings-search-results .ps-hit", { hasText: "Time zone" }).first().click();
+    await expect.poll(() => page.evaluate(() => document.activeElement?.closest('[data-setting="time-zone"]') != null)).toBe(true);
+    await landed;
+    await settled(page);
+    expect(await page.evaluate(() => document.activeElement?.closest('[data-setting="time-zone"]') != null)).toBe(true);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
   it("no secret value appears in Settings or in what the server sends it", async () => {
     const { page, errors } = await freshPage(h);
     const fake = "fakepat" + "x".repeat(45);
