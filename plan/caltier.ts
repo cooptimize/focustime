@@ -38,6 +38,7 @@ const REASON = {
   recurring: "A repeating event: change it in Outlook",
   allDay: "An all-day event: change it in Outlook",
   google: "Google events are read-only in FocusTime",
+  link: "Events from a calendar link are read-only in FocusTime",
   noWrite: "Allow calendar changes in Settings > Connections to edit Outlook events here",
   notYet: "FocusTime hasn't read this event's details yet: refresh",
   invite: "A help invite with attendees: only cancelling is done from FocusTime (Undo in Settings > Data)",
@@ -68,7 +69,10 @@ export function eventEdit(e: Pick<CalEvent, "source" | "allDay">, f: EditFacts |
   const webLink = f?.webLink ?? null;
   const st = (id: EditAction, allowed: boolean, reason?: string): ActionState => (allowed ? { id, allowed } : { id, allowed, reason: reason ?? "" });
   const open = st("open", e.source === "outlook", REASON.google);
-  if (tier === "readonly") return { tier, why: e.source === "google" ? REASON.google : "Blocked in FocusTime: change it from the day's menu", webLink: null, actions: ALL.map((a) => st(a, false, e.source === "google" ? REASON.google : "Change unavailable time from the day's menu")) };
+  if (tier === "readonly") {
+    const why = e.source === "google" ? REASON.google : e.source === "ics" ? REASON.link : null;
+    return { tier, why: why ?? "Blocked in FocusTime: change it from the day's menu", webLink: null, actions: ALL.map((a) => st(a, false, why ?? "Change unavailable time from the day's menu")) };
+  }
   if (!canWrite || tier === "unknown") {
     const reason = canWrite ? REASON.notYet : REASON.noWrite;
     return { tier, why: reason, webLink, actions: ALL.map((a) => (a === "open" ? open : st(a, false, reason))) };

@@ -5,7 +5,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import type { SourceSummary } from "../actions/types.ts";
 import type { ClientWork } from "../week/types.ts";
-import { causeLines, notConnected, SOURCE_NAMES, stateOf } from "./status.ts";
+import { causeLines, notConnected, SOURCE_NAMES, sourceKey, sourceLabel, stateOf } from "./status.ts";
 import { devopsSummary, workStatusLabel } from "./work.ts";
 import { updatedAgo } from "./refresh.ts";
 import { useReturnFocus } from "./CloseButton.tsx";
@@ -114,7 +114,11 @@ export function StatusSheet({ sources, devops, clock, zone, loading, busy, extra
               <span>{l.text}.</span>
               {l.step && <span className="muted"> {l.step}, then</span>}
               {l.fixes.map((f, i) =>
-                f.kind === "retry" ? (
+                f.kind === "replace_link" ? (
+                  <button key={i} type="button" className="mini primary" onClick={onSettings}>
+                    Replace link
+                  </button>
+                ) : f.kind === "retry" ? (
                   <button key={i} type="button" className="mini primary" disabled={loading} onClick={onRefresh}>
                     {loading ? "Retrying…" : "Retry"}
                   </button>
@@ -133,9 +137,9 @@ export function StatusSheet({ sources, devops, clock, zone, loading, busy, extra
           const st = stateOf(s);
           const detail = s.source === "dataverse" ? `${s.itemCount} ${s.itemCount === 1 ? "pattern" : "patterns"}` : s.source === "pto" ? `${s.itemCount} ${s.itemCount === 1 ? "day" : "days"}` : s.sample || notConnected(s) ? "" : `${s.itemCount} events`;
           return (
-            <li key={s.source} className={`source ${st.cls}`}>
+            <li key={sourceKey(s)} className={`source ${st.cls}`}>
               <span className="dot" aria-hidden="true" />
-              <span className="ph-src-name">{SOURCE_NAMES[s.source]}</span>
+              <span className="ph-src-name">{sourceLabel(s)}</span>
               <span className={`state ${st.cls}`}>{st.label}</span>
               <span className="muted ph-src-detail">{[detail, s.fetchedAt ? updatedAgo(s.fetchedAt, clock, zone) : ""].filter(Boolean).join(" · ")}</span>
             </li>

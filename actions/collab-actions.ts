@@ -27,6 +27,8 @@ export type CollabContext = {
   dataverse: (cfg: AppConfig) => DataverseSource;
   outlook: (cfg: AppConfig) => { write: OutlookWrite | null; schedule: ScheduleReader | null; source: CalendarSource } | null;
   google: (cfg: AppConfig) => CalendarSource | null;
+  /** CAL-1: my calendars added by link count as my busy time too. */
+  links?: { load: (weekStart: string) => Promise<{ status: string; fromCache: boolean; items: CalEvent[] }[]> };
   /** Step 13.5: my week's focus blocks (patterns and standing blocks only), to rank slots inside a client's blocks first. */
   blocks?: (cfg: AppConfig, weekStart: IsoDate) => Promise<Week | null>;
   now: () => string;
@@ -183,7 +185,8 @@ async function run(ctx: CollabContext, action: CollabAction, input: unknown): Pr
       const weeks = [...new Set(dates.map(mondayOf))];
       const own = plan ? ownEventIds((await plan.ownEvents())) : new Set<string>();
       const google = ctx.google(cfg);
-      const loads = await Promise.all(weeks.flatMap((w) => [ol.source.load(w).catch(() => null), google ? google.load(w).catch(() => null) : Promise.resolve(null)]));
+      const linked = ctx.links ? (await Promise.all(weeks.map((w) => ctx.links!.load(w).catch(() => [])))).flat() : [];
+      const loads = [...(await Promise.all(weeks.flatMap((w) => [ol.source.load(w).catch(() => null), google ? google.load(w).catch(() => null) : Promise.resolve(null)]))), ...linked];
       const problems = [...c.problems];
       if (loads.some((l) => l && l.status !== "ok" && !l.fromCache)) problems.push("A calendar of yours didn't load, so your own busy time may be missing");
       const mine: CalEvent[] = withoutOwn(loads.flatMap((l) => l?.items ?? []), own);

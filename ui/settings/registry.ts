@@ -144,6 +144,7 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "chats-read", section: "chats", label: "Client chats read for requests", keywords: ["polling", "reconnect", "delivery chats"] },
   // Accounts and calendars
   { id: "sources", section: "connections", label: "Sources", keywords: ["dataverse", "outlook", "google", "calendar", "connect", "reconnect", "disconnect", "retry"] },
+  { id: "calendar-links", section: "connections", label: "Calendars added by link", old: ["Add a calendar by link"], keywords: ["ics", "ical", "webcal", "subscribe", "icloud", "apple", "school", "busy only", "replace link"] },
   { id: "outlook-changes", section: "connections", label: "Outlook calendar changes", keywords: ["calendars.readwrite", "write"] },
   { id: "permissions", section: "connections", label: "Microsoft permissions", keywords: ["consent", "scopes", "chat.read"] },
   { id: "vm", section: "connections", label: "My VM", keywords: ["azure", "find my vm", "resource id"] },

@@ -808,6 +808,18 @@ Cooptimizers co-work on a Teams call in a client's delivery chat. FocusTime make
 - **Rollback:** revert the PR and redeploy; the table stays unused (an older build ignores it).
 
 
+## 50. CAL-1: Add any calendar by link (authorized Nov 10)
+
+Pilots need personal calendars without Google sign-in, and Apple has no comparable API. Anyone can add a calendar by its ICS subscription link (Google's secret iCal address, an Outlook published calendar, an iCloud public calendar, a school or team app). Decisions under "CAL-1"; files in `docs/architecture.md` (CAL-1).
+
+- **Add.** Settings › Accounts and calendars › Calendars added by link › Add a calendar by link: the link (webcal or https), Check link ("Found N upcoming events on host/…"), a name, a color, Busy only (default) or Show titles, Personal (default) or Work. At most 10 links. Where to find the link per provider in the help.
+- **Show.** Its events on Week and Today like other events, in its color, read only; Personal ones follow the Personal events switch and count in risk and free time.
+- **Refresh.** On use, at most every 15 minutes per link, conditional (ETag or Last-Modified); nothing polls when nobody uses FocusTime. Each link has its own source line: name, live, events, updated N min ago; a failure says why, with Retry, or Replace link when the link itself stopped working.
+- **Private.** The link is a secret: sealed per person, never returned, logged or exported (only its host shows). Busy only stores no titles. Visible only to the person; admins never see links or events.
+- **Safe fetch.** https only, no private or internal addresses at any hop (checked at connect time), 3 redirects, 15 seconds, 5 MB.
+- **Store:** one migration, `20261128T0900_calendar_links` (two user tables; adds only). Not in Export.
+- **Rollback:** revert the PR and redeploy; the tables stay unused (an older build ignores them).
+
 ## Part 0: a shared owner and state per conversation
 
 One record per conversation, the same for everyone who can see it: an owner (none, or one Cooptimizer, plus helpers), a state (Open, Owned or Closed) and a history. Each person sees Asked you, Up for grabs, You're on it, Teammate has it or Done, worked out from that record. I'll take it, Give to…, Add helper, Release, Close out and Reopen apply at once with Undo (through the Assistant and Teams, as a proposal with Confirm). A reply or a detected "I'll do it" only offers one tap. The first of two claims wins. Asking again on a Closed one reopens it to its last owner; a new message on an Owned one notifies the owner. Nothing is posted to Teams. Existing conversations are moved once by a backfill. Decisions under "Part 0" in `docs/decisions.md`.

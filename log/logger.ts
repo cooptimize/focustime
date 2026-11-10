@@ -3,7 +3,7 @@
 import { clientRef } from "./operation.ts";
 
 export type LogRecord = {
-  source: "dataverse" | "outlook" | "google" | "devops" | "azure" | "server" | "config" | "plan" | "auth" | "database" | "ai";
+  source: "dataverse" | "outlook" | "google" | "devops" | "azure" | "server" | "config" | "plan" | "auth" | "database" | "ai" | "ics";
   op: string;
   status?: number | string;
   durationMs?: number;

@@ -3,7 +3,12 @@
 import type { SourceSummary } from "../actions/types.ts";
 import type { ClientWork, FailureCause, IsoDateTime } from "../week/types.ts";
 
-export const SOURCE_NAMES = { dataverse: "Dataverse", pto: "PTO", outlook: "Outlook", google: "Google" } as const;
+export const SOURCE_NAMES = { dataverse: "Dataverse", pto: "PTO", outlook: "Outlook", google: "Google", ics: "Calendar link" } as const;
+
+/** A source's name on screen: a calendar link by the name its person gave it (CAL-1). */
+export const sourceLabel = (s: Pick<SourceSummary, "source" | "link">): string => (s.source === "ics" && s.link ? s.link.name : SOURCE_NAMES[s.source]);
+/** A React key that is unique when there are several calendar links. */
+export const sourceKey = (s: Pick<SourceSummary, "source" | "link">): string => (s.link ? `ics:${s.link.id}` : s.source);
 
 export type Calendar = "outlook" | "google";
 /** What a source's own entry offers. Retry lives on the cause line; Unlock is the user's step, then Retry. */
@@ -31,12 +36,14 @@ export function stateOf(s: SourceSummary): { cls: string; label: string } {
   if (s.sample) return { cls: "sample", label: "sample" };
   if (s.status === "ok") return { cls: "live", label: "live" };
   if (s.status === "auth_required") return { cls: "signin", label: "needs sign-in" };
+  // CAL-1: a calendar link that stopped working says so, whatever it still shows.
+  if (s.link?.broken) return { cls: "error", label: "stopped working" };
   if (s.fromCache) return { cls: "cached", label: "cached" };
   if (s.cause) return { cls: "error", label: "failed" };
   return { cls: "error", label: s.status.replace("_", " ") };
 }
 
-export type Fix = { kind: "retry" } | { kind: "connect" | "reconnect"; calendar: Calendar };
+export type Fix = { kind: "retry" } | { kind: "connect" | "reconnect"; calendar: Calendar } | { kind: "replace_link"; id: string };
 
 export type CauseLine = {
   /** Stable key: the shared cause, or the source for a failure of its own. */
@@ -90,11 +97,12 @@ export function causeLines(sources: readonly SourceSummary[], devops: readonly C
 
   for (const s of sources) {
     if (s.sample || s.status === "ok" || notConnected(s)) continue;
-    const name = SOURCE_NAMES[s.source];
+    const name = sourceLabel(s);
     const connect = sourceActions(s).find((a) => a === "connect" || a === "reconnect");
-    const fix: Fix = connect && isCalendar(s) ? { kind: connect, calendar: s.source } : { kind: "retry" };
+    // CAL-1: a link that stopped working is replaced, not retried.
+    const fix: Fix = connect && isCalendar(s) ? { kind: connect, calendar: s.source } : s.link?.broken ? { kind: "replace_link", id: s.link.id } : { kind: "retry" };
     if (s.cause) add(s.cause, s.cause, name, s.fetchedAt, s.fromCache, null, fix);
-    else add(`msg:${s.message ?? `${name} ${s.status}`}`, null, name, s.fetchedAt, s.fromCache, { text: ownText(s), step: null }, fix);
+    else add(`msg:${s.link ? `${s.link.id}:` : ""}${s.message ?? `${name} ${s.status}`}`, null, name, s.fetchedAt, s.fromCache, { text: s.link ? `${name}: ${ownText(s)}` : ownText(s), step: null }, fix);
   }
   const shared = (devops ?? []).filter((c) => c.status !== "ok" && c.cause);
   for (const cause of new Set(shared.map((c) => c.cause!))) {
@@ -114,8 +122,8 @@ export function causeLines(sources: readonly SourceSummary[], devops: readonly C
 
 /** A source's own failure in one sentence, without the "Showing data from" tail (the line shows that). */
 function ownText(s: SourceSummary): string {
-  const m = s.message ?? `${SOURCE_NAMES[s.source]} ${s.status.replace("_", " ")}`;
-  return m.replace(/\.\s*(Showing (data|PTO|items) from .*|No cached (data|PTO|items) yet)$/, "");
+  const m = s.message ?? `${sourceLabel(s)} ${s.status.replace("_", " ")}`;
+  return m.replace(/\.?\s*Replace it\?$/, "").replace(/\.\s*(Showing (data|PTO|items) from .*|No cached (data|PTO|items) yet)$/, "");
 }
 
 const CAUSE_WORD: Record<FailureCause, string> = { keyring: "keyring locked", network: "offline" };

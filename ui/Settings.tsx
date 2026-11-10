@@ -17,7 +17,8 @@ import type { FollowState } from "../week/follow.ts";
 import { spanText, VIEW_RANGE_NAMES, VIEW_RANGES, WEEKDAY_KEYS, type ViewRange } from "../week/hours.ts";
 import { call } from "./api.ts";
 import type { AiView } from "../ai/view.ts";
-import { notConnected, SOURCE_NAMES, sourceActions, stateOf, type Calendar } from "./status.ts";
+import { notConnected, SOURCE_NAMES, sourceActions, sourceKey, sourceLabel, stateOf, type Calendar } from "./status.ts";
+import { CalendarLinks } from "./settings/CalendarLinks.tsx";
 import { shortDate } from "./labels.ts";
 import { BINAURAL, MAX_PLAYLISTS, playlistLink, SOUND_NAMES, SOUNDS, type Playlist, type SoundKind } from "../plan/focussound.ts";
 import { sound } from "./sound.ts";
@@ -1781,9 +1782,9 @@ function Connections(p: BodyProps) {
           const acts = sourceActions(s);
           const cal = s.source === "outlook" || s.source === "google" ? s.source : null;
           return (
-            <li key={s.source} className={`source ${st.cls}`}>
+            <li key={sourceKey(s)} className={`source ${st.cls}`}>
               <span className="dot" aria-hidden="true" />
-              <strong>{SOURCE_NAMES[s.source]}</strong>
+              <strong>{sourceLabel(s)}</strong>
               <span className={`state ${st.cls}`}>{st.label}</span>
               <span className="muted">{s.message ?? (s.sample || notConnected(s) ? "" : `${s.itemCount} ${s.itemCount === 1 ? "item" : "items"}`)}</span>
               <span className="row-actions">
@@ -1806,6 +1807,9 @@ function Connections(p: BodyProps) {
         })}
       </ul>
       {p.reconnected && <InlineMoment line={`${SOURCE_NAMES[p.reconnected]} is connected again.`} />}
+      </Group>
+      <Group title="Calendars added by link" sid="calendar-links">
+        <CalendarLinks timeZone={Temporal.Now.timeZoneId()} onChanged={p.onRefresh} />
       </Group>
       <div data-setting="outlook-changes"><OutlookWriteRow /></div>
       <div data-setting="permissions"><MicrosoftPermissions /></div>

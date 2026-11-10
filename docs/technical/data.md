@@ -1,6 +1,6 @@
 # Data
 
-For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026; `picks.done_removed` against `fix/tx1-loose-ends` on Nov 8; SR-3's parts against `feat/report-finish` on Nov 8; DP-2's parts against `feat/deployment-items` on Nov 8; IB-2's against `feat/inbox-everything` on Nov 8; TX-1's parts against `fix/tx1-review` on Nov 8.
+For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026; `picks.done_removed` against `fix/tx1-loose-ends` on Nov 8; SR-3's parts against `feat/report-finish` on Nov 8; DP-2's parts against `feat/deployment-items` on Nov 8; IB-2's against `feat/inbox-everything` on Nov 8; TX-1's parts against `fix/tx1-review` on Nov 8; CAL-1's calendar links against `feat/ics-calendars` on Nov 10.
 
 ## One database, two kinds of table
 
@@ -48,6 +48,7 @@ FocusTime keeps everything in one database, its plan store: Azure SQL in dev and
 |---|---|---|---|
 | `outlook_events`, `markers`, `invites` | User | Invites | FocusTime's own Outlook events and help invites |
 | `write_log`, `devops_write_log`, `azure_write_log`, `teams_status_log` | User | DevOps log | The audit logs (see [Security](security.md#external-writes-and-the-audit-log)) |
+| `calendar_links`, `calendar_link_events` | User | No | CAL-1: calendars added by an ICS link. The link is sealed (`sealed`, the app data key, bound to the person and the link); also its name, color, Busy only or Show titles, Personal or Work, the host shown, ETag and Last-Modified, and the last check (a failure kind, never the server's words). Events: the instances 8 weeks back to 26 ahead, start and end, all day, show as, and a title only with Show titles (NULL with Busy only; never a location or description). Not in Export (the link is sealed with this store's key; the events come back with the next fetch); removed with Remove and with Delete my data |
 
 Newer DevOps write kinds than the `op` column's CHECK are kept in `write_kind`, with `op` "comment", so an older build still reads the row. SR-3's delete of one's own comment is stored as `write_kind` "comment_edit" with `deleted: true` in `ops`, and the old text in `before` for Undo. No migration.
 | `devops_identities`, `devops_item_clients` | User | Yes | A person's checked DevOps identity per client (never the PAT), item to client links |
@@ -107,7 +108,7 @@ Kept elsewhere:
 
 ## What is never stored
 
-- **Tokens and secrets in the clear.** Access tokens live only in memory. Refresh tokens and write PATs are sealed in `user_secrets`. The ID token is validated at sign-in and dropped; only name, UPN, email, object id and tenant id are kept.
+- **Tokens and secrets in the clear.** Access tokens live only in memory. Refresh tokens and write PATs are sealed in `user_secrets`; calendar links (CAL-1) are sealed in `calendar_links`. The ID token is validated at sign-in and dropped; only name, UPN, email, object id and tenant id are kept.
 - **The company DevOps read PAT.** Read from Dataverse when DevOps is fetched and not kept.
 - **Teammates' calendar details.** From free/busy only free or busy and working hours; never subjects, locations or other details. A teammate's time off shows only as "away".
 - **Teammates' presence.** Read for the people on screen, never stored, cached or logged.
@@ -115,6 +116,7 @@ Kept elsewhere:
 - **Voice.** Push-to-talk audio is held in memory for one request and never stored or logged.
 - **AI prompts and answers.** The request log keeps counts, cost and outcome only.
 - **Status report drafts and suggestions (SR-1, SR-3).** Feature comments are read live from DevOps and never stored. AI suggestions are held in server memory for 6 hours and never written to the plan store. Lines not pushed yet, features added by hand and dismissed suggestions stay only in that browser (`localStorage`). Upcoming PTO and Holidays is read from Dataverse each time (names and dates only).
+- **Calendar link details with Busy only (CAL-1).** No title, location or description is read into what is kept: only start, end and busy, free or tentative. Show titles keeps titles only. A calendar link's own address is never shown again, logged or exported; only its host is shown.
 - **Teams chat previews** (`lastMessagePreview`), status messages, out of office notes and work location are never read.
 
 ## Who can see what

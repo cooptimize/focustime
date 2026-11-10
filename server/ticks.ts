@@ -548,7 +548,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     if (!s?.runningSince) return void (lastCalendar = null);
     if (!calendarRefreshDue(s, lastCalendar, t)) return;
     lastCalendar = t;
-    void refreshTodayWarnings({ loadConfig, makeOutlook: liveCtx.makeOutlook, makeGoogle: liveCtx.makeGoogle, plan: store, now: () => instantNow().toString() })
+    void refreshTodayWarnings({ loadConfig, makeOutlook: liveCtx.makeOutlook, makeGoogle: liveCtx.makeGoogle, ...(liveCtx.linkCalendars ? { linkCalendars: liveCtx.linkCalendars } : {}), plan: store, now: () => instantNow().toString() })
       .then((n) => n !== null && log({ source: "plan", op: "warnings", kind: "refreshed", count: n }))
       .catch(() => log({ source: "plan", op: "warnings", kind: "failed" }));
   };

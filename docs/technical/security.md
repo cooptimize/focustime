@@ -1,6 +1,6 @@
 # Security
 
-For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `d25c148` on Nov 7, 2026 (SR-2 parts against its own branch); the assistant's context against `1e74410` with AS-3 (`feat/assistant-answers`). The standards repo (KB-1) against `feat/coop-standards` on Nov 8.
+For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `d25c148` on Nov 7, 2026 (SR-2 parts against its own branch); the assistant's context against `1e74410` with AS-3 (`feat/assistant-answers`). The standards repo (KB-1) against `feat/coop-standards` on Nov 8. Calendar links (CAL-1) against `feat/ics-calendars` on Nov 10.
 
 ## In short
 
@@ -21,11 +21,12 @@ flowchart LR
   A <-->|read PAT or the person's write PAT| D[Azure DevOps]
   A -->|app reader, read only| DV[Dataverse]
   A -->|as the person, read only| GC[Google Calendar]
+  A -->|https GET, guarded, read only| ICS[Calendar links]
   A -->|guarded, one client| AI[OpenAI]
   T[Teams bot service] <-->|signed messages| A
 ```
 
-Arrows point from the side that starts the call, labelled with the identity it uses. Data comes back on every arrow; FocusTime writes only to Graph, DevOps and Azure, and only the named writes below. Dataverse and Google are read only.
+Arrows point from the side that starts the call, labelled with the identity it uses. Data comes back on every arrow; FocusTime writes only to Graph, DevOps and Azure, and only the named writes below. Dataverse, Google and calendar links are read only.
 
 ## Sign-in and sessions
 
@@ -49,6 +50,7 @@ App secrets live only in Key Vault (RBAC mode, soft delete and purge protection 
 
 - **Scripts only.** Secrets are piped from `az ad app credential reset` or the developer's keyring straight into Key Vault; never printed, echoed, logged or passed as an argument. Nothing secret is in the repo, the image, build args, GitHub (variables hold ids only; deploys sign in with OIDC) or logs. Settings never takes an app secret (removed in ST-1).
 - **A person's secrets.** Their Microsoft and Google refresh tokens and DevOps write PATs are sealed in `user_secrets` with the app data key (`store/user-secrets.ts`) and never leave the server: not to the UI, the export, the logs or the AI.
+- **Calendar links (CAL-1).** A calendar's ICS link works like a password (anyone holding it reads the calendar), so it is treated as one: sealed in `calendar_links` with the app data key (bound to the person and the link), read back only by the fetcher, never returned to the browser, logged, exported or sent to the AI. Settings and the status show only its host ("calendar.google.com/…"); the paste box is a password field. Replace link and Remove are offered; Remove deletes the link and its events. Links are the adder's own: a user table under `store/scope.ts`, never shown to admins.
 - **Tokens.** Access tokens are kept in memory only, per person. Tokens, secrets, Authorization headers and raw HTTP bodies are never logged, cached, exported or printed.
 - **Logs** have a closed set of fields (source, operation, status, duration, count, kind, and a one-way reference for a client; `log/logger.ts`). There is no field for headers, bodies, tokens or free text, so they can't be logged by accident.
 
@@ -117,6 +119,18 @@ FocusTime reads a public GitHub repo of development standards. The repo is data,
 
 Standards are Cooptimize-wide policy with no client data, so they may go in any client's AI prompt; everything else in that prompt follows the client boundary. Article text is sent as data inside the request's input, and the instructions say nothing in it changes the rules. After the AI answers, FocusTime adds the links itself and drops any citation of a standard it didn't send. Ask's answer has to quote the article word for word, checked in code, or it says "Not in the standards".
 
+## Calendar links: the SSRF guard (CAL-1)
+
+A calendar link is a URL a person types, fetched by the server, so it is the one place where someone could aim FocusTime at an address of their choosing. The guard (`sources/ics/link.ts`, `sources/ics/fetch.ts`, `server/ics-fetch.ts`):
+
+- **https only.** webcal:// and webcals:// become https://; anything else is refused. Port 443 only, no user name or password in the link.
+- **No private or internal addresses.** Refused by name: localhost, `.local`, `.internal`, `.home.arpa`, names without a dot. Refused by address, checked in the socket's own DNS lookup at connect time (so a name can't pass and then resolve somewhere else): unspecified, loopback, private, carrier-grade NAT, link-local (169.254.0.0/16, where the cloud metadata services are; fe80::/10), unique local, multicast, reserved and documentation ranges, and IPv4 hidden in IPv6 (mapped, NAT64, 6to4). A name is refused if any of its answers is.
+- **Redirects re-checked.** The HTTP client never follows a redirect; each hop (at most 3) goes through the same rules.
+- **Bounded.** 15 seconds for the whole request, 5 MB, and only `text/calendar` (or a generic type whose body is a calendar) that parses. Errors carry a kind only, never the server's words.
+- **Read only, one person.** GET only, never a write to the calendar. One person's links are fetched for that person only.
+
+**Busy only** (the default) keeps no title, location or description: only when the person is busy. Show titles keeps titles only.
+
 ## External writes and the audit log
 
 Writes go only through the write framework (see [Architecture](architecture.md#an-external-write)). The complete list:
@@ -129,7 +143,7 @@ Writes go only through the write framework (see [Architecture](architecture.md#a
 | Azure | Start the one VM you confirmed | No (it isn't stopped by FocusTime) |
 | Teams 1:1 chat | The bot's replies and cards in your own chat | Not applicable |
 
-Nothing writes to Dataverse, Google, other Teams data or any other Azure resource. Every attempt is in Settings › Activity (the Outlook, DevOps, Azure and Teams status logs) with before and after values, result, Undo and Retry. A retry checks the target first, so a write that landed isn't done twice. Plan store changes from the Teams bot's buttons and "capture:" run at once with Undo, like the app's own buttons.
+Nothing writes to Dataverse, Google, calendar links, other Teams data or any other Azure resource. Every attempt is in Settings › Activity (the Outlook, DevOps, Azure and Teams status logs) with before and after values, result, Undo and Retry. A retry checks the target first, so a write that landed isn't done twice. Plan store changes from the Teams bot's buttons and "capture:" run at once with Undo, like the app's own buttons.
 
 ## The meeting rules
 
@@ -150,6 +164,8 @@ FocusTime reads and starts only the one VM you confirmed, with your own Azure ac
 | Tokens, PATs, app secrets | Logs, errors, exports, the browser, git | Key Vault or sealed `user_secrets`; access tokens in memory only; the `Pat` wrapper prints `[PAT]`; the logger has a closed set of fields (`log/logger.ts`) |
 | Client data | Mixing clients | One client per view, draft and AI request; the AI guard (`ai/guard.ts`); messages naming another client held back in client-facing chats; AI text for a client's DevOps scrubbed; every exit to client eyes flagged before it goes (GD-2) |
 | Other people's calendars and presence | Over-reading | Free/busy and working hours only; presence is a word, never stored |
+| The network inside Azure | A calendar link aimed at an internal address (SSRF) | https on 443 only; private, link-local and metadata addresses refused at connect time; redirects re-checked; 15 s and 5 MB caps (CAL-1) |
+| A person's calendar links | Logs, the browser, admins, other people | Sealed in `calendar_links`; only the host is ever shown; a user table; Busy only stores no titles (CAL-1) |
 | Meetings others organize | Accidental edits | Calendar editing tiers; only accept, tentative or decline, never PATCH or DELETE |
 | DevOps items | Accidental loss or a lost update | Named writes only, no deletes; `test /rev` on every patch; read back; undo |
 | Azure | Acting on the wrong resource | One confirmed VM; the client's allowlist; the person's own access; never stop |

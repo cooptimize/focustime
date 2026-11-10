@@ -26,6 +26,10 @@ import type { AiRuntime } from "../actions/ai-actions.ts";
 import { DEMO_CLIENTS, DEMO_CONFIG, DEMO_TZ } from "../sources/demo/data.ts";
 import { createPlanStore, openPlanDb, type PlanStore } from "../store/plan-store.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
+import { createCalendarLinks } from "../store/calendar-links.ts";
+import { fakeKeyProvider } from "../store/user-secrets.ts";
+import { createLinkCalendars } from "../sources/ics/source.ts";
+import { createDemoIcsGet } from "../sources/demo/links.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { mondayOf } from "../week/dates.ts";
 import { createDemoAzure, DEMO_PERSON, DEMO_VM_ID } from "../sources/demo/azure.ts";
@@ -232,6 +236,8 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     makeDataverse: () => sources.dataverse,
     makeOutlook: () => sources.outlook,
     makeGoogle: () => sources.google,
+    // CAL-1: calendar links on the demo's own database, answered in memory (sources/demo/links.ts), never fetched.
+    linkCalendars: createLinkCalendars({ store: createCalendarLinks({ db: shared, userId: DEMO_PERSON.oid, keys: fakeKeyProvider(), now: instant }), get: createDemoIcsGet(opts.now), log: () => {}, timeZone: () => DEMO_TZ, now: instant }),
     makeDevOps: () => sources.devops,
     saveSystemUserId: async () => {},
     now: opts.now,

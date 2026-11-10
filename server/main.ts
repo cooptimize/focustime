@@ -10,6 +10,9 @@ import type { Host, KeyProvider, SnapshotStore } from "../host/types.ts";
 import { perPerson } from "../host/per-person.ts";
 import { createUserSecrets, type UserSecrets } from "../store/user-secrets.ts";
 import { createPushDevices } from "../store/push-devices.ts";
+import { createCalendarLinks } from "../store/calendar-links.ts";
+import { createLinkCalendars } from "../sources/ics/source.ts";
+import { createIcsGet } from "./ics-fetch.ts";
 import { createPush, type VapidSource } from "./push.ts";
 import { keyVaultSecret } from "../host/azure/vapid.ts";
 import { openAiProvider } from "../ai/openai.ts";
@@ -558,6 +561,8 @@ const settingsFor = (userId: string): UserSettings =>
 /** A2: a person's encrypted secrets (refresh tokens, write PATs), sealed with the app's data key. */
 const secretsFor = (userId: string): UserSecrets => createUserSecrets({ db, userId, keys: host.keys, now: instantNow });
 /** P1: a person's Web Push: their devices and the app's VAPID key; the subject is the app's public URL. */
+/** CAL-1: the guarded getter every calendar link is fetched through (https only, DNS answers checked at connect). */
+const icsGet = createIcsGet();
 const pushFor = (userId: string) => createPush({ devices: createPushDevices({ db, userId, keys: host.keys, now: instantNow }), vapid: vapidSource, subject: app.publicUrl, fetch, now: () => Date.now(), log });
 
 // ADM-1: the team's settings, people's levels and client leads, and admin audit (app tables), and who is an admin.
@@ -913,6 +918,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     makeDataverse: dataverseFor(who),
     makeOutlook: outlookFor(who),
     makeGoogle: googleFor(who),
+    linkCalendars: createLinkCalendars({ store: createCalendarLinks({ db, userId, keys: host.keys, now: instantNow }), get: icsGet, log, timeZone: () => who.zone, now: instantNow }),
     makeDevOps: devopsFor(who),
     feedback: {
       target: feedbackTarget,

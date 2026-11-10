@@ -126,6 +126,8 @@ import { MEETING_CHAT } from "../store/conversation-store.ts";
 import type { MeetingSeries } from "../plan/meetings.ts";
 import type { ClientChat } from "../plan/requests.ts";
 import { inviteDomains } from "../config/schema.ts";
+import type { LinkCalendars } from "../sources/ics/source.ts";
+import { calendarLinkAction } from "./calendar-link-actions.ts";
 
 /** The plan store marker for the first launch (step 17.5). */
 const FIRST_LAUNCH_MARK = "first_launch";
@@ -165,6 +167,8 @@ export type ActionContext = {
   makeDataverse: (cfg: DataverseConfig, timeZone: string) => DataverseSource;
   makeOutlook: (cfg: OutlookConfig, timeZone: string) => CalendarSource & { write?: OutlookWrite; schedule?: ScheduleReader; people?: PeopleReader };
   makeGoogle: (cfg: GoogleConfig, timeZone: string) => CalendarSource;
+  /** CAL-1: this person's calendars added by link (read only); absent where there are none (tests). */
+  linkCalendars?: LinkCalendars;
   makeDevOps: (cfg: DataverseConfig, timeZone: string) => DevOpsSource;
   saveSystemUserId: (id: string) => Promise<void>;
   /** A2: the signed-in person's names (their sign-in email and UPN), to find them in Dataverse. */
@@ -414,11 +418,12 @@ async function aheadWeekModels(ctx: ActionContext, cfg: AppConfig, weekStarts: s
     weekStarts.map(async (w, i) => {
       let events: CalEvent[] = [];
       if (i < withCalendars) {
-        const [o, g] = await Promise.all([
+        const [o, g, l] = await Promise.all([
           cfg.outlook ? ctx.makeOutlook(cfg.outlook, tz).load(w, opts).catch(() => null) : null,
           cfg.google ? ctx.makeGoogle(cfg.google, tz).load(w, opts).catch(() => null) : null,
+          ctx.linkCalendars ? ctx.linkCalendars.load(w, opts).catch(() => []) : [],
         ]);
-        events = withoutOwn([...(o?.items ?? []), ...(g?.items ?? [])], own);
+        events = withoutOwn([...(o?.items ?? []), ...(g?.items ?? []), ...l.flatMap((x) => x.items)], own);
       }
       const sunday = Temporal.PlainDate.from(w).add({ days: 6 }).toString();
       return buildWeek({ weekStart: w, patterns: patterns?.items ?? [], events, config: cfg.week, pto: ptoByDate(ptoR?.items ?? [], weekDates7(w)), unavailable: (await ctx.plan?.unavailableBetween(w, sunday)) ?? [] });
@@ -446,6 +451,8 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   // A calendar that isn't set up says so (no-demo-leak): no stand-in meetings, ever.
   const outlookP: Promise<SourceResult<CalEvent>> = cfg?.outlook ? ctx.makeOutlook(cfg.outlook, tz).load(weekStart, refresh) : Promise.resolve(calendarNotSetUp("outlook"));
   const googleP: Promise<SourceResult<CalEvent>> = cfg?.google ? ctx.makeGoogle(cfg.google, tz).load(weekStart, refresh) : Promise.resolve(calendarNotSetUp("google"));
+  // CAL-1: calendars added by link, one result each (none when there are none); a failure keeps the last good events.
+  const linksP: Promise<SourceResult<CalEvent>[]> = ctx.linkCalendars ? ctx.linkCalendars.load(weekStart, refresh).catch(() => []) : Promise.resolve([]);
 
   let dataverse: SourceResult<FocusPattern>;
   let ptoP: Promise<SourceResult<PtoEntry> | null> = Promise.resolve(null);
@@ -522,7 +529,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     const r = await syncWeek({ plan: ctx.plan, ow, cfg, weekStart, refresh: !!input.refresh, now: ctx.now, clients: known }).catch(() => null);
     return { canWrite: true, facts: r?.facts ?? {} };
   })();
-  const [outlook, google, devops, ptoResult, ahead, synced] = await Promise.all([outlookP, googleP, devopsP, ptoP, aheadP, syncP]);
+  const [outlook, google, devops, ptoResult, ahead, synced, linked] = await Promise.all([outlookP, googleP, devopsP, ptoP, aheadP, syncP, linksP]);
   (await ctx.plan?.closeHelpFollowUps(Temporal.Instant.from(ctx.now())));
   const pto = ptoByDate(ptoResult?.items ?? [], weekDates7(weekStart));
   const ptoAhead = [...new Set((ahead?.items ?? []).map((e) => e.date))].sort();
@@ -545,7 +552,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   );
   // FocusTime's own Outlook events show once, as timeboxes, and never count as meetings in risk rules (step 12).
   const own = ctx.plan ? ownEventIds((await ctx.plan.ownEvents())) : new Set<string>();
-  const week = buildWeek({ weekStart, patterns: dataverse.items, events: withoutOwn([...outlook.items, ...google.items], own), config: weekConfig, pto, unavailable, flex, viewRange: input.viewRange ?? cfg?.ui.viewRange ?? DEFAULT_UI.viewRange, weekendPlanned });
+  const week = buildWeek({ weekStart, patterns: dataverse.items, events: withoutOwn([...outlook.items, ...google.items, ...linked.flatMap((l) => l.items)], own), config: weekConfig, pto, unavailable, flex, viewRange: input.viewRange ?? cfg?.ui.viewRange ?? DEFAULT_UI.viewRange, weekendPlanned });
   const todayDay = week.days.find((d) => d.date === todayDate);
   let clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
   // ADM-1: every client on the week has a team color (suggested the first time), unless the person picked their own.
@@ -608,7 +615,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     planClients,
     planDay: { date: todayDate, workday: (await hasHoursFor(ctx, model, todayDate)) && !todayOff, committed: !!todayPlan?.committedAt, available: !!ctx.plan },
     ptoAhead,
-    sources: [dataverse, ...(ptoResult ? [ptoResult] : []), outlook, google].map(summarize),
+    sources: [dataverse, ...(ptoResult ? [ptoResult] : []), outlook, google, ...linked].map(summarize),
     devops,
     clients: clientColors,
     guidance: cfg?.org?.guidance ?? null,
@@ -1550,6 +1557,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
             return { write: o.write ?? null, schedule: o.schedule ?? null, source: o };
           },
           google: (cfg) => (cfg.google ? ctx.makeGoogle(cfg.google, userZone(cfg)) : null),
+          ...(ctx.linkCalendars ? { links: ctx.linkCalendars } : {}),
           blocks: (cfg, w) => patternWeek(ctx, cfg, w),
           now: ctx.now,
         },
@@ -1729,6 +1737,13 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       if (ctx.demo?.on || !ctx.plan) return { ok: true, data: { first: false } };
       return { ok: true, data: { first: (await ctx.plan.markOnce(FIRST_LAUNCH_MARK, "once")) } };
     }
+    case "calendar_link.list":
+    case "calendar_link.preview":
+    case "calendar_link.add":
+    case "calendar_link.update":
+    case "calendar_link.replace":
+    case "calendar_link.remove":
+      return calendarLinkAction(ctx.linkCalendars, action, req.input);
     case "notices.list":
     case "notices.read":
     case "push.status":
