@@ -116,8 +116,9 @@ describe.skipIf(!CHROMIUM)("FN-1 story card and Wrap it up (browser, demo mode)"
     await page.getByRole("checkbox", { name: "Done: Utilization chart" }).uncheck();
     const m = (await writes(page)).length;
     await page.getByRole("checkbox", { name: "Done: Utilization chart" }).check();
-    const again = page.getByRole("dialog", { name: "Wrap it up" });
-    if (await again.isVisible({ timeout: 5_000 }).catch(() => false)) await page.keyboard.press("Escape");
+    // #4412 is Active now, not done, so the sheet opens again; Esc closes it.
+    await page.getByRole("dialog", { name: "Wrap it up" }).waitFor();
+    await page.keyboard.press("Escape");
     await expect.poll(() => page.getByRole("dialog", { name: "Wrap it up" }).count()).toBe(0);
     await expect(page.getByRole("checkbox", { name: "Done: Utilization chart" }).isChecked()).resolves.toBe(true);
     expect((await writes(page)).length).toBe(m);
