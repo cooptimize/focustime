@@ -430,7 +430,7 @@ export function createRhythm(d: RhythmDeps) {
   // ---- Taps ----
 
   const answer = (c: Card): InvokeBody => ({ statusCode: 200, type: CARD_TYPE, value: c });
-  const inline = (p: Proposal, message?: string | null, comment = ""): InlineProposal => ({ proposalId: p.id, title: p.title, whoSees: p.whoSees, changes: [...p.changes], note: p.note ?? null, expiresAt: p.expiresAt, state: "open", message: message ?? null, ...(p.editable.includes("comment") ? { comment } : {}) });
+  const inline = (p: Proposal, message?: string | null, comment = ""): InlineProposal => ({ proposalId: p.id, title: p.title, whoSees: p.whoSees, changes: [...p.changes], note: p.note ?? null, expiresAt: p.expiresAt, state: "open", message: message ?? null, ...((p.editable ?? []).includes("comment") ? { comment } : {}) });
 
   /** After a confirm: the picks', the day's and the plan's state as the store has them now. */
   async function refreshed<M extends RhythmModel>(userId: string, m: M): Promise<M> {

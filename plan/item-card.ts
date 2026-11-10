@@ -49,7 +49,7 @@ export const COMMENTS_SHOWN = 5;
 export const COMMENTS_MAX = 50;
 
 /** FocusTime's own context for an item: my to-dos and their timeboxes, my promises linked to it. */
-export type CardTodo = { id: number; date: string; half: "AM" | "PM"; status: string; title: string; timebox: string | null; leftMinutes: number | null };
+export type CardTodo = { id: number; date: string; half: "AM" | "PM" | "EVE"; status: string; title: string; timebox: string | null; leftMinutes: number | null };
 export type CardPromise = { key: string; what: string; due: string | null; state: string };
 
 export type ItemCard = Omit<CardRead, "comments" | "descriptionHtml" | "acceptanceHtml"> & {

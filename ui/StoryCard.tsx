@@ -197,7 +197,7 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
                     {card.todos.map((t) => (
                       <li key={`t${t.id}`}>
                         {t.status === "done" ? "✓ " : ""}
-                        {dayText(t.date).replace(/, \d{4}$/, "")} {t.half}
+                        {dayText(t.date).replace(/, \d{4}$/, "")} {t.half === "EVE" ? "evening" : t.half}
                         {t.timebox ? ` · ${t.timebox}` : ""}
                         {t.status !== "done" && t.leftMinutes ? ` · about ${durText(t.leftMinutes)}` : ""}
                       </li>

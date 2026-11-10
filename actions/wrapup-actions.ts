@@ -243,7 +243,7 @@ async function run(ctx: WrapUpContext, action: WrapUpAction, input: unknown): Pr
       return { ok: true, data: await confirmAll(ctx, d.previews.map((p) => p.previewId), false) };
     }
     case "wrapup.suggest":
-      return suggest(ctx, plan, cfg, input);
+      return suggest(ctx, plan, input);
   }
 }
 
@@ -303,7 +303,7 @@ export const WRAP_SUGGEST_INSTRUCTIONS = [
 const SUGGEST_SCHEMA = { type: "object" as const, properties: { text: { type: "string" as const } }, required: ["text"], additionalProperties: false as const };
 const memo = new Map<string, { at: number; text: string; namesRemoved: number }>();
 
-async function suggest(ctx: WrapUpContext, plan: PlanStore, cfg: AppConfig, input: unknown): Promise<ActionResponse> {
+async function suggest(ctx: WrapUpContext, plan: PlanStore, input: unknown): Promise<ActionResponse> {
   const o = fields(input, ["pickId", "outcome"], ["left"]);
   const outcome = outcomeOf(o.outcome);
   const p = await plan.getPick(posId(o.pickId, "pickId"));
@@ -312,7 +312,7 @@ async function suggest(ctx: WrapUpContext, plan: PlanStore, cfg: AppConfig, inpu
   const k = p.clientKey;
   const boxes = (await plan.timeboxesBetween(p.date, p.date)).filter((t) => (t.pickId ?? t.sessionPickId) === p.id && !t.removedAt);
   const boxed = Math.round(boxes.reduce((n, t) => n + Math.max(0, (Date.parse(t.end) - Date.parse(t.start)) / 60_000), 0));
-  const note = (await plan.latestNotes().catch(() => ({}) as Record<string, { text?: string }>))[k];
+  const note = (await plan.latestNotes().catch(() => ({}) as Record<string, { note?: string }>))[k];
   // That client's own facts only: this to-do, its time, my notes on it. Never another client's records (GD-2 point 4).
   const facts = [
     `Work item #${p.itemId}: ${p.title}${p.itemType ? ` (${p.itemType})` : ""}`,
@@ -321,7 +321,7 @@ async function suggest(ctx: WrapUpContext, plan: PlanStore, cfg: AppConfig, inpu
     ...((p.spentMinutes ?? 0) > 0 ? [`Time spent so far: ${durationText(p.spentMinutes!)}`] : []),
     ...(outcome === "progress" && left ? [`Time left: about ${durationText(left)}`] : []),
     ...(p.notes ? [`My notes on the to-do: ${p.notes}`] : []),
-    ...(note?.text ? [`Where I left off: ${note.text}`] : []),
+    ...(note?.note ? [`Where I left off: ${note.note}`] : []),
   ].map((l) => withoutEmails(l).slice(0, 600));
   const template = outcome === "finished" ? `Done: ${p.title}.` : `Progress: worked on ${p.title}${boxed ? ` for ${durationText(boxed)}` : ""}.${left ? ` About ${durationText(left)} left.` : ""} Next: `;
   const ai = await ctx.ai().catch(() => null);
