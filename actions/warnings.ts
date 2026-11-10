@@ -9,7 +9,7 @@ import type { CalEvent } from "../week/types.ts";
 import type { ActionContext } from "./dispatch.ts";
 import { userZone } from "../week/zone.ts";
 
-export type WarningsContext = Pick<ActionContext, "loadConfig" | "makeOutlook" | "makeGoogle" | "plan" | "now">;
+export type WarningsContext = Pick<ActionContext, "loadConfig" | "makeOutlook" | "makeGoogle" | "linkCalendars" | "plan" | "now">;
 
 /** Reloads today's calendars (cache respected) and stores today's warning points. Returns how many points. */
 export async function refreshTodayWarnings(ctx: WarningsContext): Promise<number | null> {
@@ -22,12 +22,13 @@ export async function refreshTodayWarnings(ctx: WarningsContext): Promise<number
   const today = localToday(ctx.now(), tz);
   const weekStart = mondayOf(today);
   // Each calendar falls back to its cache inside the source and never throws; anything unexpected drops just that one.
-  const [outlook, google] = await Promise.all([
+  const [outlook, google, linked] = await Promise.all([
     cfg.outlook ? ctx.makeOutlook(cfg.outlook, tz).load(weekStart).catch(() => null) : null,
     cfg.google ? ctx.makeGoogle(cfg.google, tz).load(weekStart).catch(() => null) : null,
+    ctx.linkCalendars ? ctx.linkCalendars.load(weekStart).catch(() => []) : [],
   ]);
   // FocusTime's own timebox events are not meetings (step 12).
-  const events: CalEvent[] = withoutOwn([...(outlook?.items ?? []), ...(google?.items ?? [])], ownEventIds((await plan.ownEvents())));
+  const events: CalEvent[] = withoutOwn([...(outlook?.items ?? []), ...(google?.items ?? []), ...linked.flatMap((l) => l.items)], ownEventIds((await plan.ownEvents())));
   const sunday = Temporal.PlainDate.from(weekStart).add({ days: 6 }).toString();
   const week = buildWeek({ weekStart, patterns: [], events, config: cfg.week, unavailable: (await plan.unavailableBetween(weekStart, sunday)), flex: (await plan.flexBetween(weekStart, sunday)) });
   const day = week.days.find((d) => d.date === today);

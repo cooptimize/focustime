@@ -447,7 +447,7 @@ export function AllDay({ events }: { events: readonly CalEvent[] }) {
   return (
     <div className={`day-allday${events.length ? "" : " empty"}`}>
       {events.map((e) => (
-        <span key={e.id} className={`chip ${e.unavailable ? "unavailable" : e.isPersonal ? "personal" : "meeting"}`} title={`${e.title} · all day · ${sourceName(e, samples)}`}>
+        <span key={e.id} className={`chip ${e.unavailable ? "unavailable" : e.isPersonal ? "personal" : "meeting"}${e.calendar ? " linked" : ""}`} style={e.calendar ? ({ "--cal": e.calendar.color } as CSSProperties) : undefined} title={`${e.title} · all day · ${sourceName(e, samples)}`}>
           {e.title}
         </span>
       ))}
@@ -1137,7 +1137,7 @@ function RulerEvent({ e, tz, style }: { e: CalEvent; tz: string; style: CSSPrope
   const menu = useEventMenu(e);
   const kind = e.unavailable ? "unavailable" : e.isPersonal ? "personal" : "meeting";
   return (
-    <div className={`r-ev ${kind} show-${e.showAs ?? "busy"}`} style={style} title={`${e.title}\n${eventRange(e, tz)} · ${e.unavailable ? "Unavailable" : sourceName(e, samples)} · ${showAsLabel(e)}`} {...menu}>
+    <div className={`r-ev ${kind}${e.calendar ? " linked" : ""} show-${e.showAs ?? "busy"}`} style={e.calendar ? ({ ...style, "--cal": e.calendar.color } as CSSProperties) : style} title={`${e.title}\n${eventRange(e, tz)} · ${e.unavailable ? "Unavailable" : sourceName(e, samples)} · ${showAsLabel(e)}`} {...menu}>
       <span>{e.title}</span>
     </div>
   );

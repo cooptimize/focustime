@@ -112,8 +112,8 @@ export function EventCard({ placed, tz, style, label = true, overlaps = false }:
   const menu = useEventMenu(e);
   return (
     <div
-      className={`event ${e.unavailable ? "unavailable" : kind} show-${show} ${placed.continuesBefore ? "cont-before" : ""} ${placed.continuesAfter ? "cont-after" : ""}`}
-      style={style}
+      className={`event ${e.unavailable ? "unavailable" : kind}${e.calendar ? " linked" : ""} show-${show} ${placed.continuesBefore ? "cont-before" : ""} ${placed.continuesAfter ? "cont-after" : ""}`}
+      style={e.calendar ? ({ ...style, "--cal": e.calendar.color } as CSSProperties) : style}
       title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${showAsLabel(e)}${e.unavailable ? "" : "\nClick for what FocusTime can do with it"}`}
       {...menu}
     >

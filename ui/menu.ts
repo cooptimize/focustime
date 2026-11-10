@@ -1238,6 +1238,12 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "push.status":
     case "push.subscribe":
     case "push.remove": return { run: () => env.openSettings("notifications", "devices") };
+    case "calendar_link.list":
+    case "calendar_link.preview":
+    case "calendar_link.add":
+    case "calendar_link.update":
+    case "calendar_link.replace":
+    case "calendar_link.remove": return { run: () => env.openSettings("connections", "calendar-links") };
     case "ui.set_reduce_motion": return { next: () => ({ title: "Reduce motion", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.reduceMotion === on, action: "ui.set_reduce_motion", run: () => env.saveReduceMotion(on) })) }) };
     case "demo.reset": return env.demo ? { run: () => env.openSettings("data", "demo-reset") } : { disabled: "Reset demo is only in the demo" };
     case "demo.status": return env.demo ? { run: () => env.openSettings("data", "demo-reset") } : { disabled: "Only in the demo" };

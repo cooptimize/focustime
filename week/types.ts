@@ -16,7 +16,7 @@ export type IsoDate = string;
 export type IsoDateTime = string;
 
 /** "pto" is the Dataverse Time Off Tracker read (step 6), reported on its own. */
-export type SourceId = "dataverse" | "outlook" | "google" | "pto";
+export type SourceId = "dataverse" | "outlook" | "google" | "pto" | "ics";
 
 /**
  * A failure's root cause when it is shared beyond one source, so the status bar can name it once (step 6.1):
@@ -36,6 +36,8 @@ export type SourceResult<T> = {
   message?: string;
   fixAction?: "connect_google" | "connect_microsoft" | "open_settings";
   cause?: FailureCause;
+  /** CAL-1: which calendar link (source "ics"); never the link itself. broken: the link needs replacing. */
+  link?: { id: string; name: string; color: string; kind: "personal" | "work"; mode: "busy" | "titles"; broken: boolean };
 };
 
 /** A Focus Time row after normalization: a recurring weekly pattern. */
@@ -70,7 +72,7 @@ export type ShowAs = "free" | "tentative" | "busy" | "oof" | "workingElsewhere" 
 export type CalEvent = {
   id: string;
   /** "focustime": unavailable time blocked in FocusTime (step 6b), busy like a meeting but not a meeting. */
-  source: "outlook" | "google" | "focustime";
+  source: "outlook" | "google" | "focustime" | "ics";
   title: string;
   /** Timed: ISO date-time with offset. All-day: ISO date. */
   start: string;
@@ -88,6 +90,8 @@ export type CalEvent = {
   notMeeting?: "timebox" | "solo";
   /** Set on unavailable time (source "focustime"): its plan store id and note. */
   unavailable?: { id: number; note: string | null };
+  /** CAL-1: a calendar added by link (source "ics"): its name and color as the person set them. */
+  calendar?: { name: string; color: string };
 };
 
 /** Time blocked in FocusTime for things on no calendar (step 6b). Counts against capacity like a meeting. */

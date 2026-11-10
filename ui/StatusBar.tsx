@@ -3,7 +3,7 @@ import type { SourceSummary } from "../actions/types.ts";
 import type { ClientWork } from "../week/types.ts";
 import { hoursSummary, type TimeModel } from "../week/hours.ts";
 import { devopsSummary, workStatusLabel } from "./work.ts";
-import { causeLines, notConnected, SOURCE_NAMES, sourceActions, stateOf, type Calendar, type Fix } from "./status.ts";
+import { causeLines, notConnected, SOURCE_NAMES, sourceActions, sourceKey, sourceLabel, stateOf, type Calendar, type Fix } from "./status.ts";
 import { stampText } from "./stamp.ts";
 import { updatedAgo } from "./refresh.ts";
 import { userZone } from "../week/zone.ts";
@@ -22,11 +22,13 @@ type Props = {
   onRefresh: () => void;
   onConnect: (s: Calendar) => void;
   onDisconnect: (s: Calendar) => void;
+  /** CAL-1: open Settings at a calendar link to replace it. */
+  onReplaceLink?: (id: string) => void;
 };
 
 const when = (iso: string, tz: string): string => stampText(iso, tz);
 
-export function StatusBar({ sources, devops, hours, loading, busy, notice, extra, clock, onRefresh, onConnect, onDisconnect }: Props) {
+export function StatusBar({ sources, devops, hours, loading, busy, notice, extra, clock, onRefresh, onConnect, onDisconnect, onReplaceLink }: Props) {
   const shape = { timeZone: userZone({ hours }) };
   const lines = causeLines(sources, devops);
   // Step 10: one quiet line when everything is live; it opens on a click and on its own when something needs attention.
@@ -45,7 +47,11 @@ export function StatusBar({ sources, devops, hours, loading, busy, notice, extra
     </span>
   );
   const fixButton = (f: Fix, key: string) =>
-    f.kind === "retry" ? (
+    f.kind === "replace_link" ? (
+      <button key={key} type="button" className="mini primary" onClick={() => onReplaceLink?.(f.id)}>
+        Replace link
+      </button>
+    ) : f.kind === "retry" ? (
       <button key={key} type="button" className="mini primary" disabled={loading} onClick={onRefresh}>
         {loading ? "Retrying…" : "Retry"}
       </button>
@@ -79,13 +85,13 @@ export function StatusBar({ sources, devops, hours, loading, busy, notice, extra
         )}
         {sources.map((s) => {
           const st = stateOf(s);
-          const detail = s.source === "dataverse" ? `${s.itemCount} ${s.itemCount === 1 ? "pattern" : "patterns"}` : s.source === "pto" ? `${s.itemCount} ${s.itemCount === 1 ? "day" : "days"}` : s.sample || notConnected(s) ? "" : `${s.itemCount} events`;
+          const detail = s.source === "dataverse" ? `${s.itemCount} ${s.itemCount === 1 ? "pattern" : "patterns"}` : s.source === "pto" ? `${s.itemCount} ${s.itemCount === 1 ? "day" : "days"}` : s.sample || notConnected(s) ? "" : `${s.itemCount} ${s.itemCount === 1 ? "event" : "events"}`;
           const actions = sourceActions(s);
           const cal = s.source === "outlook" || s.source === "google" ? s.source : null;
           return (
-            <span key={s.source} className={`source ${st.cls}`} title={s.message ?? ""}>
-              <span className="dot" aria-hidden="true" />
-              {SOURCE_NAMES[s.source]}
+            <span key={sourceKey(s)} className={`source ${st.cls}`} title={s.message ?? (s.link ? `Calendar link: ${s.link.name} (${s.link.mode === "busy" ? "busy only" : "with titles"}, ${s.link.kind})` : "")}>
+              <span className="dot" aria-hidden="true" style={s.link && st.cls === "live" ? { background: s.link.color } : undefined} />
+              {sourceLabel(s)}
               {/* A2: "needs sign-in" is the link that signs in again, inside the one-line chip. */}
               {cal && st.cls === "signin" && actions.includes("reconnect") ? (
                 <button type="button" className="state signin state-link" disabled={busy !== null} onClick={() => onConnect(cal)} title={s.message ?? "Sign in again"}>
@@ -94,19 +100,26 @@ export function StatusBar({ sources, devops, hours, loading, busy, notice, extra
               ) : (
                 <span className={`state ${st.cls}`}>{st.label}</span>
               )}
-              {s.fetchedAt && st.cls !== "live" && (
+              {/* CAL-1: a calendar link reads "Family · live · 12 events · updated 6 min ago". */}
+              {s.link && detail && <span className="muted">{detail}</span>}
+              {s.fetchedAt && (st.cls !== "live" || s.source === "ics") && (
                 <span className="muted" title={`${s.fromCache ? "Snapshot from" : "Fetched"} ${when(s.fetchedAt, shape.timeZone)}`}>
                   {updatedAgo(s.fetchedAt, clock, shape.timeZone)}
                 </span>
               )}
-              {detail && <span className="muted">{detail}</span>}
+              {!s.link && detail && <span className="muted">{detail}</span>}
+              {s.link?.broken && onReplaceLink && (
+                <button type="button" className="mini primary" onClick={() => onReplaceLink(s.link!.id)}>
+                  Replace link
+                </button>
+              )}
               {cal && (actions.includes("connect") || (actions.includes("reconnect") && st.cls !== "signin")) && (
                 <button type="button" className="mini primary" disabled={busy !== null} onClick={() => onConnect(cal)}>
                   {busy === cal ? "Waiting for sign-in…" : actions.includes("connect") ? "Connect" : "Reconnect"}
                 </button>
               )}
               {cal && actions.includes("disconnect") && (
-                <button type="button" className="mini quiet" disabled={busy !== null} onClick={() => onDisconnect(cal)} aria-label={`Disconnect ${SOURCE_NAMES[s.source]}`}>
+                <button type="button" className="mini quiet" disabled={busy !== null} onClick={() => onDisconnect(cal)} aria-label={`Disconnect ${sourceLabel(s)}`}>
                   Disconnect
                 </button>
               )}

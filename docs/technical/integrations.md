@@ -1,8 +1,8 @@
 # Integrations
 
-For engineers working on a source and IT reviewing what FocusTime asks for. Checked against `bc72446` on Nov 7, 2026 (with IN-2 on `feat/invite-send`; the holidays read against `feat/report-finish` on Nov 8). GitHub (KB-1) against `feat/coop-standards` on Nov 8.
+For engineers working on a source and IT reviewing what FocusTime asks for. Checked against `bc72446` on Nov 7, 2026 (with IN-2 on `feat/invite-send`; the holidays read against `feat/report-finish` on Nov 8). GitHub (KB-1) against `feat/coop-standards` on Nov 8. Calendar links (CAL-1) against `feat/ics-calendars` on Nov 10.
 
-Every outside system is read only, except the named writes listed for each one below. Each source reports its own status (`ok`, `auth_required`, `unreachable`, `misconfigured` or `error`, `week/types.ts`). When one fails, people see that source's last good data with its age, or a plain message and the fix ("Connect Google Calendar", "Open Settings"), and the rest of FocusTime keeps working. Nothing stands in for a failed source: a real session never shows demo data.
+Every outside system is read only, except the named writes listed for each one below. Calendar links (CAL-1) are read only. Each source reports its own status (`ok`, `auth_required`, `unreachable`, `misconfigured` or `error`, `week/types.ts`). When one fails, people see that source's last good data with its age, or a plain message and the fix ("Connect Google Calendar", "Open Settings"), and the rest of FocusTime keeps working. Nothing stands in for a failed source: a real session never shows demo data.
 
 ## Microsoft Entra ID and Microsoft Graph
 
@@ -70,6 +70,27 @@ Every outside system is read only, except the named writes listed for each one b
 **Written.** Nothing.
 
 **Failure.** "Connect Google Calendar" or "Reconnect"; everything else works without it.
+
+## Calendar links (ICS)
+
+**Auth.** None: a calendar's subscription link (an ICS address) carries its own access, so FocusTime treats the link as a secret (CAL-1). Each person adds their own in Settings › Accounts and calendars › Calendars added by link; it is sealed in `calendar_links` and never shown again (only its host).
+
+**Read.** One https GET of the link (`server/ics-fetch.ts`, behind the SSRF guard in [Security](security.md#calendar-links-the-ssrf-guard-cal-1)), parsed with `ical.js` (`sources/ics/parse.ts`): recurrences (RRULE, RDATE, EXDATE, RECURRENCE-ID overrides) expanded from 8 weeks back to 26 ahead, the feed's VTIMEZONE or an IANA TZID, all-day events as dates, cancelled instances dropped. The instances go into the same calendar events as Outlook's and Google's (`sources/ics/source.ts`), personal or work as the person set. Busy only (the default) keeps no titles. Read at most every 15 minutes per link while FocusTime reads the week, and at once on Refresh; conditional with ETag (If-None-Match) or Last-Modified, and a 304 keeps what is stored. Nothing is fetched in the background.
+
+**How fresh each provider is.** FocusTime's 15 minutes is on top of how often the provider rebuilds its feed:
+
+| Provider | Where the link is | Lag (provider side, not FocusTime's) |
+|---|---|---|
+| Google Calendar | Settings › the calendar › Integrate calendar › Secret address in iCal format | Google updates its iCal feeds on its own schedule, often hours behind; ETag supported |
+| Outlook.com, Outlook on the web | Settings › Calendar › Shared calendars › Publish a calendar › ICS | Usually minutes to an hour; Exchange's published calendars can lag more |
+| iCloud | Share the calendar › Public Calendar (webcal://) | Usually minutes; the host can change (p01 to p123), and iCloud redirects, which is followed (re-checked) |
+| School and activity apps | "Subscribe", "iCal" or "ICS" | Varies; some serve the calendar as `text/plain` or `application/octet-stream`, accepted when the body is a calendar |
+
+These lags are typical behavior, not tested by FocusTime; when a provider is slow, Refresh only reads what the provider serves.
+
+**Written.** Nothing, ever.
+
+**Failure.** The link's line in the status says what happened with its last good events and their age: "Family: The link stopped working" with Replace link (404, 410, 401, 403, not a calendar, or a blocked address), or a passing problem with Retry (a timeout, the network). Everything else works without it.
 
 ## Azure Resource Manager (My VM)
 

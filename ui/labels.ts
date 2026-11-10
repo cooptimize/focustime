@@ -68,6 +68,8 @@ export const SampleSources = createContext<ReadonlySet<string>>(new Set());
 
 export function sourceName(e: CalEvent, samples: ReadonlySet<string>): string {
   if (e.source === "focustime") return "FocusTime (unavailable)";
+  // CAL-1: a calendar added by link, by the name its person gave it.
+  if (e.source === "ics") return e.calendar ? `${e.calendar.name} (calendar link)` : "Calendar link";
   const name = e.source === "outlook" ? "Outlook" : "Google";
   return samples.has(e.source) ? `${name} sample` : name;
 }

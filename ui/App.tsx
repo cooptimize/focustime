@@ -38,7 +38,7 @@ import { DevOpsWork, workByClient } from "./work.ts";
 import { afterLoad, createAutoRefresh, type LoadState, type RefreshTrigger } from "./refresh.ts";
 import { DetailPanel } from "./DetailPanel.tsx";
 import { StatusBar } from "./StatusBar.tsx";
-import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
+import { causeLines, sourceActions, sourceLabel, stateOf } from "./status.ts";
 import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { MustsSummary, TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
@@ -1430,7 +1430,7 @@ export function App() {
       goToday,
       refresh: () => auto.trigger("button"),
       showSourceStatus: () => {
-        const states = data.sources.map((s) => `${SOURCE_NAMES[s.source]}: ${stateOf(s).label}`).join(" · ");
+        const states = data.sources.map((s) => `${sourceLabel(s)}: ${stateOf(s).label}`).join(" · ");
         const causes = causeLines(data.sources, data.devops).map((l) => l.text).join(". ");
         setNotice(causes ? `${states}. ${causes}.` : states);
       },
@@ -2184,6 +2184,7 @@ export function App() {
         onRefresh={() => auto.trigger("button")}
         onConnect={(src) => void connect(src)}
         onDisconnect={(src) => void disconnect(src)}
+        onReplaceLink={() => setSettingsAt("connections", "calendar-links")}
       />}
       {phone && statusOpen && (
         <StatusSheet
@@ -2197,7 +2198,7 @@ export function App() {
           extra={personalHiddenChip}
           onRefresh={() => auto.trigger("button")}
           onConnect={(src) => void connect(src)}
-          onSettings={() => (setStatusOpen(false), setSettingsAt("connections", "sources"))}
+          onSettings={() => (setStatusOpen(false), setSettingsAt("connections", data.sources.some((x) => x.link?.broken) ? "calendar-links" : "sources"))}
           onClose={() => setStatusOpen(false)}
         />
       )}

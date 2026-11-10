@@ -75,3 +75,23 @@ describe("DevOps names the true cause", () => {
     expect(workStatusLabel(client("A", { status: "auth_failed", fromCache: true }))).toBe("cached (PAT expired or invalid)");
   });
 });
+
+describe("calendar links in the status (CAL-1)", () => {
+  const link = (id: string, name: string, broken: boolean) => ({ id, name, color: "#0d9488", kind: "personal" as const, mode: "busy" as const, broken });
+  it("a link that stopped working: its own line by name, Replace link, and the chip says so", () => {
+    const stopped = src("ics", { status: "error", fromCache: true, message: "The link stopped working. Replace it?", fixAction: "open_settings", link: link("a1", "Family", true) });
+    const [line] = causeLines([src("outlook"), stopped], []);
+    expect(line).toMatchObject({ affected: ["Family"], text: "Family: The link stopped working", fixes: [{ kind: "replace_link", id: "a1" }], since: AT });
+    expect(stateOf(stopped)).toEqual({ cls: "error", label: "stopped working" });
+    expect(sourceActions(stopped)).toEqual([]);
+  });
+
+  it("two links failing alike keep a line each; a passing problem is a Retry", () => {
+    const slow = (id: string, name: string) => src("ics", { status: "unreachable", fromCache: true, message: "The calendar's server took too long to answer", link: link(id, name, false) });
+    const lines = causeLines([slow("a1", "Family"), slow("b2", "School")], []);
+    expect(lines.map((l) => [l.text, l.fixes])).toEqual([
+      ["Family: The calendar's server took too long to answer", [{ kind: "retry" }]],
+      ["School: The calendar's server took too long to answer", [{ kind: "retry" }]],
+    ]);
+  });
+});
