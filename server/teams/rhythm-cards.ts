@@ -20,6 +20,8 @@ export type InlineProposal = {
   expiresAt: string;
   state: "open" | "done" | "failed" | "expired" | "cancelled";
   message?: string | null;
+  /** FN-1: Wrap it up's optional comment box; the text shown in this preview ("" for none). */
+  comment?: string;
 };
 export type BriefBlock = { label: string; client: string | null; meetings: string[]; picks: PickRow[] };
 
@@ -40,10 +42,10 @@ export type RhythmModel = BriefModel | CheckinModel | CloseoutModel | NudgeModel
 export type RhythmOp = "done" | "undone" | "not_yet" | "confirm_today" | "move" | "move_rest" | "close_out" | "closeout_text" | "confirm" | "cancel" | "session_done" | "session_partly" | "session_left" | "session_none" | "session_all" | "session_undo" | "session_back";
 export const RHYTHM_OPS: readonly RhythmOp[] = ["done", "undone", "not_yet", "confirm_today", "move", "move_rest", "close_out", "closeout_text", "confirm", "cancel", "session_done", "session_partly", "session_left", "session_none", "session_all", "session_undo", "session_back"];
 /** What a rhythm tap sends: the card's occasion, the op, a pick or proposal, and the card's inputs by id. */
-export type RhythmTap = { ft: "rhythm"; occasion: string; op: RhythmOp; pickId?: number; proposalId?: string; movePick?: string; moveTo?: string; closeoutText?: string; left?: number; sessionLeft?: string };
+export type RhythmTap = { ft: "rhythm"; occasion: string; op: RhythmOp; pickId?: number; proposalId?: string; movePick?: string; moveTo?: string; closeoutText?: string; left?: number; sessionLeft?: string; comment?: string };
 export type CaptureTap = { ft: "capture_undo"; captureId: number };
 
-const MAX = { blocks: 3, picks: 5, meetings: 3, list: 3, closeoutText: 1000 } as const;
+const MAX = { blocks: 3, picks: 5, meetings: 3, list: 3, closeoutText: 1000, comment: 1000 } as const;
 const ROUTE: Record<RhythmModel["kind"], [string, string]> = {
   brief: ["#/today", "Open Today"],
   checkin: ["#/today/checkin", "Open Check-in"],
@@ -88,6 +90,8 @@ function proposalPart(m: { occasion: string }, p: InlineProposal): unknown[] {
     if (p.changes.length) items.push({ type: "FactSet", facts: p.changes.slice(0, 14).map((c) => ({ title: c.field, value: `${shown(c.before)} → ${shown(c.after)}` })) });
     if (p.note) items.push(muted(p.note));
     if (p.message) items.push(text(p.message, { color: "Warning", spacing: "Small" }));
+    // FN-1: Wrap it up's comment. A comment typed here comes back as a fresh preview with it; only a Confirm on that writes.
+    if (p.comment !== undefined) items.push({ type: "Input.Text", id: "wrapComment", isMultiline: true, maxLength: MAX.comment, value: p.comment, placeholder: "Done: … or Progress: … Next: …", label: "Comment (optional)" });
     items.push(muted("Nothing changes until you confirm. This expires in 15 minutes."));
     items.push(actionSet([exec("Confirm", tapOn(m, "confirm", { proposalId: p.proposalId }), "positive"), exec("Cancel", tapOn(m, "cancel", { proposalId: p.proposalId }))]));
   } else if (p.state === "done") {
@@ -316,5 +320,7 @@ export function rhythmTapOf(value: unknown): RhythmTap | CaptureTap | null {
   // TX-1b: each row's own box; `sessionLeft` is a card sent before that, still in a chat.
   const typed = short(pickId ? (d[`sessionLeft_${pickId}`] ?? d.sessionLeft) : d.sessionLeft, 12);
   if (typed !== undefined) out.sessionLeft = typed;
+  const comment = short(d.wrapComment, MAX.comment);
+  if (comment !== undefined) out.comment = comment;
   return out;
 }

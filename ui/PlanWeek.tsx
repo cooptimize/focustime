@@ -702,7 +702,7 @@ function FeaturePanel({ k, itemId, info, item, color, name, drafts, listed, clie
             <BreakDown clientKey={k} item={{ id: itemId, title }} />
             <button type="button" className="link-btn" onClick={() => ops.brief(k, itemId)}>Coop brief</button>
             {drafts.length > 0 && <CreateInDevOps drafts={drafts.slice(0, 10)} label={`Create ${drafts.length === 1 ? "the draft" : `${Math.min(10, drafts.length)} drafts`} in DevOps`} />}
-            {f && <WorkLink clientKey={k} url={f.url} className="mini">Open in DevOps</WorkLink>}
+            {f && <WorkLink clientKey={k} url={f.url} className="mini">Open card</WorkLink>}
           </span>
         )}
       </section>
@@ -802,7 +802,7 @@ function ReadyRow({ f, clientName, tz, drafts, onBrief, onMark, onAsk, onDraft, 
           <CreateInDevOps drafts={drafts.slice(0, 10)} label={`Create ${drafts.length === 1 ? "the drafted" : `${Math.min(10, drafts.length)} drafted`} ${f.kind === "needs_features" ? (drafts.length === 1 ? "feature" : "features") : drafts.length === 1 ? "story" : "stories"} in DevOps`} />
         )}
         {f.kind === "no_target_date" && f.itemId && <DevOpsAction clientKey={f.clientKey} label="Set target date" onRun={(w) => w.targetDate({ clientKey: f.clientKey, itemId: f.itemId!, title: f.title, current: null })} />}
-        {(f.kind === "needs_features" || f.kind === "no_target_date") && <WorkLink clientKey={f.clientKey} url={f.url} className="mini">Open in DevOps</WorkLink>}
+        {(f.kind === "needs_features" || f.kind === "no_target_date") && <WorkLink clientKey={f.clientKey} url={f.url} className="mini">Open card</WorkLink>}
       </span>
     </li>
   );

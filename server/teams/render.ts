@@ -18,12 +18,12 @@ export const askLink = (publicUrl: string, turnId: number | string) => `${base(p
 
 const urls = (links: readonly (Link | undefined)[], publicUrl: string) => safeLinks(links.flatMap((l) => (l ? [{ label: l.label, url: toUrl(publicUrl, l.href) }] : [])), publicUrl);
 
-/** A card's own links as the Assistant gave them (a result card's Open …, an item's DevOps link). */
+/** A card's own links as the Assistant gave them (a result card's Open …, and an item's story card in FocusTime: FN-1, never DevOps). */
 export function cardLinks(c: AsCard): Link[] {
   if (c.kind === "question" || c.kind === "suggest") return [];
   if (c.kind === "section") return c.lines.flatMap((l) => (l.link ? [l.link] : []));
   const own = c.link ? [c.link] : [];
-  return c.kind === "item" && c.devopsUrl ? [...own, { label: "Open in DevOps", href: c.devopsUrl }] : own;
+  return c.kind === "item" ? [...own, { label: "Story card", href: `#/item/${encodeURIComponent(c.clientKey)}/${c.id}` }] : own;
 }
 
 const small = (t: string) => text(t, { spacing: "Small" });

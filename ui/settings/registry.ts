@@ -102,7 +102,7 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "shortest-useful-time", section: "planning", label: "Shortest useful time per size", old: ["Shortest useful time, S", "Shortest useful time, M", "Shortest useful time, L"], keywords: ["timebox my day", "minimum"] },
   { id: "carry-over", section: "planning", label: "Carry-over (days back)", old: ["Carry-over"], keywords: ["unfinished"] },
   { id: "plan-reminder", section: "planning", label: "Plan today reminder", old: ["Reminder"], keywords: ["minutes after the day starts"] },
-  { id: "devops-on-done", section: "planning", label: "When I check off a to-do", keywords: ["devops update", "mark done", "ask to update devops"] },
+  { id: "devops-on-done", section: "planning", label: "When I tick a story", keywords: ["devops update", "mark done", "ask to update devops", "wrap it up", "when I check off a to-do", "skip devops"] },
   { id: "checkin-reminder", section: "planning", label: "Midday check-in reminder", old: ["Check-in reminder"] },
   { id: "closeout-reminder", section: "planning", label: "Close out reminder" },
   { id: "week-nudges", section: "planning", label: "Plan the week nudges", old: ["Thursday nudge", "Friday nudge", "Monday nudge"] },

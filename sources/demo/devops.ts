@@ -284,6 +284,8 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
     },
     activity: (k: DemoClientKey) => activityRows.filter((r) => r.clientKey === k).map(({ clientKey: _k, ...r }) => r),
     seedActivity: (r: (typeof activityRows)[number]) => void activityRows.push(r),
+    /** FN-1: the story card's comments, newest first, with the author's name and the HTML as DevOps holds it. */
+    cardComments: (id: number) => (comments.get(id) ?? []).filter((c) => !c.isDeleted).map((c) => ({ id: c.id, author: c.createdByName ?? (c.createdBy.toLowerCase() === ME_EMAIL ? ME_NAME : nameOf(c.createdBy) ?? "Someone"), at: c.createdDate, text: c.text })).reverse(),
     /** Its comments, newest first, as plain text. */
     comments: (id: number) => (comments.get(id) ?? []).filter((c) => !c.isDeleted).map((c) => ({ at: c.createdDate, text: plain(c.text) })).reverse(),
     seen,

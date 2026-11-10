@@ -1,6 +1,6 @@
 # Architecture
 
-For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `4088995` on Nov 7, 2026 (SR-2 parts against its own branch; Status's SR-3 parts against `feat/report-finish` on Nov 8); the assistant against `1e74410` with AS-3 (`feat/assistant-answers`); Deployment items against `feat/deployment-items` on Nov 8; the Inbox against `feat/inbox-everything` on Nov 8; Today's timeline against `feat/today-timeline` on Nov 8. Cooptimize's standards (KB-1) against `feat/coop-standards` on Nov 8; TX-1's parts against `fix/tx1-review` on Nov 8.
+For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `4088995` on Nov 7, 2026 (SR-2 parts against its own branch; Status's SR-3 parts against `feat/report-finish` on Nov 8); the assistant against `1e74410` with AS-3 (`feat/assistant-answers`); Deployment items against `feat/deployment-items` on Nov 8; the Inbox against `feat/inbox-everything` on Nov 8; Today's timeline against `feat/today-timeline` on Nov 8. Cooptimize's standards (KB-1) against `feat/coop-standards` on Nov 8; TX-1's parts against `fix/tx1-review` on Nov 8. The story card and Wrap it up (FN-1) against `feat/story-card-wrap-up` on Nov 10.
 
 FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a React app and a JSON action API, keeps its data in one SQL database, and talks to Microsoft Graph, Dataverse, Azure DevOps, Google Calendar, Azure Resource Manager and OpenAI. The per-folder detail is in [docs/architecture.md](../architecture.md); this page is the overview.
 
@@ -178,6 +178,31 @@ There is one Assistant. The in-app panel and the Teams bot are two renderers of 
 - **Where a card can't hold it** (over 24 KB or 9 cards, or a preview over 20 rows or 12,000 characters), Teams shows the first part and "Open in FocusTime", a link to the same answer (`#/ask/<turn>`). A DevOps change that can't be shown whole has no Confirm in Teams.
 
 **The parity test is the rule** (`assistant/parity.test.ts`, in CI). Every Ask topic, every assistant tool, every golden question in `assistant/answers.test.ts` and AS-2's flows run through the panel's entry and through the real bot core on fakes, and must return the same result, draw all of it as cards, and make the same writes. A new capability without a case there fails the build; add the case, and the drawing if it is a new kind of card.
+
+## The story card and Wrap it up (FN-1)
+
+A work item's title anywhere opens FocusTime's story card, never DevOps. Finishing work on a story goes through one sheet, Wrap it up, from every place that ticks a to-do.
+
+- **One link.** `ui/WorkLink.tsx` turns a DevOps edit URL into the card's address, `#/item/<client>/<id>`, an overlay over the place underneath. Item menus copy the DevOps link instead of opening it.
+- **One read.** `item.card` checks the client is one the person can see before reading anything, reads the item, its parent and epic, its children and its latest 50 comments with the company read PAT, sanitizes the HTML on the server and keeps the result a minute per person. FocusTime's own context (my to-dos, timeboxes and promises on the item) comes from the plan store.
+- **One wrap-up flow.** A tick lands at once (TX-1c, with Undo). On a client with my write PAT, for an item I can change that isn't done yet, Wrap it up opens over it: Finished (the type's done state by category, the one I use most chosen) or Made progress (state kept, New moves to In Progress, the time left), a comment with Suggest, and the optional line on the feature for Monday's status. `wrapup.preview` asks the write framework for one preview of every write; `wrapup.confirm` writes them in order, each with its own result and Retry. The card's own changes use the same writes: `comment`, `state`, and Ahead's change set as one `fields` write.
+- **The same in Teams.** The bot's Done and Partly propose `wrap_up`, which runs `wrapup.apply` on Confirm: the same writes, previewed again.
+
+```mermaid
+sequenceDiagram
+  participant P as Person
+  participant A as FocusTime
+  participant X as DevOps
+  P->>A: tick a story (plan store, at once)
+  A->>X: wrap_offer: the item, its states, my rights
+  A-->>P: Wrap it up (Finished or Made progress, comment)
+  P->>A: Preview
+  A->>X: read each target now
+  A-->>P: one summary, every before and after
+  P->>A: Confirm
+  A->>X: state (with the comment), then Remaining Work, then the feature's line (test /rev each)
+  A-->>P: a result per write, Retry, Undo
+```
 
 ## The rhythm's check-ins (TX-1)
 

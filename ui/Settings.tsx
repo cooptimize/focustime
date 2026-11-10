@@ -645,7 +645,7 @@ function StandingForm(p: FormProps) {
 const PLANNING_LABELS: Record<string, string> = {
   minS: "Shortest useful time, S", minM: "Shortest useful time, M", minL: "Shortest useful time, L", carryDays: "Carry-over",
   unsizedMinutes: "Count unsized work as", reminderOffsetMinutes: "Reminder", checkinReminderMinutes: "Check-in reminder", closeoutReminderMinutes: "Close out reminder", weekNudgeThu: "Thursday nudge",
-  weekNudgeFri: "Friday nudge", weekNudgeMon: "Monday nudge", followGraceDays: "Keep following", focusMinutes: "Focus length", breakMinutes: "Break length", endSound: "End sound", devopsOnDone: "When I check off a to-do", progressOffer: "Offer DevOps updates at end of day",
+  weekNudgeFri: "Friday nudge", weekNudgeMon: "Monday nudge", followGraceDays: "Keep following", focusMinutes: "Focus length", breakMinutes: "Break length", endSound: "End sound", devopsOnDone: "When I tick a story", progressOffer: "Offer DevOps updates at end of day",
 };
 
 /** The [plan] keys a form edits: each form saves only its own (the server takes any subset). */
@@ -707,13 +707,13 @@ function PlanningForm(p: FormProps) {
         <div className="set-grid">
           {numField(a, "carryDays", "Carry-over (days back)", "Unfinished to-dos offered again. 0 turns it off.", 1, 30)}
         </div>
-        <AutoField a={a} k="devopsOnDone" label="When I check off a to-do" hint="Asking shows its DevOps item's done state to confirm, only for items you can change. Nothing is written without Confirm.">
-          <div className="set-radios" role="radiogroup" aria-label="When I check off a to-do">
+        <AutoField a={a} k="devopsOnDone" label="When I tick a story" hint="Ask opens Wrap it up: Finished or Made progress, a comment, and one preview of what goes to DevOps. Only for items you can change, on clients with DevOps writes. Nothing is written without Confirm.">
+          <div className="set-radios" role="radiogroup" aria-label="When I tick a story">
             <label className="set-check">
-              <input type="radio" name="devops-on-done" checked={a.v.devopsOnDone === "ask"} onChange={() => a.change("devopsOnDone", "ask")} /> Ask to update DevOps
+              <input type="radio" name="devops-on-done" checked={a.v.devopsOnDone === "ask"} onChange={() => a.change("devopsOnDone", "ask")} /> Ask (Wrap it up)
             </label>
             <label className="set-check">
-              <input type="radio" name="devops-on-done" checked={a.v.devopsOnDone === "never"} onChange={() => a.change("devopsOnDone", "never")} /> Never ask
+              <input type="radio" name="devops-on-done" checked={a.v.devopsOnDone === "never"} onChange={() => a.change("devopsOnDone", "never")} /> Always skip DevOps
             </label>
           </div>
         </AutoField>

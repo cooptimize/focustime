@@ -190,7 +190,7 @@ export type UndoResult = { ok: true; message: string; notBack: { title: string; 
  * (assistant/allowlist.ts PROPOSE_TOOLS); the args are the tool's own (allowlist.ts specs). The proposal is the same
  * one the model would make: the button's preview, 15 minutes, and confirm() re-checks everything.
  */
-export type ProposeInput = { person: Person; tool: "move_pick" | "keep_pick" | "drop_pick" | "confirm_day" | "move_picks" | "close_day" | "item_done" | "item_undo" | "move_plan"; args: Record<string, unknown> };
+export type ProposeInput = { person: Person; tool: "move_pick" | "keep_pick" | "drop_pick" | "confirm_day" | "move_picks" | "close_day" | "item_done" | "item_undo" | "wrap_up" | "move_plan"; args: Record<string, unknown> };
 export type ProposeResult = { ok: true; proposal: Proposal } | { ok: false; message: string };
 
 export type TranscribeInput = { person: Person; audio: Uint8Array; mime: string; seconds: number; context?: AssistantContext };

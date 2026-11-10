@@ -2,6 +2,7 @@
 // ui/MessageThread.tsx: grouped by person with avatars, mine on the other side, quotes, reactions, the latest 20 with
 // Show earlier), Link to item, Create DevOps item (the draft), Not a request, Merge into…, a suggested update, and the
 // linked item with its live state. Nothing is posted in Teams. Chat text shows only on its own client's item.
+import { ItemTitleLink } from "./WorkLink.tsx";
 import { StandardsNote } from "./StandardsNote.tsx";
 import { TextBox } from "./TextBox.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
@@ -74,13 +75,13 @@ type Hit = { id: number; title: string; type: string; state: string; url: string
  * CV-5: a linked item with its live state from the central store: "#id title · Active · Dana · changed Tue"; when it
  * closed in DevOps, "Item closed" (Mark done is the card's primary, never done automatically).
  */
-export function LinkedItem({ item, tz, lead }: { item: NonNullable<ConversationCard["item"]>; tz: string; lead: string }) {
+export function LinkedItem({ item, tz, lead, clientKey }: { item: NonNullable<ConversationCard["item"]>; tz: string; lead: string; /** FN-1: the title opens the story card. */ clientKey: string }) {
   return (
     <p className={`conv-item${item.closed ? " closed" : ""}`}>
       {item.closed ? <strong className="conv-item-closed">Item closed</strong> : lead}{" "}
-      <a href={item.url ?? undefined} target="_blank" rel="noopener noreferrer">
+      <ItemTitleLink clientKey={clientKey} id={item.id} url={item.url}>
         #{item.id} {item.title ?? ""}
-      </a>
+      </ItemTitleLink>
       {item.state && (
         <span className="muted">
           {" "}

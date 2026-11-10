@@ -823,3 +823,10 @@ The pages are `docs/technical/*.md` (how FocusTime works, for engineers and IT);
 - **New messages.** `actions/conversations-pipeline.ts` reopens a Closed one only through `askedAgainBy`. `server/ticks.ts` (`conversationsTick`) sends `conversation_given` and `conversation_activity` through the notifier.
 - **Backfill.** `actions/ownership-backfill.ts`, a once-only scheduler job.
 - **UI.** `ui/inbox/Detail.tsx` (`WhoHasIt`, `PersonForm`), `ui/inbox/ItemActions.tsx`, `ui/inbox/model.ts` (`ownerTag`), `ui/inbox/InboxPage.tsx` (Teammate has it folded out of Everything).
+
+## FN-1: the story card and Wrap it up (Nov 10)
+
+- **Links.** `ui/WorkLink.tsx`: `WorkLink` and `ItemTitleLink` open the card (`openItemCard`, `ITEM_CARD_EVENT`); `copyWorkLink` copies an item's address. `plan/item-card.ts` (`itemIdOfUrl`, `cardHash`, `stateTone`, the card's types). `ui/nav.ts`: the `item` overlay and `#/item/<client>/<id>`.
+- **The card.** `ui/StoryCard.tsx` (fields, parent, epic, children, description, acceptance, comments, In FocusTime, Wrap it up, Add comment, Change state, Assign, Dates, Break down, Copy DevOps link). `actions/item-card-actions.ts` (`item.card`: the access check, the minute's cache, sanitizing). `sources/devops/card.ts` (`parseCard`), `sources/devops/source.ts` `itemCard`, the demo's in `sources/demo/sources.ts`.
+- **Wrap it up.** `plan/wrapup.ts` (pure: done states, Made progress's state, the outcome word, the summary). `actions/wrapup-actions.ts` (`wrapup.offer`, `tick`, `preview`, `confirm`, `apply`, `suggest`). `devops.wrap_offer` in `actions/devops-write-actions.ts`. `store/plan-store.ts` `tickDone` with `progress`. `ui/WrapUp.tsx` (`useWrapUpFlow`, the sheet, the untick undo card), wired in `ui/App.tsx` behind PK-1's `ticked` hook (`ui/DoneOffer.tsx`). Teams: `wrap_up` in `assistant/allowlist.ts` and `assistant/service.ts`, proposed by `server/teams/rhythm.ts`.
+

@@ -432,6 +432,7 @@ const TASK_LABELS: Record<string, string> = {
   "conversations.comment": "Follow-through comments",
   "capture.prepare": "Capture drafts",
   "loop_draft": "Close the loop drafts",
+  "wrapup_suggest": "Wrap it up comments",
   "test_ai": "Test AI",
 };
 export function aiTasks(standard: readonly string[]): { name: string; label: string; background: boolean; tier: AiTier }[] {

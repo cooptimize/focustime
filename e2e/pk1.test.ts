@@ -1,6 +1,5 @@
-// PK-1 (browser, demo mode, Monday Nov 2, 9:30 AM): checking off a to-do on Today offers "Set #<id> to <done state>?"
-// with the write's preview; Confirm writes it (the demo's simulated DevOps), Not now writes nothing; unchecking offers
-// the write's Undo; Close out of the last workday asks once for its done to-dos (the todo-done seed's Harbor #2211).
+// PK-1 (browser, demo mode, Monday Nov 2, 9:30 AM): since FN-1 a tick opens Wrap it up (e2e/fn1.test.ts); here the
+// setting that skips it, and Close out of the last workday asks once for its done to-dos (the todo-done seed's Harbor #2211).
 // Screenshots at 1920 and the phone, light and dark, when FOCUSTIME_SHOTS names a folder.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
@@ -45,65 +44,39 @@ describe.skipIf(!CHROMIUM)("PK-1 checking off a to-do offers the DevOps update (
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("Today: a tick offers the done state with its preview; Confirm writes once; unchecking offers Undo; Not now writes nothing", async () => {
-    const { page, errors } = await freshPage(h);
-    await planToday(page);
-    const before = (await writes(page)).length;
-    await page.getByRole("checkbox", { name: "Done: Timesheet summary query" }).check();
-    const card = page.getByRole("region", { name: "DevOps update" });
-    await card.waitFor();
-    await expect(card.locator(".do-title").textContent()).resolves.toBe("Set #4411 to Closed?");
-    // The demo process has Resolved too: both are offered, Closed (Completed) first.
-    await expect(card.getByRole("radio").allTextContents()).resolves.toEqual(["Closed", "Resolved"]);
-    await expect(card.locator(".do-preview").textContent()).resolves.toContain("Active → Closed");
-    await shots(page, "offer");
-    expect((await writes(page)).length).toBe(before);
-    await card.getByRole("button", { name: "Confirm" }).click();
-    const done = page.getByRole("status", { name: "DevOps update" });
-    await expect.poll(() => done.textContent()).toContain("#4411 is Closed in DevOps");
-    expect((await writes(page)).length).toBe(before + 1);
-    // Unchecking offers that write's own Undo (the write framework's preview), never silently.
-    await page.getByRole("checkbox", { name: "Done: Timesheet summary query" }).uncheck();
-    await expect.poll(() => card.locator(".do-title").textContent()).toBe("You set #4411 to Closed in DevOps. Undo that too?");
-    await shots(page, "undo-offer");
-    await card.getByRole("button", { name: "Undo in DevOps" }).click();
-    const dialog = page.getByRole("dialog");
-    await dialog.locator(".wd-actions .commit").click();
-    await expect.poll(async () => (await writes(page)).filter((e) => e.op === "undo_state").length).toBe(1);
-    // Not now: nothing written.
-    await page.getByRole("checkbox", { name: "Done: Utilization chart" }).check();
-    await expect.poll(() => card.locator(".do-title").textContent()).toBe("Set #4412 to Closed?");
-    const n = (await writes(page)).length;
-    await card.getByRole("button", { name: "Not now" }).click();
-    await expect(card.count()).resolves.toBe(0);
-    expect((await writes(page)).length).toBe(n);
-    expect(errors).toEqual([]);
-    await page.close();
-  }, T);
-
-  it("Never ask in Settings › Planning turns the offer off", async () => {
+  // FN-1: a tick on Today opens Wrap it up now (e2e/fn1.test.ts); Never ask is "Always skip DevOps".
+  it("Always skip DevOps in Settings › Planning: a tick opens nothing", async () => {
     const { page } = await freshPage(h);
     await planToday(page);
     expect((await call(page, "settings.save", { section: "planning", values: { devopsOnDone: "never" } })).ok).toBe(true);
     await page.reload();
     await page.getByRole("checkbox", { name: "Done: Utilization chart" }).check();
     await page.waitForTimeout(1500);
-    await expect(page.getByRole("region", { name: "DevOps update" }).count()).resolves.toBe(0);
+    await expect(page.getByRole("dialog", { name: "Wrap it up" }).count()).resolves.toBe(0);
     await page.close();
   }, T);
 
-  it("Close out asks once for the day's done to-dos: a checkbox per item, one Confirm, a result per item", async () => {
+  it("Close out asks once for the day's done to-dos: Finished or Made progress, time left and a comment per row, one preview, one Confirm", async () => {
     const { page, errors } = await freshPage(h);
     // The last workday before Monday Nov 2 is Wednesday Oct 28 (Thursday is the demo's PTO day): the seed's done
     // to-do, Harbor #2211, still open in DevOps.
     await page.evaluate(() => (location.hash = "#/today/closeout/2026-10-28"));
-    const batch = page.getByRole("group", { name: "Set items to done in DevOps" });
+    const batch = page.getByRole("group", { name: "Wrap up in DevOps" });
     await batch.waitFor({ timeout: 20_000 });
-    await expect(batch.locator(".db-ask").textContent()).resolves.toMatch(/^1 to-do done on \w+day; set its item to Closed\?$/);
+    await expect(batch.locator(".db-ask").textContent()).resolves.toMatch(/^1 to-do done on \w+day\. Wrap it up in DevOps\?$/);
     await expect(batch.getByRole("checkbox").count()).resolves.toBe(1);
+    // FN-1: each row asks Finished or Made progress; Made progress asks the time left.
+    await batch.getByRole("radio", { name: "Made progress" }).click();
+    await batch.getByRole("button", { name: "2h", exact: true }).waitFor();
+    await batch.getByRole("radio", { name: "Finished" }).click();
+    await batch.getByRole("textbox", { name: "Comment on #2211" }).fill("Ready for review");
     await shots(page, "closeout-batch");
+    const before = (await writes(page)).length;
+    await batch.getByRole("button", { name: "Preview 1" }).click();
+    await expect.poll(() => batch.locator(".db-pv").textContent()).toMatch(/#2211: state \w+ → Closed · add comment/);
+    expect((await writes(page)).length).toBe(before);
     await batch.getByRole("button", { name: "Confirm 1" }).click();
-    await expect.poll(() => batch.locator(".db-ok").textContent()).toContain("Closed in DevOps");
+    await expect.poll(() => batch.locator(".db-ok").textContent()).toContain("state");
     await shots(page, "closeout-done");
     expect((await writes(page)).some((e) => e.itemId === 2211 && e.status === "confirmed")).toBe(true);
     expect(errors).toEqual([]);

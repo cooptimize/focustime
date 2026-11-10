@@ -44,10 +44,11 @@ import { readImage, type ReadImage } from "./chat-images.ts";
 import { chatImageSrc } from "../plan/conversation-views.ts";
 export type { DevOpsPreview, DevOpsResult };
 
-export const DEVOPS_WRITE_ACTIONS = ["devops.set_write_pat", "devops.clear_write_pat", "devops.write_status", "devops.states", "devops.preview", "devops.confirm", "devops.retry", "devops.log", "devops.done_offer", "devops.undo_offer", "devops.progress_offer"] as const;
+export const DEVOPS_WRITE_ACTIONS = ["devops.set_write_pat", "devops.clear_write_pat", "devops.write_status", "devops.states", "devops.preview", "devops.confirm", "devops.retry", "devops.log", "devops.done_offer", "devops.undo_offer", "devops.progress_offer", "devops.wrap_offer"] as const;
 export type DevOpsWriteAction = (typeof DEVOPS_WRITE_ACTIONS)[number];
 export type { DoneOffer, UndoOffer } from "./types.ts";
-import type { DoneOffer, ItemDoneOffer, ProgressOffer, UndoOffer } from "./types.ts";
+import type { DoneOffer, ItemDoneOffer, ProgressOffer, UndoOffer, WrapOffer } from "./types.ts";
+import { finishChoices, progressState } from "../plan/wrapup.ts";
 
 /** The keyring for write PATs (secrets/keyring.ts). A PAT only ever comes back wrapped. */
 export type WritePats = { get: (clientKey: string) => Promise<Pat>; set: (clientKey: string, value: string) => Promise<void>; clear: (clientKey: string) => Promise<void> };
@@ -368,6 +369,42 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       }
       return { ok: true, data: { offers, off: false } };
     }
+    case "devops.wrap_offer": {
+      // FN-1: read only. What Wrap it up can offer for one item: its done states from the process model (Completed,
+      // then Resolved; the one I used most on this client chosen), the In Progress state a New item moves to on
+      // Made progress, whether its type has Remaining Work, whether canEdit lets me change it, and its parent for
+      // "Also add to <feature>'s status". No write PAT: no offer, with the reason (the tick still works).
+      const o = fields(input, ["clientKey", "itemId"]);
+      const clientKey = str(o.clientKey, "clientKey", 100)!;
+      const itemId = posId(o.itemId, "itemId");
+      let env: Env;
+      try {
+        env = await envOf(clientKey);
+      } catch (e) {
+        if (e instanceof Refused) return { ok: true, data: { offer: null, why: e.message, code: e.code ?? null } };
+        throw e;
+      }
+      const item = await env.writer.item(env.org, env.pat, env.project, itemId);
+      const [states, typeHas, right, log] = await Promise.all([
+        env.writer.states(env.org, env.pat, env.project, item.type),
+        env.writer.typeFields(env.org, env.pat, env.project, item.type),
+        rightsOn(env, item, new Map()),
+        plan.devopsWriteLog(200),
+      ]);
+      const used: Record<string, number> = {};
+      for (const e of log) if (e.op === "state" && e.clientKey === clientKey && e.status === "confirmed" && e.after.State) used[e.after.State] = (used[e.after.State] ?? 0) + 1;
+      const fin = finishChoices(states, used);
+      const rw = item.fields[REMAINING_WORK];
+      const parent = item.parentId ? await env.writer.item(env.org, env.pat, env.project, item.parentId).catch(() => null) : null;
+      const offer: WrapOffer = {
+        clientKey, clientName: env.clientName, itemId: item.id, title: item.title, type: item.type, state: item.state,
+        done: alreadyDone(states, item.state), choices: fin.choices, chosen: fin.chosen, activate: progressState(states, item.state),
+        hasRemaining: typeHas.has(REMAINING_WORK), remaining: typeof rw === "number" && Number.isFinite(rw) ? rw : null,
+        canEdit: right.ok, editNote: right.ok ? null : right.note,
+        parent: parent ? { id: parent.id, title: parent.title, type: parent.type } : null,
+      };
+      return { ok: true, data: { offer, why: null, code: null } };
+    }
     case "devops.progress_offer": {
       // TX-1: read only. End of day, once: the stories answered "partly" today (or "went to plan" with time left), each
       // as Remaining Work where its type has the field, else a short comment. Only items I can change, with my write PAT.
@@ -411,9 +448,12 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       const log = await plan.devopsWriteLog(200);
       const tops = undoTops(log);
       const since = Temporal.Instant.from(ctx.now()).subtract({ hours: 12 });
-      const e = log.find((x) => x.op === "state" && x.itemId === p.itemId && x.clientKey === p.clientKey && x.pickIds.includes(pickId));
-      if (!e || e.status !== "confirmed" || e.undoneBy !== null || tops.get(stackKey(e)) !== e.id || Temporal.Instant.compare(Temporal.Instant.from(e.at), since) < 0) return { ok: true, data: { offer: null } };
-      const offer: UndoOffer = { pickId, writeId: e.id, clientKey: e.clientKey, clientName: clientName(e.clientKey), itemId: e.itemId, title: e.title, before: e.before.State ?? null, after: e.after.State ?? null };
+      // FN-1: Wrap it up's writes for this to-do too (its state and Remaining Work), newest first, one at a time: the
+      // undo stack takes them in order, so each Undo offers the next.
+      const e = log.find((x) => (x.op === "state" || x.op === "remaining_work") && x.itemId === p.itemId && x.clientKey === p.clientKey && x.pickIds.includes(pickId) && x.status === "confirmed" && x.undoneBy === null);
+      if (!e || tops.get(stackKey(e)) !== e.id || Temporal.Instant.compare(Temporal.Instant.from(e.at), since) < 0) return { ok: true, data: { offer: null } };
+      const label = e.op === "state" ? null : REMAINING_LABEL;
+      const offer: UndoOffer = { pickId, writeId: e.id, clientKey: e.clientKey, clientName: clientName(e.clientKey), itemId: e.itemId, title: e.title, before: label ? `${label} ${e.before[label] ?? "empty"}` : (e.before.State ?? null), after: label ? `${label} ${e.after[label] ?? "empty"}` : (e.after.State ?? null) };
       return { ok: true, data: { offer } };
     }
     case "devops.preview": {

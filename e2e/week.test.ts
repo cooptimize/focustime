@@ -19,6 +19,9 @@ const go = async (page: Page, hash: string) => {
 
 /** Monday planned as in the U1 to U3 screenshots (one done), and Tuesday planned with one done pick. */
 async function seed(page: Page): Promise<{ mon: number[]; tue: number[] }> {
+  // FN-1: this test checks the plan's own tick; Wrap it up has its own (e2e/fn1.test.ts), so the sheet stays off here.
+  expect((await call(page, "settings.save", { section: "planning", values: { devopsOnDone: "never" } })).ok).toBe(true);
+  await page.reload();
   const add = async (date: string, half: string, clientKey: string, x: Record<string, unknown>) => (await call(page, "pick.add", { date, half, clientKey, ...x })).data.pick.id as number;
   const mon = [await add(MON, "AM", "Cooptimize", { itemId: 4411, size: "M" }), await add(MON, "AM", "Cooptimize", { itemId: 4412, size: "S" }), await add(MON, "PM", "Northwind", { itemId: 1111, size: "M" })];
   await call(page, "planday.commit", { date: MON });

@@ -107,12 +107,13 @@ const CASES: Case[] = [
   { covers: "comment", name: "GD-1, a comment naming another client isn't proposed", noProposal: true, text: "Comment on #8101: same fix as Wingtip had", script: (s) => s.action(["comment"], {}, call(["comment", { itemId: 8101, text: "Same fix as Wingtip had." }]), say("I can't name another client there.")) },
   // Button-only proposals (PK-1): the same preview and Confirm.
   { covers: "item_done", name: "a to-do's done state", text: "", script: () => {}, propose: (t) => ({ tool: "item_done", args: { pickId: t.tomorrow.id, state: null } }) },
+  { covers: "wrap_up", name: "FN-1, Wrap it up from a Teams card", text: "", script: () => {}, propose: (t) => ({ tool: "wrap_up", args: { pickId: t.tomorrow.id, outcome: "finished", left: null, comment: null } }) },
   { covers: "item_undo", name: "a to-do's done state undone", text: "", script: () => {}, propose: (t) => ({ tool: "item_undo", args: { pickId: t.tomorrow.id } }) },
 ];
 /** Covered by the Undo test below: it needs a write made first. */
 const COVERED_BELOW: readonly ToolName[] = ["write_undo"];
 
-const READS = new Set(["week.load", "ahead.load", "status.load", "inbox.list", "meeting.mine", "conversations.list", "team.commit", "send.today", "send.people", "devops.preview", "deploy.items", "conversations.search_items", "loop.find", "devops.done_offer", "devops.undo_offer"]);
+const READS = new Set(["week.load", "ahead.load", "status.load", "inbox.list", "meeting.mine", "conversations.list", "team.commit", "send.today", "send.people", "devops.preview", "deploy.items", "conversations.search_items", "loop.find", "devops.done_offer", "devops.undo_offer", "wrapup.offer", "wrapup.preview"]);
 const writesOf = (s: World) => s.ran.filter((r) => !READS.has(r.action)).map((r) => JSON.parse(JSON.stringify(r).replace(/"previewId":"pv\d+"/g, '"previewId":"pv"')) as unknown);
 
 const world = (o: Parameters<typeof setup>[0]) => setup({ standards, ...o });
@@ -307,7 +308,9 @@ describe("TB-3 parity: the same result and the same writes through Teams", () =>
       if (kind === "question" || kind === "suggest") expect(drawn).toBeNull();
       else expect(drawn).not.toBeNull();
     }
-    expect(J(renderCard(samples.item, URL_))).toContain("dev.azure.com");
+    // FN-1: an item opens its story card in FocusTime, never DevOps.
+    expect(J(renderCard(samples.item, URL_))).toContain("#/item/c/1");
+    expect(J(renderCard(samples.item, URL_))).not.toContain("dev.azure.com");
   });
 });
 

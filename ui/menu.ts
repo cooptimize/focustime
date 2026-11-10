@@ -56,6 +56,8 @@ export type MenuItem = {
   run?: () => void | Promise<unknown>;
   next?: () => MenuStep;
 };
+/** FN-1: the one label for copying a work item's link, in every item's ⋯ menu. */
+export const COPY_LINK = "Copy DevOps link";
 /** A row menu's header: a label naming the row it was opened from, never an action (D459). */
 export type MenuHead = { text: string; full: string };
 export type MenuStep =
@@ -132,6 +134,12 @@ export type MenuEnv = {
   commitPlan: () => void;
   openDetails: (date: IsoDate, half: Half) => void;
   openLink: (clientKey: string, url: string) => void;
+  /** FN-1: copy a work item's DevOps link, with a "Link copied" toast (announced). */
+  copyLink: (clientKey: string, url: string) => void;
+  /** FN-1: the story card for a work item (#/item/<client>/<id>). */
+  openCard: (clientKey: string, itemId: number) => void;
+  /** FN-1: Wrap it up for a to-do (the sheet a tick opens). */
+  wrapUp: (pickId: number) => void;
   changeWeek: (n: number) => void;
   goToday: () => void;
   refresh: () => void;
@@ -391,7 +399,8 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
     title: p.title,
     head: rowHead({ id: p.itemId, title: p.title, client: clientNameOf(env, p.clientKey) }),
     items: [
-      { id: "open", label: "Open in browser", action: "link.open", ...(p.itemUrl ? {} : { disabled: p.kind === "intention" ? "An intention has no work item" : "A draft story isn't in DevOps yet" }), run: () => { if (p.itemUrl) env.openLink(p.clientKey, p.itemUrl); } },
+      // FN-1: the title opens the story card; the menu copies the DevOps link (no Open in DevOps).
+      { id: "copy", label: COPY_LINK, ...(p.itemUrl ? {} : { disabled: p.kind === "intention" ? "An intention has no work item" : "A draft story isn't in DevOps yet" }), run: () => { if (p.itemUrl) env.copyLink(p.clientKey, p.itemUrl); } },
       { id: "size", label: "Set size", hint: p.size ?? "Size?", action: "pick.set_size", ...(past ? { disabled: PAST } : {}), next: () => sizeStep(env, p) },
       { id: "move", label: "Move", hint: past ? "to today or later" : "AM, PM, another day, Friday", action: "pick.move", ...(p.status !== "planned" ? { disabled: "Only a planned to-do can be moved", expected: true } : {}), next: () => moveStep(env, p) },
       {
@@ -628,7 +637,7 @@ export function itemMenu(env: MenuEnv, clientKey: string, item: WorkItem): MenuS
     title: `#${item.id}: ${item.title}`,
     head: rowHead({ id: item.id, title: item.title, client: clientNameOf(env, clientKey) }),
     items: [
-      { id: "open", label: "Open in browser", action: "link.open", run: () => env.openLink(clientKey, item.url) },
+      { id: "copy", label: COPY_LINK, run: () => env.copyLink(clientKey, item.url) },
       {
         id: "add",
         label: "Add to the plan",
@@ -1569,7 +1578,18 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "devops.progress_offer":
     case "devops.done_offer":
     case "devops.undo_offer":
+    case "devops.wrap_offer":
+    case "wrapup.preview":
+    case "wrapup.confirm":
+    case "wrapup.apply":
+    case "wrapup.tick":
+    case "wrapup.suggest":
       return { disabled: "Check off a to-do with a DevOps item" };
+    // FN-1: Wrap it up on a to-do; the story card for any work item.
+    case "wrapup.offer":
+      return { next: () => choosePick(env, "Wrap up which to-do?", (p) => () => env.wrapUp(p.id)) };
+    case "item.card":
+      return { next: () => chooseItem(env, "Open which work item?", () => true, (k, i) => () => env.openCard(k, i.id)) };
     // Step 15.4: who's signed in and my VM live in Settings > You; the VM chip has the changes.
     case "auth.status":
     case "auth.sign_in":
@@ -1829,7 +1849,7 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps, sizes: SizeScal
 
 /** Step 16 (D282): what a Roadmap row's ⋯ menu needs to know. */
 export type RoadmapRowFacts = { id?: number; clientName?: string | null; title: string; tier: "feature" | "epic"; targetDate: string | null; open: number; onWeek: boolean; canWrite: boolean; hasLink: boolean; /** Step 17: assigned to me (a contributing row can't have its dates set). */ owned?: boolean };
-export type RoadmapRowOps = { open: () => void; brief: () => void; help: () => void; addToWeek: () => void; targetDate: () => void; enableWrites: () => void };
+export type RoadmapRowOps = { copy: () => void; brief: () => void; help: () => void; addToWeek: () => void; targetDate: () => void; enableWrites: () => void };
 
 /** A Roadmap row's ⋯ menu (D282). Only Set target date writes, through the DevOps write flow. */
 export function roadmapRowMenu(f: RoadmapRowFacts, ops: RoadmapRowOps): MenuStep {
@@ -1838,7 +1858,7 @@ export function roadmapRowMenu(f: RoadmapRowFacts, ops: RoadmapRowOps): MenuStep
     title: f.title,
     head: rowHead({ id: f.id ?? null, title: f.title, client: f.clientName ?? null }),
     items: [
-      { id: "open", label: "Open in browser", hint: "O", ...(f.hasLink ? {} : { disabled: "No link for this item" }), run: ops.open },
+      { id: "copy", label: COPY_LINK, ...(f.hasLink ? {} : { disabled: "No link for this item" }), run: ops.copy },
       { id: "brief", label: "Copy Coop brief", action: "feature.brief", ...(epic ? { disabled: "Briefs are for features" } : { hint: f.open ? `${f.open} open ${f.open === 1 ? "story" : "stories"} already` : "ask Coop for stories" }), run: ops.brief },
       { id: "help", label: "Ask to collaborate", hint: "who is free", action: "collab.candidates", run: ops.help },
       { id: "week", label: "Add to this week's plan", action: "weekplan.add", ...(epic ? { disabled: "Add its features instead" } : f.onWeek ? { disabled: "Already on this week's plan" } : { hint: "as a nice to have" }), run: ops.addToWeek },

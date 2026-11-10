@@ -21,7 +21,7 @@ import { SIZE_MINUTES } from "../plan/types.ts";
 import type { ActionName } from "../actions/registry.ts";
 import { DEPLOYMENT, windowProblem, windowText } from "../plan/deploy.ts";
 import { matchNamed, namedInRequest, type ItemGroup } from "../plan/deploy-items.ts";
-import type { ActionResponse, AheadLoad, DevOpsPreview, DevOpsResult, DoneOffer, ItemDoneOffer, UndoOffer } from "../actions/types.ts";
+import type { ActionResponse, AheadLoad, DevOpsPreview, DevOpsResult, DoneOffer, ItemDoneOffer, UndoOffer, WrapOffer } from "../actions/types.ts";
 import { dropCheck } from "../plan/weekdrop.ts";
 import { placeNote } from "../plan/days.ts";
 import type { InboxListData, InboxView } from "../plan/inbox-items.ts";
@@ -922,6 +922,33 @@ export function createAssistant(env: AssistantEnv) {
           snapshot: { rows: pv.fields.map((x) => [x.label, x.before]) },
         };
       }
+      case "wrap_up": {
+        // FN-1: the sheet's writes from a Teams card. The offer (an item I can change, with my write PAT), then one
+        // preview of every write; Confirm previews again and writes them in order through the write framework.
+        const p = await pickOf(Number(args.pickId));
+        const o = await env.run("wrapup.offer", { pickId: p.id });
+        if (!o.ok) throw new Refusal(o.error);
+        const od = o.data as { offer: WrapOffer | null; why: string | null; pick: { leftMinutes: number } | null };
+        const offer = od.offer;
+        if (!offer) throw new Refusal(od.why ?? (p.itemId === null ? "That to-do has no DevOps item" : `Nothing to change in DevOps for #${p.itemId}`));
+        if (!offer.canEdit) throw new Refusal(offer.editNote ?? `You can't change #${offer.itemId}`);
+        const outcome = args.outcome === "progress" ? "progress" : "finished";
+        if (outcome === "finished" && offer.done) throw new Refusal(`#${offer.itemId} is ${offer.state} in DevOps already`);
+        const left = outcome === "progress" ? Math.min(2400, Math.max(5, Math.round((typeof args.left === "number" ? args.left : (od.pick?.leftMinutes ?? 60)) / 5) * 5)) : null;
+        const comment = typeof args.comment === "string" ? args.comment.trim().slice(0, 4000) : "";
+        const spec = { clientKey: offer.clientKey, itemId: offer.itemId, pickId: p.id, outcome, state: null, activate: true, remaining: true, left, comment, feature: false };
+        const pv = await env.run("wrapup.preview", spec);
+        if (!pv.ok) throw new Refusal(pv.error);
+        const d = pv.data as { previews: DevOpsPreview[]; nothing: string[]; summary: string; refused: { error: string }[] };
+        if (!d.previews.length) throw new Refusal(d.refused[0]?.error ?? d.nothing[0] ?? "Nothing to change in DevOps");
+        const first = d.previews[0]!;
+        const view: PreviewView = { summary: d.summary, system: "DevOps", target: `#${offer.itemId} ${offer.title}`, identity: first.identity, rows: d.previews.flatMap((x) => x.fields.filter((r) => r.changed).map((r) => ({ label: r.label, before: r.before, after: r.after }))), notes: [`${offer.choices.length > 1 && outcome === "finished" ? "Another done state, Suggest or the" : "Suggest or the"} feature's status line: Wrap it up in FocusTime.`, ...d.previews.flatMap((x) => x.notes)] };
+        return {
+          view: base("wrapup.apply", offer.clientKey, outcome === "finished" ? `Wrap up #${offer.itemId}: finished` : `Wrap up #${offer.itemId}: made progress`, view, first.visibility, ["comment"]),
+          held: { tool, args: { pickId: p.id, outcome, left, comment, itemId: offer.itemId }, run: { action: "wrapup.apply", input: spec } },
+          snapshot: { rows: d.previews.flatMap((x) => x.fields.map((r) => [r.label, r.before])) },
+        };
+      }
       case "item_undo": {
         // PK-1: unchecked after its offer wrote: that write's own undo (refused when the item changed since).
         const p = await pickOf(Number(args.pickId));
@@ -1336,6 +1363,18 @@ export function createAssistant(env: AssistantEnv) {
       const f = await findItem(d, (held.args.itemId as number) ?? 0, clientKey);
       const card: Card = typeof f === "string" ? { kind: "note", text: res.message } : itemCard(d, f);
       return res.confirmed ? { ok: true, result: card, undo: { kind: "devops", id: res.entry.id }, message: res.message } : { ok: false, reason: "not_allowed", message: res.message };
+    }
+    if (held.run.action === "wrapup.apply") {
+      // FN-1: each write's own result; the ones that landed keep their Undo (write_undo on a Teams card).
+      const r = await env.run("wrapup.apply", held.run.input);
+      if (!r.ok) return notAllowed(r);
+      const out = r.data as { results: { key: string | null; ok: boolean; message: string; writeId: number | null }[]; landed: number; message: string };
+      const parts: PartResult[] = out.results.map((x) => ({ label: x.key === "state" ? "State" : x.key === "remaining" ? "Remaining Work" : x.key === "feature" ? "Feature status" : "Comment", ok: x.ok, message: x.message, ...(x.ok && x.writeId !== null ? { undo: { kind: "devops" as const, id: x.writeId } } : {}) }));
+      if (!out.landed) return { ok: false, reason: "not_allowed", message: out.message };
+      const { clientKey } = held.run.input as { clientKey: string };
+      const f = await findItem(d, (held.args.itemId as number) ?? 0, clientKey);
+      const card: Card = typeof f === "string" ? { kind: "note", text: out.message } : itemCard(d, f);
+      return { ok: true, result: card, message: out.message, parts };
     }
     if (held.steps?.length) return executeSteps(held);
     const r = await env.run(held.run.action, held.run.input);

@@ -150,7 +150,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
       {dep ? <DeployIcon /> : typeIcon && pick.itemType && <TypeIcon clientKey={pick.clientKey} type={pick.itemType} />}
       <span className="pr-title" title={pick.title}>
         {link && pick.itemUrl ? (
-          <WorkLink clientKey={pick.clientKey} url={pick.itemUrl} className={today ? "pr-link pr-cue" : undefined} title={today ? `${pick.title}\nOpen #${pick.itemId ?? ""} in DevOps` : undefined}>
+          <WorkLink clientKey={pick.clientKey} url={pick.itemUrl} className={today ? "pr-link pr-cue" : undefined} title={today ? `${pick.title}\nOpen #${pick.itemId ?? ""}'s card` : undefined}>
             {today ? <span className="pr-text">{pick.title}</span> : pick.title}
             {today && pick.itemId !== null && <span className="pr-id">#{pick.itemId}</span>}
           </WorkLink>

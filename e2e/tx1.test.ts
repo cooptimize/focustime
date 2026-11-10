@@ -19,6 +19,9 @@ const go = async (page: Page, hash: string) => {
 type Ids = { query: number; chart: number; notes: number };
 /** Monday confirmed, with three timeboxes that have ended by the afternoon. */
 async function monday(page: Page): Promise<Ids> {
+  // FN-1: this test checks the plan's own tick; Wrap it up has its own (e2e/fn1.test.ts), so the sheet stays off here.
+  expect((await call(page, "settings.save", { section: "planning", values: { devopsOnDone: "never" } })).ok).toBe(true);
+  await page.reload();
   expect((await call(page, "planday.start", { date: MON })).ok).toBe(true);
   const add = async (input: object) => (await call(page, "pick.add", { date: MON, ...input })).data.pick.id as number;
   const query = await add({ half: "AM", clientKey: "Cooptimize", itemId: 4411 });

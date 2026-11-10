@@ -283,7 +283,7 @@ await forEachDriver("the bot's rhythm in Teams (TB-2)", (d) => {
     const occ = `checkin:${MON}`;
     let card = await t.tap(occ, "done", { pickId: a.id });
     expect((await t.plan.getPick(a.id))?.status).toBe("done");
-    expect(card).toContain("Set #500 to Closed");
+    expect(card).toContain("Wrap up #500: finished");
     expect(card).toContain("Confirm");
     const patches = () => dv.seen.filter((x) => x.method === "PATCH").length;
     expect(patches()).toBe(0);
@@ -299,6 +299,31 @@ await forEachDriver("the bot's rhythm in Teams (TB-2)", (d) => {
     expect(t.logs.map((l) => JSON.stringify(l)).join()).not.toContain("Import mapping");
   });
 
+  it("FN-1: the card's comment box comes back as a fresh preview with the comment; only Confirm on that writes it", async () => {
+    const dv = fakeDevOpsWrite({ now: () => MON });
+    dv.add(500, { "System.WorkItemType": "User Story", "System.Title": "Import mapping", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
+    const t = await setup(d, { devops: dv });
+    const a = await t.add({ kind: "item", itemId: 500, title: "Import mapping", itemType: "User Story" });
+    t.at("12:10");
+    await t.rhythm.tick(ANA, await t.facts());
+    const occ = `checkin:${MON}`;
+    let card = await t.tap(occ, "done", { pickId: a.id });
+    expect(card).toContain('"id":"wrapComment"');
+    const writes = () => dv.seen.filter((x) => x.method === "PATCH" || x.method === "POST").length;
+    const row = (await t.rhythmStore.get(occ))!.model as { proposal: { proposalId: string } };
+    // Typing a comment and tapping Confirm shows the preview again with it; nothing is written yet.
+    card = await t.tap(occ, "confirm", { proposalId: row.proposal.proposalId, wrapComment: "mapping covers all ledgers" });
+    expect(card).toContain("With your comment. Confirm to write it.");
+    expect(card).toContain('"value":"mapping covers all ledgers"');
+    expect(writes()).toBe(0);
+    // Confirm on that preview writes the state with the comment.
+    card = await t.tap(occ, "confirm", { proposalId: row.proposal.proposalId, wrapComment: "mapping covers all ledgers" });
+    expect(card).toContain("Done: Wrap up #500");
+    expect(dv.items.get(500)!.fields["System.State"]).toBe("Closed");
+    expect(dv.comments.get(500)?.map((c) => c.text.replace(/<\/?div>/g, ""))).toEqual(["Done: mapping covers all ledgers"]);
+    expect(t.logs.map((l) => JSON.stringify(l)).join()).not.toContain("ledgers");
+  });
+
   it("PK-1: with Never ask, Done on the card offers nothing", async () => {
     const dv = fakeDevOpsWrite({ now: () => MON });
     dv.add(500, { "System.WorkItemType": "User Story", "System.Title": "Import mapping", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
@@ -308,7 +333,7 @@ await forEachDriver("the bot's rhythm in Teams (TB-2)", (d) => {
     await t.rhythm.tick(ANA, await t.facts());
     const card = await t.tap(`checkin:${MON}`, "done", { pickId: a.id });
     expect((await t.plan.getPick(a.id))?.status).toBe("done");
-    expect(card).not.toContain("Set #500");
+    expect(card).not.toContain("Wrap up #500");
 expect(t.logs.map((l) => JSON.stringify(l)).join()).not.toContain("Import mapping");
   });
 
@@ -384,7 +409,7 @@ expect(t.logs.map((l) => JSON.stringify(l)).join()).not.toContain("Import mappin
       const { dv, t, a, occ } = await withItem();
       const card = await t.tap(occ, "session_all");
       expect((await t.plan.getPick(a.id))?.status).toBe("done");
-      expect(card).toContain("Set #500 to Closed");
+      expect(card).toContain("Wrap up #500: finished");
       expect(dv.seen.filter((x) => x.method === "PATCH")).toHaveLength(0);
     });
 
