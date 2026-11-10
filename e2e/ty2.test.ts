@@ -106,21 +106,25 @@ describe.skipIf(!CHROMIUM)("TY-2: the checklist beside Today's timeline", () => 
     await page.close();
   }, T);
 
-  it("ticking is the list view's: PK-1's offer with Undo, and done on both sides", async () => {
+  it("ticking is the list view's: Wrap it up (FN-1) with Undo, and done on both sides", async () => {
     const { page, errors } = await freshPage(h, TALL);
     await monday(page);
     await open(page);
     const box = page.getByRole("checkbox", { name: "Done: Timesheet summary query" });
     await box.check();
-    const card = page.getByRole("region", { name: "DevOps update" });
-    await card.waitFor();
-    await expect(card.locator(".do-title").textContent()).resolves.toBe("Set #4411 to Closed?");
-    await card.getByRole("button", { name: "Confirm" }).click();
-    await expect.poll(() => page.getByRole("status", { name: "DevOps update" }).textContent()).toContain("#4411 is Closed in DevOps");
+    const sheet = page.getByRole("dialog", { name: "Wrap it up" });
+    await sheet.waitFor();
+    await sheet.getByRole("button", { name: "Preview" }).click();
+    await expect.poll(() => sheet.locator(".wrap-summary").textContent()).toContain("#4411: state Active → Closed");
+    await sheet.getByRole("button", { name: "Confirm" }).click();
+    await expect.poll(() => sheet.getByRole("status").textContent()).toMatch(/saved to DevOps/);
+    await sheet.getByRole("button", { name: "Done" }).click();
     await expect.poll(() => band(page, "Timesheet summary query").getAttribute("class")).toMatch(/\bdone\b/);
     expect(await row(page, "Timesheet summary query").getAttribute("class")).toMatch(/\bdone\b/);
     await box.uncheck();
-    await expect.poll(() => card.locator(".do-title").textContent()).toBe("You set #4411 to Closed in DevOps. Undo that too?");
+    // Unticked: the newest write Wrap it up made is offered back first (the undo stack's order).
+    const card = page.getByRole("region", { name: "DevOps update" });
+    await expect.poll(() => card.locator(".do-title").textContent()).toMatch(/^You set #4411('s Remaining Work to \S+| to Closed) in DevOps\. Undo that too\?$/);
     await expect.poll(() => band(page, "Timesheet summary query").getAttribute("class")).not.toMatch(/\bdone\b/);
     expect(errors).toEqual([]);
     await page.close();
@@ -302,11 +306,10 @@ describe.skipIf(!CHROMIUM)("TY-2: the checklist beside Today's timeline", () => 
       await overlapping(page);
       await call(page, "ui.set_text_size", { size: text });
       await open(page);
-      // A ticked item, the DevOps offer put away, and a hover highlight.
+      // A ticked item, Wrap it up closed (the tick stays), and a hover highlight.
       await page.getByRole("checkbox", { name: "Done: Timesheet summary query" }).check();
-      const card = page.getByRole("region", { name: "DevOps update" });
-      await card.waitFor();
-      await card.getByRole("button", { name: "Not now" }).click();
+      await page.getByRole("dialog", { name: "Wrap it up" }).waitFor();
+      await page.keyboard.press("Escape");
       await row(page, "Utilization chart").hover();
       await page.waitForTimeout(400);
       await shot(page, name);

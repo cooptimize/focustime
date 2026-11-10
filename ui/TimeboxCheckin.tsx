@@ -22,7 +22,7 @@ export function TimeboxCheckin({ date, moment, color, onChanged, onError }: { da
   const [busy, setBusy] = useState(false);
   const [allError, setAllError] = useState<string | null>(null);
   const [batch, setBatch] = useState<DoneOffer[]>([]);
-  const { ticked } = useDoneOffer();
+  const { ticked, progress } = useDoneOffer();
   useEffect(() => {
     let live = true;
     setAnswered(new Map());
@@ -49,6 +49,8 @@ export function TimeboxCheckin({ date, moment, color, onChanged, onError }: { da
       onChanged();
       // PK-1's offer for one Done. Close out asks once for the whole day instead (its own batch).
       if (answer === "done" && moment === "midday") ticked(r.pickId, true, r.clientKey, r.itemId);
+      // FN-1: Partly is Made progress: the same sheet, on the time left (the plan side is answered already).
+      if (answer === "partly" && left && moment === "midday") progress?.(r.pickId, left, r.clientKey, r.itemId);
     } catch (e) {
       onError(errText(e));
     }

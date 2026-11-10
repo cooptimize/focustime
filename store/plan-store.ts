@@ -1928,16 +1928,28 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
      * TX-1c: a plain tick, the same rule as a check-in's Done: done takes the story's planned to-dos on later days off the
      * plan and remembers them on this to-do; not done puts them back. Their spent and left aren't touched either way.
      */
-    async tickDone(id: number, done: boolean): Promise<{ pick: Pick; removed: IsoDate[] }> {
+    async tickDone(id: number, done: boolean, opts: { /** FN-1: Made progress: the story isn't done, so its later to-dos stay, and this is the time left. */ progress?: { left: number } } = {}): Promise<{ pick: Pick; removed: IsoDate[] }> {
       return tx(async () => {
         const p = await mustPick(id);
+        type Was = { removed: number[]; removedBoxes: number[]; progress?: { rows: { id: number; spent: number | null; remaining: number | null }[] } };
         if (!done) {
-          const was = json<{ removed: number[]; removedBoxes: number[] }>((await db.get("SELECT done_removed FROM picks WHERE id = ?", id) as Row).done_removed);
+          const was = json<Was>((await db.get("SELECT done_removed FROM picks WHERE id = ?", id) as Row).done_removed);
           const pick = await this.setDone(id, false);
           if (was) {
             await putBackOnPlan(p, was.removed, was.removedBoxes);
+            // FN-1: a Made progress tick put its time left on the story's to-dos; unticking puts back what they had.
+            for (const r of was.progress?.rows ?? []) await db.run("UPDATE picks SET spent_minutes = ?, remaining_minutes = ? WHERE id = ?", r.spent, r.remaining, r.id);
             await db.run("UPDATE picks SET done_removed = NULL WHERE id = ?", id);
           }
+          return { pick: was?.progress ? await mustPick(id) : pick, removed: [] };
+        }
+        if (opts.progress) {
+          // FN-1: the to-do (today's slice) is done; the story goes on. Nothing comes off the plan.
+          const rows = p.itemId === null ? [] : ((await db.all("SELECT id, spent_minutes, remaining_minutes FROM picks WHERE client_key = ? AND item_id = ? AND (id = ? OR status = 'planned')", p.clientKey, p.itemId, p.id)) as Row[]);
+          const before: Was = { removed: [], removedBoxes: [], progress: { rows: (p.itemId === null ? [{ id: p.id, spent_minutes: p.spentMinutes ?? null, remaining_minutes: p.remainingMinutes ?? null } as Row] : rows).map((r) => ({ id: r.id as number, spent: (r.spent_minutes as number | null) ?? null, remaining: (r.remaining_minutes as number | null) ?? null })) } };
+          await writeProgress(p, p.spentMinutes ?? 0, opts.progress.left);
+          const pick = await this.setDone(id, true);
+          await db.run("UPDATE picks SET done_removed = ? WHERE id = ?", JSON.stringify(before), id);
           return { pick, removed: [] };
         }
         const later = p.status === "planned" ? await laterPlanned(p) : { picks: [], boxes: [] };

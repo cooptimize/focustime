@@ -12,6 +12,7 @@ import { call } from "../api.ts";
 import { SortCapture, captureClients } from "../Capture.tsx";
 import { SendLoop } from "../SendLoop.tsx";
 import { ConvLink, DraftItem, LinkedItem, Messages, NotRequest, SuggestionBox } from "../Conversations.tsx";
+import { ItemTitleLink } from "../WorkLink.tsx";
 import { MergePane } from "./MergePane.tsx";
 import { useDevOpsWrite } from "../DevOpsWrite.tsx";
 import { WRITING_POLL_MS } from "../createdraft-ctx.ts";
@@ -412,13 +413,13 @@ function Body(p: DetailProps): ReactNode {
           <WhoHasIt c={c} tz={tz} today={p.today} run={p.run} />
           <section className="ib-card" aria-label="Linked DevOps item">
             <h3 className="ib-section">Linked DevOps item</h3>
-            {c.item ? <LinkedItem item={c.item} tz={tz} lead="Tracked as" /> : <p>None yet.</p>}
+            {c.item ? <LinkedItem item={c.item} tz={tz} lead="Tracked as" clientKey={c.clientKey} /> : <p>None yet.</p>}
             {!c.item && c.likely && (
               <p className="muted">
                 Looks like{" "}
-                <a href={c.likely.url ?? undefined} target="_blank" rel="noopener noreferrer">
+                <ItemTitleLink clientKey={c.clientKey} id={c.likely.id} url={c.likely.url}>
                   #{c.likely.id} {c.likely.title ?? ""}
-                </a>
+                </ItemTitleLink>
               </p>
             )}
           </section>
@@ -461,13 +462,13 @@ function Body(p: DetailProps): ReactNode {
       <div className="ib-body">
         <section className="ib-card" aria-label="Linked DevOps item">
           <h3 className="ib-section">Linked DevOps item</h3>
-          {pr.item ? <LinkedItem item={pr.item} tz={tz} lead="Linked to" /> : <p>None yet.</p>}
+          {pr.item ? <LinkedItem item={pr.item} tz={tz} lead="Linked to" clientKey={pr.clientKey} /> : <p>None yet.</p>}
           {!pr.item && pr.likely && (
             <p className="muted">
               Looks like{" "}
-              <a href={pr.likely.url ?? undefined} target="_blank" rel="noopener noreferrer">
+              <ItemTitleLink clientKey={pr.clientKey} id={pr.likely.id} url={pr.likely.url}>
                 #{pr.likely.id} {pr.likely.title ?? ""}
-              </a>
+              </ItemTitleLink>
             </p>
           )}
         </section>
@@ -499,9 +500,9 @@ function Body(p: DetailProps): ReactNode {
           <h3 className="ib-section">Linked DevOps item</h3>
           {f.itemId ? (
             <p>
-              <a href={f.itemUrl ?? undefined} target="_blank" rel="noopener noreferrer">
+              <ItemTitleLink clientKey={f.clientKey} id={f.itemId} url={f.itemUrl}>
                 #{f.itemId}
-              </a>
+              </ItemTitleLink>
             </p>
           ) : (
             <p>None yet.</p>

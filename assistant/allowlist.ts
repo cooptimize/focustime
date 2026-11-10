@@ -45,6 +45,10 @@ export const TOOLS = {
   // PK-1: a to-do checked off on a Teams card offers its DevOps item's done state, and Undo offers that write's undo.
   // From buttons only (BUTTON_ONLY): never offered to the model.
   item_done: { kind: "proposal", actions: ["devops.done_offer", "devops.preview", "devops.confirm"], spec: { name: "item_done", description: "Propose setting a checked-off to-do's DevOps item to its done state.", parameters: obj({ pickId: id("The to-do's id, from a read"), state: sn("One of the item's done states, or null for its completed state") }) }, examples: ["(a button only)", "(Done on a Teams check-in card)", "(the to-do's DevOps offer)"] },
+  // FN-1: Wrap it up from a Teams card: Finished (the type's done state, Remaining Work 0) or Made progress (time left,
+  // New moves to its In Progress state), with an optional comment the person types on Edit. The sheet's own writes
+  // (wrapup.preview, then wrapup.apply: each through the write framework). A button only, never offered to the model.
+  wrap_up: { kind: "proposal", actions: ["wrapup.offer", "wrapup.preview", "wrapup.apply"], spec: { name: "wrap_up", description: "Propose wrapping up a checked-off to-do's DevOps item: finished or made progress, with an optional comment.", parameters: obj({ pickId: id("The to-do's id, from a read"), outcome: { type: "string", enum: ["finished", "progress"] }, left: { type: ["integer", "null"], minimum: 5, maximum: 2400, description: "Made progress: minutes left" }, comment: sn("A comment for DevOps, or null") }) }, examples: ["(a button only)", "(Done or Partly on a Teams check-in card)", "(Wrap it up in Teams)"] },
   item_undo: { kind: "proposal", actions: ["devops.undo_offer", "devops.preview", "devops.confirm"], spec: { name: "item_undo", description: "Propose undoing the state change FocusTime made to an unchecked to-do's DevOps item.", parameters: obj({ pickId: id("The to-do's id, from a read") }) }, examples: ["(a button only)", "(Undo on a Teams check-in card)", "(the to-do's DevOps undo)"] },
   // TB-3: Undo on a Teams result card: a write this proposal made, previewed and confirmed. Never offered to the model.
   write_undo: { kind: "proposal", actions: ["devops.preview", "devops.confirm"], spec: { name: "write_undo", description: "Propose undoing a DevOps write a confirmed proposal made.", parameters: obj({ clientKey: s("The write's client"), writeId: id("The audit log entry"), label: sn("What it was") }) }, examples: ["(a button only)", "(Undo on a Teams result card)", "(the write's own undo)"] },
@@ -76,9 +80,9 @@ export const TOOL_NAMES = Object.keys(TOOLS) as ToolName[];
 export const isTool = (n: string): n is ToolName => Object.hasOwn(TOOLS, n);
 /** Proposal tools that change DevOps items or the change set: their item must come from my words, the screen or a read. */
 export const ITEM_TOOLS: readonly ToolName[] = ["add_must", "ahead_change", "send", "comment", "description", "item_update", "link_comment"];
-export const PICK_TOOLS: readonly ToolName[] = ["move_pick", "drop_pick", "keep_pick", "item_done", "item_undo"];
+export const PICK_TOOLS: readonly ToolName[] = ["move_pick", "drop_pick", "keep_pick", "item_done", "item_undo", "wrap_up"];
 /** PK-1: tools only a button proposes (propose()), never given to the model. */
-export const BUTTON_ONLY: readonly ToolName[] = ["item_done", "item_undo", "write_undo"];
+export const BUTTON_ONLY: readonly ToolName[] = ["item_done", "item_undo", "write_undo", "wrap_up"];
 /** TB-2: tools whose arguments carry several pick ids (each must come from a read, like PICK_TOOLS' one). */
 export const PICKS_TOOLS: readonly ToolName[] = ["move_picks", "close_day"];
 /**
@@ -86,7 +90,7 @@ export const PICKS_TOOLS: readonly ToolName[] = ["move_picks", "close_day"];
  * to-do's DevOps state and its undo, the same write the app's offer makes. The preview, the 15 minutes and every
  * confirm check are the same as a proposal the model made.
  */
-export const PROPOSE_TOOLS = ["move_pick", "keep_pick", "drop_pick", "confirm_day", "move_picks", "close_day", "item_done", "item_undo", "move_plan"] as const satisfies readonly ToolName[];
+export const PROPOSE_TOOLS = ["move_pick", "keep_pick", "drop_pick", "confirm_day", "move_picks", "close_day", "item_done", "item_undo", "wrap_up", "move_plan"] as const satisfies readonly ToolName[];
 /**
  * AS-3: the proposals an answer may suggest as a button (FocusTime's plan only). A tap builds the same proposal the
  * model would (the button's preview, 15 minutes, every confirm check); it never runs on the tap.

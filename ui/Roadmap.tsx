@@ -13,7 +13,7 @@ import { DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { clientColor } from "./labels.ts";
 import { openCoopBrief, roadmapRowMenu, type MenuStep } from "./menu.ts";
 import { MenuCtx } from "./Menus.tsx";
-import { openWorkItem, WorkLink } from "./WorkLink.tsx";
+import { copyWorkLink, WorkLink } from "./WorkLink.tsx";
 import { createContext } from "react";
 import { Avatar, usePhotos, usePresence } from "./Presence.tsx";
 
@@ -231,7 +231,7 @@ function Row({ k, name, r, ops }: { k: string; name: string; r: RoadmapRow; ops:
     roadmapRowMenu(
       { id: r.id, clientName: name, title: r.title, tier: r.tier, targetDate: r.targetDate, open: r.open, onWeek: r.onWeek, canWrite: !!dw?.can(k), hasLink: !!r.url, owned },
       {
-        open: () => void openWorkItem(k, r.url),
+        copy: () => { if (r.url) void copyWorkLink(r.url); },
         brief: () => void ops.brief(k, r.id, r.title),
         help: () => env?.openHelp({ clientKey: k, title: `#${r.id} ${r.title}`, url: r.url, itemId: r.id, pinned: null }),
         addToWeek: () => void ops.addToWeek(k, r),

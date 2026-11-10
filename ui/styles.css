@@ -5303,6 +5303,18 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .db-fail { font-size: var(--fs-2); display: inline-flex; align-items: center; gap: 6px; }
 .db-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--fs-2); }
 .db-foot .mini { margin-left: 0; }
+/* FN-1: Close out's batch asks Wrap it up per row. */
+.db-rows li.db-row { display: grid; gap: 6px; }
+.db-row .db-check { flex: none; }
+.db-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding-left: 24px; }
+.db-outcome, .db-left { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.db-outcome .mini.on, .db-left .mini.on { background: color-mix(in oklab, var(--accent) 18%, var(--surface)); border-color: var(--accent); }
+.db-left-text { width: 5em; }
+.wrap-off { display: flex; align-items: center; gap: 8px; }
+.wrap-off .do-title { flex: 1; margin: 0; }
+.wrap-off-x { flex: none; }
+.db-comment { flex: 1 1 260px; min-width: 0; }
+.db-pv, .db-row > .db-ok, .db-row > .db-fail { padding-left: 24px; font-size: var(--fs-2); }
 @media (max-width: 599.98px) {
   .done-offer { left: 16px; right: 16px; width: auto; transform: none; bottom: calc(64px + env(safe-area-inset-bottom)); }
   .done-offer .mini, .done-batch .mini { min-height: var(--tap); }
@@ -6237,4 +6249,70 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
   .tc-btn { min-height: 44px; min-width: 44px; padding-inline: 12px; }
   .tc-left { min-height: 44px; width: 96px; font-size: 16px; }
   .tc-acts { width: 100%; }
+}
+
+/* FN-1: the story card (a modal over any place) and Wrap it up (the sheet after a tick). Phone: full-height sheets. */
+.story-card { width: min(760px, 100%); max-height: 80vh; gap: 12px; }
+.sc-head h2 { white-space: normal; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; outline: none; }
+.sc-id { color: var(--text-muted); font-weight: 500; }
+.sc-note { margin: 0; }
+.sc-facts { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: var(--fs-2); color: var(--text-muted); }
+.sc-state { padding: 1px 8px; border-radius: 999px; font-weight: 600; color: var(--text); box-shadow: inset 0 0 0 1.5px var(--border-strong); }
+.sc-state.tone-active { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.sc-state.tone-resolved, .sc-state.tone-done { box-shadow: inset 0 0 0 1.5px var(--ok); }
+.sc-state.tone-removed { color: var(--text-muted); text-decoration: line-through; }
+.sc-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 16px; margin: 0; font-size: var(--fs-2); }
+.sc-fields dt { color: var(--text-muted); }
+.sc-fields dd { margin: 0 0 4px; overflow-wrap: anywhere; }
+.sc-fields dt + dd { margin-top: -4px; }
+.sc-parents { margin: 0; font-size: var(--fs-2); overflow-wrap: anywhere; }
+.sc-link { text-align: left; overflow-wrap: anywhere; }
+.sc-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sc-edit { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--raised); margin: 0; }
+.sc-edit select, .sc-edit input { max-width: 100%; }
+.sc-edit-acts { display: flex; justify-content: flex-end; gap: 6px; }
+.sc-dates { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.sc-section h3 { margin: 0 0 6px; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.sc-html { font-size: var(--fs-3); overflow-wrap: anywhere; }
+.sc-html :is(p, ul, ol) { margin: 0 0 6px; }
+.sc-html img { display: none; }
+.sc-html pre { white-space: pre-wrap; }
+.sc-list, .sc-comments { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: var(--fs-3); }
+.sc-comments li { padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.sc-c-who { margin: 0 0 2px; font-size: var(--fs-2); }
+.sc-foot { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--border); font-size: var(--fs-2); }
+
+.wrap-backdrop { z-index: 61; }
+.wrap-sheet { width: min(560px, 100%); gap: 12px; }
+.wrap-item { overflow-wrap: anywhere; }
+.wrap-outcome { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.wrap-choice { display: grid; gap: 2px; text-align: left; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); cursor: pointer; font: inherit; }
+.wrap-choice[aria-checked="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.wrap-choice-name { font-weight: 600; font-size: var(--fs-3); }
+.wrap-choice .muted { font-size: var(--fs-2); }
+.wrap-left { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.wrap-left-typed { width: 9em; }
+.wrap-check { display: flex; gap: 8px; align-items: baseline; font-size: var(--fs-3); }
+.wrap-comment-label { display: flex; gap: 8px; align-items: baseline; }
+.wrap-comment-label .mini { margin-left: auto; }
+.wrap-note, .wrap-hint, .wrap-fine, .wrap-summary, .wrap-as { margin: 0; }
+.wrap-fine, .wrap-hint, .wrap-as { font-size: var(--fs-2); }
+.wrap-summary { font-weight: 600; overflow-wrap: anywhere; }
+.wrap-error { margin: 0; color: var(--risk); font-size: var(--fs-2); }
+.wrap-previews, .wrap-results { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.wrap-previews li { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.wrap-pv-what { font-size: var(--fs-2); color: var(--text-muted); }
+.wrap-pv-row { display: grid; grid-template-columns: 9em 1fr; gap: 8px; }
+.wrap-pv-row dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.wrap-results li { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.wrap-mentions { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--watch); border-radius: 8px; }
+.wrap-mentions p { margin: 0; }
+.wrap-foot { display: flex; justify-content: flex-end; gap: 6px; }
+
+@media (max-width: 600px) {
+  .sc-backdrop, .wrap-backdrop { padding: 0; align-items: stretch; }
+  .story-card, .wrap-sheet { width: 100%; max-height: none; height: 100%; border-radius: 0; border: 0; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); align-content: start; overflow-x: hidden; }
+  .wrap-outcome { grid-template-columns: 1fr; }
+  .wrap-pv-row { grid-template-columns: 1fr; gap: 0; }
+  .sc-acts .mini, .wrap-foot .mini { min-height: 44px; }
 }

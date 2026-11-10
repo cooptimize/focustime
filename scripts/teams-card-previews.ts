@@ -8,7 +8,8 @@
 // PK-1 adds Done's follow-up (Set #id to its done state) and Undo's (put it back), on the check-in and close out cards.
 // TB-3 adds the Ask parity set from the real service on the fictional test world; pass "tb3" as the second argument for
 // only those (docs/ux/tb3).
-// Usage: node scripts/teams-card-previews.ts <outDir> [tb3]
+// FN-1 adds Wrap it up from Done (Finished) and Partly (Made progress); pass "fn1" for only those (docs/ux/fn1).
+// Usage: node scripts/teams-card-previews.ts <outDir> [tb3|fn1]
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright-core";
 import { CHROMIUM } from "../e2e/harness.ts";
@@ -116,6 +117,14 @@ const move = await ask("Move all the items I have on my Wednesday PM block to Fr
 const moved = move.proposals[0]!;
 const done = await bot.confirm({ person, proposalId: moved.id });
 if (done.status !== "ok") throw new Error(done.message);
+// FN-1: Wrap it up on a Teams card: Done proposes Finished, Partly proposes Made progress with the time left.
+const fn1Who = "Visible to everyone with access to the Portal project in DevOps. People following the item may get a notification from DevOps.";
+const fn1Note = "Suggest or the feature's status line: Wrap it up in FocusTime. Written only if the item is still at revision 12; if anyone changed it since, nothing is written.";
+const fn1Cards: [string, Card | Card[]][] = [
+  ["teams-wrap-finished", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), checkPicks[1]!, checkPicks[2]!], proposal: ip({ title: "Wrap up #4211: finished", whoSees: fn1Who, changes: [{ field: "State", before: "Active", after: "Closed" }, { field: "Remaining Work", before: "2", after: "0" }], note: fn1Note , comment: "" }) }, URL_)],
+  ["teams-wrap-progress", checkinCard({ ...checkin, picks: [], sessions: [{ ...sessionRows[0]!, state: "partly", note: "1h left", undoIds: [1] }], proposal: ip({ title: "Wrap up #4212: made progress", whoSees: fn1Who, changes: [{ field: "State", before: "New", after: "Active" }, { field: "Remaining Work", before: "4", after: "1" }], note: fn1Note , comment: "Chart draws; legend next", message: "With your comment. Confirm to write it." }) }, URL_)],
+  ["teams-wrap-done", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), checkPicks[1]!, checkPicks[2]!], proposal: ip({ title: "Wrap up #4211: finished", changes: [{ field: "State", before: "Active", after: "Closed" }, { field: "Remaining Work", before: "2", after: "0" }], state: "done", message: "2 changes saved to DevOps" }) }, URL_)],
+];
 const tb3Cards: [string, Card | Card[]][] = [
   ["planning-answer", planning],
   ["move-proposal", [words(move.reply), proposalCard(moved, { publicUrl: URL_ })]],
@@ -135,7 +144,7 @@ for (const [theme, c] of Object.entries(THEMES)) {
   await page.setContent(`<!doctype html><html><head><style>body{margin:0;padding:20px;background:${c.bg};font-family:"Segoe UI","Noto Sans",sans-serif}#c{width:460px;background:${c.card};border:1px solid ${c.border};border-radius:8px;padding:16px}</style>
     <script src="https://unpkg.com/adaptivecards@3.0.6/dist/adaptivecards.min.js"></script></head><body><div id="c"></div></body></html>`);
   await page.waitForFunction(() => !!(window as unknown as { AdaptiveCards?: unknown }).AdaptiveCards, null, { timeout: 30_000 });
-  for (const [name, card] of (process.argv[3] === "tb3" ? tb3Cards : cards) as [string, Card | Card[]][]) {
+  for (const [name, card] of (process.argv[3] === "tb3" ? tb3Cards : process.argv[3] === "fn1" ? fn1Cards : cards) as [string, Card | Card[]][]) {
     await page.evaluate(
       ([card, c]) => {
         const AC = (window as unknown as { AdaptiveCards: any }).AdaptiveCards;

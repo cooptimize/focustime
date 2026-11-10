@@ -15,9 +15,12 @@ import { WeekMark } from "./brand/Brand.tsx";
 import { CloseReverse, MomentOverlay, Opening } from "./brand/Opening.tsx";
 import { mustsDone, sourceLines } from "./brand/opening.ts";
 import type { Theme } from "../config/schema.ts";
-import { NOTICE_EVENT, openChecked, openWorkItem, type Opened } from "./WorkLink.tsx";
+import { copyWorkLink, ITEM_CARD_EVENT, NOTICE_EVENT, openChecked, openItemCard, openWorkItem, type ItemCardTarget, type Opened } from "./WorkLink.tsx";
 import { DevOpsWriteCtx, useDevOpsWriteFlow } from "./DevOpsWrite.tsx";
-import { DoneOfferCtx, useDoneOfferFlow } from "./DoneOffer.tsx";
+import { DoneOfferCtx } from "./DoneOffer.tsx";
+import { useWrapUpFlow } from "./WrapUp.tsx";
+import { StoryCard } from "./StoryCard.tsx";
+import { itemIdOfUrl } from "../plan/item-card.ts";
 import { TimeboxCtx, TimeboxDialog, timeboxChange as tbChange, useWriteFlow, type TimeboxEnv } from "./Timeboxes.tsx";
 import { HelpFinder } from "./HelpFinder.tsx";
 import { SendHost, TeamView } from "./Team.tsx";
@@ -260,7 +263,7 @@ export function App() {
       const next = parseHash(location.hash) ?? HOME;
       // ST-1: a Settings address carries no tab: a link into Settings (Status, Feedback, the Guide's Do it now) opens it
       // over the tab I'm on, so closing returns there.
-      setLocState(next.overlay?.kind === "settings" ? { ...next, nav: locRef.current.nav } : next);
+      setLocState(next.overlay?.kind === "settings" || (next.overlay?.kind === "item" && locRef.current.overlay?.kind !== "item" && locRef.current.overlay === null) ? { ...next, nav: locRef.current.nav } : next);
     };
     window.addEventListener("popstate", on);
     return () => window.removeEventListener("popstate", on);
@@ -278,6 +281,17 @@ export function App() {
   const tourAt = loc.overlay?.kind === "tour" ? (tourById(loc.overlay.id) ?? null) : null;
   // MC-1: Client calls over the place (#/meetings and #/meetings/<occurrence>).
   const meetingAt = loc.overlay?.kind === "meeting" ? loc.overlay : null;
+  /** FN-1: a story card over the place (#/item/<client>/<id>). */
+  const itemAt = loc.overlay?.kind === "item" ? loc.overlay : null;
+  // FN-1: any work item title asks for its card; it opens over what's on screen, and Back closes it.
+  useEffect(() => {
+    const on = (e: Event) => {
+      const { clientKey, itemId } = (e as CustomEvent<ItemCardTarget>).detail;
+      go((l) => ({ nav: l.nav, overlay: { kind: "item", clientKey, itemId } }));
+    };
+    window.addEventListener(ITEM_CARD_EVENT, on);
+    return () => window.removeEventListener(ITEM_CARD_EVENT, on);
+  }, [go]);
   const base: "today" | "week" = nav.tab === "week" ? "week" : "today";
   const followUpsOpen = nav.tab === "inbox";
   /** IB-1: the Inbox's item open in the detail pane (the command menu's Inbox keys run only there). */
@@ -660,8 +674,8 @@ export function App() {
     openSettings: () => openSettingsRef.current?.("devops", "devops-write"),
     client: { name: (k) => (data ? captureClients(data).find((c) => c.clientKey === k)?.clientName : undefined) ?? k, color: (k) => (data ? clientColor(k, data.clients) : undefined) },
   });
-  // PK-1: a to-do checked off offers its DevOps item's done state (never automatically); unchecked, the Undo.
-  const doneOffer = useDoneOfferFlow({ allowed: data?.devopsWrite ?? [], ask: (data?.planning.devopsOnDone ?? "ask") === "ask", onDone: reloadQuiet });
+  // FN-1 (was PK-1's offer): a story's to-do checked off opens Wrap it up (never writes on its own); unchecked, the Undo.
+  const doneOffer = useWrapUpFlow({ allowed: data?.devopsWrite ?? [], ask: (data?.planning.devopsOnDone ?? "ask") === "ask", onDone: reloadQuiet, notice: setNotice, openSettings: () => openSettingsRef.current?.("devops", "devops-write") });
   const { ticked } = doneOffer.env;
   tickedRef.current = ticked;
   timerPickRef.current = data?.timer?.pickId ?? null;
@@ -1183,7 +1197,10 @@ export function App() {
       } else if ((e.key === "o" || e.key === "O") && !e.shiftKey && !typing) {
         e.preventDefault();
         const target = openTarget(document.activeElement);
-        if (target) void openWorkItem(target.clientKey, target.url);
+        // FN-1: O opens the focused item's card (a link with no item id opens as before).
+        const id = target ? itemIdOfUrl(target.url) : null;
+        if (target && id !== null) openItemCard(target.clientKey, id);
+        else if (target) void openWorkItem(target.clientKey, target.url);
         else setNotice("Focus a work item first (Tab to it), then press O");
       }
     };
@@ -1406,6 +1423,9 @@ export function App() {
         setDetailsOpen(true);
       },
       openLink: (k, u) => void openWorkItem(k, u),
+      copyLink: (_k: string, u: string) => void copyWorkLink(u),
+      openCard: (k: string, id: number) => openItemCard(k, id),
+      wrapUp: (pickId: number) => doneOffer.openPick(pickId),
       changeWeek,
       goToday,
       refresh: () => auto.trigger("button"),
@@ -2316,9 +2336,10 @@ export function App() {
           onClose={() => setHelpTarget(null)}
         />
       )}
+      {itemAt && <StoryCard clientKey={itemAt.clientKey} itemId={itemAt.itemId} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} onWrapUp={doneOffer.open} />}
       {writes.dialog}
       {devopsWrites.dialog}
-      {doneOffer.card}
+      {doneOffer.sheet}
       <SendHost thisWeek={data.today.weekStart} onSent={() => setPlanWeekVersion((v) => v + 1)} />
       <BreakDownHost onDone={() => (setPlanWeekVersion((v) => v + 1), reloadQuiet())} />
       <CoopBriefHost />

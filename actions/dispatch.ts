@@ -13,6 +13,8 @@ import { isClosed, isCompleted } from "../plan/process.ts";
 import { clearPhotos, photoAction } from "./photo-actions.ts";
 import { chatAction, type ChatContext } from "./chat-actions.ts";
 import { DEFAULT_DRAFT_MONTHS, storyAction, type StoryContext } from "./story-actions.ts";
+import { forgetCard, itemCardAction, type ItemCardContext } from "./item-card-actions.ts";
+import { wrapUpAction, type WrapUpContext } from "./wrapup-actions.ts";
 import { serveChatImage, type ServedImage } from "./chat-images.ts";
 import { peoplePicker, pickerPeopleOf } from "./people-picker.ts";
 import { conversationPeople, conversationAction, dayPromises, inboxFacts, loopChatOf, loopChatPromise, loopOpenChatPromises, type ConversationContext } from "./conversation-actions.ts";
@@ -1170,6 +1172,39 @@ function prepareContext(ctx: ActionContext): PrepareContext {
 }
 
 /** DS-1: Draft stories: reads through the DevOps source (read PAT), AI through ai/, writes through the write framework. */
+/** FN-1: the story card's read: the clients this person can see (followed this week, theirs in Dataverse) and write to. */
+function itemCardContext(ctx: ActionContext): ItemCardContext {
+  return {
+    plan: ctx.plan,
+    config: () => configured(ctx),
+    devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
+    clients: async (cfg) => {
+      const today = localToday(ctx.now(), userZone(cfg));
+      const dvs = ctx.makeDataverse(cfg.dataverse, userZone(cfg));
+      const [week, mine] = await Promise.all([aheadClients(ctx, cfg, mondayOf(today), false).catch(() => [] as ClientRef[]), dvs.myClients?.().catch(() => null) ?? Promise.resolve(null)]);
+      const out = new Map(week.map((c) => [c.clientKey, c] as const));
+      for (const c of mine ?? []) if (!out.has(c.clientKey)) out.set(c.clientKey, { clientKey: c.clientKey, clientName: c.clientName });
+      return [...out.values()];
+    },
+    writeClients: async () => (ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : []),
+    scope: ctx.plan ?? ctx,
+    now: ctx.now,
+  };
+}
+
+/** FN-1: Wrap it up, on the write framework's own actions. */
+function wrapUpContext(ctx: ActionContext): WrapUpContext {
+  return {
+    plan: ctx.plan,
+    config: () => configured(ctx),
+    devopsWrite: async (action, input) => devopsWriteAction(await devopsWriteContext(ctx), action, input),
+    ai: () => aiFor(ctx),
+    forget: forgetCard,
+    now: ctx.now,
+    ...standardsOption(ctx),
+  };
+}
+
 export function storyContext(ctx: ActionContext): StoryContext {
   return {
     plan: ctx.plan,
@@ -1548,7 +1583,17 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "devops.progress_offer":
     case "devops.done_offer":
     case "devops.undo_offer":
+    case "devops.wrap_offer":
       return devopsWriteAction(await devopsWriteContext(ctx), action, req.input);
+    case "item.card":
+      return itemCardAction(itemCardContext(ctx), action, req.input);
+    case "wrapup.offer":
+    case "wrapup.tick":
+    case "wrapup.preview":
+    case "wrapup.confirm":
+    case "wrapup.apply":
+    case "wrapup.suggest":
+      return wrapUpAction(wrapUpContext(ctx), action, req.input);
     case "stories.status":
     case "stories.prepare":
     case "stories.run":

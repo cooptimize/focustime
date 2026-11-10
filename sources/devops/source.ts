@@ -15,6 +15,8 @@ import { Pat } from "./pat.ts";
 import { scopeCounts, scopeOf, type DevOpsScope, type ProjectAreas, type ScopeCounts, type ScopeItem, type ScopeResult } from "../../plan/devops-scope.ts";
 import type { DevOpsTarget, TargetsResult } from "./types.ts";
 import type { ExemplarCandidate, FeatureSignals } from "../../plan/stories.ts";
+import { COMMENTS_MAX, type CardRead } from "../../plan/item-card.ts";
+import { LINK_FIELDS, parseCard, relatedIds } from "./card.ts";
 import { CHILD_FIELDS, childrenWiql, COMMENTS_API, COMMENTS_TOP, EPIC_FIELDS, FEATURE_FIELDS, parseChild, parseComments, parseReportComments, parseEpic, parseFeature, POOL_FEATURE_FIELDS, POOL_FEATURES, poolCandidates, poolStoriesWiql, poolStoryFields, poolWiql } from "./signals.ts";
 
 export const API_VERSION = "7.1";
@@ -842,6 +844,50 @@ export function createDevOpsSource(d: DevOpsDeps) {
     }
   }
 
+  /**
+   * FN-1: the story card's read of one item, on demand with the company read PAT: the item with every field and its
+   * relations, its type's fields (for Remaining Work and the size field), its parent and the parent's parent, its
+   * children, and a page of comments. Never stored or logged (counts only); the action keeps it a minute in memory.
+   */
+  async function itemCard(clientKey: string, id: number): Promise<SignalsResult<CardRead>> {
+    if (!Number.isSafeInteger(id) || id <= 0) return { ok: false, message: "Not a work item id" };
+    try {
+      const on = await onDemand(clientKey);
+      if (typeof on === "string") return { ok: false, message: on };
+      const { ctx, project, meta } = on;
+      const p = encodeURIComponent(project);
+      type RawItem = { id?: unknown; fields?: Record<string, unknown>; relations?: { rel?: unknown; url?: unknown }[] | null };
+      let raw: RawItem;
+      try {
+        raw = await call<RawItem>(ctx, "workitem", `${p}/_apis/wit/workitems/${id}?$expand=all`);
+      } catch (e) {
+        if (e instanceof DevOpsFailure && /not found|404|doesn't exist|does not exist/i.test(e.message)) return { ok: false, message: `#${id} isn't in ${ctx.projectName}, or you can't see it` };
+        throw e;
+      }
+      const type = typeof raw.fields?.["System.WorkItemType"] === "string" ? (raw.fields["System.WorkItemType"] as string) : "";
+      const rel = relatedIds(raw);
+      const batch = async (ids: number[], fields: string[]): Promise<RawItem[]> => (ids.length ? ((await call<{ value?: RawItem[] }>(ctx, "workitemsbatch", `${p}/_apis/wit/workitemsbatch`, { ids, fields, errorPolicy: "omit" })).value ?? []) : []);
+      const [typeFields, comments, first] = await Promise.all([
+        type ? call<{ value?: { referenceName?: unknown; name?: unknown }[] }>(ctx, "typefields", `${p}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/fields`).catch(() => null) : Promise.resolve(null),
+        call<unknown>(ctx, "comments", `${p}/_apis/wit/workItems/${id}/comments?$top=${COMMENTS_MAX}&order=desc&api-version=${COMMENTS_API}`).catch(() => null),
+        batch([...(rel.parent !== null ? [rel.parent] : []), ...rel.children.slice(0, 199)], [...LINK_FIELDS, "System.Parent"]),
+      ]);
+      const parentRaw = first.find((x) => x.id === rel.parent);
+      const gp = typeof parentRaw?.fields?.["System.Parent"] === "number" ? (parentRaw.fields["System.Parent"] as number) : null;
+      const second = gp !== null ? await batch([gp], LINK_FIELDS) : [];
+      const related = [...first, ...second];
+      const has = typeFields ? new Set((typeFields.value ?? []).map((f) => f.referenceName).filter((r): r is string => typeof r === "string")) : null;
+      const names = new Map((typeFields?.value ?? []).filter((f) => typeof f.referenceName === "string" && typeof f.name === "string").map((f) => [f.referenceName as string, (f.name as string).slice(0, 80)] as const));
+      const url = workItemUrl(ctx.org, ctx.projectName, id);
+      const card = parseCard({ raw, url, related, comments, category: (t, s) => meta.categories.get(t)?.get(s.toLowerCase()) ?? null, sizeLabel: (ref) => names.get(ref) ?? ref.split(".").pop()!, states: (typeOf(meta.model, type)?.states ?? []).map((x) => ({ name: x.name, category: x.category })), typeHas: has, breakDown: !!typeOf(meta.model, type)?.needsBreakdown });
+      if (!card) return { ok: false, message: `#${id} isn't in ${ctx.projectName}, or you can't see it` };
+      log("item_card", { count: 1 + related.length + card.comments.length });
+      return { ok: true, value: card };
+    } catch (e) {
+      return { ok: false, message: plainFailure(e, "Reading the item") };
+    }
+  }
+
   /** SR-1: the change log's state and comment changes since an instant, with only whether each was mine. */
   async function activity(clientKey: string, since: string, emails: readonly string[]): Promise<{ known: boolean; rows: Activity[] }> {
     if (!d.central?.activity) return { known: false, rows: [] };
@@ -1390,13 +1436,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
     },
   };
 
-  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, lastChanges, aheadItems, projectPeople, linkedItems, searchItems, featureComments, activity, internal };
+  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, lastChanges, aheadItems, projectPeople, linkedItems, searchItems, featureComments, activity, itemCard, internal };
 }
 
 /** What screens use (the same interface whether it reads DevOps or the central store). */
 type FullSource = ReturnType<typeof createDevOpsSource>;
 /** PL-1's by-id reads are optional: a source without them (a stub, an older adapter) means "DevOps can't say". */
-type PlanReads = "featureTrees" | "itemStates" | "stateChanges" | "lastChanges" | "aheadItems" | "projectPeople" | "linkedItems" | "searchItems" | "featureComments" | "activity";
+type PlanReads = "featureTrees" | "itemStates" | "stateChanges" | "lastChanges" | "aheadItems" | "projectPeople" | "linkedItems" | "searchItems" | "featureComments" | "activity" | "itemCard";
 export type DevOpsSource = Omit<FullSource, "internal" | PlanReads> & Partial<Pick<FullSource, PlanReads>>;
 /** DV-1: what the central poller uses of an app-level source. */
 export type DevOpsInternal = ReturnType<typeof createDevOpsSource>["internal"];

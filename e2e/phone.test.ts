@@ -80,6 +80,9 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
 
   it("runs the day: Today, start focus, mark done, capture", async () => {
     const { page, errors } = await freshPage(h, PHONE);
+    // FN-1: this test checks the plan's own tick; Wrap it up has its own (e2e/fn1.test.ts), so the sheet stays off here.
+    expect((await call(page, "settings.save", { section: "planning", values: { devopsOnDone: "never" } })).ok).toBe(true);
+    await page.reload();
     for (const input of [
       { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", itemId: 4411, size: "S" },
       { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", intention: "Write the release notes", size: "S" },

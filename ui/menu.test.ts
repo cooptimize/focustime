@@ -29,6 +29,9 @@ function env(over: Partial<MenuEnv> = {}) {
     commitPlan: () => calls.push(["commit"]),
     openDetails: (d, h) => calls.push(["details", d, h]),
     openLink: (k, u) => calls.push(["link", k, u]),
+    copyLink: (k, u) => calls.push(["copy", k, u]),
+    openCard: (k, id) => calls.push(["card", k, id]),
+    wrapUp: (id) => calls.push(["wrap", id]),
     changeWeek: (n) => calls.push(["week", n]),
     goToday: () => calls.push(["today"]),
     refresh: () => calls.push(["refresh"]),
@@ -135,13 +138,13 @@ describe("command menu (built from the action registry)", () => {
 });
 
 describe("⋯ menus", () => {
-  it("a pick: open in Edge, size, move, start focus, done, drop", async () => {
+  it("a pick: copy the DevOps link (FN-1), size, move, start focus, done, drop", async () => {
     const t = env();
     const m = pickMenu(t.e, pick);
-    expect(items(m).map((i) => i.label)).toEqual(["Open in browser", "Set size", "Move", "Start focus", "Timebox", "Ask to collaborate", "Mark done", "Kind", "I'll make it up…", "Drop"]);
-    await find(m, "Open in browser").run!();
+    expect(items(m).map((i) => i.label)).toEqual(["Copy DevOps link", "Set size", "Move", "Start focus", "Timebox", "Ask to collaborate", "Mark done", "Kind", "I'll make it up…", "Drop"]);
+    await find(m, "Copy DevOps link").run!();
     await find(find(m, "Set size").next!(), "S · 1h").run!();
-    expect(t.calls).toEqual([["link", "internal", pick.itemUrl], ["pick.set_size", { id: 7, size: "S" }]]);
+    expect(t.calls).toEqual([["copy", "internal", pick.itemUrl], ["pick.set_size", { id: 7, size: "S" }]]);
   });
   it("moving offers the other half, Friday and every other half-day; a PTO day takes it with a note (AS-2, D947)", () => {
     const m = find(pickMenu(env().e, pick), "Move").next!();
@@ -165,9 +168,9 @@ describe("⋯ menus", () => {
     const we = items(m).filter((i) => /^To (Saturday|Sunday)$/.test(i.label));
     expect(we.map((i) => [i.label, i.disabled, i.hint])).toEqual([["To Saturday", undefined, "Saturday isn't a working day: this is flex time"], ["To Sunday", undefined, "Sunday isn't a working day: this is flex time"]]);
   });
-  it("a work item: open, add to the plan (stories only), draft story for an empty feature", () => {
+  it("a work item: copy its link (FN-1), add to the plan (stories only), draft story for an empty feature", () => {
     const story = itemMenu(env().e, "internal", item(1));
-    expect(items(story).map((i) => [i.label, i.disabled ?? ""])).toEqual([["Open in browser", ""], ["Add to the plan", ""], ["Timebox…", ""], ["Ask to collaborate", ""], ["Send to…", ""]]);
+    expect(items(story).map((i) => [i.label, i.disabled ?? ""])).toEqual([["Copy DevOps link", ""], ["Add to the plan", ""], ["Timebox…", ""], ["Ask to collaborate", ""], ["Send to…", ""]]);
     const feature = itemMenu(env().e, "internal", item(2, "portfolio"));
     // SW-1: a feature can be sent; an epic is sent through its features.
     expect(find(feature, "Send to…").disabled).toBeUndefined();

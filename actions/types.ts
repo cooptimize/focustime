@@ -377,6 +377,8 @@ export type DevOpsPreview = {
 export type DevOpsResult = { entry: import("../plan/devopswrite.ts").DevOpsWriteEntry; confirmed: boolean; message: string; changed?: { field: string; was: string | null; now: string | null }[]; itemId?: number | null; url?: string | null };
 /** PK-1: one checked-off to-do whose DevOps item FocusTime may offer to set done: its current state and the done choices (Completed first, then Resolved). */
 export type DoneOffer = { pickId: number; clientKey: string; clientName: string; itemId: number; title: string; type: string; state: string; choices: string[]; /** The rule's open "Update DevOps" follow-up for it, closed by the write. */ followUpId: number | null };
+/** FN-1: what Wrap it up offers for one item (devops.wrap_offer): its done states by category, the state a New item moves to, Remaining Work, my right to change it, its parent. */
+export type WrapOffer = { clientKey: string; clientName: string; itemId: number; title: string; type: string; state: string; done: boolean; choices: string[]; chosen: string | null; activate: string | null; hasRemaining: boolean; remaining: number | null; canEdit: boolean; editNote: string | null; parent: { id: number; title: string; type: string } | null };
 /** TX-1: one row of a check-in, with its client's name. */
 export type SessionView = import("../plan/progress.ts").SessionRow & { clientName: string };
 /** TX-1b: one row All went to plan applied: what's on the row, what it became (`left` after it; `remaining` was before), and a Done's removed days. */

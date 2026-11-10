@@ -523,3 +523,10 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - How does FocusTime tell Coop to stop? Today only deleting the brief does, and FocusTime's comment delete is limited to the status report window.
 - The Nov 3 draft had `ask_type`, `due_at`, `priority`, `data_policy_id`, `event_id`, `run_id`, `sequence` and `work_item_changes`. None are in v1. Does Coop need any of them now?
 - Is a brief edited in place, with no new revision, right to stop Coop?
+
+## FN-1
+
+- Teams: should the card offer Suggest (AI) for the comment, or is the typed comment enough? (The comment box itself is done.)
+- Close out's batch has a comment per row but no Suggest and no feature status line. Worth adding, or are those sheet-only?
+- Should the story card show Coop brief status (C1) once that merges?
+- Should Wrap it up open for a story whose client has no write PAT, to record Made progress on the plan with a nudge to turn writes on? Today the tick is plain.

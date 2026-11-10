@@ -18,7 +18,7 @@ import { ActionRefusal, call, planAction } from "./api.ts";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { MenuCtx } from "./Menus.tsx";
 import type { MenuItem, MenuStep } from "./menu.ts";
-import { PV_BREAKDOWN_EVENT, rowHead } from "./menu.ts";
+import { COPY_LINK, PV_BREAKDOWN_EVENT, rowHead } from "./menu.ts";
 import { SizeChip } from "./plan/Estimate.tsx";
 import { Avatar, usePhotos } from "./Presence.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
@@ -377,7 +377,7 @@ function StoryRowView({ r, work, slot, clientName }: { r: StoryRow; work: Client
   const more = (e: ReactMouseEvent): void => {
     e.stopPropagation();
     const items: MenuItem[] = [
-      ...(menuEnv ? [{ id: "open", label: "Open in DevOps", action: "link.open", run: () => menuEnv.openLink(work.clientKey, item.url) } as MenuItem] : []),
+      ...(menuEnv ? [{ id: "copy", label: COPY_LINK, run: () => menuEnv.copyLink(work.clientKey, item.url) } as MenuItem] : []),
       ...(dnd ? [{ id: "add", label: "Add to…", action: "pick.add", next: () => dnd.menuFor(d, `#${item.id}`) } as MenuItem] : []),
       ...(dnd && moving ? [{ id: "move", label: `Move from ${blockLabel(moving)} to…`, action: "pick.move", next: () => dnd.menuFor({ ...d, pickId: moving.pickId }, `#${item.id}`) } as MenuItem] : []),
       // SW-1: hand it to a teammate's week.

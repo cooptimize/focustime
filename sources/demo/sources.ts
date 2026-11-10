@@ -10,8 +10,8 @@ import type { CalEvent, ClientWork, SourceId, SourceResult } from "../../week/ty
 import { createGraphWriter, type GraphWriter } from "../graph/write.ts";
 import type { DemoOutlook } from "./outlook.ts";
 import { demoDirectory } from "./directory.ts";
-import { DEMO_CLIENTS, DEMO_ME, DEMO_TZ, DEMO_PEOPLE, demoGoogle, demoOutlook, demoPatterns, demoPortfolio, demoProcess, demoPto, demoWork, demoWorkItem, isDemoClient, demoAheadClient, demoProjectPeople, type DemoClientKey } from "./data.ts";
-import { itemUrlOf, type DemoDevOps } from "./devops.ts";
+import { DEMO_CLIENTS, DEMO_ME, DEMO_TZ, ME, DEMO_PEOPLE, demoGoogle, demoOutlook, demoPatterns, demoPortfolio, demoProcess, demoPto, demoWork, demoWorkItem, isDemoClient, demoAheadClient, demoProjectPeople, type DemoClientKey } from "./data.ts";
+import { itemUrlOf, ME_NAME, STATES as DEMO_STATES, type DemoDevOps } from "./devops.ts";
 import { demoKatSent } from "./seeds/status.ts";
 import { typeOf } from "../../plan/process.ts";
 
@@ -115,6 +115,30 @@ export function createDemoSources(world: DemoDevOps, cal: DemoOutlook, now: () =
           comments: world.comments(f.id),
           storyType: childTypes[0] ?? "User Story",
           childTypes: [...childTypes],
+        },
+      };
+    },
+    // FN-1: the story card reads the demo's own item, its parent and epic, its children and comments.
+    itemCard: async (clientKey, id) => {
+      const i = isDemoClient(clientKey) ? world.item(id) : null;
+      if (!i || i.clientKey !== clientKey || !isDemoClient(clientKey)) return { ok: false, message: `#${id} isn't in the demo's DevOps` };
+      const link = (x: { id: number; title: string; type: string; state: string } | null) => (x ? { id: x.id, title: x.title, type: x.type, state: x.state } : null);
+      const parent = i.parent !== null ? world.item(i.parent) : null;
+      const gp = parent?.parent != null ? world.item(parent.parent) : null;
+      const portfolio = i.type === "Epic" || i.type === "Feature";
+      const remaining = clientKey === "Cooptimize" && !portfolio;
+      const comments = world.cardComments(id);
+      return {
+        ok: true,
+        value: {
+          id: i.id, title: i.title, type: i.type, state: i.state, stateCategory: DEMO_STATES[i.type]?.find((s) => s.name === i.state)?.category ?? null, states: DEMO_STATES[i.type] ?? [],
+          assignee: i.who === ME ? ME_NAME : i.who, iteration: i.iteration || null, area: i.area || null,
+          size: portfolio ? null : { label: clientKey === "Harbor" ? "Effort" : "Story Points", value: i.size },
+          remainingWork: remaining ? (i.remainingWork ?? null) : null, hasRemainingWork: remaining,
+          start: i.start, target: i.target, descriptionHtml: i.description, acceptanceHtml: i.acceptance,
+          parent: link(parent), grandparent: link(gp),
+          children: world.items(clientKey).filter((x) => x.parent === i.id).map((x) => link(x)!),
+          comments, commentCount: comments.length, url: itemUrlOf(clientKey, i.id), changedAt: i.changedAt, breakDown: !!typeOf(demoProcess(clientKey, await processOverrides(clientKey)), i.type)?.needsBreakdown,
         },
       };
     },

@@ -430,7 +430,7 @@ export function createRhythm(d: RhythmDeps) {
   // ---- Taps ----
 
   const answer = (c: Card): InvokeBody => ({ statusCode: 200, type: CARD_TYPE, value: c });
-  const inline = (p: Proposal, message?: string | null): InlineProposal => ({ proposalId: p.id, title: p.title, whoSees: p.whoSees, changes: [...p.changes], note: p.note ?? null, expiresAt: p.expiresAt, state: "open", message: message ?? null });
+  const inline = (p: Proposal, message?: string | null, comment = ""): InlineProposal => ({ proposalId: p.id, title: p.title, whoSees: p.whoSees, changes: [...p.changes], note: p.note ?? null, expiresAt: p.expiresAt, state: "open", message: message ?? null, ...((p.editable ?? []).includes("comment") ? { comment } : {}) });
 
   /** After a confirm: the picks', the day's and the plan's state as the store has them now. */
   async function refreshed<M extends RhythmModel>(userId: string, m: M): Promise<M> {
@@ -465,11 +465,15 @@ export function createRhythm(d: RhythmDeps) {
     return { ...m, notice: null, proposal: inline(r.proposal) };
   }
 
-  /** PK-1: the DevOps follow-up to a Done or Undo tap, through propose(); quiet when there's nothing to offer. */
-  async function offerDevOps(userId: string, m: Exclude<RhythmModel, NudgeModel | StatusModel | MeetingsModel>, tool: "item_done" | "item_undo", pickId: number): Promise<Exclude<RhythmModel, NudgeModel | StatusModel | MeetingsModel>> {
+  /**
+   * PK-1, FN-1: the DevOps follow-up to a Done, a Partly or an Undo tap, through propose(); quiet when there's nothing
+   * to offer. Done and Partly are Wrap it up (Finished, or Made progress with the time left): the same writes as the
+   * app's sheet, a comment typed on Edit, nothing written before Confirm.
+   */
+  async function offerDevOps(userId: string, m: Exclude<RhythmModel, NudgeModel | StatusModel | MeetingsModel>, tool: "item_done" | "item_undo" | "item_progress", pickId: number, left?: number): Promise<Exclude<RhythmModel, NudgeModel | StatusModel | MeetingsModel>> {
     const c = await d.config(userId).catch(() => null);
-    if (!d.assistant || (tool === "item_done" && c?.plan.devopsOnDone === "never")) return m;
-    const r = await d.assistant.propose({ person: { userId }, tool, args: tool === "item_done" ? { pickId, state: null } : { pickId } });
+    if (!d.assistant || (tool !== "item_undo" && c?.plan.devopsOnDone === "never")) return m;
+    const r = await d.assistant.propose({ person: { userId }, tool: tool === "item_undo" ? "item_undo" : "wrap_up", args: tool === "item_undo" ? { pickId } : { pickId, outcome: tool === "item_done" ? "finished" : "progress", left: left ?? null, comment: null } });
     if (!r.ok) return m;
     const row = await d.store(userId).get(m.occasion);
     await d.botStore(userId).cardSent(r.proposal.id, row?.activityId ?? null, r.proposal.expiresAt, r.proposal.title);
@@ -486,14 +490,16 @@ export function createRhythm(d: RhythmDeps) {
     return w ? nextBlockFor(w.week.days.filter((x) => x.date > m.date), pick.clientKey, d.now().toString()) : null;
   }
 
-  async function confirmInline(userId: string, m: Exclude<RhythmModel, NudgeModel | StatusModel | MeetingsModel>, proposalId: string): Promise<Exclude<RhythmModel, NudgeModel | StatusModel | MeetingsModel>> {
+  async function confirmInline(userId: string, m: Exclude<RhythmModel, NudgeModel | StatusModel | MeetingsModel>, proposalId: string, typed?: string): Promise<Exclude<RhythmModel, NudgeModel | StatusModel | MeetingsModel>> {
     const p = m.proposal;
+    // FN-1: the comment box goes as the proposal's edit; a new comment changes the preview, so it comes back to confirm.
+    const comment = p?.comment !== undefined ? (typed ?? "").trim() : undefined;
     if (!p || p.proposalId !== proposalId || p.state !== "open" || !d.assistant) return m;
     const bot = d.botStore(userId);
     if (!(await bot.claim(proposalId))) return m;
     let r: ConfirmResult;
     try {
-      r = await d.assistant.confirm({ person: { userId }, proposalId });
+      r = await d.assistant.confirm({ person: { userId }, proposalId, ...(comment !== undefined ? { edits: { comment } } : {}) });
     } catch {
       r = { status: "not_allowed", message: "Something went wrong. Check FocusTime before trying again." };
     }
@@ -502,7 +508,8 @@ export function createRhythm(d: RhythmDeps) {
       await bot.reopen(proposalId);
       await bot.cardSent(r.proposal.id, null, r.proposal.expiresAt, r.proposal.title);
       log({ op: "rhythm_tap", kind: "changed" });
-      return { ...(await refreshed(userId, m)), proposal: inline(r.proposal, r.message) };
+      const mine = comment !== undefined && comment !== (p.comment ?? "");
+      return { ...(await refreshed(userId, m)), proposal: inline(r.proposal, mine ? "With your comment. Confirm to write it." : r.message, comment ?? "") };
     }
     const state = r.status === "ok" ? "done" : r.status === "expired" ? "expired" : "failed";
     await bot.settle(proposalId, state, null);
@@ -584,7 +591,7 @@ export function createRhythm(d: RhythmDeps) {
         if (m.kind === "closeout") m = await closeoutFromWords(userId, m, t.closeoutText ?? "");
         break;
       case "confirm":
-        if (t.proposalId) m = await confirmInline(userId, m, t.proposalId);
+        if (t.proposalId) m = await confirmInline(userId, m, t.proposalId, t.comment);
         break;
       case "cancel":
         if (t.proposalId && m.proposal?.proposalId === t.proposalId && m.proposal.state === "open") {
@@ -621,6 +628,8 @@ export function createRhythm(d: RhythmDeps) {
         setPicks([row.pickId], "done");
         if (m.proposal?.state !== "open") m = (await offerDevOps(userId, m, "item_done", row.pickId)) as typeof m;
       }
+      // FN-1: Partly is Made progress: the same Wrap it up, with the time left.
+      if (answer === "partly" && left && m.proposal?.state !== "open") m = (await offerDevOps(userId, m, "item_progress", row.pickId, left)) as typeof m;
     };
     switch (t.op) {
       case "session_done":

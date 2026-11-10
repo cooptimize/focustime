@@ -1,5 +1,5 @@
 // MB-1: a to-do's sheet on the phone, the same from Today's rows and Week's ⋯: Done, Move to tomorrow, Snooze (to
-// this afternoon), Add time and Open in DevOps. Every one is an existing action (pick.mark_done, pick.move, the
+// this afternoon), Add time, the story card and Copy DevOps link (FN-1). Every one is an existing action (pick.mark_done, pick.move, the
 // timebox menu, link.open); a change to my own plan runs at once with Undo, as the Week's moves do (pick.uncarry puts
 // a to-do moved to another day back, a move within the day is moved back, Done takes back Done). Phone only: on a computer the ⋯ menu is unchanged.
 import { createContext, useContext, type ReactNode } from "react";
@@ -9,7 +9,7 @@ import type { Pick } from "../plan/types.ts";
 import { progressChip } from "../plan/progress.ts";
 import { planAction } from "./api.ts";
 import { MenuCtx } from "./Menus.tsx";
-import { deployForm, timeStep } from "./menu.ts";
+import { COPY_LINK, deployForm, timeStep } from "./menu.ts";
 import { PlanCtx } from "./planview.ts";
 import { WeekDnd } from "./WeekStories.tsx";
 import { PhoneSheet } from "./PhoneShell.tsx";
@@ -120,9 +120,15 @@ export function TodoSheet({ pick, data, now, onClose, onChanged }: { pick: Pick;
             Deployment details
           </button>
         )}
+        {/* FN-1: the story card instead of DevOps; its link is copied, never opened. */}
+        {pick.itemUrl && pick.itemId !== null && menu.env && (
+          <button type="button" onClick={() => (onClose(), menu.env!.openCard(pick.clientKey, pick.itemId!))}>
+            Story card · #{pick.itemId}
+          </button>
+        )}
         {pick.itemUrl && menu.env && (
-          <button type="button" onClick={() => (onClose(), menu.env!.openLink(pick.clientKey, pick.itemUrl!))}>
-            Open in DevOps{pick.itemId !== null ? ` · #${pick.itemId}` : ""}
+          <button type="button" onClick={() => (onClose(), menu.env!.copyLink(pick.clientKey, pick.itemUrl!))}>
+            {COPY_LINK}
           </button>
         )}
       </div>
