@@ -1,0 +1,25 @@
+{
+  "kind": "coop_update",
+  "version": 1,
+  "brief_id": "3f2b8c1e-7a4d-4e9b-9c55-1d2e3f4a5b6c",
+  "revision": 1,
+  "proposal_ids": [],
+  "question_ids": [
+    "Q1"
+  ],
+  "status": "blocked",
+  "summary": "Need to know how far back the export goes.",
+  "occurred_at": "2026-11-03T15:10:00Z",
+  "posted_at": "2026-11-03T15:10:12Z",
+  "questions": [
+    {
+      "id": "Q1",
+      "text": "Should the export include months before this year?",
+      "blocking": true,
+      "suggested_answers": [
+        "Include them",
+        "This year only"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+[Coop update v1] done: Two stories proposed, one question left open.
+
+```json
+{
+  "kind": "coop_update",
+  "version": 1,
+  "brief_id": "3f2b8c1e-7a4d-4e9b-9c55-1d2e3f4a5b6c",
+  "revision": 1,
+  "proposal_ids": [
+    "P1",
+    "P2"
+  ],
+  "question_ids": [],
+  "status": "done",
+  "summary": "Two stories proposed, one question left open.",
+  "occurred_at": "2026-11-03T16:02:00Z",
+  "posted_at": "2026-11-03T16:02:08Z",
+  "proposals": {
+    "kind": "story_proposals",
+    "version": 1,
+    "feature_id": 240,
+    "proposals": [
+      {
+        "id": "P1",
+        "title": "Add the date filter to the export",
+        "description": "Finance chooses the month before exporting.",
+        "acceptance_criteria": [
+          "A month chooser shows above the export",
+          "The file has only that month"
+        ],
+        "depends_on": [],
+        "size": "M",
+        "evidence": [
+          "Feature description",
+          "comment 2026-11-03"
+        ],
+        "open_questions": []
+      },
+      {
+        "id": "P2",
+        "title": "Email the export to finance",
+        "description": "Send the file on the first workday of the month.",
+        "acceptance_criteria": [
+          "Finance gets the file by email"
+        ],
+        "depends_on": [
+          "P1"
+        ],
+        "size": "S",
+        "evidence": [
+          "comment 2026-11-03"
+        ],
+        "open_questions": [
+          "Which mailbox should receive it?"
+        ]
+      }
+    ],
+    "rationale": "The columns are done; the filter and delivery are left.",
+    "set_aside": [
+      {
+        "title": "Choose the columns",
+        "why": "already_covered",
+        "existing_item_id": 241,
+        "reason": "Story 241 did this."
+      }
+    ]
+  }
+}
+```

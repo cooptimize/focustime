@@ -1,0 +1,45 @@
+{
+  "kind": "coop_brief",
+  "version": 1,
+  "brief_id": "3F2B8C1E-7A4D-4E9B-9C55-1D2E3F4A5B6C",
+  "revision": 1,
+  "feature_id": 240,
+  "requester": {
+    "display_name": "Ada Example",
+    "devops_user_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+  },
+  "outcome": "Review-ready child story proposals for the month-end export.",
+  "scope": {
+    "in": [
+      "This feature"
+    ],
+    "out": [
+      "Building the stories",
+      "Changing the state of any item"
+    ]
+  },
+  "acceptance_expectations": [
+    "Finance can export one chosen month",
+    "Each proposal has acceptance criteria"
+  ],
+  "known_decisions": [
+    "The export stays a file download for now"
+  ],
+  "unknowns": [
+    "How far back the export needs to go"
+  ],
+  "permitted_actions": [
+    "investigate",
+    "propose_stories",
+    "ask_questions"
+  ],
+  "granularity": {
+    "max_stories": 6,
+    "target_size": "M",
+    "include": [
+      "acceptance",
+      "dependencies"
+    ]
+  },
+  "submitted_at": "2026-11-03T15:00:00Z"
+}

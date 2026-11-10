@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.focustime.example/coop-contract/v1/brief.schema.json",
+  "title": "Coop brief v1",
+  "description": "What FocusTime asks Coop to do on one feature. Posted by the requester as a [Coop brief v1] comment.",
+  "type": "object",
+  "required": [
+    "kind",
+    "version",
+    "brief_id",
+    "revision",
+    "feature_id",
+    "requester",
+    "outcome",
+    "scope",
+    "acceptance_expectations",
+    "known_decisions",
+    "unknowns",
+    "permitted_actions",
+    "granularity",
+    "submitted_at"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "coop_brief"
+    },
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "brief_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "feature_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "requester": {
+      "type": "object",
+      "required": [
+        "display_name",
+        "devops_user_id"
+      ],
+      "properties": {
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "\\S"
+        },
+        "devops_user_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        }
+      }
+    },
+    "outcome": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "pattern": "\\S"
+    },
+    "scope": {
+      "type": "object",
+      "required": [
+        "in",
+        "out"
+      ],
+      "properties": {
+        "in": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "pattern": "\\S"
+          },
+          "minItems": 1
+        },
+        "out": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "pattern": "\\S"
+          }
+        }
+      }
+    },
+    "acceptance_expectations": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500,
+        "pattern": "\\S"
+      }
+    },
+    "known_decisions": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500,
+        "pattern": "\\S"
+      }
+    },
+    "unknowns": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500,
+        "pattern": "\\S"
+      }
+    },
+    "permitted_actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "investigate",
+          "propose_stories",
+          "ask_questions"
+        ]
+      }
+    },
+    "granularity": {
+      "type": "object",
+      "required": [
+        "max_stories",
+        "target_size",
+        "include"
+      ],
+      "properties": {
+        "max_stories": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "target_size": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "S",
+            "M",
+            "L",
+            null
+          ]
+        },
+        "include": {
+          "type": "array",
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "acceptance",
+              "dependencies",
+              "estimates",
+              "test_notes",
+              "rollout"
+            ]
+          }
+        }
+      }
+    },
+    "submitted_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,7})?Z$"
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "kind": "story_proposals",
+  "version": 1,
+  "feature_id": 240,
+  "proposals": [
+    {
+      "id": "P1",
+      "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "description": "Finance chooses the month before exporting.",
+      "acceptance_criteria": [
+        "A month chooser shows above the export",
+        "The file has only that month"
+      ],
+      "depends_on": [],
+      "size": "M",
+      "evidence": [
+        "Feature description",
+        "comment 2026-11-03"
+      ],
+      "open_questions": []
+    }
+  ],
+  "rationale": "The columns are done; the filter and delivery are left.",
+  "set_aside": [
+    {
+      "title": "Choose the columns",
+      "why": "already_covered",
+      "existing_item_id": 241,
+      "reason": "Story 241 did this."
+    }
+  ]
+}
