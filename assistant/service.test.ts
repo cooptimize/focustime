@@ -313,13 +313,16 @@ describe("move things around: proposals, written only on confirm", () => {
   });
   const cases: { name: string; tools: string[]; args: Record<string, unknown>; text: string; action: ActionName; input?: unknown }[] = [
     { name: "drop a pick", tools: ["drop_pick"], args: {}, text: "Drop my export spec", action: "pick.remove" },
-    { name: "confirm today", tools: ["confirm_day"], args: { date: TODAY }, text: "Confirm today", action: "planday.commit", input: { date: TODAY } },
-    { name: "confirm the week", tools: ["confirm_week"], args: { weekStart: "2026-11-02" }, text: "Confirm this week", action: "weekplan.commit", input: { weekStart: "2026-11-02" } },
-    { name: "add a must", tools: ["add_must"], args: { itemId: 4417, weekStart: null }, text: "Add #4417 to this week as a must", action: "weekplan.add", input: { weekStart: "2026-11-02", clientKey: FAB, itemId: 4417, tier: "must" } },
+    { name: "add to the week", tools: ["add_to_week"], args: { itemId: 4417, weekStart: null }, text: "Add #4417 to this week", action: "weekplan.add", input: { weekStart: "2026-11-02", clientKey: FAB, itemId: 4417 } },
     { name: "an Ahead edit goes into the change set, not DevOps", tools: ["ahead_change"], args: { itemId: 4417, field: "target", value: "2026-12-04" }, text: "Move #4417's target to Dec 4", action: "ahead.stage", input: { clientKey: FAB, itemId: 4417, field: "target", value: "2026-12-04", half: null } },
     { name: "a comment on a work item", tools: ["comment"], args: { itemId: 4417, text: "The export works for March." }, text: "Comment on #4417 that the export works for March", action: "devops.confirm" },
     { name: "capture", tools: ["capture"], args: { text: "Ask about the March totals", as: "sort_later" }, text: "Capture: ask about the March totals", action: "capture.add", input: { text: "Ask about the March totals" } },
   ];
+  it("CF-1: no tool confirms a day or a week, or makes a must; the confirm actions are never reachable", () => {
+    for (const t of ["confirm_day", "confirm_week", "add_must"]) expect(TOOL_NAMES as readonly string[]).not.toContain(t);
+    const reachable = Object.values(TOOLS).flatMap((t) => (t as { actions?: readonly string[] }).actions ?? []);
+    for (const a of ["planday.commit", "weekplan.commit", "weekplan.set_tier"]) expect(reachable).not.toContain(a);
+  });
   for (const k of cases) {
     it(`${k.name} maps to ${k.action}`, async () => {
       const s = setup();

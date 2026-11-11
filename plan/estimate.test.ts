@@ -1,10 +1,10 @@
 import { DEFAULT_SIZE_SCALE } from "./estimate.ts";
 import { describe, expect, it } from "vitest";
-import { aboutText, blocksToMinutes, budgetWords, estimate, hoursText, loadText, overLine, parseHours, plannedMinutesOf, progressWords, sizeChipText, sourceWords, stepHours, storyMinutes, tierOf, validEstimateHours, validEstimateMinutes, type EstItem } from "./estimate.ts";
+import { aboutText, blocksToMinutes, budgetWords, estimate, hoursText, loadText, overLine, parseHours, plannedMinutesOf, progressWords, sizeChipText, sourceWords, stepHours, storyMinutes, validEstimateHours, validEstimateMinutes, type EstItem } from "./estimate.ts";
 
 const H = 60;
-const f = (itemId: number, hours: number | null, o: Partial<EstItem> = {}): EstItem => ({ clientKey: "T&W", itemId, level: "feature", tier: "must", estimate: hours === null ? null : hours * H, ...o });
-const s = (itemId: number, size: "S" | "M" | "L" | null, parentId: number | null, o: Partial<EstItem> = {}): EstItem => ({ clientKey: "T&W", itemId, level: "story", tier: "must", estimate: null, size, parentId, ...o });
+const f = (itemId: number, hours: number | null, o: Partial<EstItem> = {}): EstItem => ({ clientKey: "T&W", itemId, level: "feature", estimate: hours === null ? null : hours * H, ...o });
+const s = (itemId: number, size: "S" | "M" | "L" | null, parentId: number | null, o: Partial<EstItem> = {}): EstItem => ({ clientKey: "T&W", itemId, level: "story", estimate: null, size, parentId, ...o });
 const load = (items: EstItem[]) => estimate(items, DEFAULT_SIZE_SCALE).envelopes[0]!;
 
 describe("one unit: hours (E2)", () => {
@@ -72,15 +72,13 @@ describe("features as envelopes", () => {
   });
   it("loose stories count their own size (unsized as 1h); nested ones only through their feature", () => {
     const e = estimate([f(10, 8), s(11, "L", 10), s(12, "L", 10), s(20, "M", 99), s(21, null, null), s(22, "S", null)], DEFAULT_SIZE_SCALE);
-    expect(plannedMinutesOf(e, "T&W", "must")).toBe(8 * H + 2 * H + 1 * H + 1 * H);
+    expect(plannedMinutesOf(e, "T&W")).toBe(8 * H + 2 * H + 1 * H + 1 * H);
   });
-  it("stories take their feature's tier; loose ones keep their own", () => {
-    const items = [f(10, 3, { tier: "nice" }), s(11, "M", 10, { tier: "must" }), s(12, "M", null, { tier: "must" })];
+  it("CF-1: one total: every feature and loose story on the week counts the same", () => {
+    const items = [f(10, 3), s(11, "M", 10), s(12, "M", null), f(20, 5)];
     const e = estimate(items, DEFAULT_SIZE_SCALE);
-    expect(tierOf(e, items[1]!)).toBe("nice");
-    expect(tierOf(e, items[2]!)).toBe("must");
-    expect(plannedMinutesOf(e, "T&W", "must")).toBe(2 * H);
-    expect(plannedMinutesOf(e, "T&W", "nice")).toBe(2 * H);
+    // Feature 10 from its story (2h), the loose story (2h), feature 20's estimate (5h): no musts line, one number.
+    expect(plannedMinutesOf(e, "T&W")).toBe(2 * H + 2 * H + 5 * H);
   });
 });
 
@@ -96,7 +94,7 @@ describe("a client's week in words", () => {
   });
   it("the over amount matches the hours shown: 8h free · 10h planned is about 2h over", () => {
     expect(budgetWords(450, 600)).toMatchObject({ free: "8h free", planned: "10h planned", over: "about 2h over" });
-    expect(overLine("Northwind", 450, 600, false)).toBe("About 2h more than Northwind's free time this week. Make one a nice to have.");
+    expect(overLine("Northwind", 450, 600, false)).toBe("About 2h more than Northwind's free time this week. Move one to another week.");
     expect(budgetWords(450, 480).over).toBe("a little over");
     for (let f = 0; f <= 900; f += 25)
       for (let p = f + 15; p <= 1200; p += 35) {
@@ -105,8 +103,8 @@ describe("a client's week in words", () => {
       }
   });
   it("the over line names the client and the ways out; Friday only when there is one", () => {
-    expect(overLine("Northwind", 7 * H, 9 * H, true)).toBe("About 2h more than Northwind's free time this week. Make one a nice to have, or borrow Friday.");
-    expect(overLine("Northwind", 7 * H, 9 * H, false)).toBe("About 2h more than Northwind's free time this week. Make one a nice to have.");
+    expect(overLine("Northwind", 7 * H, 9 * H, true)).toBe("About 2h more than Northwind's free time this week. Move one to another week, or borrow Friday.");
+    expect(overLine("Northwind", 7 * H, 9 * H, false)).toBe("About 2h more than Northwind's free time this week. Move one to another week.");
     expect(overLine("Northwind", 7 * H, 7 * H, true)).toBeNull();
   });
   it("no decimals and no blocks, whatever the numbers", () => {

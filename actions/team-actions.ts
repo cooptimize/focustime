@@ -205,7 +205,6 @@ async function livePriorities(team: TeamStore, list: Priority[], resolved: Reado
   return out;
 }
 
-/** SW-1: publishes what I committed for a week (commit and re-commit), for the Team view. Commitments only. */
 /**
  * CF-1 (D1): what's on my week, for teammates (Team) and the status report's "active this week": each feature on the
  * week with its type and title (and the features I'm watching). Written on every change to the week, never on confirm.

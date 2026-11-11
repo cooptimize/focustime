@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { CHECK_IDS, checklist, guideAction, type ChecklistFacts } from "./guide-actions.ts";
 
-const facts = (o: Partial<ChecklistFacts> = {}): ChecklistFacts => ({ setup: {}, writeClients: 0, devices: 0, teamsMessages: false, weekConfirmed: false, todayConfirmed: false, ...o });
+const facts = (o: Partial<ChecklistFacts> = {}): ChecklistFacts => ({ setup: {}, writeClients: 0, devices: 0, teamsMessages: false, weekPlanned: false, todayPlanned: false, ...o });
 const states = (f: ChecklistFacts) => Object.fromEntries(checklist(f).map((c) => [c.id, c.state]));
 
 describe("guide.checklist", () => {
@@ -15,8 +15,8 @@ describe("guide.checklist", () => {
     // Standing blocks are on the same page as the hours.
     expect(states(facts({ setup: { blocks: "done" } })).hours).toBe("done");
   });
-  it("a write PAT for any client, a device or Teams messages, a confirmed week and today", () => {
-    expect(states(facts({ writeClients: 2, devices: 0, teamsMessages: true, weekConfirmed: true, todayConfirmed: true }))).toMatchObject({ devops: "done", notify: "done", week: "done", today: "done" });
+  it("a write PAT for any client, a device or Teams messages, work on the week and on today (CF-1)", () => {
+    expect(states(facts({ writeClients: 2, devices: 0, teamsMessages: true, weekPlanned: true, todayPlanned: true }))).toMatchObject({ devops: "done", notify: "done", week: "done", today: "done" });
     expect(states(facts({ devices: 1 })).notify).toBe("done");
   });
   it("only ids and states leave the server, whatever the facts hold", async () => {

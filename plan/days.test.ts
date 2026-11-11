@@ -36,16 +36,11 @@ describe("the carry-over day", () => {
     expect(upcomingStart(at("2026-11-03T17:00"), "17:00")).toBe("2026-11-04");
   });
 
-  it("is the earliest upcoming day that can be planned and isn't committed", () => {
-    const committed = new Set<string>();
-    const c = (d: string) => committed.has(d);
-    expect(carryTarget(TUE, c)).toBe(TUE);
-    committed.add(TUE);
-    expect(carryTarget(TUE, c)).toBe("2026-11-04");
-    committed.add("2026-11-04");
-    expect(carryTarget(TUE, c, new Set(["2026-11-05"]))).toBe("2026-11-09");
+  it("CF-1: is the next day that can take work (hours, not PTO); a day with work on it is no reason to skip it", () => {
+    expect(carryTarget(TUE)).toBe(TUE);
+    expect(carryTarget(TUE, new Set([TUE, "2026-11-04", "2026-11-05"]))).toBe("2026-11-09");
     // From a Saturday: Monday.
-    expect(carryTarget("2026-11-07", () => false)).toBe("2026-11-09");
+    expect(carryTarget("2026-11-07")).toBe("2026-11-09");
   });
 });
 
@@ -56,7 +51,7 @@ describe("plannability from the time model (step 6b, D127)", () => {
     expect(stepDay("2026-11-05", 1, new Set(), has)).toBe("2026-11-06");
     expect(stepDay("2026-11-06", 1, new Set(), has)).toBe("2026-11-07");
     expect(stepDay("2026-11-07", 1, new Set(), has)).toBe("2026-11-09");
-    expect(carryTarget("2026-11-06", (d) => d === "2026-11-06", new Set(), has)).toBe("2026-11-07");
+    expect(carryTarget("2026-11-07", new Set(), has)).toBe("2026-11-07");
     expect(dayRule("2026-11-07", "2026-11-03", null, true)).toEqual({ ok: true, access: "plan" });
     expect(dayRule("2026-11-08", "2026-11-03", null, false)).toMatchObject({ ok: false, kind: "no_hours" });
     expect(dayRule("2026-11-07", "2026-11-03", { titles: [] }, true)).toMatchObject({ ok: false, kind: "pto" });
@@ -72,10 +67,10 @@ describe("plannability from the time model (step 6b, D127)", () => {
 });
 
 describe("the day header Plan button (step 13.6, D240)", () => {
-  const base = { date: "2026-11-02", today: "2026-11-01", pto: false, hasHours: true, committed: false, hasPicks: false };
-  it("says Plan before commit and Planned once committed", () => {
+  const base = { date: "2026-11-02", today: "2026-11-01", pto: false, hasHours: true, hasPicks: false };
+  it("says Plan with no to-dos and Planned once the day has one (CF-1: no confirm)", () => {
     expect(planButton(base)).toBe("plan");
-    expect(planButton({ ...base, committed: true })).toBe("planned");
+    expect(planButton({ ...base, hasPicks: true })).toBe("planned");
   });
   it("is hidden on PTO days and days without working hours", () => {
     expect(planButton({ ...base, pto: true })).toBe("hidden");
@@ -90,7 +85,7 @@ describe("the day header Plan button (step 13.6, D240)", () => {
   it("past days show only when they were planned (a review)", () => {
     const past = { ...base, date: "2026-10-29" };
     expect(planButton(past)).toBe("hidden");
-    expect(planButton({ ...past, committed: true })).toBe("planned");
+    expect(planButton({ ...past, hasPicks: true })).toBe("planned");
   });
 });
 

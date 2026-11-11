@@ -177,24 +177,24 @@ describe("Plan the day offers committed features first (step 8)", () => {
   });
   it("a committed feature DevOps can't show right now still comes first, with no stories", () => {
     const r = committedFirst(undefined, [f(10)], "T&W", "2026-11-09", "AM");
-    expect(r.committed).toEqual([{ feature: f(10), tier: "must", level: "feature", placedHere: false, pinnedToday: false, item: null, kids: [] }]);
+    expect(r.committed).toEqual([{ feature: f(10), level: "feature", placedHere: false, pinnedToday: false, item: null, kids: [] }]);
     expect(r.rest).toEqual([]);
   });
-  it("step 11: unfinished musts, then nice-to-haves, then the rest; pinned here, then pinned today, then list order", () => {
+  it("step 11, CF-1: the week's unfinished features (no musts first), then the rest; pinned here, then pinned today, then list order", () => {
     const D = "2026-11-10";
     const refs = [
-      { ...f(30), tier: "must" as const },
-      { ...f(2, [], "T&W"), level: "story" as const, tier: "nice" as const },
-      { ...f(10, [{ date: D, half: "AM" }]), tier: "must" as const }, // pinned to another half today
-      { ...f(40), tier: "must" as const, done: true }, // done: not offered
-      { ...f(50, [{ date: D, half: "PM" }]), tier: "nice" as const }, // pinned here
+      { ...f(30) },
+      { ...f(2, [], "T&W"), level: "story" as const },
+      { ...f(10, [{ date: D, half: "AM" }]) }, // pinned to another half today
+      { ...f(40), done: true }, // done: not offered
+      { ...f(50, [{ date: D, half: "PM" }]) }, // pinned here
     ];
     const r = weekFirst(work, refs, "T&W", D, "PM");
-    expect(r.musts.map((e) => [e.feature.itemId, e.pinnedToday, e.placedHere])).toEqual([[10, true, false], [30, false, false]]);
-    expect(r.nice.map((e) => [e.feature.itemId, e.level, e.item?.id ?? null, e.kids.length])).toEqual([[50, "feature", null, 0], [2, "story", 2, 0]]);
+    expect(r.committed.map((e) => [e.feature.itemId, e.level, e.pinnedToday, e.placedHere])).toEqual([[50, "feature", true, true], [10, "feature", true, false], [30, "feature", false, false], [2, "story", false, false]]);
+    expect(r.committed.find((e) => e.feature.itemId === 2)?.item?.id).toBe(2);
     // Story 2 is on the list (as a story), story 1 is under feature 10: neither repeats in the rest.
     expect(r.rest.map((i) => i.id)).toEqual([]);
-    // A done must's own item stays out of the rest too.
+    // A done feature's own item stays out of the rest too.
     expect(weekFirst({ items: [item(40, "Feature", "portfolio"), item(7, "User Story", "story")], children: [] }, [{ ...f(40), done: true }], "T&W", D, "AM").rest.map((i) => i.id)).toEqual([7]);
   });
 });

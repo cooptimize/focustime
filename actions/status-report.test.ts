@@ -121,7 +121,7 @@ describe("the client report through the action (SR-2)", () => {
   it("has the commented features in backlog order, No update yet from the team's commitments and story activity, and the team's PTO", async () => {
     const w = world();
     // Sam committed Supplier onboarding this week (Week › Team's snapshot); nobody commented on it since Monday.
-    await w.team.publish(sam.personId, "2026-11-02", [{ clientKey: ADATUM, itemId: 702, title: "Supplier onboarding", itemType: "Feature", url: null, tier: "must", watching: false }], NOW);
+    await w.team.publish(sam.personId, "2026-11-02", [{ clientKey: ADATUM, itemId: 702, title: "Supplier onboarding", itemType: "Feature", url: null, tier: "nice", watching: false }], NOW);
     const r = await w.as(dana).run({ clientKey: ADATUM });
     if (!r.ok) throw new Error(r.error);
     const rep = (r.data as StatusReportAnswer).report!;

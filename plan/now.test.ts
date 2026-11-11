@@ -36,7 +36,7 @@ const pick = (half: Pick["half"], title: string, over: Partial<Pick> = {}): Pick
 const at = (local: string) => Temporal.PlainDateTime.from(local).toZonedDateTime(NY);
 const input = (local: string, over: Partial<NowInput> = {}): NowInput => {
   const now = at(local);
-  return { sizes: DEFAULT_SIZE_SCALE, now, day: day(now.toPlainDate().toString()), picks: [], committed: false, pto: false, nextWorkday: null, clientName: (k) => k.toUpperCase(), ...over };
+  return { sizes: DEFAULT_SIZE_SCALE, now, day: day(now.toPlainDate().toString()), picks: [], pto: false, nextWorkday: null, clientName: (k) => k.toUpperCase(), ...over };
 };
 
 describe("Now strip", () => {
@@ -54,21 +54,21 @@ describe("Now strip", () => {
 
   it("counts picks done for the day, the current block's over-by, and the next pick", () => {
     const picks = [pick("AM", "Done one", { status: "done" }), pick("AM", "Big one", { size: "L" }), pick("AM", "Another", { size: "M" }), pick("PM", "Later"), pick("PM", "Dropped", { status: "dropped" })];
-    const s = nowStrip(input("2026-11-02T10:40", { picks, committed: true }));
+    const s = nowStrip(input("2026-11-02T10:40", { picks }));
     expect(s.picks).toEqual({ done: 1, total: 4 });
     // Free from 10:40 to 12:00 is 80 min; 240 + 120 planned (E2: L is 4h).
     expect(s.overBy).toBe(280);
     expect(s.nextPick).toBe("Big one");
     // With the morning's picks done, the next pick comes from later in the day.
-    const later = nowStrip(input("2026-11-02T11:00", { picks: picks.map((p) => (p.half === "AM" ? { ...p, status: "done" as const } : p)), committed: true }));
+    const later = nowStrip(input("2026-11-02T11:00", { picks: picks.map((p) => (p.half === "AM" ? { ...p, status: "done" as const } : p)) }));
     expect(later.nextPick).toBe("Later");
     expect(later.overBy).toBeNull();
   });
 
-  it("before commit the picks are drafts (Q38, step 6c)", () => {
-    const s = nowStrip(input("2026-11-02T09:40", { picks: [pick("AM", "Draft")] }));
-    expect(s).toMatchObject({ picks: { done: 0, total: 1 }, draft: true, nextPick: "Draft", overBy: null });
-    expect(nowStrip(input("2026-11-02T09:40", { picks: [pick("AM", "Draft")], committed: true })).draft).toBe(false);
+  it("CF-1: no drafts: a to-do on the day is the plan at once, counted and next", () => {
+    const s = nowStrip(input("2026-11-02T09:40", { picks: [pick("AM", "First")] }));
+    expect(s).toMatchObject({ picks: { done: 0, total: 1 }, nextPick: "First" });
+    expect(s).not.toHaveProperty("draft");
   });
 
   it("handles before work, lunch and the end of the day", () => {

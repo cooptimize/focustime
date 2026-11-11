@@ -16,7 +16,6 @@ import { plannedMinutes } from "./rules.ts";
 import { nextFreeSpan } from "./timeline.ts";
 import { suggestMinutes } from "./timer.ts";
 import { pickNeed, sizeMinutes, SIZE_MINUTES, type Pick } from "./types.ts";
-import { progress } from "./weeklist.ts";
 import { weekBudget } from "./weekplan.ts";
 import { slotPlanned } from "./timebox.ts";
 
@@ -69,11 +68,10 @@ describe("every place reads the setting (1h by default, then 2h)", () => {
     ["focusLabel", (s) => focusLabel(45 * 60, null, s), "45m of 1h", "45m of 2h"],
     ["didn't fit", (s) => didntFitText([{ title: "A", size: null }], s), "1 to-do didn't fit: A (not sized, 1h).", "1 to-do didn't fit: A (not sized, 2h)."],
     ["Break down's total", (s) => reviewTotal([{ keep: true, size: null }, { keep: true, size: "S" }], s), "2 items · about 2h", "2 items · about 3h"],
-    ["a feature's load (Plan the week)", (s) => estimate([{ clientKey: "k", itemId: 1, level: "feature", tier: "must", estimate: null }, { clientKey: "k", itemId: 2, level: "story", tier: "must", estimate: null, size: "L", parentId: 1 }, { clientKey: "k", itemId: 3, level: "story", tier: "must", estimate: null, size: null, parentId: 1 }], s).envelopes[0]!.minutes, 300, 360],
-    ["a loose story (budget)", (s) => plannedMinutesOf(estimate([{ clientKey: "k", itemId: 2, level: "story", tier: "must", estimate: null, size: null }], s), "k", "must"), 60, 120],
-    ["progress (Week)", (s) => progress([{ clientKey: "k", itemId: 2, tier: "must", estimate: null, level: "story", size: null, parentId: null }], () => false, s)[0]!.leftMinutes, 60, 120],
+    ["a feature's load (Plan the week)", (s) => estimate([{ clientKey: "k", itemId: 1, level: "feature", estimate: null }, { clientKey: "k", itemId: 2, level: "story", estimate: null, size: "L", parentId: 1 }, { clientKey: "k", itemId: 3, level: "story", estimate: null, size: null, parentId: 1 }], s).envelopes[0]!.minutes, 300, 360],
+    ["a loose story (budget)", (s) => plannedMinutesOf(estimate([{ clientKey: "k", itemId: 2, level: "story", estimate: null, size: null }], s), "k"), 60, 120],
     ["can't reach the target (Ahead)", (s) => reach({ unsizedMinutes: s.unsized, target: "2026-11-06", today: "2026-11-02", me: "me@example.com", weeks: [{ weekStart: "2026-11-02", freeMinutes: 300 }], months: [], stories: [{ assigneeEmail: "me@example.com", assigneeName: "Me", minutes: null }] }), { kind: "ok", needMinutes: 60, freeMinutes: 300 }, { kind: "ok", needMinutes: 120, freeMinutes: 300 }],
-    ["Timebox my day", (s) => planMyDay([pick()], { AM: slot }, [], s, new Set(), undefined, DEFAULT_MIN_SIZES).placed.map((p) => p.end.slice(11, 16)), ["09:00"], ["10:00"]],
+    ["Timebox my day", (s) => planMyDay([pick()], { AM: slot }, [], s, undefined, DEFAULT_MIN_SIZES).placed.map((p) => p.end.slice(11, 16)), ["09:00"], ["10:00"]],
     ["T on the timeline (nextFreeSpan)", (s) => { const x = nextFreeSpan(slot, [], { id: 1, size: null }, s, undefined, DEFAULT_MIN_SIZES)!; return x.end.slice(11, 16); }, "09:00", "10:00"],
     ["+ time's choices", (s) => timeChoices(slot, [], { id: 1, size: null }, s, undefined, DEFAULT_MIN_SIZES)[0]!.minutes, 60, 120],
   ];

@@ -130,7 +130,7 @@ async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/co
 }
 
 await forEachDriver("the bot's rhythm in Teams (TB-2)", (d) => {
-  it("sends the morning brief once at its time, with today's blocks, picks and Confirm today", async () => {
+  it("sends the morning brief once at its time, with today's blocks and picks, no confirm (CF-1)", async () => {
     const t = await setup(d);
     await t.add({ title: "Fix the login timeout" });
     t.at("08:50");
@@ -142,7 +142,7 @@ await forEachDriver("the bot's rhythm in Teams (TB-2)", (d) => {
     const card = t.cardsSent()[0]!;
     expect(card).toContain("FocusTime · Morning brief");
     expect(card).toContain("Fix the login timeout");
-    expect(card).toContain("Confirm today");
+    expect(card).not.toMatch(/[Cc]onfirm/);
     expect(card).toContain(`${URL_}/#/day`);
     await t.rhythm.tick(ANA, await t.facts());
     expect(t.sent).toHaveLength(1);

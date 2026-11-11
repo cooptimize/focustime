@@ -3,7 +3,7 @@
 // open, update and close out. The server applies it to the plan store. Nothing is ever posted anywhere.
 import { isClosed, isOpen } from "./process.ts";
 import { mondayOf } from "../week/dates.ts";
-import type { Half, IsoDate, WorkItem } from "../week/types.ts";
+import type { IsoDate, WorkItem } from "../week/types.ts";
 import type { Pick } from "./types.ts";
 
 /** A follow-up as the rules see it (the store's Follow-up fits this). */
@@ -92,9 +92,6 @@ export const isBlocked = (state: string, tags: readonly string[]) => BLOCKED.tes
 const monToFri = (d: IsoDate) => Temporal.PlainDate.from(d).dayOfWeek <= 5;
 const instant = (s: string) => Temporal.Instant.from(s);
 const after = (a: string, b: string) => !!a && !!b && Temporal.Instant.compare(instant(a), instant(b)) > 0;
-const dayText = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
-const HALF_WORDS: Record<Half, string> = { AM: "morning", PM: "afternoon", EVE: "evening" };
-const ref = (p: Pick) => (p.itemId !== null ? `#${p.itemId} ${p.title}` : p.title);
 
 function find(w: WorkState | undefined, id: number): WorkItem | null {
   if (!w) return null;
@@ -103,8 +100,6 @@ function find(w: WorkState | undefined, id: number): WorkItem | null {
 
 /** One item's identity across picks: its DevOps id, else its title. */
 const itemKey = (p: Pick) => (p.itemId !== null ? `i:${p.itemId}` : `t:${p.title.trim().toLowerCase()}`);
-const instantOf = (z: string) => Temporal.Instant.from(z.replace(/\[.*\]$/, ""));
-const later = (a: Pick, b: Pick) => Temporal.Instant.compare(instantOf(a.updatedAt), instantOf(b.updatedAt)) >= 0;
 
 /** Where a slipped pick's work ended up: still in its week (and where), in a later week, or off the plan. */
 type Fate = { kind: "in_week" | "later_week"; to: Pick } | { kind: "off_plan" };
@@ -139,30 +134,9 @@ export function slipTrigger(p: Pick, movedTo: (id: number) => Pick | null, all: 
   return null;
 }
 
-/** Each item once with its latest status: the latest slipped pick per item, and where its work is now. */
-function latestPerItem(picks: readonly Pick[]): Pick[] {
-  const by = new Map<string, Pick>();
-  for (const p of picks) {
-    const k = itemKey(p);
-    const cur = by.get(k);
-    if (!cur || later(p, cur)) by.set(k, p);
-  }
-  return [...by.values()].sort((a, b) => picks.indexOf(a) - picks.indexOf(b));
-}
-
-/** The plain-text heads-up for one client and day: each slipped item once, with where it is now. No AI, a template. */
-export function slipDraft(clientName: string, date: IsoDate, picks: readonly Pick[], movedTo: (id: number) => Pick | null, all: readonly Pick[] = picks): string {
-  const lines = latestPerItem(picks).map((p) => {
-    const f = fateOf(p, movedTo, all);
-    const plan = f.kind === "off_plan" ? "off my plan for now; I'll come back with a new date" : `moving to ${dayText(f.to.date)} (${HALF_WORDS[f.to.half]})`;
-    return `- ${ref(p)}: ${plan}`;
-  });
-  return [`Hi ${clientName}, a quick heads-up on my plan for ${dayText(date)}:`, ...lines, "I'll keep you posted."].join("\n");
-}
-
 /**
  * Open heads-ups about slipped picks that wouldn't open under the step 13.5 rule (none of their picks qualify now).
- * Listed for me to decide; never closed automatically. Must heads-ups from Plan the week always qualify.
+ * Listed for me to decide; never closed automatically. CF-1: no new ones open; old ones stay until closed.
  */
 export function reviewHeadsUps(i: DetectInput): { id: number; reason: string }[] {
   const out: { id: number; reason: string }[] = [];

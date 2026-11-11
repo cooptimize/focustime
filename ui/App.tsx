@@ -49,7 +49,7 @@ import { TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
 import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
 import { ModeArea, ModeSwitch, TimelineToggle } from "./ModeSwitch.tsx";
-import { momentCard } from "../plan/modes.ts";
+import { hasWorkOn, momentCard } from "../plan/modes.ts";
 import { FocusScreen, SoundControl } from "./FocusScreen.tsx";
 import { sound } from "./sound.ts";
 import type { TimerView } from "../actions/types.ts";
@@ -1557,7 +1557,7 @@ export function App() {
     amEnd: th.am?.end ?? null,
     pmStart: th.pm?.start ?? null,
     end: dayEndOf(data.hours, localToday),
-    hasWork: (todayPlan?.picks ?? []).some((p) => p.status === "planned" || p.status === "done"),
+    hasWork: hasWorkOn(todayPlan?.picks ?? []),
     checkedIn: data.checkIn.date === localToday && data.checkIn.done,
     closedOut: data.closeOut.date === localToday ? data.closeOut.done : !!todayPlan?.closedOutAt,
     checkinOffsetMinutes: data.planning.checkinReminderMinutes,

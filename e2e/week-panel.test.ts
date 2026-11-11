@@ -101,7 +101,7 @@ describe.skipIf(!CHROMIUM)("Week block panel (PV-1)", () => {
       page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
       await page.goto(app.url);
       await appReady(page);
-      const added = await dispatch(ctx, { action: "weekplan.add", input: { weekStart: WEEK, clientKey: "Adatum", itemId: FEATURE, tier: "must" } });
+      const added = await dispatch(ctx, { action: "weekplan.add", input: { weekStart: WEEK, clientKey: "Adatum", itemId: FEATURE } });
       expect(added.ok, JSON.stringify(added)).toBe(true);
       await page.goto(`${app.url}#/week`);
       await page.reload();

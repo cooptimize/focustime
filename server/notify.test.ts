@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { WEEK_NUDGE_MESSAGE } from "../plan/weekplan.ts";
 import { CHECKIN_MESSAGE, CLOSEOUT_MESSAGE, checkDayReminder, checkinReminderDue, checkReminder, closeoutReminderDue, reminderDue, checkWeekNudges } from "./notify.ts";
 
 import { legacyHours } from "../config/schema.ts";
 const shape = legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" });
 const at = (s: string) => Temporal.ZonedDateTime.from(`${s}[America/New_York]`);
 
-describe("Plan the day reminder", () => {
-  it("is due on Mon–Thu from the day start until 90 minutes after it, only when today isn't committed (Q23)", () => {
+describe("the start of day reminder (CF-1, C1: while today has no to-dos)", () => {
+  it("is due on Mon–Thu from the day start until 90 minutes after it, only while today has no to-dos (Q23, CF-1)", () => {
     expect(reminderDue(at("2026-11-02T08:59:00-05:00"), shape, false)).toBe(false);
     expect(reminderDue(at("2026-11-02T09:00:00-05:00"), shape, false)).toBe(true);
     expect(reminderDue(at("2026-11-02T10:29:59-05:00"), shape, false)).toBe(true);
@@ -31,7 +32,7 @@ describe("Plan the day reminder", () => {
     const deps = {
       now: () => now,
       hours: async () => shape,
-      committed: () => false,
+      hasWork: () => false,
       once: (d: string) => (marks.has(d) ? false : (marks.add(d), true)),
       send: (_t: string, b: string) => sent.push(b),
     };
@@ -47,19 +48,27 @@ describe("Plan the day reminder", () => {
   it("uses the time model's zone, not the machine's", async () => {
     const sent: string[] = [];
     const utc = Temporal.ZonedDateTime.from("2026-11-02T14:05:00+00:00[UTC]"); // 9:05 New York
-    expect(await checkReminder({ now: () => utc, hours: async () => shape, committed: () => false, once: () => true, send: (t) => sent.push(t) })).toBe(true);
+    expect(await checkReminder({ now: () => utc, hours: async () => shape, hasWork: () => false, once: () => true, send: (t) => sent.push(t) })).toBe(true);
   });
 
   it("sends nothing without a usable config", async () => {
-    expect(await checkReminder({ now: () => at("2026-11-02T10:00:00-05:00"), hours: async () => null, committed: () => false, once: () => true, send: () => { throw new Error("no"); } })).toBe(false);
+    expect(await checkReminder({ now: () => at("2026-11-02T10:00:00-05:00"), hours: async () => null, hasWork: () => false, once: () => true, send: () => { throw new Error("no"); } })).toBe(false);
   });
 
   it("sends nothing on a PTO day, and a failed PTO check doesn't block it (D106)", async () => {
-    const base = { now: () => at("2026-11-05T09:10:00-05:00"), hours: async () => shape, committed: () => false, once: () => true };
+    const base = { now: () => at("2026-11-05T09:10:00-05:00"), hours: async () => shape, hasWork: () => false, once: () => true };
     const sent: string[] = [];
     expect(await checkReminder({ ...base, off: async (d) => d === "2026-11-05", send: (_t, b) => sent.push(b) })).toBe(false);
     expect(await checkReminder({ ...base, off: async () => { throw new Error("offline"); }, send: (_t, b) => sent.push(b) })).toBe(true);
-    expect(sent).toEqual(["Today isn't planned yet. Open FocusTime and press P to plan the day."]);
+    expect(sent).toEqual(["Nothing on today yet. Open FocusTime and add work to today."]);
+  });
+
+  it("C1: a to-do on today (planned or done) stops it, and it never mentions confirming", async () => {
+    const sent: string[] = [];
+    const base = { now: () => at("2026-11-02T09:10:00-05:00"), hours: async () => shape, once: () => true, send: (_t: string, b: string) => void sent.push(b) };
+    expect(await checkReminder({ ...base, hasWork: () => true })).toBe(false);
+    expect(await checkReminder({ ...base, hasWork: async () => false })).toBe(true);
+    expect(sent.join(" ")).not.toMatch(/confirm/i);
   });
 });
 
@@ -76,7 +85,7 @@ describe("Check-in and Close out reminders (step 7)", () => {
     expect(closeoutReminderDue(at("2026-11-02T16:50:00-05:00"), evening, false, 15)).toBe(false);
     expect(closeoutReminderDue(at("2026-11-02T21:45:00-05:00"), evening, false, 15)).toBe(true);
   });
-  it("Check-in: at the end of lunch (or midday) plus the offset, only on a committed day", () => {
+  it("Check-in (CF-1, C2): at the end of lunch (or midday) plus the offset, only on a day with to-dos", () => {
     expect(checkinReminderDue(at("2026-11-02T12:44:00-05:00"), lunch, true, 0)).toBe(false);
     expect(checkinReminderDue(at("2026-11-02T12:45:00-05:00"), lunch, true, 0)).toBe(true);
     expect(checkinReminderDue(at("2026-11-02T12:50:00-05:00"), lunch, false, 0)).toBe(false);
@@ -121,7 +130,7 @@ describe("week nudges (step 8)", () => {
       d: {
         now: () => zoned(now),
         times: async () => times,
-        committed: () => false,
+        hasWork: () => false,
         off: async () => false,
         once: (key: string, week: string) => (marks.has(`${key}:${week}`) ? false : (marks.add(`${key}:${week}`), true)),
         send: (body: string) => void sent.push(body),
@@ -133,24 +142,25 @@ describe("week nudges (step 8)", () => {
     const { d, sent } = deps("2026-11-05T14:00:00-05:00");
     expect(await checkWeekNudges(d)).toBe(1);
     expect(await checkWeekNudges(d)).toBe(0);
-    expect(sent).toEqual(["Next week (Nov 9) isn't planned yet: choose each client's features. Open FocusTime and press W."]);
+    expect(sent).toEqual([WEEK_NUDGE_MESSAGE("2026-11-09", false)]);
+    expect(sent[0]).toBe("Next week (Nov 9) has nothing on it yet. Open FocusTime and add work to the week.");
   });
   it("Q50: Thursday's nudge skipped for PTO fires at Friday's working start; several due for one week send one message", async () => {
     const thu = deps("2026-11-05T14:30:00-05:00", { off: async () => true });
     expect(await checkWeekNudges(thu.d)).toBe(0);
     // Friday 9:00 (work starts at 9): Thursday's and Friday's are both due for Nov 9: one notification, both marked.
     const marks = new Set<string>();
-    const fri = deps("2026-11-06T09:00:00-05:00", { committed: (w: string) => w === "2026-11-02", workStart: async () => "09:00", once: (k: string, w: string) => (marks.has(`${k}:${w}`) ? false : (marks.add(`${k}:${w}`), true)) });
+    const fri = deps("2026-11-06T09:00:00-05:00", { hasWork: (w: string) => w === "2026-11-02", workStart: async () => "09:00", once: (k: string, w: string) => (marks.has(`${k}:${w}`) ? false : (marks.add(`${k}:${w}`), true)) });
     expect(await checkWeekNudges(fri.d)).toBe(1);
     expect([...marks].sort()).toEqual(["week_nudge_fri:2026-11-09", "week_nudge_thu:2026-11-09"]);
     expect(await checkWeekNudges(fri.d)).toBe(0);
     expect(fri.sent).toHaveLength(1);
   });
-  it("Monday's is about this week; nothing once committed, before the time, or on a PTO day", async () => {
+  it("Monday's is about this week (CF-1, C3); nothing once the week has anything on it, before the time, or on a PTO day", async () => {
     const mon = deps("2026-11-09T08:45:00-05:00");
     await checkWeekNudges(mon.d);
-    expect(mon.sent).toEqual(["This week isn't planned yet: choose each client's features. Open FocusTime and press W."]);
-    expect(await checkWeekNudges(deps("2026-11-09T08:45:00-05:00", { committed: () => true }).d)).toBe(0);
+    expect(mon.sent).toEqual(["This week has nothing on it yet. Open FocusTime and add work to the week."]);
+    expect(await checkWeekNudges(deps("2026-11-09T08:45:00-05:00", { hasWork: () => true }).d)).toBe(0);
     expect(await checkWeekNudges(deps("2026-11-09T08:00:00-05:00").d)).toBe(0);
     expect(await checkWeekNudges(deps("2026-11-06T10:00:00-05:00", { off: async () => true }).d)).toBe(0);
   });

@@ -66,6 +66,9 @@ export function weekModeStatus(hasWork: boolean, nudgeWeek: string | null, weekS
  * - Plan today (CF-1: "Nothing on today yet"): while today's blocks have no to-dos, until the afternoon starts (until
  *   the end of the day when there is no afternoon). Add work opens Week's Board on today; it goes once a to-do is on.
  */
+/** CF-1: whether a day's blocks have work: at least one to-do planned or done (moved and dropped ones don't count). */
+export const hasWorkOn = (picks: readonly { status: string }[]): boolean => picks.some((p) => p.status === "planned" || p.status === "done");
+
 export type Moment = { kind: "plan" | "checkin" | "closeout"; done: boolean };
 export function momentCard(f: DayFacts): Moment | null {
   if (f.date !== f.today || !f.workday) return null;

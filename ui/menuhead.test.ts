@@ -15,7 +15,7 @@ const work = new Map<string, ClientWork>([["northwind", { clientKey: "northwind"
 // Only what the row menus read; the rest of MenuEnv is never touched by them.
 const env = { week, work, today: "2026-11-03", timer: null, planState: null, planning: { sizes: { XS: 30, S: 60, M: 120, L: 240, unsized: 60 }, focusMinutes: 50 } } as unknown as MenuEnv;
 const pick = (id: number, itemId: number | null, title: string): Pick => ({ id, date: "2026-11-03", half: "AM", clientKey: "northwind", kind: itemId ? "item" : "intention", itemId, draftId: null, title, itemType: "User Story", itemUrl: null, size: "M", status: "planned", carriedFrom: null, carriedFromDate: null, followUpId: null, notes: null, position: 1, createdAt: "", updatedAt: "" });
-const facts = (itemId: number, title: string): WeekItemFacts => ({ itemId, title, clientName: "Northwind", tier: "must", level: "feature", first: false, last: false, past: false, done: null, minutes: 240, places: [], pinned: [], openStories: 0, targetDate: null, drafts: 0, canWrite: true });
+const facts = (itemId: number, title: string): WeekItemFacts => ({ itemId, title, clientName: "Northwind", level: "feature", first: false, last: false, past: false, done: null, minutes: 240, places: [], pinned: [], openStories: 0, targetDate: null, drafts: 0, canWrite: true });
 const noop = () => {};
 const wops: WeekItemOps = { move: noop, tier: noop, pin: noop, hours: noop, done: noop, help: noop, targetDate: noop, brief: noop, createDrafts: noop, enableWrites: noop, remove: noop };
 const rops: RoadmapRowOps = { open: noop, brief: noop, help: noop, addToWeek: noop, targetDate: noop, enableWrites: noop };
@@ -65,6 +65,6 @@ describe("row menu header (D459)", () => {
     expect(tag).not.toMatch(/tabindex|role=/);
     // The head sits before the list; the first menu item is the first action.
     expect(a.indexOf("menu-head")).toBeLessThan(a.indexOf('role="menu"'));
-    expect(a.match(/role="menuitem"[^>]*>.*?<span class="menu-label">([^<]*)/)?.[1]).toBe("Move up");
+    expect(a.match(/role="menuitem"[^>]*>.*?<span class="menu-label">([^<]*)/)?.[1]).toBe("Estimate");
   });
 });
