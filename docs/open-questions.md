@@ -610,3 +610,8 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - Not done here (the brief's "not in this step"): Week's timeline as calendar columns (WD-3).
 - From the review, not done: Undo of a take off doesn't put a local timebox back; an unsized plain to-do comes back from To place as M (a draft has a size); about 30 `.detail-panel` style rules are left in `ui/styles.css` (nothing uses them; a cleanup of its own); the Add box's feature select sits inside a list option (a screen reader reads it, but the pattern is unusual); on a catch-up Friday afternoon the panel's "+" adds without Week's drop check (as in WD-1).
 - A story with time on it can't be taken off the plan, only moved (the store keeps worked to-dos as dropped to hold their time). Should Take off work for it, with the time kept some other way?
+- Follow-up: a feature I put on my week that isn't assigned to me, with no story of mine under it, now sits under More in <client>, not in the first section. Should "on my week" also count as mine there?
+- Follow-up: "More in <client>" lists what is in Cooptimize's scope for that client (as Ahead does without "Show the whole project"). Should it show the whole project?
+- Follow-up: the target date sort uses a story's own target date; most stories have none, so they keep backlog order after the dated ones, and a feature I don't own sorts by my first story's date. Should a story fall back to its feature's date?
+- Follow-up: the hover says the size as DevOps has it ("size 3"), not the field's name ("Story Points"), which the week load doesn't carry.
+

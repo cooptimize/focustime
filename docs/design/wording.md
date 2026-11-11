@@ -70,8 +70,11 @@ Fit is never red. Being over plan is a choice to make, not a failure.
 - **A block's panel**: how the Guide and messages name the one side panel ("opens its panel", "in a block's panel"). In code and the glossary it is the block panel. Its title is the block, "<client> · Wed AM", never "Add to" or "Details".
 - **On this block**, **Add**, **To place**, **You sent**: the panel's section labels. "Nothing here yet." when the block is empty.
 - **New to-do: <text>**, **New draft story: <text>**: the last two rows while typing in the Add box.
-- **Other work assigned to you**: the folded list after this week's features and Promises (was More from DevOps).
-- **2 of 3 on**: a feature's stories that are on a block this week (was "N of M placed").
+- **Assigned to you**: the Add list's first section (the follow-up; was This week's features and Other work assigned to you): my open features and my open stories for the block's client, each story under its feature. "No feature" for a story with none. "2 more in this feature" folds a feature's other stories.
+- **More in <client>**: the folded list under Promises: everything else open in the client's DevOps (was More from DevOps).
+- **Sort by target date**, **Sort by backlog order**: the panel's ⋯. A target date is never text on a row: it is on hover, with the state and size.
+- **At risk · 2 reasons**: the header's one status line; the reasons are on hover and open under it.
+- **2 of 4 on**: a feature's stories that are on a block this week (was "N of M placed"), shown once it has work on this week.
 - **Take off the plan**: off its block and back to not placed, with Undo. Never "Drop", which marks a to-do dropped. The notice reads "Taken off Wed AM: <title>".
 - **Today** as a button beside Day's date comes back to today (was "Back to today"); on today it is a chip.
 - **Cards | Timeline**: Day's two views.

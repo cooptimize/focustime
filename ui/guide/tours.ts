@@ -78,8 +78,8 @@ const PLAN_WEEK: Tour = {
     },
     {
       target: "aw-features",
-      title: "This week's features",
-      text: "This week's features, in the client's backlog order, each with its stories and where they are. + puts a row on this block, or drag it onto any block. Drag a to-do from a block back onto the panel to take it off the plan.",
+      title: "Assigned to you",
+      text: "Your features and stories for this client, in backlog order, each story under its feature and saying where it is. More in the client, below, has everyone else's. + puts a row on this block, or drag it onto any block. Drag a to-do from a block back onto the panel to take it off the plan.",
       example: "todo-drag",
       phone: "skip",
     },
