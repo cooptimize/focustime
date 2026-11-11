@@ -876,15 +876,19 @@ const server = createApp({
   },
 });
 /** VM-2: HK-3's real use, kept as a date once a day per person (the auto-start pauses after 3 working days without). */
-const usedOn = new Map<string, string>();
+const usedOn = new Map<string, { date: string; zone: string }>();
 async function noteUse(userId: string): Promise<void> {
   try {
+    // The cheap check first (the zone last seen): one config read a day per person, not one a request.
+    const seen = usedOn.get(userId);
+    if (seen && localToday(instantNow().toString(), seen.zone) === seen.date) return;
     const ctx = await runtimeFor(userId);
     const cfg = await ctx.loadConfig().then((r) => (r.parsed.ok ? r.parsed.config : null));
-    const today = localToday(instantNow().toString(), cfg ? userZone(cfg) : host.clock.zone());
-    if (usedOn.get(userId) === today || !ctx.plan) return;
+    const zone = cfg ? userZone(cfg) : host.clock.zone();
+    const today = localToday(instantNow().toString(), zone);
+    if (!ctx.plan) return;
     await recordUse(ctx.plan, today);
-    usedOn.set(userId, today);
+    usedOn.set(userId, { date: today, zone });
   } catch {
     log({ source: "plan", op: "use", kind: "failed" });
   }
@@ -938,8 +942,9 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     demo: demoControl(false),
     env: build.env,
     // VM-2: the auto-start's gate reads FOCUSTIME_ENV exactly as set (buildInfo trims and lowercases; this doesn't), so
-    // only the Bicep's 'prod' starts anyone's VM. Unset, dev, local or anything else: never.
-    ...(process.env.FOCUSTIME_ENV !== undefined ? { autoStartEnv: process.env.FOCUSTIME_ENV } : {}),
+    // only the Bicep's 'prod' starts anyone's VM. Unset, dev, local or anything else: never. And only on the hosted app
+    // (FOCUSTIME_HOST=azure): a developer's machine never passes an environment, whatever FOCUSTIME_ENV says there.
+    ...(process.env.FOCUSTIME_HOST === "azure" && process.env.FOCUSTIME_ENV !== undefined ? { autoStartEnv: process.env.FOCUSTIME_ENV } : {}),
     loadConfig,
     makeDataverse: dataverseFor(who),
     makeOutlook: outlookFor(who),

@@ -162,8 +162,8 @@ describe("the start", () => {
     expect(st.chip).toBe("starting");
     await settled();
     expect((await w.plan.azureWriteLog())[0]).toMatchObject({ status: "confirmed" });
-    expect(w.sent.map((n) => [n.key, n.title])).toEqual([["vm_auto:2026-11-11", "Your VM was started"]]);
-    expect(w.sent[0]!.body).toMatch(/vm-sam-01 was started at \d+:\d\d AM/);
+    expect(w.sent.map((n) => [n.key, n.title])).toEqual([["vm_auto:2026-11-11", "Your VM is starting"]]);
+    expect(w.sent[0]!.body).toMatch(/vm-sam-01 is starting: FocusTime started it at \d+:\d\d AM, before your day\./);
     // One a day: later passes do nothing.
     for (let i = 0; i < 5; i++) {
       w.clock.advance(60_000);
@@ -302,6 +302,75 @@ describe("pausing, Resume and Skip", () => {
     w.clock.advance(25 * 60_000);
     expect(await autoStartTick(w.deps("prod"))).toBe("not_due");
     expect(w.starts()).toBe(0);
+  });
+});
+
+describe("from the review", () => {
+  it("PTO days don't count as days without FocusTime; PTO that can't be read doesn't pause it", async () => {
+    const ws = workStart();
+    // Last used Fri Nov 6; PTO Mon to Wed: back on Thu Nov 12 it still starts.
+    const w = await world({ start: nyAt(minus(ws, 5), "2026-11-12"), pto: ["2026-11-09", "2026-11-10", "2026-11-11"] }).init();
+    await w.plan.setState(AUTOSTART_KEY, { onSince: "2026-11-02", lastUseOn: "2026-11-06" });
+    expect(await autoStartTick(w.deps("prod"))).toBe("started");
+    const unread = await world({ start: nyAt(minus(ws, 5), "2026-11-12"), daysOffFails: true }).init();
+    await unread.plan.setState(AUTOSTART_KEY, { onSince: "2026-11-02", lastUseOn: "2026-11-06" });
+    // Not paused, and not started either (the day's PTO can't be read).
+    expect(await autoStartTick(unread.deps("prod"))).toBe("not_due");
+    expect(unread.starts()).toBe(0);
+  });
+
+  it("turning it off and on again starts afresh: no old pause", async () => {
+    const ws = workStart();
+    const w = await world({ start: nyAt(minus(ws, 5), "2026-11-12") }).init();
+    await w.plan.setState(AUTOSTART_KEY, { onSince: "2026-11-02", lastUseOn: "2026-11-06", pausedOn: "2026-11-12" });
+    w.setToml(tomlWith("auto_start = false\nauto_start_minutes = 5"));
+    expect(await autoStartTick(w.deps("prod"))).toBe("off");
+    w.setToml(ON);
+    expect(await autoStartTick(w.deps("prod"))).toBe("started");
+  });
+
+  it("a Skip that lands while a pass is running still counts", async () => {
+    const ws = workStart();
+    const w = await world({ start: nyAt(minus(ws, 5)) }).init();
+    const d = w.deps("prod");
+    // The Skip arrives after the pass read its state, before it claims the day.
+    const vm = d.vm;
+    d.vm = async () => {
+      await vmAction(w.vm(), "vm.autostart_skip", { date: "2026-11-11" });
+      return vm();
+    };
+    expect(await autoStartTick(d)).toBe("not_due");
+    expect(w.starts()).toBe(0);
+  });
+
+  it("a Stop I pressed today skips today's automatic start", async () => {
+    const ws = workStart();
+    const w = await world({ start: nyAt(minus(ws, 20)) }).init();
+    w.arm.vms.get(VM.toLowerCase())!.power = "running";
+    const p = await vmAction(w.vm(), "vm.preview", { op: "deallocate" });
+    expect(p.ok).toBe(true);
+    const c = await vmAction(w.vm(), "vm.confirm", { previewId: (p as { data: { previewId: string } }).data.previewId });
+    expect(c.ok).toBe(true);
+    await settled();
+    w.clock.set(nyAt(minus(ws, 5)));
+    expect(await autoStartTick(w.deps("prod"))).toBe("not_due");
+    expect(w.starts()).toBe(0);
+  });
+
+  it("Azure not saying stopped (Unknown): no automatic start", async () => {
+    const ws = workStart();
+    const w = await world({ start: nyAt(minus(ws, 5)) }).init();
+    w.arm.vms.get(VM.toLowerCase())!.power = "starting-weird";
+    expect(await autoStartTick(w.deps("prod"))).toBe("not_stopped");
+    expect(w.starts()).toBe(0);
+  });
+
+  it("a late start says so", async () => {
+    const ws = workStart();
+    const w = await world({ start: nyAt(ws) }).init();
+    w.clock.advance(20 * 60_000);
+    expect(await autoStartTick(w.deps("prod"))).toBe("started");
+    expect(w.sent[0]!.body).toMatch(/is starting: FocusTime started it at \d+:\d\d AM, after your day began\./);
   });
 });
 

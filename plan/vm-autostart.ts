@@ -113,12 +113,17 @@ export function dayReason(o: { date: IsoDate; settings: AutoStartSettings; hours
  * FocusTime since the later of my last use and the day it was turned on. Days are counted strictly between that day
  * and today. With neither known it doesn't pause (the tick records the day it was turned on first).
  */
-export function shouldPause(o: { today: IsoDate; lastUseOn: IsoDate | null; onSince: IsoDate | null; hours: TimeModel }): boolean {
+/** The first day the pause counts from (the day after my last use or turning it on), or null. */
+export function pauseBase(lastUseOn: IsoDate | null, onSince: IsoDate | null): IsoDate | null {
+  return [lastUseOn, onSince].filter((d): d is IsoDate => !!d).sort().at(-1) ?? null;
+}
+
+export function shouldPause(o: { today: IsoDate; lastUseOn: IsoDate | null; onSince: IsoDate | null; hours: TimeModel; /** PTO days and holidays, never counted. */ off?: ReadonlySet<IsoDate> }): boolean {
   const base = [o.lastUseOn, o.onSince].filter((d): d is IsoDate => !!d).sort().at(-1);
   if (!base || base >= o.today) return false;
   let n = 0;
   for (let d = Temporal.PlainDate.from(base).add({ days: 1 }); Temporal.PlainDate.compare(d, Temporal.PlainDate.from(o.today)) < 0; d = d.add({ days: 1 })) {
-    if (hoursOn(o.hours, d.toString()).segments.length) n++;
+    if (hoursOn(o.hours, d.toString()).segments.length && !o.off?.has(d.toString())) n++;
     if (n >= PAUSE_AFTER_DAYS) return true;
   }
   return false;
@@ -146,7 +151,8 @@ export type Due = { due: true; date: IsoDate; at: Temporal.Instant; late: boolea
 export function autoStartDue(f: DueFacts): Due {
   if (!f.settings.on) return { due: false, why: "off" };
   const today = f.now.toZonedDateTimeISO(f.zone).toPlainDate().toString();
-  if (f.state.pausedOn || shouldPause({ today, lastUseOn: f.state.lastUseOn, onSince: f.state.onSince, hours: f.hours })) return { due: false, why: "paused" };
+  // Pausing is decided by the tick (it knows the PTO and holidays since); here only whether it is paused.
+  if (f.state.pausedOn) return { due: false, why: "paused" };
   if (f.state.attemptedOn === today) return { due: false, why: "attempted" };
   const reason = dayReason({ date: today, settings: f.settings, hours: f.hours, skipped: f.state.skipped, pto: f.pto, holiday: f.holiday });
   if (reason) return { due: false, why: reason };
@@ -207,7 +213,7 @@ export function nextAutoStart(o: {
   if (!o.settings.on) return { kind: "off" };
   if (!autoStartEnvAllowed(o.env)) return { kind: "prod_only", text: PROD_ONLY_TEXT };
   const today = o.now.toZonedDateTimeISO(o.zone).toPlainDate();
-  if (o.state.pausedOn || shouldPause({ today: today.toString(), lastUseOn: o.state.lastUseOn, onSince: o.state.onSince, hours: o.hours }))
+  if (o.state.pausedOn)
     return { kind: "paused", text: "Paused: you haven't used FocusTime for 3 working days. Resume to start it again." };
   let note: string | null = null;
   for (let i = 0; i < LOOK_DAYS; i++) {

@@ -11,7 +11,7 @@
 import type { AppConfig } from "../config/schema.ts";
 import type { Logger } from "../log/logger.ts";
 import { notices, type Notice } from "../plan/notify.ts";
-import { autoStartDue, autoStartEnvAllowed, clock, plannedAt, shouldPause, type AutoStartState } from "../plan/vm-autostart.ts";
+import { autoStartDue, autoStartEnvAllowed, clock, pauseBase, plannedAt, shouldPause, type AutoStartState } from "../plan/vm-autostart.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { localToday } from "../week/dates.ts";
 import { userZone } from "../week/zone.ts";
@@ -58,19 +58,26 @@ export async function autoStartTick(d: AutoStartDeps): Promise<AutoStartOutcome>
   if (state.notice && (state.notice.date !== today || d.allows())) {
     const n = state.notice;
     if (n.date === today) await d.send(n.kind === "started" ? notices.vmAutoStarted(n.date, n.text, n.at) : n.kind === "sign_in" ? notices.vmAutoSignIn(n.date, n.at) : notices.vmAutoFailed(n.date, n.text, n.at)).catch(() => undefined);
-    state = { ...state, notice: null };
-    await d.plan.setState(AUTOSTART_KEY, state);
+    // Each write re-reads the state (writeAutoStart), so a Skip or a use recorded meanwhile isn't lost.
+    state = await writeAutoStart(d.plan, (s) => ({ ...s, notice: null }));
   }
   const settings = cfg.azure.autoStart;
-  if (!settings.on) return "off";
-  if (!state.onSince) {
-    state = { ...state, onSince: today };
-    await d.plan.setState(AUTOSTART_KEY, state);
+  if (!settings.on) {
+    // Off: turning it on again starts afresh (no old pause, the 3 days counted from then).
+    if (state.onSince || state.pausedOn) await writeAutoStart(d.plan, (s) => ({ ...s, onSince: null, pausedOn: null, pauseSeen: false }));
+    return "off";
   }
+  if (!state.onSince) state = await writeAutoStart(d.plan, (s) => ({ ...s, onSince: today }));
   if (!state.pausedOn && shouldPause({ today, lastUseOn: state.lastUseOn, onSince: state.onSince, hours: cfg.week.hours })) {
-    await writeAutoStart(d.plan, (s) => ({ ...s, pausedOn: today, pauseSeen: false }));
-    d.log({ source: "azure", op: "vm_autostart", kind: "paused" });
-    return "paused";
+    // Only then the PTO and holidays since (they don't count as days without FocusTime). Unreadable: no pause now.
+    const base = pauseBase(state.lastUseOn, state.onSince)!;
+    const vc = await d.vm();
+    const off = vc.daysOff ? await vc.daysOff(cfg, base, today).catch(() => null) : { pto: new Set<string>(), holidays: new Set<string>() };
+    if (off && shouldPause({ today, lastUseOn: state.lastUseOn, onSince: state.onSince, hours: cfg.week.hours, off: new Set([...off.pto, ...off.holidays]) })) {
+      await writeAutoStart(d.plan, (s) => ({ ...s, pausedOn: today, pauseSeen: false }));
+      d.log({ source: "azure", op: "vm_autostart", kind: "paused" });
+      return "paused";
+    }
   }
   // The cheap answers first (no PTO, holiday or Azure read until the time has come).
   const base = { now, zone, hours: cfg.week.hours, settings, state };
@@ -84,7 +91,9 @@ export async function autoStartTick(d: AutoStartDeps): Promise<AutoStartOutcome>
   if (!second.due) return "not_due";
   // Claim the day: one automatic start (or attempt) a day, whichever pass or instance gets here first.
   if (!(await d.plan.markOnce(AUTOSTART_MARK, today))) return "claimed_elsewhere";
-  await writeAutoStart(d.plan, (s) => ({ ...s, attemptedOn: today }));
+  // A Skip that landed after this pass read the state still counts.
+  const fresh = await writeAutoStart(d.plan, (s) => ({ ...s, attemptedOn: today }));
+  if (fresh.skipped.includes(today) || fresh.pausedOn) return "not_due";
   const me = await storedIdentity(d.plan);
   const vm = me ? ((await d.plan.accountState<ChosenVm>(`vm:${me.oid}`)) ?? null) : null;
   if (!vm || !parseVmId(vm.id)) return "no_vm";
@@ -92,7 +101,8 @@ export async function autoStartTick(d: AutoStartDeps): Promise<AutoStartOutcome>
   const at = now.toString();
   if (r.ok) {
     d.log({ source: "azure", op: "vm_autostart", kind: second.late ? "started_late" : "started" });
-    await notice(d, { kind: "started", date: today, at, text: `${vm.name} was started at ${clock(now, zone)}, before your day.` });
+    // Azure has accepted the start; FocusTime follows it, and the write log has how it ended.
+    await notice(d, { kind: "started", date: today, at, text: second.late ? `${vm.name} is starting: FocusTime started it at ${clock(now, zone)}, after your day began.` : `${vm.name} is starting: FocusTime started it at ${clock(now, zone)}, before your day.` });
     return "started";
   }
   const code = "code" in r ? (r.code ?? "") : "";

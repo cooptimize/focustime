@@ -257,8 +257,8 @@ export const notices = {
   }),
   meeting: (labels: string[], keys: string[], at: string): Notice => ({ kind: "meeting", key: `meeting:${keys.join("|")}`.slice(0, 300), title: "In 5 minutes", body: labels.join("\n"), buttons: [], route: "focus", at }),
   vmOff: (date: string, vmName: string, at: string): Notice => ({ kind: "vm", key: `vm_off:${date}`, title: "Your VM is off", body: `${vmName} is stopped.\nClick to start it.`, buttons: [{ key: "start", label: "Start" }], route: "vm", at, ref: date }),
-  /** VM-2: the automatic start, once a day: "Your VM was started at 7:55 AM" (quiet: no buttons). */
-  vmAutoStarted: (date: string, body: string, at: string): Notice => ({ kind: "vm", key: `vm_auto:${date}`, title: "Your VM was started", body, buttons: [], route: "vm", at, ref: date }),
+  /** VM-2: the automatic start, once a day: "Your VM is starting" (quiet: no buttons). */
+  vmAutoStarted: (date: string, body: string, at: string): Notice => ({ kind: "vm", key: `vm_auto:${date}`, title: "Your VM is starting", body, buttons: [], route: "vm", at, ref: date }),
   /** VM-2: the automatic start couldn't sign in to Azure (once a day; no retries). */
   vmAutoSignIn: (date: string, at: string): Notice => ({ kind: "vm", key: `vm_auto_signin:${date}`, title: "Auto-start couldn't sign in to Azure", body: "Your VM was left off. Allow Azure access, then start it when you need it.", buttons: [{ key: "consent", label: "Allow Azure access" }], route: "vm", at, ref: date }),
   /** VM-2: the automatic start failed for another reason (once a day; no retries). */

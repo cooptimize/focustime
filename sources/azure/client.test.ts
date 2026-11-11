@@ -182,9 +182,11 @@ describe("the allowlist (D475, VM-2): reads, start and deallocate, nothing else,
   });
 
   it("VM-2: every write to an auto-shutdown schedule stays refused, in any case and encoding", () => {
-    const variants = [SCHED, SCHED.replace("DevTestLab", "devtestlab"), SCHED.replace("schedules", "SCHEDULES"), SCHED.replace("shutdown-computevm-", "Shutdown-ComputeVm-"), SCHED.replace("/schedules/", "/schedules%2F"), `${SCHED}/`, `${SCHED}/.`];
+    const variants = [SCHED, SCHED.replace("DevTestLab", "devtestlab"), SCHED.replace("schedules", "SCHEDULES"), SCHED.replace("shutdown-computevm-", "Shutdown-ComputeVm-"), SCHED.replace("/schedules/", "/schedules%2F"), SCHED.replace("/schedules/", "/schedules%2\tF"), SCHED.replace("/schedules/", "/schedules%\n2f"), `${SCHED}/`, `${SCHED}/.`];
     for (const u of variants) for (const m of ["PUT", "PATCH", "DELETE", "POST", "MERGE"]) expect(allowedCall(m, `${u}${v}`)).toBeNull();
     for (const action of ["execute", "retarget", "deallocate", "start", "stop", "enable", "disable"]) for (const m of ["POST", "PUT", "PATCH", "DELETE"]) expect(allowedCall(m, `${SCHED}/${action}${v}`)).toBeNull();
+    // From the review: a tab or newline inside the VM path (dropped by URL parsing) never turns a read into another call.
+    for (const u of [`${ARM}${ID}/deallo\tcate${c}`, `${ARM}${ID}%2\tF..%2\tFschedules${c}`]) for (const m of ["GET", "POST"]) expect(allowedCall(m, u)).toBeNull();
     // Reads of it are the only call on a schedule.
     expect(allowedCall("GET", `${SCHED}${v}`)).toBe("scheduleRead");
   });

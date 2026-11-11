@@ -104,7 +104,8 @@ const WRITES: ReadonlySet<AzureCall> = new Set<AzureCall>(["start", "deallocate"
 
 /** Which allowed call a request is, or null: refused. Azure Resource Manager only; no encoded slashes or dot segments. */
 export function allowedCall(method: string, url: string): AzureCall | null {
-  if (!url.startsWith(`${ARM}/`)) return null;
+  // Control characters (tabs, newlines) are dropped by URL parsing, so "%2\tF" would become "%2F": refused first.
+  if (!url.startsWith(`${ARM}/`) || /[\u0000-\u001f\u007f]/.test(url)) return null;
   let u: URL;
   try {
     u = new URL(url);
@@ -114,6 +115,7 @@ export function allowedCall(method: string, url: string): AzureCall | null {
   if (u.origin !== ARM || u.username || u.password || u.hash) return null;
   const raw = url.slice(ARM.length).split("?")[0]!;
   if (/%2f|%5c|\\|\/\.\.?(\/|$)/i.test(raw)) return null;
+  if (/%2f|%5c|\\/i.test(u.pathname)) return null;
   const call = ALLOWED.find((r) => r.method === method && r.path.test(u.pathname))?.call ?? null;
   if (call && WRITES.has(call) && [...u.searchParams.keys()].some((k) => k !== "api-version")) return null;
   return call;

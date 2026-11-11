@@ -93,7 +93,9 @@ describe("it pauses itself after 3 of my working days without FocusTime", () => 
   });
   it("paused: no start; Resume (a fresh use) starts it again", () => {
     const now = at("2026-11-18T07:56", LA);
-    expect(autoStartDue(facts({ now, state: state({ lastUseOn: "2026-11-11", onSince: "2026-11-02" }) }))).toEqual({ due: false, why: "paused" });
+    // The tick decides when to pause (it knows the PTO since); the rule only honours a pause.
+    expect(shouldPause({ today: "2026-11-18", lastUseOn: "2026-11-11", onSince: "2026-11-02", hours: hours(LA) })).toBe(true);
+    expect(shouldPause({ today: "2026-11-18", lastUseOn: "2026-11-11", onSince: "2026-11-02", hours: hours(LA), off: new Set(["2026-11-12", "2026-11-16"]) })).toBe(false);
     expect(autoStartDue(facts({ now, state: state({ pausedOn: "2026-11-17", lastUseOn: "2026-11-18" }) }))).toEqual({ due: false, why: "paused" });
     expect(autoStartDue(facts({ now, state: state({ pausedOn: null, lastUseOn: "2026-11-18", onSince: "2026-11-02" }) }))).toMatchObject({ due: true });
   });

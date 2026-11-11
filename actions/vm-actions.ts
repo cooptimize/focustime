@@ -51,7 +51,12 @@ export const PROMPT_MARKER = "vm_prompt";
 /** VM-2: the auto-start's own state (plan/vm-autostart.ts AutoStartState), per person in the plan store. */
 export const AUTOSTART_KEY = "vm_autostart";
 export const readAutoStart = async (plan: PlanStore | undefined): Promise<AutoStartState> => autoStartStateOf(await plan?.getState<unknown>(AUTOSTART_KEY));
-export const writeAutoStart = async (plan: PlanStore, f: (s: AutoStartState) => AutoStartState) => plan.setState(AUTOSTART_KEY, f(await readAutoStart(plan)));
+/** Re-reads, changes and writes the state; returns what it wrote. */
+export const writeAutoStart = async (plan: PlanStore, f: (s: AutoStartState) => AutoStartState): Promise<AutoStartState> => {
+  const next = f(await readAutoStart(plan));
+  await plan.setState(AUTOSTART_KEY, next);
+  return next;
+};
 /** How long a start may take before FocusTime says it timed out. */
 export const POWER_TIMEOUT_MS = 15 * 60_000;
 const PREVIEW_MS = 5 * 60_000;
@@ -190,7 +195,10 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       const g = guard(vm, held.vmId);
       if (g) return g;
       // VM-2: the state is read again; a stop is refused unless the VM still runs (and a start unless it's still off).
-      return power(ctx, vm!, held.op, { recheck: true });
+      const r = await power(ctx, vm!, held.op, { recheck: true });
+      // VM-2 review: a Stop I pressed today also skips today's automatic start, so it never starts the VM I just stopped.
+      if (r.ok && held.op === "deallocate" && ctx.plan) await writeAutoStart(ctx.plan, (s) => ({ ...s, skipped: [...new Set([...s.skipped, today])].slice(-30) }));
+      return r;
     }
     case "vm.start_now": {
       // Step 15.5 (Q87): the morning box's (or notification's) Start, at once when Settings > You says so. The box
@@ -376,6 +384,8 @@ export async function power(ctx: VmContext, vm: ChosenVm, op: VmOp, o: { recheck
   }
   const chip = chipOf(before, transitions.get(vm.id.toLowerCase()) ?? null);
   if (op === "deallocate" && !canStop(chip)) return refuse(`Your VM is ${CHIP_LABEL[chip].toLowerCase()} now, so it wasn't stopped`);
+  // The automatic start only from a state Azure says is stopped (never from Unknown).
+  if (op === "start" && o.auto && chip !== "deallocated" && chip !== "billing") return refuse(`Your VM is ${CHIP_LABEL[chip].toLowerCase()} now, so it wasn't started`, 409);
   if (op === "start" && (o.recheck || o.auto) && !canStart(chip)) return refuse(`Your VM is ${CHIP_LABEL[chip].toLowerCase()} now, so it wasn't started`);
   const by = o.auto ? "automatic" : ((await storedIdentity(ctx.plan))?.name ?? "you");
   const entry = (await plan.logAzureWrite({ op, vmId: vm.id, vmName: vm.name, before: { power: before, by }, after: { power: op === "start" ? "running" : "deallocated" }, auto: !!o.auto }));

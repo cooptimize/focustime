@@ -24,7 +24,7 @@ async function person(env: string | undefined) {
   clearVmState();
   // Mon Nov 2, 2026, 8:54 AM in New York; the starter's day starts at 9:00, auto-start 5 minutes before.
   let at = Temporal.Instant.from("2026-11-02T13:54:00Z");
-  const toml = setValue(setValue(setValue(starterToml(NY), "dataverse", "my_email", "ana@example.com"), "azure", "auto_start", true), "azure", "auto_start_minutes", 5);
+  const toml = setValue(setValue(setValue(setValue(starterToml(NY), "dataverse", "my_email", "ana@example.com"), "dataverse", "my_systemuserid", "11111111-2222-4333-8444-555566667777"), "azure", "auto_start", true), "azure", "auto_start_minutes", 5);
   const config = parseConfig(toml);
   if (!config.ok) throw new Error(JSON.stringify(config.errors));
   const arm = fakeArm({ now: () => at.epochMilliseconds, transitionMs: 20_000 });
@@ -42,7 +42,7 @@ async function person(env: string | undefined) {
     loadConfig: async () => ({ path: "x", parsed: config }),
     now: () => at.toString(),
     sleep: async (ms: number) => void (at = at.add({ milliseconds: ms })),
-    makeDataverse: () => ({ pto: async () => ({ items: [] }), holidays: async () => ({ ok: true, days: [] }) }),
+    makeDataverse: () => ({ pto: async () => ({ status: "ok", items: [] }), holidays: async () => ({ ok: true, days: [] }) }),
     makeOutlook: () => { throw new Error("no Outlook here"); },
     makeGoogle: () => { throw new Error("no Google here"); },
     account: () => account,

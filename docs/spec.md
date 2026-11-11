@@ -822,7 +822,7 @@ Pilots need personal calendars without Google sign-in, and Apple has no comparab
 
 ## 51. VM-2: Stop, and an opt-in start before the day begins (authorized Nov 11)
 
-Tanner and Aaron: start the VM on work days before the day, but never from dev. Decisions under "VM-2" in `docs/decisions.md`.
+From the Nov 11 review: start the VM on work days before the day, but never from dev. Decisions under "VM-2" in `docs/decisions.md`.
 
 - **Stop.** The VM chip's menu has Stop… while my VM runs: a preview (Running → Stopped (deallocated), it stops billing, anything running on it ends, its auto-shutdown isn't changed), then Stop; followed until Azure shows it. Only my own confirmed VM; amends D475.
 - **Start without a preview.** Was Start right away; same setting.

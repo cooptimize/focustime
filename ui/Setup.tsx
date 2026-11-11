@@ -98,8 +98,8 @@ export function SetupFlow(p: Props) {
           {step === "calendars" && (
             <CalendarsStep connected={p.googleConnected} onConnect={p.onConnectGoogle} onDone={() => mark("calendars", "done").then(() => go("calendars"))} onSkip={() => void skip("calendars")} onBack={() => setStep("blocks")} />
           )}
-          {step === "vm" && <VmStep onDone={() => mark("vm", "done").then(() => go("vm"))} onSkip={() => void skip("vm")} onBack={() => setStep("vm")} />}
-          {step === "done" && <DoneStep view={view} onPlanWeek={() => (p.onClose(true), p.onPlanWeek())} onGuide={() => (p.onClose(true), p.onGuide())} onBack={() => setStep("calendars")} />}
+          {step === "vm" && <VmStep onDone={() => mark("vm", "done").then(() => go("vm"))} onSkip={() => void skip("vm")} onBack={() => setStep("calendars")} />}
+          {step === "done" && <DoneStep view={view} onPlanWeek={() => (p.onClose(true), p.onPlanWeek())} onGuide={() => (p.onClose(true), p.onGuide())} onBack={() => setStep("vm")} />}
         </div>
       </div>
     </div>

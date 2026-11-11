@@ -1513,7 +1513,12 @@ export async function vmContext(ctx: ActionContext): Promise<VmContext> {
     // that fails throws: the tick then leaves the VM off.
     daysOff: async (cfg, from, to) => {
       const dv = ctx.makeDataverse(cfg.dataverse, userZone(cfg));
-      const pto = cfg.dataverse.mySystemUserId ? (await dv.pto(from, to)).items.map((e) => e.date) : [];
+      // VM-2 review: PTO that can't be read fresh (Dataverse down, no role, no Dataverse user yet) is unknown, never
+      // "none": the reader doesn't throw, so its status decides. The auto-start then leaves the VM off.
+      if (!cfg.dataverse.mySystemUserId) throw new Error("PTO unknown: no Dataverse user");
+      const read = await dv.pto(from, to);
+      if (read.status !== "ok") throw new Error("PTO unavailable");
+      const pto = read.items.map((e) => e.date);
       const h = dv.holidays ? await dv.holidays(from, to) : { ok: true as const, days: [] };
       if (!h.ok) throw new Error("holidays unavailable");
       return { pto: new Set(pto), holidays: new Set(h.days.map((x) => x.date)) };
