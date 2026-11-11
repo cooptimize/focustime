@@ -64,7 +64,6 @@ export type AssistantEnv = {
 
 const COMMANDS: Link = { label: "Open the command menu", href: "#/commands" };
 
-/** AS-2: FocusTime's own words, in both rounds' fixed instructions. */
 /** CF-1: "confirm my day", "lock in my week": a request to confirm a plan, which FocusTime no longer has; null otherwise. */
 export function asksToConfirm(text: string): "day" | "week" | null {
   const s = text.toLowerCase();
@@ -73,7 +72,8 @@ export function asksToConfirm(text: string): "day" | "week" | null {
   return /\b(day|today|tomorrow|plan|monday|tuesday|wednesday|thursday|friday)('s)?\b/.test(s) ? "day" : null;
 }
 
-export const GLOSSARY = `FocusTime's words: the tabs are Day, Week, Ahead, Inbox and Status. Week is the week grid of blocks, with the Add work panel beside it for placing work on a block and adding features to the week ("Plan the week", "Plan today" and "the Board" are old names for it). Status is Monday's status report; "write my status updates" opens it. A block is a half-day of focus time for one client: AM is the morning, PM the afternoon. A to-do (code name pick; people say either, and both mean the same) is a planned piece of work on a block. Friday is the catch-up day. PTO is a day off. Every feature on the week counts the same. A send puts a feature or story on a teammate's week. A promise is something I owe someone (Inbox › Promises); In progress is a conversation or promise linked to an item. Nothing is confirmed: a day's or a week's plan is simply what's on it, and it changes freely. Ahead has Grid, Gantt, Gaps (items missing stories, a target date, an owner or a size) and Backlog (each client's backlog order; Stale is an open item unchanged for weeks). "Complete", "done", "close" and "finish" an item all mean its process's done state.`;
+/** AS-2: FocusTime's own words, in both rounds' fixed instructions. */
+export const GLOSSARY = `FocusTime's words: the tabs are Day, Week, Ahead, Status and Inbox. Week is the week grid of blocks, with the Add work panel beside it for placing work on a block and adding features to the week ("Plan the week", "Plan today" and "the Board" are old names for it). Status is Monday's status report; "write my status updates" opens it. A block is a half-day of focus time for one client: AM is the morning, PM the afternoon. A to-do (code name pick; people say either, and both mean the same) is a planned piece of work on a block. Friday is the catch-up day. PTO is a day off. Every feature on the week counts the same. A send puts a feature or story on a teammate's week. A promise is something I owe someone (Inbox › Promises); In progress is a conversation or promise linked to an item. Nothing is confirmed: a day's or a week's plan is simply what's on it, and it changes freely. Ahead has Grid, Gantt, Gaps (items missing stories, a target date, an owner or a size) and Backlog (each client's backlog order; Stale is an open item unchanged for weeks). "Complete", "done", "close" and "finish" an item all mean its process's done state.`;
 
 const examples = TOOL_NAMES.filter((t) => !BUTTON_ONLY.includes(t)).map((t) => `${t}: ${TOOLS[t].examples.map((e) => `"${e}"`).join(" | ")}`).join("\n");
 

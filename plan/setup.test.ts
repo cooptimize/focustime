@@ -1,6 +1,6 @@
 // S1 (D451): who sees first-run setup, where it resumes, and Today's one quiet line.
 import { describe, expect, it } from "vitest";
-import { autoOpen, dismissFrom, remainingSteps, todayLine, type SetupState } from "./setup.ts";
+import { autoOpen, dismissFrom, leftLine, reachesEnd, remainingSteps, todayLine, type SetupState } from "./setup.ts";
 
 const allDone: SetupState = { day: "done", clients: "done", blocks: "done", calendars: "done" };
 
@@ -38,3 +38,20 @@ describe("resume and skip", () => {
     expect(todayLine({ demo: false, state })?.text).toBe("3 setup steps left");
   });
 });
+
+describe("RF-1: through to the end", () => {
+  it("once stepped through, Day has no line even with steps skipped; what's left stays for Settings", () => {
+    const state: SetupState = { day: "done", clients: "skipped", blocks: "skipped", calendars: "skipped" };
+    expect(todayLine({ demo: false, state, through: true })).toBeNull();
+    expect(todayLine({ demo: false, state, through: false })).toEqual({ text: "3 setup steps left", step: "clients" });
+    expect(leftLine(state)).toEqual({ text: "3 setup steps left", step: "clients" });
+    expect(leftLine(allDone)).toBeNull();
+  });
+  it("the end is the last step done or skipped, not closing the flow", () => {
+    expect(reachesEnd("calendars", "done")).toBe(true);
+    expect(reachesEnd("calendars", "skipped")).toBe(true);
+    expect(reachesEnd("calendars", "dismissed")).toBe(false);
+    expect(reachesEnd("blocks", "done")).toBe(false);
+  });
+});
+

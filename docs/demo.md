@@ -15,7 +15,7 @@ To run the script yourself against a running FocusTime: `node scripts/demo-walkt
 - **Today** (1): Now · Plan · Check-in · Close out. A ✓ on a mode means it's done for the day; a small dot means it's due now (Plan in the morning, Check-in after lunch, Close out near the end of the day). Nothing switches by itself.
 - **Week** (2): Week · Plan the week (next week by default, ‹ › for others). The header has the week, the musts and any borrowed time.
 - **Roadmap** (3): Roadmap · Plan ahead (coming next).
-- **Inbox** (4): follow-ups and captures.
+- **Inbox** (5 since RF-1; 4 before): follow-ups and captures.
 - **P** toggles the current tab's planning mode. Every place has its own address, so browser back and reopening land where you were.
 - Top right: the VM chip, Focus (the countdown while it runs), Capture, ⋯ (Commands, keyboard shortcuts) and my initials (Settings, Sign out).
 

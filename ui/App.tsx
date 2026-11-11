@@ -25,6 +25,8 @@ import { TimeboxCtx, TimeboxDialog, timeboxChange as tbChange, useWriteFlow, typ
 import { HelpFinder } from "./HelpFinder.tsx";
 import { SendHost, TeamView } from "./Team.tsx";
 import { StatusView, useStatusNeeds } from "./Status.tsx";
+import { StatusMark } from "./StatusMark.tsx";
+import { dotText, dotTone } from "../plan/status-dot.ts";
 import type { HelpTarget } from "./menu.ts";
 import type { TimeboxTarget } from "./menu.ts";
 import type { WriteState } from "../actions/types.ts";
@@ -392,6 +394,9 @@ export function App() {
     };
   }, []);
   const [clock, setClock] = useState(() => Date.now());
+  // RF-1: the Status tab's dot: its tone now (amber, red or none) from my own week, and why.
+  const statusTone = dotTone(statusNeeds?.dot, statusNeeds?.needs ?? 0, clock + (statusNeeds?.skewMs ?? 0));
+  const statusText = statusNeeds?.sendsAt && statusNeeds.zone ? dotText(statusNeeds.needs, statusNeeds.sendsAt, statusNeeds.zone) : "";
   // TY-1: Timebox my day asked for: Today shows its placeholders for this date, once per ask.
   const [timeboxAsk, setTimeboxAsk] = useState<{ date: IsoDate; n: number } | null>(null);
   const cellRefs = useRef(new Map<string, HTMLDivElement>());
@@ -1653,10 +1658,10 @@ export function App() {
         </div>
         {!phone && <nav className="views" aria-label="Tabs">
           {TABS.map((t, n) => (
-            <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} title={TAB_TITLES[t] + ` (${n + 1})`} data-tour={t === "status" ? "tab-status" : undefined}>
+            <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} title={TAB_TITLES[t] + ` (${n + 1})` + (t === "status" && statusTone !== "none" ? `. ${statusText}` : "")} data-tour={t === "status" ? "tab-status" : undefined}>
               {TAB_NAMES[t]}
               {t === "inbox" && inboxCount > 0 && <span className="count" aria-label={`${inboxCount} need you`}>{inboxCount}</span>}
-              {t === "status" && !!statusNeeds && <span className="count" aria-label={`${statusNeeds} need your update`}>{statusNeeds}</span>}
+              {t === "status" && <StatusMark tone={statusTone} text={statusText} />}
             </button>
           ))}
         </nav>}
@@ -2111,7 +2116,7 @@ export function App() {
               // CV-3: on the phone the person chip is this first row (the top bar keeps room for the name).
               { id: "account", label: account.title, next: account.step },
               // WD-1: Status is a top-level place; the phone's bottom bar has no room for it, so it is here.
-              { id: "status", label: "Status", ...(statusNeeds ? { hint: `${statusNeeds} to update` } : {}), run: () => openTab("status") },
+              { id: "status", label: "Status", ...(statusNeeds?.needs ? { hint: `${statusNeeds.needs} to update` } : {}), ...(statusTone !== "none" ? { mark: { tone: statusTone, text: statusText } } : {}), run: () => openTab("status") },
               { id: "notices", label: "Notifications", ...(notices.unread > 0 ? { hint: `${notices.unread} new` } : {}), run: () => openNotices() },
               ...(data.timer ? [{ id: "focus", label: "Focus screen", run: () => setView("focus") }] : [{ id: "focus", label: "Start focus", run: () => setTimerMenuAt(phoneMoreAt) }]),
               { id: "settings", label: "Settings", run: () => setSettingsAt("") },

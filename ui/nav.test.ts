@@ -1,4 +1,4 @@
-// Step 16.2, NV-1, WD-1: tabs (Day · Week · Ahead · Inbox · Status), Week with no modes and its Add work panel,
+// Step 16.2, NV-1, WD-1, RF-1: tabs (Day · Week · Ahead · Status · Inbox), Week with no modes and its Add work panel,
 // Ahead's Grid, Gantt, Gaps and Backlog, Day's flows, addresses (back and reopen), every older address landing with
 // its date, block, week or id, P, keys 1–5, entry points, and notification and command routes.
 import { describe, expect, it } from "vitest";
@@ -9,8 +9,8 @@ const loc = (nav: Nav): Loc => ({ nav, overlay: null });
 
 describe("tabs and modes", () => {
   it("WD-1: five tabs in order, Today named Day and Status its own tab; Week, Day, Inbox and Status have no modes", () => {
-    expect(TABS).toEqual(["today", "week", "ahead", "inbox", "status"]);
-    expect(TABS.map((t) => TAB_NAMES[t])).toEqual(["Day", "Week", "Ahead", "Inbox", "Status"]);
+    expect(TABS).toEqual(["today", "week", "ahead", "status", "inbox"]);
+    expect(TABS.map((t) => TAB_NAMES[t])).toEqual(["Day", "Week", "Ahead", "Status", "Inbox"]);
     expect(MODES.today).toEqual([]);
     expect(MODES.week).toEqual([]);
     expect(MODES.ahead).toEqual(["grid", "gantt", "fix", "backlog"]);
@@ -27,7 +27,7 @@ describe("tabs and modes", () => {
   });
 
   it("keys 1–5 pick the tabs in order (T is Day, L the Inbox); other keys none", () => {
-    expect(["1", "2", "3", "4", "5", "t", "T", "l", "L"].map(tabForKey)).toEqual(["today", "week", "ahead", "inbox", "status", "today", "today", "inbox", "inbox"]);
+    expect(["1", "2", "3", "4", "5", "t", "T", "l", "L"].map(tabForKey)).toEqual(["today", "week", "ahead", "status", "inbox", "today", "today", "inbox", "inbox"]);
     expect(tabForKey("6")).toBeNull();
     expect(tabForKey("p")).toBeNull();
   });

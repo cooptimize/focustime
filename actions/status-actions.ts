@@ -12,7 +12,8 @@ import type { AiService } from "../ai/service.ts";
 import { AI_MESSAGES } from "../ai/types.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { withoutEmails } from "../plan/stories.ts";
-import { clientReportWindow, isCoopComment, contributionLine, contributions, countLine, countedAt, hintLines, KAT_ZONE, needsMyUpdate, nextKatRun, noUpdateYet, ptoWhen, reportBody, reportCandidates, reportCounts, reportHeader, reportWindow, selectFeatures, sortComments, templateLine, UPCOMING_DAYS, upcomingRows, type Contribution, type FeatureWhy, type ReportComment, type ReportItem, type ReportWindow, type StoryFact } from "../plan/status-report.ts";
+import { dotSchedule, type DotDay } from "../plan/status-dot.ts";
+import { clientReportWindow, isCoopComment, contributionLine, contributions, countLine, countedAt, hintLines, KAT_ZONE, lastKatRun, needsMyUpdate, nextKatRun, noUpdateYet, ptoWhen, reportBody, reportCandidates, reportCounts, reportHeader, reportWindow, selectFeatures, sortComments, templateLine, UPCOMING_DAYS, upcomingRows, type Contribution, type FeatureWhy, type ReportComment, type ReportItem, type ReportWindow, type StoryFact } from "../plan/status-report.ts";
 import { holidayLabel, type HolidayDay } from "../sources/dataverse/holidays.ts";
 import { isClosed } from "../plan/process.ts";
 import { createHash } from "node:crypto";
@@ -51,6 +52,8 @@ export type StatusContext = {
   writeName?: (clientKey: string) => Promise<string | null>;
   /** SR-3: Cooptimize's observed holidays in a range (Dataverse's Working Days Calendar), or why they can't be read. */
   holidays?: (cfg: AppConfig, from: IsoDate, to: IsoDate) => Promise<{ ok: true; days: HolidayDay[] } | { ok: false; message: string }>;
+  /** RF-1: my own days from one date to another (focus blocks, the catch-up day, PTO, working hours), for the tab's dot. */
+  workdays?: (cfg: AppConfig, from: IsoDate, to: IsoDate) => Promise<DotDay[]>;
 };
 
 export type { StatusClient, StatusComment, StatusFeature, StatusLoad } from "../plan/status-types.ts";
@@ -264,7 +267,22 @@ async function load(ctx: StatusContext, input: unknown): Promise<StatusLoad> {
   obj(input, ["quiet"]);
   const cfg = await ctx.config();
   if (!cfg) throw new Invalid("Fix the config first");
-  return (await readAll(ctx, cfg)).load;
+  const dotP = dotFor(ctx, cfg);
+  const { load } = await readAll(ctx, cfg);
+  return { ...load, ...(await dotP) };
+}
+
+/**
+ * RF-1: when the Status tab's dot turns amber and red for the report that goes out next (plan/status-dot.ts), from my
+ * own days between the last send and the next. Days that can't be read leave no dot (never a guess).
+ */
+async function dotFor(ctx: StatusContext, cfg: AppConfig): Promise<Pick<StatusLoad, "sendsAt" | "dot" | "zone" | "serverNow">> {
+  const now = Temporal.Instant.from(ctx.now());
+  const [last, next] = [lastKatRun(now), nextKatRun(now)];
+  const tz = userZone(cfg);
+  const local = (i: Temporal.Instant) => i.toZonedDateTimeISO(tz).toPlainDate().toString();
+  const days = ctx.workdays ? await ctx.workdays(cfg, local(last), local(next)).catch(() => null) : null;
+  return { serverNow: now.toString(), sendsAt: next.toString(), zone: tz, dot: days ? dotSchedule(days, last.toString(), next.toString()) : null };
 }
 
 // ---- SR-2: the client's report, visible to the whole team ----

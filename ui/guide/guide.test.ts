@@ -23,7 +23,7 @@ describe("the Guide's shortcuts are ui/keys.ts's", () => {
   });
   it("the cards say what the keys do (WD-1: the tabs are 1 to 5, capture N or C, midday check-in M, close out E, Add work A or W)", () => {
     const shown = Object.fromEntries(C.SHORTCUTS.cards.map((c) => [c.label, keysFor(c.keys, c.all)]));
-    expect(shown["Day, Week, Ahead, Inbox, Status"]).toEqual(["1", "2", "3", "4", "5"]);
+    expect(shown["Day, Week, Ahead, Status, Inbox"]).toEqual(["1", "2", "3", "4", "5"]);
     expect(shown["Add work (on Ahead, the Gantt)"]).toEqual(["P"]);
     expect(shown["Capture a thought"]).toEqual(["N", "C"]);
     expect(shown["Midday check-in"]).toEqual(["M"]);

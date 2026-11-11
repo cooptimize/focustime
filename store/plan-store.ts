@@ -3254,7 +3254,11 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     },
     /** Forgets the setup record (Settings > Setup > Start over; the dev reset): the flow shows again on the next open. */
     async resetSetup(): Promise<void> {
-      return tx(async () => void (await db.run("DELETE FROM setup_state")));
+      return tx(async () => {
+        await db.run("DELETE FROM setup_state");
+        // RF-1: and the mark that the flow was stepped through to its end.
+        await db.run("DELETE FROM markers WHERE kind = ?", "setup_through");
+      });
     },
     /** AI-0: one AI request in the person's log: counts, cost and outcome, never the prompt or the answer. */
     async addAiRequest(e: AiLogEntry): Promise<void> {

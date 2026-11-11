@@ -1,4 +1,4 @@
-// Step 16.2, NV-1, WD-1: where the window is. Five tabs (Day · Week · Ahead · Inbox · Status), a mode switch on Ahead
+// Step 16.2, NV-1, WD-1, RF-1: where the window is. Five tabs (Day · Week · Ahead · Status · Inbox), a mode switch on Ahead
 // (Grid · Gantt · Gaps · Backlog), Day's two flows, Week's Add work panel, and the full-window overlays (the focus
 // screen, Settings, the Guide). Every place has an address (#/…) so browser back and reopening land in the same place.
 // Pure: no DOM, no React; App applies it. WD-1: the code keeps "today" as Day's tab id; people read "Day".
@@ -8,7 +8,7 @@ import type { InboxPlace } from "../plan/inbox-items.ts";
 import { tourById } from "./guide/tours.ts";
 import { DOC_ANCHOR, DOC_CONTENTS, DOC_PAGES, docPageLabel } from "./docs/pages.ts";
 
-export const TABS = ["today", "week", "ahead", "inbox", "status"] as const;
+export const TABS = ["today", "week", "ahead", "status", "inbox"] as const;
 export type Tab = (typeof TABS)[number];
 /** WD-1: Today is called Day (the date word "today" stays), and Status is a tab of its own. */
 export const TAB_NAMES: Record<Tab, string> = { today: "Day", week: "Week", ahead: "Ahead", inbox: "Inbox", status: "Status" };
@@ -140,7 +140,7 @@ const mondayOf = (d: IsoDate): IsoDate => {
   return p.subtract({ days: p.dayOfWeek - 1 }).toString();
 };
 
-/** 1–5 switch tabs (WD-1: T stays Day, L the Inbox). */
+/** 1–5 switch tabs in their order (RF-1: 4 is Status, 5 the Inbox; T stays Day, L the Inbox). */
 export function tabForKey(key: string): Tab | null {
   const i = ["1", "2", "3", "4", "5"].indexOf(key);
   return i >= 0 ? TABS[i]! : key === "t" || key === "T" ? "today" : key === "l" || key === "L" ? "inbox" : null;

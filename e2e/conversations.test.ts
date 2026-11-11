@@ -201,7 +201,7 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       graph.say(DELIVERY, ME, "I'll be back online around 7:30 PM.", 22);
 
       // The Inbox (IB-1): Refresh reads the chats now; the conversation is a row in Needs you.
-      await page.keyboard.press("4");
+      await page.keyboard.press("5");
       const main = await openInboxView(page, "needs-you");
       await main.getByRole("button", { name: "Refresh conversations" }).click();
       const TITLE = "Movement Dashboard quantity gap on 4417001";
@@ -262,7 +262,7 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       await shotBoth(page, "today-promise-after-blocks", page.getByRole("main", { name: "Today" }));
 
       // IB-1: no Make it a follow-up; the promise's Who is the person it was promised to (Evan), never me.
-      await page.keyboard.press("4");
+      await page.keyboard.press("5");
       await openInboxView(page, "promises");
       const card = await openInboxItem(page, "Rerun the Salesforce data from CRM_Silver");
       await expect(card.getByRole("button", { name: "Make it a follow-up" }).count()).resolves.toBe(0);

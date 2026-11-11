@@ -248,7 +248,7 @@ One job reads each registered client chat for everyone; Asks are now Requests. D
 
 ## NV-1: navigation (Nov 5)
 
-- **Tabs and routes** (`ui/nav.ts`, tested in `ui/nav.test.ts`). Today · Week · Ahead · Inbox, keys 1 to 4.
+- **Tabs and routes** (`ui/nav.ts`, tested in `ui/nav.test.ts`). Today · Week · Ahead · Inbox, keys 1 to 4 (since RF-1: Day · Week · Ahead · Status · Inbox, keys 1 to 5).
   - Today: `#/today`; flows `#/today/checkin` and `#/today/closeout[/date]`. No modes.
   - Week: `#/week[/monday]` (the Board), `#/week/day[/date[/half]]` (Plan today: the Board focused on a day, `focusOf`), `#/week/commit[/monday]` (Plan, Plan the week; labelled Commit until UI-7).
   - Ahead: `#/ahead` (Grid), `#/ahead/gantt` (Gantt), `#/ahead/fix` (Fix next), `#/ahead/backlog` (Backlog, BH-1), `#/ahead/item/<id>` (an item highlighted); `#/ahead/plan` lands on Gantt (AH-1).
