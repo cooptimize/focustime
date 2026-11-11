@@ -11,7 +11,8 @@ Storage key: `[x] y` is a key in the person's settings rows (`user_settings`, on
 | You | Signed in, Sign out / Sign in | The session | Session | Everyone | Profile |
 | You | Photos | Status line for profile photos | None (status) | Signed in | Profile |
 | You | My VM: Find my VM, Forget, This is my VM, Use this VM (resource id), Allow Azure access | The one VM FocusTime reads and starts | Plan store account state (`vm:<oid>`) | Signed in | Accounts and calendars › My VM |
-| You | Start my VM without asking | Morning prompt's Start skips the preview | `[azure] start_without_asking` | Everyone | Accounts and calendars › My VM |
+| You | Start without a preview (was Start my VM without asking) | Morning prompt's Start skips the preview | `[azure] start_without_asking` | Everyone | Accounts and calendars › My VM |
+| You | Start my VM before my day (VM-2) | Starts the VM before working hours, production only | `[azure] auto_start`, `auto_start_minutes`, `auto_start_off_days` | Everyone | Accounts and calendars › My VM |
 | You | Email, Dataverse user | Read-only | Sign-in, Dataverse | Everyone | Profile |
 | You | Environment | Read-only Dataverse URL | App config | Everyone (admin value) | Profile (labelled "Dataverse environment") |
 | You | Time zone (read-only) | Duplicate of Working hours | `[hours] time_zone` | Everyone | Removed as a duplicate; Profile links to Working hours |

@@ -1,6 +1,6 @@
 # Operations
 
-For whoever deploys, watches or fixes FocusTime. The step-by-step commands are in the [runbook](../azure/runbook.md); this page is the map. Checked against `13cd461` on Nov 7, 2026 (the Find an item row against `feat/dv2-devops-fresh` on Nov 11, the browser shards row against `chore/ci2-webkit-deps` on Nov 11).
+For whoever deploys, watches or fixes FocusTime. The step-by-step commands are in the [runbook](../azure/runbook.md); this page is the map. Checked against `13cd461` on Nov 7, 2026 (the Find an item row against `feat/dv2-devops-fresh` on Nov 11, the browser shards row against `chore/ci2-webkit-deps` on Nov 11; the VM auto-start against `feat/vm2-stop-autostart` on Nov 11).
 
 ## Environments
 
@@ -16,6 +16,8 @@ For whoever deploys, watches or fixes FocusTime. The step-by-step commands are i
 | Deploy identity | `ft-dev-deploy` (OIDC) | `ft-prod-deploy` (OIDC) |
 
 Both run in the same subscription and share the Entra tenant, the "FocusTime" app registration and the "FocusTime Admins" group. Settings and resource names are in `infra/dev.bicepparam` and `infra/prod.bicepparam`. Scaling: one replica at most in both (`maxReplicas: 1`, `infra/modules/app.bicep`). The daily jobs claim their period in `job_claims`, and the Teams bot dedupes across replicas, but the scheduler's per-person ticks have no lease (its header says so). Keep one replica until one is added.
+
+**What differs by environment beyond the table (VM-2).** The VM auto-start (Start my VM before my day) runs only on the hosted app (`FOCUSTIME_HOST=azure`) where `FOCUSTIME_ENV` is exactly `prod`, which only `infra/prod.bicepparam` sets. Dev, the developer loop (unset or `local`), the demo and anything else never start a VM on their own, and dev's scheduler doesn't wake for it; the form there says it runs only on production. A person may be opted in on both (separate databases): only prod starts the VM. Stop and Start pressed by a person work everywhere. To see it run without prod, use the e2e demo (`e2e/vm2.test.ts`, `FOCUSTIME_DEMO_AUTOSTART_ENV=prod` on the fake Azure); never set `FOCUSTIME_ENV=prod` anywhere else.
 
 Costs and budgets: [runbook, Cost](../azure/runbook.md#cost-hk-2-fixed-price-databases-list-prices-for-central-us-on-2026-11-05) and [Budgets and alerts](../azure/runbook.md#budgets-and-alerts-hk-2).
 

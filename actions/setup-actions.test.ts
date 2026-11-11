@@ -47,8 +47,8 @@ describe("setup actions", () => {
     const s = setup();
     await s.run("setup.mark", { step: "day", status: "done" });
     const v = await s.run<SetupView>("setup.mark", { closeFrom: "clients" });
-    expect(v).toMatchObject({ open: null, line: { text: "3 setup steps left", step: "clients" } });
-    expect(await s.plan.setupState()).toEqual({ day: "done", clients: "dismissed", blocks: "dismissed", calendars: "dismissed" });
+    expect(v).toMatchObject({ open: null, line: { text: "4 setup steps left", step: "clients" } });
+    expect(await s.plan.setupState()).toEqual({ day: "done", clients: "dismissed", blocks: "dismissed", calendars: "dismissed", vm: "dismissed" });
   });
 
   it("the clients screen lists Dataverse's clients, or says plainly it couldn't read them", async () => {
@@ -113,7 +113,8 @@ describe("RF-1: stepping through to the end", () => {
     const mid = await s.run<SetupView>("setup.load");
     expect(mid.through).toBe(false);
     const v = await s.run<SetupView>("setup.mark", { step: "calendars", status: "skipped" });
-    expect(v).toMatchObject({ through: true, line: null, left: { text: "2 setup steps left", step: "clients" } });
+    // VM-2: Calendars (the end before Your VM was added) still counts as through; Your VM counts as left.
+    expect(v).toMatchObject({ through: true, line: null, left: { text: "3 setup steps left", step: "clients" } });
     // After a reload too.
     expect(await s.run<SetupView>("setup.load")).toMatchObject({ through: true, line: null, left: { step: "clients" } });
   });
@@ -122,10 +123,10 @@ describe("RF-1: stepping through to the end", () => {
     const s = setup();
     await s.run("setup.mark", { step: "day", status: "done" });
     const closed = await s.run<SetupView>("setup.mark", { closeFrom: "clients" });
-    expect(closed).toMatchObject({ through: false, line: { text: "3 setup steps left" } });
+    expect(closed).toMatchObject({ through: false, line: { text: "4 setup steps left" } });
     // Run from Settings, skipping to the end.
-    for (const step of ["clients", "blocks", "calendars"]) await s.run("setup.mark", { step, status: "skipped" });
-    expect(await s.run<SetupView>("setup.load")).toMatchObject({ through: true, line: null, left: { text: "3 setup steps left" } });
+    for (const step of ["clients", "blocks", "calendars", "vm"]) await s.run("setup.mark", { step, status: "skipped" });
+    expect(await s.run<SetupView>("setup.load")).toMatchObject({ through: true, line: null, left: { text: "4 setup steps left" } });
   });
 
   it("someone who never opened the flow has no line yet (it opens by itself), and Start over forgets the mark", async () => {
@@ -145,7 +146,21 @@ describe("RF-1 review: before the mark", () => {
     await s.plan.setSetupStep("clients", "skipped");
     await s.plan.setSetupStep("blocks", "skipped");
     await s.plan.setSetupStep("calendars", "skipped");
-    expect(await s.run<SetupView>("setup.load")).toMatchObject({ through: true, line: null, left: { text: "3 setup steps left" } });
+    expect(await s.run<SetupView>("setup.load")).toMatchObject({ through: true, line: null, left: { text: "4 setup steps left" } });
+  });
+});
+
+describe("VM-2: Your VM, the late step", () => {
+  it("is kept without touching setup_state (no migration), forgotten by Start over, and never reopens the flow", async () => {
+    const s = setup();
+    for (const step of ["day", "clients", "blocks", "calendars"] as const) await s.plan.setSetupStep(step, "done");
+    expect(await s.run<SetupView>("setup.load")).toMatchObject({ open: null, line: null, through: true, left: { text: "1 setup step left", step: "vm" } });
+    expect(await s.run<SetupView>("setup.mark", { step: "vm", status: "skipped" })).toMatchObject({ through: true, line: null });
+    expect((await s.plan.setupState()).vm).toBe("skipped");
+    await s.run("setup.mark", { step: "vm", status: "done" });
+    expect(await s.run<SetupView>("setup.load")).toMatchObject({ left: null });
+    await s.run("setup.reset");
+    expect(await s.plan.setupState()).toEqual({});
   });
 });
 

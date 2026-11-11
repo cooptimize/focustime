@@ -123,13 +123,14 @@ describe("auto-shutdown schedule", () => {
   });
 });
 
-describe("the allowlist (D475): reads and start, nothing else, refused before anything is sent", () => {
+describe("the allowlist (D475, VM-2): reads, start and deallocate, nothing else, refused before anything is sent", () => {
   const SCHED = `${ARM}/subscriptions/${SUB}/resourceGroups/rg-dev/providers/Microsoft.DevTestLab/schedules/shutdown-computevm-vm-pat-01`;
   const v = `?api-version=${API.schedules}`;
   const c = `?api-version=${API.compute}`;
 
-  it("allows exactly: Resource Graph query, read the VM, its instance view, its schedule, start, and a start's progress", () => {
-    expect(ALLOWED.map((r) => `${r.method} ${r.call}`)).toEqual(["POST find", "GET read", "GET instanceView", "POST start", "GET operation", "GET scheduleRead"]);
+  it("allows exactly: Resource Graph query, read the VM, its instance view, its schedule, start, deallocate, and their progress", () => {
+    expect(ALLOWED.map((r) => `${r.method} ${r.call}`)).toEqual(["POST find", "GET read", "GET instanceView", "POST start", "POST deallocate", "GET operation", "GET scheduleRead"]);
+    expect(allowedCall("POST", `${ARM}${ID}/deallocate${c}`)).toBe("deallocate");
     expect(allowedCall("POST", `${ARM}/providers/Microsoft.ResourceGraph/resources?api-version=${API.resourceGraph}`)).toBe("find");
     expect(allowedCall("GET", `${ARM}${ID}${c}`)).toBe("read");
     expect(allowedCall("GET", `${ARM}${ID}/instanceView${c}`)).toBe("instanceView");
@@ -148,7 +149,9 @@ describe("the allowlist (D475): reads and start, nothing else, refused before an
   });
 
   it("refuses every other VM write and any other path or host", () => {
-    for (const op of ["deallocate", "powerOff", "restart", "redeploy", "reimage", "runCommand", "generalize"]) expect(allowedCall("POST", `${ARM}${ID}/${op}${c}`)).toBeNull();
+    // VM-2: power off without deallocating (it keeps billing), restart, delete and resize stay refused.
+    for (const op of ["powerOff", "restart", "redeploy", "reimage", "runCommand", "generalize", "performMaintenance", "simulateEviction", "convertToManagedDisks", "vmSizes", "reapply", "installPatches", "capture"]) expect(allowedCall("POST", `${ARM}${ID}/${op}${c}`)).toBeNull();
+    for (const op of ["powerOff", "restart", "deallocate", "start"]) for (const m of ["GET", "PUT", "PATCH", "DELETE"]) expect(allowedCall(m, `${ARM}${ID}/${op}${c}`)).toBeNull();
     for (const m of ["PUT", "PATCH", "DELETE"]) expect(allowedCall(m, `${ARM}${ID}${c}`)).toBeNull();
     expect(allowedCall("GET", `${ARM}${ID}/extensions/x${c}`)).toBeNull();
     expect(allowedCall("POST", `${ARM}${ID}/../${ID.split("/").pop()}/start${c}`)).toBeNull();
@@ -157,21 +160,65 @@ describe("the allowlist (D475): reads and start, nothing else, refused before an
     expect(allowedCall("GET", `${ARM}.evil.example${ID}${c}`)).toBeNull();
   });
 
+  it("VM-2: deallocate only on a VM path, with no query parameter but api-version, and only on management.azure.com", () => {
+    expect(allowedCall("POST", `${ARM}${ID}/deallocate${c}`)).toBe("deallocate");
+    // Not on anything but a VM: a resource group, a subscription, a scale set, a schedule, a lab VM.
+    expect(allowedCall("POST", `${ARM}/subscriptions/${SUB}/resourceGroups/rg-dev/deallocate${c}`)).toBeNull();
+    expect(allowedCall("POST", `${ARM}/subscriptions/${SUB}/deallocate${c}`)).toBeNull();
+    expect(allowedCall("POST", `${ARM}/subscriptions/${SUB}/resourceGroups/rg-dev/providers/Microsoft.Compute/virtualMachineScaleSets/ss/deallocate${c}`)).toBeNull();
+    expect(allowedCall("POST", `${ARM}/subscriptions/${SUB}/resourceGroups/rg-dev/providers/Microsoft.Compute/virtualMachineScaleSets/ss/virtualmachines/0/deallocate${c}`)).toBeNull();
+    expect(allowedCall("POST", `${SCHED}/deallocate${v}`)).toBeNull();
+    expect(allowedCall("POST", `${ARM}/subscriptions/${SUB}/resourceGroups/rg-dev/providers/Microsoft.DevTestLab/labs/lab/virtualmachines/vm/stop${v}`)).toBeNull();
+    // No extra segment, no encoded slash or dot segment, no hibernate or forceDeallocate riding along, no other host.
+    expect(allowedCall("POST", `${ARM}${ID}/deallocate/x${c}`)).toBeNull();
+    expect(allowedCall("POST", `${ARM}${ID}%2Fdeallocate${c}`)).toBeNull();
+    expect(allowedCall("POST", `${ARM}${ID}/x/../deallocate${c}`)).toBeNull();
+    expect(allowedCall("POST", `${ARM}${ID}/deallocate${c}&hibernate=true`)).toBeNull();
+    expect(allowedCall("POST", `${ARM}${ID}/deallocate${c}&forceDeallocate=true`)).toBeNull();
+    expect(allowedCall("POST", `${ARM}${ID}/start${c}&x=1`)).toBeNull();
+    expect(allowedCall("POST", `https://management.azure.com.evil.example${ID}/deallocate${c}`)).toBeNull();
+    expect(allowedCall("POST", `http://management.azure.com${ID}/deallocate${c}`)).toBeNull();
+    expect(allowedCall("POST", `https://user:pw@management.azure.com${ID}/deallocate${c}`)).toBeNull();
+  });
+
+  it("VM-2: every write to an auto-shutdown schedule stays refused, in any case and encoding", () => {
+    const variants = [SCHED, SCHED.replace("DevTestLab", "devtestlab"), SCHED.replace("schedules", "SCHEDULES"), SCHED.replace("shutdown-computevm-", "Shutdown-ComputeVm-"), SCHED.replace("/schedules/", "/schedules%2F"), SCHED.replace("/schedules/", "/schedules%2\tF"), SCHED.replace("/schedules/", "/schedules%\n2f"), `${SCHED}/`, `${SCHED}/.`];
+    for (const u of variants) for (const m of ["PUT", "PATCH", "DELETE", "POST", "MERGE"]) expect(allowedCall(m, `${u}${v}`)).toBeNull();
+    for (const action of ["execute", "retarget", "deallocate", "start", "stop", "enable", "disable"]) for (const m of ["POST", "PUT", "PATCH", "DELETE"]) expect(allowedCall(m, `${SCHED}/${action}${v}`)).toBeNull();
+    // From the review: a tab or newline inside the VM path (dropped by URL parsing) never turns a read into another call.
+    for (const u of [`${ARM}${ID}/deallo\tcate${c}`, `${ARM}${ID}%2\tF..%2\tFschedules${c}`]) for (const m of ["GET", "POST"]) expect(allowedCall(m, u)).toBeNull();
+    // Reads of it are the only call on a schedule.
+    expect(allowedCall("GET", `${SCHED}${v}`)).toBe("scheduleRead");
+  });
+
   it("a refused call never asks for a token or sends anything", async () => {
     const { client, calls, tokens } = fake(() => json(200, {}));
     for (const m of ["PUT", "PATCH", "DELETE"]) await expect(client.request(m, `${SCHED}${v}`, { properties: { status: "Disabled" } })).rejects.toMatchObject({ kind: "refused" });
     await expect(client.request("POST", `${SCHED}/execute${v}`)).rejects.toMatchObject({ kind: "refused" });
-    await expect(client.request("POST", `${ARM}${ID}/deallocate${c}`)).rejects.toMatchObject({ kind: "refused" });
+    await expect(client.request("POST", `${ARM}${ID}/powerOff${c}`)).rejects.toMatchObject({ kind: "refused" });
+    await expect(client.request("POST", `${ARM}${ID}/restart${c}`)).rejects.toMatchObject({ kind: "refused" });
+    await expect(client.request("DELETE", `${ARM}${ID}${c}`)).rejects.toMatchObject({ kind: "refused" });
+    await expect(client.request("PATCH", `${ARM}${ID}${c}`, { properties: { hardwareProfile: { vmSize: "Standard_B1s" } } })).rejects.toMatchObject({ kind: "refused" });
+    await expect(client.request("POST", `${ARM}${ID}/deallocate${c}&hibernate=true`)).rejects.toMatchObject({ kind: "refused" });
     expect(calls).toEqual([]);
     expect(tokens.n).toBe(0);
-    // The reads and start still go out.
+    // The reads, start and (VM-2) deallocate still go out.
     await client.request("GET", `${SCHED}${v}`);
     await client.request("POST", `${ARM}${ID}/start${c}`);
-    expect(calls.map((x) => x.method)).toEqual(["GET", "POST"]);
+    await client.request("POST", `${ARM}${ID}/deallocate${c}`);
+    expect(calls.map((x) => x.method)).toEqual(["GET", "POST", "POST"]);
   });
 
-  it("the client has no method that writes a schedule or stops a VM", () => {
+  it("the client has no method that writes a schedule; its only writes are start and deallocate", () => {
     const { client } = fake(() => json(200, {}));
-    expect(Object.keys(client).sort()).toEqual(["findVms", "getSchedule", "getVm", "operation", "power", "request", "start"]);
+    expect(Object.keys(client).sort()).toEqual(["deallocate", "findVms", "getSchedule", "getVm", "operation", "power", "request", "start"]);
+  });
+
+  it("VM-2: deallocate POSTs with no body to the VM's deallocate; 202 gives the poll URL", async () => {
+    const { client, calls } = fake(() => new Response(null, { status: 202, headers: { location: OP, "retry-after": "10" } }));
+    const p = await client.deallocate(parseVmId(ID)!);
+    expect(calls[0]).toMatchObject({ method: "POST" });
+    expect(calls[0]!.url).toBe(`${ARM}${ID}/deallocate${c}`);
+    expect(p).toEqual({ url: OP, style: "location", retryAfterMs: 10_000 });
   });
 });

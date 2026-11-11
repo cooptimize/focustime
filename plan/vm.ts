@@ -1,5 +1,5 @@
 // My Azure VM (step 15.4): pure rules for its power state, the chip, the auto-shutdown schedule (read only: FocusTime
-// never changes it, D475) and the morning prompt. No I/O.
+// never changes it, D475) and the morning prompt. VM-2: Stop (deallocate) is offered again, only while it runs. No I/O.
 import type { IsoDate } from "../week/types.ts";
 import { zoneOf } from "./timezones.ts";
 
@@ -20,8 +20,8 @@ export function powerFrom(statuses: unknown): PowerState {
   return "unknown";
 }
 
-/** A start FocusTime asked for and is still waiting on (the one VM write; D475). */
-export type VmOp = "start";
+/** A start or (VM-2) a stop FocusTime asked for and is still waiting on: the two VM writes. */
+export type VmOp = "start" | "deallocate";
 export type VmTransition = { op: VmOp; since: string };
 
 export type VmChip = "running" | "deallocated" | "billing" | "starting" | "stopping" | "unknown";
@@ -37,6 +37,7 @@ export const CHIP_LABEL: Record<VmChip, string> = {
 /** What the chip shows: Azure's state, or the transition FocusTime started while Azure still shows the old state. */
 export function chipOf(power: PowerState, transition: VmTransition | null): VmChip {
   if (transition?.op === "start" && power !== "running") return "starting";
+  if (transition?.op === "deallocate" && power !== "deallocated") return "stopping";
   switch (power) {
     case "running": return "running";
     case "deallocated": return "deallocated";
@@ -51,10 +52,15 @@ export function chipOf(power: PowerState, transition: VmTransition | null): VmCh
 export const isTransition = (c: VmChip) => c === "starting" || c === "stopping";
 /** Refresh every 60 s while visible, every 10 s during a transition. */
 export const refreshMs = (c: VmChip) => (isTransition(c) ? 10_000 : 60_000);
-/** Whether a start has reached running. */
-export const reached = (_op: VmOp, p: PowerState) => p === "running";
+/** Whether a start has reached running, or a stop deallocated (not merely stopped: that still bills). */
+export const reached = (op: VmOp, p: PowerState) => (op === "start" ? p === "running" : p === "deallocated");
 /** Start is offered when the VM is off. */
 export const canStart = (c: VmChip) => c === "deallocated" || c === "billing" || c === "unknown";
+/**
+ * VM-2: Stop is offered only while Azure shows it running and nothing is under way (never while it starts or stops,
+ * never when the state is unknown). "Stopped (still billing)" isn't offered a stop either: Start covers it.
+ */
+export const canStop = (c: VmChip) => c === "running";
 
 // ---- Auto-shutdown (Microsoft.DevTestLab/schedules, shutdown-computevm-<vm>) ----
 

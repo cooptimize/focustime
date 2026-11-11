@@ -15,6 +15,7 @@ const TEAMS_SWITCH: Record<string, keyof Pick<TeamsRhythm, "brief" | "checkin" |
 import { DEFAULT_FOCUS, MAX_PLAYLISTS, playlistLink, SOUNDS, type FocusSettings, type SoundKind } from "../plan/focussound.ts";
 import { parseSpan, VIEW_RANGES, WEEKDAY_KEYS, type DayOverride, type Span, type TimeModel, type ViewRange, type WeekdayKey } from "../week/hours.ts";
 import { NEUTRAL_ZONE } from "../week/zone.ts";
+import { AUTOSTART_MINUTES, DEFAULT_AUTOSTART, validAutoStartMinutes, type AutoStartSettings } from "../plan/vm-autostart.ts";
 
 export type DataverseConfig = {
   environmentUrl: string;
@@ -74,9 +75,13 @@ export type AppConfig = {
   /** ADM-1: the team's settings as they apply to this person (null until applied, config/org-apply.ts). */
   org: OrgView | null;
 };
-/** `ownerValue` empty means the signed-in person's UPN (A2), then their display name. `startWithoutAsking` (step 15.5, Q87): the morning box's Start runs at once. */
-export type AzureSettings = { ownerTag: string; ownerValue: string; startWithoutAsking: boolean };
-export const DEFAULT_AZURE: AzureSettings = { ownerTag: "Owner", ownerValue: "", startWithoutAsking: true };
+/**
+ * `ownerValue` empty means the signed-in person's UPN (A2), then their display name. `startWithoutAsking` (step 15.5,
+ * Q87; "Start without a preview" since VM-2): the morning box's Start runs at once. `autoStart` (VM-2): start my VM
+ * before my day, off by default, production only (plan/vm-autostart.ts).
+ */
+export type AzureSettings = { ownerTag: string; ownerValue: string; startWithoutAsking: boolean; autoStart: AutoStartSettings };
+export const DEFAULT_AZURE: AzureSettings = { ownerTag: "Owner", ownerValue: "", startWithoutAsking: true, autoStart: DEFAULT_AUTOSTART };
 /** `domains` empty means my work email's domain. */
 /** Step 13.5: `exclude` lists people (names or addresses) who are never candidates or Who suggestions, like bots. */
 export type CollabSettings = { meetingMinutes: number; teams: boolean; daysAhead: number; domains: string[]; exclude: string[] };
@@ -640,7 +645,22 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
   if (raw.azure !== undefined) {
     const t = isTable(raw.azure) ? raw.azure : (err("azure", "Must be an [azure] table"), null);
     if (t) {
-      for (const k of Object.keys(t)) if (!["owner_tag", "owner_value", "start_without_asking"].includes(k)) err(`azure.${k}`, "Unknown field");
+      for (const k of Object.keys(t)) if (!["owner_tag", "owner_value", "start_without_asking", "auto_start", "auto_start_minutes", "auto_start_off_days"].includes(k)) err(`azure.${k}`, "Unknown field");
+      // VM-2: start my VM before my day (production only; off by default).
+      const auto = { ...DEFAULT_AUTOSTART, offDays: [...DEFAULT_AUTOSTART.offDays] };
+      if (t.auto_start !== undefined) {
+        if (typeof t.auto_start !== "boolean") err("azure.auto_start", "Must be true or false");
+        else auto.on = t.auto_start;
+      }
+      if (t.auto_start_minutes !== undefined) {
+        if (!validAutoStartMinutes(t.auto_start_minutes)) err("azure.auto_start_minutes", `Must be one of ${AUTOSTART_MINUTES.join(", ")}`);
+        else auto.minutes = t.auto_start_minutes;
+      }
+      if (t.auto_start_off_days !== undefined) {
+        if (!Array.isArray(t.auto_start_off_days) || t.auto_start_off_days.some((d) => !(WEEKDAY_KEYS as readonly unknown[]).includes(d))) err("azure.auto_start_off_days", "Must be a list of days: mon, tue, wed, thu, fri, sat, sun");
+        else auto.offDays = [...new Set(t.auto_start_off_days as WeekdayKey[])];
+      }
+      azure.autoStart = auto;
       if (t.start_without_asking !== undefined) {
         if (typeof t.start_without_asking !== "boolean") err("azure.start_without_asking", "Must be true or false");
         else azure.startWithoutAsking = t.start_without_asking;

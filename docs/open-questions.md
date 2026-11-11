@@ -637,3 +637,14 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - The other step outages can still stop are `npm ci` (npm's registry) and Install WebKit on a browser cache miss (Playwright's CDN). Neither failed on Nov 11. Worth the same treatment?
 - Each install-deps attempt is cut off at 3 minutes (3 attempts, about 10 minutes at worst), because the browser jobs time out at 20 minutes and the tests take up to 6.5. A mirror slow enough to need more (AP-2 saw 8 to 17 minutes) now fails in the step instead of timing the job out. The review suggested one overall deadline instead; kept per attempt so each retry starts fresh. Fine?
 - `e2e/wd2.test.ts` now sets the address again until the page shows. Other browser tests set `location.hash` once after a reload the same way. Give the harness one `goTo` for all of them (a later step), or leave each until it flakes?
+
+## VM-2
+
+- Azure refusing the start with 403 (no deallocate or start permission on the VM) is treated as a failure ("couldn't start your VM"), not as a sign-in problem: Allow Azure access wouldn't fix it. Is that the right word for it?
+- PTO is read fresh from Dataverse for each start (a cached snapshot isn't trusted: PTO entered this morning must count). Someone without a Dataverse user id, or on a day Dataverse can't be read, gets no automatic start. Is a cached snapshot good enough on a Dataverse outage?
+- A start Azure accepts and later fails (the operation ends Failed or times out) is said as "is starting" and the write log has the failure, but no second notice. Add a "couldn't start" notice from the follow?
+- Once a day is claimed the attempt is spent, even when the VM turned out to be running already or the start failed. A second try later the same morning would need a retry rule; none for now.
+- PTO or holidays that can't be read leave the VM off that day (the safer reading). Should it say so?
+- In the demo the environment comes only from `FOCUSTIME_DEMO_AUTOSTART_ENV` (tests); the hosted demo sessions never set it, so they show "production only". Fine?
+- The auto-start uses each person's stored sign-in (their refresh token) while they're away. If Entra's token lifetime or a conditional access policy ends it, the start is skipped with "couldn't sign in". Worth watching on prod for a week.
+- The demo's working week is Monday to Thursday, so its pause takes a calendar week; on prod it depends on each person's hours.

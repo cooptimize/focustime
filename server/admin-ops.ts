@@ -6,7 +6,7 @@ import type { StatusRegistry } from "../actions/status-rows.ts";
 import type { AdminCheck } from "../actions/admin.ts";
 import type { AdminOps, PersonHealth } from "../actions/admin-actions.ts";
 import type { OrgRuntime } from "../actions/org.ts";
-import { SETUP_STEPS, type SetupState } from "../plan/setup.ts";
+import { LATE_STEPS, SETUP_STEPS, type SetupState } from "../plan/setup.ts";
 import type { ClientChat } from "../plan/requests.ts";
 import type { ConversationCounts } from "../store/conversation-store.ts";
 import type { DirectoryRead } from "../sources/dataverse/directory.ts";
@@ -58,7 +58,8 @@ export type AdminOpsDeps = {
 
 /** Setup's state in a word: done, skipped (closed with steps left), started, or not started. */
 export function setupWord(st: SetupState): PersonHealth["setup"] {
-  const v = SETUP_STEPS.map((k) => st[k]);
+  // VM-2: the late steps (Your VM) don't change the word for people who finished before they existed.
+  const v = SETUP_STEPS.filter((k) => !LATE_STEPS.has(k)).map((k) => st[k]);
   if (v.every((x) => x === "done")) return "done";
   if (v.every((x) => !x)) return "not_started";
   return v.some((x) => x === "skipped" || x === "dismissed") ? "skipped" : "started";

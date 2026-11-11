@@ -2,7 +2,7 @@
 // "hours" and "standing", devops.set_write_pat, auth.connect_google); these only read what the screens show and keep
 // the per-person record of each step (done, skipped or dismissed). Never in demo mode.
 import type { AppConfig } from "../config/schema.ts";
-import { autoOpen, dismissFrom, firstRemaining, leftLine, reachesEnd, SETUP_STEPS, SETUP_THROUGH_MARK, todayLine, validSetupStatus, validSetupStep, type SetupClient, type SetupPrefill, type SetupState, type SetupStep, type SetupView } from "../plan/setup.ts";
+import { autoOpen, dismissFrom, FORMER_LAST_STEPS, firstRemaining, leftLine, reachesEnd, SETUP_STEPS, SETUP_THROUGH_MARK, todayLine, validSetupStatus, validSetupStep, type SetupClient, type SetupPrefill, type SetupState, type SetupStep, type SetupView } from "../plan/setup.ts";
 export type { SetupClient, SetupPrefill, SetupView };
 import type { WorkingHours } from "../plan/collab.ts";
 import type { PlanStore } from "../store/plan-store.ts";
@@ -55,8 +55,9 @@ export function setupView(demo: boolean, state: SetupState, through = false): Se
 /** RF-1: whether the person has stepped through the flow to its end (a once-mark; no migration). */
 // RF-1 review: someone who stepped through before RF-1 has no mark, but their last step's record says they reached
 // the end (closing early records it as dismissed, which doesn't count).
+// VM-2: a done or skipped record on the step that was last before Your VM was added counts too.
 const throughOf = async (plan: PlanStore, state?: SetupState) =>
-  (await plan.markedDates(SETUP_THROUGH_MARK)).size > 0 || (!!state?.[LAST_STEP] && reachesEnd(LAST_STEP, state[LAST_STEP]!));
+  (await plan.markedDates(SETUP_THROUGH_MARK)).size > 0 || (!!state?.[LAST_STEP] && reachesEnd(LAST_STEP, state[LAST_STEP]!)) || FORMER_LAST_STEPS.some((k) => !!state?.[k] && state[k] !== "dismissed");
 const LAST_STEP = SETUP_STEPS[SETUP_STEPS.length - 1]!;
 
 export async function setupAction(ctx: SetupContext, action: SetupAction, input: unknown): Promise<ActionResponse> {
