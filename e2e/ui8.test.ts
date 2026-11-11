@@ -179,11 +179,11 @@ describe.skipIf(!CHROMIUM)("UI-8 bug round", () => {
     await page.close();
   }, T);
 
-  it("a client chip's Not ready offers Break down, opening the same panel as Fix next (WD-1: was DevOps health)", async () => {
+  it("a feature that needs stories offers Break down in the block's panel, opening the same panel as Fix next (QT-1: was the client chip's Not ready)", async () => {
     const { page, errors } = await freshPage(h);
     await page.evaluate(() => (location.hash = "#/week/2026-11-02"));
-    await page.locator(".client-chips button.cc-chip", { has: page.locator(".cc-badge") }).first().click();
-    const row = page.locator(".cc-pop .cc-ready li").first();
+    await page.locator('[data-drop="2026-11-02:PM"] .add-work.add-row').first().click();
+    const row = page.locator("aside.block-panel .aw-feature.aw-not-ready .aw-feat-head").first();
     await row.waitFor();
     const bd = row.locator(".bd-trigger");
     await expect(bd.innerText()).resolves.toMatch(/^Break down/);

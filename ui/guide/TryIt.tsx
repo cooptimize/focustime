@@ -112,7 +112,7 @@ function DragTry() {
                   <b>
                     {b.client} · {b.label}
                   </b>
-                  <span className={`try-fit${planned > b.freeMinutes ? " amber" : ""}`}>{t.fit(planned, b.freeMinutes)}</span>
+                  <span className="try-fit">{t.fit(planned, b.freeMinutes)}</span>
                 </div>
                 <ul className="try-todos">{here.length ? here.map(chip) : <li className="try-empty">{t.empty}</li>}</ul>
               </div>

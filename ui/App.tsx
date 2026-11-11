@@ -34,7 +34,6 @@ import type { WriteState } from "../actions/types.ts";
 import { planTarget } from "../plan/target.ts";
 import { canAddWork } from "../plan/days.ts";
 import { BlockPanel, ToPlaceNotice } from "./BlockPanel.tsx";
-import { ClientChips } from "./ClientChips.tsx";
 import { panelBlock } from "../plan/blockpanel.ts";
 import { takeOffPick } from "./takeoff.ts";
 import { readDayPanel, writeDayPanel } from "./daypanel.ts";
@@ -2098,7 +2097,6 @@ export function App() {
                 </button>
               )}
               <AfterHoursChip after={data.afterHours} />
-              {!phone && <ClientChips data={data} now={thisWeek ? nowIso : null} onChanged={reloadQuiet} />}
             </div>
             <ModeArea>
               <TimelineToggle shown={showTimelines} onToggle={() => void saveShowTimelines(!showTimelines)} />

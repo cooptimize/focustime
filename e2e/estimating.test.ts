@@ -1,5 +1,5 @@
 // E2 (D446): estimating in hours. WD-1: a client's fit is its chip on Week ("Northwind 9h of 5h", amber when over, the
-// popover's "5h free · 9h planned · about 4h over"); a feature's estimate is its ⋯ › Estimate in Add work, in whole
+// popover's "5h free · 9h planned · about 4h over"; QT-1 removed the chips: the panel says only the free time); a feature's estimate is its ⋯ › Estimate in Add work, in whole
 // hours; a story's size is its to-do's chip (S 1h, M 2h, L 4h, unsized 1h by default). The load rules themselves are
 // unit tests (plan/). Profile photos, in demo mode (fictional data, generated avatars, no Graph calls). The scans read
 // every view for decimals and fractions, and Week, Add work and Plan ahead for blocks used as an amount (hours are the unit).
@@ -29,17 +29,17 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
   };
   const watch = (page: import("playwright-core").Page) => page.evaluate(() => { const d = document.createElement("span"); d.style.color = "var(--watch)"; document.body.append(d); const c = getComputedStyle(d).color; d.remove(); return c; });
 
-  it("each client chip: the room left in hours, amber when over, never red; its popover says the same total in hours", async () => {
+  it("QT-1: Week has no client chips and never says over; the panel's header says the free time, never amber", async () => {
     const { page, errors } = await freshPage(h);
     await page.keyboard.press("2");
-    const chips = page.locator(".client-chips button.cc-chip");
-    await chips.first().waitFor({ timeout: 30_000 });
-    for (const t of await chips.allInnerTexts()) expect(t).toMatch(/^\S.* · (\d+h free|Full|\d+h over)/);
-    const over = page.locator(".client-chips button.cc-chip.over").first();
-    await expect(over.evaluate((e) => getComputedStyle(e).color)).resolves.toBe(await watch(page));
-    await over.click();
-    const pop = page.locator(".cc-pop");
-    await expect(pop.locator("p.cc-over").textContent()).resolves.toMatch(/^\d+h over · \d+h planned · \d+h free in its blocks$/);
+    await page.locator(".week-head").first().waitFor({ timeout: 30_000 });
+    expect(await page.locator(".client-chips, .cc-chip").count()).toBe(0);
+    expect(await page.locator("main.grid").innerText()).not.toMatch(/\b(over|Full|Too much planned|Room for)\b/);
+    expect(await page.locator(".status-pill.too_much, .status-pill.tight, .status-pill.fits, .half.watch").count()).toBe(0);
+    await page.locator('[data-drop="2026-11-02:PM"] .add-work.add-row').first().click();
+    const when = page.locator("aside.block-panel .bp-when");
+    await expect(when.textContent()).resolves.toMatch(/ · (\d+h( \d+m)?|\d+m) free$| · No free time$/);
+    await expect(when.evaluate((e) => getComputedStyle(e).color)).resolves.not.toBe(await watch(page));
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -164,13 +164,6 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     await openPlanDay(page);
     await page.waitForTimeout(600);
     await scan("Week with Add work");
-    const chips = page.locator(".client-chips button.cc-chip");
-    for (let i = 0; i < (await chips.count()); i++) {
-      await chips.nth(i).click();
-      await page.locator(".cc-pop").waitFor();
-      await scan(`client chip ${i + 1}`);
-      await page.keyboard.press("Escape");
-    }
     await page.evaluate(() => (location.hash = "#/ahead/gantt"));
     await page.locator(".pa-cap").first().waitFor({ timeout: 20_000 });
     await page.waitForTimeout(600);

@@ -839,14 +839,13 @@ describe("AS-2", () => {
     expect((await pto.s.a.confirm(pto.r.proposals[0]!.id)).ok).toBe(true);
     const over = await note(NEXT_WED, "PM", {}, 1);
     expect(over.r.proposals[0]!.preview.notes.some((x) => /^Over your Wednesday PM hours by \dh$/.test(x))).toBe(true);
-    // The morning has ended at 2 PM: that to-do stays, with why.
+    // QT-1: the morning has ended at 2 PM, and it still takes work (only a day before today refuses).
     const s = opts();
     s.setNow("2026-11-05T19:00:00Z");
     await s.plan.addPick({ date: TODAY, half: "PM", clientKey: FAB, kind: "intention", title: "Export spec", size: "S" });
-    s.script(["move_plan"], call(["move_plan", { fromDate: TODAY, fromHalf: "PM", toDate: TODAY, toHalf: "AM", which: "all" }]), say("That time has passed."));
+    s.script(["move_plan"], call(["move_plan", { fromDate: TODAY, fromHalf: "PM", toDate: TODAY, toHalf: "AM", which: "all" }]), say("Moved to this morning."));
     const r = await s.a.handle("Move this afternoon's to-dos to this morning");
-    expect(r.proposals).toEqual([]);
-    expect(JSON.stringify(s.calls.at(-1)!.rounds)).toContain("that time has already ended");
+    expect(r.proposals).toHaveLength(1);
   });
 
   it("the Board's drop and the assistant give the same note for the same block", async () => {

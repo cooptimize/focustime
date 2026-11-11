@@ -527,7 +527,7 @@ type FormProps = Props & { data: SettingsData; onSavedData: (d: SettingsData) =>
 /** A field that saves itself: its input (from `children`), "Saved" or "Couldn't save. Retry" by it, an error under it. */
 /** ST-1: a field's key → its setting id in the registry, where the two differ only in name. */
 const SID: Record<string, string> = {
-  lunch: "lunch", tz: "time-zone", planShare: "plan-share", draftStories: "break-down-offered", readinessNudges: "readiness-nudges", carryDays: "carry-over",
+  lunch: "lunch", tz: "time-zone", draftStories: "break-down-offered", readinessNudges: "readiness-nudges", carryDays: "carry-over",
   reminderOffsetMinutes: "plan-reminder", devopsOnDone: "devops-on-done", progressOffer: "progress-offer", checkinReminderMinutes: "checkin-reminder", closeoutReminderMinutes: "closeout-reminder",
   followGraceDays: "follow-grace", focusMinutes: "focus-length", breakMinutes: "break-length", endSound: "end-sound", enabled: "timeboxing", outlookDefault: "outlook-default",
   confirmOwn: "confirm-own", meetingMinutes: "help-length", teams: "help-teams", daysAhead: "help-days", exclude: "exclude", teamsStatus: "teams-status",
@@ -804,9 +804,7 @@ function GuidanceForm(p: FormProps) {
     <Group title="Guidance" intro="Your level changes emphasis only; none of these ever blocks anything.">
       <div className="set-grid set-guidance">
         <ReadOnly sid="level" label="Your level" value={level} where="From your position in Dataverse. It changes suggestions only, never what you can do." />
-        <AutoField a={a} k="planShare" label="Plan up to (% of free time)" hint={<>Moves the amber over line on Week's client chips; it never blocks. Team default for your level: {team.planShare}%. {reset("planShare")}</>}>
-          <input type="number" min={50} max={100} step={5} value={a.v.planShare ?? team.planShare} onChange={(e) => a.set("planShare", Number(e.target.value))} {...a.text("planShare")} />
-        </AutoField>
+        {/* QT-1: "Plan up to (% of free time)" is gone from the screen (it moved the over line on Week's client chips, which are gone). The stored value stays. */}
         <AutoField a={a} k="draftStories" label="Break down" hint={<>Team default: {onOff(team.draftStories)}. {reset("draftStories")}</>}>
           <label className="set-check">
             <input type="checkbox" checked={a.v.draftStories ?? team.draftStories} onChange={(e) => a.change("draftStories", e.target.checked)} /> Offer Break down on features that need stories

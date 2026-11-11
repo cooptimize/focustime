@@ -127,8 +127,9 @@ describe("remaining time", () => {
     const free = slotOf([["09:00", "09:45"]]);
     const base = { slot: free, ptoDay: false, catchUp: false, now: Temporal.Instant.from(at("07:00")), today: D, picks: [], sizes: S, timeboxes: [] };
     const dragged = { clientKey: "Contoso", itemId: 7, size: "M" as const, title: "Export" };
-    expect(dropCheck({ ...base, dragged } as never)).toMatchObject({ over: true });
-    expect(dropCheck({ ...base, dragged: { ...dragged, remainingMinutes: 30 } } as never)).toMatchObject({ over: false });
+    // QT-1: the tip never says over; what's left decides whether the work needs more than the free time (shortBy).
+    expect(dropCheck({ ...base, dragged } as never)).toMatchObject({ over: false, shortBy: 75 });
+    expect(dropCheck({ ...base, dragged: { ...dragged, remainingMinutes: 30 } } as never)).toMatchObject({ over: false, text: "30 min of 1h free" });
   });
   it("the focus timer suggests what's left", () => {
     expect(suggestMinutes("L", S, 45)).toBe(45);

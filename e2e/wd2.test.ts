@@ -558,9 +558,9 @@ describe.skipIf(!CHROMIUM)("WD-2: a past day (browser, demo on Tuesday)", () => 
     await cards.first().waitFor();
     // No + Add anywhere on a past day (the header, the cards).
     expect(await page.locator(".day-view .add-work").count()).toBe(0);
-    // On the card an unfinished to-do is a dimmed line (it is suggested in a later block); the panel has it as a row.
-    const withWork = page.locator(".day-view .half.card", { has: page.locator(".checklist li") }).first();
-    await withWork.locator(".card-when").click();
+    // QT-1: a past day's card is folded to one line ("1 not done"); the panel has its to-dos as rows.
+    const withWork = page.locator(".day-view .half.card.folded", { has: page.locator(".card-folded", { hasText: /not done/ }) }).first();
+    await withWork.locator(".card-head").click();
     await panel(page).waitFor();
     expect(await panel(page).locator(".bp-add, input.bp-box").count()).toBe(0);
     await panel(page).getByText("A past day: tick what got done, or move what didn't to today.").waitFor();

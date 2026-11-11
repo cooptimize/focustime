@@ -170,15 +170,18 @@ describe("Plan the day actions", () => {
     expect(back).toMatchObject({ pick: { date: "2026-11-04" }, note: null });
   });
 
-  it("AS-2: a move into the past or into a half of today that has ended is refused; nothing moves", async () => {
+  it("AS-2: a move into the past is refused; nothing moves. QT-1: a half of today that has ended takes it", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
     const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: "2026-11-04", half: "PM", clientKey: "Adatum", itemId: 101 });
     expect((await t.fail("pick.move", { id: pick.id, date: "2026-10-30", half: "AM" })).status).toBe(409);
-    t.at("2026-11-03T22:00:00Z"); // Tuesday 5 PM in New York: both halves of Tuesday are over
-    const r = await t.fail("pick.move", { id: pick.id, date: "2026-11-03", half: "PM" });
-    expect(r).toMatchObject({ status: 409, error: "This afternoon has already ended. Move it to a later block" });
     expect((await t.plan.getPick(pick.id))!).toMatchObject({ date: "2026-11-04", half: "PM", status: "planned" });
+    t.at("2026-11-03T22:00:00Z"); // Tuesday 5 PM in New York: both halves of Tuesday are over
+    const moved = await t.run<{ pick: Pick }>("pick.move", { id: pick.id, date: "2026-11-03", half: "PM" });
+    expect(moved.pick).toMatchObject({ date: "2026-11-03", half: "PM", status: "planned" });
+    // And a new one added to this morning, after it ended.
+    const added = await t.run<{ pick: Pick }>("pick.add", { date: "2026-11-03", half: "AM", clientKey: "Adatum", intention: "Wrote the cutover notes" });
+    expect(added.pick).toMatchObject({ date: "2026-11-03", half: "AM" });
   });
 
   it("moving a pick to Friday never asks: it is catch-up work on the overflow day (step 13.6, Q78, D238)", async () => {
@@ -657,6 +660,21 @@ describe("UI-B: unfinished picks suggested in the next block", () => {
     expect((await t.plan.timeboxesBetween(D, D)).filter((x) => x.pickId === a.pick.id && !x.removedAt)).toEqual([]);
     expect(await t.fail("pick.take_off", { id: b.pick.id })).toMatchObject({ status: 409, error: expect.stringMatching(/timebox is on Outlook/) });
     expect((await t.plan.getPick(b.pick.id))?.status).toBe("planned");
+  });
+
+  it("QT-1 (WD-2 review): Undo of Take off puts a local timebox back at its time", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    await t.run("planday.start", { date: D });
+    const a = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
+    await t.plan.addTimebox({ date: D, clientKey: "Adatum", pickId: a.pick.id, title: "x", start: `${D}T14:00:00Z`, end: `${D}T15:00:00Z`, outlook: false });
+    const r = await t.run<{ undo: Record<string, unknown> }>("pick.take_off", { id: a.pick.id });
+    const back = await t.run<{ pick: Pick }>("pick.put_back", { undo: r.undo });
+    const live = (await t.plan.timeboxesBetween(D, D)).filter((x) => x.pickId === back.pick.id && !x.removedAt);
+    expect(live).toHaveLength(1);
+    expect(live[0]).toMatchObject({ outlook: false });
+    expect(Temporal.Instant.from(live[0]!.start).epochMilliseconds).toBe(Temporal.Instant.from(`${D}T14:00:00Z`).epochMilliseconds);
+    expect(Temporal.Instant.from(live[0]!.end).epochMilliseconds).toBe(Temporal.Instant.from(`${D}T15:00:00Z`).epochMilliseconds);
   });
 
   it("WD-2 review: a to-do moved here from another day comes off without going back on that day; Undo restores exactly one, linked again", async () => {

@@ -12,6 +12,7 @@ import { DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { BreakDownButton } from "./BreakDownPanel.tsx";
 import { blockWord, removeRule, storiesUnder, toPlaceCount, toPlaceLine, toPlaceShort, type ToPlace as ToPlaceCounts } from "../plan/addwork.ts";
+import { watchTip } from "../plan/blockstatus.ts";
 import { assignedList, draftParents, hoverWords, looseDrafts, meetingsWords, moreCount, moreList, moveHighlight, onBlock, sizeHover, panelClient, panelMode, panelTitle, panelWhen, placedMap, riskLine, searchPanel, takeOffRule, type AssignedGroup, type ListSort, type MoreGroup, type NewRow, type PanelMode, type Result } from "../plan/blockpanel.ts";
 import { FoldLine } from "./plan/FoldLine.tsx";
 import { planMinutes } from "../plan/fit.ts";
@@ -19,7 +20,7 @@ import { freeMinutes } from "../week/free.ts";
 import { weekList } from "../plan/weeklist.ts";
 import { dueOrder } from "../plan/due.ts";
 import { rankRisks } from "../week/risks.ts";
-import { addKey, type Dragged } from "../plan/weekdrop.ts";
+import { addKey, dropCheck, type Dragged } from "../plan/weekdrop.ts";
 import { isPickable } from "../plan/rules.ts";
 import type { DraftStory, PlanDayState, Pick } from "../plan/types.ts";
 import type { Half, IsoDate, Week, WorkItem } from "../week/types.ts";
@@ -205,6 +206,15 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
     async (d: Dragged) => {
       const b = dnd?.blocks.find((x) => x.date === at.date && x.half === at.half);
       if (dnd && b) return dnd.place(d, b);
+      // QT-1 (WD-2 review): a block Week's drag doesn't list (a catch-up afternoon, Day's own panel) gets the same drop
+      // check before it adds: another client's block, a day before today or a to-do already here are refused in words.
+      if (slot) {
+        const c = dropCheck({ slot, ptoDay: !!day?.pto, catchUp: whole && !day?.pto, now, today, picks: blockPicks, sizes: pv.sizes, timeboxes: pv.timeboxes, dragged: d });
+        if (!c.ok) {
+          say(`Can't add it to ${blockWord(at.date, at.half, whole)}: ${c.why}`);
+          return;
+        }
+      }
       try {
         await planAction("pick.add", { date: at.date, half: at.half, clientKey: d.clientKey, ...(d.add ?? { itemId: d.itemId }), ...(d.size ? { size: d.size } : {}) });
         onChanged();
@@ -212,7 +222,7 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
         say(errText(e));
       }
     },
-    [dnd, at.date, at.half, onChanged],
+    [dnd, at.date, at.half, onChanged, slot, day, whole, now, today, blockPicks, pv.sizes, pv.timeboxes],
   );
   const ctx: Ctx | null = clientKey
     ? {
@@ -251,6 +261,8 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
     return { title, items: [...callItems(env, clientKey), timebox, ...(mode === "add" ? [order] : [])] };
   });
   const risk = slot && mode === "add" ? riskLine(rankRisks(slot.risks)) : null;
+  // QT-1: Watch alone has no status line; its reasons are on hover over the time line.
+  const watch = slot && mode === "add" && !risk ? watchTip(slot.risks) : null;
   const [riskOpen, setRiskOpen] = useState(false);
   useEffect(() => setRiskOpen(false), [at.date, at.half]);
 
@@ -279,7 +291,7 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
             {clientKey && !day?.pto && <span className="swatch" aria-hidden="true" />}
             {title}
           </h2>
-          {when && <p className={`bp-when${when.over ? " over" : ""}`}>{when.text}</p>}
+          {when && <p className="bp-when" title={watch ?? undefined}>{when.text}</p>}
           {/* One status line at most: the reasons show on hover and open in place on a click. */}
           {risk && (
             <button type="button" className={`bp-risk ${risk.severity}`} aria-expanded={riskOpen} title={risk.reasons.join("\n")} onClick={() => setRiskOpen((o) => !o)}>

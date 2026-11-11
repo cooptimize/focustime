@@ -34,15 +34,12 @@ export function defaultAddBlock(blocks: readonly BlockAt[], now: string, asked?:
 }
 
 /**
- * The block's room under the panel's title: "1h 45m free", "Full" within the grace, "a little over" under 45
- * minutes, else "about 2h over". `planned` counts unsized work at the person's unsized size (SZ-1, 1h by default).
+ * The block's room under the panel's title: "1h 45m free", or "No free time" once what's on it takes it all (QT-1:
+ * never "Full" or "over"; the board is a punch list). `planned` counts unsized work at the person's unsized size.
  */
-export function roomWords(freeMinutes: number, plannedMinutes: number): { text: string; over: boolean } {
+export function roomWords(freeMinutes: number, plannedMinutes: number): { text: string; over: false } {
   const left = freeMinutes - plannedMinutes;
-  if (left > OVER_GRACE) return { text: `${hm(left)} free`, over: false };
-  if (left >= -OVER_GRACE) return { text: freeMinutes > 0 ? "Full" : "No free time", over: false };
-  const by = -left;
-  return { text: by < 45 ? "a little over" : `about ${Math.round(by / 60)}h over`, over: true };
+  return { text: left > OVER_GRACE ? `${hm(left)} free` : "No free time", over: false };
 }
 
 /** What waits to be placed (the notice line and the panel's To place section). */
@@ -159,31 +156,3 @@ export function removeRule(f: { clientKey: string; itemId: number; slots: readon
   return where.length ? { ok: false, where } : { ok: true };
 }
 
-/**
- * A client chip in Week's header: the room left, "Northwind · 2h free" or "Northwind · 6h over" (amber only when over,
- * past the grace), with the count of what isn't ready. `plannedMinutes` is the one total, musts plus nice to have, used
- * by the chip and its popover alike (`detail`: "9h planned · 5h free in its blocks").
- */
-export function clientChip(c: { name: string; plannedMinutes: number; freeMinutes: number; notReady: number }): { text: string; room: string; detail: string; over: boolean; badge: number | null } {
-  const h = (m: number) => `${Math.round(m / 60)}h`;
-  const left = c.freeMinutes - c.plannedMinutes;
-  const over = -left > OVER_GRACE;
-  const room = over ? `${Math.max(1, Math.round(-left / 60))}h over` : Math.round(left / 60) >= 1 ? `${Math.round(left / 60)}h free` : "Full";
-  return { text: `${c.name} · ${room}`, room, detail: `${h(c.plannedMinutes)} planned · ${h(c.freeMinutes)} free in its blocks`, over, badge: c.notReady > 0 ? c.notReady : null };
-}
-
-/**
- * WD-1 review: how many of Week's client chips fit `room` px in the header row: all of them, or as many as still leave
- * room for the "+N" chip that opens the rest. Chips never clip.
- */
-export function chipsThatFit(widths: readonly number[], room: number, gap: number, moreWidth: number): number {
-  const total = widths.reduce((s, w, i) => s + w + (i ? gap : 0), 0);
-  if (total <= room) return widths.length;
-  let used = 0;
-  for (let i = 0; i < widths.length; i++) {
-    const next = used + (i ? gap : 0) + widths[i]!;
-    if (next + gap + moreWidth > room) return i;
-    used = next;
-  }
-  return widths.length;
-}

@@ -1344,7 +1344,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .follow-up-what { color: var(--text); }
 .follow-up-when { font-size: var(--fs-2); flex-basis: 100%; }
 /* IB-1: Close the loop and Snooze open on their own full-width row under the promise, whatever the container's width. */
-.follow-up.has-form, .detail-panel .follow-up.has-form { flex-wrap: wrap; }
+.follow-up.has-form { flex-wrap: wrap; }
 .follow-up-form-row { flex-basis: 100%; min-width: 0; }
 .follow-up-snooze { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
 /* IB-1: the shared Close the loop (ui/CloseLoop.tsx): channels wrap (four across, two by two when narrow), the note on
@@ -2875,6 +2875,9 @@ button.att-chip { cursor: pointer; }
 .pick-row.dens-week:hover .pr-hover, .pick-row.dens-week:focus-within .pr-hover, .pick-row.dens-week .pr-hover:has([aria-expanded="true"]) { display: inline-flex; }
 @media (hover: none) { .pick-row.dens-week .pr-hover { display: inline-flex; } }
 .card-done { font-size: var(--fs-2); color: var(--text-faint); padding-left: 4px; }
+/* QT-1: a day before today folds to its header and one line of counts; the panel holds the rest. */
+.half.folded { flex-grow: 0; min-height: 0; opacity: 0.85; }
+.half.folded .card-folded { font-size: var(--fs-2); color: var(--text-muted); padding: 0 4px 2px; }
 .half .add-work { font-size: var(--fs-2); font-weight: 500; }
 .card-feats { margin-top: auto; align-self: flex-start; border: 0; background: none; padding: 2px 0 0; font: inherit; font-size: var(--fs-2); color: var(--text-muted); cursor: pointer; text-align: left; }
 .card-feats:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
@@ -2917,13 +2920,7 @@ button.att-chip { cursor: pointer; }
 .cl-must .swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--c); }
 .cl-must.tight { color: var(--watch); }
 
-/* ---------- U3: the shared detail panel (Week and Today) ---------- */
-.detail-panel {
-  position: fixed; top: 57px; right: 0; bottom: 32px; width: var(--dp-w); z-index: 20;
-  display: flex; flex-direction: column; box-sizing: border-box;
-  background: var(--surface); border-left: 1px solid var(--border-strong); box-shadow: var(--shadow-panel);
-  font-size: var(--fs-3);
-}
+/* ---------- The side panel's width (U3, kept for the block panel) ---------- */
 /* UI-8: the panel's width, and the Week grid keeps clear of it while it is open, so Friday (the last column) is never
    under the panel and stays a drop target. */
 :root { --dp-w: 440px; }
@@ -2935,11 +2932,6 @@ button.att-chip { cursor: pointer; }
    way (the panel names the day; today's weekday keeps its color). */
 .grid.with-panel .day-head { min-width: 0; overflow: hidden; }
 @media (max-width: 1599px) { .grid.with-panel.medium .day-head .date-long { display: none; } .grid.with-panel.medium .day-head .date-short { display: inline; } }
-.dp-head { display: flex; align-items: flex-start; gap: 8px; padding: 14px 16px 10px 18px; border-bottom: 1px solid var(--border); }
-.dp-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.dp-title h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-4); font-weight: 600; }
-.dp-title h2 .swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
-.dp-when { font-size: var(--fs-2); color: var(--text-muted); }
 /* UI-3: the one close control for dialogs and panels: a quiet × with a 44 px tap target. Negative margins keep the
    header's height; the icon follows the text size. */
 .x-close { flex: none; align-self: center; display: inline-grid; place-items: center; width: 44px; height: 44px; margin: -10px -10px -10px auto; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--text-muted); cursor: pointer; }
@@ -2947,41 +2939,7 @@ button.att-chip { cursor: pointer; }
 .x-close:hover:not(:disabled) { background: var(--raised); color: var(--text); }
 .x-close:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; }
 .x-close:disabled { opacity: 0.45; cursor: default; }
-.dp-body { flex: 1; overflow: auto; padding: 10px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
-.dp-section { display: flex; flex-direction: column; gap: 6px; }
-.dp-section h3 { margin: 0; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
-.dp-src { text-transform: none; letter-spacing: 0; font-weight: 400; }
-.dp-line { margin: 0; color: var(--text-muted); font-size: var(--fs-3); }
-.dp-empty { margin: 0; color: var(--text-faint); font-size: var(--fs-2); }
-.dp-risks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; color: var(--text-muted); }
-.dp-risks .status-pill { font-size: var(--fs-2); font-weight: 500; padding: 0 8px; margin-right: 4px; }
-.dp-picks, .dp-fus, .dp-feats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.dp-picks .pick-row { font-size: var(--fs-3); }
-.dp-picks .pick-row .pr-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dp-picks .pick-row .size-chip { font-size: var(--fs-1); font-weight: 500; }
-.dp-picks .pt-add, .dp-picks .pt-time { font-size: var(--fs-2); }
 .dp-start { font-size: var(--fs-2); font-weight: 500; }
-.detail-panel .dp-focused { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in oklab, var(--accent) 8%, transparent); }
-.dp-feats li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 4px 0; border-bottom: 1px solid var(--border); }
-.dp-feats .feat-link { font-weight: 500; color: var(--text); }
-.dp-count { font-size: var(--fs-2); color: var(--text-muted); }
-.dp-needs { display: inline-flex; gap: 10px; font-size: var(--fs-2); }
-.dp-needs .tw-needs { color: var(--watch); }
-.dp-needs .link-btn { font-size: var(--fs-2); }
-.dp-note { font-size: var(--fs-2); }
-.detail-panel .pd-agenda ol { margin: 0; }
-.detail-panel .work-list { margin: 0; padding: 0; font-size: var(--fs-3); }
-.detail-panel .wi-id { color: var(--text-faint); font-size: var(--fs-2); margin-right: 6px; }
-.detail-panel .wi-state { font-size: var(--fs-2); color: var(--text-muted); }
-.detail-panel .follow-up { font-size: var(--fs-3); }
-.detail-panel .work-list li { padding: 2px 0; }
-.detail-panel .work-list .wi-link { display: flex; align-items: baseline; gap: 8px; min-width: 0; color: var(--text); text-decoration: none; }
-.detail-panel .work-list .wi-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.detail-panel .work-list .wi-link:hover .wi-title { text-decoration: underline; }
-.detail-panel .follow-up { padding: 6px 10px; gap: 8px; flex-wrap: nowrap; }
-.detail-panel .follow-up-main { gap: 2px 8px; }
-.detail-panel .follow-up-what { flex-basis: 100%; font-size: var(--fs-3); }
-.detail-panel .follow-up .mini, .detail-panel .follow-up button { font-size: var(--fs-2); }
 
 /* ---------- U3: the type scale on Today and Week (D385, style guide section 4) ----------
    Four sizes (--fs-1 11, --fs-2 12, --fs-3 13, --fs-4 15) and three weights (400, 500, 600). Uppercase only for
@@ -3104,11 +3062,6 @@ button.pw-kids:hover, button.pw-kids:focus-visible { text-decoration: underline;
 .planweek .co-notice, .planweek .set-problem { font-size: var(--fs-3); }
 .planweek .pw-brief h3 { font-size: var(--fs-3); font-weight: 600; }
 /* Plan the week in the detail panel: health flags, a client's blocks, a feature's stories. */
-.detail-panel .pw-ready { gap: 6px; }
-.detail-panel .pw-flag { grid-template-columns: minmax(0, 1fr); padding: 8px 10px; font-size: var(--fs-3); gap: 4px; }
-.detail-panel .pw-kind { font-size: var(--fs-2); font-weight: 600; }
-.detail-panel .pw-flag-what { white-space: normal; }
-.detail-panel .pw-acts .mini { font-size: var(--fs-2); }
 .pw-pblocks, .pw-pstories, .pw-pdone { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: var(--fs-3); }
 .pw-pblocks li { display: flex; justify-content: space-between; gap: 10px; }
 .pw-pblocks li.off { color: var(--text-muted); }
@@ -3131,7 +3084,7 @@ button.pw-kids:hover, button.pw-kids:focus-visible { text-decoration: underline;
 .pd2-note, .pd2-empty { font-size: var(--fs-2); }
 .pd2-trim-hint { font-size: var(--fs-2); }
 .pd2 .pd-agenda ol { font-size: var(--fs-2); }
-.pd2 .ag-free .ag-title, .detail-panel .ag-free .ag-title { font-weight: 500; }
+.pd2 .ag-free .ag-title { font-weight: 500; }
 .pd2 .ag-timebox .ag-title, .pd2 .pd-agenda li.when-now .ag-title, .pd2 .pd-agenda li.when-next .ag-title { font-weight: 500; }
 /* Plan the day's rows: handle, title, badge, size chip, + time and ⋯ on hover. */
 /* Right pane. */
@@ -3461,7 +3414,6 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
    same sticky card, its own scroll. The header and the whole week grid stay in view; nothing is covered. */
 .pl-panes.with-panel { grid-template-columns: minmax(0, 1fr) var(--pl-right); }
 .pl-panel { position: sticky; top: 0; align-self: stretch; min-width: 0; min-height: 0; margin-bottom: 16px; display: flex; }
-.pl-panel > .detail-panel { position: static; inset: auto; z-index: auto; flex: 1; width: auto; min-height: 0; border: 1px solid var(--border); border-radius: 12px; box-shadow: none; overflow: hidden; }
 @media (max-width: 1199px) {
   .pl-panes.with-panel { grid-template-columns: minmax(0, 1fr); }
   .pl-panel { position: static; }
@@ -3660,9 +3612,6 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .card-events .ce-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* Panels and sheets full screen, with Back. */
-  .detail-panel { inset: 0; top: 0; bottom: 0; width: 100%; border-left: 0; z-index: 40; padding-bottom: env(safe-area-inset-bottom); }
-  .dp-head { align-items: center; padding: calc(8px + env(safe-area-inset-top)) 12px 8px 8px; }
-  .dp-back { border: 0; background: none; color: var(--accent); font: 500 var(--fs-3)/1 var(--font-ui); padding: 0 8px; min-height: var(--tap); cursor: pointer; flex: none; }
   .cap-backdrop { align-items: stretch; padding: 0; }
   .cap-dialog { width: 100%; max-width: none; height: 100dvh; max-height: none; align-content: start; margin: 0; border-radius: 0; border: 0; box-sizing: border-box; overflow-y: auto; padding: calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
   .cap-dialog-head { flex-wrap: wrap; }
@@ -3768,7 +3717,6 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .bd-panel { height: 100%; }
   .bd-foot { padding-bottom: 12px; }
   .cap-dialog { height: 100%; padding-bottom: 16px; }
-  .detail-panel { bottom: var(--bb-h); padding-bottom: 0; }
   .app.phone .closeout-panel {
     top: 0; left: 0; right: 0; bottom: var(--bb-h); width: auto; z-index: 50; border-left: 0; box-shadow: none;
     padding: calc(12px + env(safe-area-inset-top)) 16px 16px; overscroll-behavior: contain;
@@ -6369,7 +6317,7 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 :root { --aw-w: 380px; }
 .week-head.wd1-head { flex-wrap: nowrap; gap: 10px; padding-top: 8px; padding-bottom: 4px; }
 .week-head.wd1-head .ph-title { flex-wrap: nowrap; min-width: 0; }
-.week-head.wd1-head .ph-title > :not(.client-chips) { flex: none; }
+.week-head.wd1-head .ph-title > * { flex: none; }
 .week-head.wd1-head h2 { white-space: nowrap; }
 /* The phone (and the largest text on it): the header wraps instead of pushing the page sideways. */
 .app.phone .week-head.wd1-head, .app.phone .week-head.wd1-head .ph-title { flex-wrap: wrap; }
@@ -6382,25 +6330,6 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .to-place-line, .next-empty-line { margin: 0 0 6px; padding: 3px 10px; font-size: var(--fs-2); color: var(--text-muted); }
 .to-place-line .link-btn, .next-empty-line .link-btn { font-size: var(--fs-2); }
 
-.client-chips { display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; flex: 1 1 auto; min-width: 0; overflow-x: auto; padding: 2px 0; }
-/* Firefox has no ::-webkit-scrollbar: hide the chips row's bar there too (only inside this fallback, see textbox.test.ts). */
-@supports not selector(::-webkit-scrollbar) {
-  .client-chips { scrollbar-width: none; }
-}
-.client-chips::-webkit-scrollbar { display: none; }
-.cc-wrap { position: relative; }
-.cc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-2); white-space: nowrap; cursor: pointer; }
-.cc-chip .swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--c); }
-.cc-chip.over { color: var(--watch); border-color: color-mix(in oklab, var(--watch) 45%, var(--border)); }
-.cc-badge { min-width: 16px; padding: 0 4px; border-radius: 99px; background: color-mix(in oklab, var(--watch) 20%, var(--surface)); color: var(--text); font-size: var(--fs-1); font-weight: 600; text-align: center; }
-.cc-pop { position: fixed; z-index: 40; width: 300px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-panel); font-size: var(--fs-3); }
-.cc-pop h3 { margin: 0 0 4px; font-size: var(--fs-3); font-weight: 600; }
-.cc-pop p { margin: 2px 0; }
-.cc-over { color: var(--watch); }
-.cc-ready { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 4px; }
-.cc-ready li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
-.cc-ready-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.cc-keep { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--text-muted); font-size: var(--fs-2); }
 
 /* The panel: on the right like the detail panel, narrower; the grid keeps clear of it. */
 /* The grid keeps .app > .grid's height rule inside the wrapper (it holds the grid and the panel). */
@@ -6491,17 +6420,14 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .block-panel a[data-card], .cc-pop a[data-card], .half a[data-card],
 .block-panel .draft-title, .half .draft-title { color: inherit; text-decoration: none; font-weight: inherit; text-align: left; }
 .block-panel a[data-card]:hover, .block-panel a[data-card]:focus-visible,
-.cc-pop a[data-card]:hover, .cc-pop a[data-card]:focus-visible,
 .half a[data-card]:hover, .half a[data-card]:focus-visible,
 .block-panel .draft-title:hover, .block-panel .draft-title:focus-visible,
 .half .draft-title:hover, .half .draft-title:focus-visible { text-decoration: underline; }
 .placed-feature.pf-not-ready .pf-title { color: var(--text); }
 /* WD-1 review: the chips never clip: the ones that don't fit go under "+N". The hidden copy measures them. */
-.client-chips { position: relative; overflow: visible; }
 .cc-measure { position: absolute; left: 0; top: 0; visibility: hidden; pointer-events: none; display: flex; gap: 6px; white-space: nowrap; height: 0; overflow: hidden; }
 .cc-more { font-weight: 600; }
 .cc-rest { width: auto; max-width: 260px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-.cc-keep-btn { min-width: 5.5em; justify-content: space-between; }
 .week-head.wd1-head .ph-title { flex: 1 1 auto; }
 .week-head.wd1-head .client-chips { flex: 1 1 0; }
 .date-short { display: none; }
@@ -6546,7 +6472,6 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .bp-title h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--fs-4); font-weight: 600; overflow-wrap: anywhere; }
 .bp-title h2 .swatch { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--c, var(--client-none)); }
 .bp-when { margin: 2px 0 0; color: var(--text-muted); font-size: var(--fs-2); }
-.bp-when.over { color: var(--watch); }
 .block-panel .aw-scroll { display: flex; flex-direction: column; gap: 2px; }
 .bp-sec { margin-top: 10px; }
 .bp-sec > .pl-label { margin: 0 0 4px; }

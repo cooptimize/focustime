@@ -153,20 +153,17 @@ describe.skipIf(!CHROMIUM)("WK-2: the Board's Timeline toggle and per-column tie
     expect((await call(page, "ui.set_show_timelines", { show: false })).ok).toBe(true);
     await board(page);
     await expect.poll(() => hidden(page)).toBe(true);
-    // Full width: the card's list fills the card (no rail's margin).
-    const widths = await page.locator(`main.grid ${MON_AM}`).evaluate((card) => {
+    // Full width: the card's list fills the card (no rail's margin). QT-1: Monday is past by Friday, so it is folded
+    // to one line; Friday's block, under way, is the full card.
+    const widths = await page.locator(`main.grid ${FRI_AM}`).evaluate((card) => {
       const body = card.querySelector(".card-body")!.getBoundingClientRect();
       return { card: card.getBoundingClientRect().width, body: body.width };
     });
     expect(widths.body).toBeGreaterThan(widths.card - 40);
+    await expect(page.locator(`main.grid ${MON_AM}.folded .card-folded`).count()).resolves.toBe(1);
     // The now line on Friday's block under way.
     await expect(page.locator(`main.grid ${FRI_AM} .now-line`).count()).resolves.toBe(1);
     await expect(page.locator(`main.grid ${FRI_AM} .now-line .nl-pill`).textContent()).resolves.toBe("10:00");
-    // WD-1: meetings are one summary line ("2 meetings · 1h · 2h free") that opens to the lines, each with its time.
-    await page.locator(`main.grid ${MON_AM} .card-agenda-fold`).click();
-    const lines = page.locator(`main.grid ${MON_AM} .card-events li`);
-    await expect(lines.count()).resolves.toBeGreaterThan(0);
-    await expect(lines.first().locator(".ce-time").textContent()).resolves.toMatch(/^\d{1,2}:\d\d–\d{1,2}:\d\d$/);
     // Drag a story from the block panel onto Friday (today), as with the timeline shown. WD-2: Monday is past by
     // Friday (its panel has no Add list), so the panel is opened on Friday's block, with Cooptimize chosen.
     await page.locator(`main.grid ${FRI_AM} .card-client`).first().click();
