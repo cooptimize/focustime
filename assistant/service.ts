@@ -24,7 +24,8 @@ import { DEPLOYMENT, windowProblem, windowText } from "../plan/deploy.ts";
 import { matchNamed, namedInRequest, type ItemGroup } from "../plan/deploy-items.ts";
 import type { ActionResponse, AheadLoad, DevOpsPreview, DevOpsResult, DoneOffer, ItemDoneOffer, UndoOffer, WrapOffer } from "../actions/types.ts";
 import { dropCheck } from "../plan/weekdrop.ts";
-import { placeNote } from "../plan/days.ts";
+import { overNote, placeNote } from "../plan/days.ts";
+import { hoursText } from "../plan/estimate.ts";
 import type { InboxListData, InboxView } from "../plan/inbox-items.ts";
 import { resolve, type MatchedPick, type Resolved } from "./resolve.ts";
 import { quickOf, type Quick } from "./quick.ts";
@@ -1088,7 +1089,8 @@ export function createAssistant(env: AssistantEnv) {
               stays.push(`"${p.title}" stays: ${words[c.why] ?? c.why.replace(/^(.+)'s block$/, "that's $1's block")}`);
               continue;
             }
-            note = / free$/.test(c.text) ? null : c.text;
+            // QT-1: Week's tip says only what's free; the assistant's preview keeps its over note (not changed in QT-1).
+            note = c.shortBy ? overNote(toDate, half, hoursText(c.shortBy)) : / free( left)?$/.test(c.text) ? null : c.text;
           } else {
             // A day the week doesn't show yet (a weekend with nothing on it): the same day rule pick.move applies.
             if (toDate < today()) {

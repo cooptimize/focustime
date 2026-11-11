@@ -57,12 +57,11 @@ export function panelTitle(clientName: string | null, date: IsoDate, half: Half,
   return `${clientName ?? o.open ?? "Open"} · ${blockWord(date, half, !!o.wholeDay)}`;
 }
 
-/** The header's second line: "8:00 to 12:30 · 1h free", "… · a little over"; no room on a past day or a day off. */
-export function panelWhen(range: string, mode: PanelMode, freeMinutes: number, plannedMinutes: number): { text: string; over: boolean } {
+/** The header's second line: "8:00 to 12:30 · 1h free", "… · No free time" (QT-1: never over); no room on a past day or a day off. */
+export function panelWhen(range: string, mode: PanelMode, freeMinutes: number, plannedMinutes: number): { text: string } {
   const span = range.replace("–", " to ");
-  if (mode !== "add") return { text: mode === "past" ? `${span} · past` : span, over: false };
-  const room = roomWords(freeMinutes, plannedMinutes);
-  return { text: `${span} · ${room.text}`, over: room.over };
+  if (mode !== "add") return { text: mode === "past" ? `${span} · past` : span };
+  return { text: `${span} · ${roomWords(freeMinutes, plannedMinutes).text}` };
 }
 
 /** "2 meetings · 1h 15m", or null when the block has none (events shown as free don't count). */
@@ -256,12 +255,14 @@ export function sizeHover(
   return sizeChipText(todo?.size ?? listed?.size ?? null, o.scale);
 }
 
-/** The header's one status line: "At risk · 2 reasons" (the worst state and how many reasons), or null with none. */
-export function riskLine(risks: readonly { severity: string; reason: string }[]): { text: string; severity: "at_risk" | "watch"; reasons: string[] } | null {
-  if (!risks.length) return null;
-  const severity = risks.some((r) => r.severity === "at_risk") ? "at_risk" : "watch";
+/**
+ * The header's one status line: "At risk · 2 reasons", only when a calendar rule puts the block at risk (QT-1). Its
+ * reasons list the at-risk ones first, then any Watch ones. Watch alone has no line (its reasons are on hover).
+ */
+export function riskLine(risks: readonly { severity: string; reason: string }[]): { text: string; severity: "at_risk"; reasons: string[] } | null {
+  if (!risks.some((r) => r.severity === "at_risk")) return null;
   const ordered = [...risks].sort((a, b) => Number(b.severity === "at_risk") - Number(a.severity === "at_risk"));
-  return { severity, text: `${severity === "at_risk" ? "At risk" : "Watch"} · ${risks.length} ${risks.length === 1 ? "reason" : "reasons"}`, reasons: ordered.map((r) => r.reason) };
+  return { severity: "at_risk", text: `At risk · ${risks.length} ${risks.length === 1 ? "reason" : "reasons"}`, reasons: ordered.map((r) => r.reason) };
 }
 
 /** One search result: a story (with its parent's title when it has one), a draft or a promise of this client. */

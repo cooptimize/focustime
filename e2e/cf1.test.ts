@@ -87,13 +87,6 @@ describe.skipIf(!CHROMIUM)("CF-1: no confirm, no musts (browser, demo mode)", ()
     await page.locator(".week-head").first().waitFor({ timeout: 30_000 });
     await page.waitForTimeout(500);
     await look("Week");
-    const chip = page.locator(".client-chips button.cc-chip:not(.cc-more)").first();
-    if (await chip.count()) {
-      await chip.click();
-      await page.locator(".cc-pop").first().waitFor({ timeout: 5000 });
-      await look("chip popover");
-      await page.keyboard.press("Escape");
-    }
     await page.locator('[data-drop="2026-11-02:PM"] .add-work.add-row').first().click();
     await page.locator("aside.block-panel").waitFor();
     await page.waitForTimeout(500);

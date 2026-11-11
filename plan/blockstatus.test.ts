@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { blockStatus } from "./blockstatus.ts";
+import { blockStatus, watchTip } from "./blockstatus.ts";
 import type { Risk } from "../week/types.ts";
 
-const risk = (severity: Risk["severity"], reason = "Out of office") => ({ severity, reason, rule: "ooo" }) as unknown as Risk;
+const risk = (severity: Risk["severity"], reason = "Out of office") => ({ severity, reason, rule: "out_of_office" }) as unknown as Risk;
 
-describe("one status per block", () => {
-  it("at risk wins, then the fit in calm words (step 15)", () => {
-    expect(blockStatus({ kind: "over", by: 80 }, [risk("at_risk")])).toMatchObject({ kind: "at_risk", label: "At risk", detail: "Out of office" });
-    expect(blockStatus({ kind: "over", by: 80 }, [risk("watch")])).toMatchObject({ kind: "too_much", label: "About an hour over" });
-    expect(blockStatus({ kind: "tight", spare: 20 }, [])).toMatchObject({ kind: "tight", label: "Fits" });
-    expect(blockStatus({ kind: "fits", spare: 90 }, [risk("watch")])).toMatchObject({ kind: "fits", label: "Room for about 2 hours more", detail: null });
-    expect(blockStatus({ kind: "over", by: 5 }, [])).toMatchObject({ label: "Fits" });
-    expect(blockStatus(null, [])).toMatchObject({ kind: "none", label: "" });
+describe("one status per block (QT-1: the calendar only)", () => {
+  it("is At risk only when a calendar rule says so", () => {
+    expect(blockStatus([risk("at_risk")])).toMatchObject({ kind: "at_risk", label: "At risk", detail: "Out of office" });
+    expect(blockStatus([risk("watch"), risk("at_risk", "Dentist 12:00")])).toMatchObject({ kind: "at_risk", detail: "Dentist 12:00" });
+  });
+  it("says nothing for Watch alone, or for how much is planned", () => {
+    expect(blockStatus([risk("watch")])).toMatchObject({ kind: "none", label: "" });
+    expect(blockStatus([])).toMatchObject({ kind: "none", label: "" });
+  });
+  it("keeps Watch reasons for a hover", () => {
+    expect(watchTip([risk("watch", "All-day busy event: Offsite"), risk("at_risk", "x")])).toBe("All-day busy event: Offsite");
+    expect(watchTip([risk("at_risk")])).toBeNull();
   });
 });

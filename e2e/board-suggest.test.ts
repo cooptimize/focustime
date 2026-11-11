@@ -34,18 +34,15 @@ describe.skipIf(!CHROMIUM)("Unfinished picks suggested in the next block (UI-B)"
 
     const card = (title: string) => page.locator(".suggested-card", { hasText: title });
     await expect(card("Filter orders by date range").textContent()).resolves.toContain("From Mon");
-    // The original block shows it dimmed, not as a second unchecked item.
-    const origin = (title: string) => page.locator(".pick-origin", { hasText: title });
-    await expect(origin("Filter orders by date range").textContent()).resolves.toContain("→ suggested Wed PM");
-    await expect(origin("Validate date of birth").textContent()).resolves.toContain("→ in To place");
+    // QT-1: the original blocks are on past days, folded to one line; the to-do is not a second unchecked item.
     await expect(page.locator(".half .checklist .pr-title", { hasText: "Filter orders by date range" }).count()).resolves.toBe(0);
 
-    // Keep here: a normal pick on Wednesday afternoon; the original reads "→ moved to Wed PM". Undo puts it back.
+    // Keep here: a normal pick on Wednesday afternoon; the original (folded) counts it as moved on. Undo puts it back.
     await card("Filter orders by date range").locator(".sc-open").click();
     await page.getByRole("menuitem", { name: /Keep here, Wed PM/ }).click();
     await expect.poll(() => card("Filter orders by date range").count()).toBe(0);
-    await expect.poll(() => origin("Filter orders by date range").textContent()).toContain("→ moved to Wed PM");
     await expect.poll(() => page.locator(".half .checklist .pr-title", { hasText: "Filter orders by date range" }).count()).toBe(1);
+    await expect.poll(() => page.locator(".half.folded .card-folded", { hasText: /moved on/ }).count()).toBeGreaterThan(0);
     await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
     await expect.poll(() => card("Filter orders by date range").count()).toBe(1);
 
@@ -58,7 +55,7 @@ describe.skipIf(!CHROMIUM)("Unfinished picks suggested in the next block (UI-B)"
     // Keep all keeps the suggestion.
     await summary.getByRole("button", { name: "Keep all" }).click();
     await expect.poll(() => page.locator(".suggested-card").count()).toBe(0);
-    await expect.poll(() => origin("Filter orders by date range").textContent()).toContain("→ moved to Wed PM");
+    await expect.poll(() => page.locator(".half .checklist .pr-title", { hasText: "Filter orders by date range" }).count()).toBe(1);
 
     // The now line on today's column, with the time.
     await expect(page.locator(".day.today .now-line").first().textContent()).resolves.toContain("1:30");

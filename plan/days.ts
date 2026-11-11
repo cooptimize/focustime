@@ -91,6 +91,6 @@ export function placeNote(date: IsoDate, o: { pto: boolean; hasHours: boolean })
   return `${name} has no working hours: this is flex time`;
 }
 
-/** AS-2: "Over your Wednesday PM hours by 1h", the over-capacity note (never a refusal). */
+/** AS-2: "Over your Wednesday PM hours by 1h". QT-1: only the assistant's move preview says it now; Week never does. */
 export const overNote = (date: IsoDate, half: "AM" | "PM" | "EVE", over: string) =>
   `Over your ${Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" })} ${half === "EVE" ? "evening" : half} hours by ${over}`;

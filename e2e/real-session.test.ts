@@ -79,15 +79,6 @@ describe.skipIf(!CHROMIUM)("a real session never shows demo data (no-demo-leak)"
         // Positive control: this is the fake person's live data (Dataverse's focus blocks), not an empty page.
         if (name === "Week") await expect(page.evaluate(() => document.body.innerText)).resolves.toMatch(/Adatum/);
       }
-      // A client chip's popover on Week (WD-1: it took Plan the week's client panel) when there is a chip.
-      await page.evaluate(() => (location.hash = "#/week/2026-11-02"));
-      const nameBtn = page.locator(".client-chips button.cc-chip").first();
-      if (await nameBtn.count()) {
-        await nameBtn.click();
-        await page.waitForTimeout(500);
-        for (const w of await demoWordsOn(page)) found.push(`Client panel: ${w}`);
-        await page.keyboard.press("Escape");
-      }
       // Settings > Clients.
       // HK-5: by its address. The old tab or button named Clients wasn't there, the swallowed click went on after 10 s,
       // and this scanned whatever Settings showed, never Settings > Clients.

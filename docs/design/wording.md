@@ -12,12 +12,12 @@ Step 15 (D270). Applies to every string a person sees: views, buttons, menus, hi
 
 | Tone | Use for | Examples |
 |---|---|---|
-| Neutral (muted text) | Facts and fit that is fine | "Fits", "Room for about 45m more", "2 of 3 picks done" |
-| Amber (`--watch`) | Worth a look, not a problem | "About 1h over", "Due tomorrow" |
+| Neutral (muted text) | Facts, free time | "1h 45m free", "No free time", "2 of 3 picks done" |
+| Amber (`--watch`) | Worth a look, not a problem | "Due tomorrow" (QT-1: never how much is planned on Day, Week or the panel) |
 | Orange (`--due`) | Due today | "Due today" |
 | Red (`--risk`) | Real problems only | "Overdue 2 days", "At risk", a source down, a write that failed |
 
-Fit is never red. Being over plan is a choice to make, not a failure.
+Fit is never red. QT-1: Day, Week and the block panel never say a person planned too much; they say the free time. The board is a punch list.
 
 ## Words to avoid in visible copy
 
@@ -45,6 +45,8 @@ Fit is never red. Being over plan is a choice to make, not a failure.
 | Add work (the panel's name), "Add to <client> · Tue AM" | "<client> · Tue AM": the panel is the block (WD-2) |
 | Back to today | Today (a button beside the date, WD-2) |
 | This week (Day's chips), A day ahead: its plan so far | nothing: the panel's feature list, and "+ Add" on a day ahead's blocks (WD-2) |
+| Full, a little over, about 2h over, Too much planned, Fits, Room for … more (Day, Week, the panel) | "1h 45m free", "No free time" (QT-1) |
+| Keep open for walk-ins, Plan up to (on screen) | nothing (QT-1; stored values stay) |
 | em dashes | a comma, a period or a middle dot (·) |
 
 ## Patterns
@@ -81,3 +83,12 @@ Fit is never red. Being over plan is a choice to make, not a failure.
 - **Open**: the block's ⋯ entry and the command "Open the selected block" (they answer to details and add work).
 - Still plain words, not names: "Add work to today", "Add work to your week" (Setup's last button, was "Plan your week").
 - Retired from visible copy: Details (as a name), Add work… , Add an intention, Add a work item, More from DevOps, Also this week, This week (Day's chips), A day ahead, Back to today, What's next (as a card on Day).
+
+## QT-1 words (Nov 11)
+
+- **"1h 45m free"**, **"No free time"**: a block panel's time line ("12:30 to 5:00 · 1h 45m free"). Never "Full", "a little over" or "about 2h over".
+- **"2h of 3h free"**, **"1h free"**, **"No free time left"**: the tip while dragging onto a block, neutral.
+- **At risk**: a card's one chip, only when the calendar cuts into the block. Watch has no chip; its reasons are a hover.
+- **"2 done · 1 not done"**, **"Nothing planned"**: a past day's folded card.
+- Retired from visible copy on Day, Week and the panel: Full, a little over, about N hours over, Too much planned, Fits, Room for … more, Keep open for walk-ins, Plan up to, the client chips. The midday check-in, the assistant and Ahead still use their own fit words (not changed in QT-1).
+
