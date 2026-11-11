@@ -268,3 +268,36 @@ describe("the Rules, read live (ADM-2, D604)", () => {
     expect(await s.teams.messagesBefore(FAB, "2026-12-01T00:00:00Z", 10)).toHaveLength(0);
   });
 });
+
+// ENV-1: on a test site, Refresh reads only with the sign-in of the person who pressed it, and runs no upkeep.
+describe("ENV-1: Refresh on a test site", () => {
+  it("reads with the presser's sign-in only, never the registrant's first; no upkeep", async () => {
+    const s = await setup({ now: "2026-11-04T14:00:00Z" });
+    await s.register(FAB, "fabrikam");
+    s.setNow(NIGHT);
+    s.graph.say(FAB, { createdAt: "2026-11-05T02:00:00Z", modifiedAt: "2026-11-05T02:00:00Z" });
+    let upkeeps = 0;
+    s.deps.upkeep = async () => void upkeeps++;
+    expect(await pollCycle(s.deps, { force: true, chatIds: [FAB], onlyAs: BEN, upkeep: false })).toMatchObject({ polled: 1, messages: 1 });
+    expect(await s.teams.chat(FAB)).toMatchObject({ tokenUser: BEN });
+    expect(s.logs.filter((l) => l.op === "requests_poll_token").map((l) => l.kind)).toEqual(["Ben Colleague"]);
+    expect(upkeeps).toBe(0);
+    // Production's Refresh is unchanged: the registrant's sign-in first, and upkeep after.
+    s.graph.say(FAB, { createdAt: "2026-11-05T02:10:00Z", modifiedAt: "2026-11-05T02:10:00Z" });
+    await pollCycle(s.deps, { force: true, chatIds: [FAB] });
+    expect(await s.teams.chat(FAB)).toMatchObject({ tokenUser: ANA });
+    expect(upkeeps).toBe(1);
+  });
+
+  it("a presser whose sign-in can't read the chat leaves it as it was (not marked for reconnecting)", async () => {
+    const s = await setup({ now: "2026-11-04T14:00:00Z" });
+    await s.register(FAB, "fabrikam");
+    s.setNow(IN_HOURS);
+    s.graph.say(FAB);
+    s.graph.broken.set(BEN, new AuthFailure("expired", "refresh failed"));
+    const before = await s.teams.chat(FAB);
+    expect(await pollCycle(s.deps, { force: true, chatIds: [FAB], onlyAs: BEN, upkeep: false })).toMatchObject({ polled: 0, failures: 0 });
+    expect(s.graph.reads.get(FAB)).toBeUndefined();
+    expect(await s.teams.chat(FAB)).toMatchObject({ pollState: before!.pollState, failures: before!.failures });
+  });
+});

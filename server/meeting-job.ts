@@ -15,7 +15,7 @@ import type { AiService } from "../ai/service.ts";
 import type { CaptureContext, MeetingUser } from "../actions/meeting-actions.ts";
 import { runPass } from "../actions/meeting-actions.ts";
 import type { Logger } from "../log/logger.ts";
-import { attendeeIds, graphReadable, nextCheck, occurrencesBetween, type LastRead, type MeetingSeries } from "../plan/meetings.ts";
+import { attendeeIds, graphReadable, nextCheck, occurrencesBetween, type LastRead, type MeetingSeries, type Occurrence, type CheckNowResult } from "../plan/meetings.ts";
 import { parseVtt, TranscriptError } from "../plan/transcript.ts";
 import { HttpError } from "../sources/calendar/http.ts";
 import { graphFailureOf, MeetingRefused, transcriptFor, type MeetingsClient } from "../sources/graph/meetings.ts";
@@ -101,15 +101,20 @@ export function meetingJob(d: MeetingJobDeps) {
     }
   }
 
-  async function check(series: readonly MeetingSeries[], who: ReturnType<typeof people>, now: Temporal.Instant): Promise<void> {
-    for (const occ of await d.store.dueChecks(now.toString())) {
+  /**
+   * The due looks for transcripts. ENV-1, Check now (`only`): just the given occurrences, with that one person's
+   * sign-in, once; the schedule (next check, the count) is left as it was.
+   */
+  async function check(series: readonly MeetingSeries[], who: ReturnType<typeof people>, now: Temporal.Instant, only?: { occurrences: readonly Occurrence[]; uid: string }): Promise<LastRead["kind"] | null> {
+    let last: LastRead["kind"] | null = null;
+    for (const occ of only ? only.occurrences : await d.store.dueChecks(now.toString())) {
       const s = series.find((x) => x.id === occ.seriesId);
       if (!s || !graphReadable(s)) {
-        await d.store.updateOccurrence(occ.id, { state: "needs_upload", nextCheckAt: null });
+        if (!only) await d.store.updateOccurrence(occ.id, { state: "needs_upload", nextCheckAt: null });
         continue;
       }
       if (Date.parse(occ.endAt) > now.epochMilliseconds) {
-        await d.store.updateOccurrence(occ.id, { nextCheckAt: nextCheck(occ.endAt, now.toString()) });
+        if (!only) await d.store.updateOccurrence(occ.id, { nextCheckAt: nextCheck(occ.endAt, now.toString()) });
         continue;
       }
       let outcome: LastRead["kind"] = "no_token";
@@ -117,7 +122,7 @@ export function meetingJob(d: MeetingJobDeps) {
       // MC-1c: why each person's sign-in couldn't read it; the first one tried is what Admin's line says.
       const tried: { first: { kind: "no_token" | "consent" | "missing"; by: string } | null } = { first: null };
       const note = (kind: "no_token" | "consent" | "missing", uid: string) => void (tried.first ??= { kind, by: uid });
-      for (const uid of order(s)) {
+      for (const uid of only ? [only.uid] : order(s)) {
         const p = await who(uid);
         if (!p?.graph) {
           note("no_token", uid);
@@ -165,12 +170,33 @@ export function meetingJob(d: MeetingJobDeps) {
       const first = tried.first;
       if (outcome === "no_token" && first) await d.store.updateOccurrence(occ.id, { lastRead: { kind: first.kind, by: first.by, at: now.toString() } });
       else if (outcome !== "found") await d.store.updateOccurrence(occ.id, { lastRead: { kind: outcome, by: outcome === "no_token" ? s.registrantId : by, at: now.toString() } });
-      if (outcome === "not_yet" || outcome === "no_token" || outcome === "busy") {
+      last = first && outcome === "no_token" ? first.kind : outcome;
+      if (!only && (outcome === "not_yet" || outcome === "no_token" || outcome === "busy")) {
         const next = nextCheck(occ.endAt, now.toString());
         await d.store.updateOccurrence(occ.id, next ? { state: "waiting", nextCheckAt: next, checks: occ.checks + 1 } : { state: "needs_upload", nextCheckAt: null, checks: occ.checks + 1 });
       }
-      d.log({ source: "plan", op: "meeting_check", kind: outcome });
+      d.log({ source: "plan", op: only ? "meeting_check_now" : "meeting_check", kind: outcome });
     }
+    return last;
+  }
+
+  /**
+   * ENV-1: Check now on one registered call (Admin › Clients › <client> › Meetings): lays out its recent occurrences
+   * and looks once for the latest ended one's transcript, only with the sign-in of the person who pressed it (the AI
+   * pass then runs under their switches, as on the schedule). Nothing is scheduled; works the same in production.
+   */
+  async function checkNow(seriesId: number, uid: string): Promise<CheckNowResult> {
+    const now = d.now();
+    const s = (await d.store.allSeries()).find((x) => x.id === seriesId);
+    if (!s) return "not_found";
+    if (!graphReadable(s)) return "upload";
+    const mine = (u: string) => (u.toLowerCase() === uid.toLowerCase() ? d.person(u).catch(() => null) : Promise.resolve(null));
+    await layout([s], mine, now);
+    const from = day(now, s.zone).subtract({ days: 2 }).toString();
+    const open = (await d.store.occurrencesOf(s.id, { from })).filter((o) => Date.parse(o.endAt) <= now.epochMilliseconds && (o.state === "waiting" || o.state === "fetching" || o.state === "needs_upload"));
+    const latest = open.sort((a, b) => Date.parse(a.endAt) - Date.parse(b.endAt)).at(-1);
+    if (!latest) return "none";
+    return (await check([s], mine, now, { occurrences: [latest], uid })) ?? "none";
   }
 
   async function run(): Promise<void> {
@@ -193,5 +219,5 @@ export function meetingJob(d: MeetingJobDeps) {
     wakeAt = candidates.sort(Temporal.Instant.compare)[0] ?? null;
   }
 
-  return { name: MEETING_JOB, run, wake: async () => wakeAt };
+  return { name: MEETING_JOB, run, wake: async () => wakeAt, checkNow };
 }

@@ -1504,6 +1504,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "meeting.register":
     case "meeting.update":
     case "meeting.remove":
+    case "meeting.check_now":
       return { run: () => env.openSettings("admin-clients") };
     case "meeting.mine":
     case "meeting.review":

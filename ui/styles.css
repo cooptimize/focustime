@@ -5414,6 +5414,7 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-problem .reopen-actions { display: inline-flex; }
 .mtg-link input[aria-invalid="true"] { border-color: var(--watch); }
 .mtg-last-read { margin: 2px 0 6px; font-size: var(--fs-2); }
+.mtg-check-now { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
 @media (max-width: 700px) {
   .mtg-view { padding: 8px 16px 24px; }
   .mtg-prop { grid-template-columns: auto minmax(0, 1fr); }

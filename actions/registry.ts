@@ -402,6 +402,7 @@ export const ACTIONS = [
   { name: "meeting.no_transcript", title: "No transcript this week", group: "Meetings", target: "meeting", summary: "Dismisses the upload nudge for that occurrence (reviewers only)" },
   { name: "meeting.prepare", title: "Preview a call's changes", group: "Meetings", target: "meeting", summary: "The DevOps creates and comments for the ticked proposals, in the usual preview, before anything is written" },
   { name: "meeting.confirm", title: "Confirm a call's changes", group: "Meetings", target: "meeting", summary: "Writes the previewed changes through the usual writes (read back, logged, Undo), adds the promises and Waiting on, and skips the rest" },
+  { name: "meeting.check_now", title: "Check a call now", group: "Meetings", target: "meeting", summary: "Looks once for a registered call's latest transcript, with your own sign-in (admins only); nothing is scheduled" },
   { name: "meeting.rerun", title: "Propose again", group: "Meetings", target: "meeting", summary: "Runs the AI pass again on the stored transcript (reviewers only, while it's kept)" },
   { name: "link.open", title: "Open in browser", group: "Work items", target: "item", summary: "Open a work item in your browser" },
   // AS-1: the assistant. Its reads (assistant.today, lookup.day, items.get) are also on its allowlist; ask, confirm,
