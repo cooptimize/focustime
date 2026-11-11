@@ -160,6 +160,8 @@ export type MenuEnv = {
   showGuide: (section?: string) => void;
   /** DOC-1: the Technical docs (#/docs/<page>/<heading>); absent signed out. */
   showDocs?: (page?: string, heading?: string) => void;
+  /** WP-1: opens the DevOps patterns page; absent unless an admin turned it on for this person (then not in the menu). */
+  showPatterns?: () => void;
   /** UI-5: start a Show me tour over its screen (#/guide/tour/<id>). */
   startTour?: (id: string) => void;
   /** The active theme and how to change it (saved in config, applied live). */
@@ -1209,6 +1211,15 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ui.tour_offer": return { run: () => env.showGuide() };
     case "guide.checklist": return { run: () => env.showGuide("first-day") };
     case "docs.access": return env.showDocs ? { run: () => env.showDocs!() } : { disabled: "Sign in to read the Technical docs" };
+    case "patterns.status": return env.showPatterns ? { run: () => env.showPatterns!() } : { disabled: "Not available" };
+    case "patterns.access":
+    case "patterns.run_inventory":
+    case "patterns.estimate":
+    case "patterns.run_classification":
+    case "patterns.resume":
+    case "patterns.set_platform":
+    case "patterns.check":
+    case "patterns.download": return { disabled: "Runs from the DevOps patterns page" };
     case "setup.load":
     case "setup.prefill":
     case "setup.mark":
@@ -1714,7 +1725,9 @@ export const HIDDEN_FOR_NOW: ReadonlySet<string> = new Set(["team.view", "look.r
 
 export function commandList(env: MenuEnv): MenuItem[] {
   // IB-1: Make it a follow-up is gone from the UI (a promise does everything a follow-up did); the old actions stay for now.
-  const fromRegistry = (ACTIONS as readonly ActionSpec[]).filter((a) => !HIDDEN_FOR_NOW.has(a.name)).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
+  // WP-1: the DevOps patterns page is hidden: one entry, only for people it is on for; its own actions never show.
+  const hidden = (n: string) => HIDDEN_FOR_NOW.has(n) || (n.startsWith("patterns.") && (n !== "patterns.status" || !env.showPatterns));
+  const fromRegistry = (ACTIONS as readonly ActionSpec[]).filter((a) => !hidden(a.name)).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
   return [...uiCommands(env), ...fromRegistry];
 }
 

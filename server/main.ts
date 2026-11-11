@@ -120,6 +120,11 @@ import { createStandardsReader } from "../sources/github/standards.ts";
 import { standardsStoreOn } from "../store/standards-store.ts";
 import { parseRepoUrl } from "../plan/standards.ts";
 import type { StandardsPort } from "../actions/standards.ts";
+import { createPatternsStore } from "../store/patterns-store.ts";
+import { createPatternsRunner } from "../actions/patterns-run.ts";
+import { createPatternsLimiter, createPatternsReader } from "../actions/patterns-reader.ts";
+import type { PatternsPort } from "../actions/patterns.ts";
+import { workItemUrl } from "../sources/devops/normalize.ts";
 import { createDevOpsPoller, createLimiter, devopsStatusSource, NO_SNAPSHOTS, pollAccounts, type DevOpsPoller } from "../actions/devops-poll.ts";
 import { clientAccountsStatusSource } from "../actions/client-accounts-status.ts";
 import { createStatusRegistry } from "../actions/status-rows.ts";
@@ -348,6 +353,8 @@ const devopsSources = new Map<string, DevOpsSource>();
 /** DV-1: each client's limits, shared by the poller and everyone's reads on demand. */
 const devopsLimiter = createLimiter(() => Temporal.Now.instant());
 let devopsPoller: DevOpsPoller | null = null;
+/** WP-1: the DevOps patterns page's parts, once the poller is up (hosted app with app Dataverse only). */
+let patternsPort: PatternsPort | null = null;
 /** DV-1's store (the poller writes it); TB-2 reads its change log for the takeover nudge. */
 let devopsStoreRef: ReturnType<typeof createDevOpsStore> | null = null;
 /** TB-2: the bot's rhythm in Teams, once the bot is up (hosted app only). */
@@ -1003,6 +1010,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     takes,
     devopsNotes,
     devopsStored: async (k, v) => devopsPoller?.reads.stored?.(k, v),
+    ...(patternsPort ? { patterns: patternsPort } : {}),
     team,
     // ENV-1: Check now looks once with this person's sign-in (the job below; production and test sites alike).
     meetings: { store: meetingStore, users: meetingUsers, checkNow: (seriesId, uid) => meetings.checkNow(seriesId, uid) },
@@ -1250,6 +1258,40 @@ devopsPoller = devopsApp && directorySource
     })
   : null;
 if (devopsPoller) statusRows.register(devopsStatusSource(devopsPoller));
+// WP-1: DevOps patterns. A second app-level DevOps source with a limiter of its own (it always gives way to the poller,
+// actions/patterns-reader.ts), the poller's targets, and a runner that starts only from the page's buttons: no job, no
+// start-up work beyond marking a run this process doesn't own as stopped when someone opens the page.
+if (devopsPoller && directorySource) {
+  const poller = devopsPoller;
+  const patternsLimiter = createPatternsLimiter(devopsLimiter, instantNow);
+  const patternsSource = createDevOpsSource({ fetch, log, snapshots: NO_SNAPSHOTS, timeZone: host.clock.zone(), targets: (keys) => directorySource.accountTargets(keys), processOverrides: () => ({}), openStates: () => [], limiter: patternsLimiter });
+  // The clients a run covers: every client account (Internal included) whose DevOps is set up in Dataverse.
+  const patternsClients = async () => {
+    const ca = await org.clientAccounts();
+    const keys = [...new Set(ca.rows.map((r) => r.clientKey).filter((k) => ca.isClient(k)))];
+    const t = await directorySource.accountTargets(keys, { withPat: false });
+    return t.ok ? [...new Set(t.targets.filter((x) => x.org && x.project).map((x) => x.clientKey))].sort((a, b) => a.localeCompare(b)) : [];
+  };
+  const patternsAllowed = async (id: string) => (await org.rules()).devopsPatterns.includes(id.toLowerCase());
+  const store = createPatternsStore(db, instantNow);
+  patternsPort = {
+    store,
+    clients: patternsClients,
+    runner: createPatternsRunner({
+      store,
+      reader: createPatternsReader({ source: () => patternsSource.internal, limiter: patternsLimiter, target: (k) => poller.reads.target(k), freshness: (keys) => poller.freshness(keys), clients: patternsClients, now: instantNow }),
+      now: instantNow,
+      log,
+      owner: randomBytes(9).toString("base64url"),
+      allowed: patternsAllowed,
+      prices: () => app.ai.prices,
+    }),
+    async itemUrl(k, id) {
+      const t = await poller.reads.target(k);
+      return t?.org && (t.projectName ?? t.project) ? workItemUrl(t.org, (t.projectName ?? t.project)!, id) : null;
+    },
+  };
+}
 // CV-3b: whether account types are read (the client rule fails closed until they are), with Refresh.
 statusRows.register(clientAccountsStatusSource({ accounts: () => org.clientAccounts(), refreshedAt: () => adminStore.directoryRefreshedAt(), refresh: () => refreshPeople() }));
 // HK-1: telemetry's own health in Admin › Status: one row, a warning once anything was dropped or refused.
