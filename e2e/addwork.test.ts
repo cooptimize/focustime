@@ -201,16 +201,13 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
     await page.close();
   }, T);
 
-  it("a day header's ⋯: Confirm the day, and Timebox my day goes to Day's timeline with no popup", async () => {
+  it("a day header's ⋯: no Confirm (CF-1), and Timebox my day goes to Day's timeline with no popup", async () => {
     const { page } = await freshPage(h);
     await openOn(page, "2026-11-02", "PM");
     await free(section(page, "This week's features")).locator("button.aw-plus").click();
     await dayMenu(page, "Mon");
-    const confirm = page.getByRole("menuitem", { name: /^Confirm Mon, Nov 2/ });
-    await confirm.click();
-    await page.getByText("Confirmed Mon, Nov 2").first().waitFor();
-    await dayMenu(page, "Mon");
-    await page.getByRole("menuitem", { name: /Timebox my day|Confirm and timebox/ }).click();
+    expect(await page.getByRole("menuitem", { name: /Confirm/ }).count()).toBe(0);
+    await page.getByRole("menuitem", { name: "Timebox my day" }).click();
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/day/);
     expect(await page.locator("[role=dialog]").count()).toBe(0);
     await page.close();

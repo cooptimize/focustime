@@ -28,7 +28,6 @@ async function monday(page: Page): Promise<Ids> {
   const chart = await add({ half: "AM", clientKey: "Cooptimize", itemId: 4412 });
   const notes = await add({ half: "PM", clientKey: "Northwind", intention: "Write the export notes", size: "S" });
   for (const id of [query, chart]) expect((await call(page, "pick.set_size", { id, size: "M" })).ok).toBe(true);
-  expect((await call(page, "planday.commit", { date: MON })).ok).toBe(true);
   for (const [pickId, a, b] of [[query, "09:00", "10:00"], [chart, "10:00", "11:00"], [notes, "13:00", "14:00"]] as const) expect((await call(page, "timebox.add", { pickId, date: MON, start: at(a), end: at(b) })).ok).toBe(true);
   return { query, chart, notes };
 }

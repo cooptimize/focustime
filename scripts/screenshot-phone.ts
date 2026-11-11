@@ -1,6 +1,6 @@
 // P1 phone screenshots: Playwright's iPhone 15 (WebKit) and Pixel 7 (Chromium) emulation, dark and light, on a
 // throwaway demo server (e2e/harness.ts: fictional data, its own temp folder and port, the clock pinned to Monday
-// Nov 2, 2026 9:30 AM). Each run plans the demo Monday (two stories per block, committed) so Today has picks, then
+// Nov 2, 2026 9:30 AM). Each run plans the demo Monday (two stories per block) so Today has picks, then
 // shoots Today, Week, a card's detail panel, Capture, Plan the week read-only and Today with a running timer, then
 // (Part B) the unread dot, ⋯ › Notifications, the iPhone install how-to, Settings › Notifications and a toast.
 // Usage: node scripts/screenshot-phone.ts <outDir> [today,week,...]
@@ -40,7 +40,7 @@ type Load = { planDay: { date: string }; week: { days: { date: string; am: Slot;
 type Slot = { half: "AM" | "PM"; off: boolean; focus: { clientKey: string }[] };
 type Item = { id: number; level: string; stateCategory: string };
 
-/** Two open stories in each of today's blocks, then commit: the demo's Monday as a planned day. */
+/** Two open stories in each of today's blocks: the demo's Monday as a planned day. */
 async function planToday(page: Page) {
   const d = (await act(page, "week.load", {})) as Load;
   const date = d.planDay.date;
@@ -56,7 +56,6 @@ async function planToday(page: Page) {
       await act(page, "pick.add", { date, half: slot.half, clientKey: client, itemId: s.id, size: k === 0 ? "M" : "S" });
     }
   }
-  await act(page, "planday.commit", { date });
 }
 
 // The app polls (presence, the timer), so the network is never idle; a short pause lets the last render land.

@@ -21,7 +21,6 @@ async function seed(page: Page, opts: { evening?: boolean } = {}): Promise<void>
   for (const x of [{ itemId: 4411, size: "M" }, { itemId: 4412, size: "S" }, { intention: LONG_PICK, size: "S" }]) expect((await call(page, "pick.add", { date: MON, half: "AM", clientKey: "Cooptimize", ...x })).ok).toBe(true);
   expect((await call(page, "unavailable.add", { date: MON, title: LONG_MEETING, start: "10:00", end: "10:30" })).ok).toBe(true);
   if (opts.evening) expect((await call(page, "flex.add", { date: MON, clientKey: "Cooptimize", start: "19:00", end: "21:00" })).ok).toBe(true);
-  await call(page, "planday.commit", { date: MON });
   await page.reload();
   await page.waitForSelector(".topbar");
 }

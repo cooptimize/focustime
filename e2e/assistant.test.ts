@@ -47,12 +47,18 @@ describe.skipIf(!CHROMIUM)("AS-1 the assistant panel", () => {
     await box.press("Enter");
     await panel.locator(".as-card.item", { hasText: "Order history export" }).waitFor({ timeout: 30_000 });
 
-    // A proposal: the preview, and nothing changes until Confirm.
+    // CF-1: "Confirm today" asks for something FocusTime no longer has: a plain answer, no proposal.
     await box.fill("Confirm today");
+    await box.press("Enter");
+    await panel.getByText("There's nothing to confirm now. Your plan is what's on your day.").waitFor({ timeout: 30_000 });
+    expect(await panel.getByTestId("assistant-proposal").count()).toBe(0);
+
+    // A proposal: the preview, and nothing changes until Confirm.
+    await box.fill("Capture: ask about the March totals");
     await box.press("Enter");
     const proposal = panel.getByTestId("assistant-proposal").last();
     await proposal.waitFor({ timeout: 30_000 });
-    await expect(proposal.textContent()).resolves.toContain("Confirm a day's plan");
+    await expect(proposal.textContent()).resolves.toContain("March totals");
     await proposal.getByRole("button", { name: "Confirm" }).click();
     await proposal.locator(".as-outcome").waitFor({ timeout: 30_000 });
     await expect(proposal.getByRole("button", { name: "Confirm" }).count()).resolves.toBe(0);

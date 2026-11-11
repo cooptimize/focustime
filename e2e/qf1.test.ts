@@ -1,6 +1,6 @@
 // QF-1 (browser, demo mode, Monday Nov 2, 9:30 AM): Today on any day (‹ ›, [ ], Back to today, the date in the address,
 // past days read only), the demo's PTO day shown with "You're off", Timebox my day from Today and the Board's day menu
-// (Confirm and timebox first when the day isn't confirmed), and Not work-related on a conversation with Undo.
+// (CF-1: on a day never confirmed, with no confirm), and Not work-related on a conversation with Undo.
 // Screenshots at 1920 and the phone, light and dark, when FOCUSTIME_SHOTS names a folder.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
@@ -84,29 +84,30 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("Timebox my day from Today (Confirm and timebox when not confirmed) and from the Board's day menu; the same proposals on the timeline", async () => {
+  it("Timebox my day from Today on a never-confirmed day (CF-1) and from the Board's day menu; the same proposals on the timeline", async () => {
     const { page } = await freshPage(h);
-    // Today with a plan that isn't confirmed and a story without a time.
+    // Today with a plan never confirmed and a story without a time.
     await call(page, "pick.add", { date: "2026-11-02", half: "PM", clientKey: "Northwind", intention: "Write the export notes", size: "S" });
     await page.evaluate(() => (location.hash = "#/today"));
     await page.reload();
     const offer = page.locator(".today-timebox");
     await offer.waitFor();
-    await expect.poll(() => offer.textContent(), { timeout: 10_000 }).toMatch(/^(Confirm and timebox|Timebox my day)$/);
+    await expect.poll(() => offer.textContent(), { timeout: 10_000 }).toBe("Timebox my day");
     await shots(page, "today-timebox");
     await offer.click();
-    // TY-1: no popup: the same proposals, as placeholders on the day's timeline (with the day confirmed first).
+    // TY-1: no popup: the same proposals, as placeholders on the day's timeline (CF-1: nothing confirmed first).
     await page.getByRole("group", { name: "Timebox my day" }).waitFor();
     expect(await page.getByRole("dialog", { name: "Timebox my day" }).count()).toBe(0);
     await expect.poll(() => hash(page)).toMatch(/^#\/day/);
-    await expect((await call(page, "planday.start", { date: "2026-11-02" })).data.plan.committedAt).toBeTruthy();
+    expect((await call(page, "planday.start", { date: "2026-11-02" })).data.plan).not.toHaveProperty("committedAt");
     await page.getByRole("button", { name: "Discard" }).click();
-    // The Board's day header menu, on Tuesday: Confirm and timebox (nothing confirmed there yet).
+    // The Board's day header menu, on Tuesday: Timebox my day, never Confirm.
     await call(page, "pick.add", { date: "2026-11-03", half: "AM", clientKey: "Cooptimize", intention: "Draft the onboarding checklist", size: "S" });
     await page.evaluate(() => (location.hash = "#/week"));
     await page.reload();
     await page.locator(".day-head").nth(1).click({ button: "right" });
-    const item = page.getByRole("menuitem", { name: /Confirm and timebox|Timebox my day/ });
+    expect(await page.getByRole("menuitem", { name: /Confirm/ }).count()).toBe(0);
+    const item = page.getByRole("menuitem", { name: "Timebox my day" });
     await item.click();
     await page.getByRole("group", { name: "Timebox my day" }).waitFor();
     await expect.poll(() => hash(page)).toMatch(/^#\/day\/2026-11-03/);

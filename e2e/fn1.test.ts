@@ -19,7 +19,6 @@ async function planToday(page: Page) {
   const st = await call(page, "planday.start", { date: TODAY });
   expect(st.error ?? "ok").toBe("ok");
   for (const itemId of [4411, 4412]) expect((await call(page, "pick.add", { date: TODAY, half: "AM", clientKey: "Cooptimize", itemId })).ok).toBe(true);
-  expect((await call(page, "planday.commit", { date: TODAY })).ok).toBe(true);
   await page.reload();
   await page.getByRole("checkbox", { name: "Done: Timesheet summary query" }).waitFor();
 }

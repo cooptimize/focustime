@@ -15,7 +15,7 @@ const go = async (page: Page, hash: string) => {
   await page.waitForTimeout(900);
 };
 
-/** The demo day as the U1 and U2 screenshots have it: seven picks, a follow-up, committed, the first one done. */
+/** The demo day as the U1 and U2 screenshots have it: seven picks, a follow-up, the first one done. */
 async function seed(page: Page): Promise<number[]> {
   const fl = await call(page, "followups.list", {});
   const list = (fl.data?.open ?? fl.data?.followUps ?? fl.data ?? []) as { id: number; who: string }[];
@@ -32,7 +32,6 @@ async function seed(page: Page): Promise<number[]> {
   ];
   const ids: number[] = [];
   for (const [half, clientKey, x] of adds) ids.push((await call(page, "pick.add", { date: D, half, clientKey, ...x })).data.pick.id);
-  await call(page, "planday.commit", { date: D });
   await call(page, "pick.mark_done", { id: ids[0], done: true });
   await page.reload();
   await page.waitForSelector(".today-block");

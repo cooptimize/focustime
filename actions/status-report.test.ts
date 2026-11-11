@@ -18,7 +18,7 @@ import { teamStore } from "../store/team-store.ts";
 import { aDirectoryPerson, anAccount, anAheadClient, anAheadItem, anAssignee, aReportComment, ZONE } from "../test/builders/index.ts";
 import type { OrgRuntime } from "./org.ts";
 import { NOT_ON_TEAM, PTO_SOURCE, statusAction, type StatusContext } from "./status-actions.ts";
-import { reportTeam } from "./team-actions.ts";
+import { publishWeek, reportTeam } from "./team-actions.ts";
 
 const NOW = "2026-11-05T15:00:00Z"; // Thu
 const ADATUM = "adatum";
@@ -88,7 +88,7 @@ function world(extra: Partial<StatusContext> = {}) {
   const as = (p: typeof dana) => ({
     run: async (input: unknown) => statusAction(ctxOf(p), "status.report", input),
   });
-  return { as, team, reads };
+  return { as, team, reads, ctxOf, org };
 }
 
 describe("who sees a client's report (SR-2)", () => {
@@ -114,6 +114,25 @@ describe("who sees a client's report (SR-2)", () => {
     expect(await w.as(fay).run({})).toMatchObject({ data: { clients: [{ clientKey: FABRIKAM }] } });
     expect(await w.as(fay).run({ clientKey: ADATUM })).toMatchObject({ ok: false, status: 403 });
     expect(w.reads).toEqual([]);
+  });
+});
+
+describe("CF-1 (D1, D2): a teammate's week reaches the report on every change, no confirm", () => {
+  it("Sam places a feature: Dana's report lists it active this week; Sam takes it off: it goes", async () => {
+    const w = world();
+    const sp = w.ctxOf(sam).plan!;
+    const pub = () => publishWeek({ plan: sp, team: w.team, me: async () => sam.personId, now: () => NOW, org: w.org }, "2026-11-02");
+    const report = async () => {
+      const r = await w.as(dana).run({ clientKey: ADATUM });
+      if (!r.ok) throw new Error(r.error);
+      return (r.data as StatusReportAnswer).report!;
+    };
+    const f = await sp.addWeekItem({ weekStart: "2026-11-02", clientKey: ADATUM, itemId: 702, title: "Supplier onboarding", itemType: "Feature", url: null, level: "feature" });
+    await pub();
+    expect((await report()).noUpdate.find((x) => x.id === 702)).toMatchObject({ owner: "Sam Park", active: "planned" });
+    await sp.removeWeekItem(f.id);
+    await pub();
+    expect((await report()).noUpdate.find((x) => x.id === 702)?.active ?? null).not.toBe("planned");
   });
 });
 

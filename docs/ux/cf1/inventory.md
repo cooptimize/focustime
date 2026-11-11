@@ -2,7 +2,7 @@
 
 CF-1 removes confirming a plan (a day's and a week's) and musts. Work comes on and off freely. The stored confirm times (`day_plans.committed_at`, `week_plans.committed_at`) and tiers (`week_features.tier`, `week_drafts.tier`, `week_commitments.tier`) stay in the database unread and unwritten, so the idea can come back (no migration, no dropped column, no deleted row).
 
-Written before the change (Step 0) and updated to what was done. "Now" is before CF-1; "After" is what CF-1 does.
+Written before the change (Step 0) and updated to what was done (Nov 11). The decisions are in `docs/decisions.md` under CF-1. "Now" is before CF-1; "After" is what CF-1 does.
 
 ## 1. A day's confirm time (`day_plans.committed_at`, `DayPlan.committedAt`)
 
@@ -42,7 +42,7 @@ Written before the change (Step 0) and updated to what was done. "Now" is before
 | `actions/weekplan-actions.ts` `weekPlanView.changed` | "Changed since you confirmed" | Removed |
 | `plan/addwork.ts` `weekTag`, `confirmLabel` | Draft / Confirmed / Changed since you confirmed; Confirm week / Confirm again | Removed (A1) |
 | `ui/App.tsx` Week header | The tag and Confirm week; "Week confirmed" notice; the Look ahead offer after confirming next week | Removed (A1) |
-| `ui/keys.ts`, `actions/registry.ts`, command menu | C confirms the week; "Confirm the week", "Confirm the day" commands | Removed (A1, B1) |
+| `actions/registry.ts`, command menu | "Confirm the week", "Confirm the day" commands (no key: C is Capture, and Step 0 wrongly listed C as confirming the week) | Hidden from the command menu; the actions stay registered and answer plainly (A1, B1, F3) |
 | `actions/dispatch.ts` `weekCommitted`, `weekNudge`, `aheadDue` | From confirmed weeks | From weeks with anything placed (C3) |
 | `server/ticks.ts` Monday's "Add work to the week", Thursday's and Friday's "Look ahead" | Fire while that week isn't confirmed | Fire while that week has nothing placed (C3) |
 | `plan/rituals.ts` Look ahead 4 weeks | Due once next week is confirmed | Due once next week has something placed |

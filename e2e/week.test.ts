@@ -24,10 +24,8 @@ async function seed(page: Page): Promise<{ mon: number[]; tue: number[] }> {
   await page.reload();
   const add = async (date: string, half: string, clientKey: string, x: Record<string, unknown>) => (await call(page, "pick.add", { date, half, clientKey, ...x })).data.pick.id as number;
   const mon = [await add(MON, "AM", "Cooptimize", { itemId: 4411, size: "M" }), await add(MON, "AM", "Cooptimize", { itemId: 4412, size: "S" }), await add(MON, "PM", "Northwind", { itemId: 1111, size: "M" })];
-  await call(page, "planday.commit", { date: MON });
   await call(page, "pick.mark_done", { id: mon[0], done: true });
   const tue = [await add(TUE, "AM", "Harbor", { itemId: 2211, size: "S" }), await add(TUE, "AM", "Harbor", { itemId: 2212, size: "S" })];
-  await call(page, "planday.commit", { date: TUE });
   await call(page, "pick.mark_done", { id: tue[0], done: true });
   await page.reload();
   await page.waitForSelector(".topbar");

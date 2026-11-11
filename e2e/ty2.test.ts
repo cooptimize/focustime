@@ -41,7 +41,6 @@ async function monday(page: Page): Promise<Ids> {
   const query = await add({ half: "AM", clientKey: "Cooptimize", itemId: 4411 });
   const notes = await add({ half: "PM", clientKey: "Northwind", intention: "Write the export notes", size: "S" });
   const alerts = await add({ half: "PM", clientKey: "Northwind", intention: "Check the delay alerts" });
-  expect((await call(page, "planday.commit", { date: MON })).ok).toBe(true);
   expect((await call(page, "timebox.add", { pickId: chart, date: MON, start: at("11:00"), end: at("12:00") })).ok).toBe(true);
   expect((await call(page, "timebox.add", { pickId: query, date: MON, start: at("10:00"), end: at("11:00") })).ok).toBe(true);
   await call(page, "ui.set_today_timeline", { show: true });
