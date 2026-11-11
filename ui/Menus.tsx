@@ -9,6 +9,7 @@ import { filterCommands, type FormField, type MenuEnv, type MenuHead, type MenuI
 import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
 import { useScopedTab } from "./scope.ts";
+import { StatusMark } from "./StatusMark.tsx";
 
 type Opener = (at: { x: number; y: number }, step: MenuStep) => void;
 export type MenuApi = { env: MenuEnv | null; open: Opener };
@@ -210,6 +211,7 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList, pop
                 {it.checked && <span aria-hidden="true">✓ </span>}
                 {it.typeIcon && <><TypeIcon clientKey={it.typeIcon.clientKey} type={it.typeIcon.type} />{" "}</>}
                 {it.label}
+                {it.mark && <>{" "}<StatusMark tone={it.mark.tone} text={it.mark.text} /></>}
                 {it.disabled && !popup && <span className="menu-why"> · {it.disabled}</span>}
               </span>
               {it.hint && <span className="menu-hint">{it.hint.length <= 5 ? <kbd>{it.hint}</kbd> : it.hint}</span>}

@@ -48,6 +48,7 @@ import type { DataverseSource } from "../sources/dataverse/source.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import { calendarNotSetUp } from "../sources/not-set-up.ts";
 import { buildWeek } from "../week/build.ts";
+import { dotDays, type DotDay } from "../plan/status-dot.ts";
 import { followedKeys } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
 import { guideAction } from "./guide-actions.ts";
@@ -1821,6 +1822,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
             const [mine] = await reader.schedule([me], day.toInstant().toString(), day.add({ days: 1 }).toInstant().toString(), zone);
             return mine && !mine.hoursUnknown && !mine.problem ? mine.workingHours : null;
           },
+          today: () => localToday(ctx.now(), "UTC"),
         },
         action,
         req.input ?? {},
@@ -2463,7 +2465,27 @@ async function statusCtx(ctx: ActionContext): Promise<StatusContext> {
       const dv = ctx.makeDataverse(cfg.dataverse, userZone(cfg));
       return dv.holidays ? dv.holidays(from, to) : { ok: false as const, message: "Holidays can't be read here" };
     },
+    workdays: (cfg, from, to) => workdaysFor(ctx, cfg, from, to),
   };
+}
+
+/**
+ * RF-1: my own days for the Status tab's dot: the weeks week.load builds (Dataverse focus blocks, standing blocks, PTO,
+ * working hours and the catch-up day), without calendars or DevOps. Read from the sources' caches as week.load left
+ * them. Focus blocks that can't be read at all throw, so the tab shows no dot rather than a guess.
+ */
+async function workdaysFor(ctx: ActionContext, cfg: AppConfig, from: IsoDate, to: IsoDate): Promise<DotDay[]> {
+  const tz = userZone(cfg);
+  if (!cfg.dataverse.mySystemUserId) throw new Error("not matched in Dataverse yet");
+  const dv = ctx.makeDataverse(cfg.dataverse, tz);
+  const out: DotDay[] = [];
+  for (const weekStart of [...new Set([mondayOf(from), mondayOf(to)])]) {
+    const [patterns, pto] = await Promise.all([dv.load(weekStart, {}), dv.pto(...weekRange(weekStart), {}).catch(() => null)]);
+    if (patterns.status !== "ok" && !patterns.fromCache) throw new Error("focus blocks can't be read");
+    const week = buildWeek({ weekStart, patterns: patterns.items, events: [], config: cfg.week, pto: ptoByDate(pto?.items ?? [], weekDates7(weekStart)) });
+    out.push(...dotDays(week.days, tz));
+  }
+  return out.filter((d) => d.date >= from && d.date <= to);
 }
 
 /** SR-1: Kat's last send per client, from Dataverse (a source without the read: unknown, the Monday 7:00 fallback). */

@@ -1,6 +1,7 @@
 // SR-1: what status.load answers, as the UI reads it. Pure types: no author email ever appears here.
 import type { ContributionKind, FeatureWhy, ReportComment, ReportWindow, UpcomingRow } from "./status-report.ts";
 import type { IsoDate } from "../week/types.ts";
+import type { DotSchedule } from "./status-dot.ts";
 
 /** One comment as Status shows it: never its author's email. */
 export type StatusComment = { id: number; text: string; author: string; at: string; who: ReportComment["who"]; editable: boolean };
@@ -36,6 +37,12 @@ export type StatusLoad = {
   /** SR-3: features I worked on with no comment of mine in the window, across clients. */
   needsYou: number;
   clients: StatusClient[];
+  /** RF-1: when the next report goes out, my time zone, and when the tab's dot turns amber and red (null: no dot). */
+  sendsAt?: string;
+  zone?: string;
+  /** RF-1: the server's clock when this was read, so the dot turns on the server's time, not the browser's. */
+  serverNow?: string;
+  dot?: DotSchedule | null;
 };
 
 

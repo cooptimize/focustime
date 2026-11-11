@@ -16,6 +16,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { CatalogFeature, NoUpdateFeature, ReportClientRef, ReportFeature, StatusClient, StatusComment, StatusFeature, StatusLoad, StatusReport, StatusReportAnswer } from "../plan/status-types.ts";
 import type { DevOpsPreview, DevOpsResult } from "../actions/types.ts";
 import { call } from "./api.ts";
+import type { DotSchedule } from "../plan/status-dot.ts";
 import { CellPopover, FilterList } from "./CellPopover.tsx";
 import { CloseButton } from "./CloseButton.tsx";
 import { MentionFlag, Modal } from "./DevOpsWrite.tsx";
@@ -1129,21 +1130,35 @@ function UndoDialog({ u, onConfirm, onClose }: { u: { p: Pushed; preview: DevOps
   );
 }
 
+/** RF-1: what the Status tab needs for its dot: how many features need my update, and when the dot turns amber and red. */
+export type StatusNeeds = { needs: number; dot: DotSchedule | null; sendsAt: string | null; zone: string | null; /** The server's clock minus the browser's. */ skewMs: number };
+
 /**
- * WD-1: the Status tab's count (SR-3's Needs your update): features I worked on this week with no update of mine.
+ * WD-1, RF-1: SR-3's Needs your update (features I worked on this week with no update of mine) and the dot's schedule.
  * Read once, then again when `version` changes; null until read or when Status can't load.
  */
-export function useStatusNeeds(version: unknown): number | null {
-  const [n, setN] = useState<number | null>(null);
+export function useStatusNeeds(version: unknown): StatusNeeds | null {
+  const [n, setN] = useState<StatusNeeds | null>(null);
+  // RF-1: read again a minute after the report goes out, so the next week's list and dot replace this one's.
+  const [after, setAfter] = useState(0);
+  const sendsAt = n?.sendsAt ?? null;
+  const skew = n?.skewMs ?? 0;
+  useEffect(() => {
+    if (!sendsAt) return;
+    const wait = Date.parse(sendsAt) - (Date.now() + skew) + 60_000;
+    if (wait <= 0 || wait > 2 ** 31 - 1) return;
+    const t = window.setTimeout(() => setAfter((k) => k + 1), wait);
+    return () => window.clearTimeout(t);
+  }, [sendsAt, skew]);
   useEffect(() => {
     let live = true;
     call<StatusLoad>("status.load", {}).then(
-      (d) => live && setN(d.clients.reduce((k, c) => k + c.features.filter((f) => f.needsYou).length, 0)),
+      (d) => live && setN({ needs: d.clients.reduce((k, c) => k + c.features.filter((f) => f.needsYou).length, 0), dot: d.dot ?? null, sendsAt: d.sendsAt ?? null, zone: d.zone ?? null, skewMs: d.serverNow ? Date.parse(d.serverNow) - Date.now() : 0 }),
       () => live && setN(null),
     );
     return () => {
       live = false;
     };
-  }, [version]);
+  }, [version, after]);
   return n;
 }

@@ -1,7 +1,7 @@
 // WD-1: one Week, in a real browser on the demo (Monday Nov 2, 9:30 AM; Tuesday for the unfinished to-do). The
 // scenarios from the step: + Add and Undo, a feature placed as a placeholder then broken down, the panel following the
 // selected block, Confirm week and Changed since you confirmed, the To place line, the star and the remove rule, every
-// old address, no Plan buttons, Team hidden, Status's count, the phone's sheet, and the first block's height at 1440×900.
+// old address, no Plan buttons, Team hidden, Status on the tabs, the phone's sheet, and the first block's height at 1440×900.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
@@ -211,15 +211,13 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     await page.close();
   }, T);
 
-  it("Team isn't in the tabs, the command menu or the keys list; Status shows its count on the tab", async () => {
+  it("Team isn't in the tabs, the command menu or the keys list; Status has no count on the tab (RF-1: a dot)", async () => {
     const { page } = await freshPage(h);
     await expect(page.locator("nav.views .view-tab").allInnerTexts()).resolves.toEqual(expect.arrayContaining([expect.stringMatching(/^Day/), expect.stringMatching(/^Status/)]));
     const tabs = (await page.locator("nav.views .view-tab").allInnerTexts()).map((t) => t.replace(/\d+/g, "").trim());
-    expect(tabs).toEqual(["Day", "Week", "Ahead", "Inbox", "Status"]);
-    // Status's count is the features needing my update.
-    const count = page.locator("nav.views .view-tab", { hasText: "Status" }).locator(".count");
-    await count.waitFor({ timeout: 30_000 });
-    expect(Number(await count.innerText())).toBeGreaterThan(0);
+    expect(tabs).toEqual(["Day", "Week", "Ahead", "Status", "Inbox"]);
+    // RF-1: no number on Status (its dot is e2e/rf1.test.ts's).
+    expect(await page.locator("nav.views .view-tab", { hasText: "Status" }).locator(".count").count()).toBe(0);
     // The command menu: nothing named Team.
     await page.keyboard.press("Control+k");
     await page.keyboard.type("Team");
