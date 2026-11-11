@@ -46,7 +46,7 @@ FocusTime keeps everything in one database, its plan store: Azure SQL in dev and
 
 | Table | Kind | Per client | Holds |
 |---|---|---|---|
-| `outlook_events`, `markers`, `invites` | User | Invites | FocusTime's own Outlook events and help invites |
+| `outlook_events`, `markers`, `invites` | User | Invites | FocusTime's own Outlook events and help invites; `markers` also holds once-marks and SG-1's cleared suggestions (kind `sg_clear`) |
 | `write_log`, `devops_write_log`, `azure_write_log`, `teams_status_log` | User | DevOps log | The audit logs (see [Security](security.md#external-writes-and-the-audit-log)) |
 | `calendar_links`, `calendar_link_events` | User | No | CAL-1: calendars added by an ICS link. The link is sealed (`sealed`, the app data key, bound to the person and the link); also its name, color, Busy only or Show titles, Personal or Work, the host shown, ETag and Last-Modified, and the last check (a failure kind, never the server's words). Events: the instances 8 weeks back to 26 ahead, start and end, all day, show as, and a title only with Show titles (NULL with Busy only; never a location or description). Not in Export (the link is sealed with this store's key; the events come back with the next fetch); removed with Remove and with Delete my data |
 

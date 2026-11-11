@@ -92,3 +92,13 @@ Fit is never red. QT-1: Day, Week and the block panel never say a person planned
 - **"2 done · 1 not done"**, **"Nothing planned"**: a past day's folded card.
 - Retired from visible copy on Day, Week and the panel: Full, a little over, about N hours over, Too much planned, Fits, Room for … more, Keep open for walk-ins, Plan up to, the client chips. The midday check-in, the assistant and Ahead still use their own fit words (not changed in QT-1).
 
+
+## SG-1 words (Nov 11)
+
+- **Suggested**: the small word over a block's offers ("Suggested · Keep all · Clear"); its hover says they're offers and nothing is planned until kept. A row's hover gives its reason: "Unfinished from Mon", "Next in <client>'s backlog", "Target date Fri", "Needs breakdown".
+- **"5 suggested · Keep all · Clear"**: a day's line, in Day's header row and in the day's header on Week.
+- **Keep**, **Keep all**: make the offer an ordinary to-do (a feature: placed on the block). The notice says "Kept <title>" or "Kept 3 to-dos for Tuesday", with Undo.
+- **Clear**: a row, "not this one this week"; a block, "no suggestions on this block for the rest of the day"; a day, "no suggestions on Tuesday". The notice says "Cleared …" with Undo.
+- **"3 suggestions are in your blocks."**: the morning card's line under "Nothing on today yet", with Keep all.
+- **Suggestions**: the switch in Day's and Week's ⋯; **Suggest work for empty blocks** in Settings › Planning.
+- Retired: the dashed "From Mon" cards' Keep here, "N unfinished to-dos suggested in your next blocks · Keep all · Review".

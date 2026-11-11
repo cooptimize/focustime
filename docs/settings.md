@@ -72,3 +72,7 @@ The Guide can sit on the same shell once ST-1 is merged:
 
 The shell owns Esc (after the controls inside it: a picker or menu that handles Esc and stops it keeps it), the ×,
 focus on the title, focus return and the phone layout. Styles are `.panel-shell` and `.ps-*` in `ui/styles.css`.
+
+## Settings added since (a record)
+
+- **Suggest work for empty blocks** (SG-1): Settings › Planning, id `suggest-empty-blocks`, config `[plan] suggest_empty_blocks`, on by default. The same switch is Suggestions in Day's and Week's ⋯ (it saves the same setting). Off, nothing is loaded or computed.

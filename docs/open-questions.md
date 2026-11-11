@@ -648,3 +648,12 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - In the demo the environment comes only from `FOCUSTIME_DEMO_AUTOSTART_ENV` (tests); the hosted demo sessions never set it, so they show "production only". Fine?
 - The auto-start uses each person's stored sign-in (their refresh token) while they're away. If Entra's token lifetime or a conditional access policy ends it, the start is skipped with "couldn't sign in". Worth watching on prod for a week.
 - The demo's working week is Monday to Thursday, so its pause takes a calendar week; on prod it depends on each person's hours.
+
+## SG-1
+
+- Kept rows are remembered only for the visit (in the page). After a reload a block that has only kept to-dos is an ordinary block with work and offers nothing more. Should a kept suggestion keep the rest of its block's offers across reloads?
+- A draft story (local, not yet in DevOps) never makes a feature "has stories": a feature with only drafts is still offered as Needs breakdown. Count drafts?
+- On a Thursday the next working day is Monday of next week, which Day shows but Week (this week) doesn't. Fine?
+- Keep all is the existing actions one after another, not one server transaction: a failure part way keeps what worked and says how many couldn't be kept, and Undo takes back what was kept. Worth one batch action later?
+- A cleared row is cleared for the week it was suggested in; next week it can come back. Right length?
+- `planday.carry` and `planday.carry_hint` are no longer used by the UI. Remove them in a later release.
