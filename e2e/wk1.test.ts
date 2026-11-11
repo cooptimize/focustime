@@ -159,10 +159,10 @@ describe.skipIf(!CHROMIUM)("WK-1: Week fits every width from 1024", () => {
         await expect(thu.locator(".half.whole.pto").count()).resolves.toBe(1);
         // The card draws exactly its tier's element.
         const am = mon.locator(MON_AM);
-        const expectRail = t.tier === "rail" ? ".ruler:not(.slim)" : t.tier === "ruler" ? ".ruler.slim" : ".day-strip";
+        // WD-1: the rail tier's hour rail is the slim strip too (about 56 px), so the to-do titles keep their width.
+        const expectRail = t.tier === "rail" || t.tier === "ruler" ? ".ruler.slim" : ".day-strip";
         await expect(am.locator(expectRail).count()).resolves.toBe(1);
-        // The rail tier's rail is 140 to 186 px wide (its titles have room), minus its 12 px of inset.
-        if (t.tier === "rail") await expect(am.locator(".ruler").evaluate((r) => r.getBoundingClientRect().width)).resolves.toBeGreaterThanOrEqual(127);
+        if (t.tier === "rail") await expect(am.locator(".ruler").evaluate((r) => r.getBoundingClientRect().width)).resolves.toBeLessThanOrEqual(64);
         if (t.tier === "strip" || t.tier === "mini") await expect(am.locator(".day-strip .now-tick").count()).resolves.toBe(1);
         if (t.tier === "mini") await expect(am.locator(".pill-reason").isVisible()).resolves.toBe(false);
         // The block's time is always visible.

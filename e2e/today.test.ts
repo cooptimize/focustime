@@ -141,7 +141,7 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     expect(colors.used).not.toContain(colors.risk);
     // Done marks Check-in done and returns to Now.
     await page.locator("main.mode-checkin .done-btn").click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/today");
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/day");
     expect(errors).toEqual([]);
     await page.close();
   }, T);

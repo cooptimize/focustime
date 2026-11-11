@@ -257,11 +257,12 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       await page.locator(".promise-open", { hasText: "Walk Blake through the totals" }).first().waitFor();
       await shotAll(page, "cv3-today-strip-agenda", strip);
 
-      // Week's Board rail: the overdue one, amber, "was due Fri, Oct 30", at now on today's block.
+      // Week's rail: the overdue one marked at now on today's block; WD-1's slim rail has no labels, so the card's late
+      // chip names it ("Late promise: Send Evan the October export") and opens it.
       await page.keyboard.press("2");
-      const mark = page.locator(".r-promise.overdue", { hasText: "Send Evan the October export" }).first();
+      expect(await page.locator(".r-promise.overdue", { hasText: "Send Evan the October export" }).count()).toBeGreaterThan(0);
+      const mark = page.locator('.day.today .late-chip[title^="Late promise: Send Evan the October export"]').first();
       await mark.waitFor();
-      expect(await mark.textContent()).toMatch(/^was due Fri, Oct 30 · Send Evan the October export/);
       await shotAll(page, "cv3-board-rail", page.locator(".day.today").first());
       // IB-1 slice 4: the mark opens that promise in the Inbox's detail pane, then back to the Board.
       await mark.click();

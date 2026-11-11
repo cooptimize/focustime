@@ -79,7 +79,7 @@ describe.skipIf(!CHROMIUM)("Week's all-day chips and view switches (U5.1)", () =
     await expect.poll(() => page.locator(".ruler .r-ev.personal").count()).toBe(0);
     await expect(page.locator("footer.statusbar .status-chip.personal-hidden").textContent()).resolves.toMatch(/^\d+ personal hidden$/);
     // Hidden, still counted: Monday's risk still names the Dentist.
-    await expect(page.locator(".half.card .status-pill", { hasText: "Dentist" }).count()).resolves.toBeGreaterThan(0);
+    await expect(page.locator('.half.card .status-pill[title*="Dentist"]').count()).resolves.toBeGreaterThan(0);
     // Today: no Dentist row, the risk still says so.
     await go(page, "#/today");
     await page.locator(".today-block").first().waitFor();

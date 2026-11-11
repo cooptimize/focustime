@@ -179,17 +179,14 @@ describe.skipIf(!CHROMIUM)("UI-8 bug round", () => {
     await page.close();
   }, T);
 
-  it("DevOps health offers Break down beside the Coop brief, opening the same panel as Fix next", async () => {
+  it("a client chip's Not ready offers Break down, opening the same panel as Fix next (WD-1: was DevOps health)", async () => {
     const { page, errors } = await freshPage(h);
-    await page.evaluate(() => (location.hash = "#/week/plan/2026-11-02"));
-    await page.getByRole("button", { name: /^DevOps health/ }).click();
-    const health = page.locator('aside.detail-panel[aria-label="DevOps health"]');
-    await health.waitFor();
-    const row = health.locator(".pw-flag", { has: page.getByText("Feature with no stories") }).first();
+    await page.evaluate(() => (location.hash = "#/week/2026-11-02"));
+    await page.locator(".client-chips .cc-chip", { has: page.locator(".cc-badge") }).first().click();
+    const row = page.locator(".cc-pop .cc-ready li").first();
     await row.waitFor();
     const bd = row.locator(".bd-trigger");
     await expect(bd.innerText()).resolves.toMatch(/^Break down/);
-    await expect(row.getByRole("button", { name: "Coop brief" }).count()).resolves.toBe(1);
     await shots(page, "ui8-health-break-down");
     await bd.click();
     const bdPanel = page.locator(".bd-panel[role=dialog]");

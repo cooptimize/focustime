@@ -185,21 +185,21 @@ export async function sameSession(h: Harness, page: Page, opts: Parameters<Brows
   return ctx;
 }
 
-/** Opens Today › Plan on today (Monday): P from Today › Now (step 16.2). */
+/** WD-1: Week with the Add work panel on today's first block that can take work (P from anywhere but Ahead). */
 export async function openPlanDay(page: Page): Promise<void> {
-  await page.keyboard.press("1");
+  await page.keyboard.press("2");
   await page.keyboard.press("p");
-  await page.waitForSelector(".pd2-left");
+  await page.locator("aside.add-work-panel").waitFor();
 }
 
-/** Selects a block in Plan the day by its client name. */
-export async function selectBlock(page: Page, client: string): Promise<void> {
-  await page.locator(".pd2-block .pd2-block-name", { hasText: client }).click();
-  await page.locator(".pd2-right .pd2-pane-title", { hasText: client }).waitFor();
+/** WD-1: moves the open Add work panel to today's (Monday's) block for this client: a click on its card. */
+export async function selectBlock(page: Page, client: string, date = "2026-11-02"): Promise<void> {
+  await page.locator(`[data-drop^="${date}:"]`, { has: page.locator(".card-client", { hasText: client }) }).first().locator(".card-client").first().click();
+  await page.locator("aside.add-work-panel .aw-title", { hasText: client }).waitFor();
 }
 
-/** The titles of the picks in a block of the left pane. */
-export const blockPicks = (page: Page, client: string) => page.locator(".pd2-block", { has: page.locator(".pd2-client", { hasText: client }) }).locator(".pd2-picks > li .pr-title").allTextContents();
+/** WD-1: the titles of the to-dos on that client's Week card on a day (Monday by default). */
+export const blockPicks = (page: Page, client: string, date = "2026-11-02") => page.locator(`[data-drop^="${date}:"]`, { has: page.locator(".card-client", { hasText: client }) }).locator(".pr-title").allTextContents();
 
 /** Step 16.2: Settings is in the initials menu (Settings, Sign out). */
 export async function openSettings(page: Page): Promise<void> {
@@ -218,29 +218,6 @@ export async function settingsClient(page: Page, name: string): Promise<void> {
   await settingsSection(page, "clients");
   await page.locator(".set-client-row", { hasText: name }).first().click();
   await page.locator(".ps-head h2", { hasText: name }).waitFor();
-}
-
-/** U6: Plan the week has one client open at a time; open this one (its line's name) and return its card. */
-export async function weekClient(page: Page, name: string) {
-  const card = page.locator(`.pw-client[aria-label="${name}"]`);
-  await page.locator(".pw-client").first().waitFor({ timeout: 20_000 });
-  if (!(await card.count())) await page.locator(`.pw-line[aria-label="${name}"] .pl-line-name`).click();
-  await card.waitFor();
-  return card;
-}
-
-/** U6: the client names in Plan the week, in line order (the open one included). */
-export const weekClientNames = (page: Page) => page.locator(".pw-lines > li").evaluateAll((els) => els.map((e) => e.querySelector(".pw-client")?.getAttribute("aria-label") ?? e.getAttribute("aria-label") ?? ""));
-
-/** U6: a row on any client's list in Plan the week, opening clients in turn until one has it. */
-export async function weekRow(page: Page, text: string) {
-  const row = page.locator(".pw-client .pw-row", { hasText: text }).first();
-  await page.locator(".pw-client").first().waitFor({ timeout: 20_000 });
-  for (const name of await weekClientNames(page)) {
-    await weekClient(page, name);
-    if (await row.count()) return row;
-  }
-  throw new Error(`No row "${text}" in Plan the week`);
 }
 
 /** UI-7: Inbox › Captures (the capture box, follow-ups and drafts): 4, then its segment in the Inbox's mode switch. */

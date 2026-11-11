@@ -30,8 +30,9 @@ async function walk(page: Page, h: Harness) {
   await page.waitForSelector(".demo-tag", { timeout: 30_000 });
   await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
   await page.waitForSelector(".today-view .today-block", { timeout: 30_000 });
+  // WD-1: Week with Add work (the old Plan the week address lands there).
   await page.evaluate(() => (location.hash = "#/week/plan"));
-  await page.locator(".pw-client").first().waitFor({ timeout: 30_000 });
+  await page.locator("aside.add-work-panel .aw-sec").first().waitFor({ timeout: 30_000 });
   await page.waitForTimeout(300);
 }
 
@@ -45,7 +46,7 @@ describe.skipIf(!webkitRuns && process.env.FOCUSTIME_TEST_WEBKIT !== "required")
   }, T);
   afterAll(() => h?.stop());
 
-  it("the sign-in page, demo Today and demo Plan the week, with no page errors", async () => {
+  it("the sign-in page, demo Day and demo Week with Add work, with no page errors", async () => {
     const probe = await h.browser.newPage({ ignoreHTTPSErrors: true });
     await probe.goto("about:blank");
     const native = await probe.evaluate(() => typeof (globalThis as { Temporal?: unknown }).Temporal !== "undefined");

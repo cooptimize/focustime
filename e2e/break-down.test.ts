@@ -146,11 +146,16 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
       const added = await dispatch(ctx, { action: "weekplan.add", input: { weekStart: WEEK, clientKey: "Adatum", itemId: FEATURE, tier: "must" } });
       expect(added.ok, JSON.stringify(added)).toBe(true);
 
-      await page.goto(`${app.url}#/week/plan/${WEEK}`);
-      const row = () => page.locator(".pw-needs").filter({ has: page.locator(".pw-needs-word") }).first();
+      // WD-1: a feature with no stories is under Not ready in its client chip's popover on Week, with Break down.
+      await page.goto(`${app.url}#/week/${WEEK}`);
+      await page.reload();
+      await appReady(page);
+      const chip = page.locator(".client-chips .cc-chip", { hasText: /^Adatum/ }).first();
+      const row = () => page.locator(".cc-pop .cc-ready li").filter({ has: page.locator(".aw-needs-word") }).first();
       const openAdatum = async () => {
-        const line = page.getByRole("button", { name: /^Adatum/ }).first();
-        if (!(await row().isVisible().catch(() => false)) && (await line.isVisible().catch(() => false))) await line.click();
+        await chip.waitFor({ timeout: 30_000 });
+        if (!(await row().isVisible().catch(() => false))) await chip.click();
+        await row().waitFor();
       };
       await openAdatum();
       await page.locator("[data-moment]").waitFor({ state: "detached", timeout: 10_000 }).catch(() => {});
@@ -158,7 +163,6 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
 
       // AI off for Adatum: the label follows the type; the panel says so in one line, with no Run. Esc goes back to the row.
       const button = row().getByRole("button", { name: "Break down Feature", exact: true });
-      await row().getByRole("button", { name: "Coop brief" }).waitFor();
       await button.focus();
       await button.press("Enter");
       await panel.getByText("AI is off for Adatum. Ask your FocusTime admin.").waitFor();
@@ -246,9 +250,9 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
       await panel.getByRole("button", { name: "Done" }).click();
       await panel.waitFor({ state: "detached" });
 
-      // The row refreshes: the feature has stories now, so it no longer says Needs stories.
-      await page.locator(".pw-count").filter({ hasText: "2 stories" }).first().waitFor();
-      await expect(page.locator(".pw-needs-word").count()).resolves.toBe(0);
+      // The chip refreshes: the feature has stories now, so it isn't under Not ready and the badge goes.
+      await expect.poll(() => chip.locator(".cc-badge").count(), { timeout: 30_000 }).toBe(0);
+      await expect(page.locator(".cc-pop .aw-needs-word").count()).resolves.toBe(0);
 
       // Prepare again (PV-1's event): now with its existing children, and the earlier draft as one muted line.
       await page.evaluate(() => window.dispatchEvent(new CustomEvent("focustime:breakdown", { detail: { clientKey: "Adatum", itemId: 240 } })));

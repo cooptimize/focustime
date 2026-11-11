@@ -1,5 +1,5 @@
-// Step 15.3: one capture flow (kind chips, inline fields, Enter saves as the kind), the draft editor (round trip, Plan
-// it, Delete), linked intentions and dragging right-pane rows onto the week's other days. Demo mode only.
+// Step 15.3: one capture flow (kind chips, inline fields, Enter saves as the kind), the draft editor (round trip, Add
+// to a block, Delete) and linked intentions from Add work's type box (WD-1; dragging rows onto Week is in addwork). Demo mode only.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, openPlanDay, selectBlock, startDemo, type Harness, openCaptures } from "./harness.ts";
@@ -180,21 +180,21 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await page.close();
   }, T);
 
-  it("Plan it adds the draft to a block in the 15.2 order, and the same editor opens from Plan the day", async () => {
+  it("Add to a block adds the draft to a block in the 15.2 order, and the same editor opens from Add work", async () => {
     const { page } = await freshPage(h);
     const r = await api<{ draft: { id: number } }>(page, "draft.add_story", { clientKey: "Northwind", parentItemId: null, title: "Plan-it draft", size: "M" });
     await openCaptures(page);
     await openDraft(page, "Plan-it draft");
-    await page.locator(".draft-editor").getByRole("button", { name: "Plan it" }).click();
+    await page.locator(".draft-editor").getByRole("button", { name: "Add to a block" }).click();
     const first = page.locator(".popup-menu [role=menuitem]:not([aria-disabled=true]):not([disabled])").first();
     await expect.poll(() => page.locator(".popup-menu").count()).toBe(1);
     await expect(page.locator(".popup-menu").textContent()).resolves.toContain("Northwind");
     await first.click();
     await expect.poll(async () => (await api<{ picks: { draftId: number | null }[] }>(page, "planday.start", { date: "2026-11-02" })).data.picks?.some((p) => p.draftId === r.data.draft.id) ?? false).toBe(true);
-    // Plan the day: the draft's row title opens the same editor.
+    // Add work: the draft's row title opens the same editor.
     await openPlanDay(page);
     await selectBlock(page, "Northwind");
-    const t = page.locator(".pd2-right .draft-title", { hasText: "Plan-it draft" });
+    const t = page.locator("aside.add-work-panel .draft-title", { hasText: "Plan-it draft" });
     if (await t.count()) {
       await t.first().click();
       await expect(page.locator(".draft-editor").count()).resolves.toBe(1);
@@ -207,48 +207,23 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     const { page, errors } = await freshPage(h);
     await openPlanDay(page);
     await selectBlock(page, "Northwind");
-    const before = await page.locator(".pd2-block.selected .pd2-picks > li").count();
-    const look = page.locator(".pd2-right .intention .item-lookup input");
+    const card = page.locator('[data-drop^="2026-11-02:"]', { has: page.locator(".card-client", { hasText: "Northwind" }) }).first();
+    const todos = card.locator(".pr-title");
+    const before = await todos.count();
+    const look = page.locator("aside.add-work-panel .aw-box input");
     await look.fill("export");
     await look.press("ArrowDown");
     await look.press("Enter");
-    await expect.poll(() => page.locator(".pd2-block.selected .pd2-picks > li").count()).toBe(before + 1);
+    await expect.poll(() => todos.count()).toBe(before + 1);
     const picks = async () => (await api<{ picks: { kind: string; title: string; itemId: number | null }[] }>(page, "planday.start", { date: "2026-11-02" })).data.picks;
     expect((await picks()).some((p) => p.kind === "item" && /export/i.test(p.title))).toBe(true);
     await look.fill("call the warehouse about pallets");
     await look.press("Shift+Enter");
-    const row = page.locator(".pd2-block.selected .pd2-picks > li", { hasText: "call the warehouse about pallets" });
-    await expect.poll(() => row.count()).toBe(1);
-    await expect(row.locator(".pr-note").textContent()).resolves.toContain("not in DevOps");
+    await expect.poll(async () => (await picks()).some((p) => p.kind !== "item" && p.title === "call the warehouse about pallets")).toBe(true);
+    await expect.poll(() => card.getByText("call the warehouse about pallets").count()).toBe(1);
     await expect(look.inputValue()).resolves.toBe("");
     expect(errors).toEqual([]);
     await page.close();
   }, T);
 
-  it("dragging a right-pane row shows the week's other days; dropping on one adds it there", async () => {
-    const { page, errors } = await freshPage(h);
-    await openPlanDay(page);
-    await selectBlock(page, "Northwind");
-    const row = page.locator(".pd2-right li.pd2-add[draggable=true]").first();
-    const title = (await row.locator(".pr-title").first().textContent())!.trim();
-    const b = (await row.boundingBox())!;
-    await page.mouse.move(b.x + 40, b.y + b.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(b.x + 60, b.y + b.height / 2 + 10, { steps: 4 });
-    await page.waitForSelector(".pd2-weekstrip");
-    const target = page.locator(".pd2-weekcard:not(.disabled):not(.other)").first();
-    const key = (await target.getAttribute("data-drop"))!;
-    const tb = (await target.boundingBox())!;
-    await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2, { steps: 6 });
-    await page.mouse.up();
-    await expect.poll(() => page.locator(".pd2-weekstrip").count()).toBe(0);
-    const date = key.slice(0, 10);
-    const half = key.slice(10);
-    // Read from the week (the target may be Friday's catch-up, which has no hours to plan the day on; AS-2's seed
-    // already has Export orders to CSV on Wednesday afternoon).
-    const monday = Temporal.PlainDate.from(date).subtract({ days: Temporal.PlainDate.from(date).dayOfWeek - 1 }).toString();
-    await expect.poll(async () => (await api<{ plan: Record<string, { picks: { title: string; half: string; date: string }[] }> }>(page, "week.load", { weekStart: monday })).data.plan?.[date]?.picks.some((p) => p.title === title && p.half === half) ?? false).toBe(true);
-    expect(errors).toEqual([]);
-    await page.close();
-  }, T);
 });

@@ -158,7 +158,8 @@ describe.skipIf(!CHROMIUM)("WK-2: the Board's Timeline toggle and per-column tie
     // The now line on Friday's block under way.
     await expect(page.locator(`main.grid ${FRI_AM} .now-line`).count()).resolves.toBe(1);
     await expect(page.locator(`main.grid ${FRI_AM} .now-line .nl-pill`).textContent()).resolves.toBe("10:00");
-    // Meetings as lines with their time.
+    // WD-1: meetings are one summary line ("2 meetings · 1h · 2h free") that opens to the lines, each with its time.
+    await page.locator(`main.grid ${MON_AM} .card-agenda-fold`).click();
     const lines = page.locator(`main.grid ${MON_AM} .card-events li`);
     await expect(lines.count()).resolves.toBeGreaterThan(0);
     await expect(lines.first().locator(".ce-time").textContent()).resolves.toMatch(/^\d{1,2}:\d\d–\d{1,2}:\d\d$/);
@@ -191,13 +192,14 @@ describe.skipIf(!CHROMIUM)("WK-2: the Board's Timeline toggle and per-column tie
     await page.close();
   }, T);
 
-  it("2560: Friday keeps the rail with titles, and the overdue promise's label at now clears the now line's time", async () => {
+  it("2560: Friday's rail is the slim strip (WD-1) with the overdue promise marked; nothing overlaps the now line", async () => {
     const { page, errors } = await freshPage(h, { width: 2560, height: 1440 });
     expect((await call(page, "hours.set_day", { date: FRI, segments: ["09:00-13:00"] })).ok).toBe(true);
     expect((await call(page, "ui.set_show_timelines", { show: true })).ok).toBe(true);
     await board(page);
-    await page.locator(`main.grid ${FRI_AM} .ruler:not(.slim) .r-promise`).first().waitFor();
-    await expect(promiseClearOfNow(page)).resolves.toBeGreaterThan(0);
+    await page.locator(`main.grid ${FRI_AM} .ruler.slim`).first().waitFor();
+    await expect(page.locator(`main.grid ${FRI_AM} .ruler.slim .r-promise`).count()).resolves.toBeGreaterThan(0);
+    await promiseClearOfNow(page);
     await expect(headersWhole(page)).resolves.toEqual([]);
     expect(errors).toEqual([]);
     await page.close();
@@ -235,15 +237,15 @@ describe.skipIf(!CHROMIUM)("WK-2: the Board's Timeline toggle and per-column tie
             if (mon && fri) expect(order.indexOf(fri.has!)).toBeGreaterThanOrEqual(order.indexOf(mon.has!));
             // Friday's card draws exactly its tier's element.
             if (fri) {
-              const el = fri.has === "rail" ? ".ruler:not(.slim)" : fri.has === "ruler" ? ".ruler.slim" : ".day-strip";
+              // WD-1: the rail tier draws the slim strip too.
+              const el = fri.has === "rail" || fri.has === "ruler" ? ".ruler.slim" : ".day-strip";
               await expect(grid.locator(`${FRI_AM} ${el}`).count()).resolves.toBe(1);
             }
             await promiseClearOfNow(page);
           }
           await expect(headersWhole(page)).resolves.toEqual([]);
-          // "+ Add to-do", never "+ Add work".
-          await expect(grid.locator(".add-work").first().textContent()).resolves.toBe("+ Add to-do");
-          await expect(page.getByText("Add work", { exact: false }).count()).resolves.toBe(0);
+          // WD-1: every block ends with "+ Add".
+          await expect(grid.locator(".add-work").first().textContent()).resolves.toBe("+ Add");
           expect(errors).toEqual([]);
           await page.close();
         }, T);

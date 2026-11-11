@@ -39,7 +39,7 @@ describe.skipIf(!CHROMIUM || !SHOTS)("UI-B screenshots", () => {
       await page.locator(".today-rows .now-row").first().waitFor();
       await snap("today");
       await week(page);
-      await page.getByRole("button", { name: "Plan today" }).click();
+      await page.getByRole("button", { name: "Add work" }).click();
       await page.locator(".pd-agenda .now-row").first().waitFor({ timeout: 15_000 }).catch(() => {});
       await snap("plan-today");
       await page.close();

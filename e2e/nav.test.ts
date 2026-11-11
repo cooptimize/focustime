@@ -1,5 +1,5 @@
-// Step 16.2, NV-1: four tabs (1–4: Today · Week · Ahead · Inbox), Week's Board · Commit and Ahead's Grid · Gantt · Fix next (AH-1),
-// Plan today as the Board focused on a day, addresses (back and reload), P, entry points from the Week and notification routes. Demo mode (fictional data), clock pinned to Mon Nov 2, 9:30 AM.
+// Step 16.2, NV-1, WD-1: five tabs (1–5: Day · Week · Ahead · Inbox · Status), Week with no switch and the Add work panel,
+// Ahead's Grid · Gantt · Readiness · Backlog, addresses (back and reload), P, entry points from the Week and notification routes. Demo mode (fictional data), clock pinned to Mon Nov 2, 9:30 AM.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
@@ -8,7 +8,6 @@ let h: Harness;
 const T = 90_000;
 const hash = (page: Page) => page.evaluate(() => location.hash);
 const tab = (page: Page) => page.locator(".views .view-tab[aria-current=page]").textContent();
-const mode = (page: Page) => page.locator(".mode-switch .ms-btn[aria-current=page]").first().textContent();
 const route = (page: Page, r: string) => page.evaluate((r) => window.dispatchEvent(new CustomEvent("focustime:open-route", { detail: r })), r);
 
 describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo mode)", () => {
@@ -17,11 +16,11 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("four tabs in order, no Plan tab, no ritual chips, no context line; 1–4 switch them", async () => {
+  it("five tabs in order (Day · Week · Ahead · Inbox · Status), no Plan or Team tab, no ritual chips, no context line; 1–5 switch them", async () => {
     const { page, errors } = await freshPage(h);
-    await expect(page.locator(".views .view-tab").allTextContents()).resolves.toEqual(["Today", "Week", "Ahead", expect.stringMatching(/^Inbox/)]);
+    await expect(page.locator(".views .view-tab").allTextContents()).resolves.toEqual(["Day", "Week", "Ahead", expect.stringMatching(/^Inbox/), expect.stringMatching(/^Status/)]);
     await expect(page.locator(".ritual-bar, .context-line, .weeknav").count()).resolves.toBe(0);
-    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Ahead", "#/ahead"], ["4", "Inbox", "#/inbox"], ["1", "Today", "#/today"]] as const) {
+    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Ahead", "#/ahead"], ["4", "Inbox", "#/inbox"], ["5", "Status", "#/status"], ["1", "Day", "#/day"]] as const) {
       await page.keyboard.press(k);
       await expect.poll(() => tab(page)).toMatch(new RegExp(`^${name}`));
       expect(await hash(page)).toBe(h2);
@@ -30,89 +29,82 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.close();
   }, T);
 
-  it("Today has no switch; P opens Plan today on Week's Board; Back returns; Commit today commits and the card goes", async () => {
+  it("Day has no switch; P opens Week with Add work; Back returns; Confirm the day from its header and the card goes", async () => {
     const { page } = await freshPage(h);
     expect(await page.locator(".today-view .mode-switch").count()).toBe(0);
-    // Demo Monday 9:30 AM, not planned yet: the Plan today card shows and Week's Board has the due dot.
-    await page.getByRole("region", { name: "Plan today" }).waitFor();
+    // Demo Monday 9:30 AM, not planned yet: the Plan today card shows.
+    await page.getByRole("region", { name: "Add work" }).waitFor();
     await page.keyboard.press("p");
-    await page.waitForSelector(".pd2-left");
-    expect(await hash(page)).toBe("#/week/day");
-    await expect(page.locator(".pd2-title h2").textContent()).resolves.toContain("Plan today");
+    await page.locator("aside.add-work-panel").waitFor();
+    expect(await hash(page)).toBe("#/week/add");
     await expect.poll(() => tab(page)).toBe("Week");
-    expect(await page.locator(".mode-switch .ms-btn", { hasText: "Board" }).locator(".ms-due").count()).toBe(1);
-    // Back in the browser returns to Today; forward to Plan today.
+    // Back in the browser returns to Day; forward to the panel.
     await page.goBack();
-    await expect.poll(() => hash(page)).toBe("#/today");
+    await expect.poll(() => hash(page)).toBe("#/day");
     await page.goForward();
-    await page.waitForSelector(".pd2-left");
-    // Add one pick, Commit today: committed and back to the Board; Today's card is gone.
-    await page.locator(".pd2-right li.pd2-add:not(.planned) button.pd2-plus").first().click();
-    await page.locator(".pd2-right li.pd2-add.planned").first().waitFor();
-    await page.locator(".pd2-head .done-btn").click();
-    await expect.poll(async () => /^#\/week(\/2026-11-02)?$/.test(await hash(page)) || (await page.locator(".pd-committed").count()) > 0).toBe(true);
-    if (await page.locator(".pd-committed").count()) {
-      await page.locator(".pd-committed").getByRole("button", { name: "Not now" }).click();
-      await page.locator(".pd2-head .done-btn").click();
-    }
-    await expect.poll(() => hash(page)).toMatch(/^#\/week(\/2026-11-02)?$/);
+    await page.locator("aside.add-work-panel").waitFor();
+    // Add one to-do, then Confirm Mon from its day header: Day's card is gone.
+    await page.locator("aside.add-work-panel .aw-row:not(.placed) button.aw-plus").first().click();
+    await page.locator("aside.add-work-panel .aw-row.placed").first().waitFor();
+    const head = page.locator("header.day-head", { has: page.locator(".dow", { hasText: "Mon" }) }).first();
+    await head.hover();
+    await head.getByRole("button", { name: /^Actions for Mon/ }).click();
+    await page.getByRole("menuitem", { name: /^Confirm Mon, Nov 2/ }).click();
+    await page.getByText("Confirmed Mon, Nov 2").first().waitFor();
     await page.keyboard.press("1");
-    // HK-5: Today itself (the old ".card, .tc-card" never matched, and its swallowed wait cost 30 s every run).
     await page.locator(".today-view").waitFor();
-    await expect.poll(() => page.getByRole("region", { name: "Plan today" }).count()).toBe(0);
+    await expect.poll(() => page.getByRole("region", { name: "Add work" }).count()).toBe(0);
     await page.close();
   }, T);
 
-  it("Midday check-in Done returns to Today; Close out has its own day in the address", async () => {
+  it("Midday check-in Done returns to Day; Close out has its own day in the address", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("m");
-    await expect.poll(() => hash(page)).toBe("#/today/checkin");
+    await expect.poll(() => hash(page)).toBe("#/day/checkin");
     await page.locator(".mode-checkin .done-btn").click();
-    await expect.poll(() => hash(page)).toBe("#/today");
+    await expect.poll(() => hash(page)).toBe("#/day");
     await page.keyboard.press("e");
-    await expect.poll(() => hash(page)).toBe("#/today/closeout");
+    await expect.poll(() => hash(page)).toBe("#/day/closeout");
     await page.locator(".closeout-panel .co-step button[aria-label='Previous day']").click();
-    await expect.poll(() => hash(page)).toBe("#/today/closeout/2026-11-01");
+    await expect.poll(() => hash(page)).toBe("#/day/closeout/2026-11-01");
     await page.close();
   }, T);
 
-  it("Week: header with the week and musts, Board · Commit; Commit defaults to next week with ‹ ›; W and P toggle", async () => {
+  it("Week: header with the week, no mode switch; P toggles Add work; ] steps to next week and the panel follows", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("2");
-    await expect(page.locator(".week-head h2").textContent()).resolves.toMatch(/^Week of Nov 2/);
-    await expect(page.locator(".mode-switch .ms-btn").allTextContents()).resolves.toEqual([expect.stringMatching(/^Board/), "Plan", "Team", "Status"]);
+    await expect(page.locator(".wd1-head h2").first().textContent()).resolves.toMatch(/Nov 2/);
+    expect(await page.locator(".week-view .mode-switch, .wd1-head .mode-switch").count()).toBe(0);
     await page.keyboard.press("p");
-    await expect.poll(() => hash(page)).toBe("#/week/commit");
-    await expect.poll(() => page.locator(".planweek h2").first().textContent()).toBe("Plan the week of Nov 9");
-    await page.locator(".planweek .co-step button[aria-label='Previous week']").click();
-    await expect.poll(() => hash(page)).toBe("#/week/commit/2026-11-02");
-    await expect.poll(() => page.locator(".planweek h2").first().textContent()).toBe("Plan the week of Nov 2");
-    await page.keyboard.press("w");
-    await expect.poll(() => mode(page)).toMatch(/^Board/);
+    await expect.poll(() => hash(page)).toBe("#/week/add");
+    await page.keyboard.press("]");
+    await expect.poll(() => hash(page)).toBe("#/week/2026-11-09/add");
+    await page.locator("aside.add-work-panel").waitFor();
+    await page.keyboard.press("p");
+    await expect.poll(() => hash(page)).toBe("#/week/2026-11-09");
     await page.close();
   }, T);
 
-  it("a Week day header's Plan chip opens Plan today's Board on that day; the address survives a reload", async () => {
+  it("a day header's Add work opens the panel on that day; the address survives a reload", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("2");
-    const tue = page.locator(".day-plan").nth(1);
-    await tue.click();
-    await expect.poll(() => hash(page)).toBe("#/week/day/2026-11-03");
+    const head = page.locator("header.day-head", { has: page.locator(".dow", { hasText: "Tue" }) }).first();
+    await head.hover();
+    await head.getByRole("button", { name: /^Actions for Tue/ }).click();
+    await page.getByRole("menuitem", { name: /^Add work to this day/ }).click();
+    await expect.poll(() => hash(page)).toMatch(/^#\/week\/day\/2026-11-03/);
     await expect.poll(() => tab(page)).toBe("Week");
-    await expect.poll(() => page.locator(".pd2-title h2").textContent()).toContain("Plan Tuesday, Nov 3");
     await page.reload();
-    await page.waitForSelector(".pd2-left");
-    await expect(page.locator(".pd2-title h2").textContent()).resolves.toContain("Plan Tuesday, Nov 3");
+    await expect.poll(() => page.locator("aside.add-work-panel").getAttribute("data-add-panel")).toMatch(/^2026-11-03\|/);
     await page.close();
   }, T);
 
-  it("+ Add to-do on a Week card: the Board focused on that day and block", async () => {
+  it("+ Add on a Week card: the panel on that day and block", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("2");
     const card = page.locator(".half", { hasText: "Northwind" }).first();
-    await card.click({ position: { x: 12, y: 12 } });
-    await card.getByRole("button", { name: "+ Add to-do" }).click();
-    await page.locator(".pd2-right .pd2-pane-title", { hasText: "Northwind" }).waitFor();
+    await card.locator(".add-work.add-row").click();
+    await page.locator("aside.add-work-panel").waitFor();
     expect(await hash(page)).toMatch(/^#\/week\/day\/2026-11-0\d\/(AM|PM)$/);
     await page.close();
   }, T);
@@ -140,18 +132,20 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
   it("notification routes open tab and mode", async () => {
     const { page } = await freshPage(h);
     for (const [r, want] of [
-      ["checkin", "#/today/checkin"],
-      ["closeout", "#/today/closeout"],
-      ["planday", "#/week/day"],
+      ["checkin", "#/day/checkin"],
+      ["closeout", "#/day/closeout"],
+      ["planday", "#/week/add"],
       ["ahead", "#/ahead/gantt"],
       ["aheaditem:1113", "#/ahead/item/1113"],
-      ["planweek:2026-11-09", "#/week/commit/2026-11-09"],
+      ["planweek:2026-11-09", "#/week/2026-11-09/add"],
+      ["status", "#/status"],
+      ["team", "#/week"],
       ["inbox", "#/inbox/promises"],
       ["followup:1", "#/inbox/item/f1"],
       ["settings:notifications", "#/settings/notifications"],
       ["focus", "#/focus"],
-      ["vm", "#/today"],
-      ["today", "#/today"],
+      ["vm", "#/day"],
+      ["today", "#/day"],
     ] as const) {
       await route(page, r);
       await expect.poll(() => hash(page), { message: r }).toBe(want);

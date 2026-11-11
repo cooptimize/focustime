@@ -73,9 +73,9 @@ describe.skipIf(!CHROMIUM)("Today and Week fit (U5.1)", () => {
     await page.locator(".half.card").first().waitFor();
     expect(await paintsOutside(page, ".half.card")).toEqual([]);
     expect(await paintsOutside(page, ".half.whole")).toEqual([]);
-    await go(page, `#/today/plan/${MON}/AM`);
-    await page.locator(".pd2-block").first().waitFor();
-    expect(await paintsOutside(page, ".pd2-block")).toEqual([]);
+    await go(page, `#/week/day/${MON}/AM`);
+    await page.locator("aside.add-work-panel .aw-sec").first().waitFor();
+    expect(await paintsOutside(page, "aside.add-work-panel")).toEqual([]);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -123,7 +123,7 @@ describe.skipIf(!CHROMIUM)("Today and Week fit (U5.1)", () => {
     await page.close();
   }, T);
 
-  it("a Week card header at 1920 shows a 12-character client name untruncated, and the time range takes its own line first", async () => {
+  it("a Week card header at 1920 shows a 12-character client name untruncated; a longer one shortens and the time stays in view", async () => {
     const { page, errors } = await freshPage(h);
     await go(page, `#/week/${MON}`);
     await page.locator(".half.card .card-client").first().waitFor();
@@ -138,17 +138,17 @@ describe.skipIf(!CHROMIUM)("Today and Week fit (U5.1)", () => {
       expect(x.cut).toBe(false);
       expect(x.body).toBeGreaterThanOrEqual(200);
     }
-    // A name too long for the line: the time range moves to its own line before the name shortens, and stays in view
-    // (WK-1 amends U5.1, where it wrapped out of view under a fixed-height header).
+    // A name too long for the line: WD-1's header is one line (the spec's "one status chip that never wraps"), so the
+    // name shortens with an ellipsis and the time range stays on the line and in view (WK-1 had it take its own line).
     const long = await page.locator(".half.card .card-head").first().evaluate((head) => {
       const name = head.querySelector<HTMLElement>(".card-client")!;
       name.textContent = "Contoso Corporation Holdings";
       const h = head.getBoundingClientRect();
       const n = name.getBoundingClientRect();
       const when = head.querySelector(".card-when")!.getBoundingClientRect();
-      return { ownLine: when.top >= n.top + 4, inView: when.bottom <= h.bottom + 1 && when.height > 0, nameCut: name.scrollHeight > name.clientHeight + 0.5 };
+      return { ownLine: when.top >= n.top + 4, inView: when.bottom <= h.bottom + 1 && when.right <= h.right + 1 && when.height > 0 };
     });
-    expect(long).toEqual({ ownLine: true, inView: true, nameCut: false });
+    expect(long).toEqual({ ownLine: false, inView: true });
     expect(errors).toEqual([]);
     await page.close();
   }, T);

@@ -3,7 +3,7 @@
 // DEMO_SHOTS naming a folder, each step's screenshot at 1920 in dark (the default theme) and light.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
-import { CHROMIUM, FAKE_MIC, freshPage, NOW, openInboxItem, openInboxView, startDemo, type Harness } from "./harness.ts";
+import { blockPicks, CHROMIUM, FAKE_MIC, freshPage, NOW, openInboxItem, openInboxView, selectBlock, startDemo, type Harness } from "./harness.ts";
 
 const T = 600_000;
 const SHOTS = process.env.DEMO_SHOTS ?? null;
@@ -38,7 +38,7 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
   it("runs from Today to Close out", async () => {
     const { page, errors } = await freshPage(h);
 
-    // 1. Today: what's next, the urgent strip (my late promise), the moment card (Plan today).
+    // 1. Day: what's next, the urgent strip (my late promise), the moment card (Add work).
     await page.locator(".phone-now, .today-next").first().waitFor({ timeout: 30_000 });
     await page.getByText(/Promise · was due/).first().waitFor();
     await page.getByText("Send Marcus the updated export spec").first().waitFor();
@@ -53,23 +53,28 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await page.locator(".phone-now, .today-next").first().waitFor({ timeout: 30_000 });
     await shot(page, "today");
 
-    // 2. Plan today: drag Filter orders by date range onto Northwind's afternoon, then Confirm today.
+    // 2. Add work (WD-1): P opens Week with the panel; drag Filter orders by date range onto Northwind's Monday
+    // afternoon, then Confirm Mon from the day header's ⋯.
     await page.keyboard.press("p");
-    await page.waitForSelector(".pd2-left", { timeout: 30_000 });
-    await page.locator(".pd2-block .pd2-block-name", { hasText: "Northwind" }).click();
-    const row = page.locator("li.pd2-add[draggable=true]", { hasText: "Filter orders by date range" }).first();
+    await page.locator("aside.add-work-panel").waitFor({ timeout: 30_000 });
+    await selectBlock(page, "Northwind");
+    const row = page.locator("aside.add-work-panel .aw-row[draggable=true]", { hasText: "Filter orders by date range" }).first();
     await row.waitFor({ timeout: 15_000 });
-    await row.dragTo(page.locator(".pd2-block", { has: page.locator(".pd2-client", { hasText: "Northwind" }) }));
-    await expect.poll(() => page.locator(".pd2-block", { has: page.locator(".pd2-client", { hasText: "Northwind" }) }).locator(".pd2-picks .pr-title").allTextContents()).toContain("Filter orders by date range");
+    const nwMon = page.locator('[data-drop^="2026-11-02:"]', { has: page.locator(".card-client", { hasText: "Northwind" }) }).first();
+    await row.dragTo(nwMon);
+    await expect.poll(() => blockPicks(page, "Northwind")).toContain("Filter orders by date range");
     await shot(page, "plan-today");
-    await page.getByRole("button", { name: /^Confirm (today|Monday)/ }).first().click();
+    const mon = page.locator("header.day-head", { has: page.locator(".dow", { hasText: "Mon" }) }).first();
+    await mon.hover();
+    await mon.getByRole("button", { name: /^Actions for Mon/ }).click();
+    await page.getByRole("menuitem", { name: /^Confirm Mon, Nov 2/ }).click();
     await page.waitForTimeout(800);
+    await page.keyboard.press("Escape");
 
     // 3. Week: From last week (Monday), the at-risk Wednesday afternoon (Out), Thursday's PTO, Friday's catch-up, the now line.
     await go(page, "#/week");
-    await page.locator("section.carry-summary, .from-last-week").first().waitFor({ timeout: 30_000 });
-    await page.getByText(/unfinished to-dos? from last week/).first().waitFor();
-    await page.getByText("At risk · Out: school event 1:30").first().waitFor();
+    await page.getByText(/\d+ to place: .*from last week/).first().waitFor({ timeout: 30_000 });
+    await page.locator('.status-pill.at_risk[title^="At risk: Out: school event 1:30"]').first().waitFor();
     await page.locator(".day .now-line").first().waitFor();
     await shot(page, "week");
 
@@ -207,14 +212,12 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await both.locator(".as-parts").waitFor({ timeout: 30_000 });
     await page.keyboard.press("Escape");
 
-    // 10. Send to someone's week: Supplier onboarding to Sam as a Must, from Week › Plan.
-    await go(page, "#/week/commit/2026-11-02");
-    await page.locator(".pw-client").first().waitFor({ timeout: 30_000 });
-    const nw = page.locator('.pw-client[aria-label="Northwind"]');
-    if (!(await nw.count())) await page.locator('.pw-line[aria-label="Northwind"] .pl-line-name').click();
-    const srow = nw.locator(".pw-row", { hasText: "Supplier onboarding" }).first();
-    await srow.locator(":scope > .pl-title").hover();
-    await srow.locator(":scope > .pl-hover button.more").click();
+    // 10. Send to someone's week: Supplier onboarding to Sam as a Must, from its ⋯ in Add work (WD-1).
+    await go(page, "#/week/add");
+    await page.locator("aside.add-work-panel").waitFor({ timeout: 30_000 });
+    await selectBlock(page, "Northwind");
+    const srow = page.locator("aside.add-work-panel .aw-feature", { has: page.locator(":scope > .aw-feat-head .aw-feat-name", { hasText: "Supplier onboarding" }) }).first();
+    await srow.locator(":scope > .aw-feat-head").getByRole("button", { name: /^More for / }).click();
     await page.locator(".popup-menu .menu-item", { hasText: "Send to…" }).click();
     const dlg = page.getByRole("dialog", { name: "Send to… Supplier onboarding" });
     await dlg.getByRole("combobox", { name: "Send to" }).click();

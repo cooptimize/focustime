@@ -23,13 +23,15 @@ describe.skipIf(!CHROMIUM)("TD-1 to-do, not pick (browser, demo mode)", () => {
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("Today, Plan today, Settings › Planning and the command menu say to-do; the menu still finds by pick", async () => {
+  it("Day, Week with Add work, Settings › Planning and the command menu say to-do; the menu still finds by pick", async () => {
     const { page, errors } = await freshPage(h);
     expect((await call(page, "planday.start", { date: TODAY })).ok).toBe(true);
     for (const itemId of [4411, 4412]) expect((await call(page, "pick.add", { date: TODAY, half: "AM", clientKey: "Cooptimize", itemId })).ok).toBe(true);
-    // Not confirmed yet: Plan today's own words; then confirmed for Today.
+    // Not confirmed yet: Week with Add work's own words (WD-1); then confirmed for Day.
     await page.evaluate((d) => (location.hash = `#/week/day/${d}`), TODAY);
-    await page.locator(".pd2-picks > li").first().waitFor();
+    await page.reload();
+    await page.locator("aside.add-work-panel .aw-sec").first().waitFor();
+    await page.locator(".half.card li.pick-row").first().waitFor();
     expect(await pickLines(page)).toEqual([]);
     await shotBoth(page, "td1-plan-today");
     expect((await call(page, "planday.commit", { date: TODAY })).ok).toBe(true);

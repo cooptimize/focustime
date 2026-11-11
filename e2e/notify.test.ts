@@ -18,7 +18,7 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     await settingsSection(page, "notifications");
     const form = page.locator(".set-form", { hasText: "Ritual reminders" });
     await form.waitFor();
-    for (const name of ["Plan the day", "Check-in", "Close out", "Plan the week", "Look ahead", "Focus timer", "Meeting warnings", "My VM", "Promises due", "Expiring secrets"])
+    for (const name of ["Add work to today", "Check-in", "Close out", "Add work to the week", "Look ahead", "Focus timer", "Meeting warnings", "My VM", "Promises due", "Expiring secrets"])
       await expect(form.locator(".set-notify-row", { hasText: name }).count()).resolves.toBeGreaterThan(0);
     // TB-2's In Teams kinds sit in the same form ("Midday check-in", its time select): these are the app's own.
     await form.getByRole("checkbox", { name: /^Check-in/ }).uncheck();
@@ -64,8 +64,9 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     };
     await expectView("checkin", "main.mode-checkin");
     await expectView("closeout", ".closeout-panel");
-    await expectView("planday", ".pd2-left");
-    await expectView("planweek:2026-11-09", 'main[aria-label="Plan the week"]');
+    await expectView("planday", "aside.add-work-panel");
+    await expectView("planweek:2026-11-09", "aside.add-work-panel");
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/week/2026-11-09/add");
     await expectView("focus", ".focus-screen");
     await expectView("inbox", 'main[aria-label="Inbox"]');
     await expectView("settings:notifications", ".set-notify");

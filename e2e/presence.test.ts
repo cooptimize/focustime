@@ -14,12 +14,10 @@ describe.skipIf(!CHROMIUM)("Teams presence and status (browser, demo mode)", () 
 
   it("Ask to collaborate: a mark and a word for each Cooptimizer, Available now first", async () => {
     const { page, errors } = await freshPage(h);
+    // WD-1: a feature's ⋯ in Add work (this week has the demo's week lists).
     await page.keyboard.press("2");
     await page.keyboard.press("p");
-    // This week has the demo's week lists.
-    await page.locator(".planweek .co-step button[aria-label='Previous week']").click();
-    await page.locator(".pw-row").first().hover();
-    await page.locator(".pw-row button.more").first().click();
+    await page.locator("aside.add-work-panel .aw-feat-head").first().getByRole("button", { name: /^More for / }).click();
     await page.getByRole("menuitem", { name: /Ask to collaborate/ }).click();
     const dlg = page.getByRole("dialog", { name: /Ask to collaborate/ });
     await dlg.waitFor();

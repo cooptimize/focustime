@@ -55,7 +55,7 @@ describe.skipIf(!CHROMIUM)("Reset demo (DM-1)", () => {
     await Promise.all([page.waitForEvent("load", { timeout: 15_000 }), button.click()]);
     await page.locator(".topbar").waitFor({ timeout: 15_000 });
     expect(Date.now() - t0).toBeLessThan(5_000);
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/today");
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/day");
 
     expect(await snapshot(page)).toEqual(start);
     const item = await call(page, "devops.preview", { clientKey: "Northwind", change: { kind: "state", itemId: 1112, state: "Active" } });

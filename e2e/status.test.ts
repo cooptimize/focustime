@@ -10,7 +10,7 @@ const T = 300_000;
 const THURSDAY = "2026-11-05T10:00:00-05:00";
 
 async function openStatus(page: Page) {
-  await page.goto(`${new URL(page.url()).origin}/#/week/status`);
+  await page.goto(`${new URL(page.url()).origin}/#/status`);
   await page.getByRole("heading", { name: /Status report · for Monday, Nov 9/ }).waitFor({ timeout: 30_000 });
   await page.locator(".st-count").waitFor();
 }
@@ -28,8 +28,8 @@ describe.skipIf(!CHROMIUM)("Status (SR-1)", () => {
     const { page, errors } = await freshPage(h);
     await openStatus(page);
     await expect.poll(() => page.locator(".st-count").textContent()).toBe("5 features · 2 with an update · 3 without · 3 features need your update");
-    // The mode switch has the fourth segment, current.
-    await expect.poll(() => page.locator('.mode-switch .ms-btn[aria-current="page"]').textContent()).toBe("Status");
+    // WD-1: Status is its own tab, current.
+    await expect.poll(() => page.locator('.views .view-tab[aria-current="page"]').textContent()).toMatch(/^Status/);
     if (SHOTS) await shotBoth(page, "sr1-status-1920");
     const supplier = page.getByRole("article", { name: "Supplier onboarding" });
     await expect.poll(() => supplier.locator(".st-badge").textContent()).toBe("No update yet");

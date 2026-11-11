@@ -1,5 +1,5 @@
 // NV-1: the main path through the new navigation, in demo mode on Monday Nov 2 at 9:30.
-// Tabs Today · Week · Ahead · Inbox (and 1 to 4); Today without modes: what's next, the Plan today card in the
+// WD-1: tabs Day · Week · Ahead · Inbox · Status (and 1 to 5); Day without modes: what's next, the Plan today card in the
 // morning, the Midday check-in card after lunch, the Close out card at the end of the day; Plan today is Week's Board
 // focused on today, with everything Plan the day did; Board and Commit; Ahead (was Roadmap); the Inbox; every older
 // address landing on its new home with its date kept. Edge cases are unit tests (ui/nav.test.ts, plan/modes.test.ts,
@@ -38,82 +38,37 @@ async function shotAll(page: Page, name: string) {
 }
 
 describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
-  it("tabs and keys, Today's cards, Plan today on Week's Board, Board and Commit, Ahead, the Inbox and the old addresses", async () => {
+  it("tabs and keys, Day's cards, Plan today opens Week with Add work on today, Ahead, the Inbox, Status and the old addresses", async () => {
     const { page, errors } = await freshPage(h);
     page.setDefaultTimeout(30_000);
 
-    // Four tabs, Roadmap now Ahead; 1 to 4 pick them.
-    expect(await page.getByRole("navigation", { name: "Tabs" }).getByRole("button").allTextContents()).toEqual(expect.arrayContaining([expect.stringMatching(/^Today/), expect.stringMatching(/^Week/), expect.stringMatching(/^Ahead/), expect.stringMatching(/^Inbox/)]));
-    for (const [key, name, where] of [["2", "Week", "#/week"], ["3", "Ahead", "#/ahead"], ["4", "Inbox", "#/inbox"], ["1", "Today", "#/today"]] as const) {
+    // WD-1: five tabs, Day first and Status last; 1 to 5 pick them.
+    expect(await page.getByRole("navigation", { name: "Tabs" }).getByRole("button").allTextContents()).toEqual(expect.arrayContaining([expect.stringMatching(/^Day/), expect.stringMatching(/^Week/), expect.stringMatching(/^Ahead/), expect.stringMatching(/^Inbox/), expect.stringMatching(/^Status/)]));
+    for (const [key, name, where] of [["2", "Week", "#/week"], ["3", "Ahead", "#/ahead"], ["4", "Inbox", "#/inbox"], ["5", "Status", "#/status"], ["1", "Day", "#/day"]] as const) {
       await page.keyboard.press(key);
       await expect.poll(() => tab(page).textContent()).toMatch(new RegExp(`^${name}`));
       expect(await hash(page)).toBe(where);
     }
 
-    // Today has no modes: what's next, then the morning's Plan today card (Monday isn't committed yet).
+    // Day has no modes: what's next, then the morning's Plan today card (Monday isn't confirmed yet).
     expect(await page.getByRole("navigation", { name: "Today modes" }).count()).toBe(0);
     await page.locator(".phone-now").waitFor();
-    const planCard = page.getByRole("region", { name: "Plan today" });
+    const planCard = page.getByRole("region", { name: "Add work" });
     await planCard.waitFor();
     expect(await page.getByRole("region", { name: "Midday check-in" }).count()).toBe(0);
     await shotAll(page, "nv1-today-plan-card");
 
-    // Plan today: Week's Board focused on today, with everything Plan the day did.
-    await planCard.getByRole("button", { name: "Plan today" }).click();
-    await expect.poll(() => hash(page)).toBe("#/week/day/2026-11-02");
+    // Plan today: Week with the Add work panel on today; Week has no mode switch.
+    await planCard.getByRole("button", { name: "Add work" }).click();
+    await expect.poll(() => hash(page)).toMatch(/^#\/week\/day\/2026-11-02/);
     await expect.poll(() => tab(page).textContent()).toMatch(/^Week/);
-    const modes = page.getByRole("navigation", { name: "Week modes" });
-    expect(await modes.getByRole("button").allTextContents()).toEqual(["Board", "Plan", "Team", "Status"]);
-    expect(await page.locator(".pd2-title").textContent()).toContain("Plan today");
-    // Each piece of Plan the day, reachable here:
-    // 1. the day's blocks with their fit, and the day's free time;
-    expect(await page.locator(".pd2-block").count()).toBeGreaterThan(0);
-    // 2. the agenda (meetings and free gaps) open on the selected block;
-    await page.locator(".pd2-block .pd-agenda").first().waitFor();
-    // 3. the right pane: Add to <client> with this week's priorities, follow-ups and More from its DevOps;
-    await page.locator(".pd2-right .pd2-pane-title").waitFor();
-    expect(await page.locator(".pd2-right").textContent()).toMatch(/This week's|More from/);
-    // 4. the type box (a draft story under the chosen feature; Shift+Enter a note not in DevOps);
+    expect(await page.getByRole("navigation", { name: "Week modes" }).count()).toBe(0);
+    await expect.poll(() => page.locator("aside.add-work-panel").getAttribute("data-add-panel")).toMatch(/^2026-11-02\|/);
     await page.getByPlaceholder(/^Type a story for /).waitFor();
-    // 5. the day arrows (and ← →);
-    await page.getByRole("button", { name: "Next day (→)" }).waitFor();
-    await page.getByRole("button", { name: "Previous day (←)" }).waitFor();
-    // 6. "+" adds a story to the selected block, and a planned row has its ⋯ (size, move, time, help, open, remove);
-    await page.locator(".pd2-right .pd2-plus:not(.done)").first().click();
-    await expect.poll(() => page.locator(".pd2-picks > li").count()).toBeGreaterThan(0);
-    await page.locator(".pd2-picks > li").first().getByRole("button", { name: /^More for / }).waitFor();
-    // 7. Commit today (C), then Timebox my day while picks have no time.
-    const commit = page.getByRole("button", { name: "Confirm today" });
-    await commit.waitFor();
-    await shotAll(page, "nv1-week-plan-today");
-    await commit.click();
-    const timebox = page.getByRole("button", { name: "Timebox my day" });
-    await Promise.race([timebox.first().waitFor(), page.waitForFunction(() => location.hash === "#/week/2026-11-02")]);
-    if (await timebox.count()) await page.getByRole("button", { name: "Not now" }).click();
-    // 8. The next day by the arrow, and back to the whole week.
-    await page.keyboard.press("1");
-    await page.keyboard.press("p");
-    await page.waitForSelector(".pd2-left");
-    await page.getByRole("button", { name: "Next day (→)" }).click();
-    await expect.poll(() => hash(page)).toBe("#/week/day/2026-11-03");
-    await page.getByRole("button", { name: /Confirm Tuesday|Back to the week/ }).waitFor();
     await page.keyboard.press("Escape");
-    await expect.poll(() => hash(page)).toBe("#/week/2026-11-02");
+    await expect.poll(() => page.locator("aside.add-work-panel").count()).toBe(0);
 
-    // The Board is Week's default; Commit holds Plan the week, P goes back.
-    await page.keyboard.press("2");
-    await expect.poll(() => hash(page)).toBe("#/week");
-    await page.locator(".week-head").waitFor();
-    await shotAll(page, "nv1-week-board");
-    await modes.getByRole("button", { name: "Plan" }).click();
-    await expect.poll(() => hash(page)).toBe("#/week/commit");
-    await page.locator(".pw-head, .pd2-head").first().waitFor();
-    expect(await page.getByRole("heading", { name: /Plan the week of/ }).count()).toBeGreaterThan(0);
-    await shotAll(page, "nv1-week-commit");
-    await page.keyboard.press("p");
-    await expect.poll(() => hash(page)).toBe("#/week");
-
-    // AH-1: Ahead is Grid, Gantt and Fix next.
+    // AH-1: Ahead is Grid, Gantt, Readiness and Backlog.
     await page.keyboard.press("3");
     await page.locator("main.roadmap").waitFor();
     await page.getByRole("navigation", { name: "Ahead modes" }).waitFor();
@@ -128,8 +83,9 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     // Every older address lands on its new home with its date, block or week.
     for (const [old, now] of [
       ["#/today/plan/2026-11-03/PM", "#/week/day/2026-11-03/PM"],
-      ["#/today/plan", "#/week/day"],
-      ["#/week/plan/2026-11-09", "#/week/commit/2026-11-09"],
+      ["#/today/plan", "#/week/add"],
+      ["#/week/plan/2026-11-09", "#/week/2026-11-09/add"],
+      ["#/week/status", "#/status"],
       ["#/roadmap", "#/ahead"],
       ["#/roadmap/ahead", "#/ahead/gantt"],
       ["#/ahead/plan", "#/ahead/gantt"],
@@ -154,13 +110,13 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await page.goto(at("13:40"));
     const checkin = page.getByRole("region", { name: "Midday check-in" });
     await checkin.waitFor();
-    expect(await page.getByRole("region", { name: "Plan today" }).count()).toBe(0);
+    expect(await page.getByRole("region", { name: "Add work" }).count()).toBe(0);
     await shotAll(page, "nv1-today-checkin-card");
     await checkin.getByRole("button", { name: "Check in" }).click();
-    await expect.poll(() => hash(page)).toBe("#/today/checkin");
+    await expect.poll(() => hash(page)).toBe("#/day/checkin");
     await page.getByRole("heading", { name: /^Midday check-in/ }).waitFor();
     await page.locator(".today-head .done-btn").click();
-    await expect.poll(() => hash(page)).toBe("#/today");
+    await expect.poll(() => hash(page)).toBe("#/day");
     await page.getByText("Midday check-in done").waitFor();
     await page.getByRole("button", { name: "Reopen" }).waitFor();
 
@@ -169,7 +125,7 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await close.waitFor();
     await shotAll(page, "nv1-today-closeout-card");
     await close.getByRole("button", { name: "Close out" }).click();
-    await expect.poll(() => hash(page)).toBe("#/today/closeout");
+    await expect.poll(() => hash(page)).toBe("#/day/closeout");
     await page.getByRole("complementary", { name: "Close out" }).waitFor();
     expect(errors).toEqual([]);
     await page.close();
