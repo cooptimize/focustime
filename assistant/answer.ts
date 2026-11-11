@@ -13,7 +13,7 @@ export type Topic = (typeof TOPICS)[number];
 export type Line = { text: string; link?: Link };
 export type Section = { title: string; lines: Line[] };
 /** A tap that builds a proposal (`tool`, its args) or sends my words again (`say`). */
-export type Suggestion = { label: string; tool: "move_plan" | "confirm_week"; args: Record<string, unknown> } | { label: string; say: string };
+export type Suggestion = { label: string; tool: "move_plan"; args: Record<string, unknown> } | { label: string; say: string };
 export type Refs = { items: { clientKey: string; id: number; title: string }[]; picks: number[]; promises: number[] };
 export type Composed = { reply: string; sections: Section[]; suggestions: Suggestion[]; refs: Refs; links: Link[] };
 
@@ -130,9 +130,6 @@ function planCheck(ctx: AnswerContext, link: LinkFn): Composed {
     count += 1;
   }
   if (ctx.unknown.length) sections.push({ title: "Not known", lines: ctx.unknown.map((u) => ({ text: u })) });
-  const weekStart = ctx.period.from;
-  if ((ctx.period.kind === "next_week" || ctx.period.kind === "this_week") && ctx.confirmed[weekStart] === false && suggestions.length < 3)
-    suggestions.push({ label: ctx.period.kind === "next_week" ? "Confirm next week" : "Confirm this week", tool: "confirm_week", args: { weekStart } });
   const reply = count
     ? `For ${ctx.period.label}, ${plural(count, "thing")} to look at${ctx.clients.length > 1 ? `, by client` : ""}.`
     : `Nothing stands out for ${ctx.period.label}: no overloaded blocks, late promises, readiness gaps, deployments or missing updates${ctx.unknown.length ? ", though some of it couldn't be read" : ""}.`;

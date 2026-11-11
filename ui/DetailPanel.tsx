@@ -74,7 +74,6 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
   const weekStart = mondayOf(slot.date);
   const title = day.pto ? "PTO" : primary ? nameOf(primary.clientKey) : slot.off ? (day.kind === "work" ? "No working hours" : "Catch-up") : "Open";
   const picks = day.pto ? [] : checklistFor(plan.week, slot.date, slot.half).length ? checklistFor(plan.week, slot.date, slot.half) : (plan.week?.[slot.date]?.picks ?? []).filter((p) => p.half === slot.half && live(p));
-  const committed = !!plan.week?.[slot.date]?.committedAt;
   // Start focus on the first pick still to do, like the next pick on Today's card.
   const firstPlanned = picks.find((p) => p.status === "planned")?.id ?? null;
   const isToday = slot.date === data.planDay.date;
@@ -162,9 +161,9 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
                     pick={p}
                     toggle={plan.toggle}
                     link
-                    canTick={committed || slot.date < data.planDay.date}
+                    canTick={slot.date <= data.planDay.date}
                     extra={
-                      onStart && isToday && committed && p.id === firstPlanned && !timer ? (
+                      onStart && isToday && p.id === firstPlanned && !timer ? (
                         <button type="button" className="mini dp-start" onClick={() => onStart(p)} title="Start focus on this to-do">
                           Start focus
                         </button>

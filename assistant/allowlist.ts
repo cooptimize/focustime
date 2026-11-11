@@ -32,9 +32,7 @@ export const TOOLS = {
   move_pick: { kind: "proposal", actions: ["pick.move"], spec: { name: "move_pick", description: "Propose moving one of my to-dos to another day and half.", parameters: obj({ pickId: id("The to-do's id, from a read"), date: date("The day to move it to"), half }) }, examples: ["Move the CSV export to-do to Thursday morning", "Push that to-do to tomorrow afternoon", "Move my 2pm to-do to Friday"] },
   drop_pick: { kind: "proposal", actions: ["pick.remove"], spec: { name: "drop_pick", description: "Propose dropping one of my to-dos.", parameters: obj({ pickId: id("The to-do's id, from a read") }) }, examples: ["Drop the CSV export to-do", "Take the invoice to-do off my board", "Remove that to-do"] },
   keep_pick: { kind: "proposal", actions: ["pick.move"], spec: { name: "keep_pick", description: "Propose keeping an unfinished to-do from an earlier day: it moves to today.", parameters: obj({ pickId: id("The to-do's id, from a read"), half }) }, examples: ["Keep yesterday's unfinished CSV export", "Bring Monday's leftover to-do to today", "Keep that unfinished to-do this afternoon"] },
-  confirm_day: { kind: "proposal", actions: ["planday.commit"], spec: { name: "confirm_day", description: "Propose confirming a day's plan.", parameters: obj({ date: date("The day") }) }, examples: ["Confirm today", "Confirm Tuesday's plan", "Lock in my plan for tomorrow"] },
-  confirm_week: { kind: "proposal", actions: ["weekplan.commit"], spec: { name: "confirm_week", description: "Propose confirming a week's plan.", parameters: obj({ weekStart: date("The week's Monday") }) }, examples: ["Confirm my week", "Confirm next week's plan", "I'm done planning the week"] },
-  add_must: { kind: "proposal", actions: ["weekplan.add"], spec: { name: "add_must", description: "Propose adding a DevOps feature or story to a week as a must.", parameters: obj({ itemId: id("The work item id"), weekStart: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "The week's Monday, or null for this week" } }) }, examples: ["Add #id to this week as a must", "Make the invoice export a must next week", "Put that feature on my week"] },
+  add_to_week: { kind: "proposal", actions: ["weekplan.add"], spec: { name: "add_to_week", description: "Propose adding a DevOps feature or story to a week.", parameters: obj({ itemId: id("The work item id"), weekStart: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "The week's Monday, or null for this week" } }) }, examples: ["Add #id to this week", "Put the invoice export on next week", "Put that feature on my week"] },
   ahead_change: { kind: "proposal", actions: ["ahead.stage"], spec: { name: "ahead_change", description: "Propose a change to an item's start date, target date, size or owner. It goes into my Ahead change set; nothing is written to DevOps until I save the change set.", parameters: obj({ itemId: id("The work item id"), field: { type: "string", enum: ["start", "target", "size", "assignee"] }, value: sn("A date YYYY-MM-DD, a size number, a person's name, or null to clear") }) }, examples: ["Set the target date of #id to next Friday", "Make me the owner of the billing feature", "Size that story at 3", "Push the start of the billing feature to December"] },
   send: { kind: "proposal", actions: ["send.people", "send.create"], spec: { name: "send", description: "Propose sending a feature or story to a teammate's week (this week or next), as suggested or (leads only) must.", parameters: obj({ itemId: id("The work item id"), to: s("The person's name as I said it"), kind: { type: "string", enum: ["suggested", "must"] }, week: { type: "string", enum: ["this", "next"] }, note: sn("A short note, or null") }) }, examples: ["Send the CSV export story to Dana for next week", "Suggest the invoice export to Sam this week", "Send that feature to Dana as a must"] },
   comment: { kind: "proposal", actions: ["devops.preview", "devops.confirm"], spec: { name: "comment", description: "Propose adding a comment to a DevOps work item, in my words.", parameters: obj({ itemId: id("The work item id"), text: s("The comment, from what I said") }) }, examples: ["Comment on #id that the export is ready", "Add a note to the CSV export story: waiting on the client", "Tell the invoice story the file went out"] },
@@ -79,7 +77,7 @@ export type ToolName = keyof typeof TOOLS;
 export const TOOL_NAMES = Object.keys(TOOLS) as ToolName[];
 export const isTool = (n: string): n is ToolName => Object.hasOwn(TOOLS, n);
 /** Proposal tools that change DevOps items or the change set: their item must come from my words, the screen or a read. */
-export const ITEM_TOOLS: readonly ToolName[] = ["add_must", "ahead_change", "send", "comment", "description", "item_update", "link_comment"];
+export const ITEM_TOOLS: readonly ToolName[] = ["add_to_week", "ahead_change", "send", "comment", "description", "item_update", "link_comment"];
 export const PICK_TOOLS: readonly ToolName[] = ["move_pick", "drop_pick", "keep_pick", "item_done", "item_undo", "wrap_up"];
 /** PK-1: tools only a button proposes (propose()), never given to the model. */
 export const BUTTON_ONLY: readonly ToolName[] = ["item_done", "item_undo", "write_undo", "wrap_up"];
@@ -90,12 +88,12 @@ export const PICKS_TOOLS: readonly ToolName[] = ["move_picks", "close_day"];
  * to-do's DevOps state and its undo, the same write the app's offer makes. The preview, the 15 minutes and every
  * confirm check are the same as a proposal the model made.
  */
-export const PROPOSE_TOOLS = ["move_pick", "keep_pick", "drop_pick", "confirm_day", "move_picks", "close_day", "item_done", "item_undo", "wrap_up", "move_plan"] as const satisfies readonly ToolName[];
+export const PROPOSE_TOOLS = ["move_pick", "keep_pick", "drop_pick", "move_picks", "close_day", "item_done", "item_undo", "wrap_up", "move_plan"] as const satisfies readonly ToolName[];
 /**
  * AS-3: the proposals an answer may suggest as a button (FocusTime's plan only). A tap builds the same proposal the
  * model would (the button's preview, 15 minutes, every confirm check); it never runs on the tap.
  */
-export const SUGGEST_TOOLS = ["move_plan", "confirm_week"] as const satisfies readonly ToolName[];
+export const SUGGEST_TOOLS = ["move_plan"] as const satisfies readonly ToolName[];
 /** AS-2: proposals that move to-dos, undone together (assistant.undo). */
 export const MOVE_TOOLS: readonly ToolName[] = ["move_picks", "move_plan"];
 

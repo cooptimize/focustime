@@ -206,6 +206,11 @@ async function livePriorities(team: TeamStore, list: Priority[], resolved: Reado
 }
 
 /** SW-1: publishes what I committed for a week (commit and re-commit), for the Team view. Commitments only. */
+/**
+ * CF-1 (D1): what's on my week, for teammates (Team) and the status report's "active this week": each feature on the
+ * week with its type and title (and the features I'm watching). Written on every change to the week, never on confirm.
+ * The stored tier column gets one value for everyone; it is never read back or shown.
+ */
 export async function publishWeek(ctx: Pick<TeamContext, "plan" | "team" | "me" | "now" | "org">, weekStart: IsoDate): Promise<void> {
   const { plan, team } = ctx;
   const me = await ctx.me();
@@ -217,7 +222,7 @@ export async function publishWeek(ctx: Pick<TeamContext, "plan" | "team" | "me" 
   const isClient = (k: string) => !!accounts?.isClient(k);
   const [week, watches] = await Promise.all([plan.weekPlan(weekStart), plan.weekWatches(weekStart)]);
   const rows = [
-    ...week.features.filter((f) => f.level === "feature" && f.itemId > 0).map((f) => ({ clientKey: f.clientKey, itemId: f.itemId, title: f.title, itemType: f.itemType, url: f.url, tier: f.tier, watching: false })),
+    ...week.features.filter((f) => f.level === "feature" && f.itemId > 0).map((f) => ({ clientKey: f.clientKey, itemId: f.itemId, title: f.title, itemType: f.itemType, url: f.url, tier: "nice" as const, watching: false })),
     ...watches.filter((w) => !week.features.some((f) => f.clientKey === w.clientKey && f.itemId === w.itemId)).map((w) => ({ clientKey: w.clientKey, itemId: w.itemId, title: w.title, itemType: w.itemType, url: w.url, tier: "nice" as const, watching: true })),
   ];
   await team.publish(id, weekStart, rows.filter((x) => isClient(x.clientKey)), ctx.now());
@@ -316,10 +321,8 @@ export async function teamAction(ctx: TeamContext, action: TeamAction, input: un
         const v = viewOf(s, me, new Set(), thisWeek);
         if (!v.canAnswer) return bad(v.role === "recipient" ? "That one is settled already" : "Only the person it was sent to answers it", 409);
         if (s.weekStart < thisWeek) return bad("That week is over", 409);
-        await plan.addWeekItem({ weekStart: s.weekStart, clientKey: s.clientKey, itemId: s.itemId, title: s.title, itemType: s.itemType, url: s.url, level: s.level, tier: "must", ...(s.level === "story" && s.parentId ? { parentId: s.parentId } : {}) });
+        await plan.addWeekItem({ weekStart: s.weekStart, clientKey: s.clientKey, itemId: s.itemId, title: s.title, itemType: s.itemType, url: s.url, level: s.level, ...(s.level === "story" && s.parentId ? { parentId: s.parentId } : {}) });
         const n = await team.setSend(s.id, { state: "accepted", reason: null });
-        // A committed week publishes again so the Team view has it.
-        if ((await plan.weekPlan(s.weekStart)).committedAt) await publishWeek(ctx, s.weekStart);
         const open = o.schedule === true ? firstBlock(await ctx.blocks(cfg, s.weekStart).catch(() => ({ days: [] }) as unknown as Week), s.clientKey, today) : null;
         return { ok: true, data: { send: viewOf(n, me, new Set(), thisWeek), open, assign: { clientKey: s.clientKey, itemId: s.itemId, ticked: s.askTake } } };
       }
@@ -383,7 +386,7 @@ export async function teamAction(ctx: TeamContext, action: TeamAction, input: un
         const o = fields(input ?? {}, [], ["weekStart"]);
         const weekStart = o.weekStart === undefined ? thisWeek : monday(o.weekStart);
         const keys = r.myClients();
-        const [commits, committed, raw, pri0] = await Promise.all([team.commitments(keys, weekStart), team.committedPeople(weekStart), team.sendsOn(keys, weekStart), team.priorities(keys)]);
+        const [commits, raw, pri0] = await Promise.all([team.commitments(keys, weekStart), team.sendsOn(keys, weekStart), team.priorities(keys)]);
         // keys are clients only (myClients()); looks below are filtered the same way.
         const resolved = await resolvedOf(ctx, cfg, [...raw, ...pri0, ...commits.filter((c) => c.watching)]);
         const sends = await settle(team, raw, resolved);
@@ -398,7 +401,8 @@ export async function teamAction(ctx: TeamContext, action: TeamAction, input: un
           const movedIds = moved?.known ? new Set(moved.itemIds) : null;
           const people: TeamPerson[] = r.members(k).map((id) => {
             const mineRows = commits.filter((c) => c.personId === id && c.clientKey === k);
-            const state = committed.has(id) ? "committed" : r.onFocusTime(id) ? "draft" : "not_on_focustime";
+            // CF-1 (D2): a person's week shows when they're on FocusTime and have anything on it; nobody confirms.
+            const state = mineRows.length ? "shared" : r.onFocusTime(id) ? "empty" : "not_on_focustime";
             return {
               id,
               name: r.name(id),
@@ -406,9 +410,9 @@ export async function teamAction(ctx: TeamContext, action: TeamAction, input: un
               lead: r.isLead(id, k),
               you: id === me,
               state,
-              // Only what was committed: the feature, its type, must or nice to have. Nothing else of their week.
-              features: state === "committed" ? mineRows.filter((c) => !c.watching).map((c) => ({ itemId: c.itemId, title: c.title, itemType: c.itemType, url: c.url, tier: c.tier })) : [],
-              watching: state === "committed" ? mineRows.filter((c) => c.watching && !resolved.has(keyOf(k, c.itemId))).map((c) => ({ itemId: c.itemId, title: c.title, itemType: c.itemType, url: c.url, moved: movedIds ? movedIds.has(c.itemId) : null })) : [],
+              // CF-1 (D3): only the feature, its type and title (and its link). Nothing else of their week.
+              features: mineRows.filter((c) => !c.watching).map((c) => ({ itemId: c.itemId, title: c.title, itemType: c.itemType, url: c.url })),
+              watching: state === "shared" ? mineRows.filter((c) => c.watching && !resolved.has(keyOf(k, c.itemId))).map((c) => ({ itemId: c.itemId, title: c.title, itemType: c.itemType, url: c.url, moved: movedIds ? movedIds.has(c.itemId) : null })) : [],
             };
           });
           people.sort((a, b) => Number(b.you) - Number(a.you) || Number(b.lead) - Number(a.lead) || a.name.localeCompare(b.name));
@@ -445,8 +449,7 @@ export async function teamAction(ctx: TeamContext, action: TeamAction, input: un
         if (!r.onClient(me, k)) return bad("Only people on this client", 403);
         const p = (await team.priorities([k])).find((x) => x.itemId === posId(o.itemId, "itemId"));
         if (!p) return bad("That isn't a client priority any more", 404);
-        const f = await plan.addWeekItem({ weekStart, clientKey: k, itemId: p.itemId, title: p.title, itemType: p.itemType, url: p.url, level: "feature", tier: "must" });
-        if ((await plan.weekPlan(weekStart)).committedAt) await publishWeek(ctx, weekStart);
+        const f = await plan.addWeekItem({ weekStart, clientKey: k, itemId: p.itemId, title: p.title, itemType: p.itemType, url: p.url, level: "feature" });
         return { ok: true, data: { feature: f } };
       }
       case "look.ask": {

@@ -41,12 +41,12 @@ export const KIND_LABEL: Record<NotifyKind, string> = {
   conversation_activity: "New on a conversation you have",
 };
 export const KIND_HINT: Record<NotifyKind, string> = {
-  plan_day: "At the start of a workday when the day isn't planned yet.",
-  checkin: "After lunch on a planned day.",
+  plan_day: "At the start of a workday when nothing is on today yet.",
+  checkin: "After lunch when today has to-dos and you haven't closed out.",
   closeout: "Near the end of the workday until you close out.",
-  plan_week: "Monday morning when this week has no plan.",
-  look_ahead: "Thursday and Friday when next week has no plan.",
-  plan_ahead: "Every other Thursday, once next week is planned.",
+  plan_week: "Monday morning when nothing is on this week yet.",
+  look_ahead: "Thursday and Friday when nothing is on next week yet.",
+  plan_ahead: "Every other Thursday, once next week has work on it.",
   direction: "The first Thursday of each month.",
   timer: "When a focus session or break ends.",
   meeting: "5 minutes before a meeting while a focus session runs.",
@@ -228,7 +228,7 @@ const open = (label: string): NotifyButton => ({ key: "open", label });
 const shortDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric" });
 
 export const notices = {
-  planDay: (date: string, at: string): Notice => ({ kind: "plan_day", key: `plan_day:${date}`, title: "Add work to today", body: "Today isn't planned yet.\nClick to add work.", buttons: [open("Add work")], route: "planday", at, ref: date }),
+  planDay: (date: string, at: string): Notice => ({ kind: "plan_day", key: `plan_day:${date}`, title: "Add work to today", body: "Nothing on today yet.\nClick to add work.", buttons: [open("Add work")], route: "planday", at, ref: date }),
   checkin: (date: string, at: string): Notice => ({ kind: "checkin", key: `checkin:${date}`, title: "Check-in", body: "Midday check-in: what still fits this afternoon.\nClick to check in.", buttons: [open("Check in")], route: "checkin", at, ref: date }),
   closeout: (date: string, at: string): Notice => ({ kind: "closeout", key: `closeout:${date}`, title: "Close out", body: "Time to close out the day: to-dos, resume notes and promises.\nClick to close out.", buttons: [open("Close out")], route: "closeout", at, ref: date }),
   /** Monday for this week (Plan the week), Thursday and Friday for next week (Look ahead). */
@@ -236,7 +236,7 @@ export const notices = {
     kind: thisWeek ? "plan_week" : "look_ahead",
     key: `week:${weekStart}:${at.slice(0, 10)}`,
     title: thisWeek ? "Add work to the week" : "Look ahead",
-    body: `${thisWeek ? "This week" : `Next week (${shortDay(weekStart)})`} isn't planned yet: choose each client's features.\nClick to plan it.`,
+    body: `${thisWeek ? "This week" : `Next week (${shortDay(weekStart)})`} has nothing on it yet.\nClick to add work.`,
     buttons: [open("Add work")],
     route: `planweek:${weekStart}`,
     at,
@@ -326,10 +326,12 @@ export function dueFollowUps(open: readonly { id: number; what: string; due: str
 
 /** Step 16.2 (Q91): what tells whether a sent notification's occasion was handled since. */
 export type DoneFacts = {
-  committed: (date: string) => boolean;
+  /** CF-1: the day has to-dos (was: confirmed). */
+  dayHasWork: (date: string) => boolean;
   checkedIn: (date: string) => boolean;
   closedOut: (date: string) => boolean;
-  weekCommitted: (weekStart: string) => boolean;
+  /** CF-1: the week has anything placed (was: confirmed). */
+  weekHasWork: (weekStart: string) => boolean;
   /** Whether a follow-up is still open. */
   followUpOpen: (id: number) => boolean;
   /** Follow-ups due today or overdue now. */
@@ -343,18 +345,18 @@ export type DoneFacts = {
 };
 
 /**
- * Whether a sent notification no longer applies and can be closed (Q91): the day got planned, checked in or closed
- * out, the week planned, the follow-up closed (or none due any more), the timer answered in the app, the VM started.
+ * Whether a sent notification no longer applies and can be closed (Q91): the day got to-dos, was checked in or closed
+ * out, the week got work, the follow-up closed (or none due any more), the timer answered in the app, the VM started.
  * An "auto-shutdown still changed" notice from before D475 closes at once (there is nothing to restore). Meeting warnings, expiring secrets and tests stay until dismissed.
  */
 export function noticeDone(n: Notice, f: DoneFacts): boolean {
   const ref = n.ref;
   switch (n.kind) {
-    case "plan_day": return !!ref && f.committed(ref);
+    case "plan_day": return !!ref && f.dayHasWork(ref);
     case "checkin": return !!ref && (f.checkedIn(ref) || f.closedOut(ref));
     case "closeout": return !!ref && f.closedOut(ref);
     case "plan_week":
-    case "look_ahead": return !!ref && f.weekCommitted(ref);
+    case "look_ahead": return !!ref && f.weekHasWork(ref);
     case "timer": return !!ref && !f.timerWaiting(ref);
     case "plan_ahead":
     case "direction": return !!ref && !!f.aheadSeen?.(ref);

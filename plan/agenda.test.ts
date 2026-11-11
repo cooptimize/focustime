@@ -92,7 +92,7 @@ describe("planMyDay", () => {
   const pm = slot("PM", [], [gap("13:00", "14:00"), gap("15:00", "17:00")], [["13:00", "17:00"]]);
 
   it("places musts first, then larger sizes, then pick order", () => {
-    const r = planMyDay([pick(1, "PM", "S"), pick(2, "PM", "L"), pick(3, "PM", "M"), pick(4, "PM", "S")], { PM: pm }, [], sizes, new Set([4]));
+    const r = planMyDay([pick(1, "PM", "S"), pick(2, "PM", "L"), pick(3, "PM", "M"), pick(4, "PM", "S")], { PM: pm }, [], sizes);
     expect(r.placed.map((p) => [p.pickId, p.start.slice(11, 16), p.end.slice(11, 16)])).toEqual([
       [4, "13:00", "13:30"],
       [2, "15:00", "17:00"],
@@ -104,7 +104,7 @@ describe("planMyDay", () => {
   });
   it("keeps each pick in its own block and skips timeboxed, done and dropped picks", () => {
     const done = { ...pick(5, "AM", "S"), status: "done" as const };
-    const r = planMyDay([pick(1, "AM", "M"), pick(2, "PM", "M"), pick(3, "AM", "S"), done], { AM: am, PM: pm }, [tb(9, "08:00", "08:30", { pickId: 3 })], sizes, new Set());
+    const r = planMyDay([pick(1, "AM", "M"), pick(2, "PM", "M"), pick(3, "AM", "S"), done], { AM: am, PM: pm }, [tb(9, "08:00", "08:30", { pickId: 3 })], sizes);
     expect(r.placed.map((p) => [p.pickId, p.half, p.start.slice(11, 16)])).toEqual([
       [1, "AM", "09:30"],
       [2, "PM", "13:00"],
@@ -113,7 +113,7 @@ describe("planMyDay", () => {
     expect(r.unplaced).toEqual([]);
   });
   it("starts at now on today", () => {
-    const r = planMyDay([pick(1, "AM", "S")], { AM: am }, [], sizes, new Set(), T("11:10"));
+    const r = planMyDay([pick(1, "AM", "S")], { AM: am }, [], sizes, T("11:10"));
     expect(r.placed[0]!.start).toBe(T("11:10"));
   });
 });

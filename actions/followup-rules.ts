@@ -48,12 +48,10 @@ export async function ruleInput(plan: PlanStore, o: RuleOptions): Promise<Detect
     }
     ask = found.filter((p) => p.status === "moved" && !next.has(p.id)).map((p) => p.id);
   }
-  const committed = new Map((await plan.dayPlansBetween(t.subtract({ days: RULE_WINDOW_DAYS }).toString(), t.add({ days: RULE_WINDOW_DAYS }).toString())).map((d) => [d.date, d.committedAt]));
   return {
     today: o.today,
     picks,
     pick: (id) => byId.get(id) ?? null,
-    committedAt: (d) => committed.get(d) ?? null,
     movedTo: (id) => next.get(id) ?? null,
     work: o.work,
     followUps,

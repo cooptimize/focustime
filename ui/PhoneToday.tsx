@@ -27,13 +27,13 @@ export function phoneNowOf(blocks: readonly Slot[], events: readonly DayEvent[],
   );
 }
 
-export function PhoneNowCard({ card, data, pick, nowMs, nameOf, committed, onStart, onDone, onTimer, onFocusScreen }: {
+export function PhoneNowCard({ card, data, pick, nowMs, nameOf, tickable, onStart, onDone, onTimer, onFocusScreen }: {
   card: NowCard;
   data: WeekLoadData;
   pick: Pick | null;
   nowMs: number;
   nameOf: (k: string) => string;
-  committed: boolean;
+  tickable: boolean;
   onStart: (p: Pick) => void;
   onDone: (p: Pick) => void;
   onTimer: (a: "timer.done" | "timer.extend") => void;
@@ -91,7 +91,7 @@ export function PhoneNowCard({ card, data, pick, nowMs, nameOf, committed, onSta
             <button type="button" className="primary big" onClick={() => onStart(pick)}>
               Start
             </button>
-            {committed && (
+            {tickable && (
               <button type="button" className="big" onClick={() => onDone(pick)}>
                 Done
               </button>
@@ -106,7 +106,7 @@ export function PhoneNowCard({ card, data, pick, nowMs, nameOf, committed, onSta
 }
 
 /** Today's to-dos, grouped by block: a checkbox, the title on its own line (two at most), then time, size and client. */
-export function PhoneTodos({ blocks, picks, data, nameOf, committed, now, onTick }: { blocks: readonly Slot[]; picks: readonly Pick[]; data: WeekLoadData; nameOf: (k: string) => string; committed: boolean; now: string; onTick: (p: Pick, done: boolean) => void }): ReactNode {
+export function PhoneTodos({ blocks, picks, data, nameOf, tickable, now, onTick }: { blocks: readonly Slot[]; picks: readonly Pick[]; data: WeekLoadData; nameOf: (k: string) => string; tickable: boolean; now: string; onTick: (p: Pick, done: boolean) => void }): ReactNode {
   const sheet = useTodoSheet();
   const tz = userZone(data);
   const start = (p: Pick) => data.timeboxes.find((t) => t.pickId === p.id && !t.removedAt)?.start ?? null;
@@ -131,7 +131,7 @@ export function PhoneTodos({ blocks, picks, data, nameOf, committed, now, onTick
               <ul className="ph-todo-list">
                 {mine.map((p) => (
                   <li key={p.id} className={`ph-todo ${p.status}`}>
-                    <input type="checkbox" checked={p.status === "done"} disabled={!committed && p.status !== "done"} onChange={(e) => onTick(p, e.target.checked)} aria-label={`Done: ${p.title}`} />
+                    <input type="checkbox" checked={p.status === "done"} disabled={!tickable && p.status !== "done"} onChange={(e) => onTick(p, e.target.checked)} aria-label={`Done: ${p.title}`} />
                     <button type="button" className="ph-todo-main" aria-haspopup="dialog" onClick={() => sheet?.(p)} aria-label={`${p.title}. ${todoLine(p, data, { client: false })}. Actions`}>
                       <span className="ph-todo-title">{p.title}</span>
                       <span className="ph-todo-line">{todoLine(p, data)}</span>

@@ -20,11 +20,9 @@ export type TeamStore = {
   /** Waiting or accepted sends of a recipient for an item (Scheduled when it's planned). */
   sendsFor(toId: string, clientKey: string, itemId: number): Promise<Send[]>;
 
-  /** Replaces a person's published commitments for a week (commit and re-commit). */
+  /** Replaces what a person's week shares (CF-1: on every change to the week). */
   publish(personId: string, weekStart: string, rows: readonly NewCommitment[], at: string): Promise<void>;
   commitments(clientKeys: readonly string[], weekStart: string): Promise<Commitment[]>;
-  /** Whom has published for that week at all (committed, maybe with nothing on a client). */
-  committedPeople(weekStart: string): Promise<Map<string, string>>;
 
   flag(p: Omit<Priority, "flaggedAt">, at: string): Promise<void>;
   unflag(clientKey: string, itemId: number): Promise<boolean>;
@@ -139,7 +137,7 @@ export function teamStore(conn: Conn, now: () => Temporal.Instant): TeamStore {
             [id, weekStart, r.clientKey, r.itemId, r.title.slice(0, 400), cut(r.itemType, 100), cut(r.url, 1000), r.tier, r.watching ? 1 : 0, at],
           );
         }
-        // A commit with nothing on it still says "committed": one marker row (item 0) that the views never show.
+        // An empty week still leaves one marker row (item 0) that the views never show (CF-1: nothing reads it as "confirmed").
         if (!seen.size) await conn.run("INSERT INTO week_commitments (person_id, week_start, client_key, item_id, title, item_type, url, tier, watching, committed_at) VALUES (?, ?, '', 0, '', NULL, NULL, 'nice', 0, ?)", [id, weekStart, at]);
       });
     },
@@ -147,10 +145,6 @@ export function teamStore(conn: Conn, now: () => Temporal.Instant): TeamStore {
       if (!clientKeys.length) return [];
       const rows = await conn.all(`SELECT * FROM week_commitments WHERE client_key IN (${qs(clientKeys.length)}) AND week_start = ? AND item_id > 0 ORDER BY person_id, client_key, item_id`, [...clientKeys, weekStart]);
       return rows.map((r) => ({ personId: String(r.person_id), weekStart: String(r.week_start), clientKey: String(r.client_key), itemId: Number(r.item_id), title: String(r.title), itemType: s(r.item_type), url: s(r.url), tier: r.tier === "must" ? "must" : "nice", watching: r.watching === 1 || r.watching === true || r.watching === "1", committedAt: String(r.committed_at) }));
-    },
-    async committedPeople(weekStart) {
-      const rows = await conn.all("SELECT person_id, MAX(committed_at) AS at FROM week_commitments WHERE week_start = ? GROUP BY person_id", [weekStart]);
-      return new Map(rows.map((r) => [String(r.person_id), String(r.at)]));
     },
 
     async flag(p, at) {

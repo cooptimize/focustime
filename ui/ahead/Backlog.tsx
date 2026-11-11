@@ -6,7 +6,7 @@
 // Bulk actions on the selected rows go into Ahead's change set (nothing is written until Save to DevOps, with its
 // preview, confirm, read back and undo): push the target date by 2 or 4 weeks or to a chosen date, set one where
 // there's none, assign to me. Items I can't change are skipped with the reason. Plan it puts the selected stories on
-// next week's Plan as nice to haves (a plan-store write), with Undo.
+// next week's Plan (a plan-store write), with Undo.
 import { DateField } from "../DatePicker.tsx";
 import { useMemo, useState, type CSSProperties } from "react";
 import type { WeekPlanState } from "../../actions/types.ts";
@@ -61,7 +61,7 @@ export function Backlog({ groups, tier, onChanged }: { groups: BacklogGroup[]; t
     }
   };
 
-  // Plan it: next week's Plan, as nice to haves; Undo takes off only what this added.
+  // Plan it: next week's Plan; Undo takes off only what this added.
   const planIt = async () => {
     const weekStart = nextMonday(a.load.today);
     const stories = chosen.filter((r) => r.tier === "story");
@@ -78,13 +78,13 @@ export function Backlog({ groups, tier, onChanged }: { groups: BacklogGroup[]; t
           continue;
         }
         try {
-          const res = await call<{ item: { id: number } }>("weekplan.add", { weekStart, clientKey: r.clientKey, itemId: r.item.id, tier: "nice" });
+          const res = await call<{ item: { id: number } }>("weekplan.add", { weekStart, clientKey: r.clientKey, itemId: r.item.id });
           added.push(res.item.id);
         } catch (e) {
           skipped.push({ clientKey: r.clientKey, itemId: r.item.id, reason: errText(e) });
         }
       }
-      setResult({ text: `${plural(added.length, "story", "stories")} on next week's Plan (week of ${monthDay(weekStart)}) as nice to haves`, skipped });
+      setResult({ text: `${plural(added.length, "story", "stories")} on next week's Plan (week of ${monthDay(weekStart)})`, skipped });
       setSel(new Set(skipped.map((s) => `${s.clientKey}:${s.itemId}`)));
       if (added.length) {
         setToast({
@@ -128,7 +128,7 @@ export function Backlog({ groups, tier, onChanged }: { groups: BacklogGroup[]; t
           <button type="button" className="mini" disabled={busy} onClick={() => void bulk({ kind: "assign_me" })}>
             Assign to me
           </button>
-          <button type="button" className="mini" disabled={busy || !chosen.some((r) => r.tier === "story")} title={chosen.some((r) => r.tier === "story") ? "Adds the selected stories to next week's Plan as nice to haves" : "Plan it adds stories: switch to Stories"} onClick={() => void planIt()}>
+          <button type="button" className="mini" disabled={busy || !chosen.some((r) => r.tier === "story")} title={chosen.some((r) => r.tier === "story") ? "Adds the selected stories to next week's Plan" : "Plan it adds stories: switch to Stories"} onClick={() => void planIt()}>
             Plan it
           </button>
           <button type="button" className="mini quiet" disabled={busy} onClick={() => (setSel(new Set()), setDateFor(null))}>

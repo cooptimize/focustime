@@ -20,11 +20,6 @@ function requestOf(input: string): { said: string; today: string | null } {
   return { said: i >= 0 ? input.slice(i + "The person's request:\n".length) : input, today: /Today is (\d{4}-\d{2}-\d{2})/.exec(input)?.[1] ?? null };
 }
 
-function monday(d: string): string {
-  const t = new Date(`${d}T12:00:00Z`);
-  t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7));
-  return t.toISOString().slice(0, 10);
-}
 
 /** AS-2: a move the server builds (by feature or by day), not one named to-do. */
 const planMove = (s: string) => /\b(move|push)\b/.test(s) && /\b(stories|everything|all)\b/.test(s);
@@ -51,8 +46,6 @@ function callsFor(said: string, today: string | null): { name: string; arguments
     const words = quoted?.[1] ?? quoted?.[2] ?? said.replace(/^.*?\b(saying|that|:)\s*/i, "");
     return [{ name: "comment", arguments: { itemId: id, text: words.trim() } }];
   }
-  if (/\bconfirm\b.*\bweek\b/.test(s) && today) return [{ name: "confirm_week", arguments: { weekStart: monday(today) } }];
-  if (/\bconfirm\b/.test(s) && today) return [{ name: "confirm_day", arguments: { date: today } }];
   if (/\bcapture\b|\bremember to\b/.test(s)) return [{ name: "capture", arguments: { text: said.replace(/^.*?\b(capture|remember to)\b:?\s*/i, "").trim() || said, as: "sort_later" } }];
   if (id) return [{ name: "item", arguments: { id } }];
   if (/\bgaps?\b|\bmissing\b/.test(s)) return [{ name: "gaps", arguments: {} }];
@@ -114,8 +107,6 @@ export function demoQuestion(said: string, today: string | null): { topic: strin
 
 const REPLY: Record<string, string> = {
   comment: "Here's the comment. Check it, then Confirm to add it in DevOps.",
-  confirm_day: "Here's today's plan to confirm.",
-  confirm_week: "Here's the week to confirm.",
   capture: "Here's the capture. Confirm to save it.",
   item: "Here's the item.",
   gaps: "These need something before they're ready.",

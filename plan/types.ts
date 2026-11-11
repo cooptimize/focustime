@@ -18,7 +18,7 @@ export type TodoLink = { id: number; title: string };
 /** ISO date-time with offset and zone, e.g. "2026-11-02T08:01:00-05:00[Region/City]". */
 export type ZonedStamp = string;
 
-export type DayPlan = { date: IsoDate; committedAt: ZonedStamp | null; /** When Close out was done for this day (step 7). */ closedOutAt: ZonedStamp | null; createdAt: ZonedStamp; updatedAt: ZonedStamp };
+export type DayPlan = { date: IsoDate; /** When Close out was done for this day (step 7). */ closedOutAt: ZonedStamp | null; createdAt: ZonedStamp; updatedAt: ZonedStamp };
 
 export type Pick = {
   id: number;
@@ -83,7 +83,7 @@ export type PlanDayState = {
   picks: Pick[];
   /** Unfinished picks from earlier days, newest first. Only on the carry-over day (carryTarget), else empty. */
   carryOver: Pick[];
-  /** The one day carry-over is offered on: the earliest upcoming uncommitted day that can be planned. */
+  /** The one day carry-over is offered on: the next day that can take work (CF-1). */
   carryTarget: IsoDate | null;
   /** "past": only ticking done and dropping. "plan": everything. */
   access: DayAccess;
@@ -95,13 +95,13 @@ export type PlanDayState = {
   /** The latest resume note per client on or before this date (step 7). */
   resumeNotes: Record<string, { clientKey: string; date: IsoDate; note: string }>;
   /** Features committed to this date's week (step 8): their stories are offered first in their client's blocks. */
-  /** WD-1: `id` is the week list row (weekplan.set_tier and weekplan.remove take it). */
-  weekFeatures: { id?: number; clientKey: string; itemId: number; title: string; url: string | null; slots: WeekFeature["slots"]; level: WeekFeature["level"]; tier: WeekFeature["tier"]; estimate: number | null; size?: WeekFeature["size"]; parentId?: number | null; position: number | null; doneAt: ZonedStamp | null }[];
+  /** WD-1: `id` is the week list row (weekplan.remove takes it). */
+  weekFeatures: { id?: number; clientKey: string; itemId: number; title: string; url: string | null; slots: WeekFeature["slots"]; level: WeekFeature["level"]; estimate: number | null; size?: WeekFeature["size"]; parentId?: number | null; position: number | null; doneAt: ZonedStamp | null }[];
 };
 
 /** Committed plans for the days of a week, for the checklist on the week view. */
 /** Step 16.2: closedOutAt too, for the ✓ on Today's Close out mode on any day of the week. */
-export type PlanWeek = Record<IsoDate, { committedAt: ZonedStamp | null; closedOutAt?: ZonedStamp | null; picks: Pick[] }>;
+export type PlanWeek = Record<IsoDate, { closedOutAt?: ZonedStamp | null; picks: Pick[] }>;
 
 /** E2, TX-1: XS 30 min, S 1h, M 2h, L 4h, fixed for everyone (plan/estimate.ts); SZ-1's default for unsized work. A person's own scale is `planning.sizes`. */
 export const SIZE_MINUTES: SizeScale = DEFAULT_SIZE_SCALE;
@@ -125,9 +125,8 @@ export type WeekFeature = {
   title: string;
   itemType: string | null;
   url: string | null;
-  /** Step 11: a feature or a story on the client's week list, a must or a nice to have. */
+  /** Step 11: a feature or a story on the client's week list. CF-1: every one counts the same (the stored tier is unread). */
   level: "feature" | "story";
-  tier: "must" | "nice";
   /** E2: a feature's estimate in minutes (whole hours), or null for 4h (its stories on the list win once one is sized); null for a story. */
   estimate: number | null;
   /** Step 16.4: a story's size (XS, S, M or L); null for a feature. */
@@ -142,7 +141,7 @@ export type WeekFeature = {
   doneAt: ZonedStamp | null;
   /** Q51: "devops" when the title is DevOps's current one, "saved" when it is the one stored at commit. Read models only. */
   titleSource?: "devops" | "saved";
-  /** Local order within the client's tier; null follows DevOps stack rank. */
+  /** Local order (step 11); CF-1: unread, the week follows DevOps backlog order. */
   position: number | null;
   createdAt: ZonedStamp;
   updatedAt: ZonedStamp;
@@ -165,7 +164,7 @@ export type WeekWatch = {
 /** PL-1: a decision on a "From last week" row. */
 export type CarryDecisionRow = { clientKey: string; itemId: number; kind: string; decision: "kept" | "dropped" | "watching"; decidedAt: ZonedStamp };
 
-export type WeekPlanRecord = { weekStart: IsoDate; committedAt: ZonedStamp | null; /** The latest change to the plan or its features. */ updatedAt: ZonedStamp | null; features: WeekFeature[] };
+export type WeekPlanRecord = { weekStart: IsoDate; /** The latest change to the plan or its features. */ updatedAt: ZonedStamp | null; features: WeekFeature[] };
 
 /** How a follow-up was closed (step 13.5), optional. */
 export const CLOSE_HOW = ["teams", "email", "devops", "call"] as const;

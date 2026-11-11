@@ -55,7 +55,6 @@ export type DetectInput = {
   picks: readonly Pick[];
   /** Any pick by id (for follow-ups about picks outside the window). */
   pick: (id: number) => Pick | null;
-  committedAt: (date: IsoDate) => string | null;
   /** The pick a moved pick went to. */
   movedTo: (id: number) => Pick | null;
   /** DevOps per client; null when DevOps wasn't loaded (the rules that need it do nothing). */
@@ -161,17 +160,6 @@ export function slipDraft(clientName: string, date: IsoDate, picks: readonly Pic
   return [`Hi ${clientName}, a quick heads-up on my plan for ${dayText(date)}:`, ...lines, "I'll keep you posted."].join("\n");
 }
 
-const slipWhat = (clientName: string, n: number) => `Heads-up to ${clientName} about the slip${n > 1 ? ` (${n} items)` : ""}`;
-
-/** Why a heads-up opened; null when none of its picks meets the heads-up rule (an older one being redrafted). */
-function originOf(picks: readonly Pick[], movedTo: (id: number) => Pick | null, all: readonly Pick[]): Origin | null {
-  const latest = latestPerItem(picks);
-  const triggers = [...new Set(picks.map((p) => slipTrigger(p, movedTo, all)).filter((t): t is string => !!t))];
-  const at = picks.reduce((m, p) => (later(p, m) ? p : m), picks[0]!).updatedAt;
-  if (!triggers.length) return null;
-  return { trigger: triggers.join("; "), items: latest.map((p) => ({ itemId: p.itemId, title: p.title })), at };
-}
-
 /**
  * Open heads-ups about slipped picks that wouldn't open under the step 13.5 rule (none of their picks qualify now).
  * Listed for me to decide; never closed automatically. Must heads-ups from Plan the week always qualify.
@@ -225,44 +213,8 @@ export function detectFollowUps(i: DetectInput): Detected {
     else if (item.changedByMe && after(item.changedAt, l.openedAt)) out.close.push({ id: l.id, note: `DevOps #${item.id} was updated` });
   }
 
-  // 2. Committed client work that slipped on or after its day, or left its week: "Heads-up to <client> about the
-  // slip" (step 13.5, D235). One per client and day; each item once with its latest status.
-  const covered = new Set(i.followUps.filter((l) => l.kind === "slip").flatMap((l) => l.detail?.picks ?? []));
-  const groups = new Map<string, Pick[]>();
-  for (const p of i.picks) {
-    if (p.status !== "moved" && p.status !== "dropped") continue;
-    if (i.internal.has(p.clientKey) || covered.has(p.id)) continue;
-    const committed = i.committedAt(p.date);
-    if (!committed || !after(p.updatedAt, committed) && p.updatedAt !== committed) continue;
-    if (!slipTrigger(p, i.movedTo, i.picks)) continue;
-    const g = `${p.date}\u0000${p.clientKey}`;
-    groups.set(g, [...(groups.get(g) ?? []), p]);
-  }
-  const touched = new Set<number>();
-  for (const [g, picks] of groups) {
-    const [date, clientKey] = g.split("\u0000") as [IsoDate, string];
-    const name = i.clientName(clientKey);
-    const existing = open.find((l) => l.kind === "slip" && l.clientKey === clientKey && l.detail?.date === date);
-    if (existing) {
-      const ids = [...(existing.detail?.picks ?? []), ...picks.map((p) => p.id)];
-      const all = ids.map((id) => i.pick(id)).filter((p): p is Pick => !!p);
-      out.update.push({ id: existing.id, what: slipWhat(name, latestPerItem(all).length), draft: slipDraft(name, date, all, i.movedTo, i.picks), detail: { picks: ids, date }, origin: originOf(all, i.movedTo, i.picks) });
-      touched.add(existing.id);
-      continue;
-    }
-    const ids = picks.map((p) => p.id);
-    out.open.push({ kind: "slip", ruleKey: `slip:${date}:${clientKey}:${Math.min(...ids)}`, clientKey, who: name, what: slipWhat(name, latestPerItem(picks).length), draft: slipDraft(name, date, picks, i.movedTo, i.picks), detail: { picks: ids, date }, origin: originOf(picks, i.movedTo, i.picks) });
-  }
-  // Open heads-ups are redrafted when their draft no longer matches (repeated items, a later move).
-  for (const l of open) {
-    if (l.kind !== "slip" || touched.has(l.id) || !l.detail?.date || !l.detail.picks?.length || !l.clientKey) continue;
-    const all = l.detail.picks.map((id) => i.pick(id)).filter((p): p is Pick => !!p);
-    if (!all.length) continue;
-    const name = i.clientName(l.clientKey);
-    const draft = slipDraft(name, l.detail.date, all, i.movedTo, i.picks);
-    if (l.draft === undefined || l.draft === draft) continue;
-    out.update.push({ id: l.id, what: slipWhat(name, latestPerItem(all).length), draft, detail: { picks: l.detail.picks, date: l.detail.date }, origin: originOf(all, i.movedTo, i.picks) });
-  }
+  // 2. CF-1 (E1): no "Heads-up to <client> about the slip" any more (step 13.5's rule read the day's confirm time,
+  // which is gone). Heads-ups opened before stay as they are and close the usual ways (E2).
 
   // 3. A DevOps item assigned to me that is blocked: "Nudge on blocker for #id". Closes when it no longer is.
   for (const w of i.work ?? []) {

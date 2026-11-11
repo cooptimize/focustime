@@ -45,17 +45,6 @@ export function roomWords(freeMinutes: number, plannedMinutes: number): { text: 
   return { text: by < 45 ? "a little over" : `about ${Math.round(by / 60)}h over`, over: true };
 }
 
-/** UI-7's rules for the week's tag beside Confirm week: Draft, Confirmed or "Changed since you confirmed"; past weeks none. */
-export function weekTag(p: { committedAt?: string | null; changed?: boolean } | null, past: boolean): "Draft" | "Confirmed" | "Changed since you confirmed" | null {
-  if (past || !p) return null;
-  if (!p.committedAt) return "Draft";
-  return p.changed ? "Changed since you confirmed" : "Confirmed";
-}
-/** The header's button beside the tag: Confirm week, Confirm again after a change, nothing once confirmed. */
-export function confirmLabel(tag: ReturnType<typeof weekTag>): string | null {
-  return tag === "Draft" ? "Confirm week" : tag === "Changed since you confirmed" ? "Confirm again" : null;
-}
-
 /** What waits to be placed (the notice line and the panel's To place section). */
 export type ToPlace = { unfinished: number; lastWeek: number; sent: number };
 export const toPlaceCount = (t: ToPlace) => t.unfinished + t.lastWeek + t.sent;
@@ -102,7 +91,7 @@ export function placedWhere(ref: { clientKey: string; itemId?: number; draftId?:
 
 /** One client's group under "This week's features" (Plan the day's priorities for that client, in its block's terms). */
 export type FeatureGroup<R> = { clientKey: string; selected: boolean; rows: PriorityRow<R & Ref>[] };
-type Ref = { clientKey: string; itemId: number; title: string; url: string | null; slots: readonly { date: IsoDate; half: "AM" | "PM" }[]; tier?: "must" | "nice"; level?: "feature" | "story"; done?: boolean; parentId?: number | null };
+type Ref = { clientKey: string; itemId: number; title: string; url: string | null; slots: readonly { date: IsoDate; half: "AM" | "PM" }[]; level?: "feature" | "story"; done?: boolean; parentId?: number | null };
 type FollowLike = { id: number; clientKey: string | null; due: string | null; openedAt: string };
 
 export type PanelInput<R extends Ref, F extends FollowLike> = {

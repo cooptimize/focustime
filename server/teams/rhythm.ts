@@ -5,10 +5,11 @@
 // FocusTime message me in Teams" and that kind's switch on.
 //
 // Taps: Done, Undo and Not yet on a pick are the app's own pick.mark_done (a plan-store write with undo, run at once:
-// the rule's exception for an explicit tap). Confirm today, Move…, Move the rest and Close out are proposals through
+// the rule's exception for an explicit tap). Move…, Move the rest and Close out are proposals through
 // the assistant's propose() (no AI), shown inside the card and run only on Confirm. "capture: …" saves the text as
 // typed with capture.add, with Undo. Sends are paced (10 a second for the app, 3 retries with backoff and jitter); a
 // 403 MessageWritesBlocked turns Teams messages off for the person. Nothing here logs text, people or chat ids.
+import { NOTHING_TO_CONFIRM_DAY } from "../../plan/no-confirm.ts";
 import type { ActionResponse, WeekLoadData } from "../../actions/types.ts";
 import { withoutUpdate } from "../../actions/status-actions.ts";
 import { nextStatusNudge, nudgeLineFor, statusNudgeDue } from "../../plan/status-report.ts";
@@ -227,7 +228,6 @@ export function createRhythm(d: RhythmDeps) {
       more: Math.max(0, blocks.length - 3),
       promises: ib.promises.filter((p) => !p.done && p.due !== null && p.due <= date).map((p) => `${p.title}${p.clientName ? ` (${p.clientName})` : ""}${p.due! < date ? ", overdue" : ""}`),
       sends: ib.sends.filter((s) => s.waiting).map((s) => `${s.title}${s.clientName ? ` (${s.clientName})` : ""}${s.from ? `, from ${s.from}` : ""}`),
-      committed: !!w.plan?.[date]?.committedAt,
       destinations: destinationsOf(w.week.days, d.now(), date),
     };
   }
@@ -450,7 +450,7 @@ export function createRhythm(d: RhythmDeps) {
         }),
       );
     const day = await plan.day(m.date).catch(() => null);
-    if (m.kind === "brief") return { ...m, blocks: await Promise.all(m.blocks.map(async (b) => ({ ...b, picks: await fix(b.picks) }))), committed: !!day?.committedAt } as M;
+    if (m.kind === "brief") return { ...m, blocks: await Promise.all(m.blocks.map(async (b) => ({ ...b, picks: await fix(b.picks) }))) } as M;
     if (m.kind === "checkin") return { ...m, picks: await fix(m.picks) } as M;
     return { ...m, picks: await fix(m.picks), closed: !!day?.closedOutAt } as M;
   }
@@ -559,7 +559,8 @@ export function createRhythm(d: RhythmDeps) {
         break;
       }
       case "confirm_today":
-        if (m.kind === "brief") m = await propose(userId, m, "confirm_day", { date: m.date });
+        // CF-1 (F1): an earlier card's Confirm today. Nothing confirms a day now; it answers and changes nothing.
+        m = { ...m, notice: NOTHING_TO_CONFIRM_DAY };
         break;
       case "move": {
         const p = onCard(Number(t.movePick));

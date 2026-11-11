@@ -157,7 +157,7 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
   // planned, and this month's direction review. Their dot goes and their notification closes.
   if (o.seen === true) {
     const la = lookAheadOccasion(today);
-    if (la && (await plan.weekPlan(Temporal.PlainDate.from(la).add({ days: 4 }).toString())).committedAt) (await plan.markOnce(AHEAD_SEEN_MARK, `plan_ahead:${la}`));
+    if (la && (await plan.weeksWithWork([Temporal.PlainDate.from(la).add({ days: 4 }).toString()])).size) (await plan.markOnce(AHEAD_SEEN_MARK, `plan_ahead:${la}`));
     const dr = directionOccasion(today);
     if (dr) (await plan.markOnce(AHEAD_SEEN_MARK, `direction:${dr.slice(0, 7)}`));
   }
@@ -177,11 +177,11 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
     const w = weekStarts[i]!;
     const items = (await plan.weekPlan(w)).features;
     for (const b of weekBudget(week, items, { sizes: cfg.plan.sizes, borrowedMinutes: borrowedForWeek(borrowed, w) })) {
-      capOf(b.clientKey, b.clientName).weeks.push({ weekStart: w, freeMinutes: b.freeMinutes, plannedMinutes: b.plannedMinutes, nicePlannedMinutes: b.nicePlannedMinutes, borrowedMinutes: b.borrowedMinutes, status: b.status, text: b.text, over: b.over });
+      capOf(b.clientKey, b.clientName).weeks.push({ weekStart: w, freeMinutes: b.freeMinutes, plannedMinutes: b.plannedMinutes, borrowedMinutes: b.borrowedMinutes, status: b.status, text: b.text, over: b.over });
     }
     // Each feature's load that week: from its stories on that week's list once one is sized, else its estimate (E2).
-    const est = estimate(items.map((f) => ({ ...f, level: f.level ?? "feature", tier: f.tier ?? "must" })), cfg.plan.sizes);
-    for (const env of est.envelopes) cells.push({ clientKey: env.feature.clientKey, itemId: env.feature.itemId, weekStart: w, minutes: env.minutes, derived: env.derived, unsized: env.unsized, exact: !loadText(env).startsWith("about"), tier: env.feature.tier, weekItemId: env.feature.id, stories: env.stories.length });
+    const est = estimate(items.map((f) => ({ ...f, level: f.level ?? "feature" })), cfg.plan.sizes);
+    for (const env of est.envelopes) cells.push({ clientKey: env.feature.clientKey, itemId: env.feature.itemId, weekStart: w, minutes: env.minutes, derived: env.derived, unsized: env.unsized, exact: !loadText(env).startsWith("about"), weekItemId: env.feature.id, stories: env.stories.length });
   }
   // Weeks 5 to 12: free time per month column (patterns and PTO; meetings aren't known that far ahead).
   for (const col of columns) {
@@ -201,13 +201,13 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
   // A client with blocks only after week 4 still gets its four weeks (no free time).
   for (const c of caps.values())
     for (const w of weekStarts.slice(0, PLAN_WEEKS))
-      if (!c.weeks.some((x) => x.weekStart === w)) c.weeks.push({ weekStart: w, freeMinutes: 0, plannedMinutes: 0, nicePlannedMinutes: 0, borrowedMinutes: 0, status: "none", text: "No focus time this week", over: null });
+      if (!c.weeks.some((x) => x.weekStart === w)) c.weeks.push({ weekStart: w, freeMinutes: 0, plannedMinutes: 0, borrowedMinutes: 0, status: "none", text: "No focus time this week", over: null });
   for (const c of caps.values()) c.weeks.sort((a, b) => a.weekStart.localeCompare(b.weekStart));
   const dates = Object.fromEntries((await plan.roadmapDates()));
   // The last 2 weeks: each feature's hours on that week's plan against the focused time on its picks (slice 3).
   const pastOut: AheadState["past"] = await mapSeq(past, async (w) => {
     const wp = (await plan.weekPlan(w));
-    const est = estimate(wp.features.map((f) => ({ ...f, level: f.level ?? "feature", tier: f.tier ?? "must" })), cfg.plan.sizes);
+    const est = estimate(wp.features.map((f) => ({ ...f, level: f.level ?? "feature" })), cfg.plan.sizes);
     const picks = (await plan.picksBetween(w, Temporal.PlainDate.from(w).add({ days: 6 }).toString()));
     const secs = (await plan.focusedSeconds(picks.map((p) => p.id)));
     const worked = new Map<string, number>();
@@ -219,8 +219,7 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
     }
     return {
       weekStart: w,
-      committed: !!wp.committedAt,
-      planned: est.envelopes.filter((e) => e.feature.tier === "must").map((e) => ({ clientKey: e.feature.clientKey, itemId: e.feature.itemId, minutes: e.minutes })),
+      planned: est.envelopes.map((e) => ({ clientKey: e.feature.clientKey, itemId: e.feature.itemId, minutes: e.minutes })),
       worked: [...worked].map(([k, minutes]) => {
         const [clientKey, id] = k.split("|");
         return { clientKey: clientKey!, itemId: id ? Number(id) : null, minutes };

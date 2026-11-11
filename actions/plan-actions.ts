@@ -6,6 +6,7 @@ import { SIZE_MINUTES } from "../plan/types.ts";
 import { isOpen, typeNeedsBreakdown } from "../plan/process.ts";
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
+import { NOTHING_TO_CONFIRM_DAY } from "../plan/no-confirm.ts";
 import { carryTarget, dayLabel, dayRule, placeNote, SCAN_DAYS, upcomingStart, type DayRule, type HasHours } from "../plan/days.ts";
 import { alreadyPlanned } from "../plan/dup.ts";
 import { sessionEnd, unpickableReason } from "../plan/rules.ts";
@@ -78,13 +79,6 @@ export async function hasHoursNear(plan: PlanStore | undefined, model: TimeModel
   const d = Temporal.PlainDate.from(from);
   const flex = new Set(plan ? (await plan.flexDays(d.subtract({ days: SCAN_DAYS + 1 }).toString(), d.add({ days: SCAN_DAYS + 1 }).toString())).map((f) => f.date) : []);
   return (x) => hoursOn(model, x).segments.length > 0 || flex.has(x);
-}
-
-/** Which days from `from` (SCAN_DAYS on) are committed, read once. */
-export async function committedNear(plan: PlanStore, from: IsoDate): Promise<(d: IsoDate) => boolean> {
-  const to = Temporal.PlainDate.from(from).add({ days: SCAN_DAYS + 1 }).toString();
-  const days = new Set((await plan.dayPlansBetween(from, to)).filter((p) => p.committedAt).map((p) => p.date));
-  return (d) => days.has(d);
 }
 
 /** Today, the first upcoming day and the plannability rule, in the configured zone. */
@@ -169,23 +163,24 @@ const mondayOfDate = (d: IsoDate): IsoDate => {
   const p = Temporal.PlainDate.from(d);
   return p.subtract({ days: p.dayOfWeek - 1 }).toString();
 };
-const isStamp = (v: unknown): v is string => {
-  if (typeof v !== "string") return false;
-  try {
-    Temporal.ZonedDateTime.from(v);
-    return true;
-  } catch {
-    return false;
-  }
-};
 /** WD-1: what pick.add's response said its add did to the week (afterPick in dispatch.ts), handed back by Undo. */
-function weekUndo(v: unknown): { weekStart: IsoDate; featureId: number | null; before: string | null; after: string } {
-  const o = fields(v, ["weekStart", "featureId", "before", "after"]);
+/** The add's Undo: the week and the feature it put there. CF-1: WD-1's week times (before, after) are accepted from an old tab and ignored. */
+function weekUndo(v: unknown): { weekStart: IsoDate; featureId: number | null } {
+  const o = fields(v, ["weekStart", "featureId"], ["before", "after"]);
   const weekStart = date(o.weekStart, "undo.weekStart");
-  const featureId = o.featureId === null ? null : id(o.featureId, "undo.featureId");
-  if (o.before !== null && !isStamp(o.before)) throw new Invalid("undo.before must be a time");
-  if (!isStamp(o.after)) throw new Invalid("undo.after must be a time");
-  return { weekStart, featureId, before: o.before as string | null, after: o.after };
+  const featureId = o.featureId === null || o.featureId === undefined ? null : id(o.featureId, "undo.featureId");
+  return { weekStart, featureId };
+}
+
+/** Whether anything of a feature is still placed in a week (the feature itself, one of its stories, or a draft under it). */
+async function featureStillPlaced(ctx: PlanContext, plan: PlanStore, weekStart: IsoDate, featureId: number, clientKey: string): Promise<boolean> {
+  const sunday = Temporal.PlainDate.from(weekStart).add({ days: 6 }).toString();
+  const live = (await plan.picksBetween(weekStart, sunday)).filter((p) => p.clientKey === clientKey && (p.status === "planned" || p.status === "done"));
+  if (!live.length) return false;
+  const cfg = await ctx.config();
+  const dv = cfg ? ctx.devops(cfg) : null;
+  const drafts = live.some((p) => p.draftId !== null) ? await plan.drafts() : [];
+  return live.some((p) => p.itemId === featureId || (p.itemId !== null && (dv?.lookup(clientKey, p.itemId) as { parentId?: number | null } | null | undefined)?.parentId === featureId) || (p.draftId !== null && drafts.some((d) => d.id === p.draftId && d.parentItemId === featureId)));
 }
 /** A pick's size: XS, S, M or L, or none (E2: not sized yet, counts as the person's assumption; sizing is optional). */
 function size(v: unknown): Size | null {
@@ -258,7 +253,7 @@ async function carryDay(ctx: PlanContext, plan: PlanStore): Promise<{ target: Is
   const { cfg, upcoming, model } = await clock(ctx);
   const monday = Temporal.PlainDate.from(upcoming).subtract({ days: Temporal.PlainDate.from(upcoming).dayOfWeek - 1 }).toString();
   const pto = ctx.ptoAhead && cfg ? await ctx.ptoAhead(cfg, monday).catch(() => new Set<IsoDate>()) : new Set<IsoDate>();
-  return { target: carryTarget(upcoming, await committedNear(plan, upcoming), pto, await hasHoursNear(plan, model, upcoming)), upcoming };
+  return { target: carryTarget(upcoming, pto, await hasHoursNear(plan, model, upcoming)), upcoming };
 }
 
 /** A pick whose evening or weekend session hasn't ended yet by the server's clock (Q45): not carry-over yet. */
@@ -300,7 +295,7 @@ async function state(ctx: PlanContext, plan: PlanStore, d: IsoDate, opened = tru
   const resumeNotes = Object.fromEntries(Object.entries((await plan.latestNotes(d))).map(([k, n]) => [k, { clientKey: n.clientKey, date: n.date, note: n.note }]));
   // Committed features of this date's week (step 8).
   const monday = Temporal.PlainDate.from(d).subtract({ days: Temporal.PlainDate.from(d).dayOfWeek - 1 }).toString();
-  const weekFeatures = (await plan.weekPlan(monday)).features.map((f) => ({ id: f.id, clientKey: f.clientKey, itemId: f.itemId, title: f.title, url: f.url, slots: f.slots, level: f.level, tier: f.tier, estimate: f.estimate, size: f.size, parentId: f.parentId, position: f.position, doneAt: f.doneAt }));
+  const weekFeatures = (await plan.weekPlan(monday)).features.map((f) => ({ id: f.id, clientKey: f.clientKey, itemId: f.itemId, title: f.title, url: f.url, slots: f.slots, level: f.level, estimate: f.estimate, size: f.size, parentId: f.parentId, position: f.position, doneAt: f.doneAt }));
   return { date: d, plan: day, picks, carryOver, carryTarget: carry.target, access: d < today ? "past" : "plan", drafts: (await plan.drafts()), opened, focused, resumeNotes, weekFeatures };
 }
 
@@ -315,8 +310,8 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const auto = o.auto === undefined ? false : bool(o.auto, "auto");
         const rule = await ruleFor(ctx, d);
         if (!rule.ok) return bad(rule.reason, 422);
-        // An automatic open happens once per day, and never for a day already committed.
-        const opened = !auto || (!(await plan.day(d))?.committedAt && (await plan.markOnce("plan_day_auto", d)));
+        // An automatic open happens once per day (CF-1: there is no confirmed day to skip).
+        const opened = !auto || (await plan.markOnce("plan_day_auto", d));
         return { ok: true, data: await state(ctx, plan, d, opened) };
       }
       case "planday.carry": {
@@ -343,14 +338,9 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const pick = await plan.undrop(id(fields(input, ["id"]).id));
         return { ok: true, data: { pick } };
       }
-      case "planday.commit": {
-        const d = date(fields(input, ["date"]).date);
-        const rule = await ruleFor(ctx, d);
-        if (!rule.ok) return bad(rule.reason, 422);
-        if (rule.access === "past") return bad(pastReason(d), 409);
-        (await plan.commit(d));
-        return { ok: true, data: await state(ctx, plan, d) };
-      }
+      case "planday.commit":
+        // CF-1 (F3): nothing confirms a day now. An old tab or card that still asks gets a plain answer; nothing changes.
+        return { ok: true, data: { unchanged: true, message: NOTHING_TO_CONFIRM_DAY } };
       case "pick.add": {
         const o = fields(input, ["date", "half", "clientKey"], ["size", "itemId", "intention", "draftId", "followUpId"]);
         // Step 13.5: a follow-up picked into a block is size S unless sized.
@@ -402,8 +392,9 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         if (undo && undo.weekStart !== mondayOfDate(before.date)) throw new Invalid("undo is for another week");
         // On a past day nothing is deleted: the pick is kept as dropped, so the record of the day stays.
         const r = (await pastRefusal(ctx, before.date)) ? { result: "dropped" as const, pick: (await plan.drop(pid)) } : (await plan.removePick(pid));
-        // WD-1: Undo of an add also takes back what the add did to the week (its feature, "Changed since you confirmed").
-        if (undo) await plan.undoWeekAdd(undo.weekStart, undo.featureId, undo.before, undo.after);
+        // WD-1, CF-1: Undo of an add also takes back the feature the add put on the week, unless something else of it
+        // is still placed that week.
+        if (undo?.featureId != null && !(await featureStillPlaced(ctx, plan, undo.weekStart, undo.featureId, before.clientKey))) await plan.undoWeekAdd(undo.weekStart, undo.featureId);
         return { ok: true, data: { result: r.result, state: await state(ctx, plan, before.date) } };
       }
       case "pick.set_size": {

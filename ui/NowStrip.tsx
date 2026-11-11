@@ -2,12 +2,9 @@
 import type { TimerView } from "../actions/types.ts";
 import type { NowStrip as Strip } from "../plan/now.ts";
 import { formatDuration } from "../week/format.ts";
-import { clientColor, halfName } from "./labels.ts";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { progressLabel } from "../plan/weeklist.ts";
-import { usePhone } from "./viewport.ts";
+import { halfName } from "./labels.ts";
 
-/** MB-1: a client's name short enough for the phone's Musts row: its first word, at most 10 letters. */
+/** MB-1: a client's name short enough for a phone row: its first word, at most 10 letters. */
 export const shortClient = (name: string) => {
   const w = name.trim().split(/\s+/)[0] ?? name;
   return w.length > 10 ? `${w.slice(0, 9)}…` : w;
@@ -84,15 +81,14 @@ function StripLine({ strip: s, onSelect }: { strip: Strip; onSelect: () => void 
     );
   if (s.picks)
     parts.push(
-      <span key="picks" className={s.draft ? "now-draft" : undefined}>
-        {s.draft ? `${s.picks.total} ${s.picks.total === 1 ? "to-do" : "to-dos"}, press Done to keep the plan` : `${s.picks.done} of ${s.picks.total} to-dos done`}
+      <span key="picks">
+        {`${s.picks.done} of ${s.picks.total} to-dos done`}
       </span>,
     );
   if (s.nextPick)
     parts.push(
-      <span key="next" className={s.draft ? "now-pick now-draft" : "now-pick"}>
+      <span key="next" className="now-pick">
         Next: {s.nextPick}
-        {s.draft && <span className="draft-tag">draft</span>}
       </span>,
     );
   if (s.next && (s.kind === "off" || s.kind === "pto")) parts.push(<span key="nextday">Next workday {dayName(s.next)}</span>);
@@ -115,65 +111,7 @@ function StripLine({ strip: s, onSelect }: { strip: Strip; onSelect: () => void 
   );
 }
 
-type MustsRow = { clientKey: string; name: string; musts: number; done: number; left: number; leftMinutes: number; nice: number; track?: { kind: string; text: string } | null };
-
 /**
  * Step 15 (D268): one context line under the top bar instead of the Now strip, the ritual chips and the Musts strip:
- * now / next in a few words, then each client's musts ("Northwind 0/2 · Harbor 0/1"); a click on the musts opens
- * the details. No "Still realistic?" here: that question is Check-in's alone.
+ * now / next in a few words (CF-1: no musts).
  */
-/**
- * The musts summary (step 11): "Musts 2/5 · Fabrikam 1/2 …" with a popover per client. Step 16.2: in the Week tab's
- * header (the stacked context line under the top bar is gone; Today's Now mode carries now and next, the Focus
- * button a running timer).
- */
-export function MustsSummary({ musts, colors, onPlanWeek }: { musts: MustsRow[]; colors: Record<string, string>; onPlanWeek: () => void }) {
-  const [open, setOpen] = useState(false);
-  const pop = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent ? e.key === "Escape" : !pop.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", close);
-    document.addEventListener("keydown", close);
-    return () => {
-      document.removeEventListener("mousedown", close);
-      document.removeEventListener("keydown", close);
-    };
-  }, [open]);
-  const phone = usePhone();
-  const shown = musts.filter((m) => m.musts > 0);
-  if (!shown.length) return null;
-  // U3: musts once, as a swatch and "0/2" per client; amber when the on-track question says tight, muted otherwise.
-  return (
-    <div className="cl-musts" ref={pop}>
-      <button type="button" className="cl-musts-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)} title="Musts done this week, per client" aria-label={`Musts: ${shown.map((m) => `${m.name} ${m.done} of ${m.musts}${m.track?.kind === "at_risk" ? ", tight" : ""}`).join(", ")}`}>
-        <span className="cl-label">Musts</span>
-        {shown.map((m) => (
-          <span key={m.clientKey} className={`cl-must${m.track?.kind === "at_risk" ? " tight" : ""}`} style={{ "--c": clientColor(m.clientKey, colors) } as CSSProperties} title={`${m.name}${m.track ? ` · ${m.track.text}` : ""}`}>
-            <span className="swatch" aria-hidden="true" />
-            {phone && <span className="cl-name">{shortClient(m.name)}</span>}
-            {m.done}/{m.musts}
-          </span>
-        ))}
-      </button>
-      {open && (
-        <div className="cl-pop" role="dialog" aria-label="Musts this week">
-          <h3>Musts this week</h3>
-          <ul>
-            {shown.map((m) => (
-              <li key={m.clientKey} style={{ "--c": clientColor(m.clientKey, colors) } as CSSProperties}>
-                <span className="swatch" aria-hidden="true" />
-                <strong>{m.name}</strong> {progressLabel(m)}
-              </li>
-            ))}
-          </ul>
-          <button type="button" className="link-btn" onClick={() => (setOpen(false), onPlanWeek())}>
-            Add work
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}

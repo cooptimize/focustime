@@ -10,7 +10,7 @@ import { durationText, progressAsk } from "../../plan/progress.ts";
 export type PickState = "open" | "done" | "not_yet" | "moved";
 export type PickRow = { id: number; title: string; client: string | null; state: PickState; note?: string | null };
 export type Choice = { value: string; label: string };
-/** A proposal shown inside the card (Confirm today, Move…, Close out), with its outcome once tapped. */
+/** A proposal shown inside the card (Move…, Close out), with its outcome once tapped. */
 export type InlineProposal = {
   proposalId: string;
   title: string;
@@ -26,7 +26,7 @@ export type InlineProposal = {
 export type BriefBlock = { label: string; client: string | null; meetings: string[]; picks: PickRow[] };
 
 type Base = { occasion: string; date: string; dateLabel: string; test?: boolean; proposal?: InlineProposal | null; notice?: string | null };
-export type BriefModel = Base & { kind: "brief"; blocks: BriefBlock[]; promises: string[]; sends: string[]; committed: boolean; destinations: Choice[]; more: number };
+export type BriefModel = Base & { kind: "brief"; blocks: BriefBlock[]; promises: string[]; sends: string[]; destinations: Choice[]; more: number };
 /** TX-1: one to-do whose timebox ended: asked with Done, Partly and Didn't get to it, then its answer and Undo. */
 export type SessionCard = { pickId: number; title: string; client: string | null; minutes: number; state: "open" | "asking" | "done" | "partly" | "none"; note?: string | null; undoIds?: number[] };
 type Sessions = { sessions?: SessionCard[]; /** End of day: how many stories can be updated in DevOps (the offer is made in Close out). */ progressOffer?: { remaining: number; comment: number } | null };
@@ -131,14 +131,12 @@ export function briefCard(m: BriefModel, publicUrl: string): Card {
     for (const s of m.sends.slice(0, MAX.list)) body.push(text(`• ${s}`, { spacing: "Small" }));
     if (m.sends.length > MAX.list) body.push(muted(`${m.sends.length - MAX.list} more in Plan`));
   }
-  body.push(muted(m.committed ? "Today is confirmed." : "Today isn't confirmed yet."));
   if (m.notice) body.push(text(m.notice, { color: "Warning", spacing: "Small" }));
   if (m.proposal) body.push(...proposalPart(m, m.proposal));
   body.push(footer(publicUrl));
   const actions: unknown[] = [];
   const open = m.blocks.flatMap((b) => b.picks).filter((p) => p.state === "open" || p.state === "not_yet");
   if (!openProposal(m)) {
-    if (!m.committed && m.blocks.some((b) => b.picks.length)) actions.push(exec("Confirm today", tapOn(m, "confirm_today"), "positive"));
     if (open.length && m.destinations.length)
       actions.push({
         type: "Action.ShowCard",

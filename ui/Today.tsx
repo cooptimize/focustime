@@ -29,7 +29,6 @@ import { countdown, timerLeft } from "./NowStrip.tsx";
 import { clientNames, featuresOn, PlanCtx, useFocused } from "./planview.ts";
 import { causeLines } from "./status.ts";
 import { NOTICE_EVENT, WorkLink } from "./WorkLink.tsx";
-import { weekMusts } from "./WeekMusts.tsx";
 import { mondayOf } from "../week/dates.ts";
 import { stepWeekday, weekendStops } from "./nav.ts";
 import { nextWorkingDay, todayShape } from "../plan/todayday.ts";
@@ -56,7 +55,6 @@ import { MenuCtx, MoreButton, PopupMenu } from "./Menus.tsx";
 import { DEFAULT_MIN_SIZES, openGaps, planMyDay } from "../plan/agenda.ts";
 import { TodayTimeline, type Proposals } from "./TodayTimeline.tsx";
 import { useTimeboxes } from "./Timeboxes.tsx";
-import { mustPicks } from "../plan/musts.ts";
 import { agendaNowIndex, nowClock, ownsNow } from "../plan/nowline.ts";
 import { NowRow } from "./NowLine.tsx";
 import { timeChoices } from "../plan/picktime.ts";
@@ -84,7 +82,7 @@ type Props = {
   onDay?: (date: IsoDate | null) => void;
   /** WK-3: Show weekend (‹ › step onto Saturday and Sunday always, not only when something is on them). */
   showWeekend?: boolean;
-  /** QF-1: Timebox my day (Confirm and timebox while the day isn't confirmed). */
+  /** QF-1: Timebox my day. */
   onTimebox?: (date: IsoDate) => void;
   /** TY-1: Timebox my day was asked for (from here or anywhere else): show its placeholders on this day's timeline. */
   timeboxAsk?: { date: IsoDate; n: number } | null;
@@ -189,7 +187,8 @@ export function Today(props: Props) {
   const day = data.week.days.find((d) => d.date === date) ?? null;
   const plan = data.plan?.[date];
   const picks = useMemo(() => plan?.picks ?? [], [plan]);
-  const committed = !!plan?.committedAt;
+  // CF-1: no confirm; to-dos tick on today and past days.
+  const tickable = date <= realToday;
   const nameOf = clientNames(data);
   // QF-1 (plan/todayday.ts): a PTO day shows read-only with only the blocks that still hold a pick; nothing nags on it
   // or on any day but today.
@@ -210,7 +209,6 @@ export function Today(props: Props) {
   const urgentSources: UrgentSource[] = [inboxSource(target.isToday && nudges ? (props.inbox ?? []) : [], { today: date, dayEnd }), ...(props.urgentSources ?? [])];
   const inStrip = new Set(urgentLines(urgentSources, clockNow, tz).map((l) => l.key));
   const tbEnv = useTimeboxes();
-  const workItems = useContext(DevOpsWork);
   const untimed = untimedDue(todayPromises, { now: clockNow, today: date, dayEnd }).filter((p) => !inStrip.has(`c${p.id}`));
   const focused = useFocused();
   const [error, setError] = useState<string | null>(null);
@@ -360,12 +358,12 @@ export function Today(props: Props) {
   ) : null;
   const nextWorkday = ptoDay ? nextWorkingDay(date, (d) => hoursOn(data.hours, d).segments.length > 0, (d) => data.ptoAhead.includes(d) || !!data.week.days.find((x) => x.date === d)?.pto) : null;
   const dayWord = isToday ? "today" : Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" });
-  // QF-1: Timebox my day from Today, beside the day's plan (Confirm and timebox while it isn't confirmed).
+  // QF-1: Timebox my day from Today, beside the day's plan.
   const boxedIds = new Set(data.timeboxes.filter((t) => t.date === date && !t.removedAt).map((t) => t.pickId));
   const unboxed = picks.filter((p) => p.status === "planned" && !boxedIds.has(p.id)).length;
   const timeboxOffer = mode === "now" && !past && workday && !ptoDay && unboxed > 0 && data.timeboxSettings.enabled !== false && props.onTimebox && !proposals ? (
     <button type="button" className="mini today-timebox" onClick={() => props.onTimebox!(date)} title="Suggest a time for every planned to-do, on the timeline, to accept or change">
-      {committed ? "Timebox my day" : "Confirm and timebox"}
+      Timebox my day
     </button>
   ) : null;
 
@@ -376,7 +374,7 @@ export function Today(props: Props) {
     if (!day || !canTimebox) return;
     const slots: Partial<Record<Half, Slot>> = {};
     for (const s of blocks) if (!s.off && !s.pto) slots[s.half] = s;
-    const r = planMyDay(picks, slots, data.timeboxes, view.sizes, mustPicks(picks, data.weekFeatures, workItems), isToday ? now : undefined, view.minSizes);
+    const r = planMyDay(picks, slots, data.timeboxes, view.sizes, isToday ? now : undefined, view.minSizes);
     tbEnv?.loadAccess();
     setTlForced(true);
     if (!r.placed.length && !r.unplaced.length) return setNotice("Every planned to-do already has a timebox");
@@ -449,7 +447,7 @@ export function Today(props: Props) {
           pick={nextPick}
           nowMs={nowMs}
           nameOf={nameOf}
-          committed={committed}
+          tickable={tickable}
           onStart={props.onStart}
           onDone={tickWithUndo}
           onTimer={props.onTimer}
@@ -466,7 +464,7 @@ export function Today(props: Props) {
           onStart={props.onStart}
           onTimer={props.onTimer}
           onFocusScreen={props.onFocusScreen}
-          onDone={committed ? (p) => view.toggle(p.id, true) : null}
+          onDone={(p) => view.toggle(p.id, true)}
         />
       )}
       {/* MB-1: on the phone one heading over the strip (its 3 lines and "N more in Inbox"); Promises due is gone there. */}
@@ -484,7 +482,6 @@ export function Today(props: Props) {
       {error && <p className="set-problem" role="alert">{error}</p>}
       <Fading text={notice} onGone={clearNotice} />
       {offer && <FlexOfferBar offer={offer.offer} clientKey={offer.pick.clientKey} clientName={nameOf(offer.pick.clientKey)} title={offer.pick.title} onDone={(m) => { setOffer(null); setNotice(m); props.onChanged(); }} />}
-      {mode === "checkin" && !committed && workday && <p className="co-notice">Today isn't planned yet. Plan (P) to make the most of the afternoon.</p>}
       {mode === "checkin" && <TimeboxCheckin date={date} moment="midday" color={(k) => clientColor(k, data.clients)} onChanged={props.onChanged} onError={setError} />}
 
       {mode === "now" && ptoDay && (
@@ -528,7 +525,7 @@ export function Today(props: Props) {
       ) : (
         phoneToday && !timelineShown ? (
           <div className="today-body ph-today">
-            <PhoneTodos blocks={blocks} picks={picks} data={data} nameOf={nameOf} committed={committed} now={now} onTick={(p, d) => tickWithUndo(p, d)} />
+            <PhoneTodos blocks={blocks} picks={picks} data={data} nameOf={nameOf} tickable={tickable} now={now} onTick={(p, d) => tickWithUndo(p, d)} />
             <PhoneNextUp blocks={blocks} events={cal?.timed ?? []} data={data} nameOf={nameOf} now={clockNow} />
           </div>
         ) : (
@@ -570,7 +567,7 @@ export function Today(props: Props) {
                   picks={picks.filter((p) => p.half === s.half)}
                   promises={spots.within.get(s.half) ?? []}
                   check={check.find((c) => c.half === s.half) ?? null}
-                  committed={committed}
+                  tickable={tickable}
                   now={now}
                   nowMs={nowMs}
                   nameOf={nameOf}
@@ -595,7 +592,7 @@ export function Today(props: Props) {
             {mode !== "checkin" && split && !timelineShown && <OutsideLine label="After your blocks" events={wide ? [] : split.after} tz={tz} promises={spots.after} onPromise={onPromise} />}
             {mode === "now" && phone && nudges && <PhoneFollowUps data={data} date={date} onChanged={(m) => (m && setNotice(m), props.onChanged())} />}
             {mode === "now" && !phone && !ptoDay && <ThisWeek data={data} blocks={blocks} picks={picks} nameOf={nameOf} />}
-            {mode === "checkin" && <CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} now={now} act={act} onReview={props.onPlanWeek} onAsks={props.onAsks ?? props.onInbox} />}
+            {mode === "checkin" && <CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} act={act} onAsks={props.onAsks ?? props.onInbox} />}
           </div>
         </div>
         )
@@ -768,7 +765,7 @@ export function stripLine(l: UrgentLine, o: { today: IsoDate; tz: string; client
 }
 
 const MOMENTS = {
-  plan: { title: "Add work", body: "Today isn't planned yet. Put this week's stories into today's blocks.", button: "Add work" },
+  plan: { title: "Nothing on today yet", body: "Put this week's stories into today's blocks.", button: "Add work" },
   checkin: { title: "Midday check-in", body: "What still fits this afternoon, with one suggested move each.", button: "Check in" },
   closeout: { title: "Close out", body: "What got done, where you left off, DevOps updates and promises.", button: "Close out" },
 } as const;
@@ -810,7 +807,8 @@ type BlockProps = {
   rows: ReturnType<typeof blockRows<DayEvent, Pick>>;
   picks: Pick[];
   check: CheckSlot | null;
-  committed: boolean;
+  /** CF-1: today or a past day: its to-dos tick (no confirm needed). */
+  tickable: boolean;
   now: string;
   nowMs: number;
   nameOf: (k: string) => string;
@@ -839,14 +837,14 @@ type BlockProps = {
 
 /** One block card (density "today"): header with client, time and the one status, then rows, then "Left off". */
 function BlockCard(b: BlockProps) {
-  const { slot, mode, data, committed, nameOf, ended } = b;
+  const { slot, mode, data, nameOf, ended } = b;
   const view = useContext(PlanCtx);
   const tz = userZone(data);
   const client = slot.focus[0]?.clientKey ?? null;
   const planned = b.picks.filter((p) => p.status === "planned");
   const done = b.picks.filter((p) => p.status === "done");
   const dropped = b.picks.filter((p) => p.status === "dropped");
-  const fit = committed && planned.length && !ended ? planFit(b.picks, data.planning.sizes, view.timeboxes, slot) : null;
+  const fit = planned.length && !ended ? planFit(b.picks, data.planning.sizes, view.timeboxes, slot) : null;
   const status = blockStatus(fit, slot.risks);
   const title = client ? nameOf(client) : slot.open ? "Open" : halfName(slot.half);
   const followUp = (p: Pick) => (p.followUpId !== null ? data.followUps.find((f) => f.id === p.followUpId) ?? null : null);
@@ -869,11 +867,10 @@ function BlockCard(b: BlockProps) {
       toggle={view.toggle}
       link
       density="today"
-      canTick={committed && !b.readOnly}
-      timeEditable={committed && !ended && !b.readOnly}
-      draggable={committed && p.status === "planned" && !b.readOnly}
+      canTick={b.tickable}
+      timeEditable={!ended && !b.readOnly}
+      draggable={p.status === "planned" && !b.readOnly}
       className={b.selected === p.id ? "selected" : ""}
-      extra={!committed && p.status === "planned" ? <span className="draft-tag">draft</span> : undefined}
       badge={followUp(p) ? <DueBadge l={followUp(p)!} /> : undefined}
       {...extra}
     />
@@ -1085,11 +1082,8 @@ function ThisWeek({ data, blocks, picks: _today, nameOf }: { data: WeekLoadData;
   );
 }
 
-/** Check-in's foot, once: walk-on work for a block, and the week's musts in one line. */
-function CheckinFoot({ data, date, blocks, picks, now, act, onReview, onAsks }: { data: WeekLoadData; date: IsoDate; blocks: Slot[]; picks: Pick[]; now: string; act: (a: string, i: Record<string, unknown>) => Promise<boolean>; onReview: () => void; onAsks: () => void }) {
-  const { rows } = weekMusts(data, mondayOf(date), now);
-  const musts = rows.filter((r) => r.musts > 0);
-  const tight = musts.filter((r) => r.track?.kind === "at_risk").map((r) => r.name);
+/** Check-in's foot, once: walk-on work for a block (CF-1: no musts line). */
+function CheckinFoot({ data, date, blocks, picks, act, onAsks }: { data: WeekLoadData; date: IsoDate; blocks: Slot[]; picks: Pick[]; act: (a: string, i: Record<string, unknown>) => Promise<boolean>; onAsks: () => void }) {
   return (
     <div className="ci-foot">
       {blocks.length > 0 && <WalkOn data={data} date={date} blocks={blocks} picks={picks} act={act} />}
@@ -1097,21 +1091,6 @@ function CheckinFoot({ data, date, blocks, picks, now, act, onReview, onAsks }: 
         <p className="ci-asks">
           <button type="button" className="link-btn" onClick={onAsks} title="Requests still open after their urgency (now: 2 hours; this week: Friday)">
             Walked in, not resolved ({data.requests.pastUrgency})
-          </button>
-        </p>
-      )}
-      {musts.length > 0 && (
-        <p className="ci-musts">
-          Musts this week: {musts.length} {musts.length === 1 ? "client" : "clients"}
-          {tight.length ? (
-            <>
-              , <span className="watch">{tight.join(", ")} tight</span>
-            </>
-          ) : (
-            ", all look doable"
-          )}{" "}
-          <button type="button" className="link-btn" onClick={onReview}>
-            Review ›
           </button>
         </p>
       )}

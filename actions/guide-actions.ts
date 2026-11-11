@@ -18,9 +18,10 @@ export type ChecklistFacts = {
   /** How many devices get push notifications. */
   devices: number;
   teamsMessages: boolean;
-  /** This week's or next week's plan is confirmed. */
-  weekConfirmed: boolean;
-  todayConfirmed: boolean;
+  /** CF-1: this week or next week has anything placed (was: confirmed). */
+  weekPlanned: boolean;
+  /** CF-1: today has to-dos (was: confirmed). */
+  todayPlanned: boolean;
 };
 
 const step = (s: SetupState[keyof SetupState]): CheckState => (s === "done" ? "done" : s === "skipped" || s === "dismissed" ? "skipped" : "todo");
@@ -33,8 +34,8 @@ export function checklist(f: ChecklistFacts): Checklist["checks"] {
     calendars: step(f.setup.calendars),
     devops: f.writeClients > 0 ? "done" : "todo",
     notify: f.devices > 0 || f.teamsMessages ? "done" : "todo",
-    week: f.weekConfirmed ? "done" : "todo",
-    today: f.todayConfirmed ? "done" : "todo",
+    week: f.weekPlanned ? "done" : "todo",
+    today: f.todayPlanned ? "done" : "todo",
   };
   return CHECK_IDS.map((id) => ({ id, state: state[id] }));
 }
