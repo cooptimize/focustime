@@ -1155,8 +1155,11 @@ export function App() {
   }, [clock]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    // WD-1: not while the block panel has focus (its search and type box keep it).
-    if (!cmdOpen && !keysOpen && !document.activeElement?.closest(".add-work-panel")) cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
+    // WD-1, WD-2: not while the block panel has focus (its Add box keeps it), nor a dialog, a menu or a text box (Day
+    // has cards to select now, so a command that opens Capture must not lose its cursor to the card behind it).
+    const a = document.activeElement as HTMLElement | null;
+    const busy = !!a && (!!a.closest(".block-panel, [data-overlay], [role='dialog'], [role='menu'], dialog") || isTypingTarget(a));
+    if (!cmdOpen && !keysOpen && !busy) cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
   }, [sel, data?.weekStart, layout, cmdOpen, keysOpen]);
 
   useEffect(() => {

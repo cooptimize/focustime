@@ -1,7 +1,8 @@
 // DV-2: DevOps changes show up on their own (demo mode, Monday Nov 2 2026 9:30 AM ET). A fictional teammate changes or
 // adds items in the session's own demo DevOps (demo.devops_change, only in the demo); the page's one versions poll (every
 // 30 s, the page clock run forward here) sees the client's version move and each open screen rereads quietly. Then
-// Refresh's answer on Ahead and Status, the status bar's freshness, and Settings › DevOps › Find an item.
+// Refresh's answer on Ahead and Status, the status bar's freshness, and Settings › DevOps › Find an item. WD-2: Week's
+// check reads the block panel's Add list (was the Details panel's Your stories).
 // With FOCUSTIME_SHOTS the screenshots go there.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
@@ -90,11 +91,11 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
     await shot(page, "dv2-ahead-changed");
   }, T);
 
-  it("Week: a story's new title shows in the block's Your stories after a poll, with the panel left open", async () => {
+  it("Week: a story's new title shows in the block panel's Add list after a poll, with the panel left open (WD-2)", async () => {
     await page.evaluate(() => (location.hash = "#/week"));
     await page.locator("main.grid").waitFor({ timeout: 30_000 });
     await page.locator(".half.card", { hasText: "Northwind" }).first().locator(".card-when").click();
-    const stories = page.getByRole("region", { name: "Your stories for Northwind" });
+    const stories = page.locator("aside.block-panel .aw-features");
     await stories.waitFor();
     await stories.getByText("Filter orders by date range").waitFor();
     await teammate(page, "Northwind", { id: 1112, title: "Filter orders by a date range", state: "Active" });

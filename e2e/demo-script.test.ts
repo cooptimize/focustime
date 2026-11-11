@@ -38,8 +38,8 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
   it("runs from Today to Close out", async () => {
     const { page, errors } = await freshPage(h);
 
-    // 1. Day: what's next, the urgent strip (my late promise), the moment card (Add work).
-    await page.locator(".phone-now, .today-next").first().waitFor({ timeout: 30_000 });
+    // 1. Day: the urgent strip (my late promise), the moment card (+ Add) and the day's blocks.
+    await page.locator(".day-view .half.card").first().waitFor({ timeout: 30_000 });
     await page.getByText(/Promise · was due/).first().waitFor();
     await page.getByText("Send Marcus the updated export spec").first().waitFor();
     // IB-1 slice 4: the strip is the Inbox's own items, 3 at most, the most urgent first; the rest are "N more in Inbox".
@@ -50,7 +50,7 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await strip.locator(".us-all").click();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/inbox/needs-you");
     await go(page, "#/today");
-    await page.locator(".phone-now, .today-next").first().waitFor({ timeout: 30_000 });
+    await page.locator(".day-view .half.card").first().waitFor({ timeout: 30_000 });
     await shot(page, "today");
 
     // 2. Add work (WD-1): P opens Week with the panel; drag Filter orders by date range onto Northwind's Monday

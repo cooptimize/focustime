@@ -105,7 +105,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
       await page.locator(".vm-preview").getByRole("button", { name: "Cancel" }).click();
       // WD-1: a to-do's "+ time" on Day (Plan the day's left pane is gone).
       await go(page, "#/day");
-      const timed = page.locator(".day-view .half.card .pick-row", { has: page.getByRole("button", { name: /\+ time/ }) }).first();
+      const timed = page.locator(".day-view .half.card .pick-row.planned").first();
       await timed.hover();
       await timed.getByRole("button", { name: /\+ time/ }).click();
       await page.getByRole("menuitem", { name: /Custom/ }).click();

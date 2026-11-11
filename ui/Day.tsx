@@ -480,7 +480,6 @@ export function Day(props: Props) {
         <div className="today-body ph-today">
           <PhoneTodos blocks={blocks} picks={picks} data={data} nameOf={nameOf} tickable={tickable} now={now} onTick={(p, d) => tickWithUndo(p, d)} onAdd={(half) => openBlock(half, { add: true })} />
           <PhoneNextUp blocks={blocks} events={cal?.timed ?? []} data={data} nameOf={nameOf} now={clockNow} />
-          <PhoneFollowUps data={data} date={date} onChanged={(m) => (m && setNotice(m), props.onChanged())} />
         </div>
       ) : mode === "now" && timelineShown ? (
         <div className="today-body with-tl">
@@ -504,6 +503,7 @@ export function Day(props: Props) {
               onAdd={canAdd ? (half) => openBlock(half, { add: true }) : undefined}
               nameOf={nameOf}
             />
+            {phone && nudges && <PhoneFollowUps data={data} date={date} onChanged={(m) => (m && setNotice(m), props.onChanged())} />}
           </div>
         </div>
       ) : mode === "now" ? (

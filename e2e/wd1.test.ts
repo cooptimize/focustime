@@ -185,7 +185,7 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     const { page } = await freshPage(h);
     const PLAN = /^(Plan|Plan it|Plan the day|Plan the week|Plan today)$/;
     const words = () => page.locator("button:visible, a:visible").evaluateAll((els) => els.map((e) => (e.textContent ?? "").trim()));
-    for (const [key, ready] of [["1", ".today-view, .today-next"], ["2", ".half.card"], ["4", "main"], ["5", ".status-view, main"]] as const) {
+    for (const [key, ready] of [["1", ".today-view"], ["2", ".half.card"], ["4", "main"], ["5", ".status-view, main"]] as const) {
       await page.keyboard.press(key);
       await page.locator(ready).first().waitFor({ timeout: 30_000 });
       await page.waitForTimeout(300);

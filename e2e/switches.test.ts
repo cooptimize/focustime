@@ -85,11 +85,11 @@ describe.skipIf(!CHROMIUM)("Week's all-day chips and view switches (U5.1)", () =
     // Today: no Dentist row, the risk still says so.
     await go(page, "#/today");
     await page.locator(".day-view .half.card").first().waitFor();
-    await expect(page.locator(".today-rows li", { hasText: "Dentist" }).count()).resolves.toBe(0);
-    await expect(page.locator(".day-view .half.card .status-pill", { hasText: "Dentist" }).count()).resolves.toBeGreaterThan(0);
+    await expect(page.locator(".day-view .card-events li, .day-view .today-rows li", { hasText: "Dentist" }).count()).resolves.toBe(0);
+    await expect(page.locator('.day-view .half.card .status-pill[title*="Dentist"]').count()).resolves.toBeGreaterThan(0);
     await expect(page.locator("footer.statusbar .status-chip.personal-hidden").textContent()).resolves.toBe("1 personal hidden");
     // Today's ⋯ has the switch, checked off.
-    await page.getByRole("button", { name: "View options for Today" }).click();
+    await page.getByRole("button", { name: "View options for Day" }).click();
     await expect(page.locator(".popup-menu .menu-item", { hasText: "Personal events" }).getAttribute("class")).resolves.not.toContain("checked");
     await page.keyboard.press("Escape");
     // A restart: a new window reads it from config.

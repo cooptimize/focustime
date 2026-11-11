@@ -38,14 +38,14 @@ describe.skipIf(!CHROMIUM)("Unfinished picks suggested in the next block (UI-B)"
     const origin = (title: string) => page.locator(".pick-origin", { hasText: title });
     await expect(origin("Filter orders by date range").textContent()).resolves.toContain("→ suggested Wed PM");
     await expect(origin("Validate date of birth").textContent()).resolves.toContain("→ in To place");
-    await expect(page.locator(".checklist .pr-title", { hasText: "Filter orders by date range" }).count()).resolves.toBe(0);
+    await expect(page.locator(".half .checklist .pr-title", { hasText: "Filter orders by date range" }).count()).resolves.toBe(0);
 
     // Keep here: a normal pick on Wednesday afternoon; the original reads "→ moved to Wed PM". Undo puts it back.
     await card("Filter orders by date range").locator(".sc-open").click();
     await page.getByRole("menuitem", { name: /Keep here, Wed PM/ }).click();
     await expect.poll(() => card("Filter orders by date range").count()).toBe(0);
     await expect.poll(() => origin("Filter orders by date range").textContent()).toContain("→ moved to Wed PM");
-    await expect.poll(() => page.locator(".checklist .pr-title", { hasText: "Filter orders by date range" }).count()).toBe(1);
+    await expect.poll(() => page.locator(".half .checklist .pr-title", { hasText: "Filter orders by date range" }).count()).toBe(1);
     await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
     await expect.poll(() => card("Filter orders by date range").count()).toBe(1);
 

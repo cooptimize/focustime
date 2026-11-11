@@ -243,7 +243,7 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       await shotAll(page, "cv3-link-likely", loose);
       await page.keyboard.press("Escape");
 
-      // Today: due in an hour and overdue in the strip; due at 3 PM only in the agenda.
+      // Day: due in an hour and overdue in the strip; due at 3 PM in the chips line ("1 promise due"), with its time.
       const k = (await convs.commitmentsInChat(ALLIANCE))[0]!;
       await convs.addCommitment({ conversationId: k.conversationId, chatId: ALLIANCE, clientKey: "Adatum", whoId: ME, whoName: "Sam Tester", toId: BLAKE, toName: "Blake Novak", what: "Share the filter fix plan", dueAt: "2026-11-02T15:30:00Z", dueDate: "2026-11-02", impliesItem: false, messageIds: [], reason: "test" });
       await convs.addCommitment({ conversationId: k.conversationId, chatId: ALLIANCE, clientKey: "Adatum", whoId: ME, whoName: "Sam Tester", toId: BLAKE, toName: "Blake Novak", what: "Walk Blake through the totals", dueAt: "2026-11-02T20:00:00Z", dueDate: "2026-11-02", impliesItem: false, messageIds: [], reason: "test" });
@@ -254,7 +254,10 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       await strip.getByText("Share the filter fix plan").waitFor();
       await strip.getByText(/Promise · was due Fri, Oct 30/).waitFor();
       expect(await strip.getByText("Walk Blake through the totals").count()).toBe(0);
-      await page.locator(".promise-open", { hasText: "Walk Blake through the totals" }).first().waitFor();
+      await page.locator(".day-chips .att-chip.due").click();
+      const dueRow = page.locator(".day-chips .att-rows li", { hasText: "Walk Blake through the totals" });
+      await dueRow.waitFor();
+      await expect(dueRow.textContent()).resolves.toMatch(/Promise · 3:00 PM/);
       await shotAll(page, "cv3-today-strip-agenda", strip);
 
       // Week's rail: the overdue one marked at now on today's block; WD-1's slim rail has no labels, so the card's late

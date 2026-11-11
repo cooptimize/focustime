@@ -167,9 +167,11 @@ describe.skipIf(!CHROMIUM)("WK-2: the Board's Timeline toggle and per-column tie
     const lines = page.locator(`main.grid ${MON_AM} .card-events li`);
     await expect(lines.count()).resolves.toBeGreaterThan(0);
     await expect(lines.first().locator(".ce-time").textContent()).resolves.toMatch(/^\d{1,2}:\d\d–\d{1,2}:\d\d$/);
-    // Drag a story from the detail panel onto Friday (today), as with the timeline shown.
-    await openPanel(page);
-    const pick = page.locator("aside.block-panel .ps-row[data-story][draggable='true']").first();
+    // Drag a story from the block panel onto Friday (today), as with the timeline shown. WD-2: Monday is past by
+    // Friday (its panel has no Add list), so the panel is opened on Friday's block, with Cooptimize chosen.
+    await page.locator(`main.grid ${FRI_AM} .card-client`).first().click();
+    await page.locator("aside.block-panel .client-chooser").getByRole("button", { name: "Cooptimize" }).click();
+    const pick = page.locator("aside.block-panel .aw-features .aw-row[draggable=true]:not(:has(.aw-where))").first();
     await pick.waitFor();
     // As WK-1's drag (D858): over each day, nudging the pointer while it rests, so the target answers.
     const a = (await pick.boundingBox())!;

@@ -218,7 +218,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       {listEvents && slot.events.length > 0 && agendaOpen && (
         <ul className="card-events" aria-label={`Meetings and events, ${dayLabel} ${slot.half}`}>
           {slot.events.map((p) => (
-            <li key={p.event.id} className={p.event.isPersonal ? "personal" : p.event.unavailable ? "unavailable" : undefined}>
+            <li key={p.event.id} className={p.event.isPersonal ? "personal" : p.event.unavailable ? "unavailable" : undefined} title={p.event.title}>
               <span className="ce-time">{startClock(p.clipStart, tz)}–{startClock(p.clipEnd, tz)}</span>
               <span className="ce-title">{p.event.title}</span>
             </li>

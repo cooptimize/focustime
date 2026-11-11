@@ -60,21 +60,25 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
       for (const p of st.data.picks as { id: number; status: string }[]) if (p.status === "planned" || p.status === "done") await post("pick.remove", { id: p.id });
     });
     await page.reload();
-    await page.locator(".phone-now").waitFor();
+    await page.locator(".day-view .half.card").first().waitFor();
     const planCard = page.getByRole("region", { name: "Nothing on today yet" });
     await planCard.waitFor();
     expect(await page.getByRole("region", { name: "Midday check-in" }).count()).toBe(0);
     await shotAll(page, "nv1-today-plan-card");
 
-    // Plan today: Week with the Add work panel on today; Week has no mode switch.
-    await planCard.getByRole("button", { name: "Add work" }).click();
-    await expect.poll(() => hash(page)).toMatch(/^#\/week\/day\/2026-11-02/);
-    await expect.poll(() => tab(page).textContent()).toMatch(/^Week/);
-    expect(await page.getByRole("navigation", { name: "Week modes" }).count()).toBe(0);
+    // WD-2: + Add on the card opens the block panel on Day, on one of today's blocks, the cursor in its Add box.
+    await planCard.getByRole("button", { name: "+ Add" }).click();
+    await expect.poll(() => hash(page)).toMatch(/^#\/day\/2026-11-02\/(AM|PM)$/);
+    await expect.poll(() => tab(page).textContent()).toMatch(/^Day/);
     await expect.poll(() => page.locator("aside.block-panel").getAttribute("data-block-panel")).toMatch(/^2026-11-02\|/);
-    await page.getByPlaceholder(/^Type a story for /).waitFor();
+    await expect.poll(() => page.evaluate(() => document.activeElement?.classList.contains("bp-box"))).toBe(true);
     await page.keyboard.press("Escape");
     await expect.poll(() => page.locator("aside.block-panel").count()).toBe(0);
+    await expect.poll(() => hash(page)).toBe("#/day");
+    // Week has no mode switch.
+    await page.keyboard.press("2");
+    await page.locator(".half.card").first().waitFor();
+    expect(await page.getByRole("navigation", { name: "Week modes" }).count()).toBe(0);
 
     // AH-1: Ahead is Grid, Gantt, Readiness and Backlog.
     await page.keyboard.press("3");
@@ -142,7 +146,12 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
   it("Coop brief opens Break down's side panel: copies at once, Copy again and Close; Break down's panel beside it", async () => {
     const { page, errors } = await freshPage(h);
     page.setDefaultTimeout(30_000);
-    await page.getByRole("button", { name: "Coop brief" }).first().click();
+    // WD-2: the Coop brief is in a feature's ⋯ in the block panel (Day's This week chips are gone).
+    await page.locator('.day-view [data-drop="2026-11-02:PM"] .card-when').click();
+    const feature = page.locator("aside.block-panel .aw-feature", { hasText: "Supplier onboarding" }).first();
+    await feature.waitFor();
+    await feature.locator(".aw-feat-head").getByRole("button", { name: /^More for/ }).click();
+    await page.getByRole("menuitem", { name: /Coop brief/ }).click();
     const panel = page.locator(".bd-panel.brief-panel");
     await panel.waitFor();
     await panel.getByText("Coop brief").first().waitFor();
@@ -155,7 +164,7 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await panel.getByRole("button", { name: "Close" }).last().click();
     await expect.poll(() => panel.count()).toBe(0);
 
-    await page.getByRole("button", { name: /^Break down / }).first().click();
+    await page.locator("aside.block-panel .aw-feature", { hasText: "Supplier onboarding" }).first().getByRole("button", { name: /^Break down/ }).first().click();
     await page.locator(".bd-panel:not(.brief-panel)").waitFor();
     await shotAll(page, "nv1-break-down");
     await page.keyboard.press("Escape");

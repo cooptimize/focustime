@@ -62,11 +62,12 @@ describe.skipIf(!CHROMIUM)("Today and Week fit (U5.1)", () => {
     await seed(page);
     await go(page, "#/today");
     await page.locator(".day-view .half.card").first().waitFor();
+    // WD-2: Day's cards are Week's: the meetings are one line that opens to the list.
+    for (const fold of await page.locator(".day-view .half.card .card-agenda-fold").all()) await fold.click();
     await expect(page.locator(".day-view .half.card", { hasText: "Quarterly planning" }).count()).resolves.toBe(1);
     expect(await paintsOutside(page, ".day-view .half.card")).toEqual([]);
-    const meeting = page.locator(".today-rows li", { hasText: "Quarterly planning" }).first();
+    const meeting = page.locator(".day-view .card-events li", { hasText: "Quarterly planning" }).first();
     await expect(meeting.getAttribute("title")).resolves.toContain(LONG_MEETING);
-    await expect(meeting.locator(".ev-title").evaluate((e) => e.scrollWidth > e.clientWidth)).resolves.toBe(true);
     await expect(page.locator(".day-view .half.card .pr-title", { hasText: "Write the migration" }).getAttribute("title")).resolves.toBe(LONG_PICK);
     await go(page, `#/week/${MON}`);
     await page.locator(".half.card").first().waitFor();
@@ -79,7 +80,7 @@ describe.skipIf(!CHROMIUM)("Today and Week fit (U5.1)", () => {
     await page.close();
   }, T);
 
-  it("Today at 1920 with AM, PM and Evening blocks: each card is at least 560 px wide; one block is capped and left-aligned", async () => {
+  it("Day at 1920 with AM, PM and Evening blocks: the cards sit side by side, each at least 560 px wide, across the full width", async () => {
     const { page, errors } = await freshPage(h);
     await seed(page, { evening: true });
     await go(page, "#/today");
@@ -87,7 +88,9 @@ describe.skipIf(!CHROMIUM)("Today and Week fit (U5.1)", () => {
     const widths = await page.locator(".day-view .half.card").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
     for (const w of widths) expect(w).toBeGreaterThanOrEqual(560);
     // The content area is the full width minus the 24 px gutters.
-    const area = await page.locator(".today-blocks").evaluate((e) => e.getBoundingClientRect().width);
+    const tops = await page.locator(".day-view .half.card").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+    expect(new Set(tops).size).toBe(1);
+    const area = await page.locator(".grid.day-only").evaluate((e) => e.getBoundingClientRect().width);
     expect(area).toBeGreaterThan(1920 - 2 * 24 - 20);
     expect(errors).toEqual([]);
     await page.close();
