@@ -4,7 +4,7 @@
 // Week and Today, the status bar counts them, risk reasons still name them, and the choice survives a restart.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, sameSession, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, timelineOn, sameSession, startDemo, type Harness } from "./harness.ts";
 
 let h: Harness;
 const T = 90_000;
@@ -46,6 +46,7 @@ describe.skipIf(!CHROMIUM)("Week's all-day chips and view switches (U5.1)", () =
 
   it("V cycles the Timelines range, the rail follows it, and Week's ⋯ shows which; Settings › Display holds the default", async () => {
     const { page, errors } = await freshPage(h);
+    await timelineOn(page);
     await go(page, `#/week/${MON}`);
     await page.locator(".half.card .ruler").first().waitFor();
     const marks = () => page.locator(".half.card .ruler").first().locator(".r-hour").count();
@@ -72,6 +73,7 @@ describe.skipIf(!CHROMIUM)("Week's all-day chips and view switches (U5.1)", () =
 
   it("G hides personal events on Week and Today; the status bar counts them; risk reasons still name them; it survives a restart", async () => {
     const { page, errors } = await freshPage(h);
+    await timelineOn(page);
     await go(page, `#/week/${MON}`);
     await page.locator(".half.card .ruler").first().waitFor();
     expect(await page.locator(".ruler .r-ev.personal").count()).toBeGreaterThan(0);
@@ -79,7 +81,7 @@ describe.skipIf(!CHROMIUM)("Week's all-day chips and view switches (U5.1)", () =
     await expect.poll(() => page.locator(".ruler .r-ev.personal").count()).toBe(0);
     await expect(page.locator("footer.statusbar .status-chip.personal-hidden").textContent()).resolves.toMatch(/^\d+ personal hidden$/);
     // Hidden, still counted: Monday's risk still names the Dentist.
-    await expect(page.locator(".half.card .status-pill", { hasText: "Dentist" }).count()).resolves.toBeGreaterThan(0);
+    await expect(page.locator('.half.card .status-pill[title*="Dentist"]').count()).resolves.toBeGreaterThan(0);
     // Today: no Dentist row, the risk still says so.
     await go(page, "#/today");
     await page.locator(".today-block").first().waitFor();

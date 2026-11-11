@@ -479,7 +479,7 @@ function CalendarsStep({ connected, onConnect, onDone, onSkip, onBack }: { conne
 function DoneStep({ view, onPlanWeek, onGuide, onBack }: { view: SetupView | null; onPlanWeek: () => void; onGuide: () => void; onBack: () => void }) {
   const left = view?.line?.text ?? null;
   return (
-    <Screen title="You're set up" intro={left ? `${left}. Today keeps a line to finish them, and Settings › Setup runs this again.` : "Settings › Setup runs this again whenever you like."} onSubmit={onPlanWeek} primary="Plan your week" onBack={onBack}>
+    <Screen title="You're set up" intro={left ? `${left}. Day keeps a line to finish them, and Settings › Setup runs this again.` : "Settings › Setup runs this again whenever you like."} onSubmit={onPlanWeek} primary="Plan your week" onBack={onBack}>
       <p>
         New here? The{" "}
         <a

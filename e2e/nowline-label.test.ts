@@ -3,7 +3,7 @@
 // line itself stays at its time.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, timelineOn, startDemo, type Harness } from "./harness.ts";
 
 const T = 180_000;
 const AT = "2026-11-04T14:01:00-05:00";
@@ -34,6 +34,7 @@ describe.skipIf(!CHROMIUM)("The now line's time on a compact rail (HK-3)", () =>
 
   it("moves off the hour mark it would cover, at Default and Larger, and the line stays put", async () => {
     const { page, errors } = await freshPage(h);
+    await timelineOn(page);
     await page.getByRole("button", { name: "Week", exact: true }).first().click();
     await page.locator(".day.today .ruler > .now-line").waitFor({ timeout: 30_000 });
     for (const size of ["default", "larger"] as const) {

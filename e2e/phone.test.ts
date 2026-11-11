@@ -26,11 +26,11 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
   }, T);
   afterAll(() => h?.stop());
 
-  it("has the bottom bar and a small top bar, no hover-only controls, Plan today on the phone, Commit and Ahead read-only", async () => {
+  it("has the bottom bar and a small top bar, no hover-only controls, Add work as a sheet on the phone, Ahead read-only", async () => {
     const { page, errors } = await freshPage(h, PHONE);
     await open(page, "#/today");
     // MB-1: the bottom bar is Today, Week, the raised Capture, Inbox and Ask; the top bar only the logo, the status dot and ⋯.
-    expect(await page.locator(".bottom-bar .bb-tab").allTextContents()).toEqual(["Today", "Week", expect.stringMatching(/^Inbox/), "Ask"]);
+    expect(await page.locator(".bottom-bar .bb-tab").allTextContents()).toEqual(["Day", "Week", expect.stringMatching(/^Inbox/), "Ask"]);
     expect(await page.locator(".bottom-bar .bb-capture").count()).toBe(1);
     expect(await page.locator(".topbar .views").count()).toBe(0);
     expect(await page.locator(".topbar .capture-btn, .topbar .timer-btn, .topbar .phone-capture").count()).toBe(0);
@@ -60,21 +60,18 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
     await grid.dispatchEvent("touchend", { changedTouches: [{ identifier: 1, clientX: 100, clientY: 410 }] });
     await expect.poll(() => page.locator(".day-tab.current").textContent()).not.toBe(before);
 
-    // Plan today works on the phone (NV-1 narrows D476): the day arrows and Commit today, no read-only line.
-    await open(page, "#/week/day");
-    await page.getByRole("button", { name: "Next day (→)" }).waitFor();
-    expect(await page.locator(".phone-ro").count()).toBe(0);
-    // Commit read only, with the line, Copy link, and nothing to tap inside; Ahead too once opened anyway (MB-1).
+    // WD-1: Add work works on the phone as a bottom sheet (the old Plan today and Commit addresses open it), no read-only line.
+    for (const hash of ["#/week/day", "#/week/commit"]) {
+      await open(page, hash);
+      await page.locator("aside.add-work-panel.sheet").waitFor();
+      expect(await page.locator(".phone-ro").count()).toBe(0);
+    }
+    // Ahead read only, with the line, Copy link, and nothing to tap inside, once opened anyway (MB-1).
     await open(page, "#/ahead");
     await page.getByRole("button", { name: "Open anyway" }).click();
     await page.waitForSelector(".phone-ro");
-    for (const hash of ["#/week/commit"]) {
-      await open(page, hash);
-      await page.waitForSelector(".phone-ro");
-      expect(await page.locator(".phone-ro-bar").textContent()).toContain("Planning works best on a bigger screen");
-      expect(await page.locator(".phone-ro-bar button", { hasText: "Copy link" }).count()).toBe(1);
-      expect(await page.locator(".phone-ro-body").evaluate((e) => (e as HTMLElement).inert)).toBe(true);
-    }
+    expect(await page.locator(".phone-ro-bar button", { hasText: "Copy link" }).count()).toBe(1);
+    expect(await page.locator(".phone-ro-body").evaluate((e) => (e as HTMLElement).inert)).toBe(true);
     expect(errors).toEqual([]);
   }, T);
 

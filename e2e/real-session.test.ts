@@ -35,12 +35,12 @@ async function demoWordsOn(page: Page): Promise<string[]> {
 }
 
 const SCREENS: [string, string, string][] = [
-  ["Today", "#/today", ".today-view"],
-  ["Plan the day", "#/today/plan", ".pd2-status"],
-  ["Check-in", "#/today/checkin", "main"],
-  ["Close out", "#/today/closeout", "main"],
+  ["Day", "#/day", ".today-view"],
+  ["Check-in", "#/day/checkin", "main"],
+  ["Close out", "#/day/closeout", "main"],
   ["Week", "#/week", ".week-head"],
-  ["Plan the week", "#/week/plan/2026-11-02", ".pw-client, .pw-empty, .planweek"],
+  ["Week with Add work", "#/week/2026-11-02/add", "aside.add-work-panel"],
+  ["Status", "#/status", "main"],
   ["Ahead › Grid", "#/ahead", ".ahead"],
   ["Ahead › Gantt", "#/ahead/gantt", ".ahead"],
   ["Inbox › Captures", "#/inbox/captures", "main"],
@@ -79,9 +79,9 @@ describe.skipIf(!CHROMIUM)("a real session never shows demo data (no-demo-leak)"
         // Positive control: this is the fake person's live data (Dataverse's focus blocks), not an empty page.
         if (name === "Week") await expect(page.evaluate(() => document.body.innerText)).resolves.toMatch(/Adatum/);
       }
-      // Plan the week's client panel (the detail panel) when there is a client line.
-      await page.evaluate(() => (location.hash = "#/week/plan/2026-11-02"));
-      const nameBtn = page.locator(".pw-name").first();
+      // A client chip's popover on Week (WD-1: it took Plan the week's client panel) when there is a chip.
+      await page.evaluate(() => (location.hash = "#/week/2026-11-02"));
+      const nameBtn = page.locator(".client-chips button.cc-chip").first();
       if (await nameBtn.count()) {
         await nameBtn.click();
         await page.waitForTimeout(500);

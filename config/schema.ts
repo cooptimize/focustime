@@ -107,7 +107,7 @@ export const DEFAULT_INBOX_STATUSES: readonly (typeof INBOX_VIEW_NAMES)[number][
 export type InboxPrefs = { view: (typeof INBOX_VIEW_NAMES)[number]; clients: string[]; group: (typeof INBOX_GROUPS)[number]; sort: (typeof INBOX_SORTS)[number]; statuses: (typeof INBOX_VIEW_NAMES)[number][]; grouping: (typeof INBOX_GROUPINGS)[number] };
 export const DEFAULT_INBOX: InboxPrefs = { view: "needs_you", clients: [], group: "client", sort: "newest", statuses: [...DEFAULT_INBOX_STATUSES], grouping: "day" };
 export type UiConfig = { theme: Theme; viewRange: ViewRange; showTimelines: boolean; /** TY-1: the Timeline switch on Today: on a computer, and on the phone (its own, so the phone keeps MB-1's layout until asked). */ todayTimeline: boolean; todayTimelinePhone: boolean; reduceMotion: boolean; textSize: TextSize; showPersonal: boolean; inbox: InboxPrefs };
-export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business", showTimelines: true, todayTimeline: false, todayTimelinePhone: false, reduceMotion: false, textSize: "default", showPersonal: true, inbox: DEFAULT_INBOX };
+export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business", showTimelines: false, todayTimeline: false, todayTimelinePhone: false, reduceMotion: false, textSize: "default", showPersonal: true, inbox: DEFAULT_INBOX };
 
 /** The style guide's client palette (tokens --client-<slot> in every theme). */
 export const CLIENT_SLOTS = ["teal", "violet", "ochre", "blue", "rose", "earth", "green", "slate"] as const;

@@ -4,7 +4,7 @@
 // badge, Esc, ticking in the panel, no Details dialog; the type scale on Today and Week; the Week word guard.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, timelineOn, startDemo, type Harness } from "./harness.ts";
 
 let h: Harness;
 const T = 90_000;
@@ -77,14 +77,15 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("cards: meetings only on the rail, risk with its reason, no AM/PM labels; Plan only on unplanned days; done as a count off today; needs stories; under 120 words", async () => {
+  it("cards: meetings only on the rail, risk with its reason in the tooltip, no AM/PM labels; no Plan chip; done as a count off today; needs stories on the chip; under 175 words", async () => {
     const { page, errors } = await freshPage(h);
+    await timelineOn(page);
     await seed(page);
     // No meeting title both on a card's rail and in its text.
     const dup = await page.evaluate(() =>
       [...document.querySelectorAll(".half.card")].flatMap((card) => {
         const rail = [...card.querySelectorAll(".ruler .r-ev")].map((e) => (e.textContent ?? "").trim()).filter(Boolean);
-        // The risk pill names the event on purpose ("At risk · Dentist 12:00"); everything else in the card must not.
+        // The risk chip's tooltip names the event on purpose; nothing else in the card body may.
         const body = card.querySelector(".card-body")?.cloneNode(true) as HTMLElement | undefined;
         body?.querySelector(".card-status")?.remove();
         const text = body?.textContent ?? "";
@@ -93,24 +94,23 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     );
     expect(await page.locator(".ruler .r-ev").count()).toBeGreaterThan(0);
     expect(dup).toEqual([]);
-    const risks = await page.locator(".half .status-pill.at_risk").allTextContents();
-    expect(risks.length).toBeGreaterThan(0);
-    for (const r of risks) expect(r).toMatch(/^At risk · \S/);
+    // WD-1: one status chip that never wraps; its reason is in the tooltip ("At risk: Dentist 12:00").
+    const risks = page.locator(".half .status-pill.at_risk");
+    expect(await risks.count()).toBeGreaterThan(0);
+    for (const t of await risks.evaluateAll((els) => els.map((e) => e.getAttribute("title") ?? ""))) expect(t).toMatch(/^At risk: \S/);
     // No AM/PM label anywhere on the grid.
     const ampm = await page.evaluate(() => [...document.querySelectorAll(".grid *")].filter((e) => [...e.childNodes].some((x) => x.nodeType === 3 && /^(AM|PM)$/.test((x.textContent ?? "").trim()))).length);
     expect(ampm).toBe(0);
-    // Plan chip: none on planned Monday and Tuesday, one on Wednesday.
+    // WD-1: no Plan chip on a day header (a day header opens Add work), and no "Planned ✓".
     const day = (i: number) => page.locator("section.day").nth(i);
-    await expect(day(0).locator(".day-plan").count()).resolves.toBe(0);
-    await expect(day(1).locator(".day-plan").count()).resolves.toBe(0);
-    await expect(day(2).locator(".day-plan").textContent()).resolves.toBe("Plan");
+    await expect(page.locator(".day-plan").count()).resolves.toBe(0);
     await expect(page.getByText("Planned ✓").count()).resolves.toBe(0);
     // Done picks: a count on Tuesday, a visible row on today.
     await expect(day(1).locator(".pick-row.done").count()).resolves.toBe(0);
     await expect(day(1).locator(".card-done").first().textContent()).resolves.toBe("1 done");
     await expect(day(0).locator(".pick-row.done").count()).resolves.toBe(1);
-    // A client with a feature that has no stories says so.
-    await expect(page.locator(".half.card", { hasText: "Northwind" }).first().locator(".card-feats").textContent()).resolves.toMatch(/\d+ features? · 1 needs stories/);
+    // A client with a feature that has no stories says so: WD-1 moved it from the card's features line to the client chip's badge.
+    await expect(page.locator(".client-chips button.cc-chip", { hasText: /^Northwind/ }).locator(".cc-badge").textContent()).resolves.toBe("1");
     // 121: SW-1 adds Team to the mode switch (Board · Commit · Team); 122: UI-B's now line adds its time ("9:30");
     // 145: DM-1's story (From last week's unfinished picks, the late promise, the Out event's risk on Wednesday).
     // 146: SR-1's fourth Week mode (Status) in the mode switch. 147: WK-2's Timeline toggle beside the modes.
@@ -122,7 +122,7 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     await page.close();
   }, T);
 
-  it("the detail panel opens from a card, a features line and a due badge; Esc closes it; ticking there updates the card; no Details dialog", async () => {
+  it("the detail panel opens from a card and a due badge; Esc closes it; ticking there updates the card; no Details dialog", async () => {
     const { page, errors } = await freshPage(h);
     const { mon } = await seed(page);
     const card = page.locator(".half.card", { hasText: "Cooptimize" }).first();
@@ -137,11 +137,9 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     await expect.poll(() => card.locator(`[data-pick="${mon[1]}"]`).getAttribute("class"), { timeout: 10_000 }).toContain("done");
     await page.keyboard.press("Escape");
     await expect.poll(() => panel.count()).toBe(0);
-    // The features line opens the panel on the features.
-    await page.locator(".half.card", { hasText: "Northwind" }).first().locator(".card-feats").click();
+    // PV-1: on Week the panel lists my stories grouped by feature (WD-1: from the card, the features line is gone).
+    await page.locator(".half.card", { hasText: "Northwind" }).first().locator(".card-when").click();
     await panel.waitFor();
-    await expect(panel.locator("[data-panel-focus=features].dp-focused").count()).resolves.toBe(1);
-    // PV-1: on Week the panel lists my stories grouped by feature (the features section is Today's).
     await panel.getByRole("region", { name: "Your stories for Northwind" }).waitFor();
     await page.keyboard.press("Escape");
     await expect.poll(() => panel.count()).toBe(0);

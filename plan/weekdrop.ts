@@ -15,7 +15,24 @@ type PickLike = { id: number; date: IsoDate; half: Half; clientKey: string; item
 type BoxLike = { date: IsoDate; pickId: number | null; start: string; end: string; removedAt: string | null };
 
 /** What's dragged: a story not planned in that block yet, or a planned pick moving. */
-export type Dragged = { clientKey: string; itemId: number; size: StorySize | null; title: string; pickId?: number | undefined; /** TX-1: what is left of it, once there is progress. */ remainingMinutes?: number | null | undefined };
+export type Dragged = {
+  clientKey: string;
+  itemId: number;
+  size: StorySize | null;
+  title: string;
+  pickId?: number | undefined;
+  /** TX-1: what is left of it, once there is progress. */
+  remainingMinutes?: number | null | undefined;
+  /**
+   * WD-1: an Add work panel row that isn't a DevOps item (a draft story or a promise): pick.add takes these fields in
+   * place of itemId, and itemId is a negative key that never matches a real item in the "already planned here" check.
+   */
+  add?: { draftId?: number; followUpId?: number } | undefined;
+  /** WD-1: a feature placed as a placeholder: pinned to the block (weekplan.place), never a to-do. */
+  feature?: true | undefined;
+};
+/** WD-1: the negative item key of a panel row that isn't a DevOps item (a draft or a promise). */
+export const addKey = (add: { draftId?: number; followUpId?: number }) => (add.draftId !== undefined ? -1_000_000 - add.draftId : -2_000_000 - (add.followUpId ?? 0));
 
 export type DropCheck = { ok: true; text: string; over: boolean } | { ok: false; why: string };
 

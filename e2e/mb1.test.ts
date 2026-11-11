@@ -31,11 +31,11 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
   }, T);
   afterAll(() => h?.stop());
 
-  it("the bar is Today, Week, Capture, Inbox, Ask; Capture and Ask open; the computer keeps its four tabs", async () => {
+  it("the bar is Day, Week, Capture, Inbox, Ask; Capture and Ask open; the computer keeps its five tabs", async () => {
     const page = await phonePage(h, 390);
     await at(page, "#/today");
     const bar = page.locator(".bottom-bar");
-    expect(await bar.locator(".bb-tab").allTextContents()).toEqual(["Today", "Week", expect.stringMatching(/^Inbox/), "Ask"]);
+    expect(await bar.locator(".bb-tab").allTextContents()).toEqual(["Day", "Week", expect.stringMatching(/^Inbox/), "Ask"]);
     expect(await bar.getByText("Ahead").count()).toBe(0);
     expect(await bar.locator(".bb-count").count()).toBe(1);
     // The raised Capture: at least 56 px, labelled, opens the capture sheet.
@@ -59,7 +59,7 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
 
     const { page: desk } = await freshPage(h);
     await at(desk, "#/today");
-    expect((await desk.locator(".topbar nav.views").textContent())!.replace(/\d+/g, "")).toMatch(/Today.*Week.*Ahead.*Inbox/);
+    expect((await desk.locator(".topbar nav.views").textContent())!.replace(/\d+/g, "")).toMatch(/Day.*Week.*Ahead.*Inbox.*Status/);
     expect(await desk.locator(".bottom-bar, .status-dot-btn").count()).toBe(0);
     expect(await desk.locator("footer.statusbar").count()).toBe(1);
     await desk.close();
@@ -158,7 +158,8 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
     const widths = await rows.evaluateAll((els) => els.map((r) => ({ row: r.getBoundingClientRect().width, title: r.querySelector(".pr-title")!.getBoundingClientRect().width })));
     for (const w of widths) expect(w.title / w.row).toBeGreaterThan(0.6);
     const fold = page.locator(".card-agenda-fold").first();
-    expect(await fold.textContent()).toMatch(/Agenda.*meeting.*free/);
+    // WD-1: meetings are one summary line ("3 meetings · 1h 30m · 2h free") that expands to the list.
+    expect(await fold.textContent()).toMatch(/\d+ meetings? · .* free$/);
     expect(await page.locator(".grid.narrow .card-events").count()).toBe(0);
     await fold.click();
     expect(await page.locator(".grid.narrow .card-events").count()).toBe(1);
@@ -166,11 +167,9 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
     await page.getByRole("dialog", { name: /^To-do: / }).waitFor();
     await page.keyboard.press("Escape");
     expect(await noSideways(page)).toBe(0);
-    // Plan today: the agenda folded, Back to the week a small link.
+    // Add work on the phone: a bottom sheet, nothing sideways.
     await at(page, `#/week/day/${MON}`);
-    await page.locator(".pd2-fold").first().waitFor();
-    expect(await page.locator(".pd-agenda").count()).toBe(0);
-    expect(await page.locator(".done-link").textContent()).toMatch(/Back to the week/);
+    await page.locator("aside.add-work-panel.sheet").waitFor();
     expect(await noSideways(page)).toBe(0);
     await page.close();
   }, T);
@@ -206,7 +205,7 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
       });
       await page.waitForTimeout(200);
     };
-    for (const hash of ["#/today", "#/week", `#/week/day/${MON}`, "#/week/commit", "#/week/team", "#/inbox/needs-you", "#/ahead"]) {
+    for (const hash of ["#/day", "#/week", `#/week/day/${MON}`, "#/week/2026-11-09/add", "#/week/team", "#/status", "#/inbox/needs-you", "#/ahead"]) {
       await at(page, hash);
       await big();
       expect(await noSideways(page), hash).toBe(0);

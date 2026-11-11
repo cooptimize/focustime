@@ -7,21 +7,23 @@ import { shotBoth } from "./shots.ts";
 const T = 90_000;
 let h: Harness;
 
-describe.skipIf(!CHROMIUM)("PTO in Plan the week, and About (S1)", () => {
+describe.skipIf(!CHROMIUM)("PTO on Week, and About (S1)", () => {
   beforeAll(async () => {
     h = await startDemo();
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("Thursday's PTO is one PTO cell in Plan the week, as on Week; About shows the build line", async () => {
+  it("Thursday's PTO is one PTO cell on Week, with Add work open too; About shows the build line", async () => {
     const { page, errors } = await freshPage(h);
+    // WD-1: Plan the week's grid is gone; the old address opens Week with Add work on that week.
     await page.evaluate(() => (location.hash = "#/week/plan/2026-11-09"));
-    await page.locator(".pw-client").first().waitFor({ timeout: 30_000 });
-    const pto = page.locator('.pw-cell.pto[aria-label^="Thu, Nov 12"]');
-    await expect(pto.textContent()).resolves.toBe("PTO");
-    // One cell over both halves, and it takes nothing (a span, not a button).
-    await expect(pto.evaluate((e) => [e.tagName, getComputedStyle(e).gridRowStart, getComputedStyle(e).gridRowEnd])).resolves.toEqual(["SPAN", "2", "span 2"]);
-    await shotBoth(page, "planweek-nov9-thu-pto");
+    await page.locator("aside.add-work-panel").waitFor({ timeout: 30_000 });
+    const thu = page.locator("section.day").nth(3);
+    // One cell over both halves, no + Add on it.
+    await expect(thu.locator(".half.whole.pto").count()).resolves.toBe(1);
+    await expect(thu.locator(".half.whole.pto").textContent()).resolves.toContain("PTO");
+    await expect(thu.locator(".add-work.add-row").count()).resolves.toBe(0);
+    await shotBoth(page, "week-nov9-thu-pto");
 
     await page.getByRole("button", { name: /^More: the Guide/ }).click();
     await page.getByRole("menuitem", { name: "About" }).click();

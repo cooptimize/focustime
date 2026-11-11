@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 const read = (f: string) => readFileSync(new URL(f, import.meta.url), "utf8");
 
 describe("the shared timeline", () => {
-  it("Week and Today both draw ui/Timeline.tsx", () => {
-    for (const f of ["./WeekGrid.tsx", "./TodayTimeline.tsx"]) {
+  it("Week (its block card, WD-1) and Today both draw ui/Timeline.tsx", () => {
+    for (const f of ["./BlockCard.tsx", "./TodayTimeline.tsx"]) {
       expect(read(f)).toMatch(/import \{[^}]*\bTimeline\b[^}]*\} from "\.\/Timeline\.tsx"/);
       expect(read(f)).toMatch(/<Timeline\b/);
     }
@@ -21,7 +21,7 @@ describe("the shared timeline", () => {
     expect(read("./WeekGrid.tsx")).not.toMatch(/firstHour|markOverlaps/);
   });
   it("the Timebox my day popup is gone", () => {
-    expect(read("./PlanDay.tsx")).not.toMatch(/TimeboxMyDay|MyDayBlock/);
+    expect(read("./Agenda.tsx")).not.toMatch(/TimeboxMyDay|MyDayBlock/);
     expect(read("./styles.css")).not.toMatch(/\.myday\b/);
   });
 });

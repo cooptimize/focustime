@@ -1,30 +1,34 @@
-// Step 16.2, NV-1: where the window is. Four tabs (Today · Week · Ahead · Inbox), a mode switch on Week (Board ·
-// Commit) and Ahead (Grid · Gantt · Fix next), Today's two flows, and the full-window overlays (the focus screen, Settings, the Guide). Every place has an address (#/…) so browser back
-// and reopening land in the same place. Pure: no DOM, no React; App applies it.
+// Step 16.2, NV-1, WD-1: where the window is. Five tabs (Day · Week · Ahead · Inbox · Status), a mode switch on Ahead
+// (Grid · Gantt · Gaps · Backlog), Day's two flows, Week's Add work panel, and the full-window overlays (the focus
+// screen, Settings, the Guide). Every place has an address (#/…) so browser back and reopening land in the same place.
+// Pure: no DOM, no React; App applies it. WD-1: the code keeps "today" as Day's tab id; people read "Day".
 import type { Half, IsoDate } from "../week/types.ts";
 import type { Route } from "../plan/notify.ts";
 import type { InboxPlace } from "../plan/inbox-items.ts";
 import { tourById } from "./guide/tours.ts";
 import { DOC_ANCHOR, DOC_CONTENTS, DOC_PAGES, docPageLabel } from "./docs/pages.ts";
 
-export const TABS = ["today", "week", "ahead", "inbox"] as const;
+export const TABS = ["today", "week", "ahead", "inbox", "status"] as const;
 export type Tab = (typeof TABS)[number];
-export const TAB_NAMES: Record<Tab, string> = { today: "Today", week: "Week", ahead: "Ahead", inbox: "Inbox" };
+/** WD-1: Today is called Day (the date word "today" stays), and Status is a tab of its own. */
+export const TAB_NAMES: Record<Tab, string> = { today: "Day", week: "Week", ahead: "Ahead", inbox: "Inbox", status: "Status" };
 
 /** NV-1: Today has no modes. Its Midday check-in and Close out are flows its cards open over the same page. */
 export const TODAY_FLOWS = ["checkin", "closeout"] as const;
 export type TodayFlow = (typeof TODAY_FLOWS)[number];
 export const FLOW_NAMES: Record<TodayFlow, string> = { checkin: "Midday check-in", closeout: "Close out" };
-/** NV-1: Week's Board (stories onto blocks; a day focused is Plan the day) and Commit (Plan the week). */
-/** SR-1: Status, the preview of Monday's status report and the feature updates that feed it. */
-export type WeekMode = "board" | "commit" | "team" | "status";
+/**
+ * WD-1: Week is one screen with no mode switch; Team (SW-1) is hidden but keeps its address (#/week/team). Plan mode
+ * and Plan the day are gone: adding work is the Add work panel beside the week.
+ */
+export type WeekMode = "board" | "team";
 /** AH-1 (D653): Ahead is one model in three modes: Grid (was Roadmap), Gantt (was Plan ahead) and Fix next. */
 export type AheadMode = "grid" | "gantt" | "fix" | "backlog";
 
-export const MODE_NAMES = { board: "Board", commit: "Plan", team: "Team", status: "Status", grid: "Grid", gantt: "Gantt", fix: "Readiness", backlog: "Backlog" } as const;
+export const MODE_NAMES = { board: "Week", team: "Team", grid: "Grid", gantt: "Gantt", fix: "Readiness", backlog: "Backlog" } as const;
 export type ModeName = keyof typeof MODE_NAMES;
 /** Each tab's modes, in switch order (Today has none, so no switch). IB-1: the Inbox has views in its rail, not modes. */
-export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: ["board", "commit", "team", "status"], ahead: ["grid", "gantt", "fix", "backlog"], inbox: [] };
+export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: [], ahead: ["grid", "gantt", "fix", "backlog"], inbox: [], status: [] };
 
 /** IB-1: the Inbox's views in its address (#/inbox/needs-you …). */
 export const INBOX_VIEW_SLUGS: Record<InboxPlace, string> = { everything: "everything", needs_you: "needs-you", promises: "promises", waiting: "waiting", in_progress: "in-progress", captures: "captures", teammates: "teammates", done: "done", chatter: "chatter" };
@@ -32,18 +36,22 @@ const viewOfSlug = (slug: string): InboxPlace | null => (Object.keys(INBOX_VIEW_
 /** An Inbox item key (plan/inbox-items.ts): v conversation, c chat promise, f promise, s send, k capture, d draft. */
 const ITEM_KEY = /^[vcfskd][1-9]\d{0,9}$/;
 
-/** NV-1: the Board focused on one day (Plan the day): `date` null is the default day (today or the next workday); `half` is the block "+ Add work" asked for. */
-export type DayFocus = { date: IsoDate | null; half: Half | null };
+/**
+ * WD-1: the Add work panel open on Week, on one block. `date` null: the current block, or the next one that isn't over
+ * (App picks it once the week is loaded); `half` null: that day's first block.
+ */
+export type AddAt = { date: IsoDate | null; half: Half | null };
 
 /**
- * One place. Today's `flow` is a card's flow open over the page (`date`: Close out's day, null for today); with no
- * flow, `date` is the day Today shows (QF-1, #/today/<date>; null: today). Week's
- * `week` is its Monday (null: this week for the Board, next week for Commit); `focus` is the day the Board is
- * focused on (Board only).
+ * One place. Day's `flow` is a card's flow open over the page (`date`: Close out's day, null for today); with no
+ * flow, `date` is the day Day shows (QF-1, #/day/<date>; null: today). Week's `week` is its Monday (null: this
+ * week); `add` is the Add work panel open on a block (WD-1). Status is its own tab (WD-1, was Week › Status).
  */
 export type Nav =
   | { tab: "today"; flow: TodayFlow | null; date: IsoDate | null }
-  | { tab: "week"; mode: WeekMode; week: IsoDate | null; focus: DayFocus | null; /** SR-3: Status opened on Needs your update (#/week/status/needs). */ group?: "needs" }
+  | { tab: "week"; mode: WeekMode; week: IsoDate | null; add: AddAt | null }
+  /** SR-3: Status opened on Needs your update (#/status/needs). */
+  | { tab: "status"; group?: "needs" }
   | { tab: "ahead"; mode: AheadMode; item?: number }
   /**
    * IB-1: one list with views. `view` null is the bare #/inbox (IB-2: Everything);
@@ -64,14 +72,18 @@ export const navOf = {
   today: (flow: TodayFlow | null = null, date: IsoDate | null = null): Nav => ({ tab: "today", flow, date: flow === "closeout" || flow === null ? date : null }),
   /** QF-1: Today showing one day (null: today). */
   todayOn: (date: IsoDate | null): Nav => ({ tab: "today", flow: null, date }),
-  week: (mode: WeekMode = "board", week: IsoDate | null = null): Nav => ({ tab: "week", mode, week, focus: null }),
-  /** NV-1: Plan the day is the Board focused on that day (null: today or the next workday). */
-  planDay: (date: IsoDate | null = null, half: Half | null = null): Nav => ({ tab: "week", mode: "board", week: null, focus: { date, half: date ? half : null } }),
+  week: (mode: WeekMode = "board", week: IsoDate | null = null): Nav => ({ tab: "week", mode, week, add: null }),
+  /** WD-1: Week with the Add work panel on a block (null date: the current block, or the next one not over). */
+  addWork: (date: IsoDate | null = null, half: Half | null = null): Nav => ({ tab: "week", mode: "board", week: null, add: { date, half: date ? half : null } }),
+  /** WD-1: a week with the Add work panel open (the old Plan the week addresses land here). */
+  weekAdd: (week: IsoDate | null = null): Nav => ({ tab: "week", mode: "board", week: week === null ? null : mondayOf(week), add: { date: null, half: null } }),
+  /** WD-1: the Status tab (was Week › Status). */
+  status: (): Nav => ({ tab: "status" }),
   ahead: (mode: AheadMode = "grid"): Nav => ({ tab: "ahead", mode }),
   /** AH-1: one item, selected in the Grid (#/ahead/item/<id>), from a notice. */
   aheadItem: (id: number): Nav => ({ tab: "ahead", mode: "grid", item: id }),
   /** SR-3: Week › Status on its Needs your update group (the nudge's click). */
-  statusNeeds: (): Nav => ({ tab: "week", mode: "status", week: null, focus: null, group: "needs" }),
+  statusNeeds: (): Nav => ({ tab: "status", group: "needs" }),
   /** The bare Inbox (IB-2: Everything), or a promise I added or a rule opened, open in the detail pane (was #/inbox/<id>). */
   inbox: (followUp: number | null = null): Nav => ({ tab: "inbox", view: null, item: followUp ? `f${followUp}` : null }),
   /** IB-1: one view of the Inbox (#/inbox/<view>). */
@@ -94,28 +106,31 @@ export const navOf = {
 export const HOME: Loc = { nav: navOf.today(), overlay: null };
 
 /** The mode a tab opens in. */
-export const defaultNav = (tab: Tab): Nav => (tab === "today" ? navOf.today() : tab === "week" ? navOf.week() : tab === "ahead" ? navOf.ahead() : navOf.inbox());
-/** NV-1: the Board focused on a day (Plan the day). */
-export const focusOf = (n: Nav): DayFocus | null => (n.tab === "week" && n.mode === "board" ? n.focus : null);
+export const defaultNav = (tab: Tab): Nav => (tab === "today" ? navOf.today() : tab === "week" ? navOf.week() : tab === "ahead" ? navOf.ahead() : tab === "status" ? navOf.status() : navOf.inbox());
+/** WD-1: the Add work panel's block on Week (null: closed). */
+export const addOf = (n: Nav): AddAt | null => (n.tab === "week" && n.mode === "board" ? n.add : null);
 
-/** Planning places get a Done (or Commit today); the views don't. Today's flows are planning places too (Esc goes back). */
-export const isPlanning = (n: Nav): boolean => (n.tab === "today" ? n.flow !== null : n.tab === "week" ? n.mode === "commit" || n.focus !== null : false);
+/** Day's flows are planning places (Esc goes back, Done returns). WD-1: Week has none; its panel closes on Esc. */
+export const isPlanning = (n: Nav): boolean => (n.tab === "today" ? n.flow !== null : false);
 
 /**
- * P: on Week, Board and Commit (a focused day counts as the Board); on Ahead, Grid and Gantt; on Today, Plan
- * today (the Board focused on today), or back to Today from a flow. IB-1: the Inbox has no planning mode, so P does nothing there.
+ * P: on Ahead, Grid and Gantt (Ahead's own planning mode); on Day, back to Day from a flow. WD-1: everywhere else P
+ * opens Week with the Add work panel, and on Week it opens or closes the panel.
  */
 export function toggleP(n: Nav): Nav {
-  if (n.tab === "today") return n.flow ? navOf.today() : navOf.planDay();
-  if (n.tab === "week") return n.mode === "board" ? navOf.week("commit") : navOf.week("board", n.week);
+  if (n.tab === "today" && n.flow) return navOf.today();
   if (n.tab === "ahead") return navOf.ahead(n.mode === "gantt" ? "grid" : "gantt");
-  return n;
+  if (n.tab === "week" && n.mode === "board") return n.add ? navOf.week("board", weekOfAdd(n)) : navOf.weekAdd(n.week);
+  return navOf.weekAdd();
 }
 
-/** Done in a planning place: Today's flows back to Today, a focused day back to the whole week it is in, Commit back to the Board, Ahead back to the Grid. */
+/** The Monday a Week place shows: its week, else the week of the block its panel is on (null: this week). */
+export const weekOfAdd = (n: Extract<Nav, { tab: "week" }>): IsoDate | null => n.week ?? (n.add?.date ? mondayOf(n.add.date) : null);
+
+/** Done in a planning place: Day's flows back to Day, Week's panel closed on its own week, Ahead back to the Grid. */
 export function afterDone(n: Nav): Nav {
   if (n.tab === "today") return navOf.today();
-  if (n.tab === "week") return n.mode === "board" && n.focus?.date ? navOf.week("board", mondayOf(n.focus.date)) : n.mode === "board" ? navOf.week("board", n.week) : navOf.week();
+  if (n.tab === "week") return navOf.week("board", weekOfAdd(n));
   if (n.tab === "ahead") return navOf.ahead();
   return n;
 }
@@ -125,10 +140,10 @@ const mondayOf = (d: IsoDate): IsoDate => {
   return p.subtract({ days: p.dayOfWeek - 1 }).toString();
 };
 
-/** 1–4 switch tabs (T stays Today). */
+/** 1–5 switch tabs (WD-1: T stays Day, L the Inbox). */
 export function tabForKey(key: string): Tab | null {
-  const i = ["1", "2", "3", "4"].indexOf(key);
-  return i >= 0 ? TABS[i]! : key === "t" || key === "T" ? "today" : null;
+  const i = ["1", "2", "3", "4", "5"].indexOf(key);
+  return i >= 0 ? TABS[i]! : key === "t" || key === "T" ? "today" : key === "l" || key === "L" ? "inbox" : null;
 }
 
 /** A mode on the switch: the place it opens. */
@@ -163,8 +178,8 @@ const validDate = (s: string) => {
 };
 
 /**
- * "#/today", "#/today/checkin", "#/today/closeout/2026-10-30", "#/week/2026-11-09", "#/week/day/2026-11-03/PM",
- * "#/week/commit/2026-11-09", "#/ahead/plan", "#/inbox", "#/settings/you", "#/guide/keys".
+ * "#/day", "#/day/checkin", "#/day/closeout/2026-10-30", "#/week/2026-11-09", "#/week/day/2026-11-03/PM" (the panel on
+ * a block), "#/week/2026-11-09/add" (the panel on that week), "#/status", "#/ahead/gantt", "#/inbox", "#/settings/you".
  */
 export function hashOf(l: Loc): string {
   if (l.overlay?.kind === "focus") return "#/focus";
@@ -177,14 +192,14 @@ export function hashOf(l: Loc): string {
   // FN-1: a story card, over the place it opened from.
   if (l.overlay?.kind === "item") return `#/item/${encodeURIComponent(l.overlay.clientKey)}/${l.overlay.itemId}`;
   const n = l.nav;
-  if (n.tab === "today") return ["#/today", n.flow, n.flow === "closeout" || n.flow === null ? n.date : null].filter(Boolean).join("/");
+  if (n.tab === "today") return ["#/day", n.flow, n.flow === "closeout" || n.flow === null ? n.date : null].filter(Boolean).join("/");
+  // SR-1, WD-1: always this week's report (the one Kat sends next Monday).
+  if (n.tab === "status") return n.group === "needs" ? "#/status/needs" : "#/status";
   if (n.tab === "week") {
-    if (n.mode === "commit") return ["#/week/commit", n.week].filter(Boolean).join("/");
-    // SW-1: the client team view.
+    // SW-1: the client team view (hidden in WD-1; its address still opens it).
     if (n.mode === "team") return ["#/week/team", n.week].filter(Boolean).join("/");
-    // SR-1: always this week's report (the one Kat sends next Monday).
-    if (n.mode === "status") return n.group === "needs" ? "#/week/status/needs" : "#/week/status";
-    if (n.focus) return ["#/week/day", n.focus.date, n.focus.date ? n.focus.half : null].filter(Boolean).join("/");
+    if (n.add?.date) return ["#/week/day", n.add.date, n.add.half].filter(Boolean).join("/");
+    if (n.add) return n.week ? `#/week/${n.week}/add` : "#/week/add";
     return ["#/week", n.week].filter(Boolean).join("/");
   }
   if (n.tab === "ahead") return (n.mode === "gantt" ? "#/ahead/gantt" : n.mode === "fix" ? "#/ahead/fix" : n.mode === "backlog" ? "#/ahead/backlog" : n.item ? `#/ahead/item/${n.item}` : "#/ahead") + (aheadQuery ? `?${aheadQuery}` : "");
@@ -219,15 +234,28 @@ export function parseHash(full: string): Loc | null {
   const [tab, a, b, c, ...rest] = parts;
   if (rest.length) return null;
   const plain = (nav: Nav): Loc => ({ nav, overlay: null });
-  /** A day, optionally with its block: [date] or [date, half]. */
+  /** WD-1: a day's block with the Add work panel open on it: [date] or [date, half] (was Plan the day). */
   const day = (d: string | undefined, h: string | undefined): Loc | null => {
-    if (d === undefined) return h === undefined ? plain(navOf.planDay()) : null;
+    if (d === undefined) return h === undefined ? plain(navOf.addWork()) : null;
     if (!validDate(d)) return null;
-    if (h === undefined) return plain(navOf.planDay(d));
-    return HALF.test(h) ? plain(navOf.planDay(d, h as Half)) : null;
+    if (h === undefined) return plain(navOf.addWork(d));
+    return HALF.test(h) ? plain(navOf.addWork(d, h as Half)) : null;
   };
   /** A week: [] or [monday]. */
   const week = (mode: WeekMode, w: string | undefined, extra: string | undefined): Loc | null => (extra !== undefined ? null : w === undefined ? plain(navOf.week(mode)) : validDate(w) ? plain(navOf.week(mode, w)) : null);
+  /** WD-1: a week with the Add work panel open (the old Plan the week addresses). */
+  const weekAdd = (w: string | undefined, extra: string | undefined): Loc | null => (extra !== undefined ? null : w === undefined ? plain(navOf.weekAdd()) : validDate(w) ? plain(navOf.weekAdd(w)) : null);
+  /** Day and its flows: [] , [checkin], [closeout, date?], [plan, …] (before NV-1) or [date] (QF-1). */
+  const dayTab = (): Loc | null => {
+    if (a === undefined) return plain(navOf.today());
+    if (a === "checkin") return b === undefined ? plain(navOf.today("checkin")) : null;
+    if (a === "closeout") return c !== undefined ? null : b === undefined ? plain(navOf.today("closeout")) : validDate(b) ? plain(navOf.today("closeout", b)) : null;
+    // Before NV-1: Today › Plan; WD-1: Week with the Add work panel on that day.
+    if (a === "plan") return day(b, c);
+    // QF-1: one day.
+    if (validDate(a) && b === undefined) return plain(navOf.todayOn(a));
+    return null;
+  };
   switch (tab) {
     case undefined:
       return HOME;
@@ -274,22 +302,23 @@ export function parseHash(full: string): Loc | null {
         return null;
       }
     }
-    case "today": {
-      if (a === undefined) return plain(navOf.today());
-      if (a === "checkin") return b === undefined ? plain(navOf.today("checkin")) : null;
-      if (a === "closeout") return c !== undefined ? null : b === undefined ? plain(navOf.today("closeout")) : validDate(b) ? plain(navOf.today("closeout", b)) : null;
-      // Before NV-1: Today › Plan.
-      if (a === "plan") return day(b, c);
-      // QF-1: Today on one day.
-      if (validDate(a) && b === undefined) return plain(navOf.todayOn(a));
-      return null;
-    }
+    // WD-1: Day (#/day…); every #/today… address before it lands on the same place.
+    case "day":
+    case "today":
+      return dayTab();
+    // WD-1: Status is a tab (#/status, #/status/needs).
+    case "status":
+      return a === undefined ? plain(navOf.status()) : a === "needs" && b === undefined ? plain(navOf.statusNeeds()) : null;
     case "week": {
       if (a === undefined) return plain(navOf.week());
       if (a === "day") return day(b, c);
-      if (a === "commit" || a === "plan") return week("commit", b, c);
+      // WD-1: #/week/add and #/week/<monday>/add; Plan (#/week/commit, #/week/plan) lands on the week with the panel.
+      if (a === "add") return weekAdd(b, c);
+      if (a === "commit" || a === "plan") return weekAdd(b, c);
       if (a === "team") return week("team", b, c);
-      if (a === "status") return b === undefined ? plain(navOf.week("status")) : b === "needs" && c === undefined ? plain(navOf.statusNeeds()) : null;
+      // SR-1: Week › Status before WD-1.
+      if (a === "status") return b === undefined ? plain(navOf.status()) : b === "needs" && c === undefined ? plain(navOf.statusNeeds()) : null;
+      if (validDate(a) && b === "add") return c === undefined ? plain(navOf.weekAdd(a)) : null;
       return b === undefined && validDate(a) ? plain(navOf.week("board", a)) : null;
     }
     case "ahead":
@@ -342,16 +371,17 @@ export const sameLoc = (a: Loc, b: Loc) => hashOf(a) === hashOf(b);
 // ---- Where notifications and commands go ----
 
 /**
- * A notification's route (step 15.5) as a place. NV-1: Plan the day opens Week's Board focused on the day, Check-in
- * and Close out open their flow on Today, Plan the week and Look ahead open Commit on their week, Plan ahead and the
- * Direction review open Ahead's Plan ahead, follow-ups the Inbox, the timer and meetings the focus screen, the VM Today
- * with the VM menu open, expiring secrets Settings. Stored routes keep their names.
+ * A notification's route (step 15.5) as a place. WD-1: Plan the day and Plan the week (and Look ahead) open Week with
+ * the Add work panel (on that week), Check-in and Close out open their flow on Day, Plan ahead and the Direction
+ * review open Ahead's Gantt, follow-ups the Inbox, the timer and meetings the focus screen, the VM Day with the VM menu
+ * open, expiring secrets Settings, Status the Status tab. Team is hidden: its route opens Week. Stored routes keep
+ * their names.
  */
 export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
   const plain = (nav: Nav) => ({ loc: { nav, overlay: null }, vmMenu: false });
   switch (r.view) {
     case "today": return plain(navOf.today());
-    case "planday": return plain(navOf.planDay());
+    case "planday": return plain(navOf.addWork());
     case "checkin": return plain(navOf.today("checkin"));
     case "closeout": return plain(navOf.today("closeout"));
     case "focus": return { loc: { nav: navOf.today(), overlay: { kind: "focus" } }, vmMenu: false };
@@ -365,10 +395,11 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
     case "week": return plain(navOf.week());
     case "ahead": return plain(navOf.ahead("gantt"));
     case "aheaditem": return plain(navOf.aheadItem(r.id));
-    case "team": return plain(navOf.week("team"));
-    case "status": return plain(navOf.week("status"));
+    // WD-1: Team is hidden; a stored Team route opens the week.
+    case "team": return plain(navOf.week());
+    case "status": return plain(navOf.status());
     case "status_needs": return plain(navOf.statusNeeds());
-    case "planweek": return plain(navOf.week("commit", r.weekStart));
+    case "planweek": return plain(navOf.weekAdd(r.weekStart));
     case "followup": return plain(navOf.inbox(r.id));
     case "settings": return { loc: { nav: navOf.today(), overlay: { kind: "settings", section: r.section } }, vmMenu: false };
     case "meeting": return { loc: { nav: navOf.week(), overlay: { kind: "meeting", occurrence: r.id } }, vmMenu: false };
@@ -395,11 +426,12 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
     case "gaps": return { nav: navOf.ahead("fix"), overlay: null };
     // BH-1: the stack-ranked backlog across clients.
     case "backlog": return { nav: navOf.ahead("backlog"), overlay: null };
-    case "planday": return { nav: navOf.planDay(), overlay: null };
+    // WD-1: the old planning places are Week with the Add work panel.
+    case "planday": return { nav: navOf.addWork(), overlay: null };
     case "planweek":
-    case "commit": return { nav: navOf.week("commit"), overlay: null };
+    case "commit": return { nav: navOf.weekAdd(), overlay: null };
     case "team": return { nav: navOf.week("team"), overlay: null };
-    case "status": return { nav: navOf.week("status"), overlay: null };
+    case "status": return { nav: navOf.status(), overlay: null };
     case "checkin": return { nav: navOf.today("checkin"), overlay: null };
     case "closeout": return { nav: navOf.today("closeout"), overlay: null };
     case "focus": return { nav: null, overlay: { kind: "focus" } };
@@ -408,7 +440,7 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
   }
 }
 
-/** QF-1: Today's ‹ › and [ ]: the weekday before or after (Saturday and Sunday are stepped over). */
+/** QF-1: Day's ‹ › and [ ]: the weekday before or after (Saturday and Sunday are stepped over). */
 export function stepWeekday(date: IsoDate, dir: 1 | -1, weekend: (d: IsoDate) => boolean = () => false): IsoDate {
   let d = Temporal.PlainDate.from(date).add({ days: dir });
   while (d.dayOfWeek > 5 && !weekend(d.toString())) d = d.add({ days: dir });
@@ -423,39 +455,16 @@ export function stepWeekday(date: IsoDate, dir: 1 | -1, weekend: (d: IsoDate) =>
 export const weekendStops = (o: { showWeekend: boolean; days: readonly { date: IsoDate; kind: string }[] }) => (d: IsoDate) =>
   o.showWeekend || o.days.some((x) => x.date === d && x.kind === "weekend");
 
-/** The day header's Plan / Planned ✓ chip in Week, and "+ Add work" on a block: the Board focused on that day (and block). */
-export const planDayNav = (date: IsoDate, half: Half | null = null): Nav => navOf.planDay(date, half);
+/** WD-1: "+ Add" on a block, and a day's header: Week with the Add work panel on that day (and block). */
+export const addWorkNav = (date: IsoDate, half: Half | null = null): Nav => navOf.addWork(date, half);
 
-/** Plan the week's week: the one asked for, else next week. */
-export const planWeekOf = (asked: IsoDate | null, thisWeek: IsoDate): IsoDate => asked ?? Temporal.PlainDate.from(thisWeek).add({ days: 7 }).toString();
-
-/** Plan the week's header: "Plan the week of Nov 9 · next week". */
-export function planWeekTitle(weekStart: IsoDate, thisWeek: IsoDate): string {
-  const { title, when } = planWeekParts(weekStart, thisWeek);
-  return `${title} · ${when}`;
-}
-/** U4: the header's two parts: "Plan the week of Nov 9" and the muted "next week". */
-export function planWeekParts(weekStart: IsoDate, thisWeek: IsoDate): { title: string; when: string } {
-  const d = Temporal.PlainDate.from(weekStart);
-  const rel = Temporal.PlainDate.compare(d, Temporal.PlainDate.from(thisWeek));
-  const diff = d.since(Temporal.PlainDate.from(thisWeek)).days / 7;
-  const when = rel === 0 ? "this week" : diff === 1 ? "next week" : rel < 0 ? "review" : `in ${diff} weeks`;
-  return { title: `Plan the week of ${d.toLocaleString("en-US", { month: "short", day: "numeric" })}`, when };
-}
-
-/** Today's Plan header: "Plan today" or "Plan Tuesday, Nov 3" (a past day: "Review Friday, Oct 30"). */
-export function planDayTitle(date: IsoDate, today: IsoDate): string {
-  if (date === today) return "Plan today";
-  const d = Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long", month: "short", day: "numeric" });
-  return `${date < today ? "Review" : "Plan"} ${d}`;
-}
-
-/** F1: the place's plain name for "Include where I am" ("Week › Plan today", "Today › Midday check-in", "Settings: connections", "Guide"). */
+/** F1: the place's plain name for "Include where I am" ("Week › Add work", "Day › Midday check-in", "Settings: connections", "Guide"). */
 export function viewName(loc: Loc): string {
   const n = loc.nav;
   const place =
     n.tab === "today" ? (n.flow ? `${TAB_NAMES.today} › ${FLOW_NAMES[n.flow]}` : TAB_NAMES.today)
-    : n.tab === "week" ? (n.mode === "commit" ? `${TAB_NAMES.week} › ${MODE_NAMES.commit}` : n.mode === "team" ? `${TAB_NAMES.week} › Team` : n.mode === "status" ? `${TAB_NAMES.week} › Status` : n.focus ? `${TAB_NAMES.week} › Plan ${n.focus.date ?? "today"}` : TAB_NAMES.week)
+    : n.tab === "status" ? TAB_NAMES.status
+    : n.tab === "week" ? (n.mode === "team" ? `${TAB_NAMES.week} › Team` : n.add ? `${TAB_NAMES.week} › Add work` : TAB_NAMES.week)
     : n.tab === "ahead" ? `${TAB_NAMES.ahead} › ${MODE_NAMES[n.mode]}`
     : n.view ? `${TAB_NAMES.inbox} › ${INBOX_VIEW_NAMES[n.view]}` : TAB_NAMES.inbox;
   const o = loc.overlay;

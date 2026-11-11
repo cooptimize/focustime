@@ -41,7 +41,7 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     await expect(title(page)).resolves.toMatch(/^Today/);
     await shots(page, "today");
     await page.keyboard.press("]");
-    await expect.poll(() => hash(page)).toBe("#/today/2026-11-03");
+    await expect.poll(() => hash(page)).toBe("#/day/2026-11-03");
     await expect.poll(() => title(page)).toMatch(/^Tuesday.*ahead/);
     await expect.poll(() => page.locator(".today-other").textContent(), { timeout: 10_000 }).toContain("A day ahead");
     // Nothing nags on another day, and nothing starts there.
@@ -49,7 +49,7 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     // Back past the weekend with ‹ (the button) and [ (the key): Friday, Oct 30, a past day with Close out.
     await page.getByRole("button", { name: "Previous day" }).click();
     await page.keyboard.press("[");
-    await expect.poll(() => hash(page)).toBe("#/today/2026-10-30");
+    await expect.poll(() => hash(page)).toBe("#/day/2026-10-30");
     await expect.poll(() => title(page)).toMatch(/^Friday.*past/);
     await expect.poll(() => page.getByRole("button", { name: "Close out Friday" }).count(), { timeout: 10_000 }).toBe(1);
     await expect(page.locator(".today-block input[type=checkbox]:not(:disabled)").count()).resolves.toBe(0);
@@ -58,14 +58,14 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     await page.reload();
     await expect.poll(() => title(page)).toMatch(/^Friday/);
     await page.getByRole("button", { name: "Back to today" }).click();
-    await expect.poll(() => hash(page)).toBe("#/today");
+    await expect.poll(() => hash(page)).toBe("#/day");
     await expect.poll(() => title(page)).toMatch(/^Today/);
     // Typing [ in the capture box changes nothing.
     await page.keyboard.press("n");
     const box = page.getByRole("textbox").first();
     await box.waitFor();
     await box.pressSequentially("check [ and ]");
-    await expect(hash(page)).resolves.toBe("#/today");
+    await expect(hash(page)).resolves.toBe("#/day");
     await page.keyboard.press("Escape");
     expect(errors).toEqual([]);
     await page.close();
@@ -80,7 +80,7 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     await expect(page.locator(".urgent-strip, .attention, .moment-card, .start-focus, .today-off").count()).resolves.toBe(0);
     await shots(page, "pto-day");
     await pto.getByRole("button", { name: /next working day/ }).click();
-    await expect.poll(() => hash(page)).toBe("#/today/2026-11-09");
+    await expect.poll(() => hash(page)).toBe("#/day/2026-11-09");
     await page.close();
   }, T);
 
@@ -98,7 +98,7 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     // TY-1: no popup: the same proposals, as placeholders on the day's timeline (with the day confirmed first).
     await page.getByRole("group", { name: "Timebox my day" }).waitFor();
     expect(await page.getByRole("dialog", { name: "Timebox my day" }).count()).toBe(0);
-    await expect.poll(() => hash(page)).toMatch(/^#\/today/);
+    await expect.poll(() => hash(page)).toMatch(/^#\/day/);
     await expect((await call(page, "planday.start", { date: "2026-11-02" })).data.plan.committedAt).toBeTruthy();
     await page.getByRole("button", { name: "Discard" }).click();
     // The Board's day header menu, on Tuesday: Confirm and timebox (nothing confirmed there yet).
@@ -109,7 +109,7 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     const item = page.getByRole("menuitem", { name: /Confirm and timebox|Timebox my day/ });
     await item.click();
     await page.getByRole("group", { name: "Timebox my day" }).waitFor();
-    await expect.poll(() => hash(page)).toMatch(/^#\/today\/2026-11-03/);
+    await expect.poll(() => hash(page)).toMatch(/^#\/day\/2026-11-03/);
     await page.close();
   }, T);
 

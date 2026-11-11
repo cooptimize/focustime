@@ -8,17 +8,16 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ACTIONS, type ActionSpec } from "../actions/registry.ts";
 import { pendingText } from "../plan/ahead-edit.ts";
-import { finishLabel, weekState } from "./PlanWeek.tsx";
+import { confirmLabel, weekTag } from "../plan/addwork.ts";
 import { KEYS } from "./keys.ts";
 import { filterCommands, type MenuItem } from "./menu.ts";
-import { MODE_NAMES } from "./nav.ts";
 
 const root = join(import.meta.dirname, "..");
 const code = (p: string) => readFileSync(p, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
 const walk = (d: string): string[] => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? walk(p) : /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f) ? [p] : []; });
 const WORD = /\bcommit(ted|ting|s)?\b/i;
 /** Conversation commitments and the build's git commit keep their words; the Guide's Renamed table names the old one. */
-const KEEP = [/committed in\b/, /\$\{committer\} committed/, /someone commits/, /The commit on GitHub/, /who committed to what/, /<Name> committed/, /the pull request, the commit\b/, /^Committed$/, /^Commit \(in Week\)$/, /a new commit every/, /^· commit$/];
+const KEEP = [/committed in\b/, /\$\{committer\} committed/, /someone commits/, /The commit on GitHub/, /who committed to what/, /<Name> committed/, /the pull request, the commit\b/, /^Committed$/, /^Commit \(in Week\)$/, /^Week › Plan \(Plan the week, Commit\)$/, /a new commit every/, /^· commit$/];
 const STR = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g;
 /** JSX text after a tag, up to the next tag or expression. */
 const JSX_TEXT = /(?<![=-])>([^<>{}();=\n]+)[<{]/g;
@@ -46,16 +45,19 @@ describe("planning words (UI-7)", () => {
     expect(files.flatMap(readable)).toEqual([]);
     expect((ACTIONS as readonly ActionSpec[]).flatMap((a) => [a.title, a.summary]).filter((t) => WORD.test(t) && !KEEP.some((k) => k.test(t)))).toEqual([]);
   });
-  it("Week's modes, the key legend, the week's states and Ahead's pending line", () => {
-    expect([MODE_NAMES.board, MODE_NAMES.commit, MODE_NAMES.team]).toEqual(["Board", "Plan", "Team"]);
+  it("the key legend, the week's states and Ahead's pending line", () => {
     expect(KEYS.filter((k) => WORD.test(k.does)).map((k) => k.does)).toEqual([]);
-    expect(KEYS.find((k) => k.keys.includes("W"))?.does).toMatch(/^Week › Plan/);
-    expect(KEYS.find((k) => k.keys.includes("P"))?.does).toMatch(/Board and Plan/);
-    expect(weekState({ committedAt: null }, false)).toBe("Draft");
-    expect(weekState({ committedAt: "2026-11-05T10:00:00Z", changed: false }, false)).toBe("Confirmed");
-    expect(weekState({ committedAt: "2026-11-05T10:00:00Z", changed: true }, false)).toBe("changed since you confirmed");
-    expect(finishLabel({ committedAt: null }, false)).toBe("Confirm week");
-    expect(finishLabel({ committedAt: "2026-11-05T10:00:00Z", changed: false }, false)).toBe("Done");
+    // WD-1: W and P open Week with the Add work panel (there is no Plan mode).
+    expect(KEYS.find((k) => k.keys.includes("W"))?.does).toMatch(/^Week with Add work open/);
+    expect(KEYS.find((k) => k.keys.includes("P"))?.does).toMatch(/^Week with Add work open/);
+    // WD-1: the week's tag in Week's header, and its button.
+    expect(weekTag({ committedAt: null }, false)).toBe("Draft");
+    expect(weekTag({ committedAt: "2026-11-05T10:00:00Z", changed: false }, false)).toBe("Confirmed");
+    expect(weekTag({ committedAt: "2026-11-05T10:00:00Z", changed: true }, false)).toBe("Changed since you confirmed");
+    expect(weekTag({ committedAt: null }, true)).toBeNull();
+    expect(confirmLabel(weekTag({ committedAt: null }, false))).toBe("Confirm week");
+    expect(confirmLabel(weekTag({ committedAt: "2026-11-05T10:00:00Z", changed: true }, false))).toBe("Confirm again");
+    expect(confirmLabel(weekTag({ committedAt: "2026-11-05T10:00:00Z", changed: false }, false))).toBeNull();
     expect(pendingText(3)).toBe("3 changes to save");
   });
   it("the command menu still finds the renamed commands by commit", () => {

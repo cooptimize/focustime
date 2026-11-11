@@ -3,7 +3,7 @@
 // left this week, in Unfinished from earlier days); the original block shows "→ suggested …"; Keep moves one (Undo
 // puts it back), Drop settles one, Keep all keeps the rest; the now line sits on today's column.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, unfoldAddWork, startDemo, type Harness } from "./harness.ts";
 
 const T = 180_000;
 const WED = "2026-11-04T13:30:00-05:00";
@@ -20,8 +20,11 @@ describe.skipIf(!CHROMIUM)("Unfinished picks suggested in the next block (UI-B)"
 
   it("suggests, keeps with Undo, drops, keeps all, and shows the now line", async () => {
     const { page, errors } = await freshPage(h);
+    // WD-1: the summary of unfinished to-dos is in Add work › To place.
     await page.getByRole("button", { name: "Week", exact: true }).first().click();
-    const summary = page.locator("section.carry-summary");
+    await page.evaluate(() => (location.hash = "#/week/add"));
+    await unfoldAddWork(page);
+    const summary = page.locator("aside.add-work-panel section.carry-summary");
     await summary.waitFor({ timeout: 30_000 });
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/board-first-1920.png` });
     // Thursday is PTO and Friday catch-up: only Northwind (Wed PM) has a block left; the rest are in the list.
@@ -34,7 +37,7 @@ describe.skipIf(!CHROMIUM)("Unfinished picks suggested in the next block (UI-B)"
     // The original block shows it dimmed, not as a second unchecked item.
     const origin = (title: string) => page.locator(".pick-origin", { hasText: title });
     await expect(origin("Filter orders by date range").textContent()).resolves.toContain("→ suggested Wed PM");
-    await expect(origin("Validate date of birth").textContent()).resolves.toContain("→ in the list above");
+    await expect(origin("Validate date of birth").textContent()).resolves.toContain("→ in To place");
     await expect(page.locator(".checklist .pr-title", { hasText: "Filter orders by date range" }).count()).resolves.toBe(0);
 
     // Keep here: a normal pick on Wednesday afternoon; the original reads "→ moved to Wed PM". Undo puts it back.

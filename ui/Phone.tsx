@@ -72,7 +72,7 @@ export function BottomBar({ current, inboxCount, onTab, onCapture, onAsk, askOpe
   );
   return (
     <nav className="bottom-bar bb-five" aria-label="Tabs">
-      {tab("today", "Today")}
+      {tab("today", "Day")}
       {tab("week", "Week")}
       <span className="bb-capture-slot">
         <button type="button" className="bb-capture" aria-label="Capture" aria-expanded={captureOpen} title="Quick capture: one line, saved at once" onClick={onCapture}>

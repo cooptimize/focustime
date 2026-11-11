@@ -81,7 +81,7 @@ describe.skipIf(!CHROMIUM)("Brand: the opening, the Close out reverse and Lumen'
     // The top bar's mark is the week, not Lumen; it goes to Today.
     await page.evaluate(() => (location.hash = "#/week"));
     await page.locator(".brand-home").click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/today");
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/day");
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -116,7 +116,7 @@ describe.skipIf(!CHROMIUM)("Brand: the opening, the Close out reverse and Lumen'
     const s = await seen(page);
     expect(s.close).toEqual(["moment"]); // straight to the moment: no flight in, no reverse
     expect(s.lumen.every((p) => p === "still")).toBe(true);
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/today");
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/day");
     await ctx.close();
   }, T);
 
@@ -151,7 +151,7 @@ describe.skipIf(!CHROMIUM)("Brand: the opening, the Close out reverse and Lumen'
     await page.waitForSelector('[data-close="moment"] [data-lumen="bob"]');
     await page.locator(".brand-stage").click();
     await page.waitForSelector(".brand-stage", { state: "detached" });
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/today");
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/day");
     expect(errors).toEqual([]);
     await page.close();
   }, T);

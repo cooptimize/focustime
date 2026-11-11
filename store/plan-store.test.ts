@@ -311,6 +311,40 @@ describe("week plan (step 8)", () => {
     clock = clock.add({ minutes: 5 });
     expect((await store.commitWeek(W)).committedAt! >= p.updatedAt!).toBe(true);
   });
+  it("WD-1: a change in the same second as the confirm still counts as a change; confirming again clears it", async () => {
+    const { store } = await fresh();
+    (await store.setWeekFeature({ ...f, estimate: 480 }));
+    (await store.commitWeek(W));
+    (await store.touchWeekPlan(W)); // same clock second
+    const p = (await store.weekPlan(W));
+    expect(Temporal.Instant.compare(Temporal.ZonedDateTime.from(p.updatedAt!).toInstant(), Temporal.ZonedDateTime.from(p.committedAt!).toInstant())).toBe(1);
+    const again = (await store.commitWeek(W));
+    expect(again.updatedAt).toBe(again.committedAt);
+  });
+  it("WD-1: Undo of an add takes back its feature and the change mark, only while nothing else changed the week", async () => {
+    const { store } = await fresh();
+    (await store.setWeekFeature({ ...f, estimate: 480 }));
+    (await store.commitWeek(W));
+    const before = (await store.weekStamp(W))!;
+    clock = clock.add({ minutes: 1 });
+    const added = (await store.addWeekItem({ weekStart: W, clientKey: "Adatum", itemId: 777, title: "Placed by a story", itemType: "Feature", url: null, level: "feature", tier: "nice" }));
+    (await store.touchWeekPlan(W));
+    const after = (await store.weekStamp(W))!;
+    expect((await store.weekPlan(W)).features.map((x) => x.itemId)).toContain(777);
+    expect((await store.undoWeekAdd(W, added.id, before, after))).toBe(true);
+    const p = (await store.weekPlan(W));
+    expect(p.features.map((x) => x.itemId)).not.toContain(777);
+    expect(p.updatedAt).toBe(p.committedAt);
+    // Something else changed the week since: Undo leaves the week alone.
+    clock = clock.add({ minutes: 1 });
+    const b2 = (await store.weekStamp(W))!;
+    const again = (await store.addWeekItem({ weekStart: W, clientKey: "Adatum", itemId: 778, title: "Another", itemType: "Feature", url: null, level: "feature", tier: "nice" }));
+    const a2 = (await store.weekStamp(W))!;
+    clock = clock.add({ minutes: 1 });
+    (await store.setWeekItemTier(again.id, "must"));
+    expect((await store.undoWeekAdd(W, again.id, b2, a2))).toBe(false);
+    expect((await store.weekPlan(W)).features.map((x) => x.itemId)).toContain(778);
+  });
   it("marks a feature as being broken down (local only), and the reset and export cover the week plan", async () => {
     const { store } = await fresh();
     (await store.markBreakdown("Adatum", 240, true));

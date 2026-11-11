@@ -27,7 +27,7 @@ function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden"; text?: string
   const ado = fakeDevOps({ contoso: "portfolio", cooptimize: "agile" });
   const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, snapshots: createSnapshotStore(dir), log: () => {} });
   const devopsByKey = new Map<string, ReturnType<typeof createDevOpsSource>>();
-  const plan = createPlanStore({ path: join(dir, "plan.db"), now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });
+  const plan = createPlanStore({ path: join(dir, "plan.db"), now: () => Temporal.Instant.from(clock).toZonedDateTimeISO("America/New_York") });
   const c: ActionContext = {
     loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(opts.text ?? text) }),
     makeDataverse,
@@ -610,5 +610,29 @@ describe("UI-B: unfinished picks suggested in the next block", () => {
     expect((await t.run<{ hint: boolean }>("planday.carry", {})).hint).toBe(true);
     await t.run("planday.carry_hint", {});
     expect((await t.run<{ hint: boolean }>("planday.carry", {})).hint).toBe(false);
+  });
+
+  it("WD-1: placing a story adds its feature to the week as nice to have, once; a story with no parent adds nothing; no DevOps call", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const before = t.ado.calls.length;
+    await t.run("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 111 });
+    await t.run("pick.add", { date: D, half: "PM", clientKey: "Adatum", itemId: 112 });
+    await t.run("pick.add", { date: D, half: "PM", clientKey: "Adatum", itemId: 101 });
+    expect(t.ado.calls.length).toBe(before);
+    const st = await t.run<PlanDayState>("planday.start", { date: D });
+    const added = st.weekFeatures.filter((f) => f.clientKey === "Adatum");
+    expect(added.map((f) => [f.itemId, f.tier, f.level])).toEqual([[110, "nice", "feature"]]);
+    expect(added[0]!.id).toBeTypeOf("number");
+  });
+
+  it("WD-1: placing work on a confirmed week makes it Changed since you confirmed", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    await t.run("weekplan.commit", { weekStart: "2026-11-02" });
+    expect((await t.run<WeekLoadData>("week.load", { weekStart: "2026-11-02" })).weekPlan?.changed).toBe(false);
+    t.at("2026-11-03T15:00:00Z");
+    await t.run("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
+    expect((await t.run<WeekLoadData>("week.load", { weekStart: "2026-11-02" })).weekPlan?.changed).toBe(true);
   });
 });

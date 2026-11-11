@@ -5,7 +5,7 @@
 // strip). UI-B's unfinished suggestions still show at a mid-week clock (Wednesday 2:00 PM).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, timelineOn, startDemo, type Harness } from "./harness.ts";
 
 const T = 240_000;
 const WIDTHS: [number, number][] = [[1920, 1080], [1600, 900], [1440, 900], [1366, 768], [1280, 800], [1024, 768]];
@@ -134,6 +134,7 @@ describe.skipIf(!CHROMIUM)("WK-1: Week fits every width from 1024", () => {
   for (const t of TIERS) {
     it(`the now line and the PTO day show in the ${t.fold ? "fold" : t.tier} tier (${t.width}${t.panel ? ", panel" : ""}${t.big ? ", Larger" : ""})`, async () => {
       const { page, errors } = await freshPage(h, { width: t.width, height: t.height });
+      await timelineOn(page);
       await page.keyboard.press("2");
       await page.locator("main.grid").waitFor();
       if (t.big) await larger(page, true);
@@ -159,10 +160,10 @@ describe.skipIf(!CHROMIUM)("WK-1: Week fits every width from 1024", () => {
         await expect(thu.locator(".half.whole.pto").count()).resolves.toBe(1);
         // The card draws exactly its tier's element.
         const am = mon.locator(MON_AM);
-        const expectRail = t.tier === "rail" ? ".ruler:not(.slim)" : t.tier === "ruler" ? ".ruler.slim" : ".day-strip";
+        // WD-1: the rail tier's hour rail is the slim strip too (about 56 px), so the to-do titles keep their width.
+        const expectRail = t.tier === "rail" || t.tier === "ruler" ? ".ruler.slim" : ".day-strip";
         await expect(am.locator(expectRail).count()).resolves.toBe(1);
-        // The rail tier's rail is 140 to 186 px wide (its titles have room), minus its 12 px of inset.
-        if (t.tier === "rail") await expect(am.locator(".ruler").evaluate((r) => r.getBoundingClientRect().width)).resolves.toBeGreaterThanOrEqual(127);
+        if (t.tier === "rail") await expect(am.locator(".ruler").evaluate((r) => r.getBoundingClientRect().width)).resolves.toBeLessThanOrEqual(64);
         if (t.tier === "strip" || t.tier === "mini") await expect(am.locator(".day-strip .now-tick").count()).resolves.toBe(1);
         if (t.tier === "mini") await expect(am.locator(".pill-reason").isVisible()).resolves.toBe(false);
         // The block's time is always visible.

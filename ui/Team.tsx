@@ -379,7 +379,7 @@ function AskToLook({ c, weekStart, act, label }: { c: CommitClient; weekStart: I
         </p>
       ))}
       {c.leads.length > 0 && !open && (
-        <button type="button" className="link-btn look-ask" onClick={() => setOpen(true)} title={`Sends a link to your planned ${c.clientName} features in Week › Team`}>
+        <button type="button" className="link-btn look-ask" onClick={() => setOpen(true)} title={`Sends a link to your planned ${c.clientName} features in Team`}>
           {label ? `${label} (${c.leads.map((l) => first(l.name)).join(", ")})` : `Ask ${c.leads.length === 1 ? first(lead0!.name) : "a lead"} to look`}
         </button>
       )}
@@ -399,9 +399,11 @@ function AskToLook({ c, weekStart, act, label }: { c: CommitClient; weekStart: I
  * Commit's "From your team": per client, sent to me (top), client priorities, what I sent, and Ask <lead> to look.
  * Hidden for a client with nothing in it but a lead to ask, so Commit stays calm; nothing counts until accepted.
  */
-export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, onSchedule }: { weekStart: IsoDate; thisWeek: IsoDate; version: unknown; colors: Record<string, string>; onChanged: () => void; onSchedule?: (date: IsoDate, half: Half) => void }) {
+export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, onSchedule, part = "all" }: { weekStart: IsoDate; thisWeek: IsoDate; version: unknown; colors: Record<string, string>; onChanged: () => void; onSchedule?: (date: IsoDate, half: Half) => void; /** WD-1: "answer" (sent to me and priorities: Add work's To place), "mine" (what I sent and Ask a lead: its group at the bottom). */ part?: "all" | "answer" | "mine" }) {
   const t = useTeamCommit(weekStart, version);
   const past = weekStart < thisWeek;
+  const answerPart = part !== "mine";
+  const minePart = part !== "answer";
   const act = useCallback(
     async (action: string, input: Record<string, unknown>) => {
       try {
@@ -418,29 +420,30 @@ export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, 
     },
     [t, onChanged],
   );
-  const clients = (t.data?.clients ?? []).filter((c) => c.incoming.length || c.priorities.length || c.sent.length || c.looks.length);
+  const clients = (t.data?.clients ?? []).filter((c) => (answerPart && (c.incoming.length || c.priorities.length)) || (minePart && (c.sent.length || c.looks.length)));
   // Clients with nothing here but a lead to ask: one quiet line at the foot, not a section each.
-  const askOnly = past ? [] : (t.data?.clients ?? []).filter((c) => !clients.includes(c) && c.leads.length);
+  const askOnly = past || !minePart ? [] : (t.data?.clients ?? []).filter((c) => !clients.includes(c) && c.leads.length);
   const waiting = clients.reduce((n, c) => n + c.incoming.filter((s) => !s.conflict).length, 0);
   const answer = clients.reduce((n, c) => n + c.incoming.length, 0);
   // Open by itself only while something waits on me (or a Must I couldn't take); otherwise one line, like From last week.
   const [open, setOpen] = useState<boolean | null>(null);
-  const shown = open ?? answer > 0;
+  // A part is already inside its own fold in Add work: always open there.
+  const shown = part !== "all" || (open ?? answer > 0);
   if (!clients.length && !askOnly.length) return t.error ? <p className="error-line" role="alert">{t.error}</p> : null;
   const count = (n: number, one: string, many = `${one}s`) => (n ? [`${n} ${n === 1 ? one : many}`] : []);
   const sum = (f: (c: CommitClient) => number) => clients.reduce((n, c) => n + f(c), 0);
   const folded = [...count(sum((c) => c.priorities.length), "priority", "priorities"), ...count(sum((c) => c.sent.length), "sent", "sent"), ...count(sum((c) => c.looks.filter((l) => l.reply).length), "reply", "replies")].join(" · ") || "Ask a lead to look";
   return (
-    <section className="carry team-group" aria-label="From your team">
-      <header className="carry-head">
+    <section className="carry team-group" aria-label={part === "mine" ? "You sent and Ask a lead" : "From your team"}>
+      {part !== "mine" && <header className="carry-head">
         <h2 className="section-label">From your team</h2>
-        {answer === 0 && (
+        {answer === 0 && part === "all" && (
           <button type="button" className="link-btn carry-fold" aria-expanded={shown} onClick={() => setOpen(!shown)} title={shown ? "Hide these rows" : "Show priorities, what you sent and Ask to look"}>
             {folded}
           </button>
         )}
-        {waiting > 0 && <span className="muted">{waiting} to answer · nothing counts on your week until you accept</span>}
-      </header>
+        {waiting > 0 && answerPart && <span className="muted">{waiting} to answer · nothing counts on your week until you accept</span>}
+      </header>}
       {t.error && <p className="error-line" role="alert">{t.error}</p>}
       {shown && clients.map((c) => (
         <div key={c.clientKey} className="carry-client" style={{ "--c": clientColor(c.clientKey, colors) } as CSSProperties}>
@@ -448,21 +451,21 @@ export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, 
             <span className="swatch" aria-hidden="true" />
             {c.clientName}
           </h3>
-          {c.incoming.length > 0 && (
+          {answerPart && c.incoming.length > 0 && (
             <ul className="carry-rows" aria-label={`Sent to you for ${c.clientName}`}>
               {c.incoming.map((s) => (
                 <IncomingRow key={s.id} s={s} clientName={c.clientName} past={past} act={act} onSchedule={onSchedule} />
               ))}
             </ul>
           )}
-          {c.priorities.length > 0 && (
+          {answerPart && c.priorities.length > 0 && (
             <ul className="carry-rows" aria-label={`${c.clientName} priorities`}>
               {c.priorities.map((p) => (
                 <PriorityRow key={p.itemId} p={p} weekStart={weekStart} past={past} act={act} />
               ))}
             </ul>
           )}
-          {c.sent.length > 0 && (
+          {minePart && c.sent.length > 0 && (
             <>
               <p className="team-sub">You sent</p>
               <ul className="carry-rows" aria-label={`You sent for ${c.clientName}`}>
@@ -472,7 +475,7 @@ export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, 
               </ul>
             </>
           )}
-          {!past && <AskToLook c={c} weekStart={weekStart} act={act} />}
+          {!past && minePart && <AskToLook c={c} weekStart={weekStart} act={act} />}
         </div>
       ))}
       {shown && askOnly.length > 0 && (

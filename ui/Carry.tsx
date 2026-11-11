@@ -187,7 +187,7 @@ function SuggestedCard({ s, c, tabIndex }: { s: Suggestion; c: CarryApi; tabInde
 /** The original block's line for a pick that is suggested elsewhere, listed, or moved on: dimmed, never tickable. */
 export function OriginPick({ pick }: { pick: Pick }) {
   const c = useContext(CarryCtx);
-  const text = originNote(pick, c?.suggested ?? new Map()) ?? (c?.listed.has(pick.id) ? "→ in the list above" : null);
+  const text = originNote(pick, c?.suggested ?? new Map()) ?? (c?.listed.has(pick.id) ? "→ in To place" : null);
   return (
     <li className="pick-origin" data-pick={pick.id} title={text ? `${pick.title} ${text}` : pick.title}>
       {pick.itemType && <TypeIcon clientKey={pick.clientKey} type={pick.itemType} decorative />}

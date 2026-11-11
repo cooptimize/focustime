@@ -75,17 +75,17 @@ describe.skipIf(!CHROMIUM)("UI-3: one close button", () => {
     };
     await closesBothWays(page, openCapture, capture, (d) => d.locator(".cap-dialog-head"));
 
-    // A side panel: Commit's DevOps health.
-    await page.evaluate(() => (location.hash = "#/week/plan/2026-11-09"));
-    const health = page.getByRole("button", { name: /^DevOps health/ });
-    await health.waitFor({ timeout: 30_000 });
+    // A side panel: Week's Add work (WD-1). It opens from a card's + Add; closing gives focus back to the card.
+    await page.evaluate(() => (location.hash = "#/week"));
+    const cell = page.locator('[data-drop="2026-11-02:PM"]').first();
+    await cell.waitFor({ timeout: 30_000 });
     const openHealth = async () => {
-      await health.click();
-      const p = page.locator('aside.detail-panel[aria-label="DevOps health"]');
+      await cell.locator(".add-work.add-row").click();
+      const p = page.locator("aside.add-work-panel");
       await p.waitFor();
       return p;
     };
-    await closesBothWays(page, openHealth, health, (p) => p.locator(".dp-head"));
+    await closesBothWays(page, openHealth, cell, (p) => p.locator(".aw-head"));
 
     if (SHOTS) {
       await openHealth();

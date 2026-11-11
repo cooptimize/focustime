@@ -186,7 +186,7 @@ describe.skipIf(!CHROMIUM)("WK-3: weekends, the Evening band and Deployment to-d
     await form.locator("input[name=title]").fill("Ledger views");
     await form.locator("input[name=start]").fill("18:00");
     await form.locator("input[name=end]").fill("19:30");
-    await form.getByRole("button", { name: "Plan it" }).click();
+    await form.getByRole("button", { name: "Add it" }).click();
     await page.locator(".app-undo", { hasText: /Deployment planned/ }).waitFor();
     await page.locator("main.grid .evening-band .pick-row", { hasText: "Ledger views" }).waitFor();
     // The command menu.
@@ -198,7 +198,7 @@ describe.skipIf(!CHROMIUM)("WK-3: weekends, the Evening band and Deployment to-d
     await f2.locator("input[name=date]").fill(SUN);
     await f2.locator("input[name=start]").fill("08:00");
     await f2.locator("input[name=end]").fill("10:00");
-    await f2.getByRole("button", { name: "Plan it" }).click();
+    await f2.getByRole("button", { name: "Add it" }).click();
     await sun(page).locator(".pick-row", { hasText: "Weekend cutover" }).waitFor();
     // Changing a to-do's kind: Kind › Deployment asks for the window.
     await pickMenu(page, "Export orders to CSV");
@@ -255,7 +255,7 @@ describe.skipIf(!CHROMIUM)("WK-3: weekends, the Evening band and Deployment to-d
     await page.reload();
     await page.locator(".today-nav, [aria-label='Next day']").first().waitFor();
     await page.getByRole("button", { name: "Next day" }).click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/today/${SAT}`);
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/day/${SAT}`);
     const we = page.locator("section.today-weekend");
     await we.waitFor();
     await expect(we.locator(".today-weekend-head").textContent()).resolves.toMatch(/^Weekend/);
@@ -266,7 +266,7 @@ describe.skipIf(!CHROMIUM)("WK-3: weekends, the Evening band and Deployment to-d
     await shot(page, "wk3-today-saturday");
     // Sunday has nothing: the next step goes on to Monday.
     await page.getByRole("button", { name: "Next day" }).click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/today/2026-11-09");
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/day/2026-11-09");
     expect(errors).toEqual([]);
     await page.close();
   }, T);

@@ -1688,9 +1688,16 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
   /** Every write runs in a transaction (joined when the caller has one open). */
   const tx = <T>(fn: () => Promise<T>): Promise<T> => db.tx(fn);
 
-  /** The week's plan row, created if missing, with its updated time moved on. */
-  const touchWeek = async (weekStart: IsoDate, at: ZonedStamp) =>
-    (await db.run("INSERT INTO week_plans (week_start, committed_at, created_at, updated_at) VALUES (?, NULL, ?, ?) ON CONFLICT(week_start) DO UPDATE SET updated_at = excluded.updated_at", weekStart, at, at));
+  /**
+   * The week's plan row, created if missing, with its updated time moved on. Stamps are to the second, so a change in
+   * the same second as the confirm lands one second after it: the week still reads "Changed since you confirmed" (WD-1).
+   */
+  const touchWeek = async (weekStart: IsoDate, at: ZonedStamp) => {
+    const row = (await db.get("SELECT committed_at FROM week_plans WHERE week_start = ?", weekStart)) as Row | undefined;
+    const committed = row?.committed_at ? stampText(row.committed_at) : null;
+    const when = committed && Temporal.Instant.compare(Temporal.ZonedDateTime.from(at).toInstant(), Temporal.ZonedDateTime.from(committed).toInstant()) <= 0 ? Temporal.ZonedDateTime.from(committed).add({ seconds: 1 }).toString({ smallestUnit: "second" }) : at;
+    await db.run("INSERT INTO week_plans (week_start, committed_at, created_at, updated_at) VALUES (?, NULL, ?, ?) ON CONFLICT(week_start) DO UPDATE SET updated_at = excluded.updated_at", weekStart, at, when);
+  };
   /** One change to a week item: runs `change`, touches its week; returns the week it is on. */
   const weekItemChange = (id: number, change: (at: ZonedStamp) => Promise<unknown>): Promise<IsoDate> =>
     tx(async () => {
@@ -2730,6 +2737,40 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
           );
         }
         return (await this.weekPlan(f.weekStart)).features.find((x) => x.id === id)!;
+      });
+    },
+    /**
+     * WD-1: a change to the week's to-dos (a story placed or moved into it) counts as a change to the week, so a
+     * confirmed week reads "Changed since you confirmed". Only a week that has a plan row is touched.
+     */
+    async touchWeekPlan(weekStart: IsoDate): Promise<void> {
+      await tx(async () => {
+        const row = (await db.get("SELECT week_start FROM week_plans WHERE week_start = ?", weekStart)) as Row | undefined;
+        if (row) await touchWeek(weekStart, stamp());
+      });
+    },
+    /** WD-1: the week row's own updated time (null: no row), so an Undo can tell whether anything changed since. */
+    async weekStamp(weekStart: IsoDate): Promise<string | null> {
+      const row = (await db.get("SELECT updated_at FROM week_plans WHERE week_start = ?", weekStart)) as Row | undefined;
+      return row?.updated_at ? stampText(row.updated_at) : null;
+    },
+    /**
+     * WD-1: Undo of a to-do's add takes back what the add did to the week: the feature it put on the week (only while it
+     * is still a nice to have with no pins) and the week's updated time. Only when nothing else changed the week since
+     * (its updated time is still `after`); otherwise the week keeps both, and reads as changed, which it is.
+     */
+    async undoWeekAdd(weekStart: IsoDate, featureId: number | null, before: string | null, after: string): Promise<boolean> {
+      return tx(async () => {
+        const row = (await db.get("SELECT updated_at FROM week_plans WHERE week_start = ?", weekStart)) as Row | undefined;
+        if (!row?.updated_at || stampText(row.updated_at) !== after) return false;
+        if (featureId !== null) {
+          const f = (await db.get("SELECT tier FROM week_features WHERE id = ? AND week_start = ?", featureId, weekStart)) as Row | undefined;
+          const pinned = (await db.get("SELECT 1 AS x FROM week_feature_slots WHERE feature_id = ?", featureId)) as Row | undefined;
+          if (f && f.tier === "nice" && !pinned) await db.run("DELETE FROM week_features WHERE id = ?", featureId);
+        }
+        // No row before the add: the week was a draft, nothing reads its time; it keeps the add's.
+        if (before !== null) await db.run("UPDATE week_plans SET updated_at = ? WHERE week_start = ?", before, weekStart);
+        return true;
       });
     },
     /** Must or nice to have; changing tier puts it back in DevOps order within the new tier. */

@@ -726,12 +726,12 @@ function PlanningForm(p: FormProps) {
       </Group>
       <Group title="Reminders" intro="Each comes as a notification; switch the kinds in Notifications.">
         <div className="set-grid">
-          {numField(a, "reminderOffsetMinutes", "Plan today reminder (minutes after the day starts)", "Only when today isn't confirmed.", 5, 240)}
+          {numField(a, "reminderOffsetMinutes", "Add work reminder (minutes after the day starts)", "Only when today isn't confirmed.", 5, 240)}
           {numField(a, "checkinReminderMinutes", "Midday check-in reminder (minutes after lunch)", "On a confirmed day. 0 is the end of lunch.", 5, 120)}
           {numField(a, "closeoutReminderMinutes", "Close out reminder (minutes before the day ends)", "Only if Close out isn't done.", 5, 120)}
         </div>
       </Group>
-      <Group title="Plan the week nudges" sid="week-nudges" intro="Empty turns a nudge off.">
+      <Group title="Week nudges" sid="week-nudges" intro="Empty turns a nudge off.">
         <div className="set-grid">
           {([
             ["weekNudgeThu", "Thursday", "For next week."],
@@ -803,7 +803,7 @@ function GuidanceForm(p: FormProps) {
     <Group title="Guidance" intro="Your level changes emphasis only; none of these ever blocks anything.">
       <div className="set-grid set-guidance">
         <ReadOnly sid="level" label="Your level" value={level} where="From your position in Dataverse. It changes suggestions only, never what you can do." />
-        <AutoField a={a} k="planShare" label="Plan up to (% of free time)" hint={<>Moves Plan the week's amber over line; it never blocks. Team default for your level: {team.planShare}%. {reset("planShare")}</>}>
+        <AutoField a={a} k="planShare" label="Plan up to (% of free time)" hint={<>Moves the amber over line on Week's client chips; it never blocks. Team default for your level: {team.planShare}%. {reset("planShare")}</>}>
           <input type="number" min={50} max={100} step={5} value={a.v.planShare ?? team.planShare} onChange={(e) => a.set("planShare", Number(e.target.value))} {...a.text("planShare")} />
         </AutoField>
         <AutoField a={a} k="draftStories" label="Break down" hint={<>Team default: {onOff(team.draftStories)}. {reset("draftStories")}</>}>
@@ -829,7 +829,7 @@ function AheadRituals() {
   return (
     <ul className="set-rituals">
       <li>
-        <strong>Look ahead 4 weeks</strong> every other Thursday, offered after Done in Plan the week. Next: {day(n.lookAhead)}.
+        <strong>Look ahead 4 weeks</strong> every other Thursday, offered after you confirm next week. Next: {day(n.lookAhead)}.
       </li>
       <li>
         <strong>Direction review</strong> (8 to 12 weeks) on the first Thursday of each month. Next: {day(n.direction)}.

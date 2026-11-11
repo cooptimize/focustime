@@ -119,7 +119,7 @@ function planCheck(ctx: AnswerContext, link: LinkFn): Composed {
     }
     for (const f of (ctx.statusMissing ?? []).filter((f) => f.clientKey === c.key)) {
       itemRefs.push(f);
-      lines.push({ text: `#${f.id} ${f.title}: no update yet for Monday's report`, link: link("#/week/status", "Open Status") });
+      lines.push({ text: `#${f.id} ${f.title}: no update yet for Monday's report`, link: link("#/status", "Open Status") });
     }
     for (const k of ctx.calls.filter((k) => k.clientKey === c.key)) lines.push({ text: `${k.meeting} on ${dateLabel(k.date)}: ${k.kind === "upload" ? "a transcript to upload" : "proposals to review"}`, link: link("#/meetings", "Open Client calls") });
     count += lines.length;
@@ -136,9 +136,9 @@ function planCheck(ctx: AnswerContext, link: LinkFn): Composed {
   const reply = count
     ? `For ${ctx.period.label}, ${plural(count, "thing")} to look at${ctx.clients.length > 1 ? `, by client` : ""}.`
     : `Nothing stands out for ${ctx.period.label}: no overloaded blocks, late promises, readiness gaps, deployments or missing updates${ctx.unknown.length ? ", though some of it couldn't be read" : ""}.`;
-  const links = [link("#/week/commit", "Open Plan")];
+  const links = [link("#/week/add", "Open Add work")];
   if (ctx.gaps.length) links.push(link("#/ahead/fix", "Open Gaps"));
-  if (ctx.statusMissing?.length) links.push(link("#/week/status", "Open Status"));
+  if (ctx.statusMissing?.length) links.push(link("#/status", "Open Status"));
   return { reply, sections, suggestions: suggestions.slice(0, 3), refs: refsOf(ctx, usedTodos, itemRefs, promiseRefs), links };
 }
 
@@ -213,10 +213,10 @@ function deployments(ctx: AnswerContext, link: LinkFn): Composed {
 }
 
 function statusUpdates(ctx: AnswerContext, link: LinkFn): Composed {
-  if (ctx.statusMissing === null) return { reply: "I couldn't read Monday's status report, so I don't know which features still need an update.", sections: notKnown(ctx, "status"), suggestions: [], refs: refsOf(ctx, [], [], []), links: [link("#/week/status", "Open Status")] };
-  const sections = byClient(ctx, ctx.statusMissing, (f) => ({ text: `#${f.id} ${f.title}`, link: link("#/week/status", "Open Status") }));
+  if (ctx.statusMissing === null) return { reply: "I couldn't read Monday's status report, so I don't know which features still need an update.", sections: notKnown(ctx, "status"), suggestions: [], refs: refsOf(ctx, [], [], []), links: [link("#/status", "Open Status")] };
+  const sections = byClient(ctx, ctx.statusMissing, (f) => ({ text: `#${f.id} ${f.title}`, link: link("#/status", "Open Status") }));
   const n = ctx.statusMissing.length;
-  return { reply: n ? `${plural(n, "feature has", "features have")} no update yet for ${ctx.statusTitle ?? "Monday's report"}.` : `Every feature on ${ctx.statusTitle ?? "Monday's report"} has an update.`, sections: [...sections, ...notKnown(ctx, "status")], suggestions: [], refs: refsOf(ctx, [], ctx.statusMissing, []), links: [link("#/week/status", "Open Status")] };
+  return { reply: n ? `${plural(n, "feature has", "features have")} no update yet for ${ctx.statusTitle ?? "Monday's report"}.` : `Every feature on ${ctx.statusTitle ?? "Monday's report"} has an update.`, sections: [...sections, ...notKnown(ctx, "status")], suggestions: [], refs: refsOf(ctx, [], ctx.statusMissing, []), links: [link("#/status", "Open Status")] };
 }
 
 function done(ctx: AnswerContext, link: LinkFn): Composed {

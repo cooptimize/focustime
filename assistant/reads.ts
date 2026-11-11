@@ -43,7 +43,7 @@ async function data<T>(r: Promise<ActionResponse>): Promise<T | string> {
 }
 
 function pickCard(d: ReadDeps, p: Pick): PickCard {
-  return { kind: "pick", id: p.id, clientKey: p.clientKey, clientName: d.clientName(p.clientKey), title: p.title, date: p.date, half: p.half === "PM" ? "PM" : "AM", time: null, done: p.status === "done", link: d.link(p.date === d.today ? "#/today" : `#/week/day/${p.date}/${p.half}`, p.date === d.today ? "Open Today" : `Open ${dayName(p.date)}`) };
+  return { kind: "pick", id: p.id, clientKey: p.clientKey, clientName: d.clientName(p.clientKey), title: p.title, date: p.date, half: p.half === "PM" ? "PM" : "AM", time: null, done: p.status === "done", link: d.link(p.date === d.today ? "#/day" : `#/week/day/${p.date}/${p.half}`, p.date === d.today ? "Open Today" : `Open ${dayName(p.date)}`) };
 }
 
 /** assistant.today: now (the next pick and what's on), today (open picks, follow-ups and promises due), tonight. */
@@ -62,7 +62,7 @@ export async function todayRead(d: ReadDeps, when: "now" | "today" | "tonight", 
     const order = ["AM", "PM", "EVE"];
     const next = timed ?? open.filter((p) => order.indexOf(p.half) >= order.indexOf(half)).sort((a, b) => order.indexOf(a.half) - order.indexOf(b.half) || a.id - b.id)[0];
     if (next) cards.push(pickCard(d, next));
-    else cards.push({ kind: "note", text: open.length ? "Nothing planned for the rest of today's blocks." : w.planDay.committed ? "Everything planned for today is done." : "Today isn't planned yet.", link: d.link("#/today", "Open Today") });
+    else cards.push({ kind: "note", text: open.length ? "Nothing planned for the rest of today's blocks." : w.planDay.committed ? "Everything planned for today is done." : "Today isn't planned yet.", link: d.link("#/day", "Open Day") });
     facts.next = next ? { pickId: next.id, title: next.title, half: halfName(next.half), focusRunning: !!timed } : null;
   } else {
     const list = when === "tonight" ? open.filter((p) => p.half === "EVE") : open;
@@ -170,7 +170,7 @@ export async function commitmentsRead(d: ReadDeps, client: string, person: strin
 }
 
 function sendCard(d: ReadDeps, s: SendView): SendCard {
-  return { kind: "send", id: s.id, clientKey: s.clientKey, clientName: d.clientName(s.clientKey), title: s.title, to: s.to.name, from: s.from.name, tier: s.kind, weekStart: s.weekStart, state: s.words || s.state, link: d.link(`#/week/commit/${s.weekStart}`, "Open Plan") };
+  return { kind: "send", id: s.id, clientKey: s.clientKey, clientName: d.clientName(s.clientKey), title: s.title, to: s.to.name, from: s.from.name, tier: s.kind, weekStart: s.weekStart, state: s.words || s.state, link: d.link(`#/week/${s.weekStart}/add`, "Open Add work") };
 }
 
 /** My sends (this week and next) and the ones sent to me, with their states. */
@@ -186,7 +186,7 @@ export async function sendsRead(d: ReadDeps, client: string | null): Promise<Rea
   const seen = new Set<number>();
   const list = out.filter((s) => !seen.has(s.id) && seen.add(s.id));
   const cards: Card[] = list.slice(0, 12).map((s) => sendCard(d, s));
-  if (!cards.length) cards.push({ kind: "note", text: "No sends this week or next.", link: d.link("#/week/commit", "Open Plan") });
+  if (!cards.length) cards.push({ kind: "note", text: "No sends this week or next.", link: d.link("#/week/add", "Open Add work") });
   return { cards, facts: list.slice(0, 12).map((s) => ({ title: { quoted: s.title }, from: s.from.name, to: s.to.name, kind: s.kind, week: s.weekStart, state: s.words || s.state })), itemIds: list.map((s) => s.itemId), pickIds: [] };
 }
 
@@ -203,7 +203,7 @@ export async function statusRead(d: ReadDeps, client: string | null): Promise<Re
   const without = clients.flatMap((c) => c.features).filter((f) => f.thisWeek !== null && f.thisWeek.length === 0).length;
   const shown = clients.reduce((n, c) => n + c.features.length, 0);
   const text = shown ? `${l.title}: ${shown} feature${shown === 1 ? "" : "s"}, ${without} without an update yet.` : `${l.title}: no features this week.`;
-  const cards: Card[] = [{ kind: "note", text, link: d.link("#/week/status", "Open Status") }];
+  const cards: Card[] = [{ kind: "note", text, link: d.link("#/status", "Open Status") }];
   const facts = client ? features.map(({ f }) => ({ id: f.id, title: { quoted: f.title }, updatesThisWeek: f.thisWeek?.length ?? null, canComment: clients[0]?.canWrite ?? false })) : { features: shown, without };
   return { cards, facts, itemIds: client ? features.map(({ f }) => f.id) : [], pickIds: [] };
 }

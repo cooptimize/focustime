@@ -4,7 +4,7 @@
 // FOCUSTIME_SHOTS, the screenshots for the report at 1920, 1366×768, Text size Larger and a phone.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, weekRow, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, selectBlock, unfoldAddWork, startDemo, type Harness } from "./harness.ts";
 import { SHOTS } from "./shots.ts";
 
 const T = 240_000;
@@ -14,18 +14,28 @@ async function larger(page: Page, on: boolean) {
   await page.evaluate((v) => (v ? document.documentElement.setAttribute("data-text-size", "larger") : document.documentElement.removeAttribute("data-text-size")), on);
   await page.waitForTimeout(200);
 }
+/** WD-1: From your team is in Add work › To place (this week); the old Commit address opens it. */
 const commit = async (page: Page) => {
   await page.evaluate((w) => (location.hash = `#/week/commit/${w}`), THIS_WEEK);
-  await page.locator("section.team-group").waitFor({ timeout: 30_000 });
+  await unfoldAddWork(page);
+  await page.locator("aside.add-work-panel section.team-group").waitFor({ timeout: 30_000 });
+  // The panel lists the selected block's client's features: Northwind's (Monday PM).
+  await selectBlock(page, "Northwind");
+  await unfoldAddWork(page);
 };
+/** WD-1: a feature on this week's list, in Add work › This week's features. */
+async function weekRow(page: Page, text: string) {
+  const row = page.locator("aside.add-work-panel .aw-feature", { has: page.locator(":scope > .aw-feat-head .aw-feat-name", { hasText: text }) }).first();
+  await row.waitFor({ timeout: 20_000 });
+  return row;
+}
 const team = async (page: Page) => {
   await page.evaluate(() => (location.hash = "#/week/team"));
   await page.locator(".team-view .team-client").first().waitFor({ timeout: 30_000 });
 };
 async function openSendFor(page: Page, title: string) {
   const row = await weekRow(page, title);
-  await row.locator(":scope > .pl-title").hover();
-  await row.locator(":scope > .pl-hover button.more").click();
+  await row.locator(":scope > .aw-feat-head").getByRole("button", { name: /^More for / }).click();
   await page.locator(".popup-menu .menu-item", { hasText: "Send to…" }).click();
   const dlg = page.getByRole("dialog", { name: `Send to… ${title}` });
   await dlg.waitFor();
@@ -53,8 +63,9 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/inbox\/item\/s\d+$/);
     await page.locator(".ib-pane .ib-detail-title", { hasText: "Loyalty points" }).waitFor();
     await commit(page);
-    const group = page.locator("section.team-group");
-    await group.waitFor({ timeout: 30_000 });
+    // WD-1 review: sends to answer are under To place, You sent in the folded group at the bottom; both unfolded.
+    await page.locator("aside.add-work-panel .aw-sends section.team-group").waitFor({ timeout: 30_000 });
+    const group = page.locator("aside.add-work-panel");
 
     // Accept: it leaves From your team and joins Northwind's list as a must (the demo has no DevOps writes, so untick).
     const loyalty = group.locator(".send-row", { hasText: "Loyalty points" });
@@ -68,7 +79,7 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
     // The client priority shows for everyone on Northwind; it's already on my week.
     await expect(group.locator(".priority-row", { hasText: "Order history export" }).textContent()).resolves.toContain("On your week");
 
-    // Send to… a Must from a Commit row (I lead Northwind), to Sam; it shows in You sent as Waiting.
+    // Send to… a Must from a feature in Add work (I lead Northwind), to Sam; it shows in You sent as Waiting.
     const dlg = await openSendFor(page, "Supplier onboarding");
     await dlg.getByRole("combobox", { name: "Send to" }).click();
     await page.getByRole("option", { name: /Sam Ortiz/ }).click();

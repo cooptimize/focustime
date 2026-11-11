@@ -768,7 +768,7 @@ export function stripLine(l: UrgentLine, o: { today: IsoDate; tz: string; client
 }
 
 const MOMENTS = {
-  plan: { title: "Plan today", body: "Today isn't planned yet. Put this week's stories into today's blocks.", button: "Plan today" },
+  plan: { title: "Add work", body: "Today isn't planned yet. Put this week's stories into today's blocks.", button: "Add work" },
   checkin: { title: "Midday check-in", body: "What still fits this afternoon, with one suggested move each.", button: "Check in" },
   closeout: { title: "Close out", body: "What got done, where you left off, DevOps updates and promises.", button: "Close out" },
 } as const;
@@ -833,7 +833,7 @@ type BlockProps = {
   promises?: DayPromise[];
   /** QF-1: another day, or a PTO day: nothing ticks, moves or starts here. */
   readOnly?: boolean;
-  /** QF-1: "Plan it" on an empty block (not on a past day or PTO). */
+  /** QF-1: "+ Add" on an empty block (not on a past day or PTO; WD-1: was Plan it). */
   planLink?: boolean;
 };
 
@@ -1021,7 +1021,7 @@ function BlockCard(b: BlockProps) {
             <>
               {" "}
               <button type="button" className="link-btn" onClick={() => b.props.onPlan(slot.date)}>
-                Plan it
+                + Add
               </button>
             </>
           )}

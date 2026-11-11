@@ -3,7 +3,7 @@
 // focusable, never the active item, arrow keys skip it. A nested story's hover shows its own ⋯, not its feature's.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
-import { CHROMIUM, freshPage, openPlanDay, startDemo, weekClient, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, openPlanDay, selectBlock, startDemo, type Harness } from "./harness.ts";
 
 let h: Harness;
 const T = 90_000;
@@ -51,23 +51,18 @@ describe.skipIf(!CHROMIUM)("row menu headers (D459)", () => {
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  const planWeek = async (page: Page) => {
-    await page.keyboard.press("2");
-    await page.keyboard.press("p");
-    await page.locator(".planweek .co-step button[aria-label='Previous week']").click();
-    await page.locator(".pw-client").first().waitFor();
-  };
-
-  it("Plan the week: A then B; the header is a label the keys skip; a nested story shows its own ⋯", async () => {
+  it("Add work's features: A then B; the header is a label the keys skip; a nested story shows its own ⋯", async () => {
     const { page, errors } = await freshPage(h);
-    await planWeek(page);
-    const nw = await weekClient(page, "Northwind");
-    await aThenB(page, nw.locator(".pw-row:not(.nested)"), ":scope > .pl-hover button.more", ":scope > .pl-title");
+    await openPlanDay(page);
+    await selectBlock(page, "Northwind");
+    const feats = page.locator("aside.add-work-panel .aw-feature");
+    const more = ':scope > .aw-feat-head button[aria-label^="More for "]';
+    await aThenB(page, feats, more, ":scope > .aw-feat-head .aw-feat-name");
 
     // The header: not focusable, not a menu item, never active; arrow keys go round the items only.
-    const row = nw.locator(".pw-row").first();
-    await row.locator(":scope > .pl-title").hover();
-    await row.locator(":scope > .pl-hover button.more").click();
+    const row = feats.first();
+    await row.locator(":scope > .aw-feat-head .aw-feat-name").hover();
+    await row.locator(more).click();
     await expect(head(page).getAttribute("tabindex")).resolves.toBeNull();
     await expect(head(page).getAttribute("role")).resolves.toBeNull();
     await expect(head(page).evaluate((e) => [getComputedStyle(e).fontWeight, getComputedStyle(e).textOverflow, getComputedStyle(e).whiteSpace, getComputedStyle(e).borderBottomStyle])).resolves.toEqual(["500", "ellipsis", "nowrap", "solid"]);
@@ -83,26 +78,22 @@ describe.skipIf(!CHROMIUM)("row menu headers (D459)", () => {
     await expect(help.evaluate((b) => { const r = b.getBoundingClientRect(); return [...b.children].every((c) => c.getBoundingClientRect().right <= r.right + 1); })).resolves.toBe(true);
     await page.keyboard.press("Escape");
 
-    // A nested story: hovering it shows its own ⋯ and not its feature's; its menu names the story.
-    const harbor = await weekClient(page, "Harbor");
-    const feature = harbor.locator(".pw-row").first();
-    const story = feature.locator(".pw-nested > li").first();
-    await story.locator(":scope > .pl-title").hover();
-    await expect.poll(() => feature.locator(":scope > .pl-hover").evaluate((e) => getComputedStyle(e).opacity)).toBe("0");
-    await expect.poll(() => story.locator(":scope > .pl-hover").evaluate((e) => getComputedStyle(e).opacity)).toBe("1");
-    const s = await headerOf(page, story, ":scope > .pl-hover button.more", ":scope > .pl-title");
+    // A nested story: its own ⋯ names the story, the feature's names the feature.
+    const feature = feats.filter({ has: page.locator(':scope > ul > li button[aria-label^="More for "]') }).first();
+    const story = feature.locator(":scope > ul > li").first();
+    const s = await headerOf(page, story, 'button[aria-label^="More for "]', ".aw-row-title");
     expect(s.got).toContain(s.want.slice(0, 24));
-    const f = await headerOf(page, feature, ":scope > .pl-hover button.more", ":scope > .pl-title");
+    const f = await headerOf(page, feature, more, ":scope > .aw-feat-head .aw-feat-name");
     expect(f.got).toContain(f.want.slice(0, 24));
     expect(errors).toEqual([]);
     await page.close();
   }, T);
 
-  it("Plan the day: picks and the offered DevOps items, A then B", async () => {
+  it("Week's cards: to-dos, A then B", async () => {
     const { page, errors } = await freshPage(h);
     await seed(page);
-    await openPlanDay(page);
-    await aThenB(page, page.locator(".pd2-picks > li.pick-row"), ".more-btn", ".pr-title");
+    await page.keyboard.press("2");
+    await aThenB(page, page.locator('[data-drop="2026-11-02:PM"] li.pick-row'), ".more-btn", ".pr-title");
     expect(errors).toEqual([]);
     await page.close();
   }, T);

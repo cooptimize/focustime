@@ -72,6 +72,8 @@ export type WeekLoadData = {
   aheadDue: import("../plan/rituals.ts").AheadRitualKind[];
   /** Step 16.2: whether a week (this week, next week, the week shown) is committed, by its Monday. */
   weekCommitted: Record<IsoDate, boolean>;
+  /** WD-1: next week has no features and no to-dos yet (Thursday's and Friday's "Next week is empty"). */
+  nextWeekEmpty?: boolean;
   /** Display settings from [ui] (step 6b): the theme. Defaults when the config is invalid. */
   /** Timeboxes on the week (step 12): live ones, plus removed ones whose Outlook event is still to be taken off. */
   timeboxes: TimeboxView[];

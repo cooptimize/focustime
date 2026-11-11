@@ -15,10 +15,10 @@ describe.skipIf(!CHROMIUM)("Top bar Focus and Quick capture (browser, demo mode)
     const { page, errors } = await freshPage(h);
     await openPlanDay(page);
     await selectBlock(page, "Cooptimize");
-    const row = page.locator(".pd2-right li.pd2-add:not(.planned)").first();
-    const title = (await row.locator(".pr-title").textContent())!;
-    await row.locator("button.pd2-plus").click();
-    await page.locator(".pd2-right li.pd2-add.planned").first().waitFor();
+    const row = page.locator("aside.add-work-panel .aw-row:not(.placed)", { has: page.locator("button.aw-plus") }).first();
+    const title = (await row.locator(".aw-row-title").innerText()).trim().replace(/^[^:]+: /, "");
+    await row.locator("button.aw-plus").click();
+    await page.locator("aside.add-work-panel .aw-row.placed").first().waitFor();
     await page.keyboard.press("Escape");
     const focus = page.locator(".top-btn.timer-btn");
     await expect(focus.textContent()).resolves.toMatch(/^Focus/);

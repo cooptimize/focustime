@@ -59,8 +59,8 @@ describe.skipIf(!CHROMIUM)("MB-1b: phone polish", () => {
       expect(heights.sameLine).toBe(true);
       expect(heights.right).toBeLessThanOrEqual(heights.cardRight);
 
-      // With a status pill: the chip stays on the chips line beside it.
-      expect(await pm.locator(".card-status .status-pill").count()).toBe(1);
+      // With a status chip (WD-1: in the header, never wrapping): the late chip goes on the chips line under it.
+      expect(await pm.locator(".card-head .status-pill").count()).toBe(1);
       expect(await pm.locator(".card-status > .late-chip").count()).toBe(1);
       expect(await pm.locator(".card-head .late-chip").count()).toBe(0);
 

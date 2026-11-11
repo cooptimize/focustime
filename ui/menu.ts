@@ -132,6 +132,8 @@ export type MenuEnv = {
   /** QF-1: Timebox my day on a date (confirming the day first when it isn't). */
   timeboxDay?: (date: IsoDate) => void;
   commitPlan: () => void;
+  /** WD-1: Confirm <day> from a day header's ⋯ (saves that day's plan, as Plan the day's Confirm did). */
+  confirmDay?: (date: IsoDate) => void;
   openDetails: (date: IsoDate, half: Half) => void;
   openLink: (clientKey: string, url: string) => void;
   /** FN-1: copy a work item's DevOps link, with a "Link copied" toast (announced). */
@@ -473,7 +475,7 @@ export function deployForm(env: MenuEnv, o: { pick?: Pick; date?: IsoDate; clien
   const link = p?.links?.find((l) => l.id !== p.itemId) ?? null;
   return {
     title: p ? (p.todoKind === "deployment" ? `Deployment: ${p.title}` : `Make "${p.title}" a deployment`) : "Plan a deployment",
-    button: p ? "Save" : "Plan it",
+    button: p ? "Save" : "Add it",
     fields: [
       ...(p ? [] : [
         { key: "client", label: "Client", type: "select", value: client, options: clients.length ? clients : [{ value: "", label: "No clients on this week" }] } satisfies FormField,
@@ -794,27 +796,25 @@ export function timeboxMenu(env: MenuEnv, t: TimeboxView): MenuStep {
 /** The "⋯" menu of a half-day card. */
 export function slotMenu(env: MenuEnv, date: IsoDate, half: Half, clientKey: string | null, clientName: string | null): MenuStep {
   const off = closedReason(env, date);
-  const refused = planDayRefusal(env, date);
   const work = clientKey ? env.work.get(clientKey) : undefined;
   const pickable = (work?.items ?? []).filter(isPickable);
   return {
     title: `${dayName(date)} ${half}${clientName ? ` · ${clientName}` : ""}`,
     items: [
       { id: "details", label: "Details", hint: "Enter", action: "ui.details", run: () => env.openDetails(date, half) },
-      { id: "plan", label: "Plan this day", action: "planday.start", ...(refused ? { disabled: refused } : {}), run: () => env.openPlanDay(date) },
-      { id: "addwork", label: "Add a to-do…", aka: ["Add work"], hint: "A", action: "ui.add_work", ...(addWorkRefusal(env, date, half) ? { disabled: addWorkRefusal(env, date, half)! } : {}), run: () => env.addWork?.(date, half) },
+      { id: "addwork", label: "Add work…", aka: ["Add a to-do", "Plan this day"], hint: "A", action: "ui.add_work", ...(addWorkRefusal(env, date, half) ? { disabled: addWorkRefusal(env, date, half)! } : {}), run: () => env.addWork?.(date, half) },
       {
         id: "intention",
         label: "Add an intention",
         action: "pick.add",
-        ...(off ? { disabled: off } : !clientKey ? { disabled: "Open half-day: plan it in Plan the day to choose a client" } : {}),
+        ...(off ? { disabled: off } : !clientKey ? { disabled: "Open half-day: choose its client in Add work first" } : {}),
         next: () => ({ title: `Intention for ${dayName(date)} ${half}`, prompt: `What you mean to do for ${clientName}`, submit: (text) => env.runPlan("pick.add", { date, half, clientKey, intention: text }) }),
       },
       {
         id: "add-item",
         label: "Add a work item",
         action: "pick.add",
-        ...(off ? { disabled: off } : !pickable.length ? { disabled: clientKey ? `No story-level items loaded for ${clientName}` : "Open half-day: plan it in Plan the day to choose a client" } : {}),
+        ...(off ? { disabled: off } : !pickable.length ? { disabled: clientKey ? `No story-level items loaded for ${clientName}` : "Open half-day: choose its client in Add work first" } : {}),
         next: () => ({ title: `Add to ${dayName(date)} ${half}`, items: pickable.map((i) => ({ id: `i${i.id}`, label: i.title, hint: `#${i.id}`, ...(clientKey ? { typeIcon: { clientKey, type: i.type } } : {}), action: "pick.add", ...(clientKey ? plannedHere(env, date, half, clientKey, i.id) : {}), run: () => env.runPlan("pick.add", { date, half, clientKey, itemId: i.id }) })) }),
       },
       ...callItems(env, clientKey),
@@ -940,7 +940,8 @@ export function dayMenu(env: MenuEnv, date: IsoDate): MenuStep {
   return {
     title: dayName(date),
     items: [
-      { id: "plan", label: isPast(env, date) && !refused ? "Plan this day (past: done and drop only)" : "Plan this day", action: "planday.start", ...(refused ? { disabled: refused } : {}), run: () => env.openPlanDay(date) },
+      { id: "plan", label: isPast(env, date) && !refused ? "Add work to this day (past: done and drop only)" : "Add work to this day", action: "planday.start", ...(refused ? { disabled: refused } : {}), run: () => env.openPlanDay(date) },
+      ...(env.confirmDay ? [confirmItem(env, date, refused)] : []),
       ...(env.timeboxDay ? [timeboxItem(env, date, refused)] : []),
       { id: "am", label: "Details of AM", action: "ui.details", run: () => env.openDetails(date, "AM") },
       { id: "pm", label: "Details of PM", action: "ui.details", run: () => env.openDetails(date, "PM") },
@@ -949,6 +950,13 @@ export function dayMenu(env: MenuEnv, date: IsoDate): MenuStep {
       ...timeItems(env, date),
     ],
   };
+}
+
+/** WD-1: the day menu's Confirm <day> (Confirm again once confirmed and changed; nothing to do once confirmed). */
+function confirmItem(env: MenuEnv, date: IsoDate, refused: string | undefined): MenuItem {
+  const committed = !!env.planWeek?.[date]?.committedAt;
+  const why = refused ?? (isPast(env, date) ? "That day is past" : undefined);
+  return { id: "confirm", label: committed ? `Confirm ${dayName(date)} again` : `Confirm ${dayName(date)}`, action: "planday.commit", ...(why ? { disabled: why } : { run: () => env.confirmDay!(date) }) };
 }
 
 /** QF-1: the day menu's Timebox my day, or Confirm and timebox while the day isn't confirmed. */
@@ -1068,7 +1076,7 @@ function chooseDay(env: MenuEnv, title: string, then: (date: IsoDate) => MenuSte
 
 /** "Plan a day…": a date picker. A refused date says why (PTO, no working hours) instead of opening. */
 export function planDateStep(env: MenuEnv): MenuStep {
-  return { title: "Plan a day", prompt: "Date to plan", input: "date", value: env.planState?.date ?? env.planTarget.date, button: "Plan", submit: (d) => env.openPlanDay(d) };
+  return { title: "Add work to a day", prompt: "Which day", input: "date", value: env.planState?.date ?? env.planTarget.date, button: "Open", submit: (d) => env.openPlanDay(d) };
 }
 
 // ---------- the command menu ----------
@@ -1082,7 +1090,7 @@ function picksInScope(env: MenuEnv): Pick[] {
 function choosePick(env: MenuEnv, title: string, then: (p: Pick) => MenuItem["run"] | MenuStep): MenuStep {
   const picks = picksInScope(env);
   const day = env.planState?.date ?? env.selection.date;
-  if (!picks.length) return { title, items: [{ id: "none", label: `No to-dos on ${dayName(day)}`, disabled: "Plan the day first, or select a day with to-dos" }] };
+  if (!picks.length) return { title, items: [{ id: "none", label: `No to-dos on ${dayName(day)}`, disabled: "Add work to it first, or select a day with to-dos" }] };
   return {
     title,
     items: picks.map((p) => {
@@ -1197,7 +1205,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     }
     case "planday.start": return { next: () => planDayStep(env) };
     case "planday.carry": return { run: () => env.setView("week") };
-    case "planday.commit": return env.planState ? { run: env.commitPlan } : { disabled: "Open Plan the day first" };
+    case "planday.commit": return { run: env.commitPlan };
     case "pick.add": return { next: () => chooseItem(env, "Add which work item?", isPickable, (k, i) => addStep(env, k, i)) };
     case "pick.set_size": return { next: () => choosePick(env, "Set the size of which to-do?", (p) => sizeStep(env, p)) };
     case "pick.move": return { next: () => choosePick(env, "Move which to-do?", (p) => moveStep(env, p)) };
@@ -1466,7 +1474,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       return { run: () => env.setView("roadmap") };
     case "ahead.stage_bulk":
       return { run: () => env.setView("backlog") };
-    case "weekplan.commit": return env.planWeekOpen ? { run: env.commitWeek } : { disabled: "Open Plan the week first" };
+    case "weekplan.commit": return env.planWeekOpen ? { run: env.commitWeek } : { disabled: "That week is over" };
     // Features are chosen in Plan the week itself.
     case "weekplan.set_feature":
     case "weekplan.place":
@@ -1671,27 +1679,28 @@ const askKey = (id: AskKeyId): void => void window.dispatchEvent(new CustomEvent
 function uiCommands(env: MenuEnv): MenuItem[] {
   const soon = "Coming soon";
   return [
-    { id: "view.today", action: "view.today", group: "Views", label: "Today", hint: "1", run: () => env.setView("today") },
-    { id: "view.week", action: "view.week", group: "Views", label: "Week › Board", hint: "2", run: () => env.setView("week") },
+    { id: "view.today", action: "view.today", group: "Views", label: "Day", aka: ["Today"], hint: "1", run: () => env.setView("today") },
+    { id: "view.week", action: "view.week", group: "Views", label: "Week", aka: ["Board"], hint: "2", run: () => env.setView("week") },
     { id: "view.roadmap", action: "view.roadmap", group: "Views", label: "Ahead: features and epics ahead (Roadmap)", hint: "3", run: () => env.setView("roadmap") },
     { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: what needs you, promises, waiting on, captures and drafts", hint: "4", run: () => env.setView("inbox") },
+    { id: "view.status", action: "view.status", aka: ["status report", "Week › Status"], group: "Views", label: "Status: this week's feature updates for Monday's report", hint: "5", run: () => env.setView("status") },
     { id: "view.requests", action: "view.requests", group: "Views", label: "Inbox › Needs you: what your clients' chats and your promises need from you", run: () => env.setView("requests") },
     ...ASK_KEYS.map((k): MenuItem => ({ id: k.id, action: k.id, group: "Inbox", label: k.label, hint: k.hint, ...(env.asksOpen ? { run: () => askKey(k.id) } : { disabled: "Open the Inbox first" }) })),
-    { id: "view.plan", action: "view.plan", aka: ["commit"], group: "Views", label: "Week: Board or Plan; Ahead: Roadmap or Plan ahead; Today: Plan today", hint: "P", run: env.openRitual },
-    { id: "view.planday", action: "view.planday", group: "Views", label: "Week › Plan today (the Board on today)", run: () => env.openPlanDay() },
-    { id: "view.planday_date", action: "view.planday_date", group: "Views", label: "Plan a day…", next: () => planDateStep(env) },
-    { id: "view.planweek", action: "view.planweek", aka: ["commit"], group: "Views", label: "Week › Plan: plan the week (each client's features)", hint: "W", run: () => env.openPlanWeek() },
+    { id: "view.plan", action: "view.plan", aka: ["commit", "plan"], group: "Views", label: "Add work beside Week (on Ahead: Grid or Gantt)", hint: "P", run: env.openRitual },
+    { id: "view.planday", action: "view.planday", aka: ["Plan today", "Plan the day"], group: "Views", label: "Add work to today", run: () => env.openPlanDay() },
+    { id: "view.planday_date", action: "view.planday_date", aka: ["Plan a day"], group: "Views", label: "Add work to a day…", next: () => planDateStep(env) },
+    { id: "view.planweek", action: "view.planweek", aka: ["commit", "Plan the week", "Week › Plan"], group: "Views", label: "Add work to the week", hint: "W", run: () => env.openPlanWeek() },
     { id: "view.ahead", action: "view.ahead", group: "Views", label: "Ahead › Plan ahead", run: () => env.setView("ahead") },
     { id: "view.backlog", action: "view.backlog", aka: ["stale", "stack rank"], group: "Views", label: "Ahead › Backlog: each client's backlog in order, stale items", run: () => env.setView("backlog") },
     { id: "view.gaps", action: "view.gaps", aka: ["fix next", "gaps", "get ready", "readiness"], group: "Views", label: "Ahead › Readiness: items not ready yet (missing stories, a target date, an owner or a size)", run: () => env.setView("gaps") },
     { id: "view.capture", action: "view.capture", group: "Views", label: "Captures to sort (Inbox)", run: env.openCaptures },
-    { id: "view.checkin", action: "view.checkin", group: "Views", label: "Today › Midday check-in", hint: "M", run: env.openCheckIn },
-    { id: "view.closeout", action: "view.closeout", group: "Views", label: "Today › Close out", hint: "E", run: () => env.openCloseOut() },
+    { id: "view.checkin", action: "view.checkin", group: "Views", label: "Day › Midday check-in", hint: "M", run: env.openCheckIn },
+    { id: "view.closeout", action: "view.closeout", group: "Views", label: "Day › Close out", hint: "E", run: () => env.openCloseOut() },
     { id: "week.prev", action: "week.prev", group: "Week", label: "Previous week", hint: "[", run: () => env.changeWeek(-1) },
     { id: "week.next", action: "week.next", group: "Week", label: "Next week", hint: "]", run: () => env.changeWeek(1) },
     { id: "week.today", action: "week.today", group: "Week", label: "Back to this week", run: env.goToday },
     { id: "ui.details", action: "ui.details", group: "Week", label: "Details of the selected half-day", hint: "Enter", run: () => env.openDetails(env.selection.date, env.selection.half) },
-    { id: "ui.add_work", action: "ui.add_work", group: "Week", label: "Add a to-do to the selected block", aka: ["Add work"], hint: "A", ...(addWorkRefusal(env, env.selection.date, env.selection.half) ? { disabled: addWorkRefusal(env, env.selection.date, env.selection.half)! } : { run: () => env.addWork?.(env.selection.date, env.selection.half) }) },
+    { id: "ui.add_work", action: "ui.add_work", group: "Week", label: "Add work to the selected block", aka: ["Add a to-do"], hint: "A", ...(addWorkRefusal(env, env.selection.date, env.selection.half) ? { disabled: addWorkRefusal(env, env.selection.date, env.selection.half)! } : { run: () => env.addWork?.(env.selection.date, env.selection.half) }) },
     { id: "ui.settings", action: "ui.settings", group: "Week", label: "Settings", disabled: soon },
     { id: "ui.region_next", action: "ui.region_next", group: "Keyboard", label: "Next region (top bar, week, panel, status bar)", hint: "F6", run: () => env.moveRegion(1) },
     { id: "ui.region_prev", action: "ui.region_prev", group: "Keyboard", label: "Previous region", hint: "Shift F6", run: () => env.moveRegion(-1) },
@@ -1714,9 +1723,12 @@ function uiCommands(env: MenuEnv): MenuItem[] {
 }
 
 /** Every command: window commands, then one per registered action (built from the registry). */
+/** WD-1: Team is hidden for now (its address still opens it); its own commands aren't offered. */
+export const HIDDEN_FOR_NOW: ReadonlySet<string> = new Set(["team.view", "look.reply"]);
+
 export function commandList(env: MenuEnv): MenuItem[] {
   // IB-1: Make it a follow-up is gone from the UI (a promise does everything a follow-up did); the old actions stay for now.
-  const fromRegistry = (ACTIONS as readonly ActionSpec[]).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
+  const fromRegistry = (ACTIONS as readonly ActionSpec[]).filter((a) => !HIDDEN_FOR_NOW.has(a.name)).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
   return [...uiCommands(env), ...fromRegistry];
 }
 
@@ -1848,7 +1860,7 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps, sizes: SizeScal
           ] as MenuItem[])
         : []),
       ...(f.drafts > 0 ? [{ id: "create", label: `Create ${f.drafts === 1 ? "the draft" : `${f.drafts} drafts`} in DevOps`, ...writes("create"), action: "devops.preview", ...closed, run: f.canWrite ? ops.createDrafts : ops.enableWrites } as MenuItem] : []),
-      { id: "remove", label: "Take off the week", danger: true, action: "weekplan.remove", ...closed, run: ops.remove },
+      { id: "remove", label: "Remove from this week", danger: true, action: "weekplan.remove", ...closed, run: ops.remove },
     ],
   };
 }

@@ -104,9 +104,11 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
       await page.locator(".vm-preview").waitFor();
       await check("VM preview");
       await page.locator(".vm-preview").getByRole("button", { name: "Cancel" }).click();
-      await go(page, `#/today/plan/${MON}/AM`);
-      await page.locator(".pd2-left .pick-row").nth(1).hover();
-      await page.locator(".pd2-left .pick-row").nth(1).getByRole("button", { name: /\+ time/ }).click();
+      // WD-1: a to-do's "+ time" on Day (Plan the day's left pane is gone).
+      await go(page, "#/day");
+      const timed = page.locator(".today-block .pick-row", { has: page.getByRole("button", { name: /\+ time/ }) }).first();
+      await timed.hover();
+      await timed.getByRole("button", { name: /\+ time/ }).click();
       await page.getByRole("menuitem", { name: /Custom/ }).click();
       await page.locator("[role=dialog]").waitFor();
       await check("Timebox…");
@@ -137,7 +139,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
     const before = await fontOf(page, ".settings .set-hint");
     await page.getByRole("radio", { name: "Larger" }).check();
     await expect.poll(() => fontOf(page, ".settings .set-hint")).toBe(before + 4);
-    for (const [hash, sel] of [["#/today", ".today-block"], ["#/week/2026-11-02", ".half.card .card-client"], ["#/week/plan/2026-11-09", ".pw-card-head"], ["#/ahead", ".ah-col-item"], ["#/inbox/promises", ".ib-row-title"]] as const) {
+    for (const [hash, sel] of [["#/today", ".today-block"], ["#/week/2026-11-02", ".half.card .card-client"], ["#/week/2026-11-09/add", "aside.add-work-panel .aw-title"], ["#/ahead", ".ah-col-item"], ["#/inbox/promises", ".ib-row-title"]] as const) {
       await go(page, hash);
       await page.locator(sel).first().waitFor({ timeout: 30_000 });
       expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--text-base").trim()), hash).toBe("17px");

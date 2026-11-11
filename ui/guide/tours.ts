@@ -55,95 +55,81 @@ export type Tour = {
   end: { line: string; tryIt: string };
 };
 
+// WD-1: Plan the week's tour became Add work's: Week is one screen, and work goes onto blocks from the panel.
 const PLAN_WEEK: Tour = {
   id: "plan-week",
-  title: "Plan your week",
-  summary: "Choose the features you'll touch next week, one client at a time.",
-  start: { tab: "week", mode: "commit", week: null, focus: null },
+  title: "Add work to your week",
+  summary: "Put features, stories and promises on your blocks from one panel beside Week.",
+  // Opens with the panel on the block under way (or the next one), so its steps have something to point at.
+  start: { tab: "week", mode: "board", week: null, add: { date: null, half: null } },
   section: "week",
   steps: [
     {
-      target: "modes-week",
-      title: "Week › Plan",
-      text: "Plan is Week's second mode. It opens on next week. You plan features here; the to-dos come later, on the Board.",
+      target: "wk-add",
+      title: "+ Add",
+      text: "Opens the Add work panel on the block under way, or the next one. Each block also has its own + Add at the bottom, and A opens it on the selected block.",
+      phone: { text: "+ Add on a block opens Add work as a sheet." },
     },
     {
-      target: "pw-grid",
-      title: "Your blocks for the week",
-      text: "Each cell is a half-day block from Focus Time in Dataverse, in its client's color. PTO is hatched and Friday is catch-up. Click a cell to open its client.",
-      example: "pw-grid",
-      phone: { text: "Each cell is a half-day block from Focus Time in Dataverse, in its client's color. PTO is hatched and Friday is catch-up." },
-    },
-    {
-      target: "pw-carry",
-      title: "From last week",
-      text: "Last week's features come first, each with one suggestion: carry it over, watch it, or it's finished. Nothing is added until you choose.",
-      example: "pw-carry",
-    },
-    {
-      target: "pw-open-card",
-      title: "One client at a time",
-      text: "Musts are what you'll definitely touch; nice to haves fit if there's room. The line at the top compares the hours you planned with the free time in that client's blocks. Over turns amber, never red.",
-      example: "pw-card",
-      // No musts yet: the example card, not an empty ring.
-      emptyWhen: ".pw-features",
-    },
-    {
-      target: "pw-addpane",
-      title: "Add from DevOps",
-      text: "The right side lists that client's DevOps work assigned to you. Add a feature as a must or a nice to have, or type a draft feature at the bottom.",
-      example: "pw-add",
+      target: "aw-panel",
+      title: "Add to one block",
+      text: "The panel says which block it adds to and how much room is left. Click another block and it follows; Esc closes it.",
       phone: "skip",
     },
     {
-      target: "pw-next",
-      title: "Next client",
-      text: "Next client moves on (J and K do too). When every client is planned, this button reads Confirm week.",
-      example: "pw-next",
-      phone: { text: "Next client moves on. Planning works best on a bigger screen: Copy link at the top opens this week on your computer." },
+      target: "aw-features",
+      title: "This week's features",
+      text: "The star makes a feature a must; the rest are nice to have. Placing a story adds its feature to the week for you. + puts a row on this block, or drag it onto any block.",
+      example: "todo-drag",
+      phone: "skip",
     },
     {
-      target: "mode-done",
+      target: "aw-box",
+      title: "Type it",
+      text: "Not in DevOps yet? Type a story and press Enter for a draft story, or Shift+Enter for a plain to-do.",
+      phone: "skip",
+    },
+    {
+      target: "wk-confirm",
       title: "Confirm week",
-      text: "Confirm week saves your lists and goes back to the Board. You can change and confirm again any time; the header says if it changed since.",
+      text: "Confirm week saves your plan. Change it any time; the header says when it changed since you confirmed.",
       phone: "skip",
     },
   ],
-  end: { line: "That's planning. About 15 minutes on a Thursday or Friday.", tryIt: "Try it yourself: open Week › Plan with W, or close this and start from the first client." },
+  end: { line: "That's adding work. About 15 minutes on a Thursday or Friday.", tryIt: "Try it yourself: press A on Week, or + Add on any block." },
 };
 
 const BOARD: Tour = {
   id: "board",
-  title: "Your Board and to-dos",
+  title: "Your week and to-dos",
   summary: "Your half-day blocks for the week, and the to-dos on them.",
-  start: { tab: "week", mode: "board", week: null, focus: null },
+  start: { tab: "week", mode: "board", week: null, add: null },
   section: "week",
   steps: [
-    { target: "modes-week", title: "Week › Board", text: "The Board is Week's first mode: this week's half-day blocks, Monday to Friday, with Friday as catch-up." },
-    { target: "wk-block", title: "A block", text: "Half a day for one client, from Focus Time in Dataverse. It says when it's at risk and why, like a dentist at noon. Click it for that client's stories.", phone: { text: "Half a day for one client, from Focus Time in Dataverse. It says when it's at risk and why. Tap it for that client's stories." } },
+    { target: "wk-block", title: "A block", text: "Week shows this week's half-day blocks, Monday to Friday, with Friday as catch-up. Each is half a day for one client, from Focus Time in Dataverse. It says when it's at risk and why, like a dentist at noon. Click it for that client's stories.", phone: { text: "Half a day for one client, from Focus Time in Dataverse. It says when it's at risk and why. Tap it for that client's stories." } },
     { target: "wk-timeline", title: "Timeline", text: "Shows or hides the hours beside each block: meetings, free time and the line for now. B does the same.", phone: "skip" },
     { target: "wk-todo", title: "Put a to-do on a block", text: "Drag a story from a block's list onto any of that client's blocks this week. The block shows the fit as you drag; each drop has Undo.", example: "todo-drag", phone: { text: "Tap a block, then Add to… on a story. Long-press a to-do to move it." } },
     { title: "Check it off", text: "Tick a to-do when it's done. When it has a DevOps item you can change, FocusTime asks whether to set it done there too: Confirm, or Not now.", example: "done-offer" },
-    { target: "wk-carry", title: "From last week", text: "Last week's unfinished work, suggested in each client's next block as dashed cards. Nothing moves until you keep it.", example: "pw-carry" },
+    { target: "wk-carry", title: "To place", text: "The line above the week counts what's waiting: unfinished work, last week's and anything a teammate sent. Review opens it in Add work. Nothing moves until you place it." },
   ],
-  end: { line: "That's the Board. Plan today is the same screen, focused on one day.", tryIt: "Try it yourself: the Guide's Week section has a block to drag stories onto." },
+  end: { line: "That's Week. One screen, with Add work beside it.", tryIt: "Try it yourself: the Guide's Week section has a block to drag stories onto." },
 };
 
 const TODAY: Tour = {
   id: "today",
-  title: "Today, focus and close out",
+  title: "Day, focus and close out",
   summary: "What's next, what's urgent and the moment of the day.",
   start: { tab: "today", flow: null, date: null },
   section: "today",
   steps: [
     { target: "today-next", title: "What's next", text: "The block you're in and its next to-do, with the one Start focus button. Focus sets your Teams status to Busy and counts the time." },
     { target: "today-urgent", title: "The urgent strip", text: "What needs you now: requests sorted as urgent, promises late or due within 2 hours, and work sent to you. The 3 most urgent, then N more in Inbox.", example: "urgent" },
-    { target: "today-moment", title: "The moment card", text: "One card for the moment of the day: Plan today, then Midday check-in after lunch, then Close out. Each opens its flow; nothing is forced." },
-    { target: "today-blocks", title: "Today's blocks", text: "Each block's meetings and to-dos in time order, with the line for now. Tick a to-do when it's done." },
+    { target: "today-moment", title: "The moment card", text: "One card for the moment of the day: Add work, then Midday check-in after lunch, then Close out. Each opens its flow; nothing is forced." },
+    { target: "today-blocks", title: "The day's blocks", text: "Each block's meetings and to-dos in time order, with the line for now. Tick a to-do when it's done." },
     { title: "Close out", text: "At the end of the day: one line per client on where you left off, the DevOps updates you owe and the promises due. Then Done.", example: "closeout" },
     { target: "today-days", title: "Any day", text: "‹ › step to another day, read only. Back to today comes back.", phone: "skip" },
   ],
-  end: { line: "That's Today. Most days it's the only screen you need.", tryIt: "Try it yourself: Today's Plan today card opens the Board on today." },
+  end: { line: "That's Day. Most days it's the only screen you need.", tryIt: "Try it yourself: the Add work card opens Week with the panel on today." },
 };
 
 const INBOX: Tour = {
@@ -197,10 +183,10 @@ const STATUS: Tour = {
   id: "status",
   title: "Status",
   summary: "This week's lines for Monday's status report.",
-  start: { tab: "week", mode: "status", week: null, focus: null },
+  start: { tab: "status" },
   section: "week",
   steps: [
-    { target: "modes-week", title: "Week › Status", text: "Status is Week's fourth mode: what Monday's report will say for your features, by client." },
+    { target: "tab-status", title: "Status", text: "Status is its own tab (5): what Monday's report will say for your features, by client." },
     { target: "st-toggle", title: "Edit and Preview", text: "Preview shows the report as its email will read: a heading per feature, each comment this week a bullet with its author." },
     { target: "st-add", title: "+ Add a line", text: "Each line becomes its own DevOps comment on the feature. Edit changes your own comments from this week.", example: "status-line" },
     { target: "st-draft", example: "status-draft", title: "Draft", text: "With AI allowed for the client, a first version from your story changes, close-out notes and captures. Edit it as you like." },

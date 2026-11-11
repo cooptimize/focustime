@@ -170,7 +170,7 @@ export function MustsSummary({ musts, colors, onPlanWeek }: { musts: MustsRow[];
             ))}
           </ul>
           <button type="button" className="link-btn" onClick={() => (setOpen(false), onPlanWeek())}>
-            Open Plan the week
+            Add work
           </button>
         </div>
       )}

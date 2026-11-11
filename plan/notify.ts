@@ -12,10 +12,10 @@ export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 export type AnyKind = NotifyKind | "test" | "held";
 
 export const KIND_LABEL: Record<NotifyKind, string> = {
-  plan_day: "Plan the day",
+  plan_day: "Add work to today",
   checkin: "Check-in",
   closeout: "Close out",
-  plan_week: "Plan the week",
+  plan_week: "Add work to the week",
   look_ahead: "Look ahead",
   plan_ahead: "Look ahead 4 weeks",
   direction: "Direction review",
@@ -228,16 +228,16 @@ const open = (label: string): NotifyButton => ({ key: "open", label });
 const shortDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric" });
 
 export const notices = {
-  planDay: (date: string, at: string): Notice => ({ kind: "plan_day", key: `plan_day:${date}`, title: "Plan the day", body: "Today isn't planned yet.\nClick to plan the day.", buttons: [open("Plan the day")], route: "planday", at, ref: date }),
+  planDay: (date: string, at: string): Notice => ({ kind: "plan_day", key: `plan_day:${date}`, title: "Add work to today", body: "Today isn't planned yet.\nClick to add work.", buttons: [open("Add work")], route: "planday", at, ref: date }),
   checkin: (date: string, at: string): Notice => ({ kind: "checkin", key: `checkin:${date}`, title: "Check-in", body: "Midday check-in: what still fits this afternoon.\nClick to check in.", buttons: [open("Check in")], route: "checkin", at, ref: date }),
   closeout: (date: string, at: string): Notice => ({ kind: "closeout", key: `closeout:${date}`, title: "Close out", body: "Time to close out the day: to-dos, resume notes and promises.\nClick to close out.", buttons: [open("Close out")], route: "closeout", at, ref: date }),
   /** Monday for this week (Plan the week), Thursday and Friday for next week (Look ahead). */
   week: (weekStart: string, thisWeek: boolean, at: string): Notice => ({
     kind: thisWeek ? "plan_week" : "look_ahead",
     key: `week:${weekStart}:${at.slice(0, 10)}`,
-    title: thisWeek ? "Plan the week" : "Look ahead",
+    title: thisWeek ? "Add work to the week" : "Look ahead",
     body: `${thisWeek ? "This week" : `Next week (${shortDay(weekStart)})`} isn't planned yet: choose each client's features.\nClick to plan it.`,
-    buttons: [open("Plan the week")],
+    buttons: [open("Add work")],
     route: `planweek:${weekStart}`,
     at,
     ref: weekStart,
@@ -280,21 +280,21 @@ export const notices = {
   /** PV-1: told quietly, once, that a teammate took one of my stories (Take one). Never the item's title. */
   storyTaken: (id: number, byName: string, itemId: number, at: string): Notice => ({ kind: "story_taken", key: `story_taken:${id}`, title: `${byName} took #${itemId}`, body: "It's assigned to them in DevOps now. Nothing more for you to do.", buttons: [open("Open Week")], route: "week", at }),
   /** SW-1: work sent to my week, once per send and recipient. */
-  sentToYou: (id: number, to: string, fromName: string, title: string, must: boolean, weekStart: string, at: string): Notice => ({ kind: "sent_to_you", key: `sent_to_you:${id}:${to}`.slice(0, 200), title: `${fromName} sent you ${must ? "a Must" : "a suggestion"}`, body: `${title}\nClick to open Week › Plan.`, buttons: [open("Open Plan")], route: `planweek:${weekStart}`, at }),
+  sentToYou: (id: number, to: string, fromName: string, title: string, must: boolean, weekStart: string, at: string): Notice => ({ kind: "sent_to_you", key: `sent_to_you:${id}:${to}`.slice(0, 200), title: `${fromName} sent you ${must ? "a Must" : "a suggestion"}`, body: `${title}\nClick to open Add work.`, buttons: [open("Open Add work")], route: `planweek:${weekStart}`, at }),
   /** SW-1: an answer on work I sent (accepted, scheduled, passed, can't), once per answer. */
-  sendAnswered: (id: number, stamp: string, words: string, title: string, weekStart: string, at: string): Notice => ({ kind: "send_answered", key: `send_answered:${id}:${stamp}`.slice(0, 200), title: words, body: `${title}\nClick to see what you sent.`, buttons: [open("Open Plan")], route: `planweek:${weekStart}`, at }),
+  sendAnswered: (id: number, stamp: string, words: string, title: string, weekStart: string, at: string): Notice => ({ kind: "send_answered", key: `send_answered:${id}:${stamp}`.slice(0, 200), title: words, body: `${title}\nClick to see what you sent.`, buttons: [open("Open Add work")], route: `planweek:${weekStart}`, at }),
   /** SW-1 (D632): quietly, to the other leads of the client, when a Must can't be taken. */
   sendCantLead: (id: number, stamp: string, who: string, title: string, reason: string, at: string): Notice => ({ kind: "send_cant_lead", key: `send_cant_lead:${id}:${stamp}`.slice(0, 200), title: `${who} can't take a Must this week`, body: `${title}\n${reason}`, buttons: [open("Open Team")], route: "team", at }),
   /** SW-1: a teammate asks me (a client lead) to look at their planned week. */
   lookAsk: (id: number, fromName: string, clientName: string, at: string): Notice => ({ kind: "look_ask", key: `look_ask:${id}`, title: `${fromName} asked you to look at their week`, body: `${clientName}\nClick to open Team.`, buttons: [open("Open Team")], route: "team", at }),
   /** SW-1: the lead replied to my Ask to look. */
-  lookReply: (id: number, leadName: string, clientName: string, weekStart: string, at: string): Notice => ({ kind: "look_reply", key: `look_reply:${id}`, title: `${leadName} replied about your week`, body: `${clientName}\nClick to open Plan.`, buttons: [open("Open Plan")], route: `planweek:${weekStart}`, at }),
+  lookReply: (id: number, leadName: string, clientName: string, weekStart: string, at: string): Notice => ({ kind: "look_reply", key: `look_reply:${id}`, title: `${leadName} replied about your week`, body: `${clientName}\nClick to open Week.`, buttons: [open("Open Week")], route: `planweek:${weekStart}`, at }),
   // AH-1 (D664): quiet, in-app only; ids and a first name, never a title.
   assigned: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "assigned", key, title: itemIds.length === 1 ? `${byName} assigned you #${itemIds[0]}` : `${byName} assigned you ${itemIds.length} items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to open it in Ahead.`, buttons: [open("Open Ahead")], route: `aheaditem:${itemIds[0]}`, at }),
   datesMoved: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "dates_moved", key, title: itemIds.length === 1 ? `${byName} moved the dates of #${itemIds[0]}` : `${byName} moved the dates of ${itemIds.length} of your items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to see them in Ahead.`, buttons: [open("Open Ahead")], route: `aheaditem:${itemIds[0]}`, at }),
   /** SR-1: Friday afternoon or Sunday evening, once per occasion, when features have no update yet. */
   // SR-3: with features I worked on, the click opens Status on Needs your update.
-  statusReport: (occasion: string, line: string, at: string, needsYou = false): Notice => ({ kind: "status_report", key: occasion, title: "Monday's status report", body: `${line}.\nClick to open Week › Status.`, buttons: [open(needsYou ? "Open Needs your update" : "Open Status")], route: needsYou ? "status_needs" : "status", at, ref: occasion }),
+  statusReport: (occasion: string, line: string, at: string, needsYou = false): Notice => ({ kind: "status_report", key: occasion, title: "Monday's status report", body: `${line}.\nClick to open Status.`, buttons: [open(needsYou ? "Open Needs your update" : "Open Status")], route: needsYou ? "status_needs" : "status", at, ref: occasion }),
   /** MC-1: a call I review, once per occurrence: proposals ready, or a transcript to upload. The call's name, never its words. */
   meetingReview: (key: string, occurrenceId: number, upload: boolean, clientName: string, meeting: string, dateLabel: string, at: string): Notice => ({
     kind: "meeting_review",

@@ -65,14 +65,14 @@ function useOffered(): boolean {
  * "Break down Feature" on a Needs stories row, with the type's icon. Opens the panel, which says when AI is off; hidden
  * when the person has the offer turned off (ADM-1). The Coop brief beside it stays either way.
  */
-export function BreakDownButton({ clientKey, item }: { clientKey: string; item: BreakDownTarget }) {
+export function BreakDownButton({ clientKey, item, short = false }: { clientKey: string; item: BreakDownTarget; /** WD-1: Week's rows say just "Break down" (the row already names the item); the type stays in the tooltip. */ short?: boolean }) {
   const type = useItemType(clientKey, item);
   const offered = useOffered();
   if (!offered) return null;
   return (
-    <button type="button" className="link-btn tw-draft bd-trigger" data-breakdown={`${clientKey}:${item.id}`} onClick={() => openBreakDown(clientKey, { ...item, ...(type ? { type } : {}) })}>
-      {type && <TypeIcon clientKey={clientKey} type={type} decorative />}
-      {breakdownLabel(type)}
+    <button type="button" className="link-btn tw-draft bd-trigger" data-breakdown={`${clientKey}:${item.id}`} title={short ? breakdownLabel(type) : undefined} onClick={() => openBreakDown(clientKey, { ...item, ...(type ? { type } : {}) })}>
+      {type && !short && <TypeIcon clientKey={clientKey} type={type} decorative />}
+      {short ? "Break down" : breakdownLabel(type)}
     </button>
   );
 }

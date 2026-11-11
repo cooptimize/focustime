@@ -220,7 +220,7 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
                   openMenu({ x: r.left, y: r.bottom + 4 }, addStep(env, d.clientKey, { draftId: d.id, title: d.title, size: d.size }));
                 }}
               >
-                Plan it
+                Add to a block
               </button>
             )}
             <DevOpsAction

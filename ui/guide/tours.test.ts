@@ -29,7 +29,7 @@ describe("the tours", () => {
     for (const t of TOURS) for (const s of t.steps) if (s.example) expect(drawn.has(s.example), `${t.id}: ${s.example}`).toBe(true);
   });
   it("seven tours, as approved", () => {
-    expect(TOURS.map((t) => t.title)).toEqual(["Plan your week", "Your Board and to-dos", "Today, focus and close out", "The Inbox", "Ahead", "The assistant", "Status"]);
+    expect(TOURS.map((t) => t.title)).toEqual(["Add work to your week", "Your week and to-dos", "Day, focus and close out", "The Inbox", "Ahead", "The assistant", "Status"]);
   });
   it("each has 4 to 7 steps, a start the address opens, and #/guide/tour/<id> round-trips", () => {
     for (const t of TOURS) {
@@ -50,7 +50,7 @@ describe("the tours", () => {
     const words = [...strings(TOURS), ...strings(C.START), ...strings(C.TOUR_UI), ...strings(C.TOUR_EXAMPLES)];
     for (const w of words) {
       expect(w, w).not.toContain("—");
-      expect(w, w).not.toMatch(/\b(Plan the day|Roadmap|Requests|Draft stories|Needs help from|Fix next|Sort later|picks?)\b/);
+      expect(w, w).not.toMatch(/\b(Plan the day|Plan the week|Board|Commit|Roadmap|Requests|Draft stories|Needs help from|Fix next|Sort later|picks?)\b/);
     }
   });
 });
@@ -63,7 +63,7 @@ describe("Start here", () => {
   it("says what FocusTime is for in three lines, the day in five steps and the week in three", () => {
     expect(C.START.why).toHaveLength(3);
     expect(C.START.day.steps).toHaveLength(5);
-    expect(C.START.week.steps.map((s) => s.name)).toEqual(["Plan", "Board", "Status"]);
+    expect(C.START.week.steps.map((s) => s.name)).toEqual(["Add work", "Your blocks", "Status"]);
   });
   it("stays about 250 words", () => {
     const n = strings(C.START).join(" ").split(/\s+/).filter((w) => /[A-Za-z0-9]/.test(w)).length;
