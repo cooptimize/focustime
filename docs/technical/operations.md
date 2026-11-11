@@ -1,6 +1,6 @@
 # Operations
 
-For whoever deploys, watches or fixes FocusTime. The step-by-step commands are in the [runbook](../azure/runbook.md); this page is the map. Checked against `13cd461` on Nov 7, 2026 (the Find an item row against `feat/dv2-devops-fresh` on Nov 11, the browser shards row against `chore/ci2-webkit-deps` on Nov 11).
+For whoever deploys, watches or fixes FocusTime. The step-by-step commands are in the [runbook](../azure/runbook.md); this page is the map. Checked against `13cd461` on Nov 7, 2026 (the Find an item row against `feat/dv2-devops-fresh` on Nov 11, the browser shards row against `chore/ci2-webkit-deps` on Nov 11, What runs on its own against `feat/env1-background-policy` on Nov 11).
 
 ## Environments
 
@@ -18,6 +18,38 @@ For whoever deploys, watches or fixes FocusTime. The step-by-step commands are i
 Both run in the same subscription and share the Entra tenant, the "FocusTime" app registration and the "FocusTime Admins" group. Settings and resource names are in `infra/dev.bicepparam` and `infra/prod.bicepparam`. Scaling: one replica at most in both (`maxReplicas: 1`, `infra/modules/app.bicep`). The daily jobs claim their period in `job_claims`, and the Teams bot dedupes across replicas, but the scheduler's per-person ticks have no lease (its header says so). Keep one replica until one is added.
 
 Costs and budgets: [runbook, Cost](../azure/runbook.md#cost-hk-2-fixed-price-databases-list-prices-for-central-us-on-2026-11-05) and [Budgets and alerts](../azure/runbook.md#budgets-and-alerts-hk-2).
+
+## What runs on its own (ENV-1)
+
+Dev and prod are two deployments used by the same people against the same outside systems: one Entra app registration, the same Dataverse, DevOps read PAT, Graph tenant and Azure subscription. Their databases and Teams bot apps are separate. So **outside production, nothing happens on its own** that reaches a person, spends AI, writes to an outside system (Teams status included) or reads a person's delegated data on a schedule. A person pressing a button still works, and acts only for that person.
+
+One pure module decides it: `config/background-policy.ts`. `server/main.ts` computes the policy once from the environment and hands it to the scheduler (its app jobs), to every person's ticks (their parts) and to the few on-demand paths that differ on a test site. Production is `FOCUSTIME_ENV` exactly `prod`; any other value (`Prod`, `production`, `prod ` with a space), an empty value or none is not, so a new deployment that forgets the variable is a test site. Every piece of background work is named in the policy's list; a job or tick part that isn't named never runs outside production, and `config/background-policy.test.ts` fails until it is.
+
+Everything FocusTime does with nobody pressing a button (checked against the code on `feat/env1-background-policy`, Nov 11, 2026):
+
+| Work (policy name) | Started from | Outside system | Reads, writes or messages | Prod | Test site (dev, local) |
+|---|---|---|---|---|---|
+| Chat poll (`requests_poll`) | App job, every 5 min in followers' hours | Teams (followers' delegated Chat.Read), AI | Reads people's chats, spends AI | Runs | Off. Refresh reads your own chats once with your sign-in. `FOCUSTIME_REQUESTS_POLL=on` declares a watch period |
+| Conversation upkeep (`conversations_upkeep`) | After each chat poll | DevOps (read), AI | Spends AI (follow-through drafts) | Runs | Off, and not after a Refresh either |
+| Meeting capture (`meeting_capture`) | App job: lay out calls, look for transcripts, the AI pass | Graph (reviewers' calendars and transcripts), AI | Reads people's transcripts, spends AI | Runs | Off. Check now on a registered call looks once with your sign-in |
+| Held messages re-sorted (`held_recheck`) | Once per build at start, and when an admin edits a client's names | AI | Spends AI | Runs | Off: held messages stay held |
+| Reminders and notices (`notices`): plan today, check-in, close out, the week nudges, Look ahead, promises due, expiring secrets, the VM's morning prompt, urgent requests, promises waiting on an item, taken over, conversations given or active, Take one, Ahead's notes, sends and looks, client calls to review, the status report nudge | Each person's slow pass (held ones in the fast pass) | The in-app list; reads the person's own VM status and DevOps status for some | Messages a person | Runs | Only for someone who switches on "Send me reminders and Teams messages from this test site" |
+| Web Push (`web_push`) | Every notice that passes the gate | Web Push services | Messages a person | Runs | Only with that switch on (the test send and the samples always) |
+| Teams bot's rhythm (`teams_rhythm`): brief, check-in, close out, nudges, client calls | Each person's slow pass | Teams (the bot, the person's 1:1 chat) | Messages a person | Runs | Only with that switch on (Send me a test now always) |
+| Teams status (`teams_status`) | The fast pass and every timer button | Teams presence (the person's own) | Writes | Runs | Never, not even from a button. The focus screen says "Teams status isn't changed from the test site." |
+| VM-2's morning start (`vm_autostart`) | Reserved: not built yet | Azure (the person's own VM) | Writes | When built | Never |
+| Coop DevOps mailbox (`coop_mailbox`) | Reserved: not built yet | DevOps comments | Writes | When built | Never, so an answer is posted once |
+| DevOps store (`devops_poll`) | App job | DevOps (the company read PAT) | Reads shared data | Runs (in followers' hours) | Only while someone is using that deployment, paced and backing off as in prod |
+| People refresh (`people_refresh`) | App job, once a day | Dataverse (the app's own access) | Reads shared data | Runs | Runs |
+| Standards sync (`standards_sync`) | App job and once at start | Public GitHub, no token | Reads public data | Runs | Runs |
+| Calendar refresh (`calendar_refresh`) | Fast pass, every 5 min while a focus timer runs | Outlook, Google (the person's own) | Reads | Runs | Runs (the person started the timer) |
+| The focus timer (`focus_timer`) | Fast pass | none | That database only | Runs | Runs; its end shows in the page, no push without the switch |
+| Retention purge (`retention_purge`), ownership backfill (`conversation_ownership_backfill`), maintenance (`maintenance`), notice sweep (`notice_sweep`), old chat rows (`chat_text_cleanup`) | App jobs and passes | none | That database only | Runs | Runs |
+| Start-up moves (`startup_upkeep`): team settings, Who repair, AP-1 requests to conversations, guest sessions, cancelled VM restores | Once at start | none | That database only | Runs | Runs |
+
+**What differs between dev and prod** after ENV-1: dev never reads chats, calendars for capture or transcripts on its own, never runs AI in the background, never changes anyone's Teams status and never messages anyone unless that person switched it on for themselves. Production is unchanged: `config/background-policy.test.ts` proves its job list and tick parts are what they were. Admin › Status on a test site has a "This is a test site" row listing what runs only on a button, and a second row while a watch period is on. What dev's database already holds stays; the usual retention rules still expire old chat text and transcripts.
+
+**Adding background work:** name it in `BACKGROUND` (`config/background-policy.ts`) with what it touches and what it does outside production, then start it from the scheduler or a tick part under that name. Nothing else reads `FOCUSTIME_ENV` to decide what runs.
 
 ## Deploys
 
