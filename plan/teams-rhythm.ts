@@ -188,7 +188,7 @@ export function nudges(f: NudgeFacts): Nudge[] {
   for (const s of f.sends) {
     if (!s.waiting) continue;
     if (f.now.since(Temporal.Instant.from(s.at)).total("hours") < SEND_WAIT_HOURS) continue;
-    out.push({ key: `send:${s.key}`, kind: "send_waiting", title: s.title, clientName: s.clientName, line: `${s.from ? `From ${s.from}, w` : "W"}aiting for your answer`, route: "#/week/commit" });
+    out.push({ key: `send:${s.key}`, kind: "send_waiting", title: s.title, clientName: s.clientName, line: `${s.from ? `From ${s.from}, w` : "W"}aiting for your answer`, route: "#/week/add" });
   }
   for (const t of f.takeovers) out.push({ key: `taken:${t.key}`, kind: "taken_over", title: t.title ? `#${t.itemId} ${t.title}` : `#${t.itemId}`, clientName: t.clientName, line: `${t.byName} assigned it to someone else`, route: `#/ahead?item=${t.itemId}` });
   return out;

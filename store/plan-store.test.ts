@@ -311,6 +311,16 @@ describe("week plan (step 8)", () => {
     clock = clock.add({ minutes: 5 });
     expect((await store.commitWeek(W)).committedAt! >= p.updatedAt!).toBe(true);
   });
+  it("WD-1: a change in the same second as the confirm still counts as a change; confirming again clears it", async () => {
+    const { store } = await fresh();
+    (await store.setWeekFeature({ ...f, estimate: 480 }));
+    (await store.commitWeek(W));
+    (await store.touchWeekPlan(W)); // same clock second
+    const p = (await store.weekPlan(W));
+    expect(Temporal.Instant.compare(Temporal.ZonedDateTime.from(p.updatedAt!).toInstant(), Temporal.ZonedDateTime.from(p.committedAt!).toInstant())).toBe(1);
+    const again = (await store.commitWeek(W));
+    expect(again.updatedAt).toBe(again.committedAt);
+  });
   it("marks a feature as being broken down (local only), and the reset and export cover the week plan", async () => {
     const { store } = await fresh();
     (await store.markBreakdown("Adatum", 240, true));

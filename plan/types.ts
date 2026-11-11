@@ -95,7 +95,8 @@ export type PlanDayState = {
   /** The latest resume note per client on or before this date (step 7). */
   resumeNotes: Record<string, { clientKey: string; date: IsoDate; note: string }>;
   /** Features committed to this date's week (step 8): their stories are offered first in their client's blocks. */
-  weekFeatures: { clientKey: string; itemId: number; title: string; url: string | null; slots: WeekFeature["slots"]; level: WeekFeature["level"]; tier: WeekFeature["tier"]; estimate: number | null; size?: WeekFeature["size"]; parentId?: number | null; position: number | null; doneAt: ZonedStamp | null }[];
+  /** WD-1: `id` is the week list row (weekplan.set_tier and weekplan.remove take it). */
+  weekFeatures: { id?: number; clientKey: string; itemId: number; title: string; url: string | null; slots: WeekFeature["slots"]; level: WeekFeature["level"]; tier: WeekFeature["tier"]; estimate: number | null; size?: WeekFeature["size"]; parentId?: number | null; position: number | null; doneAt: ZonedStamp | null }[];
 };
 
 /** Committed plans for the days of a week, for the checklist on the week view. */

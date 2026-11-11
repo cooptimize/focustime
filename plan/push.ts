@@ -7,11 +7,11 @@ import { parseRoute, type Notice } from "./notify.ts";
 
 /** The words per kind with details off: what kind of thing, never which. */
 export const PUSH_GENERIC: Record<string, { title: string; body: string }> = {
-  plan_day: { title: "Plan the day", body: "Today isn't planned yet." },
+  plan_day: { title: "Add work to today", body: "Today isn't planned yet." },
   checkin: { title: "Check-in", body: "A look at what still fits today." },
   closeout: { title: "Close out", body: "Time to close out the day." },
-  plan_week: { title: "Plan the week", body: "This week isn't planned yet." },
-  look_ahead: { title: "Plan the week", body: "Next week isn't planned yet." },
+  plan_week: { title: "Add work to the week", body: "This week isn't planned yet." },
+  look_ahead: { title: "Add work to next week", body: "Next week isn't planned yet." },
   plan_ahead: { title: "Look ahead 4 weeks", body: "Time to look a few weeks ahead." },
   direction: { title: "Direction review", body: "Time to look 8 to 12 weeks ahead." },
   timer: { title: "Focus", body: "Your session ended." },

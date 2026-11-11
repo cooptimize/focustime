@@ -88,7 +88,7 @@ import { followUpAction } from "./followup-actions.ts";
 import { roadmapAction } from "./roadmap-actions.ts";
 import { aheadAction, type AheadAction, type AheadContext } from "./ahead-actions.ts";
 import { CHECKIN_DONE_MARK } from "./closeout-actions.ts";
-import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
+import { placeFeature, titleFrom, weekPlanAction, weekPlanView, withTitles, type WeekPlanContext } from "./weekplan-actions.ts";
 import { markScheduled, publishWeek, reportTeam, sendFacts, teamAction, type TeamAction, type TeamContext } from "./team-actions.ts";
 import { inboxAction } from "./inbox-actions.ts";
 import { diagnosticsAction } from "./diagnostics.ts";
@@ -643,6 +643,13 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
       : [],
     weekNudge: { badge: ctx.plan && cfg ? weekNudges(Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(tz), nudgeTimes(cfg), (w) => committedWeeks.has(w)).badge : null },
     // Step 16.2: Planned ✓ on the Week tab's mode switch, for this week, next week and the week shown.
+    // WD-1: Thursday's and Friday's "Next week is empty".
+    nextWeekEmpty: plan ? await (async () => {
+      const next = Temporal.PlainDate.from(mondayOf(todayDate)).add({ days: 7 });
+      if ((await plan.weekPlan(next.toString())).features.length) return false;
+      const days = Array.from({ length: 7 }, (_, i) => next.add({ days: i }).toString());
+      return !Object.values(await plan.week(days)).some((d) => d.picks.some((p) => p.status === "planned" || p.status === "done"));
+    })() : false,
     weekCommitted: Object.fromEntries([...new Set([mondayOf(todayDate), Temporal.PlainDate.from(mondayOf(todayDate)).add({ days: 7 }).toString(), week.days[0]!.date])].map((w) => [w, committedWeeks.has(w)])),
     timeboxes: plan ? await mapSeq(await timeboxesFor(plan, weekStart, sunday), (t) => timeboxView(t, plan, cfg)) : [],
     timeboxSettings: cfg?.timebox ?? DEFAULT_TIMEBOX,
@@ -1490,7 +1497,30 @@ const progressContext = (ctx: ActionContext): ProgressContext => ({
 
 export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<ActionResponse> {
   const r = await dispatchAction(ctx, req);
-  return req.action === "weekplan.commit" || req.action === "weekplan.place" || req.action === "pick.add" ? afterPlanChange(ctx, req.action, req.input, r) : r;
+  const after = req.action === "pick.add" || req.action === "pick.move" ? await afterPick(ctx, req.action, req.input, r) : r;
+  return req.action === "weekplan.commit" || req.action === "weekplan.place" || req.action === "pick.add" ? afterPlanChange(ctx, req.action, req.input, after) : after;
+}
+
+/**
+ * WD-1: a to-do placed on a block (or moved into another week) puts its feature on that week as a nice to have when
+ * it isn't there (placeFeature), and touches a confirmed week so it reads "Changed since you confirmed". The to-do
+ * stands whatever happens here.
+ */
+async function afterPick(ctx: ActionContext, action: string, input: unknown, r: ActionResponse): Promise<ActionResponse> {
+  if (!r.ok || !ctx.plan) return r;
+  try {
+    const pick = (r.data as { pick?: { date: string; clientKey: string; itemId: number | null; draftId: number | null } } | undefined)?.pick;
+    if (!pick) return r;
+    const o = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
+    if (action === "pick.move" && typeof o.date !== "string") return r;
+    const draft = pick.draftId !== null ? await ctx.plan.getDraft(pick.draftId) : null;
+    if (pick.itemId !== null) await placeFeature(weekCtx(ctx), { date: pick.date, clientKey: pick.clientKey, itemId: pick.itemId });
+    else if (draft?.parentItemId != null) await placeFeature(weekCtx(ctx), { date: pick.date, clientKey: pick.clientKey, featureId: draft.parentItemId });
+    await ctx.plan.touchWeekPlan(mondayOf(pick.date));
+  } catch {
+    // The to-do stands; the feature can still be added from the panel.
+  }
+  return r;
 }
 
 async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<ActionResponse> {
@@ -2238,22 +2268,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "feature.brief":
     case "feature.mark_breakdown":
     case "followup.ask_priorities":
-      return weekPlanAction(
-        {
-          plan: ctx.plan,
-          config: () => configured(ctx),
-          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
-          clients: async (cfg, weekStart, refresh) => {
-            const today = localToday(ctx.now(), userZone(cfg));
-            const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).load(weekStart, refresh ? { refresh } : {}).catch(() => null) : null;
-            return (await devopsClients(ctx, cfg, weekStart, today, refresh ? { refresh } : {}, dv?.items ?? [])).fetch;
-          },
-          blocks: (cfg, weekStart) => patternWeek(ctx, cfg, weekStart),
-          now: ctx.now,
-        },
-        action,
-        req.input,
-      );
+      return weekPlanAction(weekCtx(ctx), action, req.input);
     case "weekplan.proposal":
     case "weekplan.carry_decide":
     case "weekplan.carry_accept_all":
@@ -2375,6 +2390,22 @@ export function teamCtx(ctx: ActionContext): TeamContext {
     devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
     blocks: (cfg, weekStart) => patternWeek(ctx, cfg, weekStart),
     ...(ctx.onFocusTime ? { onFocusTime: ctx.onFocusTime } : {}),
+    now: ctx.now,
+  };
+}
+
+/** The week plan actions' context (and WD-1's placeFeature). */
+function weekCtx(ctx: ActionContext): WeekPlanContext {
+  return {
+    plan: ctx.plan,
+    config: () => configured(ctx),
+    devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
+    clients: async (cfg, weekStart, refresh) => {
+      const today = localToday(ctx.now(), userZone(cfg));
+      const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).load(weekStart, refresh ? { refresh } : {}).catch(() => null) : null;
+      return (await devopsClients(ctx, cfg, weekStart, today, refresh ? { refresh } : {}, dv?.items ?? [])).fetch;
+    },
+    blocks: (cfg, weekStart) => patternWeek(ctx, cfg, weekStart),
     now: ctx.now,
   };
 }

@@ -32,7 +32,7 @@ const expectGrounded = (r: HandleResult) => {
   for (const sec of sections(r)) for (const l of sec.lines) {
     const id = /#(\d+)/.exec(l.text)?.[1];
     if (id) expect([8100, 8101, 8102, 8200, 8300, 8301, 9100, 9101]).toContain(Number(id));
-    if (l.link) expect(l.link.href).toMatch(/^#\/(week|ahead|inbox|meetings|commands|guide)/);
+    if (l.link) expect(l.link.href).toMatch(/^#\/(week|ahead|inbox|status|meetings|commands|guide)/);
   }
 };
 

@@ -143,7 +143,7 @@ await forEachDriver("the bot's rhythm in Teams (TB-2)", (d) => {
     expect(card).toContain("FocusTime · Morning brief");
     expect(card).toContain("Fix the login timeout");
     expect(card).toContain("Confirm today");
-    expect(card).toContain(`${URL_}/#/today`);
+    expect(card).toContain(`${URL_}/#/day`);
     await t.rhythm.tick(ANA, await t.facts());
     expect(t.sent).toHaveLength(1);
   });
@@ -517,7 +517,7 @@ expect(t.logs.map((l) => JSON.stringify(l)).join()).not.toContain("Import mappin
     expect(card).toContain("Fabrikam");
     expect(card).toContain(load.clients[0]!.features[0]!.title);
     expect(card).not.toContain(load.clients[0]!.features[1]!.title);
-    expect(card).toContain("#/week/status");
+    expect(card).toContain("#/status");
     t.atOn("2026-11-06", "16:00");
     await t.rhythm.tick(ANA, await t.facts());
     expect(t.sent).toHaveLength(1);
@@ -540,7 +540,7 @@ expect(t.logs.map((l) => JSON.stringify(l)).join()).not.toContain("Import mappin
     expect(card).toContain(`${load.clients[0]!.features[0]!.title}](`);
     expect(card).toContain("you worked on this");
     expect(card).toContain("Open Needs your update");
-    expect(card).toContain("#/week/status/needs");
+    expect(card).toContain("#/status/needs");
   });
 
   it("SR-1: no status nudge with its switch off, on PTO, after my day ends, or on Sunday unless asked", async () => {

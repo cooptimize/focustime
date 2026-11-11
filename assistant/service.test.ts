@@ -458,7 +458,7 @@ describe("SR-1: the status report", () => {
     const s = setup({ handlers: { "status.load": () => ({ ok: true, data: load }) } });
     s.script(["status"], call(["status", {}]), say("Here's your status report."));
     const r = await s.a.handle("Write my status updates");
-    expect(r.cards).toEqual([{ kind: "note", text: "Status report · for Monday, Nov 9: 2 features, 1 without an update yet.", link: expect.objectContaining({ href: "#/week/status" }) }]);
+    expect(r.cards).toEqual([{ kind: "note", text: "Status report · for Monday, Nov 9: 2 features, 1 without an update yet.", link: expect.objectContaining({ href: "#/status" }) }]);
     expect(r.proposals).toEqual([]);
     expect(s.writes()).toEqual([]);
   });

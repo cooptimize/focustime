@@ -64,7 +64,7 @@ export type AssistantEnv = {
 const COMMANDS: Link = { label: "Open the command menu", href: "#/commands" };
 
 /** AS-2: FocusTime's own words, in both rounds' fixed instructions. */
-export const GLOSSARY = `FocusTime's words: Week has four modes: Board (the week grid of blocks), Plan (choosing the week's musts and nice to haves), Team (what teammates confirmed) and Status (Monday's status report; "write my status updates" opens it). A block is a half-day of focus time for one client: AM is the morning, PM the afternoon. A to-do (code name pick; people say either, and both mean the same) is a planned piece of work on a block. Friday is the catch-up day. PTO is a day off. A must is a week item that should get done this week; a nice to have only if there's room. A send puts a feature or story on a teammate's week. A promise is something I owe someone (Inbox › Promises); In progress is a conversation or promise linked to an item. Confirm today and Confirm week finish a plan. Ahead has Grid, Gantt, Gaps (items missing stories, a target date, an owner or a size) and Backlog (each client's backlog order; Stale is an open item unchanged for weeks). "Complete", "done", "close" and "finish" an item all mean its process's done state.`;
+export const GLOSSARY = `FocusTime's words: the tabs are Day, Week, Ahead, Inbox and Status. Week is the week grid of blocks, with the Add work panel beside it for placing work on a block and choosing the week's musts and nice to haves ("Plan the week", "Plan today" and "the Board" are old names for it). Status is Monday's status report; "write my status updates" opens it. A block is a half-day of focus time for one client: AM is the morning, PM the afternoon. A to-do (code name pick; people say either, and both mean the same) is a planned piece of work on a block. Friday is the catch-up day. PTO is a day off. A must is a week item that should get done this week; a nice to have only if there's room. A send puts a feature or story on a teammate's week. A promise is something I owe someone (Inbox › Promises); In progress is a conversation or promise linked to an item. Confirm today and Confirm week finish a plan. Ahead has Grid, Gantt, Gaps (items missing stories, a target date, an owner or a size) and Backlog (each client's backlog order; Stale is an open item unchanged for weeks). "Complete", "done", "close" and "finish" an item all mean its process's done state.`;
 
 const examples = TOOL_NAMES.filter((t) => !BUTTON_ONLY.includes(t)).map((t) => `${t}: ${TOOLS[t].examples.map((e) => `"${e}"`).join(" | ")}`).join("\n");
 
@@ -511,10 +511,10 @@ export function createAssistant(env: AssistantEnv) {
 
   /** TB-3: an answer with no AI call, from the same reads and composers as any other answer. */
   async function quickAnswer(turnId: number, q: Quick, context: AssistantContext, prior: Memory | null): Promise<HandleResult> {
-    if (q === "open") return finish(turnId, "ok", "", [{ kind: "note", text: "Your week, your focus blocks and everything you planned.", link: link("#/today", "Open FocusTime") }], [], [], prior ? { memory: prior } : undefined);
+    if (q === "open") return finish(turnId, "ok", "", [{ kind: "note", text: "Your week, your focus blocks and everything you planned.", link: link("#/day", "Open FocusTime") }], [], [], prior ? { memory: prior } : undefined);
     if (q === "next") {
       const r = await todayRead(readDeps(), "now", null);
-      return finish(turnId, "ok", r.error ?? "", r.error ? [] : r.cards, [], r.error ? [link("#/today", "Open Today")] : [], prior ? { memory: prior } : undefined);
+      return finish(turnId, "ok", r.error ?? "", r.error ? [] : r.cards, [], r.error ? [link("#/day", "Open Day")] : [], prior ? { memory: prior } : undefined);
     }
     const none: Resolved = { picks: [], items: [], clients: [], ambiguous: null };
     return answerPath(turnId, { text: q === "help" ? "help" : "today", said: q === "help" ? "help" : "today", context, client: null, named: false, topic: q === "help" ? "capabilities" : "agenda", period: q === "help" ? "this_week" : "today", date: null, lateOnly: false, res: none, prior: null });
@@ -1396,8 +1396,8 @@ export function createAssistant(env: AssistantEnv) {
       return { ok: true, result: { kind: "pick", id: p.id, clientKey: p.clientKey, clientName: env.clientName(p.clientKey), title: p.title, date: p.date, half: p.half === "PM" ? "PM" : "AM", time: null, done: p.status === "done", link: link(`#/week/day/${p.date}/${p.half}`, `Open ${dayWords(p.date)}`) }, message: "Moved" };
     }
     const messages: Partial<Record<ToolName, string>> = { drop_pick: "Dropped", confirm_day: "Day confirmed", confirm_week: "Week confirmed", add_must: "Added as a must", ahead_change: "In your change set. Save it in Ahead to write it to DevOps", send: "Sent", unlink: "Unlinked", conversation_owner: "Done. Nothing was posted to Teams", inbox_seen: "Marked seen", snooze: "Snoozed" };
-    const hrefs: Partial<Record<ToolName, [string, string]>> = { drop_pick: ["#/today", "Open Today"], confirm_day: ["#/today", "Open Today"], confirm_week: ["#/week/commit", "Open Plan"], add_must: ["#/week/commit", "Open Plan"], ahead_change: ["#/ahead", "Open Ahead"], send: ["#/week/commit", "Open Plan"], unlink: ["#/inbox", "Open the Inbox"], inbox_seen: ["#/inbox", "Open the Inbox"], snooze: ["#/inbox", "Open the Inbox"] };
-    const [h, l] = hrefs[held.tool] ?? ["#/today", "Open Today"];
+    const hrefs: Partial<Record<ToolName, [string, string]>> = { drop_pick: ["#/day", "Open Day"], confirm_day: ["#/day", "Open Day"], confirm_week: ["#/week/add", "Open Add work"], add_must: ["#/week/add", "Open Add work"], ahead_change: ["#/ahead", "Open Ahead"], send: ["#/week/add", "Open Add work"], unlink: ["#/inbox", "Open the Inbox"], inbox_seen: ["#/inbox", "Open the Inbox"], snooze: ["#/inbox", "Open the Inbox"] };
+    const [h, l] = hrefs[held.tool] ?? ["#/day", "Open Day"];
     return { ok: true, result: { kind: "note", text: messages[held.tool] ?? "Done", link: link(h, l) }, message: messages[held.tool] ?? "Done" };
   }
 
@@ -1424,7 +1424,7 @@ export function createAssistant(env: AssistantEnv) {
     }
     const date = String(held.args.date ?? "");
     const tail = skipped.length ? ` ${skipped.length} couldn't move (${[...new Set(skipped)].slice(0, 2).join("; ")}).` : "";
-    if (held.tool === "close_day") return { ok: true, result: { kind: "note", text: `Closed out ${dayWords(date)}.${tail}`, link: link("#/today", "Open Today") }, message: `Day closed out.${tail}` };
+    if (held.tool === "close_day") return { ok: true, result: { kind: "note", text: `Closed out ${dayWords(date)}.${tail}`, link: link("#/day", "Open Day") }, message: `Day closed out.${tail}` };
     if (!did) return { ok: false, reason: "not_allowed", message: `Nothing moved.${tail}` };
     return { ok: true, result: { kind: "note", text: `Moved ${did} to-do${did === 1 ? "" : "s"}.${tail}`, link: link("#/week", "Open Week") }, message: `Moved ${did} to-do${did === 1 ? "" : "s"}.${tail}`, done };
   }

@@ -154,6 +154,37 @@ async function storyOf(ctx: WeekPlanContext, cfg: AppConfig, weekStart: IsoDate,
   return null;
 }
 
+/**
+ * WD-1: placing work on a block puts its feature on that week as a nice to have when it isn't there yet: the item
+ * itself when it is a feature, else the parent feature DevOps shows for a story (or a draft's feature). Nothing for a
+ * past week, a story with no feature, or an item DevOps doesn't show; a feature already on the week keeps its tier.
+ * Only FocusTime's plan store changes. Returns the item it added, or null.
+ */
+export async function placeFeature(ctx: WeekPlanContext, input: { date: IsoDate; clientKey: string; itemId?: number | null; featureId?: number | null }): Promise<WeekFeature | null> {
+  const plan = ctx.plan;
+  if (!plan) return null;
+  const { cfg, thisWeek } = await clock(ctx);
+  if (!cfg) return null;
+  const weekStart = mondayOf(input.date);
+  if (weekStart < thisWeek) return null;
+  const key = input.clientKey;
+  // Only what DevOps already gave this week's read (never a DevOps call here: placing a to-do stays local).
+  const w = ctx.devops(cfg).last(key);
+  if (!w) return null;
+  const all = [...w.items, ...w.children, ...(w.committed ?? []), ...(w.watched ?? []), ...(w.parents ?? [])];
+  const asked = input.featureId ?? input.itemId ?? null;
+  if (asked === null || asked <= 0) return null;
+  // The feature tier from the project's backlog levels (D243), never a type name.
+  const isFeature = (i: (typeof all)[number]) => i.level === "portfolio" && i.tier !== "epic";
+  const direct = all.find((i) => i.id === asked && isFeature(i));
+  const story = direct ? null : all.find((i) => i.id === asked && i.level === "story");
+  const feature = direct ?? (story?.parentId != null ? all.find((i) => i.id === story.parentId && isFeature(i)) : undefined);
+  if (!feature) return null;
+  const week = await plan.weekPlan(weekStart);
+  if (week.features.some((f) => f.clientKey === key && f.itemId === feature.id)) return null;
+  return plan.addWeekItem({ weekStart, clientKey: key, itemId: feature.id, title: feature.title, itemType: feature.type, url: feature.url, level: "feature", tier: "nice" });
+}
+
 /** Where a feature can go: that client's own blocks, or an Open half-day (Mon to Thu, no focus block). */
 async function checkSlot(ctx: WeekPlanContext, cfg: AppConfig, weekStart: IsoDate, key: string, d: IsoDate, h: "AM" | "PM"): Promise<string | null> {
   const week = await ctx.blocks(cfg, weekStart);

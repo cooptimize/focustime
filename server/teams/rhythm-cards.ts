@@ -47,11 +47,11 @@ export type CaptureTap = { ft: "capture_undo"; captureId: number };
 
 const MAX = { blocks: 3, picks: 5, meetings: 3, list: 3, closeoutText: 1000, comment: 1000 } as const;
 const ROUTE: Record<RhythmModel["kind"], [string, string]> = {
-  brief: ["#/today", "Open Today"],
-  checkin: ["#/today/checkin", "Open Check-in"],
-  closeout: ["#/today", "Open Close out"],
+  brief: ["#/day", "Open Day"],
+  checkin: ["#/day/checkin", "Open Check-in"],
+  closeout: ["#/day", "Open Close out"],
   nudges: ["#/inbox", "Open the Inbox"],
-  status: ["#/week/status", "Open Status"],
+  status: ["#/status", "Open Status"],
   meetings: ["#/meetings", "Open client calls"],
 };
 const NAME: Record<RhythmModel["kind"], string> = { brief: "Morning brief", checkin: "Midday check-in", closeout: "Close out", nudges: "Nudges", status: "Status report", meetings: "Client calls" };
@@ -249,7 +249,7 @@ export function statusCard(m: StatusModel, publicUrl: string): Card {
   return card(body, [openUrl({ label: m.needsYou ? "Open Needs your update" : ROUTE.status[1], url: abs(publicUrl, m.needsYou ? STATUS_NEEDS_ROUTE : ROUTE.status[0]) })]);
 }
 /** SR-3: Week › Status opened on the Needs your update group. */
-export const STATUS_NEEDS_ROUTE = "#/week/status/needs";
+export const STATUS_NEEDS_ROUTE = "#/status/needs";
 
 /** MC-1: "Update Contoso's plan · Contoso sync · Tue, Nov 10", a button each; the call's name, never its words. */
 export function meetingsCard(m: MeetingsModel, publicUrl: string): Card {

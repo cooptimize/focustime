@@ -1688,9 +1688,16 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
   /** Every write runs in a transaction (joined when the caller has one open). */
   const tx = <T>(fn: () => Promise<T>): Promise<T> => db.tx(fn);
 
-  /** The week's plan row, created if missing, with its updated time moved on. */
-  const touchWeek = async (weekStart: IsoDate, at: ZonedStamp) =>
-    (await db.run("INSERT INTO week_plans (week_start, committed_at, created_at, updated_at) VALUES (?, NULL, ?, ?) ON CONFLICT(week_start) DO UPDATE SET updated_at = excluded.updated_at", weekStart, at, at));
+  /**
+   * The week's plan row, created if missing, with its updated time moved on. Stamps are to the second, so a change in
+   * the same second as the confirm lands one second after it: the week still reads "Changed since you confirmed" (WD-1).
+   */
+  const touchWeek = async (weekStart: IsoDate, at: ZonedStamp) => {
+    const row = (await db.get("SELECT committed_at FROM week_plans WHERE week_start = ?", weekStart)) as Row | undefined;
+    const committed = row?.committed_at ? stampText(row.committed_at) : null;
+    const when = committed && Temporal.Instant.compare(Temporal.ZonedDateTime.from(at).toInstant(), Temporal.ZonedDateTime.from(committed).toInstant()) <= 0 ? Temporal.ZonedDateTime.from(committed).add({ seconds: 1 }).toString({ smallestUnit: "second" }) : at;
+    await db.run("INSERT INTO week_plans (week_start, committed_at, created_at, updated_at) VALUES (?, NULL, ?, ?) ON CONFLICT(week_start) DO UPDATE SET updated_at = excluded.updated_at", weekStart, at, when);
+  };
   /** One change to a week item: runs `change`, touches its week; returns the week it is on. */
   const weekItemChange = (id: number, change: (at: ZonedStamp) => Promise<unknown>): Promise<IsoDate> =>
     tx(async () => {
@@ -2730,6 +2737,16 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
           );
         }
         return (await this.weekPlan(f.weekStart)).features.find((x) => x.id === id)!;
+      });
+    },
+    /**
+     * WD-1: a change to the week's to-dos (a story placed or moved into it) counts as a change to the week, so a
+     * confirmed week reads "Changed since you confirmed". Only a week that has a plan row is touched.
+     */
+    async touchWeekPlan(weekStart: IsoDate): Promise<void> {
+      await tx(async () => {
+        const row = (await db.get("SELECT week_start FROM week_plans WHERE week_start = ?", weekStart)) as Row | undefined;
+        if (row) await touchWeek(weekStart, stamp());
       });
     },
     /** Must or nice to have; changing tier puts it back in DevOps order within the new tier. */
