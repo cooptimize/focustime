@@ -27,12 +27,14 @@ export const SUGGEST_CLEARED = "sg_clear";
 export type SuggestSlot = {
   date: IsoDate;
   half: Half;
+  start: string;
   end: string;
+  longestFreeMinutes: number;
   pto: boolean;
   off: boolean;
   open: boolean;
   focus: readonly { clientKey: string; clientName?: string }[];
-  freeGaps: readonly FreeGap[];
+  freeGaps: FreeGap[];
 };
 export type SuggestDay = { date: IsoDate; kind: string; pto?: unknown; am: SuggestSlot; pm: SuggestSlot };
 type WorkLike = { clientName?: string; items: readonly WorkItem[]; children: readonly WorkItem[]; committed?: readonly WorkItem[]; parents?: readonly WorkItem[]; types?: readonly import("../week/types.ts").TypeLook[] };

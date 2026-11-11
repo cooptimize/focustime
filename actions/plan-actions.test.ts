@@ -749,3 +749,38 @@ describe("UI-B: unfinished picks suggested in the next block", () => {
     expect(r).toMatchObject({ unchanged: true, message: "There's nothing to confirm now. Your plan is what's on your day." });
   });
 });
+
+describe("SG-1: the board's suggestions", () => {
+  it("suggest.load reads the unfinished to-dos and what was cleared", async () => {
+    const t = setup();
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", intention: "Write the release notes" });
+    t.at("2026-11-04T14:00:00Z"); // Wed 9:00: Tuesday's to-do is unfinished
+    const r = await t.run<{ picks: Pick[]; cleared: string[] }>("suggest.load", {});
+    expect(r.picks.map((p) => p.id)).toEqual([pick.id]);
+    expect(r.cleared).toEqual([]);
+  });
+  it("Clear on a row, a block and a day is stored per person; Undo takes it away; nothing else changes", async () => {
+    const t = setup();
+    const keys = ["item:2026-11-02:iAdatum:101", "block:2026-11-04:AM", "day:2026-11-05"];
+    const r = await t.run<{ cleared: string[] }>("suggest.clear", { keys });
+    expect(r.cleared.sort()).toEqual([...keys].sort());
+    // Clearing twice is fine.
+    await t.run("suggest.clear", { keys: [keys[0]] });
+    expect((await t.run<{ cleared: string[] }>("suggest.load", {})).cleared.sort()).toEqual([...keys].sort());
+    const back = await t.run<{ cleared: string[] }>("suggest.unclear", { keys: [keys[1]] });
+    expect(back.cleared.sort()).toEqual([keys[0], keys[2]].sort());
+    expect((await t.plan.picksFor("2026-11-04"))).toEqual([]);
+  });
+  it("refuses anything that isn't a clear key", async () => {
+    const t = setup();
+    expect((await t.fail("suggest.clear", { keys: ["vm_prompt"] })).status).toBe(400);
+    expect((await t.fail("suggest.clear", { keys: [] })).status).toBe(400);
+    expect((await t.fail("suggest.unclear", { keys: ["day:soon"] })).status).toBe(400);
+  });
+  it("week.load says the next working day, after today", async () => {
+    const t = setup();
+    const w = await t.run<WeekLoadData>("week.load", { weekStart: "2026-11-02" });
+    expect(w.nextWorkDay === null || (typeof w.nextWorkDay === "string" && w.nextWorkDay > w.planDay.date)).toBe(true);
+    expect(w.planning.suggest).toBe(true);
+  });
+});

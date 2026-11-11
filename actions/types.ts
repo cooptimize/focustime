@@ -36,6 +36,8 @@ export type WeekLoadData = {
   planDay: { date: IsoDate; workday: boolean; available: boolean };
   /** PTO dates from this week's Monday about five weeks ahead, so Plan the day's target skips them (D106). */
   ptoAhead: IsoDate[];
+  /** SG-1: the next day after today with focus blocks that isn't PTO or a day off (the board suggests into it and today). */
+  nextWorkDay?: IsoDate | null;
   /** The time model (step 6b): working hours per weekday, lunch, one-day overrides and the zone. */
   hours: TimeModel;
   thresholds: RiskThresholds;

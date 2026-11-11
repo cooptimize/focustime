@@ -9,6 +9,7 @@ import type { AppConfig } from "../config/schema.ts";
 import { NOTHING_TO_CONFIRM_DAY } from "../plan/no-confirm.ts";
 import { carryTarget, dayLabel, dayRule, placeNote, SCAN_DAYS, upcomingStart, type DayRule, type HasHours } from "../plan/days.ts";
 import { alreadyPlanned } from "../plan/dup.ts";
+import { SUGGEST_CLEARED, validClearKey } from "../plan/boardsuggest.ts";
 import { sessionEnd, unpickableReason } from "../plan/rules.ts";
 import { DEFAULT_SIZE, SIZES, type Pick as PlanPick, type PlanDayState, type Size, type TodoLink, type TodoWindow } from "../plan/types.ts";
 import { DEPLOYMENT, windowHalf, windowMinutes, windowProblem } from "../plan/deploy.ts";
@@ -21,7 +22,7 @@ import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
-export const PLAN_ACTIONS = ["planday.start", "planday.carry", "planday.commit", "pick.add", "pick.remove", "pick.take_off", "pick.put_back", "pick.set_size", "pick.move", "pick.mark_done", "deploy.add", "pick.set_kind", "pick.uncarry", "pick.undrop", "planday.carry_hint", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
+export const PLAN_ACTIONS = ["planday.start", "planday.carry", "planday.commit", "pick.add", "pick.remove", "pick.take_off", "pick.put_back", "pick.set_size", "pick.move", "pick.mark_done", "deploy.add", "pick.set_kind", "pick.uncarry", "pick.undrop", "planday.carry_hint", "suggest.load", "suggest.clear", "suggest.unclear", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
 /** UI-B: the marker kind for the suggested-cards hint, dismissed once. */
 export const CARRY_HINT = "carry_hint";
 
@@ -342,6 +343,28 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         fields(input, [], []);
         await plan.markOnce(CARRY_HINT, "once");
         return { ok: true, data: { hint: false } };
+      }
+      case "suggest.load": {
+        // SG-1: what the board's suggestion rule reads from the store: the unfinished to-dos (planday.carry's read)
+        // and what was cleared. Nothing is stored for a suggestion itself.
+        fields(input, [], []);
+        const { cfg } = await clock(ctx);
+        const carry = await carryDay(ctx, plan);
+        const picks = carry.target ? await plan.carryOverFor(carry.upcoming, cfg?.plan.carryDays, await pendingSession(ctx, plan, cfg, carry.upcoming)) : [];
+        const cleared = [...(await plan.markedDates(SUGGEST_CLEARED))].filter(validClearKey);
+        return { ok: true, data: { picks, cleared } };
+      }
+      case "suggest.clear":
+      case "suggest.unclear": {
+        // SG-1: Clear on a row (that item, for its week), a block (for that day) or a day; Undo takes the mark away.
+        // A per-person marker in the plan store (markers, kind sg_clear); nothing else changes.
+        const o = fields(input, ["keys"], []);
+        if (!Array.isArray(o.keys) || !o.keys.length || o.keys.length > 20 || o.keys.some((k) => typeof k !== "string" || !validClearKey(k))) throw new Invalid("keys must be 1 to 20 clear keys");
+        for (const k of o.keys as string[]) {
+          if (action === "suggest.clear") await plan.markOnce(SUGGEST_CLEARED, k);
+          else await plan.unmark(SUGGEST_CLEARED, k);
+        }
+        return { ok: true, data: { cleared: [...(await plan.markedDates(SUGGEST_CLEARED))].filter(validClearKey) } };
       }
       case "pick.uncarry": {
         // UI-B: Undo of Keep or Move on an unfinished pick: the copy goes, the pick it came from is planned again.
