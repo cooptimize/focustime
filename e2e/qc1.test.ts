@@ -22,9 +22,12 @@ async function shot(page: Page, name: string, keep?: Locator) {
   if (!SHOTS) return;
   for (const theme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: theme });
-    await page.waitForTimeout(150);
+    const was = await page.evaluate(() => document.documentElement.getAttribute("data-theme"));
+    await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t === "light" ? "cooptimize-light" : "cooptimize-dark"), theme);
+    await page.waitForTimeout(200);
     await keep?.scrollIntoViewIfNeeded().catch(() => undefined);
     await page.screenshot({ path: `${SHOTS}/${name}-${theme}.png` });
+    await page.evaluate((w) => (w ? document.documentElement.setAttribute("data-theme", w) : document.documentElement.removeAttribute("data-theme")), was);
   }
   await page.emulateMedia({ colorScheme: "light" });
 }
@@ -87,7 +90,7 @@ describe.skipIf(!CHROMIUM)("QC-1: one New form, straight to DevOps (browser, dem
       // Ahead says so; the default People filter is mine, and a new item assigned to me shows.
       await expect.poll(() => page.locator(".ah-refreshed").textContent(), { timeout: 30_000 }).toMatch(/^Created #\d+/);
       await expect.poll(() => page.locator(".ah-grid, .ah-tree, main").first().textContent()).toContain("Gift cards at checkout");
-      await shot(page, "qc1-created-in-ahead");
+      await shot(page, "qc1-created-in-ahead", page.locator("tr.ah-row.highlighted").first());
 
       // Assigned to nobody: Assigned to me would hide it; it shows until I leave, and says which filter hides it.
       await page.getByRole("group", { name: "People" }).getByRole("button", { name: "Mine", exact: true }).click();
