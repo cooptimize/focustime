@@ -74,6 +74,9 @@ export type Occurrence = {
 /** MC-1c: one look for a transcript. `by` is whose sign-in read it (found) or who has to sign in again (no_token). */
 export type LastRead = { kind: "found" | "not_yet" | "no_token" | "consent" | "missing" | "busy" | "failed"; by: string | null; at: string };
 
+/** ENV-1: what Check now found for one call: a look's outcome, or why there was nothing to look at. */
+export type CheckNowResult = LastRead["kind"] | "upload" | "none" | "not_found";
+
 const lower = (s: string) => s.trim().toLowerCase();
 const has = (xs: readonly string[], id: string) => xs.some((x) => lower(x) === lower(id));
 

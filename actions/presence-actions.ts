@@ -26,6 +26,8 @@ export type PresenceContext = {
   plan?: PlanStore | undefined;
   config: () => Promise<AppConfig | null>;
   account: MicrosoftAccount | null;
+  /** ENV-1: whether Teams status may be written here (false outside production). Absent: yes. */
+  writes?: boolean;
   /** Cooptimize teammates with their Entra object IDs (Dataverse); null when they can't be read. */
   team: (cfg: AppConfig) => Promise<PresenceTeammate[] | null>;
   now: () => string;
@@ -90,6 +92,9 @@ async function syncOnce(ctx: PresenceContext, plan: PlanStore): Promise<TeamsSta
   const cfg = await ctx.config().catch(() => null);
   const session = sessionOf((await plan.getState<TimerState>(TIMER_KEY)) ?? null, now);
   const step = teamsStep(state, session, settingsOf(cfg), nowIso);
+  // ENV-1: a test site never sets, clears or reads my Teams status; a status set before is forgotten here (its own
+  // expiration ends it in Teams), so nothing waits to clear it.
+  if (ctx.writes === false) return state.set ? await save({ ...NO_TEAMS_STATUS }) : state;
   const client = ctx.account?.presence ?? null;
   const me = (await storedIdentity(plan));
   if (!client || !me) {
@@ -158,11 +163,11 @@ export async function presenceAction(ctx: PresenceContext, action: PresenceActio
       const s = settingsOf(cfg);
       const st = ctx.plan ? await readState(ctx.plan) : NO_TEAMS_STATUS;
       let access: TeamsAccess | null = null;
-      if (check) {
+      if (check && ctx.writes !== false) {
         if (!ctx.account?.presence || !(await storedIdentity(ctx.plan))) access = "signed_out";
         else access = await ctx.account.presence.mine().then(() => "ok" as const, (e: unknown) => accessOf(e).access);
       }
-      const view: TeamsStatusView = { enabled: s.teamsStatus, plainFocus: s.plainFocus, access, set: st.set, until: st.until, manual: st.manual, error: st.error };
+      const view: TeamsStatusView = { enabled: s.teamsStatus, plainFocus: s.plainFocus, access, set: st.set, until: st.until, manual: st.manual, error: st.error, ...(ctx.writes === false ? { testSite: true } : {}) };
       return { ok: true, data: view };
     }
     case "presence.people": {

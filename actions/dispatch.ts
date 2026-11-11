@@ -107,6 +107,8 @@ import { DATAVERSE_UNREACHABLE, manyDataverseMatches, noDataverseMatch, type Mat
 import { accountAction, storedIdentity, withMe, IDENTITY_KEY, type MicrosoftAccount, type StoredIdentity } from "./account.ts";
 import { vmAction, vmKey, type VmContext } from "./vm-actions.ts";
 import { presenceAction, syncTeamsStatusWith, type PresenceContext } from "./presence-actions.ts";
+import type { BackgroundPolicy } from "../config/background-policy.ts";
+import type { CheckNowResult } from "../plan/meetings.ts";
 import type { AzureClient } from "../sources/azure/client.ts";
 import { userZone } from "../week/zone.ts";
 import { inList } from "./admin.ts";
@@ -155,6 +157,11 @@ export type ActionContext = {
   log?: Logger;
   /** S1 (D452): where this runs: local, dev, prod or demo (runtime config). Absent: local. */
   env?: string;
+  /**
+   * ENV-1: what may run here (config/background-policy.ts), computed once by server/main.ts. Only the few on-demand
+   * paths that differ on a test site read it (Teams status, Refresh, Check now). Absent: as in production (tests).
+   */
+  background?: BackgroundPolicy;
   /**
    * VM-2: the environment the VM auto-start's gate reads: FOCUSTIME_ENV exactly as set (never normalized), or what the
    * demo and the tests pass in. Only exactly "prod" lets an automatic start run; absent means it never does.
@@ -740,6 +747,8 @@ export async function presenceContext(ctx: ActionContext): Promise<PresenceConte
     ...(ctx.plan ? { plan: ctx.plan } : {}),
     config: () => configured(ctx),
     account: await accountOf(ctx),
+    // ENV-1: outside production the focus timer never sets or clears Teams status.
+    writes: ctx.background ? ctx.background.allows("teams_status") : true,
     team: async (cfg) => {
       const r = await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).teammates();
       return r.ok ? r.people : null;
@@ -1304,7 +1313,12 @@ export function meetingChatsOf(series: readonly MeetingSeries[]): ClientChat[] {
 }
 
 /** MC-1: the meeting store and the FocusTime users (id, name, every address that is them) for registration. */
-export type MeetingsPort = { store: MeetingStore; users: () => Promise<MeetingUser[]> };
+export type MeetingsPort = {
+  store: MeetingStore;
+  users: () => Promise<MeetingUser[]>;
+  /** ENV-1: Check now: one look for one registered call's transcript with this person's sign-in (absent: not here). */
+  checkNow?: (seriesId: number, userId: string) => Promise<CheckNowResult>;
+};
 
 /**
  * MC-1: one client's AI pass context: its name, whether it is Cooptimize Internal (GD-1), its open DevOps items in
@@ -1341,6 +1355,7 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     },
     graph: (cfg) => ctx.account?.(cfg)?.meetings ?? null,
     users: async () => (ctx.meetings ? ctx.meetings.users() : []),
+    ...(ctx.meetings?.checkNow ? { checkNow: ctx.meetings.checkNow } : {}),
     // MC-1c: the organization's clients (Admin › Clients' clientAccounts()), never the admin's own settings; keys match
     // case-insensitively and come back as the organization's. It fails closed: with the team runtime, a list that can't
     // be read is "unavailable", never the admin's settings. Only without one (no team runtime) the configured clients.
@@ -2507,6 +2522,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.prepare":
     case "meeting.confirm":
     case "meeting.rerun":
+    case "meeting.check_now":
       return meetingAction(await meetingContext(ctx), action as MeetingAction, req.input);
     default: {
       const unhandled: never = action;

@@ -36,7 +36,8 @@ export type RequestAction = (typeof REQUEST_ACTIONS)[number];
 /** The shared store and the job's Refresh, as the server hands them in (absent: no shared store, e.g. tests). */
 export type RequestsPort = {
   teams: TeamsStore;
-  refresh: (chatIds: readonly string[]) => Promise<CycleResult>;
+  /** `by`: the Entra object id of the person who pressed Refresh (ENV-1: a test site reads only with their sign-in). */
+  refresh: (chatIds: readonly string[], by?: string | null) => Promise<CycleResult>;
   /** CV-1: the shared conversations, commitments and suggestions, and the FocusTime users (for Sort unsorted). */
   conversations?: ConversationStore;
   users?: () => Promise<FocusUser[]>;
@@ -260,7 +261,7 @@ export async function requestAction(ctx: RequestContext, action: RequestAction, 
       case "requests.refresh": {
         if (!only(input, [])) return bad("requests.refresh takes {}");
         const v = await seen(ctx);
-        if (v?.chats.length && ctx.requests) await ctx.requests.refresh(v.chats.map((c) => c.chatId));
+        if (v?.chats.length && ctx.requests) await ctx.requests.refresh(v.chats.map((c) => c.chatId), await ctx.me());
         return { ok: true, data: await list(ctx, plan, cfg) };
       }
       case "requests.context": {

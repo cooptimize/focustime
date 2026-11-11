@@ -540,7 +540,7 @@ Registering, relabelling, removing and turning reading on or off are logged with
 ### Polling
 
 - **Hosted prod:** every 5 minutes while any follower of the chat is inside their working hours, nothing outside them; the first poll of the day asks for everything changed since the last message seen. No new Azure resource: the job runs in the app's own scheduler.
-- **Dev:** in the background too during the CV-1 watch period (`requestsPoll = 'on'` and min replicas 1 in `infra/dev.bicepparam`, D549). **The developer loop:** only on Refresh (Inbox › Conversations). `FOCUSTIME_REQUESTS_POLL=on` or `off` (the Bicep parameter `requestsPoll`) sets it; the server logs `requests_poll_mode` at start.
+- **Dev and the developer loop (ENV-1):** only on Refresh (Inbox › Conversations), which reads the chats you're in once with your own sign-in and runs no upkeep. `requestsPoll = 'off'` in `infra/dev.bicepparam`. `FOCUSTIME_REQUESTS_POLL=on` (the Bicep parameter `requestsPoll`) declares a watch period, below; in prod only `off` changes anything. The server logs `requests_poll_mode` (`background`, `watch_period` or `on_demand`) and `background_policy` (`production` or `test_site`) at start.
 - **Replicas:** prod runs at min replicas 1, so the job keeps its 5 minutes all day. Dev runs at min replicas 1 for the CV-1 watch period (see Conversations below for going back to 0); at 0, with nobody on dev there is no replica and no poll, even with `FOCUSTIME_REQUESTS_POLL=on`. The first poll after it wakes (Refresh, or the job if switched on) reads everything changed since the last message seen, up to the newest 250 per chat (Q-SP-8). Both stay at max replicas 1, so one job polls each chat once a cycle; a second replica would only read twice (each message and Request is stored once).
 - **Whose token:** the person who registered the chat first, then the other followers by name. Settings › Clients and the Requests tab show "polling via <name>" when it isn't the registrant, and **Needs reconnecting** with the last fetch when nobody's token works: any follower signing in again (and allowing Chat.Read) fixes it on the next poll. A throttle from Teams waits out Retry-After without trying anyone else.
 - **What's logged per cycle:** `requests_poll` (chats read), `requests_poll_messages`, `requests_poll_candidates`, `requests_poll_token` (the token owner's name and count) and `requests_poll_failures`. Never a chat id, topic, member or message text.
@@ -569,7 +569,14 @@ The poller sorts every message that passes the rules into conversations with one
 
 Admin › Status will show the counts (ADM-1): `convs.counts(day)` returns conversations by status, messages by role (work, chatter, ack, unsorted), commitments by state and AI calls per chat today.
 
-**Dev replicas:** the CV-1 watch period is over and dev scales to zero again (HK-1, `param minReplicas = 0` in `infra/dev.bicepparam`). The first request wakes it (a cold start of a few seconds), and it goes back to zero 300 s after the last request. `requestsPoll` stays `'on'`: dev polls the chats every 5 minutes in working hours while it is awake, and the first poll after a start catches up from each chat's stored watermark; the DevOps checks do the same. To keep dev awake for a watch period again, set `minReplicas = 1` in a pull request and run **deploy-dev** (never `az containerapp update` by hand).
+**Dev replicas:** the CV-1 watch period is over and dev scales to zero again (HK-1, `param minReplicas = 0` in `infra/dev.bicepparam`). The first request wakes it (a cold start of a few seconds), and it goes back to zero 300 s after the last request. Since ENV-1 `requestsPoll` is `'off'`: dev reads chats only on Refresh. The DevOps checks catch up from their stored watermarks while someone uses dev.
+
+**Declaring a watch period (ENV-1).** Outside production nothing reads chats on its own. To watch the chat pipeline on dev for a while:
+
+1. In a pull request, set `param requestsPoll = 'on'` (and `param minReplicas = 1` if dev must stay awake) in `infra/dev.bicepparam`, saying in the PR why and until when.
+2. Merge it; **deploy-dev** shows the what-if (one change: the app's `FOCUSTIME_REQUESTS_POLL` setting) and deploys. Never `az containerapp update` by hand.
+3. While it's on, dev reads every registered chat every 5 minutes in followers' working hours and sorts them with AI, as prod does, and Admin › Status says "Chat reading is on for a watch period". Nothing else turns on: no meeting capture, reminders, Teams messages, background AI on held messages or Teams status.
+4. When the period ends, set it back to `'off'` (and `minReplicas = 0`) the same way. What dev stored stays; the usual retention expires it.
 
 ### Purging a client's stored chat text
 

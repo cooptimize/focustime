@@ -32,9 +32,9 @@ param adminGroupId string = ''
 param feedbackOrg string = 'cooptimize'
 param feedbackProject string = 'Cooptimize Internal'
 param feedbackParentId string = '496'
-@description('CV-1: shared polling of client chats in the background.')
+@description('CV-1: shared polling of client chats in the background. ENV-1: on by default only in prod; elsewhere \'on\' declares a watch period.')
 @allowed(['on', 'off'])
-param requestsPoll string = 'on'
+param requestsPoll string = env == 'prod' ? 'on' : 'off'
 @description('HK-2: the monthly budget in USD for this resource group (dev 30, prod 60).')
 param budgetAmount int
 @description('HK-2: who gets the budget alerts, from the FT_BUDGET_EMAIL GitHub variable (never in the repo); empty: no budget.')
