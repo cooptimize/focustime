@@ -16,6 +16,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { CatalogFeature, NoUpdateFeature, ReportClientRef, ReportFeature, StatusClient, StatusComment, StatusFeature, StatusLoad, StatusReport, StatusReportAnswer } from "../plan/status-types.ts";
 import type { DevOpsPreview, DevOpsResult } from "../actions/types.ts";
 import { call } from "./api.ts";
+import { useDevOpsChanged, useDevOpsFresh } from "./DevOpsFresh.tsx";
 import type { DotSchedule } from "../plan/status-dot.ts";
 import { CellPopover, FilterList } from "./CellPopover.tsx";
 import { CloseButton } from "./CloseButton.tsx";
@@ -239,11 +240,21 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
   useEffect(() => {
     if (date) store(DISMISSED, dismissed.length ? { report: date, keys: dismissed } : null);
   }, [date, dismissed]);
+  // DV-2: Refresh is the shared check (for the clients on screen), with its answer; a client's change rereads quietly.
+  const fresh = useDevOpsFresh();
+  const [said, setSaid] = useState<string | null>(null);
   const refresh = async () => {
     setRefreshing(true);
-    await load(true);
+    const keys = onReport ? [scope] : (data?.clients.map((c) => c.clientKey) ?? undefined);
+    const r = fresh ? await fresh.refresh(keys) : null;
+    await load(!fresh);
     setRefreshing(false);
+    if (r) {
+      setSaid(r.line);
+      window.setTimeout(() => setSaid((x) => (x === r.line ? null : x)), 6000);
+    }
   };
+  useDevOpsChanged(onReport ? [scope] : (data?.clients.map((c) => c.clientKey) ?? null), () => void load());
   const shownReport = onReport && report?.clientKey === scope ? report : null;
   const known: Known | null = onReport ? (shownReport ? reportKnown(shownReport) : null) : data;
 
@@ -508,7 +519,8 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
               </p>
               <span className="st-push">
                 <span className="muted st-fresh">Refreshed {when(r.refreshedAt, tz)}</span>
-                <button type="button" className="mini quiet" disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "Refreshing…" : "Refresh"}</button>
+                <button type="button" className="mini quiet" disabled={refreshing} onClick={() => void refresh()} title="Check DevOps now (R)">{refreshing ? "Refreshing…" : "Refresh"}</button>
+                {said && <span className="muted st-refreshed" role="status">{said}</span>}
                 {pushBar}
               </span>
             </div>

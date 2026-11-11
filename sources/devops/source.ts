@@ -104,9 +104,9 @@ export type CentralReads = {
   /** After a write: check the client now, so the next read shows the change. */
   afterWrite(clientKey: string): void;
   /** DV-2: each client's version and freshness, from memory (never items). */
-  freshness?(clientKeys: readonly string[]): Promise<import("../../actions/devops-poll.ts").Freshness[]>;
+  freshness?(clientKeys: readonly string[]): Promise<import("../../plan/devops-fresh-types.ts").Freshness[]>;
   /** DV-2: Refresh: a check now (30 s apart, shared), waited for up to 8 s. */
-  force?(clientKey: string): Promise<import("../../actions/devops-poll.ts").ForcedCheck>;
+  force?(clientKey: string): Promise<import("../../plan/devops-fresh-types.ts").ForcedCheck>;
   /** DV-2: Find an item's one read by id (never stored). */
   find?(clientKey: string, id: number): Promise<import("../../actions/devops-poll.ts").FoundRaw>;
   /** DV-2: what the store holds of one item, and the client's last check. */
@@ -1407,12 +1407,12 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return keys.filter((k) => !precheck({ clientKey: k, clientName: k }, t.targets.find((x) => x.clientKey === k), { pat: false }));
   }
   /** DV-2: versions and freshness of the clients asked for that this person can see. Nothing else, never an item. */
-  async function freshness(clients: readonly ClientRef[]): Promise<import("../../actions/devops-poll.ts").Freshness[]> {
+  async function freshness(clients: readonly ClientRef[]): Promise<import("../../plan/devops-fresh-types.ts").Freshness[]> {
     if (!d.central?.freshness || !clients.length) return [];
     return d.central.freshness(await seen(clients.map((c) => c.clientKey), false));
   }
   /** DV-2: Refresh for the clients on screen this person can see: a check each (30 s apart, shared), up to 8 s. */
-  async function refreshNow(clients: readonly ClientRef[]): Promise<import("../../actions/devops-poll.ts").ForcedCheck[]> {
+  async function refreshNow(clients: readonly ClientRef[]): Promise<import("../../plan/devops-fresh-types.ts").ForcedCheck[]> {
     if (!d.central?.force || !clients.length) return [];
     const keys = await seen(clients.map((c) => c.clientKey), true);
     return Promise.all(keys.map((k) => d.central!.force!(k)));

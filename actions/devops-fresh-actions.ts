@@ -7,10 +7,11 @@
 // - devops.find: Settings › DevOps › Find an item. For one client I can see and one item number: whether DevOps has
 //   it (one read by id through the client's limiter), whether FocusTime has it, the scope, and whether Day, Week,
 //   Ahead and Status show it, and why not. At most 10 a minute per person, so it can't be used to sweep numbers.
-import type { AppConfig } from "../config/types.ts";
+import type { AppConfig } from "../config/schema.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
-import type { ForcedCheck, Freshness } from "./devops-poll.ts";
-import { findAnswer, type AheadPresence, type FindFacts, type FindLine, type StatusPresence } from "../plan/find-item.ts";
+import type { FindAnswer, ForcedCheck, RefreshAnswer, VersionsAnswer } from "../plan/devops-fresh-types.ts";
+export type { FindAnswer, RefreshAnswer, VersionsAnswer } from "../plan/devops-fresh-types.ts";
+import { findAnswer, type AheadPresence, type FindFacts, type StatusPresence } from "../plan/find-item.ts";
 import { DEFAULT_FILTERS, groups } from "../plan/ahead-model.ts";
 import type { AheadFilters } from "../plan/ahead-edit.ts";
 import type { ActionResponse, AheadLoad } from "./types.ts";
@@ -35,9 +36,6 @@ export type FreshContext = {
   who: object;
 };
 
-export type VersionsAnswer = { clients: (Freshness & { clientName: string })[]; serverNow: string };
-export type RefreshAnswer = { clients: (ForcedCheck & { clientName: string })[]; line: string; problems: string[]; serverNow: string };
-export type FindAnswer = { clientName: string; id: number; lines: FindLine[] };
 
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
 const isKey = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= 100;
@@ -103,7 +101,7 @@ export function aheadPresence(load: AheadLoad, saved: AheadFilters | null, clien
     ["owner", { ...f, owner: { ...f.owner, [clientKey]: "all" } }],
     ["epic", { ...f, epic: null }],
     ["ready", { ...f, gaps: false, kinds: [] }],
-    ["dates", { ...f, from: null, to: null, range: undefined } as AheadFilters],
+    ["dates", (({ range: _r, ...rest }) => ({ ...rest, from: null, to: null }))(f)],
     ["stale", { ...f, stale: false }],
     ["text", { ...f, q: "" }],
   ];

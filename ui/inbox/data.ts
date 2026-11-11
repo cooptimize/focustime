@@ -2,6 +2,7 @@
 // sources give the detail pane what it shows and acts on (a conversation's card, a chat promise's card, a promise I
 // added, a capture, a draft). Rows and sources join by item key (plan/inbox-items.ts). A source that fails leaves its
 // rows in the list and says so in the pane; it never empties the list.
+import { useDevOpsChanged } from "../DevOpsFresh.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CaptureState, FollowUpView } from "../../actions/types.ts";
 import type { ConversationCard, ConversationsData, MyPromisesData, PromiseCard } from "../../plan/conversation-views.ts";
@@ -55,6 +56,8 @@ export function useInboxData(version: number | string): InboxSources & { reload:
     }));
   }, []);
   useEffect(() => void reload(), [reload, version]);
+  // DV-2: a change in DevOps (a linked item's state) rereads the Inbox quietly.
+  useDevOpsChanged(null, () => void reload());
   const setConvs = useCallback((d: ConversationsData) => setS((c) => ({ ...c, convs: d })), []);
   const setPromises = useCallback((d: MyPromisesData) => setS((c) => ({ ...c, promises: d })), []);
   return { ...s, reload, setConvs, setPromises };

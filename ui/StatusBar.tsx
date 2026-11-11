@@ -3,6 +3,8 @@ import type { SourceSummary } from "../actions/types.ts";
 import type { ClientWork } from "../week/types.ts";
 import { hoursSummary, type TimeModel } from "../week/hours.ts";
 import { devopsSummary, workStatusLabel } from "./work.ts";
+import { useDevOpsFresh } from "./DevOpsFresh.tsx";
+import { clientDetail, clientLine, freshWords } from "./devops-fresh.ts";
 import { causeLines, notConnected, SOURCE_NAMES, sourceActions, sourceKey, sourceLabel, stateOf, type Calendar, type Fix } from "./status.ts";
 import { stampText } from "./stamp.ts";
 import { updatedAgo } from "./refresh.ts";
@@ -68,8 +70,9 @@ export function StatusBar({ sources, devops, hours, loading, busy, notice, extra
           <button type="button" className="status-quiet" onClick={() => setOpen(true)} aria-label="All sources live. Show each source's status" title={`All sources live${oldest ? `, oldest data ${updatedAgo(oldest, clock, shape.timeZone)}` : ""}. Click for each source's status`}>
             <span className="dot" aria-hidden="true" />
           </button>
+          <DevOpsFreshness clock={clock} />
           {chips}
-          <button type="button" className="refresh mini quiet" onClick={onRefresh} disabled={loading} aria-label="Refresh all sources" title="Refresh all sources (R)">
+          <button type="button" className="refresh mini quiet" onClick={onRefresh} disabled={loading} aria-label="Refresh all sources" title="Check DevOps now and refresh every source (R)">
             {loading ? "Loading…" : "Refresh"}
           </button>
         </div>
@@ -151,19 +154,38 @@ export function StatusBar({ sources, devops, hours, loading, busy, notice, extra
   );
 }
 
+/** DV-2: "DevOps checked 40s ago" (the stalest client), each client's check or trouble on hover. */
+function DevOpsFreshness({ clock }: { clock: number }) {
+  const env = useDevOpsFresh();
+  const w = env ? freshWords(env.entries, clock) : null;
+  if (!w) return null;
+  return (
+    <span className={`devops-fresh muted${w.trouble ? " trouble" : ""}`} tabIndex={0} title={w.title} aria-label={`${w.text}. ${w.title.replace(/\n/g, ". ")}`}>
+      {w.text}
+    </span>
+  );
+}
+
 /** One entry for all clients: "DevOps 4 of 5 live". Hover for a summary, click for each client's status. */
 function DevOpsEntry({ devops, clock, timeZone }: { devops: ClientWork[] | null; clock: number; timeZone: string }) {
   const [open, setOpen] = useState(false);
   const sum = devopsSummary(devops);
   if (!sum || !devops) return null;
   const cls = sum.level === "live" ? "live" : sum.level === "partial" ? "cached" : "error";
-  const lines = devops.map((c) => `${c.clientName}: ${c.message ?? workStatusLabel(c)}`).join("\n");
+  const fresh = useDevOpsFresh();
+  const freshOf = (k: string) => fresh?.entries.find((e) => e.clientKey === k) ?? null;
+  const lines = devops.map((c) => {
+    const f = freshOf(c.clientKey);
+    return f ? clientLine(f, clock) : `${c.clientName}: ${c.message ?? workStatusLabel(c)}`;
+  }).join("\n");
+  const words = fresh ? freshWords(fresh.entries, clock) : null;
   return (
     <span className={`source devops ${cls}`}>
       <button type="button" className="devops-toggle" aria-expanded={open} aria-controls="devops-status" title={lines} onClick={() => setOpen((o) => !o)}>
         <span className="dot" aria-hidden="true" />
         DevOps
         <span className={`state ${cls}`}>{sum.label}</span>
+        {words && <span className="muted devops-fresh">{words.text.replace(/^DevOps /, "")}</span>}
       </button>
       {open && (
         <div className="devops-pop" id="devops-status" role="region" aria-label="DevOps status per client">
@@ -171,7 +193,7 @@ function DevOpsEntry({ devops, clock, timeZone }: { devops: ClientWork[] | null;
             {devops.map((c) => (
               <li key={c.clientKey} className={c.status === "ok" ? "ok" : "problem"}>
                 <strong>{c.clientName}</strong>
-                <span className="muted"> · {workStatusLabel(c)} · {c.items.length} open{c.fetchedAt ? ` · ${updatedAgo(c.fetchedAt, clock, timeZone)}` : ""}</span>
+                <span className="muted"> · {workStatusLabel(c)} · {c.items.length} open{freshOf(c.clientKey) ? ` · ${clientDetail(freshOf(c.clientKey)!, clock)}` : c.fetchedAt ? ` · ${updatedAgo(c.fetchedAt, clock, timeZone)}` : ""}</span>
                 {c.message && <div className="msg">{c.message}</div>}
               </li>
             ))}

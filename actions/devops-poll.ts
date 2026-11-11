@@ -169,20 +169,8 @@ type Client = {
   last: { at: string; changes: number; failed: boolean } | null;
 };
 
-/** DV-2: what a person's page may know about a client's DevOps: its version and how fresh it is. Never an item. */
-export type Freshness = {
-  clientKey: string;
-  /** Moves whenever a change for the client reaches the store (null: none yet). */
-  version: string | null;
-  checkedAt: string | null;
-  okAt: string | null;
-  /** When the next check is due (null: now, or not known). */
-  nextAt: string | null;
-  problem: FreshProblem | null;
-};
-export type FreshProblem = { kind: "slowed" | "refused" | "failed" | "first"; words: string };
-/** DV-2: Refresh's answer for one client. `changes` is what the check it ran (or the one just before) found. */
-export type ForcedCheck = Freshness & { forced: boolean; pending: boolean; changes: number | null };
+export type { Freshness, FreshProblem, ForcedCheck } from "../plan/devops-fresh-types.ts";
+import type { Freshness, FreshProblem, ForcedCheck } from "../plan/devops-fresh-types.ts";
 /** DV-2: Find an item's one read by id. `elsewhere`: DevOps has it, in a project this client isn't set up with. */
 export type FoundRaw = { status: "found"; value: RawValue } | { status: "missing" } | { status: "elsewhere" } | { status: "unavailable"; words: string };
 
