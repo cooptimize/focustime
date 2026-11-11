@@ -1513,10 +1513,16 @@ async function afterPick(ctx: ActionContext, action: string, input: unknown, r: 
     if (!pick) return r;
     const o = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
     if (action === "pick.move" && typeof o.date !== "string") return r;
+    const weekStart = mondayOf(pick.date);
+    const before = await ctx.plan.weekStamp(weekStart);
     const draft = pick.draftId !== null ? await ctx.plan.getDraft(pick.draftId) : null;
-    if (pick.itemId !== null) await placeFeature(weekCtx(ctx), { date: pick.date, clientKey: pick.clientKey, itemId: pick.itemId });
-    else if (draft?.parentItemId != null) await placeFeature(weekCtx(ctx), { date: pick.date, clientKey: pick.clientKey, featureId: draft.parentItemId });
-    await ctx.plan.touchWeekPlan(mondayOf(pick.date));
+    let feature: { id: number } | null = null;
+    if (pick.itemId !== null) feature = await placeFeature(weekCtx(ctx), { date: pick.date, clientKey: pick.clientKey, itemId: pick.itemId });
+    else if (draft?.parentItemId != null) feature = await placeFeature(weekCtx(ctx), { date: pick.date, clientKey: pick.clientKey, featureId: draft.parentItemId });
+    await ctx.plan.touchWeekPlan(weekStart);
+    const after = await ctx.plan.weekStamp(weekStart);
+    // What Undo (pick.remove with `undo`) takes back: the feature this put on the week and the week's updated time.
+    if (action === "pick.add" && after !== null && after !== before) return { ...r, data: { ...(r.data as object), undo: { weekStart, featureId: feature?.id ?? null, before, after } } };
   } catch {
     // The to-do stands; the feature can still be added from the panel.
   }

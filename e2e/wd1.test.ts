@@ -107,6 +107,39 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     await page.close();
   }, T);
 
+  it("review fix: Confirm week, add a story, Undo: the week reads Confirmed again and the add's feature is gone", async () => {
+    const { page } = await freshPage(h);
+    await openWeek(page);
+    if ((await tag(page)) === "Draft") await page.getByRole("button", { name: "Confirm week" }).click();
+    await expect.poll(() => tag(page)).toBe("Confirmed");
+    await addOn(page, "2026-11-03", "PM");
+    const features = () => panel(page).locator(".aw-feature .aw-feat-name").allInnerTexts();
+    const before = await features();
+    // A story under More from DevOps whose feature isn't on the week yet, else any free row.
+    await freeRow(page).locator("button.aw-plus").click();
+    await expect.poll(() => tag(page)).toBe("Changed since you confirmed");
+    await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
+    await expect.poll(() => tag(page)).toBe("Confirmed");
+    await expect.poll(features).toEqual(before);
+    await page.close();
+  }, T);
+
+  it("review fix: the panel opened on next week closes onto next week (Esc, + Add, W)", async () => {
+    const { page } = await freshPage(h);
+    await openWeek(page);
+    await page.keyboard.press("]");
+    await page.locator(".week-head h2", { hasText: "Nov 9" }).waitFor();
+    for (const close of ["Escape", "head", "w"] as const) {
+      await addOn(page, "2026-11-10", "AM");
+      if (close === "head") await page.locator(".add-work-head").click();
+      else await page.keyboard.press(close);
+      await panel(page).waitFor({ state: "detached" });
+      await expect(page.locator(".week-head h2").innerText(), close).resolves.toContain("Nov 9");
+      await expect(hash(page), close).resolves.toBe("#/week/2026-11-09");
+    }
+    await page.close();
+  }, T);
+
   it("star a feature and reload: still a must; Remove from this week is refused while one of its stories is placed", async () => {
     const { page } = await freshPage(h);
     await openWeek(page);
@@ -230,6 +263,15 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     expect(errors).toEqual([]);
     await page.close();
   }, T);
+
+  it("review fix: phone: ⋯ › Status opens Status (the bottom bar has no room for it)", async () => {
+    const { page } = await freshPage(h, { width: 390, height: 844 });
+    await page.evaluate(() => (location.hash = "#/week"));
+    await page.locator(".top-more").click();
+    await page.getByRole("menuitem", { name: /^Status/ }).click();
+    await expect.poll(() => hash(page)).toMatch(/^#\/status/);
+    await page.close();
+  }, T);
 });
 
 describe.skipIf(!CHROMIUM)("WD-1: the To place line (browser, demo on Tuesday)", () => {
@@ -260,6 +302,28 @@ describe.skipIf(!CHROMIUM)("WD-1: the To place line (browser, demo on Tuesday)",
       await expect.poll(async () => ((await line.count()) ? Number((await line.innerText()).match(/^(\d+)/)![1]) : 0)).toBeLessThan(n1);
     }
     await expect.poll(() => summary.getByRole("button", { name: "Keep all" }).count()).toBe(0);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("review fix: a past day's header, a PTO day and a weekend address open the panel on a block that can take work, and the address says which", async () => {
+    const { page, errors } = await freshPage(h);
+    await openWeek(page);
+    // Monday is past: its header opens the next block that can take work, not a full Monday.
+    const mon = page.locator("header.day-head", { has: page.locator(".dow", { hasText: "Mon" }) }).first();
+    await mon.locator(".day-open").click({ force: true });
+    await panel(page).waitFor();
+    const at = (await panel(page).getAttribute("data-add-panel"))!;
+    expect(at.startsWith("2026-11-02")).toBe(false);
+    await expect.poll(() => hash(page)).toBe(`#/week/day/${at.replace("|", "/")}`);
+    for (const typed of ["#/week/day/2026-11-05/AM", "#/week/day/2026-11-07/AM"]) {
+      await page.evaluate((x) => (location.hash = x), typed);
+      await expect.poll(() => hash(page), { message: typed }).not.toBe(typed);
+      const now = (await panel(page).getAttribute("data-add-panel"))!;
+      expect(now.startsWith("2026-11-05"), typed).toBe(false);
+      await expect.poll(() => hash(page), { message: typed }).toBe(`#/week/day/${now.replace("|", "/")}`);
+      await expect(panel(page).getByText("PTO · anything added").count()).resolves.toBe(0);
+    }
     expect(errors).toEqual([]);
     await page.close();
   }, T);

@@ -26,6 +26,11 @@ describe("the block the panel opens on", () => {
     expect(defaultAddBlock(blocks, "2026-11-09T18:00:00Z", null)).toEqual({ date: "2026-11-02", half: "AM" });
     expect(defaultAddBlock([], "2026-11-02T18:00:00Z", null)).toBeNull();
   });
+  it("review fix: a block or day that can't take work (past, PTO) isn't opened on: the next block that can", () => {
+    expect(defaultAddBlock(blocks, "2026-11-02T15:00:00Z", { date: "2026-11-03", half: "AM" })).toEqual({ date: "2026-11-03", half: "PM" });
+    const past = blocks.map((b) => (b.date === "2026-11-02" ? { ...b, plannable: false } : b));
+    expect(defaultAddBlock(past, "2026-11-03T15:00:00Z", { date: "2026-11-02", half: null })).toEqual({ date: "2026-11-03", half: "PM" });
+  });
 });
 
 describe("the room line", () => {
@@ -80,6 +85,9 @@ describe("where a row is placed", () => {
     // Same id, another client: not this row.
     expect(placedWhere({ clientKey: "fabrikam", itemId: 11 }, picks, { date: "2026-11-02", half: "AM" }, days)).toBeNull();
     expect(blockWord("2026-11-03", "EVE")).toBe("Tue Evening");
+    // Review fix: Evening comes after PM on the same day.
+    const two = [{ id: 7, date: "2026-11-03", half: "EVE" as const, clientKey: "contoso", itemId: 40, draftId: null, followUpId: null, status: "planned" }, { id: 8, date: "2026-11-03", half: "PM" as const, clientKey: "contoso", itemId: 40, draftId: null, followUpId: null, status: "planned" }];
+    expect(placedWhere({ clientKey: "contoso", itemId: 40 }, two, { date: "2026-11-02", half: "AM" }, days)).toBe("Tue PM");
   });
   it("Remove from this week only while none of the feature's stories is placed; otherwise where", () => {
     const f = { clientKey: "contoso", itemId: 10, slots: [] };

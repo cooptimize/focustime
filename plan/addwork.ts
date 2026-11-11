@@ -17,13 +17,14 @@ export function storiesUnder(work: { items: readonly { id: number; parentId?: nu
 export type BlockAt = { date: IsoDate; half: Half; end: string; plannable: boolean };
 
 /**
- * The block "+ Add" in the header and A open on: the one asked for when it can take work, else the block under way,
+ * The block "+ Add" in the header and A open on: the one asked for (or its day's first) when it can take work, else the block under way,
  * else the next one that isn't over (in the week shown), else the week's first plannable block, else null.
  */
 export function defaultAddBlock(blocks: readonly BlockAt[], now: string, asked?: { date: IsoDate | null; half: Half | null } | null): { date: IsoDate; half: Half } | null {
   if (asked?.date) {
     const sameDay = blocks.filter((b) => b.date === asked.date);
-    const hit = (asked.half ? sameDay.find((b) => b.half === asked.half) : null) ?? sameDay.find((b) => b.plannable) ?? sameDay[0];
+    // A block that can't take work (past, PTO, ended) isn't opened on: the panel goes to the next one that can.
+    const hit = (asked.half ? sameDay.find((b) => b.half === asked.half && b.plannable) : null) ?? sameDay.find((b) => b.plannable);
     if (hit) return { date: hit.date, half: hit.half };
   }
   const t = Temporal.Instant.from(now);
@@ -86,11 +87,14 @@ const live = (p: PickLike) => p.status === "planned" || p.status === "done";
  * Where a row's item is already placed this week: "On this block" when it is on the selected block, else its first
  * other block ("Tue PM"), else null.
  */
+/** The day's order of halves (AM, PM, then Evening), not the alphabet's. */
+const HALF_ORDER: Record<Half, number> = { AM: 0, PM: 1, EVE: 2 };
+
 export function placedWhere(ref: { clientKey: string; itemId?: number; draftId?: number; followUpId?: number }, picks: readonly PickLike[], selected: { date: IsoDate; half: Half }, weekDays: readonly { date: IsoDate; whole: boolean }[]): string | null {
   const mine = picks.filter((p) => live(p) && (ref.itemId !== undefined ? p.clientKey === ref.clientKey && p.itemId === ref.itemId : ref.draftId !== undefined ? p.draftId === ref.draftId : p.followUpId === ref.followUpId));
   if (!mine.length) return null;
   if (mine.some((p) => p.date === selected.date && p.half === selected.half)) return "On this block";
-  const p = [...mine].sort((a, b) => (a.date === b.date ? a.half.localeCompare(b.half) : a.date.localeCompare(b.date)))[0]!;
+  const p = [...mine].sort((a, b) => (a.date === b.date ? HALF_ORDER[a.half] - HALF_ORDER[b.half] : a.date.localeCompare(b.date)))[0]!;
   return blockWord(p.date, p.half, !!weekDays.find((d) => d.date === p.date)?.whole);
 }
 

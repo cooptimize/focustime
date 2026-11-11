@@ -55,6 +55,6 @@ WD-1 removed Week › Plan (Plan the week, `ui/PlanWeek.tsx`) and Plan today (Pl
 | Size chip on a to-do | The to-do's ⋯ on its card (unchanged) |
 | Timebox my day | A day header's ⋯ › Timebox my day (or Confirm and timebox), and the command menu |
 | Confirm today, Confirm Tuesday | A day header's ⋯ › Confirm Tue, Nov 3, and the command menu's Confirm the day |
-| Past days as a review (done and drop only) | Unchanged on the cards; "Add work to this day (past: done and drop only)" |
+| Past days as a review (done and drop only) | Unchanged on the cards (done and drop). A past day's header, like a PTO day's, opens Add work on the next block that can take work |
 | Trim suggestions when over | Dropped from the panel. The block's chip says Too much planned, and Check-in still offers moves |
 | The day's headline ("7h of work · 6h 15m free") | The room line in the panel ("1h 45m free", "about 2h over") for the selected block |

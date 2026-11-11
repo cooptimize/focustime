@@ -533,7 +533,7 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 
 ## WD-1
 
-- The wide layout keeps its hour Timeline on each card; only the compact layout (1440 and below) gets the slim 56 px rail. Is the slim rail wanted on wide screens too?
+- The hour rail is now the slim 56 px strip at every width (event titles on hover and in the detail panel), so to-do titles keep their width. Is the rail with event titles wanted back on wide screens (2560 and up)?
 - Reordering features inside the panel is Move up and Move down in a feature's ⋯, not drag. Is drag to reorder in the panel needed?
 - The heads-up offer when a confirmed must is dropped or demoted (D147) was Plan the week's; the panel doesn't offer it yet. Bring it back in the panel's notice line?
 - Plan the week's draft feature from the type box and "Epic needs features" aren't in the panel (the type box makes stories; draft features come from Capture). Is that enough?
@@ -542,3 +542,5 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - Status's tab count is SR-3's "need your update" count. Should it show only from Friday, like the nudge?
 - "This week's features: the selected block's client first, then the others": the panel lists the selected block's client's features in full and every other client as one line ("Atlas · 2 features") that moves the panel to that client's next block, since + adds to the selected block and another client's block refuses the drop. Full lists for every client instead?
 - DevOps health's Mark as being broken down and Ask the client about priorities aren't on Week any more (Break down is in the client chip's popover, dates and owners in Ahead › Readiness). Bring them into the chip's popover?
+- Esc in More from DevOps' search takes up to three presses (clear the text, leave the box, close the panel). Should Esc close the panel at once when the box is already empty?
+- A past week has no Add work (the panel doesn't open there). If it ever does, its star, Add to this week and row ⋯ need the same past-week refusal as + has.

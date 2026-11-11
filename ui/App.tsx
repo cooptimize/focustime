@@ -47,7 +47,7 @@ import { causeLines, sourceActions, sourceLabel, stateOf } from "./status.ts";
 import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
-import { stepWeekday, weekendStops, afterDone, addOf, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
+import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
 import { ModeArea, ModeSwitch, TimelineToggle } from "./ModeSwitch.tsx";
 import { momentCard } from "../plan/modes.ts";
 import { FocusScreen, SoundControl } from "./FocusScreen.tsx";
@@ -791,6 +791,19 @@ export function App() {
     const dayIndex = data.week.days.findIndex((d) => d.date === panelAt.date);
     if (dayIndex >= 0) setSel((s) => (s.dayIndex === dayIndex && s.half === panelAt.half ? s : { dayIndex, half: panelAt.half }));
   }, [panelAt?.date, panelAt?.half, data?.weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
+  // WD-1: the address says where the panel really is: a block asked for that can't take work (a weekend, a past or PTO
+  // day) becomes the block it opened on, and a week with nowhere to add (a past week) drops "add". Replaced, not pushed.
+  useEffect(() => {
+    if (!addAt || !data || nav.tab !== "week" || loc.overlay) return;
+    const shown = data.weekStart;
+    if (addAt.date ? mondayOf(addAt.date) !== shown : (nav.week ?? data.today.weekStart) !== shown) return; // still loading that week
+    const asked = addAt.date && panelAt && (addAt.date !== panelAt.date || (addAt.half !== null && addAt.half !== panelAt.half));
+    const next: Nav | null = !panelAt ? navOf.week("board", shown === data.today.weekStart ? null : shown) : asked ? navOf.addWork(panelAt.date, panelAt.half) : null;
+    if (!next) return;
+    const l: Loc = { nav: next, overlay: null };
+    history.replaceState(null, "", hashOf(l));
+    go(l);
+  }, [panelAt?.date, panelAt?.half, addAt?.date, addAt?.half, data?.weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** The Now strip (slice 4): from the loaded week and today's picks, recomputed on the 30 s clock. */
   const strip = useMemo(() => {
@@ -820,6 +833,11 @@ export function App() {
     },
     [goNav],
   );
+  /** WD-1: closing the panel stays on the week it was on (this week as the plain #/week). */
+  const closeAddNav = (): Nav => {
+    const w = nav.tab === "week" ? weekOfAdd(nav) : null;
+    return navOf.week("board", w && w !== data?.today.weekStart ? w : null);
+  };
   /** Day's Add work and the command menu's Plan today: Week with the panel on that day (default: today or the next workday). */
   const openPlanDay = useCallback((date?: IsoDate) => addWork(date ?? null), [addWork]);
 
@@ -1236,7 +1254,7 @@ export function App() {
       } else if ((k === "w" || k === "W") && free && settingsAt === null) {
         e.preventDefault();
         // WD-1: W opens Week with the Add work panel (again: closes it).
-        goNav(addAt ? navOf.week("board", nav.tab === "week" ? nav.week : null) : navOf.addWork());
+        goNav(addAt ? closeAddNav() : navOf.addWork());
       } else if ((k === "e" || k === "E") && free && settingsAt === null) {
         e.preventDefault();
         goNav(closeOutAt !== null ? navOf.today() : navOf.today("closeout"));
@@ -1999,7 +2017,7 @@ export function App() {
             <ModeArea>
               <TimelineToggle shown={showTimelines} onToggle={() => void saveShowTimelines(!showTimelines)} />
               {!past && (
-                <button type="button" className="mini add-work-head" data-tour="wk-add" aria-pressed={!!addAt} onClick={() => (addAt ? goNav(navOf.week("board", nav.tab === "week" ? nav.week : null)) : addWork())} title="Add work to a block (A)">
+                <button type="button" className="mini add-work-head" data-tour="wk-add" aria-pressed={!!addAt} onClick={() => (addAt ? goNav(closeAddNav()) : addWork())} title="Add work to a block (A)">
                   + Add
                 </button>
               )}
@@ -2071,7 +2089,7 @@ export function App() {
           clients={data.planClients}
           sheet={phone}
           onClose={() => {
-            goNav(navOf.week("board", nav.tab === "week" ? nav.week : null));
+            goNav(closeAddNav());
             cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
           }}
           onChanged={reloadQuiet}
@@ -2148,6 +2166,8 @@ export function App() {
             items: [
               // CV-3: on the phone the person chip is this first row (the top bar keeps room for the name).
               { id: "account", label: account.title, next: account.step },
+              // WD-1: Status is a top-level place; the phone's bottom bar has no room for it, so it is here.
+              { id: "status", label: "Status", ...(statusNeeds ? { hint: `${statusNeeds} to update` } : {}), run: () => openTab("status") },
               { id: "notices", label: "Notifications", ...(notices.unread > 0 ? { hint: `${notices.unread} new` } : {}), run: () => openNotices() },
               ...(data.timer ? [{ id: "focus", label: "Focus screen", run: () => setView("focus") }] : [{ id: "focus", label: "Start focus", run: () => setTimerMenuAt(phoneMoreAt) }]),
               { id: "settings", label: "Settings", run: () => setSettingsAt("") },

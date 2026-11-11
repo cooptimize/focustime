@@ -32,6 +32,12 @@ describe("tabs and modes", () => {
     expect(tabForKey("p")).toBeNull();
   });
 
+  it("review fix: a week's Add work address is on its Monday, whatever day was typed", () => {
+    expect(parseHash("#/week/commit/2026-11-10")?.nav).toEqual(navOf.weekAdd("2026-11-09"));
+    expect(parseHash("#/week/2026-11-12/add")?.nav).toEqual(navOf.weekAdd("2026-11-09"));
+    expect(navOf.weekAdd("2026-11-13")).toEqual({ tab: "week", mode: "board", week: "2026-11-09", add: { date: null, half: null } });
+  });
+
   it("P: on Week opens or closes the Add work panel (keeping the week); Ahead toggles Grid and Gantt; a Day flow goes back; elsewhere opens Week with the panel", () => {
     expect(toggleP(navOf.week("board", "2026-11-09"))).toEqual(navOf.weekAdd("2026-11-09"));
     expect(toggleP(navOf.weekAdd("2026-11-09"))).toEqual(navOf.week("board", "2026-11-09"));

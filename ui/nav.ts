@@ -76,7 +76,7 @@ export const navOf = {
   /** WD-1: Week with the Add work panel on a block (null date: the current block, or the next one not over). */
   addWork: (date: IsoDate | null = null, half: Half | null = null): Nav => ({ tab: "week", mode: "board", week: null, add: { date, half: date ? half : null } }),
   /** WD-1: a week with the Add work panel open (the old Plan the week addresses land here). */
-  weekAdd: (week: IsoDate | null = null): Nav => ({ tab: "week", mode: "board", week, add: { date: null, half: null } }),
+  weekAdd: (week: IsoDate | null = null): Nav => ({ tab: "week", mode: "board", week: week === null ? null : mondayOf(week), add: { date: null, half: null } }),
   /** WD-1: the Status tab (was Week › Status). */
   status: (): Nav => ({ tab: "status" }),
   ahead: (mode: AheadMode = "grid"): Nav => ({ tab: "ahead", mode }),

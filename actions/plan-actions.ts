@@ -165,6 +165,28 @@ function id(v: unknown, name = "id"): number {
   if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0) throw new Invalid(`${name} must be a positive whole number`);
   return v;
 }
+const mondayOfDate = (d: IsoDate): IsoDate => {
+  const p = Temporal.PlainDate.from(d);
+  return p.subtract({ days: p.dayOfWeek - 1 }).toString();
+};
+const isStamp = (v: unknown): v is string => {
+  if (typeof v !== "string") return false;
+  try {
+    Temporal.ZonedDateTime.from(v);
+    return true;
+  } catch {
+    return false;
+  }
+};
+/** WD-1: what pick.add's response said its add did to the week (afterPick in dispatch.ts), handed back by Undo. */
+function weekUndo(v: unknown): { weekStart: IsoDate; featureId: number | null; before: string | null; after: string } {
+  const o = fields(v, ["weekStart", "featureId", "before", "after"]);
+  const weekStart = date(o.weekStart, "undo.weekStart");
+  const featureId = o.featureId === null ? null : id(o.featureId, "undo.featureId");
+  if (o.before !== null && !isStamp(o.before)) throw new Invalid("undo.before must be a time");
+  if (!isStamp(o.after)) throw new Invalid("undo.after must be a time");
+  return { weekStart, featureId, before: o.before as string | null, after: o.after };
+}
 /** A pick's size: XS, S, M or L, or none (E2: not sized yet, counts as the person's assumption; sizing is optional). */
 function size(v: unknown): Size | null {
   if (v === undefined || v === null) return null;
@@ -372,11 +394,16 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         return { ok: true, data: { pick, state: await state(ctx, plan, pick.date), note } };
       }
       case "pick.remove": {
-        const pid = id(fields(input, ["id"]).id);
+        const o = fields(input, ["id"], ["undo"]);
+        const pid = id(o.id);
+        const undo = o.undo === undefined ? null : weekUndo(o.undo);
         const before = (await plan.getPick(pid));
         if (!before) return bad(`No to-do ${pid}`, 404);
+        if (undo && undo.weekStart !== mondayOfDate(before.date)) throw new Invalid("undo is for another week");
         // On a past day nothing is deleted: the pick is kept as dropped, so the record of the day stays.
         const r = (await pastRefusal(ctx, before.date)) ? { result: "dropped" as const, pick: (await plan.drop(pid)) } : (await plan.removePick(pid));
+        // WD-1: Undo of an add also takes back what the add did to the week (its feature, "Changed since you confirmed").
+        if (undo) await plan.undoWeekAdd(undo.weekStart, undo.featureId, undo.before, undo.after);
         return { ok: true, data: { result: r.result, state: await state(ctx, plan, before.date) } };
       }
       case "pick.set_size": {

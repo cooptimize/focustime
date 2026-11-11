@@ -130,7 +130,9 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
           const r = await planAction("pick.add", { date: b.date, half: b.half, clientKey: d.clientKey, ...(d.add ? d.add : { itemId: d.itemId }), ...(d.size ? { size: d.size } : {}) });
           onChanged();
           const id = r.pick?.id;
-          note(`Added to ${b.label}${r.note ? ` · ${r.note}` : ""}`, id ? async () => (await planAction("pick.remove", { id }), onChanged()) : null);
+          // WD-1: Undo also takes back what the add did to the week (its feature, the confirmed week's change mark).
+          const undo = (r as { undo?: unknown }).undo;
+          note(`Added to ${b.label}${r.note ? ` · ${r.note}` : ""}`, id ? async () => (await planAction("pick.remove", { id, ...(undo ? { undo } : {}) }), onChanged()) : null);
         }
       } catch (e) {
         note(errText(e));

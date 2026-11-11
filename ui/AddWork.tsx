@@ -173,7 +173,6 @@ export function AddWorkPanel({ at, week, version, thisWeek, today, colors, clien
         <CloseButton onClose={onClose} />
       </header>
       {room && <p className={`aw-room${room.over ? " over" : ""}`}>{room.text}</p>}
-      {day?.pto && <p className="aw-room">PTO · anything added here shows as a note</p>}
       {!block && clients.length > 0 && (
         <div className="client-chooser aw-chooser" role="group" aria-label="Which client">
           {clients.map((c) => (

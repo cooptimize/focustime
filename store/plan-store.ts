@@ -2749,6 +2749,30 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         if (row) await touchWeek(weekStart, stamp());
       });
     },
+    /** WD-1: the week row's own updated time (null: no row), so an Undo can tell whether anything changed since. */
+    async weekStamp(weekStart: IsoDate): Promise<string | null> {
+      const row = (await db.get("SELECT updated_at FROM week_plans WHERE week_start = ?", weekStart)) as Row | undefined;
+      return row?.updated_at ? stampText(row.updated_at) : null;
+    },
+    /**
+     * WD-1: Undo of a to-do's add takes back what the add did to the week: the feature it put on the week (only while it
+     * is still a nice to have with no pins) and the week's updated time. Only when nothing else changed the week since
+     * (its updated time is still `after`); otherwise the week keeps both, and reads as changed, which it is.
+     */
+    async undoWeekAdd(weekStart: IsoDate, featureId: number | null, before: string | null, after: string): Promise<boolean> {
+      return tx(async () => {
+        const row = (await db.get("SELECT updated_at FROM week_plans WHERE week_start = ?", weekStart)) as Row | undefined;
+        if (!row?.updated_at || stampText(row.updated_at) !== after) return false;
+        if (featureId !== null) {
+          const f = (await db.get("SELECT tier FROM week_features WHERE id = ? AND week_start = ?", featureId, weekStart)) as Row | undefined;
+          const pinned = (await db.get("SELECT 1 AS x FROM week_feature_slots WHERE feature_id = ?", featureId)) as Row | undefined;
+          if (f && f.tier === "nice" && !pinned) await db.run("DELETE FROM week_features WHERE id = ?", featureId);
+        }
+        // No row before the add: the week was a draft, nothing reads its time; it keeps the add's.
+        if (before !== null) await db.run("UPDATE week_plans SET updated_at = ? WHERE week_start = ?", before, weekStart);
+        return true;
+      });
+    },
     /** Must or nice to have; changing tier puts it back in DevOps order within the new tier. */
     async setWeekItemTier(id: number, tier: "must" | "nice"): Promise<WeekFeature> {
       return tx(async () => {
