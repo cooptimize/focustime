@@ -616,3 +616,12 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - Follow-up: the hover says the size as DevOps has it ("size 3"), not the field's name ("Story Points"), which the week load doesn't carry. (Answered Nov 11: the hover shows the size the way the rest of the app does, the letter and its hours, not the DevOps field's value.)
 - Follow-up 2: a feature's hover says its size only when it is on the week's list with an estimate ("about 6h"); otherwise the hover has no size. Should it say the 4h default?
 - Follow-up 2: a story's size on hover is FocusTime's own (its to-do's size, else the week list's, else "Size? · 2h"); DevOps points are not turned into a letter anywhere in the app, so they aren't here either.
+
+## CI-2
+
+- The offline path needs the cache to be written on the same runner image. On the first run after GitHub rolls out a new `ubuntu-latest` image (about weekly), every shard takes the online path once; an outage on that day would still fail them. Accept, or also allow the offline path from the previous image's cache when WebKit starts (the launch is the check)?
+- A new Playwright version also takes the online path once (its package list may differ). Same question; read as "accept" for now.
+- The proof runs on pull requests that change the script or the CI workflows, and by hand (from main only, as GitHub allows). Should it also run weekly, so a new runner image that breaks the offline path shows before an outage does?
+- `docs/architecture.md`'s scripts line doesn't list `ci-webkit-deps.sh`: this step was limited to `.github/`, `scripts/` and the named docs while QT-1 works in `docs/`. Add it in a later docs pass.
+- The other step outages can still stop are `npm ci` (npm's registry) and Install WebKit on a browser cache miss (Playwright's CDN). Neither failed on Nov 11. Worth the same treatment?
+- Each install-deps attempt is cut off at 3 minutes (3 attempts, about 10 minutes at worst), because the browser jobs time out at 20 minutes and the tests take up to 6.5. A mirror slow enough to need more (AP-2 saw 8 to 17 minutes) now fails in the step instead of timing the job out. The review suggested one overall deadline instead; kept per attempt so each retry starts fresh. Fine?
