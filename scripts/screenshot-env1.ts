@@ -1,6 +1,6 @@
 // ENV-1 screenshots on a throwaway demo server (e2e/harness.ts: fictional data, its own temp folder and port). The demo
 // server isn't production, so Settings › Notifications shows "This test site" with its switch, and Admin › Clients ›
-// Meetings shows Check now on an Automatic call. At 1920, Default and Larger text, dark and light.
+// Meetings shows Check now on an Automatic call (the demo's call is switched to Automatic first). At 1920, Default and Larger text, dark and light.
 // Usage: node scripts/screenshot-env1.ts <outDir>
 import { mkdirSync } from "node:fs";
 import type { Page } from "playwright-core";
@@ -47,12 +47,15 @@ try {
       await go("#/settings/notifications");
       await page.getByText("Send me reminders and Teams messages from this test site").waitFor({ timeout: 30_000 });
       await page.screenshot({ path: `${out}/env1-settings-${tag}.png` });
+      // The demo's call is an Upload call; made Automatic here (the app's own action) so Check now shows. Not pressed:
+      // the demo has no Microsoft sign-in to look with.
+      const list = (await act(page, "meeting.list", { clientKey: "Northwind" })) as { meetings: { id: number; source: string }[] };
+      for (const m of list.meetings) if (m.source !== "automatic") await act(page, "meeting.update", { seriesId: m.id, source: "automatic" });
       await go("#/settings/admin-clients");
       const check = page.getByRole("button", { name: "Check now" }).first();
       await check.waitFor({ timeout: 30_000 });
       await check.scrollIntoViewIfNeeded();
-      await check.click();
-      await page.waitForTimeout(800);
+      await page.waitForTimeout(400);
       await page.screenshot({ path: `${out}/env1-check-now-${tag}.png` });
       await ctx.close();
     }
