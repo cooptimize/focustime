@@ -23,6 +23,18 @@ const poll = async (page: Page) => {
   await page.clock.runFor(31_000);
   await page.waitForTimeout(800);
 };
+/** <name>-light.png and <name>-dark.png at 1440×900 when FOCUSTIME_SHOTS names a folder; back to light after. */
+const shot = async (page: Page, name: string) => {
+  if (!SHOTS) return;
+  for (const theme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme === "dark" ? "cooptimize-dark" : "cooptimize-light");
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: `${SHOTS}/${name}-${theme}.png` });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.evaluate(() => (document.documentElement.dataset.theme = "cooptimize-light"));
+};
 const row = (page: Page, title: string) => page.locator(".ah-row", { has: page.getByRole("link", { name: title, exact: true }) });
 
 describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
@@ -72,10 +84,10 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
     await changed.waitFor({ timeout: 10_000 });
     await expect(changed.textContent()).resolves.toContain("Changed in DevOps just now");
     await changed.getByRole("button", { name: "Show the new values" }).click();
-    await expect(changed.locator(".ah-changed-vals").textContent()).resolves.toMatch(/Start: DevOps has .+, yours .*Nov 16/);
+    await expect(changed.locator(".ah-changed-vals").textContent()).resolves.toMatch(/Start: DevOps has no value, yours .*Nov 16/);
     // Mine stays staged.
     await expect(row(page, "Store locator").locator(".ah-col-start").getAttribute("class")).resolves.toContain("ah-pend");
-    if (SHOTS) await page.screenshot({ path: `${SHOTS}/dv2-ahead-changed-light.png` });
+    await shot(page, "dv2-ahead-changed");
   }, T);
 
   it("Week: a story's new title shows in the block's Your stories after a poll, with the panel left open", async () => {
@@ -104,7 +116,7 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
     const fresh = page.locator(".devops-fresh").first();
     await expect(fresh.textContent()).resolves.toMatch(/^DevOps checked /);
     await expect(fresh.getAttribute("title")).resolves.toMatch(/Northwind: checked/);
-    if (SHOTS) await page.screenshot({ path: `${SHOTS}/dv2-refresh-ahead-light.png` });
+    await shot(page, "dv2-refresh-ahead");
     // R does the same from any tab, its answer in the status bar.
     await teammate(page, "Harbor", { id: 2212, title: "Validate the date of birth" });
     await page.locator("body").click({ position: { x: 5, y: 300 } });
@@ -134,21 +146,22 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
       await group.getByLabel("Item number").fill(n);
       await group.getByRole("button", { name: "Find" }).click();
       await group.locator(".find-item-answer").waitFor();
+      await group.locator(".find-item-answer").scrollIntoViewIfNeeded();
       await page.waitForTimeout(200);
       return (await group.locator(".find-item-answer li").allTextContents()).join("\n");
     };
     const out = await find("1710");
     expect(out).toMatch(/DevOps has #1710/);
     expect(out).toMatch(/outside what FocusTime shows for Northwind/);
-    if (SHOTS) await page.screenshot({ path: `${SHOTS}/dv2-find-out-of-area-light.png` });
+    await shot(page, "dv2-find-out-of-area");
     const fine = await find("1111");
     expect(fine).toMatch(/DevOps has #1111/);
     expect(fine).toMatch(/FocusTime has it/);
     expect(fine).toMatch(/Ahead shows it/);
-    if (SHOTS) await page.screenshot({ path: `${SHOTS}/dv2-find-fine-light.png` });
+    await shot(page, "dv2-find-fine");
     const none = await find("999999");
     expect(none).toMatch(/DevOps has no #999999 in Northwind's project/);
-    if (SHOTS) await page.screenshot({ path: `${SHOTS}/dv2-find-missing-light.png` });
+    await shot(page, "dv2-find-missing");
     expect(errors).toEqual([]);
   }, T);
 });

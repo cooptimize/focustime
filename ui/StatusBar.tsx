@@ -157,7 +157,7 @@ export function StatusBar({ sources, devops, hours, loading, busy, notice, extra
 /** DV-2: "DevOps checked 40s ago" (the stalest client), each client's check or trouble on hover. */
 function DevOpsFreshness({ clock }: { clock: number }) {
   const env = useDevOpsFresh();
-  const w = env ? freshWords(env.entries, clock) : null;
+  const w = env ? freshWords(env.entries, clock + env.skewMs) : null;
   if (!w) return null;
   return (
     <span className={`devops-fresh muted${w.trouble ? " trouble" : ""}`} tabIndex={0} title={w.title} aria-label={`${w.text}. ${w.title.replace(/\n/g, ". ")}`}>
@@ -169,16 +169,16 @@ function DevOpsFreshness({ clock }: { clock: number }) {
 /** One entry for all clients: "DevOps 4 of 5 live". Hover for a summary, click for each client's status. */
 function DevOpsEntry({ devops, clock, timeZone }: { devops: ClientWork[] | null; clock: number; timeZone: string }) {
   const [open, setOpen] = useState(false);
+  const fresh = useDevOpsFresh();
   const sum = devopsSummary(devops);
   if (!sum || !devops) return null;
   const cls = sum.level === "live" ? "live" : sum.level === "partial" ? "cached" : "error";
-  const fresh = useDevOpsFresh();
   const freshOf = (k: string) => fresh?.entries.find((e) => e.clientKey === k) ?? null;
   const lines = devops.map((c) => {
     const f = freshOf(c.clientKey);
-    return f ? clientLine(f, clock) : `${c.clientName}: ${c.message ?? workStatusLabel(c)}`;
+    return f ? clientLine(f, clock + (fresh?.skewMs ?? 0)) : `${c.clientName}: ${c.message ?? workStatusLabel(c)}`;
   }).join("\n");
-  const words = fresh ? freshWords(fresh.entries, clock) : null;
+  const words = fresh ? freshWords(fresh.entries, clock + fresh.skewMs) : null;
   return (
     <span className={`source devops ${cls}`}>
       <button type="button" className="devops-toggle" aria-expanded={open} aria-controls="devops-status" title={lines} onClick={() => setOpen((o) => !o)}>
@@ -193,7 +193,7 @@ function DevOpsEntry({ devops, clock, timeZone }: { devops: ClientWork[] | null;
             {devops.map((c) => (
               <li key={c.clientKey} className={c.status === "ok" ? "ok" : "problem"}>
                 <strong>{c.clientName}</strong>
-                <span className="muted"> · {workStatusLabel(c)} · {c.items.length} open{freshOf(c.clientKey) ? ` · ${clientDetail(freshOf(c.clientKey)!, clock)}` : c.fetchedAt ? ` · ${updatedAgo(c.fetchedAt, clock, timeZone)}` : ""}</span>
+                <span className="muted"> · {workStatusLabel(c)} · {c.items.length} open{freshOf(c.clientKey) ? ` · ${clientDetail(freshOf(c.clientKey)!, clock + (fresh?.skewMs ?? 0))}` : c.fetchedAt ? ` · ${updatedAgo(c.fetchedAt, clock, timeZone)}` : ""}</span>
                 {c.message && <div className="msg">{c.message}</div>}
               </li>
             ))}

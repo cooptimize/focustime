@@ -46,19 +46,21 @@ DevOps store (`devops_items`), which the poller fills; every screen reads the st
 | Outside them, nobody using FocusTime | no checks (the database can pause, D431) | until the next start of hours or the next use |
 | Slowed by DevOps | doubled per slow-down, up to 15 minutes; Retry-After holds even Refresh | up to 15 minutes |
 
-## After DV-2
+## After DV-2 (as built, checked by `e2e/dv2.test.ts`)
 
 | Screen | On open | On window focus | On a timer | After a FocusTime write | On Refresh (R or the button) |
 |---|---|---|---|---|---|
 | Day (Today) | week load | week load, at most once a minute; the versions are asked again | **when a shown client's version moves** (asked every 30 s while visible), plus the 5-minute quiet load | yes | R and the button on every tab: forces a check of the clients on screen, says what it found, then rereads |
-| Week's cards (Board, Plan, Team) | same | same | same as Day (Team too) | yes | same |
+| Week's cards (Board, Plan) | same | same | same as Day | yes | same |
+| Week › Team | `team.view` | unchanged | unchanged (what people committed, not DevOps) | plan version | unchanged |
 | Add work panel | from the week load | follows it | follows it | yes | follows it |
 | Details panel | from the week load | follows it | follows it | yes | follows it |
 | Story card | `item.card` | the versions | **when its client's version moves** (quiet) | yes | yes |
 | Ahead › Grid, Gantt, Readiness, Backlog | `ahead.load` | the versions | **when a shown client's version moves** (quiet: no "Reading…", place kept, staged changes kept; an item I have staged that changed shows "Changed in DevOps just now") | yes | R and the button: the shared check, then Ahead rereads |
-| Status | `status.report` | the versions | **when a shown client's version moves** (typed lines kept) | plan version | R and the button |
+| Status | `status.report` | the versions | **when a shown client's version moves** (quiet) | plan version | R and its own button, with the answer beside it |
 | Inbox items linked to DevOps | `inbox.list` | the versions | **when one of my clients' version moves** | after an action | R and the button |
-| Status bar's DevOps entry | "DevOps checked 40s ago", per client on hover | refreshed | every 30 s from the versions answer | | the answer: "DevOps checked just now · 3 changes" |
+| Status bar | "DevOps checked 40s ago" (server clock), per client on hover | refreshed | every 30 s from the versions answer | | the answer: "DevOps checked just now · 3 changes" |
+| Why isn't it showing? | Settings › DevOps › Find an item: DevOps, the store, the scope, Day, Week, Ahead and Status, each with why not | | | | |
 
 **The poller after DV-2:**
 

@@ -289,7 +289,8 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
     if (!mine.length || !it) return null;
     const now = (f: ChangeField): ChangeValue => (f === "start" ? it.start : f === "target" ? it.target : f === "size" ? it.size : f === "state" ? it.state : it.assignee?.email ? { email: it.assignee.email, name: it.assignee.name } : null) as ChangeValue;
     const label: Record<ChangeField, string> = { start: "Start", target: "Target", size: "Size", assignee: "Owner", state: "State" };
-    return mine.map((c) => ({ field: label[c.field], devops: valueText(c.field, now(c.field)), mine: valueText(c.field, c.value, c.half) }));
+    const text = (f: ChangeField, v: ChangeValue | undefined, half: DayHalf | null = null) => (v === null || v === undefined || v === "" ? (f === "assignee" ? "nobody" : "no value") : valueText(f, v, half));
+    return mine.map((c) => ({ field: label[c.field], devops: text(c.field, now(c.field)), mine: text(c.field, c.value, c.half) }));
   };
   const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, setChanges, breakDown, color, focusItem: item, error: setError, view, changedUnder } : null;
   const anyFilter = counts.shown !== counts.total;

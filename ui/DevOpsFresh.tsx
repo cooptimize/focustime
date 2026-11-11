@@ -15,6 +15,8 @@ export type FreshEnv = {
   entries: FreshEntry[];
   /** Moves with every answer (what subscribers watch). */
   seq: number;
+  /** The server's clock minus this browser's, from the last answer (so "40s ago" never reads a skewed clock). */
+  skewMs: number;
   /** Refresh: a check now of these clients (all of mine without), and what it found. */
   refresh: (clientKeys?: string[]) => Promise<RefreshAnswer | null>;
 };
@@ -30,7 +32,8 @@ const merge = (was: readonly FreshEntry[], next: readonly FreshEntry[]): FreshEn
 
 /** App's one poll. `on`: signed in with data showing (never before the first load). */
 export function useDevOpsFreshFlow(on: boolean): FreshEnv {
-  const [state, setState] = useState<{ entries: FreshEntry[]; seq: number }>({ entries: [], seq: 0 });
+  const [state, setState] = useState<{ entries: FreshEntry[]; seq: number; skewMs: number }>({ entries: [], seq: 0, skewMs: 0 });
+  const skew = (serverNow: string) => (Number.isFinite(Date.parse(serverNow)) ? Date.parse(serverNow) - Date.now() : 0);
   const inflight = useRef(false);
   const last = useRef(0);
   const ask = useCallback(async () => {
@@ -40,7 +43,7 @@ export function useDevOpsFreshFlow(on: boolean): FreshEnv {
     try {
       const r = await call<VersionsAnswer>("devops.versions", {}, { background: true });
       // Only the clients in this answer: one I lost access to drops out (and never "moves").
-      setState((s) => ({ entries: r.clients, seq: s.seq + 1 }));
+      setState((s) => ({ entries: r.clients, seq: s.seq + 1, skewMs: skew(r.serverNow) }));
     } catch {
       // Offline or signed out: the next ask tries again; screens keep what they show.
     } finally {
@@ -65,7 +68,7 @@ export function useDevOpsFreshFlow(on: boolean): FreshEnv {
   const refresh = useCallback(async (clientKeys?: string[]) => {
     try {
       const r = await call<RefreshAnswer>("devops.refresh", clientKeys ? { clientKeys } : {});
-      setState((s) => ({ entries: merge(s.entries, r.clients), seq: s.seq + 1 }));
+      setState((s) => ({ entries: merge(s.entries, r.clients), seq: s.seq + 1, skewMs: skew(r.serverNow) }));
       return r;
     } catch {
       return null;

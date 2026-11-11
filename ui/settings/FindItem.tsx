@@ -32,8 +32,8 @@ export function FindItem({ clients }: { clients: { key: string; name: string }[]
   return (
     <div className="find-item">
       <form className="find-item-form" onSubmit={(e) => void submit(e)} aria-label="Find an item">
-        <label>
-          <span>Client</span>
+        <label className="set-field">
+          <span className="set-label">Client</span>
           <select value={client} onChange={(e) => setClient(e.target.value)}>
             {clients.map((c) => (
               <option key={c.key} value={c.key}>
@@ -42,8 +42,8 @@ export function FindItem({ clients }: { clients: { key: string; name: string }[]
             ))}
           </select>
         </label>
-        <label>
-          <span>Item number</span>
+        <label className="set-field">
+          <span className="set-label">Item number</span>
           <input type="text" inputMode="numeric" value={id} onChange={(e) => setId(e.target.value)} placeholder="4417" aria-label="Item number" />
         </label>
         <button type="submit" className="mini primary" disabled={busy || !id.trim()}>

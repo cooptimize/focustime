@@ -558,3 +558,12 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - If Kat sends a client's report late, the dot still goes at 7:00 AM ET while the "3 to update" hint (counted against Kat's real last send) can stay until the next read. Worth reading Kat's send per client for the dot?
 - The brief said the command menu's Status entry keeps its hint "3 to update". The Ctrl+K entry's hint is its key (now 4); "3 to update" is the phone ⋯ menu's, which keeps it. Should Ctrl+K show "3 to update" too?
 - Setup's Done screen still offers "Plan your week" (a setup screen, not Day). Rename it to "Add work to your week" with WD-1's words?
+
+## DV-2
+
+- Taken as the simpler reading: "every open screen within about 2 minutes" is measured from the change reaching the store (the Rule, 1 minute in hours) plus the next 30-second versions ask. Week › Team isn't covered: it shows what people committed, which isn't DevOps. Should Team reread on a version move too?
+- Refresh counts "changes" as items the check added, changed or removed for the clients on screen, including changes FocusTime itself wrote since the last check. Should a person's own writes be left out of the count?
+- Find an item answers for one client at a time; a number in another of my clients' projects reads as "DevOps has no #N in X's project". Should it try my other clients and say where it is?
+- The finder's Ahead line uses my saved Ahead filters, not what an open Ahead tab has unsaved. Fine?
+- Ahead's "Changed in DevOps just now" lasts until Ahead is left; coming back reads fresh values with no flag. Should it last until I save or discard?
+- Not done here (the brief's "not in this step"): service hooks or webhooks to cut the 1 to 2 minute delay, and what Ahead shows by ownership or level (AH-8).
