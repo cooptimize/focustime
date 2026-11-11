@@ -55,7 +55,10 @@ async function openCloseOut(page: Page): Promise<void> {
 }
 
 /** Today's must pick (demo: Cooptimize's "Timesheet summary query" in the Monday AM block), done. */
-async function mustDone(page: Page): Promise<void> {
+/** CF-1: every to-do today done (the moment's rule): take the demo's off, then add one and tick it. */
+async function allDoneToday(page: Page): Promise<void> {
+  const st = await call(page, "planday.start", { date: "2026-11-02" });
+  for (const p of st.data.picks as { id: number; status: string }[]) if (p.status === "planned" || p.status === "done") await call(page, "pick.remove", { id: p.id });
   const add = await call(page, "pick.add", { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", itemId: 4411, size: "S" });
   expect(add.ok).toBe(true);
   const w = await call(page, "week.load", {});
@@ -105,11 +108,11 @@ describe.skipIf(!CHROMIUM)("Brand: the opening, the Close out reverse and Lumen'
     await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
     await page.waitForSelector(".topbar");
     expect(await seen(page)).toMatchObject({ loader: true, unroll: false, sweep: false });
-    // Close out with today's musts done: no reverse, the moment shows Lumen still, then Today.
-    await mustDone(page);
+    // Close out with every to-do today done: no reverse, the moment shows Lumen still, then Today.
+    await allDoneToday(page);
     await openCloseOut(page);
     await page.locator(".closeout-panel .done-btn").click();
-    await page.getByText("Musts done. See you tomorrow.").waitFor();
+    await page.getByText("All done. See you tomorrow.").waitFor();
     await expect(page.locator(".brand-stage [data-lumen]").getAttribute("data-lumen")).resolves.toBe("still");
     await page.keyboard.press("Space"); // any key skips
     await page.waitForSelector(".brand-stage", { state: "detached" });
@@ -138,16 +141,16 @@ describe.skipIf(!CHROMIUM)("Brand: the opening, the Close out reverse and Lumen'
     await ctx.close();
   }, T);
 
-  it("Close out plays the reverse, then the musts moment (Lumen bobs), then Today; a click skips", async () => {
+  it("Close out plays the reverse, then the all-done moment (Lumen bobs), then Today; a click skips", async () => {
     const { page, errors } = await freshPage(h);
     await page.addInitScript(WATCH);
     await page.reload();
     await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
-    await mustDone(page);
+    await allDoneToday(page);
     await openCloseOut(page);
     await page.locator(".closeout-panel .done-btn").click();
     await page.waitForSelector('[data-close="unroll"]');
-    await page.getByText("Musts done. See you tomorrow.").waitFor();
+    await page.getByText("All done. See you tomorrow.").waitFor();
     await page.waitForSelector('[data-close="moment"] [data-lumen="bob"]');
     await page.locator(".brand-stage").click();
     await page.waitForSelector(".brand-stage", { state: "detached" });

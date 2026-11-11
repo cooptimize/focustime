@@ -147,7 +147,7 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     await page.close();
   }, T);
 
-  it("Close out: a panel over Today; no pick twice, dropped picks only as a count; no Lumen; Done closes the day", async () => {
+  it("Close out: a panel over Today; no pick twice, a to-do taken off today is gone (CF-1); no Lumen; Done closes the day", async () => {
     const { page, errors } = await freshPage(h);
     const ids = await seed(page);
     await call(page, "pick.remove", { id: ids[ids.length - 1] });
@@ -156,7 +156,7 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     await go(page, "#/today/closeout");
     const panel = page.locator(".closeout-panel");
     await panel.waitFor();
-    await expect.poll(() => panel.locator(".cp-numbers").textContent()).toMatch(/1\s*dropped/);
+    await expect.poll(() => panel.locator(".cp-numbers").textContent()).toMatch(/0\s*dropped/);
     await expect(page.locator(".pick-row.dropped").count()).resolves.toBe(0);
     const titles = await page.locator("main .pick-row .pr-title").allTextContents();
     expect(new Set(titles).size).toBe(titles.length);

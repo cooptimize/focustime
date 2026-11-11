@@ -14,6 +14,15 @@ async function themed(page: Page, theme: (typeof THEMES)[number]) {
   await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t === "light" ? "cooptimize-light" : "cooptimize-dark"), theme);
   await page.waitForTimeout(200);
 }
+async function clearToday(page: Page) {
+  await page.evaluate(async () => {
+    const csrf = document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "";
+    const post = (action: string, input: unknown) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": csrf }, body: JSON.stringify({ action, input }) }).then((r) => r.json());
+    const st = await post("planday.start", { date: "2026-11-02" });
+    for (const p of st.data.picks as { id: number; status: string }[]) if (p.status === "planned" || p.status === "done") await post("pick.remove", { id: p.id });
+  });
+  await page.reload();
+}
 const shot = (page: Page, name: string, clip?: { x: number; y: number; width: number; height: number }) => page.screenshot({ path: `${DIR}/${name}.png`, ...(clip ? { clip } : {}) });
 async function boxOf(page: Page, sel: string, pad = 8) {
   const b = await page.locator(sel).first().boundingBox();
@@ -60,6 +69,14 @@ describe.skipIf(!CHROMIUM || !DIR)("CF-1 screenshots", () => {
       await page.keyboard.press("1");
       await page.waitForTimeout(600);
       await shot(page, `day-1440x900-${theme}`);
+      // Day with nothing on today (after only: before CF-1 the card read "Today isn't planned yet").
+      if (!DIR!.endsWith("before")) {
+        await clearToday(page);
+        await themed(page, theme);
+        await page.locator(".today-view").waitFor();
+        await page.waitForTimeout(600);
+        await shot(page, `day-empty-1440x900-${theme}`);
+      }
       await page.close();
     }, T);
   }
@@ -73,6 +90,13 @@ describe.skipIf(!CHROMIUM || !DIR)("CF-1 screenshots", () => {
       await page.keyboard.press("2");
       await page.waitForTimeout(600);
       await shot(page, `phone-week-${theme}`);
+      if (!DIR!.endsWith("before")) {
+        await clearToday(page);
+        await themed(page, theme);
+        await page.keyboard.press("1");
+        await page.waitForTimeout(800);
+        await shot(page, `phone-day-empty-${theme}`);
+      }
       await page.close();
     }, T);
   }

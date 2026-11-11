@@ -110,7 +110,7 @@ only if the app happens to be awake inside that kind's window. To see each one:
    Teams once…" (it does until step 1 reaches it).
 3. Turn on Let FocusTime message me in Teams, then Send me a test now beside a kind. The card comes at once, marked
    "(test)", whatever the switches, the time, quiet hours or focus say. Nudges use a sample when nothing is due.
-4. Tap through it: Done and Undo change your plan at once (look at Today); Move…, Confirm today and Close out show a
+4. Tap through it: Done and Undo change your plan at once (look at Today); Move… and Close out show a
    proposal in the card that changes nothing until Confirm. Reply to a Close out card in your own words ("all but 2").
    Send "capture: something" and look in Inbox › Captures.
 

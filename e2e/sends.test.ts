@@ -94,11 +94,11 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
     await expect(mine.textContent()).resolves.toContain("Waiting");
     await expect(group.locator(".sent-row", { hasText: "Invoice PDF totals" }).textContent()).resolves.toContain("Can't: Out Thursday and Friday");
 
-    // Team: committed features only; Sam hasn't committed; Taylor Kim isn't on FocusTime yet.
+    // Team: each person's week features; Sam has nothing on his week; Taylor Kim isn't on FocusTime yet.
     await team(page);
     const nw = page.locator(".team-client", { hasText: "Northwind" }).first();
     await expect(nw.locator(".team-person", { hasText: "Priya Shah" }).textContent()).resolves.toContain("Order history export");
-    await expect(nw.locator(".team-person", { hasText: "Sam Ortiz" }).textContent()).resolves.toContain("Not confirmed yet");
+    await expect(nw.locator(".team-person", { hasText: "Sam Ortiz" }).textContent()).resolves.toContain("Nothing on their week yet");
     await expect(page.locator(".team-client", { hasText: "Harbor" }).locator(".team-person", { hasText: "Taylor Kim" }).textContent()).resolves.toContain("Not on FocusTime yet");
     expect(errors).toEqual([]);
     await page.close();
