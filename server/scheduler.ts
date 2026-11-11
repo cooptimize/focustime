@@ -12,6 +12,7 @@
 import type { Logger } from "../log/logger.ts";
 import type { WakeStore } from "../store/wake-store.ts";
 import type { PersonTicks } from "./ticks.ts";
+import { policyJobs, type BackgroundPolicy } from "../config/background-policy.ts";
 
 export type PassKind = "fast" | "slow";
 
@@ -19,6 +20,11 @@ export type PassKind = "fast" | "slow";
 export type { WakeStore };
 
 export type SchedulerOptions = {
+  /**
+   * ENV-1: which app jobs may run here (config/background-policy.ts). Production keeps every job as given; elsewhere a
+   * job the policy doesn't name or allow is dropped at start, and an in_use job runs only while someone is active.
+   */
+  policy: BackgroundPolicy;
   /** Everyone's ticks (built on first use, so an idle start reads nobody's rows). */
   people: () => Iterable<PersonTicks> | Promise<Iterable<PersonTicks>>;
   log: Logger;
@@ -50,6 +56,10 @@ export function createScheduler(o: SchedulerOptions) {
   /** ADM-2: when each job last ran (in memory; Admin › Status shows it). */
   const lastRun = new Map<string, string>();
   let waking = false;
+  // ENV-1: the jobs this deployment runs, decided once.
+  const jobs = policyJobs(o.policy, o.jobs ?? [], active, (name) => o.log({ source: "plan", op: "scheduler", kind: `job_off:${name}` }));
+  if (!o.policy.allows("maintenance")) o.log({ source: "plan", op: "scheduler", kind: "job_off:maintenance" });
+  const maintenance = o.policy.allows("maintenance") ? o.maintenance : undefined;
 
   /** One pass of a kind for everyone; how many people it ran for (0 when one of its kind is still running). */
   async function pass(kind: PassKind): Promise<number> {
@@ -57,7 +67,7 @@ export function createScheduler(o: SchedulerOptions) {
     running[kind] = true;
     try {
       if (kind === "slow")
-        for (const j of o.jobs ?? []) {
+        for (const j of jobs) {
           await j.run().catch(() => o.log({ source: "plan", op: "scheduler", kind: `${j.name}_failed` }));
           lastRun.set(j.name, now().toString());
         }
@@ -65,10 +75,10 @@ export function createScheduler(o: SchedulerOptions) {
       const r = await Promise.allSettled(people.map((t) => t[kind]()));
       const failed = r.filter((x) => x.status === "rejected").length;
       if (failed) o.log({ source: "plan", op: "scheduler", kind: `${kind}_failed`, count: failed });
-      if (kind === "slow" && o.maintenance && (!lastMaintenance || now().since(lastMaintenance).total("milliseconds") >= o.maintenance.everyMs)) {
+      if (kind === "slow" && maintenance && (!lastMaintenance || now().since(lastMaintenance).total("milliseconds") >= maintenance.everyMs)) {
         lastMaintenance = now();
         lastRun.set("maintenance", lastMaintenance.toString());
-        await o.maintenance.run().catch(() => o.log({ source: "plan", op: "scheduler", kind: "maintenance_failed" }));
+        await maintenance.run().catch(() => o.log({ source: "plan", op: "scheduler", kind: "maintenance_failed" }));
       }
       return people.length;
     } finally {
@@ -84,7 +94,7 @@ export function createScheduler(o: SchedulerOptions) {
       const w = await p.wake?.().catch(() => t.add({ minutes: 1 }));
       if (w && Temporal.Instant.compare(w, next) < 0) next = w;
     }
-    for (const j of o.jobs ?? []) {
+    for (const j of jobs) {
       const w = await j.wake().catch(() => t.add({ minutes: 1 }));
       if (w && Temporal.Instant.compare(w, next) < 0) next = w;
     }
@@ -143,5 +153,5 @@ export function createScheduler(o: SchedulerOptions) {
     return () => timers.forEach(clearInterval);
   }
 
-  return { pass, start, first, beat, wakeAt: () => wakeAt, lastRuns: (): Record<string, string> => Object.fromEntries(lastRun) };
+  return { pass, start, first, beat, wakeAt: () => wakeAt, lastRuns: (): Record<string, string> => Object.fromEntries(lastRun), jobNames: (): string[] => jobs.map((j) => j.name) };
 }

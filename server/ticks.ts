@@ -44,9 +44,48 @@ import { userZone } from "../week/zone.ts";
 import { checkDayReminder, checkinReminderDue, checkReminder, checkWeekNudges, closeoutReminderDue } from "./notify.ts";
 import { calendarRefreshDue, checkTimer, TIMER_BUTTONS } from "./timer.ts";
 import type { PassFacts } from "./teams/rhythm.ts";
+import type { BackgroundName, BackgroundPolicy } from "../config/background-policy.ts";
+
+/**
+ * ENV-1: the parts of a person's passes, in the order they run, each under its name in the background policy
+ * (config/background-policy.ts). Production runs every part, as before ENV-1; outside production a part runs only when
+ * the policy allows it (opt_in parts only for a person who switched "from this test site" on).
+ */
+export const SLOW_PARTS = [
+  ["teams_rhythm", "teams_rhythm"],
+  ["day_reminders", "notices"],
+  ["workday_notices", "notices"],
+  ["vm_notice", "notices"],
+  ["urgent_asks", "notices"],
+  ["chat_text_cleanup", "chat_text_cleanup"],
+  ["conversation_notices", "notices"],
+  ["takes", "notices"],
+  ["notes", "notices"],
+  ["team", "notices"],
+  ["meetings", "notices"],
+] as const satisfies readonly (readonly [string, BackgroundName])[];
+export const FAST_PARTS = [
+  ["timer", "focus_timer"],
+  ["warnings", "calendar_refresh"],
+  ["held", "notices"],
+  ["sweep", "notice_sweep"],
+  ["teams_status", "teams_status"],
+] as const satisfies readonly (readonly [string, BackgroundName])[];
+export type SlowPart = (typeof SLOW_PARTS)[number][0];
+export type FastPart = (typeof FAST_PARTS)[number][0];
+
+/** The parts a person's passes run under a policy (their opt-in read from their settings). */
+export function partsFor(policy: BackgroundPolicy, optIn: boolean): { slow: SlowPart[]; fast: FastPart[] } {
+  return {
+    slow: SLOW_PARTS.filter(([, n]) => policy.allows(n, { optIn })).map(([p]) => p),
+    fast: FAST_PARTS.filter(([, n]) => policy.allows(n, { optIn })).map(([p]) => p),
+  };
+}
 
 export type TickDeps = {
   log: Logger;
+  /** ENV-1: what may run here (server/main.ts computes it once from the environment). */
+  policy: BackgroundPolicy;
   now: () => Temporal.Instant;
   notifications: HostNotifications;
   media: HostMedia;
@@ -171,7 +210,12 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       // The host shows it at once (never waiting on the database); the handle names the list row once it is written.
       show: (n, shown) => {
         const row = store.addNotice({ key: n.key, kind: String(n.kind), title: n.title, body: n.body, route: n.route }).catch(() => null);
-        if (d.push && !QUIET_KINDS.has(n.kind)) void configOrNull().then((c) => d.push!.send(n, c?.notify.pushDetails ?? false)).catch(() => log({ source: "server", op: "push_failed" }));
+        // ENV-1: outside production Web Push goes only to a person who opted in, or for a test or sample they pressed.
+        const pressed = n.kind === "test" || n.key.startsWith("sample:");
+        if (d.push && !QUIET_KINDS.has(n.kind))
+          void configOrNull()
+            .then((c) => (pressed || d.policy.allows("web_push", { optIn: !!c?.notify.fromTestSite }) ? d.push!.send(n, c?.notify.pushDetails ?? false) : undefined))
+            .catch(() => log({ source: "server", op: "push_failed" }));
         return host.notifications.show(n, (h) => void row.then((r) => shown?.(`${r ?? ""}|${h}`)));
       },
       close: (h) => {
@@ -371,6 +415,10 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       const urgent = (await urgentRequests(me ? teams.viewer(me) : null, await rc.followed().catch(() => null))).filter((a) => a.sort!.urgency === "now" && !!a.sortedAt && Date.parse(a.sortedAt) >= since);
       for (const u of urgent) await send(notices.urgentAsk(u.messageId, c.clientSettings[u.clientKey]?.name ?? u.clientKey, u.sort!.title, instantNow().toString()));
     }
+  };
+  const chatTextCleanup = async () => {
+    const c = await configOrNull();
+    if (!c) return;
     if (await store.markOnce("asks_cleanup", todayOf(c))) {
       const n = await store.purgeChatText({ olderThan: instantNow().subtract({ hours: 24 * UNMATCHED_DAYS }).toString() });
       log({ source: "plan", op: "asks_cleanup", count: n });
@@ -501,18 +549,25 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     if (!c?.notify.teamsMessages) return;
     await d.teams.tick({ config: c, inHours: f.inHours, pto: f.pto, focusRunning: f.focusRunning });
   };
+  /** ENV-1: the parts this pass may run (production: all of them; elsewhere the policy's, with the person's opt-in). */
+  const parts = async () => partsFor(d.policy, !!(await configOrNull().catch(() => null))?.notify.fromTestSite);
   const tick = async () => {
+    const allowed = new Set<string>((await parts()).slow);
     const facts = await notifier.refresh().catch(() => null);
-    await teamsTick(facts).catch(() => log({ source: "server", op: "teams_rhythm", kind: "failed" }));
-    await dayReminders();
-    await workdayNotices().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
-    await vmTick().catch(() => log({ source: "azure", op: "vm_tick", kind: "failed" }));
-    await asksTick().catch(() => log({ source: "plan", op: "asks_tick", kind: "failed" }));
-    await conversationsTick().catch(() => log({ source: "plan", op: "conversations_tick", kind: "failed" }));
-    await takesTick().catch(() => log({ source: "plan", op: "takes_tick", kind: "failed" }));
-    await notesTick().catch(() => log({ source: "plan", op: "notes_tick", kind: "failed" }));
-    await teamTick().catch(() => log({ source: "plan", op: "team_tick", kind: "failed" }));
-    await meetingsTick().catch(() => log({ source: "plan", op: "meetings_tick", kind: "failed" }));
+    const slow: Record<SlowPart, () => Promise<unknown>> = {
+      teams_rhythm: () => teamsTick(facts).catch(() => log({ source: "server", op: "teams_rhythm", kind: "failed" })),
+      day_reminders: () => dayReminders(),
+      workday_notices: () => workdayNotices().catch(() => log({ source: "plan", op: "notify", kind: "failed" })),
+      vm_notice: () => vmTick().catch(() => log({ source: "azure", op: "vm_tick", kind: "failed" })),
+      urgent_asks: () => asksTick().catch(() => log({ source: "plan", op: "asks_tick", kind: "failed" })),
+      chat_text_cleanup: () => chatTextCleanup().catch(() => log({ source: "plan", op: "asks_tick", kind: "failed" })),
+      conversation_notices: () => conversationsTick().catch(() => log({ source: "plan", op: "conversations_tick", kind: "failed" })),
+      takes: () => takesTick().catch(() => log({ source: "plan", op: "takes_tick", kind: "failed" })),
+      notes: () => notesTick().catch(() => log({ source: "plan", op: "notes_tick", kind: "failed" })),
+      team: () => teamTick().catch(() => log({ source: "plan", op: "team_tick", kind: "failed" })),
+      meetings: () => meetingsTick().catch(() => log({ source: "plan", op: "meetings_tick", kind: "failed" })),
+    };
+    for (const [part] of SLOW_PARTS) if (allowed.has(part)) await slow[part]();
   };
 
   // The focus timer (step 6c): ends sessions on time and warns 5 minutes ahead, window open or not.
@@ -556,15 +611,21 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
   };
   /** Every 5 seconds: the timer, meeting warnings, held notices after focus, handled ones closed, Teams status. */
   const fast = async () => {
-    await timerTick();
-    await warningsTick().catch(() => log({ source: "plan", op: "warnings", kind: "failed" }));
-    await flushHeld().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
-    // Q91: close notifications on screen whose occasion was handled (the day planned, the follow-up closed...).
-    if (notifier.onScreen().length) await notifier.sweep().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
-    // Step 16.3: my Teams status follows focus (set, refreshed on +15, cleared however the session ends, even after a
-    // restart). Only while a timer exists or a status FocusTime set is still to clear.
-    if ((await store.getState(TIMER_KEY)) || (await store.accountState<TeamsStatusState>(TEAMS_STATUS_KEY))?.set)
-      await presenceContext(liveCtx).then(syncTeamsStatus).catch(() => log({ source: "outlook", op: "teams_status", kind: "failed" }));
+    const allowed = new Set<string>((await parts()).fast);
+    const parts2: Record<FastPart, () => Promise<unknown>> = {
+      timer: () => timerTick(),
+      warnings: () => warningsTick().catch(() => log({ source: "plan", op: "warnings", kind: "failed" })),
+      held: () => flushHeld().catch(() => log({ source: "plan", op: "notify", kind: "failed" })),
+      // Q91: close notifications on screen whose occasion was handled (the day planned, the follow-up closed...).
+      sweep: async () => void (notifier.onScreen().length && (await notifier.sweep().catch(() => log({ source: "plan", op: "notify", kind: "failed" })))),
+      // Step 16.3: my Teams status follows focus (set, refreshed on +15, cleared however the session ends, even after a
+      // restart). Only while a timer exists or a status FocusTime set is still to clear. ENV-1: production only.
+      teams_status: async () => {
+        if ((await store.getState(TIMER_KEY)) || (await store.accountState<TeamsStatusState>(TEAMS_STATUS_KEY))?.set)
+          await presenceContext(liveCtx).then(syncTeamsStatus).catch(() => log({ source: "outlook", op: "teams_status", kind: "failed" }));
+      },
+    };
+    for (const [part] of FAST_PARTS) if (allowed.has(part)) await parts2[part]();
   };
   /** A3, the idle rule: the next moment this person's passes could do something (plan/wake.ts). */
   const wake = async (): Promise<Temporal.Instant> => {
@@ -572,10 +633,13 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const timer = await store.getState<TimerState>(TIMER_KEY);
     const points = (await store.getState<{ date: string; points: WarnPoint[] }>("warn_points"))?.points ?? [];
     const running = !!timer?.runningSince && !timer.ended;
-    const pending = (!timer && !!(await store.accountState<TeamsStatusState>(TEAMS_STATUS_KEY))?.set) || (!running && (await notifier.held()).length > 0);
-    const p = c?.plan;
+    // ENV-1: only what this person's parts may do wakes the server (outside production: no reminders unless opted in).
+    const allowed = await parts();
+    const may = new Set<string>([...allowed.slow, ...allowed.fast]);
+    const pending = (may.has("teams_status") && !timer && !!(await store.accountState<TeamsStatusState>(TEAMS_STATUS_KEY))?.set) || (may.has("held") && !running && (await notifier.held()).length > 0);
+    const p = may.has("day_reminders") ? c?.plan : undefined;
     // Shared polling: the chats' next read is the app job's wake (server/scheduler.ts), not anyone's.
-    const teamsAt = d.teams ? await d.teams.wake(c).catch(() => null) : null;
+    const teamsAt = d.teams && may.has("teams_rhythm") ? await d.teams.wake(c).catch(() => null) : null;
     const base = nextWake({
       now: instantNow(),
       zone: c ? userZone(c) : who.zone,
@@ -587,7 +651,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     });
     // SR-1: the status nudge's Friday and Sunday times (Sunday evening is outside the hours the base counts).
     let statusAt: Temporal.Instant | null = null;
-    if (c?.notify.kinds.status_report) {
+    if (c?.notify.kinds.status_report && may.has("day_reminders")) {
       const z = zonedNow(userZone(c));
       const today = z.toPlainDate().toString();
       const doneToday = await store.marked("status_notice", today);

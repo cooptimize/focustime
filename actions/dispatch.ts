@@ -107,6 +107,7 @@ import { DATAVERSE_UNREACHABLE, manyDataverseMatches, noDataverseMatch, type Mat
 import { accountAction, storedIdentity, withMe, IDENTITY_KEY, type MicrosoftAccount, type StoredIdentity } from "./account.ts";
 import { vmAction, vmKey, type VmContext } from "./vm-actions.ts";
 import { presenceAction, syncTeamsStatusWith, type PresenceContext } from "./presence-actions.ts";
+import type { BackgroundPolicy } from "../config/background-policy.ts";
 import type { AzureClient } from "../sources/azure/client.ts";
 import { userZone } from "../week/zone.ts";
 import { inList } from "./admin.ts";
@@ -155,6 +156,11 @@ export type ActionContext = {
   log?: Logger;
   /** S1 (D452): where this runs: local, dev, prod or demo (runtime config). Absent: local. */
   env?: string;
+  /**
+   * ENV-1: what may run here (config/background-policy.ts), computed once by server/main.ts. Only the few on-demand
+   * paths that differ on a test site read it (Teams status, Refresh, Check now). Absent: as in production (tests).
+   */
+  background?: BackgroundPolicy;
   /** R1: what to do when the one-time move from Coopilot's keyring entries failed; shown on the sign-in screen. */
   renameNote?: string | null;
   /** Step 16.4: the profile photo cache (~/.cache/focustime/photos). Absent: photos aren't cached (demo mode, tests). */
@@ -735,6 +741,8 @@ export async function presenceContext(ctx: ActionContext): Promise<PresenceConte
     ...(ctx.plan ? { plan: ctx.plan } : {}),
     config: () => configured(ctx),
     account: await accountOf(ctx),
+    // ENV-1: outside production the focus timer never sets or clears Teams status.
+    writes: ctx.background ? ctx.background.allows("teams_status") : true,
     team: async (cfg) => {
       const r = await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).teammates();
       return r.ok ? r.people : null;

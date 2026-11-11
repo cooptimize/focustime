@@ -16,6 +16,9 @@ import { IDENTITY_KEY } from "../actions/account.ts";
 import type { Notice } from "../plan/notify.ts";
 import { createScheduler } from "./scheduler.ts";
 import { personTicks } from "./ticks.ts";
+import { backgroundPolicy } from "../config/background-policy.ts";
+
+const PRODUCTION = backgroundPolicy({ FOCUSTIME_ENV: "prod" });
 
 const NY = "America/New_York";
 const CHAT = { chatId: "19:fabrikam@thread.v2", displayName: "Fabrikam team", webUrl: null };
@@ -43,7 +46,7 @@ async function setup(o: { focus?: boolean; through?: boolean; member?: boolean }
   const shown: Notice[] = [];
   const notifications = { show: async (n: Notice) => (shown.push(n), null), close: () => {}, line: () => {} } as unknown as HostNotifications;
   const media = { status: async () => ({ players: false, spotify: false }), transition: async () => null, open: async () => {}, endSound: () => {} } as unknown as HostMedia;
-  const ticks = personTicks({ log: () => {}, now: () => at, notifications, media, openRoute: () => {} }, plan, ctx, { zone: NY });
+  const ticks = personTicks({ policy: PRODUCTION, log: () => {}, now: () => at, notifications, media, openRoute: () => {} }, plan, ctx, { zone: NY });
   await plan.setAccountState(IDENTITY_KEY, { oid: ME, tid: HOME_TENANT, name: "Ana", username: "ana@cooptimize.example", email: "ana@cooptimize.example", signedInAt: at.toString(), systemUserId: null, systemUserEmail: null });
   await teams.addChat({ chatId: CHAT.chatId, clientKey: "fabrikam", kind: "customer", displayName: CHAT.displayName, webUrl: null, members: [aChatMember({ external: true }), ...(o.member === false ? [] : [aChatMember({ userId: ME, displayName: "Ana" })])], by: ME });
   if (o.focus) await plan.setState("timer", { kind: "focus", pickId: null, label: "Focus", plannedMinutes: 120, elapsedMs: 0, runningSince: at.toString(), startedAt: at.toString(), ended: false, warned: [] });
@@ -64,7 +67,7 @@ describe("the poll job in the scheduler", () => {
     const order: string[] = [];
     const at = Temporal.Instant.from("2026-11-04T15:00:00Z");
     const stored: Temporal.Instant[] = [];
-    const scheduler = createScheduler({
+    const scheduler = createScheduler({ policy: PRODUCTION,
       people: () => [{ fast: async () => void order.push("fast"), slow: async () => void order.push("person"), wake: async () => at.add({ hours: 3 }) }],
       log: () => {},
       active: () => false,
@@ -80,7 +83,7 @@ describe("the poll job in the scheduler", () => {
   it("a job that fails doesn't stop the pass", async () => {
     const ran: string[] = [];
     const logs: string[] = [];
-    const s = createScheduler({ people: () => [{ fast: async () => {}, slow: async () => void ran.push("person") }], log: (r) => void logs.push(String(r.kind)), jobs: [{ name: "requests_poll", run: async () => { throw new Error("x"); }, wake: async () => null }] });
+    const s = createScheduler({ policy: PRODUCTION, people: () => [{ fast: async () => {}, slow: async () => void ran.push("person") }], log: (r) => void logs.push(String(r.kind)), jobs: [{ name: "requests_poll", run: async () => { throw new Error("x"); }, wake: async () => null }] });
     await s.pass("slow");
     expect(ran).toEqual(["person"]);
     expect(logs).toContain("requests_poll_failed");

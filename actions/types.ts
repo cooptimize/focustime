@@ -490,6 +490,8 @@ export type TeamsStatusView = {
   until: string | null;
   manual: boolean;
   error: string | null;
+  /** ENV-1: this is a test site, where the focus timer never changes Teams status. */
+  testSite?: boolean;
 };
 /** presence.people: a word per Cooptimizer on screen; nothing for anyone presence couldn't be read for. */
 export type PresencePeopleData = { available: boolean; reason: TeamsAccess | null; people: { email: string; name: string; word: import("../plan/presence.ts").PresenceWord }[]; /** Step 16.4: my own, when asked (the top bar's avatar). */ me?: import("../plan/presence.ts").PresenceWord | null };

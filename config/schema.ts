@@ -677,6 +677,9 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
         } else if (k === "teams_messages") {
           if (typeof t.teams_messages !== "boolean") err("notify.teams_messages", "Must be true or false");
           else notify.teamsMessages = t.teams_messages;
+        } else if (k === "from_test_site") {
+          if (typeof t.from_test_site !== "boolean") err("notify.from_test_site", "Must be true or false");
+          else notify.fromTestSite = t.from_test_site;
         } else if (k === "asks_through_focus") {
           if (typeof t.asks_through_focus !== "boolean") err("notify.asks_through_focus", "Must be true or false");
           else notify.asksThroughFocus = t.asks_through_focus;
