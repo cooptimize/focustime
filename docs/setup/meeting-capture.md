@@ -37,9 +37,12 @@ occurrence has a transcript without anyone remembering to start one.
 
 ## 3. FocusTime: register the call
 
-A FocusTime admin who follows the client opens Admin › Clients › <client> › Meetings › Register a meeting:
+A FocusTime admin opens Admin › Clients › <client> › Meetings › Register a meeting. Any client in Admin › Clients'
+list can have calls registered, whoever the admin is (MC-1c); the admin needs to be on the call's invite, as organizer
+or attendee, for it to be on their calendar.
 
-- **From my calendar**: the admin's recurring Teams meetings with someone from outside Cooptimize; pick the series.
+- **From my calendar**: the admin's recurring Teams meetings with someone from outside Cooptimize, whoever organizes
+  them (a Cooptimize teammate's call shows "<name> organizes it at Cooptimize"); pick the series.
 - **Paste a Teams link**: the join link; for a link FocusTime can't find on the admin's calendar, give its weekday,
   time and length.
 
@@ -53,6 +56,25 @@ add or remove them on the card. The transcript source is detected from the organ
 
 An admin can switch a call to Upload at any time. Stop reading removes the registration; stored transcripts go at 30
 days as usual and everything already confirmed stays.
+
+A call a Cooptimize teammate organizes is Automatic like one the admin organizes: Microsoft lets the people on a
+meeting's calendar invite read its transcript, so the registrant's sign-in reads it, then the other reviewers' (MC-1c).
+
+When something goes wrong the form says why beside the control, and keeps what was typed:
+
+| It says | What to do |
+|---|---|
+| Sign in with Microsoft again to see your calendar's meetings | Sign in again (the button beside it), then Register |
+| Microsoft refused FocusTime access to your calendar (Calendars.ReadWrite) | A Cooptimize admin grants it once for everyone in the Entra admin center (section 1) |
+| Microsoft didn't accept that request | Paste the meeting's Teams join link instead |
+| Microsoft isn't answering right now | Try again in a minute; for a pasted link, give its weekday, time and length to register it now as Upload |
+| That isn't one of FocusTime's clients | The account isn't a client in Admin › Clients (Customers); treat it as one there first |
+| That meeting is already registered | Another admin registered it (any copy of its link counts); it's on the client's card |
+
+Each registered call shows its last read under its name: "Transcript read Nov 9, 2:15 PM through <name>'s sign-in",
+or why not ("waiting for the call to end", "<name> needs to sign in with Microsoft again", "Microsoft didn't find this
+call for <name>", "no transcript was recorded"). "A former teammate's sign-in was the one to read it" means a reviewer
+left: change the reviewers.
 
 ## 4. Upload calls (client-hosted)
 

@@ -21,6 +21,8 @@ export type SeriesView = {
   reviewers: { id: string; name: string }[];
   attendees: number;
   mine: { review: boolean; attend: boolean };
+  /** MC-1c: Admin's one line of proof: the latest call's transcript, read when and through whose sign-in, or why not. */
+  lastRead?: string;
 };
 
 export type OccurrenceView = { id: number; seriesId: number; date: string; startAt: string; endAt: string; state: Occurrence["state"]; transcriptFrom: TranscriptSource | null; proposals: number; open: number; aiOutcome: string | null; aiMessage: string | null };

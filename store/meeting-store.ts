@@ -4,7 +4,7 @@
 // attend; confirming, uploading and dismissing need a reviewer. The unscoped methods are for the poll job, the admin
 // registration and the retention purge only. Every write runs in a transaction. Nothing here logs; transcript text
 // never leaves through here except to a viewer's own read and the AI pass.
-import { canConfirm, canView, OCCURRENCE_STATES, PROPOSAL_STATES, type MeetingSeries, type Occurrence, type OccurrenceState, type Proposal, type ProposalBody, type ProposalState, type Quote, type TranscriptSource } from "../plan/meetings.ts";
+import { canConfirm, canView, joinKey, OCCURRENCE_STATES, PROPOSAL_STATES, type MeetingSeries, type Occurrence, type OccurrenceState, type Proposal, type ProposalBody, type ProposalState, type Quote, type TranscriptSource } from "../plan/meetings.ts";
 import type { TranscriptLine } from "../plan/transcript.ts";
 import { PlanError } from "./plan-store.ts";
 import type { Conn, Param, Row } from "./sql/conn.ts";
@@ -56,6 +56,7 @@ const toOccurrence = (r: Row): Occurrence => ({
   aiOutcome: s(r.ai_outcome),
   dismissedBy: s(r.dismissed_by),
   reviewedBy: s(r.reviewed_by),
+  lastRead: json<Occurrence["lastRead"]>(r.last_read, null),
   updatedAt: r.updated_at as string,
 });
 
@@ -74,7 +75,7 @@ const toProposal = (r: Row): Proposal => ({
 
 export type NewSeries = Omit<MeetingSeries, "id" | "createdAt" | "removedAt" | "onlineMeetingId">;
 export type SeriesPatch = Partial<Pick<MeetingSeries, "name" | "role" | "source" | "reviewers" | "attendees" | "onlineMeetingId" | "weekday" | "start" | "minutes" | "zone" | "interval">>;
-export type OccurrencePatch = Partial<Pick<Occurrence, "state" | "nextCheckAt" | "checks" | "transcriptFrom" | "transcriptAt" | "aiOutcome" | "dismissedBy" | "reviewedBy">>;
+export type OccurrencePatch = Partial<Pick<Occurrence, "state" | "nextCheckAt" | "checks" | "transcriptFrom" | "transcriptAt" | "aiOutcome" | "dismissedBy" | "reviewedBy" | "lastRead">>;
 export type ProposalPatch = { body?: ProposalBody; state?: ProposalState; result?: Proposal["result"]; decidedBy?: string | null; decidedAt?: string | null };
 
 const lower = (x: string) => x.trim().toLowerCase();
@@ -98,8 +99,15 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
     async allSeries(): Promise<MeetingSeries[]> {
       return (await db.all("SELECT * FROM meeting_series WHERE removed_at IS NULL ORDER BY id")).map(toSeries);
     },
+    /**
+     * MC-1c: refused (PlanError "That meeting is already registered") when a live series has the same join link, checked
+     * inside the insert's transaction; on SQL Server the read holds an update lock on the table's live rows, so two
+     * admins registering one call at once can't both get through.
+     */
     async addSeries(x: NewSeries): Promise<MeetingSeries> {
       return db.tx(async () => {
+        const live = await db.all(`SELECT join_url FROM meeting_series${db.dialect === "sqlserver" ? " WITH (UPDLOCK, HOLDLOCK)" : ""} WHERE removed_at IS NULL`);
+        if (live.some((r) => joinKey(String(r.join_url)) === joinKey(x.joinUrl))) throw new PlanError("That meeting is already registered");
         const t = stamp();
         const r = await db.run(
           `INSERT INTO meeting_series (client_key, name, role, source, detected, organizer, join_url, event_id, registrant_id, weekday, start_time, minutes, zone, interval_weeks, reviewers_json, attendees_json, created_at, updated_at)
@@ -156,14 +164,14 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
     async updateOccurrence(id: number, p: OccurrencePatch): Promise<Occurrence> {
       return db.tx(async () => {
         if (!(await occurrenceById(id))) throw new PlanError("No such meeting");
-        const cols: Record<keyof OccurrencePatch, string> = { state: "state", nextCheckAt: "next_check_at", checks: "checks", transcriptFrom: "transcript_from", transcriptAt: "transcript_at", aiOutcome: "ai_outcome", dismissedBy: "dismissed_by", reviewedBy: "reviewed_by" };
+        const cols: Record<keyof OccurrencePatch, string> = { state: "state", nextCheckAt: "next_check_at", checks: "checks", transcriptFrom: "transcript_from", transcriptAt: "transcript_at", aiOutcome: "ai_outcome", dismissedBy: "dismissed_by", reviewedBy: "reviewed_by", lastRead: "last_read" };
         const sets: string[] = [];
         const params: Param[] = [];
         for (const [k, v] of Object.entries(p) as [keyof OccurrencePatch, unknown][]) {
           if (v === undefined) continue;
           if (k === "state" && !OCCURRENCE_STATES.includes(v as OccurrenceState)) throw new PlanError("Not a state");
           sets.push(`${cols[k]} = ?`);
-          params.push(v as Param);
+          params.push(k === "lastRead" ? (v === null ? null : JSON.stringify({ ...(v as object), by: (v as { by: string | null }).by?.toLowerCase() ?? null })) : (v as Param));
         }
         sets.push("updated_at = ?");
         await db.run(`UPDATE meeting_occurrences SET ${sets.join(", ")} WHERE id = ?`, [...params, stamp(), id]);
