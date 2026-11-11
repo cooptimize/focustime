@@ -6,7 +6,7 @@
 import { afterEach, expect, it } from "vitest";
 import { createAi } from "../ai/service.ts";
 import { stubProvider } from "../ai/stub.ts";
-import type { ProviderCall } from "../ai/types.ts";
+import type { ProviderCall, ProviderReply } from "../ai/types.ts";
 import type { LogRecord } from "../log/logger.ts";
 import { createPatternsStore } from "../store/patterns-store.ts";
 import { forEachDriver, type TestDb } from "../test/db.ts";
@@ -40,7 +40,7 @@ function world(db: TestDb, reader: FakeReader, o: { allowed?: () => boolean; own
   return { store, runner, logs, sleeps, tick: (ms: number) => void (clock = clock.add({ milliseconds: ms })) };
 }
 
-function ai(o: { allowed?: string[]; respond?: (c: ProviderCall) => string; calls?: ProviderCall[] } = {}): ClassifyDeps {
+function ai(o: { allowed?: string[]; respond?: (c: ProviderCall) => string | ProviderReply; calls?: ProviderCall[] } = {}): ClassifyDeps {
   const allowed = o.allowed ?? ["adatum", "fabrikam"];
   const respond = o.respond ?? patternsAnswer({ other: (ref) => ref === "i1" });
   const service = createAi({
@@ -111,7 +111,7 @@ await forEachDriver("DevOps patterns run (WP-1)", ({ open: openDb }) => {
     };
     await first.runner.startInventory(ME);
     await done(first.runner);
-    reader.before = undefined;
+    delete reader.before;
     const second = world(db, reader, { owner: "proc-2" });
     second.tick(5 * 60_000);
     await second.runner.reconcile();

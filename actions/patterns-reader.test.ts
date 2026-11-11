@@ -14,7 +14,7 @@ import type { Freshness } from "../plan/devops-fresh-types.ts";
 
 const NOW = "2026-11-11T17:00:00Z";
 const ME = "e2e00000-0000-4000-8000-0000000000aa";
-const headers = (h: Record<string, string>) => ({ get: (n: string) => h[n.toLowerCase()] ?? null });
+const headers = (h: Record<string, string>) => new Headers(h);
 const target = (k: string): DevOpsTarget => ({ accountId: `acc-${k}`, clientKey: k, clientName: k, org: "contoso", project: "Sample", projectName: "Sample", email: null, pat: null });
 
 /** The fake DevOps behind the second app-level source: each request goes through the limiter like the real client. */
