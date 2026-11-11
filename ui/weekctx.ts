@@ -29,3 +29,10 @@ export const LiveOnCard = createContext<ReadonlyMap<string, CoworkChatView[]>>(n
  */
 export type AddPanelApi = { at: { date: IsoDate; half: Half } | null; open: (date: IsoDate, half: Half) => void };
 export const AddPanelCtx = createContext<AddPanelApi>({ at: null, open: () => {} });
+
+/**
+ * WD-2: Day today's next to-do (the first planned one in the first block that hasn't ended, or the one being timed):
+ * its row on the card is highlighted and carries Start focus or the running timer. Null everywhere else.
+ */
+export type NextTodo = { id: number | null; actions: (p: import("../plan/types.ts").Pick) => import("react").ReactNode };
+export const NextTodoCtx = createContext<NextTodo | null>(null);

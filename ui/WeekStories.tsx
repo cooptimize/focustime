@@ -23,6 +23,7 @@ import { SizeChip } from "./plan/Estimate.tsx";
 import { Avatar, usePhotos } from "./Presence.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { usePhone } from "./viewport.ts";
+import { takeOffPick } from "./takeoff.ts";
 import { WorkLink } from "./WorkLink.tsx";
 
 /** The drag type for a story or a planned pick moving between Week's blocks. */
@@ -56,6 +57,8 @@ type DndApi = {
   touchStart: (d: Dragged, e: React.PointerEvent) => void;
   /** A short notice at the foot of the screen, with Undo when given. */
   note: (text: string, undo?: (() => Promise<void>) | null) => void;
+  /** WD-2: Take off the plan (a to-do dropped on the block panel): off its block, back to not placed, with Undo. */
+  takeOff: (pickId: number) => Promise<void>;
 };
 export const WeekDnd = createContext<DndApi | null>(null);
 
@@ -83,7 +86,7 @@ export function weekBlocks(week: Week): Block[] {
 
 const errText = (e: unknown) => (e instanceof ActionRefusal || e instanceof Error ? e.message : "That didn't work");
 
-export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenSlot, children }: { data: WeekLoadData; week: Week; now: string; onChanged: () => void; /** Reads DevOps again (after a create or Take one, so the story shows under its feature). */ onRefresh?: () => void; onOpenSlot: (date: IsoDate, half: Half) => void; children: ReactNode }) {
+export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenSlot, onPickDrag, onTookOff, children }: { /** WD-2: a to-do started (its block) or stopped (null) dragging: the block panel opens as the drop area. */ onPickDrag?: (at: { date: IsoDate; half: Half } | null) => void; /** WD-2: a to-do was taken off this block. */ onTookOff?: (at: { date: IsoDate; half: Half }) => void; data: WeekLoadData; week: Week; now: string; onChanged: () => void; /** Reads DevOps again (after a create or Take one, so the story shows under its feature). */ onRefresh?: () => void; onOpenSlot: (date: IsoDate, half: Half) => void; children: ReactNode }) {
   const [dragging, setDragging] = useState<Dragged | null>(null);
   const [touch, setTouch] = useState<{ x: number; y: number } | null>(null);
   const [hover, setHover] = useState<string | null>(null);
@@ -141,6 +144,23 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
     [check, note, onChanged, picks, data.planDay.date],
   );
 
+  const takeOff = useCallback(
+    async (pickId: number) => {
+      const p = picks.find((x) => x.id === pickId);
+      const at = p ? { date: p.date, half: p.half } : null;
+      if (await takeOffPick(pickId, at, { changed: onChanged, note }) && at) onTookOff?.(at);
+    },
+    [picks, onChanged, note, onTookOff],
+  );
+  // WD-2: while a to-do drags, the block panel is the drop area for Take off the plan (it opens when it was closed).
+  const dragPick = dragging?.pickId;
+  useEffect(() => {
+    if (dragPick === undefined) return;
+    const p = picks.find((x) => x.id === dragPick);
+    if (p && p.status === "planned") onPickDrag?.({ date: p.date, half: p.half });
+    return () => onPickDrag?.(null);
+  }, [dragPick]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const menuFor = useCallback(
     (d: Dragged, title: string): MenuStep => ({
       title: `${d.pickId !== undefined ? "Move" : "Add"} ${title} to…`,
@@ -177,7 +197,11 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
   }, []);
   useEffect(() => {
     if (!touch) return;
-    const target = (x: number, y: number) => document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-drop]")?.dataset.drop ?? null;
+    // WD-2: the block panel's Take off area is a target too ("takeoff").
+    const target = (x: number, y: number) => {
+      const el = document.elementFromPoint(x, y);
+      return el?.closest("[data-takeoff]") ? "takeoff" : (el?.closest<HTMLElement>("[data-drop]")?.dataset.drop ?? null);
+    };
     const move = (e: PointerEvent) => (e.preventDefault(), setTouch({ x: e.clientX, y: e.clientY }), setHover(target(e.clientX, e.clientY)));
     const up = (e: PointerEvent) => {
       const k = target(e.clientX, e.clientY);
@@ -186,7 +210,8 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
       setTouch(null);
       setDragging(null);
       setHover(null);
-      if (d && b) void place(d, b);
+      if (d && k === "takeoff" && d.pickId !== undefined) void takeOff(d.pickId);
+      else if (d && b) void place(d, b);
     };
     const block = (e: Event) => e.preventDefault();
     window.addEventListener("pointermove", move, { passive: false });
@@ -201,7 +226,7 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
       window.removeEventListener("contextmenu", block);
       document.body.classList.remove("touch-dragging");
     };
-  }, [touch !== null, place]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [touch !== null, place, takeOff]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const api: DndApi = {
     dragging,
@@ -217,6 +242,7 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
     menuFor,
     touchStart,
     note: (t, u) => note(t, u ?? null),
+    takeOff,
   };
   return (
     <WeekDnd.Provider value={api}>

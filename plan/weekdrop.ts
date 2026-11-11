@@ -27,12 +27,12 @@ export type Dragged = {
    * WD-1: an Add work panel row that isn't a DevOps item (a draft story or a promise): pick.add takes these fields in
    * place of itemId, and itemId is a negative key that never matches a real item in the "already planned here" check.
    */
-  add?: { draftId?: number; followUpId?: number } | undefined;
+  add?: { draftId?: number; followUpId?: number; /** WD-2: a new plain to-do typed in the block panel. */ intention?: string } | undefined;
   /** WD-1: a feature placed as a placeholder: pinned to the block (weekplan.place), never a to-do. */
   feature?: true | undefined;
 };
 /** WD-1: the negative item key of a panel row that isn't a DevOps item (a draft or a promise). */
-export const addKey = (add: { draftId?: number; followUpId?: number }) => (add.draftId !== undefined ? -1_000_000 - add.draftId : -2_000_000 - (add.followUpId ?? 0));
+export const addKey = (add: { draftId?: number; followUpId?: number; intention?: string }) => (add.draftId !== undefined ? -1_000_000 - add.draftId : add.intention !== undefined ? -3_000_000 : -2_000_000 - (add.followUpId ?? 0));
 
 export type DropCheck = { ok: true; text: string; over: boolean } | { ok: false; why: string };
 

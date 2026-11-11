@@ -23,7 +23,7 @@ export function nextRegion(current: Region | null, available: readonly Region[],
 
 /** Selectors per region. The panel is checked before the grid: Plan the day sits inside the grid's element. */
 export const REGION_SELECTORS: readonly [Region, string][] = [
-  ["panel", ".planday, .detail-panel"],
+  ["panel", ".planday, .block-panel"],
   ["top", ".topbar"],
   ["grid", ".grid"],
   ["status", ".statusbar"],

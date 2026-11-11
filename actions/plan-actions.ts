@@ -21,7 +21,7 @@ import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
-export const PLAN_ACTIONS = ["planday.start", "planday.carry", "planday.commit", "pick.add", "pick.remove", "pick.set_size", "pick.move", "pick.mark_done", "deploy.add", "pick.set_kind", "pick.uncarry", "pick.undrop", "planday.carry_hint", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
+export const PLAN_ACTIONS = ["planday.start", "planday.carry", "planday.commit", "pick.add", "pick.remove", "pick.take_off", "pick.set_size", "pick.move", "pick.mark_done", "deploy.add", "pick.set_kind", "pick.uncarry", "pick.undrop", "planday.carry_hint", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
 /** UI-B: the marker kind for the suggested-cards hint, dismissed once. */
 export const CARRY_HINT = "carry_hint";
 
@@ -396,6 +396,31 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         // is still placed that week.
         if (undo?.featureId != null && !(await featureStillPlaced(ctx, plan, undo.weekStart, undo.featureId, before.clientKey))) await plan.undoWeekAdd(undo.weekStart, undo.featureId);
         return { ok: true, data: { result: r.result, state: await state(ctx, plan, before.date) } };
+      }
+      case "pick.take_off": {
+        // WD-2: Take off the plan. The to-do leaves its block and its work is "not placed" again; it is never marked
+        // dropped by this (Drop is pick.remove). A plain to-do isn't destroyed: its words stay as a draft with no
+        // feature, listed under To place. The answer says how Undo puts it back.
+        const pid = id(fields(input, ["id"]).id);
+        const before = await plan.getPick(pid);
+        if (!before) return bad(`No to-do ${pid}`, 404);
+        if (before.status === "done") return bad("A done to-do stays on its day. Mark it not done first", 409);
+        if (before.status !== "planned") return bad("Only a planned to-do can be taken off the plan", 409);
+        if (await pastRefusal(ctx, before.date)) return bad("A past day keeps its record. Move the to-do to today instead", 409);
+        if (before.todoKind === "deployment") return bad("A deployment keeps its window. Move it or drop it instead", 409);
+        const boxes = (await plan.timeboxesBetween(before.date, before.date)).filter((t) => t.pickId === pid && !t.removedAt);
+        if (boxes.some((t) => t.outlook)) return bad("Its timebox is on Outlook. Remove the timebox first, then take the to-do off", 409);
+        for (const t of boxes) await plan.removeTimebox(t.id);
+        const at = { date: before.date, half: before.half, clientKey: before.clientKey, ...(before.size ? { size: before.size } : {}) };
+        const plain = before.kind === "intention" && before.followUpId === null;
+        const kind = plain ? "plain" : before.followUpId !== null ? "promise" : before.kind === "draft" ? "draft" : "item";
+        const draft = plain ? await plan.addDraft({ clientKey: before.clientKey, parentItemId: null, title: before.title, size: before.size ?? "M" }) : null;
+        const r = await plan.removePick(pid);
+        const undo =
+          r.result === "dropped"
+            ? { undrop: pid }
+            : { add: { ...at, ...(plain ? { intention: before.title } : before.followUpId !== null ? { followUpId: before.followUpId } : before.kind === "draft" ? { draftId: before.draftId } : { itemId: before.itemId }) }, ...(draft ? { draftId: draft.id } : {}) };
+        return { ok: true, data: { result: r.result, kind, title: before.title, timeboxes: boxes.length, draftId: draft?.id ?? null, undo, state: await state(ctx, plan, before.date) } };
       }
       case "pick.set_size": {
         const o = fields(input, ["id", "size"]);

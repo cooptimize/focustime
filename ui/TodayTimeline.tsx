@@ -55,6 +55,8 @@ type Props = {
   onPromise: (key: string) => void;
   onLate: (clientKey: string | null) => void;
   onOpen?: ((half: Half, focus?: PanelFocus) => void) | undefined;
+  /** WD-2: "+ Add" on a block that can take work: the block panel with the cursor in its Add box. Absent on a day that takes none. */
+  onAdd?: ((half: Half) => void) | undefined;
   nameOf: (k: string) => string;
 };
 
@@ -411,6 +413,7 @@ export function TodayTimeline(props: Props) {
                   onPromise={props.onPromise}
                   onLate={props.onLate}
                   onOpen={props.onOpen ? (focus) => props.onOpen!(s.half, focus) : undefined}
+                  onAdd={props.onAdd ? () => props.onAdd!(s.half) : undefined}
                 />
               );
             })
@@ -494,6 +497,7 @@ type BlockProps = {
   onPromise: (key: string) => void;
   onLate: (clientKey: string | null) => void;
   onOpen?: ((focus?: PanelFocus) => void) | undefined;
+  onAdd?: (() => void) | undefined;
 };
 
 /** One block: the client-coloured band with Week's card header, then Week's hour timeline with the checklist beside it (the phone: TY-1's tray above it). */
@@ -561,6 +565,11 @@ function TimelineBlock(b: BlockProps) {
           <TodoChecklist b={b} />
         </div>
       )}
+      {b.phone && b.onAdd && !slot.pto && !slot.off && (
+        <button type="button" className="add-work add-row tt-add" onClick={b.onAdd} aria-label={`Add to ${name}, ${halfName(slot.half)}`}>
+          + Add
+        </button>
+      )}
     </article>
   );
 }
@@ -587,7 +596,12 @@ function TodoChecklist({ b }: { b: BlockProps }) {
         {heading && <h3 className="tt-tray-label">Not timeboxed yet</h3>}
         {rest.length > 0 && <ul className="today-picks tt-check-rest">{rest.map((p) => row(p, "rest"))}</ul>}
         {rest.length === 0 && heading && <p className="tt-tray-empty muted">Everything here has a time. Drag one back here to take its time off.</p>}
-        {count === 0 && <p className="tt-tray-empty muted">Nothing planned here.</p>}
+        {count === 0 && <p className="tt-tray-empty muted">Nothing here yet.</p>}
+        {b.onAdd && !slot.pto && !slot.off && (
+          <button type="button" className="add-work add-row tt-add" onClick={b.onAdd} title="Add to this block (A)" aria-label={`Add to ${b.name}, ${halfName(slot.half)}`}>
+            + Add
+          </button>
+        )}
       </div>
     </aside>
   );

@@ -1,8 +1,8 @@
 // Menus for everything (step 6, D102): the command menu (Ctrl+K), the "⋯" and right-click menus on block cards,
 // picks and work items. One model: a menu step is a titled list of items, or a text prompt; an item either runs
 // or opens the next step. The command menu is built from the action registry, so every action appears.
+import { takeOffRule } from "../plan/blockpanel.ts";
 import type { CheckinGhost } from "../plan/carry.ts";
-import { alreadyPlanned } from "../plan/dup.ts";
 import { aboutText, hoursText, namedSize, parseHours, sizeChipText, storyMinutes, unsizedText, type SizeScale, MAX_ESTIMATE_HOURS, MIN_ESTIMATE_HOURS } from "../plan/estimate.ts";
 import { addTargets, type AddTarget, type TargetBlock, type TargetGroup } from "../plan/addtargets.ts";
 import { freeMinutes } from "../week/free.ts";
@@ -133,7 +133,10 @@ export type MenuEnv = {
   openPlanDay: (date?: IsoDate) => void;
   /** QF-1: Timebox my day on a date. */
   timeboxDay?: (date: IsoDate) => void;
-  openDetails: (date: IsoDate, half: Half) => void;
+  /** WD-2: opens the block panel on a block (`add`: with the cursor in its Add box). */
+  openBlock: (date: IsoDate, half: Half, add?: boolean) => void;
+  /** WD-2: Take off the plan for a to-do (off its block, back to not placed, with Undo). */
+  takeOff?: (p: Pick) => void;
   openLink: (clientKey: string, url: string) => void;
   /** FN-1: copy a work item's DevOps link, with a "Link copied" toast (announced). */
   copyLink: (clientKey: string, url: string) => void;
@@ -250,7 +253,6 @@ export type MenuEnv = {
   /** Step 13.6: the week's timeboxes and the clock, for a pick's free gaps; "+ Add work" on a block (key A). */
   timeboxes?: readonly TimeboxView[];
   now?: string;
-  addWork?: (date: IsoDate, half: Half) => void;
   /** Step 15 (D272): demo mode on or off (the server swaps every source and the plan store). */
   demo?: boolean;
   setDemo?: (on: boolean) => void;
@@ -301,7 +303,6 @@ function ptoReason(env: MenuEnv, date: IsoDate): string | undefined {
 const PAST = "Past day: its to-dos can only be ticked done or dropped";
 const isPast = (env: MenuEnv, date: IsoDate) => date < env.today;
 /** Why a day can't take new picks or changes: PTO, or past. */
-const closedReason = (env: MenuEnv, date: IsoDate) => ptoReason(env, date) ?? (isPast(env, date) ? PAST : undefined);
 
 /** Why Plan the day can't open a date (PTO, no working hours), or undefined when it can. */
 export function planDayRefusal(env: MenuEnv, date: IsoDate): string | undefined {
@@ -417,6 +418,8 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
       ...(p.todoKind === "deployment" ? [{ id: "deploy-edit", label: "Deployment details…", hint: p.window ? windowText(p.window) : "its window", action: "pick.set_kind", ...(past ? { disabled: PAST } : {}), next: () => deployForm(env, { pick: p }) } satisfies MenuItem] : []),
       { id: "kind", label: "Kind", hint: p.todoKind === "deployment" ? DEPLOYMENT : "To-do", action: "pick.set_kind", ...(past ? { disabled: PAST } : p.status !== "planned" && p.status !== "done" ? { disabled: "Only a planned or done to-do", expected: true } : {}), next: () => kindStep(env, p) },
       { id: "makeup", label: "I'll make it up…", hint: "tonight, Friday, another day", action: "pick.make_up", ...(p.status !== "planned" ? { disabled: "Only a planned to-do can be made up" } : {}), next: () => makeUpStep(env, p) },
+      // WD-2: off its block and back to not placed (never marked dropped); the same as dropping it on the block panel.
+      { id: "takeoff", label: "Take off the plan", hint: "back to not placed", action: "pick.take_off", ...(() => { const r = takeOffRule(p, env.today); return r.ok ? {} : { disabled: r.why, expected: true }; })(), run: () => (env.takeOff ? env.takeOff(p) : void env.runPlan("pick.take_off", { id: p.id })) },
       { id: "drop", label: "Drop", danger: true, action: "pick.remove", ...(past && p.status !== "planned" ? { disabled: "Only a planned to-do can be dropped on a past day" } : {}), run: () => env.runPlan("pick.remove", { id: p.id }) },
     ].filter((it) => !(p.todoKind === "deployment" && DEPLOY_HIDDEN.has(it.id))),
   };
@@ -566,11 +569,6 @@ export function followUpForm(env: MenuEnv): MenuStep {
 }
 
 // ---------- work items ----------
-
-/** Step 15.1 (D277): a work item already planned (or done) in this block is shown disabled, not added again. */
-function plannedHere(env: MenuEnv, date: string, half: Half, clientKey: string, itemId: number): { disabled?: string; expected?: boolean } {
-  return alreadyPlanned(env.planWeek?.[date]?.picks ?? [], { clientKey, itemId }, date, half) ? { disabled: "Already planned here", expected: true } : {};
-}
 
 /** Step 15.3: the week's blocks that could take this work, in the 15.2 order (shared by "Add to the plan" and the drop strip). */
 export function weekTargets(env: MenuEnv, clientKey: string, ref: { itemId?: number; draftId?: number; followUpId?: number }): AddTarget[] {
@@ -793,28 +791,11 @@ export function timeboxMenu(env: MenuEnv, t: TimeboxView): MenuStep {
 
 /** The "⋯" menu of a half-day card. */
 export function slotMenu(env: MenuEnv, date: IsoDate, half: Half, clientKey: string | null, clientName: string | null): MenuStep {
-  const off = closedReason(env, date);
-  const work = clientKey ? env.work.get(clientKey) : undefined;
-  const pickable = (work?.items ?? []).filter(isPickable);
   return {
     title: `${dayName(date)} ${half}${clientName ? ` · ${clientName}` : ""}`,
     items: [
-      { id: "details", label: "Details", hint: "Enter", action: "ui.details", run: () => env.openDetails(date, half) },
-      { id: "addwork", label: "Add work…", aka: ["Add a to-do", "Plan this day"], hint: "A", action: "ui.add_work", ...(addWorkRefusal(env, date, half) ? { disabled: addWorkRefusal(env, date, half)! } : {}), run: () => env.addWork?.(date, half) },
-      {
-        id: "intention",
-        label: "Add an intention",
-        action: "pick.add",
-        ...(off ? { disabled: off } : !clientKey ? { disabled: "Open half-day: choose its client in Add work first" } : {}),
-        next: () => ({ title: `Intention for ${dayName(date)} ${half}`, prompt: `What you mean to do for ${clientName}`, submit: (text) => env.runPlan("pick.add", { date, half, clientKey, intention: text }) }),
-      },
-      {
-        id: "add-item",
-        label: "Add a work item",
-        action: "pick.add",
-        ...(off ? { disabled: off } : !pickable.length ? { disabled: clientKey ? `No story-level items loaded for ${clientName}` : "Open half-day: choose its client in Add work first" } : {}),
-        next: () => ({ title: `Add to ${dayName(date)} ${half}`, items: pickable.map((i) => ({ id: `i${i.id}`, label: i.title, hint: `#${i.id}`, ...(clientKey ? { typeIcon: { clientKey, type: i.type } } : {}), action: "pick.add", ...(clientKey ? plannedHere(env, date, half, clientKey, i.id) : {}), run: () => env.runPlan("pick.add", { date, half, clientKey, itemId: i.id }) })) }),
-      },
+      // WD-2: the block panel does the rest (what's on the block, the meetings, adding). Here: open it, and the calls.
+      { id: "open", label: "Open", aka: ["Details", "Add work", "Add a to-do", "Add an intention", "Add a work item"], hint: "Enter", action: "ui.block", run: () => env.openBlock(date, half) },
       ...callItems(env, clientKey),
     ],
   };
@@ -940,9 +921,9 @@ export function dayMenu(env: MenuEnv, date: IsoDate): MenuStep {
     items: [
       { id: "plan", label: isPast(env, date) && !refused ? "Add work to this day (past: done and drop only)" : "Add work to this day", action: "planday.start", ...(refused ? { disabled: refused } : {}), run: () => env.openPlanDay(date) },
       ...(env.timeboxDay ? [timeboxItem(env, date, refused)] : []),
-      { id: "am", label: "Details of AM", action: "ui.details", run: () => env.openDetails(date, "AM") },
-      { id: "pm", label: "Details of PM", action: "ui.details", run: () => env.openDetails(date, "PM") },
-      ...(day?.eve ? [{ id: "eve", label: "Details of the evening", action: "ui.details", run: () => env.openDetails(date, "EVE") } as MenuItem] : []),
+      { id: "am", label: "Open AM", aka: ["Details of AM"], action: "ui.block", run: () => env.openBlock(date, "AM") },
+      { id: "pm", label: "Open PM", aka: ["Details of PM"], action: "ui.block", run: () => env.openBlock(date, "PM") },
+      ...(day?.eve ? [{ id: "eve", label: "Open the evening", aka: ["Details of the evening"], action: "ui.block", run: () => env.openBlock(date, "EVE") } as MenuItem] : []),
       { id: "deploy", label: "Plan a deployment…", hint: "a window this day", action: "deploy.add", ...(isPast(env, date) ? { disabled: PAST } : {}), next: () => deployForm(env, { date }) },
       ...timeItems(env, date),
     ],
@@ -1200,6 +1181,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "pick.move": return { next: () => choosePick(env, "Move which to-do?", (p) => moveStep(env, p)) };
     case "pick.mark_done": return { next: () => choosePick(env, "Mark which to-do done or not done?", (p) => () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" })) };
     case "pick.remove": return { next: () => choosePick(env, "Drop which to-do?", (p) => () => env.runPlan("pick.remove", { id: p.id })) };
+    case "pick.take_off": return { next: () => choosePick(env, "Take which to-do off the plan?", (p) => () => (env.takeOff ? env.takeOff(p) : void env.runPlan("pick.take_off", { id: p.id }))) };
     case "deploy.add": return { next: () => deployForm(env, env.selection.date >= env.today ? { date: env.selection.date } : {}) };
     case "deploy.items":
     case "deploy.config_save": return { disabled: "Set in Admin › Clients, or the client's page in Settings" };
@@ -1695,8 +1677,8 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "week.prev", action: "week.prev", group: "Week", label: "Previous week", hint: "[", run: () => env.changeWeek(-1) },
     { id: "week.next", action: "week.next", group: "Week", label: "Next week", hint: "]", run: () => env.changeWeek(1) },
     { id: "week.today", action: "week.today", group: "Week", label: "Back to this week", run: env.goToday },
-    { id: "ui.details", action: "ui.details", group: "Week", label: "Details of the selected half-day", hint: "Enter", run: () => env.openDetails(env.selection.date, env.selection.half) },
-    { id: "ui.add_work", action: "ui.add_work", group: "Week", label: "Add work to the selected block", aka: ["Add a to-do"], hint: "A", ...(addWorkRefusal(env, env.selection.date, env.selection.half) ? { disabled: addWorkRefusal(env, env.selection.date, env.selection.half)! } : { run: () => env.addWork?.(env.selection.date, env.selection.half) }) },
+    // WD-2: one entry opens the selected block's panel; it still answers to Details and Add work.
+    { id: "ui.block", action: "ui.block", group: "Week", label: "Open the selected block", aka: ["Details", "Details of the selected half-day", "Add work", "Add work to the selected block", "Add a to-do", "block panel"], hint: "A", run: () => env.openBlock(env.selection.date, env.selection.half, !addWorkRefusal(env, env.selection.date, env.selection.half)) },
     { id: "ui.settings", action: "ui.settings", group: "Week", label: "Settings", disabled: soon },
     { id: "ui.region_next", action: "ui.region_next", group: "Keyboard", label: "Next region (top bar, week, panel, status bar)", hint: "F6", run: () => env.moveRegion(1) },
     { id: "ui.region_prev", action: "ui.region_prev", group: "Keyboard", label: "Previous region", hint: "Shift F6", run: () => env.moveRegion(-1) },

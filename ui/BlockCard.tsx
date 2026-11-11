@@ -2,7 +2,7 @@
 // and name, the block's time and one status chip that never wraps (the worst state; the rest in its tooltip); rows
 // with a checkbox, type icon, a title on up to two lines and the size or time (a title opens the story card, FN-1);
 // a feature placed with no stories as "Needs stories · Break down"; "+ Add" as the last row of every block, which
-// selects it and opens the Add work panel; meetings as one summary line that opens into the list when there is no
+// selects it and opens the block panel with the cursor in its Add box (WD-2); meetings as one summary line that opens into the list when there is no
 // rail. With the Timeline switch on the hour rail is a slim strip (about 56 px) so titles keep their width.
 import { Fragment, useContext, useState, type CSSProperties } from "react";
 import { callsIn, useCallMarks } from "./meetings/calls.ts";
@@ -30,7 +30,7 @@ import { usePhone } from "./viewport.ts";
 import { cardPlan, PlanCtx, type PlanView } from "./planview.ts";
 import { blockStatus } from "../plan/blockstatus.ts";
 import { HalfScope } from "./scope.ts";
-import { interactive } from "./DetailPanel.tsx";
+import { interactive, onRowOrChip } from "./cardclick.ts";
 import type { RailItem } from "../plan/inbox-items.ts";
 import { cardGroups } from "../plan/blockstories.ts";
 import { TypeIcon } from "./TypeIcon.tsx";
@@ -38,8 +38,8 @@ import { pickDragged, useDragSource, useDropTarget } from "./WeekStories.tsx";
 import { OriginPick, SuggestedCards, useIsOrigin } from "./Carry.tsx";
 import { NowEdge, NowLine, NowPast, NowTick } from "./NowLine.tsx";
 import { Timeline, ms, offHours, pct, useEventMenu, type RailNow } from "./Timeline.tsx";
-import { AddPanelCtx, LiveOnCard, RulerCtx, TierCtx, TimelineCtx, type PanelFocus } from "./weekctx.ts";
-import { PlacedFeatures } from "./AddWork.tsx";
+import { AddPanelCtx, LiveOnCard, NextTodoCtx, RulerCtx, TierCtx, TimelineCtx, type PanelFocus } from "./weekctx.ts";
+import { PlacedFeatures } from "./BlockPanel.tsx";
 
 /**
  * WD-1 (MB-1's agenda line on every card with no rail): "3 meetings · 2h 30m · 1h 45m free", the block's meetings and
@@ -76,7 +76,7 @@ export type BlockCardProps = {
   isToday: boolean;
   /** Follow-ups due this week to badge on this card (U3). */
   dueBadges: readonly FollowUpView[];
-  /** WD-1: "+ Add" opens the Add work panel on this block. Absent where work can't be added (a past or PTO block). */
+  /** WD-2: "+ Add" opens the block panel on this block, the cursor in its Add box. Absent where work can't be added (a past or PTO block). */
   addWork?: (() => void) | undefined;
   /** UI-B: today's now line on this block's rail; null on other days. */
   railNow: RailNow | null;
@@ -231,14 +231,14 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       {!eve && <CheckinChips date={slot.date} half={slot.half as "AM" | "PM"} tabIndex={selected ? 0 : -1} />}
       {doneHidden.length > 0 && <div className="card-done">{doneHidden.length} done</div>}
       {addWork && (
-        // WD-1: "+ Add" is the last row of every block that can take work, always visible: it selects the block and
-        // opens the Add work panel on it (a bottom sheet on the phone).
+        // WD-1, WD-2: "+ Add" is the last row of every block that can take work, always visible: it selects the block
+        // and opens the block panel on it (a bottom sheet on the phone).
         <button
           type="button"
           className="add-work add-row"
           tabIndex={selected ? 0 : -1}
-          title="Add work to this block (A)"
-          aria-label={`Add work to ${dayLabel} ${eve ? "evening" : slot.half}`}
+          title="Add to this block (A)"
+          aria-label={`Add to ${dayLabel} ${eve ? "evening" : slot.half}`}
           onClick={(e) => {
             e.stopPropagation();
             onSelect();
@@ -264,9 +264,9 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       aria-describedby={status.kind !== "none" ? reasonsId : undefined}
       aria-pressed={selected}
       onClick={(e) => {
-        if (interactive(e)) return;
-        const pick = (e.target as HTMLElement).closest<HTMLElement>("[data-pick]");
-        onOpen(pick ? { kind: "pick", id: Number(pick.dataset.pick) } : undefined);
+        // WD-2: the header or empty space opens the block panel; a row, a checkbox, a chip or a drag doesn't.
+        if (interactive(e) || onRowOrChip(e)) return;
+        onOpen();
       }}
       onContextMenu={(e) => {
         onSelect();
@@ -420,6 +420,9 @@ export function CheckinChips({ date, half, tabIndex }: { date: IsoDate; half: "A
 export function CardPick({ pick, tabIndex }: { pick: Pick; tabIndex: number }) {
   const plan = useContext(PlanCtx);
   const drag = useDragSource(pickDragged(pick));
+  // WD-2: on Day today the next to-do is highlighted and is the only one with Start focus (or the running timer).
+  const next = useContext(NextTodoCtx);
+  if (next && next.id === pick.id) return <PickRow pick={pick} toggle={plan.toggle} density="week" tabIndex={tabIndex} typeIcon dragProps={drag} next actions={next.actions(pick)} />;
   return <PickRow pick={pick} toggle={plan.toggle} density="week" tabIndex={tabIndex} typeIcon dragProps={drag} />;
 }
 

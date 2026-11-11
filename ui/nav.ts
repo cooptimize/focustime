@@ -1,5 +1,5 @@
-// Step 16.2, NV-1, WD-1, RF-1: where the window is. Five tabs (Day · Week · Ahead · Status · Inbox), a mode switch on Ahead
-// (Grid · Gantt · Gaps · Backlog), Day's two flows, Week's Add work panel, and the full-window overlays (the focus
+// Step 16.2, NV-1, WD-1, RF-1, WD-2: where the window is. Five tabs (Day · Week · Ahead · Status · Inbox), a mode switch on Ahead
+// (Grid · Gantt · Gaps · Backlog), Day's two flows, the block panel on Week and on Day, and the full-window overlays (the focus
 // screen, Settings, the Guide). Every place has an address (#/…) so browser back and reopening land in the same place.
 // Pure: no DOM, no React; App applies it. WD-1: the code keeps "today" as Day's tab id; people read "Day".
 import type { Half, IsoDate } from "../week/types.ts";
@@ -48,7 +48,7 @@ export type AddAt = { date: IsoDate | null; half: Half | null };
  * week); `add` is the Add work panel open on a block (WD-1). Status is its own tab (WD-1, was Week › Status).
  */
 export type Nav =
-  | { tab: "today"; flow: TodayFlow | null; date: IsoDate | null }
+  | { tab: "today"; flow: TodayFlow | null; date: IsoDate | null; /** WD-2: the block panel open on this half of `date` (#/day/<date>/<half>). */ half?: Half | null }
   | { tab: "week"; mode: WeekMode; week: IsoDate | null; add: AddAt | null }
   /** SR-3: Status opened on Needs your update (#/status/needs). */
   | { tab: "status"; group?: "needs" }
@@ -72,6 +72,8 @@ export const navOf = {
   today: (flow: TodayFlow | null = null, date: IsoDate | null = null): Nav => ({ tab: "today", flow, date: flow === "closeout" || flow === null ? date : null }),
   /** QF-1: Today showing one day (null: today). */
   todayOn: (date: IsoDate | null): Nav => ({ tab: "today", flow: null, date }),
+  /** WD-2: Day on a date with the block panel open on one of its blocks (#/day/<date>/<half>). */
+  dayBlock: (date: IsoDate, half: Half): Nav => ({ tab: "today", flow: null, date, half }),
   week: (mode: WeekMode = "board", week: IsoDate | null = null): Nav => ({ tab: "week", mode, week, add: null }),
   /** WD-1: Week with the Add work panel on a block (null date: the current block, or the next one not over). */
   addWork: (date: IsoDate | null = null, half: Half | null = null): Nav => ({ tab: "week", mode: "board", week: null, add: { date, half: date ? half : null } }),
@@ -192,7 +194,7 @@ export function hashOf(l: Loc): string {
   // FN-1: a story card, over the place it opened from.
   if (l.overlay?.kind === "item") return `#/item/${encodeURIComponent(l.overlay.clientKey)}/${l.overlay.itemId}`;
   const n = l.nav;
-  if (n.tab === "today") return ["#/day", n.flow, n.flow === "closeout" || n.flow === null ? n.date : null].filter(Boolean).join("/");
+  if (n.tab === "today") return ["#/day", n.flow, n.flow === "closeout" || n.flow === null ? n.date : null, n.flow === null && n.date ? n.half : null].filter(Boolean).join("/");
   // SR-1, WD-1: always this week's report (the one Kat sends next Monday).
   if (n.tab === "status") return n.group === "needs" ? "#/status/needs" : "#/status";
   if (n.tab === "week") {
@@ -254,6 +256,8 @@ export function parseHash(full: string): Loc | null {
     if (a === "plan") return day(b, c);
     // QF-1: one day.
     if (validDate(a) && b === undefined) return plain(navOf.todayOn(a));
+    // WD-2: one day with the block panel on a block.
+    if (validDate(a) && b !== undefined && HALF.test(b) && c === undefined) return plain(navOf.dayBlock(a, b as Half));
     return null;
   };
   switch (tab) {

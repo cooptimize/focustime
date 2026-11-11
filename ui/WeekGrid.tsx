@@ -23,7 +23,7 @@ import { cardHalves, eveOnly, slotOf } from "./halves.ts";
 import { type Layout } from "./viewport.ts";
 import { PlanCtx } from "./planview.ts";
 import { HalfScope } from "./scope.ts";
-import { interactive } from "./DetailPanel.tsx";
+import { interactive } from "./cardclick.ts";
 import { userZone } from "../week/zone.ts";
 import type { RailItem } from "../plan/inbox-items.ts";
 import { useDropTarget } from "./WeekStories.tsx";
@@ -51,7 +51,7 @@ type Props = {
   layout: Layout;
   /** Half-days as compact cards (medium, and narrow windows too thin for rail plus timeline). */
   compact: boolean;
-  /** WD-1: a click on a day's header (its first block, with the Add work panel); "+ Add" on a block; Friday's "Add hours" link. */
+  /** WD-2: a click on a day's header opens Day on that date; "+ Add" on a block; Friday's "Add hours" link. */
   onDayHead?: ((date: string) => void) | undefined;
   onAddWork?: ((date: string, half: Half) => void) | undefined;
   onAddHours?: ((date: string) => void) | undefined;
@@ -64,6 +64,8 @@ type Props = {
   panelOpen?: boolean | undefined;
   /** WK-2: the Timeline toggle (default shown). Hidden, every card is a full-width list with its meetings as lines. */
   timeline?: boolean | undefined;
+  /** WD-2: Day: only this day's column, with no day header, its blocks side by side when there's room. */
+  only?: number | undefined;
 };
 
 export function WeekGrid(props: Props) {
@@ -105,7 +107,7 @@ export function WeekGrid(props: Props) {
   );
 }
 
-function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, onSelect, onOpen, layout, compact: compactIn, onDayHead, onAddWork, onAddHours, panelOpen, timeline = true }: Props) {
+function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, onSelect, onOpen, layout, compact: compactIn, onDayHead, onAddWork, onAddHours, panelOpen, timeline = true, only }: Props) {
   // WK-2: with the timeline hidden every layout draws compact cards (no hour timeline beside them).
   const compact = compactIn || !timeline;
   const pv = useContext(PlanCtx);
@@ -147,10 +149,20 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
       onAddHours={onAddHours}
       badges={badges}
       own={own}
-      grow={!compactIn}
+      bare={only !== undefined}
+      grow={!compactIn && only === undefined}
       band={eveningBand(day, week, pv.week?.[day.date]?.picks ?? [])}
     />
   );
+  // WD-2: Day is one day of this grid: the same column and cards, no day header, AM and PM side by side.
+  if (only !== undefined && week.days[only])
+    return (
+      <TierCtx.Provider value={null}>
+        <main className={`grid day-only${timeline ? "" : " no-timeline"}`} role="group" aria-label="The day's blocks. Arrow keys move between them, Enter opens one.">
+          {column(week.days[only]!, only)}
+        </main>
+      </TierCtx.Provider>
+    );
   if (layout === "narrow") {
     const i = selection.dayIndex;
     const swipe = { x: 0, y: 0 };
@@ -264,7 +276,7 @@ function wholeDay(day: Day): Whole {
   return null;
 }
 
-function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boolean; hasEve: boolean; badges: ReadonlyMap<string, FollowUpView[]>; own?: { tier: Tier; railPx: number } | undefined; grow?: boolean; /** WK-3: the Evening band's items, or null (no band). */ band?: EveningBand | null } & Omit<Props, "week" | "today">) {
+function DayColumn(props: { /** WD-2: Day draws the column with no header (Day has its own). */ bare?: boolean; day: Day; dayIndex: number; tz: string; isToday: boolean; hasEve: boolean; badges: ReadonlyMap<string, FollowUpView[]>; own?: { tier: Tier; railPx: number } | undefined; grow?: boolean; /** WK-3: the Evening band's items, or null (no band). */ band?: EveningBand | null } & Omit<Props, "week" | "today">) {
   // WK-2: this column's own tier (from its own width) in the medium layout; the grid's otherwise.
   const gridTier = useContext(TierCtx);
   const tier = gridTier && props.own ? props.own.tier : gridTier;
@@ -325,9 +337,9 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
       style={tier && props.own ? ({ "--rail-w": `${props.own.railPx}px` } as CSSProperties) : undefined}
       aria-label={`${dayLabel}${day.pto ? `, ${ptoLabel(day.pto)}` : ""}`}
     >
-      <header className="day-head" onContextMenu={menu.onContextMenu}>
-        {/* WD-1: the weekday and date select the day's first block and open the Add work panel (WD-2 opens Day). */}
-        <button type="button" className="day-open" tabIndex={daySelected ? 0 : -1} onClick={() => props.onDayHead?.(day.date)} title={`Add work to ${day.weekday}`} aria-label={`${dayLabel}: add work`}>
+      {!props.bare && <header className="day-head" onContextMenu={menu.onContextMenu}>
+        {/* WD-2: the weekday and date open Day on that date. */}
+        <button type="button" className="day-open" tabIndex={daySelected ? 0 : -1} onClick={() => props.onDayHead?.(day.date)} title={`Open ${day.weekday} in Day`} aria-label={`${dayLabel}: open in Day`}>
           <span className="dow">{day.weekday}</span>
           <span className="date">
             <span className="date-long">{shortDate(day.date)}</span>
@@ -348,7 +360,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
         ) : null}
         {/* In the Tab order only for the selected day (Shift+Tab from its half-day reaches it); shown on hover and focus. */}
         <HalfScope.Provider value={daySelected}>{menu.button(`Actions for ${dayLabel}`)}</HalfScope.Provider>
-      </header>
+      </header>}
 
       {/* U5.1 (D406): one chip per day an all-day event covers, PTO and Catch-up days too; the chip is its one home. */}
       <AllDay events={day.allDay} />

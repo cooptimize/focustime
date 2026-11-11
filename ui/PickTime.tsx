@@ -72,7 +72,7 @@ export function PickTime({ pick, editable = true, hint = false }: { pick: Pick; 
 }
 
 /** Where the hint must stay: the card its row is in (a Plan the day block, a Today block, a week card or a panel). */
-export const HINT_CARD = ".pd2-block, .today-block, .half.card, .detail-panel, .pl-card, .checklist";
+export const HINT_CARD = ".pd2-block, .today-block, .half.card, .block-panel, .pl-card, .checklist";
 
 /**
  * fix/planday-pane: the one-time hint as a small popover under "+ time" (it used to sit in the row and overflow it).
