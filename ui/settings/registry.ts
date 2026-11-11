@@ -95,7 +95,6 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "reduce-motion", section: "display", label: "Reduce motion", old: ["Motion"], keywords: ["animation", "lumen"] },
   // Today and Week
   { id: "level", section: "planning", label: "Your level", keywords: ["guidance", "consultant", "senior", "lead"] },
-  { id: "plan-share", section: "planning", label: "Plan up to (% of free time)", old: ["Plan up to"], keywords: ["over line", "guidance"] },
   { id: "break-down-offered", section: "planning", label: "Offer Break down", old: ["Break down", "Draft stories"] },
   { id: "readiness-nudges", section: "planning", label: "Readiness nudges", keywords: ["flags"] },
   { id: "count-unsized", section: "planning", label: "Count unsized work as", old: ["Unsized", "Size? hours"] },

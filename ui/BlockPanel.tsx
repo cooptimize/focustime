@@ -12,6 +12,7 @@ import { DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { BreakDownButton } from "./BreakDownPanel.tsx";
 import { blockWord, removeRule, storiesUnder, toPlaceCount, toPlaceLine, toPlaceShort, type ToPlace as ToPlaceCounts } from "../plan/addwork.ts";
+import { watchTip } from "../plan/blockstatus.ts";
 import { assignedList, draftParents, hoverWords, looseDrafts, meetingsWords, moreCount, moreList, moveHighlight, onBlock, sizeHover, panelClient, panelMode, panelTitle, panelWhen, placedMap, riskLine, searchPanel, takeOffRule, type AssignedGroup, type ListSort, type MoreGroup, type NewRow, type PanelMode, type Result } from "../plan/blockpanel.ts";
 import { FoldLine } from "./plan/FoldLine.tsx";
 import { planMinutes } from "../plan/fit.ts";
@@ -251,6 +252,8 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
     return { title, items: [...callItems(env, clientKey), timebox, ...(mode === "add" ? [order] : [])] };
   });
   const risk = slot && mode === "add" ? riskLine(rankRisks(slot.risks)) : null;
+  // QT-1: Watch alone has no status line; its reasons are on hover over the time line.
+  const watch = slot && mode === "add" && !risk ? watchTip(slot.risks) : null;
   const [riskOpen, setRiskOpen] = useState(false);
   useEffect(() => setRiskOpen(false), [at.date, at.half]);
 
@@ -279,7 +282,7 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
             {clientKey && !day?.pto && <span className="swatch" aria-hidden="true" />}
             {title}
           </h2>
-          {when && <p className={`bp-when${when.over ? " over" : ""}`}>{when.text}</p>}
+          {when && <p className="bp-when" title={watch ?? undefined}>{when.text}</p>}
           {/* One status line at most: the reasons show on hover and open in place on a click. */}
           {risk && (
             <button type="button" className={`bp-risk ${risk.severity}`} aria-expanded={riskOpen} title={risk.reasons.join("\n")} onClick={() => setRiskOpen((o) => !o)}>

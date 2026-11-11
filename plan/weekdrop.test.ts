@@ -14,10 +14,12 @@ const base = (o: Partial<Parameters<typeof dropCheck>[0]> = {}) => {
 describe("dropCheck (PV-1)", () => {
   it("shows the story's hours against the block's free time left", () => {
     expect(dropCheck(base())).toEqual({ ok: true, text: "2h of 4h free", over: false });
-    // A 2h meeting and 1h already planned leave about 1h: the 2h story is 1h over, amber.
+    // QT-1: a 2h meeting and 1h already planned leave 1h: the 2h story still drops, and the tip says only what's free.
     const week = aWeek({ events: [aMeeting({ start: "2026-11-03T09:00", end: "2026-11-03T11:00" })] });
     const picks = [aPick({ date: "2026-11-03", half: "AM", itemId: 7, size: "S" })];
-    expect(dropCheck(base({ slot: week.days[1]!.am, picks }))).toEqual({ ok: true, text: "Over your Tuesday AM hours by 2h", over: true });
+    expect(dropCheck(base({ slot: week.days[1]!.am, picks }))).toMatchObject({ ok: true, text: "1h free", over: false });
+    const full = [...picks, aPick({ id: 8, date: "2026-11-03", half: "AM", itemId: 8, size: "L" })];
+    expect(dropCheck(base({ slot: week.days[1]!.am, picks: full }))).toMatchObject({ ok: true, text: "No free time left", over: false });
   });
 
   it("AS-2: a PTO day takes it with a note (supersedes PV-1's refusal)", () => {
@@ -26,9 +28,10 @@ describe("dropCheck (PV-1)", () => {
     expect(dropCheck(base({ slot: week.days[1]!.am }))).toEqual({ ok: true, text: "You're on PTO that day", over: false });
   });
 
-  it("refuses past half-days and a block that already has the story", () => {
+  it("refuses past days and a block that already has the story", () => {
     expect(dropCheck(base({ today: "2026-11-04" }))).toEqual({ ok: false, why: "Already over" });
-    expect(dropCheck(base({ now: "2026-11-03T18:00:00Z" }))).toEqual({ ok: false, why: "Already over" });
+    // QT-1: a block that ended earlier today takes work.
+    expect(dropCheck(base({ today: "2026-11-03", now: "2026-11-03T20:00:00Z" }))).toMatchObject({ ok: true });
     const picks = [aPick({ id: 5, date: "2026-11-03", half: "AM", itemId: 100 })];
     expect(dropCheck(base({ picks }))).toEqual({ ok: false, why: "Already planned here" });
     expect(dropCheck(base({ picks, dragged: { ...story, pickId: 5 } }))).toEqual({ ok: false, why: "Planned here" });

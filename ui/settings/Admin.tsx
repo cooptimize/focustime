@@ -1252,7 +1252,6 @@ function AdminOrganization() {
         <thead>
           <tr>
             <th scope="col">Level</th>
-            <th scope="col">Plan up to (% of free time) <Kind kind="Default by level" /></th>
             <th scope="col">Break down offered</th>
             <th scope="col">Readiness nudges</th>
           </tr>
@@ -1263,10 +1262,6 @@ function AdminOrganization() {
             return (
               <tr key={lv}>
                 <th scope="row">{data.levelNames[lv]}</th>
-                <td>
-                  <NumInput label={`${data.levelNames[lv]}: plan up to`} value={g.planShare} min={50} max={100} step={5} onSave={(v) => void saver.save(scope, "plan_share", v, `${data.levelNames[lv]}: plan up to`)} />
-                  <SaveMark s={saver.status(scope, "plan_share")} retry={() => void saver.save(scope, "plan_share", g.planShare, "Plan up to")} />
-                </td>
                 <td>
                   <input type="checkbox" aria-label={`${data.levelNames[lv]}: Break down offered`} checked={saver.shown(scope, "draft_stories", g.draftStories)} onChange={(e) => void saver.save(scope, "draft_stories", e.target.checked, `${data.levelNames[lv]}: Break down`)} />
                   <SaveMark s={saver.status(scope, "draft_stories")} retry={() => void saver.save(scope, "draft_stories", g.draftStories, "Break down")} />

@@ -15,7 +15,7 @@ import { DEPLOYMENT, windowHalf, windowMinutes, windowProblem } from "../plan/de
 import { defaultKeys, groupsFor, resolveTicked, type ClientDeploy, type DeployItem } from "../plan/deploy-items.ts";
 import { PlanError, type DraftPatch, type NewPick, type PlanStore } from "../store/plan-store.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
-import { dayEndOf, hoursOn, nominalHours, type TimeModel } from "../week/hours.ts";
+import { dayEndOf, hoursOn, type TimeModel } from "../week/hours.ts";
 import type { PtoDay } from "../week/pto.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
@@ -105,19 +105,13 @@ async function ruleFor(ctx: PlanContext, d: IsoDate): Promise<DayRule> {
 
 /**
  * AS-2 (supersedes PV-1's PTO refusal and step 13.5's "Add hours for that day?"): where a to-do may go. The day never
- * refuses it; the only refusal is a time that has ended (a day before today, or today's half once it is over). The
- * note says what kind of day it is (placeNote, the same words as the Board's drop tip).
+ * refuses it; the only refusal is a day before today. QT-1: a block that ended earlier today takes work too (the
+ * board is a punch list: something done this morning can still be put there and ticked). The note says what kind of
+ * day it is (placeNote, the same words as the Board's drop tip).
  */
-async function placeAt(ctx: PlanContext, d: IsoDate, h: Half): Promise<{ ended: string | null; note: string | null }> {
-  const { cfg, today, model, hasHours } = await clock(ctx);
+async function placeAt(ctx: PlanContext, d: IsoDate, _h: Half): Promise<{ ended: string | null; note: string | null }> {
+  const { cfg, today, hasHours } = await clock(ctx);
   if (d < today) return { ended: `${pastReason(d)}. Move it to today or a later day`, note: null };
-  if (d === today) {
-    const day = hoursOn(model, d);
-    const span = h === "AM" ? (day.am ?? nominalHours(model).am) : h === "PM" ? (day.pm ?? nominalHours(model).pm) : null;
-    const end = span?.end ?? "24:00";
-    const nowHm = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(userZone(model)).toPlainTime().toString({ smallestUnit: "minute" });
-    if (end !== "24:00" && nowHm >= end) return { ended: `${h === "AM" ? "This morning" : "This afternoon"} has already ended. Move it to a later block`, note: null };
-  }
   const pto = await ptoOf(ctx, cfg, d);
   return { ended: null, note: placeNote(d, { pto: !!pto, hasHours: await hasHours(d) }) };
 }
@@ -471,7 +465,8 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         if (o.anyway !== undefined && typeof o.anyway !== "boolean") throw new Invalid("anyway must be true or false");
         // WK-3: a deployment's window decides its half on the new day (its times stay; Edit changes them).
         const h = before.todoKind === "deployment" && before.window ? windowHalf(hoursOn((await clock(ctx)).model, to), before.window) : half(o.half);
-        // AS-2: into a time that has ended never (out of a past day only forward: that is carrying it). Any other day
+        // AS-2: never into a day before today (out of a past day only forward: that is carrying it). QT-1: today's ended
+        // blocks take it. Any other day
         // takes it, with a note: PTO, a weekend, Friday's catch-up, no working hours. `anyway` is still accepted.
         const at = await placeAt(ctx, to, h);
         if (at.ended) return bad(at.ended, 409);

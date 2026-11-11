@@ -1,10 +1,10 @@
 // PV-1 (D571): dropping a story onto a Week block (drag and drop, or Add to… / Move to…). Which blocks take it and
-// what the target shows while dragging: "2h of 3h free", or amber "Over your Wednesday PM hours by 1h" (the block's
-// whole free time after its planned picks, as Plan the day's fit, D266). AS-2 (supersedes PV-1's PTO refusal): the day
+// what the target shows while dragging: "2h of 3h free", or "No free time left" (QT-1: neutral, never amber or "over";
+// the block's whole free time after its planned picks, as Plan the day's fit, D266). AS-2 (supersedes PV-1's PTO refusal): the day
 // never refuses it; a PTO day, a weekend, Friday's catch-up or a day without hours takes it with a note (placeNote,
-// shared with pick.move and the assistant). Only a half-day that has ended, another client's block or a block that
-// already has it refuse. Pure.
-import { overNote, placeNote } from "./days.ts";
+// shared with pick.move and the assistant). QT-1: a block that ended earlier today takes it too. Only a day before
+// today, another client's block or a block that already has it refuse. Pure.
+import { placeNote } from "./days.ts";
 import { freeMinutes } from "../week/free.ts";
 import { hoursText, storyMinutes, type SizeScale, type StorySize } from "./estimate.ts";
 import { planMinutes } from "./fit.ts";
@@ -34,7 +34,12 @@ export type Dragged = {
 /** WD-1: the negative item key of a panel row that isn't a DevOps item (a draft or a promise). */
 export const addKey = (add: { draftId?: number; followUpId?: number; intention?: string }) => (add.draftId !== undefined ? -1_000_000 - add.draftId : add.intention !== undefined ? -3_000_000 : -2_000_000 - (add.followUpId ?? 0));
 
-export type DropCheck = { ok: true; text: string; over: boolean } | { ok: false; why: string };
+/**
+ * `over` is always false since QT-1 (kept so older callers type-check); nothing on Week turns amber for being full.
+ * `shortBy`: minutes the dragged work needs beyond the block's free time, for the assistant's preview note only
+ * (QT-1 leaves the assistant's words to a later step).
+ */
+export type DropCheck = { ok: true; text: string; over: false; shortBy?: number } | { ok: false; why: string };
 
 export function dropCheck(i: {
   slot: SlotLike;
@@ -42,7 +47,7 @@ export function dropCheck(i: {
   ptoDay: boolean;
   /** A day without working hours (Friday's catch-up): it takes work, with no fit to show. */
   catchUp: boolean;
-  /** The real clock and today's date. */
+  /** The real clock and today's date (QT-1: only the date decides; a block that ended earlier today takes work). */
   now: string;
   today: IsoDate;
   /** That block's picks. */
@@ -52,7 +57,7 @@ export function dropCheck(i: {
   dragged: Dragged;
 }): DropCheck {
   const { slot, dragged } = i;
-  if (slot.date < i.today || Temporal.Instant.compare(Temporal.Instant.from(slot.end), Temporal.Instant.from(i.now)) <= 0) return { ok: false, why: "Already over" };
+  if (slot.date < i.today) return { ok: false, why: "Already over" };
   // Another client's block refuses it: a story stays in its own client's blocks (or an Open half-day, or catch-up).
   const owner = slot.focus ?? [];
   if (owner.length && !owner.some((f) => f.clientKey === dragged.clientKey)) return { ok: false, why: `${owner[0]!.clientName}'s block` };
@@ -64,6 +69,6 @@ export function dropCheck(i: {
   const free = freeMinutes(slot);
   const left = Math.max(0, free - planMinutes(live, i.sizes, i.timeboxes, slot));
   const need = dragged.remainingMinutes || storyMinutes(dragged.size, i.sizes);
-  if (need <= left) return { ok: true, text: `${need < 60 ? `${need} min` : hoursText(need)} of ${hoursText(left)} free`, over: false };
-  return { ok: true, text: overNote(slot.date, slot.half, hoursText(need - left)), over: true };
+  if (left > 0 && need <= left) return { ok: true, text: `${need < 60 ? `${need} min` : hoursText(need)} of ${hoursText(left)} free`, over: false };
+  return { ok: true, text: left > 0 ? `${hoursText(left)} free` : "No free time left", over: false, shortBy: need - left };
 }

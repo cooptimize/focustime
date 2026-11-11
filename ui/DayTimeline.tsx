@@ -7,9 +7,8 @@
 import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { TimeboxView, WeekLoadData } from "../actions/types.ts";
 import { didntFitText, openGaps, type DayPlacement, type Unplaced, type AgendaTimebox } from "../plan/agenda.ts";
-import { blockStatus } from "../plan/blockstatus.ts";
+import { blockStatus, watchTip } from "../plan/blockstatus.ts";
 import { bandIds, eveningBand } from "../plan/evening.ts";
-import { planFit } from "../plan/fit.ts";
 import { railItems, type InboxItemView } from "../plan/inbox-items.ts";
 import { nowClock, nowSpot } from "../plan/nowline.ts";
 import { lateOnCards } from "../plan/rail-promises.ts";
@@ -18,7 +17,6 @@ import { minutesOf, TIMEBOX_MIN } from "../plan/timebox.ts";
 import { pickNeed, type Pick } from "../plan/types.ts";
 import type { DragMode } from "../plan/picktime.ts";
 import type { Day, Half, IsoDate, Slot } from "../week/types.ts";
-import { worstSeverity } from "../week/risks.ts";
 import { call } from "./api.ts";
 import { DueBadge } from "./FollowUps.tsx";
 import { clientColor, halfName, slotRange, startClock } from "./labels.ts";
@@ -502,15 +500,13 @@ type BlockProps = {
 
 /** One block: the client-coloured band with Week's card header, then Week's hour timeline with the checklist beside it (the phone: TY-1's tray above it). */
 function TimelineBlock(b: BlockProps) {
-  const { slot, day, data, picks, tz, name, untimed } = b;
-  const pv = useContext(PlanCtx);
+  const { slot, day, data, tz, name, untimed } = b;
   const client = slot.focus[0]?.clientKey ?? null;
-  const here = picks.filter((p) => p.half === slot.half);
   const ended = ms(b.now) >= ms(slot.end);
-  const fit = here.some((p) => p.status === "planned") && !ended ? planFit(here, data.planning.sizes, pv.timeboxes, slot) : null;
-  const status = blockStatus(fit, slot.risks);
-  const sev = worstSeverity(slot.risks);
-  const pill = status.kind === "at_risk" ? `At risk${status.short ? ` · ${status.short}` : ""}` : status.label;
+  // QT-1: the calendar alone makes a status (At risk); how much is planned never does.
+  const status = blockStatus(slot.risks);
+  const sev = status.kind === "at_risk" ? "at_risk" : null;
+  const pill = status.kind === "at_risk" ? `At risk${status.short ? ` · ${status.short}` : ""}` : "";
   const state = slot.pto ? "pto-half" : slot.half === "EVE" ? "eve" : slot.open ? "open" : "focus";
   const span = Math.max(1, ms(slot.view.end) - ms(slot.view.start));
   const pos = (iso: string) => (ms(iso) - ms(slot.view.start)) / span;
@@ -534,7 +530,7 @@ function TimelineBlock(b: BlockProps) {
   );
   return (
     <article className={`half ${state} tt-block${sev ? ` ${sev}` : ""}${ended ? " ended" : ""}`} style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties} aria-label={`${name}, ${slotRange(slot, tz)}`}>
-      <header className="tt-head card-head" onClick={openHead ? () => openHead() : undefined}>
+      <header className="tt-head card-head" title={watchTip(slot.risks) ?? undefined} onClick={openHead ? () => openHead() : undefined}>
         <span className="swatch" aria-hidden="true" />
         <span className="card-client" title={name}>{name}</span>
         <CardWhen slot={slot} tz={tz} />

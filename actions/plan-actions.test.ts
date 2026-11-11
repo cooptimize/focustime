@@ -170,15 +170,18 @@ describe("Plan the day actions", () => {
     expect(back).toMatchObject({ pick: { date: "2026-11-04" }, note: null });
   });
 
-  it("AS-2: a move into the past or into a half of today that has ended is refused; nothing moves", async () => {
+  it("AS-2: a move into the past is refused; nothing moves. QT-1: a half of today that has ended takes it", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
     const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: "2026-11-04", half: "PM", clientKey: "Adatum", itemId: 101 });
     expect((await t.fail("pick.move", { id: pick.id, date: "2026-10-30", half: "AM" })).status).toBe(409);
-    t.at("2026-11-03T22:00:00Z"); // Tuesday 5 PM in New York: both halves of Tuesday are over
-    const r = await t.fail("pick.move", { id: pick.id, date: "2026-11-03", half: "PM" });
-    expect(r).toMatchObject({ status: 409, error: "This afternoon has already ended. Move it to a later block" });
     expect((await t.plan.getPick(pick.id))!).toMatchObject({ date: "2026-11-04", half: "PM", status: "planned" });
+    t.at("2026-11-03T22:00:00Z"); // Tuesday 5 PM in New York: both halves of Tuesday are over
+    const moved = await t.run<{ pick: Pick }>("pick.move", { id: pick.id, date: "2026-11-03", half: "PM" });
+    expect(moved.pick).toMatchObject({ date: "2026-11-03", half: "PM", status: "planned" });
+    // And a new one added to this morning, after it ended.
+    const added = await t.run<{ pick: Pick }>("pick.add", { date: "2026-11-03", half: "AM", clientKey: "Adatum", intention: "Wrote the cutover notes" });
+    expect(added.pick).toMatchObject({ date: "2026-11-03", half: "AM" });
   });
 
   it("moving a pick to Friday never asks: it is catch-up work on the overflow day (step 13.6, Q78, D238)", async () => {
