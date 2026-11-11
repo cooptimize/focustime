@@ -292,7 +292,12 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
     ? actsFor(entry, {
         run,
         form: setForm,
-        createDraft: (id) => createDraft?.(id),
+        // QC-1: a draft's Create in DevOps opens the preview directly (the New form is for changing it first).
+        createDraft: (id) => {
+          const d = src.caps?.drafts.find((x) => x.id === id);
+          if (d && writes?.can(d.clientKey)) writes.create(d.clientKey, [d]);
+          else createDraft?.(id);
+        },
         editDraft: (id) => {
           const d = src.caps?.drafts.find((x) => x.id === id);
           if (d) editDraft?.(d);
@@ -338,7 +343,8 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
       }
       // The Inbox's own letters: here they are the item's actions, never the window's other uses of the same keys
       // (N capture, L promises, W plan, H timelines…), so they stop here whether or not this item has that action.
-      if (!INBOX_LETTERS.has(key)) return;
+      // QC-1: Shift+N is the window's New (a new work item in DevOps), here too.
+      if (!INBOX_LETTERS.has(key) || (key === "N" && e.shiftKey)) return;
       e.preventDefault();
       e.stopPropagation();
       k.acts.find((x) => x.key === key)?.run();

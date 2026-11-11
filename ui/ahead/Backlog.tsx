@@ -14,6 +14,7 @@ import { bulkSummary, lastText, nextMonday, type BacklogGroup, type BacklogRow, 
 import type { StagedChange } from "../../plan/ahead-edit.ts";
 import { call } from "../api.ts";
 import { TypeIcon } from "../TypeIcon.tsx";
+import { NewUnder } from "./NewUnder.tsx";
 import { WorkLink } from "../WorkLink.tsx";
 import { useAhead } from "./Ahead.tsx";
 import { gapChip, ReadyChips } from "./Chips.tsx";
@@ -254,6 +255,7 @@ function BacklogItem({ r, selected, toggle }: { r: BacklogRow; selected: boolean
         </WorkLink>{" "}
         <span className="muted bl-id">#{r.item.id}</span>
       </span>
+      <NewUnder clientKey={r.clientKey} item={r.item} />
       <ReadyChips chips={r.gaps.map((k) => gapChip(k))} dots />
       <span className="bl-meta">
         <span>{r.item.state}</span>

@@ -13,13 +13,14 @@ import { fixCount } from "../../plan/fixnext.ts";
 import { call } from "../api.ts";
 import { useDevOpsWrite } from "../DevOpsWrite.tsx";
 import { useDevOpsChanged, useDevOpsFresh } from "../DevOpsFresh.tsx";
+import { CREATED_EVENT, useOpenNew, type Created } from "../NewItem.tsx";
 import { TypeIcon } from "../TypeIcon.tsx";
 import { openBreakDown, type PanelAction } from "../menu.ts";
 import { openSend } from "../send-event.ts";
 import { clientColor } from "../labels.ts";
 import { ModeArea } from "../ModeSwitch.tsx";
 import type { AheadMode } from "../nav.ts";
-import { buildRows, DEFAULT_FILTERS, fixGroups, groups, type Group, type Row } from "./model.ts";
+import { buildRows, DEFAULT_FILTERS, fixGroups, groups, hiddenBy, type Group, type Row } from "./model.ts";
 import { Grid } from "./Grid.tsx";
 import { Gantt } from "./Gantt.tsx";
 import { FixNext } from "./FixNext.tsx";
@@ -61,6 +62,8 @@ export type AheadEnv = {
    * staged field beside mine (null: it didn't). Nothing is overwritten on either side.
    */
   changedUnder: (clientKey: string, itemId: number) => { field: string; devops: string; mine: string }[] | null;
+  /** QC-1: the New form with this item as the parent (the next level down chosen). Absent: no New here. */
+  newUnder?: (parent: { clientKey: string; id: number; type: string; title: string }) => void;
 };
 export const AheadCtx = createContext<AheadEnv | null>(null);
 export const useAhead = () => useContext(AheadCtx)!;
@@ -80,6 +83,12 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   const [toast, setToast] = useState<{ id: number; text: string; undo: (() => Promise<void>) | null } | null>(null);
   const head = useRef<HTMLHeadingElement>(null);
   const dw = useDevOpsWrite();
+  // QC-1: items I created while Ahead is open: always shown (whatever the filters or the scope say) and the last one
+  // selected, until I leave Ahead. ahead.load is asked to keep them (it checks they are my own creates).
+  const openNew = useOpenNew();
+  const made = useRef<{ clientKey: string; id: number }[]>([]);
+  const [madeKeys, setMadeKeys] = useState<ReadonlySet<string>>(new Set());
+  const [madeFocus, setMadeFocus] = useState<number | null>(null);
   // AH-6: one view for every mode: the level and carets and Show callouts (remembered in this browser), and the
   // address's query, which wins when it names them (a link opens what its sender saw).
   const linked = useRef(fromQuery(queryOf(location.hash)));
@@ -106,7 +115,7 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
     if (!quiet) setBusy(true);
     const startedAt = local.current;
     try {
-      const l = await call<AheadLoad>("ahead.load", { ...(refresh ? { refresh: true } : {}), ...(wantLast.current ? { lastChanges: true } : {}) }, quiet ? { background: true } : {});
+      const l = await call<AheadLoad>("ahead.load", { ...(refresh ? { refresh: true } : {}), ...(wantLast.current ? { lastChanges: true } : {}), ...(made.current.length ? { keep: made.current } : {}) }, quiet ? { background: true } : {});
       const staged = new Set(l.changes.map((c) => `${c.clientKey}:${c.itemId}`));
       const moved: string[] = [];
       for (const c of l.clients)
@@ -203,6 +212,22 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
     r.tier === "feature" && r.item.id > 0
       ? [{ id: "send", label: "Send to…", hint: "a teammate's week", run: () => openSend({ clientKey: r.clientKey, clientName: load?.clients.find((c) => c.clientKey === r.clientKey)?.clientName ?? null, itemId: r.item.id, level: "feature", title: r.item.title, itemType: r.item.type, url: r.item.url, parentId: r.item.parentId }) }]
       : [];
+  const newUnder: AheadEnv["newUnder"] = openNew && !readOnly ? (p) => openNew({ from: "ahead_row", clientKey: p.clientKey, parent: { id: p.id, type: p.type, title: p.title } }) : undefined;
+  const newHere = () => openNew?.({ from: "ahead", clientKey: filters?.clients.length === 1 ? filters.clients[0]! : (load?.clients.length === 1 ? load.clients[0]!.clientKey : null) });
+  // A create from anywhere while Ahead is open (its own New, a row, the command menu): read again, keep it, select it.
+  useEffect(() => {
+    const on = (e: Event) => {
+      const c = (e as CustomEvent<Created>).detail;
+      if (!c) return;
+      made.current = [...made.current.filter((x) => !(x.clientKey === c.clientKey && x.id === c.itemId)), { clientKey: c.clientKey, id: c.itemId }].slice(-50);
+      setMadeKeys(new Set(made.current.map((x) => `${x.clientKey}:${x.id}`)));
+      setMadeFocus(c.itemId);
+      void reload(false, true).then(() => setJustMade({ clientKey: c.clientKey, id: c.itemId, n: Date.now() }));
+    };
+    window.addEventListener(CREATED_EVENT, on);
+    return () => window.removeEventListener(CREATED_EVENT, on);
+  }, [reload]);
+  const [justMade, setJustMade] = useState<{ clientKey: string; id: number; n: number } | null>(null);
   const breakDown = (r: Row) => openBreakDown(r.clientKey, { id: r.item.id, title: r.item.title, type: r.item.type, actions: panelActions(r) });
 
   const f = filters ?? DEFAULT_FILTERS;
@@ -215,7 +240,16 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
     if (/^#\/?ahead(\/|$)/.test(base) && location.hash !== base + (q ? `?${q}` : "")) history.replaceState(history.state, "", base + (q ? `?${q}` : ""));
   }, [filters, fold.level, callouts, mode]);
   const staleWeeks = load?.staleWeeks ?? DEFAULT_AHEAD.staleWeeks;
-  const shown: Group[] = useMemo(() => (load ? groups(load, f, { stories: true }) : []), [load, f, mode]);
+  const shown: Group[] = useMemo(() => (load ? groups(load, f, { stories: true, keep: madeKeys }) : []), [load, f, mode, madeKeys]);
+  // QC-1: once the new item is read, say it was created and which filters would hide it after I leave.
+  useEffect(() => {
+    if (!justMade || !load || !filters) return;
+    const why = hiddenBy(load, filters, `${justMade.clientKey}:${justMade.id}`);
+    const there = load.clients.some((c) => c.clientKey === justMade.clientKey && c.items.some((i) => i.id === justMade.id));
+    setSaid({ id: justMade.n, text: !there ? `Created #${justMade.id}. FocusTime hasn't read it from DevOps yet; Refresh shows it` : why.length ? `Created #${justMade.id}. Shown until you leave Ahead. Hidden by: ${why.join(", ")}` : `Created #${justMade.id}` });
+    setJustMade(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [justMade, load]);
   // AH-6: what every mode would show with no filters (all clients, everyone): the summary's "of N".
   const everything = useMemo<AheadFilters>(() => ({ ...DEFAULT_FILTERS, owner: Object.fromEntries((load?.clients ?? []).map((c) => [c.clientKey, "all" as const])), ...(f.whole ? { whole: true } : {}) }), [load, f.whole]);
   // AH-3: Readiness for every client, ranked by each client's backlog; AH-6: Ahead's filters apply to it too.
@@ -303,7 +337,7 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
     const text = (f: ChangeField, v: ChangeValue | undefined, half: DayHalf | null = null) => (v === null || v === undefined || v === "" ? (f === "assignee" ? "nobody" : "no value") : valueText(f, v, half));
     return mine.map((c) => ({ field: label[c.field], devops: text(c.field, now(c.field)), mine: text(c.field, c.value, c.half) }));
   };
-  const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, setChanges, breakDown, color, focusItem: item, error: setError, view, changedUnder } : null;
+  const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, setChanges, breakDown, color, focusItem: madeFocus ?? item, error: setError, view, changedUnder, ...(newUnder ? { newUnder } : {}) } : null;
   const anyFilter = counts.shown !== counts.total;
   const visible = counts.shown;
   const title = mode === "fix" ? "Readiness" : mode === "gantt" ? "Gantt" : mode === "backlog" ? "Backlog" : "Grid";
@@ -317,6 +351,11 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
         <button type="button" className="top-btn" disabled={busy} onClick={() => void refreshNow()} title="Check DevOps now (R)">
           {busy ? "Reading…" : "Refresh"}
         </button>
+        {openNew && !readOnly && (
+          <button type="button" className="top-btn ah-new" onClick={newHere} title="A new story, feature, epic or any level, straight to DevOps (Shift N)">
+            + New
+          </button>
+        )}
         {said && (
           <span className="muted ah-refreshed" role="status">
             {said.text}

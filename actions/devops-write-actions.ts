@@ -20,6 +20,7 @@ import type { ClientEntry } from "../ai/guard.ts";
 import { exitCheck, nameList, NAME_REMOVED, replaceMentions } from "../plan/boundary.ts";
 import { isCoopComment } from "../plan/status-report.ts";
 import { breakdownChildTypes, ladderFromProcessConfig, levelsFromProcessConfig } from "../plan/process.ts";
+import { cleanTitle, createLevelsOf, missingRequired, parentProblem } from "../plan/quick-create.ts";
 import { canEdit, rungOf, sameValue, valueText, type ChangeField, type ChangeValue, type EditRight, type StagedChange } from "../plan/ahead-edit.ts";
 import { addFixed, dropFixed, fills, FIXED_KEY, readFixed } from "../plan/readiness.ts";
 import type { NotesStore } from "../store/devops-notes.ts";
@@ -113,6 +114,8 @@ export type AheadPort = {
   automation: () => Promise<boolean>;
   /** The read-back goes straight into the central store and its change log. */
   stored?: (clientKey: string, value: { id: number; fields: Record<string, unknown> }) => Promise<void>;
+  /** QC-1: whom a new item may be assigned to (anyone on the client's DevOps project, as Ahead's picker lists them). Missing: only me. */
+  assignable?: (clientKey: string, email: string) => Promise<boolean>;
   /** AH-5: a new assignee who isn't a Cooptimizer gets no FocusTime notice (and no devops_notes row). Missing: everyone does. */
   isCooptimizer?: (clientKey: string, email: string) => Promise<boolean>;
 };
@@ -676,7 +679,7 @@ async function linkComment(env: Env, o: Record<string, unknown>): Promise<HeldIn
 
 /** One change → what to hold, or a reason there is nothing to do. Reads the item now (fresh rev). */
 async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Promise<unknown>> = new Map()): Promise<HeldIn | string> {
-  const o = fields(c, ["kind"], ["key", "hours", "itemId", "commentId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images", "assign", "pickId", "mention"]);
+  const o = fields(c, ["kind"], ["key", "hours", "itemId", "commentId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images", "assign", "pickId", "mention", "assignTo", "size"]);
   const { writer, org, pat, project, plan } = env;
   switch (o.kind) {
     case "state": {
@@ -914,6 +917,91 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const ops = createOps({ org, title: draft.title, description, acceptance, acField, assignedTo: env.me.email, areaPath: area, iterationPath: iteration, parentId: parent.id, startDate, targetDate, timeZone: tz });
       const after: Record<string, string | null> = { Type: type, Title: draft.title, Description: description, ...(acField ? { "Acceptance criteria": acceptance } : {}), ...(draft.level === "feature" ? { "Start date": startDate?.date ?? null, "Target date": targetDate?.date ?? null } : {}), "Assigned to": `${env.me.name} <${env.me.email}>`, Area: area, Iteration: iteration, Parent: `#${parent.id} ${parent.title}` };
       return { ...base(env), ...none, op: "create", itemId: null, parentId: parent.id, title: draft.title, ops, rev: null, before: {}, after, draftId: draft.id, type };
+    }
+    case "new_item": {
+      // QC-1: the New form's create, at any level the client's process has (its backlog ladder, never a list of names):
+      // a title, a type, an optional parent one level up (its area and iteration; else the project's defaults),
+      // assigned to me, to someone on the client's project or to nobody, an optional target date, description and the
+      // type's size field. From a draft (any level) the draft's values fill what the form didn't send, and the to-dos
+      // that use it become the item on confirm. Every check runs here, before anything is sent.
+      const draft = o.draftId === undefined || o.draftId === null ? null : await plan.getDraft(posId(o.draftId, "draftId"));
+      if (o.draftId !== undefined && o.draftId !== null && !draft) throw new PlanError("No such draft");
+      if (draft?.devopsId) return `"${draft.title}" is already in DevOps as #${draft.devopsId}`;
+      if (draft && draft.clientKey !== env.clientKey) throw new Refused("That draft belongs to another client", 409);
+      const t = cleanTitle(o.title !== undefined ? o.title : draft?.title);
+      if ("problem" in t) throw new Invalid(t.problem);
+      const title = t.title;
+      const pc = await writer.processConfig(org, pat, project);
+      const ladder = ladderFromProcessConfig(pc);
+      const levels = createLevelsOf(ladder);
+      const asked = o.type !== undefined && o.type !== null ? str(o.type, "type", 200)! : (draft?.itemType ?? null);
+      const fallback = draft ? (draft.level === "feature" ? levels.filter((l) => l.kind === "portfolio").at(-1)?.types[0] : levels.find((l) => l.kind === "requirement")?.types[0]) : undefined;
+      const type = asked ?? fallback ?? null;
+      if (!type) throw new Invalid("Choose a level and type");
+      if (!levels.some((l) => l.types.includes(type))) throw new Refused(`${type} isn't a level in ${env.projectName}'s process. It has: ${levels.flatMap((l) => l.types).join(", ")}`, 409);
+      const parentId = o.parentId !== undefined ? (o.parentId === null ? null : posId(o.parentId, "parentId")) : (draft?.parentItemId ?? null);
+      let parent: ItemSnapshot | null = null;
+      if (parentId !== null) {
+        try {
+          parent = await writer.item(org, pat, project, parentId);
+        } catch (e) {
+          if (e instanceof WriteFailure && e.kind === "not_found") throw new Refused(`#${parentId} isn't in ${env.clientName}'s project ${env.projectName}`, 409);
+          throw e;
+        }
+        // An id from another project of the same organization reads fine: only this client's project counts.
+        const inProject = String(parent.fields["System.TeamProject"] ?? env.projectName).toLowerCase();
+        if (inProject !== env.projectName.toLowerCase() && inProject !== env.project.toLowerCase()) throw new Refused(`#${parentId} isn't in ${env.clientName}'s project ${env.projectName}`, 409);
+        const why = parentProblem(ladder, parent.type, type);
+        if (why) throw new Refused(why, 409);
+        const parentStates = await writer.states(org, pat, project, parent.type);
+        if (!isOpenCategory(parentStates.find((x) => x.name === parent!.state)?.category)) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime adds items only under open parents`, 409);
+      }
+      // Assigned to: me (the default), nobody, or someone on this client's DevOps project.
+      const want = o.assignTo !== undefined ? o.assignTo : (draft?.assignTo ?? "me");
+      let assignee: { email: string; text: string } | null;
+      if (want === "me" || want === undefined) assignee = { email: env.me.email, text: `${env.me.name} <${env.me.email}>` };
+      else if (want === null || want === "none" || want === "") assignee = null;
+      else {
+        const email = str(want, "assignTo", 320)!.toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+$/.test(email)) throw new Invalid("assignTo must be me, none or an email");
+        if (email === env.me.email.toLowerCase()) assignee = { email: env.me.email, text: `${env.me.name} <${env.me.email}>` };
+        else if (!(await env.ahead?.assignable?.(env.clientKey, email).catch(() => false))) throw new Refused(`Only people on ${env.clientName}'s DevOps project can be assigned here`, 409);
+        else assignee = { email, text: email };
+      }
+      const description = o.description !== undefined ? str(o.description, "description", 8000, true) : (draft?.description ?? null);
+      const acceptance = o.acceptance !== undefined ? str(o.acceptance, "acceptance", 8000, true) : (draft?.acceptance ?? null);
+      const date = o.date !== undefined && o.date !== null && o.date !== "" ? isoDate(o.date, "date") : o.date === undefined ? (draft?.targetDate ?? null) : null;
+      const startDay = o.date === undefined ? (draft?.startDate ?? null) : null;
+      const sizeIn = o.size === undefined || o.size === null || o.size === "" ? null : Number(o.size);
+      if (sizeIn !== null && (!Number.isFinite(sizeIn) || sizeIn < 0 || sizeIn > 10_000)) throw new Invalid("size must be a number from 0 to 10000");
+      const info = await writer.typeFieldInfo(org, pat, project, type);
+      const typeHas = new Set(info.map((f) => f.ref));
+      let targetDate: { field: string; date: string } | null = null;
+      if (date) {
+        const field = detectTargetField(await writer.fields(org, pat, project), typeHas);
+        if (!field) throw new Refused(`${type} has no target date in ${env.projectName}'s process. Leave the target date empty`, 409);
+        targetDate = { field, date };
+      }
+      const startDate = startDay && typeHas.has(START_FIELD) ? { field: START_FIELD, date: startDay } : null;
+      const sizeField = sizeIn !== null ? detectTypeSizeField(typeHas) : null;
+      if (sizeIn !== null && !sizeField) throw new Refused(`${type} has no size field in ${env.projectName}'s process. Leave the size empty`, 409);
+      const acField = !!acceptance && typeHas.has(AC_FIELD);
+      const area = parent ? String(parent.fields["System.AreaPath"] ?? "") || null : null;
+      const iteration = parent ? String(parent.fields["System.IterationPath"] ?? "") || null : null;
+      const ops = [...createOps({ org, title, description, acceptance, acField, assignedTo: assignee?.email ?? null, areaPath: area, iterationPath: iteration, parentId: parent?.id ?? null, startDate, targetDate, timeZone: tz }), ...(sizeField && sizeIn !== null ? [{ op: "add" as const, path: `/fields/${sizeField}`, value: sizeIn }] : [])];
+      // A required field this create leaves empty, that DevOps has no default for: say so now, never half-create.
+      const missing = missingRequired(info, new Set(ops.filter((x) => x.path.startsWith("/fields/")).map((x) => x.path.slice(8))));
+      if (missing.length) throw new Refused(`${env.projectName}'s process needs ${missing.map((f) => f.name ?? f.ref).join(", ")} on a new ${type}, which FocusTime doesn't fill. Create this one in DevOps, or save it as a draft`, 409, "required_field");
+      // Never two: a create of this title, type and parent that may have landed (from another tab or a double click).
+      const same = (await plan.devopsWriteLog(200)).find((e) => e.op === "create" && e.clientKey === env.clientKey && e.title === title && e.after.Type === type && e.parentId === (parent?.id ?? null) && (e.status === "pending" || e.status === "unconfirmed" || (draft !== null && e.draftId === draft.id && e.status === "confirmed" && e.undoneBy === null)));
+      if (same) throw new Refused(same.status === "confirmed" ? `"${title}" is already in DevOps as #${same.itemId}` : `"${title}" may already be in DevOps. Retry it in Settings > Data > Audit log: it checks first and won't make a second one`, 409, "pending_write");
+      const after: Record<string, string | null> = {
+        Type: type, Title: title, Description: description, ...(acField ? { "Acceptance criteria": acceptance } : {}),
+        "Assigned to": assignee?.text ?? "Nobody", ...(targetDate ? { "Target date": targetDate.date } : {}), ...(startDate ? { "Start date": startDate.date } : {}), ...(sizeField && sizeIn !== null ? { Size: String(sizeIn) } : {}),
+        Area: area ?? "The project's default", Iteration: iteration ?? "The project's default", Parent: parent ? `#${parent.id} ${parent.title}` : "None",
+      };
+      const notes = [`Created as you: DevOps shows ${env.me.name} as who made it.`, ...(draft ? ["The draft becomes this item wherever it is placed, keeping its block, size and time."] : []), ...(assignee && assignee.email !== env.me.email ? ["DevOps tells them as it usually does; FocusTime sends no note of its own."] : [])];
+      return { ...base(env), ...none, op: "create", itemId: null, parentId: parent?.id ?? null, title, ops, rev: null, before: {}, after, type, draftId: draft?.id ?? null, notes };
     }
     case "proposal_create": {
       // DS-1: one kept card of a Draft stories draft, as a story under its feature: the process's story type, the
@@ -1240,7 +1328,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       };
     }
     default:
-      throw new Invalid("kind must be state, comment, comment_edit, comment_delete, create, request_create, proposal_create, conversation_create, conversation_comment, description_update, description_edit, target_date, assign, fields or undo");
+      throw new Invalid("kind must be state, comment, comment_edit, comment_delete, create, new_item, request_create, proposal_create, conversation_create, conversation_comment, description_update, description_edit, target_date, assign, fields or undo");
   }
 }
 
@@ -1461,8 +1549,9 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       }
       const back = await again(() => writer.item(org, pat, project, id!));
       // CV-5: a create may leave it unassigned (no AssignedTo in the patch): then any assignee DevOps' own rules set is fine.
-      const assigned = (entry.ops as PatchOp[]).some((p) => p.path === "/fields/System.AssignedTo");
-      const ok = back.title === entry.title && (back.parentId ?? null) === entry.parentId && (!assigned || identityEmail(back.fields["System.AssignedTo"]) === env.me.email.toLowerCase());
+      // QC-1: the assignee is whoever the patch names (me, or someone on the client's project).
+      const assignedTo = (entry.ops as PatchOp[]).find((p) => p.path === "/fields/System.AssignedTo")?.value;
+      const ok = back.title === entry.title && (back.parentId ?? null) === entry.parentId && (typeof assignedTo !== "string" || identityEmail(back.fields["System.AssignedTo"]) === assignedTo.toLowerCase());
       if (!ok) return settle("unconfirmed", `DevOps didn't show #${id} as asked yet (title, parent or assignee). Retry checks first and won't create another`, { itemId: id });
       // CV-4: every image it was meant to have is linked.
       const linked = new Set(back.relations.filter((r) => r.rel === ATTACHED).map((r) => attachmentId(r.url)));
@@ -1476,6 +1565,8 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
         if (a?.status === "open") await shared.teams.resolveRequest(entry.ask.chatId, entry.ask.messageId, { status: "created", itemId: id, itemUrl: url, itemTitle: back.title, writeId: entry.id });
       }
       if (entry.conv && ctx.conversations) await ctx.conversations.created(entry.conv, { id, url, title: back.title });
+      // QC-1: the read back goes straight into FocusTime's store, so every open screen shows the new item now (DV-2).
+      await ctx.ahead?.stored?.(env.clientKey, { id: back.id, fields: { ...back.fields, "System.Rev": back.rev } }).catch(() => {});
       forget();
       return settle("confirmed", `Created #${id} in DevOps`, { itemId: id, revAfter: back.rev, pickIds }, { itemId: id, url });
     }

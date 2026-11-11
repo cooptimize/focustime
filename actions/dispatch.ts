@@ -84,6 +84,7 @@ import { pastUrgency } from "../plan/asks-ai.ts";
 import { isActionName, type ActionName } from "./registry.ts";
 import { captureAction, featuresOf, type CaptureContext } from "./capture-actions.ts";
 import { draftAiAction, type PrepareContext } from "./draft-prepare.ts";
+import { newItemAction, type NewItemContext } from "./new-item-actions.ts";
 import { standardsForQuestion, standardsLookup, type StandardsLookup, type StandardsPort } from "./standards.ts";
 import { followUpAction } from "./followup-actions.ts";
 import { roadmapAction } from "./roadmap-actions.ts";
@@ -1080,6 +1081,11 @@ function aheadPort(ctx: ActionContext, plan: PlanStore): AheadPort {
     isLead: async (clientKey) => (await cc).isLead(clientKey),
     automation: async () => (await aheadContext(ctx)).automation(),
     ...(ctx.devopsStored ? { stored: ctx.devopsStored } : {}),
+    // QC-1: a new item's assignee is anyone Ahead's own picker lists for that client (its project's people, never another client's).
+    assignable: async (clientKey, email) => {
+      const r = await aheadAction(await aheadContext(ctx), "ahead.people", { clientKey });
+      return r.ok && ((r.data as { people?: { email: string }[] }).people ?? []).some((p) => p.email.toLowerCase() === email.toLowerCase());
+    },
     // AH-5: only Cooptimizers (and their client logins) get FocusTime's quiet assigned note.
     ...(ctx.org ? { isCooptimizer: async (clientKey: string, email: string) => !!(await scopeDepsOf(ctx.org!)(clientKey))?.isCooptimizer(email) } : {}),
   };
@@ -1169,6 +1175,25 @@ function standardsOption(ctx: ActionContext): { standards?: StandardsLookup } {
     return rule ? { dataPlatform: rule.dataPlatform, sourceSystems: rule.sourceSystems } : null;
   });
   return standards ? { standards } : {};
+}
+
+/** QC-1: the New form's reads (the process model, the client's open items in the store) and write access. */
+function newItemContext(ctx: ActionContext): NewItemContext {
+  return {
+    plan: ctx.plan,
+    config: () => configured(ctx),
+    model: async (cfg, key) => {
+      const r = (await ctx.makeDevOps(cfg.dataverse, userZone(cfg)).processModels([key]))[0];
+      return r?.ok ? r.model : null;
+    },
+    items: async (cfg, key) => {
+      const src = ctx.makeDevOps(cfg.dataverse, userZone(cfg));
+      if (!src.searchItems) return null;
+      const hits = await src.searchItems({ clientKey: key, clientName: cfg.clientSettings[key]?.name ?? key }, "", 2000);
+      return hits ? hits.map((i) => ({ id: i.id, title: i.title, type: i.type, state: i.state, stateCategory: i.stateCategory, url: i.url, parentId: i.parentId })) : null;
+    },
+    canWrite: async (key) => !!ctx.devopsWriter && !!ctx.writePats && !!(await ctx.plan?.devopsIdentity(key).catch(() => null)),
+  };
 }
 
 function prepareContext(ctx: ActionContext): PrepareContext {
@@ -2338,6 +2363,10 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "draft.prepare":
     case "draft.get":
       return draftAiAction(prepareContext(ctx), action, req.input);
+    case "new.options":
+    case "draft.add":
+    case "draft.save":
+      return newItemAction(newItemContext(ctx), action, req.input);
     case "ahead.load":
     case "ahead.people":
     case "ahead.stage":

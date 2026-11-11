@@ -247,7 +247,8 @@ const ACCEPTANCE: Record<number, string> = {
 
 const client = (k: DemoClientKey) => DEMO_CLIENTS.find((c) => c.key === k)!;
 const urlOf = (k: DemoClientKey, id: number) => `https://dev.azure.com/${client(k).org}/${encodeURIComponent(client(k).project)}/_workitems/edit/${id}`;
-const isPortfolio = (t: string) => t === "Feature" || t === "Epic";
+/** QC-1: the demo's Cooptimize process has a level above Epic (Domain), as a real process may. */
+const isPortfolio = (t: string) => t === "Feature" || t === "Epic" || t === "Domain";
 const category = (s: string) => (s === "New" ? "Proposed" : s === "Closed" ? "Completed" : s === "Resolved" ? "Resolved" : s === "Removed" ? "Removed" : "InProgress");
 const emailOf = (who: string | null) => (who === ME ? "you@example.com" : who ? (CLIENT_STAFF[who] ?? DEMO_PEOPLE.find((p) => p.name === who)?.email ?? null) : null);
 
@@ -280,7 +281,7 @@ export type DemoItems = { items: (k: DemoClientKey) => DemoItem[] };
 
 function item(k: DemoClientKey, i: DemoItem): WorkItem {
   return {
-    id: i.id, title: i.title, type: i.type, state: i.state, stateCategory: category(i.state), level: isPortfolio(i.type) ? "portfolio" : "story", ...(isPortfolio(i.type) ? { tier: i.type === "Epic" ? ("epic" as const) : ("feature" as const) } : {}),
+    id: i.id, title: i.title, type: i.type, state: i.state, stateCategory: category(i.state), level: isPortfolio(i.type) ? "portfolio" : "story", ...(isPortfolio(i.type) ? { tier: i.type === "Epic" || i.type === "Domain" ? ("epic" as const) : ("feature" as const) } : {}),
     order: i.order, parentId: i.parent, changedAt: i.changedAt, url: urlOf(k, i.id), tags: [], blocked: false, changedByMe: false,
     assignedTo: i.who === ME ? "You" : i.who, assignedToMe: i.who === ME, targetDate: i.target,
     // Step 16.4: the fictional assignee's email (DevOps uniqueName), matched to the demo team by email.
@@ -302,8 +303,9 @@ export function demoProcess(k: DemoClientKey, overrides: ProcessOverrides = {}):
   return buildProcessModel({
     org: client(k).org, project: client(k).project, process: "Agile", fetchedAt: "2026-10-30T15:00:00Z",
     teamSettings: { bugsBehavior: "asTasks" }, processConfig: { bugWorkItems: { workItemTypes: [{ name: "Bug" }] } },
-    teamBacklogs: { value: [lvl("portfolio", 4, ["Epic"]), lvl("portfolio", 3, ["Feature"]), lvl("requirement", 2, ["User Story"]), lvl("task", 1, ["Task", "Bug"])] },
-    types: [demoType("Epic", "icon_crown", "E06C00"), demoType("Feature", "icon_trophy", "773B93"), demoType("User Story", "icon_book", "009CCC"), demoType("Task", "icon_clipboard", "A4880A"), demoType("Bug", "icon_insect", "CC293D")],
+    // QC-1: Cooptimize's demo process has a level above Epic, so creating and showing one can be tried.
+    teamBacklogs: { value: [...(k === "Cooptimize" ? [lvl("portfolio", 5, ["Domain"])] : []), lvl("portfolio", 4, ["Epic"]), lvl("portfolio", 3, ["Feature"]), lvl("requirement", 2, ["User Story"]), lvl("task", 1, ["Task", "Bug"])] },
+    types: [...(k === "Cooptimize" ? [demoType("Domain", "icon_list", "60AF49")] : []), demoType("Epic", "icon_crown", "E06C00"), demoType("Feature", "icon_trophy", "773B93"), demoType("User Story", "icon_book", "009CCC"), demoType("Task", "icon_clipboard", "A4880A"), demoType("Bug", "icon_insect", "CC293D")],
   }, overrides);
 }
 

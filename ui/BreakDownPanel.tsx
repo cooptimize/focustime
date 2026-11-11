@@ -12,6 +12,7 @@ import type { StandardsUsed } from "../plan/standards.ts";
 import { MentionFlag } from "./DevOpsWrite.tsx";
 import { TextBox } from "./TextBox.tsx";
 import { CloseButton } from "./CloseButton.tsx";
+import { useOpenNew } from "./NewItem.tsx";
 import { openSend } from "./send-event.ts";
 import { useCallback, useContext, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { breakdownLabel, moveCard, reviewTotal } from "../plan/breakdown.ts";
@@ -267,6 +268,7 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
   }, []);
   const kept = draft?.cards.filter((c) => c.keep && c.status.state !== "created").length ?? 0;
   const title = prep?.featureTitle ?? item.title;
+  const openNew = useOpenNew();
   const type = prep?.featureType ?? item.type ?? null;
   const childWord = draft?.storyType ?? childType ?? prep?.storyType ?? "";
   const label = breakdownLabel(type);
@@ -346,6 +348,12 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
               </label>
             )}
             <div className="bd-buttons">
+              {step === "prepare" && openNew && (
+                // QC-1: one child by hand, no AI needed: the New form, under this item, one level down.
+                <button type="button" className="mini bd-by-hand" disabled={!!busy} onClick={() => (close(), openNew({ from: "breakdown", clientKey, parent: { id: item.id, type: type ?? "", title } }))}>
+                  Add one by hand…
+                </button>
+              )}
               {step === "prepare" && canRun && (
                 <button type="button" className="commit" disabled={!!busy} onClick={() => void run()}>
                   Run

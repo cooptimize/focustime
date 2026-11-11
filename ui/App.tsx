@@ -67,7 +67,9 @@ import { pickNeed, type DraftStory, type Pick } from "../plan/types.ts";
 import { CaptureDialog, captureClients } from "./Capture.tsx";
 import { AssistantPanel, COMMANDS_HREF } from "./Assistant.tsx";
 import type { AssistantContext } from "../assistant/types.ts";
-import { CreateDraftCtx, CreateDraftDialog } from "./CreateDraft.tsx";
+import { CreateDraftCtx } from "./CreateDraft.tsx";
+import { NewItemCtx, NewItemDialog, type NewHooks, type NewPlace } from "./NewItem.tsx";
+import { newTypesOf } from "./new-types.ts";
 import { DraftEditor, DraftEditorCtx } from "./DraftEditor.tsx";
 import type { BoxKind } from "../plan/capture.ts";
 import { borrowedSummary } from "../plan/borrow.ts";
@@ -349,7 +351,12 @@ export function App() {
   const [captureKind, setCaptureKind] = useState<BoxKind | null>(null);
   // Step 15.3: the draft open in the draft editor.
   const [draftEdit, setDraftEdit] = useState<DraftStory | null>(null);
-  const [createDraft, setCreateDraft] = useState<number | null>(null);
+  // QC-1: the one New form (a story, a feature, an epic, any level), from wherever it was opened.
+  const [newAt, setNewAt] = useState<{ place: NewPlace; hooks: NewHooks; n: number } | null>(null);
+  const newN = useRef(0);
+  const openNew = useCallback((place: NewPlace, hooks: NewHooks = {}) => setNewAt({ place, hooks, n: ++newN.current }), []);
+  // CP-1's Create in DevOps from a captured draft (Capture, the draft editor) opens the New form on that draft.
+  const openDraftForm = useCallback((draftId: number) => openNew({ from: "draft", clientKey: null, draftId }), [openNew]);
   const [captureVersion, setCaptureVersion] = useState(0);
   const [borrowMenuAt, setBorrowMenuAt] = useState<{ x: number; y: number } | null>(null);
   /** U2: Week's ⋯ (the hours shown, and the compact timelines in the medium layout), moved from the status bar. */
@@ -1316,6 +1323,10 @@ export function App() {
       } else if ((k === "m" || k === "M") && free && settingsAt === null) {
         e.preventDefault();
         goNav(checkInOpen ? navOf.today() : navOf.today("checkin"));
+      } else if (e.key === "N" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !typing && !captureOpen) {
+        // QC-1: Shift+N, the New form for the selected block's client (or the one I choose).
+        e.preventDefault();
+        openNew({ from: "command", clientKey: envRef.current?.selection.clientKey ?? null });
       } else if ((e.key === "n" || e.key === "N" || ((e.key === "c" || e.key === "C") && !e.ctrlKey && !e.metaKey && !e.altKey)) && !typing && !captureOpen) {
         // P1: C opens Capture too.
         e.preventDefault();
@@ -1437,6 +1448,7 @@ export function App() {
       const s = data.sources.find((x) => x.source === src);
       return !!s && sourceActions(s).includes("disconnect");
     };
+    const selClient = (sel.half === "AM" ? day.am : sel.half === "PM" ? day.pm : day.eve)?.focus[0]?.clientKey ?? null;
     return {
       cowork,
       openChat,
@@ -1524,6 +1536,9 @@ export function App() {
       openCapture: (kind) => (setCaptureKind(kind ?? null), setCaptureOpen(true)),
       openAssistant: (text) => setAssistantAt({ text: text ?? "" }),
       openCaptures: () => setView("capture"),
+      // QC-1: "New feature", "New epic"… for the selected block's client, by its process's own names.
+      openNew: (o) => openNew({ from: "command", clientKey: selClient, ...(o.type ? { level: o.type } : {}) }),
+      newTypes: newTypesOf(work.get(selClient ?? "")?.types),
       openRitual: togglePlanning,
       closeOutDate: closeOutAt,
       commitCloseOut: () => {
@@ -1594,6 +1609,9 @@ export function App() {
         ),
     };
   }, [data, target, sel, openGuide, work, runPlan, openPlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, openPlanWeek, togglePlanning, connectWrite, addWork, timeboxDay, goNav, asksOpen, cowork]); // eslint-disable-line react-hooks/exhaustive-deps
+  // QC-1: Shift+N reads the selection at the moment it is pressed.
+  const envRef = useRef<MenuEnv | null>(null);
+  envRef.current = env;
 
   // AS-1: what the assistant hears about the screen: its address, the client and item in focus, the selected block and
   // today. Nothing else on screen is sent; the server reads what a question needs.
@@ -1743,7 +1761,8 @@ export function App() {
     <MenuHost env={env}>
     <VmProvider onSettings={() => setSettingsAt("connections", "vm")}>
     <DraftEditorCtx.Provider value={setDraftEdit}>
-    <CreateDraftCtx.Provider value={setCreateDraft}>
+    <CreateDraftCtx.Provider value={openDraftForm}>
+    <NewItemCtx.Provider value={openNew}>
     <WeekDndProvider
       data={data}
       week={week}
@@ -2361,12 +2380,13 @@ export function App() {
         />
       )}
       {captureOpen && <CaptureDialog data={data} defaultClient={env?.selection.clientKey ?? null} initialKind={captureKind} onClose={() => (setCaptureOpen(false), setCaptureKind(null))} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
-      {createDraft !== null && <CreateDraftDialog key={createDraft} draftId={createDraft} data={data} onClose={() => setCreateDraft(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
+      {newAt && <NewItemDialog key={newAt.n} place={newAt.place} hooks={{ ...newAt.hooks, onCreated: (c) => { newAt.hooks.onCreated?.(c); setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }, onDraft: (d) => { newAt.hooks.onDraft?.(d); setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); } }} clients={captureClients(data)} colors={(k) => clientColor(k, data.clients)} today={data.planDay.date} onClose={() => setNewAt(null)} />}
       {draftEdit && <DraftEditor key={draftEdit.id} draft={draftEdit} data={data} onClose={() => setDraftEdit(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
       {phone && todoSheet && <TodoSheet pick={todoSheet} data={data} now={now ?? new Date(clock).toISOString()} onClose={() => setTodoSheet(null)} onChanged={reloadQuiet} />}
     </div>
     </TodoSheetCtx.Provider>
     </WeekDndProvider>
+    </NewItemCtx.Provider>
     </CreateDraftCtx.Provider>
     </DraftEditorCtx.Provider>
     </VmProvider>
