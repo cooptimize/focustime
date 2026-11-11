@@ -377,7 +377,7 @@ export function createPatternsRunner(d: RunnerDeps) {
     const keys = Object.keys(run.progress.clients);
     for (const k of keys) {
       const cp = run.progress.clients[k]!;
-      if (cp.state !== "done" && !(await c.aiAllowed(k))) Object.assign(cp, { state: "skipped", reason: "AI is off for this client" });
+      if (cp.state !== "done" && !(await c.aiAllowed(k))) Object.assign(cp, { state: "skipped", reason: "Allow AI is off for this client (Admin › AI)" });
       else if (cp.state === "skipped") Object.assign(cp, { state: "waiting", reason: null });
     }
     await save(run, run.spentMicros);
@@ -499,7 +499,7 @@ export function createPatternsRunner(d: RunnerDeps) {
     let totalTokens = { input: 0, output: 0 };
     for (const k of keys) {
       if (!(await aiAllowed(k))) {
-        clients[k] = { items: 0, micros: 0, skipped: "AI is off for this client" };
+        clients[k] = { items: 0, micros: 0, skipped: "Allow AI is off for this client (Admin › AI)" };
         continue;
       }
       const p1 = await todo(k, STARTING_LIST, 1);

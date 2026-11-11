@@ -90,7 +90,10 @@ const find = (s: MenuStep, label: string) => items(s).find((i) => i.label === la
 describe("command menu (built from the action registry)", () => {
   it("lists every dispatcher action, so new actions appear automatically", () => {
     const listed = commandList(env().e).map((c) => c.action);
-    for (const name of ACTION_NAMES) if (!HIDDEN_FOR_NOW.has(name)) expect(listed, name).toContain(name);
+    for (const name of ACTION_NAMES) if (!HIDDEN_FOR_NOW.has(name) && !name.startsWith("patterns.")) expect(listed, name).toContain(name);
+    // WP-1: DevOps patterns is offered only to people an admin turned it on for, and only as the page.
+    expect(listed.filter((n) => n.startsWith("patterns."))).toEqual([]);
+    expect(commandList({ ...env().e, showPatterns: () => {} }).map((c) => c.action).filter((n) => n.startsWith("patterns."))).toEqual(["patterns.status"]);
     // WD-1: Team is hidden for now: its commands aren't offered.
     for (const name of HIDDEN_FOR_NOW) expect(listed, name).not.toContain(name);
     // CL-1: Make it a follow-up (gone from the UI in IB-1) is gone from the server too.

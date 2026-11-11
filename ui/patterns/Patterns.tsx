@@ -351,7 +351,9 @@ function TypesList({ lists, shown }: { lists: TypeList[]; shown: string }) {
 }
 
 function CheckByHand({ clients }: { clients: ClientRow[] }) {
-  const [k, setK] = useState(clients[0]?.key ?? "");
+  const [picked, setK] = useState<string | null>(null);
+  // The clients arrive (and gain results) after the first render: fall back to the first one offered.
+  const k = picked && clients.some((c) => c.key === picked) ? picked : (clients[0]?.key ?? "");
   const [rows, setRows] = useState<CheckRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   return (

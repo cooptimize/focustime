@@ -238,10 +238,10 @@ await forEachDriver("DevOps patterns run (WP-1)", ({ open: openDb }) => {
     await done(w.runner);
     const deps = ai({ allowed: ["adatum"] });
     const est = await w.runner.estimate(["adatum", "fabrikam"], deps.aiAllowed);
-    expect(est.clients.fabrikam).toEqual({ items: 0, micros: 0, skipped: "AI is off for this client" });
+    expect(est.clients.fabrikam).toEqual({ items: 0, micros: 0, skipped: "Allow AI is off for this client (Admin › AI)" });
     await w.runner.startClassify(ME, deps, est.totalMicros * 100, ["adatum", "fabrikam"]);
     await done(w.runner);
-    expect((await w.store.latest("classify")).last!.progress.clients.fabrikam).toMatchObject({ state: "skipped", reason: "AI is off for this client" });
+    expect((await w.store.latest("classify")).last!.progress.clients.fabrikam).toMatchObject({ state: "skipped", reason: "Allow AI is off for this client (Admin › AI)" });
   });
 
   it("the cost stop: spending more than half over the estimate stops the run; Resume needs a new estimate and pays nothing twice", async () => {

@@ -12,7 +12,7 @@ import type { Limiter } from "../sources/devops/source.ts";
 import { DevOpsFailure, type DevOpsInternal } from "../sources/devops/source.ts";
 import type { DevOpsTarget } from "../sources/devops/types.ts";
 import { readRate } from "../plan/devops-pace.ts";
-import { isClosed, isProposed } from "../plan/process.ts";
+import { countsAsDone, isClosed, isProposed } from "../plan/process.ts";
 import type { Freshness } from "../plan/devops-fresh-types.ts";
 import type { PatternsReader } from "./patterns-run.ts";
 import type { ClientLimiter } from "./devops-poll.ts";
@@ -84,7 +84,7 @@ export function createPatternsReader(d: {
       const m = await d.source().meta(await targetOf(k));
       const cat = (type: string, state: string) => m.meta.categories.get(type)?.get(state.toLowerCase()) ?? null;
       const estimateFields = [...new Set([...(m.fields.size ? [m.fields.size] : []), ...Object.values(m.fields.sizes ?? {})])];
-      return { closed: (t, s) => isClosed(cat(t, s)) || cat(t, s) === "Resolved", proposed: (t, s) => isProposed(cat(t, s)), estimateFields };
+      return { closed: (t, s) => countsAsDone(cat(t, s)) || isClosed(cat(t, s)), proposed: (t, s) => isProposed(cat(t, s)), estimateFields };
     },
     async ids(k, wiql, top) {
       return (await d.source().ids(await targetOf(k), wiql, top)).ids;
