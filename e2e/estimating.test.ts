@@ -24,7 +24,7 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     const { page, errors } = await freshPage(h);
     await page.keyboard.press("2");
     await page.locator('[data-drop="2026-11-02:PM"] .add-work.add-row').first().click();
-    await page.locator("aside.add-work-panel").waitFor();
+    await page.locator("aside.block-panel").waitFor();
     return { page, errors };
   };
   const watch = (page: import("playwright-core").Page) => page.evaluate(() => { const d = document.createElement("span"); d.style.color = "var(--watch)"; document.body.append(d); const c = getComputedStyle(d).color; d.remove(); return c; });
@@ -46,7 +46,7 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
 
   it("a feature's ⋯ › Estimate: whole hours, out of range changes nothing; a story's size from its to-do's chip", async () => {
     const { page, errors } = await addWork();
-    const feats = page.locator("aside.add-work-panel .aw-feature");
+    const feats = page.locator("aside.block-panel .aw-feature");
     await feats.first().waitFor();
     const est = feats.filter({ has: page.locator(".aw-feat-head") }).first();
     const name = (await est.locator(".aw-feat-name").first().innerText()).trim();
@@ -97,7 +97,7 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     await page.keyboard.press("Escape");
     // A plain to-do from Add work's type box is unsized.
     await openPlanDay(page);
-    const box = page.locator("aside.add-work-panel .aw-box input");
+    const box = page.locator("aside.block-panel input.bp-box");
     await box.fill("Unsized check for SZ-1");
     await box.press("Shift+Enter");
     const unsized = page.locator(".half.card li", { hasText: "Unsized check for SZ-1" }).locator(".size-chip.unsized").first();
@@ -113,7 +113,7 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
   it("photos: generated avatars with presence on the corner; initials when someone has none", async () => {
     const { page, errors } = await addWork();
     await expect.poll(() => page.locator(".topbar .person-chip .avatar img").count(), { timeout: 10_000 }).toBe(1);
-    await page.locator("aside.add-work-panel .aw-feat-head").first().getByRole("button", { name: /^More for / }).click();
+    await page.locator("aside.block-panel .aw-feat-head").first().getByRole("button", { name: /^More for / }).click();
     await page.getByRole("menuitem", { name: /Ask to collaborate/ }).click();
     const dlg = page.getByRole("dialog", { name: /Ask to collaborate/ });
     await expect.poll(() => dlg.locator(".help-people .avatar img").count(), { timeout: 10_000 }).toBe(3);
@@ -129,7 +129,7 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     for (const ok of ["9:30 AM", "Nov 2, 2026", "8h free · 10h planned", "about 6h", "1:30 PM to 5:00 PM"]) expect(ok).not.toMatch(FRACTION);
     const { page } = await freshPage(h);
     const views: [string, string][] = [
-      ["#/week/2026-11-02/add", "aside.add-work-panel .aw-sec"],
+      ["#/week/2026-11-02/add", "aside.block-panel .aw-sec"],
       ["#/week", ".half.card"],
       ["#/day", ".today-view"],
       ["#/day/checkin", "main"],

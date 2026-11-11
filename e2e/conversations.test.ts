@@ -254,12 +254,14 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       await expect(mine.locator(".ib-row").count()).resolves.toBe(2);
       await shotBoth(page, "my-promises", mine);
 
-      // Today: the promise under After your blocks.
+      // Day: the promise is in the chips line above the blocks ("1 promise due"), with its time (WD-2: Day's cards
+      // don't list a promise at its time any more).
       await page.keyboard.press("1");
-      const after = page.locator(".day-outside").filter({ hasText: "After your blocks" });
-      await after.getByText("Rerun the Salesforce data from CRM_Silver").waitFor();
-      await after.getByText(/7:30\sPM/).waitFor();
-      await shotBoth(page, "today-promise-after-blocks", page.getByRole("main", { name: "Today" }));
+      await page.locator(".day-chips .att-chip.due").click();
+      const after = page.locator(".day-chips .att-rows li", { hasText: "Rerun the Salesforce data from CRM_Silver" });
+      await after.waitFor();
+      await expect(after.textContent()).resolves.toMatch(/7:30\sPM/);
+      await shotBoth(page, "today-promise-after-blocks", page.getByRole("main", { name: "Day" }));
 
       // IB-1: no Make it a follow-up; the promise's Who is the person it was promised to (Evan), never me.
       await page.keyboard.press("5");

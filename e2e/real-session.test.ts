@@ -39,7 +39,7 @@ const SCREENS: [string, string, string][] = [
   ["Check-in", "#/day/checkin", "main"],
   ["Close out", "#/day/closeout", "main"],
   ["Week", "#/week", ".week-head"],
-  ["Week with Add work", "#/week/2026-11-02/add", "aside.add-work-panel"],
+  ["Week with Add work", "#/week/2026-11-02/add", "aside.block-panel"],
   ["Status", "#/status", "main"],
   ["Ahead › Grid", "#/ahead", ".ahead"],
   ["Ahead › Gantt", "#/ahead/gantt", ".ahead"],

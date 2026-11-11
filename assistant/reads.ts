@@ -170,7 +170,7 @@ export async function commitmentsRead(d: ReadDeps, client: string, person: strin
 }
 
 function sendCard(d: ReadDeps, s: SendView): SendCard {
-  return { kind: "send", id: s.id, clientKey: s.clientKey, clientName: d.clientName(s.clientKey), title: s.title, to: s.to.name, from: s.from.name, tier: s.kind, weekStart: s.weekStart, state: s.words || s.state, link: d.link(`#/week/${s.weekStart}/add`, "Open Add work") };
+  return { kind: "send", id: s.id, clientKey: s.clientKey, clientName: d.clientName(s.clientKey), title: s.title, to: s.to.name, from: s.from.name, tier: s.kind, weekStart: s.weekStart, state: s.words || s.state, link: d.link(`#/week/${s.weekStart}/add`, "Open Week") };
 }
 
 /** My sends (this week and next) and the ones sent to me, with their states. */
@@ -186,7 +186,7 @@ export async function sendsRead(d: ReadDeps, client: string | null): Promise<Rea
   const seen = new Set<number>();
   const list = out.filter((s) => !seen.has(s.id) && seen.add(s.id));
   const cards: Card[] = list.slice(0, 12).map((s) => sendCard(d, s));
-  if (!cards.length) cards.push({ kind: "note", text: "No sends this week or next.", link: d.link("#/week/add", "Open Add work") });
+  if (!cards.length) cards.push({ kind: "note", text: "No sends this week or next.", link: d.link("#/week/add", "Open Week") });
   return { cards, facts: list.slice(0, 12).map((s) => ({ title: { quoted: s.title }, from: s.from.name, to: s.to.name, kind: s.kind, week: s.weekStart, state: s.words || s.state })), itemIds: list.map((s) => s.itemId), pickIds: [] };
 }
 

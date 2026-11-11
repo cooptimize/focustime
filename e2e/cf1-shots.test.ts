@@ -61,7 +61,7 @@ describe.skipIf(!CHROMIUM || !DIR)("CF-1 screenshots", () => {
       }
       // The Add work panel on Monday afternoon.
       await page.locator('[data-drop="2026-11-02:PM"] .add-work.add-row').first().click();
-      await page.locator("aside.add-work-panel").waitFor();
+      await page.locator("aside.block-panel").waitFor();
       await page.waitForTimeout(400);
       await shot(page, `add-work-1440x900-${theme}`);
       await page.keyboard.press("Escape");

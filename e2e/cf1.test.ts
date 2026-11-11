@@ -51,7 +51,7 @@ describe.skipIf(!CHROMIUM)("CF-1: no confirm, no musts (browser, demo mode)", ()
     await page.close();
   }, T);
 
-  it("an empty Day: Nothing on today yet, Add work; once a to-do is on today the card goes", async () => {
+  it("an empty Day: Nothing on today yet, + Add (the block panel, on Day); once a to-do is on today the card goes", async () => {
     const { page, errors } = await freshPage(h);
     await clearToday(page);
     await page.evaluate(() => (location.hash = "#/day"));
@@ -59,13 +59,15 @@ describe.skipIf(!CHROMIUM)("CF-1: no confirm, no musts (browser, demo mode)", ()
     const card = page.locator(".today-view").getByText("Nothing on today yet").first();
     await card.waitFor({ timeout: 30_000 });
     expect(oldWords(await page.locator(".today-view").innerText())).toEqual([]);
-    await page.locator(".today-view").getByRole("button", { name: "Add work" }).first().click();
-    const panel = page.locator("aside.add-work-panel");
+    await page.locator(".today-view .moment-card").getByRole("button", { name: "+ Add" }).click();
+    const panel = page.locator("aside.block-panel");
     await panel.waitFor({ timeout: 30_000 });
-    await panel.locator(".aw-row:not(.placed) button.aw-plus").first().click();
+    // WD-2: it opens on Day, on one of today's blocks.
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/day\/2026-11-02\/(AM|PM)$/);
+    await panel.locator(".aw-features .aw-row:not(.placed):not(:has(.aw-where)) button.aw-plus").first().click();
     await panel.locator(".aw-row.placed").first().waitFor();
-    await page.keyboard.press("Escape");
-    await page.keyboard.press("1");
+    await panel.getByRole("button", { name: /Close/ }).first().click();
+    await panel.waitFor({ state: "detached" });
     await page.locator(".today-view").waitFor();
     await expect.poll(() => page.locator(".today-view").getByText("Nothing on today yet").count(), { timeout: 15_000 }).toBe(0);
     expect(errors).toEqual([]);
@@ -93,7 +95,7 @@ describe.skipIf(!CHROMIUM)("CF-1: no confirm, no musts (browser, demo mode)", ()
       await page.keyboard.press("Escape");
     }
     await page.locator('[data-drop="2026-11-02:PM"] .add-work.add-row').first().click();
-    await page.locator("aside.add-work-panel").waitFor();
+    await page.locator("aside.block-panel").waitFor();
     await page.waitForTimeout(500);
     await look("Add work");
     await page.keyboard.press("Escape");

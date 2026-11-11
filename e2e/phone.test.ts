@@ -63,7 +63,7 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
     // WD-1: Add work works on the phone as a bottom sheet (the old Plan today and Commit addresses open it), no read-only line.
     for (const hash of ["#/week/day", "#/week/commit"]) {
       await open(page, hash);
-      await page.locator("aside.add-work-panel.sheet").waitFor();
+      await page.locator("aside.block-panel.sheet").waitFor();
       expect(await page.locator(".phone-ro").count()).toBe(0);
     }
     // Ahead read only, with the line, Copy link, and nothing to tap inside, once opened anyway (MB-1).

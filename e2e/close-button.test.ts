@@ -81,7 +81,7 @@ describe.skipIf(!CHROMIUM)("UI-3: one close button", () => {
     await cell.waitFor({ timeout: 30_000 });
     const openHealth = async () => {
       await cell.locator(".add-work.add-row").click();
-      const p = page.locator("aside.add-work-panel");
+      const p = page.locator("aside.block-panel");
       await p.waitFor();
       return p;
     };

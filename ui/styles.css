@@ -6366,7 +6366,7 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 }
 
 /* ---------- WD-1: one Week. The header row, the notice lines, the client chips, the Add work panel, the block card. ---------- */
-:root { --aw-w: 360px; }
+:root { --aw-w: 380px; }
 .week-head.wd1-head { flex-wrap: nowrap; gap: 10px; padding-top: 8px; padding-bottom: 4px; }
 .week-head.wd1-head .ph-title { flex-wrap: nowrap; min-width: 0; }
 .week-head.wd1-head .ph-title > :not(.client-chips) { flex: none; }
@@ -6407,7 +6407,7 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .app > .wd1-body { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
 .wd1-body > .grid { flex: 1; }
 .wd1-body.with-panel .grid.with-panel:not(.narrow) { padding-right: calc(var(--aw-w) + 12px); }
-.add-work-panel {
+.block-panel {
   position: fixed; top: 57px; right: 0; bottom: 32px; width: var(--aw-w); z-index: 20;
   display: flex; flex-direction: column; box-sizing: border-box;
   background: var(--surface); border-left: 1px solid var(--border-strong); box-shadow: var(--shadow-panel);
@@ -6454,25 +6454,25 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .aw-typebox .item-lookup { display: block; flex: none; width: 100%; }
 .aw-typebox input { width: 100%; box-sizing: border-box; }
 /* To place: the Board's carry and team rows, stacked to fit the panel's width. */
-.add-work-panel .carry-row, .add-work-panel .send-row, .add-work-panel .sent-row { grid-template-columns: minmax(0, 1fr); padding: 4px 0; }
-.add-work-panel .carry-acts { justify-content: flex-start; flex-wrap: wrap; }
-.add-work-panel .carry, .add-work-panel .carry-summary { margin: 8px 0 0; padding: 8px 10px; }
+.block-panel .carry-row, .block-panel .send-row, .block-panel .sent-row { grid-template-columns: minmax(0, 1fr); padding: 4px 0; }
+.block-panel .carry-acts { justify-content: flex-start; flex-wrap: wrap; }
+.block-panel .carry, .block-panel .carry-summary { margin: 8px 0 0; padding: 8px 10px; }
 /* From last week holds its own .carry box: no second border around it. Rows wrap inside the panel's width. */
-.add-work-panel .from-last-week { margin: 0; padding: 0; border: 0; }
-.add-work-panel .carry-summary .cs-text { flex-basis: 100%; }
-.add-work-panel .carry-summary .cs-text + .cs-sep { display: none; }
-.add-work-panel .flw-row, .add-work-panel .flw-row-inner { flex-wrap: wrap; min-width: 0; }
-.add-work-panel .flw-row-inner > * { min-width: 0; overflow-wrap: anywhere; }
-.add-work-panel .flw-row-inner > .pr-title { flex: 1 1 auto; min-width: 8em; }
+.block-panel .from-last-week { margin: 0; padding: 0; border: 0; }
+.block-panel .carry-summary .cs-text { flex-basis: 100%; }
+.block-panel .carry-summary .cs-text + .cs-sep { display: none; }
+.block-panel .flw-row, .block-panel .flw-row-inner { flex-wrap: wrap; min-width: 0; }
+.block-panel .flw-row-inner > * { min-width: 0; overflow-wrap: anywhere; }
+.block-panel .flw-row-inner > .pr-title { flex: 1 1 auto; min-width: 8em; }
 .aw-hint { margin: 4px 0 0; color: var(--text-muted); font-size: var(--fs-2); }
 /* The phone: a bottom sheet over the day. */
-.add-work-panel.sheet { top: auto; left: 0; width: auto; bottom: 0; max-height: 82dvh; border-left: 0; border-top: 1px solid var(--border-strong); border-radius: 14px 14px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+.block-panel.sheet { top: auto; left: 0; width: auto; bottom: 0; max-height: 82dvh; border-left: 0; border-top: 1px solid var(--border-strong); border-radius: 14px 14px 0 0; padding-bottom: env(safe-area-inset-bottom); }
 /* Above the phone's bottom bar (its + would sit over the type box otherwise). */
-.app.phone .add-work-panel.sheet { bottom: var(--bb-h, 0px); max-height: calc(82dvh - var(--bb-h, 0px)); padding-bottom: 0; }
+.app.phone .block-panel.sheet { bottom: var(--bb-h, 0px); max-height: calc(82dvh - var(--bb-h, 0px)); padding-bottom: 0; }
 /* The phone's day header: the weekday, date and Today on one line with the ⋯ (the button's tap height pushed Today down). */
 .app.phone .day-head, .app.phone .day-head .day-open { align-items: center; }
-.add-work-panel.sheet .aw-plus { width: 36px; height: 36px; }
-.add-work-panel.sheet .aw-row { min-height: 40px; }
+.block-panel.sheet .aw-plus { width: 36px; height: 36px; }
+.block-panel.sheet .aw-row { min-height: 40px; }
 
 /* The block card: one status chip in the header that never wraps (the rest in its tooltip), the + Add row last,
    the card the panel is on marked, the slim rail. */
@@ -6488,12 +6488,12 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 
 /* WD-1 review: item titles in Add work, the client chip's popover and on the cards use the app's title style (the card
    to-do's): plain text, underline on hover and focus, never link blue. */
-.add-work-panel a[data-card], .cc-pop a[data-card], .half a[data-card],
-.add-work-panel .draft-title, .half .draft-title { color: inherit; text-decoration: none; font-weight: inherit; text-align: left; }
-.add-work-panel a[data-card]:hover, .add-work-panel a[data-card]:focus-visible,
+.block-panel a[data-card], .cc-pop a[data-card], .half a[data-card],
+.block-panel .draft-title, .half .draft-title { color: inherit; text-decoration: none; font-weight: inherit; text-align: left; }
+.block-panel a[data-card]:hover, .block-panel a[data-card]:focus-visible,
 .cc-pop a[data-card]:hover, .cc-pop a[data-card]:focus-visible,
 .half a[data-card]:hover, .half a[data-card]:focus-visible,
-.add-work-panel .draft-title:hover, .add-work-panel .draft-title:focus-visible,
+.block-panel .draft-title:hover, .block-panel .draft-title:focus-visible,
 .half .draft-title:hover, .half .draft-title:focus-visible { text-decoration: underline; }
 .placed-feature.pf-not-ready .pf-title { color: var(--text); }
 /* WD-1 review: the chips never clip: the ones that don't fit go under "+N". The hidden copy measures them. */
@@ -6538,3 +6538,89 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .find-item-answer .find-part { font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
 .find-item-answer .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); align-self: center; }
 .find-item-answer li.no .dot { background: var(--watch); }
+
+
+/* ---------- WD-2: the block panel (one side panel for a block, on Week and on Day) and Day on Week's cards ---------- */
+.bp-head { display: flex; align-items: flex-start; gap: 6px; padding: 12px 10px 6px 14px; }
+.bp-title { flex: 1; min-width: 0; }
+.bp-title h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--fs-4); font-weight: 600; overflow-wrap: anywhere; }
+.bp-title h2 .swatch { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--c, var(--client-none)); }
+.bp-when { margin: 2px 0 0; color: var(--text-muted); font-size: var(--fs-2); }
+.bp-when.over { color: var(--watch); }
+.block-panel .aw-scroll { display: flex; flex-direction: column; gap: 2px; }
+.bp-sec { margin-top: 10px; }
+.bp-sec > .pl-label { margin: 0 0 4px; }
+.bp-line { margin: 4px 0 0; color: var(--text-muted); font-size: var(--fs-2); }
+.bp-note { overflow-wrap: anywhere; }
+.bp-empty { margin: 2px 0; color: var(--text-muted); font-size: var(--fs-2); }
+/* The header's one status line ("At risk · 2 reasons"); the reasons open under it. */
+.bp-risk { display: inline-block; margin: 3px 0 0; padding: 0; border: 0; background: none; font: inherit; font-size: var(--fs-2); font-weight: 600; cursor: pointer; text-align: left; }
+.bp-risk.at_risk { color: var(--risk); }
+.bp-risk.watch { color: var(--watch); }
+.bp-risk:hover, .bp-risk:focus-visible { text-decoration: underline; }
+.bp-risks { list-style: none; margin: 3px 0 0; padding: 0; display: grid; gap: 2px; font-size: var(--fs-2); color: var(--text-muted); }
+.bp-others { padding-left: 14px; }
+.bp-others-line { font-size: var(--fs-2); color: var(--text-muted); }
+.bp-others ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.bp-nofeature { color: var(--text-muted); }
+.block-panel .aw-feat-head > .aw-who { flex: none; }
+.bp-todos { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.bp-todos > li { border-radius: 6px; }
+.bp-todos > li.dp-focused, .block-panel .aw-row.dp-focused { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in oklab, var(--accent) 8%, transparent); }
+.bp-forward { flex: none; }
+/* A to-do's title keeps its own width in the panel: up to two lines, the controls after it. */
+.bp-todos .pick-row { flex-wrap: wrap; row-gap: 2px; }
+.bp-todos .pick-row .pr-title { flex: 1 1 60%; white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }
+.bp-meet-line { width: 100%; text-align: left; }
+.bp-meetings .pd-agenda ol { margin: 4px 0 0; }
+.bp-addbox { display: flex; flex-direction: column; gap: 4px; }
+.bp-box { width: 100%; box-sizing: border-box; }
+.bp-results { max-height: none; }
+.bp-result { cursor: pointer; }
+.bp-result.hl { background: color-mix(in oklab, var(--accent) 14%, var(--raised)); box-shadow: inset 2px 0 0 var(--accent); }
+.bp-result .aw-type { min-width: 0; }
+.bp-new .aw-plus { display: inline-grid; place-items: center; pointer-events: none; }
+.bp-new .aw-row-title { font-weight: 500; }
+.bp-parent { flex: 0 1 auto; max-width: 13em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2); }
+.bp-more { padding: 2px 4px; list-style: none; }
+.block-panel .aw-who { flex: 0 1 auto; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: var(--fs-2); }
+.bp-promise { color: inherit; text-decoration: none; }
+.bp-promise:hover, .bp-promise:focus-visible { text-decoration: underline; }
+.bp-other > .pl-fold, .bp-foot .pl-fold { width: 100%; text-align: left; }
+.bp-foot { margin-top: 14px; padding-top: 8px; border-top: 1px solid var(--border); display: grid; gap: 2px; }
+.bp-foot .aw-sec { margin-top: 0; }
+.bp-loose { margin-top: 4px; }
+.bp-past { margin-top: 10px; }
+/* The drop area while a to-do is dragged from a block: over the whole panel, so any drop on it counts. */
+.bp-takeoff {
+  position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 24px; text-align: center; border: 2px dashed var(--border-strong); border-radius: 0;
+  background: var(--surface); color: var(--text-muted); font-size: var(--fs-3);
+}
+.bp-takeoff strong { color: var(--text); font-size: var(--fs-4); font-weight: 600; }
+.bp-takeoff.over { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 12%, var(--surface)); color: var(--text); }
+.block-panel.sheet .bp-head { padding-top: 14px; }
+
+/* Day: one header row, then Week's block cards, AM and PM side by side when there's room. */
+.today-view.day-view.with-panel { padding-right: calc(var(--aw-w) + 24px); }
+.day-bar .ph-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.day-bar .day-when { font-size: var(--fs-2); }
+.day-bar .day-today { flex: none; }
+.day-switch { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.day-switch button { height: calc(28px * var(--text-scale)); padding: 0 10px; border: 0; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-2); font-weight: 500; cursor: pointer; white-space: nowrap; }
+.day-switch button + button { border-left: 1px solid var(--border); }
+.day-switch button:hover { color: var(--text); }
+.day-switch button[aria-pressed="true"] { background: var(--raised); color: var(--text); }
+.day-chips { min-width: 0; }
+.day-cards { display: flex; flex-direction: column; gap: 12px; }
+.grid.day-only { display: block; padding: 0; width: 100%; min-width: 0; box-sizing: border-box; align-self: stretch; }
+.grid.day-only .day { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px; align-items: start; }
+.grid.day-only .day > :not(.half) { grid-column: 1 / -1; }
+.grid.day-only .day > .half { flex-basis: auto; min-height: 150px; }
+.grid.day-only .day > .half.whole { grid-column: 1 / -1; min-height: 120px; }
+.grid.day-only .half .card-body { padding: 12px 14px; gap: 6px; }
+.grid.day-only .half .card-client { font-size: var(--fs-4); }
+.day-pto-todos { list-style: none; margin: 0; padding: 0; }
+.tt-add { margin: 6px 0 0; }
+.ph-add { margin: 6px 0 0; width: 100%; }
+@media (max-width: 1100px) { .today-view.day-view.with-panel { padding-right: calc(var(--aw-w) + 16px); } }

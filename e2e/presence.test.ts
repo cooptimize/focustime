@@ -17,7 +17,7 @@ describe.skipIf(!CHROMIUM)("Teams presence and status (browser, demo mode)", () 
     // WD-1: a feature's ⋯ in Add work (this week has the demo's week lists).
     await page.keyboard.press("2");
     await page.keyboard.press("p");
-    await page.locator("aside.add-work-panel .aw-feat-head").first().getByRole("button", { name: /^More for / }).click();
+    await page.locator("aside.block-panel .aw-feat-head").first().getByRole("button", { name: /^More for / }).click();
     await page.getByRole("menuitem", { name: /Ask to collaborate/ }).click();
     const dlg = page.getByRole("dialog", { name: /Ask to collaborate/ });
     await dlg.waitFor();

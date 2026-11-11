@@ -169,7 +169,7 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
     expect(await noSideways(page)).toBe(0);
     // Add work on the phone: a bottom sheet, nothing sideways.
     await at(page, `#/week/day/${MON}`);
-    await page.locator("aside.add-work-panel.sheet").waitFor();
+    await page.locator("aside.block-panel.sheet").waitFor();
     expect(await noSideways(page)).toBe(0);
     await page.close();
   }, T);

@@ -1,4 +1,4 @@
-// WD-1: the Add work panel beside Week, and the lines that lead to it. Pure: which block the panel opens on, the
+// WD-1: the block panel beside Week, and the lines that lead to it. Pure: which block the panel opens on, the
 // block's room, the panel's sections for a selected block (the client rule of Plan the day's pane, AddPaneDay, and
 // Plan the week's, AddWeek, kept exactly), where a row is already placed, the week's features without a Plan mode
 // (the star and the remove rule), the notice line's counts and the header's tag.

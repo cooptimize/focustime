@@ -161,6 +161,8 @@ export const ACTIONS = [
   { name: "deploy.config_save", title: "Change a client's deployment items", group: "To-dos", target: "none", summary: "Admins and the client's leads: its data platform and its list of deployment items; only new deployments follow" },
   { name: "pick.set_kind", title: "Change the kind of a to-do", group: "To-dos", target: "pick", aka: ["make it a deployment"], summary: "A plain to-do or a Deployment (a Deployment needs its window)" },
   { name: "pick.remove", title: "Drop to-do", group: "To-dos", target: "pick", summary: "Remove a to-do from the plan" },
+  { name: "pick.take_off", title: "Take a to-do off the plan", group: "To-dos", target: "pick", aka: ["unplan", "not placed", "remove from block"], summary: "The to-do leaves its block and its work is not placed again; a plain to-do is kept under To place" },
+  { name: "pick.put_back", title: "Put back a to-do taken off the plan", group: "To-dos", target: "pick", summary: "Undo of Take off the plan: the to-do is on its block again" },
   { name: "pick.uncarry", title: "Put back an unfinished to-do", group: "To-dos", target: "pick", summary: "Undo of Keep or Move on a suggested to-do: it goes back to the day it came from" },
   { name: "pick.undrop", title: "Put back a dropped to-do", group: "To-dos", target: "pick", summary: "Undo of Drop: the to-do is planned again where it was" },
   { name: "draft.add_feature", title: "Draft a feature", group: "Work items", target: "portfolio", summary: "A local feature under an epic, to add in DevOps" },

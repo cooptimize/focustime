@@ -580,6 +580,118 @@ describe("UI-B: unfinished picks suggested in the next block", () => {
     expect((await t.fail("pick.uncarry", { id: pick.id })).status).toBe(409);
   });
 
+  it("WD-2: Take off the plan: a story leaves its block and isn't marked dropped; Undo's add puts it back", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    await t.run("planday.start", { date: D });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101, size: "S" });
+    const r = await t.run<{ result: string; kind: string; draftId: number | null; undo: { add?: Record<string, unknown> }; state: { picks: Pick[] } }>("pick.take_off", { id: pick.id });
+    expect(r).toMatchObject({ result: "deleted", kind: "item", draftId: null });
+    expect(r.state.picks).toEqual([]);
+    expect(r.undo).toEqual({ add: { date: D, half: "AM", clientKey: "Adatum", size: "S", itemId: 101 } });
+    const back = await t.run<{ pick: Pick; state: { picks: Pick[] } }>("pick.put_back", { undo: r.undo });
+    expect(back.pick).toMatchObject({ date: D, half: "AM", itemId: 101, status: "planned", size: "S" });
+    // Undo twice is refused by pick.add's own rule: never two of it on the block.
+    expect((await t.fail("pick.put_back", { undo: r.undo })).status).toBe(409);
+    expect(back.state.picks.filter((p) => p.status === "planned")).toHaveLength(1);
+  });
+
+  it("WD-2: a plain to-do taken off isn't destroyed: its words are kept as a draft with no feature; Undo makes it a plain to-do again", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    await t.run("planday.start", { date: D });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "PM", clientKey: "Adatum", intention: "Call the vendor" });
+    const r = await t.run<{ result: string; kind: string; draftId: number; undo: { add: Record<string, unknown>; draftId: number }; state: { picks: Pick[]; drafts: { id: number; title: string; parentItemId: number | null }[] } }>("pick.take_off", { id: pick.id });
+    expect(r).toMatchObject({ result: "deleted", kind: "plain" });
+    expect(r.state.picks).toEqual([]);
+    expect(r.state.drafts.find((d) => d.id === r.draftId)).toMatchObject({ title: "Call the vendor", parentItemId: null });
+    expect(r.undo).toMatchObject({ add: { date: D, half: "PM", clientKey: "Adatum", intention: "Call the vendor" }, draftId: r.draftId });
+    // Undo: a plain to-do on its block again, and the kept draft is gone.
+    const back = await t.run<{ pick: Pick; state: { picks: Pick[]; drafts: { id: number }[] } }>("pick.put_back", { undo: r.undo });
+    expect(back.pick).toMatchObject({ kind: "intention", title: "Call the vendor", date: D, half: "PM" });
+    expect(back.state.drafts.some((d) => d.id === r.draftId)).toBe(false);
+    // Taken off again and placed from To place, it is that draft on the block.
+    const off = await t.run<{ draftId: number }>("pick.take_off", { id: back.pick.id });
+    const again = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", draftId: off.draftId });
+    expect(again.pick).toMatchObject({ kind: "draft", draftId: off.draftId, title: "Call the vendor" });
+  });
+
+  it("WD-2: a draft story and a promise taken off stay a draft and a promise, not placed", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    await t.run("planday.start", { date: D });
+    const { draft } = await t.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "Adatum", parentItemId: null, title: "Sketch the export" });
+    const d = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", draftId: draft.id });
+    const r = await t.run<{ kind: string; draftId: number | null; undo: { add: Record<string, unknown> }; state: { drafts: { id: number }[] } }>("pick.take_off", { id: d.pick.id });
+    expect(r).toMatchObject({ kind: "draft", draftId: null });
+    expect(r.undo.add).toMatchObject({ draftId: draft.id });
+    expect(r.state.drafts.map((x) => x.id)).toContain(draft.id);
+  });
+
+  it("WD-2: a done to-do, a past day's to-do and a deployment can't be taken off; an unknown one is 404", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    await t.run("planday.start", { date: D });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
+    await t.run("pick.mark_done", { id: pick.id, done: true });
+    expect(await t.fail("pick.take_off", { id: pick.id })).toMatchObject({ status: 409, error: expect.stringMatching(/done to-do stays/) });
+    await t.run("pick.mark_done", { id: pick.id, done: false });
+    t.at("2026-11-04T14:00:00Z");
+    expect(await t.fail("pick.take_off", { id: pick.id })).toMatchObject({ status: 409, error: expect.stringMatching(/past day keeps its record/) });
+    expect((await t.fail("pick.take_off", { id: 99999 })).status).toBe(404);
+    // Nothing changed: the to-do is still planned on its day.
+    expect((await t.plan.getPick(pick.id))?.status).toBe("planned");
+  });
+
+  it("WD-2: taking off a to-do with a timebox removes its local timebox; one on Outlook is refused until the timebox is removed", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    await t.run("planday.start", { date: D });
+    const a = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
+    const b = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "PM", clientKey: "Adatum", intention: "Prep the demo" });
+    const box = (pickId: number, outlook: boolean) => t.plan.addTimebox({ date: D, clientKey: "Adatum", pickId, title: "x", start: `${D}T14:00:00Z`, end: `${D}T15:00:00Z`, outlook });
+    await box(a.pick.id, false);
+    await box(b.pick.id, true);
+    const r = await t.run<{ timeboxes: number }>("pick.take_off", { id: a.pick.id });
+    expect(r.timeboxes).toBe(1);
+    expect((await t.plan.timeboxesBetween(D, D)).filter((x) => x.pickId === a.pick.id && !x.removedAt)).toEqual([]);
+    expect(await t.fail("pick.take_off", { id: b.pick.id })).toMatchObject({ status: 409, error: expect.stringMatching(/timebox is on Outlook/) });
+    expect((await t.plan.getPick(b.pick.id))?.status).toBe("planned");
+  });
+
+  it("WD-2 review: a to-do moved here from another day comes off without going back on that day; Undo restores exactly one, linked again", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const mon = "2026-11-02";
+    t.at("2026-11-02T14:00:00Z");
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: mon, half: "PM", clientKey: "Adatum", itemId: 101 });
+    // Tuesday: Monday's to-do is carried to today (a copy; the original reads moved).
+    t.at("2026-11-03T14:00:00Z");
+    const moved = await t.run<{ pick: Pick }>("pick.move", { id: pick.id, date: D, half: "AM" });
+    expect(moved.pick.carriedFrom).toBe(pick.id);
+    const r = await t.run<{ undo: { add: Record<string, unknown>; carriedFrom?: number } }>("pick.take_off", { id: moved.pick.id });
+    expect(r.undo.carriedFrom).toBe(pick.id);
+    // Not back on Monday as planned, and not on Tuesday: it is not placed.
+    expect((await t.plan.getPick(pick.id))?.status).toBe("moved");
+    expect((await t.plan.picksFor(D)).filter((p) => p.status === "planned")).toEqual([]);
+    expect((await t.run<{ picks: Pick[] }>("planday.carry", {})).picks).toEqual([]);
+    const back = await t.run<{ pick: Pick }>("pick.put_back", { undo: r.undo });
+    expect(back.pick).toMatchObject({ date: D, half: "AM", itemId: 101, carriedFrom: pick.id });
+    const planned = [...(await t.plan.picksFor(mon)), ...(await t.plan.picksFor(D))].filter((p) => p.status === "planned");
+    expect(planned.map((p) => p.id)).toEqual([back.pick.id]);
+  });
+
+  it("WD-2 review: a story with time on it can't be taken off (it would read as dropped): it moves instead, and nothing changes", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    await t.run("planday.start", { date: D });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101, size: "M" });
+    await t.plan.setRemaining(pick.id, 60);
+    expect(await t.fail("pick.take_off", { id: pick.id })).toMatchObject({ error: expect.stringMatching(/has time on it/) });
+    expect((await t.plan.getPick(pick.id))?.status).toBe("planned");
+    expect((await t.plan.picksFor(D)).some((p) => p.status === "dropped")).toBe(false);
+  });
+
   it("Drop settles it and Undo plans it again", async () => {
     const t = setup();
     await t.run("planday.start", { date: D });

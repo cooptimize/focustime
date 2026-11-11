@@ -59,7 +59,11 @@ export const inboxSource = (rows: readonly InboxItemView[], o: { today: IsoDate;
   lines: (now) => todayLines(rows, { today: o.today, now, dayEnd: o.dayEnd }).map((row): UrgentLine => ({ kind: "item", key: row.key, row })),
 });
 
-/** Promises due today with no time that aren't in the strip yet: the attention line's follow-ups row carries them. */
-export function untimedDue(promises: readonly DayPromise[], o: { now: string; today: IsoDate; dayEnd: string | null }): DayPromise[] {
-  return promises.filter((p) => !p.dueAt && p.dueDate === o.today && !promiseUrgent(p, { now: o.now, today: o.today, dayEnd: o.dayEnd }));
+/**
+ * WD-2: my promises due today that the strip doesn't show yet, timed or not: Day's chips line carries them ("2 promises
+ * due"), since Day's cards no longer list a promise as a row at its time.
+ */
+export function dueTodayNotUrgent(promises: readonly DayPromise[], o: { now: string; today: IsoDate; dayEnd: string | null }): DayPromise[] {
+  return promises.filter((p) => p.dueDate === o.today && !p.overdue && !promiseUrgent(p, { now: o.now, today: o.today, dayEnd: o.dayEnd }));
 }
+

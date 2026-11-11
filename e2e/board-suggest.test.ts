@@ -24,7 +24,7 @@ describe.skipIf(!CHROMIUM)("Unfinished picks suggested in the next block (UI-B)"
     await page.getByRole("button", { name: "Week", exact: true }).first().click();
     await page.evaluate(() => (location.hash = "#/week/add"));
     await unfoldAddWork(page);
-    const summary = page.locator("aside.add-work-panel section.carry-summary");
+    const summary = page.locator("aside.block-panel section.carry-summary");
     await summary.waitFor({ timeout: 30_000 });
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/board-first-1920.png` });
     // Thursday is PTO and Friday catch-up: only Northwind (Wed PM) has a block left; the rest are in the list.
@@ -38,14 +38,14 @@ describe.skipIf(!CHROMIUM)("Unfinished picks suggested in the next block (UI-B)"
     const origin = (title: string) => page.locator(".pick-origin", { hasText: title });
     await expect(origin("Filter orders by date range").textContent()).resolves.toContain("→ suggested Wed PM");
     await expect(origin("Validate date of birth").textContent()).resolves.toContain("→ in To place");
-    await expect(page.locator(".checklist .pr-title", { hasText: "Filter orders by date range" }).count()).resolves.toBe(0);
+    await expect(page.locator(".half .checklist .pr-title", { hasText: "Filter orders by date range" }).count()).resolves.toBe(0);
 
     // Keep here: a normal pick on Wednesday afternoon; the original reads "→ moved to Wed PM". Undo puts it back.
     await card("Filter orders by date range").locator(".sc-open").click();
     await page.getByRole("menuitem", { name: /Keep here, Wed PM/ }).click();
     await expect.poll(() => card("Filter orders by date range").count()).toBe(0);
     await expect.poll(() => origin("Filter orders by date range").textContent()).toContain("→ moved to Wed PM");
-    await expect.poll(() => page.locator(".checklist .pr-title", { hasText: "Filter orders by date range" }).count()).toBe(1);
+    await expect.poll(() => page.locator(".half .checklist .pr-title", { hasText: "Filter orders by date range" }).count()).toBe(1);
     await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
     await expect.poll(() => card("Filter orders by date range").count()).toBe(1);
 

@@ -1547,7 +1547,7 @@ async function publishOnce(ctx: ActionContext, r: ActionResponse): Promise<Actio
  * published for teammates and the status report at once (publishWeek), never a past week. Was: on Confirm week.
  */
 export const WEEK_CHANGES = new Set<string>([
-  "pick.add", "pick.move", "pick.remove", "weekplan.add", "weekplan.remove", "weekplan.place", "weekplan.load",
+  "pick.add", "pick.move", "pick.remove", "pick.take_off", "pick.put_back", "weekplan.add", "weekplan.remove", "weekplan.place", "weekplan.load",
   "weekplan.carry_decide", "weekplan.carry_accept_all", "weekplan.watch_checkin", "weekplan.watch_remove",
   "send.accept", "priority.add_to_week", "weekplan.set_feature",
 ]);
@@ -2422,6 +2422,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "planday.commit":
     case "pick.add":
     case "pick.remove":
+    case "pick.take_off":
+    case "pick.put_back":
     case "pick.set_size":
     case "pick.move":
     case "pick.mark_done":
@@ -2447,6 +2449,11 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
           },
           now: ctx.now,
           resolved: (cfg, items) => resolvedKeys(ctx.makeDevOps(cfg.dataverse, userZone(cfg)), [...new Set(items.map((i) => i.clientKey))].map((clientKey) => ({ clientKey, clientName: clientKey })), idsByClient(items)),
+          storeItem: async (clientKey, itemId) => {
+            const r = await aheadAction(await aheadContext(ctx), "ahead.load", {});
+            const it = r.ok ? (r.data as import("./types.ts").AheadLoad).clients.find((c) => c.clientKey === clientKey)?.items.find((x) => x.id === itemId && x.inScope) : undefined;
+            return it ? { id: it.id, title: it.title, type: it.type, state: it.state, stateCategory: it.stateCategory, level: it.level === "child" || it.level === "task" ? "story" : it.level ? "portfolio" : "other", order: it.order ?? null, parentId: it.parentId, changedAt: it.changedAt, url: it.url } : null;
+          },
           openParents: async (clientKey, tier) => {
             const cap = captureContext(ctx);
             const f = await featuresOf(cap, await cap.config(), clientKey);

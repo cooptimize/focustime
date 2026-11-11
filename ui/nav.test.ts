@@ -84,6 +84,9 @@ describe("addresses", () => {
   const places: [Loc, string][] = [
     [HOME, "#/day"],
     [loc(navOf.todayOn("2026-11-03")), "#/day/2026-11-03"],
+    // WD-2: Day with the block panel on one of its blocks.
+    [loc(navOf.dayBlock("2026-11-03", "PM")), "#/day/2026-11-03/PM"],
+    [loc(navOf.dayBlock("2026-11-03", "EVE")), "#/day/2026-11-03/EVE"],
     [loc(navOf.today("checkin")), "#/day/checkin"],
     [loc(navOf.today("closeout")), "#/day/closeout"],
     [loc(navOf.today("closeout", "2026-10-30")), "#/day/closeout/2026-10-30"],
@@ -123,6 +126,8 @@ describe("addresses", () => {
     // WD-1: Today is Day.
     ["#/today", HOME, "#/day"],
     ["#/today/2026-11-03", loc(navOf.todayOn("2026-11-03")), "#/day/2026-11-03"],
+    // WD-2: the same day and block under the old tab name.
+    ["#/today/2026-11-03/AM", loc(navOf.dayBlock("2026-11-03", "AM")), "#/day/2026-11-03/AM"],
     ["#/today/checkin", loc(navOf.today("checkin")), "#/day/checkin"],
     ["#/today/closeout", loc(navOf.today("closeout")), "#/day/closeout"],
     ["#/today/closeout/2026-10-30", loc(navOf.today("closeout", "2026-10-30")), "#/day/closeout/2026-10-30"],
@@ -168,6 +173,25 @@ describe("addresses", () => {
   });
 });
 
+describe("WD-2: the block panel's addresses", () => {
+  it("Week keeps its panel address; Day gets one (#/day/<date>/<half>); both read back", () => {
+    expect(hashOf(loc(navOf.addWork("2026-11-03", "PM")))).toBe("#/week/day/2026-11-03/PM");
+    expect(parseHash("#/week/day/2026-11-03/PM")).toEqual(loc(navOf.addWork("2026-11-03", "PM")));
+    expect(parseHash("#/day/2026-11-03/PM")).toEqual(loc(navOf.dayBlock("2026-11-03", "PM")));
+    expect(hashOf(loc(navOf.dayBlock("2026-11-03", "AM")))).toBe("#/day/2026-11-03/AM");
+  });
+  it("Day's panel address is refused when it isn't a date and a half; a flow never carries a half", () => {
+    for (const bad of ["#/day/2026-11-03/XX", "#/day/2026-11-03/PM/extra", "#/day/PM", "#/day/checkin/PM", "#/day/2026-13-40/AM"]) expect(parseHash(bad), bad).toBeNull();
+    expect(hashOf(loc({ tab: "today", flow: "closeout", date: "2026-11-03", half: "PM" }))).toBe("#/day/closeout/2026-11-03");
+    expect(hashOf(loc({ tab: "today", flow: null, date: null, half: "PM" }))).toBe("#/day");
+  });
+  it("Day with its panel open is still Day: not a planning place, and P leaves for Week's panel", () => {
+    expect(isPlanning(navOf.dayBlock("2026-11-03", "PM"))).toBe(false);
+    expect(viewName(loc(navOf.dayBlock("2026-11-03", "PM")))).toBe("Day");
+    expect(toggleP(navOf.dayBlock("2026-11-03", "PM"))).toEqual(navOf.weekAdd());
+  });
+});
+
 describe("entry points", () => {
   it("+ Add and a day header open Week with the Add work panel on that day and block", () => {
     expect(addWorkNav("2026-11-04")).toEqual({ tab: "week", mode: "board", week: null, add: { date: "2026-11-04", half: null } });
@@ -178,7 +202,7 @@ describe("entry points", () => {
     expect(viewName(HOME)).toBe("Day");
     expect(viewName(loc(navOf.today("checkin")))).toBe("Day › Midday check-in");
     expect(viewName(loc(navOf.week()))).toBe("Week");
-    expect(viewName(loc(navOf.addWork("2026-11-03")))).toBe("Week › Add work");
+    expect(viewName(loc(navOf.addWork("2026-11-03")))).toBe("Week › Block");
     expect(viewName(loc(navOf.status()))).toBe("Status");
     expect(viewName(loc(navOf.ahead()))).toBe("Ahead › Grid");
     expect(viewName(loc(navOf.ahead("gantt")))).toBe("Ahead › Gantt");

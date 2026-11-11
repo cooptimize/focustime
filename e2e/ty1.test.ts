@@ -112,18 +112,18 @@ describe.skipIf(!CHROMIUM)("TY-1: Today's timeline", () => {
   it("the switch shows and hides the timeline, remembered; off is the list", async () => {
     const { page, errors } = await freshPage(h);
     await open(page);
-    await page.locator(".today-blocks").waitFor();
+    await page.locator(".day-view .day-cards").waitFor();
     expect(await page.locator(".today-tl").count()).toBe(0);
     await shot(page, "01-today-list");
-    await page.locator(".today-head .tl-toggle").click();
+    await page.locator(".day-switch").getByRole("button", { name: "Timeline" }).click();
     await page.locator(".today-tl").waitFor();
-    expect(await page.locator(".today-blocks").count()).toBe(0);
+    expect(await page.locator(".day-view .day-cards").count()).toBe(0);
     await expect.poll(async () => (await call(page, "week.load", {})).data.ui.todayTimeline).toBe(true);
     await page.reload();
     await page.locator(".today-tl").waitFor();
     // B does the same, and the phone's own setting is left alone.
     await page.keyboard.press("b");
-    await page.locator(".today-blocks").waitFor();
+    await page.locator(".day-view .day-cards").waitFor();
     await expect.poll(async () => (await call(page, "week.load", {})).data.ui.todayTimeline).toBe(false);
     expect((await call(page, "week.load", {})).data.ui.todayTimelinePhone).toBe(false);
     expect(errors).toEqual([]);
@@ -280,7 +280,7 @@ describe.skipIf(!CHROMIUM)("TY-1: Today's timeline", () => {
     const c = await addPick(page, "Review the mapping", "S");
     await busyMonday(page);
     await open(page);
-    await page.locator(".today-blocks").waitFor();
+    await page.locator(".day-view .day-cards").waitFor();
     await page.locator(".today-timebox").click();
     const bar = page.getByRole("group", { name: "Timebox my day" });
     await bar.waitFor();
@@ -418,7 +418,7 @@ describe.skipIf(!CHROMIUM)("TY-1: Today's timeline", () => {
     await page.locator(".ph-todos").waitFor();
     // MB-1's layout by default; the switch is in ⋯.
     expect(await page.locator(".today-tl").count()).toBe(0);
-    await page.getByRole("button", { name: "View options for Today" }).click();
+    await page.getByRole("button", { name: "View options for Day" }).click();
     await page.getByRole("menuitem", { name: /Timeline/ }).click();
     await page.locator(".today-tl").waitFor();
     await expect.poll(async () => (await call(page, "week.load", {})).data.ui.todayTimelinePhone).toBe(true);

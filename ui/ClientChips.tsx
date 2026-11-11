@@ -9,7 +9,7 @@ import type { WeekLoadData } from "../actions/types.ts";
 import { chipsThatFit, clientChip, storiesUnder } from "../plan/addwork.ts";
 import { clientColor } from "./labels.ts";
 import { weekMusts } from "./WeekMusts.tsx";
-import { BreakDown } from "./DetailPanel.tsx";
+import { BreakDown } from "./BlockPanel.tsx";
 import { call } from "./api.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 import { PopupMenu } from "./Menus.tsx";

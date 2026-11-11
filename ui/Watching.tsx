@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } 
 import type { CarryRow, ProposalData, WatchView } from "../plan/carry.ts";
 import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
-import { BreakDown } from "./DetailPanel.tsx";
+import { BreakDown } from "./BlockPanel.tsx";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { clientColor } from "./labels.ts";
 import { TypeIcon } from "./TypeIcon.tsx";

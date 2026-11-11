@@ -27,7 +27,7 @@ function env(over: Partial<MenuEnv> = {}) {
     runPlan: async (a, i) => (calls.push([a, i]), true),
     openPlanDay: (d) => calls.push(["openPlanDay", d]),
     commitPlan: () => calls.push(["commit"]),
-    openDetails: (d, h) => calls.push(["details", d, h]),
+    openBlock: (d, h, add) => calls.push(["block", d, h, !!add]),
     openLink: (k, u) => calls.push(["link", k, u]),
     copyLink: (k, u) => calls.push(["copy", k, u]),
     openCard: (k, id) => calls.push(["card", k, id]),
@@ -143,10 +143,10 @@ describe("command menu (built from the action registry)", () => {
 });
 
 describe("⋯ menus", () => {
-  it("a pick: copy the DevOps link (FN-1), size, move, start focus, done, drop", async () => {
+  it("a pick: copy the DevOps link (FN-1), size, move, start focus, done, take off the plan, drop", async () => {
     const t = env();
     const m = pickMenu(t.e, pick);
-    expect(items(m).map((i) => i.label)).toEqual(["Copy DevOps link", "Set size", "Move", "Start focus", "Timebox", "Ask to collaborate", "Mark done", "Kind", "I'll make it up…", "Drop"]);
+    expect(items(m).map((i) => i.label)).toEqual(["Copy DevOps link", "Set size", "Move", "Start focus", "Timebox", "Ask to collaborate", "Mark done", "Kind", "I'll make it up…", "Take off the plan", "Drop"]);
     await find(m, "Copy DevOps link").run!();
     await find(find(m, "Set size").next!(), "S · 1h").run!();
     expect(t.calls).toEqual([["copy", "internal", pick.itemUrl], ["pick.set_size", { id: 7, size: "S" }]]);
@@ -196,10 +196,22 @@ describe("⋯ menus", () => {
     void first.run!();
     expect(calls).toEqual([["pick.add", { date: "2026-11-04", half: "AM", clientKey: "internal", itemId: 1 }]]);
   });
-  it("a block card on a full PTO day can't take picks", () => {
-    const m = slotMenu(env().e, "2026-11-05", "AM", "internal", "Internal");
-    expect(find(m, "Add an intention").disabled).toBe("PTO day (Watch Kids)");
-    expect(find(m, "Details").disabled).toBeUndefined();
+  it("WD-2: a block's menu only opens the block (the panel does the rest): no Details, Add work…, Add an intention or Add a work item", async () => {
+    const t = env();
+    for (const date of ["2026-11-04", "2026-11-05", "2026-11-02"]) {
+      const m = slotMenu(t.e, date, "AM", "internal", "Internal");
+      expect(items(m).map((i) => i.label)).toEqual(["Open"]);
+      expect(find(m, "Open").disabled).toBeUndefined();
+    }
+    await find(slotMenu(t.e, "2026-11-04", "AM", "internal", "Internal"), "Open").run!();
+    expect(t.calls.at(-1)).toEqual(["block", "2026-11-04", "AM", false]);
+  });
+  it("WD-2: Take off the plan is off for a done to-do, a past day and a deployment, each with its reason", async () => {
+    const t = env({ takeOff: (p) => t.calls.push(["takeOff", p.id]) });
+    await find(pickMenu(t.e, pick), "Take off the plan").run!();
+    expect(t.calls.at(-1)).toEqual(["takeOff", pick.id]);
+    expect(find(pickMenu(t.e, { ...pick, status: "done" }), "Take off the plan").disabled).toBe("A done to-do stays on its day");
+    expect(find(pickMenu(t.e, { ...pick, date: "2026-11-02" }), "Take off the plan").disabled).toMatch(/past day keeps its record/);
   });
 });
 
@@ -392,21 +404,25 @@ describe("Timebox a pick into a free gap (step 13.6, D245)", () => {
   });
 });
 
-describe("+ Add work entry points (step 13.6, D241)", () => {
-  it("the block menu and the command menu add work to a block with working time (key A)", async () => {
-    const { e, calls } = env({ addWork: (d, h) => calls.push(["addWork", d, h]), selection: { date: "2026-11-04", half: "PM" } });
-    await find(slotMenu(e, "2026-11-04", "AM", "internal", "Internal"), "Add work…").run?.();
-    expect(calls.at(-1)).toEqual(["addWork", "2026-11-04", "AM"]);
-    const cmd = commandList(e).find((c) => c.action === "ui.add_work")!;
+describe("WD-2: one command opens the selected block (was Details and Add work)", () => {
+  it("opens the block panel on the selected block, the cursor in the Add box when the block can take work (key A)", async () => {
+    const { e, calls } = env({ selection: { date: "2026-11-04", half: "PM" } });
+    const cmd = commandList(e).find((c) => c.action === "ui.block")!;
     expect(cmd.hint).toBe("A");
     await cmd.run?.();
-    expect(calls.at(-1)).toEqual(["addWork", "2026-11-04", "PM"]);
+    expect(calls.at(-1)).toEqual(["block", "2026-11-04", "PM", true]);
   });
-  it("is disabled on a past day, a PTO day and a block without working hours", () => {
-    const { e } = env();
-    expect(find(slotMenu(e, "2026-11-02", "AM", "internal", "Internal"), "Add work…").disabled).toMatch(/Past day/);
-    expect(find(slotMenu(e, "2026-11-05", "AM", "internal", "Internal"), "Add work…").disabled).toMatch(/PTO/);
-    expect(find(slotMenu(e, "2026-11-07", "AM", null, null), "Add work…").disabled).toBe("No working hours in this block");
+  it("a past day, a PTO day and a block without working hours still open (to tick and read), with no Add box", async () => {
+    for (const [date, half] of [["2026-11-02", "AM"], ["2026-11-05", "AM"], ["2026-11-07", "AM"]] as const) {
+      const { e, calls } = env({ selection: { date, half } });
+      await commandList(e).find((c) => c.action === "ui.block")!.run?.();
+      expect(calls.at(-1)).toEqual(["block", date, half, false]);
+    }
+  });
+  it("still answers to the old words", () => {
+    const list = commandList(env().e);
+    for (const q of ["details", "add work", "add a to-do"]) expect(filterCommands(list, q).map((c) => c.id), q).toContain("ui.block");
+    expect(list.filter((c) => c.id === "ui.details" || c.id === "ui.add_work")).toEqual([]);
   });
 });
 
@@ -456,8 +472,6 @@ describe("duplicate picks in menus (step 15.1, D277)", () => {
     const add = items(find(itemMenu(e, "internal", item(1)), "Add to the plan").next!());
     expect(add.find((i) => i.id === "add-2026-11-03-AM")!.disabled).toBe("Already planned here");
     expect(add.find((i) => i.id === "add-2026-11-03-PM")!.disabled).toBe("Already planned for the morning that day");
-    const inSlot = items(find(slotMenu(e, "2026-11-03", "AM", "internal", "Internal"), "Add a work item").next!());
-    expect(inSlot.find((i) => i.id === "i1")!.disabled).toBe("Already planned here");
   });
 });
 

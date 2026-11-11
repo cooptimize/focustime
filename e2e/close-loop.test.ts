@@ -94,8 +94,14 @@ describe.skipIf(!CHROMIUM)("IB-1: Close the loop never overflows", () => {
       await form.getByRole("button", { name: "Cancel" }).click();
       await go(page, "#/week");
       await page.locator(".half.card", { hasText: "Northwind" }).first().locator(".card-when").click();
-      await openAndCheck(page, ".detail-panel", "Send the export spec", ".detail-panel");
-      await page.keyboard.press("Escape");
+      // WD-2: the block panel lists the promise with + (to put it on the block) and nothing overflows; its words
+      // open it in the Inbox, where Close the loop is.
+      const promise = page.locator(".block-panel .aw-row[data-promise]", { hasText: "Send the export spec" }).first();
+      await promise.waitFor({ timeout: 20_000 });
+      expect(await overflow(page, ".block-panel")).toEqual({ found: true, container: 0, page: 0 });
+      await promise.locator("a.bp-promise").click();
+      await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/inbox\/item\/f\d+$/);
+      await page.locator(".ib-pane").getByRole("button", { name: /^Close the loop/ }).first().waitFor({ timeout: 20_000 });
       await go(page, "#/today/closeout");
       await openAndCheck(page, ".closeout-panel", "Reply about the proposal timeline", ".closeout-panel");
       expect(errors).toEqual([]);
@@ -138,7 +144,7 @@ describe.skipIf(!CHROMIUM)("IB-1: Close the loop never overflows", () => {
       const tag = theme.endsWith("dark") ? "dark" : "light";
       await go(page, "#/week");
       await page.locator(".half.card", { hasText: "Northwind" }).first().locator(".card-when").click();
-      const panelRow = page.locator(".detail-panel .follow-up", { hasText: "Send the export spec" }).first();
+      const panelRow = page.locator(".block-panel .follow-up", { hasText: "Send the export spec" }).first();
       await panelRow.getByRole("button", { name: "Close the loop", exact: true }).click();
       await shotBoth(page, `ib1-close-loop-panel-${tag}`, panelRow);
       await page.keyboard.press("Escape");

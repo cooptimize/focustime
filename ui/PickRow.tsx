@@ -175,8 +175,10 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
         <>
           {badge}
           {timed && <TodoTime pick={pick} editable={timeEditable && !readOnly} />}
+          {/* WD-2: once there's progress the chip says what's left, always shown (Day uses this row too). */}
+          {left && sizeChip}
           <span className="pr-hover">
-            {sizeChip}
+            {!left && sizeChip}
             {!timed && <TodoTime pick={pick} editable={timeEditable && !readOnly} />}
             {more}
           </span>

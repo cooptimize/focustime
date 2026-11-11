@@ -33,9 +33,11 @@ import type { TimeboxTarget } from "./menu.ts";
 import type { WriteState } from "../actions/types.ts";
 import { planTarget } from "../plan/target.ts";
 import { canAddWork } from "../plan/days.ts";
-import { AddWorkPanel, ToPlaceNotice } from "./AddWork.tsx";
+import { BlockPanel, ToPlaceNotice } from "./BlockPanel.tsx";
 import { ClientChips } from "./ClientChips.tsx";
-import { defaultAddBlock } from "../plan/addwork.ts";
+import { panelBlock } from "../plan/blockpanel.ts";
+import { takeOffPick } from "./takeoff.ts";
+import { readDayPanel, writeDayPanel } from "./daypanel.ts";
 import { AddPanelCtx } from "./weekctx.ts";
 
 /** WD-1: Thursday and Friday offer next week when it's empty. */
@@ -44,7 +46,6 @@ import { dayRolledOver } from "./planday.ts";
 import { PlanCtx, resumeSlots } from "./planview.ts";
 import { DevOpsWork, workByClient } from "./work.ts";
 import { afterLoad, createAutoRefresh, type LoadState, type RefreshTrigger } from "./refresh.ts";
-import { DetailPanel } from "./DetailPanel.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { causeLines, sourceActions, sourceLabel, stateOf } from "./status.ts";
 import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
@@ -62,7 +63,7 @@ import { InboxPage } from "./inbox/InboxPage.tsx";
 import { useInboxToday } from "./inboxcount.ts";
 import { railItems } from "../plan/inbox-items.ts";
 import { Ahead } from "./ahead/Ahead.tsx";
-import { Today } from "./Today.tsx";
+import { Day } from "./Day.tsx";
 import { pickNeed, type DraftStory, type Pick } from "../plan/types.ts";
 import { CaptureDialog, captureClients } from "./Capture.tsx";
 import { AssistantPanel, COMMANDS_HREF } from "./Assistant.tsx";
@@ -220,9 +221,12 @@ export function App() {
   }, [loadSetup]);
   const [tourOffer, setTourOffer] = useState(false);
   const endTourOffer = useCallback(() => setTourOffer(false), []);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  /** U3: where the detail panel opened (the features list, a follow-up or a pick), or the block itself. */
+  /** WD-2: where the block panel opened (a promise's due badge), or the block itself. */
   const [panelFocus, setPanelFocus] = useState<PanelFocus | null>(null);
+  /** WD-2: bumped by "+ Add" and the A key: the cursor goes into the block panel's Add box. */
+  const [focusAdd, setFocusAdd] = useState(0);
+  /** WD-2: a to-do is being dragged from this block: the block panel shows as the drop area for Take off the plan. */
+  const [dragAt, setDragAt] = useState<{ date: IsoDate; half: Half } | null>(null);
   // ADM-1: whether the signed-in person is a FocusTime admin (Admin in ⋯ and the Settings sidebar).
   const isAdmin = useAdmin();
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -304,7 +308,7 @@ export function App() {
   const asksOpen = nav.tab === "inbox";
   const roadmapOpen = nav.tab === "ahead";
   const checkInOpen = nav.tab === "today" && nav.flow === "checkin";
-  /** WD-1: the Add work panel's asked-for block (null: closed). */
+  /** WD-1: the block panel's asked-for block (null: closed). */
   const addAt = addOf(nav);
   /** Settings (step 6b) at a section, or closed (back to the place under it). */
   const setSettingsAt = useCallback((section: string | null, setting: string | null = null) => go((l) => ({ nav: l.nav, overlay: section !== null ? { kind: "settings", section, setting } : null })), [go]);
@@ -365,7 +369,6 @@ export function App() {
   const focusedItem = useRef<{ clientKey: string; url: string } | null>(null);
   const openCommands = useCallback(() => {
     focusedItem.current = openTarget(document.activeElement);
-    setDetailsOpen(false); // the details dialog is modal and would sit above the menu
     setCmdOpen(true);
   }, []);
   const [busy, setBusy] = useState<"outlook" | "google" | null>(null);
@@ -411,7 +414,7 @@ export function App() {
   /** Close out's day (Today › Close out), and Plan the week's week (Week › Plan the week: next week unless asked). */
   const closeOutAt: IsoDate | null = nav.tab === "today" && nav.flow === "closeout" && data ? (nav.date ?? data.planDay.date) : null;
   /** QF-1: the day Today shows (#/today/<date>); null is today. */
-  const todayAt: IsoDate | null = nav.tab === "today" && !nav.flow && data && nav.date && nav.date !== data.planDay.date ? nav.date : null;
+  const dayShown: IsoDate | null = nav.tab === "today" && !nav.flow && data && nav.date && nav.date !== data.planDay.date ? nav.date : null;
 
   // Theme: the config's value once loaded; a change applies at once and is saved, and reverts if saving fails.
   const [theme, setThemeState] = useState<Theme>(initialTheme);
@@ -560,19 +563,19 @@ export function App() {
     }
   }, []);
   // TY-1: Today's Timeline switch; the phone keeps its own, off until asked, so it keeps MB-1's layout.
-  const [todayTimeline, setTodayTimeline] = useState(false);
-  const todayTimelineRef = useRef(todayTimeline);
-  todayTimelineRef.current = todayTimeline;
-  const savedTodayTimeline = phone ? data?.ui.todayTimelinePhone : data?.ui.todayTimeline;
+  const [dayTimeline, setDayTimeline] = useState(false);
+  const dayTimelineRef = useRef(dayTimeline);
+  dayTimelineRef.current = dayTimeline;
+  const savedDayTimeline = phone ? data?.ui.todayTimelinePhone : data?.ui.todayTimeline;
   useEffect(() => {
-    if (savedTodayTimeline !== undefined) setTodayTimeline(savedTodayTimeline);
-  }, [savedTodayTimeline]);
-  const saveTodayTimeline = useCallback(async (show: boolean) => {
-    setTodayTimeline(show);
+    if (savedDayTimeline !== undefined) setDayTimeline(savedDayTimeline);
+  }, [savedDayTimeline]);
+  const saveDayTimeline = useCallback(async (show: boolean) => {
+    setDayTimeline(show);
     try {
       await call("ui.set_today_timeline", { show, phone });
     } catch (e) {
-      setTodayTimeline(!show);
+      setDayTimeline(!show);
       setNotice(`Not saved: ${e instanceof Error ? e.message : "unknown error"}`);
     }
   }, [phone]);
@@ -754,7 +757,7 @@ export function App() {
   const changeWeek = useCallback(
     (n: number) => {
       if (!data) return;
-      // WD-1: the Add work panel stays open on the other week (on its first open block).
+      // WD-1: the block panel stays open on the other week (on its first open block).
       const w = addWeeks(data.weekStart, n);
       goNav(addAt ? navOf.weekAdd(w) : navOf.week("board", w));
     },
@@ -789,27 +792,51 @@ export function App() {
     return planTarget(now, dayEndOf(data.hours, now.toPlainDate().toString()) ?? "24:00", pto, hasHours);
   }, [data, zonedNow, clock, hasHours]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /**
-   * WD-1: the block the Add work panel is on: the one the address asks for when it can take work, else the block under
-   * way or the next one not over in the week shown, else its first block that can take work.
-   */
-  const panelAt = useMemo(() => {
-    if (!addAt || !data) return null;
+  /** WD-2: Day's own screen (no flow open): its date, and whether its block panel was left open on this device. */
+  // A Guide tour runs over the real screen, so the panel stays where it is under one.
+  // WD-2 review: nor does it go while a story card is open over it (its chosen client and typed text stay).
+  const underTour = !loc.overlay || loc.overlay.kind === "tour" || loc.overlay.kind === "item";
+  const dayOn = nav.tab === "today" && !nav.flow && underTour;
+  const dayDate: IsoDate | null = dayOn && data ? (dayShown ?? data.planDay.date) : null;
+  const [dayPanelKept, setDayPanelKept] = useState(() => readDayPanel());
+  const keepDayPanel = useCallback((open: boolean) => {
+    setDayPanelKept(open);
+    writeDayPanel(open);
+  }, []);
+  /** The blocks of the week shown, for where the panel opens. */
+  const panelBlocks = useMemo(() => {
+    if (!data) return [];
     const today = data.planDay.date;
-    const blocks = data.week.days.flatMap((d) =>
+    return data.week.days.flatMap((d) =>
       cardHalves(d).flatMap((h) => {
         const sl = slotOf(d, h);
         return sl ? [{ date: d.date, half: h, end: sl.end, plannable: canAddWork({ date: d.date, today, pto: !!d.pto, off: sl.off }) || (d.kind !== "work" && d.date >= today) }] : [];
       }),
     );
-    return defaultAddBlock(blocks, now ?? new Date(clock).toISOString(), addAt);
-  }, [addAt, data, now, clock]);
+  }, [data]);
+  /**
+   * WD-2: the block the panel is on. Week: the one its address asks for (any block: a past or PTO one opens to tick
+   * and read), else the block under way or the next one that can take work. Day: the half in its address, else, on a
+   * computer where the panel was left open, the day's block under way (a working day only).
+   */
+  const dayAsk = dayOn && dayDate && data ? (nav.tab === "today" && nav.half ? { date: dayDate, half: nav.half } : dayPanelKept && !phone && data.week.days.some((d) => d.date === dayDate && d.kind !== "weekend" && !(d.am.off && d.pm.off)) ? { date: dayDate, half: null } : null) : null;
+  const panelAsk = addAt ?? dayAsk;
+  const panelAt = useMemo(() => {
+    if (!panelAsk || !data) return null;
+    return panelBlock(panelBlocks, now ?? new Date(clock).toISOString(), panelAsk);
+  }, [panelAsk?.date, panelAsk?.half, !!panelAsk, data, panelBlocks, now, clock]); // eslint-disable-line react-hooks/exhaustive-deps
   // WD-1: the panel's block is the selected block.
   useEffect(() => {
     if (!panelAt || !data) return;
     const dayIndex = data.week.days.findIndex((d) => d.date === panelAt.date);
     if (dayIndex >= 0) setSel((s) => (s.dayIndex === dayIndex && s.half === panelAt.half ? s : { dayIndex, half: panelAt.half }));
   }, [panelAt?.date, panelAt?.half, data?.weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
+  // WD-2: on Day the selected block is one of the day shown (the arrow keys and A work on its cards).
+  useEffect(() => {
+    if (!dayDate || !data) return;
+    const dayIndex = data.week.days.findIndex((d) => d.date === dayDate);
+    if (dayIndex >= 0) setSel((x) => (x.dayIndex === dayIndex ? x : { dayIndex, half: validHalf(data.week.days[dayIndex]!, dayDate === data.planDay.date ? data.today.half : "AM") }));
+  }, [dayDate, data?.weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
   // WD-1: the address says where the panel really is: a block asked for that can't take work (a weekend, a past or PTO
   // day) becomes the block it opened on, and a week with nowhere to add (a past week) drops "add". Replaced, not pushed.
   useEffect(() => {
@@ -843,23 +870,65 @@ export function App() {
     });
   }, [data, target, zonedNow, clock, hasHours]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** WD-1: Week with the Add work panel on a block (a date alone: that day's first block; nothing: the next one). */
+  /** WD-2: Week with the block panel on a block, the cursor in its Add box (a date alone: that day's block; nothing: the next one). */
   // WD-1 review: To place opens in the panel only when the notice line's Review opened it.
   const [placeOpen, setPlaceOpen] = useState(false);
   const addWork = useCallback(
     (date: IsoDate | null = null, half: Half | null = null, review = false) => {
-      setDetailsOpen(false);
       setPlaceOpen(review);
+      setPanelFocus(null);
+      setFocusAdd((n) => (review ? 0 : n + 1));
       goNav(navOf.addWork(date, half));
     },
     [goNav],
+  );
+  /**
+   * WD-2: the block panel on a block, on the screen I'm on: Day stays Day (#/day/<date>/<half>), anywhere else it is
+   * Week. `add`: the cursor goes into the Add box ("+ Add", A). `focus`: a promise's due badge.
+   */
+  const openBlock = useCallback(
+    (date: IsoDate, half: Half, o: { add?: boolean; focus?: PanelFocus | null } = {}) => {
+      setPlaceOpen(false);
+      setPanelFocus(o.focus ?? null);
+      // Only "+ Add" and A put the cursor in the Add box; any other way of opening or moving the panel leaves it.
+      setFocusAdd((n) => (o.add ? n + 1 : 0));
+      if (nav.tab === "today" && !nav.flow) {
+        keepDayPanel(true);
+        goNav(navOf.dayBlock(date, half));
+      } else goNav(navOf.addWork(date, half));
+    },
+    [goNav, nav, keepDayPanel],
   );
   /** WD-1: closing the panel stays on the week it was on (this week as the plain #/week). */
   const closeAddNav = (): Nav => {
     const w = nav.tab === "week" ? weekOfAdd(nav) : null;
     return navOf.week("board", w && w !== data?.today.weekStart ? w : null);
   };
-  /** Day's Add work and the command menu's Plan today: Week with the panel on that day (default: today or the next workday). */
+  /** WD-2: closes the block panel where it is, and gives focus back to its block. */
+  const closePanel = () => {
+    setPanelFocus(null);
+    setFocusAdd(0);
+    if (nav.tab === "today") {
+      keepDayPanel(false);
+      goNav(navOf.todayOn(dayShown));
+    } else goNav(closeAddNav());
+    const el = cellRefs.current.get(`${sel.dayIndex}${sel.half}`);
+    requestAnimationFrame(() => el?.focus({ preventScroll: true }));
+  };
+  /** WD-2: "+ Add" in Day's header: the panel on that day's block under way (or its next), the cursor in the Add box. */
+  const addOnDay = useCallback(
+    (date: IsoDate) => {
+      const b = panelBlock(panelBlocks, now ?? new Date(clock).toISOString(), { date, half: null });
+      setPlaceOpen(false);
+      setPanelFocus(null);
+      setFocusAdd((n) => n + 1);
+      keepDayPanel(true);
+      // A day outside the week shown: Day goes there, and the panel opens on its block once that week is here.
+      goNav(b && b.date === date ? navOf.dayBlock(b.date, b.half) : navOf.todayOn(date === data?.planDay.date ? null : date));
+    },
+    [panelBlocks, now, clock, goNav, keepDayPanel, data?.planDay.date],
+  );
+  /** The command menu's Add work to today (or a day): Week with the panel on that day. */
   const openPlanDay = useCallback((date?: IsoDate) => addWork(date ?? null), [addWork]);
 
   /**
@@ -898,8 +967,8 @@ export function App() {
     [reloadQuiet],
   );
 
-  // The week each place shows: Week its week (this week by default; the Add work panel's block's week), Day and its flows the day's.
-  const wantWeek = !data ? null : nav.tab === "week" ? (nav.week ?? (addAt?.date ? mondayOf(addAt.date) : data.today.weekStart)) : nav.tab === "today" && !loc.overlay ? (todayAt ? mondayOf(todayAt) : data.today.weekStart) : null;
+  // The week each place shows: Week its week (this week by default; the block panel's block's week), Day and its flows the day's.
+  const wantWeek = !data ? null : nav.tab === "week" ? (nav.week ?? (addAt?.date ? mondayOf(addAt.date) : data.today.weekStart)) : nav.tab === "today" && !loc.overlay ? (dayShown ? mondayOf(dayShown) : data.today.weekStart) : null;
   useEffect(() => {
     if (!data || !wantWeek || wantWeek === weekRef.current) return;
     void load({ weekStart: wantWeek }, { selectToday: wantWeek === data.today.weekStart });
@@ -965,11 +1034,10 @@ export function App() {
     [load],
   );
 
-  /** The old Plan the week entry points: Week with the Add work panel on that week. */
+  /** The old Plan the week entry points: Week with the block panel on that week. */
   // A week opens with the panel on its block under way (or its first one), never pinned to its Monday.
   const openPlanWeek = useCallback(
     (w: IsoDate) => {
-      setDetailsOpen(false);
       goNav(navOf.weekAdd(w === data?.today.weekStart ? null : w));
     },
     [goNav, data?.today.weekStart],
@@ -978,7 +1046,6 @@ export function App() {
   /** A view by name (the command menu, older entry points): its tab and mode, or an overlay. */
   const setView = useCallback(
     (v: View) => {
-      setDetailsOpen(false);
       const r = viewNav(v);
       if (r.overlay) return go((l) => ({ nav: r.nav ?? l.nav, overlay: r.overlay }));
       if (r.nav?.tab === "week" && r.nav.mode === "board" && !r.nav.add && data) setSel({ dayIndex: data.today.dayIndex, half: data.today.half });
@@ -988,13 +1055,11 @@ export function App() {
   );
   /** P: the current tab's planning mode, or back to its view mode. */
   const togglePlanning = useCallback(() => {
-    setDetailsOpen(false);
     go((l) => ({ nav: toggleP(l.nav), overlay: null }));
   }, [go]);
   /** A tab (top bar, 1–4): its default mode. */
   const openTab = useCallback(
     (t: Tab) => {
-      setDetailsOpen(false);
       if (t === "week" && data) setSel({ dayIndex: data.today.dayIndex, half: data.today.half });
       goNav(defaultNav(t));
     },
@@ -1045,7 +1110,6 @@ export function App() {
     const r = parseRoute(text);
     if (!r) return;
     setCmdOpen(false);
-    setDetailsOpen(false);
     // Step 16.2: each route is a tab and mode (or an overlay); the VM opens Today with the VM menu.
     const { loc: to, vmMenu } = routeLoc(r);
     go(to);
@@ -1094,8 +1158,11 @@ export function App() {
   }, [clock]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    // WD-1: not while the Add work panel has focus (its search and type box keep it).
-    if (!cmdOpen && !keysOpen && !document.activeElement?.closest(".add-work-panel")) cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
+    // WD-1, WD-2: not while the block panel has focus (its Add box keeps it), nor a dialog, a menu or a text box (Day
+    // has cards to select now, so a command that opens Capture must not lose its cursor to the card behind it).
+    const a = document.activeElement as HTMLElement | null;
+    const busy = !!a && (!!a.closest(".block-panel, [data-overlay], [role='dialog'], [role='menu'], dialog") || isTypingTarget(a));
+    if (!cmdOpen && !keysOpen && !busy) cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
   }, [sel, data?.weekStart, layout, cmdOpen, keysOpen]);
 
   useEffect(() => {
@@ -1112,18 +1179,18 @@ export function App() {
   const focusRegion = useCallback(
     (r: Region) => {
       if (r === "grid") return cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus();
-      const root = document.querySelector<HTMLElement>(r === "panel" ? (detailsOpen ? ".detail-panel" : ".planday") : r === "top" ? ".topbar" : ".statusbar");
+      const root = document.querySelector<HTMLElement>(r === "panel" ? (panelAt ? ".block-panel" : ".planday") : r === "top" ? ".topbar" : ".statusbar");
       if (!root) return;
       const last = lastInRegion.current.get(r);
       if (last?.isConnected && root.contains(last) && !last.matches(":disabled")) return last.focus();
-      if (r === "panel" && !detailsOpen) return root.focus();
+      if (r === "panel" && !panelAt) return root.focus();
       root.querySelector<HTMLElement>(FOCUSABLE)?.focus();
     },
-    [sel, detailsOpen],
+    [sel, panelAt],
   );
   const moveRegion = useCallback(
-    (dir: 1 | -1) => focusRegion(nextRegion(regionOf(document.activeElement), regionsAvailable({ planOpen: false, detailsOpen }), dir)),
-    [focusRegion, detailsOpen],
+    (dir: 1 | -1) => focusRegion(nextRegion(regionOf(document.activeElement), regionsAvailable({ planOpen: false, detailsOpen: !!panelAt }), dir)),
+    [focusRegion, panelAt],
   );
 
   // F6, O and ? work everywhere (capture phase: the ⋯ buttons keep other keys to themselves), except while typing
@@ -1138,7 +1205,6 @@ export function App() {
       if (e.key === "?" && !typing) {
         // G1: ? opens the Guide (and closes it again); the one-list legend stays in the command menu and ⋯.
         e.preventDefault();
-        setDetailsOpen(false);
         setKeysOpen(false);
         go((l) => (l.overlay?.kind === "guide" ? { nav: l.nav, overlay: null } : { nav: l.nav, overlay: { kind: "guide", chapter: null } }));
         return;
@@ -1237,13 +1303,13 @@ export function App() {
       } else if ((k === "b" || k === "B") && free && settingsAt === null && !loc.overlay && nav.tab === "today" && !nav.flow && !e.ctrlKey && !e.metaKey && !e.altKey) {
         // TY-1: Today's Timeline switch.
         e.preventDefault();
-        void saveTodayTimeline(!todayTimelineRef.current);
+        void saveDayTimeline(!dayTimelineRef.current);
       } else if ((k === "l" || k === "L") && free && settingsAt === null) {
         e.preventDefault();
         openTab("inbox");
       } else if ((k === "w" || k === "W") && free && settingsAt === null) {
         e.preventDefault();
-        // WD-1: W opens Week with the Add work panel (again: closes it).
+        // WD-1: W opens Week with the block panel (again: closes it).
         addAt ? goNav(closeAddNav()) : addWork();
       } else if ((k === "e" || k === "E") && free && settingsAt === null) {
         e.preventDefault();
@@ -1264,27 +1330,44 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [loc, nav, addAt, settingsAt, closeOutAt, checkInOpen, captureOpen, cmdOpen, keysOpen, detailsOpen, go, goNav, openTab, togglePlanning, setSettingsAt]);
+  }, [loc, nav, addAt, settingsAt, closeOutAt, checkInOpen, captureOpen, cmdOpen, keysOpen, go, goNav, openTab, togglePlanning, setSettingsAt]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (base !== "week" || (nav.tab === "week" && nav.mode === "team") || focusOpen || guideAt || docsAt || meetingAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || captureOpen || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      // WD-2: the block keys work on Week and on Day (the day's own blocks; [ and ] step Day's days in its own handler).
+      const onDay = nav.tab === "today" && !nav.flow;
+      if (!(onDay || (nav.tab === "week" && nav.mode !== "team")) || focusOpen || guideAt || docsAt || meetingAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || captureOpen || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
+      // WD-2 review: never from inside the block panel, a link, a checkbox or a menu (Space ticks, Enter follows).
+      const from = e.target as HTMLElement | null;
+      if (from?.closest?.(".block-panel, a, input, select, [role='menu'], [role='listbox']")) return;
       const days = data.week.days;
+      if (onDay) {
+        // Day: only its own day's blocks (a date outside the loaded week has none here), and only from the cards or
+        // with nothing focused, so the arrows and Space still scroll the page from anywhere else. A works anywhere.
+        if (days[sel.dayIndex]?.date !== dayDate) return;
+        const letterA = e.key === "a" || e.key === "A";
+        if (!letterA && !from?.closest(".grid.day-only")) return;
+      }
       const halvesOf = (i: number): Half[] => (days[i] ? cardHalves(days[i]) : ["AM", "PM"]);
       const move = (dayIndex: number, half: Half) => {
         e.preventDefault();
-        const i = Math.max(0, Math.min(days.length - 1, dayIndex));
-        setSel({ dayIndex: i, half: validHalf(days[i]!, half) });
+        // Day keeps to its own day: left and right step its blocks like up and down.
+        const i = onDay ? sel.dayIndex : Math.max(0, Math.min(days.length - 1, dayIndex));
+        const h = validHalf(days[i]!, half);
+        setSel({ dayIndex: i, half: h });
+        cellRefs.current.get(`${i}${h}`)?.focus({ preventScroll: true });
+        // WD-2: with the block panel open, arrowing to another block moves it there.
+        if (panelAt && days[i] && (days[i]!.date !== panelAt.date || h !== panelAt.half)) openBlock(days[i]!.date, h);
       };
       const step = (dir: 1 | -1) => {
         const hs = halvesOf(sel.dayIndex);
         return move(sel.dayIndex, hs[Math.max(0, Math.min(hs.length - 1, hs.indexOf(sel.half) + dir))]!);
       };
       switch (e.key) {
-        case "ArrowLeft": return move(sel.dayIndex - 1, sel.half);
-        case "ArrowRight": return move(sel.dayIndex + 1, sel.half);
+        case "ArrowLeft": return onDay ? step(-1) : move(sel.dayIndex - 1, sel.half);
+        case "ArrowRight": return onDay ? step(1) : move(sel.dayIndex + 1, sel.half);
         case "ArrowUp": return step(-1);
         case "ArrowDown": return step(1);
         case "v":
@@ -1296,25 +1379,24 @@ export function App() {
           return;
         case "Enter":
         case " ":
-          e.preventDefault();
-          return setDetailsOpen(true);
         case "a":
         case "A": {
-          // Step 13.6 (D241), WD-1: the Add work panel on the selected block.
+          // WD-2: A and Enter open the block panel on the selected block; A puts the cursor in its Add box when the
+          // block can take work (a past or PTO block opens without one).
           e.preventDefault();
           const d = days[sel.dayIndex];
           const sl = d ? slotOf(d, sel.half) : undefined;
           if (!d || !sl) return;
-          if (!canAddWork({ date: d.date, today: data.planDay.date, pto: !!d.pto, off: sl.off })) return setNotice(d.date < data.planDay.date ? "That day is past: its to-dos can only be ticked done or dropped" : d.pto ? "That's a PTO day" : "That block has no working hours");
-          return addWork(d.date, sel.half);
+          const add = (e.key === "a" || e.key === "A") && canAddWork({ date: d.date, today: data.planDay.date, pto: !!d.pto, off: sl.off });
+          return openBlock(d.date, sel.half, { add });
         }
-        case "[": return changeWeek(-1);
-        case "]": return changeWeek(1);
+        case "[": return onDay ? undefined : changeWeek(-1);
+        case "]": return onDay ? undefined : changeWeek(1);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, cmdOpen, keysOpen, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, focusOpen, guideAt, docsAt, meetingAt, base, captureOpen, layout, nav]);
+  }, [sel, panelAt, openBlock, data, goToday, changeWeek, auto, cmdOpen, keysOpen, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, focusOpen, guideAt, docsAt, meetingAt, base, captureOpen, layout, nav]);
 
   // DV-2: R refreshes on every tab (Today, Week, Ahead, Status, Inbox, Settings), never while typing or in a dialog.
   useEffect(() => {
@@ -1336,12 +1418,12 @@ export function App() {
       if (e.key !== "[" && e.key !== "]") return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       e.preventDefault();
-      const next = stepWeekday(todayAt ?? data.planDay.date, e.key === "]" ? 1 : -1, weekendStops({ showWeekend: weekendRef.current, days: data.week.days }));
+      const next = stepWeekday(dayShown ?? data.planDay.date, e.key === "]" ? 1 : -1, weekendStops({ showWeekend: weekendRef.current, days: data.week.days }));
       goNav(navOf.todayOn(next === data.planDay.date ? null : next));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [base, nav, loc.overlay, cmdOpen, keysOpen, captureOpen, settingsAt, data, todayAt, goNav]);
+  }, [base, nav, loc.overlay, cmdOpen, keysOpen, captureOpen, settingsAt, data, dayShown, goNav]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
   const weekItems = useMemo(() => (data?.weekFeatures ?? []).filter((f) => f.weekStart === data?.weekStart).map((f) => ({ clientKey: f.clientKey, itemId: f.itemId })), [data?.weekFeatures, data?.weekStart]);
@@ -1360,7 +1442,7 @@ export function App() {
       cowork,
       openChat,
       week: data.week,
-      // Step 15.2, WD-1: the selected block (the Add work panel's while it is open) is the selection.
+      // Step 15.2, WD-1: the selected block (the block panel's while it is open) is the selection.
       selection: (() => {
         const at = { d: day, half: sel.half };
         return { date: at.d.date, half: at.half, clientKey: (at.half === "AM" ? at.d.am : at.half === "PM" ? at.d.pm : at.d.eve)?.focus[0]?.clientKey ?? null };
@@ -1375,14 +1457,9 @@ export function App() {
       runPlan,
       openPlanDay: (d) => void openPlanDay(d),
       ...(data.timeboxSettings.enabled !== false ? { timeboxDay: (d: IsoDate) => void timeboxDay(d) } : {}),
-      openDetails: (date, half) => {
-        const i = data.week.days.findIndex((x) => x.date === date);
-        if (i < 0) return;
-        // The details belong to the Week: go there (that week) with the half-day selected.
-        goNav(navOf.week("board", data.weekStart));
-        setSel({ dayIndex: i, half });
-        setDetailsOpen(true);
-      },
+      // WD-2: the block panel on a block (Day stays Day; anywhere else it is Week).
+      openBlock: (date, half, add) => openBlock(date, half, { add: !!add }),
+      takeOff: (p) => void takeOffPick(p.id, { date: p.date, half: p.half }, { changed: reloadQuiet, note: (text, undo) => setUndoToast({ id: Date.now(), text, undo }) }),
       openLink: (k, u) => void openWorkItem(k, u),
       copyLink: (_k: string, u: string) => void copyWorkLink(u),
       openCard: (k: string, id: number) => openItemCard(k, id),
@@ -1419,8 +1496,8 @@ export function App() {
       saveShowPersonal: (show) => void saveShowPersonal(show),
       showTimelines,
       saveShowTimelines: (show) => void saveShowTimelines(show),
-      todayTimeline,
-      saveTodayTimeline: (show) => void saveTodayTimeline(show),
+      dayTimeline,
+      saveDayTimeline: (show) => void saveDayTimeline(show),
       showWeekend,
       saveShowWeekend,
       undoable: (text, undo) => setUndoToast({ id: Date.now(), text, undo }),
@@ -1483,7 +1560,6 @@ export function App() {
       openFeedback: () => setFeedbackOpen(true),
       openNotifications: () => openNotices(),
       openSettings: (section, setting) => {
-        setDetailsOpen(false);
         setSettingsAt(section ?? "", setting ?? null);
       },
       openTimebox: (t) => {
@@ -1507,7 +1583,6 @@ export function App() {
       tz: userZone(data.week),
       timeboxes: data.timeboxes,
       now: now ?? new Date(clock).toISOString(),
-      addWork,
       planFeature: (date: IsoDate, half: Half) => addWork(date, half),
       demo: data.demo,
       admin: isAdmin === true,
@@ -1557,8 +1632,26 @@ export function App() {
   }
 
   const { week } = shownData ?? data;
-  const day = week.days[Math.min(sel.dayIndex, week.days.length - 1)]!;
-  const slot = slotOf(day, validHalf(day, sel.half)) ?? day.am;
+  // WD-2: the one block panel, on Week and on Day: where the address (or Day's remembered state) puts it, or, while a
+  // to-do is dragged out of its block with the panel closed, on that block as the drop area for Take off the plan.
+  const panelScreen = dayOn || (nav.tab === "week" && nav.mode === "board" && underTour);
+  const shownPanel = !panelScreen ? null : panelAt ?? (dragAt && !phone && week.days.some((d) => d.date === dragAt.date) ? dragAt : null);
+  const panelEl = shownPanel ? (
+    <BlockPanel
+      at={shownPanel}
+      data={shownData ?? data}
+      now={now ?? new Date(clock).toISOString()}
+      sheet={phone}
+      placeOpen={placeOpen}
+      focusAdd={panelAt ? focusAdd : 0}
+      focus={panelFocus}
+      onStart={startFocus}
+      onTimebox={(d) => void timeboxDay(d)}
+      onClose={closePanel}
+      onChanged={reloadQuiet}
+      onSelect={(d, h) => openBlock(d, h)}
+    />
+  ) : null;
   // Weekend: "Today" shows the coming week (D36), so say so.
   const localToday = data.planDay.date;
   // The real date only: on a weekend the Today key shows next week, but no day there is badged "Today".
@@ -1660,11 +1753,18 @@ export function App() {
       onRefresh={() => void load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}), refresh: true }, { quiet: true })}
       onOpenSlot={(date, half) => {
         // PV-1: "Planned · Thu AM" opens that block's panel.
-        const dayIndex = week.days.findIndex((d) => d.date === date);
-        if (dayIndex < 0) return;
-        setSel({ dayIndex, half });
-        setPanelFocus(null);
-        setDetailsOpen(true);
+        if (week.days.some((d) => d.date === date)) openBlock(date, half);
+      }}
+      // WD-2: a to-do dragged out of its block: the block panel shows as the drop area (it opens when it was closed);
+      // dropped there, it comes off the plan and the panel stays on that block.
+      onPickDrag={(at) => {
+        setDragAt(at);
+        // The block it is dragged from is the selected one, so its day stays open while the panel takes its room.
+        const i = at && !panelAt ? week.days.findIndex((d) => d.date === at.date) : -1;
+        if (at && i >= 0) setSel({ dayIndex: i, half: at.half });
+      }}
+      onTookOff={(at) => {
+        if (!panelAt && !phone) openBlock(at.date, at.half);
       }}
     >
     <TodoSheetCtx.Provider value={phone ? openTodoSheet : null}>
@@ -1905,14 +2005,16 @@ export function App() {
           phone && !aheadAnyway && loc.overlay?.kind !== "tour" ? <AheadNotice onOpen={() => setAheadAnyway(true)} onToday={() => openTab("today")} /> : <PhoneGate phone={phone}><Ahead data={data} mode={nav.mode} item={nav.item ?? null} switcher={switches.ahead} renderSwitch={aheadSwitch} onChanged={reloadQuiet} readOnly={phone} /></PhoneGate>
         ) : null
       ) : base === "today" ? (
-        <Today
-          viewDate={todayAt}
+        <CarryProvider active={data.weekStart === data.today.weekStart} version={data} week={week} now={now ?? new Date(clock).toISOString()} onChanged={reloadQuiet}>
+        <AddPanelCtx.Provider value={{ at: shownPanel, open: (d, h) => openBlock(d, h, { add: true }) }}>
+        <Day
+          viewDate={dayShown}
           showWeekend={showWeekend}
           onDay={(d) => goNav(navOf.todayOn(d && d !== data.planDay.date ? d : null))}
           onTimebox={(d) => void timeboxDay(d)}
           timeboxAsk={timeboxAsk}
-          timeline={todayTimeline}
-          onTimeline={(show) => void saveTodayTimeline(show)}
+          timeline={dayTimeline}
+          onTimeline={(show) => void saveDayTimeline(show)}
           onCloseOutOn={(d) => goNav(navOf.today("closeout", d))}
           data={shownData ?? data}
           strip={strip}
@@ -1924,19 +2026,16 @@ export function App() {
           onCheckIn={() => goNav(navOf.today("checkin"))}
           onCloseOut={() => goNav(navOf.today("closeout"))}
           closeOutDate={closeOutAt}
-          wide={layout === "wide"}
           showPersonal={showPersonal}
           onShowPersonal={(show) => void saveShowPersonal(show)}
           onStart={startFocus}
           onFocusScreen={() => setView("focus")}
           onTimer={(a) => void runTimer(a)}
-          onPlan={(d) => openPlanDay(d)}
-          onPlanWeek={() => openPlanWeek(data.today.weekStart)}
           inbox={inboxToday?.items ?? null}
           needsYou={needsYouCount}
           onItem={(key) => goNav(navOf.inboxItem(key))}
           onNeedsYou={() => goNav(navOf.inboxView("needs_you"))}
-          switcher={switches.today}
+          onLate={(client) => goNav(navOf.inboxLate(client))}
           onInbox={() => setView("follow_ups")}
           onAsks={(id) => (id ? goNav(navOf.conversation(id)) : setView("conversations"))}
           onPromises={(id) => (id ? goNav(navOf.promise(id)) : setView("my_promises"))}
@@ -1950,7 +2049,21 @@ export function App() {
           onClosedOut={(st) => setClosing({ allDone: st.date === st.today && allDone(st.picks) })}
           setupLine={setupView?.line ?? null}
           onSetup={(step) => setSetupAt(step)}
+          panelAt={dayOn ? shownPanel : null}
+          onOpenBlock={openBlock}
+          onAdd={addOnDay}
+          selection={sel}
+          cellRefs={cellRefs.current}
+          onSelect={(x) => {
+            setSel(x);
+            // WD-2: clicking another block keeps the panel open on it.
+            const d = week.days[x.dayIndex];
+            if (panelAt && d && (d.date !== panelAt.date || x.half !== panelAt.half)) openBlock(d.date, x.half);
+          }}
         />
+        {dayOn && panelEl}
+        </AddPanelCtx.Provider>
+        </CarryProvider>
       ) : (
         (() => {
           const nowIso = now ?? new Date(clock).toISOString();
@@ -1990,7 +2103,7 @@ export function App() {
             <ModeArea>
               <TimelineToggle shown={showTimelines} onToggle={() => void saveShowTimelines(!showTimelines)} />
               {!past && (
-                <button type="button" className="mini add-work-head" data-tour="wk-add" aria-pressed={!!addAt} onClick={() => (addAt ? goNav(closeAddNav()) : addWork())} title="Add work to a block (A)">
+                <button type="button" className="mini add-work-head" data-tour="wk-add" aria-pressed={!!addAt} onClick={() => (addAt ? closePanel() : addWork())} title="Add to a block (A)">
                   + Add
                 </button>
               )}
@@ -2013,8 +2126,8 @@ export function App() {
           </button>
         </p>
       )}
-      <div className={`wd1-body${panelAt ? " with-panel" : ""}`}>
-      <AddPanelCtx.Provider value={{ at: panelAt, open: (d, h) => addWork(d, h) }}>
+      <div className={`wd1-body${shownPanel ? " with-panel" : ""}`}>
+      <AddPanelCtx.Provider value={{ at: shownPanel, open: (d, h) => addWork(d, h) }}>
       <WeekGrid
         week={week}
         colors={data.clients}
@@ -2025,51 +2138,31 @@ export function App() {
         cellRefs={cellRefs.current}
         layout={layout}
         compact={compact}
-        onDayHead={(d) => addWork(d)}
+        onDayHead={(d) => goNav(navOf.todayOn(d === data.planDay.date ? null : d))}
         promises={railItems(inboxToday?.items ?? [])}
         onPromise={(key) => goNav(navOf.inboxItem(key))}
         onLate={(client) => goNav(navOf.inboxLate(client))}
         onAddWork={(d, h) => addWork(d, h)}
         onAddHours={() => {
-          setDetailsOpen(false);
           setSettingsAt("hours");
         }}
-        panelOpen={(detailsOpen || !!panelAt) && !phone}
+        panelOpen={!!shownPanel && !phone}
         timeline={showTimelines}
-        onSelect={(s) => {
-          setSel(s);
-          // WD-1: clicking another block keeps the Add work panel open on it.
-          const d = week.days[s.dayIndex];
-          if (panelAt && d) addWork(d.date, s.half);
+        onSelect={(x) => {
+          setSel(x);
+          // WD-1, WD-2: clicking another block keeps the block panel open on it.
+          const d = week.days[x.dayIndex];
+          if (panelAt && d && (d.date !== panelAt.date || x.half !== panelAt.half)) openBlock(d.date, x.half);
         }}
-        onOpen={(s, focus) => {
-          setSel(s);
-          const d = week.days[s.dayIndex];
-          if (panelAt && d) return addWork(d.date, s.half);
-          setPanelFocus(focus ?? null);
-          setDetailsOpen(true);
+        onOpen={(x, focus) => {
+          // WD-2: a click on a block's header or empty space (or a promise's due badge) opens the one block panel.
+          setSel(x);
+          const d = week.days[x.dayIndex];
+          if (d) openBlock(d.date, x.half, { focus: focus ?? null });
         }}
       />
       </AddPanelCtx.Provider>
-      {panelAt && (
-        <AddWorkPanel
-          at={panelAt}
-          week={week}
-          version={data}
-          thisWeek={data.today.weekStart}
-          today={data.planDay.date}
-          colors={data.clients}
-          clients={data.planClients}
-          sheet={phone}
-          placeOpen={placeOpen}
-          onClose={() => {
-            goNav(closeAddNav());
-            cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
-          }}
-          onChanged={reloadQuiet}
-          onSelect={(d, h) => addWork(d, h)}
-        />
-      )}
+      {panelEl}
       </div>
       </CarryProvider>
         </>
@@ -2113,9 +2206,6 @@ export function App() {
         />
       )}
 
-      {detailsOpen && base === "week" && !panelAt && !(nav.tab === "week" && nav.mode === "team") && (
-        <DetailPanel variant="week" data={data} day={day} slot={slot} focus={panelFocus} now={now ?? new Date(clock).toISOString()} onClose={() => (setDetailsOpen(false), setPanelFocus(null), cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true }))} onStart={startFocus} onChanged={reloadQuiet} onNotice={setNotice} />
-      )}
       {phone && (
         <BottomBar
           current={settingsAt !== null || guideAt || docsAt || meetingAt || focusOpen || nav.tab === "status" ? null : nav.tab}
@@ -2231,7 +2321,6 @@ export function App() {
       {keysOpen && <KeyLegend onClose={() => setKeysOpen(false)} />}
       <NoHoursPrompt
         onAddHours={() => {
-          setDetailsOpen(false);
           setSettingsAt("hours");
         }}
       />

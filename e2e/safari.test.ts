@@ -29,10 +29,10 @@ async function walk(page: Page, h: Harness) {
   await demo.click();
   await page.waitForSelector(".demo-tag", { timeout: 30_000 });
   await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
-  await page.waitForSelector(".today-view .today-block", { timeout: 30_000 });
+  await page.waitForSelector(".today-view .half.card", { timeout: 30_000 });
   // WD-1: Week with Add work (the old Plan the week address lands there).
   await page.evaluate(() => (location.hash = "#/week/plan"));
-  await page.locator("aside.add-work-panel .aw-sec").first().waitFor({ timeout: 30_000 });
+  await page.locator("aside.block-panel .aw-sec").first().waitFor({ timeout: 30_000 });
   await page.waitForTimeout(300);
 }
 

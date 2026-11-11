@@ -25,7 +25,7 @@ describe.skipIf(!CHROMIUM)("co-working calls (browser, demo mode)", () => {
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("Week's card and Today's Now card show the live call with Join; the ⋯ offers Join and Start a call", async () => {
+  it("Week's card and Day's card show the live call with Join; the block's ⋯ and the block panel's ⋯ offer Join and Start a call", async () => {
     const { page, errors } = await freshPage(h);
     await at(page, "#/week");
     const live = page.locator(".card-live .live-call");
@@ -48,18 +48,24 @@ describe.skipIf(!CHROMIUM)("co-working calls (browser, demo mode)", () => {
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/cw1-week-menu.png` });
     await page.keyboard.press("Escape");
 
-    // The block's detail panel: Join, and Start a call for the other chat.
-    await card.locator(".card-head").click();
-    const panel = page.locator(".detail-panel .dp-calls");
+    // WD-2: the block panel's ⋯: Join, and Start a call for the other chat.
+    await card.locator(".card-head .card-client").click();
+    const panel = page.locator("aside.block-panel");
     await panel.waitFor();
-    await expect(panel.locator(".lc-start").textContent()).resolves.toBe("Start a call in Northwind Customer Collaboration (Cooptimize)");
+    await panel.locator(".bp-head").getByRole("button", { name: /^More for/ }).click();
+    const more = page.locator(".popup-menu, [role=menu]").last();
+    await more.getByText(`Join the call in ${DELIVERY}`).waitFor();
+    await more.getByText("Start a call in Northwind Customer Collaboration (Cooptimize)").waitFor();
+    await more.getByText("Timebox this day").waitFor();
+    await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
 
+    // Day: the same card, with the live call and Join.
     await at(page, "#/today");
-    const now = page.locator(".phone-now .live-call");
+    const now = page.locator(".day-view .half .card-live .live-call");
     await now.waitFor({ timeout: 30_000 });
     await expect(now.locator(".lc-line").textContent()).resolves.toBe(`Call live in ${DELIVERY} · started 9:20`);
-    await shotBoth(page, "cw1-today-live", page.locator(".phone-now"));
+    await shotBoth(page, "cw1-today-live", page.locator(".day-view .half", { has: page.locator(".card-live") }).first());
 
     // The command menu: Start a call lists every chat I can see.
     await page.keyboard.press("Control+k");

@@ -113,15 +113,16 @@ describe.skipIf(!CHROMIUM)("RF-1: tab order, Status's dot, the top of Day", () =
       await page.close();
     }, T);
 
-    it("a day ahead reads Add work, never Plan, and opens Week's Add work on that day", async () => {
+    it("a day ahead is a day: + Add on its blocks, never Plan, and the block panel opens on Day on that date (WD-2)", async () => {
       const { page, errors } = await freshPage(h);
       await page.evaluate(() => (location.hash = "#/day/2026-11-11"));
-      await page.locator(".today-other").waitFor();
+      await page.locator(".day-view .half.card .add-work.add-row").first().waitFor({ timeout: 30_000 });
+      expect(await page.locator(".today-other").count()).toBe(0);
       expect(await page.locator(".today-view").getByRole("button", { name: /^Plan\b/ }).count()).toBe(0);
       expect(await page.locator(".today-view").getByRole("link", { name: /^Plan\b/ }).count()).toBe(0);
-      await page.locator(".today-other").getByRole("button", { name: "Add work", exact: true }).click();
-      await page.locator("aside.add-work-panel").waitFor();
-      await expect.poll(() => hash(page)).toMatch(/^#\/week\/day\/2026-11-11/);
+      await page.locator(".day-view .half.card .add-work.add-row").first().click();
+      await page.locator("aside.block-panel").waitFor();
+      await expect.poll(() => hash(page)).toMatch(/^#\/day\/2026-11-11\/(AM|PM)$/);
       expect(errors).toEqual([]);
       await page.close();
     }, T);

@@ -8,9 +8,9 @@ import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
 
 const T = 180_000;
 const block = (page: Page, date: string, half: string) => page.locator(`[data-drop="${date}:${half}"]`).first();
-const panel = (page: Page) => page.locator("aside.add-work-panel");
-const panelTitle = (page: Page) => panel(page).locator(".aw-title").innerText();
-const room = (page: Page) => panel(page).locator(".aw-room").first().innerText();
+const panel = (page: Page) => page.locator("aside.block-panel");
+const panelTitle = (page: Page) => panel(page).locator(".bp-title h2").innerText();
+const room = (page: Page) => panel(page).locator(".bp-when").first().innerText();
 const hash = (page: Page) => page.evaluate(() => location.hash);
 async function openWeek(page: Page) {
   await page.keyboard.press("2");
@@ -19,7 +19,7 @@ async function openWeek(page: Page) {
 async function addOn(page: Page, date: string, half: string) {
   await block(page, date, half).locator(".add-work.add-row").click();
   await panel(page).waitFor();
-  await expect.poll(() => panel(page).getAttribute("data-add-panel")).toBe(`${date}|${half}`);
+  await expect.poll(() => panel(page).getAttribute("data-block-panel")).toBe(`${date}|${half}`);
 }
 /** The first story row in the panel's own sections (not To place) that isn't on this block yet. */
 const freeRow = (page: Page) => panel(page).locator(".aw-sec .aw-row:not(.placed)").filter({ has: page.locator("button.aw-plus") }).first();
@@ -35,7 +35,7 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     const { page, errors } = await freshPage(h);
     await openWeek(page);
     await addOn(page, "2026-11-03", "AM");
-    await expect(panelTitle(page)).resolves.toMatch(/^Add to \S.* · Tue AM$/);
+    await expect(panelTitle(page)).resolves.toMatch(/^\S.* · Tue AM$/);
     const before = await room(page);
     const row = freeRow(page);
     const title = (await row.locator(".aw-row-title").innerText()).trim();
@@ -82,7 +82,7 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     await addOn(page, "2026-11-03", "AM");
     const before = { title: await panelTitle(page), room: await room(page) };
     await block(page, "2026-11-03", "PM").locator(".card-client").first().click();
-    await expect.poll(() => panel(page).getAttribute("data-add-panel")).toBe("2026-11-03|PM");
+    await expect.poll(() => panel(page).getAttribute("data-block-panel")).toBe("2026-11-03|PM");
     await expect(panelTitle(page)).resolves.toMatch(/· Tue PM$/);
     expect(await panelTitle(page)).not.toBe(before.title);
     await expect(hash(page)).resolves.toBe("#/week/day/2026-11-03/PM");
@@ -124,6 +124,8 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     await page.locator(".week-head h2", { hasText: "Nov 9" }).waitFor();
     for (const close of ["Escape", "head", "w"] as const) {
       await addOn(page, "2026-11-10", "AM");
+      // WD-2: + Add puts the cursor in the Add box, where W is a letter: leave the box first.
+      if (close === "w") await panel(page).locator(".bp-title h2").click();
       if (close === "head") await page.locator(".add-work-head").click();
       else await page.keyboard.press(close);
       await panel(page).waitFor({ state: "detached" });
@@ -172,7 +174,7 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     }
     // The panel on a block opens that week and selects the block; the team address opens Team.
     await page.evaluate(() => (location.hash = "#/week/day/2026-11-10/AM"));
-    await expect.poll(() => panel(page).getAttribute("data-add-panel")).toBe("2026-11-10|AM");
+    await expect.poll(() => panel(page).getAttribute("data-block-panel")).toBe("2026-11-10|AM");
     await page.getByRole("heading", { name: /^Week of Nov 9/ }).waitFor();
     await page.evaluate(() => (location.hash = "#/week/team"));
     await page.locator(".team-view, [aria-label^='Team']").first().waitFor({ timeout: 30_000 });
@@ -183,7 +185,7 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     const { page } = await freshPage(h);
     const PLAN = /^(Plan|Plan it|Plan the day|Plan the week|Plan today)$/;
     const words = () => page.locator("button:visible, a:visible").evaluateAll((els) => els.map((e) => (e.textContent ?? "").trim()));
-    for (const [key, ready] of [["1", ".today-view, .today-next"], ["2", ".half.card"], ["4", "main"], ["5", ".status-view, main"]] as const) {
+    for (const [key, ready] of [["1", ".today-view"], ["2", ".half.card"], ["4", "main"], ["5", ".status-view, main"]] as const) {
       await page.keyboard.press(key);
       await page.locator(ready).first().waitFor({ timeout: 30_000 });
       await page.waitForTimeout(300);
@@ -235,9 +237,9 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     const card = page.locator(".half.card", { has: page.locator(".add-work.add-row") }).nth(1);
     await card.waitFor({ timeout: 30_000 });
     await card.locator(".add-work.add-row").click();
-    const sheet = page.locator("aside.add-work-panel.sheet");
+    const sheet = page.locator("aside.block-panel.sheet");
     await sheet.waitFor();
-    const at = (await sheet.getAttribute("data-add-panel"))!.split("|");
+    const at = (await sheet.getAttribute("data-block-panel"))!.split("|");
     const row = sheet.locator(".aw-sec .aw-row:not(.placed)").filter({ has: page.locator("button.aw-plus") }).first();
     const title = (await row.locator(".aw-row-title").innerText()).trim();
     await row.locator("button.aw-plus").click();
@@ -290,7 +292,7 @@ describe.skipIf(!CHROMIUM)("WD-1: the To place line (browser, demo on Tuesday)",
     await page.close();
   }, T);
 
-  it("review fix: from a block, This week's features come first and To place is one folded line; Review opens it; You sent is folded last", async () => {
+  it("WD-2: from a block, Assigned to you comes first; To place and You sent are folded at the bottom; Review opens To place", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await openWeek(page);
     await page.locator(".to-place-line").waitFor({ timeout: 30_000 });
@@ -301,26 +303,27 @@ describe.skipIf(!CHROMIUM)("WD-1: the To place line (browser, demo on Tuesday)",
     const line = panel(page).locator(".aw-toplace-line");
     await line.waitFor();
     await expect(line.getAttribute("aria-expanded")).resolves.toBe("false");
-    expect(await line.innerText()).toMatch(/^▸ \d+ to place · .*\d+ (unfinished|from last week|sent to you)/);
+    expect(await line.innerText()).toMatch(/^▸ \d+ to place$/);
+    expect(await line.getAttribute("title")).toMatch(/\d+ (unfinished|from last week|sent to you)/);
     expect(await panel(page).locator("section.carry-summary, section.carry").count()).toBe(0);
-    // Order: To place's line, then This week's features as the first section, then Promises and More from DevOps;
-    // You sent and Ask a lead folded at the bottom.
+    // Order: On this block, the meetings line, Add with Assigned to you first, then Promises and More in the client;
+    // To place and You sent folded at the bottom.
     const order = await panel(page).evaluate((el) =>
-      [...el.querySelectorAll(".aw-toplace, .aw-sec")].map((x) => (x.classList.contains("aw-toplace") ? "place" : x.classList.contains("aw-features") ? "features" : x.classList.contains("aw-sends") ? "sends" : (x.querySelector("h3, .pl-label")?.textContent ?? "").trim())),
+      [...el.querySelectorAll(".bp-on, .bp-add, .aw-toplace, .aw-sec")].map((x) => (x.classList.contains("bp-on") ? "on" : x.classList.contains("bp-add") ? "add" : x.classList.contains("aw-toplace") ? "place" : x.classList.contains("aw-features") ? "features" : x.classList.contains("aw-sends") ? "sends" : x.classList.contains("bp-other") ? "other" : (x.querySelector("h3, h4, .pl-label")?.textContent ?? "").trim())),
     );
-    expect(order[0]).toBe("place");
-    expect(order[1]).toBe("features");
+    expect(order.slice(0, 3)).toEqual(["on", "add", "features"]);
+    expect(order.at(-2)).toBe("place");
     expect(order.at(-1)).toBe("sends");
-    expect(order.indexOf("More from DevOps")).toBeGreaterThan(1);
+    expect(order.indexOf("other")).toBeGreaterThan(order.indexOf("features"));
     const sends = panel(page).locator(".aw-sends > .pl-fold");
-    await expect(sends.innerText()).resolves.toMatch(/^▸ You sent and Ask a lead to look/);
+    await expect(sends.innerText()).resolves.toMatch(/^▸ You sent/);
     expect(await panel(page).locator(".aw-sends section.team-group").count()).toBe(0);
     await sends.click();
     await panel(page).locator(".aw-sends section.team-group").waitFor();
-    // A day header: the same folded line.
+    // A click on a block: the same folded line.
     await page.keyboard.press("Escape");
     await panel(page).waitFor({ state: "detached" });
-    await page.locator(".day.today .day-open").click();
+    await nw.locator(".card-client").first().click();
     await panel(page).waitFor();
     await expect(panel(page).locator(".aw-toplace-line").getAttribute("aria-expanded")).resolves.toBe("false");
     await page.keyboard.press("Escape");
@@ -381,24 +384,28 @@ describe.skipIf(!CHROMIUM)("WD-1: the To place line (browser, demo on Tuesday)",
     await page.close();
   }, T);
 
-  it("review fix: a past day's header, a PTO day and a weekend address open the panel on a block that can take work, and the address says which", async () => {
+  it("WD-2: a past block and a PTO day open the panel to read and tick, with no Add; a day's header opens Day on that date", async () => {
     const { page, errors } = await freshPage(h);
     await openWeek(page);
-    // Monday is past: its header opens the next block that can take work, not a full Monday.
-    const mon = page.locator("header.day-head", { has: page.locator(".dow", { hasText: "Mon" }) }).first();
-    await mon.locator(".day-open").click({ force: true });
-    await panel(page).waitFor();
-    const at = (await panel(page).getAttribute("data-add-panel"))!;
-    expect(at.startsWith("2026-11-02")).toBe(false);
-    await expect.poll(() => hash(page)).toBe(`#/week/day/${at.replace("|", "/")}`);
-    for (const typed of ["#/week/day/2026-11-05/AM", "#/week/day/2026-11-07/AM"]) {
-      await page.evaluate((x) => (location.hash = x), typed);
-      await expect.poll(() => hash(page), { message: typed }).not.toBe(typed);
-      const now = (await panel(page).getAttribute("data-add-panel"))!;
-      expect(now.startsWith("2026-11-05"), typed).toBe(false);
-      await expect.poll(() => hash(page), { message: typed }).toBe(`#/week/day/${now.replace("|", "/")}`);
-      await expect(panel(page).getByText("PTO · anything added").count()).resolves.toBe(0);
-    }
+    // Monday is past: its block opens the panel on itself, with no Add section and no + Add on the card.
+    expect(await block(page, "2026-11-02", "AM").locator(".add-work.add-row").count()).toBe(0);
+    await block(page, "2026-11-02", "AM").locator(".card-client").first().click();
+    await expect.poll(() => panel(page).getAttribute("data-block-panel")).toBe("2026-11-02|AM");
+    await expect.poll(() => hash(page)).toBe("#/week/day/2026-11-02/AM");
+    await panel(page).getByText("A past day: tick what got done, or move what didn't to today.").waitFor();
+    expect(await panel(page).locator(".bp-add, input.bp-box").count()).toBe(0);
+    // A PTO day's address opens that day, read only.
+    await page.evaluate(() => (location.hash = "#/week/day/2026-11-05/AM"));
+    await expect.poll(() => panel(page).getAttribute("data-block-panel")).toBe("2026-11-05|AM");
+    await expect(panelTitle(page)).resolves.toMatch(/^PTO · Thu$/);
+    expect(await panel(page).locator(".bp-add, input.bp-box").count()).toBe(0);
+    await page.keyboard.press("Escape");
+    await panel(page).waitFor({ state: "detached" });
+    // A day's header opens Day on that date.
+    const wed = page.locator("header.day-head", { has: page.locator(".dow", { hasText: "Wed" }) }).first();
+    await wed.locator(".day-open").click();
+    await expect.poll(() => hash(page)).toBe("#/day/2026-11-04");
+    await page.locator(".day-view .day-bar h1", { hasText: "Wed, Nov 4" }).waitFor();
     expect(errors).toEqual([]);
     await page.close();
   }, T);

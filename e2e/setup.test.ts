@@ -99,12 +99,12 @@ describe.skipIf(!CHROMIUM)("first-run setup", () => {
       await focusIn("Calendars");
       await page.keyboard.press("Enter");
 
-      // Done: Plan your week, and the Guide.
+      // Done: Add work to your week (WD-2; was Plan your week), and the Guide.
       await dialog.getByRole("heading", { name: "You're set up" }).waitFor();
       await dialog.getByText("2 setup steps left").waitFor();
       await dialog.getByRole("link", { name: "Guide" }).waitFor();
       await shot("setup-5-done");
-      await dialog.getByRole("button", { name: "Plan your week" }).click();
+      await dialog.getByRole("button", { name: "Add work to your week" }).click();
       await page.waitForURL(/#\/week\/(commit|add|day)/);
 
       // RF-1: stepped through to the end (two steps skipped), so Day has no "steps left" line, after a reload too.

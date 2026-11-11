@@ -1,6 +1,6 @@
 // The hour timeline of one half-day, shared by Week (the wide layout's cards) and Today's Timeline (TY-1): hour marks, the
 // off hours, free gaps, meetings side by side, timeboxes and the now line. One copy: ui/WeekGrid.tsx and
-// ui/TodayTimeline.tsx both draw this.
+// ui/DayTimeline.tsx both draw this.
 import { useContext, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type Ref } from "react";
 import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";

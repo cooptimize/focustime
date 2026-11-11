@@ -21,7 +21,7 @@ import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
-export const PLAN_ACTIONS = ["planday.start", "planday.carry", "planday.commit", "pick.add", "pick.remove", "pick.set_size", "pick.move", "pick.mark_done", "deploy.add", "pick.set_kind", "pick.uncarry", "pick.undrop", "planday.carry_hint", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
+export const PLAN_ACTIONS = ["planday.start", "planday.carry", "planday.commit", "pick.add", "pick.remove", "pick.take_off", "pick.put_back", "pick.set_size", "pick.move", "pick.mark_done", "deploy.add", "pick.set_kind", "pick.uncarry", "pick.undrop", "planday.carry_hint", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
 /** UI-B: the marker kind for the suggested-cards hint, dismissed once. */
 export const CARRY_HINT = "carry_hint";
 
@@ -44,6 +44,8 @@ export type PlanContext = {
    * capture.features), for a parent the Week hasn't loaded (someone else's feature). Null when DevOps can't say.
    */
   openParents?: (clientKey: string, tier: "feature" | "epic") => Promise<readonly number[] | null>;
+  /** WD-2 follow-up: one open item of a client I can see, from the central store (Ahead's read), or null. */
+  storeItem?: (clientKey: string, itemId: number) => Promise<import("../week/types.ts").WorkItem | null>;
   /** DP-2: the client's data platform and its list of deployment items (Admin › Clients); absent: not set. */
   clientDeploy?: (clientKey: string) => Promise<ClientDeploy | null>;
 };
@@ -357,7 +359,9 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
           const itemId = id(o.itemId, "itemId");
           const cfg = await ctx.config();
           if (!cfg) return bad("Fix the config first", 409);
-          const item = ctx.devops(cfg).lookup(base.clientKey, itemId);
+          // WD-2 follow-up: "More in <client>" lists the client's whole open backlog, so an item the Week didn't load
+          // (a teammate's story under a feature that isn't mine) is read from the client's store, by my own access.
+          const item = ctx.devops(cfg).lookup(base.clientKey, itemId) ?? (await ctx.storeItem?.(base.clientKey, itemId).catch(() => null)) ?? null;
           if (!item) return bad(`Item ${itemId} is not among the loaded DevOps items for ${base.clientKey}. Refresh and try again`, 409);
           const why = unpickableReason(item);
           if (why) return bad(why, 422);
@@ -396,6 +400,49 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         // is still placed that week.
         if (undo?.featureId != null && !(await featureStillPlaced(ctx, plan, undo.weekStart, undo.featureId, before.clientKey))) await plan.undoWeekAdd(undo.weekStart, undo.featureId);
         return { ok: true, data: { result: r.result, state: await state(ctx, plan, before.date) } };
+      }
+      case "pick.take_off": {
+        // WD-2: Take off the plan. The to-do leaves its block and its work is "not placed" again; it is never marked
+        // dropped by this (Drop is pick.remove). A plain to-do isn't destroyed: its words stay as a draft with no
+        // feature, listed under To place. The answer says how Undo puts it back.
+        const pid = id(fields(input, ["id"]).id);
+        const before = await plan.getPick(pid);
+        if (!before) return bad(`No to-do ${pid}`, 404);
+        if (before.status === "done") return bad("A done to-do stays on its day. Mark it not done first", 409);
+        if (before.status !== "planned") return bad("Only a planned to-do can be taken off the plan", 409);
+        if (await pastRefusal(ctx, before.date)) return bad("A past day keeps its record. Move the to-do to today instead", 409);
+        if (before.todoKind === "deployment") return bad("A deployment keeps its window. Move it or drop it instead", 409);
+        const boxes = (await plan.timeboxesBetween(before.date, before.date)).filter((t) => t.pickId === pid && !t.removedAt);
+        if (boxes.some((t) => t.outlook)) return bad("Its timebox is on Outlook. Remove the timebox first, then take the to-do off", 409);
+        const at = { date: before.date, half: before.half, clientKey: before.clientKey, ...(before.size ? { size: before.size } : {}) };
+        const plain = before.kind === "intention" && before.followUpId === null;
+        const kind = plain ? "plain" : before.followUpId !== null ? "promise" : before.kind === "draft" ? "draft" : "item";
+        // The row goes first (it refuses one with time on it or carried on), so nothing else changes on a refusal.
+        await plan.takeOffPick(pid);
+        for (const t of boxes) await plan.removeTimebox(t.id);
+        const draft = plain ? await plan.addDraft({ clientKey: before.clientKey, parentItemId: null, title: before.title, size: before.size ?? "M" }) : null;
+        const undo = {
+          add: { ...at, ...(plain ? { intention: before.title } : before.followUpId !== null ? { followUpId: before.followUpId } : before.kind === "draft" ? { draftId: before.draftId } : { itemId: before.itemId }) },
+          ...(draft ? { draftId: draft.id } : {}),
+          ...(before.carriedFrom !== null ? { carriedFrom: before.carriedFrom } : {}),
+        };
+        return { ok: true, data: { result: "deleted", kind, title: before.title, timeboxes: boxes.length, draftId: draft?.id ?? null, undo, state: await state(ctx, plan, before.date) } };
+      }
+      case "pick.put_back": {
+        // WD-2: Undo of Take off the plan, from what pick.take_off answered: the to-do is added to its block again by
+        // pick.add's own rules, a plain to-do's kept draft goes, and a carried one is linked to where it came from.
+        const u = fields(fields(input, ["undo"]).undo, ["add"], ["draftId", "carriedFrom"]);
+        const again = await planAction(ctx, "pick.add", u.add);
+        if (!again.ok) return again;
+        const pick = (again.data as { pick: import("../plan/types.ts").Pick }).pick;
+        if (u.draftId !== undefined) {
+          const d = id(u.draftId, "draftId");
+          // Only the draft this take off made: one with no feature, with the to-do's own words, not on a block.
+          const kept = (await plan.drafts()).find((x) => x.id === d);
+          if (kept && kept.parentItemId === null && kept.title === pick.title && pick.kind === "intention") await plan.removeDraft(d).catch(() => undefined);
+        }
+        if (u.carriedFrom !== undefined) await plan.relinkCarried(pick.id, id(u.carriedFrom, "carriedFrom")).catch(() => undefined);
+        return { ok: true, data: { pick: (await plan.getPick(pick.id)) ?? pick, state: await state(ctx, plan, pick.date) } };
       }
       case "pick.set_size": {
         const o = fields(input, ["id", "size"]);
