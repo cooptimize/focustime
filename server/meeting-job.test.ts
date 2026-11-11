@@ -25,16 +25,19 @@ function setup() {
   const signedOut = new Set<string>();
   const calendarOut = new Set<string>();
   let transcriptsFail: Error | null = null;
+  let calendarFail: Error | null = null;
+  const refusedBy = new Map<string, Error>();
   const graphFor = (who: string) =>
     ({
       instances: async () => {
         calls.push({ who, op: "instances" });
-        if (calendarOut.has(who)) throw new HttpError(401);
+        if (calendarOut.has(who)) throw calendarFail ?? new HttpError(401);
         return instances;
       },
       onlineMeetingId: async () => {
         calls.push({ who, op: "onlineMeetingId" });
         if (signedOut.has(who)) throw new HttpError(401);
+        if (refusedBy.has(who)) throw refusedBy.get(who)!;
         return "om-1";
       },
       transcripts: async () => {
@@ -52,7 +55,7 @@ function setup() {
     person: async (uid) => ({ graph: graphFor(uid), ai: async () => null, capture: async () => null }),
     users: async () => [{ id: "33333333-3333-4333-8333-333333333333", name: "Lee Mate", emails: ["lee@cooptimize.example"] }],
   });
-  return { store, job, calls, signedOut, calendarOut, failTranscripts: (e: Error | null) => (transcriptsFail = e), setNow: (t: string) => (now = Temporal.Instant.from(t)), setTranscripts: (t: TranscriptRef[]) => (transcripts = t) };
+  return { store, job, calls, signedOut, calendarOut, failTranscripts: (e: Error | null) => (transcriptsFail = e), failCalendar: (e: Error) => (calendarFail = e), refusedBy, setNow: (t: string) => (now = Temporal.Instant.from(t)), setTranscripts: (t: TranscriptRef[]) => (transcripts = t) };
 }
 
 describe("meeting capture job (MC-1)", () => {
@@ -162,5 +165,26 @@ describe("meeting capture job (MC-1)", () => {
     t.setNow("2026-11-10T16:06:00Z");
     await t.job.run();
     expect((await t.store.occurrencesOf(s.id))[0]).toMatchObject({ transcriptFrom: "automatic", lastRead: { kind: "found", by: REV } });
+  });
+
+  it("records why the first person's sign-in couldn't read it: consent or not found, not just sign in again", async () => {
+    for (const [err, kind] of [[new HttpError(403), "consent"], [new HttpError(404), "missing"]] as const) {
+      const t = setup();
+      const s = await t.store.addSeries(series());
+      await t.job.run();
+      t.refusedBy.set(REG, err).set(REV, new HttpError(401));
+      t.setNow("2026-11-10T16:06:00Z");
+      await t.job.run();
+      expect((await t.store.occurrencesOf(s.id))[0]!.lastRead).toMatchObject({ kind, by: REG });
+    }
+  });
+
+  it("never lays a call out from its pattern when its series is gone (404)", async () => {
+    const t = setup();
+    const s = await t.store.addSeries(series());
+    t.calendarOut.add(REG);
+    t.failCalendar(new HttpError(404));
+    await t.job.run();
+    expect(await t.store.occurrencesOf(s.id)).toEqual([]);
   });
 });

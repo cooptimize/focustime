@@ -90,11 +90,12 @@ async function setup() {
   ];
   // MC-1c: the organization's clients (Admin › Clients' list), whatever the admin's own settings hold.
   const orgClients = ["contoso", "fabrikam", "Northwind"];
-  const ctxAs = (me: string, o: { admin?: boolean; write?: boolean; graph?: MeetingsClient | null; log?: (r: LogRecord) => void } = {}): MeetingContext => ({
+  const ctxAs = (me: string, o: { admin?: boolean; write?: boolean; graph?: MeetingsClient | null; log?: (r: LogRecord) => void; clientsDown?: boolean; usersFail?: boolean } = {}): MeetingContext => ({
     meetings, conversations, plan: planStoreOn(db.conn, { now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("UTC"), userId: me }),
     me: async () => me, isAdmin: async () => !!o.admin, config: async () => cfg.config, now: () => NOW, homeDomains: async () => ["cooptimize.example"],
-    graph: () => (o.graph === undefined ? graph : o.graph), users: async () => users,
-    client: async (k) => { const hit = orgClients.find((c) => c.toLowerCase() === k.trim().toLowerCase()); return hit ? { key: hit, name: hit } : null; }, leads: async () => [LEAD],
+    graph: () => (o.graph === undefined ? graph : o.graph), users: async () => { if (o.usersFail) throw new Error("db down"); return users; },
+    client: async (k) => {
+      if (o.clientsDown) return "unavailable"; const hit = orgClients.find((c) => c.toLowerCase() === k.trim().toLowerCase()); return hit ? { key: hit, name: hit } : null; }, leads: async () => [LEAD],
     capture: async (_c, k) => (k === "contoso" ? { clientName: "Contoso", internal: false, items: [aWorkItem({ id: 1201, title: "Rates export", type: "Feature", tier: "feature" })], model: buildProcessModel(aClientProcess()), directory: [aClientEntry({ key: "contoso", names: ["Contoso"], itemIds: [1201] }), aClientEntry({ key: "fabrikam", names: ["Fabrikam"], itemIds: [4410] })] } : null),
     ai: async () => ai,
     devops: async (action, input): Promise<ActionResponse> => {
@@ -287,5 +288,44 @@ describe("meeting registration fixes (MC-1c)", () => {
     const b = data<{ meeting: { source: string } }>(await act(ADMIN, "meeting.register", { clientKey: "fabrikam", role: "status", joinUrl: "https://teams.microsoft.com/l/meetup-join/19%3ameeting_other%40thread.v2/0" }, { admin: true, graph: { ...g, seriesByJoinUrl: async () => ({ ...mates, eventId: "E-mate2", joinUrl: "https://teams.microsoft.com/l/meetup-join/19%3ameeting_other%40thread.v2/0" }) } as unknown as MeetingsClient })).meeting;
     expect(b.source).toBe("automatic");
   });
-});
 
+  // The review pass's findings.
+  it("fails closed when the client list can't be read, never falling back to the admin's settings", async () => {
+    const { act } = await setup();
+    for (const action of ["meeting.list", "meeting.candidates"] as const) expect(await act(ADMIN, action, { clientKey: "contoso" }, { admin: true, clientsDown: true })).toMatchObject({ ok: false, status: 503, error: /couldn't read the client list/ });
+  });
+
+  it("refuses a non-admin before looking up the client", async () => {
+    const { act } = await setup();
+    for (const action of ["meeting.list", "meeting.candidates"] as const) expect(await act(LEAD, action, { clientKey: "tailspin" })).toMatchObject({ ok: false, status: 403 });
+    expect(await act(LEAD, "meeting.register", { clientKey: "tailspin", role: "status", eventId: "E-contoso" })).toMatchObject({ ok: false, status: 403 });
+  });
+
+  it("never answers bad request for an unexpected failure", async () => {
+    const { act } = await setup();
+    const r = await act(ADMIN, "meeting.list", { clientKey: "contoso" }, { admin: true, usersFail: true });
+    expect(r).toMatchObject({ ok: false, status: 500, code: "failed" });
+    expect(!r.ok && r.error).toMatch(/FocusTime couldn't finish that/);
+  });
+
+  it("asks a signed-out admin who pasted a link to sign in, or for the pattern", async () => {
+    const { act } = await setup();
+    const r = await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", joinUrl: JOIN }, { admin: true, graph: null });
+    expect(r).toMatchObject({ ok: false, status: 422, code: "signin" });
+    expect(!r.ok && r.error).toMatch(/^Sign in with Microsoft again.*weekday, start time and length/);
+  });
+
+  it("refuses the same call registered again, however the link was copied, and hides it from another admin's candidates", async () => {
+    const { act, meetings, graph, candidate } = await setup();
+    data(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true }));
+    const variant = JOIN.replace("%3a", "%3A") + "?context=%7b%22Tid%22%7d";
+    expect(await act(LEAD, "meeting.register", { clientKey: "contoso", role: "status", joinUrl: variant, weekday: 2, start: "10:00", minutes: 60 }, { admin: true })).toMatchObject({ ok: false, status: 409, error: "That meeting is already registered" });
+    // Another admin's own copy of the series has another event id.
+    const theirs = { ...graph, seriesOnMyCalendar: async () => [candidate({ eventId: "E-their-copy" })] } as unknown as MeetingsClient;
+    expect(data<{ candidates: unknown[] }>(await act(LEAD, "meeting.candidates", { clientKey: "contoso" }, { admin: true, graph: theirs })).candidates).toEqual([]);
+    // Two admins at once: the store refuses the second inside its transaction.
+    const base = { clientKey: "fabrikam", name: "x", role: "status" as const, source: "upload" as const, detected: "upload" as const, organizer: "unknown" as const, joinUrl: CLIENT_HOSTED, eventId: null, registrantId: ADMIN, weekday: 4, start: "14:00", minutes: 30, zone: "UTC", interval: 1, reviewers: [ADMIN], attendees: [] };
+    const both = await Promise.allSettled([meetings.addSeries(base), meetings.addSeries({ ...base, registrantId: LEAD, joinUrl: CLIENT_HOSTED.toUpperCase().replace("HTTPS://TEAMS.MICROSOFT.COM", "https://teams.microsoft.com") })]);
+    expect(both.map((x) => x.status).sort()).toEqual(["fulfilled", "rejected"]);
+  });
+});

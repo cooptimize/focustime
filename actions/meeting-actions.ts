@@ -12,7 +12,7 @@ import type { AiService } from "../ai/service.ts";
 import { AI_MESSAGES } from "../ai/types.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
-import { attendeeIds, canConfirm, defaultReviewers, detectSource, lastReadLine, MEETING_ROLES, nudgesFor, proposalOrder, ROLE_LABEL, type MeetingRole, type MeetingSeries, type Occurrence, type ProposalBody, type TranscriptSource } from "../plan/meetings.ts";
+import { attendeeIds, canConfirm, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, nudgesFor, proposalOrder, ROLE_LABEL, type MeetingRole, type MeetingSeries, type Occurrence, type ProposalBody, type TranscriptSource } from "../plan/meetings.ts";
 import { levelOfType, type ProcessModel } from "../plan/process.ts";
 import { TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
 import { graphFailureOf, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
@@ -52,9 +52,9 @@ export type MeetingContext = {
   /**
    * MC-1c: a client in the organization's list (the one Admin › Clients shows, clientAccounts()), matched the way the
    * rest of the app matches keys (case-insensitive), as its own key and name; null for anything that isn't a client.
-   * Never the admin's personal client settings.
+   * Never the admin's personal client settings. "unavailable" when the list can't be read now (it fails closed).
    */
-  client: (clientKey: string) => Promise<{ key: string; name: string } | null>;
+  client: (clientKey: string) => Promise<{ key: string; name: string } | null | "unavailable">;
   /** The client's leads' user ids (Dataverse's with admins' overrides). */
   leads: (clientKey: string) => Promise<string[]>;
   capture: (cfg: AppConfig, clientKey: string) => Promise<CaptureContext | null>;
@@ -112,10 +112,10 @@ function whenOf(s: Pick<MeetingSeries, "weekday" | "start" | "minutes" | "interv
   return `${s.interval > 1 ? `Every ${s.interval} weeks on ${WEEKDAYS[s.weekday]}` : WEEKDAYS[s.weekday]} ${t(start)} to ${t(start + s.minutes)}`;
 }
 
-function viewOf(s: MeetingSeries, cfg: AppConfig, users: readonly MeetingUser[], me: string): SeriesView {
+function viewOf(s: MeetingSeries, clientName: string, users: readonly MeetingUser[], me: string): SeriesView {
   const name = (uid: string) => users.find((u) => lower(u.id) === lower(uid))?.name ?? "A former teammate";
   return {
-    id: s.id, clientKey: s.clientKey, clientName: cfg.clientSettings[s.clientKey]?.name ?? s.clientKey, name: s.name, role: s.role, roleLabel: ROLE_LABEL[s.role], source: s.source, detected: s.detected, organizer: s.organizer,
+    id: s.id, clientKey: s.clientKey, clientName, name: s.name, role: s.role, roleLabel: ROLE_LABEL[s.role], source: s.source, detected: s.detected, organizer: s.organizer,
     when: whenOf(s), weekday: s.weekday, start: s.start, minutes: s.minutes, zone: s.zone, reviewers: s.reviewers.map((r) => ({ id: r, name: name(r) })), attendees: s.attendees.length,
     mine: { review: s.reviewers.some((r) => lower(r) === lower(me)), attend: s.attendees.some((a) => lower(a) === lower(me)) },
   };
@@ -124,6 +124,23 @@ function viewOf(s: MeetingSeries, cfg: AppConfig, users: readonly MeetingUser[],
 // MC-1c: a Graph meeting call that failed, in plain words with a next step, never "bad request". `code` lets the
 // form answer it (Sign in again for "signin"; the pattern fields for a pasted link).
 const NOT_A_CLIENT = "That isn't one of FocusTime's clients";
+const NO_CLIENT_LIST = "FocusTime couldn't read the client list just now. Try again in a minute";
+/** MC-1c: the organization's name for each client key (the key itself when the list can't say). */
+async function namesOf(ctx: MeetingContext, keys: readonly string[]): Promise<(k: string) => string> {
+  const m = new Map<string, string>();
+  for (const k of new Set(keys)) {
+    const c = await ctx.client(k).catch(() => null);
+    m.set(k, c && c !== "unavailable" ? c.name : k);
+  }
+  return (k) => m.get(k) ?? k;
+}
+/** The organization's client for a key, or the refusal (not a client: 404; the list can't be read: 503). */
+async function clientOf(ctx: MeetingContext, key: string): Promise<{ key: string; name: string } | ActionResponse> {
+  const c = await ctx.client(key);
+  if (c === "unavailable") return { ok: false, status: 503, error: NO_CLIENT_LIST, code: "busy" };
+  return c ?? bad(NOT_A_CLIENT, 404);
+}
+const isRefusal = (x: unknown): x is ActionResponse => typeof x === "object" && x !== null && "ok" in x;
 export const GRAPH_WORDS: Record<Exclude<GraphFailure, "missing">, { status: number; error: string }> = {
   signin: { status: 409, error: "Sign in with Microsoft again to see your calendar's meetings" },
   consent: { status: 403, error: "Microsoft refused FocusTime access to your calendar (Calendars.ReadWrite). A Cooptimize admin grants it once for everyone in the Entra admin center" },
@@ -157,37 +174,38 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         // Admin › Clients › <client> › Meetings: the client's registered calls (admins only; no transcripts here).
         const o = obj(input, ["clientKey"]);
         if (!(await ctx.isAdmin())) return bad("Only FocusTime admins register meetings", 403);
-        const client = await ctx.client(text(o.clientKey, "clientKey", 100)!);
-        if (!client) return bad(NOT_A_CLIENT, 404);
+        const client = await clientOf(ctx, text(o.clientKey, "clientKey", 100)!);
+        if (isRefusal(client)) return client;
         const users = await ctx.users();
         // The reviewer picker's people: FocusTime users by name (ids for the picker, never an address).
-        const nameOf = (uid: string) => users.find((u) => lower(u.id) === lower(uid))?.name ?? "A former teammate";
+        const nameOf = (uid: string) => users.find((u) => lower(u.id) === lower(uid))?.name ?? null;
         const from = Temporal.Instant.from(ctx.now()).subtract({ hours: 24 * 21 }).toZonedDateTimeISO("UTC").toPlainDate().toString();
-        const meetings = await Promise.all((await store.seriesOf(client.key)).map(async (s) => ({ ...viewOf(s, cfg, users, me), lastRead: lastReadLine(s, await store.occurrencesOf(s.id, { from }), ctx.now(), userZone(cfg), nameOf) })));
+        const meetings = await Promise.all((await store.seriesOf(client.key)).map(async (s) => ({ ...viewOf(s, client.name, users, me), lastRead: lastReadLine(s, await store.occurrencesOf(s.id, { from }), ctx.now(), userZone(cfg), nameOf) })));
         return { ok: true, data: { meetings, people: users.map((u) => ({ id: u.id.toLowerCase(), name: u.name })).sort((a, b) => a.name.localeCompare(b.name)) } };
       }
       case "meeting.candidates": {
         // My recurring online meetings with people from outside Cooptimize, the client's name first.
         const o = obj(input, ["clientKey"]);
         if (!(await ctx.isAdmin())) return bad("Only FocusTime admins register meetings", 403);
-        const client = await ctx.client(text(o.clientKey, "clientKey", 100)!);
-        if (!client) return bad(NOT_A_CLIENT, 404);
+        const client = await clientOf(ctx, text(o.clientKey, "clientKey", 100)!);
+        if (isRefusal(client)) return client;
         const g = ctx.graph(cfg);
         if (!g) return { ok: false, status: 409, error: GRAPH_WORDS.signin.error, code: "signin" };
         const names = [client.key, client.name].filter(Boolean).map(lower);
         const zone = userZone(cfg);
         let all: SeriesCandidate[];
         try {
-          all = await g.seriesOnMyCalendar(zone);
+          all = await g.seriesOnMyCalendar(zone, ctx.now());
         } catch (e) {
           const p = graphProblem(ctx, e);
           if (p) return p;
           throw e;
         }
-        const taken = new Set((await store.allSeries()).map((s) => s.eventId).filter(Boolean));
+        // Taken by any admin: by join link (event ids are per mailbox, so another admin's registration has another id).
+        const taken = new Set((await store.allSeries()).map((s) => joinKey(s.joinUrl)));
         const home = await ctx.homeDomains();
         const rows = all
-          .filter((c) => !taken.has(c.eventId))
+          .filter((c) => !taken.has(joinKey(c.joinUrl)))
           .map((c) => ({ eventId: c.eventId, subject: c.subject, organizerName: c.organizerName, organizer: detectSource(c.organizerEmail, home).organizer, when: whenOf({ ...c }), outside: c.outside, match: names.some((n) => lower(c.subject).includes(n)) }))
           .sort((a, b) => Number(b.match) - Number(a.match) || a.subject.localeCompare(b.subject));
         return { ok: true, data: { candidates: rows } };
@@ -199,13 +217,14 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         const s = await store.series(id(o.seriesId, "seriesId"));
         if (!s || s.removedAt) return bad("No such meeting", 404);
         const users = await ctx.users();
+        const clientName = (await namesOf(ctx, [s.clientKey]))(s.clientKey);
         const reviewers = o.reviewers === undefined ? undefined : reviewerIds(o.reviewers, users);
         const role = o.role === undefined ? undefined : roleOf(o.role);
         const source = o.source === undefined ? undefined : sourceOf(o.source);
         // A client-hosted meeting is never read from Graph, whatever the override says (D: Upload only).
         if (source === "automatic" && s.organizer === "other") return bad("This meeting is organized outside Cooptimize, so its transcript can only be uploaded", 409);
         const next = await store.updateSeries(s.id, { ...(o.name !== undefined ? { name: text(o.name, "name", 200)! } : {}), ...(role ? { role } : {}), ...(reviewers ? { reviewers } : {}), ...(source ? { source } : {}) });
-        return { ok: true, data: { meeting: viewOf(next, cfg, users, me) } };
+        return { ok: true, data: { meeting: viewOf(next, clientName, users, me) } };
       }
       case "meeting.remove": {
         const o = obj(input, ["seriesId"]);
@@ -227,8 +246,9 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
           counts.set(o.id, { all: ps.length, open: ps.filter((p) => p.state === "open").length });
         }
         // The nudges (in-app and the Teams kind): ready to review, or a transcript to upload; once each by key.
-        const nudges = nudgesFor(me, mine, occs).map((n) => ({ ...n, clientName: cfg.clientSettings[n.clientKey]?.name ?? n.clientKey, dateLabel: Temporal.PlainDate.from(n.date).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" }) }));
-        return { ok: true, data: { meetings: mine.map((s) => viewOf(s, cfg, users, me)), occurrences: occs.map((o) => occView(o, counts.get(o.id))), nudges } };
+        const nameOf = await namesOf(ctx, mine.map((s) => s.clientKey));
+        const nudges = nudgesFor(me, mine, occs).map((n) => ({ ...n, clientName: nameOf(n.clientKey), dateLabel: Temporal.PlainDate.from(n.date).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" }) }));
+        return { ok: true, data: { meetings: mine.map((s) => viewOf(s, nameOf(s.clientKey), users, me)), occurrences: occs.map((o) => occView(o, counts.get(o.id))), nudges } };
       }
       case "meeting.review": return await review(ctx, store, cfg, me, input);
       case "meeting.edit": {
@@ -266,8 +286,12 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
   } catch (e) {
     if (e instanceof Invalid) return bad(e.message);
     if (e instanceof TranscriptError) return bad(e.message, 422);
-    if (e instanceof PlanError) return bad(e.message, /No such/.test(e.message) ? 404 : 403);
-    throw e;
+    if (e instanceof PlanError) return bad(e.message, /No such/.test(e.message) ? 404 : /already registered/.test(e.message) ? 409 : 403);
+    // MC-1c: never "bad request": anything else is said plainly and logged by its kind only.
+    const kind = graphFailureOf(e);
+    ctx.log({ source: "plan", op: "meeting_action_failed", kind: kind ?? (e instanceof Error ? e.name : "unknown") });
+    if (kind && kind !== "missing") return { ok: false, ...GRAPH_WORDS[kind === "refused" ? "refused" : kind], code: kind === "refused" ? "graph_refused" : kind };
+    return { ok: false, status: 500, error: "FocusTime couldn't finish that. Try again; if it keeps happening, a FocusTime admin can look in Admin › Status", code: "failed" };
   }
 }
 
@@ -293,8 +317,8 @@ function reviewerIds(v: unknown, users: readonly MeetingUser[]): string[] {
 async function register(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, input: unknown): Promise<ActionResponse> {
   const o = obj(input, ["clientKey", "role"], ["eventId", "joinUrl", "name", "reviewers", "source", "weekday", "start", "minutes"]);
   if (!(await ctx.isAdmin())) return bad("Only FocusTime admins register meetings", 403);
-  const client = await ctx.client(text(o.clientKey, "clientKey", 100)!);
-  if (!client) return bad(NOT_A_CLIENT, 404);
+  const client = await clientOf(ctx, text(o.clientKey, "clientKey", 100)!);
+  if (isRefusal(client)) return client;
   const clientKey = client.key;
   const role = roleOf(o.role);
   if ((o.eventId === undefined) === (o.joinUrl === undefined)) throw new Invalid("Pick a meeting from your calendar or paste its Teams join link");
@@ -322,6 +346,7 @@ async function register(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig
     if (!JOIN_URL.test(joinUrl)) throw new Invalid("Paste the meeting's Teams join link (https://teams.microsoft.com/l/meetup-join/…)");
     // Only what my own calendar shows of it: its event in the next 5 weeks, if it's there. When Microsoft can't be
     // asked, say why; with the pattern typed in, it registers from that alone (organizer unknown, so Upload).
+    if (!g && !hasPattern) return { ok: false, status: 422, error: `${GRAPH_WORDS.signin.error}. Or give its weekday, start time and length below to register it now; its transcript is then uploaded`, code: "signin" };
     if (g) {
       try {
         c = await g.seriesByJoinUrl(joinUrl, zone, ctx.now());
@@ -332,7 +357,8 @@ async function register(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig
       }
     }
   }
-  if ((await store.allSeries()).some((s) => s.joinUrl === joinUrl)) return bad("That meeting is already registered", 409);
+  const ALREADY = "That meeting is already registered";
+  if ((await store.allSeries()).some((s) => joinKey(s.joinUrl) === joinKey(joinUrl))) return bad(ALREADY, 409);
   // The pattern: from the calendar, else typed in (a pasted link with no event on my calendar).
   const weekday = c?.weekday ?? typed.weekday;
   const start = c?.start ?? typed.start;
@@ -349,7 +375,7 @@ async function register(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig
     joinUrl, eventId: c?.eventId ?? null, registrantId: me, weekday, start, minutes, zone: c?.zone ?? zone, interval: c?.interval ?? 1, reviewers, attendees,
   });
   ctx.log({ source: "plan", op: "meeting_registered", kind: source });
-  return { ok: true, data: { meeting: viewOf(s, cfg, users, me) } };
+  return { ok: true, data: { meeting: viewOf(s, client.name, users, me) } };
 }
 
 function edited(b: ProposalBody, o: Record<string, unknown>): ProposalBody {
@@ -377,7 +403,7 @@ async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, 
   return {
     ok: true,
     data: {
-      meeting: viewOf(r.series, cfg, users, me),
+      meeting: viewOf(r.series, (await namesOf(ctx, [r.series.clientKey]))(r.series.clientKey), users, me),
       occurrence: occView(r.o, { all: ps.length, open: ps.filter((p) => p.state === "open").length }),
       proposals: ps,
       transcript: lines ? { lines: lines.length, speakers: [...new Set(lines.map((l) => l.speaker))].length } : null,

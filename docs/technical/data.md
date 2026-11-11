@@ -65,7 +65,7 @@ Newer DevOps write kinds than the `op` column's CHECK are kept in `write_kind`, 
 | `chat_calls` | App | Yes | CW-1: calls in registered chats, from their call started and ended events: the call id, when it started and ended, who started it (a user id and tenant). Never the participants or anything said |
 | `conversations`, `conversation_messages`, `commitments`, `conversation_suggestions`, `conversation_merges`, `conversation_events`, `requests` | App | Yes | Conversations, their summaries and commitments |
 | `chat_messages`, `asks`, `dedupe_log` | User | Yes | The older per-person Requests rows (AP-1) |
-| `meeting_series`, `meeting_occurrences`, `meeting_transcripts`, `meeting_proposals` | App | Yes | Registered client calls, transcripts (30 days), proposals |
+| `meeting_series`, `meeting_occurrences`, `meeting_transcripts`, `meeting_proposals` | App | Yes | Registered client calls, transcripts (30 days), proposals; each occurrence's last look for its transcript (`last_read`: what was found and through whose sign-in, MC-1c) |
 
 ### Admin and team
 

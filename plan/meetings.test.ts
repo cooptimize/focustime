@@ -5,7 +5,7 @@ const series = (p: Partial<MeetingSeries> = {}): MeetingSeries => ({
   id: 1, clientKey: "contoso", name: "Contoso sync", role: "status", source: "automatic", detected: "automatic", organizer: "home", joinUrl: "https://teams.microsoft.com/l/meetup-join/x", eventId: "AAA", registrantId: "u1",
   weekday: 2, start: "10:00", minutes: 60, zone: "America/New_York", interval: 1, reviewers: ["u1", "u2"], attendees: ["u3"], onlineMeetingId: null, createdAt: "2026-11-02T15:00:00Z", removedAt: null, ...p,
 });
-const occ = (p: Partial<Occurrence> = {}): Occurrence => ({ id: 10, seriesId: 1, date: "2026-11-10", startAt: "2026-11-10T15:00:00Z", endAt: "2026-11-10T16:00:00Z", state: "ready", nextCheckAt: null, checks: 0, transcriptFrom: "automatic", transcriptAt: null, aiOutcome: "done", dismissedBy: null, reviewedBy: null, updatedAt: "2026-11-10T16:00:00Z", ...p });
+const occ = (p: Partial<Occurrence> = {}): Occurrence => ({ id: 10, seriesId: 1, date: "2026-11-10", startAt: "2026-11-10T15:00:00Z", endAt: "2026-11-10T16:00:00Z", state: "ready", nextCheckAt: null, checks: 0, transcriptFrom: "automatic", transcriptAt: null, aiOutcome: "done", dismissedBy: null, reviewedBy: null, updatedAt: "2026-11-10T16:00:00Z", lastRead: null, ...p });
 
 describe("meeting capture rules (MC-1)", () => {
   it("reads only registered (not removed) or FocusTime-scheduled meetings", () => {
@@ -71,9 +71,9 @@ describe("meeting capture rules (MC-1)", () => {
 });
 
 describe("the last-read line (MC-1c)", () => {
-  const S = { source: "automatic" as const, registrantId: "reg", weekday: 2, start: "10:00", minutes: 60, zone: "America/New_York", interval: 1, createdAt: "2026-11-01T12:00:00Z" };
+  const S: Pick<MeetingSeries, "source" | "registrantId" | "weekday" | "start" | "minutes" | "zone" | "interval" | "createdAt"> = { source: "automatic", registrantId: "reg", weekday: 2, start: "10:00", minutes: 60, zone: "America/New_York", interval: 1, createdAt: "2026-11-01T12:00:00Z" };
   const occ = (p: Partial<Occurrence> = {}): Occurrence => ({ id: 1, seriesId: 1, date: "2026-11-10", startAt: "2026-11-10T15:00:00Z", endAt: "2026-11-10T16:00:00Z", state: "waiting", nextCheckAt: null, checks: 0, transcriptFrom: null, transcriptAt: null, aiOutcome: null, dismissedBy: null, reviewedBy: null, lastRead: null, updatedAt: "2026-11-10T15:00:00Z", ...p });
-  const names = (id: string) => ({ reg: "Sam Admin", rev: "Kim Lead" })[id] ?? "A former teammate";
+  const names = (id: string) => ({ reg: "Sam Admin", rev: "Kim Lead" })[id] ?? null;
   const line = (o: Occurrence[], now: string, s: Partial<typeof S> = {}) => lastReadLine({ ...S, ...s }, o, now, "America/New_York", names);
 
   it("says when and through whose sign-in a transcript was read", () => {
@@ -92,5 +92,12 @@ describe("the last-read line (MC-1c)", () => {
 
   it("before the first call, names its day", () => {
     expect(line([], "2026-11-11T12:00:00Z")).toBe("Not read yet: the first call is Tue, Nov 17");
+  });
+
+  it("words consent, not found and a former teammate, and an old series without recent calls", () => {
+    expect(line([occ({ lastRead: { kind: "consent", by: "reg", at: "x" } })], "2026-11-10T16:30:00Z")).toBe("Nov 10 call: Microsoft refused Sam Admin's sign-in the transcript permission. A Cooptimize admin grants it once for everyone");
+    expect(line([occ({ lastRead: { kind: "missing", by: "rev", at: "x" } })], "2026-11-10T16:30:00Z")).toBe("Nov 10 call: Microsoft didn't find this call for Kim Lead. Check they're on its invite, or switch it to Upload");
+    expect(line([occ({ lastRead: { kind: "no_token", by: "gone", at: "x" } })], "2026-11-10T16:30:00Z")).toBe("Nov 10 call: a former teammate's sign-in was the one to read it. Change the reviewers");
+    expect(line([], "2026-12-30T12:00:00Z")).toBe("No call in the last 3 weeks. The next one is Tue, Jan 5");
   });
 });

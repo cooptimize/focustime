@@ -1335,12 +1335,14 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     graph: (cfg) => ctx.account?.(cfg)?.meetings ?? null,
     users: async () => (ctx.meetings ? ctx.meetings.users() : []),
     // MC-1c: the organization's clients (Admin › Clients' clientAccounts()), never the admin's own settings; keys match
-    // case-insensitively and come back as the organization's. Without the team runtime, the configured clients.
+    // case-insensitively and come back as the organization's. It fails closed: with the team runtime, a list that can't
+    // be read is "unavailable", never the admin's settings. Only without one (no team runtime) the configured clients.
     client: async (clientKey) => {
       const want = clientKey.trim().toLowerCase();
       if (!want) return null;
-      const ca = await clientsOf(ctx.org);
-      if (ca) {
+      if (ctx.org) {
+        const ca = await ctx.org.clientAccounts().catch(() => null);
+        if (!ca) return "unavailable";
         const key = ca.row(clientKey.trim())?.clientKey ?? ca.keys.find((k) => k.toLowerCase() === want) ?? null;
         return key && ca.isClient(key) ? { key, name: key } : null;
       }

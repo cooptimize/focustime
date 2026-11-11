@@ -59,10 +59,14 @@ export function meetingJob(d: MeetingJobDeps) {
       try {
         if (graphReadable(s) && s.eventId) {
           let done = false;
+          let why: string | null = null;
           // Only the registrant's calendar has the series' event id (event ids are per mailbox).
           for (const uid of [s.registrantId]) {
             const p = await who(uid);
-            if (!p?.graph) continue;
+            if (!p?.graph) {
+              why = "signin";
+              continue;
+            }
             try {
               const xs = await p.graph.instances(s.eventId, from.toString(), to.add({ days: 1 }).toString());
               for (const x of xs.filter((i) => !i.cancelled)) {
@@ -75,13 +79,15 @@ export function meetingJob(d: MeetingJobDeps) {
               break;
             } catch (e) {
               if (!refused(e)) throw e;
+              why = graphFailureOf(e);
             }
           }
           if (!done) {
             // MC-1c: the registrant's calendar can't be read (signed out, consent): lay the call out from its stored
-            // pattern so the other reviewers' sign-ins are still tried for the transcript.
-            d.log({ source: "plan", op: "meeting_layout", kind: "no_token" });
-            for (const x of occurrencesBetween(s, from.toString(), to.toString())) await d.store.ensureOccurrence(s.id, x.date, x.startAt, x.endAt, "waiting", nextCheck(x.endAt, now.toString()));
+            // pattern so the other reviewers' sign-ins are still tried for the transcript. Never when the series isn't
+            // there (404: deleted, ended or re-created), which would ask for uploads of calls that never happened.
+            d.log({ source: "plan", op: "meeting_layout", kind: why === "missing" ? "missing" : "no_token" });
+            if (why === "signin" || why === "consent") for (const x of occurrencesBetween(s, from.toString(), to.toString())) await d.store.ensureOccurrence(s.id, x.date, x.startAt, x.endAt, "waiting", nextCheck(x.endAt, now.toString()));
           }
         } else {
           for (const x of occurrencesBetween(s, from.toString(), to.toString())) {
@@ -108,9 +114,15 @@ export function meetingJob(d: MeetingJobDeps) {
       }
       let outcome: LastRead["kind"] = "no_token";
       let by: string | null = null;
+      // MC-1c: why each person's sign-in couldn't read it; the first one tried is what Admin's line says.
+      let first: { kind: "no_token" | "consent" | "missing"; by: string } | null = null;
+      const note = (kind: "no_token" | "consent" | "missing", uid: string) => void (first ??= { kind, by: uid });
       for (const uid of order(s)) {
         const p = await who(uid);
-        if (!p?.graph) continue;
+        if (!p?.graph) {
+          note("no_token", uid);
+          continue;
+        }
         try {
           let meetingId = s.onlineMeetingId;
           if (!meetingId) {
@@ -137,7 +149,11 @@ export function meetingJob(d: MeetingJobDeps) {
             outcome = "failed";
             break;
           }
-          if (refused(e)) continue;
+          if (refused(e)) {
+            const k = graphFailureOf(e);
+            note(k === "consent" ? "consent" : k === "missing" ? "missing" : "no_token", uid);
+            continue;
+          }
           by = uid;
           // MC-1c: throttled, Microsoft down or unreachable is "busy" (looked at again on schedule), not "no transcript".
           outcome = e instanceof TranscriptError ? "failed" : graphFailureOf(e) === "busy" ? "busy" : "not_yet";
@@ -146,7 +162,8 @@ export function meetingJob(d: MeetingJobDeps) {
         }
       }
       // Who has to sign in again when nobody's sign-in could: the registrant (theirs is tried first).
-      if (outcome !== "found") await d.store.updateOccurrence(occ.id, { lastRead: { kind: outcome, by: outcome === "no_token" ? s.registrantId : by, at: now.toString() } });
+      if (outcome === "no_token" && first) await d.store.updateOccurrence(occ.id, { lastRead: { kind: first.kind, by: first.by, at: now.toString() } });
+      else if (outcome !== "found") await d.store.updateOccurrence(occ.id, { lastRead: { kind: outcome, by: outcome === "no_token" ? s.registrantId : by, at: now.toString() } });
       if (outcome === "not_yet" || outcome === "no_token" || outcome === "busy") {
         const next = nextCheck(occ.endAt, now.toString());
         await d.store.updateOccurrence(occ.id, next ? { state: "waiting", nextCheckAt: next, checks: occ.checks + 1 } : { state: "needs_upload", nextCheckAt: null, checks: occ.checks + 1 });

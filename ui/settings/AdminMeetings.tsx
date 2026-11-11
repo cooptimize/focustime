@@ -164,8 +164,8 @@ function RegisterForm({ clientKey, clientName, people, onDone, onCancel }: { cli
   return (
     <div className="dchat-card mtg-register" role="group" aria-label={`Register a meeting for ${clientName}`}>
       <span className="st-toggle" role="group" aria-label="Where it comes from">
-        <button type="button" className="ms-btn" aria-pressed={how === "calendar"} onClick={() => setHow("calendar")}>From my calendar</button>
-        <button type="button" className="ms-btn" aria-pressed={how === "link"} onClick={() => setHow("link")}>Paste a Teams link</button>
+        <button type="button" className="ms-btn" aria-pressed={how === "calendar"} onClick={() => (setHow("calendar"), setProblem(null))}>From my calendar</button>
+        <button type="button" className="ms-btn" aria-pressed={how === "link"} onClick={() => (setHow("link"), setProblem(null))}>Paste a Teams link</button>
       </span>
       {how === "calendar" ? (
         <div className="mtg-cands">

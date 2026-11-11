@@ -4,7 +4,7 @@
 // attend; confirming, uploading and dismissing need a reviewer. The unscoped methods are for the poll job, the admin
 // registration and the retention purge only. Every write runs in a transaction. Nothing here logs; transcript text
 // never leaves through here except to a viewer's own read and the AI pass.
-import { canConfirm, canView, OCCURRENCE_STATES, PROPOSAL_STATES, type MeetingSeries, type Occurrence, type OccurrenceState, type Proposal, type ProposalBody, type ProposalState, type Quote, type TranscriptSource } from "../plan/meetings.ts";
+import { canConfirm, canView, joinKey, OCCURRENCE_STATES, PROPOSAL_STATES, type MeetingSeries, type Occurrence, type OccurrenceState, type Proposal, type ProposalBody, type ProposalState, type Quote, type TranscriptSource } from "../plan/meetings.ts";
 import type { TranscriptLine } from "../plan/transcript.ts";
 import { PlanError } from "./plan-store.ts";
 import type { Conn, Param, Row } from "./sql/conn.ts";
@@ -99,8 +99,15 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
     async allSeries(): Promise<MeetingSeries[]> {
       return (await db.all("SELECT * FROM meeting_series WHERE removed_at IS NULL ORDER BY id")).map(toSeries);
     },
+    /**
+     * MC-1c: refused (PlanError "That meeting is already registered") when a live series has the same join link, checked
+     * inside the insert's transaction; on SQL Server the read holds an update lock on the table's live rows, so two
+     * admins registering one call at once can't both get through.
+     */
     async addSeries(x: NewSeries): Promise<MeetingSeries> {
       return db.tx(async () => {
+        const live = await db.all(`SELECT join_url FROM meeting_series${db.dialect === "sqlserver" ? " WITH (UPDLOCK, HOLDLOCK)" : ""} WHERE removed_at IS NULL`);
+        if (live.some((r) => joinKey(String(r.join_url)) === joinKey(x.joinUrl))) throw new PlanError("That meeting is already registered");
         const t = stamp();
         const r = await db.run(
           `INSERT INTO meeting_series (client_key, name, role, source, detected, organizer, join_url, event_id, registrant_id, weekday, start_time, minutes, zone, interval_weeks, reviewers_json, attendees_json, created_at, updated_at)
