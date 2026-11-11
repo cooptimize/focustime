@@ -1,14 +1,13 @@
 // WD-2: the block panel's model: what a block can take, whose work it lists, what's on it, the Add list's order, the
 // search with its two "New" rows, where the panel opens, and what Take off the plan does to each kind of to-do.
 import { describe, expect, it } from "vitest";
-import { addList, draftParents, meetingsWords, moveHighlight, onBlock, panelBlock, panelClient, panelMode, panelTitle, panelWhen, placedMap, RESULT_LIMIT, searchPanel, takeOffRule, takenOffWords, todoSort } from "./blockpanel.ts";
+import { assignedList, draftParents, hoverWords, looseDrafts, moreCount, moreList, riskLine, meetingsWords, moveHighlight, onBlock, panelBlock, panelClient, panelMode, panelTitle, panelWhen, placedMap, RESULT_LIMIT, searchPanel, takeOffRule, takenOffWords, todoSort } from "./blockpanel.ts";
 import type { BlockAt } from "./addwork.ts";
 import type { DraftStory, Pick } from "./types.ts";
 import type { WorkItem } from "../week/types.ts";
 
 const item = (id: number, over: Partial<WorkItem> = {}): WorkItem => ({ id, title: `Item ${id}`, type: "User Story", state: "Active", stateCategory: "InProgress", level: "story", order: id, parentId: null, changedAt: "2026-11-01T00:00:00Z", url: `https://dev.azure.com/contoso/p/_workitems/edit/${id}`, ...over }) as WorkItem;
 const feature = (id: number, over: Partial<WorkItem> = {}) => item(id, { type: "Feature", level: "portfolio", title: `Feature ${id}`, ...over });
-const ref = (itemId: number, clientKey = "contoso", over: Record<string, unknown> = {}) => ({ clientKey, itemId, title: `Feature ${itemId}`, url: null, slots: [], level: "feature" as const, ...over });
 const pick = (id: number, over: Partial<Pick> = {}): Pick => ({ id, date: "2026-11-11", half: "AM", clientKey: "contoso", kind: "item", itemId: 100 + id, draftId: null, title: `To-do ${id}`, itemType: "User Story", itemUrl: null, size: "M", status: "planned", carriedFrom: null, carriedFromDate: null, notes: null, followUpId: null, position: id, createdAt: "", updatedAt: "", ...over });
 const draft = (id: number, over: Partial<DraftStory> = {}): DraftStory => ({ id, clientKey: "contoso", parentItemId: null, title: `Draft ${id}`, size: "M", level: "story", createdAt: "", ...over });
 const promise = (id: number, clientKey: string | null = "contoso", what = `Promise ${id}`) => ({ id, clientKey, due: null, openedAt: "2026-11-01T00:00:00Z", what, who: "Dana", hasWho: true });
@@ -64,40 +63,73 @@ describe("on this block", () => {
   });
 });
 
-describe("the Add list before typing", () => {
-  const week = [ref(2), ref(1), ref(3), ref(9, "fabrikam")];
-  const weekPicks = [pick(1, { itemId: 11 }), pick(2, { itemId: 12, date: "2026-11-12", half: "PM" }), pick(3, { itemId: 99, status: "dropped" })];
-  const list = addList({ clientKey: "contoso", date: AT.date, half: AT.half, work, week, followUps: [promise(1), promise(2, "fabrikam")], drafts: [draft(1, { parentItemId: 1 }), draft(2), draft(3, { clientKey: "fabrikam" })], weekPicks });
-  it("this week's features first, in the week list's order, each with its stories and how many are on", () => {
-    expect(list.features.map((f) => f.row.ref.itemId)).toEqual([2, 1, 3]);
-    const f1 = list.features.find((f) => f.row.ref.itemId === 1)!;
-    // Stories 11, 12, 13 (14 is resolved) and one draft: 11 and 12 are on a block this week.
-    expect(f1.row.stories.map((x) => x.id)).toEqual([11, 12, 13]);
-    expect(f1.label).toBe("2 of 4 on");
-    expect(list.features.find((f) => f.row.ref.itemId === 2)!.label).toBe("0 of 1 on");
-    // A feature with no stories asks to be broken down and has no count.
-    expect(list.features.find((f) => f.row.ref.itemId === 3)!.row.breakDown).toBe(true);
-    expect(list.features.find((f) => f.row.ref.itemId === 3)!.label).toBeNull();
+describe("Assigned to you", () => {
+  // Feature 1 is mine (stories 11, 12 mine; 13 a teammate's; 14 mine but resolved). Feature 2 is Dana's, with one
+  // story of mine (21). Feature 3 is mine with no stories. Story 31 is mine with no feature. Feature 4 is mine, closed.
+  const mineWork = {
+    items: [
+      feature(1, { assignedToMe: true, order: 30, targetDate: "2026-12-01" }),
+      item(11, { parentId: 1, assignedToMe: true, order: 31 }),
+      item(12, { parentId: 1, assignedToMe: true, order: 32 }),
+      item(14, { parentId: 1, assignedToMe: true, order: 33, stateCategory: "Resolved" }),
+      item(21, { parentId: 2, assignedToMe: true, order: 10, targetDate: "2026-11-20" }),
+      feature(3, { assignedToMe: true, order: 50 }),
+      item(31, { assignedToMe: true, order: 5 }),
+      feature(4, { assignedToMe: true, order: 1, stateCategory: "Completed" }),
+    ],
+    children: [item(13, { parentId: 1, assignedToMe: false, assignedTo: "Dana Morales", order: 34 })],
+    parents: [feature(2, { assignedToMe: false, assignedTo: "Dana Morales", order: 90, targetDate: "2026-11-15" })],
+  };
+  const base = { clientKey: "contoso", work: mineWork, drafts: [draft(1, { parentItemId: 1 }), draft(2), draft(3, { clientKey: "fabrikam", parentItemId: 1 })], weekPicks: [pick(1, { itemId: 11 })] };
+  const ids = (gs: ReturnType<typeof assignedList>) => gs.map((g) => [g.feature?.id ?? null, g.stories.map((x) => x.id)]);
+  it("my features and my stories, grouped by feature, in backlog order; a feature I don't own sits where my first story under it falls; No feature last", () => {
+    // Dana's feature 2 (order 90) sits at 10, where my story 21 falls: before my feature 1 (30) and 3 (50).
+    expect(ids(assignedList(base))).toEqual([[2, [21]], [1, [11, 12]], [3, []], [null, [31]]]);
   });
-  it("then my promises for this client, then the other work assigned to me (collapsed, with a count)", () => {
-    expect(list.promises.map((f) => f.id)).toEqual([1]);
-    expect(list.other.map((r) => r.item.id)).toEqual([31]);
-    expect(list.otherCount).toBe(1);
+  it("a story of mine under someone else's feature shows under that feature, which says it isn't mine", () => {
+    const g = assignedList(base).find((x) => x.feature?.id === 2)!;
+    expect(g).toMatchObject({ mine: false, breakDown: false });
+    expect(g.feature).toMatchObject({ title: "Feature 2", assignedTo: "Dana Morales" });
   });
-  it("another client's features, promises and drafts never show (GD-2)", () => {
-    expect(list.features.some((f) => f.row.ref.clientKey !== "contoso")).toBe(false);
-    expect(list.promises.some((f) => f.clientKey !== "contoso")).toBe(false);
-    expect(list.loose.map((d) => d.id)).toEqual([2]);
+  it("a feature's other open stories fold behind it; its drafts are this client's only", () => {
+    const g = assignedList(base).find((x) => x.feature?.id === 1)!;
+    expect(g.others.map((x) => x.id)).toEqual([13]);
+    expect(g.drafts.map((d) => d.id)).toEqual([1]);
+    // 11 is on a block this week: 1 of the 4 (two of mine, a teammate's, a draft).
+    expect(g).toMatchObject({ mine: true, on: 1, total: 4, label: "1 of 4 on" });
   });
-  it("a draft with no feature that is on a block isn't under To place", () => {
-    const placed = addList({ clientKey: "contoso", date: AT.date, half: AT.half, work, week, followUps: [], drafts: [draft(2)], weekPicks: [pick(9, { kind: "draft", itemId: null, draftId: 2 })] });
-    expect(placed.loose).toEqual([]);
+  it("a feature with nothing on this week has no count, unless it is on the week's list", () => {
+    expect(assignedList({ ...base, weekPicks: [] }).find((x) => x.feature?.id === 1)!.label).toBeNull();
+    expect(assignedList({ ...base, weekPicks: [], onWeek: new Set([1]) }).find((x) => x.feature?.id === 1)!.label).toBe("0 of 4 on");
   });
-  it("a new draft story goes under one of this week's features, or none yet", () => {
-    expect(draftParents(list.features).map((p) => p.id)).toEqual([2, 1, 3, null]);
+  it("a feature of mine with no stories asks to be broken down; one that isn't mine never does", () => {
+    expect(assignedList(base).find((x) => x.feature?.id === 3)).toMatchObject({ mine: true, breakDown: true, total: 0, label: null });
+  });
+  it("done, resolved and closed items are left out, and epics are never groups", () => {
+    const all = assignedList(base);
+    expect(all.some((g) => g.feature?.id === 4)).toBe(false);
+    expect(all.flatMap((g) => g.stories.map((x) => x.id))).not.toContain(14);
+    const epic = assignedList({ ...base, work: { ...mineWork, items: [...mineWork.items, feature(9, { assignedToMe: true, tier: "epic", order: 0 })] } });
+    expect(epic.some((g) => g.feature?.id === 9)).toBe(false);
+  });
+  it("sorted by target date: the earliest first, none last; a feature I don't own by my first story's date", () => {
+    // Story 21 targets Nov 20 (Dana's feature 2), my feature 1 Dec 1, feature 3 has none.
+    expect(ids(assignedList({ ...base, sort: "target" })).map(([f]) => f)).toEqual([2, 1, 3, null]);
+    const flipped = { ...mineWork, items: mineWork.items.map((x) => (x.id === 3 ? { ...x, targetDate: "2026-11-05" } : x)) };
+    expect(ids(assignedList({ ...base, work: flipped, sort: "target" })).map(([f]) => f)).toEqual([3, 2, 1, null]);
+    expect(ids(assignedList({ ...base, work: flipped, sort: "backlog" })).map(([f]) => f)).toEqual([2, 1, 3, null]);
+  });
+  it("no DevOps read is an empty list; a new draft story goes under a feature shown, or none yet", () => {
+    expect(assignedList({ ...base, work: undefined })).toEqual([]);
+    expect(draftParents(assignedList(base)).map((p) => p.id)).toEqual([2, 1, 3, null]);
     expect(draftParents([]).map((p) => p.title)).toEqual(["No feature yet"]);
   });
+  it("a draft with no feature that isn't on a block waits under To place (this client's only)", () => {
+    expect(looseDrafts("contoso", base.drafts, []).map((d) => d.id)).toEqual([2]);
+    expect(looseDrafts("contoso", base.drafts, [pick(9, { kind: "draft", itemId: null, draftId: 2 })])).toEqual([]);
+  });
   it("says where each thing is: on this block first, else its earliest block this week", () => {
+    const weekPicks = [pick(1, { itemId: 11 }), pick(2, { itemId: 12, date: "2026-11-12", half: "PM" }), pick(3, { itemId: 99, status: "dropped" })];
     const m = placedMap([...weekPicks, pick(7, { itemId: 12, date: "2026-11-11", half: "AM" })], AT);
     expect(m.get("icontoso:11")).toMatchObject({ here: true, pickId: 1 });
     expect(m.get("icontoso:12")).toMatchObject({ here: true, pickId: 7 });
@@ -109,11 +141,54 @@ describe("the Add list before typing", () => {
   });
 });
 
+describe("More in the client", () => {
+  const all = [
+    feature(1, { assignedToMe: true }),
+    feature(5, { order: 20, assignedTo: "Dana Morales" }),
+    item(51, { parentId: 5, order: 22 }),
+    item(52, { parentId: 5, order: 21 }),
+    item(53, { parentId: 5, stateCategory: "Completed" }),
+    feature(6, { order: 10 }),
+    feature(7, { order: 1, tier: "epic" }),
+    item(13, { parentId: 1, order: 3 }),
+    item(61, { order: 99 }),
+    item(11, { parentId: 1, assignedToMe: true }),
+  ];
+  it("everything else open, features in backlog order with their stories; what Assigned to you shows, mine and epics left out", () => {
+    const g = moreList(all, new Set([1, 11, 13]));
+    expect(g.map((x) => [x.feature?.id ?? null, x.stories.map((s) => s.id)])).toEqual([[6, []], [5, [52, 51]], [null, [61]]]);
+    expect(moreCount(g)).toBe(5);
+  });
+  it("a teammate's story under a feature in Assigned to you stays there, not here; by target date when asked", () => {
+    expect(moreList(all, new Set([1, 11])).flatMap((x) => x.stories.map((s) => s.id))).not.toContain(13);
+    const dated = all.map((x) => (x.id === 5 ? { ...x, targetDate: "2026-11-12" } : x));
+    expect(moreList(dated, new Set([1, 11, 13]), "target").map((x) => x.feature?.id ?? null)).toEqual([5, 6, null]);
+  });
+});
+
+describe("a row's hover and the header's status line", () => {
+  it("the hover has the type and number, state, target date and size", () => {
+    expect(hoverWords(item(11, { targetDate: "2026-11-20", size: 3 }))).toBe("User Story 11 · Active · target Nov 20 · size 3");
+    expect(hoverWords(item(12))).toBe("User Story 12 · Active · no target date · not sized");
+  });
+  it("one status line: the worst state and how many reasons; none with no risk", () => {
+    expect(riskLine([])).toBeNull();
+    expect(riskLine([{ severity: "watch", reason: "1h 30m of meetings" }])).toEqual({ severity: "watch", text: "Watch · 1 reason", reasons: ["1h 30m of meetings"] });
+    expect(riskLine([{ severity: "watch", reason: "b" }, { severity: "at_risk", reason: "a" }])).toEqual({ severity: "at_risk", text: "At risk · 2 reasons", reasons: ["a", "b"] });
+  });
+});
+
 describe("the search", () => {
   const base = { clientKey: "contoso", work, followUps: [promise(1, "contoso", "Send the export spec"), promise(2, "fabrikam", "Send the export spec")], drafts: [draft(2, { title: "Export button" }), draft(3, { clientKey: "fabrikam", title: "Export again" })] };
   it("empty text is no search (the Add list shows)", () => {
     expect(searchPanel(base, "")).toBeNull();
     expect(searchPanel(base, "   ")).toBeNull();
+  });
+  it("covers Assigned to you and More in the client, each item once", () => {
+    const more = [item(77, { title: "Export the ledger" }), item(11, { title: "Item 11", parentId: 1 })];
+    const r = searchPanel({ ...base, more }, "ledger")!;
+    expect(r.results.map((x) => x.key)).toEqual(["icontoso:77"]);
+    expect(searchPanel({ ...base, more }, "Item 11")!.results.map((x) => x.key)).toEqual(["icontoso:11"]);
   });
   it("matches this client's stories by title or number, its drafts and my promises for it; never another client's", () => {
     const s = searchPanel(base, "export")!;

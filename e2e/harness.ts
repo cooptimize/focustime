@@ -182,7 +182,7 @@ export async function timelineOn(page: Page, on = true): Promise<void> {
 
 /**
  * WD-2: the block panel keeps To place and You sent folded at the bottom (To place opens only from the notice's Review)
- * and Other work assigned to you folded in its Add list. Opens all three, once the panel has its sections.
+ * and More in <client> folded in its Add list. Opens all three, once the panel has its sections.
  */
 export async function unfoldAddWork(page: Page): Promise<void> {
   const panel = page.locator("aside.block-panel");

@@ -16,6 +16,7 @@ import { blockClient, isPickable } from "../plan/rules.ts";
 import { formatDuration } from "../week/format.ts";
 import { DevOpsWork } from "./work.ts";
 import { dayName } from "./PickReview.tsx";
+import { SelectField } from "./SelectField.tsx";
 
 const cap = (s: string) => `${s[0]!.toUpperCase()}${s.slice(1)}`;
 const live = (p: Pick) => p.status === "planned" || p.status === "done";
@@ -147,23 +148,9 @@ function WalkOn({ data, date, blocks, picks, act }: { data: WeekLoadData; date: 
         }
       }}
     >
-      {blocks.length > 1 && (
-        <select value={half} onChange={(e) => setHalf(e.target.value as Half)} aria-label="Block">
-          {blocks.map((s) => (
-            <option key={s.half} value={s.half}>
-              {halfName(s.half)}
-            </option>
-          ))}
-        </select>
-      )}
-      <select value={choice} onChange={(e) => setChoice(e.target.value)} aria-label="DevOps item">
-        <option value="">Typed intention</option>
-        {items.map((i) => (
-          <option key={i.id} value={i.id}>
-            #{i.id} {i.title}
-          </option>
-        ))}
-      </select>
+      {/* The app's own pickers (no browser select). */}
+      {blocks.length > 1 && <SelectField label="Block" value={half} options={blocks.map((sl) => ({ key: sl.half, label: halfName(sl.half) }))} onChange={(k) => setHalf(k as Half)} />}
+      <SelectField label="DevOps item" value={choice} options={[{ key: "", label: "Typed intention" }, ...items.map((i) => ({ key: String(i.id), label: `#${i.id} ${i.title}` }))]} onChange={setChoice} />
       {!choice && <input required maxLength={200} value={intention} placeholder="What walked in" onChange={(e) => setIntention(e.target.value)} aria-label="Intention" />}
       <button type="submit" className="mini primary">
         Add

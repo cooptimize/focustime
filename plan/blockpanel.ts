@@ -1,15 +1,15 @@
 // WD-2: the block panel's model, the one side panel for a block on Week and on Day. Pure: what the panel can do on
 // this block (add, or only tick and move on a past day, or nothing on a day off), whose work it lists, what is on the
-// block, the Add list before typing (this week's features first with their stories, then promises, then the other
-// work assigned to me), the search results with the two "New" rows, and what Take off the plan does to each kind of
+// block, the Add list before typing (Assigned to you: my features and stories grouped by feature; then More in the
+// client), the search results with the two "New" rows, and what Take off the plan does to each kind of
 // to-do. Every list is built for one client's key, so one client's items never show under another's heading (GD-2).
 import type { DraftStory, Pick as Todo } from "./types.ts";
 import type { Half, IsoDate, TypeLook, WorkItem } from "../week/types.ts";
-import { addSections, matches, type PriorityRow, type RestRow } from "./addpane.ts";
+import { matches } from "./addpane.ts";
+import { isOpen, typeNeedsBreakdown } from "./process.ts";
 import { blockWord, defaultAddBlock, roomWords, type BlockAt } from "./addwork.ts";
 import { blockClient, isPickable } from "./rules.ts";
 
-type Ref = { clientKey: string; itemId: number; title: string; url: string | null; slots: readonly { date: IsoDate; half: "AM" | "PM" }[]; level?: "feature" | "story"; done?: boolean; parentId?: number | null };
 type FollowLike = { id: number; clientKey: string | null; due: string | null; openedAt: string; what: string; who?: string | null; hasWho?: boolean };
 type PickLike = { id: number; date: IsoDate; half: Half; clientKey: string; itemId: number | null; draftId: number | null; followUpId: number | null; status: string };
 type WorkLike = { items: readonly WorkItem[]; children: readonly WorkItem[]; committed?: readonly WorkItem[]; types?: readonly TypeLook[] };
@@ -95,55 +95,138 @@ export function placedMap(weekPicks: readonly PickLike[], at: { date: IsoDate; h
   return out;
 }
 
-/** One feature in the Add list: its row (stories and drafts to add), and "2 of 3 on" (placed anywhere this week). */
-export type FeatureLine<R extends Ref> = { row: PriorityRow<R>; on: number; total: number; label: string | null };
+/** WD-2 follow-up: how the Add list is ordered: the project's backlog order, or by target date (none last). */
+export type ListSort = "backlog" | "target";
+type Ordered = Pick<WorkItem, "id" | "order"> & { targetDate?: IsoDate | null };
+const byBacklog = (a: Ordered, b: Ordered) => (a.order ?? Number.POSITIVE_INFINITY) - (b.order ?? Number.POSITIVE_INFINITY) || a.id - b.id;
+const byTarget = (a: Ordered, b: Ordered) => (a.targetDate ?? "9999").localeCompare(b.targetDate ?? "9999") || byBacklog(a, b);
+export const sorter = (sort: ListSort) => (sort === "target" ? byTarget : byBacklog);
+const open = (x: Pick<WorkItem, "stateCategory">) => isOpen(x.stateCategory);
 
-export type AddList<R extends Ref, F extends FollowLike> = {
-  /** This week's features for the client, in the week list's order, each with its stories. */
-  features: FeatureLine<R>[];
-  /** My open promises for the client, in due order (the caller passes them ordered). */
-  promises: F[];
-  /** "Other work assigned to you": what isn't under a feature on this week, grouped under its parent; collapsed. */
-  other: RestRow[];
-  otherCount: number;
-  /** Drafts with no feature that aren't on a block (a plain to-do taken off the plan is one): listed under To place. */
-  loose: DraftStory[];
+/**
+ * One group of "Assigned to you": a feature (mine, or someone else's that holds a story of mine) with my stories under
+ * it, its other open stories folded behind "N more in this feature", and its local drafts; or "No feature".
+ */
+export type AssignedGroup = {
+  /** Null: my stories with no feature. */
+  feature: WorkItem | null;
+  /** The feature is assigned to me (else it is here only because a story of mine is under it). */
+  mine: boolean;
+  /** My open stories under it, in the list's order. */
+  stories: WorkItem[];
+  /** Its other open stories (a teammate's or nobody's), folded. */
+  others: WorkItem[];
+  drafts: DraftStory[];
+  /** A feature of mine with no stories and no drafts, of a type that needs breaking down. */
+  breakDown: boolean;
+  /** "2 of 4 on": its stories and drafts on a block this week, when any is (or it is on the week's list). */
+  on: number;
+  total: number;
+  label: string | null;
 };
 
-export type AddInput<R extends Ref, F extends FollowLike> = {
+export type AssignedInput = {
   clientKey: string;
-  date: IsoDate;
-  half: Half;
-  work: WorkLike | undefined;
-  /** The week's list (any client), in list order. */
-  week: readonly R[];
-  followUps: readonly F[];
+  work: (WorkLike & { parents?: readonly WorkItem[] }) | undefined;
   drafts: readonly DraftStory[];
   /** The week's to-dos (any client). */
   weekPicks: readonly PickLike[];
+  /** Ids of the client's features on this week's list. */
+  onWeek?: ReadonlySet<number>;
+  sort?: ListSort;
 };
 
-/** The Add list before typing. Rows already on a block stay listed, so each can say where it is. */
-export function addList<R extends Ref, F extends FollowLike>(i: AddInput<R, F>): AddList<R, F> {
+/**
+ * "Assigned to you" for one client (GD-2: only that client's key): every open feature assigned to me and every open
+ * story assigned to me, grouped under its feature. A story of mine shows under its feature even when the feature isn't
+ * mine; one with no feature goes under "No feature", last. Features in the list's order (backlog, or target date); a
+ * feature I don't own sits where its first story of mine falls. Done, closed and removed items are left out; epics
+ * are never groups of their own.
+ */
+export function assignedList(i: AssignedInput): AssignedGroup[] {
+  const w = i.work;
+  if (!w) return [];
+  const cmp = sorter(i.sort ?? "backlog");
+  const pool = [...new Map([...w.items, ...w.children, ...(w.committed ?? []), ...(w.parents ?? [])].map((x) => [x.id, x])).values()];
+  const byId = new Map(pool.map((x) => [x.id, x]));
   const placed = new Set(i.weekPicks.filter(live).map(keyOf).filter((k): k is string => !!k));
-  // Nothing is hidden for being on the day: every row shows, with where it is.
-  const s = addSections<R, F>({ clientKey: i.clientKey, date: i.date, half: i.half, work: i.work, week: i.week, followUps: i.followUps, drafts: i.drafts, picked: new Set() });
-  const features = s.priorities.map((row): FeatureLine<R> => {
-    if (row.level === "story") return { row, on: 0, total: 0, label: null };
-    const on = row.stories.filter((x) => placed.has(`i${i.clientKey}:${x.id}`)).length + row.drafts.filter((d) => placed.has(`d${d.id}`)).length;
-    const total = row.stories.length + row.drafts.length;
-    return { row, on, total, label: total ? `${on} of ${total} on` : null };
-  });
-  // A story under a listed parent shows there once, not again on its own.
-  const grouped = new Set(s.rest.flatMap((r) => r.kids.map((k) => k.id)));
-  const seen = new Set<number>();
-  const other = s.rest.flatMap((r) => {
-    if (!r.kids.length) return grouped.has(r.item.id) ? [] : [r];
-    const kids = r.kids.filter((k) => !seen.has(k.id) && (seen.add(k.id), true));
-    return kids.length ? [{ ...r, kids }] : [];
-  });
-  const loose = i.drafts.filter((d) => d.clientKey === i.clientKey && d.parentItemId === null && d.level === "story" && d.devopsId == null && !placed.has(`d${d.id}`));
-  return { features, promises: s.followUps, other, otherCount: other.reduce((n, r) => n + (r.kids.length || 1), 0), loose };
+  const isFeature = (x: WorkItem) => x.level === "portfolio" && x.tier !== "epic";
+  const myStories = pool.filter((x) => x.assignedToMe && isPickable(x) && open(x));
+  const myFeatures = pool.filter((x) => x.assignedToMe && isFeature(x) && open(x));
+  // A story's group: its parent when we know it and it isn't a story itself; else none.
+  const parentOf = (x: WorkItem) => {
+    const p = x.parentId != null ? byId.get(x.parentId) : undefined;
+    return p && p.level === "portfolio" ? p : null;
+  };
+  const under = new Map<number | null, WorkItem[]>();
+  for (const st of myStories) {
+    const k = parentOf(st)?.id ?? null;
+    under.set(k, [...(under.get(k) ?? []), st]);
+  }
+  const ids = new Set<number>([...myFeatures.map((f) => f.id), ...[...under.keys()].filter((k): k is number => k !== null)]);
+  const group = (id: number): AssignedGroup & { key: Ordered } => {
+    const feature = byId.get(id)!;
+    const mine = !!feature.assignedToMe && isFeature(feature) && open(feature);
+    const stories = [...(under.get(id) ?? [])].sort(cmp);
+    const others = pool.filter((x) => x.parentId === id && !x.assignedToMe && isPickable(x) && open(x)).sort(cmp);
+    const drafts = i.drafts.filter((d) => d.clientKey === i.clientKey && d.parentItemId === id && d.level === "story" && d.devopsId == null);
+    const all = [...stories, ...others];
+    const on = all.filter((x) => placed.has(`i${i.clientKey}:${x.id}`)).length + drafts.filter((d) => placed.has(`d${d.id}`)).length;
+    const total = all.length + drafts.length;
+    return {
+      feature, mine, stories, others, drafts,
+      breakDown: mine && total === 0 && typeNeedsBreakdown(w.types, feature.type),
+      on, total,
+      label: total > 0 && (on > 0 || !!i.onWeek?.has(id)) ? `${on} of ${total} on` : null,
+      // Mine: where the feature itself falls. Someone else's: where my first story under it falls.
+      key: mine ? feature : (stories[0] ?? feature),
+    };
+  };
+  const groups: AssignedGroup[] = [...ids].map(group).sort((a, b) => cmp(a.key, b.key)).map(({ key: _key, ...g }) => g);
+  const loose = [...(under.get(null) ?? [])].sort(cmp);
+  if (loose.length) groups.push({ feature: null, mine: false, stories: loose, others: [], drafts: [], breakDown: false, on: 0, total: loose.length, label: null });
+  return groups;
+}
+
+/** The client's drafts with no feature that aren't on a block (a plain to-do taken off the plan is one): To place. */
+export function looseDrafts(clientKey: string, drafts: readonly DraftStory[], weekPicks: readonly PickLike[]): DraftStory[] {
+  const placed = new Set(weekPicks.filter(live).map(keyOf).filter((k): k is string => !!k));
+  return drafts.filter((d) => d.clientKey === clientKey && d.parentItemId === null && d.level === "story" && d.devopsId == null && !placed.has(`d${d.id}`));
+}
+
+/** One group of "More in <client>": a feature that isn't in Assigned to you with its open stories, or loose stories. */
+export type MoreGroup = { feature: WorkItem | null; stories: WorkItem[] };
+
+/**
+ * "More in <client>": everything else open in the client's DevOps (other people's features and stories), in the
+ * list's order. `all` is the client's open work as Ahead reads it; what Assigned to you already shows is left out
+ * (`shown`), as are epics. A story whose feature is in Assigned to you sits there (behind "N more in this feature").
+ */
+export function moreList(all: readonly WorkItem[], shown: ReadonlySet<number>, sort: ListSort = "backlog"): MoreGroup[] {
+  const cmp = sorter(sort);
+  const openOnes = all.filter((x) => open(x) && !shown.has(x.id) && !x.assignedToMe);
+  const features = openOnes.filter((x) => x.level === "portfolio" && x.tier !== "epic").sort(cmp);
+  const stories = openOnes.filter((x) => isPickable(x));
+  const fid = new Set(features.map((f) => f.id));
+  const groups: MoreGroup[] = features.map((feature) => ({ feature, stories: stories.filter((x) => x.parentId === feature.id).sort(cmp) }));
+  const loose = stories.filter((x) => x.parentId == null || (!fid.has(x.parentId) && !shown.has(x.parentId))).sort(cmp);
+  if (loose.length) groups.push({ feature: null, stories: loose });
+  return groups;
+}
+export const moreCount = (groups: readonly MoreGroup[]) => groups.reduce((n, g) => n + (g.feature ? 1 : 0) + g.stories.length, 0);
+
+/** A row's hover: its type and number, state, target date and size, joined with " · " (what the row doesn't spell out). */
+export function hoverWords(x: Pick<WorkItem, "type" | "id" | "state"> & { targetDate?: IsoDate | null; size?: number | null; assignedTo?: string | null }, o: { sizeName?: string } = {}): string {
+  const target = x.targetDate ? `target ${Temporal.PlainDate.from(x.targetDate).toLocaleString("en-US", { month: "short", day: "numeric" })}` : "no target date";
+  return [`${x.type} ${x.id}`, x.state, target, x.size != null ? `${o.sizeName ?? "size"} ${x.size}` : "not sized"].join(" · ");
+}
+
+/** The header's one status line: "At risk · 2 reasons" (the worst state and how many reasons), or null with none. */
+export function riskLine(risks: readonly { severity: string; reason: string }[]): { text: string; severity: "at_risk" | "watch"; reasons: string[] } | null {
+  if (!risks.length) return null;
+  const severity = risks.some((r) => r.severity === "at_risk") ? "at_risk" : "watch";
+  const ordered = [...risks].sort((a, b) => Number(b.severity === "at_risk") - Number(a.severity === "at_risk"));
+  return { severity, text: `${severity === "at_risk" ? "At risk" : "Watch"} · ${risks.length} ${risks.length === 1 ? "reason" : "reasons"}`, reasons: ordered.map((r) => r.reason) };
 }
 
 /** One search result: a story (with its parent's title when it has one), a draft or a promise of this client. */
@@ -170,11 +253,12 @@ export type SearchModel<F extends FollowLike> = {
  * While typing: this client's DevOps work, drafts and my promises for it that match, then "New to-do: <text>" and
  * "New draft story: <text>". Empty text: null (the Add list shows instead).
  */
-export function searchPanel<F extends FollowLike>(i: { clientKey: string; work: WorkLike | undefined; followUps: readonly F[]; drafts: readonly DraftStory[] }, query: string): SearchModel<F> | null {
+export function searchPanel<F extends FollowLike>(i: { clientKey: string; work: (WorkLike & { parents?: readonly WorkItem[] }) | undefined; followUps: readonly F[]; drafts: readonly DraftStory[]; /** "More in <client>": the rest of the client's open work, once read. */ more?: readonly WorkItem[] }, query: string): SearchModel<F> | null {
   const text = query.trim();
   if (!text) return null;
-  const pool = i.work ? [...new Map([...i.work.items, ...i.work.children].map((x) => [x.id, x])).values()] : [];
-  const title = new Map([...pool, ...(i.work?.committed ?? [])].map((x) => [x.id, x.title]));
+  // Assigned to you first, then the rest of the client's work; each item once.
+  const pool = [...new Map([...(i.work ? [...i.work.items, ...i.work.children] : []), ...(i.more ?? [])].map((x) => [x.id, x] as const).reverse()).values()].reverse();
+  const title = new Map([...pool, ...(i.work?.committed ?? []), ...(i.work?.parents ?? []), ...(i.more ?? [])].map((x) => [x.id, x.title]));
   const q = text.toLowerCase().replace(/^#/, "");
   // "#" alone (or "#12") is a number search: it matches work items only, never every draft and promise.
   const words = !text.startsWith("#") && q.length > 0;
@@ -201,9 +285,9 @@ export function moveHighlight(at: number, dir: 1 | -1, rows: number): number {
   return Math.max(0, Math.min(rows - 1, at + dir));
 }
 
-/** The features a new draft story can go under: the client's features on this week, then "No feature yet". */
-export function draftParents<R extends Ref>(features: readonly FeatureLine<R>[]): { id: number | null; title: string }[] {
-  return [...features.filter((f) => f.row.level === "feature" && f.row.ref.itemId > 0 && f.row.item).map((f) => ({ id: f.row.ref.itemId as number | null, title: f.row.ref.title })), { id: null, title: "No feature yet" }];
+/** The features a new draft story can go under: the ones in Assigned to you, then "No feature yet". */
+export function draftParents(groups: readonly Pick<AssignedGroup, "feature">[]): { id: number | null; title: string }[] {
+  return [...groups.filter((g) => g.feature).map((g) => ({ id: g.feature!.id as number | null, title: g.feature!.title })), { id: null, title: "No feature yet" }];
 }
 
 /** The kinds of to-do Take off the plan tells apart. */

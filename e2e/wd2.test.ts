@@ -409,6 +409,80 @@ describe.skipIf(!CHROMIUM)("WD-2: one panel, one Day (browser, demo)", () => {
     await page.close();
   }, T);
 
+  it("follow-up: More in <client> opens the rest of the client's open work; a teammate's story there adds to the block", async () => {
+    const { page, errors } = await freshPage(h);
+    // A teammate's feature with one story, in the session's own demo DevOps.
+    const fid = (await call(page, "demo.devops_change", { clientKey: "Northwind", change: { create: { type: "Feature", title: "Gift cards", parent: 1100, assignee: null } } })).data.id as unknown as number;
+    expect(fid).toBeGreaterThan(0);
+    expect((await call(page, "demo.devops_change", { clientKey: "Northwind", change: { create: { type: "User Story", title: "Gift card balance page", parent: fid, assignee: null } } })).ok).toBe(true);
+    await page.reload();
+    await week(page);
+    await block(page, MON, "PM").locator(".card-when").click();
+    const assigned = panel(page).locator(".bp-assigned");
+    await assigned.locator(".aw-feature").first().waitFor();
+    // Not mine: it isn't under Assigned to you.
+    expect(await assigned.getByText("Gift cards").count()).toBe(0);
+    const fold = panel(page).locator(".bp-other > .pl-fold");
+    await expect(fold.innerText()).resolves.toMatch(/^▸ More in Northwind/);
+    await fold.click();
+    const group = panel(page).locator(".bp-other .aw-group", { hasText: "Gift cards" });
+    await group.waitFor();
+    await expect(fold.innerText()).resolves.toMatch(/^▾ More in Northwind · \d+$/);
+    await group.locator(".aw-row", { hasText: "Gift card balance page" }).locator("button.aw-plus").click();
+    await expect.poll(() => cardTitles(page, MON, "PM")).toContain("Gift card balance page");
+    await expect.poll(() => onBlock(page)).toContain("Gift card balance page");
+    // The Add box's search covers it too.
+    await panel(page).locator("input.bp-box").fill("Gift card");
+    await panel(page).locator("#bp-results .bp-result", { hasText: "Gift card balance page" }).waitFor();
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("follow-up: the panel's ⋯ sorts the list by target date or backlog order, remembered across a reload; a row's hover has its state, target date and size", async () => {
+    const { page, errors } = await freshPage(h);
+    await week(page);
+    await block(page, MON, "PM").locator(".card-when").click();
+    const names = () => panel(page).locator(".bp-assigned .aw-feature .aw-feat-name").allInnerTexts();
+    await panel(page).locator(".bp-assigned .aw-feature").first().waitFor();
+    const backlog = await names();
+    // Hover: the type and number, the state, the target date and the size; nothing of that is on the row itself.
+    const tips = await panel(page).locator(".bp-assigned .aw-feature .aw-feat-name[title]").evaluateAll((els) => els.map((e) => e.getAttribute("title")!));
+    expect(tips.length).toBeGreaterThan(1);
+    for (const t of tips) expect(t).toMatch(/^\S.* \d+ · \S.* · (target \w+ \d+|no target date) · (\S+ \d+|not sized)$/);
+    expect(tips.some((t) => /target \w+ \d+/.test(t))).toBe(true);
+    expect(await panel(page).locator(".bp-assigned").innerText()).not.toMatch(/target/i);
+    const more = panel(page).locator(".bp-head").getByRole("button", { name: /^More for/ });
+    await more.click();
+    await page.getByRole("menuitem", { name: /^Sort by target date/ }).click();
+    await expect.poll(names).not.toEqual(backlog);
+    const byTarget = await names();
+    expect([...byTarget].sort()).toEqual([...backlog].sort());
+    await page.reload();
+    await panel(page).locator(".bp-assigned .aw-feature").first().waitFor({ timeout: 30_000 });
+    expect(await names()).toEqual(byTarget);
+    await more.click();
+    await page.getByRole("menuitem", { name: /^Sort by backlog order/ }).click();
+    await expect.poll(names).toEqual(backlog);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("follow-up: the header has one status line; no browser select anywhere in the panel or on Day", async () => {
+    const { page, errors } = await freshPage(h);
+    await day(page);
+    await page.locator(`.day-view [data-drop="${MON}:PM"] .card-when`).click();
+    await panel(page).locator(".bp-assigned").waitFor();
+    expect(await panel(page).locator(".bp-head .bp-risk").count()).toBe(1);
+    expect(await panel(page).locator(".bp-risks, .status-pill").count()).toBe(0);
+    await panel(page).locator("input.bp-box").fill("A new draft");
+    await panel(page).locator("button.bp-parent").click();
+    await page.locator(".popup-menu").getByText("Order history export").click();
+    await panel(page).locator("button.bp-parent", { hasText: "under Order history export" }).waitFor();
+    expect(await page.locator("aside.block-panel select, .day-view select").count()).toBe(0);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
   it("Day remembers on this device whether its panel was left open, and its address names the block", async () => {
     const { page, errors } = await freshPage(h);
     await day(page);

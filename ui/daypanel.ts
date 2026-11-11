@@ -17,3 +17,20 @@ export function writeDayPanel(open: boolean): void {
     // A browser with storage off: the panel simply starts closed.
   }
 }
+
+// WD-2 follow-up: the block panel's Add list order (backlog order, or target date), remembered on this device.
+const SORT = "focustime.panel.sort";
+export function readPanelSort(): "backlog" | "target" {
+  try {
+    return localStorage.getItem(SORT) === "target" ? "target" : "backlog";
+  } catch {
+    return "backlog";
+  }
+}
+export function writePanelSort(sort: "backlog" | "target"): void {
+  try {
+    localStorage.setItem(SORT, sort);
+  } catch {
+    // Storage off: the list stays in backlog order.
+  }
+}

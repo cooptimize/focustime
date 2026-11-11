@@ -44,6 +44,8 @@ export type PlanContext = {
    * capture.features), for a parent the Week hasn't loaded (someone else's feature). Null when DevOps can't say.
    */
   openParents?: (clientKey: string, tier: "feature" | "epic") => Promise<readonly number[] | null>;
+  /** WD-2 follow-up: one open item of a client I can see, from the central store (Ahead's read), or null. */
+  storeItem?: (clientKey: string, itemId: number) => Promise<import("../week/types.ts").WorkItem | null>;
   /** DP-2: the client's data platform and its list of deployment items (Admin › Clients); absent: not set. */
   clientDeploy?: (clientKey: string) => Promise<ClientDeploy | null>;
 };
@@ -357,7 +359,9 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
           const itemId = id(o.itemId, "itemId");
           const cfg = await ctx.config();
           if (!cfg) return bad("Fix the config first", 409);
-          const item = ctx.devops(cfg).lookup(base.clientKey, itemId);
+          // WD-2 follow-up: "More in <client>" lists the client's whole open backlog, so an item the Week didn't load
+          // (a teammate's story under a feature that isn't mine) is read from the client's store, by my own access.
+          const item = ctx.devops(cfg).lookup(base.clientKey, itemId) ?? (await ctx.storeItem?.(base.clientKey, itemId).catch(() => null)) ?? null;
           if (!item) return bad(`Item ${itemId} is not among the loaded DevOps items for ${base.clientKey}. Refresh and try again`, 409);
           const why = unpickableReason(item);
           if (why) return bad(why, 422);

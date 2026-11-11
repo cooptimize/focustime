@@ -19,6 +19,7 @@ import { ProgressOfferCard, TimeboxCheckin } from "./TimeboxCheckin.tsx";
 import { DevOpsWork } from "./work.ts";
 import { dayName } from "./PickReview.tsx";
 import { userZone } from "../week/zone.ts";
+import { MenuCtx } from "./Menus.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 
 const clock = (iso: string, tz: string) => {
@@ -94,7 +95,7 @@ export function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onErr
   const [extra, setExtra] = useState<string[]>([]);
   /** TX-1: bumped by a check-in answer, so the end of day DevOps offer reads again. */
   const [progressAt, setProgressAt] = useState(0);
-  const [adding, setAdding] = useState(false);
+  const { open: openMenu } = useContext(MenuCtx);
   const work = useContext(DevOpsWork);
   const devopsWrite = useDevOpsWrite();
   // PK-1: the day's done to-dos whose items could be set done in DevOps (one ask, one Confirm). Null while loading or
@@ -177,20 +178,20 @@ export function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onErr
             ))}
           </ul>
           {others.length > 0 &&
-            (adding ? (
-              <select autoFocus value="" onChange={(e) => (e.target.value && setExtra((x) => [...x, e.target.value]), setAdding(false))} onBlur={() => setAdding(false)} aria-label="Another client">
-                <option value="">Choose a client</option>
-                {others.map((c) => (
-                  <option key={c.clientKey} value={c.clientKey}>
-                    {nameOf(c.clientKey)}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <button type="button" className="link-btn" onClick={() => setAdding(true)}>
+            (
+              // The app's own menu (no browser select): another client to leave a note for.
+              <button
+                type="button"
+                className="link-btn"
+                aria-haspopup="menu"
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  openMenu({ x: r.left, y: r.bottom + 4 }, { title: "Another client", items: others.map((c) => ({ id: c.clientKey, label: nameOf(c.clientKey), run: () => setExtra((x) => [...x, c.clientKey]) })) });
+                }}
+              >
                 + Another client
               </button>
-            ))}
+            )}
         </section>
         {(owedDone.length > 0 || owedComment.length > 0 || batch.length > 0) && (
           <section className="cp-section" aria-label="DevOps updates owed">

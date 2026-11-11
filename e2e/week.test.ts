@@ -128,6 +128,12 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     const panel = page.locator(".block-panel");
     await panel.waitFor();
     await expect(panel.locator("h2").textContent()).resolves.toContain("Cooptimize");
+    // WD-2 follow-up: one status line under the time; its reasons are on hover and open in place.
+    const risk = panel.locator(".bp-head .bp-risk");
+    await expect(risk.textContent()).resolves.toMatch(/^At risk · \d+ reasons?$/);
+    await expect(risk.getAttribute("title")).resolves.toContain("Dentist");
+    expect(await panel.locator(".bp-risks").count()).toBe(0);
+    await risk.click();
     await expect(panel.locator(".bp-risks").textContent()).resolves.toContain("Dentist");
     await expect(page.locator("dialog.details").count()).resolves.toBe(0);
     // Ticking a pick in the panel ticks it on the card.

@@ -23,7 +23,7 @@ const commit = async (page: Page) => {
   await selectBlock(page, "Northwind");
   await unfoldAddWork(page);
 };
-/** WD-1: a feature on this week's list, in Add work › This week's features. */
+/** WD-1: a feature on this week's list, in the block panel › Assigned to you. */
 async function weekRow(page: Page, text: string) {
   const row = page.locator("aside.block-panel .aw-feature", { has: page.locator(":scope > .aw-feat-head .aw-feat-name", { hasText: text }) }).first();
   await row.waitFor({ timeout: 20_000 });

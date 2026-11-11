@@ -10,14 +10,6 @@ const T = 120_000;
 const block = (page: Page, date: string, half: string) => page.locator(`[data-drop="${date}:${half}"]`).first();
 const panel = (page: Page) => page.locator("aside.block-panel");
 const section = (page: Page, label: string) => panel(page).locator(".aw-sec").filter({ has: page.locator(".pl-label, .pl-fold, h4, h3", { hasText: new RegExp(`^\\W*${label}`, "i") }) }).first();
-/** WD-2: Other work assigned to you is folded: open it. */
-async function other(page: Page) {
-  const s = section(page, "Other work assigned to you");
-  const fold = s.locator(".pl-fold").first();
-  await fold.waitFor({ timeout: 30_000 });
-  if ((await fold.getAttribute("aria-expanded")) === "false") await fold.click();
-  return s;
-}
 const cardTitles = (page: Page, date: string, half: string) => block(page, date, half).locator(".pr-title").allInnerTexts();
 async function openOn(page: Page, date: string, half: string) {
   await page.keyboard.press("2");
@@ -38,11 +30,10 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
   }, T);
   afterAll(async () => h?.stop());
 
-  it("+ in This week's features, in Promises and in Other work assigned to you: each lands on the block and says so", async () => {
+  it("+ in Assigned to you and in Promises: each lands on the block and says so (More in <client> is in e2e/wd2.test.ts)", async () => {
     const { page, errors } = await freshPage(h);
     await openOn(page, "2026-11-02", "PM");
-    await other(page);
-    for (const label of ["This week's features", "Promises", "Other work assigned to you"]) {
+    for (const label of ["Assigned to you", "Promises"]) {
       const row = section(page, label).locator(".aw-row:not(.placed):not(:has(.aw-where))").filter({ has: page.locator("button.aw-plus") }).first();
       const title = (await row.locator(".aw-row-title").innerText()).trim().replace(/^[^:]+: /, "");
       await row.locator("button.aw-plus").click();
@@ -56,7 +47,7 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
   it("⋯ → Add to the plan offers the selected block first; another client's block is under Different client and asks first", async () => {
     const { page } = await freshPage(h);
     await openOn(page, "2026-11-02", "PM");
-    const row = free(await other(page));
+    const row = section(page, "Assigned to you").locator(".aw-feature > ul > .aw-row:not(.placed):not(:has(.aw-where))").filter({ has: page.locator("button.aw-plus") }).first();
     const title = (await row.locator(".aw-row-title").innerText()).trim();
     await row.getByRole("button", { name: `More for ${title}` }).click();
     await page.getByRole("menuitem", { name: /^Add to the plan/ }).click();
@@ -71,7 +62,7 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
   it("drag a row onto its client's block adds it there; another client's block refuses it", async () => {
     const { page } = await freshPage(h);
     await openOn(page, "2026-11-02", "PM");
-    const row = section(page, "This week's features").locator(".aw-row[draggable=true]:not(:has(.aw-where))").first();
+    const row = section(page, "Assigned to you").locator(".aw-row[draggable=true]:not(:has(.aw-where))").first();
     const title = (await row.locator(".aw-row-title").innerText()).trim();
     // Tuesday AM is another client's: nothing lands there.
     await row.dragTo(block(page, "2026-11-03", "AM"));
@@ -89,7 +80,7 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
     await block(page, "2026-11-04", "PM").locator(".card-client").first().click();
     await page.keyboard.press("a");
     await expect.poll(() => panel(page).getAttribute("data-block-panel")).toBe("2026-11-04|PM");
-    await free(section(page, "This week's features")).locator("button.aw-plus").click();
+    await free(section(page, "Assigned to you")).locator("button.aw-plus").click();
     await page.keyboard.press("Escape");
     await panel(page).waitFor({ state: "detached" });
     // W opens it again, on the selected block.
@@ -120,12 +111,12 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
     const { page } = await freshPage(h);
     await openOn(page, "2026-11-02", "PM");
     const box = panel(page).locator("input.bp-box");
-    const first = (await section(page, "This week's features").locator(".aw-row .aw-row-title").first().innerText()).trim();
+    const first = (await section(page, "Assigned to you").locator(".aw-row .aw-row-title").first().innerText()).trim();
     await box.fill(first.split(" ")[0]!);
     const results = panel(page).locator("#bp-results");
     await results.waitFor();
     // The list is replaced while typing.
-    await expect(section(page, "This week's features").count()).resolves.toBe(0);
+    await expect(section(page, "Assigned to you").count()).resolves.toBe(0);
     await expect(results.locator(".bp-result", { hasText: first }).count()).resolves.toBeGreaterThan(0);
     await expect(results.locator(".bp-result").last().innerText()).resolves.toMatch(/^\+?\s*New draft story: /);
     await box.fill("zzzz no such item");
@@ -134,7 +125,7 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
     await box.press("Escape");
     await expect(box.inputValue()).resolves.toBe("");
     await expect(panel(page).count()).resolves.toBe(1);
-    await section(page, "This week's features").waitFor();
+    await section(page, "Assigned to you").waitFor();
     // With the box empty, Esc closes the panel.
     await box.press("Escape");
     await panel(page).waitFor({ state: "detached" });
@@ -225,7 +216,7 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
   it("a day header's ⋯: no Confirm (CF-1), and Timebox my day goes to Day's timeline with no popup", async () => {
     const { page } = await freshPage(h);
     await openOn(page, "2026-11-02", "PM");
-    await free(section(page, "This week's features")).locator("button.aw-plus").click();
+    await free(section(page, "Assigned to you")).locator("button.aw-plus").click();
     await dayMenu(page, "Mon");
     expect(await page.getByRole("menuitem", { name: /Confirm/ }).count()).toBe(0);
     await page.getByRole("menuitem", { name: "Timebox my day" }).click();

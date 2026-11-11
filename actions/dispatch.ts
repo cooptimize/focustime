@@ -2449,6 +2449,11 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
           },
           now: ctx.now,
           resolved: (cfg, items) => resolvedKeys(ctx.makeDevOps(cfg.dataverse, userZone(cfg)), [...new Set(items.map((i) => i.clientKey))].map((clientKey) => ({ clientKey, clientName: clientKey })), idsByClient(items)),
+          storeItem: async (clientKey, itemId) => {
+            const r = await aheadAction(await aheadContext(ctx), "ahead.load", {});
+            const it = r.ok ? (r.data as import("./types.ts").AheadLoad).clients.find((c) => c.clientKey === clientKey)?.items.find((x) => x.id === itemId && x.inScope) : undefined;
+            return it ? { id: it.id, title: it.title, type: it.type, state: it.state, stateCategory: it.stateCategory, level: it.level === "child" || it.level === "task" ? "story" : it.level ? "portfolio" : "other", order: it.order ?? null, parentId: it.parentId, changedAt: it.changedAt, url: it.url } : null;
+          },
           openParents: async (clientKey, tier) => {
             const cap = captureContext(ctx);
             const f = await featuresOf(cap, await cap.config(), clientKey);

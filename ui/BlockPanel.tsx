@@ -3,7 +3,7 @@
 // (Start a call, Timebox this day) and close; ON THIS BLOCK (the to-dos, each with its checkbox, title, size, + time
 // and ⋯); the meetings line that opens the agenda in place; ADD, one box that searches the client's DevOps work and
 // my promises and always ends with "New to-do" and "New draft story"; before typing, this week's features with their
-// stories, Promises, and Other work assigned to you (collapsed); at the bottom, collapsed, To place and You sent.
+// work Assigned to you grouped by feature, Promises, and More in <client> (collapsed); at the bottom, collapsed, To place and You sent.
 // Rows use "+" (this block) or a drag onto any block; a to-do dragged from a block drops on the panel to come off the
 // plan. Everything here writes only FocusTime's plan store, through named actions, with Undo.
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -12,7 +12,7 @@ import { DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { BreakDownButton } from "./BreakDownPanel.tsx";
 import { blockWord, removeRule, storiesUnder, toPlaceCount, toPlaceLine, toPlaceShort, type ToPlace as ToPlaceCounts } from "../plan/addwork.ts";
-import { addList, draftParents, meetingsWords, moveHighlight, onBlock, panelClient, panelMode, panelTitle, panelWhen, placedMap, searchPanel, takeOffRule, type AddList, type FeatureLine, type NewRow, type PanelMode, type Result } from "../plan/blockpanel.ts";
+import { assignedList, draftParents, hoverWords, looseDrafts, meetingsWords, moreCount, moreList, moveHighlight, onBlock, panelClient, panelMode, panelTitle, panelWhen, placedMap, riskLine, searchPanel, takeOffRule, type AssignedGroup, type ListSort, type MoreGroup, type NewRow, type PanelMode, type Result } from "../plan/blockpanel.ts";
 import { FoldLine } from "./plan/FoldLine.tsx";
 import { planMinutes } from "../plan/fit.ts";
 import { freeMinutes } from "../week/free.ts";
@@ -48,6 +48,8 @@ import { PickRow } from "./PickRow.tsx";
 import { userZone } from "../week/zone.ts";
 import { HalfScope } from "./scope.ts";
 import type { PanelFocus } from "./weekctx.ts";
+import type { AheadLoad } from "../actions/types.ts";
+import { readPanelSort, writePanelSort } from "./daypanel.ts";
 import { useDevOpsChanged } from "./DevOpsFresh.tsx";
 
 const mondayOf = (d: IsoDate) => {
@@ -57,9 +59,39 @@ const mondayOf = (d: IsoDate) => {
 const say = (text: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: text }));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong");
 
-type WeekRow = PlanDayState["weekFeatures"][number] & { done: boolean };
-type List = AddList<WeekRow, FollowUpView>;
-type Line = FeatureLine<WeekRow>;
+type WeekRows = ReturnType<typeof weekList<PlanDayState["weekFeatures"][number]>>["items"];
+
+/**
+ * "More in <client>": the rest of the client's open work, read once it is asked for (the fold opens, or the Add box is
+ * typed in) from Ahead's read of the central store, by my own access. Kept a minute, so moving the panel doesn't reread.
+ */
+let moreCache: { at: number; load: AheadLoad } | null = null;
+function useMore(clientKey: string | null, want: boolean, version: unknown): { items: WorkItem[] | null; error: string | null } {
+  const [load, setLoad] = useState<AheadLoad | null>(() => (moreCache && Date.now() - moreCache.at < 60_000 ? moreCache.load : null));
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!want || !clientKey) return;
+    if (moreCache && Date.now() - moreCache.at < 60_000) return setLoad(moreCache.load);
+    let live = true;
+    call<AheadLoad>("ahead.load", {}).then(
+      (r) => ((moreCache = { at: Date.now(), load: r }), live && (setLoad(r), setError(null))),
+      (e: unknown) => live && setError(errText(e)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [want, clientKey, version]);
+  const items = useMemo(() => {
+    const c = clientKey ? load?.clients.find((x) => x.clientKey === clientKey) : undefined;
+    if (!c) return load ? [] : null;
+    const me = new Set((c.mine ?? []).map((m) => m.toLowerCase()));
+    return c.items.filter((x) => x.inScope && x.level !== "task").map((x): WorkItem => ({
+      id: x.id, title: x.title, type: x.type, state: x.state, stateCategory: x.stateCategory, level: x.level === "child" ? "story" : "portfolio", ...(x.level === "top" ? { tier: "epic" as const } : x.level === "parent" ? { tier: "feature" as const } : {}),
+      order: x.order ?? null, parentId: x.parentId, changedAt: x.changedAt, url: x.url, assignedTo: x.assignee?.name ?? null, assignedToMe: !!x.assignee?.email && me.has(x.assignee.email.toLowerCase()), targetDate: x.target, size: x.size,
+    }));
+  }, [load, clientKey]);
+  return { items, error };
+}
 
 type Ctx = {
   clientKey: string;
@@ -196,21 +228,32 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
 
   // The Add list and the search read one client's work only (GD-2).
   const work = clientKey ? allWork.get(clientKey) : undefined;
-  const doneBy = useMemo(() => weekList(state?.weekFeatures ?? [], work ? [work] : null, pv.sizes).items, [state?.weekFeatures, work, pv.sizes]);
-  const listed = useMemo<WeekRow[]>(() => doneBy.map((f) => ({ ...f, done: !!f.done })), [doneBy]);
+  const doneBy: WeekRows = useMemo(() => weekList(state?.weekFeatures ?? [], work ? [work] : null, pv.sizes).items, [state?.weekFeatures, work, pv.sizes]);
   const fus = clientKey ? dueOrder((pv.followUps ?? []).filter((f) => f.clientKey === clientKey), at.date, (f) => f.due, (f) => f.openedAt) : [];
-  const list: List | null = clientKey && state ? addList({ clientKey, date: at.date, half: at.half, work, week: listed, followUps: fus, drafts: state.drafts, weekPicks }) : null;
+  // WD-2 follow-up: backlog order or target date, remembered on this device.
+  const [sort, setSort] = useState<ListSort>(() => readPanelSort());
+  const onWeek = useMemo(() => new Set((state?.weekFeatures ?? []).filter((f) => f.clientKey === clientKey).map((f) => f.itemId)), [state?.weekFeatures, clientKey]);
+  const groups = useMemo(() => (clientKey && state ? assignedList({ clientKey, work, drafts: state.drafts, weekPicks, onWeek, sort }) : null), [clientKey, state, work, weekPicks, onWeek, sort]);
+  const loose = clientKey && state ? looseDrafts(clientKey, state.drafts, weekPicks) : [];
+  // "More in <client>" is read when its fold opens or the Add box is typed in.
+  const [wantMore, setWantMore] = useState(false);
+  useEffect(() => setWantMore(false), [clientKey]);
+  const more = useMore(clientKey, wantMore && mode === "add", data);
 
   // ⋯: what isn't about adding. Start (or Join) a call in the client's chats, and Timebox this day.
   const menu = useMenu((env): MenuStep => {
     const boxOff = mode !== "add" ? (mode === "past" ? "A past day keeps its record" : "Nothing to timebox on a day off") : data.timeboxSettings.enabled === false ? "Timeboxing is off in Settings › Planning" : null;
     const timebox: MenuItem = { id: "timebox-day", label: "Timebox this day", hint: "a time for each to-do", ...(boxOff ? { disabled: boxOff } : {}), run: () => onTimebox?.(at.date) };
-    return { title, items: [...callItems(env, clientKey), timebox] };
+    const order: MenuItem = { id: "sort", label: sort === "backlog" ? "Sort by target date" : "Sort by backlog order", hint: sort === "backlog" ? "now: backlog order" : "now: target date", run: () => { const next: ListSort = sort === "backlog" ? "target" : "backlog"; setSort(next); writePanelSort(next); } };
+    return { title, items: [...callItems(env, clientKey), timebox, ...(mode === "add" ? [order] : [])] };
   });
+  const risk = slot && mode === "add" ? riskLine(rankRisks(slot.risks)) : null;
+  const [riskOpen, setRiskOpen] = useState(false);
+  useEffect(() => setRiskOpen(false), [at.date, at.half]);
 
   // Opened on a to-do or a promise: bring it into view.
   const focusSel = !focus ? null : focus.kind === "pick" ? `[data-pick="${focus.id}"]` : focus.kind === "followup" ? `[data-promise="${focus.id}"]` : null;
-  const listed1 = !!list;
+  const listed1 = !!groups;
   useEffect(() => {
     if (!focusSel) return;
     const el = ref.current?.querySelector(focusSel);
@@ -234,6 +277,17 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
             {title}
           </h2>
           {when && <p className={`bp-when${when.over ? " over" : ""}`}>{when.text}</p>}
+          {/* One status line at most: the reasons show on hover and open in place on a click. */}
+          {risk && (
+            <button type="button" className={`bp-risk ${risk.severity}`} aria-expanded={riskOpen} title={risk.reasons.join("\n")} onClick={() => setRiskOpen((o) => !o)}>
+              {risk.text}
+            </button>
+          )}
+          {risk && riskOpen && (
+            <ul className="bp-risks">
+              {risk.reasons.map((r, i) => <li key={i}>{r}</li>)}
+            </ul>
+          )}
         </div>
         <HalfScope.Provider value={true}>{menu.button(`More for ${title}`)}</HalfScope.Provider>
         <CloseButton onClose={onClose} />
@@ -251,15 +305,6 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
       <div className="aw-scroll">
         {error && <p className="pd-error" role="alert">{error}</p>}
         {day?.pto && <p className="bp-line">Whole day off · {day.pto.titles.join(", ")}</p>}
-        {slot && slot.risks.length > 0 && mode === "add" && (
-          <ul className="bp-risks">
-            {rankRisks(slot.risks).map((r, i) => (
-              <li key={i} className={r.severity}>
-                <span className={`status-pill ${r.severity}`}>{r.severity === "at_risk" ? "At risk" : "Watch"}</span> {r.reason}
-              </li>
-            ))}
-          </ul>
-        )}
         {slot?.focus.slice(1).map((b) => (
           <p key={b.id} className="bp-line">Also booked: {b.clientName}</p>
         ))}
@@ -301,11 +346,11 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
             <h3 className="pl-label">Add</h3>
             {!clientKey ? (
               <p className="muted aw-note">Choose a client for this block first.</p>
-            ) : !state || !ctx || !list ? (
+            ) : !state || !ctx || !groups ? (
               !error && <p className="muted aw-note">Loading…</p>
             ) : (
-              <AddBox ctx={ctx} list={list} drafts={state.drafts} followUps={fus} work={work} clientName={name(clientKey)} focusAdd={focusAdd} onClose={onClose} onChanged={onChanged}>
-                <AddListView ctx={ctx} list={list} state={state} doneBy={doneBy} name={name} focus={focus} onChanged={onChanged} />
+              <AddBox ctx={ctx} groups={groups} drafts={state.drafts} followUps={fus} work={work} more={more.items} onTyping={() => setWantMore(true)} clientName={name(clientKey)} focusAdd={focusAdd} onClose={onClose} onChanged={onChanged}>
+                <AddListView ctx={ctx} groups={groups} promises={fus} more={more} sort={sort} onWantMore={() => setWantMore(true)} state={state} doneBy={doneBy} name={name} focus={focus} onChanged={onChanged} />
               </AddBox>
             )}
             {clientKey && work && work.status !== "ok" && <p className="muted aw-note">DevOps {workStatusLabel(work)}{work.message ? `: ${work.message}` : ""}</p>}
@@ -316,7 +361,7 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
 
         {mode === "add" && (
           <div className="bp-foot">
-            <ToPlace data={data} at={at} ctx={ctx} loose={list?.loose ?? []} nameOf={(k) => name(k)} onChanged={onChanged} onSelect={onSelect} startOpen={placeOpen} />
+            <ToPlace data={data} at={at} ctx={ctx} loose={loose} nameOf={(k) => name(k)} onChanged={onChanged} onSelect={onSelect} startOpen={placeOpen} />
             {monday >= thisWeek && <YourSends weekStart={monday} thisWeek={thisWeek} version={data} colors={colors} onChanged={onChanged} />}
           </div>
         )}
@@ -405,7 +450,7 @@ function TakeOffZone() {
  * "New to-do: <text>" and "New draft story: <text>" (under a chosen feature). Up and Down move, Enter takes the
  * highlighted row; with no match the highlight starts on "New to-do". Before typing, its children (the Add list) show.
  */
-function AddBox({ ctx, list, drafts, followUps, work, clientName, focusAdd, onClose, onChanged, children }: { ctx: Ctx; list: List; drafts: readonly DraftStory[]; followUps: readonly FollowUpView[]; work: Parameters<typeof searchPanel>[0]["work"]; clientName: string; focusAdd: number; onClose: () => void; onChanged: () => void; children: ReactNode }) {
+function AddBox({ ctx, groups, drafts, followUps, work, more, onTyping, clientName, focusAdd, onClose, onChanged, children }: { ctx: Ctx; groups: readonly AssignedGroup[]; more: readonly WorkItem[] | null; onTyping: () => void; drafts: readonly DraftStory[]; followUps: readonly FollowUpView[]; work: Parameters<typeof searchPanel>[0]["work"]; clientName: string; focusAdd: number; onClose: () => void; onChanged: () => void; children: ReactNode }) {
   const { clientKey, at } = ctx;
   const [query, setQuery] = useState("");
   const [hl, setHl] = useState(0);
@@ -418,13 +463,14 @@ function AddBox({ ctx, list, drafts, followUps, work, clientName, focusAdd, onCl
   useEffect(() => {
     if (focusAdd) input.current?.focus({ preventScroll: true });
   }, [focusAdd, at.date, at.half]);
-  const model = useMemo(() => searchPanel({ clientKey, work, followUps, drafts }, query), [clientKey, work, followUps, drafts, query]);
+  const model = useMemo(() => searchPanel({ clientKey, work, followUps, drafts, ...(more ? { more } : {}) }, query), [clientKey, work, followUps, drafts, more, query]);
+  const { open: openMenu } = useContext(MenuCtx);
   const rows: (Result<FollowUpView> | NewRow)[] = model ? [...model.results, ...model.news] : [];
   useEffect(() => setHl(0), [query]);
   useEffect(() => {
     listRef.current?.querySelector(".hl")?.scrollIntoView({ block: "nearest" });
   }, [hl]);
-  const parents = draftParents(list.features);
+  const parents = draftParents(groups);
   // Only a feature the select shows now (the week's list can change under it).
   const under = parents.some((p) => p.id === parent) ? parent : null;
 
@@ -472,7 +518,7 @@ function AddBox({ ctx, list, drafts, followUps, work, clientName, focusAdd, onCl
         maxLength={200}
         placeholder={`Search ${clientName}'s work, or type a new to-do`}
         aria-label={`Add to ${blockWord(at.date, at.half)}: search ${clientName}'s work or type a new to-do`}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => (setQuery(e.target.value), e.target.value && onTyping())}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
             e.preventDefault();
@@ -517,13 +563,21 @@ function AddBox({ ctx, list, drafts, followUps, work, clientName, focusAdd, onCl
                 <span className="aw-plus" aria-hidden="true">+</span>
                 <span className="aw-row-title">{n.label}</span>
                 {n.kind === "draft" && parents.length > 1 && (
-                  <select className="bp-parent" value={under ?? ""} aria-label="Under which feature" title="The feature the draft story goes under" onClick={(e) => e.stopPropagation()} onChange={(e) => setParent(e.target.value ? Number(e.target.value) : null)}>
-                    {parents.map((p) => (
-                      <option key={p.id ?? "none"} value={p.id ?? ""}>
-                        {p.id === null ? p.title : `under ${p.title}`}
-                      </option>
-                    ))}
-                  </select>
+                  // The app's own menu (no browser select): which feature the draft story goes under.
+                  <button
+                    type="button"
+                    className="link-btn bp-parent"
+                    aria-haspopup="menu"
+                    aria-label={`Under which feature: ${parents.find((p) => p.id === under)?.title ?? "No feature yet"}`}
+                    title="The feature the draft story goes under"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const r = e.currentTarget.getBoundingClientRect();
+                      openMenu({ x: r.left, y: r.bottom + 4 }, { title: "Under which feature", items: parents.map((p) => ({ id: `p${p.id ?? "none"}`, label: p.title, checked: p.id === under, run: () => setParent(p.id) })) });
+                    }}
+                  >
+                    {under === null ? "No feature yet" : `under ${parents.find((p) => p.id === under)!.title}`} ▾
+                  </button>
                 )}
               </li>
             );
@@ -534,15 +588,17 @@ function AddBox({ ctx, list, drafts, followUps, work, clientName, focusAdd, onCl
   );
 }
 
-/** Before typing: this week's features with their stories, Promises, and Other work assigned to you (collapsed). */
-function AddListView({ ctx, list, state, doneBy, name, focus, onChanged }: { ctx: Ctx; list: List; state: PlanDayState; doneBy: (PlanDayState["weekFeatures"][number] & { done: import("../plan/weeklist.ts").Listed<unknown>["done"] })[]; name: (k: string | null) => string; focus: PanelFocus | null; onChanged: () => void }) {
+/**
+ * Before typing: "Assigned to you" (my features and my stories, grouped by feature), Promises, and "More in <client>"
+ * (the rest of the client's open work, collapsed).
+ */
+function AddListView({ ctx, groups, promises, more, sort, onWantMore, state, doneBy, name, focus, onChanged }: { ctx: Ctx; groups: readonly AssignedGroup[]; promises: readonly FollowUpView[]; more: { items: WorkItem[] | null; error: string | null }; sort: ListSort; onWantMore: () => void; state: PlanDayState; doneBy: WeekRows; name: (k: string | null) => string; focus: PanelFocus | null; onChanged: () => void }) {
   const { clientKey, at } = ctx;
   const pv = useContext(PlanCtx);
   const work = useContext(DevOpsWork).get(clientKey);
-  const [otherOpen, setOtherOpen] = useState(false);
-  useEffect(() => setOtherOpen(false), [clientKey]);
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEffect(() => setMoreOpen(false), [clientKey]);
   const weekRows = state.weekFeatures.filter((f) => f.clientKey === clientKey);
-  const onWeek = new Set(weekRows.map((f) => f.itemId));
   const weekPicks = Object.values(pv.week ?? {}).flatMap((d) => d.picks);
   const weekStart = mondayOf(at.date);
   const act = async (action: string, input: Record<string, unknown>, done: string) => {
@@ -554,62 +610,66 @@ function AddListView({ ctx, list, state, doneBy, name, focus, onChanged }: { ctx
       say(errText(e));
     }
   };
-  type Row = Line["row"];
-  const remove = (p: Row) => {
-    const row = weekRows.find((f) => f.itemId === p.ref.itemId);
+  const remove = (f: WorkItem) => {
+    const row = weekRows.find((x) => x.itemId === f.id);
     if (row?.id === undefined) return;
-    const kids = new Set(storiesUnder(work, p.ref.itemId));
-    const r = removeRule({ clientKey, itemId: p.ref.itemId, slots: row.slots }, kids, weekPicks, state.drafts);
+    const kids = new Set(storiesUnder(work, f.id));
+    const r = removeRule({ clientKey, itemId: f.id, slots: row.slots }, kids, weekPicks, state.drafts);
     if (!r.ok) {
-      say(`${p.ref.title} is placed on ${r.where.join(", ")}. Take those off first.`);
+      say(`${f.title} is placed on ${r.where.join(", ")}. Take those off first.`);
       return;
     }
-    void act("weekplan.remove", { id: row.id }, `${p.ref.title} is off this week`);
+    void act("weekplan.remove", { id: row.id }, `${f.title} is off this week`);
   };
   const addToWeek = (item: WorkItem) => void act("weekplan.add", { weekStart, clientKey, itemId: item.id }, `${item.title} added to this week`);
-  // A feature's ⋯ (Move, Estimate, Pin, Mark done, Ask to collaborate, Send to…, the target date, the Coop brief, Remove).
+  // A feature on this week's list keeps its ⋯ (Move, Estimate, Pin, Mark done, Ask to collaborate, Send to…, the
+  // target date, the Coop brief, Remove); one that isn't offers Add to this week and the item's own menu.
   const { env } = useContext(MenuCtx);
   const dw = useDevOpsWrite();
-  const menuFor = (p: Row): MenuStep | null => {
-    const row = weekRows.find((f) => f.itemId === p.ref.itemId);
-    const li = doneBy.find((f) => f.itemId === p.ref.itemId);
+  const menuFor = (g: AssignedGroup): MenuStep | null => {
+    const f = g.feature!;
+    const row = weekRows.find((x) => x.itemId === f.id);
+    const li = doneBy.find((x) => x.itemId === f.id);
     if (row?.id === undefined || !li) return null;
     const id = row.id;
-    const target = [...(work?.items ?? []), ...(work?.committed ?? [])].find((x) => x.id === p.ref.itemId)?.targetDate ?? null;
     const facts: WeekItemFacts = {
-      itemId: p.ref.itemId, title: p.ref.title, clientName: name(clientKey), level: "feature", past: ctx.past,
-      done: li.done ? (li.done === "local" ? "local" : "other") : null, minutes: row.estimate ?? DEFAULT_FEATURE_MINUTES, size: null, places: ctx.places, pinned: [...row.slots], openStories: p.total, targetDate: target, drafts: p.drafts.length, canWrite: !!dw?.can(clientKey),
+      itemId: f.id, title: f.title, clientName: name(clientKey), level: "feature", past: ctx.past,
+      done: li.done ? (li.done === "local" ? "local" : "other") : null, minutes: row.estimate ?? DEFAULT_FEATURE_MINUTES, size: null, places: ctx.places, pinned: [...row.slots], openStories: g.total, targetDate: f.targetDate ?? null, drafts: g.drafts.length, canWrite: !!dw?.can(clientKey),
     };
     const ops: WeekItemOps = {
-      pin: (date, half, on) => void act("weekplan.place", { weekStart, clientKey, itemId: p.ref.itemId, date, half, on }, on ? `Pinned to ${blockWord(date, half)}` : "Unpinned"),
-      hours: (n) => void act("weekplan.set_estimate", { id, hours: n }, `${p.ref.title}: about ${n}h`),
-      done: (on) => void act("weekplan.mark_done", { id, on }, on ? `${p.ref.title} marked done` : `${p.ref.title} not done`),
-      help: () => env?.openHelp({ clientKey, title: `#${p.ref.itemId} ${p.ref.title}`, url: p.ref.url, itemId: p.ref.itemId, pinned: row.slots[0]?.date ?? null }),
-      ...(p.ref.itemId > 0 ? { send: () => openSend({ clientKey, clientName: name(clientKey), itemId: p.ref.itemId, level: "feature", title: p.ref.title, itemType: p.item?.type ?? null, url: p.ref.url, parentId: p.item?.parentId ?? null }) } : {}),
-      targetDate: () => dw?.targetDate({ clientKey, itemId: p.ref.itemId, title: p.ref.title, current: target }),
-      brief: () => openCoopBrief(clientKey, { id: p.ref.itemId, title: p.ref.title }, weekStart),
-      createDrafts: () => dw?.create(clientKey, p.drafts.slice(0, 10)),
+      pin: (date, half, on) => void act("weekplan.place", { weekStart, clientKey, itemId: f.id, date, half, on }, on ? `Pinned to ${blockWord(date, half)}` : "Unpinned"),
+      hours: (n) => void act("weekplan.set_estimate", { id, hours: n }, `${f.title}: about ${n}h`),
+      done: (on) => void act("weekplan.mark_done", { id, on }, on ? `${f.title} marked done` : `${f.title} not done`),
+      help: () => env?.openHelp({ clientKey, title: `#${f.id} ${f.title}`, url: f.url, itemId: f.id, pinned: row.slots[0]?.date ?? null }),
+      send: () => openSend({ clientKey, clientName: name(clientKey), itemId: f.id, level: "feature", title: f.title, itemType: f.type, url: f.url, parentId: f.parentId }),
+      targetDate: () => dw?.targetDate({ clientKey, itemId: f.id, title: f.title, current: f.targetDate ?? null }),
+      brief: () => openCoopBrief(clientKey, { id: f.id, title: f.title }, weekStart),
+      createDrafts: () => dw?.create(clientKey, g.drafts.slice(0, 10)),
       enableWrites: () => dw?.enable(clientKey),
-      remove: () => remove(p),
+      remove: () => remove(f),
     };
     return weekItemMenu(facts, ops, pv.sizes);
   };
-  const nothing = !list.features.length && !list.promises.length && !list.other.length;
+  const pinnedHere = (id: number) => !!weekRows.find((x) => x.itemId === id)?.slots.some((sl) => sl.date === at.date && sl.half === at.half);
+  const shown = useMemo(() => new Set(groups.flatMap((g) => [...(g.feature ? [g.feature.id] : []), ...g.stories.map((x) => x.id), ...g.others.map((x) => x.id)])), [groups]);
+  const rest: MoreGroup[] | null = useMemo(() => (more.items ? moreList(more.items, shown, sort) : null), [more.items, shown, sort]);
   return (
     <>
-      {list.features.length > 0 && (
-        <AddSection className="aw-sec aw-features" label="This week's features" tour="aw-features">
+      <AddSection className="aw-sec aw-features bp-assigned" label="Assigned to you" tour="aw-features">
+        {groups.length > 0 ? (
           <ul className="aw-list">
-            {list.features.map((f) => (
-              <Feature key={f.row.ref.itemId} f={f} ctx={ctx} onRemove={() => remove(f.row)} menuOf={() => menuFor(f.row)} />
+            {groups.map((g) => (
+              <Group key={g.feature?.id ?? "none"} g={g} ctx={ctx} pinnedHere={g.feature ? pinnedHere(g.feature.id) : false} onWeek={!!g.feature && weekRows.some((x) => x.itemId === g.feature!.id)} onAddToWeek={g.feature ? () => addToWeek(g.feature!) : undefined} menuOf={() => (g.feature ? menuFor(g) : null)} />
             ))}
           </ul>
-        </AddSection>
-      )}
-      {list.promises.length > 0 && (
+        ) : (
+          work && <p className="muted aw-note">Nothing open is assigned to you for {name(clientKey)}. Type to add a to-do.</p>
+        )}
+      </AddSection>
+      {promises.length > 0 && (
         <AddSection className="aw-sec" label="Promises">
           <ul className="aw-list">
-            {list.promises.map((f) => (
+            {promises.map((f) => (
               <AddRow key={f.id} ctx={ctx} k={`f${f.id}`} promise={f.id} focused={focus?.kind === "followup" && focus.id === f.id} d={{ clientKey, itemId: addKey({ followUpId: f.id }), size: null, title: f.what, add: { followUpId: f.id } }}>
                 <a className="aw-row-title bp-promise" href={`#/inbox/item/f${f.id}`} title="Open it in the Inbox">{f.hasWho ? `${f.who}: ` : ""}{f.what}</a>
                 <DueBadge l={f} />
@@ -618,35 +678,32 @@ function AddListView({ ctx, list, state, doneBy, name, focus, onChanged }: { ctx
           </ul>
         </AddSection>
       )}
-      {list.other.length > 0 && (
-        <section className="pl-sec aw-sec bp-other" aria-label="Other work assigned to you">
-          <FoldLine open={otherOpen} onToggle={() => setOtherOpen((o) => !o)} label="Other work assigned to you" count={list.otherCount} />
-          {otherOpen && (
+      <section className="pl-sec aw-sec bp-other" aria-label={`More in ${name(clientKey)}`}>
+        <FoldLine open={moreOpen} onToggle={() => (setMoreOpen((o) => !o), onWantMore())} label={`More in ${name(clientKey)}`} count={rest ? moreCount(rest) : undefined} title={`Everything else open in ${name(clientKey)}'s DevOps: other people's features and stories`} />
+        {moreOpen && (rest ? (
+          rest.length > 0 ? (
             <ul className="aw-list">
-              {list.other.map((r) =>
-                r.kids.length ? (
-                  <li key={r.item.id} className="aw-group">
-                    <span className="aw-group-title">
-                      <TypeIcon clientKey={clientKey} type={r.item.type} /> <span className="aw-row-title">{r.item.title}</span>
-                      {!onWeek.has(r.item.id) && (
-                        <button type="button" className="link-btn aw-addweek" onClick={() => addToWeek(r.item)}>
-                          Add to this week
-                        </button>
-                      )}
-                    </span>
+              {rest.map((g) => (
+                <li key={g.feature?.id ?? "none"} className="aw-group">
+                  <span className="aw-group-title" title={g.feature ? hoverWords(g.feature) : undefined}>
+                    {g.feature ? <TypeIcon clientKey={clientKey} type={g.feature.type} /> : null} <span className="aw-row-title">{g.feature?.title ?? "No feature"}</span>
+                    {g.feature && <span className="aw-who">{g.feature.assignedTo ?? "Unassigned"}</span>}
+                  </span>
+                  {g.stories.length > 0 && (
                     <ul>
-                      {r.kids.map((k) => <ItemAdd key={k.id} item={k} ctx={ctx} />)}
+                      {g.stories.map((k) => <ItemAdd key={k.id} item={k} ctx={ctx} take />)}
                     </ul>
-                  </li>
-                ) : (
-                  <ItemAdd key={r.item.id} item={r.item} ctx={ctx} onAddToWeek={onWeek.has(r.item.id) ? undefined : () => addToWeek(r.item)} />
-                ),
-              )}
+                  )}
+                </li>
+              ))}
             </ul>
-          )}
-        </section>
-      )}
-      {nothing && work && <p className="muted aw-note">Nothing open for {name(clientKey)}. Type to add a to-do.</p>}
+          ) : (
+            <p className="muted aw-note">Nothing else open in {name(clientKey)}.</p>
+          )
+        ) : (
+          <p className="muted aw-note">{more.error ?? "Loading…"}</p>
+        ))}
+      </section>
     </>
   );
 }
@@ -766,22 +823,19 @@ function AddRow({ ctx, k, d, children, menu, promise, focused = false }: { ctx: 
 }
 
 /**
- * A DevOps item to add, with its type's icon and, outside this week's features, "Add to this week" in its ⋯. Under one
- * of this week's features a teammate's open story says whose it is and offers Take one (PV-1: assign it to me in
- * DevOps, after its preview, with Undo), when I can write to that client's DevOps.
+ * A DevOps story to add, with its type's icon; its state, target date and size are on hover. A story that isn't mine
+ * says whose it is and offers Take one (PV-1: assign it to me in DevOps, after its preview, with Undo), when I can
+ * write to that client's DevOps.
  */
-function ItemAdd({ item, ctx, onAddToWeek, take = false }: { item: WorkItem; ctx: Ctx; onAddToWeek?: (() => void) | undefined; take?: boolean }) {
+function ItemAdd({ item, ctx, take = false }: { item: WorkItem; ctx: Ctx; take?: boolean }) {
   const dw = useDevOpsWrite();
   const dnd = useContext(WeekDnd);
-  const menu = useMenu((env) => {
-    const base = itemMenu(env, ctx.clientKey, item);
-    return onAddToWeek && "items" in base ? { ...base, items: [{ id: "add-week", label: "Add to this week", action: "weekplan.add", run: onAddToWeek }, ...base.items] } : base;
-  });
-  const theirs = take && item.assignedToMe === false;
+  const menu = useMenu((env) => itemMenu(env, ctx.clientKey, item));
+  const theirs = take && item.assignedToMe !== true;
   return (
     <AddRow ctx={ctx} k={`i${ctx.clientKey}:${item.id}`} d={{ clientKey: ctx.clientKey, itemId: item.id, size: null, title: item.title }} menu={menu}>
       <TypeIcon clientKey={ctx.clientKey} type={item.type} />
-      <span className="aw-row-title" title={`${item.type} ${item.id} · ${item.state}`}>
+      <span className="aw-row-title" title={hoverWords(item)}>
         <WorkLink clientKey={ctx.clientKey} url={item.url}>{item.title}</WorkLink>
       </span>
       {theirs && <span className="aw-who" title="Who it is assigned to in DevOps">{item.assignedTo ?? "Unassigned"}</span>}
@@ -795,47 +849,52 @@ function ItemAdd({ item, ctx, onAddToWeek, take = false }: { item: WorkItem; ctx
 }
 
 /**
- * A feature on this week: its title with "2 of 3 on", then its stories and drafts with "+". One with no stories is a
- * "Needs stories · Break down" row. Its own "+" places it on the block as a placeholder (its pin); ⋯ has the rest.
+ * One group of Assigned to you: a feature with my stories under it. Its "+" places it on the block as a placeholder
+ * (its pin); "2 of 4 on" when it has work on this week; "Needs stories · Break down" when it has none; whose it is
+ * when it isn't mine; its other stories behind "2 more in this feature"; its drafts with Create in DevOps.
  */
-function Feature({ f, ctx, onRemove, menuOf }: { f: Line; ctx: Ctx; onRemove: () => void; menuOf: () => MenuStep | null }) {
-  const p = f.row;
-  const story = p.level === "story";
-  const w = story ? ctx.where(`i${ctx.clientKey}:${p.ref.itemId}`) : null;
-  const pinnedHere = story ? !!w?.here : p.ref.slots.some((s) => s.date === ctx.at.date && s.half === ctx.at.half);
-  // A story on the week list goes on the block as a to-do; a feature as a placeholder.
-  const fd: Dragged = { clientKey: ctx.clientKey, itemId: p.ref.itemId, size: null, title: p.ref.title, ...(story ? (w && !w.here ? { pickId: w.pickId } : {}) : { feature: true as const }) };
-  const drag = useDragSource(pinnedHere || ctx.past ? null : fd);
-  const menu = useMenu(() => menuOf() ?? { title: p.ref.title, items: [{ id: "remove-week", label: "Remove from this week", action: "weekplan.remove", run: onRemove }] });
+function Group({ g, ctx, pinnedHere, onWeek, onAddToWeek, menuOf }: { g: AssignedGroup; ctx: Ctx; pinnedHere: boolean; onWeek: boolean; onAddToWeek?: (() => void) | undefined; menuOf: () => MenuStep | null }) {
+  const f = g.feature;
+  const [othersOpen, setOthersOpen] = useState(false);
+  const fd: Dragged | null = f ? { clientKey: ctx.clientKey, itemId: f.id, size: null, title: f.title, feature: true } : null;
+  const drag = useDragSource(!fd || pinnedHere || ctx.past ? null : fd);
+  const menu = useMenu((env) => {
+    const own = menuOf();
+    if (own || !f) return own ?? { title: "No feature", items: [] };
+    const base = itemMenu(env, ctx.clientKey, f);
+    return "items" in base && onAddToWeek ? { ...base, items: [{ id: "add-week", label: "Add to this week", action: "weekplan.add", run: onAddToWeek }, ...base.items] } : base;
+  });
   return (
-    <li className={`aw-feature${p.breakDown ? " aw-not-ready" : ""}`} data-feature={p.ref.itemId} onContextMenu={menu.onContextMenu}>
+    <li className={`aw-feature${g.breakDown ? " aw-not-ready" : ""}`} data-feature={f?.id ?? "none"} onContextMenu={f ? menu.onContextMenu : undefined}>
       <div className="aw-feat-head" {...drag}>
-        {pinnedHere ? (
-          <span className="aw-plus done" role="img" aria-label={story ? "On this block" : "On this block as a placeholder"} title={story ? "On this block" : "On this block as a placeholder"}>✓</span>
+        {!f ? null : pinnedHere ? (
+          <span className="aw-plus done" role="img" aria-label="On this block as a placeholder" title="On this block as a placeholder">✓</span>
         ) : (
-          <button type="button" className="aw-plus" disabled={ctx.past} onClick={() => void ctx.place(fd)} aria-label={story ? `Add ${p.ref.title}` : `Place ${p.ref.title} on this block`} title={story ? "Add to this block" : "Place it on this block as a placeholder (or drag it onto a block)"}>+</button>
+          <button type="button" className="aw-plus" disabled={ctx.past} onClick={() => void ctx.place(fd!)} aria-label={`Place ${f.title} on this block`} title="Place it on this block as a placeholder (or drag it onto a block)">+</button>
         )}
-        {p.item && <TypeIcon clientKey={ctx.clientKey} type={p.item.type} />}
-        {p.ref.itemId > 0 ? (
-          <ItemTitleLink clientKey={ctx.clientKey} id={p.ref.itemId} url={p.ref.url} className="aw-feat-name">{p.ref.title}</ItemTitleLink>
-        ) : (
-          <span className="aw-feat-name">{p.ref.title}</span>
-        )}
-        {p.breakDown ? (
-          <span className="aw-needs">
-            <span className="aw-needs-word">Needs stories</span>
-            <BreakDown clientKey={ctx.clientKey} item={{ id: p.ref.itemId, title: p.ref.title, ...(p.item ? { type: p.item.type } : {}) }} short />
+        {f && <TypeIcon clientKey={ctx.clientKey} type={f.type} />}
+        {f ? (
+          <span className="aw-feat-name" title={hoverWords(f)}>
+            <ItemTitleLink clientKey={ctx.clientKey} id={f.id} url={f.url}>{f.title}</ItemTitleLink>
           </span>
         ) : (
-          f.label && <span className="aw-count">{f.label}</span>
+          <span className="aw-feat-name bp-nofeature">No feature</span>
         )}
-        {w && !w.here && <span className="aw-where">{w.label}</span>}
-        {menu.button(`More for ${p.ref.title}`)}
+        {f && !g.mine && <span className="aw-who" title="Who the feature is assigned to in DevOps">{f.assignedTo ?? "Unassigned"}</span>}
+        {g.breakDown && f ? (
+          <span className="aw-needs">
+            <span className="aw-needs-word">Needs stories</span>
+            <BreakDown clientKey={ctx.clientKey} item={{ id: f.id, title: f.title, type: f.type }} short />
+          </span>
+        ) : (
+          g.label && <span className="aw-count" title={onWeek ? "Its stories on a block this week" : undefined}>{g.label}</span>
+        )}
+        {f && menu.button(`More for ${f.title}`)}
       </div>
-      {(p.stories.length > 0 || p.drafts.length > 0) && (
+      {(g.stories.length > 0 || g.drafts.length > 0) && (
         <ul>
-          {p.stories.map((k) => <ItemAdd key={k.id} item={k} ctx={ctx} take />)}
-          {p.drafts.map((d) => (
+          {g.stories.map((k) => <ItemAdd key={k.id} item={k} ctx={ctx} />)}
+          {g.drafts.map((d) => (
             <AddRow key={`d${d.id}`} ctx={ctx} k={`d${d.id}`} d={{ clientKey: ctx.clientKey, itemId: addKey({ draftId: d.id }), size: d.size, title: d.title, add: { draftId: d.id } }}>
               <DraftTitle draft={d} className="aw-row-title" />
               <span className="aw-size">{d.size ? `${d.size} · ` : ""}draft</span>
@@ -843,6 +902,16 @@ function Feature({ f, ctx, onRemove, menuOf }: { f: Line; ctx: Ctx; onRemove: ()
             </AddRow>
           ))}
         </ul>
+      )}
+      {g.others.length > 0 && (
+        <div className="bp-others">
+          <FoldLine className="bp-others-line" open={othersOpen} onToggle={() => setOthersOpen((o) => !o)} label={`${g.others.length} more in this feature`} />
+          {othersOpen && (
+            <ul>
+              {g.others.map((k) => <ItemAdd key={k.id} item={k} ctx={ctx} take />)}
+            </ul>
+          )}
+        </div>
       )}
     </li>
   );

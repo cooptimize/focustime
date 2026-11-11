@@ -113,19 +113,20 @@ describe.skipIf(!CHROMIUM)("Week block panel (PV-1)", () => {
       const mon = blocks.nth(0);
       const tue = blocks.nth(1);
 
-      // WD-2: open Monday PM's block panel. Its Add list has this week's feature (none of its stories yet: Needs
-      // stories) and, folded, the other work assigned to me under its features.
+      // WD-2: open Monday PM's block panel. Assigned to you has my feature with no stories (Needs stories) and my
+      // stories under their features.
       await mon.locator(".card-client").first().click();
       const panel = page.locator("aside.block-panel");
       await panel.waitFor();
       const empty = panel.locator(`.aw-feature[data-feature="${FEATURE}"]`);
       await empty.getByText("Needs stories").waitFor();
-      const fold = panel.locator(".bp-other > .pl-fold");
-      await fold.click();
-      const story = panel.locator(".bp-other .aw-row[draggable=true]").first();
+      // WD-2 follow-up: a story of mine under a teammate's feature shows under that feature, by name, in Assigned to you.
+      const theirs = panel.locator(".bp-assigned .aw-feature", { has: page.locator(".aw-feat-head .aw-who") }).first();
+      await theirs.waitFor();
+      expect((await theirs.locator(".aw-feat-name").innerText()).trim().length).toBeGreaterThan(0);
+      const story = theirs.locator(":scope > ul > .aw-row[draggable=true]").first();
       await story.waitFor();
       const title = (await story.locator(".aw-row-title").innerText()).trim();
-      // Placing it adds its feature to the week, so its row moves from Other work to This week's features.
       const rowOf = () => panel.locator(".aw-row", { hasText: title }).first();
       await shotBoth(page, "week-panel-groups", panel);
       await shotBoth(page, "week-panel-no-stories", empty);
@@ -153,7 +154,10 @@ describe.skipIf(!CHROMIUM)("Week block panel (PV-1)", () => {
       await box.fill("Check the export with finance");
       await box.press("ArrowDown");
       await panel.locator(".bp-result.hl", { hasText: "New draft story: Check the export with finance" }).waitFor();
-      await panel.locator("select.bp-parent").selectOption(String(FEATURE));
+      await panel.locator("button.bp-parent").click();
+      await page.getByRole("menuitemcheckbox", { name: /My feature with no stories/ }).or(page.getByRole("menuitem", { name: /My feature with no stories/ })).first().click();
+      await panel.locator("button.bp-parent", { hasText: "under My feature with no stories" }).waitFor();
+      await box.focus();
       await box.press("Enter");
       await mon.getByText("Check the export with finance").waitFor();
       await empty.locator(".aw-row", { hasText: "Check the export with finance" }).getByRole("button", { name: "Create in DevOps" }).click();

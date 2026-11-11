@@ -292,7 +292,7 @@ describe.skipIf(!CHROMIUM)("WD-1: the To place line (browser, demo on Tuesday)",
     await page.close();
   }, T);
 
-  it("WD-2: from a block, This week's features come first; To place and You sent are folded at the bottom; Review opens To place", async () => {
+  it("WD-2: from a block, Assigned to you comes first; To place and You sent are folded at the bottom; Review opens To place", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await openWeek(page);
     await page.locator(".to-place-line").waitFor({ timeout: 30_000 });
@@ -306,7 +306,7 @@ describe.skipIf(!CHROMIUM)("WD-1: the To place line (browser, demo on Tuesday)",
     expect(await line.innerText()).toMatch(/^▸ \d+ to place$/);
     expect(await line.getAttribute("title")).toMatch(/\d+ (unfinished|from last week|sent to you)/);
     expect(await panel(page).locator("section.carry-summary, section.carry").count()).toBe(0);
-    // Order: On this block, the meetings line, Add with This week's features first, then Promises and Other work;
+    // Order: On this block, the meetings line, Add with Assigned to you first, then Promises and More in the client;
     // To place and You sent folded at the bottom.
     const order = await panel(page).evaluate((el) =>
       [...el.querySelectorAll(".bp-on, .bp-add, .aw-toplace, .aw-sec")].map((x) => (x.classList.contains("bp-on") ? "on" : x.classList.contains("bp-add") ? "add" : x.classList.contains("aw-toplace") ? "place" : x.classList.contains("aw-features") ? "features" : x.classList.contains("aw-sends") ? "sends" : x.classList.contains("bp-other") ? "other" : (x.querySelector("h3, h4, .pl-label")?.textContent ?? "").trim())),
