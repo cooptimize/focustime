@@ -154,6 +154,7 @@ export const SETTINGS: readonly SettingDef[] = [
   // DevOps
   { id: "devops-read", section: "devops", label: "DevOps per client", keywords: ["live", "cached", "pat problem"] },
   { id: "devops-write", section: "devops", label: "DevOps write access", old: ["Enable DevOps writes", "Write access"], keywords: ["pat", "personal access token"] },
+  { id: "find-item", section: "devops", label: "Find an item", keywords: ["missing item", "why isn't it showing", "not showing", "item number", "scope", "area"] },
   // AI and assistant
   { id: "ai-team", section: "ai", label: "AI for FocusTime", keywords: ["allowed for", "monthly limit", "admin"] },
   { id: "ai-month", section: "ai", label: "This month's AI spend", keywords: ["cost", "budget", "cap"] },

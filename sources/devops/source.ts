@@ -12,7 +12,7 @@ import { formatFetchedAt } from "../when.ts";
 import { batchFields, buildAllChildrenWiql, buildChildrenWiql, buildWiql, detectOrderField, identityEmail, detectSizeField, detectTargetField, detectTypeSizeField, fieldNames, identityName, dateOnly, workItemUrl, START_DATE_FIELD, ACCEPTANCE_FIELD, htmlToText, normalizeWorkItems, type BacklogLevels, type FieldInfo, type NormalizeContext, type StateCategories } from "./normalize.ts";
 import { buildProcessModel, isClosed, isOpen, looksOf, type TypeLook, planningLevels, stateCategories, typeOf, type ProcessModel, type ProcessOverrides, type RawProcess } from "../../plan/process.ts";
 import { Pat } from "./pat.ts";
-import { scopeCounts, scopeOf, type DevOpsScope, type ProjectAreas, type ScopeCounts, type ScopeItem, type ScopeResult } from "../../plan/devops-scope.ts";
+import { scopeCounts, scopeOf, scopeWords, type DevOpsScope, type ProjectAreas, type ScopeCounts, type ScopeItem, type ScopeResult } from "../../plan/devops-scope.ts";
 import type { DevOpsTarget, TargetsResult } from "./types.ts";
 import type { ExemplarCandidate, FeatureSignals } from "../../plan/stories.ts";
 import { COMMENTS_MAX, type CardRead } from "../../plan/item-card.ts";
@@ -103,6 +103,14 @@ export type CentralReads = {
   target(clientKey: string): Promise<DevOpsTarget | null>;
   /** After a write: check the client now, so the next read shows the change. */
   afterWrite(clientKey: string): void;
+  /** DV-2: each client's version and freshness, from memory (never items). */
+  freshness?(clientKeys: readonly string[]): Promise<import("../../plan/devops-fresh-types.ts").Freshness[]>;
+  /** DV-2: Refresh: a check now (30 s apart, shared), waited for up to 8 s. */
+  force?(clientKey: string): Promise<import("../../plan/devops-fresh-types.ts").ForcedCheck>;
+  /** DV-2: Find an item's one read by id (never stored). */
+  find?(clientKey: string, id: number): Promise<import("../../actions/devops-poll.ts").FoundRaw>;
+  /** DV-2: what the store holds of one item, and the client's last check. */
+  storedOf?(clientKey: string, id: number): Promise<{ item: { rev: number; changedAt: string } | null; checkedAt: string | null; okAt: string | null }>;
   /** AH-1: a write's read-back, into the store and its change log now (not on the next check). */
   stored?(clientKey: string, value: RawValue): Promise<void>;
   /** PL-1: items whose state changed since an instant (the change log), and whether the log covers that span. */
@@ -1391,6 +1399,66 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return { ref, target: { ...t, email: v!.email } };
   }
 
+  // ---- DV-2: freshness, Refresh and Find an item, only for clients this person can see ----
+  /** The clients of these this person may see (an active Account Worker with DevOps set up), as Ahead decides it. */
+  async function seen(keys: readonly string[], force: boolean): Promise<string[]> {
+    const t = await viewerTargets(keys, force);
+    if (!t.ok) return [];
+    return keys.filter((k) => !precheck({ clientKey: k, clientName: k }, t.targets.find((x) => x.clientKey === k), { pat: false }));
+  }
+  /** DV-2: versions and freshness of the clients asked for that this person can see. Nothing else, never an item. */
+  async function freshness(clients: readonly ClientRef[]): Promise<import("../../plan/devops-fresh-types.ts").Freshness[]> {
+    if (!d.central?.freshness || !clients.length) return [];
+    return d.central.freshness(await seen(clients.map((c) => c.clientKey), false));
+  }
+  /** DV-2: Refresh for the clients on screen this person can see: a check each (30 s apart, shared), up to 8 s. */
+  async function refreshNow(clients: readonly ClientRef[]): Promise<import("../../plan/devops-fresh-types.ts").ForcedCheck[]> {
+    if (!d.central?.force || !clients.length) return [];
+    const keys = await seen(clients.map((c) => c.clientKey), true);
+    return Promise.all(keys.map((k) => d.central!.force!(k)));
+  }
+  /**
+   * DV-2: Find an item's facts for one client this person can see: one read by id (the poller's limiter), the store,
+   * the scope. Null when the person can't see the client. Never another client's records: an item in another project
+   * reads as missing, with nothing about it.
+   */
+  async function findItem(ref: ClientRef, id: number): Promise<Pick<import("../../plan/find-item.ts").FindFacts, "devops" | "store" | "scope" | "devopsRev"> | null> {
+    if (!d.central?.find || !d.central.storedOf) return null;
+    const targets = await viewerTargets([ref.clientKey], false);
+    if (!targets.ok) return null;
+    const target = targets.targets.find((t) => t.clientKey === ref.clientKey);
+    if (precheck(ref, target, { pat: false })) return null;
+    const [raw, st, view] = await Promise.all([d.central.find(ref.clientKey, id), d.central.storedOf(ref.clientKey, id), d.central.view(ref.clientKey, { force: false })]);
+    const store = { has: !!st.item, changedAt: st.item?.changedAt ?? null, rev: st.item?.rev ?? null, checkedAt: st.checkedAt, okAt: st.okAt };
+    if (raw.status === "unavailable") return { devops: { kind: "unavailable", words: raw.words }, store, scope: null };
+    if (raw.status !== "found" || !view.process) return { devops: { kind: "missing" }, store, scope: null };
+    const meta = metaOf(view.process, ref.clientKey);
+    const cats = stateCategories(meta.model, d.openStates?.(ref.clientKey) ?? []);
+    const f = raw.value.fields;
+    const str = (v: unknown) => (typeof v === "string" ? v : "");
+    const type = str(f["System.WorkItemType"]);
+    const state = str(f["System.State"]);
+    const level = typeOf(meta.model, type)?.level ?? null;
+    const tier = level === "top" ? "epic" : level === "parent" ? "feature" : level === "child" ? "story" : level === "task" ? "task" : null;
+    const who = identityEmail(f[ASSIGNED_FIELD]);
+    const ids = await d.identities?.(ref.clientKey).catch(() => null);
+    const mine = new Set([target!.email, ...(ids?.mine ?? [])].filter((e): e is string => !!e).map((e) => e.toLowerCase()));
+    const parent = f["System.Parent"];
+    // The scope as screens apply it, with this item as DevOps has it now in place of the stored one.
+    const values = [...view.values.filter((v) => v.id !== id), raw.value];
+    const sc = await scopeFor(ref.clientKey, { values, areas: view.areas ?? null }, meta.model, target!.email ?? null);
+    const deps = sc ? await d.scope?.(ref.clientKey).catch(() => null) : null;
+    return {
+      devops: {
+        kind: "found",
+        item: { id, title: str(f["System.Title"]).trim() || "(No title)", type, state, closed: isClosed(cats.get(type)?.get(state.toLowerCase()) ?? "Unknown"), tier, parentId: typeof parent === "number" ? parent : null, assignee: !who ? "nobody" : mine.has(who) ? "me" : "someone", area: str(f["System.AreaPath"]) || null },
+      },
+      devopsRev: typeof f["System.Rev"] === "number" ? (f["System.Rev"] as number) : null,
+      store,
+      scope: sc && !sc.all ? { inScope: sc.ids.has(id), rule: scopeWords(deps?.rule ?? null) } : null,
+    };
+  }
+
   // ---- DV-1: what the central poller uses (an app-level source: targets carry the company read PAT, no identity) ----
   const internal = {
     /** Why a client can't be polled, or null. */
@@ -1436,13 +1504,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
     },
   };
 
-  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, lastChanges, aheadItems, projectPeople, linkedItems, searchItems, featureComments, activity, itemCard, internal };
+  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, lastChanges, aheadItems, projectPeople, linkedItems, searchItems, featureComments, activity, itemCard, freshness, refreshNow, findItem, internal };
 }
 
 /** What screens use (the same interface whether it reads DevOps or the central store). */
 type FullSource = ReturnType<typeof createDevOpsSource>;
 /** PL-1's by-id reads are optional: a source without them (a stub, an older adapter) means "DevOps can't say". */
-type PlanReads = "featureTrees" | "itemStates" | "stateChanges" | "lastChanges" | "aheadItems" | "projectPeople" | "linkedItems" | "searchItems" | "featureComments" | "activity" | "itemCard";
+type PlanReads = "featureTrees" | "itemStates" | "stateChanges" | "lastChanges" | "aheadItems" | "projectPeople" | "linkedItems" | "searchItems" | "featureComments" | "activity" | "itemCard" | "freshness" | "refreshNow" | "findItem";
 export type DevOpsSource = Omit<FullSource, "internal" | PlanReads> & Partial<Pick<FullSource, PlanReads>>;
 /** DV-1: what the central poller uses of an app-level source. */
 export type DevOpsInternal = ReturnType<typeof createDevOpsSource>["internal"];

@@ -130,7 +130,7 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["Drag"], does: "In Week: a row from Add work onto any block to place it there" },
   { keys: ["["], does: "Previous week", command: "week.prev" },
   { keys: ["]"], does: "Next week", command: "week.next" },
-  { keys: ["R"], does: "Refresh all sources", command: "week.load" },
+  { keys: ["R"], does: "Refresh: check DevOps now for the clients on screen and reread every source, on every tab; says what it found", command: "week.load" },
   { keys: ["V"], does: "Week: Timelines, the hours the rails show (business hours, 12 hours, 24 hours); H also works; also in Week's ⋯", command: "ui.set_view_range" },
   { keys: ["B"], does: "Week: show or hide the timeline (the slim hour rail beside each card); also in the header and in ⋯", command: "ui.set_show_timelines" },
   { keys: ["B"], does: "Day: show or hide the timeline; also beside the header and in ⋯", command: "ui.set_today_timeline" },

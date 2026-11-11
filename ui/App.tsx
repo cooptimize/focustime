@@ -17,6 +17,7 @@ import { allDone, sourceLines } from "./brand/opening.ts";
 import type { Theme } from "../config/schema.ts";
 import { copyWorkLink, ITEM_CARD_EVENT, NOTICE_EVENT, openChecked, openItemCard, openWorkItem, type ItemCardTarget, type Opened } from "./WorkLink.tsx";
 import { DevOpsWriteCtx, useDevOpsWriteFlow } from "./DevOpsWrite.tsx";
+import { DevOpsFreshCtx, useDevOpsChanged, useDevOpsFreshFlow } from "./DevOpsFresh.tsx";
 import { DoneOfferCtx } from "./DoneOffer.tsx";
 import { useWrapUpFlow } from "./WrapUp.tsx";
 import { StoryCard } from "./StoryCard.tsx";
@@ -720,6 +721,20 @@ export function App() {
       }),
     [load],
   );
+  // DV-2: one signal for DevOps: the versions every 30 s while visible; a client's move rereads the week quietly
+  // (Day, Week's cards, Add work and the Details panel read it). Ahead, Status, the Inbox and the story card follow the
+  // same signal on their own data.
+  const fresh = useDevOpsFreshFlow(state.kind === "ready");
+  useDevOpsChanged(null, reloadQuiet, { env: fresh, gapMs: 60_000 });
+  /** DV-2: R and every Refresh: check DevOps now for my clients, say what it found, then reread every source. */
+  const refreshAll = useCallback(async () => {
+    setNotice("Checking DevOps…");
+    const r = await fresh.refresh();
+    setNotice(r ? r.line : "DevOps couldn't be checked now");
+    auto.trigger("button");
+  }, [fresh, auto]);
+  const refreshAllRef = useRef(refreshAll);
+  refreshAllRef.current = refreshAll;
   useEffect(() => {
     auto.start();
     const onFocus = () => auto.trigger("focus");
@@ -1293,10 +1308,6 @@ export function App() {
           if (!canAddWork({ date: d.date, today: data.planDay.date, pto: !!d.pto, off: sl.off })) return setNotice(d.date < data.planDay.date ? "That day is past: its to-dos can only be ticked done or dropped" : d.pto ? "That's a PTO day" : "That block has no working hours");
           return addWork(d.date, sel.half);
         }
-        case "r":
-          e.preventDefault();
-          auto.trigger("key");
-          return;
         case "[": return changeWeek(-1);
         case "]": return changeWeek(1);
       }
@@ -1304,6 +1315,19 @@ export function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [sel, detailsOpen, data, goToday, changeWeek, auto, cmdOpen, keysOpen, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, focusOpen, guideAt, docsAt, meetingAt, base, captureOpen, layout, nav]);
+
+  // DV-2: R refreshes on every tab (Today, Week, Ahead, Status, Inbox, Settings), never while typing or in a dialog.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key !== "r" && e.key !== "R") || e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented || !data) return;
+      if (focusOpen || cmdOpen || keysOpen || captureOpen) return;
+      if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
+      e.preventDefault();
+      void refreshAllRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [data, focusOpen, cmdOpen, keysOpen, captureOpen]);
 
   // QF-1: [ and ] on Today step a day back or ahead (never while typing; Week keeps them for its weeks).
   useEffect(() => {
@@ -1365,7 +1389,7 @@ export function App() {
       wrapUp: (pickId: number) => doneOffer.openPick(pickId),
       changeWeek,
       goToday,
-      refresh: () => auto.trigger("button"),
+      refresh: () => void refreshAllRef.current(),
       showSourceStatus: () => {
         const states = data.sources.map((s) => `${sourceLabel(s)}: ${stateOf(s).label}`).join(" · ");
         const causes = causeLines(data.sources, data.devops).map((l) => l.text).join(". ");
@@ -1621,6 +1645,7 @@ export function App() {
     <WeekItems.Provider value={weekItems}>
     <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, minSizes: data.planning.minSizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures, timeboxes: data.timeboxes, followUps: data.followUps, today: data.planDay.date, checkins: data.checkins ?? [] }}>
     <TimeboxCtx.Provider value={tbEnv}>
+    <DevOpsFreshCtx.Provider value={fresh}>
     <DevOpsWriteCtx.Provider value={devopsWrites.env}>
     <DoneOfferCtx.Provider value={doneOffer.env}>
     <MenuHost env={env}>
@@ -1781,7 +1806,7 @@ export function App() {
           devops={data.devops}
           busy={busy}
           loading={loading}
-          onRefresh={() => auto.trigger("button")}
+          onRefresh={() => void refreshAllRef.current()}
           onConnect={(src) => {
             // Step 17.5: a calendar that was down and reconnects here gets the fun moment.
             const wasDown = data.sources.some((s) => s.source === src && s.status !== "ok");
@@ -1916,7 +1941,7 @@ export function App() {
           onAsks={(id) => (id ? goNav(navOf.conversation(id)) : setView("conversations"))}
           onPromises={(id) => (id ? goNav(navOf.promise(id)) : setView("my_promises"))}
           onCaptures={() => setView("capture")}
-          onRetry={() => auto.trigger("button")}
+          onRetry={() => void refreshAllRef.current()}
           onFix={() => setSettingsAt("connections")}
           onSettings={(section) => setSettingsAt(section as never)}
           onChanged={reloadQuiet}
@@ -2066,7 +2091,7 @@ export function App() {
         notice={notice ?? (state.kind === "ready" ? state.refreshError ?? null : null)}
         extra={personalHiddenChip}
         clock={clock}
-        onRefresh={() => auto.trigger("button")}
+        onRefresh={() => void refreshAllRef.current()}
         onConnect={(src) => void connect(src)}
         onDisconnect={(src) => void disconnect(src)}
         onReplaceLink={() => setSettingsAt("connections", "calendar-links")}
@@ -2081,7 +2106,7 @@ export function App() {
           busy={busy}
           vm={<VmChip />}
           extra={personalHiddenChip}
-          onRefresh={() => auto.trigger("button")}
+          onRefresh={() => void refreshAllRef.current()}
           onConnect={(src) => void connect(src)}
           onSettings={() => (setStatusOpen(false), setSettingsAt("connections", data.sources.some((x) => x.link?.broken) ? "calendar-links" : "sources"))}
           onClose={() => setStatusOpen(false)}
@@ -2261,6 +2286,7 @@ export function App() {
     </MenuHost>
     </DoneOfferCtx.Provider>
     </DevOpsWriteCtx.Provider>
+    </DevOpsFreshCtx.Provider>
     </TimeboxCtx.Provider>
     </PlanCtx.Provider>
     </WeekItems.Provider>

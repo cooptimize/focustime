@@ -1242,6 +1242,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "calendar_link.replace":
     case "calendar_link.remove": return { run: () => env.openSettings("connections", "calendar-links") };
     case "ui.set_reduce_motion": return { next: () => ({ title: "Reduce motion", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.reduceMotion === on, action: "ui.set_reduce_motion", run: () => env.saveReduceMotion(on) })) }) };
+    case "demo.devops_change": return { disabled: "Runs from a demo script" };
     case "demo.reset": return env.demo ? { run: () => env.openSettings("data", "demo-reset") } : { disabled: "Reset demo is only in the demo" };
     case "demo.status": return env.demo ? { run: () => env.openSettings("data", "demo-reset") } : { disabled: "Only in the demo" };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
@@ -1565,6 +1566,12 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "devops.clear_write_pat":
     case "devops.write_status":
       return { run: () => env.openSettings("devops", "devops-write") };
+    // DV-2: Refresh checks DevOps now and says what changed; Find an item lives in Settings › DevOps.
+    case "devops.versions":
+    case "devops.refresh":
+      return { run: env.refresh };
+    case "devops.find":
+      return { run: () => env.openSettings("devops", "find-item") };
     case "devops.states":
     case "devops.preview":
       return { run: env.openCaptures };

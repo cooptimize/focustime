@@ -13,7 +13,7 @@ import type { ProcessOverrides } from "../plan/process.ts";
 import { createDemoSources } from "../sources/demo/sources.ts";
 import { DEFAULT_AI } from "./appconfig.ts";
 import { demoAi } from "../sources/demo/ai.ts";
-import { createDemoDevOps, type DemoDevOps } from "../sources/demo/devops.ts";
+import { createDemoDevOps, parseTeammate, type DemoDevOps } from "../sources/demo/devops.ts";
 import { createDemoOutlook, type DemoOutlook } from "../sources/demo/outlook.ts";
 import { DEMO_SEEDS, type DemoSeedEnv } from "../sources/demo/seeds/index.ts";
 import { demoDevOpsPeople, demoItems, demoPto } from "../sources/demo/data.ts";
@@ -254,7 +254,11 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     org,
     adminOps,
     standards,
-    demo: { ...opts.demo, status: () => ({ ai: { realProvider: ai.real(), real: ai.log.real, samples: ai.log.samples, lastReason: ai.log.lastReason } }) },
+    demo: {
+      ...opts.demo,
+      status: () => ({ ai: { realProvider: ai.real(), real: ai.log.real, samples: ai.log.samples, lastReason: ai.log.lastReason } }),
+      devopsChange: (clientKey, change) => (isDemoClient(clientKey) ? devops.teammate(clientKey, parseTeammate(change)) : { ok: false, error: "That isn't a demo client" }),
+    },
     // DM-1: every AI feature runs in the demo: the app's real provider on this fictional data, else the stored samples.
     ai: aiRuntime,
     account: () => demoAzure.account,

@@ -12,6 +12,7 @@ import { byItem, pendingText, valueText, type ChangeField, type ChangeValue, typ
 import { fixCount } from "../../plan/fixnext.ts";
 import { call } from "../api.ts";
 import { useDevOpsWrite } from "../DevOpsWrite.tsx";
+import { useDevOpsChanged, useDevOpsFresh } from "../DevOpsFresh.tsx";
 import { TypeIcon } from "../TypeIcon.tsx";
 import { openBreakDown, type PanelAction } from "../menu.ts";
 import { openSend } from "../send-event.ts";
@@ -55,6 +56,11 @@ export type AheadEnv = {
   error: (s: string) => void;
   /** AH-6: the one level, carets and Show callouts, shared by every mode. */
   view: AheadViewState;
+  /**
+   * DV-2: an item I have staged changes on that changed in DevOps while Ahead was open: what DevOps has now for each
+   * staged field beside mine (null: it didn't). Nothing is overwritten on either side.
+   */
+  changedUnder: (clientKey: string, itemId: number) => { field: string; devops: string; mine: string }[] | null;
 };
 export const AheadCtx = createContext<AheadEnv | null>(null);
 export const useAhead = () => useContext(AheadCtx)!;
@@ -89,23 +95,60 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   // BH-1: only Backlog asks for the change log's last change per item.
   const wantLast = useRef(mode === "backlog");
   wantLast.current = wantLast.current || mode === "backlog";
-  const reload = useCallback(async (refresh = false) => {
-    setBusy(true);
+  // DV-2: the revision of each item as last read, to see an item I have staged changes on change in DevOps underneath.
+  const revs = useRef<Map<string, number>>(new Map());
+  const [changedNow, setChangedNow] = useState<Set<string>>(new Set());
+  // DV-2: moves on every stage, unstage and skip (as each starts and ends). A quiet reread that overlapped one keeps the
+  // page's own staged changes and skips, so a teammate's change never hides one I just made.
+  const local = useRef(0);
+  /** `quiet` (DV-2's signal): no "Reading…", and the place, filters, folds and staged changes all stay. */
+  const reload = useCallback(async (refresh = false, quiet = false) => {
+    if (!quiet) setBusy(true);
+    const startedAt = local.current;
     try {
-      const l = await call<AheadLoad>("ahead.load", { ...(refresh ? { refresh: true } : {}), ...(wantLast.current ? { lastChanges: true } : {}) });
-      setLoad(l);
+      const l = await call<AheadLoad>("ahead.load", { ...(refresh ? { refresh: true } : {}), ...(wantLast.current ? { lastChanges: true } : {}) }, quiet ? { background: true } : {});
+      const staged = new Set(l.changes.map((c) => `${c.clientKey}:${c.itemId}`));
+      const moved: string[] = [];
+      for (const c of l.clients)
+        for (const i of c.items) {
+          const k = `${c.clientKey}:${i.id}`;
+          const was = revs.current.get(k);
+          if (staged.has(k) && was !== undefined && i.rev > was) moved.push(k);
+          revs.current.set(k, i.rev);
+        }
+      // Only items still staged keep the flag (saved or unstaged ones lose it).
+      setChangedNow((x) => (moved.length || [...x].some((k) => !staged.has(k)) ? new Set([...x, ...moved].filter((k) => staged.has(k))) : x));
+      setLoad((was) => (quiet && was && local.current !== startedAt ? { ...l, changes: was.changes, ...(was.skips ? { skips: was.skips } : {}) } : l));
       setError(null);
       void call<RoadmapState>("roadmap.load", refresh ? { refresh: true } : {}).then(
         (r) => setRoadmap(new Map(r.clients.flatMap((c) => c.rows.map((x) => [`${c.clientKey}:${x.id}`, x] as const)))),
         () => null,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not read Ahead");
+      // A quiet reread that fails keeps what's showing, without a banner (the next signal tries again).
+      if (!quiet) setError(e instanceof Error ? e.message : "Could not read Ahead");
     } finally {
-      setBusy(false);
+      if (!quiet) setBusy(false);
     }
   }, []);
   useEffect(() => void reload(), [reload, dw?.version]);
+  // DV-2: a change in DevOps for a client shown here rereads Ahead quietly, in every mode.
+  useDevOpsChanged(load ? load.clients.map((c) => c.clientKey) : [], () => void reload(false, true));
+  const fresh = useDevOpsFresh();
+  /** Ahead's Refresh: the shared check for Ahead's clients, its answer, then Ahead reread. */
+  const refreshNow = async () => {
+    setBusy(true);
+    const r = fresh ? await fresh.refresh(load?.clients.map((c) => c.clientKey)) : null;
+    await reload(!fresh);
+    setBusy(false);
+    if (r) setSaid({ id: Date.now(), text: r.line });
+  };
+  const [said, setSaid] = useState<{ id: number; text: string } | null>(null);
+  useEffect(() => {
+    if (!said) return;
+    const t = window.setTimeout(() => setSaid((x) => (x?.id === said.id ? null : x)), 6000);
+    return () => window.clearTimeout(t);
+  }, [said]);
   // AH-7: a fresh read brings my skips (and this week's fixes) from the server again.
   useEffect(() => setSkipOverride(null), [load?.skips]);
   useEffect(() => {
@@ -138,8 +181,10 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   };
 
   const stage: AheadEnv["stage"] = async (r, field, value, half = null) => {
+    local.current++;
     try {
       const res = await call<{ changes: StagedChange[] }>("ahead.stage", { clientKey: r.clientKey, itemId: r.item.id, field, value, ...(half ? { half } : {}) });
+      local.current++;
       setLoad((l) => (l ? { ...l, changes: res.changes } : l));
       return true;
     } catch (e) {
@@ -148,7 +193,9 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
     }
   };
   const unstage: AheadEnv["unstage"] = async (r, field) => {
+    local.current++;
     const res = await call<{ changes: StagedChange[] }>("ahead.unstage", { clientKey: r.clientKey, itemId: r.item.id, ...(field ? { field } : {}) }).catch(() => null);
+    local.current++;
     if (res) setLoad((l) => (l ? { ...l, changes: res.changes } : l));
   };
   // The side panel's action list (D665): Send to… for a feature, SW-1's one dialog and rules (an epic is sent through its features).
@@ -221,7 +268,9 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
     if (on) next[key] = load?.today ?? "";
     else delete next[key];
     setSkipOverride(next);
-    void call<{ skips: Skips }>(on ? "ahead.skip" : "ahead.unskip", { clientKey, itemId }).then((r) => setSkipOverride(r.skips), (e: unknown) => {
+    local.current++;
+    void call<{ skips: Skips }>(on ? "ahead.skip" : "ahead.unskip", { clientKey, itemId }).then((r) => (local.current++, setSkipOverride(r.skips)), (e: unknown) => {
+      local.current++;
       setSkipOverride(skips);
       setError(e instanceof Error ? e.message : "That skip couldn't be kept");
     });
@@ -243,8 +292,18 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
 
   const n = load?.changes.length ?? 0;
   const color = (k: string) => clientColor(k, data.clients);
-  const setChanges = (changes: StagedChange[]) => setLoad((l) => (l ? { ...l, changes } : l));
-  const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, setChanges, breakDown, color, focusItem: item, error: setError, view } : null;
+  const setChanges = (changes: StagedChange[]) => (local.current++, setLoad((l) => (l ? { ...l, changes } : l)));
+  const changedUnder: AheadEnv["changedUnder"] = (clientKey, itemId) => {
+    if (!load || !changedNow.has(`${clientKey}:${itemId}`)) return null;
+    const mine = load.changes.filter((c) => c.clientKey === clientKey && c.itemId === itemId);
+    const it = load.clients.find((c) => c.clientKey === clientKey)?.items.find((i) => i.id === itemId);
+    if (!mine.length || !it) return null;
+    const now = (f: ChangeField): ChangeValue => (f === "start" ? it.start : f === "target" ? it.target : f === "size" ? it.size : f === "state" ? it.state : it.assignee?.email ? { email: it.assignee.email, name: it.assignee.name } : null) as ChangeValue;
+    const label: Record<ChangeField, string> = { start: "Start", target: "Target", size: "Size", assignee: "Owner", state: "State" };
+    const text = (f: ChangeField, v: ChangeValue | undefined, half: DayHalf | null = null) => (v === null || v === undefined || v === "" ? (f === "assignee" ? "nobody" : "no value") : valueText(f, v, half));
+    return mine.map((c) => ({ field: label[c.field], devops: text(c.field, now(c.field)), mine: text(c.field, c.value, c.half) }));
+  };
+  const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, setChanges, breakDown, color, focusItem: item, error: setError, view, changedUnder } : null;
   const anyFilter = counts.shown !== counts.total;
   const visible = counts.shown;
   const title = mode === "fix" ? "Readiness" : mode === "gantt" ? "Gantt" : mode === "backlog" ? "Backlog" : "Grid";
@@ -255,9 +314,14 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
         <h2 ref={head} tabIndex={-1}>
           Ahead <span className="muted">{load ? `· ${mode === "fix" ? `${fixN} not ready yet` : plural(visible, "item", "items")}` : ""}</span>
         </h2>
-        <button type="button" className="top-btn" disabled={busy} onClick={() => void reload(true)} title="Read DevOps again">
+        <button type="button" className="top-btn" disabled={busy} onClick={() => void refreshNow()} title="Check DevOps now (R)">
           {busy ? "Reading…" : "Refresh"}
         </button>
+        {said && (
+          <span className="muted ah-refreshed" role="status">
+            {said.text}
+          </span>
+        )}
         <ModeArea>{renderSwitch && load && !readOnly ? renderSwitch({ fix: fixN }) : switcher}</ModeArea>
       </div>
       {load && n > 0 && (

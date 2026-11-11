@@ -39,6 +39,25 @@ export type DemoItem = {
   iteration: string;
   relations: { rel: string; url: string; attributes?: unknown }[];
 };
+/** DV-2: what a teammate can change in the demo's DevOps (see `teammate`). */
+export type TeammateChange =
+  | { id: number; title?: string; state?: string; assignee?: string | null; target?: string | null }
+  | { create: { type: string; title: string; parent?: number | null; assignee?: string | null; target?: string | null; /** In the project, outside the scope (another team's area). */ outsideScope?: boolean } };
+/** DV-2: a teammate's change from a request's input, or null when it isn't one. */
+export function parseTeammate(v: unknown): TeammateChange | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const str = (x: unknown) => typeof x === "string";
+  const opt = (x: unknown, ok: (y: unknown) => boolean) => x === undefined || ok(x);
+  const day = (x: unknown) => x === null || (str(x) && /^\d{4}-\d{2}-\d{2}$/.test(x as string));
+  if (o.create && typeof o.create === "object") {
+    const c = o.create as Record<string, unknown>;
+    if (!str(c.type) || !str(c.title) || !opt(c.parent, (x) => x === null || Number.isInteger(x)) || !opt(c.assignee, (x) => x === null || str(x)) || !opt(c.target, day) || !opt(c.outsideScope, (x) => typeof x === "boolean")) return null;
+    return { create: { type: c.type as string, title: c.title as string, ...(c.parent !== undefined ? { parent: c.parent as number | null } : {}), ...(c.assignee !== undefined ? { assignee: c.assignee as string | null } : {}), ...(c.target !== undefined ? { target: c.target as string | null } : {}), ...(c.outsideScope ? { outsideScope: true } : {}) } };
+  }
+  if (!Number.isInteger(o.id) || !opt(o.title, str) || !opt(o.state, str) || !opt(o.assignee, (x) => x === null || str(x)) || !opt(o.target, day)) return null;
+  return { id: o.id as number, ...(o.title !== undefined ? { title: o.title as string } : {}), ...(o.state !== undefined ? { state: o.state as string } : {}), ...(o.assignee !== undefined ? { assignee: o.assignee as string | null } : {}), ...(o.target !== undefined ? { target: o.target as string | null } : {}) };
+}
 type DemoComment = { id: number; text: string; isDeleted: boolean; createdBy: string; createdDate: string; /** SR-1 */ createdByName?: string; modifiedDate?: string };
 
 export const STATES: Record<string, { name: string; category: string }[]> = Object.fromEntries(
@@ -119,9 +138,18 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
   }
   const relationsOf = (i: DemoItem) => [...(i.parent !== null ? [{ rel: "System.LinkTypes.Hierarchy-Reverse", url: apiUrl(orgOf(i.clientKey), i.parent) }] : []), ...[...items.values()].filter((c) => c.parent === i.id).map((c) => ({ rel: "System.LinkTypes.Hierarchy-Forward", url: apiUrl(orgOf(i.clientKey), c.id) })), ...i.relations];
   const view = (i: DemoItem) => ({ id: i.id, rev: i.rev, fields: fields(i), relations: relationsOf(i), url: apiUrl(orgOf(i.clientKey), i.id) });
+  /** DV-2: each client's version moves on every change to one of its items (a write, a create, a teammate's change). */
+  const versions = new Map<DemoClientKey, number>();
+  /** DV-2: the items changed since the client's last Refresh, for "DevOps checked just now · 3 changes". */
+  const changedSince = new Map<DemoClientKey, Set<number>>();
+  const mark = (k: DemoClientKey, id: number) => {
+    versions.set(k, (versions.get(k) ?? 0) + 1);
+    (changedSince.get(k) ?? changedSince.set(k, new Set()).get(k)!).add(id);
+  };
   const bump = (i: DemoItem) => {
     i.rev++;
     i.changedAt = o.now();
+    mark(i.clientKey, i.id);
   };
   /** One field set the way DevOps would store it. */
   function setField(i: DemoItem, k: string, v: unknown, remove = false): void {
@@ -198,6 +226,7 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
       }
       if (!it.title.trim()) return json({ message: "TF401320: Rule Error for field Title. Error code: Required" }, 400);
       items.set(it.id, it);
+      mark(clientKey, it.id);
       return json(view(it));
     }
     m = /^_apis\/wit\/workitems\/(\d+)$/i.exec(rest);
@@ -262,8 +291,50 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
     return json({ message: "The demo's DevOps doesn't have that" }, 404);
   }) as typeof fetch;
 
+  /**
+   * DV-2: a teammate's change in the demo's DevOps (not through FocusTime): a title, state, assignee (an email, or null
+   * for nobody) or target date on an item, or a new item of a type the client's process has, with or without a parent
+   * or an assignee. Answers the item's id, or why not in plain words. Fictional, like everything here.
+   */
+  function teammate(k: DemoClientKey, c: TeammateChange | null): { ok: true; id: number } | { ok: false; error: string } {
+    if (!c) return { ok: false, error: "That isn't a change the demo's DevOps takes" };
+    const by = Object.keys(o.people).find((e) => e !== ME_EMAIL) ?? "teammate@example.com";
+    if ("create" in c) {
+      const x = c.create;
+      if (!STATES[x.type]) return { ok: false, error: `The demo's process has no ${x.type}` };
+      if (!x.title.trim()) return { ok: false, error: "A new item needs a title" };
+      const parent = x.parent != null ? items.get(x.parent) : null;
+      if (x.parent != null && (!parent || parent.clientKey !== k)) return { ok: false, error: `#${x.parent} isn't one of ${k}'s items` };
+      const c0 = DEMO_CLIENTS.find((d) => d.key === k)!;
+      const it: DemoItem = { clientKey: k, id: nextId++, rev: 1, type: x.type, state: "New", parent: parent?.id ?? null, title: x.title.trim(), who: null, whoEmail: null, target: x.target ?? null, start: null, size: null, changedAt: o.now(), order: Math.max(0, ...[...items.values()].filter((i) => i.clientKey === k).map((i) => i.order)) + 1, blocked: false, description: "", acceptance: "", projectOnly: !!x.outsideScope, createdBy: by, area: parent?.area ?? c0.project, iteration: parent?.iteration ?? c0.project, relations: [] };
+      if (x.assignee !== undefined) setField(it, "System.AssignedTo", x.assignee ?? "", x.assignee === null);
+      items.set(it.id, it);
+      if (parent) bump(parent);
+      mark(k, it.id);
+      return { ok: true, id: it.id };
+    }
+    const it = items.get(c.id);
+    if (!it || it.clientKey !== k) return { ok: false, error: `#${c.id} isn't one of ${k}'s items` };
+    if (c.state !== undefined && !(STATES[it.type] ?? []).some((s) => s.name === c.state)) return { ok: false, error: `${it.type} has no state ${c.state}` };
+    if (c.title !== undefined) setField(it, "System.Title", c.title);
+    if (c.state !== undefined) setField(it, "System.State", c.state);
+    if (c.assignee !== undefined) setField(it, "System.AssignedTo", c.assignee ?? "", c.assignee === null);
+    if (c.target !== undefined) setField(it, T, c.target ?? null, c.target === null);
+    bump(it);
+    return { ok: true, id: it.id };
+  }
+
   return {
     fetch: fetchFn,
+    teammate,
+    /** DV-2: the client's version (opaque; moves on every change to its items). */
+    versionOf: (k: DemoClientKey): string => `v${versions.get(k) ?? 0}`,
+    /** DV-2: how many of the client's items changed since the last take, then a fresh start (Refresh's count). */
+    takeChanges: (k: DemoClientKey): number => {
+      const n = changedSince.get(k)?.size ?? 0;
+      changedSince.delete(k);
+      return n;
+    },
     /** One client's items, in backlog order (every state). */
     items: (k: DemoClientKey): DemoItem[] => [...items.values()].filter((i) => i.clientKey === k).sort((a, b) => a.order - b.order || a.id - b.id),
     item: (id: number): DemoItem | null => items.get(id) ?? null,

@@ -265,6 +265,7 @@ function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, ba
                     <span className="muted ah-id">#{r.item.id}</span>
                   </span>
                   {!r.editable && !r.context && <span className="ah-ro" title={c.note}>Read only</span>}
+                  <ChangedUnder clientKey={c.clientKey} itemId={r.item.id} />
                   {r.item.inScope === false && !r.context && <span className="ah-ro" title="Outside Cooptimize's work in this project (shown with Show the whole project)">Outside scope</span>}
                 </span>,
                 { label: `${r.item.type} #${r.item.id} ${r.item.title}${r.editable ? "" : `. ${c.note}`}${hasKids ? `. Enter to ${open ? "hide" : "show"} what's under it.` : ""}` },
@@ -350,3 +351,31 @@ function Who({ name, email }: { name: string; email: string }) {
 
 // The editors moved to ./Editors.tsx (AH-5); Gantt and Gaps import Editor from there.
 export { Editor } from "./Editors.tsx";
+
+/**
+ * DV-2: an item I have staged changes on that changed in DevOps while Ahead was open. My changes stay staged; Show the
+ * new values puts DevOps's values beside mine, so nothing is overwritten silently on either side.
+ */
+function ChangedUnder({ clientKey, itemId }: { clientKey: string; itemId: number }) {
+  const { changedUnder } = useAhead();
+  const [open, setOpen] = useState(false);
+  const vals = changedUnder(clientKey, itemId);
+  if (!vals) return null;
+  return (
+    <span className="ah-changed" role="status">
+      Changed in DevOps just now
+      <button type="button" className="mini quiet" aria-expanded={open} onClick={(e) => (e.stopPropagation(), setOpen((o) => !o))}>
+        {open ? "Hide the new values" : "Show the new values"}
+      </button>
+      {open && (
+        <span className="ah-changed-vals">
+          {vals.map((v) => (
+            <span key={v.field}>
+              {v.field}: DevOps has {v.devops}, yours {v.mine}
+            </span>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}

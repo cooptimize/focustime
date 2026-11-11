@@ -12,6 +12,7 @@ import { call } from "./api.ts";
 import { openBreakDown } from "./menu.ts";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
+import { useDevOpsChanged } from "./DevOpsFresh.tsx";
 import { TextBox } from "./TextBox.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { CARD_STALE_EVENT, copyWorkLink, openItemCard, type ItemCardTarget } from "./WorkLink.tsx";
@@ -56,6 +57,9 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
     void load(false);
   }, [load]);
   useEffect(() => head.current?.focus(), [clientKey, itemId]);
+  // DV-2: the item changed in DevOps (its client's version moved): read it again, quietly; an open edit stays.
+  // The card reads its item, comments and children from DevOps: a move rereads at most once a minute.
+  useDevOpsChanged([clientKey], () => void load(false), { gapMs: 60_000 });
   // Wrap it up wrote this item: read it again.
   useEffect(() => {
     const on = (e: Event) => {

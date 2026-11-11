@@ -1,6 +1,6 @@
 # Operations
 
-For whoever deploys, watches or fixes FocusTime. The step-by-step commands are in the [runbook](../azure/runbook.md); this page is the map. Checked against `13cd461` on Nov 7, 2026.
+For whoever deploys, watches or fixes FocusTime. The step-by-step commands are in the [runbook](../azure/runbook.md); this page is the map. Checked against `13cd461` on Nov 7, 2026 (the Find an item row against `feat/dv2-devops-fresh` on Nov 11).
 
 ## Environments
 
@@ -68,6 +68,7 @@ The bot itself deploys with the Bicep. The Teams app package (the manifest and i
 
 | What you see | Why | Fix |
 |---|---|---|
+| Someone says an item they made in DevOps isn't in FocusTime | Usually the area scope, a filter, or the item isn't on the week's plan; sometimes another project | Ask them to open Settings › DevOps › Find an item with the client and the number: it says which (DV-2). Refresh checks DevOps now. |
 | A deploy fails because a resource provider is `NotRegistered` (seen with `Microsoft.BotService` when TB-1 added the bot) | The deploy identity can only work in its resource group; it can't register a provider for the subscription | Run `infra/scripts/bootstrap.sh --env <env> --member <your upn> --dry-run`, then without `--dry-run`. It registers the providers and changes nothing else. **Not verified:** the exact error text Azure shows |
 | FocusTime doesn't show in Teams | Prod: the package isn't uploaded, isn't Allowed in Manage apps, or a permission policy blocks custom apps; it can take a few hours to reach people. Dev: the tester's setup policy hasn't applied yet (hours), or they haven't uploaded the package | Check Teams admin center › Manage apps and the policies ([teams-bot.md](../setup/teams-bot.md)) |
 | The bot doesn't answer the first message on dev | Dev wakes from zero in about 30 seconds; Teams gives a bot 10 to 15 | Send it again. Prod always runs |

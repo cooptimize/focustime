@@ -2,6 +2,7 @@
 // account, or the config file in the developer loop); each field saves itself (ui/settings/autosave.tsx). Values
 // owned by Dataverse are shown read-only with where to change them. Secrets are entered in masked fields that go
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
+import { FindItem } from "./settings/FindItem.tsx";
 import { hoursText, STORY_SIZES, UNSIZED_CHOICES, unsizedText } from "../plan/estimate.ts";
 import { AzureWriteLog, LoopSendsLog, TeamsAccessLine, TeamsStatusLog, YouAccount } from "./Account.tsx";
 import { responseLabel } from "../plan/rsvp.ts";
@@ -1541,6 +1542,9 @@ function DevOpsSection(p: BodyProps) {
         ) : (
           withDevOps.map((c) => <WriteAccess key={c.key} client={c} onDone={p.reload} />)
         )}
+      </Group>
+      <Group title="Find an item" sid="find-item" intro="Why an item isn't showing: whether FocusTime's last check of DevOps found it, the scope, and where it shows. It answers from what FocusTime already read; Refresh checks DevOps now.">
+        <FindItem clients={withDevOps.map((c) => ({ key: c.key, name: c.setting.name ?? c.dataverseName ?? c.key }))} />
       </Group>
     </div>
   );
