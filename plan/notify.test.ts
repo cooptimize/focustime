@@ -114,16 +114,16 @@ describe("follow-ups due", () => {
 
 describe("notifications that no longer apply (step 16.2, Q91)", () => {
   const at = "2026-11-02T15:00:00Z";
-  const none: DoneFacts = { committed: () => false, checkedIn: () => false, closedOut: () => false, weekCommitted: () => false, followUpOpen: () => true, dueCount: () => 1, timerWaiting: () => true, vmOff: () => true };
+  const none: DoneFacts = { dayHasWork: () => false, checkedIn: () => false, closedOut: () => false, weekHasWork: () => false, followUpOpen: () => true, dueCount: () => 1, timerWaiting: () => true, vmOff: () => true };
   const yes = (over: Partial<DoneFacts>) => ({ ...none, ...over });
   it("each kind closes on its own signal, and not before", () => {
     const cases: [Notice, Partial<DoneFacts>][] = [
-      [notices.planDay("2026-11-02", at), { committed: (d) => d === "2026-11-02" }],
+      [notices.planDay("2026-11-02", at), { dayHasWork: (d) => d === "2026-11-02" }],
       [notices.checkin("2026-11-02", at), { checkedIn: (d) => d === "2026-11-02" }],
       [notices.checkin("2026-11-02", at), { closedOut: (d) => d === "2026-11-02" }],
       [notices.closeout("2026-11-02", at), { closedOut: (d) => d === "2026-11-02" }],
-      [notices.week("2026-11-02", true, at), { weekCommitted: (w) => w === "2026-11-02" }],
-      [notices.week("2026-11-09", false, at), { weekCommitted: (w) => w === "2026-11-09" }],
+      [notices.week("2026-11-02", true, at), { weekHasWork: (w) => w === "2026-11-02" }],
+      [notices.week("2026-11-09", false, at), { weekHasWork: (w) => w === "2026-11-09" }],
       [notices.timerEnd(false, "A", "2026-11-02T14:00:00Z", at), { timerWaiting: (s) => s !== "2026-11-02T14:00:00Z" }],
       [notices.vmOff("2026-11-02", "vm", at), { vmOff: () => false }],
       [notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }], at)!, { followUpOpen: (id) => id !== 7 }],
@@ -142,9 +142,9 @@ describe("notifications that no longer apply (step 16.2, Q91)", () => {
     expect(noticeDone(old, none)).toBe(true);
   });
   it("another day's plan doesn't close today's; an unknown VM state never closes; meetings and expiry stay", () => {
-    expect(noticeDone(notices.planDay("2026-11-02", at), yes({ committed: (d) => d === "2026-11-03" }))).toBe(false);
+    expect(noticeDone(notices.planDay("2026-11-02", at), yes({ dayHasWork: (d) => d === "2026-11-03" }))).toBe(false);
     expect(noticeDone(notices.vmOff("2026-11-02", "vm", at), yes({ vmOff: () => null }))).toBe(false);
-    expect(noticeDone(notices.meeting(["x"], ["k"], at), yes({ committed: () => true }))).toBe(false);
+    expect(noticeDone(notices.meeting(["x"], ["k"], at), yes({ dayHasWork: () => true }))).toBe(false);
     expect(noticeDone(notices.expiry("2026-11-02", [{ text: "x", section: "clients" }], at)!, yes({ dueCount: () => 0 }))).toBe(false);
   });
 });

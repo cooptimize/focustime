@@ -69,7 +69,7 @@ describe("Plan the week actions (step 8)", () => {
   it("loads next week by default with Adatum's features and epics from DevOps, read-only", async () => {
     const t = setup();
     const s = await t.run<WeekPlanState>("weekplan.load", {});
-    expect(s).toMatchObject({ weekStart: NEXT, thisWeek: "2026-11-02", access: "plan", plan: { committedAt: null, features: [] } });
+    expect(s).toMatchObject({ weekStart: NEXT, thisWeek: "2026-11-02", access: "plan", plan: { features: [] } });
     const adatum = s.portfolios.find((p) => p.clientKey === "Adatum")!;
     expect(adatum.items.map((i) => [i.id, i.tier])).toEqual([[210, "feature"], [220, "feature"], [230, "epic"], [240, "feature"], [250, "epic"]]);
     for (const call of t.ado.calls) if (call.method === "POST") expect(call.url).toMatch(/\/_apis\/wit\/(wiql|workitemsbatch)\?/);
@@ -105,19 +105,18 @@ describe("Plan the week actions (step 8)", () => {
     const w = await t.run<WeekLoadData>("week.load", { weekStart: NEXT });
     expect(w.weekPlan!.features[0]).toMatchObject({ title: "Dana's feature", titleSource: "devops" });
     // DevOps unreachable (a fresh server with only the stored plan): the stored title stands, marked as saved.
-    expect(withTitles({ weekStart: NEXT, committedAt: null, updatedAt: null, changed: false, features: (await t.plan.weekPlan(NEXT)).features }, () => null).features[0]).toMatchObject({ title: "Name at commit", titleSource: "saved" });
+    expect(withTitles({ weekStart: NEXT, updatedAt: null, features: (await t.plan.weekPlan(NEXT)).features }, () => null).features[0]).toMatchObject({ title: "Name at commit", titleSource: "saved" });
   });
 
-  it("commits the week, stays editable and re-committable, and week.load shows it", async () => {
+  it("the week is always editable with no confirm, and week.load shows it; an old Confirm week changes nothing", async () => {
     const t = setup();
     await t.run("weekplan.load", { weekStart: NEXT });
     await t.run("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 8 });
-    const c = await t.run<{ plan: WeekPlanView }>("weekplan.commit", { weekStart: NEXT });
-    expect(c.plan.committedAt).toBeTruthy();
-    expect(c.plan.changed).toBe(false);
+    expect(await t.run("weekplan.commit", { weekStart: NEXT })).toMatchObject({ unchanged: true, message: "There's nothing to confirm now. What's on your week is your plan." });
+    expect(await t.run("weekplan.set_tier", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, tier: "must" })).toMatchObject({ unchanged: true, message: "Every feature on the week counts the same now. Nothing changed." });
     t.at("2026-11-05T19:45:00Z");
     const e = await t.run<{ plan: WeekPlanView }>("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 12 });
-    expect(e.plan.changed).toBe(true);
+    expect(e.plan).not.toHaveProperty("changed");
     const week = await t.run<WeekLoadData>("week.load", { weekStart: NEXT });
     expect(week.weekPlan?.features.map((f) => [f.itemId, f.estimate])).toEqual([[210, 720]]);
     expect(week.weekFeatures.map((f) => f.itemId)).toEqual([210]);
@@ -147,7 +146,6 @@ describe("Plan the week actions (step 8)", () => {
     expect(s.portfolios).toEqual([]);
     for (const [a, i] of [
       ["weekplan.set_feature", { weekStart: "2026-10-26", clientKey: "Adatum", itemId: 210, hours: 4 }],
-      ["weekplan.commit", { weekStart: "2026-10-26" }],
       ["weekplan.place", { weekStart: "2026-10-26", clientKey: "Adatum", itemId: 210, date: "2026-10-26", half: "AM", on: true }],
     ] as const)
       expect((await t.fail(a, i)).status).toBe(409);
@@ -191,16 +189,16 @@ describe("Plan the week actions (step 8)", () => {
 
 describe("week plan by client (step 11)", () => {
   type Res = { plan: WeekPlanView; headsUp: { weekStart: string; clientKey: string; itemId: number; title: string } | null };
-  it("adds DevOps features and stories as musts or nice to haves; refuses what DevOps doesn't show for that client", async () => {
+  it("adds DevOps features and stories; refuses what DevOps doesn't show for that client", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: NEXT });
     await t.run("weekplan.load", { weekStart: NEXT });
     const a = await t.run<{ plan: WeekPlanView }>("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 210 });
-    expect(a.plan.features).toEqual([expect.objectContaining({ itemId: 210, level: "feature", tier: "must", estimate: null })]);
+    expect(a.plan.features).toEqual([expect.objectContaining({ itemId: 210, level: "feature", estimate: null })]);
     // A story of mine (work read) and a story under a feature that isn't mine (portfolio read).
-    await t.run("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 204, tier: "nice" });
+    await t.run("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 204 });
     const c = await t.run<{ plan: WeekPlanView }>("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 212, size: "L" });
-    expect(c.plan.features.map((f) => [f.itemId, f.level, f.tier, f.estimate, f.size])).toEqual([[210, "feature", "must", null, null], [204, "story", "nice", null, null], [212, "story", "must", null, "L"]]);
+    expect(c.plan.features.map((f) => [f.itemId, f.level, f.estimate, f.size])).toEqual([[210, "feature", null, null], [204, "story", null, null], [212, "story", null, "L"]]);
     // E2: whole hours for features (1 to 80), sizes for stories.
     expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 1.5 })).status).toBe(400);
     expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 204, hours: 4 })).status).toBe(400);
@@ -208,21 +206,21 @@ describe("week plan by client (step 11)", () => {
     expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 999 })).status).toBe(422);
     expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 250 })).status).toBe(422); // an epic
     expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 81 })).status).toBe(400);
-    expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, tier: "maybe" })).status).toBe(400);
+    // CF-1: a tier from an old tab is accepted and ignored.
+    expect((await t.run<{ plan: WeekPlanView }>("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 240, tier: "must" })).plan.features.map((f) => f.itemId)).toContain(240);
   });
 
-  it("moves, reorders and resets in one call each, no reason asked; nothing goes to DevOps", async () => {
+  it("an old tab's reorder and tier still answer; sizes and estimates; nothing goes to DevOps", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: NEXT });
     await t.run("weekplan.load", { weekStart: NEXT });
     for (const itemId of [210, 240, 201]) await t.run("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId });
     const posts = t.ado.calls.length;
     const id = async (n: number) => (await t.plan.weekPlan(NEXT)).features.find((f) => f.itemId === n)!.id;
-    const r = await t.run<{ plan: WeekPlanView }>("weekplan.reorder", { weekStart: NEXT, clientKey: "Adatum", tier: "must", order: [201, 210, 240] });
+    const r = await t.run<{ plan: WeekPlanView }>("weekplan.reorder", { weekStart: NEXT, clientKey: "Adatum", order: [201, 210, 240] });
     expect(Object.fromEntries(r.plan.features.map((f) => [f.itemId, f.position]))).toEqual({ 210: 2, 240: 3, 201: 1 });
-    const s = await t.run<Res>("weekplan.set_tier", { id: await id(240), tier: "nice" });
-    expect(s.headsUp).toBeNull(); // not committed yet
-    expect(s.plan.features.find((f) => f.itemId === 240)).toMatchObject({ tier: "nice", position: null });
+    // CF-1: set_tier changes nothing.
+    expect(await t.run("weekplan.set_tier", { id: await id(240) })).toMatchObject({ unchanged: true });
     await t.run("weekplan.set_estimate", { id: await id(210), hours: 10 });
     expect((await t.plan.weekPlan(NEXT)).features.find((f) => f.itemId === 210)!.estimate).toBe(600);
     await t.run("weekplan.set_estimate", { id: await id(210), hours: 12 });
@@ -238,34 +236,23 @@ describe("week plan by client (step 11)", () => {
     const z = await t.run<{ plan: WeekPlanView }>("weekplan.reorder", { weekStart: NEXT, clientKey: "Adatum", reset: true });
     expect(z.plan.features.every((f) => f.position === null)).toBe(true);
     expect(z.plan.features.find((f) => f.itemId === 201)!.doneAt).toBeTruthy();
-    expect((await t.fail("weekplan.reorder", { weekStart: NEXT, clientKey: "Adatum", tier: "must", order: [201, 201] })).status).toBe(400);
-    expect((await t.fail("weekplan.reorder", { weekStart: NEXT, clientKey: "Adatum", tier: "must", order: [240] })).status).toBe(409);
+    expect((await t.fail("weekplan.reorder", { weekStart: NEXT, clientKey: "Adatum", order: [201, 201] })).status).toBe(400);
     // Local only: no DevOps writes, and no reads beyond what's cached.
     expect(t.ado.calls.slice(posts).filter((c) => c.method !== "GET" && c.method !== "POST")).toEqual([]);
     for (const call of t.ado.calls) if (call.method === "POST") expect(call.url).toMatch(/\/_apis\/wit\/(wiql|workitemsbatch)\?/);
   });
 
-  it("dropping a must the week was committed with offers the heads-up follow-up (once); a must added after the commit doesn't", async () => {
+  it("CF-1 (E1): taking a feature off the week offers no heads-up, and an old tab's heads-up creates nothing", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: NEXT });
     await t.run("weekplan.load", { weekStart: NEXT });
     await t.run("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 210 });
-    await t.run("weekplan.commit", { weekStart: NEXT });
-    t.at("2026-11-05T19:45:00Z");
-    await t.run("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 240 });
     const id = async (n: number) => (await t.plan.weekPlan(NEXT)).features.find((f) => f.itemId === n)!.id;
-    expect((await t.run<Res>("weekplan.remove", { id: await id(240) })).headsUp).toBeNull();
-    const d = await t.run<Res>("weekplan.set_tier", { id: await id(210), tier: "nice" });
-    expect(d.headsUp).toEqual({ weekStart: NEXT, clientKey: "Adatum", itemId: 210, title: "Dana's feature", trigger: "demoted" });
-    const l = await t.run<{ followUp: FollowUpView; created: boolean }>("weekplan.headsup", d.headsUp!);
-    expect(l.created).toBe(true);
-    expect(l.followUp).toMatchObject({ kind: "slip", clientKey: "Adatum" });
-    // Step 13.5: it says where it came from.
-    expect(l.followUp.origin).toEqual({ trigger: "A confirmed must was made a nice to have", items: [{ itemId: 210, title: "Dana's feature" }], at: "2026-11-05T19:45:00Z" });
-    expect(l.followUp.draft).toContain("#210 Dana's feature won't be finished the week of Mon, Nov 9");
-    expect((await t.run<{ created: boolean }>("weekplan.headsup", d.headsUp!)).created).toBe(false);
-    // A nice to have dropped: nothing offered.
-    expect((await t.run<Res>("weekplan.remove", { id: await id(210) })).headsUp).toBeNull();
+    const r = await t.run<Res>("weekplan.remove", { id: await id(210) });
+    expect(r.headsUp ?? null).toBeNull();
+    const l = await t.run<{ followUp: FollowUpView | null; created: boolean }>("weekplan.headsup", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, title: "Dana's feature", trigger: "dropped" });
+    expect(l).toEqual({ followUp: null, created: false });
+    expect((await t.plan.openFollowUps()).filter((f) => f.kind === "slip")).toEqual([]);
   });
 
   it("pins without raising blocks; pinning a story not on the list puts it on as a must", async () => {
@@ -274,7 +261,7 @@ describe("week plan by client (step 11)", () => {
     const { adatum } = slots(week);
     await t.run("weekplan.load", { weekStart: NEXT });
     const p = await t.run<{ plan: WeekPlanView }>("weekplan.place", { weekStart: NEXT, clientKey: "Adatum", itemId: 201, date: adatum[0]!.date, half: adatum[0]!.half, on: true });
-    expect(p.plan.features).toEqual([expect.objectContaining({ itemId: 201, level: "story", tier: "must", estimate: null, size: null, slots: [{ date: adatum[0]!.date, half: adatum[0]!.half }] })]);
+    expect(p.plan.features).toEqual([expect.objectContaining({ itemId: 201, level: "story", estimate: null, size: null, slots: [{ date: adatum[0]!.date, half: adatum[0]!.half }] })]);
     if (adatum[1]) expect((await t.run<{ plan: WeekPlanView }>("weekplan.place", { weekStart: NEXT, clientKey: "Adatum", itemId: 201, date: adatum[1].date, half: adatum[1].half, on: true })).plan.features[0]!.size).toBeNull();
   });
 
@@ -307,35 +294,36 @@ describe("draft stories with no feature (step 11)", () => {
 });
 
 describe("Plan the week one client at a time (U6)", () => {
-  it("the type box: a draft feature as a must or a nice to have; its tier changes; off takes it off; a past week refuses", async () => {
+  it("the type box: a draft feature goes on the week; off takes it off; a past week refuses", async () => {
     const t = setup();
-    const a = await t.run<{ draft: { id: number; level: string; parentItemId: number | null }; weekDrafts: { draftId: number; tier: string }[] }>("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: "Self-service export", tier: "must" });
+    const a = await t.run<{ draft: { id: number; level: string; parentItemId: number | null }; weekDrafts: { draftId: number; tier: string }[] }>("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: "Self-service export" });
     expect(a.draft).toMatchObject({ level: "feature", parentItemId: null });
-    await t.run("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: "Audit trail", tier: "nice" });
+    await t.run("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: "Audit trail" });
     let s = await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT });
-    expect(s.weekDrafts.map((d) => d.tier)).toEqual(["must", "nice"]);
+    expect(s.weekDrafts).toHaveLength(2);
     expect(s.drafts.filter((d) => d.level === "feature").map((d) => d.title)).toEqual(["Self-service export", "Audit trail"]);
     // The week list's records (week_features) are not touched by drafts.
     expect(s.plan.features).toEqual([]);
-    await t.run("weekplan.draft_tier", { weekStart: NEXT, draftId: a.draft.id, tier: "nice" });
+    // CF-1: an old tab's Must or Nice to have keeps the draft on the week.
+    await t.run("weekplan.draft_tier", { weekStart: NEXT, draftId: a.draft.id, tier: "must" });
     await t.run("weekplan.draft_tier", { weekStart: NEXT, draftId: s.weekDrafts[1]!.draftId, tier: "off" });
     s = await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT });
-    expect(s.weekDrafts).toEqual([{ draftId: a.draft.id, tier: "nice" }]);
-    expect((await t.fail("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: " ", tier: "must" })).status).toBe(400);
+    expect(s.weekDrafts.map((d) => d.draftId)).toEqual([a.draft.id]);
+    expect((await t.fail("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: " " })).status).toBe(400);
     // D437: the type box always saves a draft feature; a level can't be asked for (never a story).
-    expect((await t.fail("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: "A story?", tier: "must", level: "story" })).status).toBe(400);
-    expect((await t.fail("weekplan.add_draft", { weekStart: "2026-10-26", clientKey: "Adatum", title: "Late", tier: "must" })).status).toBe(409);
+    expect((await t.fail("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: "A story?", level: "story" })).status).toBe(400);
+    expect((await t.fail("weekplan.add_draft", { weekStart: "2026-10-26", clientKey: "Adatum", title: "Late" })).status).toBe(409);
   });
 
-  it("a week-list draft created in DevOps becomes a week item with its tier once DevOps shows it", async () => {
+  it("a week-list draft created in DevOps becomes a week item once DevOps shows it", async () => {
     const t = setup();
-    const a = await t.run<{ draft: { id: number } }>("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: "Reporting", tier: "must" });
+    const a = await t.run<{ draft: { id: number } }>("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: "Reporting" });
     const s0 = await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT });
     const feature = s0.portfolios.find((p) => p.clientKey === "Adatum")!.items.find((i) => i.tier === "feature")!;
     (await t.plan.markDraftCreated(a.draft.id, { itemId: feature.id, url: feature.url, title: feature.title, type: feature.type }));
     const s = await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT });
     expect(s.weekDrafts).toEqual([]);
-    expect(s.plan.features.map((f) => [f.itemId, f.tier, f.level])).toEqual([[feature.id, "must", "feature"]]);
+    expect(s.plan.features.map((f) => [f.itemId, f.level])).toEqual([[feature.id, "feature"]]);
   });
 
   it("Nothing this week is kept per week and client, and taken back", async () => {

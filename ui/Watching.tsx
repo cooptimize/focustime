@@ -57,7 +57,7 @@ export function useProposal(weekStart: IsoDate, version: unknown, onChanged: () 
 const WHY_WORDS = { owner: "you own it", lead: "you lead this client", chosen: "you chose to watch it" } as const;
 const KIND_WORDS: Record<CarryRow["kind"], string> = {
   finished: "Finished last week",
-  carry: "Carry over as a must",
+  carry: "Carry over",
   watch: "Watching",
   part_done: "Your part is done",
   not_yours: "Not yours yet",
@@ -104,7 +104,7 @@ function Row({ row, act, onRefresh }: { row: CarryRow; act: (action: string, inp
         {row.kind === "part_done" && <button type="button" className="mini" onClick={() => decide("watch")} title="Watch it this week, with a 30-minute check-in">Keep watching</button>}
         {row.kind === "needs_stories" && (
           <>
-            <button type="button" className="mini primary" onClick={() => decide("keep")} title="Keep it as a must; break it down in Plan">Keep</button>
+            <button type="button" className="mini primary" onClick={() => decide("keep")} title="Keep it on this week; break it down in Plan">Keep</button>
             <BreakDown clientKey={row.clientKey} item={{ id: row.itemId, title: row.title, ...(row.itemType ? { type: row.itemType } : {}) }} />
           </>
         )}
@@ -168,7 +168,7 @@ export function ProposalSection({ data, act, onRefresh, colors, title = "From la
         )}
         {open && rows.length > 0 && <span className="muted">nothing is added until you accept</span>}
         {open && plannable > 0 && data.access === "plan" && (
-          <button type="button" className="mini primary carry-all" onClick={() => void act("weekplan.carry_accept_all", {})} title="Keep every carried must and Needs stories row, and watch every Watching row">
+          <button type="button" className="mini primary carry-all" onClick={() => void act("weekplan.carry_accept_all", {})} title="Keep every carried feature and Needs stories row, and watch every Watching row">
             Accept all
           </button>
         )}

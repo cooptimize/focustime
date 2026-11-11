@@ -118,10 +118,10 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const c = await configOrNull();
     if (!c) return true;
     const today = todayOf(c);
-    if (n.kind === "plan_day") return !(await store.day(today))?.committedAt;
+    if (n.kind === "plan_day") return !(await store.dayHasWork(today));
     if (n.kind === "closeout") return !(await store.day(today))?.closedOutAt;
-    if (n.kind === "checkin") return !!(await store.day(today))?.committedAt && !(await store.day(today))?.closedOutAt;
-    if (n.kind === "plan_week" || n.kind === "look_ahead") return !(await store.weekPlan(n.route.slice("planweek:".length))).committedAt;
+    if (n.kind === "checkin") return (await store.dayHasWork(today)) && !(await store.day(today))?.closedOutAt;
+    if (n.kind === "plan_week" || n.kind === "look_ahead") return !(await store.weeksWithWork([n.route.slice("planweek:".length)])).size;
     if (n.kind === "followups") return dueFollowUps((await store.openFollowUps()), today).length > 0;
     if (n.kind === "plan_ahead" || n.kind === "direction") return !n.ref || !(await store.marked(AHEAD_SEEN_MARK, n.ref));
     if (n.kind === "vm" && n.key.startsWith("vm_off:")) {
@@ -146,15 +146,16 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const ref = n.ref ?? "";
     const day = ref && ["plan_day", "checkin", "closeout"].includes(n.kind) ? await store.day(ref) : null;
     const checked = n.kind === "checkin" && ref ? await store.marked(CHECKIN_DONE_MARK, ref) : false;
-    const week = ref && (n.kind === "plan_week" || n.kind === "look_ahead") ? await store.weekPlan(ref) : null;
+    const dayWork = ref && n.kind === "plan_day" ? await store.dayHasWork(ref) : false;
+    const weekWork = ref && (n.kind === "plan_week" || n.kind === "look_ahead") ? (await store.weeksWithWork([ref])).size > 0 : false;
     const open = n.kind === "followups" ? await store.openFollowUps() : [];
     const timer = n.kind === "timer" ? await store.getState<TimerState>(TIMER_KEY) : null;
     const seen = ref && (n.kind === "plan_ahead" || n.kind === "direction") ? await store.marked(AHEAD_SEEN_MARK, ref) : false;
     return noticeDone(n, {
-      committed: () => !!day?.committedAt,
+      dayHasWork: () => dayWork,
       checkedIn: () => checked,
       closedOut: () => !!day?.closedOutAt,
-      weekCommitted: () => !!week?.committedAt,
+      weekHasWork: () => weekWork,
       followUpOpen: (id) => open.some((f) => f.id === id && !f.closedAt),
       dueCount: () => (today ? dueFollowUps(open, today).length : 1),
       timerWaiting: (startedAt) => !!timer && timer.ended && timer.startedAt === startedAt,
@@ -254,7 +255,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       now: () => zonedNow(who.zone),
       hours: hoursOrNull,
       offsetMinutes: async () => c.plan.reminderOffsetMinutes,
-      committed: async (d) => !!(await store.day(d))?.committedAt,
+      hasWork: (d) => store.dayHasWork(d),
       off: ptoOff,
       once: async (d) => (await notifier.allows("plan_day")) && (await store.markOnce("reminder", d)),
       send: () => void send(notices.planDay(todayOf(c), at)),
@@ -263,7 +264,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     await checkDayReminder({
       now: () => zonedNow(who.zone),
       hours: hoursOrNull,
-      due: async (n, m) => checkinReminderDue(n, m, !!(await store.day(n.toPlainDate().toString()))?.committedAt, c.plan.checkinReminderMinutes),
+      due: async (n, m) => checkinReminderDue(n, m, await store.dayHasWork(n.toPlainDate().toString()), c.plan.checkinReminderMinutes),
       off: ptoOff,
       once: async (d) => (await notifier.allows("checkin")) && (await store.markOnce("checkin_reminder", d)),
       send: () => void send(notices.checkin(todayOf(c), at)),
@@ -281,24 +282,25 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     await checkWeekNudges({
       now: () => zonedNow(who.zone),
       times: async () => ({ thu: c.plan.weekNudgeThu, fri: c.plan.weekNudgeFri, mon: c.plan.weekNudgeMon }),
-      committed: async (w) => !!(await store.weekPlan(w)).committedAt,
+      hasWork: async (w) => (await store.weeksWithWork([w])).size > 0,
       off: ptoOff,
       workStart: async (d) => hoursOn(c.week.hours, d).segments[0]?.start ?? null,
       once: async (key, w) => (await notifier.allows(w === thisWeek ? "plan_week" : "look_ahead")) && (await store.markOnce(key, w)),
       send: (_body, w) => void send(notices.week(w, w === thisWeek, at)),
     }).catch(() => log({ source: "plan", op: "week_nudge", kind: "failed" }));
-    // Step 17: Look ahead 4 weeks (every other Thursday, once next week is planned) and the direction review (first
+    // Step 17: Look ahead 4 weeks (every other Thursday, once next week has work on it) and the direction review (first
     // Thursday of the month), from work start on a working day; once each; both open Roadmap › Plan ahead.
     try {
       const today = todayOf(c);
-      const committedWeeks = await store.committedWeeks();
+      const mon = Temporal.PlainDate.from(today).subtract({ days: Temporal.PlainDate.from(today).dayOfWeek - 1 });
+      const workWeeks = await store.weeksWithWork([0, 7, 14].map((n) => mon.add({ days: n }).toString()));
       const seenKeys = await store.markedDates(AHEAD_SEEN_MARK);
       const due = aheadRitualsDue({
         today,
         time: zonedNow(who.zone).toPlainTime().toString().slice(0, 5),
         workStart: hoursOn(c.week.hours, today).segments[0]?.start ?? null,
         pto: await ptoOff(today).catch(() => true),
-        weekCommitted: (w) => committedWeeks.has(w),
+        weekHasWork: (w) => workWeeks.has(w),
         seen: (k) => seenKeys.has(k),
       });
       for (const r of due) if (notifier.allows(r.kind) && (await store.markOnce("ahead_notice", r.key))) await send(r.kind === "plan_ahead" ? notices.planAhead(r.key, at) : notices.direction(r.key, r.occasion, at));

@@ -99,8 +99,8 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
     addToWeek: async (k: string, row: RoadmapRow) => {
       if (!state) return;
       try {
-        await call("weekplan.add", { weekStart: state.weekStart, clientKey: k, itemId: row.id, tier: "nice" });
-        setNotice(`${row.title} is on this week's plan as a nice to have`);
+        await call("weekplan.add", { weekStart: state.weekStart, clientKey: k, itemId: row.id });
+        setNotice(`${row.title} is on this week's plan`);
         onChanged();
         void load();
       } catch (e) {
@@ -145,7 +145,7 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
             </button>
           ))}
           {over && (over.weeks > 0 || filter.overbooked) && (
-            <button type="button" className="rm-sum rm-over" aria-pressed={filter.overbooked} onClick={() => setFilter({ ...filter, overbooked: !filter.overbooked })} title="Weeks 1 to 4 where a client's musts take more blocks than it has: show the features in them">
+            <button type="button" className="rm-sum rm-over" aria-pressed={filter.overbooked} onClick={() => setFilter({ ...filter, overbooked: !filter.overbooked })} title="Weeks 1 to 4 where a client's features take more blocks than it has: show the features in them">
               <span className="rm-sum-n">{over.weeks}</span>
               <span className="rm-sum-w"><span className="rm-mark" aria-hidden="true" />Over-booked {over.weeks === 1 ? "week" : "weeks"}</span>
             </button>

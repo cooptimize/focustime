@@ -15,7 +15,7 @@ const patterns = [pattern("T&W", { Mon: "PM", Tue: "AllDay", Wed: "PM" }), patte
 const week = (over: Partial<Parameters<typeof buildWeek>[0]> = {}) => buildWeek({ weekStart: W, patterns, events: [], config: weekConfig, ...over });
 
 const feature = (over: Partial<WeekFeature>): WeekFeature => ({
-  id: 1, weekStart: W, clientKey: "T&W", itemId: 210, title: "Export", itemType: "Feature", url: null, estimate: 8 * 60, size: null, parentId: null, slots: [], position: 1, level: "feature", tier: "must", doneAt: null, createdAt: "", updatedAt: "", ...over,
+  id: 1, weekStart: W, clientKey: "T&W", itemId: 210, title: "Export", itemType: "Feature", url: null, estimate: 8 * 60, size: null, parentId: null, slots: [], position: 1, level: "feature", doneAt: null, createdAt: "", updatedAt: "", ...over,
 }) as WeekFeature;
 const pItem = (over: Partial<PortfolioItem>): PortfolioItem => ({
   id: 210, title: "Export", type: "Feature", state: "Active", stateCategory: "InProgress", tier: "feature", order: 1, parentId: null, url: "https://dev.azure.com/o/p/_workitems/edit/210",
@@ -168,19 +168,20 @@ describe("readiness ladder", () => {
   });
 });
 
-describe("the budget counts musts only (step 11)", () => {
-  it("nice-to-haves are listed but don't count against the client's free time", () => {
-    const b = weekBudget(week(), [feature({ itemId: 1, estimate: 8 * 60 }), { ...feature({ itemId: 2, estimate: 12 * 60 }), tier: "nice" }], { sizes: DEFAULT_SIZE_SCALE, borrowedMinutes: {} }).find((f) => f.clientKey === "T&W")!;
-    expect(b).toMatchObject({ plannedMinutes: 8 * 60, nicePlannedMinutes: 12 * 60 });
+describe("CF-1: one total fit", () => {
+  it("every feature on the week counts against the client's free time the same; there is no musts total", () => {
+    const b = weekBudget(week(), [feature({ itemId: 1, estimate: 8 * 60 }), { ...feature({ itemId: 2, estimate: 12 * 60 }) }], { sizes: DEFAULT_SIZE_SCALE, borrowedMinutes: {} }).find((f) => f.clientKey === "T&W")!;
+    expect(b.plannedMinutes).toBe(20 * 60);
+    expect(b).not.toHaveProperty("nicePlannedMinutes");
   });
 });
 
 describe("DevOps health (step 11)", () => {
   const base = { week: week(), work: null, marks: [], followUps: [] };
   const ports = [portfolio("T&W", [pItem({ id: 240, targetDate: null }), pItem({ id: 241, targetDate: null }), pItem({ id: 242, targetDate: "2026-11-20", children: [child(1, true)] })])];
-  it("flags list features with no stories (must or nice) and musts with no target date; stories aren't checked as features", () => {
-    const r = readiness({ ...base, portfolios: ports, features: [feature({ itemId: 240 }), { ...feature({ itemId: 241 }), tier: "nice" }, feature({ itemId: 242 }), { ...feature({ itemId: 243 }), level: "story" }] });
-    expect(r.map((x) => `${x.kind}:${x.itemId}`)).toEqual(["needs_breakdown:240", "needs_breakdown:241", "no_target_date:240"]);
+  it("flags list features with no stories and (CF-1: every feature) no target date; stories aren't checked as features", () => {
+    const r = readiness({ ...base, portfolios: ports, features: [feature({ itemId: 240 }), { ...feature({ itemId: 241 }) }, feature({ itemId: 242 }), { ...feature({ itemId: 243 }), level: "story" }] });
+    expect(r.map((x) => `${x.kind}:${x.itemId}`)).toEqual(["needs_breakdown:240", "needs_breakdown:241", "no_target_date:240", "no_target_date:241"]);
   });
   it("nudges typed intentions into DevOps, unless already a draft, dropped, or a Break down pick", () => {
     const intentions = [

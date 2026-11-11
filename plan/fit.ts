@@ -59,17 +59,15 @@ export function fitWords(f: Fit | null): FitWords {
 }
 
 /**
- * Picks to shrink or move so a block fits: the fewest planned picks whose sizes cover the overage. Musts last, larger
- * first, untimed before timed, later in the list first. Empty when nothing is over.
+ * Picks to shrink or move so a block fits: the fewest planned picks whose sizes cover the overage. Larger first, untimed before timed, later in the list first. Empty when nothing is over.
  */
-export function trimCandidates<P extends PickLike>(picks: readonly P[], overBy: number, sizes: SizeScale, opts: { musts?: ReadonlySet<number>; timed?: ReadonlySet<number> } = {}): number[] {
+export function trimCandidates<P extends PickLike>(picks: readonly P[], overBy: number, sizes: SizeScale, opts: { timed?: ReadonlySet<number> } = {}): number[] {
   if (overBy <= OVER_GRACE) return [];
-  const musts = opts.musts ?? new Set<number>();
   const timed = opts.timed ?? new Set<number>();
   const order = picks
     .map((p, i) => ({ p, i }))
     .filter(({ p }) => p.status === "planned")
-    .sort((a, b) => Number(musts.has(a.p.id)) - Number(musts.has(b.p.id)) || pickNeed(b.p, sizes) - pickNeed(a.p, sizes) || Number(timed.has(a.p.id)) - Number(timed.has(b.p.id)) || b.i - a.i);
+    .sort((a, b) => pickNeed(b.p, sizes) - pickNeed(a.p, sizes) || Number(timed.has(a.p.id)) - Number(timed.has(b.p.id)) || b.i - a.i);
   const out: number[] = [];
   let covered = 0;
   for (const { p } of order) {

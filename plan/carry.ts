@@ -2,7 +2,7 @@
 //
 //   Last week's feature                                   New week
 //   Resolved or closed                                    "Finished last week" (shown, nothing to plan)
-//   Open, with my open stories                            Carried over as a must, with those stories
+//   Open, with my open stories                            Carried over, with those stories
 //   Open, my part done, I'm the owner or a client lead    Watching (with its 30-minute check-in)
 //   Open, my part done, otherwise                         "Your part is done", with Keep watching
 //   Open, stories never mine, owner or client lead        Watching
@@ -39,7 +39,7 @@ export const treeOf = (i: Pick<PortfolioItem, "id" | "title" | "type" | "url" | 
 });
 
 /** A feature or story on last week's list. */
-export type LastWeekItem = { clientKey: string; itemId: number; level: "feature" | "story"; tier: "must" | "nice"; title: string; itemType: string | null; url: string | null; estimate: number | null; position: number | null };
+export type LastWeekItem = { clientKey: string; itemId: number; level: "feature" | "story"; title: string; itemType: string | null; url: string | null; estimate: number | null; position: number | null };
 
 export type CarryRow = {
   clientKey: string;
@@ -48,7 +48,7 @@ export type CarryRow = {
   title: string;
   itemType: string | null;
   url: string | null;
-  /** Last week's estimate (minutes), carried with the must. */
+  /** Last week's estimate (minutes), carried with the feature. */
   estimate: number | null;
   /** Why I'd watch it: I own it, or I lead its client (Watching and Needs stories rows). */
   why: "owner" | "lead" | null;
@@ -103,7 +103,7 @@ export function carryProposal(i: CarryInput): { rows: CarryRow[]; unknown: numbe
   let unknown = 0;
   const features = i.lastWeek
     .filter((f) => f.level === "feature" && i.isClient(f.clientKey) && !skip.has(k(f.clientKey, f.itemId)))
-    .sort((a, b) => a.clientKey.localeCompare(b.clientKey) || (a.tier === b.tier ? 0 : a.tier === "must" ? -1 : 1) || (a.position ?? 1e9) - (b.position ?? 1e9) || a.itemId - b.itemId);
+    .sort((a, b) => a.clientKey.localeCompare(b.clientKey) || (a.position ?? 1e9) - (b.position ?? 1e9) || a.itemId - b.itemId);
   for (const f of features) {
     const t = i.tree(f.clientKey, f.itemId);
     if (!t) {

@@ -13,7 +13,7 @@ import { applyTextSize, stepTextSize, storedTextSize, TEXT_SIZE_NAMES, textSizeK
 import type { TextSize } from "../config/schema.ts";
 import { WeekMark } from "./brand/Brand.tsx";
 import { CloseReverse, MomentOverlay, Opening } from "./brand/Opening.tsx";
-import { mustsDone, sourceLines } from "./brand/opening.ts";
+import { allDone, sourceLines } from "./brand/opening.ts";
 import type { Theme } from "../config/schema.ts";
 import { copyWorkLink, ITEM_CARD_EVENT, NOTICE_EVENT, openChecked, openItemCard, openWorkItem, type ItemCardTarget, type Opened } from "./WorkLink.tsx";
 import { DevOpsWriteCtx, useDevOpsWriteFlow } from "./DevOpsWrite.tsx";
@@ -35,7 +35,7 @@ import { planTarget } from "../plan/target.ts";
 import { canAddWork } from "../plan/days.ts";
 import { AddWorkPanel, ToPlaceNotice } from "./AddWork.tsx";
 import { ClientChips } from "./ClientChips.tsx";
-import { defaultAddBlock, weekTag, confirmLabel } from "../plan/addwork.ts";
+import { defaultAddBlock } from "../plan/addwork.ts";
 import { AddPanelCtx } from "./weekctx.ts";
 
 /** WD-1: Thursday and Friday offer next week when it's empty. */
@@ -52,7 +52,7 @@ import { TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
 import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
 import { ModeArea, ModeSwitch, TimelineToggle } from "./ModeSwitch.tsx";
-import { momentCard } from "../plan/modes.ts";
+import { hasWorkOn, momentCard } from "../plan/modes.ts";
 import { FocusScreen, SoundControl } from "./FocusScreen.tsx";
 import { sound } from "./sound.ts";
 import type { TimerView } from "../actions/types.ts";
@@ -184,7 +184,7 @@ export function App() {
   const [sel, setSel] = useState<Selection>({ dayIndex: 0, half: "AM" });
   // Step 17.5: the welcome moment (the first launch ever, kept in the plan store) and the Close out reverse.
   const [welcome, setWelcome] = useState(false);
-  const [closing, setClosing] = useState<{ musts: boolean } | null>(null);
+  const [closing, setClosing] = useState<{ allDone: boolean } | null>(null);
   const [reconnected, setReconnected] = useState<"outlook" | "google" | null>(null);
   // S1 (D451): first-run setup. It opens by itself for a new person (and resumes after a sign-out halfway); once
   // closed or skipped, Today keeps one quiet line to finish it. Never in demo mode (the server says so).
@@ -380,7 +380,6 @@ export function App() {
     history.replaceState(null, "", `${location.pathname}${q.size ? `?${q}` : ""}${location.hash}`);
   }, []);
   // Step 17: after Done in Plan the week, offer Look ahead 4 weeks when it is due (every other Thursday).
-  const [offerAhead, setOfferAhead] = useState(false);
   // Notices from work item links (e.g. "Could not start the browser"), shown for a few seconds.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -835,7 +834,6 @@ export function App() {
       now,
       day: data.week.days.find((d) => d.date === date) ?? null,
       picks: data.plan?.[date]?.picks ?? [],
-      committed: !!data.plan?.[date]?.committedAt,
       pto: data.ptoAhead.includes(date),
       nextWorkday: target.date !== date ? target.date : null,
       clientName: (k) => names.get(k) ?? k,
@@ -865,14 +863,13 @@ export function App() {
   const openPlanDay = useCallback((date?: IsoDate) => addWork(date ?? null), [addWork]);
 
   /**
-   * QF-1, TY-1: Timebox my day from anywhere: confirms the day first when it isn't ("Confirm and timebox"), then goes to
-   * that day on Today, whose timeline shows the suggestions as placeholders.
+   * QF-1, TY-1: Timebox my day from anywhere: goes to that day on Today, whose timeline shows the suggestions as
+   * placeholders. CF-1: no confirm first; the day's plan is what's on it.
    */
   const timeboxDay = useCallback(
     async (date: IsoDate) => {
       if (!data || !data.planDay.available) return void setNotice("The local plan store isn't available, so planning is off");
       try {
-        if (!data.plan?.[date]?.committedAt) await planAction("planday.commit", { date });
         reloadQuiet();
         setTimeboxAsk((s) => ({ date, n: (s?.n ?? 0) + 1 }));
         goNav(navOf.todayOn(date !== data.planDay.date ? date : null));
@@ -907,36 +904,6 @@ export function App() {
     if (!data || !wantWeek || wantWeek === weekRef.current) return;
     void load({ weekStart: wantWeek }, { selectToday: wantWeek === data.today.weekStart });
   }, [wantWeek]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  /** Confirm <day> (the day header's ⋯ and the command menu): saves that day's plan, as Plan the day's Confirm did. */
-  const commitDay = useCallback(
-    async (date: IsoDate) => {
-      try {
-        await planAction("planday.commit", { date });
-        setNotice(`Confirmed ${shortDay(date)}`);
-        reloadQuiet();
-      } catch (e) {
-        setNotice(e instanceof Error ? e.message : "Couldn't save the plan");
-      }
-    },
-    [reloadQuiet],
-  );
-  /** Confirm week (the header's tag): saves the week's lists, as Plan the week's Confirm week did. */
-  const commitWeek = useCallback(
-    async (weekStart: IsoDate) => {
-      try {
-        await call("weekplan.commit", { weekStart });
-        setNotice("Week confirmed");
-        setPlanWeekVersion((n) => n + 1);
-        // Step 17: after confirming next week, offer Look ahead 4 weeks when it is due.
-        if (data && weekStart > data.today.weekStart) setOfferAhead(true);
-        reloadQuiet();
-      } catch (e) {
-        setNotice(e instanceof Error ? e.message : "Couldn't save the week plan");
-      }
-    },
-    [reloadQuiet, data],
-  );
 
   /** Step 15 (D272): demo mode on or off; the server swaps every source and the plan store, then the week reloads. */
   // A2: the demo is its own session. Turning it on starts a demo session in place of this one (sign in again for your own
@@ -1408,8 +1375,6 @@ export function App() {
       runPlan,
       openPlanDay: (d) => void openPlanDay(d),
       ...(data.timeboxSettings.enabled !== false ? { timeboxDay: (d: IsoDate) => void timeboxDay(d) } : {}),
-      commitPlan: () => void commitDay(day.date),
-      confirmDay: (d: IsoDate) => void commitDay(d),
       openDetails: (date, half) => {
         const i = data.week.days.findIndex((x) => x.date === date);
         if (i < 0) return;
@@ -1484,7 +1449,6 @@ export function App() {
       openAssistant: (text) => setAssistantAt({ text: text ?? "" }),
       openCaptures: () => setView("capture"),
       openRitual: togglePlanning,
-      commitWeek: () => void commitWeek(data.weekStart),
       closeOutDate: closeOutAt,
       commitCloseOut: () => {
         if (closeOutAt) void call("closeout.commit", { date: closeOutAt }).then(() => { setNotice("Closed out"); reloadQuiet(); }, (e: unknown) => setNotice(e instanceof Error ? e.message : "Couldn't save Close out"));
@@ -1555,7 +1519,7 @@ export function App() {
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, openGuide, work, runPlan, openPlanDay, commitDay, commitWeek, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, openPlanWeek, togglePlanning, connectWrite, addWork, timeboxDay, goNav, asksOpen, cowork]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, openGuide, work, runPlan, openPlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, openPlanWeek, togglePlanning, connectWrite, addWork, timeboxDay, goNav, asksOpen, cowork]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // AS-1: what the assistant hears about the screen: its address, the client and item in focus, the selected block and
   // today. Nothing else on screen is sent; the server reads what a question needs.
@@ -1622,7 +1586,7 @@ export function App() {
     amEnd: th.am?.end ?? null,
     pmStart: th.pm?.start ?? null,
     end: dayEndOf(data.hours, localToday),
-    committed: !!todayPlan?.committedAt,
+    hasWork: hasWorkOn(todayPlan?.picks ?? []),
     checkedIn: data.checkIn.date === localToday && data.checkIn.done,
     closedOut: data.closeOut.date === localToday ? data.closeOut.done : !!todayPlan?.closedOutAt,
     checkinOffsetMinutes: data.planning.checkinReminderMinutes,
@@ -1674,7 +1638,7 @@ export function App() {
     <>
     {opening}
     {welcome && <MomentOverlay line="Welcome to FocusTime. Here's your week." onDone={() => setWelcome(false)} />}
-    {closing && <CloseReverse musts={closing.musts} onDone={() => setClosing(null)} />}
+    {closing && <CloseReverse allDone={closing.allDone} onDone={() => setClosing(null)} />}
     <SampleSources.Provider value={samples}>
     <CoworkCtx.Provider value={cowork}>
     <DevOpsWork.Provider value={work}>
@@ -1810,18 +1774,6 @@ export function App() {
               </li>
             ))}
           </ul>
-        </div>
-      )}
-
-      {offerAhead && nav.tab === "week" && nav.mode === "board" && !addAt && data.aheadDue.includes("plan_ahead") && (
-        <div className="ahead-offer" role="status">
-          <span>Next week is planned. Look ahead 4 weeks: blocks per week and dates.</span>
-          <button type="button" className="primary" onClick={() => (setOfferAhead(false), goNav(navOf.ahead("gantt")))}>
-            Look ahead 4 weeks
-          </button>
-          <button type="button" className="quiet" onClick={() => setOfferAhead(false)}>
-            Not now
-          </button>
         </div>
       )}
 
@@ -1995,7 +1947,7 @@ export function App() {
           onChanged={reloadQuiet}
           onLeave={(msg) => (msg && setNotice(msg), leavePlanning())}
           onCloseOutDate={(d) => goNav(navOf.today("closeout", d))}
-          onClosedOut={(st) => setClosing({ musts: st.date === st.today && mustsDone(st.picks, data.weekFeatures) })}
+          onClosedOut={(st) => setClosing({ allDone: st.date === st.today && allDone(st.picks) })}
           setupLine={setupView?.line ?? null}
           onSetup={(step) => setSetupAt(step)}
         />
@@ -2004,8 +1956,6 @@ export function App() {
           const nowIso = now ?? new Date(clock).toISOString();
           const thisWeek = data.weekStart === data.today.weekStart;
           const past = data.weekStart < data.today.weekStart;
-          const tag = weekTag(data.weekPlan, past);
-          const confirm = confirmLabel(tag);
           return (
         <>
           <header className="page-head week-head wd1-head">
@@ -2018,16 +1968,6 @@ export function App() {
               {!thisWeek && (
                 <button type="button" className="mini today-btn" onClick={goToday} title="Back to this week">
                   This week
-                </button>
-              )}
-              {tag && (
-                <span className={`week-tag tag-${tag === "Draft" ? "draft" : tag === "Confirmed" ? "confirmed" : "changed"}`} role="status">
-                  {tag}
-                </span>
-              )}
-              {confirm && (
-                <button type="button" className="mini primary confirm-week" data-tour="wk-confirm" onClick={() => void commitWeek(data.weekStart)} title="Save this week's plan. You can change it and confirm again any time">
-                  {confirm}
                 </button>
               )}
               {weekendNote && <span className="weekend-note">{weekendNote}</span>}

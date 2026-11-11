@@ -3,7 +3,7 @@
 //   From your team    Commit's group beside From last week: what was sent to me (Accept, Accept and schedule, Pass
 //                     to…, Can't this week), client priorities (Add to my week), what I sent with its state, and Ask
 //                     <lead> to look with their reply
-//   Team              Week's third mode: per client I'm on, each teammate's committed features, the sends, the
+//   Team              Week's third mode: per client I'm on, each teammate's features on their week, the sends, the
 //                     priorities and the watched features. Read-only on the phone. Never day plans, focus, notes or hours
 //   Today's line      one line in the urgent strip when something waits for me ("Priya sent you Loyalty points (Must)")
 // Plain words; nothing here reads as anyone checking on anyone.
@@ -155,7 +155,7 @@ export function SendDialog({ target, thisWeek, onClose, onSent }: { target: Send
               <span className="help-label">As</span>
               <div className="chips" role="radiogroup" aria-label="Suggested or Must">
                 <button type="button" className="chip-btn" role="radio" aria-checked={kind === "suggested"} onClick={() => setKind("suggested")}>Suggested</button>
-                <button type="button" className="chip-btn" role="radio" aria-checked={kind === "must"} disabled={!people.canMust} title={people.canMust ? "It goes on their week as a must once they accept" : `Only ${client}'s leads send a Must`} onClick={() => setKind("must")}>Must</button>
+                <button type="button" className="chip-btn" role="radio" aria-checked={kind === "must"} disabled={!people.canMust} title={people.canMust ? "A Must from a lead: it goes on their week once they accept" : `Only ${client}'s leads send a Must`} onClick={() => setKind("must")}>Must</button>
               </div>
               {!people.canMust && <span className="muted send-hint">Only {client}'s leads send a Must</span>}
             </div>
@@ -490,9 +490,9 @@ export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, 
   );
 }
 
-const STATE_WORDS: Record<TeamPerson["state"], string> = { committed: "", draft: "Not confirmed yet", not_on_focustime: "Not on FocusTime yet" };
+const STATE_WORDS: Record<TeamPerson["state"], string> = { shared: "", empty: "Nothing on their week yet", not_on_focustime: "Not on FocusTime yet" };
 
-/** Week › Team: per client I'm on, everyone's committed features, the sends, the priorities, the watched features. */
+/** Week › Team: per client I'm on, the features on everyone's week (CF-1: shared on every change), the sends, the priorities, the watched features. */
 export function TeamView({ switcher, weekStart, thisWeek, colors, readOnly, onWeek, version, onChanged }: { switcher?: React.ReactNode; weekStart: IsoDate; thisWeek: IsoDate; colors: Record<string, string>; readOnly: boolean; onWeek: (w: IsoDate) => void; version: unknown; onChanged: () => void }) {
   const [data, setData] = useState<TeamData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -559,19 +559,18 @@ export function TeamView({ switcher, weekStart, thisWeek, colors, readOnly, onWe
                     <span className="team-name">{p.you ? "You" : p.name}</span>
                     {p.lead && <span className="team-lead">Lead</span>}
                   </span>
-                  {p.state !== "committed" ? (
+                  {p.state !== "shared" ? (
                     <span className="muted team-state">{STATE_WORDS[p.state]}</span>
                   ) : !p.features.length && !p.watching.length ? (
                     <span className="muted team-state">Nothing planned for {c.clientName}</span>
                   ) : (
                     <ul className="team-features">
                       {p.features.map((f) => (
-                        <li key={f.itemId} className={`team-feature tier-${f.tier}`}>
+                        <li key={f.itemId} className="team-feature">
                           {f.itemType && <TypeIcon clientKey={c.clientKey} type={f.itemType} decorative />}
                           <WorkLink clientKey={c.clientKey} url={f.url} className="carry-title" title={f.title}>
                             {f.title}
                           </WorkLink>
-                          {f.tier === "nice" && <span className="muted"> · nice to have</span>}
                         </li>
                       ))}
                       {p.watching.map((f) => (

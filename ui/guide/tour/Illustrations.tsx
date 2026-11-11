@@ -49,14 +49,13 @@ function Card() {
         <b>{X.card.client}</b>
         <span className="ti-hint">{X.card.fit}</span>
       </div>
-      <div className="ti-label">Musts</div>
-      {X.card.musts.map((m) => (
+      <div className="ti-label">This week</div>
+      {X.card.features.map((m) => (
         <div key={m.title} className="ti-must">
           <span className="ti-title">{m.title}</span>
           <span className="ti-chip">{m.hours}</span>
         </div>
       ))}
-      <div className="ti-fold">▸ {X.card.nice}</div>
     </div>
   );
 }
@@ -68,7 +67,7 @@ function Add() {
       {X.add.rows.map((r) => (
         <div key={r} className="ti-must">
           <span className="ti-title">{r}</span>
-          <span className="ti-btn">+ Must</span>
+          <span className="ti-btn">+ Add</span>
         </div>
       ))}
       <div className="ti-box">{X.add.box}</div>

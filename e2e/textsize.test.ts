@@ -48,7 +48,6 @@ const fontOf = (page: Page, sel: string) => page.locator(sel).first().evaluate((
 async function seed(page: Page): Promise<void> {
   for (const x of [{ itemId: 4411, size: "M" }, { itemId: 4412, size: "S" }]) await call(page, "pick.add", { date: MON, half: "AM", clientKey: "Cooptimize", ...x });
   await call(page, "draft.add_story", { clientKey: "Cooptimize", parentItemId: null, title: "Filter presets for the export", size: "M" });
-  await call(page, "planday.commit", { date: MON });
   await page.reload();
   await page.waitForSelector(".topbar");
 }

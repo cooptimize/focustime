@@ -32,7 +32,7 @@ export type WeekLoadData = {
   planClients: { clientKey: string; clientName: string }[];
   /** Today's Plan the day status, for the automatic open on the first focus of a workday. */
   /** Today (the real date). `workday`: it has working hours or a flex session and isn't a PTO day (D106, D127). */
-  planDay: { date: IsoDate; workday: boolean; committed: boolean; available: boolean };
+  planDay: { date: IsoDate; workday: boolean; available: boolean };
   /** PTO dates from this week's Monday about five weeks ahead, so Plan the day's target skips them (D106). */
   ptoAhead: IsoDate[];
   /** The time model (step 6b): working hours per weekday, lunch, one-day overrides and the zone. */
@@ -66,12 +66,10 @@ export type WeekLoadData = {
   captures: number;
   /** Open follow-ups, not snoozed (step 13.5): on the week's cards, Today and Plan the day. */
   followUps: FollowUpView[];
-  /** The Plan the week badge: the week a nudge asked for that still isn't committed (server clock). */
+  /** The week nudge's badge: the week a nudge asked for that still has nothing placed (server clock; CF-1). */
   weekNudge: { badge: IsoDate | null };
   /** Step 17: the Plan ahead rituals due now: Look ahead 4 weeks and the direction review (a dot on Plan ahead). */
   aheadDue: import("../plan/rituals.ts").AheadRitualKind[];
-  /** Step 16.2: whether a week (this week, next week, the week shown) is committed, by its Monday. */
-  weekCommitted: Record<IsoDate, boolean>;
   /** WD-1: next week has no features and no to-dos yet (Thursday's and Friday's "Next week is empty"). */
   nextWeekEmpty?: boolean;
   /** Display settings from [ui] (step 6b): the theme. Defaults when the config is invalid. */
@@ -260,7 +258,6 @@ export type CloseOutState = {
   today: IsoDate;
   /** "today" or "past" (Close out for a past day can be done later). */
   access: "today" | "past";
-  committedAt: string | null;
   closedOutAt: string | null;
   picks: import("../plan/types.ts").Pick[];
   /** Where each moved pick went. */
@@ -283,7 +280,7 @@ export type CloseOutState = {
 };
 
 /** A week's plan as the UI sees it (step 8). `changed`: edited since the last commit. */
-export type WeekPlanView = { weekStart: IsoDate; committedAt: string | null; updatedAt: string | null; changed: boolean; features: WeekFeature[] };
+export type WeekPlanView = { weekStart: IsoDate; updatedAt: string | null; features: WeekFeature[] };
 
 /** Everything Plan the week needs beyond the week itself (step 8). Fit and readiness are computed from this and week.load. */
 export type WeekPlanState = {
@@ -460,8 +457,8 @@ export type AheadState = {
   clients: {
     clientKey: string;
     clientName: string;
-    /** Weeks 1 to 4: free time against the musts planned, in minutes, as Plan the week counts them (E2). */
-    weeks: { weekStart: string; freeMinutes: number; plannedMinutes: number; nicePlannedMinutes: number; borrowedMinutes: number; status: "none" | "all" | "free" | "over"; text: string; over: string | null }[];
+    /** Weeks 1 to 4: free time against what's planned (CF-1: one total), in minutes, as the week counts them (E2). */
+    weeks: { weekStart: string; freeMinutes: number; plannedMinutes: number; borrowedMinutes: number; status: "none" | "all" | "free" | "over"; text: string; over: string | null }[];
     /** Weeks 5 to 12: free minutes per month column (patterns and PTO). */
     months: { month: string; available: number }[];
   }[];
@@ -470,14 +467,14 @@ export type AheadState = {
    * from its stories on that week's list (one sized), so the cell can't be set by hand; unsized: most aren't sized;
    * exact: every story under it is sized (its hours read "6h", else "about 6h").
    */
-  cells: { clientKey: string; itemId: number; weekStart: string; minutes: number; derived: boolean; unsized: boolean; exact: boolean; tier: "must" | "nice"; weekItemId: number; stories: number }[];
+  cells: { clientKey: string; itemId: number; weekStart: string; minutes: number; derived: boolean; unsized: boolean; exact: boolean; weekItemId: number; stories: number }[];
   /** Dates dragged on the timeline, not saved to DevOps yet, per "<client>:<id>". */
   dates: Record<string, { start: string; end: string }>;
   /**
-   * Slice 3: the 2 weeks before week 1. Musts' minutes from that week's plan (committed or not) and focused minutes per
+   * Slice 3: the 2 weeks before week 1. Each feature's minutes from that week's plan and focused minutes per
    * pick item (a story maps to its feature in the UI); shown as whole hours in words.
    */
-  past: { weekStart: string; committed: boolean; planned: { clientKey: string; itemId: number; minutes: number }[]; worked: { clientKey: string; itemId: number | null; minutes: number }[] }[];
+  past: { weekStart: string; planned: { clientKey: string; itemId: number; minutes: number }[]; worked: { clientKey: string; itemId: number | null; minutes: number }[] }[];
 };
 
 // ---- Step 16.3: Teams presence ----

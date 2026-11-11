@@ -388,7 +388,7 @@ export function TodayTimeline(props: Props) {
                   name={s.focus[0] ? props.nameOf(s.focus[0].clientKey) : s.half === "EVE" ? "Evening" : s.open ? "Open" : halfName(s.half)}
                   untimed={untimed}
                   checklist={checklist}
-                  tickable={!!data.plan?.[date]?.committedAt && !props.readOnly && !s.pto}
+                  tickable={date <= data.planDay.date && !s.pto}
                   linked={linked}
                   setLinked={setLinked}
                   onReveal={reveal}
@@ -501,10 +501,9 @@ function TimelineBlock(b: BlockProps) {
   const { slot, day, data, picks, tz, name, untimed } = b;
   const pv = useContext(PlanCtx);
   const client = slot.focus[0]?.clientKey ?? null;
-  const committed = !!data.plan?.[slot.date]?.committedAt;
   const here = picks.filter((p) => p.half === slot.half);
   const ended = ms(b.now) >= ms(slot.end);
-  const fit = committed && here.some((p) => p.status === "planned") && !ended ? planFit(here, data.planning.sizes, pv.timeboxes, slot) : null;
+  const fit = here.some((p) => p.status === "planned") && !ended ? planFit(here, data.planning.sizes, pv.timeboxes, slot) : null;
   const status = blockStatus(fit, slot.risks);
   const sev = worstSeverity(slot.risks);
   const pill = status.kind === "at_risk" ? `At risk${status.short ? ` · ${status.short}` : ""}` : status.label;
@@ -601,7 +600,6 @@ function CheckRow({ pick, group, b }: { pick: Pick; group: "timed" | "rest"; b: 
   const suggestion = b.placeholders.find((p) => p.pickId === pick.id) ?? null;
   const planned = pick.status === "planned";
   const canDrag = group === "rest" && planned && b.canChange;
-  const committed = !!data.plan?.[slot.date]?.committedAt;
   const followUp = pick.followUpId !== null ? data.followUps.find((f) => f.id === pick.followUpId) ?? null : null;
   const box = b.checklist.timed.find((t) => t.pick.id === pick.id)?.box ?? null;
   const selected = b.sel === `p${pick.id}` || (!!box && b.sel === `t${box.id}`) || (!!suggestion && b.sel === `g${pick.id}`);
@@ -620,7 +618,6 @@ function CheckRow({ pick, group, b }: { pick: Pick; group: "timed" | "rest"; b: 
   const cls = `tt-check-row${canDrag ? " can-drag" : ""}${selected ? " selected" : ""}${b.linked === pick.id ? " linked" : ""}`;
   const tags = (
     <>
-      {!committed && planned && <span className="draft-tag">draft</span>}
       {suggestion && <span className="tt-suggested">Suggested {spanWords(suggestion, tz)}</span>}
     </>
   );

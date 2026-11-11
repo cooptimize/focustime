@@ -49,7 +49,7 @@ describe("demo mode (D272)", () => {
     expect(Object.values(w.week.days).flatMap((d) => [d.am, d.pm]).flatMap((s) => s.focus.map((f) => f.clientName))).toEqual(expect.arrayContaining(["Cooptimize", "Northwind", "Harbor", "Atlas"]));
     expect(w.week.days.find((d) => d.weekday === "Thu")?.pto).not.toBeNull();
     expect((w.devops ?? []).map((c) => c.clientKey).sort()).toEqual(["Atlas", "Cooptimize", "Harbor", "Northwind"]);
-    expect(w.weekFeatures.filter((f) => f.tier === "must").length).toBe(11);
+    expect(w.weekFeatures.length).toBeGreaterThan(0);
     // PK-1: the last workday's done to-do with its item still open adds the rule's Update DevOps #2211.
     expect(w.followUps.length).toBe(5);
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -136,17 +136,33 @@ describe("demo mode (D272)", () => {
   });
 });
 
-describe("Done and commit (D265)", () => {
-  it("the first Done commits; later edits keep that commit and need no second one, and committed rules apply", async () => {
+describe("No confirm (CF-1)", () => {
+  it("work comes on and off today freely: a removed to-do is taken off, and an old Confirm changes nothing", async () => {
     const ctx = await demo();
-    await ok(ctx, "pick.add", { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", itemId: 4411 });
-    const c = await ok<{ plan: { committedAt: string } }>(ctx, "planday.commit", { date: "2026-11-02" });
-    const first = c.plan?.committedAt ?? (await ctx.plan!.day("2026-11-02"))!.committedAt;
-    expect(first).toBeTruthy();
     const added = await ok<{ pick: { id: number } }>(ctx, "pick.add", { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", itemId: 4412 });
-    expect((await ctx.plan!.day("2026-11-02"))!.committedAt).toBe(first);
-    // After the commit a removed pick is kept as dropped (the committed-day rule), with no second commit.
     const removed = await ok<{ result: string }>(ctx, "pick.remove", { id: added.pick.id });
-    expect(removed.result).toBe("dropped");
+    expect(removed.result).not.toBe("dropped");
+    expect(await ok(ctx, "planday.commit", { date: "2026-11-02" })).toMatchObject({ unchanged: true });
+  });
+});
+
+describe("CF-1 review: a week planned before CF-1 reaches teammates on the first load", () => {
+  it("week.load publishes this week and next once; later changes publish as they happen", async () => {
+    // The seed loads the week (this week and next get their once-mark); a week later, the week after is new.
+    let now = NOW;
+    const ctx = createDemoContext({ now: () => now, demo: { on: true, set: async () => {} } });
+    await seedDemo(ctx);
+    now = "2026-11-09T14:30:00Z";
+    const LATER = "2026-11-16";
+    // Put on that week straight in the store, as a week planned before CF-1 (never published).
+    await ctx.plan!.addWeekItem({ weekStart: LATER, clientKey: "Northwind", itemId: 1140, title: "Loyalty points", itemType: "Feature", url: null, level: "feature" });
+    const shared = async () => (await ctx.team!.commitments(["Northwind"], LATER)).map((c) => c.itemId);
+    expect(await shared()).not.toContain(1140);
+    await ok(ctx, "week.load", {});
+    expect(await shared()).toContain(1140);
+    // Once only: a second store-only change waits for the next real change.
+    await ctx.plan!.addWeekItem({ weekStart: LATER, clientKey: "Northwind", itemId: 1141, title: "Earn points", itemType: "Feature", url: null, level: "feature" });
+    await ok(ctx, "week.load", {});
+    expect(await shared()).not.toContain(1141);
   });
 });

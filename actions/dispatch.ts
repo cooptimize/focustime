@@ -590,7 +590,10 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     ? await (async () => planBitsFor({ cfg, plan, devops: ctx.makeDevOps(cfg.dataverse, tz), refs: (devops ?? []).map((w) => ({ clientKey: w.clientKey, clientName: w.clientName })), weekStart, items: [...listed, ...Object.values(weekPlans0 ?? {}).flatMap((d) => d.picks)] }))().catch(() => null)
     : null;
   const weekPlans = weekPlans0 && carry?.resolved.size ? Object.fromEntries(Object.entries(weekPlans0).map(([d, v]) => [d, { ...v, picks: markResolved(v.picks, carry.resolved) }])) : weekPlans0;
-  const committedWeeks = plan ? await plan.committedWeeks() : new Set<IsoDate>();
+  // CF-1: weeks with anything placed (this week, next week, the week shown and the Look ahead week) stand in for
+  // "confirmed" in the week's reminders and Look ahead.
+  const nextMon = Temporal.PlainDate.from(mondayOf(todayDate)).add({ days: 7 }).toString();
+  const workWeeks = plan ? await plan.weeksWithWork([mondayOf(todayDate), nextMon, Temporal.PlainDate.from(nextMon).add({ days: 7 }).toString(), Temporal.PlainDate.from(mondayOf(todayDate)).subtract({ days: 7 }).toString(), weekStart]) : new Set<IsoDate>();
   const aheadSeen = plan ? await plan.markedDates(AHEAD_SEEN_MARK) : new Set<IsoDate>();
   const clientName = nameOf(cfg, (k) => names.get(k));
   const writeLog = plan ? await plan.writeLog(1000) : [];
@@ -615,7 +618,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     today: columnOf(todayTarget(now, model, { todayHasPlans: todayPlans, hasEve: !!todayDay?.eve }), week),
     plan: weekPlans,
     planClients,
-    planDay: { date: todayDate, workday: (await hasHoursFor(ctx, model, todayDate)) && !todayOff, committed: !!todayPlan?.committedAt, available: !!ctx.plan },
+    planDay: { date: todayDate, workday: (await hasHoursFor(ctx, model, todayDate)) && !todayOff, available: !!ctx.plan },
     ptoAhead,
     sources: [dataverse, ...(ptoResult ? [ptoResult] : []), outlook, google, ...linked].map(summarize),
     devops,
@@ -641,10 +644,9 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     weekFeatures: ctx.plan ? withCurrentTitles((await ctx.plan.weekFeaturesFor(featureWeeks(weekStart, todayDate))), currentTitle) : [],
     // Step 17: the Plan ahead rituals due now (a dot on Roadmap's Plan ahead).
     aheadDue: ctx.plan
-      ? aheadRitualsDue({ today: todayDate, time: Temporal.Instant.from(now).toZonedDateTimeISO(tz).toPlainTime().toString().slice(0, 5), workStart: hoursOn(model, todayDate).segments[0]?.start ?? null, pto: todayOff, weekCommitted: (w) => committedWeeks.has(w), seen: (k) => aheadSeen.has(k) }).map((r) => r.kind)
+      ? aheadRitualsDue({ today: todayDate, time: Temporal.Instant.from(now).toZonedDateTimeISO(tz).toPlainTime().toString().slice(0, 5), workStart: hoursOn(model, todayDate).segments[0]?.start ?? null, pto: todayOff, weekHasWork: (w) => workWeeks.has(w), seen: (k) => aheadSeen.has(k) }).map((r) => r.kind)
       : [],
-    weekNudge: { badge: ctx.plan && cfg ? weekNudges(Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(tz), nudgeTimes(cfg), (w) => committedWeeks.has(w)).badge : null },
-    // Step 16.2: Planned ✓ on the Week tab's mode switch, for this week, next week and the week shown.
+    weekNudge: { badge: ctx.plan && cfg ? weekNudges(Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(tz), nudgeTimes(cfg), (w) => workWeeks.has(w)).badge : null },
     // WD-1: Thursday's and Friday's "Next week is empty".
     nextWeekEmpty: plan ? await (async () => {
       const next = Temporal.PlainDate.from(mondayOf(todayDate)).add({ days: 7 });
@@ -652,7 +654,6 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
       const days = Array.from({ length: 7 }, (_, i) => next.add({ days: i }).toString());
       return !Object.values(await plan.week(days)).some((d) => d.picks.some((p) => p.status === "planned" || p.status === "done"));
     })() : false,
-    weekCommitted: Object.fromEntries([...new Set([mondayOf(todayDate), Temporal.PlainDate.from(mondayOf(todayDate)).add({ days: 7 }).toString(), week.days[0]!.date])].map((w) => [w, committedWeeks.has(w)])),
     timeboxes: plan ? await mapSeq(await timeboxesFor(plan, weekStart, sunday), (t) => timeboxView(t, plan, cfg)) : [],
     timeboxSettings: cfg?.timebox ?? DEFAULT_TIMEBOX,
     eventEdit: synced.facts,
@@ -1516,13 +1517,76 @@ const progressContext = (ctx: ActionContext): ProgressContext => ({
 export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<ActionResponse> {
   const r = await dispatchAction(ctx, req);
   const after = req.action === "pick.add" || req.action === "pick.move" ? await afterPick(ctx, req.action, req.input, r) : r;
-  return req.action === "weekplan.commit" || req.action === "weekplan.place" || req.action === "pick.add" ? afterPlanChange(ctx, req.action, req.input, after) : after;
+  const changed = req.action === "weekplan.place" || req.action === "pick.add" ? await afterPlanChange(ctx, req.action, req.input, after) : after;
+  if (req.action === "week.load") return publishOnce(ctx, changed);
+  return typeof req.action === "string" && WEEK_CHANGES.has(req.action) ? publishAfter(ctx, req.input, changed) : changed;
+}
+
+/** The marker of a week published once on load (CF-1): weeks planned before CF-1 (confirmed or not) reach teammates. */
+export const PUBLISHED_ON_LOAD = "cf1_published";
+
+/**
+ * CF-1 review: a week planned before CF-1 was published only on Confirm, so after the deploy Team and the status report
+ * would show it empty or stale until the person's next change. The first week.load publishes this week and next once
+ * (a marker per week); every change after that publishes as it happens.
+ */
+async function publishOnce(ctx: ActionContext, r: ActionResponse): Promise<ActionResponse> {
+  if (!r.ok || !ctx.team || !ctx.plan) return r;
+  try {
+    const cfg = await configured(ctx);
+    const thisWeek = mondayOf(localToday(ctx.now(), cfg ? userZone(cfg) : "UTC"));
+    for (const w of [thisWeek, Temporal.PlainDate.from(thisWeek).add({ days: 7 }).toString()]) if (await ctx.plan.markOnce(PUBLISHED_ON_LOAD, w)) await publishWeek(teamCtx(ctx), w);
+  } catch {
+    // Nothing is lost: the next change publishes.
+  }
+  return r;
 }
 
 /**
- * WD-1: a to-do placed on a block (or moved into another week) puts its feature on that week as a nice to have when
- * it isn't there (placeFeature), and touches a confirmed week so it reads "Changed since you confirmed". The to-do
- * stands whatever happens here.
+ * CF-1 (D1): the actions that can change which features are on a week. After one succeeds, the weeks it touched are
+ * published for teammates and the status report at once (publishWeek), never a past week. Was: on Confirm week.
+ */
+export const WEEK_CHANGES = new Set<string>([
+  "pick.add", "pick.move", "pick.remove", "weekplan.add", "weekplan.remove", "weekplan.place", "weekplan.load",
+  "weekplan.carry_decide", "weekplan.carry_accept_all", "weekplan.watch_checkin", "weekplan.watch_remove",
+  "send.accept", "priority.add_to_week", "weekplan.set_feature",
+]);
+
+/** The Mondays an action's input or answer names (a week, a date, a to-do's day, a week list row's week). */
+export function weeksTouched(input: unknown, data: unknown): IsoDate[] {
+  const out = new Set<IsoDate>();
+  const day = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? out.add(mondayOf(v)) : undefined);
+  const o = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
+  day(o.weekStart);
+  day(o.date);
+  const d = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
+  for (const k of ["pick", "item", "feature", "plan", "state", "send"]) {
+    const x = d[k] as Record<string, unknown> | null | undefined;
+    if (x && typeof x === "object") {
+      day(x.weekStart);
+      day(x.date);
+    }
+  }
+  return [...out];
+}
+
+async function publishAfter(ctx: ActionContext, input: unknown, r: ActionResponse): Promise<ActionResponse> {
+  if (!r.ok || !ctx.team || !ctx.plan) return r;
+  try {
+    const cfg = await configured(ctx);
+    const thisWeek = mondayOf(localToday(ctx.now(), cfg ? userZone(cfg) : "UTC"));
+    // pick.move and pick.remove answer with the day the to-do left (`state`), so the week it left is published too.
+    for (const w of weeksTouched(input, r.data)) if (w >= thisWeek) await publishWeek(teamCtx(ctx), w);
+  } catch {
+    // The plan change stands; the next change publishes again.
+  }
+  return r;
+}
+
+/**
+ * WD-1: a to-do placed on a block (or moved into another week) puts its feature on that week when it isn't there
+ * (placeFeature). The to-do stands whatever happens here. CF-1: the week is no longer touched (there is no
+ * "Changed since you confirmed"); the add's answer carries the feature it put on the week, for Undo.
  */
 async function afterPick(ctx: ActionContext, action: string, input: unknown, r: ActionResponse): Promise<ActionResponse> {
   if (!r.ok || !ctx.plan) return r;
@@ -1532,15 +1596,12 @@ async function afterPick(ctx: ActionContext, action: string, input: unknown, r: 
     const o = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
     if (action === "pick.move" && typeof o.date !== "string") return r;
     const weekStart = mondayOf(pick.date);
-    const before = await ctx.plan.weekStamp(weekStart);
     const draft = pick.draftId !== null ? await ctx.plan.getDraft(pick.draftId) : null;
     let feature: { id: number } | null = null;
     if (pick.itemId !== null) feature = await placeFeature(weekCtx(ctx), { date: pick.date, clientKey: pick.clientKey, itemId: pick.itemId });
     else if (draft?.parentItemId != null) feature = await placeFeature(weekCtx(ctx), { date: pick.date, clientKey: pick.clientKey, featureId: draft.parentItemId });
-    await ctx.plan.touchWeekPlan(weekStart);
-    const after = await ctx.plan.weekStamp(weekStart);
-    // What Undo (pick.remove with `undo`) takes back: the feature this put on the week and the week's updated time.
-    if (action === "pick.add" && after !== null && after !== before) return { ...r, data: { ...(r.data as object), undo: { weekStart, featureId: feature?.id ?? null, before, after } } };
+    // What Undo (pick.remove with `undo`) takes back: the feature this add put on the week.
+    if (action === "pick.add" && feature) return { ...r, data: { ...(r.data as object), undo: { weekStart, featureId: feature.id } } };
   } catch {
     // The to-do stands; the feature can still be added from the panel.
   }
@@ -1868,21 +1929,20 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
             const today = localToday(ctx.now(), cfg ? userZone(cfg) : "UTC");
             const mon = mondayOf(today);
             const next = Temporal.PlainDate.from(mon).add({ days: 7 }).toString();
-            const [setup, ids, push, thisWeek, nextWeek, days] = await Promise.all([
+            const [setup, ids, push, weeks, todayWork] = await Promise.all([
               plan.setupState(),
               plan.devopsIdentities(),
               ctx.push?.status().catch(() => null) ?? Promise.resolve(null),
-              plan.weekPlan(mon),
-              plan.weekPlan(next),
-              plan.dayPlansBetween(today, today),
+              plan.weeksWithWork([mon, next]),
+              plan.dayHasWork(today),
             ]);
             return {
               setup,
               writeClients: ids.length,
               devices: push?.devices.length ?? 0,
               teamsMessages: !!cfg?.notify.teamsMessages,
-              weekConfirmed: !!(thisWeek.committedAt || nextWeek.committedAt),
-              todayConfirmed: !!days[0]?.committedAt,
+              weekPlanned: weeks.size > 0,
+              todayPlanned: todayWork,
             };
           },
         },
@@ -2452,12 +2512,11 @@ async function afterPlanChange(ctx: ActionContext, action: string, input: unknow
   if (!r.ok || !ctx.team) return r;
   const o = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
   try {
-    if (action === "weekplan.commit" && typeof o.weekStart === "string") await publishWeek(teamCtx(ctx), o.weekStart);
     if ((action === "weekplan.place" && o.on !== false) || action === "pick.add") {
       if (typeof o.clientKey === "string" && typeof o.itemId === "number") await markScheduled(teamCtx(ctx), o.clientKey, o.itemId);
     }
   } catch {
-    // The plan change stands; the team's view catches up on the next commit.
+    // The plan change stands.
   }
   return r;
 }

@@ -1,9 +1,9 @@
 // WD-1: the Add work panel beside Week (a bottom sheet on the phone). It replaces Plan the day's right pane and Plan
 // the week's Add pane: "Add to <client> · Tue AM", the block's room, then To place (unfinished, from last week, sent by
-// a teammate), This week's features (the star makes one a must), Promises, More from DevOps (search) and the type box
+// a teammate), This week's features (CF-1: no star; backlog order), Promises, More from DevOps (search) and the type box
 // pinned at the bottom (Enter a draft story, Shift+Enter a plain to-do). Rows use "+" (the selected block) or a drag
 // onto any block on the grid; both go through Week's drop rule (another client's block refuses). Placing work adds its
-// feature to the week as nice to have (the server's pick.add does it). Everything here writes only FocusTime's plan
+// feature to the week (the server's pick.add does it). Everything here writes only FocusTime's plan
 // store, through the existing actions.
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
@@ -34,7 +34,6 @@ import { MenuCtx, useMenu } from "./Menus.tsx";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { openSend } from "./send-event.ts";
 import { DEFAULT_FEATURE_MINUTES } from "../plan/estimate.ts";
-import { moveWithin } from "../plan/weeklist.ts";
 import { AddSection, BoxHint } from "./plan/AddPane.tsx";
 import { CloseButton } from "./CloseButton.tsx";
 import { WeekDnd, useDragSource } from "./WeekStories.tsx";
@@ -304,8 +303,9 @@ function ClientSections({ ctx, state, name, onChanged }: { ctx: Ctx; state: Plan
   });
   const s = { ...s0, rest };
   const loose = state.drafts.filter((d) => d.clientKey === clientKey && d.parentItemId === null && d.level === "story" && d.devopsId == null && !picked.has(`d${d.id}`));
-  // Musts first, the rest after (the star moves a feature between them).
-  const features = [...s.priorities.filter((p) => p.tier === "must"), ...s.priorities.filter((p) => p.tier !== "must")];
+  // CF-1 (G3): the client's backlog order (the week list's order), no musts first.
+  const rankOf = new Map(doneBy.map((f, n) => [f.itemId, n] as const));
+  const features = [...s.priorities].sort((a, b) => (rankOf.get(a.ref.itemId) ?? Infinity) - (rankOf.get(b.ref.itemId) ?? Infinity));
   const weekRows = state.weekFeatures.filter((f) => f.clientKey === clientKey);
   const onWeek = new Set(weekRows.map((f) => f.itemId));
   const weekPicks = Object.values(pv.week ?? {}).flatMap((d) => d.picks);
@@ -319,11 +319,6 @@ function ClientSections({ ctx, state, name, onChanged }: { ctx: Ctx; state: Plan
       say(errText(e));
     }
   };
-  const star = (p: PriorityRow) => {
-    const row = weekRows.find((f) => f.itemId === p.ref.itemId);
-    if (row?.id === undefined) return;
-    void act("weekplan.set_tier", { id: row.id, tier: p.tier === "must" ? "nice" : "must" }, p.tier === "must" ? `${p.ref.title}: nice to have` : `${p.ref.title}: a must this week`);
-  };
   const remove = (p: PriorityRow) => {
     const row = weekRows.find((f) => f.itemId === p.ref.itemId);
     if (row?.id === undefined) return;
@@ -335,7 +330,7 @@ function ClientSections({ ctx, state, name, onChanged }: { ctx: Ctx; state: Plan
     }
     void act("weekplan.remove", { id: row.id }, `${p.ref.title} is off this week`);
   };
-  const addToWeek = (item: WorkItem) => void act("weekplan.add", { weekStart, clientKey, itemId: item.id, tier: "nice" }, `${item.title} added to this week`);
+  const addToWeek = (item: WorkItem) => void act("weekplan.add", { weekStart, clientKey, itemId: item.id }, `${item.title} added to this week`);
   // Plan the week's row ⋯ (Move, Estimate, Pin, Mark done, Ask to collaborate, Send to…, the target date, the Coop
   // brief, Remove), on the same actions.
   const { env } = useContext(MenuCtx);
@@ -345,16 +340,12 @@ function ClientSections({ ctx, state, name, onChanged }: { ctx: Ctx; state: Plan
     const li = doneBy.find((f) => f.itemId === p.ref.itemId);
     if (row?.id === undefined || !li) return null;
     const id = row.id;
-    const group = features.filter((f) => f.tier === p.tier).map((f) => f.ref.itemId);
-    const at0 = group.indexOf(p.ref.itemId);
     const target = [...(work?.items ?? []), ...(work?.committed ?? [])].find((x) => x.id === p.ref.itemId)?.targetDate ?? null;
     const facts: WeekItemFacts = {
-      itemId: p.ref.itemId, title: p.ref.title, clientName: name(clientKey), tier: p.tier === "must" ? "must" : "nice", level: "feature", first: at0 <= 0, last: at0 === group.length - 1, past: ctx.past,
+      itemId: p.ref.itemId, title: p.ref.title, clientName: name(clientKey), level: "feature", past: ctx.past,
       done: li.done ? (li.done === "local" ? "local" : "other") : null, minutes: row.estimate ?? DEFAULT_FEATURE_MINUTES, size: null, places: ctx.places, pinned: [...row.slots], openStories: p.total, targetDate: target, drafts: p.drafts.length, canWrite: !!dw?.can(clientKey),
     };
     const ops: WeekItemOps = {
-      move: (by) => void act("weekplan.reorder", { weekStart, clientKey, tier: facts.tier, order: moveWithin(group, p.ref.itemId, at0 + by).map((x) => x.itemId) }, `Moved ${p.ref.title}`),
-      tier: () => star(p),
       pin: (date, half, on) => void act("weekplan.place", { weekStart, clientKey, itemId: p.ref.itemId, date, half, on }, on ? `Pinned to ${blockWord(date, half)}` : "Unpinned"),
       hours: (n) => void act("weekplan.set_estimate", { id, hours: n }, `${p.ref.title}: about ${n}h`),
       done: (on) => void act("weekplan.mark_done", { id, on }, on ? `${p.ref.title} marked done` : `${p.ref.title} not done`),
@@ -374,7 +365,7 @@ function ClientSections({ ctx, state, name, onChanged }: { ctx: Ctx; state: Plan
         <AddSection className="aw-sec aw-features" label="This week's features" tour="aw-features">
           <ul className="aw-list">
             {features.map((p) => (
-              <Feature key={p.ref.itemId} p={p} ctx={ctx} onStar={() => star(p)} onRemove={() => remove(p)} menuOf={() => menuFor(p)} />
+              <Feature key={p.ref.itemId} p={p} ctx={ctx} onRemove={() => remove(p)} menuOf={() => menuFor(p)} />
             ))}
           </ul>
         </AddSection>
@@ -483,7 +474,7 @@ function AddRow({ ctx, k, d, where, children, menu }: { ctx: Ctx; k: string; d: 
 function ItemAdd({ item, ctx, after, onAddToWeek }: { item: WorkItem; ctx: Ctx; after?: ReactNode; onAddToWeek?: (() => void) | undefined }) {
   const menu = useMenu((env) => {
     const base = itemMenu(env, ctx.clientKey, item);
-    return onAddToWeek && "items" in base ? { ...base, items: [{ id: "add-week", label: "Add to this week", hint: "Nice to have", action: "weekplan.add", run: onAddToWeek }, ...base.items] } : base;
+    return onAddToWeek && "items" in base ? { ...base, items: [{ id: "add-week", label: "Add to this week", action: "weekplan.add", run: onAddToWeek }, ...base.items] } : base;
   });
   return (
     <AddRow ctx={ctx} k={`i${ctx.clientKey}:${item.id}`} where={ctx.where({ itemId: item.id })} d={{ clientKey: ctx.clientKey, itemId: item.id, size: null, title: item.title }} menu={menu}>
@@ -497,11 +488,10 @@ function ItemAdd({ item, ctx, after, onAddToWeek }: { item: WorkItem; ctx: Ctx; 
 }
 
 /**
- * A feature on this week: the star (must), its title, then its stories and drafts with "+". One with no stories is a
+ * A feature on this week (CF-1: no star; every feature counts the same): its title, then its stories and drafts with "+". One with no stories is a
  * "Needs stories · Break down" row. A feature isn't a to-do, so it has no "+"; ⋯ has Remove from this week.
  */
-function Feature({ p, ctx, onStar, onRemove, menuOf }: { p: PriorityRow; ctx: Ctx; onStar: () => void; onRemove: () => void; menuOf: () => MenuStep | null }) {
-  const must = p.tier === "must";
+function Feature({ p, ctx, onRemove, menuOf }: { p: PriorityRow; ctx: Ctx; onRemove: () => void; menuOf: () => MenuStep | null }) {
   // A feature can go on a block as a placeholder (its pin there), by + or a drag.
   const pinnedHere = p.level === "story" ? ctx.here.has(`i${ctx.clientKey}:${p.ref.itemId}`) : p.ref.slots.some((s) => s.date === ctx.at.date && s.half === ctx.at.half);
   // A story on the week list (not a feature) goes on the block as a to-do, like any story row.
@@ -517,9 +507,6 @@ function Feature({ p, ctx, onStar, onRemove, menuOf }: { p: PriorityRow; ctx: Ct
         ) : (
           <button type="button" className="aw-plus" disabled={ctx.past} onClick={() => void ctx.place(fd)} aria-label={story ? `Add ${p.ref.title}` : `Place ${p.ref.title} on this block`} title={story ? "Add to this block" : "Place it on this block as a placeholder (or drag it onto a block)"}>+</button>
         )}
-        <button type="button" className={`aw-star${must ? " on" : ""}`} aria-pressed={must} onClick={onStar} aria-label={must ? `${p.ref.title} is a must. Make it nice to have` : `Make ${p.ref.title} a must`} title={must ? "A must this week (click for nice to have)" : "Nice to have (click to make it a must)"}>
-          {must ? "★" : "☆"}
-        </button>
         {p.item && <TypeIcon clientKey={ctx.clientKey} type={p.item.type} />}
         {p.ref.itemId > 0 ? (
           <ItemTitleLink clientKey={ctx.clientKey} id={p.ref.itemId} url={p.ref.url} className="aw-feat-name">{p.ref.title}</ItemTitleLink>

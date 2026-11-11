@@ -32,7 +32,7 @@ type Props = {
   toggle: (id: number, done: boolean) => void;
   /** Title as a link to the work item (Today, Plan the day); plain text on cards so a click selects the card. */
   link?: boolean;
-  /** Ticking needs a committed day on Today (a draft plan shows "draft"). */
+  /** Whether the box ticks (CF-1: today and past days; no confirm needed). */
   canTick?: boolean;
   timeEditable?: boolean;
   hint?: boolean;

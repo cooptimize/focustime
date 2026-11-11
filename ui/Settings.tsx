@@ -727,8 +727,8 @@ function PlanningForm(p: FormProps) {
       </Group>
       <Group title="Reminders" intro="Each comes as a notification; switch the kinds in Notifications.">
         <div className="set-grid">
-          {numField(a, "reminderOffsetMinutes", "Add work reminder (minutes after the day starts)", "Only when today isn't confirmed.", 5, 240)}
-          {numField(a, "checkinReminderMinutes", "Midday check-in reminder (minutes after lunch)", "On a confirmed day. 0 is the end of lunch.", 5, 120)}
+          {numField(a, "reminderOffsetMinutes", "Add work reminder (minutes after the day starts)", "Only while today has no to-dos.", 5, 240)}
+          {numField(a, "checkinReminderMinutes", "Midday check-in reminder (minutes after lunch)", "On a day with to-dos. 0 is the end of lunch.", 5, 120)}
           {numField(a, "closeoutReminderMinutes", "Close out reminder (minutes before the day ends)", "Only if Close out isn't done.", 5, 120)}
         </div>
       </Group>
@@ -736,8 +736,8 @@ function PlanningForm(p: FormProps) {
         <div className="set-grid">
           {([
             ["weekNudgeThu", "Thursday", "For next week."],
-            ["weekNudgeFri", "Friday", "For next week, if still not confirmed."],
-            ["weekNudgeMon", "Monday", "For this week, if still not confirmed."],
+            ["weekNudgeFri", "Friday", "For next week, if nothing is on it yet."],
+            ["weekNudgeMon", "Monday", "For this week, if nothing is on it yet."],
           ] as const).map(([k, label, hint]) => (
             <AutoField key={k} a={a} k={k} label={label} hint={hint}>
               <input type="time" value={a.v[k]} onChange={(e) => a.set(k, e.target.value)} {...a.text(k)} />

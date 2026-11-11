@@ -99,15 +99,15 @@ const halfWord = (h: Half) => (h === "AM" ? "the morning" : h === "PM" ? "the af
 const dur = (m: number) => (m < 60 ? `${m}m` : m % 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m / 60}h`);
 
 /**
- * "Timebox my day" (D246, TY-1 shows the result as placeholders on Today's timeline): every planned pick without a timebox, musts first, then larger sizes, then pick order,
+ * "Timebox my day" (D246, TY-1 shows the result as placeholders on Today's timeline): every planned pick without a timebox, larger sizes first, then pick order (CF-1: no musts),
  * into its own block: the first gap that fits it whole, else the largest gap left of at least its shortest useful
  * time (trimmed down to no less than that, D273), else not placed.
  */
-export function planMyDay(picks: readonly Pick[], blocks: Partial<Record<Half, Slot>>, timeboxes: readonly AgendaTimebox[], sizes: SizeScale, musts: ReadonlySet<number>, now?: string, minSizes: Readonly<Record<Size, number>> = DEFAULT_MIN_SIZES): { placed: DayPlacement[]; unplaced: Unplaced[] } {
+export function planMyDay(picks: readonly Pick[], blocks: Partial<Record<Half, Slot>>, timeboxes: readonly AgendaTimebox[], sizes: SizeScale, now?: string, minSizes: Readonly<Record<Size, number>> = DEFAULT_MIN_SIZES): { placed: DayPlacement[]; unplaced: Unplaced[] } {
   const boxed = new Set(timeboxes.filter((t) => !t.removedAt && t.pickId !== null).map((t) => t.pickId));
   const todo = picks
     .filter((p) => p.status === "planned" && !boxed.has(p.id) && blocks[p.half])
-    .sort((a, b) => Number(musts.has(b.id)) - Number(musts.has(a.id)) || SIZE_RANK[namedSize(a.size, sizes)] - SIZE_RANK[namedSize(b.size, sizes)] || a.position - b.position || a.id - b.id);
+    .sort((a, b) => SIZE_RANK[namedSize(a.size, sizes)] - SIZE_RANK[namedSize(b.size, sizes)] || a.position - b.position || a.id - b.id);
   const gaps = new Map<Half, FreeGap[]>();
   for (const [h, s] of Object.entries(blocks) as [Half, Slot][]) gaps.set(h, openGaps(s, timeboxes, now));
   const placed: DayPlacement[] = [];

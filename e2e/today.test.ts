@@ -15,7 +15,7 @@ const go = async (page: Page, hash: string) => {
   await page.waitForTimeout(900);
 };
 
-/** The demo day as the U1 and U2 screenshots have it: seven picks, a follow-up, committed, the first one done. */
+/** The demo day as the U1 and U2 screenshots have it: seven picks, a follow-up, the first one done. */
 async function seed(page: Page): Promise<number[]> {
   const fl = await call(page, "followups.list", {});
   const list = (fl.data?.open ?? fl.data?.followUps ?? fl.data ?? []) as { id: number; who: string }[];
@@ -32,7 +32,6 @@ async function seed(page: Page): Promise<number[]> {
   ];
   const ids: number[] = [];
   for (const [half, clientKey, x] of adds) ids.push((await call(page, "pick.add", { date: D, half, clientKey, ...x })).data.pick.id);
-  await call(page, "planday.commit", { date: D });
   await call(page, "pick.mark_done", { id: ids[0], done: true });
   await page.reload();
   await page.waitForSelector(".today-block");
@@ -148,7 +147,7 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     await page.close();
   }, T);
 
-  it("Close out: a panel over Today; no pick twice, dropped picks only as a count; no Lumen; Done closes the day", async () => {
+  it("Close out: a panel over Today; no pick twice, a to-do taken off today is gone (CF-1); no Lumen; Done closes the day", async () => {
     const { page, errors } = await freshPage(h);
     const ids = await seed(page);
     await call(page, "pick.remove", { id: ids[ids.length - 1] });
@@ -157,7 +156,7 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     await go(page, "#/today/closeout");
     const panel = page.locator(".closeout-panel");
     await panel.waitFor();
-    await expect.poll(() => panel.locator(".cp-numbers").textContent()).toMatch(/1\s*dropped/);
+    await expect.poll(() => panel.locator(".cp-numbers").textContent()).toMatch(/0\s*dropped/);
     await expect(page.locator(".pick-row.dropped").count()).resolves.toBe(0);
     const titles = await page.locator("main .pick-row .pr-title").allTextContents();
     expect(new Set(titles).size).toBe(titles.length);

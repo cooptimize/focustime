@@ -1,5 +1,5 @@
 // Step 17.5: when the loader shows, when the app is revealed, what each source says while loading, and whether
-// today's musts are done (for the Close out moment). Pure.
+// today's work is all done (for the Close out moment). Pure.
 import type { SourceSummary } from "../../actions/types.ts";
 import type { ClientWork } from "../../week/types.ts";
 
@@ -44,21 +44,10 @@ export function sourceLines(sources: readonly SourceSummary[] | null, devops: re
 /** The words for a source line. */
 export const sourceWord = (s: SourceState) => (s === "done" ? "done" : s === "failed" ? "didn't load" : "waiting");
 
-type MustItem = { clientKey: string; itemId: number; tier: "must" | "nice"; parentId?: number | null };
-type DayPick = { clientKey: string; itemId: number | null; status: string };
+type DayPick = { status: string };
 
-/**
- * Whether today's musts are done: today has at least one pick that is a must on the week list (or a story in a
- * must's envelope), and every such pick is done.
- */
-export function mustsDone(picks: readonly DayPick[], weekItems: readonly MustItem[]): boolean {
-  const must = new Set(weekItems.filter((i) => i.tier === "must").map((i) => `${i.clientKey}:${i.itemId}`));
-  const isMust = (p: DayPick) => {
-    if (p.itemId === null) return false;
-    if (must.has(`${p.clientKey}:${p.itemId}`)) return true;
-    const item = weekItems.find((i) => i.clientKey === p.clientKey && i.itemId === p.itemId);
-    return item?.parentId != null && must.has(`${p.clientKey}:${item.parentId}`);
-  };
-  const musts = picks.filter((p) => (p.status === "planned" || p.status === "done") && isMust(p));
-  return musts.length > 0 && musts.every((p) => p.status === "done");
+/** CF-1: whether today's work is all done: at least one to-do planned or done today, and every one of them done. */
+export function allDone(picks: readonly DayPick[]): boolean {
+  const live = picks.filter((p) => p.status === "planned" || p.status === "done");
+  return live.length > 0 && live.every((p) => p.status === "done");
 }

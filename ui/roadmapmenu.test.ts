@@ -13,8 +13,9 @@ describe("Roadmap row menu (D282)", () => {
     expect(items(facts()).map((i) => i.label)).toEqual(["Copy DevOps link", "Copy Coop brief", "Ask to collaborate", "Add to this week's plan", "Set target date"]);
     expect(item(facts({ targetDate: "2026-11-30" }), "target").label).toBe("Change target date");
   });
-  it("adds a feature as a nice to have, never an epic, and not twice", () => {
-    expect(item(facts(), "week")).toMatchObject({ action: "weekplan.add", hint: "as a nice to have" });
+  it("adds a feature to the week (CF-1: no tier), never an epic, and not twice", () => {
+    expect(item(facts(), "week")).toMatchObject({ action: "weekplan.add" });
+    expect(item(facts(), "week").hint).toBeUndefined();
     expect(item(facts({ tier: "epic" }), "week").disabled).toBe("Add its features instead");
     expect(item(facts({ onWeek: true }), "week").disabled).toBe("Already on this week's plan");
     expect(item(facts({ tier: "epic" }), "brief").disabled).toBe("Briefs are for features");

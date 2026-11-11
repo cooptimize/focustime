@@ -29,11 +29,18 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.close();
   }, T);
 
-  it("Day has no switch; P opens Week with Add work; Back returns; Confirm the day from its header and the card goes", async () => {
+  it("Day has no switch; P opens Week with Add work; Back returns; a to-do on today and the card goes", async () => {
     const { page } = await freshPage(h);
     expect(await page.locator(".today-view .mode-switch").count()).toBe(0);
-    // Demo Monday 9:30 AM, not planned yet: the Plan today card shows.
-    await page.getByRole("region", { name: "Add work" }).waitFor();
+    // CF-1: the card shows only while today has no to-dos, so take the demo's off first.
+    await page.evaluate(async () => {
+      const csrf = document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "";
+      const post = (action: string, input: unknown) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": csrf }, body: JSON.stringify({ action, input }) }).then((r) => r.json());
+      const st = await post("planday.start", { date: "2026-11-02" });
+      for (const p of st.data.picks as { id: number; status: string }[]) if (p.status === "planned" || p.status === "done") await post("pick.remove", { id: p.id });
+    });
+    await page.reload();
+    await page.getByRole("region", { name: "Nothing on today yet" }).waitFor();
     await page.keyboard.press("p");
     await page.locator("aside.add-work-panel").waitFor();
     expect(await hash(page)).toBe("#/week/add");
@@ -43,17 +50,12 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await expect.poll(() => hash(page)).toBe("#/day");
     await page.goForward();
     await page.locator("aside.add-work-panel").waitFor();
-    // Add one to-do, then Confirm Mon from its day header: Day's card is gone.
+    // Add one to-do (CF-1: nothing to confirm): Day's morning card is gone.
     await page.locator("aside.add-work-panel .aw-row:not(.placed) button.aw-plus").first().click();
     await page.locator("aside.add-work-panel .aw-row.placed").first().waitFor();
-    const head = page.locator("header.day-head", { has: page.locator(".dow", { hasText: "Mon" }) }).first();
-    await head.hover();
-    await head.getByRole("button", { name: /^Actions for Mon/ }).click();
-    await page.getByRole("menuitem", { name: /^Confirm Mon, Nov 2/ }).click();
-    await page.getByText("Confirmed Mon, Nov 2").first().waitFor();
     await page.keyboard.press("1");
     await page.locator(".today-view").waitFor();
-    await expect.poll(() => page.getByRole("region", { name: "Add work" }).count()).toBe(0);
+    await expect.poll(() => page.getByRole("region", { name: "Nothing on today yet" }).count()).toBe(0);
     await page.close();
   }, T);
 

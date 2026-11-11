@@ -69,7 +69,6 @@ describe("follow-ups through week.load (step 7)", () => {
   it("a done pick whose item is still open opens 'Update DevOps'; a later fetch of the item by id closes it", async () => {
     const t = setup();
     const p = (await t.add({ kind: "item", itemId: 101, title: "Export report" }));
-    (await t.plan.commit(MON));
     (await t.plan.setDone(p.id, true));
     t.setDevOps([adatum([item()])]);
     await t.run("week.load", { weekStart: MON });
@@ -96,12 +95,11 @@ describe("follow-ups through week.load (step 7)", () => {
 });
 
 describe("Close out (step 7)", () => {
-  it("carries over to the next plannable day, moves to a chosen slot, and the slip opens a heads-up follow-up with a draft", async () => {
+  it("carries over to the next plannable day and moves to a chosen slot; CF-1: the slip opens no heads-up", async () => {
     const t = setup("2026-11-02T22:15:00Z"); // Mon 5:15 PM
     const a = (await t.add({ kind: "item", itemId: 101, title: "Export report" }));
     const b = (await t.add({ title: "Review the mapping", size: "S" }));
     const done = (await t.add({ title: "Standup notes", size: "S" }));
-    (await t.plan.commit(MON));
     (await t.plan.setDone(done.id, true));
     (await t.plan.addFocus({ pickId: a.id, label: "Export report", startedAt: "x", endedAt: "y", seconds: 45 * 60 }));
     let st = await t.run<CloseOutState>("closeout.load", { date: MON });
@@ -113,13 +111,7 @@ describe("Close out (step 7)", () => {
     await t.run("pick.move", { id: b.id, date: "2026-11-04", half: "AM" });
     st = await t.run<CloseOutState>("closeout.load", { date: MON });
     expect(st.movedTo[a.id]).toEqual({ date: "2026-11-03", half: "PM" });
-    const slip = st.followUps.find((l) => l.kind === "slip")!;
-    expect(slip).toMatchObject({ who: "Adatum", what: "Heads-up to Adatum about the slip (2 items)", isNew: true });
-    expect(slip.draft).toContain("- #101 Export report: moving to Tue, Nov 3 (afternoon)");
-    expect(slip.draft).toContain("- Review the mapping: moving to Wed, Nov 4 (morning)");
-    // Mark as told closes it by hand.
-    await t.run("followup.close", { id: slip.id, note: "Posted in Teams" });
-    expect((await t.plan.allFollowUps()).find((l) => l.id === slip.id)).toMatchObject({ closedBy: "me", closeNote: "Posted in Teams" });
+    expect(st.followUps.filter((l) => l.kind === "slip")).toEqual([]);
 
     st = await t.run<CloseOutState>("closeout.commit", { date: MON });
     expect(st.closedOutAt).toMatch(/^2026-11-02T17:15/);
@@ -130,7 +122,8 @@ describe("Close out (step 7)", () => {
     const t = setup("2026-11-04T15:00:00Z"); // Wed
     expect((await t.fail("closeout.load", { date: "2026-11-05" })).status).toBe(422);
     const st = await t.run<CloseOutState>("closeout.load", { date: MON });
-    expect(st).toMatchObject({ access: "past", carryTo: "2026-11-04", committedAt: null });
+    expect(st).toMatchObject({ access: "past", carryTo: "2026-11-04" });
+    expect(st).not.toHaveProperty("committedAt");
     // An unplanned day can still be closed out; nothing blocks.
     expect((await t.run<CloseOutState>("closeout.commit", { date: MON })).closedOutAt).not.toBeNull();
   });
@@ -140,7 +133,6 @@ describe("borrowed time (step 7)", () => {
   it("'make it up tonight' moves the pick to the evening, records what's owed and offers a flex session; a done payback pick pays it", async () => {
     const t = setup("2026-11-02T22:15:00Z");
     const p = (await t.add({ title: "Export report", size: "M" }));
-    (await t.plan.commit(MON));
     (await t.plan.addFocus({ pickId: p.id, label: "x", startedAt: "x", endedAt: "y", seconds: 45 * 60 }));
     const r = await t.run<{ pick: { id: number; date: string; half: string }; borrowed: { minutes: number; payback: string; paidAt: string | null }; flexOffer: unknown }>("pick.make_up", { id: p.id, when: "tonight" });
     expect(r.pick).toMatchObject({ id: p.id, date: MON, half: "EVE" });
@@ -156,11 +148,10 @@ describe("borrowed time (step 7)", () => {
     expect(w.borrowed[0]!.paidAt).not.toBeNull();
   });
 
-  it("Friday or another day moves it there (the slip owes a heads-up); paying by hand works; refusals are plain", async () => {
+  it("Friday or another day moves it there (CF-1: no heads-up); paying by hand works; refusals are plain", async () => {
     const t = setup("2026-11-02T22:15:00Z");
     const p = (await t.add({ title: "Export report", size: "S" }));
     const q = (await t.add({ title: "Load test", size: "S" }));
-    (await t.plan.commit(MON));
     const r = await t.run<{ pick: { id: number; date: string; half: string }; borrowed: { id: number; minutes: number }; flexOffer: unknown }>("pick.make_up", { id: p.id, when: "friday" });
     expect(r.pick).toMatchObject({ date: "2026-11-06", half: "AM" });
     expect(r.borrowed.minutes).toBe(60);
@@ -170,7 +161,7 @@ describe("borrowed time (step 7)", () => {
     await t.run("borrow.pay", { id: r.borrowed.id });
     const w = await t.run<WeekLoadData>("week.load", { weekStart: MON });
     expect(w.borrowed.map((b) => [b.title, b.paidBy])).toEqual([["Export report", "me"], ["Load test", null]]);
-    expect((await t.plan.openFollowUps()).map((l) => l.kind)).toContain("slip");
+    expect((await t.plan.openFollowUps()).map((l) => l.kind)).not.toContain("slip");
     expect((await t.fail("pick.make_up", { id: p.id, when: "tonight" })).status).toBe(409);
     expect((await t.fail("pick.make_up", { id: 999, when: "tonight" })).status).toBe(404);
     expect((await t.fail("pick.make_up", { id: q.id, when: "someday" })).status).toBe(400);

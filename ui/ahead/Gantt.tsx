@@ -301,10 +301,10 @@ function HeaderRow({ cols, scale, labelW, min, max, setW, reset }: { cols: Ahead
 }
 
 /** Planned hours for an item in the next 4 weeks: a feature's own, an epic's from its features. */
-function plannedOf(ahead: AheadState, clientKey: string, ids: ReadonlySet<number>): { total: number; weeks: { weekStart: string; minutes: number; exact: boolean; derived: boolean; nice: boolean }[] } {
+function plannedOf(ahead: AheadState, clientKey: string, ids: ReadonlySet<number>): { total: number; weeks: { weekStart: string; minutes: number; exact: boolean; derived: boolean }[] } {
   const weeks = ahead.weeks.slice(0, 4).map((w) => {
     const cells = ahead.cells.filter((x) => x.clientKey === clientKey && ids.has(x.itemId) && x.weekStart === w);
-    return { weekStart: w, minutes: cells.reduce((n, x) => n + x.minutes, 0), exact: cells.length === 1 && !!cells[0]!.exact, derived: cells.some((x) => x.derived), nice: cells.length > 0 && cells.every((x) => x.tier === "nice") };
+    return { weekStart: w, minutes: cells.reduce((n, x) => n + x.minutes, 0), exact: cells.length === 1 && !!cells[0]!.exact, derived: cells.some((x) => x.derived) };
   });
   return { total: weeks.reduce((n, w) => n + w.minutes, 0), weeks };
 }
@@ -934,7 +934,7 @@ function CapacityRow({ name, clientKey, cap, cols, scale, loads, ahead }: { name
             const w = cap?.weeks.find((x) => x.weekStart === col.weekStart);
             const bw = budgetWords(w?.freeMinutes ?? 0, w?.plannedMinutes ?? 0);
             return (
-              <span key={col.from} className={`pa-capcell ${w?.status ?? "none"}`} style={style} title={`Free focus time in ${name}'s blocks that week, after meetings; musts planned against it`}>
+              <span key={col.from} className={`pa-capcell ${w?.status ?? "none"}`} style={style} title={`Free focus time in ${name}'s blocks that week, after meetings; what's planned against it`}>
                 {bw.text}
                 {w?.over && <span className="over-word"> · {w.over}</span>}
               </span>

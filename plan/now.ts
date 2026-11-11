@@ -12,7 +12,6 @@ export type NowInput = {
   day: Day | null;
   /** Today's picks (any status). */
   picks: readonly Pick[];
-  committed: boolean;
   /** Today is a PTO day (D105). */
   pto: boolean;
   /** The next day with working hours (Plan the day's target after today), for "no work today". */
@@ -39,10 +38,8 @@ export type NowStrip = {
   untilMinutes: number | null;
   /** The event under way (`now`, `at` is its end) or the next one today (`at` is its start). */
   event: { title: string; at: string; minutes: number; now: boolean } | null;
-  /** Today's picks done of the ones planned or done. Before commit they are drafts (Q38, step 6c). */
+  /** Today's picks done of the ones planned or done. CF-1: there are no drafts; what's on the day is the plan. */
   picks: { done: number; total: number } | null;
-  /** Today isn't committed yet: the counts and next pick are drafts, shown dimmed. */
-  draft: boolean;
   /** Minutes the current block's picks still to do exceed its free time from now. */
   overBy: number | null;
   nextPick: string | null;
@@ -71,7 +68,7 @@ function busyEvents(day: Day): PlacedEvent["event"][] {
 const order: Half[] = ["AM", "PM", "EVE"];
 
 export function nowStrip(i: NowInput): NowStrip {
-  const base: NowStrip = { kind: "away", half: null, title: "Today is on another week", until: null, untilMinutes: null, event: null, picks: null, overBy: null, nextPick: null, next: null, flex: false, draft: false };
+  const base: NowStrip = { kind: "away", half: null, title: "Today is on another week", until: null, untilMinutes: null, event: null, picks: null, overBy: null, nextPick: null, next: null, flex: false };
   if (i.pto || i.day?.pto) return { ...base, kind: "pto", title: "PTO today", next: i.nextWorkday };
   const day = i.day;
   if (!day) return i.noHoursToday ? { ...base, kind: "off", title: "No work today", next: i.nextWorkday } : base;
@@ -84,7 +81,6 @@ export function nowStrip(i: NowInput): NowStrip {
 
   const live = i.picks.filter((p) => p.status === "planned" || p.status === "done");
   const picks = live.length ? { done: live.filter((p) => p.status === "done").length, total: live.length } : null;
-  const draft = !i.committed && live.length > 0;
   const todo = live.filter((p) => p.status === "planned").sort((a, b) => order.indexOf(a.half) - order.indexOf(b.half) || a.position - b.position);
 
   const events = busyEvents(day);
@@ -96,7 +92,7 @@ export function nowStrip(i: NowInput): NowStrip {
       ? { title: upcoming.title, at: hm(upcoming.start, tz), minutes: Math.ceil((ms(upcoming.start) - t) / 60_000), now: false }
       : null;
 
-  const common = { ...base, event, picks, draft };
+  const common = { ...base, event, picks };
   const nextPickFrom = (half: Half | null) => {
     const from = half ? order.indexOf(half) : 0;
     return todo.find((p) => order.indexOf(p.half) >= from)?.title ?? null;
@@ -118,7 +114,7 @@ export function nowStrip(i: NowInput): NowStrip {
       title,
       until: hm(fx ? fx.end : w.end, tz),
       untilMinutes: Math.ceil((ms(fx ? fx.end : w.end) - t) / 60_000),
-      overBy: i.committed && fit?.kind === "over" ? fit.by : null,
+      overBy: fit?.kind === "over" ? fit.by : null,
       nextPick: nextPickFrom(s.half) ?? (fx ? fx.itemTitle || fx.note || null : null),
       flex: !!fx,
     };

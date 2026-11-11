@@ -30,19 +30,19 @@ describe("shortest useful time (D273)", () => {
   });
   it("never puts an M pick into a 15 minute gap (the real Monday case)", () => {
     const am = slot("AM", [["11:45", "12:00"]]);
-    const r = planMyDay([pick(1, "AM", "M")], { AM: am }, [], SIZES, new Set(), undefined, DEFAULT_MIN_SIZES);
+    const r = planMyDay([pick(1, "AM", "M")], { AM: am }, [], SIZES, undefined, DEFAULT_MIN_SIZES);
     expect(r.placed).toEqual([]);
     expect(r.unplaced).toEqual([{ pickId: 1, half: "AM", title: "Pick 1", size: "M", reason: "No gap of 1h or more left in the morning" }]);
   });
   it("E2: an unsized pick is placed as the assumption (1h by default), never left out for having no size", () => {
     const am = slot("AM", [["09:00", "12:00"]]);
-    const r = planMyDay([pick(1, "AM", "M", { size: null })], { AM: am }, [], SIZES, new Set(), undefined, DEFAULT_MIN_SIZES);
+    const r = planMyDay([pick(1, "AM", "M", { size: null })], { AM: am }, [], SIZES, undefined, DEFAULT_MIN_SIZES);
     expect(r.placed.map((p) => [p.pickId, p.start.slice(11, 16), p.end.slice(11, 16)])).toEqual([[1, "09:00", "10:00"]]);
     expect(r.unplaced).toEqual([]);
   });
   it("prefers a gap that holds the pick whole, then the largest gap of at least the minimum", () => {
     const pm = slot("PM", [["13:00", "13:20"], ["14:00", "15:15"], ["15:30", "17:00"]]);
-    const r = planMyDay([pick(1, "PM", "L"), pick(2, "PM", "M"), pick(3, "PM", "S")], { PM: pm }, [], SIZES, new Set(), undefined, DEFAULT_MIN_SIZES);
+    const r = planMyDay([pick(1, "PM", "L"), pick(2, "PM", "M"), pick(3, "PM", "S")], { PM: pm }, [], SIZES, undefined, DEFAULT_MIN_SIZES);
     // L (210) fits nowhere whole: the largest gap of 90m or more (15:30–17:00) trimmed to 90.
     // M (120) fits nowhere whole: 14:00–15:15 (75m, at least 60) trimmed. S (60): only 13:00–13:20 is left, under 30.
     expect(r.placed.map((p) => [p.pickId, p.start.slice(11, 16), p.end.slice(11, 16), p.trimmed])).toEqual([

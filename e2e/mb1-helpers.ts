@@ -1,5 +1,5 @@
 // MB-1: e2e helpers for the phone: a phone page signed in to the demo with the iPhone's 17 px root font, an action
-// call, and Monday planned and confirmed.
+// call, and Monday planned.
 import type { Page } from "playwright-core";
 import type { Harness } from "./harness.ts";
 
@@ -27,7 +27,7 @@ export async function phonePage(h: Harness, width: number): Promise<Page> {
   return page;
 }
 
-/** Today planned and confirmed: two to-dos in the morning (one with a long title), one in the afternoon. */
+/** Today planned: two to-dos in the morning (one with a long title), one in the afternoon. */
 export async function planMonday(page: Page): Promise<void> {
   for (const p of [
     { half: "AM", clientKey: "Cooptimize", intention: "Write the migration notes for the customer export and share them with the delivery team", size: "M" },
@@ -35,6 +35,5 @@ export async function planMonday(page: Page): Promise<void> {
     { half: "PM", clientKey: "Northwind", intention: "Prepare the data model review", size: "L" },
   ])
     await call(page, "pick.add", { date: MON, ...p });
-  await call(page, "planday.commit", { date: MON });
 }
 

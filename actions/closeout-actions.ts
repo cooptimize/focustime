@@ -117,7 +117,6 @@ export async function closeOutState(ctx: CloseoutContext, plan: PlanStore, d: Is
     date: d,
     today,
     access: d < today ? "past" : "today",
-    committedAt: dayPlan?.committedAt ?? null,
     closedOutAt: dayPlan?.closedOutAt ?? null,
     picks,
     movedTo: Object.fromEntries(

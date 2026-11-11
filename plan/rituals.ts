@@ -49,22 +49,22 @@ export type RitualFacts = {
   /** Today's first working time ("HH:MM"); null without hours. */
   workStart: string | null;
   pto: boolean;
-  /** Plan the week's Done for that week. */
-  weekCommitted: (weekStart: IsoDate) => boolean;
+  /** CF-1: that week has anything placed (was: confirmed). */
+  weekHasWork: (weekStart: IsoDate) => boolean;
   /** Plan ahead was opened for this occasion. */
   seen: (key: string) => boolean;
 };
 
 /**
  * The rituals due now. Look ahead: in the look-ahead week (Thursday to Wednesday), once next week (the Monday after the
- * Thursday) is committed. Direction: from the first Thursday to the end of that month. Both only on a working day
+ * Thursday) has anything placed (CF-1; was: confirmed). Direction: from the first Thursday to the end of that month. Both only on a working day
  * from its working start, and not once Plan ahead was opened for them.
  */
 export function aheadRitualsDue(f: RitualFacts): AheadRitual[] {
   if (f.pto || !f.workStart || f.time < f.workStart) return [];
   const out: AheadRitual[] = [];
   const la = lookAheadOccasion(f.today);
-  if (la && f.weekCommitted(plus(la, 4))) {
+  if (la && f.weekHasWork(plus(la, 4))) {
     const key = `plan_ahead:${la}`;
     if (!f.seen(key)) out.push({ kind: "plan_ahead", key, occasion: la });
   }

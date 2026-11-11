@@ -65,7 +65,7 @@ async function setup(trees: Record<string, PortfolioItem[]>, o: Opts = {}) {
   };
   /** Puts these features on last week's list for a client. */
   const lastWeek = async (clientKey: string, items: PortfolioItem[]) => {
-    for (const t of items) await plan.addWeekItem({ weekStart: LAST_WEEK, clientKey, itemId: t.id, title: t.title, itemType: t.type, url: t.url, level: "feature", tier: "must", estimate: 360 });
+    for (const t of items) await plan.addWeekItem({ weekStart: LAST_WEEK, clientKey, itemId: t.id, title: t.title, itemType: t.type, url: t.url, level: "feature", estimate: 360 });
   };
   return { plan, ctx, run, lastWeek };
 }
@@ -93,7 +93,7 @@ describe("From last week through the actions (PL-1)", () => {
     const after = await s.run<ProposalData & { accepted: number }>("weekplan.carry_accept_all", { weekStart: THIS_WEEK });
     expect(after.accepted).toBe(2);
     const list = (await s.plan.weekPlan(THIS_WEEK)).features;
-    expect(list.filter((f) => f.level === "feature").map((f) => [f.itemId, f.tier, f.estimate])).toEqual([[carry.id, "must", 360]]);
+    expect(list.filter((f) => f.level === "feature").map((f) => [f.itemId, f.estimate])).toEqual([[carry.id, 360]]);
     // Only my open story comes along, under its feature.
     expect(list.filter((f) => f.level === "story").map((f) => [f.itemId, f.parentId])).toEqual([[carry.children[0]!.id, carry.id]]);
     expect((await s.plan.weekWatches(THIS_WEEK)).map((w) => [w.itemId, w.why])).toEqual([[watch.id, "owner"]]);

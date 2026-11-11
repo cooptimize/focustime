@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { WorkItem } from "../week/types.ts";
 import type { DraftStory } from "./types.ts";
-import { addSections, defaultBlock, doneAction, matches, mustsSummary, type AddInput } from "./addpane.ts";
+import { addSections, defaultBlock, matches, type AddInput } from "./addpane.ts";
 
 const wi = (id: number, title: string, level: WorkItem["level"], parentId: number | null = null, extra: Partial<WorkItem> = {}): WorkItem => ({ id, title, type: level === "story" ? "User Story" : "Feature", state: "Active", stateCategory: "InProgress", level, order: id, parentId, changedAt: "", url: `https://dev.azure.com/o/p/_workitems/edit/${id}`, ...extra });
 const F1 = wi(10, "Order history export", "portfolio", null, { tier: "feature" });
@@ -13,13 +13,13 @@ const S31 = wi(31, "Update README", "story");
 const F4 = wi(40, "Reporting", "portfolio", null, { tier: "feature" });
 const S41 = wi(41, "Monthly report", "story", 40);
 const work = { items: [S30, F1, S31, F4, F2], children: [S11, S12, S41] };
-const ref = (itemId: number, title: string, tier: "must" | "nice", level: "feature" | "story" = "feature", slots: { date: string; half: "AM" | "PM" }[] = []) => ({ clientKey: "nw", itemId, title, url: null, slots, tier, level, parentId: null as number | null });
+const ref = (itemId: number, title: string, level: "feature" | "story" = "feature", slots: { date: string; half: "AM" | "PM" }[] = []) => ({ clientKey: "nw", itemId, title, url: null, slots, level, parentId: null as number | null });
 const draft = (id: number, parentItemId: number | null): DraftStory => ({ id, clientKey: "nw", parentItemId, title: `Draft ${id}`, size: "M", level: "story", createdAt: "" });
 const fu = (id: number, clientKey: string, due: string | null) => ({ id, clientKey, due, openedAt: "2026-11-01" });
 
 const base = (over: Partial<AddInput<ReturnType<typeof ref>, ReturnType<typeof fu>>> = {}): AddInput<ReturnType<typeof ref>, ReturnType<typeof fu>> => ({
   clientKey: "nw", date: "2026-11-02", half: "AM", work,
-  week: [ref(20, "Supplier portal", "nice"), ref(10, "Order history export", "must"), ref(30, "Fix login timeout", "must", "story")],
+  week: [ref(10, "Order history export"), ref(30, "Fix login timeout", "story"), ref(20, "Supplier portal")],
   followUps: [fu(1, "nw", "2026-11-02"), fu(2, "hh", null), fu(3, "nw", null)], drafts: [], picked: new Set(), ...over,
 });
 
@@ -37,13 +37,14 @@ describe("defaultBlock", () => {
 
 describe("addSections", () => {
   it("a story whose feature is on the week list shows only in the feature's row (step 16.4)", () => {
-    const s = addSections(base({ week: [ref(10, "Order history export", "must"), { ...ref(11, "Export to CSV", "must", "story"), parentId: 10 }] }));
+    const s = addSections(base({ week: [ref(10, "Order history export"), { ...ref(11, "Export to CSV", "story"), parentId: 10 }] }));
     expect(s.priorities.map((p) => [p.ref.itemId, p.level])).toEqual([[10, "feature"]]);
     expect(s.priorities[0]!.stories.map((x) => x.id)).toEqual([11, 12]);
   });
-  it("lists priorities (musts then nice to haves), then the client's follow-ups, then everything else in DevOps order", () => {
+  it("lists the week's features in the week list's order (CF-1: no musts first), then the client's follow-ups, then everything else in DevOps order", () => {
     const s = addSections(base());
-    expect(s.priorities.map((p) => [p.ref.itemId, p.tier])).toEqual([[10, "must"], [30, "must"], [20, "nice"]]);
+    expect(s.priorities.map((p) => p.ref.itemId)).toEqual([10, 30, 20]);
+    expect(s.priorities[0]).not.toHaveProperty("tier");
     expect(s.priorities[0]!.stories.map((x) => x.id)).toEqual([11, 12]);
     expect(s.followUps.map((f) => f.id)).toEqual([1, 3]);
     expect(s.rest.map((r) => r.item.id)).toEqual([31, 40]);
@@ -83,7 +84,7 @@ describe("addSections", () => {
     expect(s.priorities[0]).toMatchObject({ allPicked: true, breakDown: false });
   });
   it("puts the feature pinned to this block first", () => {
-    const s = addSections(base({ week: [ref(10, "Order history export", "must"), ref(40, "Reporting", "must", "feature", [{ date: "2026-11-02", half: "AM" }])] }));
+    const s = addSections(base({ week: [ref(10, "Order history export"), ref(40, "Reporting", "feature", [{ date: "2026-11-02", half: "AM" }])] }));
     expect(s.priorities.map((p) => [p.ref.itemId, p.pinnedHere])).toEqual([[40, true], [10, false]]);
   });
   it("filters priorities to one feature from a card's This week link", () => {
@@ -104,19 +105,5 @@ describe("matches", () => {
     expect(matches("#1", S11)).toBe(true);
     expect(matches("zz", S11)).toBe(false);
     expect(matches("  ", S11)).toBe(true);
-  });
-});
-
-describe("Done", () => {
-  it("the first Done commits; later ones only close (committedAt stays as first set)", () => {
-    expect(doneAction(null)).toBe("commit");
-    expect(doneAction("2026-11-02T08:10:00-05:00[America/New_York]")).toBe("close");
-  });
-});
-
-describe("mustsSummary", () => {
-  it("reads client done/musts, skipping clients without musts", () => {
-    const names: Record<string, string> = { coop: "Cooptimize", tw: "T&W", adatum: "Adatum", q: "Proseware" };
-    expect(mustsSummary([{ clientKey: "coop", musts: 2, done: 0 }, { clientKey: "tw", musts: 1, done: 0 }, { clientKey: "q", musts: 0, done: 0 }, { clientKey: "adatum", musts: 1, done: 1 }], (k) => names[k]!)).toBe("Cooptimize 0/2 · T&W 0/1 · Adatum 1/1");
   });
 });

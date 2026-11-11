@@ -77,7 +77,7 @@ describe("XS", () => {
 describe("a timebox's length is its own thing", () => {
   const twoH = pick({ size: "M" });
   it("placing a 2h item in a 1h gap makes a 1h timebox and leaves the size alone", () => {
-    const r = planMyDay([twoH], { AM: slotOf([["09:00", "10:00"]]) }, [], S, new Set());
+    const r = planMyDay([twoH], { AM: slotOf([["09:00", "10:00"]]) }, [], S);
     expect(r.placed).toHaveLength(1);
     expect(r.placed[0]).toMatchObject({ minutes: 60, trimmed: true });
     expect(twoH.size).toBe("M");
@@ -95,7 +95,7 @@ describe("a timebox's length is its own thing", () => {
     expect(placeInGap({ start: at("09:00"), end: at("09:50"), minutes: 50 }, 120, 30)).toMatchObject({ minutes: 45, trimmed: true });
   });
   it("placing uses the time left, not the size", () => {
-    const r = planMyDay([pick({ size: "L", remainingMinutes: 60, spentMinutes: 180 })], { AM: slotOf([["09:00", "12:00"]]) }, [], S, new Set());
+    const r = planMyDay([pick({ size: "L", remainingMinutes: 60, spentMinutes: 180 })], { AM: slotOf([["09:00", "12:00"]]) }, [], S);
     expect(r.placed[0]).toMatchObject({ minutes: 60, trimmed: false });
   });
 });
@@ -114,9 +114,9 @@ describe("remaining time", () => {
     expect(pickNeed(pick({ remainingMinutes: 0 }), S)).toBe(0);
   });
   it("week capacity counts a story's time left", () => {
-    const item = (itemId: number, o: Partial<EstItem> = {}): EstItem => ({ clientKey: "C", itemId, level: "story", tier: "must", estimate: null, size: "M", parentId: null, ...o });
+    const item = (itemId: number, o: Partial<EstItem> = {}): EstItem => ({ clientKey: "C", itemId, level: "story", estimate: null, size: "M", parentId: null, ...o });
     const e = estimate([item(1), item(2, { remainingMinutes: 60 })], S);
-    expect(plannedMinutesOf(e, "C", "must")).toBe(180);
+    expect(plannedMinutesOf(e, "C")).toBe(180);
   });
   it('a block\'s "A little over" counts what\'s left of an untimed to-do', () => {
     const slot = { date: D, start: at("08:00"), end: at("12:00") };

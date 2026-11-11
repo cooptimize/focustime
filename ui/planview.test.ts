@@ -55,9 +55,9 @@ describe("a card's plan (step 6.1)", () => {
     expect(cardPlan(plan([pick({ size: "L" }), pick({ itemId: 3, size: "S" })]), slot, "Adatum", ITEMS, "2026-11-03T13:00:00Z", SIZE_MINUTES).fit).toBeNull();
   });
 
-  it("committed with no picks in this half: no fit, the list still collapses", () => {
+  it("no picks in this half: no fit, and the list stays open (CF-1: nothing collapses on a confirm)", () => {
     const cp = cardPlan(plan([pick({ half: "PM" })]), slot, "Adatum", ITEMS, NOW, SIZE_MINUTES);
-    expect(cp).toMatchObject({ picks: [], fit: null, collapsed: true, items: ITEMS });
+    expect(cp).toMatchObject({ picks: [], fit: null, collapsed: false, items: ITEMS });
   });
 });
 
@@ -80,15 +80,15 @@ describe("resume notes on the week (step 7)", () => {
 describe("week items on a block (step 11)", () => {
   type F = { clientKey: string; itemId: number; title: string; blocks: number; slots: { date: string; half: "AM" | "PM" }[]; tier?: "must" | "nice"; doneAt?: string | null };
   const f = (over: Partial<F>): F => ({ clientKey: "T&W", itemId: 1, title: "Export", blocks: 2, slots: [], ...over });
-  it("shows what is pinned to this block, then the client's unpinned musts that aren't done", () => {
+  it("shows what is pinned to this block, then the client's unpinned features that aren't done (CF-1: every feature)", () => {
     const placed = f({ itemId: 1, title: "Pinned here", slots: [{ date: "2026-11-09", half: "PM" }] });
     const floating = f({ itemId: 2, title: "Unpinned must" });
     const elsewhere = f({ itemId: 3, title: "Pinned elsewhere", slots: [{ date: "2026-11-10", half: "AM" }] });
-    const nice = f({ itemId: 5, title: "Nice", tier: "nice" });
+    const nice = f({ itemId: 5, title: "Nice" });
     const done = f({ itemId: 6, title: "Done", doneAt: "x" });
     const other = f({ clientKey: "Adatum", itemId: 4, title: "Adatum's" });
     const all = [elsewhere, floating, placed, nice, done, other];
-    expect(featuresOn(all, "2026-11-09", "PM", "T&W").map((x) => x.title)).toEqual(["Pinned here", "Unpinned must"]);
+    expect(featuresOn(all, "2026-11-09", "PM", "T&W").map((x) => x.title)).toEqual(["Pinned here", "Unpinned must", "Nice"]);
     // An Open half-day shows only what is pinned to it.
     expect(featuresOn(all, "2026-11-09", "PM", null).map((x) => x.title)).toEqual(["Pinned here"]);
     expect(featuresOn(all, "2026-11-11", "AM", "Adatum").map((x) => x.title)).toEqual(["Adatum's"]);

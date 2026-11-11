@@ -13,7 +13,7 @@ import type { Conn } from "./sql/conn.ts";
 import { storyDraftMethods } from "./story-drafts.ts";
 import { sqliteConn } from "./sql/sqlite.ts";
 import { carryOver } from "../plan/rules.ts";
-import { type ItemLevel, type Tier } from "../plan/weeklist.ts";
+import { type ItemLevel } from "../plan/weeklist.ts";
 import { DEFAULT_SIZE_SCALE, MAX_ESTIMATE_HOURS, validEstimateMinutes, validStorySize, type SizeScale, type StorySize } from "../plan/estimate.ts";
 import type { DeployItem } from "../plan/deploy-items.ts";
 import type { Capture, DayPlan, DraftAi, DraftAiState, DraftStory, Pick, PickKind, PlanWeek, Size, TodoKind, TodoLink, TodoWindow, ZonedStamp } from "../plan/types.ts";
@@ -1342,7 +1342,10 @@ export type { WeekFeature, WeekPlanRecord } from "../plan/types.ts";
 import type { CarryDecisionRow, WeekFeature, WeekPlanRecord, WeekWatch } from "../plan/types.ts";
 
 export type NewWeekFeature = { weekStart: IsoDate; clientKey: string; itemId: number; title: string; itemType: string | null; url: string | null; /** Minutes (whole hours); 0 takes it off. */ estimate: number };
-export type NewWeekItem = Omit<NewWeekFeature, "estimate"> & { level: ItemLevel; tier?: Tier; /** Features: an estimate in minutes (whole hours), or null for 4h. */ estimate?: number | null; size?: StorySize | null; parentId?: number | null };
+export type NewWeekItem = Omit<NewWeekFeature, "estimate"> & { level: ItemLevel; /** Features: an estimate in minutes (whole hours), or null for 4h. */ estimate?: number | null; size?: StorySize | null; parentId?: number | null };
+
+/** CF-1: the stored tier column (step 11) is kept for the idea to return; every new row gets the same value and nothing reads it. */
+export const KEPT_TIER = "nice";
 
 const ESTIMATE_ERROR = `an estimate must be whole hours, 1 to ${MAX_ESTIMATE_HOURS}`;
 
@@ -1487,7 +1490,7 @@ const toWatch = (r: Row): WeekWatch => ({
   checkin: r.checkin_date != null && r.checkin_half != null && r.checkin_minutes != null ? { date: String(r.checkin_date).slice(0, 10), half: r.checkin_half as "AM" | "PM", minutes: r.checkin_minutes as number } : null,
   checkinPickId: (r.checkin_pick_id as number | null) ?? null,
 });
-const toPlan = (r: Row): DayPlan => ({ date: r.date as string, committedAt: (r.committed_at as string | null) ?? null, closedOutAt: (r.closed_out_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string });
+const toPlan = (r: Row): DayPlan => ({ date: r.date as string, closedOutAt: (r.closed_out_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string });
 const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: sizeOfRow(r) as Size, level: ((r.level as string | null) ?? "story") as DraftStory["level"], createdAt: r.created_at as string, updatedAt: (r.updated_at as string | null) ?? (r.created_at as string), description: (r.description as string | null) ?? null, acceptance: (r.acceptance as string | null) ?? null, startDate: (r.start_date as string | null) ?? null, targetDate: (r.target_date as string | null) ?? null, ...(r.devops_id != null ? { devopsId: r.devops_id as number, devopsUrl: (r.devops_url as string | null) ?? null } : {}), ai: toDraftAi(r) });
 const toDraftAi = (r: Row): DraftAi | null =>
   r.ai_state == null ? null : { ...(r.ai_standards ? { standards: JSON.parse(r.ai_standards as string) as StandardsUsed } : {}), state: r.ai_state as DraftAiState, title: (r.ai_title as string | null) ?? null, description: (r.ai_description as string | null) ?? null, acceptance: (r.ai_acceptance as string | null) ?? null, type: (r.ai_type as string | null) ?? null, parentId: (r.ai_parent_id as number | null) ?? null, parentReason: (r.ai_parent_reason as string | null) ?? null, note: (r.ai_note as string | null) ?? null, ranAt: (r.ai_ran_at as string | null) ?? null };
@@ -1688,15 +1691,9 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
   /** Every write runs in a transaction (joined when the caller has one open). */
   const tx = <T>(fn: () => Promise<T>): Promise<T> => db.tx(fn);
 
-  /**
-   * The week's plan row, created if missing, with its updated time moved on. Stamps are to the second, so a change in
-   * the same second as the confirm lands one second after it: the week still reads "Changed since you confirmed" (WD-1).
-   */
+  /** The week's plan row, created if missing, with its updated time moved on. CF-1: its confirm time is never read or written. */
   const touchWeek = async (weekStart: IsoDate, at: ZonedStamp) => {
-    const row = (await db.get("SELECT committed_at FROM week_plans WHERE week_start = ?", weekStart)) as Row | undefined;
-    const committed = row?.committed_at ? stampText(row.committed_at) : null;
-    const when = committed && Temporal.Instant.compare(Temporal.ZonedDateTime.from(at).toInstant(), Temporal.ZonedDateTime.from(committed).toInstant()) <= 0 ? Temporal.ZonedDateTime.from(committed).add({ seconds: 1 }).toString({ smallestUnit: "second" }) : at;
-    await db.run("INSERT INTO week_plans (week_start, committed_at, created_at, updated_at) VALUES (?, NULL, ?, ?) ON CONFLICT(week_start) DO UPDATE SET updated_at = excluded.updated_at", weekStart, at, when);
+    await db.run("INSERT INTO week_plans (week_start, committed_at, created_at, updated_at) VALUES (?, NULL, ?, ?) ON CONFLICT(week_start) DO UPDATE SET updated_at = excluded.updated_at", weekStart, at, at);
   };
   /** One change to a week item: runs `change`, touches its week; returns the week it is on. */
   const weekItemChange = (id: number, change: (at: ZonedStamp) => Promise<unknown>): Promise<IsoDate> =>
@@ -1813,19 +1810,22 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       return carryOver((await picksBetween(from, today)), today, days, pending);
     },
     addPick: async (p: NewPick, sizes?: SizeScale): Promise<Pick> => tx(async () => (await insertPick(p, null, sizes))),
-    /** Before the day is committed a pick is simply removed; after, it is kept as dropped. */
+    /**
+     * CF-1: a pick comes off freely (as on a day that was never confirmed): deleted, and a carried copy goes back to the
+     * day it came from. Kept as dropped only when something points at it or it has time on it. pick.remove keeps a past
+     * day's as dropped before it gets here.
+     */
     async removePick(id: number): Promise<{ result: "deleted" | "dropped"; pick: Pick }> {
       return tx(async () => {
         const p = (await mustPick(id));
-        const committed = !!(await getPlan(p.date))?.committedAt;
         const referenced = (await db.get("SELECT 1 FROM picks WHERE carried_from = ?", id));
         // TX-1c: a to-do with time on it is kept off the plan instead of deleted, so the story keeps its spent and left.
         const worked = p.itemId !== null && ((p.spentMinutes ?? 0) > 0 || (p.remainingMinutes ?? 0) > 0);
-        if (!committed && !referenced && p.carriedFrom === null && !worked) {
+        if (!referenced && p.carriedFrom === null && !worked) {
           (await db.run("DELETE FROM picks WHERE id = ?", id));
           return { result: "deleted", pick: p };
         }
-        if (p.carriedFrom !== null && !committed) {
+        if (p.carriedFrom !== null) {
           // Carried in this morning and dropped again: hand it back to the day it came from.
           (await db.run("DELETE FROM picks WHERE id = ?", id));
           (await db.run("UPDATE picks SET status = 'planned', updated_at = ? WHERE id = ? AND status = 'moved'", stamp(), p.carriedFrom));
@@ -1894,14 +1894,6 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         }
         (await db.run("UPDATE picks SET status = 'moved', updated_at = ? WHERE id = ?", stamp(), id));
         return (await insertPick(copyOf(p, date, half), p.id));
-      });
-    },
-    async commit(date: IsoDate): Promise<DayPlan> {
-      return tx(async () => {
-        (await ensurePlan(date));
-        const at = stamp();
-        (await db.run("UPDATE day_plans SET committed_at = ?, updated_at = ? WHERE date = ?", at, at, date));
-        return (await getPlan(date))!;
       });
     },
     /**
@@ -2680,7 +2672,6 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         clientKey: r.client_key as string,
         itemId: r.item_id as number,
         level: r.level as "feature" | "story",
-        tier: r.tier as "must" | "nice",
         title: r.title as string,
         itemType: (r.item_type as string | null) ?? null,
         url: (r.url as string | null) ?? null,
@@ -2695,7 +2686,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         updatedAt: r.updated_at as string,
       }));
       const latest = [plan?.updated_at as string | undefined, ...features.map((x) => x.updatedAt)].filter((x): x is string => !!x).sort((a, b) => Temporal.Instant.compare(Temporal.ZonedDateTime.from(a).toInstant(), Temporal.ZonedDateTime.from(b).toInstant())).at(-1);
-      return { weekStart, committedAt: (plan?.committed_at as string | null) ?? null, updatedAt: latest ?? null, features };
+      return { weekStart, updatedAt: latest ?? null, features };
     },
     /** Step 8's call: a feature on a week with an estimate (a must when new); 0 takes it off. */
     async setWeekFeature(f: NewWeekFeature): Promise<WeekFeature | null> {
@@ -2718,7 +2709,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       return tx(async () => {
         const at = stamp();
         // U3 (D388): never a second row for the same item, even under a client key in another letter case.
-        const row = (await db.get("SELECT id, tier, level FROM week_features WHERE week_start = ? AND lower(client_key) = lower(?) AND item_id = ? ORDER BY id LIMIT 1", f.weekStart, f.clientKey, f.itemId)) as Row | undefined;
+        const row = (await db.get("SELECT id, level FROM week_features WHERE week_start = ? AND lower(client_key) = lower(?) AND item_id = ? ORDER BY id LIMIT 1", f.weekStart, f.clientKey, f.itemId)) as Row | undefined;
         (await touchWeek(f.weekStart, at));
         let id: number;
         const estimate = f.level === "feature" ? (f.estimate ?? null) : null;
@@ -2730,55 +2721,42 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
           else if (f.level === "feature" && f.estimate !== undefined) (await db.run("UPDATE week_features SET estimate = ? WHERE id = ?", estimate, id));
           else if (f.level === "story" && f.size !== undefined) (await db.run("UPDATE week_features SET size = ?, size_xs = ? WHERE id = ?", sizeColumn(size), xsFlag(size), id));
           if (f.parentId !== undefined) (await db.run("UPDATE week_features SET parent_id = ? WHERE id = ?", f.parentId, id));
-          if (f.tier && f.tier !== row.tier) (await db.run("UPDATE week_features SET tier = ?, position = NULL WHERE id = ?", f.tier, id));
         } else {
           id = Number(
-            (await db.run("INSERT INTO week_features (week_start, client_key, item_id, level, tier, title, item_type, url, estimate, size, size_xs, parent_id, position, done_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)", f.weekStart, f.clientKey, f.itemId, f.level, f.tier ?? "must", f.title, f.itemType, f.url, estimate, sizeColumn(size), xsFlag(size), f.parentId ?? null, at, at)).lastId,
+            (await db.run("INSERT INTO week_features (week_start, client_key, item_id, level, tier, title, item_type, url, estimate, size, size_xs, parent_id, position, done_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)", f.weekStart, f.clientKey, f.itemId, f.level, KEPT_TIER, f.title, f.itemType, f.url, estimate, sizeColumn(size), xsFlag(size), f.parentId ?? null, at, at)).lastId,
           );
         }
         return (await this.weekPlan(f.weekStart)).features.find((x) => x.id === id)!;
       });
     },
     /**
-     * WD-1: a change to the week's to-dos (a story placed or moved into it) counts as a change to the week, so a
-     * confirmed week reads "Changed since you confirmed". Only a week that has a plan row is touched.
+     * CF-1 (replaces WD-1's week stamp): Undo of a to-do's add takes back the feature the add put on the week, while it
+     * is unchanged since (no estimate, done mark or pin since). The caller checks that nothing else of it is placed.
      */
-    async touchWeekPlan(weekStart: IsoDate): Promise<void> {
-      await tx(async () => {
-        const row = (await db.get("SELECT week_start FROM week_plans WHERE week_start = ?", weekStart)) as Row | undefined;
-        if (row) await touchWeek(weekStart, stamp());
-      });
-    },
-    /** WD-1: the week row's own updated time (null: no row), so an Undo can tell whether anything changed since. */
-    async weekStamp(weekStart: IsoDate): Promise<string | null> {
-      const row = (await db.get("SELECT updated_at FROM week_plans WHERE week_start = ?", weekStart)) as Row | undefined;
-      return row?.updated_at ? stampText(row.updated_at) : null;
-    },
-    /**
-     * WD-1: Undo of a to-do's add takes back what the add did to the week: the feature it put on the week (only while it
-     * is still a nice to have with no pins) and the week's updated time. Only when nothing else changed the week since
-     * (its updated time is still `after`); otherwise the week keeps both, and reads as changed, which it is.
-     */
-    async undoWeekAdd(weekStart: IsoDate, featureId: number | null, before: string | null, after: string): Promise<boolean> {
+    async undoWeekAdd(weekStart: IsoDate, featureId: number): Promise<boolean> {
       return tx(async () => {
-        const row = (await db.get("SELECT updated_at FROM week_plans WHERE week_start = ?", weekStart)) as Row | undefined;
-        if (!row?.updated_at || stampText(row.updated_at) !== after) return false;
-        if (featureId !== null) {
-          const f = (await db.get("SELECT tier FROM week_features WHERE id = ? AND week_start = ?", featureId, weekStart)) as Row | undefined;
-          const pinned = (await db.get("SELECT 1 AS x FROM week_feature_slots WHERE feature_id = ?", featureId)) as Row | undefined;
-          if (f && f.tier === "nice" && !pinned) await db.run("DELETE FROM week_features WHERE id = ?", featureId);
-        }
-        // No row before the add: the week was a draft, nothing reads its time; it keeps the add's.
-        if (before !== null) await db.run("UPDATE week_plans SET updated_at = ? WHERE week_start = ?", before, weekStart);
+        const f = (await db.get("SELECT created_at, updated_at FROM week_features WHERE id = ? AND week_start = ?", featureId, weekStart)) as Row | undefined;
+        if (!f || stampText(f.created_at) !== stampText(f.updated_at)) return false;
+        if ((await db.get("SELECT 1 AS x FROM week_feature_slots WHERE feature_id = ?", featureId))) return false;
+        await db.run("DELETE FROM week_features WHERE id = ?", featureId);
         return true;
       });
     },
-    /** Must or nice to have; changing tier puts it back in DevOps order within the new tier. */
-    async setWeekItemTier(id: number, tier: "must" | "nice"): Promise<WeekFeature> {
-      return tx(async () => {
-        const w = (await weekItemChange(id, async (at) => (await db.run("UPDATE week_features SET tier = ?, position = CASE WHEN tier = ? THEN position ELSE NULL END, updated_at = ? WHERE id = ?", tier, tier, at, id))));
-        return (await this.weekPlan(w)).features.find((x) => x.id === id)!;
-      });
+    /** CF-1: whether a day has to-dos (planned or done): the morning card's and the day's reminders' one rule. */
+    async dayHasWork(date: IsoDate): Promise<boolean> {
+      return !!(await db.get("SELECT 1 AS x FROM picks WHERE date = ? AND status IN ('planned', 'done')", date));
+    },
+    /**
+     * CF-1: of these weeks (Mondays), the ones with anything placed: a feature on the week or a to-do (planned or done)
+     * on one of its days. Replaces "the week is confirmed" for the week's reminders and Look ahead.
+     */
+    async weeksWithWork(weekStarts: readonly IsoDate[]): Promise<Set<IsoDate>> {
+      const out = new Set<IsoDate>();
+      for (const w of new Set(weekStarts)) {
+        const sunday = Temporal.PlainDate.from(w).add({ days: 6 }).toString();
+        if ((await db.get("SELECT 1 AS x FROM week_features WHERE week_start = ?", w)) || (await db.get("SELECT 1 AS x FROM picks WHERE date >= ? AND date <= ? AND status IN ('planned', 'done')", w, sunday))) out.add(w);
+      }
+      return out;
     },
     /** A feature's estimate in minutes (whole hours, 1h to 80h), or null for 4h (E2). Stories have a size. */
     async setWeekItemEstimate(id: number, minutes: number | null): Promise<WeekFeature> {
@@ -2817,15 +2795,15 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
      * A local order for one client's tier: positions 1..n for the items given (the rest of the tier follows in DevOps
      * order). `null` resets the client's whole list (both tiers) to DevOps order. Never written back to DevOps.
      */
-    async reorderWeekItems(weekStart: IsoDate, clientKey: string, tier: "must" | "nice", order: readonly { itemId: number; position: number }[] | null): Promise<WeekPlanRecord> {
+    async reorderWeekItems(weekStart: IsoDate, clientKey: string, order: readonly { itemId: number; position: number }[] | null): Promise<WeekPlanRecord> {
       await tx(async () => {
         const at = stamp();
         if (order === null) (await db.run("UPDATE week_features SET position = NULL, updated_at = ? WHERE week_start = ? AND client_key = ? AND position IS NOT NULL", at, weekStart, clientKey));
         else
           for (const o of order) {
             if (!Number.isInteger(o.position) || o.position < 1) throw new PlanError("position must be a whole number from 1");
-            const r = (await db.run("UPDATE week_features SET position = ?, updated_at = ? WHERE week_start = ? AND client_key = ? AND tier = ? AND item_id = ?", o.position, at, weekStart, clientKey, tier, o.itemId));
-            if (Number(r.changes) !== 1) throw new PlanError(`#${o.itemId} isn't a ${tier === "must" ? "must" : "nice to have"} on this client's week`);
+            const r = (await db.run("UPDATE week_features SET position = ?, updated_at = ? WHERE week_start = ? AND client_key = ? AND item_id = ?", o.position, at, weekStart, clientKey, o.itemId));
+            if (Number(r.changes) !== 1) throw new PlanError(`#${o.itemId} isn't on this client's week`);
           }
         (await touchWeek(weekStart, at));
       });
@@ -2859,14 +2837,6 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         (await touchWeek(week, at));
         return (await this.weekPlan(week)).features.find((x) => x.id === featureId)!;
       });
-    },
-    async commitWeek(weekStart: IsoDate): Promise<WeekPlanRecord> {
-      await tx(async () => {
-        const at = stamp();
-        (await touchWeek(weekStart, at));
-        (await db.run("UPDATE week_plans SET committed_at = ?, updated_at = ? WHERE week_start = ?", at, at, weekStart));
-      });
-      return (await this.weekPlan(weekStart));
     },
     /** Committed features per week for these weeks (the week view and Plan the day). */
     async weekFeaturesFor(weekStarts: readonly IsoDate[]): Promise<WeekFeature[]> {
@@ -2950,7 +2920,6 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     /** Every date marked with this kind (A3: read once where a plain rule asks about several). */
     markedDates: async (kind: string): Promise<Set<IsoDate>> => new Set(((await db.all("SELECT date FROM markers WHERE kind = ?", kind)) as Row[]).map((r) => r.date as string)),
     /** The weeks whose plan is committed (A3: read once where a plain rule asks about several). */
-    committedWeeks: async (): Promise<Set<IsoDate>> => new Set(((await db.all("SELECT week_start FROM week_plans WHERE committed_at IS NOT NULL")) as Row[]).map((r) => r.week_start as string)),
     /** Whether (kind, date) was marked (step 15.4: the morning VM prompt dismissed for the day). */
     async marked(kind: string, date: IsoDate): Promise<boolean> {
       return !!(await db.get("SELECT 1 FROM markers WHERE kind = ? AND date = ?", kind, date));
@@ -2966,7 +2935,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
           const to = new Map(((await db.all("SELECT n.carried_from AS origin, n.date AS date, n.half AS half FROM picks n JOIN picks o ON o.id = n.carried_from WHERE o.date = ? AND o.status = 'moved'", d)) as Row[]).map((r) => [r.origin as number, { date: r.date as IsoDate, half: r.half as Half }] as const));
           for (const p of picks) if (p.status === "moved") p.carriedTo = to.get(p.id) ?? null;
         }
-        out[d] = { committedAt: plan.committedAt, closedOutAt: plan.closedOutAt, picks };
+        out[d] = { closedOutAt: plan.closedOutAt, picks };
       }
       return out;
     },

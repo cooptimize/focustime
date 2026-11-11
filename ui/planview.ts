@@ -56,15 +56,15 @@ export function resumeSlots(days: readonly { date: IsoDate; am: Slot; pm: Slot }
   }
   return out;
 }
-type FeatureOnWeek = { clientKey: string; itemId: number; title: string; slots: readonly { date: IsoDate; half: "AM" | "PM" }[]; tier?: "must" | "nice"; doneAt?: string | null };
+type FeatureOnWeek = { clientKey: string; itemId: number; title: string; slots: readonly { date: IsoDate; half: "AM" | "PM" }[]; doneAt?: string | null };
 
 /**
- * Week items to show on a block (step 11): those pinned to it, then (on a client's own block) that client's musts not
- * pinned anywhere and not marked done. An Open half-day (no client) shows only what is pinned to it.
+ * Week items to show on a block (step 11): those pinned to it, then (on a client's own block) that client's features
+ * on the week (CF-1: all of them, no musts) not pinned anywhere and not marked done. An Open half-day (no client) shows only what is pinned to it.
  */
 export function featuresOn<T extends FeatureOnWeek>(features: readonly T[], date: IsoDate, half: Half, clientKey: string | null): T[] {
   const here = features.filter((f) => f.slots.some((s) => s.date === date && s.half === half));
-  const floating = clientKey ? features.filter((f) => f.clientKey === clientKey && !here.includes(f) && !f.slots.length && (f.tier ?? "must") === "must" && !f.doneAt) : [];
+  const floating = clientKey ? features.filter((f) => f.clientKey === clientKey && !here.includes(f) && !f.slots.length && !f.doneAt) : [];
   return [...here, ...floating];
 }
 
@@ -76,11 +76,10 @@ export function useFocused(): (id: number) => number {
   return (id) => liveFocused(id, v.focused, v.timer, v.nowMs);
 }
 
-/** The checklist for a half-day: shown once the day is committed; planned and done picks only. */
+/** The checklist for a half-day: its planned and done picks (CF-1: no confirm needed). */
 export function checklistFor(week: PlanWeek | null, date: IsoDate, half: Half): Pick[] {
   const day = week?.[date];
-  if (!day?.committedAt) return [];
-  return day.picks.filter((p) => p.half === half && (p.status === "planned" || p.status === "done"));
+  return (day?.picks ?? []).filter((p) => p.half === half && (p.status === "planned" || p.status === "done"));
 }
 
 export type CardPlan = {
@@ -97,12 +96,11 @@ export type CardPlan = {
 /**
  * A card's plan (step 6.1): its picks, their fit against the block's whole free time (step 15, D266: the same number
  * Plan the day uses), the DevOps list without items picked here, and that list collapsed. PV-1 (D574): committed or
- * not, since stories are dragged onto blocks on Week before the day is planned. With no picks: every item, collapsed
- * only on a committed day.
+ * not, since stories are dragged onto blocks on Week before the day is planned. With no picks: every item, open.
  */
 export function cardPlan(week: PlanWeek | null, slot: Slot, clientKey: string | null, items: readonly WorkItem[], now: string, sizes: SizeScale , timeboxes: readonly TimeboxLike[] = []): CardPlan {
   const picks = (week?.[slot.date]?.picks ?? []).filter((p) => p.half === slot.half && (p.status === "planned" || p.status === "done"));
-  if (!picks.length) return { picks: [], fit: null, items: [...items], collapsed: !!week?.[slot.date]?.committedAt };
+  if (!picks.length) return { picks: [], fit: null, items: [...items], collapsed: false };
   const picked = new Set(picks.filter((p) => p.kind === "item" && p.clientKey === clientKey && p.itemId !== null).map((p) => p.itemId));
   return {
     picks,

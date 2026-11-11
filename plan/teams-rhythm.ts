@@ -39,7 +39,7 @@ export const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export const TEAMS_KIND_LABEL: Record<TeamsKind, string> = { brief: "Morning brief", checkin: "Midday check-in", closeout: "Close out", nudges: "Nudges", status: "Status report", meetings: "Client calls to review" };
 export const TEAMS_KIND_HINT: Record<TeamsKind, string> = {
-  brief: "Today's blocks, meetings, to-dos, promises due and work sent to you, with Confirm today.",
+  brief: "Today's blocks, meetings, to-dos, promises due and work sent to you.",
   checkin: "This morning's to-dos with Done and Not yet, and Move the rest.",
   closeout: "What got done today: tick to-dos or tell me, then one Confirm closes the day.",
   nudges: "A promise due tonight that's still open, work sent to you waiting over half a day, and someone taking over an item assigned to you. At most one message an hour.",

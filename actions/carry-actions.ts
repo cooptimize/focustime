@@ -260,8 +260,8 @@ async function decide(ctx: CarryContext, cfg: AppConfig, plan: PlanStore, weekSt
   if (row.kind !== "carry" && row.kind !== "needs_stories") throw new PlanError(row.kind === "not_yours" ? "Take one of its stories first, or drop it" : "Nothing to plan for this one; keep watching it or drop it");
   const last = (await plan.weekPlan(Temporal.PlainDate.from(weekStart).subtract({ days: 7 }).toString())).features;
   const prior = (itemId: number) => last.find((f) => f.clientKey === row.clientKey && f.itemId === itemId);
-  await plan.addWeekItem({ weekStart, clientKey: row.clientKey, itemId: row.itemId, title: row.title, itemType: row.itemType, url: row.url, level: "feature", tier: "must", estimate: row.estimate });
-  for (const s of row.stories) await plan.addWeekItem({ weekStart, clientKey: row.clientKey, itemId: s.id, title: s.title, itemType: s.type, url: s.url, level: "story", tier: "must", size: prior(s.id)?.size ?? null, parentId: row.itemId });
+  await plan.addWeekItem({ weekStart, clientKey: row.clientKey, itemId: row.itemId, title: row.title, itemType: row.itemType, url: row.url, level: "feature", estimate: row.estimate });
+  for (const s of row.stories) await plan.addWeekItem({ weekStart, clientKey: row.clientKey, itemId: s.id, title: s.title, itemType: s.type, url: s.url, level: "story", size: prior(s.id)?.size ?? null, parentId: row.itemId });
   await plan.decideCarry(weekStart, row.clientKey, row.itemId, row.kind, "kept");
 }
 

@@ -34,7 +34,6 @@ describe.skipIf(!CHROMIUM)("TD-1 to-do, not pick (browser, demo mode)", () => {
     await page.locator(".half.card li.pick-row").first().waitFor();
     expect(await pickLines(page)).toEqual([]);
     await shotBoth(page, "td1-plan-today");
-    expect((await call(page, "planday.commit", { date: TODAY })).ok).toBe(true);
     await page.evaluate(() => (location.hash = "#/today"));
     await page.reload();
     await page.getByRole("checkbox", { name: "Done: Timesheet summary query" }).waitFor();

@@ -16,8 +16,7 @@ export type FeatureLike = {
   /** E2: a feature's estimate in minutes, or null for 4h; ignored when a sized story of it is on the list. Stories: unused. */
   estimate: number | null;
   slots: readonly { date: IsoDate; half: "AM" | "PM" }[];
-  /** Step 11: must or nice to have (missing: must, as step 8 stored them), and feature or story (missing: feature). */
-  tier?: "must" | "nice";
+  /** Step 11: feature or story (missing: feature). CF-1: every one counts the same (no musts). */
   level?: "feature" | "story";
   /** Step 16.4: a story's size and parent feature. */
   size?: StorySize | null;
@@ -26,7 +25,6 @@ export type FeatureLike = {
   /** WT-1: the DevOps type, so a background type (no hours) can be left out of the budget. */
   itemType?: string | null;
 };
-const isMust = (f: FeatureLike) => (f.tier ?? "must") === "must";
 const isFeature = (f: FeatureLike) => (f.level ?? "feature") === "feature";
 
 export type Block = { date: IsoDate; half: "AM" | "PM"; start: string; end: string; freeMinutes: number; totalMinutes: number; pto: boolean; /** An Open half-day an item of this client is pinned to. */ open: boolean };
@@ -42,7 +40,7 @@ export function clientBlocks(week: Week, clientKey: string): Block[] {
   return week.days.flatMap((d) => [d.am, d.pm].filter((s) => s.focus[0]?.clientKey === clientKey).map((s) => blockOf(s, false)));
 }
 
-/** S1 (D453): a must pinned to a PTO half stays pinned, flagged; never moved or unpinned for the person. */
+/** S1 (D453): a feature pinned to a PTO half stays pinned, flagged; never moved or unpinned for the person. */
 export const PINNED_TO_PTO = "Pinned to PTO, move it";
 /** The PTO halves an item is pinned to (Week's PTO: a whole day or one half). */
 export function pinnedToPto(week: Pick<Week, "days">, slots: readonly { date: IsoDate; half: "AM" | "PM" }[]): { date: IsoDate; half: "AM" | "PM" }[] {
@@ -67,9 +65,8 @@ export type ClientBudget = {
   freeMinutes: number;
   /** Unpaid borrowed minutes taken off it. */
   borrowedMinutes: number;
-  /** Minutes of its musts (nice to haves don't count against it). */
+  /** CF-1: minutes of everything on its week (one total). */
   plannedMinutes: number;
-  nicePlannedMinutes: number;
   status: "none" | "all" | "free" | "over";
   /** "7h free · 9h planned". */
   text: string;
@@ -127,8 +124,8 @@ export function withCurrentTitles<T extends { clientKey: string; itemId: number;
 /**
  * The budget per client (E2): the real free focus time in its blocks that week (and Open half-days an item is pinned
  * to), each block's free minutes as Plan the day counts them (week/free.ts: after meetings, personal events whether
- * shown or hidden, unavailable time; none on a day off), less unpaid borrowed time. Planned: minutes of its musts,
- * features as envelopes (plan/estimate.ts).
+ * shown or hidden, unavailable time; none on a day off), less unpaid borrowed time. Planned: minutes of everything on
+ * its week (CF-1: one total), features as envelopes (plan/estimate.ts).
  */
 export type BudgetOptions = {
   /** SZ-1: S, M, L and what this person counts unsized work as. */
@@ -155,7 +152,7 @@ export function weekBudget(week: Week, all: readonly FeatureLike[], o: BudgetOpt
     const d = week.days.find((x) => x.date === date);
     return d ? (half === "AM" ? d.am : d.pm) : null;
   };
-  const est = estimate(items.map((i) => ({ ...i, level: i.level ?? "feature", tier: i.tier ?? "must", done: !!o.resolved?.(i.clientKey, i.itemId) })), o.sizes);
+  const est = estimate(items.map((i) => ({ ...i, level: i.level ?? "feature", done: !!o.resolved?.(i.clientKey, i.itemId) })), o.sizes);
   for (const k of Object.keys(o.checkins ?? {})) if (!names.has(k)) names.set(k, k);
   return [...names].map(([clientKey, clientName]) => {
     const mine = items.filter((f) => f.clientKey === clientKey);
@@ -173,11 +170,11 @@ export function weekBudget(week: Week, all: readonly FeatureLike[], o: BudgetOpt
     const borrowed = o.borrowedMinutes[clientKey] ?? 0;
     const freeMinutes = Math.max(0, inBlocks - borrowed);
     const checkinMinutes = o.checkins?.[clientKey] ?? 0;
-    const plannedMinutes = plannedMinutesOf(est, clientKey, "must") + checkinMinutes;
+    const plannedMinutes = plannedMinutesOf(est, clientKey) + checkinMinutes;
     const keepOpen = o.keepOpen?.(clientKey) ?? 0;
     const w0 = budgetWords(freeMinutes, plannedMinutes, o.planShare ?? 100, keepOpen);
     const w = onlyPto ? { ...w0, free: NO_TIME, text: [NO_TIME, w0.planned].filter(Boolean).join(" · ") } : w0;
-    return { clientKey, clientName, blocks, ptoBlocks: all.filter((b) => b.pto).map((b) => ({ date: b.date, half: b.half })), freeMinutes, borrowedMinutes: Math.min(borrowed, inBlocks), plannedMinutes, nicePlannedMinutes: plannedMinutesOf(est, clientKey, "nice"), status: w.kind, text: w.text, free: w.free, planned: w.planned, over: w.over, keepOpen, checkinMinutes, planUpTo: onlyPto ? 0 : w0.line };
+    return { clientKey, clientName, blocks, ptoBlocks: all.filter((b) => b.pto).map((b) => ({ date: b.date, half: b.half })), freeMinutes, borrowedMinutes: Math.min(borrowed, inBlocks), plannedMinutes, status: w.kind, text: w.text, free: w.free, planned: w.planned, over: w.over, keepOpen, checkinMinutes, planUpTo: onlyPto ? 0 : w0.line };
   });
 }
 
@@ -275,8 +272,8 @@ export function readiness(i: ReadinessInput): ReadinessFlag[] {
     for (const e of p.items.filter((x) => x.tier === "epic"))
       if (needsFeatures(e))
         out.push({ kind: "needs_features", clientKey: p.clientKey, itemId: e.id, title: e.title, url: e.url, soft: false, drafts: (i.drafts ?? []).filter((d) => d.clientKey === p.clientKey && d.parentItemId === e.id && d.level === "feature").length });
-  // Step 11: musts (features) with no target date; a nice-to-have isn't a promise yet.
-  for (const f of i.features.filter((x) => isFeature(x) && isMust(x))) {
+  // Step 11: features on the week with no target date (CF-1: every feature on the week, no musts).
+  for (const f of i.features.filter((x) => isFeature(x))) {
     const item = find(f.clientKey, f.itemId);
     if (item && !item.targetDate) out.push({ kind: "no_target_date", clientKey: f.clientKey, itemId: f.itemId, title: item.title, url: item.url, soft: true });
   }
@@ -334,15 +331,15 @@ export type NudgeKey = "week_nudge_thu" | "week_nudge_fri" | "week_nudge_mon";
 
 /**
  * Week nudges: Thursday and Friday for next week, Monday for this week, each from its time until the end of that day
- * and only while that week isn't committed (the caller fires each once, markOnce). Q50: given today's working start
+ * and only while that week has nothing placed (CF-1; the caller fires each once, markOnce). Q50: given today's working start
  * (null: no working time today), one not sent on its day (a PTO day) is due again from that start, until its week
  * starts (Thursday's and Friday's) or ends (Monday's). The top-bar badge shows the week of the latest nudge time
- * passed (looking back a week) until that week is committed.
+ * passed (looking back a week) until that week has something placed.
  */
 export function weekNudges(
   now: Temporal.ZonedDateTime,
   times: NudgeTimes,
-  committed: (weekStart: IsoDate) => boolean,
+  hasWork: (weekStart: IsoDate) => boolean,
   o: { workStart?: Temporal.PlainTime | null } = {},
 ): { due: { key: NudgeKey; weekStart: IsoDate }[]; badge: IsoDate | null } {
   type Moment = { key: NudgeKey; at: Temporal.ZonedDateTime; weekStart: IsoDate; day: IsoDate };
@@ -364,10 +361,10 @@ export function weekNudges(
   const until = (m: Moment) => Temporal.PlainDate.from(m.weekStart).add({ days: m.key === "week_nudge_mon" ? 7 : 0 });
   const late = (m: Moment) =>
     m.day < today.toString() && !!o.workStart && Temporal.PlainTime.compare(now.toPlainTime(), o.workStart) >= 0 && Temporal.PlainDate.compare(today, until(m)) < 0;
-  const due = passed.filter((m) => (m.day === today.toString() || late(m)) && !committed(m.weekStart)).map((m) => ({ key: m.key, weekStart: m.weekStart }));
+  const due = passed.filter((m) => (m.day === today.toString() || late(m)) && !hasWork(m.weekStart)).map((m) => ({ key: m.key, weekStart: m.weekStart }));
   const last = passed.sort((a, b) => Temporal.ZonedDateTime.compare(a.at, b.at)).at(-1);
-  return { due, badge: last && !committed(last.weekStart) ? last.weekStart : null };
+  return { due, badge: last && !hasWork(last.weekStart) ? last.weekStart : null };
 }
 
 export const WEEK_NUDGE_MESSAGE = (weekStart: IsoDate, thisWeek: boolean) =>
-  `${thisWeek ? "This week" : `Next week (${Temporal.PlainDate.from(weekStart).toLocaleString("en-US", { month: "short", day: "numeric" })})`} isn't planned yet: choose each client's features. Open FocusTime and press W.`;
+  `${thisWeek ? "This week" : `Next week (${Temporal.PlainDate.from(weekStart).toLocaleString("en-US", { month: "short", day: "numeric" })})`} has nothing on it yet. Open FocusTime and add work to the week.`;

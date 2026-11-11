@@ -17,7 +17,8 @@ export type DayFacts = {
   pmStart: Hm | null;
   /** End of the working day (its last span); null without hours. */
   end: Hm | null;
-  committed: boolean;
+  /** CF-1: today's blocks have at least one to-do (planned or done). */
+  hasWork: boolean;
   checkedIn: boolean;
   closedOut: boolean;
   /** Settings > Planning: Check-in from the end of lunch plus this many minutes. */
@@ -33,8 +34,8 @@ export const CLOSEOUT_WINDOW_MINUTES = 60;
 const closeoutFrom = (f: DayFacts) => (f.end ? toMin(f.end) - Math.max(CLOSEOUT_WINDOW_MINUTES, f.closeoutLeadMinutes) : null);
 
 /**
- * Plan: ✓ once the day is committed; due on today's morning (before the morning ends) while it isn't.
- * Check-in: ✓ once done (or the day closed out); due on a planned day from the end of lunch (plus the offset) until
+ * Plan: ✓ once the day has a to-do; due on today's morning (before the morning ends) while it has none (CF-1).
+ * Check-in: ✓ once done (or the day closed out); due on a day with to-dos from the end of lunch (plus the offset) until
  *   Close out becomes due.
  * Close out: ✓ once the day is closed out; due near the end of today's working hours (and after, the same day).
  * Only today has due dots; another day shows only ✓.
@@ -44,16 +45,16 @@ export function dayModeStatus(f: DayFacts): { plan: ModeStatus; checkin: ModeSta
   const now = toMin(f.time);
   const due = isToday && f.workday;
   const close = closeoutFrom(f);
-  const plan: ModeStatus = f.committed ? "done" : due && now < toMin(f.amEnd ?? f.end ?? "12:00") ? "due" : null;
+  const plan: ModeStatus = f.hasWork ? "done" : due && now < toMin(f.amEnd ?? f.end ?? "12:00") ? "due" : null;
   const checkin: ModeStatus =
-    f.checkedIn || f.closedOut ? "done" : due && f.committed && f.pmStart && now >= toMin(f.pmStart) + f.checkinOffsetMinutes && (close === null || now < close) ? "due" : null;
+    f.checkedIn || f.closedOut ? "done" : due && f.hasWork && f.pmStart && now >= toMin(f.pmStart) + f.checkinOffsetMinutes && (close === null || now < close) ? "due" : null;
   const closeout: ModeStatus = f.closedOut ? "done" : due && close !== null && now >= close ? "due" : null;
   return { plan, checkin, closeout };
 }
 
-/** Plan the week: ✓ once that week is committed; due while a week nudge asks for that week. */
-export function weekModeStatus(committed: boolean, nudgeWeek: string | null, weekStart: string): ModeStatus {
-  return committed ? "done" : nudgeWeek === weekStart ? "due" : null;
+/** Plan the week: ✓ once that week has anything on it (CF-1); due while a week nudge asks for that week. */
+export function weekModeStatus(hasWork: boolean, nudgeWeek: string | null, weekStart: string): ModeStatus {
+  return hasWork ? "done" : nudgeWeek === weekStart ? "due" : null;
 }
 
 /**
@@ -62,9 +63,12 @@ export function weekModeStatus(committed: boolean, nudgeWeek: string | null, wee
  *   small "Closed out ✓" line instead, reopenable.
  * - Midday check-in: from the afternoon's start plus the Check-in offset until Close out is due; once done, a small
  *   "Checked in ✓" line instead.
- * - Plan today: while today isn't committed, until the afternoon starts (until the end of the day when there is no
- *   afternoon). It opens Week's Board focused on today and goes once the day is committed.
+ * - Plan today (CF-1: "Nothing on today yet"): while today's blocks have no to-dos, until the afternoon starts (until
+ *   the end of the day when there is no afternoon). Add work opens Week's Board on today; it goes once a to-do is on.
  */
+/** CF-1: whether a day's blocks have work: at least one to-do planned or done (moved and dropped ones don't count). */
+export const hasWorkOn = (picks: readonly { status: string }[]): boolean => picks.some((p) => p.status === "planned" || p.status === "done");
+
 export type Moment = { kind: "plan" | "checkin" | "closeout"; done: boolean };
 export function momentCard(f: DayFacts): Moment | null {
   if (f.date !== f.today || !f.workday) return null;
@@ -75,6 +79,6 @@ export function momentCard(f: DayFacts): Moment | null {
   const checkFrom = f.pmStart ? toMin(f.pmStart) + f.checkinOffsetMinutes : null;
   if (checkFrom !== null && now >= checkFrom) return { kind: "checkin", done: f.checkedIn };
   const planUntil = f.pmStart ? toMin(f.pmStart) : f.end ? toMin(f.end) : null;
-  if (!f.committed && (planUntil === null || now < planUntil)) return { kind: "plan", done: false };
+  if (!f.hasWork && (planUntil === null || now < planUntil)) return { kind: "plan", done: false };
   return null;
 }

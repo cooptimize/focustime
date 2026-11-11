@@ -50,10 +50,18 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
       expect(await hash(page)).toBe(where);
     }
 
-    // Day has no modes: what's next, then the morning's Plan today card (Monday isn't confirmed yet).
+    // Day has no modes: what's next, then the morning's card. CF-1: it shows only while today has no to-dos, so take
+    // the demo's off first.
     expect(await page.getByRole("navigation", { name: "Today modes" }).count()).toBe(0);
+    await page.evaluate(async () => {
+      const csrf = document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "";
+      const post = (action: string, input: unknown) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": csrf }, body: JSON.stringify({ action, input }) }).then((r) => r.json());
+      const st = await post("planday.start", { date: "2026-11-02" });
+      for (const p of st.data.picks as { id: number; status: string }[]) if (p.status === "planned" || p.status === "done") await post("pick.remove", { id: p.id });
+    });
+    await page.reload();
     await page.locator(".phone-now").waitFor();
-    const planCard = page.getByRole("region", { name: "Add work" });
+    const planCard = page.getByRole("region", { name: "Nothing on today yet" });
     await planCard.waitFor();
     expect(await page.getByRole("region", { name: "Midday check-in" }).count()).toBe(0);
     await shotAll(page, "nv1-today-plan-card");
@@ -110,7 +118,7 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await page.goto(at("13:40"));
     const checkin = page.getByRole("region", { name: "Midday check-in" });
     await checkin.waitFor();
-    expect(await page.getByRole("region", { name: "Add work" }).count()).toBe(0);
+    expect(await page.getByRole("region", { name: "Nothing on today yet" }).count()).toBe(0);
     await shotAll(page, "nv1-today-checkin-card");
     await checkin.getByRole("button", { name: "Check in" }).click();
     await expect.poll(() => hash(page)).toBe("#/day/checkin");
