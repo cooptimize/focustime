@@ -22,7 +22,7 @@ import type { Attendee, Fields, LocalState, OwnEvent, SyncOp, Timebox, WriteEntr
 import type { DevOpsWriteEntry, PatchOp } from "../plan/devopswrite.ts";
 import { NAMED_MIGRATIONS } from "./migrations/index.ts";
 import type { AiLogEntry, AiOutcome } from "../ai/types.ts";
-import { validSetupStatus, validSetupStep, type SetupState, type SetupStatus, type SetupStep } from "../plan/setup.ts";
+import { LATE_STEPS, validSetupStatus, validSetupStep, type SetupState, type SetupStatus, type SetupStep } from "../plan/setup.ts";
 import { NAMES_TABLE, pending, type NamedMigration } from "./migrations/named.ts";
 export type { WriteEntry, WriteStatus } from "../plan/timebox.ts";
 
@@ -3268,16 +3268,24 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async setupState(): Promise<SetupState> {
       const out: SetupState = {};
       for (const r of (await db.all("SELECT step, status FROM setup_state")) as Row[]) if (validSetupStep(r.step) && validSetupStatus(r.status)) out[r.step] = r.status;
+      // VM-2: steps added later keep their record in kv (setup_state's CHECK names the first four; migrations only add).
+      for (const k of LATE_STEPS) {
+        const r = (await db.get("SELECT value FROM kv WHERE key = ?", `setup_late:${k}`)) as Row | undefined;
+        const v = r ? (JSON.parse(r.value as string) as unknown) : null;
+        if (validSetupStatus(v)) out[k] = v;
+      }
       return out;
     },
     async setSetupStep(step: SetupStep, status: SetupStatus): Promise<void> {
       if (!validSetupStep(step) || !validSetupStatus(status)) throw new PlanError("Unknown setup step");
+      if (LATE_STEPS.has(step)) return tx(async () => void (await db.run("INSERT INTO kv (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at", `setup_late:${step}`, JSON.stringify(status), stamp())));
       return tx(async () => void (await db.run("INSERT INTO setup_state (step, status, updated_at) VALUES (?, ?, ?) ON CONFLICT (step) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at", step, status, stamp())));
     },
     /** Forgets the setup record (Settings > Setup > Start over; the dev reset): the flow shows again on the next open. */
     async resetSetup(): Promise<void> {
       return tx(async () => {
         await db.run("DELETE FROM setup_state");
+        for (const k of LATE_STEPS) await db.run("DELETE FROM kv WHERE key = ?", `setup_late:${k}`);
         // RF-1: and the mark that the flow was stepped through to its end.
         await db.run("DELETE FROM markers WHERE kind = ?", "setup_through");
       });

@@ -3,10 +3,13 @@
 //   2. Your clients: the clients followed in Dataverse, each with DevOps write access or read only.
 //   3. Standing blocks (optional; Skip is the default).
 //   4. Calendars (optional): connect Google, or skip.
+//   5. Your VM (optional, VM-2): Allow Azure access and Find my VM, or skip. A late step: added after people had already
+//      stepped through, so it never opens the flow or the Today line by itself (RF-1's rule holds); Settings › Setup
+//      shows it as not done.
 // Only this is stored, per person: each step done, skipped or dismissed (closed). Every screen saves through the
 // ordinary settings actions; nothing here is a second copy of a setting. Pure: no I/O.
 
-export const SETUP_STEPS = ["day", "clients", "blocks", "calendars"] as const;
+export const SETUP_STEPS = ["day", "clients", "blocks", "calendars", "vm"] as const;
 export type SetupStep = (typeof SETUP_STEPS)[number];
 export const SETUP_STATUSES = ["done", "skipped", "dismissed"] as const;
 export type SetupStatus = (typeof SETUP_STATUSES)[number];
@@ -15,7 +18,12 @@ export type SetupState = Partial<Record<SetupStep, SetupStatus>>;
 export const validSetupStep = (s: unknown): s is SetupStep => (SETUP_STEPS as readonly unknown[]).includes(s);
 export const validSetupStatus = (s: unknown): s is SetupStatus => (SETUP_STATUSES as readonly unknown[]).includes(s);
 
-export const SETUP_TITLES: Readonly<Record<SetupStep, string>> = { day: "Your day", clients: "Your clients", blocks: "Standing blocks", calendars: "Calendars" };
+export const SETUP_TITLES: Readonly<Record<SetupStep, string>> = { day: "Your day", clients: "Your clients", blocks: "Standing blocks", calendars: "Calendars", vm: "Your VM" };
+
+/** VM-2: steps added after setup shipped. They never open the flow, the Today line or the admin's word by themselves. */
+export const LATE_STEPS: ReadonlySet<SetupStep> = new Set<SetupStep>(["vm"]);
+/** The steps that were the end of the flow before a late step was added (RF-1: a record on one means "through"). */
+export const FORMER_LAST_STEPS: readonly SetupStep[] = ["calendars"];
 
 /** Steps not done yet, in order. Skipped and dismissed steps count as left: the Today line offers them again. */
 export const remainingSteps = (s: SetupState): SetupStep[] => SETUP_STEPS.filter((k) => s[k] !== "done");
@@ -31,7 +39,7 @@ export const firstRemaining = (s: SetupState): SetupStep => remainingSteps(s)[0]
 export function autoOpen(o: { demo: boolean; state: SetupState }): SetupStep | null {
   if (o.demo) return null;
   if (Object.values(o.state).includes("dismissed")) return null;
-  return SETUP_STEPS.find((k) => !o.state[k]) ?? null;
+  return SETUP_STEPS.find((k) => !o.state[k] && !LATE_STEPS.has(k)) ?? null;
 }
 
 /** What's left, in words: "2 setup steps left", opening the flow at the first step not done; or null once all four are done. */
@@ -48,6 +56,9 @@ export function leftLine(state: SetupState): { text: string; step: SetupStep } |
  */
 export function todayLine(o: { demo: boolean; state: SetupState; through?: boolean }): { text: string; step: SetupStep } | null {
   if (o.demo || o.through || autoOpen(o)) return null;
+  // VM-2: a late step alone never brings the line back.
+  const left = remainingSteps(o.state).filter((k) => !LATE_STEPS.has(k));
+  if (!left.length) return null;
   return leftLine(o.state);
 }
 

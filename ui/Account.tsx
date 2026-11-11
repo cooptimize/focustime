@@ -267,9 +267,19 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
     const items: MenuItem[] = [];
     if (s?.vm) {
       if (s.canStart) items.push({ id: "start", label: "Start", action: "vm.preview", run: () => act("start") });
-      // D475: Start is the only change. No Stop, and nothing that touches the auto-shutdown schedule (the chip shows it).
-      if (s.needsConsent) items.push({ id: "consent", label: "Allow Azure access…", run: () => void signIn(true).then((m) => (m ? notify(m) : void refresh(true))) });
+      // VM-2: Stop only while it runs, always through its preview. Nothing touches the auto-shutdown (D475).
+      if (s.canStop) items.push({ id: "stop", label: "Stop…", action: "vm.preview", run: () => act("deallocate") });
+      const consent = () => void signIn(true).then((m) => (m ? notify(m) : void refresh(true)));
+      // VM-2: today's automatic start couldn't sign in (said once; the chip's ! until this menu was opened).
+      if (s.autoStart?.signInProblem) items.push({ id: "auto-signin", label: "Auto-start couldn't sign in to Azure", hint: "Allow Azure access", run: consent });
+      else if (s.needsConsent) items.push({ id: "consent", label: "Allow Azure access…", run: consent });
+      // VM-2: the next automatic start, in production only (outside it `next` is null and nothing shows).
+      if (s.autoStart?.next) {
+        items.push({ id: "auto-next", label: `Auto-start: ${s.autoStart.next.short}`, run: onSettings });
+        items.push({ id: "auto-skip", label: "Skip this one", action: "vm.autostart_skip", run: () => void call<{ skipped: string }>("vm.autostart_skip", { date: s.autoStart!.next!.date }).then(() => (notify("This auto-start is skipped"), void refresh(true)), (e: unknown) => notify(errText(e))) });
+      }
       items.push({ id: "refresh", label: "Refresh", run: () => void refresh(true) });
+      if (s.autoStart?.signInProblem && !s.autoStart.signInProblem.seen) void call("vm.autostart_seen", { what: "sign_in" }).then(() => refresh(), () => undefined);
     }
     items.push({ id: "choose", label: s?.vm ? "Choose another VM…" : "Find my VM…", action: "vm.choose", run: onSettings });
     open(at, { title: s?.vm ? `${s.vm.name}: ${s.label ?? "Unknown"}` : "My VM", items });
@@ -288,6 +298,7 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
   return (
     <VmCtx.Provider value={api}>
       {children}
+      {status?.autoStart?.pauseNotice && <AutoStartPaused onDone={() => void refresh()} />}
       {preview && (
         <VmPreviewDialog
           p={preview}
@@ -303,8 +314,30 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
   );
 }
 
+/** VM-2: said once, the next time I open FocusTime after the auto-start paused itself. */
+function AutoStartPaused({ onDone }: { onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const close = (resume: boolean) => {
+    setBusy(true);
+    void (resume ? call("vm.autostart_resume", {}).then(() => notify("Auto-start is back on")) : Promise.resolve())
+      .then(() => call("vm.autostart_seen", { what: "paused" }))
+      .catch((e: unknown) => notify(errText(e)))
+      .finally(() => (setBusy(false), onDone()));
+  };
+  return (
+    <div className="vm-notice" role="status" aria-label="VM auto-start paused">
+      <p><strong>Auto-start is paused.</strong> You haven't used FocusTime for 3 working days, so it stopped starting your VM before your day.</p>
+      <div className="wd-actions">
+        <button type="button" className="mini primary" disabled={busy} onClick={() => close(true)}>Resume</button>
+        <button type="button" className="mini quiet" disabled={busy} onClick={() => close(false)}>Not now</button>
+      </div>
+    </div>
+  );
+}
+
 const DONE: Record<VmPreviewOp, string> = {
   start: "Starting your VM. FocusTime follows it until it's running",
+  deallocate: "Stopping your VM. FocusTime follows it until Azure shows it stopped (deallocated)",
 };
 
 function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => void; onDone: (msg: string) => void }) {
@@ -370,7 +403,8 @@ export function VmChip({ dot = false }: { dot?: boolean } = {}) {
   if (!status?.vm) return null;
   const chip = status.chip ?? "unknown";
   const text = status.text ?? status.label ?? "Unknown";
-  const extra = [status.needsConsent ? "FocusTime needs your OK to use Azure: open this menu and choose Allow Azure access" : status.error?.message].filter(Boolean).join(". ");
+  const signInNote = status.autoStart?.signInProblem && !status.autoStart.signInProblem.seen;
+  const extra = [signInNote ? "Auto-start couldn't sign in to Azure: open this menu and choose Allow Azure access" : status.needsConsent ? "FocusTime needs your OK to use Azure: open this menu and choose Allow Azure access" : status.error?.message].filter(Boolean).join(". ");
   return (
     <button
       type="button"
@@ -392,7 +426,7 @@ export function VmChip({ dot = false }: { dot?: boolean } = {}) {
           <span className="vm-short">{SHORT[chip] ?? "Unknown"}</span>
         </>
       )}
-      {status.needsConsent && <span className="vm-attn" aria-hidden="true">!</span>}
+      {(status.needsConsent || signInNote) && <span className="vm-attn" aria-hidden="true">!</span>}
     </button>
   );
 }
@@ -512,7 +546,7 @@ export function YouAccount({ part }: { part: "account" | "vm" }) {
           <span className="set-value">
             {vm.status?.vm ? <>{vm.status.vm.name} <span className="muted">{vm.status.vm.resourceGroup} · {vm.status.vm.location}</span></> : <span className="muted">None chosen yet</span>}
           </span>
-          <span className="set-hint">FocusTime only reads this VM's status and starts it. It never changes its auto-shutdown.</span>
+          <span className="set-hint">FocusTime reads this VM's status, starts it, and stops it only when you press Stop and confirm. It never changes its auto-shutdown.</span>
           <span className="set-actions">
             <button type="button" className="mini" disabled={busy} onClick={() => void run(async () => setFound(await call<Found>("vm.find", {})))}>Find my VM</button>
             {vm.status?.vm && <button type="button" className="mini quiet" disabled={busy} onClick={() => void choose(null)}>Forget</button>}
@@ -568,6 +602,12 @@ const sched = (v: unknown) => {
   return o.time ? `${o.time.slice(0, 2)}:${o.time.slice(2)} (schedule time)` : "";
 };
 
+/** VM-2: who pressed it (kept with the state before). */
+const byOf = (v: unknown) => {
+  const b = (v as { by?: unknown } | null)?.by;
+  return typeof b === "string" && b !== "automatic" ? b : null;
+};
+
 export function AzureWriteLog({ tz }: { tz: string }) {
   const [log, setLog] = useState<AzureWriteEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -578,7 +618,7 @@ export function AzureWriteLog({ tz }: { tz: string }) {
   return (
     <section className="write-log" aria-label="Azure write log">
       <h3>Azure write log</h3>
-      <p className="muted">Every start of your VM: when, the result and what it was before. Older rows may show stops and auto-shutdown changes from before FocusTime stopped making them.</p>
+      <p className="muted">Every start and stop of your VM: when, who (you, or automatic before your day), the result and what it was before. Older rows may show auto-shutdown changes from before FocusTime stopped making them.</p>
       {error && <p className="set-problem">{error}</p>}
       {log && !log.length && <p className="muted">Nothing written yet.</p>}
       {log && log.length > 0 && (
@@ -590,7 +630,7 @@ export function AzureWriteLog({ tz }: { tz: string }) {
             {log.map((e) => (
               <tr key={e.id} className={`wl-${e.status === "timed_out" ? "failed" : e.status}`}>
                 <td>{stamp(e.at)}</td>
-                <td>{AZ_OP[e.op]} <strong>{e.vmName}</strong>{e.auto && <span className="muted"> · automatic</span>}</td>
+                <td>{AZ_OP[e.op]} <strong>{e.vmName}</strong>{e.auto ? <span className="muted"> · automatic</span> : byOf(e.before) && <span className="muted"> · by {byOf(e.before)}</span>}</td>
                 <td>{AZ_STATUS[e.status]}{e.attempts > 1 && <span className="muted"> · {e.attempts} tries</span>}{e.message && <div className="muted">{e.message}</div>}</td>
                 <td className="muted">{sched(e.before) || "Nothing"}</td>
               </tr>
@@ -748,5 +788,99 @@ export function TeamsAccessLine() {
       )}
       {message && <span className="set-problem" role="alert">{message}</span>}
     </span>
+  );
+}
+
+// ---- VM-2: Start without a preview, and Start my VM before my day ----
+
+const DAY_NAMES: Record<string, string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
+const AUTO_MINUTES = [0, 5, 10, 15, 30] as const;
+
+/**
+ * Settings › Accounts and connections › My VM, and setup's Your VM: "Start without a preview" (Q87, renamed in VM-2)
+ * and the auto-start (off by default; production only). Saves each change at once through settings.save.
+ */
+export function VmStartForm() {
+  const vm = useContext(VmCtx);
+  const s = vm.status;
+  const a = s?.autoStart ?? null;
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState<{ field: "preview" | "auto"; text: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  /** Turning it on for a VM with no auto-shutdown waits for one more tick. */
+  const [confirmNoShutdown, setConfirmNoShutdown] = useState(false);
+  const save = async (values: Record<string, unknown>, what: string, field: "preview" | "auto" = "auto") => {
+    setBusy(true);
+    setError(null);
+    try {
+      await call("settings.save", { section: "vm", values });
+      setSaved({ field, text: what });
+      await vm.refresh(true);
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!s?.vm || !a) return <p className="set-hint" data-setting="vm-start">Find your VM first to start it without a preview or before your day.</p>;
+  const turnOn = (on: boolean) => {
+    if (on && s.noShutdown && !confirmNoShutdown) return setConfirmNoShutdown(true);
+    setConfirmNoShutdown(false);
+    void save({ autoStart: on }, on ? "Auto-start on" : "Auto-start off");
+  };
+  const off = new Set(a.offDays);
+  return (
+    <div className="set-grid set-vm-start">
+      <div className="set-field" data-setting="vm-start">
+        <span className="set-label">Start without a preview</span>
+        <label className="set-check">
+          <input type="checkbox" checked={s.startWithoutAsking} disabled={busy} onChange={(e) => void save({ startWithoutAsking: e.target.checked }, "Saved", "preview")} /> Start without a preview
+        </label>
+        <span className="set-hint">Pressing Start in the morning starts the VM at once.</span>
+        {saved?.field === "preview" && !error && <span className="muted vm-saved" role="status">{saved.text}</span>}
+      </div>
+      <div className="set-field vm-auto" data-setting="vm-autostart">
+        <span className="set-label">Start my VM before my day</span>
+        <label className="set-check">
+          <input type="checkbox" checked={a.on || confirmNoShutdown} disabled={busy} onChange={(e) => turnOn(e.target.checked)} /> Start my VM before my day
+        </label>
+        {a.prodOnly && (a.on || confirmNoShutdown) && <p className="vm-prod-only" role="note">Auto-start runs only on the production FocusTime. Here it never starts your VM.</p>}
+        {confirmNoShutdown && !a.on && (
+          <div className="vm-warning" role="alert">
+            <p>This VM has no auto-shutdown. Once started it runs until you stop it.</p>
+            <label className="set-check">
+              <input type="checkbox" disabled={busy} onChange={(e) => e.target.checked && void save({ autoStart: true }, "Auto-start on").then(() => setConfirmNoShutdown(false))} /> I understand: turn auto-start on
+            </label>
+          </div>
+        )}
+        {a.on && (
+          <>
+            <span className="set-hint">{s.schedule ? (s.schedule.status === "Disabled" ? "Its auto-shutdown is off, so once started it runs until you stop it." : `Its auto-shutdown: ${s.schedule.label.replace(/^Auto-shutdown /, "off at ")} (read only; FocusTime never changes it).`) : s.noShutdown ? "This VM has no auto-shutdown. Once started it runs until you stop it." : ""}</span>
+            <label className="set-inline">
+              <span>Minutes before my day starts</span>{" "}
+              <select value={a.minutes} disabled={busy} aria-label="Minutes before my day starts" onChange={(e) => void save({ autoStartMinutes: Number(e.target.value) }, "Saved")}>
+                {AUTO_MINUTES.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </label>
+            <fieldset className="vm-days">
+              <legend>Days</legend>
+              {a.days.length === 0 && <span className="muted">Your working hours have no days yet.</span>}
+              {a.days.map((d) => (
+                <label key={d} className="set-check">
+                  <input type="checkbox" checked={!off.has(d)} disabled={busy} onChange={(e) => void save({ autoStartOffDays: e.target.checked ? [...off].filter((x) => x !== d) : [...off, d] }, "Saved")} /> {DAY_NAMES[d] ?? d}
+                </label>
+              ))}
+            </fieldset>
+            <p className={`vm-next${a.paused ? " paused" : ""}`} aria-live="polite">
+              {a.prodOnly ? "Next: never here. It runs only on the production FocusTime." : a.line}
+              {a.paused && <button type="button" className="mini" disabled={busy} onClick={() => void call("vm.autostart_resume", {}).then(() => vm.refresh(true), (e: unknown) => setError(errText(e)))}>Resume</button>}
+            </p>
+            <span className="set-hint">Only on days your working hours cover, not on PTO or holidays, and only when the VM is stopped. It never stops your VM: only Stop does, when you confirm.</span>
+          </>
+        )}
+        {saved?.field === "auto" && !error && <span className="muted vm-saved" role="status">{saved.text}</span>}
+        {error && <p className="set-problem" role="alert">{error}</p>}
+      </div>
+    </div>
   );
 }

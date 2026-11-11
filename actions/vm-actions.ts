@@ -196,7 +196,7 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       // Step 15.5 (Q87): the morning box's (or notification's) Start, at once when Settings > You says so. The box
       // names the VM and says it starts; the start is still logged and followed until Azure shows it running.
       if (!onlyKeys(input, ["vmId"])) return bad("vm.start_now takes { vmId? }");
-      if (!cfg?.azure.startWithoutAsking) return { ok: false, status: 409, error: "Start asks first: Settings > You > Start my VM without asking is off", code: "ask_first" };
+      if (!cfg?.azure.startWithoutAsking) return { ok: false, status: 409, error: "Start asks first: Settings > Accounts and connections > My VM > Start without a preview is off", code: "ask_first" };
       const vm = (await chosen(ctx));
       const g = guard(vm, isObj(input) ? input.vmId : undefined);
       if (g) return g;
@@ -311,6 +311,8 @@ export async function autoStartView(ctx: VmContext, cfg: AppConfig, chip: VmStat
   const prod = autoStartEnvAllowed(ctx.autoStartEnv);
   return {
     on: settings.on,
+    minutes: settings.minutes,
+    offDays: [...settings.offDays],
     prodOnly: !prod,
     line: n.kind === "off" ? null : n.text,
     next: n.kind === "next" ? { date: n.date, at: n.at, short: n.short } : null,

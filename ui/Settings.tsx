@@ -4,7 +4,7 @@
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
 import { FindItem } from "./settings/FindItem.tsx";
 import { hoursText, STORY_SIZES, UNSIZED_CHOICES, unsizedText } from "../plan/estimate.ts";
-import { AzureWriteLog, LoopSendsLog, TeamsAccessLine, TeamsStatusLog, YouAccount } from "./Account.tsx";
+import { AzureWriteLog, LoopSendsLog, TeamsAccessLine, TeamsStatusLog, VmStartForm, YouAccount } from "./Account.tsx";
 import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -1065,20 +1065,6 @@ function FocusForm(p: FormProps) {
   );
 }
 
-/** Settings > You (step 15.5, Q87): whether the morning box's Start starts the VM at once. */
-function VmStartForm(p: FormProps) {
-  const a = useAutoSave({ section: "vm", initial: { startWithoutAsking: p.data.vm.startWithoutAsking }, payload: (v) => v, onSaved: p.onSavedData, label: () => "Start my VM without asking" });
-  return (
-    <div className="set-grid set-vm-start">
-      <AutoField a={a} k="startWithoutAsking" label="Start my VM without asking" hint={"Start in the morning prompt skips the preview."}>
-        <label className="set-check">
-          <input type="checkbox" checked={a.v.startWithoutAsking} onChange={(e) => a.change("startWithoutAsking", e.target.checked)} /> Start right away
-        </label>
-      </AutoField>
-    </div>
-  );
-}
-
 /** Settings > Ahead (was Roadmap, step 17): when a row reads Stalled or Watch, and (BH-1) when Backlog calls an item stale. Whole numbers. */
 function RoadmapForm(p: FormProps) {
   const r = p.data.roadmap;
@@ -1817,7 +1803,7 @@ function Connections(p: BodyProps) {
       <div data-setting="permissions"><MicrosoftPermissions /></div>
       <Group title="My VM">
         <YouAccount part="vm" />
-        <VmStartForm {...p} />
+        <VmStartForm />
       </Group>
       <Group title="FocusTime in Teams" sid="teams-app">
         <TeamsStatusLine always />

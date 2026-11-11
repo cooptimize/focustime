@@ -19,7 +19,7 @@ const PAT: IdClaims = { oid: "0f0f0f0f-1111-4222-8333-444455556666", tid: "11111
 const TOML = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"').replace(/(\[outlook\]\ntenant_id = "[^"]*"\n)client_id = ""/, '$1client_id = "44444444-4444-4444-8444-444444444444"');
 
 type AccountOpts = { signedIn?: boolean; arm?: "ok" | "consent"; identityFails?: AuthFailure["kind"] };
-function setup(opts: AccountOpts & { start?: string; forbid?: string[]; failOps?: "start"[]; toml?: string } = {}) {
+function setup(opts: AccountOpts & { start?: string; forbid?: string[]; failOps?: ("start" | "deallocate")[]; toml?: string } = {}) {
   clearVmState();
   let t = Date.parse(opts.start ?? "2026-11-02T14:00:00Z");
   const clock = { now: () => new Date(t).toISOString(), advance: (ms: number) => void (t += ms) };
@@ -296,10 +296,10 @@ describe("my VM: status and start through the write framework", () => {
   });
 });
 
-describe("D475: FocusTime never changes a VM's auto-shutdown and never stops it", () => {
-  /** Every call that isn't a read, a start or its progress: none may ever reach Azure. */
+describe("D475 (unchanged by VM-2): FocusTime never changes a VM's auto-shutdown", () => {
+  /** Every call that isn't a read, a start, a deallocate or their progress: none may ever reach Azure. */
   const writes = (s: Awaited<ReturnType<typeof signedInWithVm>>) =>
-    s.arm.calls.filter((x) => x.path.includes("Microsoft.DevTestLab") ? x.method !== "GET" : x.method !== "GET" && !x.path.endsWith("/start") && !x.path.includes("ResourceGraph"));
+    s.arm.calls.filter((x) => x.path.includes("Microsoft.DevTestLab") ? x.method !== "GET" : x.method !== "GET" && !x.path.endsWith("/start") && !x.path.endsWith("/deallocate") && !x.path.includes("ResourceGraph"));
 
   it("the chip shows the schedule as Azure has it, read only", async () => {
     const s = await signedInWithVm();
@@ -307,15 +307,15 @@ describe("D475: FocusTime never changes a VM's auto-shutdown and never stops it"
     expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ text: "Running · off at 7:00 PM", schedule: { label: "Auto-shutdown 7:00 PM", time: "1900", status: "Enabled" } });
     (s.arm.schedules.get(VM.toLowerCase())!.properties as { status: string }).status = "Disabled";
     expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ text: "Running · auto-shutdown off", schedule: { label: "Auto-shutdown off" } });
-    expect(Object.keys(await s.run<VmStatus>("vm.status"))).not.toEqual(expect.arrayContaining(["change", "stillChanged", "canStop"]));
+    expect(Object.keys(await s.run<VmStatus>("vm.status"))).not.toEqual(expect.arrayContaining(["change", "stillChanged"]));
     expect(s.arm.calls.filter((x) => x.path.includes("DevTestLab")).every((x) => x.method === "GET")).toBe(true);
   });
 
-  it("delay, skip, restore and stop are refused before Azure is asked; vm.restore is gone", async () => {
+  it("delay, skip, restore and power off are refused before Azure is asked; vm.restore is gone", async () => {
     const s = await signedInWithVm();
     s.arm.setPower(VM, "running");
-    for (const op of ["delay60", "delay120", "skip", "restore", "deallocate", "powerOff"])
-      expect(await s.fail("vm.preview", { op }), op).toMatchObject({ status: 400, error: expect.stringMatching(/only starts your VM/) });
+    for (const op of ["delay60", "delay120", "skip", "restore", "powerOff", "restart", "stop", "Deallocate"])
+      expect(await s.fail("vm.preview", { op }), op).toMatchObject({ status: 400, error: expect.stringMatching(/only starts and stops your VM/) });
     expect(await s.fail("vm.restore", {})).toMatchObject({ status: 400 });
     expect(writes(s)).toEqual([]);
     expect(s.arm.schedule(VM)).toEqual({ time: "1900", status: "Enabled" });
@@ -411,3 +411,77 @@ describe("one-click Start from the morning box (step 15.5, Q87)", () => {
   });
 });
 
+
+describe("VM-2: Stop (deallocate), only when I confirm", () => {
+  it("is offered only while it runs; the preview names the VM, deallocation, what ends, and the untouched auto-shutdown", async () => {
+    const s = await signedInWithVm();
+    expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ chip: "deallocated", canStop: false, canStart: true });
+    expect(await s.fail("vm.preview", { op: "deallocate" })).toMatchObject({ status: 409, error: expect.stringMatching(/only for a running VM/) });
+    s.arm.setPower(VM, "running");
+    expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ chip: "running", canStop: true, canStart: false });
+    const p = await s.run<VmPreview>("vm.preview", { op: "deallocate", vmId: VM });
+    expect(p).toMatchObject({ op: "deallocate", title: "Stop your VM", vm: "vm-pat-01 (rg-dev)", confirmLabel: "Stop", lines: [{ label: "State", before: "Running", after: "Stopped (deallocated)" }] });
+    expect(p.notes.join(" ")).toMatch(/deallocated.*stops billing/);
+    expect(p.notes.join(" ")).toMatch(/auto-shutdown isn't changed/);
+    expect(p.warning).toMatch(/remote session, Coop/);
+    // Nothing was written by the preview.
+    expect(s.arm.calls.filter((x) => x.method === "POST" && !x.path.includes("ResourceGraph"))).toEqual([]);
+    expect(await s.plan.azureWriteLog()).toEqual([]);
+  });
+
+  it("confirm deallocates, follows it to Stopped (deallocated), reads it back and logs who, when and the state before", async () => {
+    const s = await signedInWithVm();
+    s.arm.setPower(VM, "running");
+    const p = await s.run<VmPreview>("vm.preview", { op: "deallocate" });
+    await s.run("vm.confirm", { previewId: p.previewId });
+    expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ chip: "stopping", canStop: false, canStart: false, transition: { op: "deallocate" } });
+    // Never offered while stopping.
+    expect(await s.fail("vm.preview", { op: "deallocate" })).toMatchObject({ status: 409 });
+    await settled();
+    expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ chip: "deallocated", label: "Stopped (deallocated)" });
+    const [row] = await s.plan.azureWriteLog();
+    expect(row).toMatchObject({ op: "deallocate", status: "confirmed", auto: false, vmId: VM, before: { power: "running", by: "Pat Example" }, after: { power: "deallocated" } });
+    expect(row!.message).toMatch(/Read back: Stopped \(deallocated\)/);
+    expect(s.arm.calls.filter((x) => x.method === "POST" && x.path.endsWith("/deallocate"))).toHaveLength(1);
+    expect(s.arm.calls.filter((x) => x.path.includes("DevTestLab")).every((x) => x.method === "GET")).toBe(true);
+    expect(s.arm.schedule(VM)).toEqual({ time: "1900", status: "Enabled" });
+  });
+
+  it("cancel (no confirm) does nothing; a preview confirmed after the VM stopped elsewhere is refused", async () => {
+    const s = await signedInWithVm();
+    s.arm.setPower(VM, "running");
+    await s.run<VmPreview>("vm.preview", { op: "deallocate" });
+    expect(s.arm.calls.filter((x) => x.path.endsWith("/deallocate"))).toEqual([]);
+    const p = await s.run<VmPreview>("vm.preview", { op: "deallocate" });
+    s.arm.setPower(VM, "deallocated");
+    expect(await s.fail("vm.confirm", { previewId: p.previewId })).toMatchObject({ status: 409, error: expect.stringMatching(/wasn't stopped/) });
+    expect(s.arm.calls.filter((x) => x.path.endsWith("/deallocate"))).toEqual([]);
+    expect(await s.plan.azureWriteLog()).toEqual([]);
+  });
+
+  it("a failure says why, logs it, and the chip stays truthful", async () => {
+    const s = await signedInWithVm({ forbid: ["deallocate"] });
+    s.arm.setPower(VM, "running");
+    const p = await s.run<VmPreview>("vm.preview", { op: "deallocate" });
+    expect(await s.fail("vm.confirm", { previewId: p.previewId })).toMatchObject({ status: 403, error: expect.stringMatching(/deallocate\/action/) });
+    expect((await s.plan.azureWriteLog())[0]).toMatchObject({ op: "deallocate", status: "refused" });
+    expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ chip: "running", canStop: true });
+  });
+
+  it("Azure ending the stop Failed is logged as failed; the VM shows running again", async () => {
+    const s = await signedInWithVm({ failOps: ["deallocate"] });
+    s.arm.setPower(VM, "running");
+    const p = await s.run<VmPreview>("vm.preview", { op: "deallocate" });
+    await s.run("vm.confirm", { previewId: p.previewId });
+    await settled();
+    expect((await s.plan.azureWriteLog())[0]).toMatchObject({ op: "deallocate", status: "failed", message: "Azure says the stop failed" });
+    expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ chip: "running" });
+  });
+
+  it("only my confirmed VM: another VM's id is refused before Azure is asked", async () => {
+    const s = await signedInWithVm();
+    s.arm.setPower(VM, "running");
+    expect(await s.fail("vm.preview", { op: "deallocate", vmId: OTHER })).toMatchObject({ status: 403 });
+    expect(s.arm.calls.filter((x) => x.path.includes("vm-dana-01"))).toEqual([]);
+  });
+});

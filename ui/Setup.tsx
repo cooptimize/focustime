@@ -3,11 +3,12 @@
 // resumes there). Every save goes through the ordinary actions (settings.save, devops.set_write_pat, Google's
 // connect); setup.mark keeps only which steps are done, skipped or closed.
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { nextStep, SETUP_STEPS, SETUP_TITLES, type SetupClient, type SetupPrefill, type SetupStep, type SetupView } from "../plan/setup.ts";
 import { WEEKDAY_KEYS } from "../week/hours.ts";
 import type { SettingsData } from "../actions/types.ts";
 import { call } from "./api.ts";
+import { VmCtx, VmStartForm, YouAccount } from "./Account.tsx";
 
 type Props = {
   /** The step to open on. */
@@ -97,6 +98,7 @@ export function SetupFlow(p: Props) {
           {step === "calendars" && (
             <CalendarsStep connected={p.googleConnected} onConnect={p.onConnectGoogle} onDone={() => mark("calendars", "done").then(() => go("calendars"))} onSkip={() => void skip("calendars")} onBack={() => setStep("blocks")} />
           )}
+          {step === "vm" && <VmStep onDone={() => mark("vm", "done").then(() => go("vm"))} onSkip={() => void skip("vm")} onBack={() => setStep("vm")} />}
           {step === "done" && <DoneStep view={view} onPlanWeek={() => (p.onClose(true), p.onPlanWeek())} onGuide={() => (p.onClose(true), p.onGuide())} onBack={() => setStep("calendars")} />}
         </div>
       </div>
@@ -472,6 +474,29 @@ function CalendarsStep({ connected, onConnect, onDone, onSkip, onBack }: { conne
           </button>
         </div>
       )}
+    </Screen>
+  );
+}
+
+/**
+ * VM-2: Your VM (optional, last): Allow Azure access and Find my VM, with the same controls as Settings › Accounts and
+ * connections › My VM (start without a preview, start before my day).
+ */
+function VmStep({ onDone, onSkip, onBack }: { onDone: () => Promise<void>; onSkip: () => void; onBack: () => void }) {
+  const vm = useContext(VmCtx);
+  const chosen = !!vm.status?.vm;
+  return (
+    <Screen
+      title="Your VM"
+      intro="Optional. If you have an Azure VM for client work, FocusTime can show whether it's running, start it, and stop it when you confirm. It finds the VM by its Owner tag. It never changes the VM's auto-shutdown."
+      onSubmit={chosen ? onDone : onSkip}
+      primary={chosen ? "Continue" : "Skip"}
+      onBack={onBack}
+    >
+      <div className="setup-vm">
+        <YouAccount part="vm" />
+        {chosen && <VmStartForm />}
+      </div>
     </Screen>
   );
 }

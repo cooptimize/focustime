@@ -63,6 +63,9 @@ export type VmStatus = {
 /** VM-2: the auto-start's state for the form, the chip's menu and the once-only notices. */
 export type AutoStartView = {
   on: boolean;
+  /** The minutes before my day, and the weekdays switched off (my setting). */
+  minutes: number;
+  offDays: string[];
   /** Not production: it never starts the VM here (the form says so; `next` is null). */
   prodOnly: boolean;
   /** The one line: "Next: Thu, Nov 12 at 7:55 AM", "Thu is PTO. Next: …", "Paused: …", or production only. Null when off. */

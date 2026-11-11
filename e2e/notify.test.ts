@@ -1,4 +1,4 @@
-// Step 15.5: Settings > Notifications (switches, quiet hours, saved), Settings > You's "Start my VM without asking"
+// Step 15.5: Settings > Notifications (switches, quiet hours, saved), Settings > My VM's "Start without a preview"
 // and the morning box: one click when on, the preview when off. Demo mode (fictional data; no desktop notifications).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CHROMIUM, freshPage, startDemo, type Harness, openSettings, settingsSection } from "./harness.ts";
@@ -33,15 +33,15 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     await page.close();
   }, T);
 
-  it("Start my VM without asking off: the morning box's Start shows the preview instead", async () => {
+  it("Start without a preview off: the morning box's Start shows the preview instead", async () => {
     const { page, errors } = await freshPage(h);
     await openSettings(page);
     await settingsSection(page, "connections");
-    const toggle = page.locator(".set-field", { hasText: "Start my VM without asking" }).locator("input");
+    const toggle = page.locator(".set-field", { hasText: "Start without a preview" }).locator("input");
     await toggle.waitFor();
     await expect(toggle.isChecked()).resolves.toBe(true);
     await toggle.uncheck();
-    await expect.poll(() => page.locator(".set-field", { hasText: "Start my VM without asking" }).textContent(), { timeout: 5000 }).toContain("Saved");
+    await expect.poll(() => page.locator(".set-field", { hasText: "Start without a preview" }).textContent(), { timeout: 5000 }).toContain("Saved");
     await page.keyboard.press("Escape");
     await page.keyboard.press("1");
     const prompt = page.locator(".att-chip.vm", { hasText: "VM is off" });
