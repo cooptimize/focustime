@@ -56,6 +56,7 @@ const toOccurrence = (r: Row): Occurrence => ({
   aiOutcome: s(r.ai_outcome),
   dismissedBy: s(r.dismissed_by),
   reviewedBy: s(r.reviewed_by),
+  lastRead: json<Occurrence["lastRead"]>(r.last_read, null),
   updatedAt: r.updated_at as string,
 });
 
@@ -74,7 +75,7 @@ const toProposal = (r: Row): Proposal => ({
 
 export type NewSeries = Omit<MeetingSeries, "id" | "createdAt" | "removedAt" | "onlineMeetingId">;
 export type SeriesPatch = Partial<Pick<MeetingSeries, "name" | "role" | "source" | "reviewers" | "attendees" | "onlineMeetingId" | "weekday" | "start" | "minutes" | "zone" | "interval">>;
-export type OccurrencePatch = Partial<Pick<Occurrence, "state" | "nextCheckAt" | "checks" | "transcriptFrom" | "transcriptAt" | "aiOutcome" | "dismissedBy" | "reviewedBy">>;
+export type OccurrencePatch = Partial<Pick<Occurrence, "state" | "nextCheckAt" | "checks" | "transcriptFrom" | "transcriptAt" | "aiOutcome" | "dismissedBy" | "reviewedBy" | "lastRead">>;
 export type ProposalPatch = { body?: ProposalBody; state?: ProposalState; result?: Proposal["result"]; decidedBy?: string | null; decidedAt?: string | null };
 
 const lower = (x: string) => x.trim().toLowerCase();
@@ -156,14 +157,14 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
     async updateOccurrence(id: number, p: OccurrencePatch): Promise<Occurrence> {
       return db.tx(async () => {
         if (!(await occurrenceById(id))) throw new PlanError("No such meeting");
-        const cols: Record<keyof OccurrencePatch, string> = { state: "state", nextCheckAt: "next_check_at", checks: "checks", transcriptFrom: "transcript_from", transcriptAt: "transcript_at", aiOutcome: "ai_outcome", dismissedBy: "dismissed_by", reviewedBy: "reviewed_by" };
+        const cols: Record<keyof OccurrencePatch, string> = { state: "state", nextCheckAt: "next_check_at", checks: "checks", transcriptFrom: "transcript_from", transcriptAt: "transcript_at", aiOutcome: "ai_outcome", dismissedBy: "dismissed_by", reviewedBy: "reviewed_by", lastRead: "last_read" };
         const sets: string[] = [];
         const params: Param[] = [];
         for (const [k, v] of Object.entries(p) as [keyof OccurrencePatch, unknown][]) {
           if (v === undefined) continue;
           if (k === "state" && !OCCURRENCE_STATES.includes(v as OccurrenceState)) throw new PlanError("Not a state");
           sets.push(`${cols[k]} = ?`);
-          params.push(v as Param);
+          params.push(k === "lastRead" ? (v === null ? null : JSON.stringify({ ...(v as object), by: (v as { by: string | null }).by?.toLowerCase() ?? null })) : (v as Param));
         }
         sets.push("updated_at = ?");
         await db.run(`UPDATE meeting_occurrences SET ${sets.join(", ")} WHERE id = ?`, [...params, stamp(), id]);

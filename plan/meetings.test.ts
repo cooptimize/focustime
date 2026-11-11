@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attendeeIds, canConfirm, canView, defaultReviewers, detectSource, graphReadable, mayRead, nextCheck, nudgesFor, occurrencesBetween, type MeetingSeries, type Occurrence } from "./meetings.ts";
+import { lastReadLine, attendeeIds, canConfirm, canView, defaultReviewers, detectSource, graphReadable, mayRead, nextCheck, nudgesFor, occurrencesBetween, type MeetingSeries, type Occurrence } from "./meetings.ts";
 
 const series = (p: Partial<MeetingSeries> = {}): MeetingSeries => ({
   id: 1, clientKey: "contoso", name: "Contoso sync", role: "status", source: "automatic", detected: "automatic", organizer: "home", joinUrl: "https://teams.microsoft.com/l/meetup-join/x", eventId: "AAA", registrantId: "u1",
@@ -67,5 +67,30 @@ describe("meeting capture rules (MC-1)", () => {
     expect(nudgesFor("u3", s, [occ()])).toEqual([]);
     expect(nudgesFor("u1", s, [occ({ state: "needs_upload", dismissedBy: "u2" })])).toEqual([]);
     expect(nudgesFor("u1", s, [occ({ state: "reviewed" })])).toEqual([]);
+  });
+});
+
+describe("the last-read line (MC-1c)", () => {
+  const S = { source: "automatic" as const, registrantId: "reg", weekday: 2, start: "10:00", minutes: 60, zone: "America/New_York", interval: 1, createdAt: "2026-11-01T12:00:00Z" };
+  const occ = (p: Partial<Occurrence> = {}): Occurrence => ({ id: 1, seriesId: 1, date: "2026-11-10", startAt: "2026-11-10T15:00:00Z", endAt: "2026-11-10T16:00:00Z", state: "waiting", nextCheckAt: null, checks: 0, transcriptFrom: null, transcriptAt: null, aiOutcome: null, dismissedBy: null, reviewedBy: null, lastRead: null, updatedAt: "2026-11-10T15:00:00Z", ...p });
+  const names = (id: string) => ({ reg: "Sam Admin", rev: "Kim Lead" })[id] ?? "A former teammate";
+  const line = (o: Occurrence[], now: string, s: Partial<typeof S> = {}) => lastReadLine({ ...S, ...s }, o, now, "America/New_York", names);
+
+  it("says when and through whose sign-in a transcript was read", () => {
+    expect(line([occ({ state: "ready", transcriptFrom: "automatic", transcriptAt: "2026-11-10T19:15:00Z", lastRead: { kind: "found", by: "rev", at: "2026-11-10T19:15:00Z" } })], "2026-11-11T12:00:00Z")).toBe("Transcript read Nov 10, 2:15 PM through Kim Lead's sign-in");
+    expect(line([occ({ state: "ready", transcriptFrom: "upload", transcriptAt: "2026-11-10T19:15:00Z" })], "2026-11-11T12:00:00Z")).toBe("Transcript uploaded Nov 10, 2:15 PM");
+  });
+
+  it("says plainly why not", () => {
+    expect(line([occ()], "2026-11-10T15:30:00Z")).toBe("Nov 10 call: waiting for the call to end");
+    expect(line([occ({ lastRead: { kind: "no_token", by: "reg", at: "x" } })], "2026-11-10T16:30:00Z")).toBe("Nov 10 call: Sam Admin needs to sign in with Microsoft again");
+    expect(line([occ({ state: "needs_upload", checks: 9, lastRead: { kind: "not_yet", by: "reg", at: "x" } })], "2026-11-11T12:00:00Z")).toBe("Nov 10 call: no transcript was recorded. A reviewer can upload one");
+    expect(line([occ({ state: "needs_upload" })], "2026-11-11T12:00:00Z", { source: "upload" })).toBe("Nov 10 call: waiting for a reviewer to upload the transcript");
+    expect(line([occ({ lastRead: { kind: "busy", by: "reg", at: "x" } })], "2026-11-10T16:30:00Z")).toMatch(/Microsoft wasn't answering/);
+    expect(line([occ({ state: "no_transcript" })], "2026-11-11T12:00:00Z")).toBe("Nov 10 call: no transcript this week");
+  });
+
+  it("before the first call, names its day", () => {
+    expect(line([], "2026-11-11T12:00:00Z")).toBe("Not read yet: the first call is Tue, Nov 17");
   });
 });

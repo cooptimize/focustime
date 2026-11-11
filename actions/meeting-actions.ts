@@ -12,7 +12,7 @@ import type { AiService } from "../ai/service.ts";
 import { AI_MESSAGES } from "../ai/types.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
-import { attendeeIds, canConfirm, defaultReviewers, detectSource, MEETING_ROLES, nudgesFor, proposalOrder, ROLE_LABEL, type MeetingRole, type MeetingSeries, type Occurrence, type ProposalBody, type TranscriptSource } from "../plan/meetings.ts";
+import { attendeeIds, canConfirm, defaultReviewers, detectSource, lastReadLine, MEETING_ROLES, nudgesFor, proposalOrder, ROLE_LABEL, type MeetingRole, type MeetingSeries, type Occurrence, type ProposalBody, type TranscriptSource } from "../plan/meetings.ts";
 import { levelOfType, type ProcessModel } from "../plan/process.ts";
 import { TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
 import { graphFailureOf, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
@@ -161,7 +161,10 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         if (!client) return bad(NOT_A_CLIENT, 404);
         const users = await ctx.users();
         // The reviewer picker's people: FocusTime users by name (ids for the picker, never an address).
-        return { ok: true, data: { meetings: (await store.seriesOf(client.key)).map((s) => viewOf(s, cfg, users, me)), people: users.map((u) => ({ id: u.id.toLowerCase(), name: u.name })).sort((a, b) => a.name.localeCompare(b.name)) } };
+        const nameOf = (uid: string) => users.find((u) => lower(u.id) === lower(uid))?.name ?? "A former teammate";
+        const from = Temporal.Instant.from(ctx.now()).subtract({ hours: 24 * 21 }).toZonedDateTimeISO("UTC").toPlainDate().toString();
+        const meetings = await Promise.all((await store.seriesOf(client.key)).map(async (s) => ({ ...viewOf(s, cfg, users, me), lastRead: lastReadLine(s, await store.occurrencesOf(s.id, { from }), ctx.now(), userZone(cfg), nameOf) })));
+        return { ok: true, data: { meetings, people: users.map((u) => ({ id: u.id.toLowerCase(), name: u.name })).sort((a, b) => a.name.localeCompare(b.name)) } };
       }
       case "meeting.candidates": {
         // My recurring online meetings with people from outside Cooptimize, the client's name first.
