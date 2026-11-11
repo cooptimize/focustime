@@ -876,7 +876,7 @@ export function App() {
     (date: IsoDate | null = null, half: Half | null = null, review = false) => {
       setPlaceOpen(review);
       setPanelFocus(null);
-      if (!review) setFocusAdd((n) => n + 1);
+      setFocusAdd((n) => (review ? 0 : n + 1));
       goNav(navOf.addWork(date, half));
     },
     [goNav],
@@ -889,7 +889,8 @@ export function App() {
     (date: IsoDate, half: Half, o: { add?: boolean; focus?: PanelFocus | null } = {}) => {
       setPlaceOpen(false);
       setPanelFocus(o.focus ?? null);
-      if (o.add) setFocusAdd((n) => n + 1);
+      // Only "+ Add" and A put the cursor in the Add box; any other way of opening or moving the panel leaves it.
+      setFocusAdd((n) => (o.add ? n + 1 : 0));
       if (nav.tab === "today" && !nav.flow) {
         keepDayPanel(true);
         goNav(navOf.dayBlock(date, half));
@@ -905,6 +906,7 @@ export function App() {
   /** WD-2: closes the block panel where it is, and gives focus back to its block. */
   const closePanel = () => {
     setPanelFocus(null);
+    setFocusAdd(0);
     if (nav.tab === "today") {
       keepDayPanel(false);
       goNav(navOf.todayOn(dayShown));
