@@ -2,6 +2,7 @@
 // sign-out, the person in the top bar, the VM chip (top bar) with Start and its preview, the auto-shutdown time shown
 // read only (D475), Today's morning prompt, Settings > You (sign out, find and confirm my VM) and the Azure write log
 // in Settings > Data.
+import { SaveMark, type FieldStatus } from "./settings/autosave.tsx";
 import { useDeveloperLoop } from "./appenv.ts";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { Avatar, forgetPhotos, usePhotos, usePresence } from "./Presence.tsx";
@@ -817,21 +818,26 @@ export function VmStartForm() {
   const s = vm.status;
   const a = s?.autoStart ?? null;
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState<{ field: "preview" | "auto"; text: string } | null>(null);
+  /** Each field's mark, the shared one Settings uses (Saving…, Saved, Couldn't save. Retry). */
+  const [marks, setMarks] = useState<{ preview: FieldStatus; auto: FieldStatus }>({ preview: null, auto: null });
+  const [last, setLast] = useState<{ values: Record<string, unknown>; field: "preview" | "auto" } | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** Turning it on for a VM with no auto-shutdown waits for one more tick. */
   const [confirmNoShutdown, setConfirmNoShutdown] = useState(false);
   /** What I just changed, shown at once while it saves (the boxes would otherwise wait for the server). */
   const [pending, setPending] = useState<Record<string, unknown>>({});
-  const save = async (values: Record<string, unknown>, what: string, field: "preview" | "auto" = "auto") => {
+  const save = async (values: Record<string, unknown>, _what: string, field: "preview" | "auto" = "auto") => {
     setBusy(true);
     setError(null);
     setPending(values);
+    setLast({ values, field });
+    setMarks((m) => ({ ...m, [field]: { kind: "saving" } }));
     try {
       await call("settings.save", { section: "vm", values });
-      setSaved({ field, text: what });
+      setMarks((m) => ({ ...m, [field]: { kind: "saved" } }));
       await vm.refresh(true);
     } catch (e) {
+      setMarks((m) => ({ ...m, [field]: { kind: "retry" } }));
       setError(errText(e));
     } finally {
       setPending({});
@@ -856,7 +862,7 @@ export function VmStartForm() {
           <input type="checkbox" checked={withoutPreview} disabled={busy} onChange={(e) => void save({ startWithoutAsking: e.target.checked }, "Saved", "preview")} /> Start without a preview
         </label>
         <span className="set-hint">Pressing Start in the morning starts the VM at once.</span>
-        {saved?.field === "preview" && !error && <span className="muted vm-saved" role="status">{saved.text}</span>}
+        <SaveMark s={marks.preview} retry={() => last && void save(last.values, "", last.field)} />
       </div>
       <div className="set-field vm-auto" data-setting="vm-autostart">
         <span className="set-label">Start my VM before my day</span>
@@ -897,7 +903,7 @@ export function VmStartForm() {
             <span className="set-hint">Only on days your working hours cover, not on PTO or holidays, and only when the VM is stopped. It never stops your VM: only Stop does, when you confirm.</span>
           </>
         )}
-        {saved?.field === "auto" && !error && <span className="muted vm-saved" role="status">{saved.text}</span>}
+        <SaveMark s={marks.auto} retry={() => last && void save(last.values, "", last.field)} />
         {error && <p className="set-problem" role="alert">{error}</p>}
       </div>
     </div>
