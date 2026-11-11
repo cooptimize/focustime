@@ -4612,7 +4612,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .sug-week-day > * { flex: none; }
 .day-head:has(.sug-week-day) { container-type: inline-size; }
 /* A narrow column: the count alone ("2", "2 suggested" on hover). */
-@container (max-width: 25em) { .sug-week-day .sug-w { display: none; } }
+@container (max-width: 23em) { .sug-week-day .sug-w { display: none; } }
 .sug-week-day .link-btn { font-size: var(--fs-1); }
 /* Room for the line: the short date ("Wed 4") while it shows. */
 .day-head:has(.sug-week-day) .date-long { display: none; }
