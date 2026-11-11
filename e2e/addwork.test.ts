@@ -132,58 +132,6 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
     await page.close();
   }, T);
 
-  it("the client chips: the room left from one total, amber only when over; the popover says the same; Keep open on the app's menu; Break down", async () => {
-    const { page } = await freshPage(h);
-    await page.keyboard.press("2");
-    const chips = page.locator(".client-chips button.cc-chip:not(.cc-more)");
-    await chips.first().waitFor({ timeout: 30_000 });
-    for (const t of await chips.allInnerTexts()) expect(t).toMatch(/^\S.* · (\d+h free|Full|\d+h over)/);
-    // Amber only when over.
-    for (const c of await chips.all()) expect(await c.evaluate((e) => e.classList.contains("over")), await c.innerText()).toBe(/ over/.test(await c.innerText()));
-    const over = page.locator(".client-chips button.cc-chip.over").first();
-    const room = (await over.innerText()).split(" · ")[1]!.replace(/\s*\d+$/, "").trim();
-    await over.click();
-    const pop = page.locator(".cc-pop");
-    await pop.waitFor();
-    // One total: the popover's first line starts with the chip's room, then the planned (musts and nice to have) and free hours.
-    await expect(pop.locator("p").first().textContent()).resolves.toMatch(new RegExp(`^${room} · \\d+h planned · \\d+h free in its blocks$`));
-    expect(await pop.locator("select").count()).toBe(0);
-    await pop.getByRole("button", { name: /^Keep open for walk-ins/ }).click();
-    await page.getByRole("menuitem", { name: "20%" }).click();
-    await page.getByText(/Keeping 20% of .* open for walk-ins/).first().waitFor();
-    await page.keyboard.press("Escape");
-    // A client with a feature that isn't ready says so, with Break down beside it.
-    const badge = page.locator(".client-chips button.cc-chip", { has: page.locator(".cc-badge") }).first();
-    await badge.click();
-    await pop.getByText("Needs stories").first().waitFor();
-    await expect(pop.getByRole("button", { name: /Break down/ }).first().innerText()).resolves.toBe("Break down");
-    await page.close();
-  }, T);
-
-  it("review fix: with the panel open the chips never clip: the ones that don't fit are under +N, which opens the rest", async () => {
-    const { page } = await freshPage(h, { width: 1280, height: 720 });
-    await openOn(page, "2026-11-02", "PM");
-    const row = page.locator(".client-chips");
-    const more = row.locator("button.cc-more");
-    await more.waitFor();
-    const box = (await row.boundingBox())!;
-    for (const c of await row.locator("button.cc-chip").all()) {
-      const b = (await c.boundingBox())!;
-      expect(b.x + b.width, await c.innerText()).toBeLessThanOrEqual(box.x + box.width + 1);
-    }
-    const shown = await row.locator("button.cc-chip:not(.cc-more)").count();
-    const n = Number((await more.innerText()).replace("+", ""));
-    expect(n).toBeGreaterThan(0);
-    await more.click();
-    const rest = page.locator(".cc-rest");
-    await expect(rest.locator("button.cc-chip").count()).resolves.toBe(n);
-    // A chip from the list opens its popover.
-    await rest.locator("button.cc-chip").first().click();
-    await page.locator(".cc-pop:not(.cc-rest) h3").waitFor();
-    expect(shown + n).toBeGreaterThan(1);
-    await page.close();
-  }, T);
-
   it("rows show their type as an icon named for the type; the panel is 380 px wide and nothing in it overflows sideways", async () => {
     const { page } = await freshPage(h, { width: 1440, height: 900 });
     await openOn(page, "2026-11-02", "PM");

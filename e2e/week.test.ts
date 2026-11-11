@@ -107,8 +107,8 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     await expect(day(1).locator(".pick-row.done").count()).resolves.toBe(0);
     await expect(day(1).locator(".card-done").first().textContent()).resolves.toBe("1 done");
     await expect(day(0).locator(".pick-row.done").count()).resolves.toBe(1);
-    // A client with a feature that has no stories says so: WD-1 moved it from the card's features line to the client chip's badge.
-    await expect(page.locator(".client-chips button.cc-chip", { hasText: /^Northwind/ }).locator(".cc-badge").textContent()).resolves.toBe("1");
+    // QT-1: no client chips on Week (a feature with no stories says so on its row in the block's panel).
+    await expect(page.locator(".client-chips, .cc-chip").count()).resolves.toBe(0);
     // 121: SW-1 adds Team to the mode switch (Board · Commit · Team); 122: UI-B's now line adds its time ("9:30");
     // 145: DM-1's story (From last week's unfinished picks, the late promise, the Out event's risk on Wednesday).
     // 146: SR-1's fourth Week mode (Status) in the mode switch. 147: WK-2's Timeline toggle beside the modes.

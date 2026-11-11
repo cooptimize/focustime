@@ -134,7 +134,7 @@ describe.skipIf(!CHROMIUM)("Week block panel (PV-1)", () => {
       // Drag it onto Tuesday's block: the target shows its fit while the story is over it; Undo after the drop.
       await drag(page, story, tue, async () => {
         await tue.locator(".drop-tip").waitFor();
-        expect(await tue.locator(".drop-tip").innerText()).toMatch(/^\d+h (of \d+h free|over)$/);
+        expect(await tue.locator(".drop-tip").innerText()).toMatch(/^(\d+h|\d+ min) of \d+h( \d+m)? free$|^\d+h( \d+m)? free$|^No free time left$/);
         await shotBoth(page, "week-panel-drag-fit");
       });
       await page.locator(".undo-toast", { hasText: "Added to Tue PM" }).waitFor();
