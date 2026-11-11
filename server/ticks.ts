@@ -23,6 +23,7 @@ import { UNMATCHED_DAYS } from "../plan/asks.ts";
 /** An urgent request is notified while its sort is this fresh (a person who signs in later isn't told of old ones). */
 const URGENT_NOTICE_HOURS = 2;
 import { vmAction, type VmStatus } from "../actions/vm-actions.ts";
+import { autoStartTick, autoStartWake } from "../actions/vm-autostart.ts";
 import { CHECKIN_DONE_MARK } from "../actions/closeout-actions.ts";
 import { refreshTodayWarnings } from "../actions/warnings.ts";
 import { TIMER_KEY, timerAction, timerLike } from "../actions/timer-actions.ts";
@@ -112,6 +113,8 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
         if (r.code !== "ask_first") host.notifications.line("FocusTime", `Couldn't start your VM: ${r.error}.`);
       }
     }
+    // VM-2: the auto-start couldn't sign in: Allow Azure access opens the VM menu, where it is offered.
+    if (n.kind === "vm" && key === "consent") openRoute("vm");
   };
   /** Whether a held notification still matters when focus ends. */
   const still = async (n: Notice) => {
@@ -356,6 +359,12 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       if (st.ok && (st.data as VmStatus).prompt) await send(notices.vmOff(today, (st.data as VmStatus).vm?.name ?? "Your VM", at));
     }
   };
+  // VM-2: start my VM before my day, when I opted in. Production only: autoStartTick asks the gate before anything
+  // else (no settings, no store, no token read outside production).
+  const autoTick = async () => {
+    const r = await autoStartTick({ env: liveCtx.autoStartEnv, plan: store, config: configOrNull, vm: vmCtx, now: instantNow, allows: () => notifier.allows("vm"), send: async (n) => void (await send(n)), log });
+    if (r !== "env" && r !== "off" && r !== "not_due") log({ source: "azure", op: "vm_autostart", kind: r });
+  };
   // Shared polling (D517): the job reads the chats for everyone; here, one notification per request the AI sorted as
   // needing someone now in a chat I see, within URGENT_NOTICE_HOURS of its sort (each key goes out once; held during
   // focus unless Settings lets it through). And once a day, the AP-1 per-person message rows that didn't become asks
@@ -506,6 +515,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     await teamsTick(facts).catch(() => log({ source: "server", op: "teams_rhythm", kind: "failed" }));
     await dayReminders();
     await workdayNotices().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
+    await autoTick().catch(() => log({ source: "azure", op: "vm_autostart", kind: "failed" }));
     await vmTick().catch(() => log({ source: "azure", op: "vm_tick", kind: "failed" }));
     await asksTick().catch(() => log({ source: "plan", op: "asks_tick", kind: "failed" }));
     await conversationsTick().catch(() => log({ source: "plan", op: "conversations_tick", kind: "failed" }));
@@ -593,7 +603,9 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       const doneToday = await store.marked("status_notice", today);
       statusAt = nextStatusNudge(z, { ...c.notify.status, friday: true }, (x) => dayEndOf(c.week.hours, x), (o) => doneToday && o === `status_report:${today}`);
     }
-    return [teamsAt, statusAt].filter((x): x is Temporal.Instant => !!x).reduce((a, b) => (Temporal.Instant.compare(a, b) <= 0 ? a : b), base);
+    // VM-2: the next planned automatic start (production only, when on).
+    const autoAt = await autoStartWake({ env: liveCtx.autoStartEnv, now: instantNow, config: c }).catch(() => null);
+    return [teamsAt, statusAt, autoAt].filter((x): x is Temporal.Instant => !!x).reduce((a, b) => (Temporal.Instant.compare(a, b) <= 0 ? a : b), base);
   };
   return { fast, slow: tick, wake, settled };
 }

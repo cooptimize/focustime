@@ -1,17 +1,19 @@
 // Azure Resource Manager for my VM (step 15.4), delegated (user_impersonation): the signed-in person's own Azure
 // permissions decide what works. fix/vm-schedule (D475): every request passes a fixed allowlist (ALLOWED) before a
 // token is asked for or anything is sent. Reads: Resource Graph (VMs by owner tag), the VM, its instance view, its
-// auto-shutdown schedule and a start's progress. The one write: start the VM. Nothing else: no stop, and never any
+// auto-shutdown schedule and a start's or stop's progress. The two writes: start the VM, and (VM-2) deallocate it (a
+// stop that ends compute billing). Never power off without deallocating, restart, delete or resize, and never any
 // write to an auto-shutdown schedule (PUT, PATCH, DELETE, execute, retarget); the schedule is the person's own.
+// The two writes take no query parameter but api-version (no hibernate, no forceDeallocate).
 // Only https://management.azure.com is called. Errors carry a kind, the HTTP status and Azure's error code, never
 // bodies, tokens or Azure's messages (they can name principals and scopes).
 import type { Logger } from "../../log/logger.ts";
 import { powerFrom, type PowerState } from "../../plan/vm.ts";
 
 export const ARM = "https://management.azure.com";
-/** api-versions, checked against Microsoft Learn on Nov 2, 2026. */
+/** api-versions, checked against Microsoft Learn on Nov 2, 2026 (deallocate: Nov 11, 2026, VM-2). */
 export const API = {
-  /** Microsoft.Compute virtualMachines: GET, instanceView, start. */
+  /** Microsoft.Compute virtualMachines: GET, instanceView, start, deallocate. */
   compute: "2026-04-01",
   /** Microsoft.ResourceGraph resources (POST query). */
   resourceGraph: "2024-04-01",
@@ -71,6 +73,7 @@ export const PERMISSION = {
   read: "Microsoft.Compute/virtualMachines/read",
   instanceView: "Microsoft.Compute/virtualMachines/instanceView/read",
   start: "Microsoft.Compute/virtualMachines/start/action",
+  deallocate: "Microsoft.Compute/virtualMachines/deallocate/action",
   operation: "Microsoft.Compute/locations/operations/read",
   scheduleRead: "Microsoft.DevTestLab/schedules/read",
 } as const;
@@ -90,9 +93,14 @@ export const ALLOWED = [
   rule("read", "GET", VM_PATH),
   rule("instanceView", "GET", `${VM_PATH}/instanceView`),
   rule("start", "POST", `${VM_PATH}/start`),
+  // VM-2: the stop that ends compute billing. Never powerOff (it keeps billing), restart, delete or resize.
+  rule("deallocate", "POST", `${VM_PATH}/deallocate`),
   rule("operation", "GET", `/subscriptions/${GUID}/providers/Microsoft\\.Compute/locations/${SEG}/operations/${SEG}`),
   rule("scheduleRead", "GET", `/subscriptions/${GUID}/resourceGroups/${SEG}/providers/Microsoft\\.DevTestLab/schedules/shutdown-computevm-${SEG}`),
 ] as const;
+
+/** The writes: their only query parameter is api-version (VM-2: no hibernate or forceDeallocate rides along). */
+const WRITES: ReadonlySet<AzureCall> = new Set<AzureCall>(["start", "deallocate"]);
 
 /** Which allowed call a request is, or null: refused. Azure Resource Manager only; no encoded slashes or dot segments. */
 export function allowedCall(method: string, url: string): AzureCall | null {
@@ -106,7 +114,9 @@ export function allowedCall(method: string, url: string): AzureCall | null {
   if (u.origin !== ARM || u.username || u.password || u.hash) return null;
   const raw = url.slice(ARM.length).split("?")[0]!;
   if (/%2f|%5c|\\|\/\.\.?(\/|$)/i.test(raw)) return null;
-  return ALLOWED.find((r) => r.method === method && r.path.test(u.pathname))?.call ?? null;
+  const call = ALLOWED.find((r) => r.method === method && r.path.test(u.pathname))?.call ?? null;
+  if (call && WRITES.has(call) && [...u.searchParams.keys()].some((k) => k !== "api-version")) return null;
+  return call;
 }
 
 export type VmCandidate = { id: string; name: string; resourceGroup: string; subscriptionId: string; location: string; power: PowerState };
@@ -130,7 +140,7 @@ export function createAzureClient(d: AzureDeps) {
     const call = allowedCall(method, url);
     if (!call) {
       d.log({ source: "azure", op: "refused", kind: "refused" });
-      throw new AzureError("refused", 0, url.startsWith(`${ARM}/`) ? "FocusTime doesn't make that Azure call. It only reads your VM and its auto-shutdown, and starts it" : "FocusTime only calls Azure Resource Manager");
+      throw new AzureError("refused", 0, url.startsWith(`${ARM}/`) ? "FocusTime doesn't make that Azure call. It only reads your VM and its auto-shutdown, starts it and stops it" : "FocusTime only calls Azure Resource Manager");
     }
     const token = await d.token();
     const started = performance.now();
@@ -192,15 +202,15 @@ export function createAzureClient(d: AzureDeps) {
     return { id: typeof j.id === "string" ? j.id : r.id, name: typeof j.name === "string" ? j.name : r.name, location: typeof j.location === "string" ? j.location : "" };
   }
 
-  async function power(r: VmRef): Promise<PowerState> {
+  async function powerState(r: VmRef): Promise<PowerState> {
     const res = await send("GET", `${ARM}${vmPath(r)}/instanceView?api-version=${API.compute}`);
     const j = (await res.json().catch(() => ({}))) as { statuses?: unknown };
     return powerFrom(j.statuses);
   }
 
-  /** Start (the one write). Null poll: Azure finished at once (200). */
-  async function start(r: VmRef): Promise<Poll | null> {
-    const res = await send("POST", `${ARM}${vmPath(r)}/start?api-version=${API.compute}`);
+  /** Start or (VM-2) deallocate, the two writes. Null poll: Azure finished at once (200). */
+  async function power(r: VmRef, op: "start" | "deallocate"): Promise<Poll | null> {
+    const res = await send("POST", `${ARM}${vmPath(r)}/${op}?api-version=${API.compute}`);
     await res.body?.cancel();
     if (res.status !== 202 && res.status !== 201) return null;
     const asyncUrl = res.headers.get("azure-asyncoperation");
@@ -237,7 +247,10 @@ export function createAzureClient(d: AzureDeps) {
   }
 
   return {
-    findVms, getVm, power, start, operation, getSchedule,
+    findVms, getVm, power: powerState, operation, getSchedule,
+    start: (r: VmRef) => power(r, "start"),
+    /** VM-2: stop it so it stops billing (deallocate). Only ever from a person's Confirm on their own VM. */
+    deallocate: (r: VmRef) => power(r, "deallocate"),
     /** Any request, through the same allowlist (tests; nothing in FocusTime calls this). */
     request: (method: string, url: string, body?: unknown) => send(method, url, body),
   };

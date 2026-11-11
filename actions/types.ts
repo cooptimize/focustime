@@ -7,6 +7,7 @@ import type { PlanWeek } from "../plan/types.ts";
 import type { ClientPortfolio, ClientWork, IsoDate, RiskThresholds, SourceResult, StandingBlock, TypeLook, Week } from "../week/types.ts";
 import type { Capture, DraftStory, WeekFeature } from "../plan/types.ts";
 import type { TimeModel } from "../week/hours.ts";
+import type { AutoStartSettings } from "../plan/vm-autostart.ts";
 
 export type SourceSummary = Omit<SourceResult<unknown>, "items"> & { itemCount: number };
 
@@ -157,7 +158,7 @@ export type SettingsData = {
   /** Settings > Notifications (step 15.5). */
   notify: AppConfig["notify"];
   /** Settings > You > My VM (step 15.5, Q87). */
-  vm: { startWithoutAsking: boolean };
+  vm: { startWithoutAsking: boolean; autoStart: AutoStartSettings };
   /** Settings > Roadmap (step 17): state thresholds. */
   roadmap: AppConfig["roadmap"];
   /** BH-1: Settings › Ahead: when an item is stale. */

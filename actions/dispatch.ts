@@ -155,6 +155,11 @@ export type ActionContext = {
   log?: Logger;
   /** S1 (D452): where this runs: local, dev, prod or demo (runtime config). Absent: local. */
   env?: string;
+  /**
+   * VM-2: the environment the VM auto-start's gate reads: FOCUSTIME_ENV exactly as set (never normalized), or what the
+   * demo and the tests pass in. Only exactly "prod" lets an automatic start run; absent means it never does.
+   */
+  autoStartEnv?: string;
   /** R1: what to do when the one-time move from Coopilot's keyring entries failed; shown on the sign-in screen. */
   renameNote?: string | null;
   /** Step 16.4: the profile photo cache (~/.cache/focustime/photos). Absent: photos aren't cached (demo mode, tests). */
@@ -206,7 +211,7 @@ export type ActionContext = {
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
   media?: MediaControl;
   /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
-  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus; /** DV-2: a teammate's change in the demo's DevOps (not through FocusTime), to watch it arrive. */ devopsChange?: (clientKey: string, change: unknown) => { ok: true; id: number } | { ok: false; error: string } };
+  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus; /** DV-2: a teammate's change in the demo's DevOps (not through FocusTime), to watch it arrive. */ devopsChange?: (clientKey: string, change: unknown) => { ok: true; id: number } | { ok: false; error: string }; /** VM-2 (verification runs only, --clock): move this demo session's clock on and run the VM auto-start's pass once. */ vmTick?: (advanceMinutes: number) => Promise<string> };
   /**
    * Step 15.4: the Microsoft sign-in for a config (null without an [outlook] app registration), and an Azure Resource
    * Manager client on a token. Absent: no sign-in here (tests that don't need it), and the config's "me" is used.
@@ -1503,6 +1508,16 @@ export async function vmContext(ctx: ActionContext): Promise<VmContext> {
     ...(ctx.sleep ? { sleep: ctx.sleep } : {}),
     focusRunning: async () => !!(await ctx.plan?.getState<TimerState>(TIMER_KEY))?.runningSince,
     workday: async (cfg, date) => (await hasHoursOn(ctx.plan, cfg.week.hours, date)) && !(await ptoOn(ctx, cfg, date)),
+    ...(ctx.autoStartEnv !== undefined ? { autoStartEnv: ctx.autoStartEnv } : {}),
+    // VM-2: my whole-day PTO (the Time Off Tracker) and Cooptimize's observed holidays (Working Days Calendar). A read
+    // that fails throws: the tick then leaves the VM off.
+    daysOff: async (cfg, from, to) => {
+      const dv = ctx.makeDataverse(cfg.dataverse, userZone(cfg));
+      const pto = cfg.dataverse.mySystemUserId ? (await dv.pto(from, to)).items.map((e) => e.date) : [];
+      const h = dv.holidays ? await dv.holidays(from, to) : { ok: true as const, days: [] };
+      if (!h.ok) throw new Error("holidays unavailable");
+      return { pto: new Set(pto), holidays: new Set(h.days.map((x) => x.date)) };
+    },
   };
 }
 
@@ -1638,6 +1653,15 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       const r = ctx.demo.devopsChange(i.clientKey, i.change);
       return r.ok ? { ok: true, data: { id: r.id } } : bad(r.error);
     }
+    case "demo.vm_tick": {
+      // VM-2: only in a demo session started with --clock (the e2e tests): the session's clock moves on by the minutes
+      // given (0 to 1440) and the auto-start's pass runs once, with the environment the demo was given.
+      if (!ctx.demo?.on || !ctx.demo.vmTick) return { ok: false, status: 403, error: "Only in a demo verification run" };
+      const i = req.input as Record<string, unknown> | null;
+      const m = i && typeof i === "object" && !Array.isArray(i) && Object.keys(i).every((k) => k === "advanceMinutes") ? (i.advanceMinutes ?? 0) : null;
+      if (typeof m !== "number" || !Number.isInteger(m) || m < 0 || m > 1440) return bad("demo.vm_tick takes { advanceMinutes?: 0 to 1440 }");
+      return { ok: true, data: { outcome: await ctx.demo.vmTick(m), now: ctx.now() } };
+    }
     case "demo.status": {
       if (!noInput(req.input)) return bad("demo.status takes no input");
       if (!ctx.demo?.on || !ctx.demo.status) return { ok: false, status: 403, error: "Only in the demo" };
@@ -1748,6 +1772,9 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "vm.dismiss_prompt":
     case "vm.log":
     case "vm.start_now":
+    case "vm.autostart_skip":
+    case "vm.autostart_resume":
+    case "vm.autostart_seen":
       return vmAction(await vmContext(ctx), action, req.input);
     case "feedback.status":
     case "feedback.preview":

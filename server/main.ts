@@ -74,11 +74,13 @@ import type { Conn } from "../store/sql/conn.ts";
 import { openStore, StoreConfigError, type OpenedStore } from "../store/open.ts";
 import { createApp } from "./app.ts";
 import { moveFromOldName } from "../host/local/rename.ts";
-import { createDemoContext, seedDemo, type DemoControl, type DemoRealAi } from "./demo.ts";
+import { createDemoContext, demoAutoStart, seedDemo, type DemoControl, type DemoRealAi } from "./demo.ts";
 import { buildInfo } from "./buildinfo.ts";
 import { execFileSync } from "node:child_process";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { userZone } from "../week/zone.ts";
+import { localToday } from "../week/dates.ts";
+import { recordUse } from "../actions/vm-autostart.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { pollCycle, requestsNextDue, type PollDeps, type PollPerson } from "../actions/request-poll.ts";
 import { requestContext, aiFor, escalationHours, dispatch, meetingPerson, audienceRulesOf } from "../actions/dispatch.ts";
@@ -661,8 +663,14 @@ const demoRealAi: DemoRealAi = {
 };
 /** A demo session's context, seeded. Reset demo (DM-1) builds a new one the same way and puts it in place. */
 const buildDemo = async (userId: string): Promise<ActionContext> => {
-  const ctx = createDemoContext({ now: () => instantNow().toString(), demo: { on: true, set: async () => {}, reset: () => resetDemo(userId) }, feedbackParent: demoFeedbackParent, realAi: demoRealAi, publicUrl: app.publicUrl });
+  // VM-2: a verification run (--clock) may move one demo session's clock on (demo.vm_tick); never otherwise.
+  let shiftMs = 0;
+  const vmTick = clockArg >= 0 ? async (minutes: number) => ((shiftMs += minutes * 60_000), demoAutoStart(ctx)) : undefined;
+  const ctx = createDemoContext({ now: () => instantNow().add({ milliseconds: shiftMs }).toString(), demo: { on: true, set: async () => {}, reset: () => resetDemo(userId), ...(vmTick ? { vmTick } : {}) }, feedbackParent: demoFeedbackParent, realAi: demoRealAi, publicUrl: app.publicUrl });
   ctx.env = "demo";
+  // VM-2: the demo's auto-start gate gets only what is passed in explicitly (the e2e tests: "prod" or "dev"); unset,
+  // it never fires. The demo's VM is the fake Resource Manager's, never a real one.
+  if (process.env.FOCUSTIME_DEMO_AUTOSTART_ENV !== undefined) ctx.autoStartEnv = process.env.FOCUSTIME_DEMO_AUTOSTART_ENV;
   await seedDemo(ctx);
   return ctx;
 };
@@ -862,10 +870,25 @@ const server = createApp({
     if (s.demo) return null;
     const wasIdle = !use.active();
     use.used(s.userId);
+    void noteUse(s.userId);
     if (wasIdle) void refreshRules();
     return use.minutes();
   },
 });
+/** VM-2: HK-3's real use, kept as a date once a day per person (the auto-start pauses after 3 working days without). */
+const usedOn = new Map<string, string>();
+async function noteUse(userId: string): Promise<void> {
+  try {
+    const ctx = await runtimeFor(userId);
+    const cfg = await ctx.loadConfig().then((r) => (r.parsed.ok ? r.parsed.config : null));
+    const today = localToday(instantNow().toString(), cfg ? userZone(cfg) : host.clock.zone());
+    if (usedOn.get(userId) === today || !ctx.plan) return;
+    await recordUse(ctx.plan, today);
+    usedOn.set(userId, today);
+  } catch {
+    log({ source: "plan", op: "use", kind: "failed" });
+  }
+}
 /**
  * A2: one person's runtime: their action context (their plan store; config, sources and secrets are still this
  * machine's until the settings and secrets steps) and their background ticks (reminders, the focus timer, Teams status),
@@ -914,6 +937,9 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     renameNote: renamed.note,
     demo: demoControl(false),
     env: build.env,
+    // VM-2: the auto-start's gate reads FOCUSTIME_ENV exactly as set (buildInfo trims and lowercases; this doesn't), so
+    // only the Bicep's 'prod' starts anyone's VM. Unset, dev, local or anything else: never.
+    ...(process.env.FOCUSTIME_ENV !== undefined ? { autoStartEnv: process.env.FOCUSTIME_ENV } : {}),
     loadConfig,
     makeDataverse: dataverseFor(who),
     makeOutlook: outlookFor(who),
