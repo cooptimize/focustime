@@ -45,8 +45,8 @@ export const BACKGROUND = {
   devops_poll: { what: "The DevOps store: each client's items read once for everyone", touches: "DevOps (the company read PAT)", effect: "reads", kind: "job", outside: "in_use" },
   people_refresh: { what: "People, levels and client leads from Dataverse, once a day", touches: "Dataverse (the app's own access)", effect: "reads", kind: "job", outside: "always" },
   standards_sync: { what: "Cooptimize's standards from public GitHub", touches: "GitHub (public, no token)", effect: "reads", kind: "job", outside: "always" },
-  retention: { what: "The retention purge, once a day", touches: "none", effect: "db", kind: "job", outside: "always" },
-  ownership_backfill: { what: "The one-time move of conversations to shared owners", touches: "none", effect: "db", kind: "job", outside: "always" },
+  retention_purge: { what: "The retention purge, once a day", touches: "none", effect: "db", kind: "job", outside: "always" },
+  conversation_ownership_backfill: { what: "The one-time move of conversations to shared owners", touches: "none", effect: "db", kind: "job", outside: "always" },
   maintenance: { what: "Hard deletes after 30 days and ended sessions, hourly", touches: "none", effect: "db", kind: "job", outside: "always" },
   // Each person's ticks (server/ticks.ts).
   notices: { what: "Timed reminders and notices (plan today, check-in, close out, the week, promises, the VM, sends, notes, calls)", touches: "none (the in-app list)", effect: "messages", kind: "tick", outside: "opt_in", onDemand: "Settings › Notifications: Send a test notification and the samples" },
