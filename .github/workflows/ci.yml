@@ -101,6 +101,7 @@ jobs:
       # Playwright's WebKit (Safari's engine) and its system libraries, for e2e/safari.test.ts. Both are cached between
       # runs (AP-2): the browser keyed on the Playwright version, the system packages (.deb files) on the runner image and
       # the Playwright version. A slow Ubuntu mirror once took 8 to 17 minutes for the packages alone and cancelled a shard.
+      # The browser comes first: the packages step launches WebKit to check them.
       - name: Versions for the browser caches
         id: pw
         run: |
@@ -112,24 +113,39 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-webkit-${{ runner.os }}-${{ steps.pw.outputs.version }}
-      - name: Cache WebKit's system packages
-        uses: actions/cache@v4
-        with:
-          path: ~/apt-webkit
-          key: apt-webkit-${{ steps.pw.outputs.image }}-${{ steps.pw.outputs.version }}
-          restore-keys: |
-            apt-webkit-${{ steps.pw.outputs.image }}-
-            apt-webkit-
-      - name: Install WebKit's system packages
-        run: |
-          mkdir -p ~/apt-webkit
-          # Cached packages first; apt downloads only what changed since.
-          if ls ~/apt-webkit/*.deb >/dev/null 2>&1; then sudo cp ~/apt-webkit/*.deb /var/cache/apt/archives/; fi
-          npx playwright-core install-deps webkit
-          cp /var/cache/apt/archives/*.deb ~/apt-webkit/ 2>/dev/null || true
       - name: Install WebKit
         if: steps.browser-cache.outputs.cache-hit != 'true'
         run: npx playwright-core install webkit
+      # CI-2: the packages are installed from the cache with no network when it was written on this image and
+      # Playwright version, else the usual way with retries (scripts/ci-webkit-deps.sh says which). On Nov 11 an exact
+      # cache hit still failed in every shard: install-deps refreshes apt's lists and fetches what they call newest, and
+      # the Ubuntu mirrors couldn't be reached. Each cache's key ends in a hash of its contents, so a rewritten cache is a
+      # new entry and the newest wins; the exact key below never exists, only the prefixes match.
+      - name: Restore WebKit's system packages
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/apt-webkit
+          key: apt-webkit2-${{ steps.pw.outputs.image }}-${{ steps.pw.outputs.version }}
+          restore-keys: |
+            apt-webkit2-${{ steps.pw.outputs.image }}-${{ steps.pw.outputs.version }}-
+            apt-webkit2-${{ steps.pw.outputs.image }}-
+            apt-webkit2-
+      - name: Install WebKit's system packages
+        id: deps
+        env:
+          CI2_IMAGE: ${{ steps.pw.outputs.image }}
+        run: bash scripts/ci-webkit-deps.sh
+      # Only after the usual way rewrote the cache, and only from main (a push, or deploy-dev calling this): a pull
+      # request's cache would be scoped to its own ref, unused by anyone else, and evict the npm and browser caches. The
+      # packages are then pinned to what the first run on a runner image installed, so a security update arrives with
+      # the next image (about weekly). Shards that rewrote the same packages share one key; the loser only warns.
+      - name: Save WebKit's system packages
+        if: steps.deps.outputs.save == 'true' && github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ~/apt-webkit
+          key: apt-webkit2-${{ steps.pw.outputs.image }}-${{ steps.pw.outputs.version }}-${{ steps.deps.outputs.hash }}
       # The UI is built once for the run (test/e2e-build.ts) and every demo server serves it.
       - name: Browser tests
         run: |

@@ -70,6 +70,37 @@ having moved between the PR's last ci run and the merge. It prints its reason in
 (`reuse: tested=true pr=12 (run 123 tested tree abc…)`). Run it by hand with `gh` signed in:
 `scripts/ci-tree-match.sh cooptimize/focustime <sha>`.
 
+### When CI's browser jobs fail before testing (CI-2)
+
+**Outage or real failure?** Open a failed shard and look at which step failed.
+
+- **An outage:** the failure is in a step before "Browser tests" (npm ci, Install WebKit, Install WebKit's system
+  packages), usually in every shard at once, with network words in the log: `Temporary failure resolving
+  'archive.ubuntu.com'`, `Failed to fetch`, `Could not connect`, `ETIMEDOUT`, or a 503 from npm or the Playwright CDN.
+  Nothing in the code is wrong.
+- **A real failure:** "Browser tests" itself failed, with a test name under `FAIL` and an assertion or a timeout. Look at
+  that test.
+
+`gh run view <run id> --repo cooptimize/focustime --json jobs --jq '.jobs[] | select(.conclusion=="failure") | .name + ": " + ([.steps[] | select(.conclusion=="failure") | .name] | join(", "))'`
+lists each failed job with its failed step.
+
+Since CI-2 the packages step installs from the cache with no network when the cache was written on the same runner
+image and Playwright version. Its last line says which path it took (`webkit-deps: took the offline path: …` or
+`took the online path: …`). The online path runs on a new runner image or Playwright version, or when the cache is
+missing or damaged. It retries three times, 3 minutes each at most, with 20 and 40 s between. Only that path can still
+fail during an outage. The proof is the `ci-webkit-deps` workflow, which runs on pull requests that change the script
+or the CI workflows, and by hand (`gh workflow run ci-webkit-deps.yml`, from main).
+
+**Re-run only the failed jobs** once the outage is over (Ubuntu's status: <https://status.canonical.com>, GitHub's:
+<https://www.githubstatus.com>): `gh run rerun <run id> --failed --repo cooptimize/focustime`, or "Re-run failed jobs"
+on the run's page. The jobs that passed keep their results, and the test gate runs again once the shards pass.
+
+**deploy-dev waits on CI.** When the PR's own run tested the merged tree (the tree check above), deploy-dev runs only
+the typecheck and deploys, so a failure on main's own `ci` run doesn't stop dev. Otherwise deploy-dev runs all of
+`ci.yml` first, and a failed browser job stops the deploy. Re-run deploy-dev's failed jobs the same way (`gh run rerun
+<deploy-dev run id> --failed`); the deploy job runs once CI passes. On Nov 11 (#127, #128) main's own `ci` failed but
+deploy-dev reused each PR's run, and dev got both commits.
+
 ## What's deployed where (S1, D452)
 
 The image carries its build info, baked at build time (`scripts/build-info.ts` into Docker build args): the short
