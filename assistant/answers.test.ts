@@ -50,8 +50,10 @@ describe("AS-3 golden set: the six questions from the brief", () => {
     // Days: a meeting-heavy Tuesday and Thursday's PTO.
     expect(all).toContain("Tue, Nov 10: 6h of meetings");
     expect(all).toContain("Thu, Nov 12: PTO");
-    // Tailspin: the over-full Wed PM, the late promise, gaps for work dated then, the missing update, the call to review.
-    expect(all.some((l) => /^Wed PM: about 10h planned, 5h free$/.test(l))).toBe(true);
+    // Tailspin: Wed PM at risk from its meeting (QT-2: never because of how much is planned), the late promise, gaps
+    // for work dated then, the missing update, the call to review.
+    expect(all.find((l) => l.startsWith("Wed PM:"))).toMatch(/^Wed PM: at risk, .+, (\d+ min|\d+h) free$/);
+    expect(all.join("\n")).not.toMatch(/planned|overloaded|too much|\bover\b/i);
     expect(all).toContain("Late promise to Dana Reyes: Send the row counts (was due Nov 3)");
     expect(all).toContain("#8200 Usage export: needs stories (target Nov 12)");
     expect(all).toContain("#8100 Data Staleness: no update yet for Monday's report");
@@ -61,7 +63,7 @@ describe("AS-3 golden set: the six questions from the brief", () => {
     expect(all).toContain("#9100 Claims intake: no update yet for Monday's report");
     expectGrounded(r);
     expectNoLeak(r, s);
-    // Up to 3 suggestions, only allowlisted proposals: move the over-full block's to-dos (CF-1: no Confirm next week).
+    // Up to 3 suggestions, only allowlisted proposals: move the at-risk block's to-dos (CF-1: no Confirm next week).
     const sg = suggest(r)!;
     expect(sg.choices.map((c) => c.label)).toEqual(["Move the Tailspin to-dos from Wed PM to Fri AM"]);
     for (const t2 of SUGGEST_TOOLS) expect(TOOLS[t2].kind).toBe("proposal");

@@ -92,7 +92,7 @@ export async function checkDayReminder(d: DayReminderDeps): Promise<boolean> {
 }
 
 export const CLOSEOUT_MESSAGE = "Time to close out the day: to-dos, resume notes and follow-ups. Open FocusTime and press E.";
-export const CHECKIN_MESSAGE = "Midday check-in: what still fits this afternoon. Open FocusTime and press M.";
+export const CHECKIN_MESSAGE = "Midday check-in: what's done and what's left. Open FocusTime and press M.";
 
 /**
  * Plan the week nudges (step 8): Thursday and Friday for next week, Monday for this week, each from its time (Settings

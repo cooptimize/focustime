@@ -1,6 +1,6 @@
 import { DEFAULT_SIZE_SCALE } from "./estimate.ts";
 import { describe, expect, it } from "vitest";
-import { aboutText, blocksToMinutes, budgetWords, estimate, hoursText, loadText, overLine, parseHours, plannedMinutesOf, progressWords, sizeChipText, sourceWords, stepHours, storyMinutes, validEstimateHours, validEstimateMinutes, type EstItem } from "./estimate.ts";
+import { aboutText, blocksToMinutes, budgetWords, estimate, hoursText, loadText, parseHours, plannedMinutesOf, progressWords, sizeChipText, sourceWords, stepHours, storyMinutes, validEstimateHours, validEstimateMinutes, type EstItem } from "./estimate.ts";
 
 const H = 60;
 const f = (itemId: number, hours: number | null, o: Partial<EstItem> = {}): EstItem => ({ clientKey: "T&W", itemId, level: "feature", estimate: hours === null ? null : hours * H, ...o });
@@ -84,7 +84,7 @@ describe("features as envelopes", () => {
 
 describe("a client's week in words", () => {
   it("7h free · 9h planned, with the amber about 2h over", () => {
-    expect(budgetWords(7 * H, 9 * H)).toEqual({ kind: "over", free: "7h free", planned: "9h planned", over: "about 2h over", text: "7h free · 9h planned", line: 7 * H });
+    expect(budgetWords(7 * H, 9 * H)).toEqual({ kind: "over", free: "7h free", planned: "9h planned", over: "about 2h over", text: "7h free · 9h planned" });
     expect(budgetWords(7 * H, 4 * H)).toMatchObject({ kind: "free", over: null, text: "7h free · 4h planned" });
     expect(budgetWords(7 * H, 7 * H)).toMatchObject({ kind: "all", over: null });
     expect(budgetWords(7 * H, 0)).toMatchObject({ kind: "none", text: "7h free" });
@@ -94,7 +94,6 @@ describe("a client's week in words", () => {
   });
   it("the over amount matches the hours shown: 8h free · 10h planned is about 2h over", () => {
     expect(budgetWords(450, 600)).toMatchObject({ free: "8h free", planned: "10h planned", over: "about 2h over" });
-    expect(overLine("Northwind", 450, 600, false)).toBe("About 2h more than Northwind's free time this week. Move one to another week.");
     expect(budgetWords(450, 480).over).toBe("a little over");
     for (let f = 0; f <= 900; f += 25)
       for (let p = f + 15; p <= 1200; p += 35) {
@@ -102,15 +101,10 @@ describe("a client's week in words", () => {
         if (w.over && w.over !== "a little over" && !w.free.startsWith("under")) expect(Number(w.planned!.match(/\d+/)![0]) - (f ? Number(w.free.match(/\d+/)![0]) : 0), `${f} ${p}`).toBe(Number(w.over.match(/\d+/)![0]));
       }
   });
-  it("the over line names the client and the ways out; Friday only when there is one", () => {
-    expect(overLine("Northwind", 7 * H, 9 * H, true)).toBe("About 2h more than Northwind's free time this week. Move one to another week, or borrow Friday.");
-    expect(overLine("Northwind", 7 * H, 9 * H, false)).toBe("About 2h more than Northwind's free time this week. Move one to another week.");
-    expect(overLine("Northwind", 7 * H, 7 * H, true)).toBeNull();
-  });
   it("no decimals and no blocks, whatever the numbers", () => {
     for (const [a, b] of [[425, 543], [0, 120], [95, 0], [4800, 5000], [17, 400]] as const) {
       const w = budgetWords(a, b);
-      expect(`${w.text} ${w.over ?? ""} ${overLine("X", a, b, true) ?? ""}`).not.toMatch(/[.,]\d|½|¼|¾|block/);
+      expect(`${w.text} ${w.over ?? ""}`).not.toMatch(/[.,]\d|½|¼|¾|block/);
     }
   });
 });
@@ -139,15 +133,10 @@ describe("converting stored blocks (E1 half blocks, step 16.4 whole blocks)", ()
   });
 });
 
-describe("plan share (ADM-1): plan up to N% of free time moves only the amber over line", () => {
-  it("80% of 10h free: 8h planned fits, 10h is about 2h over; nothing is ever blocked", () => {
-    expect(budgetWords(600, 480, 80)).toMatchObject({ kind: "all", over: null, text: "10h free · plan up to 8h · 8h planned" });
-    expect(budgetWords(600, 600, 80)).toMatchObject({ kind: "over", over: "about 2h over" });
+describe("QT-2: no plan share or Keep open in Ahead's weeks", () => {
+  it("free time as it is: 10h planned against 10h free is all of it, never over", () => {
+    expect(budgetWords(600, 480)).toMatchObject({ kind: "free", over: null, text: "10h free · 8h planned" });
     expect(budgetWords(600, 600)).toMatchObject({ kind: "all", over: null, text: "10h free · 10h planned" });
-  });
-  it("stays between 50% and 100%", () => {
-    expect(budgetWords(600, 300, 10).kind).toBe("all");
-    expect(budgetWords(600, 360, 10).kind).toBe("over");
-    expect(budgetWords(600, 600, 150).kind).toBe("all");
+    expect(budgetWords(600, 600).text).not.toMatch(/plan up to/);
   });
 });
