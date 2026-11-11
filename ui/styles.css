@@ -6562,6 +6562,9 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 }
 /* Ahead: "+ New" beside Refresh, and "+ New under" on a row, shown on hover or focus within. */
 .ah-new-under { visibility: hidden; margin-left: 6px; font-size: var(--fs-2); }
+/* In Gantt's label column it takes no space, so titles and bars keep their rows (AH-6). */
+.pa-label { position: relative; }
+.pa-label .ah-new-under { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); margin: 0; background: var(--surface); box-shadow: 0 0 0 4px var(--surface); }
 .ah-row:is(:hover, :focus-within) .ah-new-under, .pa-row:is(:hover, :focus-within) .ah-new-under, .bl-row:is(:hover, :focus-within) .ah-new-under, .ah-new-under:focus-visible { visibility: visible; }
 @media (hover: none) { .ah-new-under { visibility: visible; } }
 .bd-by-hand { margin-right: auto; }

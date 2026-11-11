@@ -672,4 +672,4 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - Review pass: closing the form after the panel's New feature keeps the draft on the block (with a line saying so) rather than removing it. Should Cancel remove it?
 - Review pass: when a process has several types at a level, the form starts on the level above's default child type, else the first. A process rule can also make a field required only in some states; FocusTime checks only the always-required fields, so such a refusal comes back from DevOps at Confirm in its own words.
 - Review pass: "the same create" is the same title, type and parent within 15 minutes. Two people making the same title on purpose in that time each make their own (it's per person); one person must change the title or wait. Fine?
-- The epic tier's label in Gantt lists every top type ("Domains / Epics") when a level sits above epics. Better as separate rows per level?
+- A level above epics shares the epic tier in Ahead (Show: Epics opens it too, named "Domains / Epics" once one is listed). Better as its own level in the control?

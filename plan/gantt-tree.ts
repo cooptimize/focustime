@@ -103,12 +103,8 @@ const DEFAULT_NAMES: Record<Tier, string> = { epic: "Epics", feature: "Features"
  * Each level's name from the types the rows have at it (the process model's level, through the row's tier): the most
  * common type's plural, and when the clients shown name a level differently, both ("Stories / Backlog items").
  */
-export function levelNames(groups: readonly { rows: readonly { tier: Tier; item: { type: string } }[]; /** QC-1: the client's process types, so every top level shows by name. */ client?: { types?: readonly { name: string; level: string | null }[] } }[]): Record<Tier, string> {
+export function levelNames(groups: readonly { rows: readonly { tier: Tier; item: { type: string } }[] }[]): Record<Tier, string> {
   const out = { ...DEFAULT_NAMES };
-  // QC-1: every level above the feature tier, from the process (a level above Epic, such as a Domain, by its own name),
-  // even before it has items: "Domains / Epics". Shown with Epics' button, which opens everything at the top.
-  const tops: string[] = [];
-  for (const g of groups) for (const t of g.client?.types ?? []) if (t.level === "top" && !tops.includes(pluralType(t.name))) tops.push(pluralType(t.name));
   for (const tier of LEVELS) {
     const names: string[] = [];
     for (const g of groups) {
@@ -119,7 +115,6 @@ export function levelNames(groups: readonly { rows: readonly { tier: Tier; item:
     }
     if (names.length) out[tier] = names.join(" / ");
   }
-  if (tops.length > 1) out.epic = tops.join(" / ");
   return out;
 }
 
