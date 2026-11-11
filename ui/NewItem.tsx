@@ -218,7 +218,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
         </div>
         <div className="nf-grid">
           <span className="set-label" id="nf-client">Client</span>
-          <SelectField label="Client" value={clientKey ?? ""} options={clients.map((c) => ({ key: c.clientKey, label: c.clientName }))} onChange={(k) => (setClientKey(k), setParentId(null))} className="nf-select" />
+          <SelectField label="Client" value={clientKey ?? ""} options={clients.map((c) => ({ key: c.clientKey, label: c.clientName }))} onChange={(k) => (setClientKey(k), setParentId(null))} className="nf-select" empty="Choose a client" />
           <span className="set-label" id="nf-type">Level</span>
           <span className="nf-types">
             {!clientKey ? <span className="muted">Choose a client first</span> : !opts ? <span className="muted">{optsError ?? "Reading the client's process…"}</span> : types.length ? <Segmented label="Level" options={typeOptions} value={type} onChange={setType} /> : <span className="muted">{opts.problem}</span>}

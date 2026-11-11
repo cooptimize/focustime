@@ -1539,6 +1539,7 @@ export function App() {
       // QC-1: "New feature", "New epic"… for the selected block's client, by its process's own names.
       openNew: (o) => openNew({ from: "command", clientKey: selClient, ...(o.type ? { level: o.type } : {}) }),
       newTypes: newTypesOf(work.get(selClient ?? "")?.types),
+      createDraft: (k: string, id: number) => (devopsWrites.env.can(k) ? devopsWrites.env.create(k, [{ id, clientKey: k } as DraftStory]) : devopsWrites.env.enable(k)),
       openRitual: togglePlanning,
       closeOutDate: closeOutAt,
       commitCloseOut: () => {
@@ -1608,7 +1609,7 @@ export function App() {
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, openGuide, work, runPlan, openPlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, openPlanWeek, togglePlanning, connectWrite, addWork, timeboxDay, goNav, asksOpen, cowork]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, openGuide, work, runPlan, openPlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, openPlanWeek, togglePlanning, connectWrite, addWork, timeboxDay, goNav, asksOpen, cowork, devopsWrites.env, openNew]); // eslint-disable-line react-hooks/exhaustive-deps
   // QC-1: Shift+N reads the selection at the moment it is pressed.
   const envRef = useRef<MenuEnv | null>(null);
   envRef.current = env;

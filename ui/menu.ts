@@ -232,6 +232,8 @@ export type MenuEnv = {
   openCaptures: () => void;
   /** QC-1: the New form, opened from the command menu (a type by the process's own name, or the default). */
   openNew?: ((o: { type?: string }) => void) | undefined;
+  /** QC-1: a draft's Create in DevOps, straight to the write preview (or Enable DevOps writes without my PAT). */
+  createDraft?: ((clientKey: string, draftId: number) => void) | undefined;
   /** QC-1: the types the current client's process can create, top-down ("New feature", "New epic"). */
   newTypes?: readonly string[] | undefined;
   /** The Plan button (step 10): the ritual for the moment. */
@@ -405,6 +407,8 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
     title: p.title,
     head: rowHead({ id: p.itemId, title: p.title, client: clientNameOf(env, p.clientKey) }),
     items: [
+      // QC-1: a draft's row: Create in DevOps opens the write preview; created, the item takes its place here.
+      ...(p.kind === "draft" && p.draftId !== null && env.createDraft ? [{ id: "create", label: "Create in DevOps", action: "devops.preview", run: () => env.createDraft!(p.clientKey, p.draftId!) } satisfies MenuItem] : []),
       // FN-1: the title opens the story card; the menu copies the DevOps link (no Open in DevOps).
       { id: "copy", label: COPY_LINK, ...(p.itemUrl ? {} : { disabled: p.kind === "intention" ? "An intention has no work item" : "A draft story isn't in DevOps yet" }), run: () => { if (p.itemUrl) env.copyLink(p.clientKey, p.itemUrl); } },
       { id: "size", label: "Set size", hint: p.size ?? "Size?", action: "pick.set_size", ...(past ? { disabled: PAST } : {}), next: () => sizeStep(env, p) },

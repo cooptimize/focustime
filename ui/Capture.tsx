@@ -304,7 +304,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
   const dueNow = due ?? s.due ?? "";
   const blocked = (kind === "draft" || kind === "draft_feature" || kind === "deployment") && !client ? `A ${BOX_NAME[kind].toLowerCase()} needs a client: choose one with the client chip or type @` : kind === "deployment" ? (!depDate ? "A deployment needs a date" : depDate < today ? "Choose today or a later day" : windowProblem({ start: depStart, end: depEnd })) : null;
 
-  const submit = async (_open = false) => {
+  const submit = async (open = false) => {
     const body = text.trim();
     if (!body || busy) return;
     // CP-1: the chip is the client, always (an @tag counts only once it is the chip).
@@ -352,9 +352,9 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
       setNotice(null);
       setSaved({ captureId: r.capture.id, text: msg, body, client: key });
       onChanged();
-      if (draftId !== null && openDraft) {
-        // QC-1: a story or feature opens the New form at once (Enter or Ctrl+Enter), so it reaches DevOps without the
-        // Inbox; Cancel or Save as draft leaves the draft saved. The AI version is offered there when it lands.
+      if (draftId !== null && open && openDraft) {
+        // QC-1: Ctrl+Enter on a story or feature opens the New form, so it reaches DevOps without the Inbox; Cancel or
+        // Save as draft leaves the draft saved. Plain Enter only saves (Capture is saved at once, never a form).
         openDraft(draftId);
         onOpenedDraft?.();
       } else {
@@ -493,7 +493,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
           </button>
         ))}
         <span className="muted cap-kind-hint" id="cap-kind-hint">
-          {text.trim() ? `Tab changes the kind${kind !== "later" ? " · ↓ to its details" : ""} · ${kind === "draft" || kind === "draft_feature" ? "Enter saves and opens Create in DevOps" : "Enter saves"}` : "Enter saves · Shift+Enter for a new line"}
+          {text.trim() ? `Tab changes the kind${kind !== "later" ? " · ↓ to its details" : ""} · Enter saves${kind === "draft" || kind === "draft_feature" ? " · Ctrl+Enter saves and opens Create in DevOps" : ""}` : "Enter saves · Shift+Enter for a new line"}
         </span>
       </div>
       {kind !== "later" && text.trim() && (
