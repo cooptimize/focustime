@@ -306,6 +306,8 @@ async function peopleSection(ops: AdminOps, meId: string) {
         notCooptimizer: e.notCooptimizer,
         notCooptimizerText: e.notCooptimizer ? NOT_COOPTIMIZER_TEXT[e.notCooptimizer] : null,
         automation: rules.automation.includes(id) || (!!e.dir && rules.automation.includes(e.dir.personId)),
+        // WP-1: the DevOps patterns page (preview), only for people an admin turns it on for.
+        devopsPatterns: rules.devopsPatterns.includes(id.toLowerCase()),
         level: level.level,
         levelName: level.level ? LEVEL_NAMES[level.level] : null,
         levelSource: level.source,

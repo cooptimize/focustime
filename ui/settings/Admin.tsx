@@ -726,6 +726,8 @@ type Person = {
   cooptimizer: boolean;
   notCooptimizerText: string | null;
   automation: boolean;
+  /** WP-1: the DevOps patterns page is on for this person (off for everyone by default). */
+  devopsPatterns: boolean;
   positionName: string | null;
   clients: string[];
   sources: { microsoft: boolean; google: boolean; devopsWrites: number } | null;
@@ -975,6 +977,7 @@ function PeopleTable({ people, levels, leadsShown, saver, onOverride, onRemove, 
             {!others && <th scope="col">Clients</th>}
             <th scope="col">Sources</th>
             <th scope="col">Automation <Kind kind="Rule" /></th>
+            {!others && <th scope="col">DevOps patterns (preview) <Kind kind="Rule" /></th>}
             <th scope="col"><span className="sr-only">Remove</span></th>
           </tr>
         </thead>
@@ -1001,6 +1004,15 @@ function PersonRow({ p, levels, leadsShown, saver, onOverride, onRemove, others 
         <input type="checkbox" role="switch" checked={saver.shown(scope, "automation", p.automation)} aria-label={`${p.name}: automation account`} onChange={(e) => void saver.save(scope, "automation", e.target.checked ? true : undefined, `${p.name}: automation account`)} /> {p.automation ? "Yes" : "No"}
       </label>
       <SaveMark s={saver.status(scope, "automation")} retry={() => void saver.save(scope, "automation", p.automation ? true : undefined, `${p.name}: automation account`)} />
+    </td>
+  );
+  // WP-1: the one switch for the DevOps patterns page; only an admin sets it, off by default.
+  const patterns = (
+    <td>
+      <label className="adm-switch">
+        <input type="checkbox" role="switch" checked={saver.shown(scope, "devops_patterns", p.devopsPatterns)} aria-label={`${p.name}: DevOps patterns (preview)`} onChange={(e) => void saver.save(scope, "devops_patterns", e.target.checked ? true : undefined, `${p.name}: DevOps patterns (preview)`)} /> {p.devopsPatterns ? "On" : "Off"}
+      </label>
+      <SaveMark s={saver.status(scope, "devops_patterns")} retry={() => void saver.save(scope, "devops_patterns", p.devopsPatterns ? true : undefined, `${p.name}: DevOps patterns (preview)`)} />
     </td>
   );
   // The word, then the how on its own line (matched by which key, or why there's no sign-in to match yet).
@@ -1115,6 +1127,7 @@ function PersonRow({ p, levels, leadsShown, saver, onOverride, onRemove, others 
       <td>{p.clients.length ? p.clients.join(", ") : <span className="muted">None</span>}</td>
       {sources}
       {automation}
+      {patterns}
       {remove}
     </tr>
   );

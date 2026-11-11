@@ -53,6 +53,8 @@ import { followedKeys } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
 import { guideAction } from "./guide-actions.ts";
 import { docsAccessAction } from "./docs-actions.ts";
+import { NO_CLIENT } from "../ai/types.ts";
+import { patternsAction, type PatternsAction, type PatternsContext, type PatternsPort } from "./patterns.ts";
 import { defaultWeekStart, localToday, minutesOn, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
 import { hoursOn, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
@@ -214,6 +216,8 @@ export type ActionContext = {
   team?: import("../store/team-store.ts").TeamStore;
   /** MC-1: the registered client calls (app tables) and the FocusTime users they name. Absent: no meeting capture here. */
   meetings?: MeetingsPort;
+  /** WP-1: the DevOps patterns page's run and store (app tables). Absent: the page doesn't exist here. */
+  patterns?: PatternsPort;
   /** SW-1: whether a person has signed in to FocusTime (can receive sends). Absent: their entry has a sign-in. */
   onFocusTime?: (personId: string) => boolean;
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
@@ -2553,11 +2557,70 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.rerun":
     case "meeting.check_now":
       return meetingAction(await meetingContext(ctx), action as MeetingAction, req.input);
+    case "patterns.access":
+    case "patterns.status":
+    case "patterns.run_inventory":
+    case "patterns.estimate":
+    case "patterns.run_classification":
+    case "patterns.resume":
+    case "patterns.set_platform":
+    case "patterns.check":
+    case "patterns.download":
+      return patternsAction(patternsContext(ctx), action as PatternsAction, req.input);
     default: {
       const unhandled: never = action;
       return bad(`unknown action ${String(unhandled)}`);
     }
   }
+}
+
+/**
+ * WP-1: what the DevOps patterns page needs per request: the person, their switch (an admin's, Admin › People), the
+ * clients they are on (Account Workers and focus time, matched on their FocusTime and Dataverse ids), and their AI for a
+ * classification. Admins get nothing extra.
+ */
+export function patternsContext(ctx: ActionContext): PatternsContext {
+  const meId = async () => (await storedIdentity(ctx.plan))?.oid ?? null;
+  const rules = async () => (ctx.org ? await ctx.org.rules() : null);
+  const aiAllowed = async (k: string) => {
+    const r = await rules();
+    return !!r && r.ai.on && r.ai.allowedClients.includes(k);
+  };
+  return {
+    port: ctx.patterns ?? null,
+    me: meId,
+    allowed: async (id) => !!(await rules())?.devopsPatterns.includes(id.toLowerCase()),
+    async myClients() {
+      const id = await meId();
+      if (!id || !ctx.org) return [];
+      const entry = (await ctx.org.levels()).people.entry(id);
+      const ids = new Set([id.toLowerCase(), ...(entry ? [entry.id.toLowerCase()] : []), ...(entry?.dir?.personId ? [entry.dir.personId.toLowerCase()] : [])]);
+      return [...new Set((await ctx.org.store.peopleClients()).filter((p) => ids.has(p.personId.toLowerCase())).map((p) => p.clientKey))];
+    },
+    dataPlatform: async (k) => (await rules())?.clients[k]?.dataPlatform ?? null,
+    aiAllowed,
+    async ai() {
+      const service = await aiFor(ctx);
+      const NONE = "Classification needs an AI provider, and AI isn't set up here.";
+      if (!service || !ctx.patterns) return { why: NONE };
+      const a = await service.availability(NO_CLIENT);
+      if (a === "not_set_up") return { why: NONE };
+      if (a === "off") return { why: "AI is off for FocusTime. A FocusTime admin turns it on in Admin › AI." };
+      const keys = await ctx.patterns.clients();
+      const cfg = await configured(ctx);
+      const mine = cfg ? await aiDirectory(ctx, cfg) : [];
+      const r = await rules();
+      // Every client the run covers is in the masking directory, with its aliases, not only the person's own.
+      const port = ctx.patterns;
+      const projectsOf = async (k: string) => (port.projects ? await port.projects(k).catch(() => []) : []);
+      const others = keys.filter((k) => !mine.some((m) => m.key.toLowerCase() === k.toLowerCase()));
+      const directory = [...mine, ...(await Promise.all(others.map(async (k) => ({ key: k, names: [], projects: await projectsOf(k), itemIds: [], ...(r?.clients[k]?.aliases?.length ? { aliases: [...r.clients[k]!.aliases] } : {}) }))))];
+      const internal = new Set<string>();
+      for (const k of keys) if (await isInternalKey(ctx.org, k)) internal.add(k);
+      return { deps: { ai: service, aiAllowed, directory, isInternal: (k: string) => internal.has(k) } };
+    },
+    now: () => ctx.now(),
+  };
 }
 
 /** SW-1: sends, priorities, the Team view and Ask to look. */
