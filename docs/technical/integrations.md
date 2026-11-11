@@ -1,6 +1,6 @@
 # Integrations
 
-For engineers working on a source and IT reviewing what FocusTime asks for. Checked against `bc72446` on Nov 7, 2026 (with IN-2 on `feat/invite-send`; the holidays read against `feat/report-finish` on Nov 8). GitHub (KB-1) against `feat/coop-standards` on Nov 8. Calendar links (CAL-1) against `feat/ics-calendars` on Nov 10. Client calls (MC-1c) against `fix/mc1c-meeting-register` on Nov 11. DevOps freshness and Find an item (DV-2) against `feat/dv2-devops-fresh` on Nov 11.
+For engineers working on a source and IT reviewing what FocusTime asks for. Checked against `bc72446` on Nov 7, 2026 (with IN-2 on `feat/invite-send`; the holidays read against `feat/report-finish` on Nov 8). GitHub (KB-1) against `feat/coop-standards` on Nov 8. Calendar links (CAL-1) against `feat/ics-calendars` on Nov 10. Client calls (MC-1c) against `fix/mc1c-meeting-register` on Nov 11. DevOps freshness and Find an item (DV-2) against `feat/dv2-devops-fresh` on Nov 11. The VM (VM-2) against `feat/vm2-stop-autostart` on Nov 11.
 
 Every outside system is read only, except the named writes listed for each one below. Calendar links (CAL-1) are read only. Each source reports its own status (`ok`, `auth_required`, `unreachable`, `misconfigured` or `error`, `week/types.ts`). When one fails, people see that source's last good data with its age, or a plain message and the fix ("Connect Google Calendar", "Open Settings"), and the rest of FocusTime keeps working. Nothing stands in for a failed source: a real session never shows demo data.
 
@@ -98,7 +98,9 @@ These lags are typical behavior, not tested by FocusTime; when a provider is slo
 
 **Auth.** Delegated `user_impersonation`: your own Azure access, nothing more.
 
-**Read and written.** A fixed allowlist checked before any token is asked for (`ALLOWED` in `sources/azure/client.ts`): find VMs by the owner tag (Resource Graph), read the VM and its instance view, read its auto-shutdown schedule, read a start's progress, and **start** the one VM you confirmed. Nothing else: never stop, never any write to the auto-shutdown schedule.
+**Read and written.** A fixed allowlist checked before any token is asked for (`ALLOWED` in `sources/azure/client.ts`): find VMs by the owner tag (Resource Graph), read the VM and its instance view, read its auto-shutdown schedule, read a start's or stop's progress, and two writes on the one VM you confirmed: **start**, and (VM-2) **deallocate** (`POST …/deallocate`, api-version 2026-04-01, checked on Microsoft Learn Nov 11, 2026: it shuts the VM down and ends compute billing). The writes take no query parameter but api-version. Nothing else: never power off without deallocating, restart, delete or resize, and never any write to the auto-shutdown schedule.
+
+**Unattended start (VM-2).** With Start my VM before my day on, the production server starts your VM before your day without you there. It uses your own delegated access: your stored Microsoft sign-in (sealed in `user_secrets`) is redeemed for an Azure Resource Manager token held in memory for that call, as the VM notification's Start does. No app-only access and no Azure role for FocusTime. When that sign-in can't be used, the VM stays off and FocusTime says so once.
 
 **Failure.** The VM chip says Unknown, with the reason kind; Azure's own messages are never shown (they can name principals).
 

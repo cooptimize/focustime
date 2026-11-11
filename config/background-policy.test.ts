@@ -47,7 +47,7 @@ describe("which environment is production", () => {
     for (const n of ["people_refresh", "calendar_refresh", "standards_sync", "retention_purge", "maintenance", "conversation_ownership_backfill", "startup_upkeep", "focus_timer", "notice_sweep", "chat_text_cleanup"] as const) expect(p.allows(n), n).toBe(true);
   });
 
-  it("names the reserved entries for VM-2's start and the Coop mailbox, off outside production", () => {
+  it("VM-2's start and the reserved Coop mailbox are off outside production", () => {
     expect(BACKGROUND.vm_autostart.outside).toBe("never");
     expect(BACKGROUND.coop_mailbox.outside).toBe("never");
   });
@@ -129,7 +129,8 @@ describe("the scheduler's jobs", () => {
 });
 
 // Each person's tick parts, in order, before ENV-1 (server/ticks.ts's slow and fast passes).
-const PRE_ENV1_SLOW = ["teams_rhythm", "day_reminders", "workday_notices", "vm_notice", "urgent_asks", "chat_text_cleanup", "conversation_notices", "takes", "notes", "team", "meetings"];
+// VM-2 merged during this step: its auto-start ran between the workday notices and the VM notice, and still does.
+const PRE_ENV1_SLOW = ["teams_rhythm", "day_reminders", "workday_notices", "vm_autostart", "vm_notice", "urgent_asks", "chat_text_cleanup", "conversation_notices", "takes", "notes", "team", "meetings"];
 const PRE_ENV1_FAST = ["timer", "warnings", "held", "sweep", "teams_status"];
 
 describe("each person's tick parts", () => {
@@ -147,7 +148,7 @@ describe("each person's tick parts", () => {
   it("outside production: the timer, calendar refresh, sweep and cleanup; reminders and Teams messages only when opted in; never Teams status", () => {
     const p = backgroundPolicy({ FOCUSTIME_ENV: "dev" });
     expect(partsFor(p, false)).toEqual({ slow: ["chat_text_cleanup"], fast: ["timer", "warnings", "sweep"] });
-    expect(partsFor(p, true)).toEqual({ slow: PRE_ENV1_SLOW, fast: ["timer", "warnings", "held", "sweep"] });
+    expect(partsFor(p, true)).toEqual({ slow: PRE_ENV1_SLOW.filter((x) => x !== "vm_autostart"), fast: ["timer", "warnings", "held", "sweep"] });
   });
 });
 
@@ -170,7 +171,10 @@ describe("background work starts only from the scheduler", () => {
   });
 
   it("nothing reads FOCUSTIME_ENV to decide what runs but the policy (buildinfo only labels the build)", () => {
-    const hits = ["server", "actions", "sources", "store", "ai", "plan", "week", "config", "host"].flatMap(files).filter((p) => readFileSync(join(root, p), "utf8").includes("FOCUSTIME_ENV"));
+    const hits = ["server", "actions", "sources", "store", "ai", "plan", "week", "config", "host"].flatMap(files).filter((p) =>
+      // Code only: comments may say what the policy reads.
+      readFileSync(join(root, p), "utf8").split("\n").some((l) => l.includes("FOCUSTIME_ENV") && !/^\s*(\/\/|\*|\/\*)/.test(l)),
+    );
     expect(hits.sort()).toEqual(["config/background-policy.ts", "server/buildinfo.ts"]);
     // The chat poll's old default from the build label is gone (the Teams app link still names the build's own app).
     expect(readFileSync(join(root, "server/main.ts"), "utf8")).not.toMatch(/build\.env === "prod" \? "on"/);

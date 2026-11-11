@@ -1,6 +1,6 @@
 # Security
 
-For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `d25c148` on Nov 7, 2026 (SR-2 parts against its own branch); the assistant's context against `1e74410` with AS-3 (`feat/assistant-answers`). The standards repo (KB-1) against `feat/coop-standards` on Nov 8. Calendar links (CAL-1) against `feat/ics-calendars` on Nov 10. Test sites (ENV-1) against `feat/env1-background-policy` on Nov 11.
+For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `d25c148` on Nov 7, 2026 (SR-2 parts against its own branch); the assistant's context against `1e74410` with AS-3 (`feat/assistant-answers`). The standards repo (KB-1) against `feat/coop-standards` on Nov 8. Calendar links (CAL-1) against `feat/ics-calendars` on Nov 10. The VM (VM-2) against `feat/vm2-stop-autostart` on Nov 11. Test sites (ENV-1) against `feat/env1-background-policy` on Nov 11.
 
 ## In short
 
@@ -158,7 +158,9 @@ Dev shares the Entra registration, Dataverse, the DevOps read PAT, the Graph ten
 
 ## The VM and its auto-shutdown
 
-FocusTime reads and starts only the one VM you confirmed, with your own Azure access. It never stops a VM and never writes its auto-shutdown schedule (no time, status, time zone, notification or delete): the schedule is yours and is only read. The Azure client throws before a request is sent for anything outside its allowlist (`ALLOWED` in `sources/azure/client.ts`).
+FocusTime reads, starts and stops (deallocates) only the one VM you confirmed, with your own Azure access. Stop runs only from your Confirm after its preview. It never writes the VM's auto-shutdown schedule (no time, status, time zone, notification or delete): the schedule is yours and is only read. The Azure client throws before a request is sent for anything outside its allowlist (`ALLOWED` in `sources/azure/client.ts`), and its two writes refuse any query parameter but api-version.
+
+The one write without a preview is the start before your day (VM-2), and only because you turned it on. It runs only on production (`FOCUSTIME_ENV` exactly `prod`, checked first, before any setting or token is read), at most once a day (a claim in the database), never stops anything, and is logged as automatic. Admins never see or control anyone's VM; the assistant and the Teams bot can't start or stop it.
 
 ## Threat model
 

@@ -42,6 +42,10 @@ export type VmStatus = {
   power: PowerState | null;
   transition: VmTransition | null;
   canStart: boolean;
+  /** VM-2: Stop is offered (only while it runs; never while it starts or stops). */
+  canStop: boolean;
+  /** VM-2: Azure has no auto-shutdown schedule for this VM (read without error and none found). */
+  noShutdown?: boolean;
   /** The auto-shutdown schedule as Azure has it, read only (D475: FocusTime never changes it). */
   schedule: { label: string; time: string; status: Shutdown["status"]; timeZoneId: string } | null;
   /** "Your VM is off. Start it?" */
@@ -52,6 +56,29 @@ export type VmStatus = {
   /** Azure needs an incremental consent (Allow Azure access). */
   needsConsent: boolean;
   error: VmError | null;
+  /** VM-2: start my VM before my day (null: settings unavailable). */
+  autoStart: AutoStartView | null;
+};
+
+/** VM-2: the auto-start's state for the form, the chip's menu and the once-only notices. */
+export type AutoStartView = {
+  on: boolean;
+  /** The minutes before my day, and the weekdays switched off (my setting). */
+  minutes: number;
+  offDays: string[];
+  /** Not production: it never starts the VM here (the form says so; `next` is null). */
+  prodOnly: boolean;
+  /** The one line: "Next: Thu, Nov 12 at 7:55 AM", "Thu is PTO. Next: …", "Paused: …", or production only. Null when off. */
+  line: string | null;
+  /** The next automatic start, in production only. */
+  next: { date: string; at: string; short: string } | null;
+  paused: boolean;
+  /** Say once that it paused itself, with Resume. */
+  pauseNotice: boolean;
+  /** Today's automatic start couldn't sign in to Azure; `seen` once it was shown. */
+  signInProblem: { seen: boolean } | null;
+  /** The weekdays my working hours cover (mon…sun), each switchable off. */
+  days: string[];
 };
 
 /** One Azure write: a start. Older rows may be a deallocate, an auto-shutdown change or its restore (before D475). */

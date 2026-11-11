@@ -4,6 +4,7 @@
 import { WEEKDAY_KEYS, type WeekdayKey } from "../week/hours.ts";
 import { hoursBody, removeValue, replaceArrayTables, replaceSection, setValue, tomlValue, type TomlValue } from "./edit.ts";
 import { NOTIFY_KINDS } from "../plan/notify.ts";
+import { AUTOSTART_MINUTES, validAutoStartMinutes } from "../plan/vm-autostart.ts";
 
 export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap", "ahead", "asks", "ai", "guidance", "keep_open"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
@@ -299,11 +300,29 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       return (text) => edits.reduce((t, [k, val]) => (val === null ? removeValue(t, "guidance", k) : setValue(t, "guidance", k, val, "Guidance (ADM-1): my own choices over my level's defaults.")), text);
     }
     case "vm": {
-      // Step 15.5 (Q87): Settings > You > "Start my VM without asking".
-      only(v, ["startWithoutAsking"], "azure");
-      if (typeof v.startWithoutAsking !== "boolean") throw new SettingsInputError("azure.start_without_asking", "Must be true or false");
-      const on = v.startWithoutAsking;
-      return (text) => setValue(text, "azure", "start_without_asking", on, "My VM (step 15.4).");
+      // Step 15.5 (Q87): "Start without a preview" (was "Start my VM without asking"). VM-2: "Start my VM before my
+      // day" (production only), its minutes and the days switched off. Any of them; each written only when given.
+      only(v, ["startWithoutAsking", "autoStart", "autoStartMinutes", "autoStartOffDays"], "azure");
+      const edits: [string, TomlValue][] = [];
+      if (v.startWithoutAsking !== undefined) {
+        if (typeof v.startWithoutAsking !== "boolean") throw new SettingsInputError("azure.start_without_asking", "Must be true or false");
+        edits.push(["start_without_asking", v.startWithoutAsking]);
+      }
+      if (v.autoStart !== undefined) {
+        if (typeof v.autoStart !== "boolean") throw new SettingsInputError("azure.auto_start", "Must be true or false");
+        edits.push(["auto_start", v.autoStart]);
+      }
+      if (v.autoStartMinutes !== undefined) {
+        if (!validAutoStartMinutes(v.autoStartMinutes)) throw new SettingsInputError("azure.auto_start_minutes", `Must be one of ${AUTOSTART_MINUTES.join(", ")}`);
+        edits.push(["auto_start_minutes", v.autoStartMinutes]);
+      }
+      if (v.autoStartOffDays !== undefined) {
+        const days = v.autoStartOffDays;
+        if (!Array.isArray(days) || days.length > 7 || days.some((d) => !(WEEKDAY_KEYS as readonly unknown[]).includes(d))) throw new SettingsInputError("azure.auto_start_off_days", "Must be a list of days: mon, tue, wed, thu, fri, sat, sun");
+        edits.push(["auto_start_off_days", [...new Set(days as string[])]]);
+      }
+      if (!edits.length) throw new SettingsInputError("azure", "Nothing to save");
+      return (text) => edits.reduce((t, [k, val], i) => setValue(t, "azure", k, val, i === 0 ? "My VM (step 15.4)." : undefined), text);
     }
     case "display": {
       only(v, ["theme", "viewRange", "showTimelines"], "ui");

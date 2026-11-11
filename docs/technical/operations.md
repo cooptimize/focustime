@@ -1,6 +1,6 @@
 # Operations
 
-For whoever deploys, watches or fixes FocusTime. The step-by-step commands are in the [runbook](../azure/runbook.md); this page is the map. Checked against `13cd461` on Nov 7, 2026 (the Find an item row against `feat/dv2-devops-fresh` on Nov 11, the browser shards row against `chore/ci2-webkit-deps` on Nov 11, What runs on its own against `feat/env1-background-policy` on Nov 11).
+For whoever deploys, watches or fixes FocusTime. The step-by-step commands are in the [runbook](../azure/runbook.md); this page is the map. Checked against `13cd461` on Nov 7, 2026 (the Find an item row against `feat/dv2-devops-fresh` on Nov 11, the browser shards row against `chore/ci2-webkit-deps` on Nov 11; the VM auto-start against `feat/vm2-stop-autostart` on Nov 11, the What runs on its own section against `feat/env1-background-policy` on Nov 11).
 
 ## Environments
 
@@ -16,6 +16,8 @@ For whoever deploys, watches or fixes FocusTime. The step-by-step commands are i
 | Deploy identity | `ft-dev-deploy` (OIDC) | `ft-prod-deploy` (OIDC) |
 
 Both run in the same subscription and share the Entra tenant, the "FocusTime" app registration and the "FocusTime Admins" group. Settings and resource names are in `infra/dev.bicepparam` and `infra/prod.bicepparam`. Scaling: one replica at most in both (`maxReplicas: 1`, `infra/modules/app.bicep`). The daily jobs claim their period in `job_claims`, and the Teams bot dedupes across replicas, but the scheduler's per-person ticks have no lease (its header says so). Keep one replica until one is added.
+
+**What differs by environment beyond the table (VM-2).** The VM auto-start (Start my VM before my day) runs only on the hosted app (`FOCUSTIME_HOST=azure`) where `FOCUSTIME_ENV` is exactly `prod`, which only `infra/prod.bicepparam` sets. Dev, the developer loop (unset or `local`), the demo and anything else never start a VM on their own, and dev's scheduler doesn't wake for it; the form there says it runs only on production. A person may be opted in on both (separate databases): only prod starts the VM. Stop and Start pressed by a person work everywhere. To see it run without prod, use the e2e demo (`e2e/vm2.test.ts`, `FOCUSTIME_DEMO_AUTOSTART_ENV=prod` on the fake Azure); never set `FOCUSTIME_ENV=prod` anywhere else.
 
 Costs and budgets: [runbook, Cost](../azure/runbook.md#cost-hk-2-fixed-price-databases-list-prices-for-central-us-on-2026-11-05) and [Budgets and alerts](../azure/runbook.md#budgets-and-alerts-hk-2).
 
@@ -37,7 +39,7 @@ Everything FocusTime does with nobody pressing a button (checked against the cod
 | Web Push (`web_push`) | Every notice that passes the gate | Web Push services | Messages a person | Runs | Only with that switch on (the test send and the samples always) |
 | Teams bot's rhythm (`teams_rhythm`): brief, check-in, close out, nudges, client calls | Each person's slow pass | Teams (the bot, the person's 1:1 chat) | Messages a person | Runs | Only with that switch on (Send me a test now always) |
 | Teams status (`teams_status`) | The fast pass and every timer button | Teams presence (the person's own) | Writes | Runs | Never, not even from a button. The focus screen says "Teams status isn't changed from the test site." |
-| VM-2's morning start (`vm_autostart`) | Reserved: not built yet | Azure (the person's own VM) | Writes | When built | Never |
+| VM-2's automatic start (`vm_autostart`) | Each person's slow pass, before work when they turned it on | Azure (the person's own VM) | Writes | Runs | Never (the chip's Start still works) |
 | Coop DevOps mailbox (`coop_mailbox`) | Reserved: not built yet | DevOps comments | Writes | When built | Never, so an answer is posted once |
 | DevOps store (`devops_poll`) | App job | DevOps (the company read PAT) | Reads shared data | Runs (in followers' hours) | Only while someone is using that deployment, paced and backing off as in prod |
 | People refresh (`people_refresh`) | App job, once a day | Dataverse (the app's own access) | Reads shared data | Runs | Runs |

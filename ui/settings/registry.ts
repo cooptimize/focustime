@@ -147,7 +147,8 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "outlook-changes", section: "connections", label: "Outlook calendar changes", keywords: ["calendars.readwrite", "write"] },
   { id: "permissions", section: "connections", label: "Microsoft permissions", keywords: ["consent", "scopes", "chat.read"] },
   { id: "vm", section: "connections", label: "My VM", keywords: ["azure", "find my vm", "resource id"] },
-  { id: "vm-start", section: "connections", label: "Start my VM without asking" },
+  { id: "vm-start", section: "connections", label: "Start without a preview", old: ["Start my VM without asking", "Start right away"] },
+  { id: "vm-autostart", section: "connections", label: "Start my VM before my day", keywords: ["auto-start", "auto start", "automatically", "before work"] },
   { id: "teams-app", section: "connections", label: "FocusTime in Teams", keywords: ["bot", "teams"] },
   { id: "feedback", section: "connections", label: "Send feedback" },
   // DevOps

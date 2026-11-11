@@ -2313,6 +2313,18 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .vm-banner-warn { border-color: color-mix(in oklab, var(--watch) 60%, var(--border)); background: color-mix(in oklab, var(--watch) 12%, var(--surface)); }
 .vm-banner strong { font-size: var(--fs-4); }
 .vm-preview { max-width: 520px; }
+/* VM-2: the auto-start form, its production-only note, and the once-only paused notice. */
+.vm-auto .set-inline { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.vm-days { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 4px 0; padding: 0; border: 0; }
+.vm-days legend { color: var(--text-muted); font-size: var(--fs-2); padding: 0; margin-bottom: 4px; }
+.vm-next { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; font-weight: 600; }
+.vm-next.paused { color: var(--text); }
+.vm-prod-only { margin: 6px 0; padding: 8px 12px; border-radius: 6px; border: 1px solid color-mix(in oklab, var(--watch) 60%, var(--border)); background: color-mix(in oklab, var(--watch) 12%, var(--surface)); color: var(--text); }
+.vm-auto .vm-warning p { margin: 0 0 6px; }
+.vm-auto .vm-warning .set-check { font-weight: 400; }
+.vm-notice { position: fixed; right: 16px; bottom: 16px; z-index: 60; max-width: min(420px, calc(100vw - 32px)); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-pop); }
+.vm-notice p { margin: 0 0 8px; }
+.setup-vm .set-account { margin-bottom: 8px; }
 .vm-warning { margin: 0 0 10px; padding: 8px 12px; border-radius: 6px; border: 1px solid color-mix(in oklab, var(--risk) 55%, var(--border)); background: color-mix(in oklab, var(--risk) 10%, var(--surface)); color: var(--text); font-weight: 600; }
 .vm-change { margin: 6px 0; display: grid; gap: 6px; }
 .vm-change div { display: flex; gap: 12px; align-items: baseline; }

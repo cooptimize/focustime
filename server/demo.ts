@@ -8,7 +8,8 @@
 import { demoStandards } from "../sources/demo/standards.ts";
 import { parseConfig } from "../config/schema.ts";
 import type { ActionContext } from "../actions/dispatch.ts";
-import { dispatch } from "../actions/dispatch.ts";
+import { dispatch, vmContext } from "../actions/dispatch.ts";
+import { autoStartTick } from "../actions/vm-autostart.ts";
 import type { ProcessOverrides } from "../plan/process.ts";
 import { createDemoSources } from "../sources/demo/sources.ts";
 import { DEFAULT_AI } from "./appconfig.ts";
@@ -59,7 +60,7 @@ function followTeamColors(t: string): string {
 }
 
 /** `reset` (DM-1): Reset demo, where the host can rebuild this session's demo (absent: not offered). */
-export type DemoControl = { on: boolean; set: (on: boolean) => Promise<void>; reset?: () => Promise<void> };
+export type DemoControl = { on: boolean; set: (on: boolean) => Promise<void>; reset?: () => Promise<void>; /** VM-2: verification runs only. */ vmTick?: (advanceMinutes: number) => Promise<string> };
 
 /** DM-1: what the app's real AI lends the demo: its provider, settings and spend, and whether a real call may run now (the team's switch on, the app's cap not reached). */
 export type DemoRealAi = { runtime: AiRuntime; allowed: () => Promise<boolean> };
@@ -322,3 +323,26 @@ function lastWorkday(today: Temporal.PlainDate): string {
   for (let d = today.subtract({ days: 1 }); ; d = d.subtract({ days: 1 })) if (d.dayOfWeek <= 4 && !demoPto(d.toString(), d.toString(), today.toString()).length) return d.toString();
 }
 
+
+/**
+ * VM-2: the demo's VM auto-start pass (the demo has no background ticks): the same runner as a real person's, on the
+ * demo's fake Resource Manager, with the environment the demo was given (FOCUSTIME_DEMO_AUTOSTART_ENV; unset: it never
+ * fires). Its notices go to the demo's in-page notices.
+ */
+export async function demoAutoStart(ctx: ActionContext): Promise<string> {
+  const plan = ctx.plan;
+  if (!plan) return "no_store";
+  return autoStartTick({
+    env: ctx.autoStartEnv,
+    plan,
+    config: async () => {
+      const r = await ctx.loadConfig();
+      return r.parsed.ok ? r.parsed.config : null;
+    },
+    vm: () => vmContext(ctx),
+    now: () => Temporal.Instant.from(ctx.now()),
+    allows: () => true,
+    send: async (n) => void (await plan.addNotice({ key: n.key, kind: n.kind, title: n.title, body: n.body, route: n.route })),
+    log: () => {},
+  });
+}

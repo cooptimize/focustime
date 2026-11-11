@@ -638,13 +638,24 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - Each install-deps attempt is cut off at 3 minutes (3 attempts, about 10 minutes at worst), because the browser jobs time out at 20 minutes and the tests take up to 6.5. A mirror slow enough to need more (AP-2 saw 8 to 17 minutes) now fails in the step instead of timing the job out. The review suggested one overall deadline instead; kept per attempt so each retry starts fresh. Fine?
 - `e2e/wd2.test.ts` now sets the address again until the page shows. Other browser tests set `location.hash` once after a reload the same way. Give the harness one `goTo` for all of them (a later step), or leave each until it flakes?
 
+## VM-2
+
+- Azure refusing the start with 403 (no deallocate or start permission on the VM) is treated as a failure ("couldn't start your VM"), not as a sign-in problem: Allow Azure access wouldn't fix it. Is that the right word for it?
+- PTO is read fresh from Dataverse for each start (a cached snapshot isn't trusted: PTO entered this morning must count). Someone without a Dataverse user id, or on a day Dataverse can't be read, gets no automatic start. Is a cached snapshot good enough on a Dataverse outage?
+- A start Azure accepts and later fails (the operation ends Failed or times out) is said as "is starting" and the write log has the failure, but no second notice. Add a "couldn't start" notice from the follow?
+- Once a day is claimed the attempt is spent, even when the VM turned out to be running already or the start failed. A second try later the same morning would need a retry rule; none for now.
+- PTO or holidays that can't be read leave the VM off that day (the safer reading). Should it say so?
+- In the demo the environment comes only from `FOCUSTIME_DEMO_AUTOSTART_ENV` (tests); the hosted demo sessions never set it, so they show "production only". Fine?
+- The auto-start uses each person's stored sign-in (their refresh token) while they're away. If Entra's token lifetime or a conditional access policy ends it, the start is skipped with "couldn't sign in". Worth watching on prod for a week.
+- The demo's working week is Monday to Thursday, so its pause takes a calendar week; on prod it depends on each person's hours.
+
 ## ENV-1
 
 - The focus timer still ends on time on a test site and its end shows in the page (the person pressed Start there); only its Web Push waits for the person's switch. Read as "the person started it", not as an unprompted notice. Should a test site's timer end be silent in the page too?
 - Check now runs the AI pass when it finds a transcript, under the presser's switches and caps (a button press, for that person). Taken as allowed; say if a test site should store the transcript without the AI pass.
 - An admin editing a client's names on a test site doesn't re-sort held messages (it spends AI on everyone's chats, not just the admin's). Held messages stay held there. Is a button for it wanted on dev?
 - The retention purge still runs on dev, so dev's stored chat text and transcripts go after 14 and 30 days as the hard rules say. Read "what dev's database already holds stays" as "this step deletes nothing", not as "retention stops on dev". Confirm.
-- VM-2 hadn't merged (no branch on origin) when this step started. Its opt-in morning start has a reserved `vm_autostart` entry (never outside production); VM-2 should drop its own environment check in `server/ticks.ts` and start under that name.
+- VM-2 merged while this step was open. Its production check now comes from the policy's `vm_autostart` (never outside production), and its tick part and wake are skipped on a test site, which shows "production only" as VM-2 designed. VM-2's demo override (`FOCUSTIME_DEMO_AUTOSTART_ENV`) is unchanged.
 - The Settings switch is hidden by `/version`'s env label, which is lowercased and trimmed, while the server's policy needs exactly `prod`. With a misspelled `FOCUSTIME_ENV` such as `Prod`, the label says prod and the switch is hidden while the server treats it as a test site: nothing is sent, the safe side. Fix the label too, or leave it?
 - The DevOps store on a test site runs only while someone is active there, so the first screen after a quiet night reads from a store up to a night old until the next poll (seconds). Acceptable?
 - Not run here: a live Bicep what-if against Azure (the step's rules allow nothing against Azure). The compiled parameters were compared offline (`az bicep build-params`); deploy-dev prints the real what-if on merge.

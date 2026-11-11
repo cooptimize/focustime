@@ -1226,6 +1226,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "calendar_link.remove": return { run: () => env.openSettings("connections", "calendar-links") };
     case "ui.set_reduce_motion": return { next: () => ({ title: "Reduce motion", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.reduceMotion === on, action: "ui.set_reduce_motion", run: () => env.saveReduceMotion(on) })) }) };
     case "demo.devops_change": return { disabled: "Runs from a demo script" };
+    case "demo.vm_tick": return { disabled: "Runs from a demo check" };
     case "demo.reset": return env.demo ? { run: () => env.openSettings("data", "demo-reset") } : { disabled: "Reset demo is only in the demo" };
     case "demo.status": return env.demo ? { run: () => env.openSettings("data", "demo-reset") } : { disabled: "Only in the demo" };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
@@ -1596,7 +1597,11 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "vm.confirm":
     case "vm.dismiss_prompt":
     case "vm.start_now":
+    case "vm.autostart_skip":
+    case "vm.autostart_seen":
       return { run: env.openVm };
+    case "vm.autostart_resume":
+      return { run: () => env.openSettings("you") };
     // Step 15.5: Settings > Notifications has the test button; samples are for the live check.
     case "notify.test":
     case "notify.sample":

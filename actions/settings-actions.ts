@@ -52,7 +52,7 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
   // ST-1: app secrets are never set or listed in Settings (only by the scripts and the keyring, docs/settings.md).
   const base = { configPath: loaded.path, fromFile: isFilePath(loaded.path), palette: CLIENT_SLOTS, data: { planStore: !!ctx.plan } };
   if (!loaded.parsed.ok)
-    return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [], backgroundTypes: [], ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } }, focus: { ...DEFAULT_FOCUS, playlists: [] }, clients: [], display: null, timebox: { ...DEFAULT_TIMEBOX }, collab: { ...DEFAULT_COLLAB, domains: [] }, notify: { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds } }, vm: { startWithoutAsking: DEFAULT_AZURE.startWithoutAsking }, roadmap: { ...DEFAULT_THRESHOLDS }, ahead: { ...DEFAULT_AHEAD }, asks: { ...DEFAULT_ASK_SETTINGS, requestPhrases: [...DEFAULT_ASK_SETTINGS.requestPhrases], ackPhrases: [...DEFAULT_ASK_SETTINGS.ackPhrases] }, ai: { ...DEFAULT_AI_PERSON, allowedClients: [] }, aiRules: { ...DEFAULT_AI_RULES, allowedClients: [] }, org: null, guidance: {} };
+    return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [], backgroundTypes: [], ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } }, focus: { ...DEFAULT_FOCUS, playlists: [] }, clients: [], display: null, timebox: { ...DEFAULT_TIMEBOX }, collab: { ...DEFAULT_COLLAB, domains: [] }, notify: { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds } }, vm: { startWithoutAsking: DEFAULT_AZURE.startWithoutAsking, autoStart: { ...DEFAULT_AZURE.autoStart, offDays: [] } }, roadmap: { ...DEFAULT_THRESHOLDS }, ahead: { ...DEFAULT_AHEAD }, asks: { ...DEFAULT_ASK_SETTINGS, requestPhrases: [...DEFAULT_ASK_SETTINGS.requestPhrases], ackPhrases: [...DEFAULT_ASK_SETTINGS.ackPhrases] }, ai: { ...DEFAULT_AI_PERSON, allowedClients: [] }, aiRules: { ...DEFAULT_AI_RULES, allowedClients: [] }, org: null, guidance: {} };
   const tz = userZone(loaded.parsed.config);
   // Who I am in Dataverse: the kept user, else a match now (the same as the week's), else why not.
   let matchProblem: string | null = null;
@@ -111,7 +111,7 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
     // ADM-1: a person edits only their own additions; the team's lists show beside them (cfg.org).
     collab: { ...cfg.collab, domains: inviteDomains(cfg), exclude: cfg.org ? [...(cfg.mine.exclude ?? [])] : cfg.collab.exclude },
     notify: cfg.notify,
-    vm: { startWithoutAsking: cfg.azure.startWithoutAsking },
+    vm: { startWithoutAsking: cfg.azure.startWithoutAsking, autoStart: { ...cfg.azure.autoStart, offDays: [...cfg.azure.autoStart.offDays] } },
     roadmap: cfg.roadmap,
     ahead: cfg.ahead ?? { ...DEFAULT_AHEAD },
     asks: cfg.org ? { ...cfg.asks, requestPhrases: [...cfg.org.phrases.mine.request], ackPhrases: [...cfg.org.phrases.mine.ack], promisePhrases: [...cfg.org.phrases.mine.promise] } : cfg.asks,

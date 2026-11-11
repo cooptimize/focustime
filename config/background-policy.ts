@@ -60,8 +60,8 @@ export const BACKGROUND = {
   // Once at server start (server/main.ts).
   held_recheck: { what: "Re-sorting held chat messages with AI, once per build and when an admin edits a client's names", touches: "AI", effect: "ai", kind: "startup", outside: "never" },
   startup_upkeep: { what: "One-time database moves at start (team settings, Who repair, AP-1 requests, guest sessions, cancelled VM restores)", touches: "none", effect: "db", kind: "startup", outside: "always" },
-  // Reserved: named now so their step decides nothing new.
-  vm_autostart: { what: "VM-2: starting a person's VM in the morning (opt-in, not built yet)", touches: "Azure (the person's own VM)", effect: "writes", kind: "reserved", outside: "never" },
+  vm_autostart: { what: "VM-2: starting a person's VM before work when they turned it on (and its notice)", touches: "Azure (the person's own VM)", effect: "writes", kind: "tick", outside: "never" },
+  // Reserved: named now so its step decides nothing new.
   coop_mailbox: { what: "The Coop DevOps mailbox answering once (not built yet)", touches: "DevOps (comments)", effect: "writes", kind: "reserved", outside: "never" },
 } as const satisfies Record<string, BackgroundEntry>;
 

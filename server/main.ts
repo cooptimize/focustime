@@ -74,13 +74,15 @@ import type { Conn } from "../store/sql/conn.ts";
 import { openStore, StoreConfigError, type OpenedStore } from "../store/open.ts";
 import { createApp } from "./app.ts";
 import { moveFromOldName } from "../host/local/rename.ts";
-import { createDemoContext, seedDemo, type DemoControl, type DemoRealAi } from "./demo.ts";
+import { createDemoContext, demoAutoStart, seedDemo, type DemoControl, type DemoRealAi } from "./demo.ts";
 import { buildInfo } from "./buildinfo.ts";
 import { backgroundPolicy, type BackgroundName } from "../config/background-policy.ts";
 import { backgroundStatusSource } from "./background-status.ts";
 import { execFileSync } from "node:child_process";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { userZone } from "../week/zone.ts";
+import { localToday } from "../week/dates.ts";
+import { recordUse } from "../actions/vm-autostart.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { pollCycle, requestsNextDue, type PollDeps, type PollPerson } from "../actions/request-poll.ts";
 import { requestContext, aiFor, escalationHours, dispatch, meetingPerson, audienceRulesOf } from "../actions/dispatch.ts";
@@ -684,8 +686,14 @@ const demoRealAi: DemoRealAi = {
 };
 /** A demo session's context, seeded. Reset demo (DM-1) builds a new one the same way and puts it in place. */
 const buildDemo = async (userId: string): Promise<ActionContext> => {
-  const ctx = createDemoContext({ now: () => instantNow().toString(), demo: { on: true, set: async () => {}, reset: () => resetDemo(userId) }, feedbackParent: demoFeedbackParent, realAi: demoRealAi, publicUrl: app.publicUrl });
+  // VM-2: a verification run (--clock) may move one demo session's clock on (demo.vm_tick); never otherwise.
+  let shiftMs = 0;
+  const vmTick = clockArg >= 0 ? async (minutes: number) => ((shiftMs += minutes * 60_000), demoAutoStart(ctx)) : undefined;
+  const ctx = createDemoContext({ now: () => instantNow().add({ milliseconds: shiftMs }).toString(), demo: { on: true, set: async () => {}, reset: () => resetDemo(userId), ...(vmTick ? { vmTick } : {}) }, feedbackParent: demoFeedbackParent, realAi: demoRealAi, publicUrl: app.publicUrl });
   ctx.env = "demo";
+  // VM-2: the demo's auto-start gate gets only what is passed in explicitly (the e2e tests: "prod" or "dev"); unset,
+  // it never fires. The demo's VM is the fake Resource Manager's, never a real one.
+  if (process.env.FOCUSTIME_DEMO_AUTOSTART_ENV !== undefined) ctx.autoStartEnv = process.env.FOCUSTIME_DEMO_AUTOSTART_ENV;
   await seedDemo(ctx);
   return ctx;
 };
@@ -885,10 +893,29 @@ const server = createApp({
     if (s.demo) return null;
     const wasIdle = !use.active();
     use.used(s.userId);
+    void noteUse(s.userId);
     if (wasIdle) void refreshRules();
     return use.minutes();
   },
 });
+/** VM-2: HK-3's real use, kept as a date once a day per person (the auto-start pauses after 3 working days without). */
+const usedOn = new Map<string, { date: string; zone: string }>();
+async function noteUse(userId: string): Promise<void> {
+  try {
+    // The cheap check first (the zone last seen): one config read a day per person, not one a request.
+    const seen = usedOn.get(userId);
+    if (seen && localToday(instantNow().toString(), seen.zone) === seen.date) return;
+    const ctx = await runtimeFor(userId);
+    const cfg = await ctx.loadConfig().then((r) => (r.parsed.ok ? r.parsed.config : null));
+    const zone = cfg ? userZone(cfg) : host.clock.zone();
+    const today = localToday(instantNow().toString(), zone);
+    if (!ctx.plan) return;
+    await recordUse(ctx.plan, today);
+    usedOn.set(userId, { date: today, zone });
+  } catch {
+    log({ source: "plan", op: "use", kind: "failed" });
+  }
+}
 /**
  * A2: one person's runtime: their action context (their plan store; config, sources and secrets are still this
  * machine's until the settings and secrets steps) and their background ticks (reminders, the focus timer, Teams status),
@@ -938,6 +965,9 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     demo: demoControl(false),
     env: build.env,
     background,
+    // VM-2, ENV-1: the auto-start's gate gets "prod" only where the background policy allows vm_autostart (FOCUSTIME_ENV
+    // exactly "prod") and only on the hosted app (FOCUSTIME_HOST=azure): a developer's machine never passes one.
+    ...(process.env.FOCUSTIME_HOST === "azure" ? { autoStartEnv: background.allows("vm_autostart") ? "prod" : "test" } : {}),
     loadConfig,
     makeDataverse: dataverseFor(who),
     makeOutlook: outlookFor(who),
