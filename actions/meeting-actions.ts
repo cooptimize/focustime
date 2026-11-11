@@ -15,7 +15,7 @@ import type { LogRecord } from "../log/logger.ts";
 import { attendeeIds, canConfirm, defaultReviewers, detectSource, MEETING_ROLES, nudgesFor, proposalOrder, ROLE_LABEL, type MeetingRole, type MeetingSeries, type Occurrence, type ProposalBody, type TranscriptSource } from "../plan/meetings.ts";
 import { levelOfType, type ProcessModel } from "../plan/process.ts";
 import { TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
-import type { MeetingsClient, SeriesCandidate } from "../sources/graph/meetings.ts";
+import { graphFailureOf, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
 import { MEETING_CHAT, type ConversationStore } from "../store/conversation-store.ts";
 import type { MeetingStore } from "../store/meeting-store.ts";
 import type { PlanStore } from "../store/plan-store.ts";
@@ -49,6 +49,12 @@ export type MeetingContext = {
   /** My Graph meetings client (my calendar; the meetings token), or null when I'm not signed in with Microsoft. */
   graph: (cfg: AppConfig) => MeetingsClient | null;
   users: () => Promise<MeetingUser[]>;
+  /**
+   * MC-1c: a client in the organization's list (the one Admin › Clients shows, clientAccounts()), matched the way the
+   * rest of the app matches keys (case-insensitive), as its own key and name; null for anything that isn't a client.
+   * Never the admin's personal client settings.
+   */
+  client: (clientKey: string) => Promise<{ key: string; name: string } | null>;
   /** The client's leads' user ids (Dataverse's with admins' overrides). */
   leads: (clientKey: string) => Promise<string[]>;
   capture: (cfg: AppConfig, clientKey: string) => Promise<CaptureContext | null>;
@@ -115,6 +121,28 @@ function viewOf(s: MeetingSeries, cfg: AppConfig, users: readonly MeetingUser[],
   };
 }
 
+// MC-1c: a Graph meeting call that failed, in plain words with a next step, never "bad request". `code` lets the
+// form answer it (Sign in again for "signin"; the pattern fields for a pasted link).
+const NOT_A_CLIENT = "That isn't one of FocusTime's clients";
+const GRAPH_WORDS: Record<Exclude<GraphFailure, "missing">, { status: number; error: string }> = {
+  signin: { status: 409, error: "Sign in with Microsoft again to see your calendar's meetings" },
+  consent: { status: 403, error: "Microsoft refused FocusTime access to your calendar (Calendars.ReadWrite). A Cooptimize admin grants it once for everyone in the Entra admin center" },
+  refused: { status: 502, error: "Microsoft didn't accept that request. Paste the meeting's Teams join link instead" },
+  busy: { status: 503, error: "Microsoft isn't answering right now. Try again in a minute" },
+  setup: { status: 503, error: "FocusTime's Microsoft sign-in isn't set up here. A FocusTime admin can see why in Admin › Status" },
+};
+const NOT_ON_CALENDAR = "That meeting isn't a weekly Teams meeting on your calendar";
+type Refusal = { ok: false; status: number; error: string; code: string };
+/** The answer for a failed Graph call (logged by kind only: never a token, header, body, link or id), or null. */
+function graphProblem(ctx: Pick<MeetingContext, "log">, e: unknown): Refusal | null {
+  const kind = graphFailureOf(e);
+  if (!kind) return null;
+  const code = kind === "refused" ? "graph_refused" : kind;
+  ctx.log({ source: "plan", op: "meeting_graph_failed", kind: code });
+  if (kind === "missing") return { ok: false, status: 404, error: NOT_ON_CALENDAR, code };
+  return { ok: false, ...GRAPH_WORDS[kind], code };
+}
+
 const aiMessage = (o: string | null) => (!o || o === "done" ? null : o === "no_ai" ? "AI isn't on for this client, so nothing was proposed. A FocusTime admin allows it in Admin › AI." : (AI_MESSAGES as Record<string, string>)[o] ?? "The AI pass didn't finish");
 
 export async function meetingAction(ctx: MeetingContext, action: MeetingAction, input: unknown): Promise<ActionResponse> {
@@ -129,20 +157,30 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         // Admin › Clients › <client> › Meetings: the client's registered calls (admins only; no transcripts here).
         const o = obj(input, ["clientKey"]);
         if (!(await ctx.isAdmin())) return bad("Only FocusTime admins register meetings", 403);
+        const client = await ctx.client(text(o.clientKey, "clientKey", 100)!);
+        if (!client) return bad(NOT_A_CLIENT, 404);
         const users = await ctx.users();
         // The reviewer picker's people: FocusTime users by name (ids for the picker, never an address).
-        return { ok: true, data: { meetings: (await store.seriesOf(text(o.clientKey, "clientKey", 100)!)).map((s) => viewOf(s, cfg, users, me)), people: users.map((u) => ({ id: u.id.toLowerCase(), name: u.name })).sort((a, b) => a.name.localeCompare(b.name)) } };
+        return { ok: true, data: { meetings: (await store.seriesOf(client.key)).map((s) => viewOf(s, cfg, users, me)), people: users.map((u) => ({ id: u.id.toLowerCase(), name: u.name })).sort((a, b) => a.name.localeCompare(b.name)) } };
       }
       case "meeting.candidates": {
         // My recurring online meetings with people from outside Cooptimize, the client's name first.
         const o = obj(input, ["clientKey"]);
         if (!(await ctx.isAdmin())) return bad("Only FocusTime admins register meetings", 403);
+        const client = await ctx.client(text(o.clientKey, "clientKey", 100)!);
+        if (!client) return bad(NOT_A_CLIENT, 404);
         const g = ctx.graph(cfg);
-        if (!g) return bad("Sign in with Microsoft to see your calendar's meetings", 409);
-        const k = text(o.clientKey, "clientKey", 100)!;
-        const names = [k, cfg.clientSettings[k]?.name ?? ""].filter(Boolean).map(lower);
+        if (!g) return { ok: false, status: 409, error: GRAPH_WORDS.signin.error, code: "signin" };
+        const names = [client.key, client.name].filter(Boolean).map(lower);
         const zone = userZone(cfg);
-        const all = await g.seriesOnMyCalendar(zone);
+        let all: SeriesCandidate[];
+        try {
+          all = await g.seriesOnMyCalendar(zone);
+        } catch (e) {
+          const p = graphProblem(ctx, e);
+          if (p) return p;
+          throw e;
+        }
         const taken = new Set((await store.allSeries()).map((s) => s.eventId).filter(Boolean));
         const home = await ctx.homeDomains();
         const rows = all
@@ -252,31 +290,50 @@ function reviewerIds(v: unknown, users: readonly MeetingUser[]): string[] {
 async function register(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, input: unknown): Promise<ActionResponse> {
   const o = obj(input, ["clientKey", "role"], ["eventId", "joinUrl", "name", "reviewers", "source", "weekday", "start", "minutes"]);
   if (!(await ctx.isAdmin())) return bad("Only FocusTime admins register meetings", 403);
-  const clientKey = text(o.clientKey, "clientKey", 100)!;
-  if (!cfg.clientSettings[clientKey]) return bad("That isn't one of FocusTime's clients", 404);
+  const client = await ctx.client(text(o.clientKey, "clientKey", 100)!);
+  if (!client) return bad(NOT_A_CLIENT, 404);
+  const clientKey = client.key;
   const role = roleOf(o.role);
   if ((o.eventId === undefined) === (o.joinUrl === undefined)) throw new Invalid("Pick a meeting from your calendar or paste its Teams join link");
   const g = ctx.graph(cfg);
   const zone = userZone(cfg);
   const home = await ctx.homeDomains();
+  const typed = { weekday: typeof o.weekday === "number" && Number.isInteger(o.weekday) && o.weekday >= 1 && o.weekday <= 5 ? o.weekday : null, start: typeof o.start === "string" && TIME.test(o.start) ? o.start : null, minutes: typeof o.minutes === "number" && Number.isInteger(o.minutes) && o.minutes >= 15 && o.minutes <= 240 ? o.minutes : null };
+  const hasPattern = typed.weekday !== null && typed.start !== null && typed.minutes !== null;
   let c: SeriesCandidate | null = null;
   let joinUrl: string;
   if (o.eventId !== undefined) {
-    if (!g) return bad("Sign in with Microsoft to see your calendar's meetings", 409);
-    c = await g.series(text(o.eventId, "eventId", 1000)!, zone);
-    if (!c) return bad("That meeting isn't a weekly Teams meeting on your calendar", 404);
+    const eventId = text(o.eventId, "eventId", 1000)!;
+    if (!g) return { ok: false, status: 409, error: GRAPH_WORDS.signin.error, code: "signin" };
+    try {
+      c = await g.series(eventId, zone);
+    } catch (e) {
+      const p = graphProblem(ctx, e);
+      if (p) return p;
+      throw e;
+    }
+    if (!c) return bad(NOT_ON_CALENDAR, 404);
     joinUrl = c.joinUrl;
   } else {
     joinUrl = text(o.joinUrl, "joinUrl", 4000)!;
     if (!JOIN_URL.test(joinUrl)) throw new Invalid("Paste the meeting's Teams join link (https://teams.microsoft.com/l/meetup-join/…)");
-    // Only what my own calendar shows of it: its event in the next 5 weeks, if it's there.
-    c = g ? await g.seriesByJoinUrl(joinUrl, zone, ctx.now()).catch(() => null) : null;
+    // Only what my own calendar shows of it: its event in the next 5 weeks, if it's there. When Microsoft can't be
+    // asked, say why; with the pattern typed in, it registers from that alone (organizer unknown, so Upload).
+    if (g) {
+      try {
+        c = await g.seriesByJoinUrl(joinUrl, zone, ctx.now());
+      } catch (e) {
+        const p = graphProblem(ctx, e);
+        if (!p) throw e;
+        if (!hasPattern) return { ...p, status: 422, error: `${p.error.replace(/\. Paste the meeting's Teams join link instead$/, "")}. Or give its weekday, start time and length below to register it now; its transcript is then uploaded` };
+      }
+    }
   }
   if ((await store.allSeries()).some((s) => s.joinUrl === joinUrl)) return bad("That meeting is already registered", 409);
   // The pattern: from the calendar, else typed in (a pasted link with no event on my calendar).
-  const weekday = c?.weekday ?? (typeof o.weekday === "number" && Number.isInteger(o.weekday) && o.weekday >= 1 && o.weekday <= 5 ? o.weekday : null);
-  const start = c?.start ?? (typeof o.start === "string" && TIME.test(o.start) ? o.start : null);
-  const minutes = c?.minutes ?? (typeof o.minutes === "number" && Number.isInteger(o.minutes) && o.minutes >= 15 && o.minutes <= 240 ? o.minutes : null);
+  const weekday = c?.weekday ?? typed.weekday;
+  const start = c?.start ?? typed.start;
+  const minutes = c?.minutes ?? typed.minutes;
   if (weekday === null || start === null || minutes === null) return bad("That link isn't on your calendar in the next 5 weeks. Give its weekday, start time and length", 422);
   const detected = detectSource(c?.organizerEmail ?? null, home);
   const source = o.source === undefined ? detected.source : sourceOf(o.source);
@@ -285,7 +342,7 @@ async function register(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig
   const reviewers = o.reviewers === undefined ? defaultReviewers(me, await ctx.leads(clientKey).catch(() => [])).filter((r) => users.some((u) => lower(u.id) === r)) : reviewerIds(o.reviewers, users);
   const attendees = attendeeIds((c?.homeAttendees ?? []).map((email) => ({ email })), users);
   const s = await store.addSeries({
-    clientKey, name: text(o.name, "name", 200, true) ?? c?.subject ?? `${cfg.clientSettings[clientKey]?.name ?? clientKey} weekly call`, role, source, detected: detected.source, organizer: detected.organizer,
+    clientKey, name: text(o.name, "name", 200, true) ?? c?.subject ?? `${client.name} weekly call`, role, source, detected: detected.source, organizer: detected.organizer,
     joinUrl, eventId: c?.eventId ?? null, registrantId: me, weekday, start, minutes, zone: c?.zone ?? zone, interval: c?.interval ?? 1, reviewers, attendees,
   });
   ctx.log({ source: "plan", op: "meeting_registered", kind: source });

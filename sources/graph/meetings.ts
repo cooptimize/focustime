@@ -11,6 +11,7 @@
 // Logs carry the op, status, count and duration: never a subject, a link, an id, a person or transcript text.
 import type { Logger } from "../../log/logger.ts";
 import { HttpError, NetworkError } from "../calendar/http.ts";
+import { AuthFailure } from "../oauth/oauth.ts";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 /** The longest transcript read (a few hours of meeting is well under this). */
@@ -21,6 +22,24 @@ export class MeetingRefused extends Error {
     super("FocusTime reads only registered meetings");
     this.name = "MeetingRefused";
   }
+}
+
+/**
+ * MC-1c: what went wrong with a Graph meeting call, as one kind (logged, counted, and turned into plain words by the
+ * caller), or null when the error isn't one of Graph's or the sign-in's:
+ *   signin   signed out, the token was refused (401) or the sign-in needs an interactive step
+ *   consent  Microsoft refused the permission (403)
+ *   missing  not there (404)
+ *   refused  Microsoft didn't accept the request (400 and other 4xx)
+ *   busy     throttled, Microsoft down or unreachable (429, 5xx, network)
+ *   setup    FocusTime's own Microsoft sign-in isn't set up here (keyring, config)
+ */
+export type GraphFailure = "signin" | "consent" | "missing" | "refused" | "busy" | "setup";
+export function graphFailureOf(e: unknown): GraphFailure | null {
+  if (e instanceof AuthFailure) return e.kind === "network" ? "busy" : e.kind === "misconfigured" || e.kind === "keyring" ? "setup" : "signin";
+  if (e instanceof NetworkError) return "busy";
+  if (e instanceof HttpError) return e.status === 401 ? "signin" : e.status === 403 ? "consent" : e.status === 404 ? "missing" : e.status === 429 || e.status >= 500 ? "busy" : "refused";
+  return null;
 }
 
 export type MeetingGate = {
@@ -76,6 +95,8 @@ type GraphSeries = {
   end?: { dateTime?: unknown; timeZone?: unknown };
   originalStartTimeZone?: unknown;
   recurrence?: { pattern?: { type?: unknown; interval?: unknown; daysOfWeek?: unknown } } | null;
+  type?: unknown;
+  isOnlineMeeting?: unknown;
   seriesMasterId?: unknown;
   isCancelled?: unknown;
 };
@@ -151,16 +172,22 @@ export function createMeetingsClient(d: MeetingsDeps) {
     };
   }
 
-  const SELECT = "id,subject,organizer,attendees,onlineMeeting,start,end,recurrence,isOnlineMeeting";
+  const SELECT = "id,subject,organizer,attendees,onlineMeeting,start,end,recurrence,isOnlineMeeting,type";
 
   return {
-    /** My recurring online meetings with someone from outside Cooptimize on them (at most 200 series). */
+    /**
+     * My recurring online meetings with someone from outside Cooptimize on them. MC-1c: /me/events lists single
+     * events and series masters; Microsoft's docs don't say `type` or `isOnlineMeeting` can be filtered there (checked
+     * Nov 11, 2026), so nothing is filtered in the request: series masters with a join link are kept here, up to
+     * 1,000 events read.
+     */
     async seriesOnMyCalendar(zone: string): Promise<SeriesCandidate[]> {
       const out: SeriesCandidate[] = [];
-      let url: string | null = `${GRAPH}/me/events?$filter=${encodeURIComponent("type eq 'seriesMaster' and isOnlineMeeting eq true")}&$select=${SELECT}&$top=50`;
-      for (let page = 0; url && page < 4; page++) {
+      let url: string | null = `${GRAPH}/me/events?$select=${SELECT}&$top=50`;
+      for (let page = 0; url && page < 20; page++) {
         const j = (await request("meetings_series", url, d.calendarToken, { prefer: `outlook.timezone="${zone}"` })) as { value?: GraphSeries[]; "@odata.nextLink"?: unknown } | null;
         for (const e of j?.value ?? []) {
+          if (e.type !== "seriesMaster" || e.isOnlineMeeting === false) continue;
           const c = candidateOf(e, zone);
           if (c && c.outside > 0) out.push(c);
         }

@@ -1334,6 +1334,20 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     },
     graph: (cfg) => ctx.account?.(cfg)?.meetings ?? null,
     users: async () => (ctx.meetings ? ctx.meetings.users() : []),
+    // MC-1c: the organization's clients (Admin › Clients' clientAccounts()), never the admin's own settings; keys match
+    // case-insensitively and come back as the organization's. Without the team runtime, the configured clients.
+    client: async (clientKey) => {
+      const want = clientKey.trim().toLowerCase();
+      if (!want) return null;
+      const ca = await clientsOf(ctx.org);
+      if (ca) {
+        const key = ca.row(clientKey.trim())?.clientKey ?? ca.keys.find((k) => k.toLowerCase() === want) ?? null;
+        return key && ca.isClient(key) ? { key, name: key } : null;
+      }
+      const cfg = await configured(ctx);
+      const key = Object.keys(cfg?.clientSettings ?? {}).find((k) => k.toLowerCase() === want) ?? null;
+      return key ? { key, name: key } : null;
+    },
     leads: async (clientKey) => ((await ctx.org?.clientLeads(clientKey).catch(() => [])) ?? []).map((l) => l.personId),
     capture: (cfg, clientKey) => meetingCapture(ctx, cfg, clientKey),
     ai: () => aiFor(ctx, { waiting: true }),
