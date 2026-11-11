@@ -72,9 +72,9 @@ describe.skipIf(!CHROMIUM || !DIR)("CF-1 screenshots", () => {
       // Day with nothing on today (after only: before CF-1 the card read "Today isn't planned yet").
       if (!DIR!.endsWith("before")) {
         await clearToday(page);
-        await themed(page, theme);
         await page.locator(".today-view").waitFor();
-        await page.waitForTimeout(600);
+        await page.waitForTimeout(800);
+        await themed(page, theme);
         await shot(page, `day-empty-1440x900-${theme}`);
       }
       await page.close();
@@ -92,9 +92,10 @@ describe.skipIf(!CHROMIUM || !DIR)("CF-1 screenshots", () => {
       await shot(page, `phone-week-${theme}`);
       if (!DIR!.endsWith("before")) {
         await clearToday(page);
-        await themed(page, theme);
+        await page.waitForTimeout(1000);
         await page.keyboard.press("1");
         await page.waitForTimeout(800);
+        await themed(page, theme);
         await shot(page, `phone-day-empty-${theme}`);
       }
       await page.close();
