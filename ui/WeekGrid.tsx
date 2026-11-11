@@ -363,7 +363,7 @@ function DayColumn(props: { /** WD-2: Day draws the column with no header (Day h
         {/* In the Tab order only for the selected day (Shift+Tab from its half-day reaches it); shown on hover and focus. */}
         <HalfScope.Provider value={daySelected}>{menu.button(`Actions for ${dayLabel}`)}</HalfScope.Provider>
         {/* SG-1: "5 suggested · Keep all · Clear" as the header's second line (the header is one row of the shared grid). */}
-        <DaySuggestLine date={day.date} className="sug-week-day" />
+        <DaySuggestLine date={day.date} className="sug-week-day" tabIndex={daySelected ? 0 : -1} />
       </header>}
 
       {/* U5.1 (D406): one chip per day an all-day event covers, PTO and Catch-up days too; the chip is its one home. */}

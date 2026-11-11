@@ -10,6 +10,28 @@ import { useSuggest, type SuggestApi } from "./Carry.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { useDragSource } from "./WeekStories.tsx";
 
+/**
+ * After a Keep or Clear the focused row goes; focus moves to the block's next suggestion, else the block itself (or
+ * the day's header), never to the page's body.
+ */
+function holdFocus(from: HTMLElement) {
+  const row = from.closest<HTMLElement>(".sug-row");
+  const next = row?.nextElementSibling?.querySelector<HTMLElement>(".sug-take") ?? row?.previousElementSibling?.querySelector<HTMLElement>(".sug-take") ?? null;
+  const home = from.closest<HTMLElement>("[data-drop], .day-head, .day-bar, .moment-card");
+  const nextKey = next?.closest<HTMLElement>(".sug-row")?.dataset.sg ?? null;
+  window.setTimeout(() => {
+    if (document.activeElement && document.activeElement !== document.body && document.contains(document.activeElement)) return;
+    const again = nextKey ? document.querySelector<HTMLElement>(`.sug-row[data-sg="${CSS.escape(nextKey)}"] .sug-take`) : null;
+    const target = again ?? (home && document.contains(home) ? (home.matches("[tabindex]") ? home : home.querySelector<HTMLElement>("button, [tabindex]")) : null);
+    target?.focus();
+  }, 350);
+}
+const act = (e: { stopPropagation(): void; currentTarget: HTMLElement }, run: () => void) => {
+  e.stopPropagation();
+  holdFocus(e.currentTarget);
+  run();
+};
+
 const dayWord = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "long" });
 const plural = (n: number) => (n === 1 ? "1 suggestion" : `${n} suggestions`);
 
@@ -27,11 +49,11 @@ export function BlockSuggestions({ date, half, tabIndex = 0, where = "card" }: {
           Suggested
         </span>
         <span className="sug-sep" aria-hidden="true">·</span>
-        <button type="button" className="link-btn sug-keep-all" tabIndex={tabIndex} onClick={(e) => (e.stopPropagation(), void sg.keep(here, undefined, true))} aria-label={`Keep all ${here.length} suggested for ${block}`}>
+        <button type="button" className="link-btn sug-keep-all" tabIndex={tabIndex} onClick={(e) => act(e, () => void sg.keep(here, undefined, true))} aria-label={`Keep all ${here.length} suggested for ${block}`}>
           Keep all
         </button>
         <span className="sug-sep" aria-hidden="true">·</span>
-        <button type="button" className="link-btn sug-clear" tabIndex={tabIndex} onClick={(e) => (e.stopPropagation(), void sg.clear({ scope: "block", date, half }, `suggestions for ${block}`))} aria-label={`Clear the suggestions for ${block}`} title="No suggestions on this block for the rest of the day">
+        <button type="button" className="link-btn sug-clear" tabIndex={tabIndex} onClick={(e) => act(e, () => void sg.clear({ scope: "block", date, half }, `suggestions for ${block}`))} aria-label={`Clear the suggestions for ${block}`} title="No suggestions on this block for the rest of the day">
           Clear
         </button>
       </p>
@@ -50,15 +72,15 @@ function SuggestRow({ s, sg, tabIndex, panel }: { s: Suggestion; sg: SuggestApi;
   const tip = `${s.reason}. Suggested: not planned until you keep it`;
   return (
     <li className={`sug-row${s.needsBreakdown ? " sug-feature" : ""}`} {...drag} data-sg={s.key}>
-      <button type="button" className="sug-take" tabIndex={tabIndex} title={tip} aria-label={`${s.title}, suggested. ${s.reason}. Keep it`} onClick={(e) => (e.stopPropagation(), keep())}>
+      <button type="button" className="sug-take" tabIndex={tabIndex} title={tip} aria-label={`${s.title}, suggested. ${s.reason}. Keep it`} onClick={(e) => act(e, keep)}>
         {s.itemType && <TypeIcon clientKey={s.clientKey} type={s.itemType} decorative />}
         <span className="sug-title">{s.title}</span>
         {s.needsBreakdown && <span className="sug-needs">Needs breakdown</span>}
       </button>
-      <button type="button" className={panel ? "mini sug-keep" : "sug-plus"} tabIndex={tabIndex} title="Keep it on this block" aria-label={`Keep ${s.title}`} onClick={(e) => (e.stopPropagation(), keep())}>
+      <button type="button" className={panel ? "mini sug-keep" : "sug-plus"} tabIndex={tabIndex} title="Keep it on this block" aria-label={`Keep ${s.title}`} onClick={(e) => act(e, keep)}>
         {panel ? "Keep" : "+"}
       </button>
-      <button type="button" className="sug-x" tabIndex={tabIndex} title="Not this one this week" aria-label={`Clear ${s.title}`} onClick={(e) => (e.stopPropagation(), void sg.clear({ scope: "item", date: s.at.date, key: s.key }, s.title))}>
+      <button type="button" className="sug-x" tabIndex={tabIndex} title="Not this one this week" aria-label={`Clear ${s.title}`} onClick={(e) => act(e, () => void sg.clear({ scope: "item", date: s.at.date, key: s.key }, s.title))}>
         ×
       </button>
     </li>
@@ -66,7 +88,7 @@ function SuggestRow({ s, sg, tabIndex, panel }: { s: Suggestion; sg: SuggestApi;
 }
 
 /** A day's line: "5 suggested · Keep all · Clear"; nothing when the day has none. */
-export function DaySuggestLine({ date, className = "" }: { date: IsoDate; className?: string }) {
+export function DaySuggestLine({ date, className = "", tabIndex = 0 }: { date: IsoDate; className?: string; tabIndex?: number }) {
   const sg = useSuggest();
   if (!sg?.on) return null;
   const all = sg.onDay(date);
@@ -76,11 +98,11 @@ export function DaySuggestLine({ date, className = "" }: { date: IsoDate; classN
     <p className={`sug-day ${className}`.trim()} role="group" aria-label={`Suggested for ${day}`}>
       <span className="sug-count">{all.length} suggested</span>
       <span className="sug-sep" aria-hidden="true">·</span>
-      <button type="button" className="link-btn sug-keep-all" onClick={(e) => (e.stopPropagation(), void sg.keep(all, `${all.length === 1 ? "1 to-do" : `${all.length} to-dos`} for ${day}`, true))} aria-label={`Keep all ${all.length} suggested for ${day}`}>
+      <button type="button" className="link-btn sug-keep-all" tabIndex={tabIndex} onClick={(e) => act(e, () => void sg.keep(all, `${all.length === 1 ? "1 to-do" : `${all.length} to-dos`} for ${day}`, true))} aria-label={`Keep all ${all.length} suggested for ${day}`}>
         Keep all
       </button>
       <span className="sug-sep" aria-hidden="true">·</span>
-      <button type="button" className="link-btn sug-clear" onClick={(e) => (e.stopPropagation(), void sg.clear({ scope: "day", date }, `suggestions for ${day}`))} aria-label={`Clear the suggestions for ${day}`} title={`No suggestions on ${day}`}>
+      <button type="button" className="link-btn sug-clear" tabIndex={tabIndex} onClick={(e) => act(e, () => void sg.clear({ scope: "day", date }, `suggestions for ${day}`))} aria-label={`Clear the suggestions for ${day}`} title={`No suggestions on ${day}`}>
         Clear
       </button>
     </p>

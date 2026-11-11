@@ -79,6 +79,14 @@ export function CarryProvider({ thisWeek, suggest, nextWorkDay, version, week, n
   const [keptFeatures, setKeptFeatures] = useState<ReadonlySet<string>>(new Set());
   // Blocks a Keep all ran on: what was offered is kept, so nothing new fills in behind it.
   const [keptBlocks, setKeptBlocks] = useState<ReadonlySet<string>>(new Set());
+  // Rows being kept: hidden at once, until the next load shows them as to-dos (a second click can't keep twice).
+  const [keeping, setKeeping] = useState<ReadonlySet<string>>(new Set());
+  // Clears and Undos the store hasn't answered yet: a load that crosses one doesn't bring a row back or hide it again.
+  const pendingClear = useRef(new Set<string>());
+  const pendingUnclear = useRef(new Set<string>());
+  // Blocks an Undo of Keep all gives back: open again only once the load after the Undo lands (until then the
+  // to-dos it took away are still in the week's picks).
+  const releaseOnLoad = useRef<string[]>([]);
   const dnd = useContext(WeekDnd);
   const pv = useContext(PlanCtx);
   const work = useContext(DevOpsWork);
@@ -89,7 +97,13 @@ export function CarryProvider({ thisWeek, suggest, nextWorkDay, version, week, n
       (c) => {
         if (!live) return;
         setData(c);
-        setCleared(new Set(c.cleared));
+        setCleared(new Set([...c.cleared.filter((k) => !pendingUnclear.current.has(k)), ...pendingClear.current]));
+        setKeeping(new Set());
+        const back = releaseOnLoad.current;
+        if (back.length) {
+          releaseOnLoad.current = [];
+          setKeptBlocks((b) => new Set([...b].filter((k) => !back.includes(k))));
+        }
       },
       () => live && setData(null),
     );
@@ -114,7 +128,8 @@ export function CarryProvider({ thisWeek, suggest, nextWorkDay, version, week, n
       ...(clientName ? { clientName } : {}),
     });
   }, [data, suggest, week, weekPicks, minute, today, nextWorkDay, work, cleared, kept, keptFeatures, keptBlocks, pv.weekFeatures, pv.checkins, pv.sizes, pv.resolved]); // eslint-disable-line react-hooks/exhaustive-deps
-  const blocks = useMemo(() => byBlock(list), [list]);
+  const shown = useMemo(() => (keeping.size ? list.filter((s) => !keeping.has(`${s.at.date}:${s.at.half}:${s.key}`)) : list), [list, keeping]);
+  const blocks = useMemo(() => byBlock(shown), [shown]);
   const suggested = useMemo(() => new Map(list.filter((s) => s.pickId !== null).map((s) => [s.pickId!, s.at] as const)), [list]);
   const plan = useMemo<CarryPlan>(() => {
     if (!data || !thisWeek) return { cards: [], earlierDays: [], earlierWeeks: [] };
@@ -170,7 +185,7 @@ export function CarryProvider({ thisWeek, suggest, nextWorkDay, version, week, n
   const sg: SuggestApi = {
     on: suggest,
     at: (date, half) => blocks.get(`${date}:${half}`) ?? [],
-    onDay: (date) => list.filter((s) => s.at.date === date),
+    onDay: (date) => shown.filter((s) => s.at.date === date),
     keep: async (many, label, whole = false) => {
       if (!many.length || busyRef.current) return;
       busyRef.current = true;
@@ -178,11 +193,13 @@ export function CarryProvider({ thisWeek, suggest, nextWorkDay, version, week, n
       const undos: (() => Promise<void>)[] = [];
       let failed: string | null = null;
       try {
+        setKeeping((k) => new Set([...k, ...many.map((s) => `${s.at.date}:${s.at.half}:${s.key}`)]));
         for (const s of many) {
           try {
             undos.push(await keepOne(s));
           } catch (e) {
             failed = errText(e);
+            setKeeping((k) => new Set([...k].filter((x) => x !== `${s.at.date}:${s.at.half}:${s.key}`)));
           }
         }
       } finally {
@@ -198,8 +215,14 @@ export function CarryProvider({ thisWeek, suggest, nextWorkDay, version, week, n
         text,
         n
           ? async () => {
-              for (const u of [...undos].reverse()) await u().catch(() => undefined);
-              setKeptBlocks((b) => new Set([...b].filter((k) => !where.includes(k))));
+              if (busyRef.current) return;
+              busyRef.current = true;
+              try {
+                for (const u of [...undos].reverse()) await u().catch(() => undefined);
+              } finally {
+                busyRef.current = false;
+              }
+              releaseOnLoad.current = [...releaseOnLoad.current, ...where];
               onChanged();
             }
           : null,
@@ -207,16 +230,29 @@ export function CarryProvider({ thisWeek, suggest, nextWorkDay, version, week, n
     },
     clear: async (c, label) => {
       const key = clearKey(c);
-      setCleared((x) => new Set([...x, key]));
+      const drop = () => setCleared((x) => new Set([...x].filter((k) => k !== key)));
+      const add = () => setCleared((x) => new Set([...x, key]));
+      add();
+      pendingClear.current.add(key);
       try {
         await call("suggest.clear", { keys: [key] });
         note(`Cleared ${label}`, async () => {
-          setCleared((x) => new Set([...x].filter((k) => k !== key)));
-          await call("suggest.unclear", { keys: [key] });
+          drop();
+          pendingUnclear.current.add(key);
+          try {
+            await call("suggest.unclear", { keys: [key] });
+          } catch (e) {
+            add();
+            note(errText(e));
+          } finally {
+            pendingUnclear.current.delete(key);
+          }
         });
       } catch (e) {
-        setCleared((x) => new Set([...x].filter((k) => k !== key)));
+        drop();
         note(errText(e));
+      } finally {
+        pendingClear.current.delete(key);
       }
     },
     dragged: (s) => {

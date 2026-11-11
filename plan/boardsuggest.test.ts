@@ -14,7 +14,7 @@ const TUE_930 = "2026-11-03T14:30:00Z";
 /** Adatum every morning Mon to Thu, Fabrikam every afternoon Mon to Thu. */
 const patterns = [aFocusBlock({ client: ADATUM, days: { Mon: "AM", Tue: "AM", Wed: "AM", Thu: "AM" } }), aFocusBlock({ client: FABRIKAM, days: { Mon: "PM", Tue: "PM", Wed: "PM", Thu: "PM" } })];
 
-function input(o: Partial<SuggestInput> & { week?: Week; work?: ClientWork[] } = {}): SuggestInput {
+function input(o: Omit<Partial<SuggestInput>, "work"> & { week?: Week; work?: ClientWork[] } = {}): SuggestInput {
   const week = o.week ?? aWeek({ patterns });
   const work = o.work ?? [];
   const { week: _w, work: _k, ...rest } = o;
@@ -114,11 +114,15 @@ describe("what, in order", () => {
     expect(mine).toHaveLength(1);
     expect(mine[0]).toMatchObject({ kind: "feature", needsBreakdown: true, reason: "Needs breakdown" });
   });
+  it("a clear key keeps a client key with spaces", () => {
+    expect(validClearKey(clearKey({ scope: "item", date: TUE, key: "iContoso Ltd:501" }))).toBe(true);
+    expect(validClearKey("item:2026-11-02:iA\nB:1")).toBe(false);
+  });
   it("a feature already placed on the board (kept, or pinned in Plan) isn't offered again", () => {
     const f = aFeature({ id: 10, order: 1, title: "Loyalty points" });
-    const work = [aClientWork({ clientKey: "adatum", clientName: "Adatum", items: [f] })];
-    expect(boardSuggestions(input({ work })).some((s) => s.itemId === 10)).toBe(true);
-    expect(boardSuggestions(input({ work, placed: new Set(["iadatum:10"]) })).some((s) => s.itemId === 10)).toBe(false);
+    const work = () => [aClientWork({ clientKey: "adatum", clientName: "Adatum", items: [f] })];
+    expect(boardSuggestions(input({ work: work() })).some((s) => s.itemId === 10)).toBe(true);
+    expect(boardSuggestions(input({ work: work(), placed: new Set(["iadatum:10"]) })).some((s) => s.itemId === 10)).toBe(false);
   });
   it("never: anything placed this week, done or closed, cleared, or another client's", () => {
     const items = [aWorkItem({ id: 501, order: 1 }), aWorkItem({ id: 502, order: 2, stateCategory: "Completed", state: "Closed" }), aWorkItem({ id: 503, order: 3 }), aWorkItem({ id: 504, order: 4 }), aWorkItem({ id: 505, order: 5 })];

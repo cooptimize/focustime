@@ -110,7 +110,7 @@ export function clearKey(c: ClearScope): string {
   return `day:${c.date}`;
 }
 /** Whether a stored key is one `clearKey` makes (the server accepts only these). */
-export const validClearKey = (k: string) => /^(item:\d{4}-\d{2}-\d{2}:(i[^\s]{1,120}:\d{1,10}|[dfp]\d{1,10})|block:\d{4}-\d{2}-\d{2}:(AM|PM)|day:\d{4}-\d{2}-\d{2})$/.test(k);
+export const validClearKey = (k: string) => /^(item:\d{4}-\d{2}-\d{2}:(i[^\x00-\x1f]{1,120}:\d{1,10}|[dfp]\d{1,10})|block:\d{4}-\d{2}-\d{2}:(AM|PM)|day:\d{4}-\d{2}-\d{2})$/.test(k);
 
 /** The next day after `today` with a focus block in a half that isn't PTO or a day off; null when none is in `days`. */
 export function nextWorkDay(days: readonly SuggestDay[], today: IsoDate): IsoDate | null {
