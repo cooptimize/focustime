@@ -2,7 +2,7 @@
 // last week's features per client and adds nothing until accepted (WD-1: in Add work › To place); Watch makes a Watching row with its check-in on the
 // client's first block; Keep carries a feature over as a must; next week's Add work proposes from this week's list.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, unfoldAddWork, startDemo, type Harness } from "./harness.ts";
 
 const T = 180_000;
 
@@ -19,6 +19,7 @@ describe.skipIf(!CHROMIUM)("From last week and Watching (PL-1)", () => {
     const { page, errors } = await freshPage(h);
     // WD-1: From last week is in Add work › To place.
     await page.evaluate(() => (location.hash = "#/week/add"));
+    await unfoldAddWork(page);
     const flw = page.locator("aside.add-work-panel section.carry", { hasText: "From last week" }).first();
     await flw.waitFor({ timeout: 30_000 });
     // Folded to one line until Review.
@@ -46,9 +47,12 @@ describe.skipIf(!CHROMIUM)("From last week and Watching (PL-1)", () => {
 
     // Next week's Add work proposes from this week's list.
     await page.evaluate(() => (location.hash = "#/week/2026-11-09/add"));
+    // WD-1 review: To place is one folded line there too (folded again for the new week); opening it shows the proposal.
+    const line = page.locator("aside.add-work-panel .aw-toplace-line");
+    await expect.poll(() => line.getAttribute("aria-expanded").catch(() => null), { timeout: 30_000 }).toBe("false");
+    await line.click();
     const next = page.locator("aside.add-work-panel section.carry", { hasText: "From last week" }).first();
     await next.waitFor({ timeout: 30_000 });
-    // Review stays open (remembered).
     await expect(next.locator(".carry-row", { hasText: "Supplier onboarding" }).textContent()).resolves.toContain("Needs stories");
     expect(errors).toEqual([]);
   }, T);

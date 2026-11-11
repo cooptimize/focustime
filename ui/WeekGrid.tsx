@@ -331,7 +331,10 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
         {/* WD-1: the weekday and date select the day's first block and open the Add work panel (WD-2 opens Day). */}
         <button type="button" className="day-open" tabIndex={daySelected ? 0 : -1} onClick={() => props.onDayHead?.(day.date)} title={`Add work to ${day.weekday}`} aria-label={`${dayLabel}: add work`}>
           <span className="dow">{day.weekday}</span>
-          <span className="date">{shortDate(day.date)}</span>
+          <span className="date">
+            <span className="date-long">{shortDate(day.date)}</span>
+            <span className="date-short" aria-hidden="true">{Number(day.date.slice(8))}</span>
+          </span>
         </button>
         {isToday && <span className="today-pill">Today</span>}
         {day.pto && (

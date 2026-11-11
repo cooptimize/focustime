@@ -4,7 +4,7 @@
 // Replace link. The link itself never reaches the page or an API response. With FOCUSTIME_SHOTS the screenshots go there.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, NOW, openSettings, settingsSection, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, timelineOn, NOW, openSettings, settingsSection, startDemo, type Harness } from "./harness.ts";
 import { SHOTS, shotBoth } from "./shots.ts";
 
 const T = 240_000;
@@ -68,7 +68,8 @@ describe.skipIf(!CHROMIUM)("CAL-1: Add a calendar by link", () => {
     // The link is gone from the page once saved (only its host shows).
     expect(await page.content()).not.toMatch(PATHS);
 
-    // Week: the family calendar's events as Busy, with its color, read only.
+    // Week: the family calendar's events as Busy, with its color, read only (on the timeline, off by default).
+    await timelineOn(page);
     await board(page);
     const busy = page.locator(".r-ev.linked");
     await expect.poll(() => busy.count()).toBeGreaterThan(0);

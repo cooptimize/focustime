@@ -57,7 +57,7 @@ Each step: **Click** what to do · **Say** one line · **Expect** what appears �
 
 - **Click**: **Week**.
 - **Say**: "The week is half-day blocks with meetings on the rail. Risk always says why."
-- **Expect**: the line above the week, "8 to place: 6 from last week, 2 sent to you", with Review. Wednesday afternoon
+- **Expect**: the line above the week, "8 to place · 6 from last week, 2 sent to you", with Review. Wednesday afternoon
   "At risk" (hover: "Out: school event 1:30"). Thursday is a hatched **PTO** day, Friday a dashed **Catch-up** column. (Neither is ever today:
   on a Wednesday the afternoon out is Tuesday's, and on a Thursday Friday is the PTO day.) The now line sits on
   today with its time.

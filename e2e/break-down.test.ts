@@ -150,7 +150,7 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
       await page.goto(`${app.url}#/week/${WEEK}`);
       await page.reload();
       await appReady(page);
-      const chip = page.locator(".client-chips .cc-chip", { hasText: /^Adatum/ }).first();
+      const chip = page.locator(".client-chips button.cc-chip", { hasText: /^Adatum/ }).first();
       const row = () => page.locator(".cc-pop .cc-ready li").filter({ has: page.locator(".aw-needs-word") }).first();
       const openAdatum = async () => {
         await chip.waitFor({ timeout: 30_000 });
@@ -161,8 +161,10 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
       await page.locator("[data-moment]").waitFor({ state: "detached", timeout: 10_000 }).catch(() => {});
       const panel = page.getByRole("dialog", { name: /^Break down Feature: / });
 
-      // AI off for Adatum: the label follows the type; the panel says so in one line, with no Run. Esc goes back to the row.
-      const button = row().getByRole("button", { name: "Break down Feature", exact: true });
+      // AI off for Adatum: the button says "Break down" (WD-1 review), its tooltip follows the type; the panel says so
+      // in one line, with no Run. Esc goes back to the row.
+      const button = row().getByRole("button", { name: "Break down", exact: true });
+      await expect(button.getAttribute("title")).resolves.toBe("Break down Feature");
       await button.focus();
       await button.press("Enter");
       await panel.getByText("AI is off for Adatum. Ask your FocusTime admin.").waitFor();
@@ -170,7 +172,7 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
       await shotAll(page, "break-down-ai-off");
       await page.keyboard.press("Escape");
       await panel.waitFor({ state: "detached" });
-      await expect.poll(() => page.evaluate(() => document.activeElement?.textContent ?? "")).toBe("Break down Feature");
+      await expect.poll(() => page.evaluate(() => document.activeElement?.textContent ?? "")).toBe("Break down");
 
       // ADM-1: an admin turns AI on for FocusTime and allows it for Adatum.
       await team.set("org", "ai.on", true);
@@ -189,7 +191,7 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
       await page.keyboard.press("Escape");
       await panel.waitFor({ state: "detached" });
 
-      await row().getByRole("button", { name: "Break down Feature", exact: true }).click();
+      await row().getByRole("button", { name: "Break down", exact: true }).click();
 
       // Prepare: the item with its state chip and description, no children section (it has none), the child type
       // choice (the fake has bugs with stories), and what's sent behind a fold. The removed sections are gone.

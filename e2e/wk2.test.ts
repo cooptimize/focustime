@@ -103,7 +103,11 @@ describe.skipIf(!CHROMIUM)("WK-2: the Board's Timeline toggle and per-column tie
     const { page, errors } = await freshPage(h);
     expect((await call(page, "hours.set_day", { date: FRI, segments: ["09:00-13:00"] })).ok).toBe(true);
     await board(page);
-    await expect(hidden(page)).resolves.toBe(false);
+    // WD-1 review: off by default (Cards); one click turns it on.
+    await expect(hidden(page)).resolves.toBe(true);
+    await expect(toggle(page).getAttribute("aria-pressed")).resolves.toBe("false");
+    await toggle(page).click();
+    await expect.poll(() => hidden(page)).toBe(false);
     await expect(toggle(page).getAttribute("aria-pressed")).resolves.toBe("true");
     await expect(toggle(page).getAttribute("title")).resolves.toBe("Hide timeline (B)");
 

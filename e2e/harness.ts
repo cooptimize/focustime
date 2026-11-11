@@ -167,6 +167,33 @@ export async function freshPage(h: Harness, viewport = { width: 1920, height: 10
 }
 
 /**
+ * WD-1 review: the timeline is off by default (Cards). Tests about the hour rail turn it on for their session, then
+ * reload so the page shows it.
+ */
+export async function timelineOn(page: Page, on = true): Promise<void> {
+  const ok = await page.evaluate((v) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "ui.set_show_timelines", input: { show: v } }) }).then((r) => r.ok), on);
+  if (!ok) throw new Error("couldn't set the timeline");
+  const at = page.url();
+  await page.reload();
+  await page.waitForSelector(".topbar", { timeout: 60_000 });
+  await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
+  if (page.url() !== at) await page.goto(at);
+}
+
+/**
+ * WD-1 review: Add work keeps To place folded to one line (open only from the notice's Review) and You sent at the
+ * bottom folded. Opens both, once the panel has its sections.
+ */
+export async function unfoldAddWork(page: Page): Promise<void> {
+  const panel = page.locator("aside.add-work-panel");
+  await panel.locator(".aw-toplace-line, .aw-sends > .pl-fold").first().waitFor({ timeout: 30_000 });
+  for (const sel of [".aw-toplace-line", ".aw-sends > .pl-fold"]) {
+    const b = panel.locator(sel).first();
+    if ((await b.count()) && (await b.getAttribute("aria-expanded")) === "false") await b.click();
+  }
+}
+
+/**
  * Opens FocusTime in this page: the app if its context already has a session, else the sign-in page and "Try the
  * demo". Returns once the app is up (the opening may still be playing).
  */

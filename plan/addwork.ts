@@ -60,13 +60,15 @@ export function confirmLabel(tag: ReturnType<typeof weekTag>): string | null {
 export type ToPlace = { unfinished: number; lastWeek: number; sent: number };
 export const toPlaceCount = (t: ToPlace) => t.unfinished + t.lastWeek + t.sent;
 
-/** "3 to place: 1 unfinished, 2 from last week" (and "1 sent to you"); null when nothing waits. */
+/** "3 to place · 1 unfinished, 2 from last week" (and "1 sent to you"); null when nothing waits. */
 export function toPlaceLine(t: ToPlace): string | null {
   const n = toPlaceCount(t);
   if (!n) return null;
   const parts = [t.unfinished ? `${t.unfinished} unfinished` : "", t.lastWeek ? `${t.lastWeek} from last week` : "", t.sent ? `${t.sent} sent to you` : ""].filter(Boolean);
-  return `${n} to place: ${parts.join(", ")}`;
+  return `${n} to place · ${parts.join(", ")}`;
 }
+/** The phone's notice: "3 to place"; null when nothing waits. */
+export const toPlaceShort = (t: ToPlace): string | null => (toPlaceCount(t) ? `${toPlaceCount(t)} to place` : null);
 
 /** Thursday and Friday, when next week has nothing placed: "Next week is empty". */
 export function nextWeekEmpty(i: { today: IsoDate; thisWeek: IsoDate; shownWeek: IsoDate; nextWeekPicks: number; nextWeekFeatures: number }): boolean {
@@ -168,8 +170,31 @@ export function removeRule(f: { clientKey: string; itemId: number; slots: readon
   return where.length ? { ok: false, where } : { ok: true };
 }
 
-/** A client chip in Week's header: "Northwind 6h of 8h", amber when over, with the count of what isn't ready. */
-export function clientChip(c: { name: string; plannedMinutes: number; freeMinutes: number; notReady: number }): { text: string; over: boolean; badge: number | null } {
+/**
+ * A client chip in Week's header: the room left, "Northwind · 2h free" or "Northwind · 6h over" (amber only when over,
+ * past the grace), with the count of what isn't ready. `plannedMinutes` is the one total, musts plus nice to have, used
+ * by the chip and its popover alike (`detail`: "9h planned · 5h free in its blocks").
+ */
+export function clientChip(c: { name: string; plannedMinutes: number; freeMinutes: number; notReady: number }): { text: string; room: string; detail: string; over: boolean; badge: number | null } {
   const h = (m: number) => `${Math.round(m / 60)}h`;
-  return { text: `${c.name} ${h(c.plannedMinutes)} of ${h(c.freeMinutes)}`, over: c.plannedMinutes - c.freeMinutes > OVER_GRACE, badge: c.notReady > 0 ? c.notReady : null };
+  const left = c.freeMinutes - c.plannedMinutes;
+  const over = -left > OVER_GRACE;
+  const room = over ? `${Math.max(1, Math.round(-left / 60))}h over` : Math.round(left / 60) >= 1 ? `${Math.round(left / 60)}h free` : "Full";
+  return { text: `${c.name} · ${room}`, room, detail: `${h(c.plannedMinutes)} planned · ${h(c.freeMinutes)} free in its blocks`, over, badge: c.notReady > 0 ? c.notReady : null };
+}
+
+/**
+ * WD-1 review: how many of Week's client chips fit `room` px in the header row: all of them, or as many as still leave
+ * room for the "+N" chip that opens the rest. Chips never clip.
+ */
+export function chipsThatFit(widths: readonly number[], room: number, gap: number, moreWidth: number): number {
+  const total = widths.reduce((s, w, i) => s + w + (i ? gap : 0), 0);
+  if (total <= room) return widths.length;
+  let used = 0;
+  for (let i = 0; i < widths.length; i++) {
+    const next = used + (i ? gap : 0) + widths[i]!;
+    if (next + gap + moreWidth > room) return i;
+    used = next;
+  }
+  return widths.length;
 }

@@ -3,7 +3,7 @@
 // left this week, in Unfinished from earlier days); the original block shows "→ suggested …"; Keep moves one (Undo
 // puts it back), Drop settles one, Keep all keeps the rest; the now line sits on today's column.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, unfoldAddWork, startDemo, type Harness } from "./harness.ts";
 
 const T = 180_000;
 const WED = "2026-11-04T13:30:00-05:00";
@@ -23,6 +23,7 @@ describe.skipIf(!CHROMIUM)("Unfinished picks suggested in the next block (UI-B)"
     // WD-1: the summary of unfinished to-dos is in Add work › To place.
     await page.getByRole("button", { name: "Week", exact: true }).first().click();
     await page.evaluate(() => (location.hash = "#/week/add"));
+    await unfoldAddWork(page);
     const summary = page.locator("aside.add-work-panel section.carry-summary");
     await summary.waitFor({ timeout: 30_000 });
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/board-first-1920.png` });

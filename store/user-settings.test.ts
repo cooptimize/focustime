@@ -76,12 +76,12 @@ await forEachDriver("a person's settings in the store (A2)", ({ open }) => {
     const ben = t.make("ben");
     await ana.seed(STARTER_TOML);
     await ben.seed(STARTER_TOML);
-    const r = await ana.write(settingsEdit("display", { theme: "neutral", viewRange: "business", showTimelines: false }));
+    const r = await ana.write(settingsEdit("display", { theme: "neutral", viewRange: "business", showTimelines: true }));
     expect(r.ok).toBe(true);
     const a = await ana.load();
     const b = await ben.load();
-    expect(a.parsed.ok && a.parsed.config.ui).toMatchObject({ theme: "neutral", showTimelines: false });
-    expect(b.parsed.ok && b.parsed.config.ui).toMatchObject({ theme: "cooptimize-dark", showTimelines: true });
+    expect(a.parsed.ok && a.parsed.config.ui).toMatchObject({ theme: "neutral", showTimelines: true });
+    expect(b.parsed.ok && b.parsed.config.ui).toMatchObject({ theme: "cooptimize-dark", showTimelines: false });
     const bad = await ana.write((x) => setValue(x, "ui", "theme", "plaid"));
     expect(bad.ok).toBe(false);
     expect((await ana.load()).parsed.ok && ((await ana.load()).parsed as { config: { ui: { theme: string } } }).config.ui.theme).toBe("neutral");
@@ -109,7 +109,7 @@ await forEachDriver("a person's settings in the store (A2)", ({ open }) => {
     const before = await ana.text();
     const section = (text: string, name: string) => splitSettings(text).find((r) => r.section === name)?.body;
     // An edit of the section that holds the unknown key, then of another section.
-    expect((await ana.write(settingsEdit("display", { theme: "neutral", viewRange: "business", showTimelines: false }))).ok).toBe(true);
+    expect((await ana.write(settingsEdit("display", { theme: "neutral", viewRange: "business", showTimelines: true }))).ok).toBe(true);
     expect((await ana.write(settingsEdit("ahead", { staleWeeks: 9 }))).ok).toBe(true);
     const after = await ana.text();
     expect(section(after, "future_feature")).toBe(section(before, "future_feature"));

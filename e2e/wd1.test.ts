@@ -306,6 +306,97 @@ describe.skipIf(!CHROMIUM)("WD-1: the To place line (browser, demo on Tuesday)",
     await page.close();
   }, T);
 
+  it("review fix: from a block, This week's features come first and To place is one folded line; Review opens it; You sent is folded last", async () => {
+    const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
+    await openWeek(page);
+    await page.locator(".to-place-line").waitFor({ timeout: 30_000 });
+    // A Northwind block (it has features this week).
+    const nw = page.locator("[data-drop]", { has: page.locator(".card-client", { hasText: "Northwind" }) }).last();
+    await nw.locator(".add-work.add-row").click();
+    await panel(page).waitFor();
+    const line = panel(page).locator(".aw-toplace-line");
+    await line.waitFor();
+    await expect(line.getAttribute("aria-expanded")).resolves.toBe("false");
+    expect(await line.innerText()).toMatch(/^▸ \d+ to place · .*\d+ (unfinished|from last week|sent to you)/);
+    expect(await panel(page).locator("section.carry-summary, section.carry").count()).toBe(0);
+    // Order: To place's line, then This week's features as the first section, then Promises and More from DevOps;
+    // You sent and Ask a lead folded at the bottom.
+    const order = await panel(page).evaluate((el) =>
+      [...el.querySelectorAll(".aw-toplace, .aw-sec")].map((x) => (x.classList.contains("aw-toplace") ? "place" : x.classList.contains("aw-features") ? "features" : x.classList.contains("aw-sends") ? "sends" : (x.querySelector("h3, .pl-label")?.textContent ?? "").trim())),
+    );
+    expect(order[0]).toBe("place");
+    expect(order[1]).toBe("features");
+    expect(order.at(-1)).toBe("sends");
+    expect(order.indexOf("More from DevOps")).toBeGreaterThan(1);
+    const sends = panel(page).locator(".aw-sends > .pl-fold");
+    await expect(sends.innerText()).resolves.toMatch(/^▸ You sent and Ask a lead to look/);
+    expect(await panel(page).locator(".aw-sends section.team-group").count()).toBe(0);
+    await sends.click();
+    await panel(page).locator(".aw-sends section.team-group").waitFor();
+    // A day header: the same folded line.
+    await page.keyboard.press("Escape");
+    await panel(page).waitFor({ state: "detached" });
+    await page.locator(".day.today .day-open").click();
+    await panel(page).waitFor();
+    await expect(panel(page).locator(".aw-toplace-line").getAttribute("aria-expanded")).resolves.toBe("false");
+    await page.keyboard.press("Escape");
+    await panel(page).waitFor({ state: "detached" });
+    // Review: To place is open.
+    await page.locator(".to-place-line").getByRole("button", { name: "Review" }).click();
+    await panel(page).locator("section.carry-summary").waitFor();
+    await expect(panel(page).locator(".aw-toplace-line").getAttribute("aria-expanded")).resolves.toBe("true");
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  for (const [w, ht] of [[1440, 900], [1280, 720]] as const)
+    it(`review fix: ${w} with the panel open: day headers keep a short date and Today; each card's status chip is on its header row`, async () => {
+      const { page, errors } = await freshPage(h, { width: w, height: ht });
+      await openWeek(page);
+      await page.locator(".add-work-head").click();
+      await panel(page).waitFor();
+      await page.waitForTimeout(300);
+      const today = page.locator(".day.today .day-head");
+      await expect(today.locator(".date-short").isVisible()).resolves.toBe(true);
+      await expect(today.locator(".date-short").innerText()).resolves.toBe("3");
+      await expect(today.locator(".dow").innerText()).resolves.toBe("Tue");
+      await expect(today.locator(".today-pill").isVisible()).resolves.toBe(true);
+      for (const head of await page.locator("main.grid .half.card .card-head").all()) {
+        const pill = head.locator(".status-pill");
+        if (!(await pill.count())) continue;
+        const [c, p] = await Promise.all([head.locator(".card-client").boundingBox(), pill.boundingBox()]);
+        // On the same row: the chip's middle within the client's line.
+        expect(Math.abs(c!.y + c!.height / 2 - (p!.y + p!.height / 2)), await head.innerText()).toBeLessThan(c!.height);
+        // The time is still shown.
+        await expect(head.locator(".card-when").isVisible()).resolves.toBe(true);
+      }
+      expect(errors).toEqual([]);
+      await page.close();
+    }, T);
+
+  it("review fix: phone (390×844): the week title, + Add and ⋯ share one row; the notice is one line, \"N to place · Review\"", async () => {
+    const { page, errors } = await freshPage(h, { width: 390, height: 844 });
+    await page.evaluate(() => (location.hash = "#/week"));
+    await page.locator(".half.card").first().waitFor({ timeout: 30_000 });
+    const head = page.locator(".week-head.wd1-head");
+    const [t, add, more] = await Promise.all([head.locator("h2").boundingBox(), head.locator(".add-work-head").boundingBox(), head.getByRole("button", { name: "View options for Week" }).boundingBox()]);
+    const mid = (b: { y: number; height: number }) => b.y + b.height / 2;
+    expect(Math.abs(mid(t!) - mid(add!))).toBeLessThan(t!.height);
+    expect(Math.abs(mid(add!) - mid(more!))).toBeLessThan(add!.height);
+    const notice = page.locator(".to-place-line");
+    await expect(notice.innerText()).resolves.toMatch(/^\d+ to place · Review$/);
+    // One line: the text and Review sit on the same line box.
+    const spread = await notice.evaluate((e) => {
+      const r = document.createRange();
+      r.selectNodeContents(e);
+      const mids = [...r.getClientRects()].filter((x) => x.width > 0).map((x) => x.top + x.height / 2);
+      return Math.max(...mids) - Math.min(...mids);
+    });
+    expect(spread).toBeLessThan(8);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
   it("review fix: a past day's header, a PTO day and a weekend address open the panel on a block that can take work, and the address says which", async () => {
     const { page, errors } = await freshPage(h);
     await openWeek(page);

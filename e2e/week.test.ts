@@ -4,7 +4,7 @@
 // badge, Esc, ticking in the panel, no Details dialog; the type scale on Today and Week; the Week word guard.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, timelineOn, startDemo, type Harness } from "./harness.ts";
 
 let h: Harness;
 const T = 90_000;
@@ -79,6 +79,7 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
 
   it("cards: meetings only on the rail, risk with its reason in the tooltip, no AM/PM labels; no Plan chip; done as a count off today; needs stories on the chip; under 175 words", async () => {
     const { page, errors } = await freshPage(h);
+    await timelineOn(page);
     await seed(page);
     // No meeting title both on a card's rail and in its text.
     const dup = await page.evaluate(() =>
@@ -109,7 +110,7 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     await expect(day(1).locator(".card-done").first().textContent()).resolves.toBe("1 done");
     await expect(day(0).locator(".pick-row.done").count()).resolves.toBe(1);
     // A client with a feature that has no stories says so: WD-1 moved it from the card's features line to the client chip's badge.
-    await expect(page.locator(".client-chips .cc-chip", { hasText: /^Northwind/ }).locator(".cc-badge").textContent()).resolves.toBe("1");
+    await expect(page.locator(".client-chips button.cc-chip", { hasText: /^Northwind/ }).locator(".cc-badge").textContent()).resolves.toBe("1");
     // 121: SW-1 adds Team to the mode switch (Board · Commit · Team); 122: UI-B's now line adds its time ("9:30");
     // 145: DM-1's story (From last week's unfinished picks, the late promise, the Out event's risk on Wednesday).
     // 146: SR-1's fourth Week mode (Status) in the mode switch. 147: WK-2's Timeline toggle beside the modes.

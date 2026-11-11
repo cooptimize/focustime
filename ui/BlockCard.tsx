@@ -321,7 +321,7 @@ export function CardWhen({ slot, tz }: { slot: Slot; tz: string }) {
   const full = shortRange(slot, tz);
   const [a, b] = full.split("–");
   if (b === undefined) return <span className="card-when">{full}</span>;
-  const hour = (t: string) => t.replace(/:\d\d/, "");
+  const hour = (t: string) => t.replace(/:00$/, "");
   return (
     <span className="card-when" title={slotRange(slot, tz)}>
       {/* One text (one word for the reader), with a zero-width break after the dash: it wraps there, never in a number. */}

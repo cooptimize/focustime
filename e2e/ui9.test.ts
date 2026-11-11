@@ -6,7 +6,7 @@
 // a status (MB-1; with no status it ends the title line, MB-1b, e2e/mb1b.test.ts): no taller beside a status pill, the tap target is 44 px, and the page doesn't scroll sideways.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, timelineOn, startDemo, type Harness } from "./harness.ts";
 import { SHOTS, shotBoth } from "./shots.ts";
 
 const T = 240_000;
@@ -44,6 +44,7 @@ describe.skipIf(!CHROMIUM)("UI-9: the late chip on Week's cards", () => {
 
   it("1 late and 3 late by the rail's placement and the card's client, with the timeline hidden or shown", async () => {
     const { page, errors } = await freshPage(h);
+    await timelineOn(page);
     await board(page);
     // Shown: the slim rail marks them (both carried to the block under way, Mon AM); WD-1: it has no labels, so the
     // cards keep their chips too.

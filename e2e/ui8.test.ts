@@ -182,7 +182,7 @@ describe.skipIf(!CHROMIUM)("UI-8 bug round", () => {
   it("a client chip's Not ready offers Break down, opening the same panel as Fix next (WD-1: was DevOps health)", async () => {
     const { page, errors } = await freshPage(h);
     await page.evaluate(() => (location.hash = "#/week/2026-11-02"));
-    await page.locator(".client-chips .cc-chip", { has: page.locator(".cc-badge") }).first().click();
+    await page.locator(".client-chips button.cc-chip", { has: page.locator(".cc-badge") }).first().click();
     const row = page.locator(".cc-pop .cc-ready li").first();
     await row.waitFor();
     const bd = row.locator(".bd-trigger");

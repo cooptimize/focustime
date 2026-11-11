@@ -2,7 +2,7 @@
 // notice line's counts, Thursday's next-week line, where a row is already placed, the remove rule, the client chips
 // and the panel's sections (one client's rows never under another's heading).
 import { describe, expect, it } from "vitest";
-import { blockWord, clientChip, confirmLabel, defaultAddBlock, nextWeekEmpty, panelModel, placedWhere, removeRule, roomWords, storiesUnder, toPlaceCount, toPlaceLine, weekTag, type BlockAt } from "./addwork.ts";
+import { blockWord, chipsThatFit, clientChip, confirmLabel, defaultAddBlock, nextWeekEmpty, panelModel, placedWhere, removeRule, roomWords, storiesUnder, toPlaceCount, toPlaceLine, toPlaceShort, weekTag, type BlockAt } from "./addwork.ts";
 import type { WorkItem } from "../week/types.ts";
 
 const blocks: BlockAt[] = [
@@ -55,9 +55,10 @@ describe("the week's tag and its button", () => {
 
 describe("the notice line", () => {
   it("counts what waits and names each part; nothing waiting is no line", () => {
-    expect(toPlaceLine({ unfinished: 1, lastWeek: 2, sent: 0 })).toBe("3 to place: 1 unfinished, 2 from last week");
-    expect(toPlaceLine({ unfinished: 0, lastWeek: 0, sent: 1 })).toBe("1 to place: 1 sent to you");
+    expect(toPlaceLine({ unfinished: 1, lastWeek: 2, sent: 0 })).toBe("3 to place · 1 unfinished, 2 from last week");
+    expect(toPlaceLine({ unfinished: 0, lastWeek: 0, sent: 1 })).toBe("1 to place · 1 sent to you");
     expect(toPlaceLine({ unfinished: 0, lastWeek: 0, sent: 0 })).toBeNull();
+    expect([toPlaceShort({ unfinished: 2, lastWeek: 3, sent: 2 }), toPlaceShort({ unfinished: 0, lastWeek: 0, sent: 0 })]).toEqual(["7 to place", null]);
     expect(toPlaceCount({ unfinished: 2, lastWeek: 1, sent: 1 })).toBe(4);
   });
   it("Next week is empty only on Thursday and Friday of this week, with nothing placed next week", () => {
@@ -99,9 +100,12 @@ describe("where a row is placed", () => {
 });
 
 describe("the client chips", () => {
-  it("planned of free hours, amber when over by more than the grace, a badge for what isn't ready", () => {
-    expect(clientChip({ name: "Northwind", plannedMinutes: 360, freeMinutes: 480, notReady: 0 })).toEqual({ text: "Northwind 6h of 8h", over: false, badge: null });
-    expect(clientChip({ name: "Northwind", plannedMinutes: 600, freeMinutes: 480, notReady: 2 })).toEqual({ text: "Northwind 10h of 8h", over: true, badge: 2 });
+  it("the room left from one total (musts plus nice to have): free, Full, or over (amber only past the grace); a badge for what isn't ready", () => {
+    expect(clientChip({ name: "Northwind", plannedMinutes: 360, freeMinutes: 480, notReady: 0 })).toEqual({ text: "Northwind · 2h free", room: "2h free", detail: "6h planned · 8h free in its blocks", over: false, badge: null });
+    expect(clientChip({ name: "Northwind", plannedMinutes: 840, freeMinutes: 480, notReady: 2 })).toMatchObject({ text: "Northwind · 6h over", over: true, badge: 2 });
+    expect(clientChip({ name: "Atlas", plannedMinutes: 120, freeMinutes: 120, notReady: 0 })).toMatchObject({ text: "Atlas · Full", over: false });
+    // Within the grace: not over, not amber.
+    expect(clientChip({ name: "Atlas", plannedMinutes: 128, freeMinutes: 120, notReady: 0 }).over).toBe(false);
   });
 });
 
@@ -136,5 +140,15 @@ describe("the stories under a feature", () => {
     expect(storiesUnder(work, 10).sort()).toEqual([11, 12]);
     expect(storiesUnder(work, 99)).toEqual([]);
     expect(storiesUnder(null, 10)).toEqual([]);
+  });
+});
+
+describe("the client chips that fit (review fix)", () => {
+  it("all when they fit; otherwise as many as leave room for +N; none when even one doesn't", () => {
+    expect(chipsThatFit([100, 100, 100], 320, 6, 30)).toBe(3);
+    expect(chipsThatFit([100, 100, 100], 300, 6, 30)).toBe(2);
+    expect(chipsThatFit([100, 100, 100], 200, 6, 30)).toBe(1);
+    expect(chipsThatFit([100, 100, 100], 120, 6, 30)).toBe(0);
+    expect(chipsThatFit([], 0, 6, 30)).toBe(0);
   });
 });

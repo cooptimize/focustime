@@ -81,7 +81,7 @@ describe.skipIf(!CHROMIUM)("a real session never shows demo data (no-demo-leak)"
       }
       // A client chip's popover on Week (WD-1: it took Plan the week's client panel) when there is a chip.
       await page.evaluate(() => (location.hash = "#/week/2026-11-02"));
-      const nameBtn = page.locator(".client-chips .cc-chip").first();
+      const nameBtn = page.locator(".client-chips button.cc-chip").first();
       if (await nameBtn.count()) {
         await nameBtn.click();
         await page.waitForTimeout(500);

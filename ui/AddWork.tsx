@@ -12,7 +12,8 @@ import { CreateInDevOps } from "./DevOpsWrite.tsx";
 import { BreakDown } from "./DetailPanel.tsx";
 import { blockClient, isPickable } from "../plan/rules.ts";
 import { addSections, type PriorityRow } from "../plan/addpane.ts";
-import { blockWord, placedWhere, removeRule, storiesUnder, roomWords, toPlaceLine, type ToPlace as ToPlaceCounts } from "../plan/addwork.ts";
+import { blockWord, placedWhere, removeRule, storiesUnder, roomWords, toPlaceLine, toPlaceShort, type ToPlace as ToPlaceCounts } from "../plan/addwork.ts";
+import { FoldLine } from "./plan/FoldLine.tsx";
 import { planMinutes } from "../plan/fit.ts";
 import { freeMinutes } from "../week/free.ts";
 import { weekList } from "../plan/weeklist.ts";
@@ -83,9 +84,14 @@ type Props = {
   onSelect: (date: IsoDate, half: Half) => void;
   /** The phone's bottom sheet. */
   sheet?: boolean;
+  /** Opened from the notice line's Review: To place starts open. */
+  placeOpen?: boolean;
 };
 
-export function AddWorkPanel({ at, week, version, thisWeek, today, colors, clients, onClose, onChanged, onSelect, sheet = false }: Props) {
+export function AddWorkPanel({ at, week, version, thisWeek, today, colors, clients, onClose, onChanged, onSelect, sheet = false, placeOpen = false }: Props) {
+  // To place is open when Review opened the panel; from a block it is one collapsed line (WD-1 review).
+  const [placeShown, setPlaceShown] = useState(placeOpen);
+  useEffect(() => setPlaceShown(placeOpen), [placeOpen, at.date, at.half]);
   const day = week.days.find((d) => d.date === at.date) ?? null;
   const slot = day ? slotOf(day, at.half) : null;
   const [state, setState] = useState<PlanDayState | null>(null);
@@ -185,7 +191,7 @@ export function AddWorkPanel({ at, week, version, thisWeek, today, colors, clien
       )}
       <div className="aw-scroll">
         {error && <p className="pd-error" role="alert">{error}</p>}
-        <ToPlace week={week} at={at} thisWeek={thisWeek} today={today} colors={colors} nameOf={(k) => name(k)} version={version} onChanged={onChanged} onSelect={onSelect} />
+        <ToPlace week={week} at={at} thisWeek={thisWeek} today={today} colors={colors} nameOf={(k) => name(k)} version={version} onChanged={onChanged} onSelect={onSelect} open={placeShown} onToggle={() => setPlaceShown((o) => !o)} />
         {!clientKey ? (
           <p className="muted aw-note">Choose a client for this block first.</p>
         ) : state && ctx ? (
@@ -194,6 +200,7 @@ export function AddWorkPanel({ at, week, version, thisWeek, today, colors, clien
           !error && <p className="muted aw-note">Loading…</p>
         )}
         {state && <AlsoThisWeek state={state} clientKey={clientKey} week={week} name={name} colors={colors} onSelect={onSelect} at={at} />}
+        {mondayOf(at.date) >= thisWeek && <YourSends weekStart={mondayOf(at.date)} thisWeek={thisWeek} version={version} colors={colors} onChanged={onChanged} />}
       </div>
       {ctx && <div className="aw-box" data-tour="aw-box"><StoryBox ctx={ctx} clientName={name(ctx.clientKey)} onChanged={onChanged} /></div>}
       {!allWork.size && <p className="muted aw-note">DevOps isn't loaded right now.</p>}
@@ -206,14 +213,40 @@ export function AddWorkPanel({ at, week, version, thisWeek, today, colors, clien
  * features and unfinished to-dos, and what teammates sent); nothing moves until it is placed. A later week shows its
  * own From last week proposal and sends (Plan the week's), never the unfinished to-dos; a past week shows none.
  */
-function ToPlace({ week, at, thisWeek, today, colors, nameOf, version, onChanged, onSelect }: { week: Week; at: { date: IsoDate; half: Half }; thisWeek: IsoDate; today: IsoDate; colors: Record<string, string>; nameOf: (k: string) => string; version: unknown; onChanged: () => void; onSelect: (date: IsoDate, half: Half) => void }) {
+function ToPlace({ week, at, thisWeek, today, colors, nameOf, version, onChanged, onSelect, open, onToggle }: { week: Week; at: { date: IsoDate; half: Half }; thisWeek: IsoDate; today: IsoDate; colors: Record<string, string>; nameOf: (k: string) => string; version: unknown; onChanged: () => void; onSelect: (date: IsoDate, half: Half) => void; open: boolean; onToggle: () => void }) {
   const monday = mondayOf(at.date);
-  if (monday < thisWeek) return null;
+  const t = useToPlaceCounts(monday, monday === thisWeek, version);
+  const line = toPlaceLine(t);
+  if (monday < thisWeek || !line) return null;
+  // WD-1 review: one collapsed line at the top ("7 to place · 2 unfinished, …"), open only when Review opened the panel.
   return (
     <div className="aw-toplace" aria-label="To place">
-      {monday === thisWeek && <CarrySummary colors={colors} nameOf={nameOf} />}
-      <FromLastWeek version={version} colors={colors} nameOf={nameOf} weekStart={monday} week={week} today={today} onChanged={onChanged} />
-      <FromYourTeam weekStart={monday} thisWeek={thisWeek} version={version} colors={colors} onChanged={onChanged} onSchedule={onSelect} />
+      <FoldLine className="aw-toplace-line" open={open} onToggle={onToggle} label={line} title={line} />
+      {open && (
+        <>
+          {monday === thisWeek && <CarrySummary colors={colors} nameOf={nameOf} />}
+          <FromLastWeek version={version} colors={colors} nameOf={nameOf} weekStart={monday} week={week} today={today} onChanged={onChanged} />
+          <FromYourTeam weekStart={monday} thisWeek={thisWeek} version={version} colors={colors} onChanged={onChanged} onSchedule={onSelect} part="answer" />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** WD-1 review: what I sent and Ask a lead to look at my week, one collapsed group at the bottom of the panel. */
+function YourSends({ weekStart, thisWeek, version, colors, onChanged }: { weekStart: IsoDate; thisWeek: IsoDate; version: unknown; colors: Record<string, string>; onChanged: () => void }) {
+  const team = useTeamCommit(weekStart, version);
+  const [open, setOpen] = useState(false);
+  const clients = team.data?.clients ?? [];
+  const sent = clients.reduce((n, c) => n + c.sent.length, 0);
+  const replies = clients.reduce((n, c) => n + c.looks.filter((l) => l.reply).length, 0);
+  const canAsk = weekStart >= thisWeek && clients.some((c) => c.leads.length);
+  if (!sent && !replies && !canAsk) return null;
+  const count = [sent ? `${sent} sent` : "", replies ? `${replies} ${replies === 1 ? "reply" : "replies"}` : ""].filter(Boolean).join(", ");
+  return (
+    <div className="aw-sec aw-sends">
+      <FoldLine open={open} onToggle={() => setOpen((o) => !o)} label="You sent and Ask a lead to look" count={count || undefined} />
+      {open && <FromYourTeam weekStart={weekStart} thisWeek={thisWeek} version={version} colors={colors} onChanged={onChanged} part="mine" />}
     </div>
   );
 }
@@ -222,14 +255,9 @@ function ToPlace({ week, at, thisWeek, today, colors, nameOf, version, onChanged
  * E: the slim line over Week that replaces the banners: "3 to place: 1 unfinished, 2 from last week · Review". Review
  * opens the Add work panel. Nothing when nothing waits, and only on this week.
  */
-export function ToPlaceNotice({ weekStart, version, onReview }: { weekStart: IsoDate; version: unknown; onReview: () => void }) {
-  const carry = useContext(CarryCtx);
-  const team = useTeamCommit(weekStart, version);
-  const proposal = useProposal(weekStart, version, () => {});
-  const sent = (team.data?.clients ?? []).reduce((n, c) => n + c.incoming.filter((x) => !x.conflict).length, 0);
-  const lastWeekRows = proposal.data ? proposal.data.clients.flatMap((c) => c.rows).length : 0;
-  const t: ToPlaceCounts = { unfinished: (carry?.plan.cards.length ?? 0) + (carry?.plan.earlierDays.length ?? 0), lastWeek: (carry?.plan.earlierWeeks.length ?? 0) + lastWeekRows, sent };
-  const line = toPlaceLine(t);
+export function ToPlaceNotice({ weekStart, version, onReview, short = false }: { weekStart: IsoDate; version: unknown; onReview: () => void; /** The phone: "7 to place · Review". */ short?: boolean }) {
+  const t = useToPlaceCounts(weekStart, true, version);
+  const line = short ? toPlaceShort(t) : toPlaceLine(t);
   if (!line) return null;
   return (
     <p className="to-place-line" role="status" data-tour="wk-carry">
@@ -240,6 +268,17 @@ export function ToPlaceNotice({ weekStart, version, onReview }: { weekStart: Iso
       </button>
     </p>
   );
+}
+
+/** What waits to be placed in a week: unfinished to-dos (this week only), last week's rows, and sends to answer. */
+function useToPlaceCounts(weekStart: IsoDate, thisWeek: boolean, version: unknown): ToPlaceCounts {
+  const carry = useContext(CarryCtx);
+  const team = useTeamCommit(weekStart, version);
+  const proposal = useProposal(weekStart, version, () => {});
+  const sent = (team.data?.clients ?? []).reduce((n, c) => n + c.incoming.filter((x) => !x.conflict).length, 0);
+  const lastWeekRows = proposal.data ? proposal.data.clients.flatMap((c) => c.rows).length : 0;
+  const mine = thisWeek ? carry : null;
+  return { unfinished: (mine?.plan.cards.length ?? 0) + (mine?.plan.earlierDays.length ?? 0), lastWeek: (mine?.plan.earlierWeeks.length ?? 0) + lastWeekRows, sent };
 }
 
 /** This week's features, Promises and More from DevOps for the block's client (Plan the day's pane rule, AddPaneDay). */
@@ -490,7 +529,7 @@ function Feature({ p, ctx, onStar, onRemove, menuOf }: { p: PriorityRow; ctx: Ct
         {p.breakDown ? (
           <span className="aw-needs">
             <span className="aw-needs-word">Needs stories</span>
-            <BreakDown clientKey={ctx.clientKey} item={{ id: p.ref.itemId, title: p.ref.title, ...(p.item ? { type: p.item.type } : {}) }} />
+            <BreakDown clientKey={ctx.clientKey} item={{ id: p.ref.itemId, title: p.ref.title, ...(p.item ? { type: p.item.type } : {}) }} short />
           </span>
         ) : (
           p.level !== "story" && p.total > 0 && <span className="aw-count">{p.stories.filter((k) => ctx.here.has(`i${ctx.clientKey}:${k.id}`) || ctx.where({ itemId: k.id })).length} of {p.total} placed</span>
@@ -580,13 +619,13 @@ export function PlacedFeatures({ clientKey, date, half, tabIndex }: { clientKey:
         const n = storiesOf(f.itemId).length;
         const bare = storiesUnder(work, f.itemId).length === 0;
         return (
-          <li key={f.itemId} className={`placed-feature${bare ? " needs" : ""}`}>
+          <li key={f.itemId} className={`placed-feature${bare ? " pf-not-ready" : ""}`}>
             <span className="pf-title" title={f.title}>{f.title}</span>
             {bare ? (
               <span className="aw-needs">
                 <span className="aw-needs-word">Needs stories</span>
                 <span tabIndex={tabIndex}>
-                  <BreakDown clientKey={clientKey} item={{ id: f.itemId, title: f.title }} />
+                  <BreakDown clientKey={clientKey} item={{ id: f.itemId, title: f.title }} short />
                 </span>
               </span>
             ) : (

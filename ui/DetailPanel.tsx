@@ -344,8 +344,8 @@ export function PanelShell({ title, sub, color, menu, label, onClose, children }
  * Break down on a Needs stories row (Today's This week chips, the panel, Plan the day, Plan the week): BD-1's side panel,
  * labelled with the parent's type. A single draft story by hand stays in the item's ⋯ menu.
  */
-export function BreakDown({ clientKey, item }: { clientKey: string; item: { id: number; title: string; type?: string } }) {
-  return <BreakDownButton clientKey={clientKey} item={item} />;
+export function BreakDown({ clientKey, item, short = false }: { clientKey: string; item: { id: number; title: string; type?: string }; short?: boolean }) {
+  return <BreakDownButton clientKey={clientKey} item={item} short={short} />;
 }
 
 /** The panel's block for a selection: the day and its slot (AM for a whole-day cell). */

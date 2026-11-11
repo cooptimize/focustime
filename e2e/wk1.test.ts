@@ -5,7 +5,7 @@
 // strip). UI-B's unfinished suggestions still show at a mid-week clock (Wednesday 2:00 PM).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, timelineOn, startDemo, type Harness } from "./harness.ts";
 
 const T = 240_000;
 const WIDTHS: [number, number][] = [[1920, 1080], [1600, 900], [1440, 900], [1366, 768], [1280, 800], [1024, 768]];
@@ -134,6 +134,7 @@ describe.skipIf(!CHROMIUM)("WK-1: Week fits every width from 1024", () => {
   for (const t of TIERS) {
     it(`the now line and the PTO day show in the ${t.fold ? "fold" : t.tier} tier (${t.width}${t.panel ? ", panel" : ""}${t.big ? ", Larger" : ""})`, async () => {
       const { page, errors } = await freshPage(h, { width: t.width, height: t.height });
+      await timelineOn(page);
       await page.keyboard.press("2");
       await page.locator("main.grid").waitFor();
       if (t.big) await larger(page, true);

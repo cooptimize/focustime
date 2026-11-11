@@ -539,11 +539,11 @@ export function App() {
     window.addEventListener(TICK_REMOVED_EVENT, on);
     return () => window.removeEventListener(TICK_REMOVED_EVENT, on);
   }, []);
-  const [showTimelines, setShowTimelines] = useState(true);
+  const [showTimelines, setShowTimelines] = useState(false);
   const showTimelinesRef = useRef(showTimelines);
   showTimelinesRef.current = showTimelines;
   useEffect(() => {
-    if (data) setShowTimelines(data.ui.showTimelines ?? true);
+    if (data) setShowTimelines(data.ui.showTimelines ?? false);
   }, [data?.ui.showTimelines]); // eslint-disable-line react-hooks/exhaustive-deps
   const saveShowTimelines = useCallback(async (show: boolean) => {
     setShowTimelines(show);
@@ -826,9 +826,12 @@ export function App() {
   }, [data, target, zonedNow, clock, hasHours]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** WD-1: Week with the Add work panel on a block (a date alone: that day's first block; nothing: the next one). */
+  // WD-1 review: To place opens in the panel only when the notice line's Review opened it.
+  const [placeOpen, setPlaceOpen] = useState(false);
   const addWork = useCallback(
-    (date: IsoDate | null = null, half: Half | null = null) => {
+    (date: IsoDate | null = null, half: Half | null = null, review = false) => {
       setDetailsOpen(false);
+      setPlaceOpen(review);
       goNav(navOf.addWork(date, half));
     },
     [goNav],
@@ -1254,7 +1257,7 @@ export function App() {
       } else if ((k === "w" || k === "W") && free && settingsAt === null) {
         e.preventDefault();
         // WD-1: W opens Week with the Add work panel (again: closes it).
-        goNav(addAt ? closeAddNav() : navOf.addWork());
+        addAt ? goNav(closeAddNav()) : addWork();
       } else if ((k === "e" || k === "E") && free && settingsAt === null) {
         e.preventDefault();
         goNav(closeOutAt !== null ? navOf.today() : navOf.today("closeout"));
@@ -1981,7 +1984,7 @@ export function App() {
                 <button type="button" onClick={() => changeWeek(-1)} aria-label="Previous week" title="Previous week ([)">‹</button>
                 <button type="button" onClick={() => changeWeek(1)} aria-label="Next week" title="Next week (])">›</button>
               </span>
-              <h2>Week of {weekLabel(week.days[0]!.date, week.days[4]!.date)}</h2>
+              <h2><span className="wk-of">Week of </span>{weekLabel(week.days[0]!.date, week.days[4]!.date)}</h2>
               {!thisWeek && (
                 <button type="button" className="mini today-btn" onClick={goToday} title="Back to this week">
                   This week
@@ -2031,7 +2034,7 @@ export function App() {
             </ModeArea>
           </header>
       <CarryProvider active={thisWeek} version={data} week={week} now={nowIso} onChanged={reloadQuiet}>
-      {thisWeek && <ToPlaceNotice weekStart={data.weekStart} version={data} onReview={() => addWork()} />}
+      {thisWeek && <ToPlaceNotice weekStart={data.weekStart} version={data} short={phone} onReview={() => addWork(null, null, true)} />}
       {thisWeek && data.nextWeekEmpty && nextWeekEmptyDay(localToday) && (
         <p className="next-empty-line" role="status">
           Next week is empty ·{" "}
@@ -2088,6 +2091,7 @@ export function App() {
           colors={data.clients}
           clients={data.planClients}
           sheet={phone}
+          placeOpen={placeOpen}
           onClose={() => {
             goNav(closeAddNav());
             cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });

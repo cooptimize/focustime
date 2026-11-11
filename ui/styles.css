@@ -2927,7 +2927,7 @@ button.att-chip { cursor: pointer; }
 /* Narrower columns while it is open (1366): each day's header stays in its column; the date and the Today pill give
    way (the panel names the day; today's weekday keeps its color). */
 .grid.with-panel .day-head { min-width: 0; overflow: hidden; }
-@media (max-width: 1599px) { .grid.with-panel.medium .day-head .date, .grid.with-panel.medium .day-head .today-pill { display: none; } }
+@media (max-width: 1599px) { .grid.with-panel.medium .day-head .date-long { display: none; } .grid.with-panel.medium .day-head .date-short { display: inline; } }
 .dp-head { display: flex; align-items: flex-start; gap: 8px; padding: 14px 16px 10px 18px; border-bottom: 1px solid var(--border); }
 .dp-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .dp-title h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-4); font-weight: 600; }
@@ -5044,7 +5044,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .grid.tier-mini .card-when { flex-basis: 100%; order: 3; }
 .grid.tier-mini .half .card-body { padding: 8px 8px 8px 10px; }
 .grid.tier-mini .pick-row.dens-week .size-chip { display: none; }
-.grid.tier-mini .day-head .date, .grid.tier-mini .day-head .today-pill { display: none; }
+.grid.tier-mini .day-head .date-long { display: none; } .grid.tier-mini .day-head .date-short { display: inline; }
 .grid.tier-mini .day-head { gap: 4px; }
 .grid.tier-mini .day-head .day-plan { padding: 0 6px; }
 
@@ -5112,8 +5112,9 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 /* A day header never spills into the next column: the date gives way first, then the Today pill (today's weekday
    keeps its colour, the panel names the day). em, so Larger text gives way sooner. */
 .grid.medium .day-head { min-width: 0; overflow: hidden; container-type: inline-size; }
-@container (max-width: 17em) { .day-head .date { display: none; } }
-@container (max-width: 12em) { .day-head .today-pill { display: none; } }
+/* WD-1 review: the date gives way to its short form ("Tue 3"), and the Today marker stays; only a very narrow column drops them. */
+@container (max-width: 17em) { .day-head .date-long { display: none; } .day-head .date-short { display: inline; } }
+@container (max-width: 7em) { .day-head .date, .day-head .today-pill { display: none; } }
 /* On a narrow PTO column the hatched cell already says PTO. */
 @container (max-width: 9em) { .day-head .pto-pill { display: none; } }
 .grid.tier-mini .suggested-card .sc-open { flex-wrap: wrap; }
@@ -5462,7 +5463,7 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .day.tier-mini .card-when { flex-basis: 100%; order: 3; }
 .day.tier-mini .half .card-body { padding: 8px 8px 8px 10px; }
 .day.tier-mini .pick-row.dens-week .size-chip { display: none; }
-.day.tier-mini .day-head .date, .day.tier-mini .day-head .today-pill { display: none; }
+.day.tier-mini .day-head .date-long { display: none; } .day.tier-mini .day-head .date-short { display: inline; }
 .day.tier-mini .day-head { gap: 4px; }
 .day.tier-mini .day-head .day-plan { padding: 0 6px; }
 .day.tier-mini .suggested-card .sc-open { flex-wrap: wrap; }
@@ -6472,3 +6473,40 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .pf-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .day-head .day-open { display: inline-flex; align-items: baseline; gap: 10px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 .day-head .day-open:hover .dow, .day-head .day-open:focus-visible .dow { text-decoration: underline; }
+
+/* WD-1 review: item titles in Add work, the client chip's popover and on the cards use the app's title style (the card
+   to-do's): plain text, underline on hover and focus, never link blue. */
+.add-work-panel a[data-card], .cc-pop a[data-card], .half a[data-card],
+.add-work-panel .draft-title, .half .draft-title { color: inherit; text-decoration: none; font-weight: inherit; text-align: left; }
+.add-work-panel a[data-card]:hover, .add-work-panel a[data-card]:focus-visible,
+.cc-pop a[data-card]:hover, .cc-pop a[data-card]:focus-visible,
+.half a[data-card]:hover, .half a[data-card]:focus-visible,
+.add-work-panel .draft-title:hover, .add-work-panel .draft-title:focus-visible,
+.half .draft-title:hover, .half .draft-title:focus-visible { text-decoration: underline; }
+.placed-feature.pf-not-ready .pf-title { color: var(--text); }
+/* WD-1 review: the chips never clip: the ones that don't fit go under "+N". The hidden copy measures them. */
+.client-chips { position: relative; overflow: visible; }
+.cc-measure { position: absolute; left: 0; top: 0; visibility: hidden; pointer-events: none; display: flex; gap: 6px; white-space: nowrap; height: 0; overflow: hidden; }
+.cc-more { font-weight: 600; }
+.cc-rest { width: auto; max-width: 260px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.cc-keep-btn { min-width: 5.5em; justify-content: space-between; }
+.week-head.wd1-head .ph-title { flex: 1 1 auto; }
+.week-head.wd1-head .client-chips { flex: 1 1 0; }
+.date-short { display: none; }
+/* WD-1 review: a card's status chip stays on the header row: the time takes its short form ("9–12:30") first. */
+@container cardbody (max-width: 24em) {
+  .card-when .cw-full { display: none; }
+  .card-when .cw-short { display: inline; white-space: nowrap; }
+}
+/* WD-1 review: the phone's Week header is one row: the week title (wrapping in its own column), then + Add and ⋯. */
+.app.phone .week-head.wd1-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+.app.phone .week-head.wd1-head .mode-area { grid-column: auto; flex: none; justify-self: end; flex-wrap: nowrap; overflow: visible; }
+.app.phone .to-place-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The phone's title drops "Week of" so the title, + Add and ⋯ fit one row; the tag wraps under it. */
+.app.phone .week-head.wd1-head h2 { white-space: nowrap; flex: none; }
+.app.phone .week-head.wd1-head .wk-of { display: none; }
+/* The panel's To place line is one line; its full text is its tooltip. */
+.aw-toplace-line { display: block; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A card too narrow for the short time beside the status chip: the time takes its own line under the header row, so
+   the chip stays beside the client and the time stays visible. */
+@container cardbody (max-width: 17em) { .card-head { flex-wrap: wrap; } .card-head .card-when { flex-basis: 100%; order: 3; } }

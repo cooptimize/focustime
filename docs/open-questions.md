@@ -544,3 +544,6 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - DevOps health's Mark as being broken down and Ask the client about priorities aren't on Week any more (Break down is in the client chip's popover, dates and owners in Ahead › Readiness). Bring them into the chip's popover?
 - Esc in More from DevOps' search takes up to three presses (clear the text, leave the box, close the panel). Should Esc close the panel at once when the box is already empty?
 - A past week has no Add work (the panel doesn't open there). If it ever does, its star, Add to this week and row ⋯ need the same past-week refusal as + has.
+- WD-1 review: the timeline default changed to off only for people who never chose; anyone who saved "on" keeps it. Should everyone be reset to Cards once?
+- WD-1 review: To place folds again when another block is chosen in the panel, even after Review opened it. Should it stay open for the rest of that panel session?
+- WD-1 review: the client chip popover no longer shows the musts pace line ("about 2h free left. Still realistic?") so the hours appear once. Is the pace nudge wanted elsewhere (the chip's tooltip, the notice line)?

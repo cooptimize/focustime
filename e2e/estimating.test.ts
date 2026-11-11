@@ -29,17 +29,17 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
   };
   const watch = (page: import("playwright-core").Page) => page.evaluate(() => { const d = document.createElement("span"); d.style.color = "var(--watch)"; document.body.append(d); const c = getComputedStyle(d).color; d.remove(); return c; });
 
-  it("each client chip: planned of free hours, amber when over, never red; its popover says the free time and the over in hours", async () => {
+  it("each client chip: the room left in hours, amber when over, never red; its popover says the same total in hours", async () => {
     const { page, errors } = await freshPage(h);
     await page.keyboard.press("2");
-    const chips = page.locator(".client-chips .cc-chip");
+    const chips = page.locator(".client-chips button.cc-chip");
     await chips.first().waitFor({ timeout: 30_000 });
-    for (const t of await chips.allInnerTexts()) expect(t).toMatch(/^\S.* \d+h of \d+h/);
-    const over = page.locator(".client-chips .cc-chip.over").first();
+    for (const t of await chips.allInnerTexts()) expect(t).toMatch(/^\S.* · (\d+h free|Full|\d+h over)/);
+    const over = page.locator(".client-chips button.cc-chip.over").first();
     await expect(over.evaluate((e) => getComputedStyle(e).color)).resolves.toBe(await watch(page));
     await over.click();
     const pop = page.locator(".cc-pop");
-    await expect(pop.locator("p.cc-over").textContent()).resolves.toMatch(/^\d+h free · \d+h planned · (a little over|about \d+h over)$/);
+    await expect(pop.locator("p.cc-over").textContent()).resolves.toMatch(/^\d+h over · \d+h planned · \d+h free in its blocks$/);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -164,7 +164,7 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     await openPlanDay(page);
     await page.waitForTimeout(600);
     await scan("Week with Add work");
-    const chips = page.locator(".client-chips .cc-chip");
+    const chips = page.locator(".client-chips button.cc-chip");
     for (let i = 0; i < (await chips.count()); i++) {
       await chips.nth(i).click();
       await page.locator(".cc-pop").waitFor();
