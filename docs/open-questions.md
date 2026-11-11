@@ -627,3 +627,13 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - The three WD-2 review items taken were the ones that fit without a migration: the panel's "+" with the drop check, Undo restoring a local timebox, and the unused styles. If the brief meant others (an unsized plain to-do coming back as M, the feature select inside a list option), they are still open.
 - Admin's per-level "Plan up to" column was removed with Settings' (it only moved the chips' amber line on Week). Ahead's capacity still reads the stored values, which nobody can now change on screen. Remove them from Ahead's budget too, in the next step?
 - Still talking about over-planning, outside Day, Week and the panel: the midday check-in, the assistant's "overloaded blocks" and move note, Ahead's weekly "about 2h over". For the next step.
+
+## VM-2
+
+- Azure refusing the start with 403 (no deallocate or start permission on the VM) is treated as a failure ("couldn't start your VM"), not as a sign-in problem: Allow Azure access wouldn't fix it. Is that the right word for it?
+- The pause counts working days by my working hours only, not PTO: a week of PTO pauses it. Safer (it doesn't start a VM nobody uses), but Resume is needed after every long PTO. Count PTO days as not working?
+- Once a day is claimed the attempt is spent, even when the VM turned out to be running already or the start failed. A second try later the same morning would need a retry rule; none for now.
+- PTO or holidays that can't be read leave the VM off that day (the safer reading). Should it say so?
+- In the demo the environment comes only from `FOCUSTIME_DEMO_AUTOSTART_ENV` (tests); the hosted demo sessions never set it, so they show "production only". Fine?
+- The auto-start uses each person's stored sign-in (their refresh token) while they're away. If Entra's token lifetime or a conditional access policy ends it, the start is skipped with "couldn't sign in". Worth watching on prod for a week.
+- The demo's working week is Monday to Thursday, so its pause takes a calendar week; on prod it depends on each person's hours.

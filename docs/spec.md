@@ -820,6 +820,17 @@ Pilots need personal calendars without Google sign-in, and Apple has no comparab
 - **Store:** one migration, `20261128T0900_calendar_links` (two user tables; adds only). Not in Export.
 - **Rollback:** revert the PR and redeploy; the tables stay unused (an older build ignores them).
 
+## 51. VM-2: Stop, and an opt-in start before the day begins (authorized Nov 11)
+
+Tanner and Aaron: start the VM on work days before the day, but never from dev. Decisions under "VM-2" in `docs/decisions.md`.
+
+- **Stop.** The VM chip's menu has Stop… while my VM runs: a preview (Running → Stopped (deallocated), it stops billing, anything running on it ends, its auto-shutdown isn't changed), then Stop; followed until Azure shows it. Only my own confirmed VM; amends D475.
+- **Start without a preview.** Was Start right away; same setting.
+- **Start my VM before my day.** Off by default; minutes before my day starts (0, 5, 10, 15, 30) and which of my working days. Never on PTO or a holiday, never when it already runs; once a day; late by up to an hour; pauses after 3 working days without FocusTime (Resume). Production only: the env check is first, and dev never starts a VM. Uses my own Azure sign-in; when it can't, the VM stays off and FocusTime says so once.
+- **Setup.** A fifth, optional screen: Your VM.
+- **Not in it:** any schedule change, stopping on a schedule or when idle, other VMs, the assistant or the Teams bot, Azure, Entra or infra changes.
+- **Store:** no migration (settings rows and kv state). **Rollback:** revert the PR and redeploy; the settings rows are ignored by an older build.
+
 ## Part 0: a shared owner and state per conversation
 
 One record per conversation, the same for everyone who can see it: an owner (none, or one Cooptimizer, plus helpers), a state (Open, Owned or Closed) and a history. Each person sees Asked you, Up for grabs, You're on it, Teammate has it or Done, worked out from that record. I'll take it, Give to…, Add helper, Release, Close out and Reopen apply at once with Undo (through the Assistant and Teams, as a proposal with Confirm). A reply or a detected "I'll do it" only offers one tap. The first of two claims wins. Asking again on a Closed one reopens it to its last owner; a new message on an Owned one notifies the owner. Nothing is posted to Teams. Existing conversations are moved once by a backfill. Decisions under "Part 0" in `docs/decisions.md`.
