@@ -681,7 +681,7 @@ export const FIRST_DAY = {
   problem: "Your setup can't be read just now. Every link still works.",
   never: "This list only checks whether each one is set. It never shows a token or a key.",
   faqTitle: "Questions people ask on day one",
-  faqs: ["Where do my clients and blocks come from?", "Can anyone else see my plan?", "What does FocusTime change in DevOps or Outlook?", "First run: what was that setup?", "Do I need to connect my personal calendar?", "Does FocusTime use AI?", "How fresh is what I see from DevOps?"],
+  faqs: ["Where do my clients and blocks come from?", "Can anyone else see my plan?", "What does FocusTime change in DevOps or Outlook?", "First run: what was that setup?", "Do I need to connect my personal calendar?", "Does FocusTime use AI?", "How fresh is what I see from DevOps?", "An item I made in DevOps isn't showing. Why?"],
 };
 
 /** UI-5: one list of names that changed. The command menu still finds every old one. */
