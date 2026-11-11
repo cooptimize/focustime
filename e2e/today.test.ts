@@ -1,6 +1,7 @@
-// U2: Today in three states (browser, demo mode, clock pinned to Mon Nov 2, 9:30 AM). Behavior only: one Start
-// focus, the attention line only when needed, risk with its reason, Check-in's counts and one move per pick, fit never
-// in the risk color, Close out's panel (no pick twice, dropped as a count), Lumen absent, and the word count guard.
+// U2, WD-2: Day in three states (browser, demo mode, clock pinned to Mon Nov 2, 9:30 AM). Behavior only: one Start
+// focus (on the next to-do's row, on Week's block card), the chips line only when needed, risk with its reason,
+// Check-in's counts and one move per to-do, fit never in the risk color, Close out's panel (no to-do twice, dropped as
+// a count), Lumen absent, and the word count guard. The 3840 day timeline went in WD-2 (docs/ux/wd2/inventory.md).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
@@ -34,7 +35,7 @@ async function seed(page: Page): Promise<number[]> {
   for (const [half, clientKey, x] of adds) ids.push((await call(page, "pick.add", { date: D, half, clientKey, ...x })).data.pick.id);
   await call(page, "pick.mark_done", { id: ids[0], done: true });
   await page.reload();
-  await page.waitForSelector(".today-block");
+  await page.waitForSelector(".day-view .half.card");
   return ids;
 }
 
@@ -45,7 +46,7 @@ const uiWords = (page: Page) =>
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0 && r.left < innerWidth && r.right > 0 && el.checkVisibility({ opacityProperty: true, visibilityProperty: true });
     };
-    const TITLE = ".ev-title, .att-names, .att-who, .pr-title, .what, .feat-link, .today-resume, .day-allday-ev, a, input, textarea";
+    const TITLE = ".ev-title, .att-names, .att-who, .pr-title, .cf-title, .card-client, .what, .feat-link, .today-resume, .day-allday-ev, a, input, textarea";
     let n = 0;
     const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     let t: Node | null;
@@ -63,20 +64,25 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("Now: one Start focus, at the top on the next pick; risk says why; at most 80 UI words on the demo day", async () => {
+  it("Day: one Start focus, on the next to-do's row; nothing above the blocks but the strip, the chips and the moment card; risk says why; the word count", async () => {
     const { page, errors } = await freshPage(h);
     await seed(page);
-    // NV-1: the one Start focus is at the top, beside what's next; the card highlights the next pick.
+    // WD-2: the one Start focus is on the next to-do's row on its card (no "what's next" card above the blocks).
     await expect(page.getByRole("button", { name: "Start focus" }).count()).resolves.toBe(1);
-    await expect(page.locator(".phone-now").getByRole("button", { name: "Start focus" }).count()).resolves.toBe(1);
-    await expect(page.locator(".phone-now .pn-pick").textContent()).resolves.toContain("Utilization chart");
+    await expect(page.locator(".pick-row.next").getByRole("button", { name: "Start focus" }).count()).resolves.toBe(1);
     await expect(page.locator(".pick-row.next .pr-title").textContent()).resolves.toContain("Utilization chart");
-    // No size chips on Today's rows.
-    await expect(page.locator(".today-block .size-chip").count()).resolves.toBe(0);
-    const risks = await page.locator(".today-block .status-pill.at_risk").allTextContents();
-    expect(risks.length).toBeGreaterThan(0);
-    for (const r of risks) expect(r).toMatch(/^At risk · \S/);
-    expect(risks.join(" ")).toContain("Dentist 12:00");
+    expect(await page.locator(".phone-now, .this-week, .today-other").count()).toBe(0);
+    // Above the blocks, in order: the urgent strip, the chips, then (when one is current) the moment card.
+    const above = await page.evaluate(() => {
+      const cards = document.querySelector(".day-cards")!;
+      return [...document.querySelectorAll(".day-view > *")].filter((e) => e !== cards && !e.matches("header, .fading, [hidden]") && (e.compareDocumentPosition(cards) & Node.DOCUMENT_POSITION_FOLLOWING) && (e as HTMLElement).offsetHeight > 0).map((e) => (e.matches(".urgent-strip") ? "urgent" : e.matches(".day-chips") || e.querySelector(".attention") ? "chips" : e.matches(".moment-card, .moment-done") ? "moment" : e.className));
+    });
+    expect(above.filter((x) => x !== "moment")).toEqual(["urgent", "chips"]);
+    // The card's one status chip; its reason is in the tooltip.
+    const risks = page.locator(".day-view .half.card .status-pill.at_risk");
+    expect(await risks.count()).toBeGreaterThan(0);
+    for (const r of await risks.allTextContents()) expect(r).toBe("At risk");
+    expect((await risks.evaluateAll((els) => els.map((e) => e.getAttribute("title")))).join(" ")).toContain("Dentist 12:00");
     // 81: UI-B's now line adds its time ("9:30"); 95: DM-1's late promise in the urgent strip; 98: QF-1's Timebox my day beside the plan.
     // 113: IB-1 slice 4's strip reads the Inbox, capped at 3 lines (two late promises and Priya's Must on the demo day)
     // plus "N more in Inbox"; before, it was the late promise and SW-1's one sends line.
@@ -102,7 +108,7 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
       return route.fulfill({ response: res, json: j });
     });
     await page.reload();
-    await page.waitForSelector(".today-block");
+    await page.waitForSelector(".day-view .half.card");
     await page.waitForTimeout(500);
     await expect(page.locator(".attention").count()).resolves.toBe(0);
     fail = true;
@@ -152,7 +158,7 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     const ids = await seed(page);
     await call(page, "pick.remove", { id: ids[ids.length - 1] });
     await page.reload();
-    await page.waitForSelector(".today-block");
+    await page.waitForSelector(".day-view .half.card");
     await go(page, "#/today/closeout");
     const panel = page.locator(".closeout-panel");
     await panel.waitFor();
@@ -165,19 +171,6 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     await expect(panel.locator(".cap-box").count()).resolves.toBe(0);
     await panel.locator(".done-btn").click();
     await expect.poll(async () => (await call(page, "closeout.load", { date: D })).data.closedOutAt, { timeout: 10_000 }).not.toBeNull();
-    expect(errors).toEqual([]);
-    await page.close();
-  }, T);
-
-  it("3840: a day timeline beside the cards; a pick dropped on a free gap is timeboxed there", async () => {
-    const { page, errors } = await freshPage(h, { width: 3840, height: 1600 });
-    await seed(page);
-    await page.waitForSelector(".day-timeline .dt-free");
-    const gaps = await page.locator(".dt-free").count();
-    await page.locator(".pick-row.next").dragTo(page.locator(".dt-free").first());
-    await expect.poll(() => page.locator(".dt-box").count(), { timeout: 10_000 }).toBe(1);
-    await expect(page.locator(".dt-box .ev-title").textContent()).resolves.toContain("Utilization chart");
-    expect(await page.locator(".dt-free").count()).toBeGreaterThanOrEqual(gaps - 1);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

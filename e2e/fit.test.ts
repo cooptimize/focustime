@@ -61,13 +61,13 @@ describe.skipIf(!CHROMIUM)("Today and Week fit (U5.1)", () => {
     const { page, errors } = await freshPage(h, { width: 1280, height: 900 });
     await seed(page);
     await go(page, "#/today");
-    await page.locator(".today-block").first().waitFor();
-    await expect(page.locator(".today-block", { hasText: "Quarterly planning" }).count()).resolves.toBe(1);
-    expect(await paintsOutside(page, ".today-block")).toEqual([]);
+    await page.locator(".day-view .half.card").first().waitFor();
+    await expect(page.locator(".day-view .half.card", { hasText: "Quarterly planning" }).count()).resolves.toBe(1);
+    expect(await paintsOutside(page, ".day-view .half.card")).toEqual([]);
     const meeting = page.locator(".today-rows li", { hasText: "Quarterly planning" }).first();
     await expect(meeting.getAttribute("title")).resolves.toContain(LONG_MEETING);
     await expect(meeting.locator(".ev-title").evaluate((e) => e.scrollWidth > e.clientWidth)).resolves.toBe(true);
-    await expect(page.locator(".today-block .pr-title", { hasText: "Write the migration" }).getAttribute("title")).resolves.toBe(LONG_PICK);
+    await expect(page.locator(".day-view .half.card .pr-title", { hasText: "Write the migration" }).getAttribute("title")).resolves.toBe(LONG_PICK);
     await go(page, `#/week/${MON}`);
     await page.locator(".half.card").first().waitFor();
     expect(await paintsOutside(page, ".half.card")).toEqual([]);
@@ -83,8 +83,8 @@ describe.skipIf(!CHROMIUM)("Today and Week fit (U5.1)", () => {
     const { page, errors } = await freshPage(h);
     await seed(page, { evening: true });
     await go(page, "#/today");
-    await expect.poll(() => page.locator(".today-block").count()).toBe(3);
-    const widths = await page.locator(".today-block").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
+    await expect.poll(() => page.locator(".day-view .half.card").count()).toBe(3);
+    const widths = await page.locator(".day-view .half.card").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
     for (const w of widths) expect(w).toBeGreaterThanOrEqual(560);
     // The content area is the full width minus the 24 px gutters.
     const area = await page.locator(".today-blocks").evaluate((e) => e.getBoundingClientRect().width);
@@ -110,7 +110,7 @@ describe.skipIf(!CHROMIUM)("Today and Week fit (U5.1)", () => {
     await page.keyboard.press("h");
     await expect.poll(async () => (await inBar()).find((c) => /^Timelines/.test(c.text))?.inside).toBe(true);
     await go(page, "#/today");
-    const row = page.locator(".today-block .pick-row", { hasText: "Utilization chart" });
+    const row = page.locator(".day-view .half.card .pick-row", { hasText: "Utilization chart" });
     await row.hover();
     await row.getByRole("button", { name: /More for/ }).click();
     await page.getByRole("menuitem", { name: /make it up/i }).click();

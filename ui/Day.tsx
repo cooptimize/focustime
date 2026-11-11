@@ -46,7 +46,7 @@ import { WeekGrid } from "./WeekGrid.tsx";
 import { NextTodoCtx, type NextTodo, type PanelFocus, type Selection } from "./weekctx.ts";
 import { userZone } from "../week/zone.ts";
 import type { Moment } from "../plan/modes.ts";
-import { inboxSource, moreInInbox, untimedDue, urgentLines, type UrgentLine, type UrgentSource } from "../plan/urgent.ts";
+import { inboxSource, moreInInbox, dueTodayNotUrgent, urgentLines, type UrgentLine, type UrgentSource } from "../plan/urgent.ts";
 import { railItems, type InboxItemView } from "../plan/inbox-items.ts";
 import { canAddWork } from "../plan/days.ts";
 import { aboveBlocks, dayHeadline, nextTodo } from "../plan/dayview.ts";
@@ -184,7 +184,7 @@ export function Day(props: Props) {
   const urgentSources: UrgentSource[] = [inboxSource(target.isToday && nudges ? (props.inbox ?? []) : [], { today: date, dayEnd }), ...(props.urgentSources ?? [])];
   const inStrip = new Set(urgentLines(urgentSources, clockNow, tz).map((l) => l.key));
   const tbEnv = useTimeboxes();
-  const untimed = untimedDue(todayPromises, { now: clockNow, today: date, dayEnd }).filter((p) => !inStrip.has(`c${p.id}`));
+  const dueChips = dueTodayNotUrgent(todayPromises, { now: clockNow, today: date, dayEnd }).filter((p) => !inStrip.has(`c${p.id}`));
   const focused = useFocused();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -334,7 +334,7 @@ export function Day(props: Props) {
   useEffect(() => setProposals((p) => (p && p.date !== date ? null : p)), [date]);
 
   // RF-1: on a computer a source that needs reconnecting is in the status bar only; the phone has no status bar, so it keeps the chip.
-  const chips = mode === "now" && nudges ? <Attention noDue={phone} sources={phone} promises={untimed} inStrip={inStrip} onItem={props.onItem} onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
+  const chips = mode === "now" && nudges ? <Attention noDue={phone} sources={phone} promises={dueChips} inStrip={inStrip} onItem={props.onItem} onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
   const toggleTimeline = () => {
     const show = !timelineShown;
     setTlForced(false);
@@ -649,7 +649,7 @@ function Attention({ noDue = false, sources = true, promises = [], soon = [], in
           {promises.map((p) => (
             <li key={`promise-${p.id}`}>
               <button type="button" className="att-row" onClick={() => (onItem ? onItem(`c${p.id}`) : (onPromises ?? onInbox)())}>
-                <span className={`due-badge${p.overdue ? " overdue-amber" : ""}`}>{p.overdue ? `Promise · ${wasDueText(p, date, userZone(data)).replace(/^Was/, "was")}` : "Promise"}</span>
+                <span className={`due-badge${p.overdue ? " overdue-amber" : ""}`}>{p.overdue ? `Promise · ${wasDueText(p, date, userZone(data)).replace(/^Was/, "was")}` : p.dueAt ? `Promise · ${clock(p.dueAt, userZone(data))}` : "Promise"}</span>
                 <span className="att-who">{p.toName ?? p.clientName}</span>
                 <span className="what">{p.what}</span>
               </button>

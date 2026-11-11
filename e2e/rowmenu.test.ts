@@ -17,7 +17,7 @@ async function seed(page: Page) {
     await call(page, "pick.add", { date: "2026-11-02", half: "PM", clientKey: "Northwind", intention: "Review the export spec", size: "S" });
   }
   await page.reload();
-  await page.waitForSelector(".today-block");
+  await page.waitForSelector(".day-view .half.card");
 }
 const head = (page: Page) => page.locator(".popup-menu .menu-head");
 
@@ -106,14 +106,15 @@ describe.skipIf(!CHROMIUM)("row menu headers (D459)", () => {
     await page.close();
   }, T);
 
-  it("Week's detail panel: my stories, A then B", async () => {
+  it("WD-2: the block panel's story rows, A then B", async () => {
     const { page, errors } = await freshPage(h);
     await page.keyboard.press("2");
     const card = page.locator(".half.card", { hasText: "Northwind" }).first();
     await card.locator(".card-when").click();
     const panel = page.locator(".block-panel");
     await panel.waitFor();
-    await aThenB(page, panel.locator(".ps-row"), ".ps-more", ".ps-title");
+    await panel.locator(".aw-features .aw-feature").first().waitFor();
+    await aThenB(page, panel.locator(".aw-features .aw-feature > ul > li.aw-row"), 'button[aria-label^="More for "]', ".aw-row-title");
     expect(errors).toEqual([]);
     await page.close();
   }, T);

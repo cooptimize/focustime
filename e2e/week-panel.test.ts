@@ -1,8 +1,8 @@
-// PV-1: Week's block panel, the main path, in a real (not demo) session on fake sources and a fake DevOps write side.
-// Select an Adatum block → its panel lists only my stories, grouped by feature (features are headers) → drag a story
-// onto another day's block (the fit shows on the target) → drag it back → under a feature on this week's plan with no
-// stories of mine, "Add a story for me" → preview → Confirm → it is in the block. Edge cases are unit tests
-// (plan/blockstories.test.ts, plan/weekdrop.test.ts, actions/devops-write.test.ts). Screenshots at 1920 and Text size
+// PV-1, WD-2: Week's block panel, the main path, in a real (not demo) session on fake sources and a fake DevOps write
+// side. Open an Adatum block → its panel lists this week's features and my other work under its features → drag a
+// story onto another day's block (the fit shows on the target) → drag it back → under a feature on this week's plan
+// with no stories, a New draft story, then Create in DevOps → preview → Confirm → it is in the block. Edge cases are
+// unit tests (plan/blockpanel.test.ts, plan/weekdrop.test.ts, actions/devops-write.test.ts). Screenshots at 1920 and Text size
 // Larger when FOCUSTIME_SHOTS is set.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { IDENTITY_KEY } from "../actions/account.ts";
@@ -77,7 +77,7 @@ describe.skipIf(!CHROMIUM)("Week block panel (PV-1)", () => {
     await lb?.close();
   }, T);
 
-  it("panel groups my stories by feature → drag to another day and back → Add a story for me → it is in the block", async () => {
+  it("WD-2: the block panel lists my work under its features → drag to another day and back → a new draft story under a feature, created in DevOps → it is in the block", async () => {
     const dv = fakeDevOpsWrite({ org: "contoso", identities: { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "me@contoso.example" } } });
     dv.add(FEATURE, { "System.WorkItemType": "Feature", "System.Title": "My feature with no stories", "System.State": "Active", "System.AreaPath": "Project Ada", "System.IterationPath": "Project Ada\\Sprint 4" });
     const created = () => [...dv.items.values()].filter((i) => i.fields["System.Parent"] === FEATURE);
@@ -113,16 +113,20 @@ describe.skipIf(!CHROMIUM)("Week block panel (PV-1)", () => {
       const mon = blocks.nth(0);
       const tue = blocks.nth(1);
 
-      // Select Monday PM: the panel lists my stories under their features; features are headers only.
-      await mon.click({ position: { x: 120, y: 200 } });
-      const panel = page.getByRole("region", { name: "Your stories for Adatum" });
+      // WD-2: open Monday PM's block panel. Its Add list has this week's feature (none of its stories yet: Needs
+      // stories) and, folded, the other work assigned to me under its features.
+      await mon.locator(".card-client").first().click();
+      const panel = page.locator("aside.block-panel");
       await panel.waitFor();
-      const story = panel.locator(".ps-row[data-story]").first();
+      const empty = panel.locator(`.aw-feature[data-feature="${FEATURE}"]`);
+      await empty.getByText("Needs stories").waitFor();
+      const fold = panel.locator(".bp-other > .pl-fold");
+      await fold.click();
+      const story = panel.locator(".bp-other .aw-row[draggable=true]").first();
       await story.waitFor();
-      const id = Number(await story.getAttribute("data-story"));
-      expect(await panel.locator(".ps-row[data-story='240']").count()).toBe(0);
-      const empty = panel.getByRole("group", { name: /#240 My feature with no stories/ });
-      await empty.getByText("No stories for you yet").waitFor();
+      const title = (await story.locator(".aw-row-title").innerText()).trim();
+      // Placing it adds its feature to the week, so its row moves from Other work to This week's features.
+      const rowOf = () => panel.locator(".aw-row", { hasText: title }).first();
       await shotBoth(page, "week-panel-groups", panel);
       await shotBoth(page, "week-panel-no-stories", empty);
 
@@ -133,20 +137,26 @@ describe.skipIf(!CHROMIUM)("Week block panel (PV-1)", () => {
         await shotBoth(page, "week-panel-drag-fit");
       });
       await page.locator(".undo-toast", { hasText: "Added to Tue PM" }).waitFor();
-      await panel.locator(`.ps-row[data-story='${id}'] .ps-planned`, { hasText: "Planned · Tue PM" }).waitFor();
+      await rowOf().locator(".aw-where", { hasText: "Tue PM" }).waitFor();
       const onTue = tue.locator("li[draggable='true']").first();
       await onTue.waitFor();
 
       // Move it back from the card to Monday.
       await drag(page, onTue, mon);
       await page.locator(".undo-toast", { hasText: "Moved to Mon PM" }).waitFor();
-      await panel.locator(`.ps-row[data-story='${id}'] .ps-here`).waitFor();
+      await rowOf().getByRole("img", { name: "On this block" }).waitFor();
       expect(await tue.locator("li[draggable='true']").count()).toBe(0);
 
-      // Add a story for me under the committed feature with none: preview → Confirm → it is in this block.
-      const box = empty.getByRole("textbox");
+      // A story for me under the feature with none: New draft story under it, then Create in DevOps: preview →
+      // Confirm → it is in this block.
+      const box = panel.locator("input.bp-box");
       await box.fill("Check the export with finance");
+      await box.press("ArrowDown");
+      await panel.locator(".bp-result.hl", { hasText: "New draft story: Check the export with finance" }).waitFor();
+      await panel.locator("select.bp-parent").selectOption(String(FEATURE));
       await box.press("Enter");
+      await mon.getByText("Check the export with finance").waitFor();
+      await empty.locator(".aw-row", { hasText: "Check the export with finance" }).getByRole("button", { name: "Create in DevOps" }).click();
       const write = page.locator(".commit");
       await write.waitFor();
       await shotBoth(page, "week-panel-add-for-me-preview");

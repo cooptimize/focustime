@@ -1,7 +1,7 @@
-// WD-1: the scenarios of Plan the day and Plan the week (planday-add, planday-pane, planning, planweek), moved to the
-// Add work panel beside Week, on the demo (Monday Nov 2, 9:30 AM). Each one adds through the panel's own rows, its ⋯,
-// a drag or the type box, and reads the result on Week's cards. What was dropped with Plan mode, and why, is in
-// docs/ux/wd1/inventory.md.
+// WD-1, WD-2: the scenarios of Plan the day and Plan the week (planday-add, planday-pane, planning, planweek), moved
+// to the block panel beside Week, on the demo (Monday Nov 2, 9:30 AM). Each one adds through the panel's own rows, its
+// ⋯, a drag or the one Add box, and reads the result on Week's cards. What was dropped with Plan mode and with the two
+// old panels, and why, is in docs/ux/wd1/inventory.md and docs/ux/wd2/inventory.md.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
@@ -9,12 +9,20 @@ import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
 const T = 120_000;
 const block = (page: Page, date: string, half: string) => page.locator(`[data-drop="${date}:${half}"]`).first();
 const panel = (page: Page) => page.locator("aside.block-panel");
-const section = (page: Page, label: string) => panel(page).locator(".aw-sec").filter({ has: page.locator(".pl-label, h4, h3", { hasText: new RegExp(`^${label}`, "i") }) }).first();
+const section = (page: Page, label: string) => panel(page).locator(".aw-sec").filter({ has: page.locator(".pl-label, .pl-fold, h4, h3", { hasText: new RegExp(`^\\W*${label}`, "i") }) }).first();
+/** WD-2: Other work assigned to you is folded: open it. */
+async function other(page: Page) {
+  const s = section(page, "Other work assigned to you");
+  const fold = s.locator(".pl-fold").first();
+  await fold.waitFor({ timeout: 30_000 });
+  if ((await fold.getAttribute("aria-expanded")) === "false") await fold.click();
+  return s;
+}
 const cardTitles = (page: Page, date: string, half: string) => block(page, date, half).locator(".pr-title").allInnerTexts();
 async function openOn(page: Page, date: string, half: string) {
   await page.keyboard.press("2");
   await block(page, date, half).locator(".add-work.add-row").click();
-  await expect.poll(() => panel(page).getAttribute("data-add-panel")).toBe(`${date}|${half}`);
+  await expect.poll(() => panel(page).getAttribute("data-block-panel")).toBe(`${date}|${half}`);
 }
 async function dayMenu(page: Page, dow: string) {
   const head = page.locator("header.day-head", { has: page.locator(".dow", { hasText: dow }) }).first();
@@ -30,11 +38,12 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
   }, T);
   afterAll(async () => h?.stop());
 
-  it("+ in This week's features, in Promises and in More from DevOps: each lands on the block and says so", async () => {
+  it("+ in This week's features, in Promises and in Other work assigned to you: each lands on the block and says so", async () => {
     const { page, errors } = await freshPage(h);
     await openOn(page, "2026-11-02", "PM");
-    for (const label of ["This week's features", "Promises", "More from DevOps"]) {
-      const row = free(section(page, label));
+    await other(page);
+    for (const label of ["This week's features", "Promises", "Other work assigned to you"]) {
+      const row = section(page, label).locator(".aw-row:not(.placed):not(:has(.aw-where))").filter({ has: page.locator("button.aw-plus") }).first();
       const title = (await row.locator(".aw-row-title").innerText()).trim().replace(/^[^:]+: /, "");
       await row.locator("button.aw-plus").click();
       await expect.poll(async () => (await cardTitles(page, "2026-11-02", "PM")).some((t) => t.includes(title)), { message: label }).toBe(true);
@@ -47,7 +56,7 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
   it("⋯ → Add to the plan offers the selected block first; another client's block is under Different client and asks first", async () => {
     const { page } = await freshPage(h);
     await openOn(page, "2026-11-02", "PM");
-    const row = free(section(page, "More from DevOps"));
+    const row = free(await other(page));
     const title = (await row.locator(".aw-row-title").innerText()).trim();
     await row.getByRole("button", { name: `More for ${title}` }).click();
     await page.getByRole("menuitem", { name: /^Add to the plan/ }).click();
@@ -79,7 +88,7 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
     await page.keyboard.press("2");
     await block(page, "2026-11-04", "PM").locator(".card-client").first().click();
     await page.keyboard.press("a");
-    await expect.poll(() => panel(page).getAttribute("data-add-panel")).toBe("2026-11-04|PM");
+    await expect.poll(() => panel(page).getAttribute("data-block-panel")).toBe("2026-11-04|PM");
     await free(section(page, "This week's features")).locator("button.aw-plus").click();
     await page.keyboard.press("Escape");
     await panel(page).waitFor({ state: "detached" });
@@ -89,34 +98,46 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
     await page.close();
   }, T);
 
-  it("the type box: Enter makes a draft story placed on the block; Shift+Enter a plain to-do, not in DevOps", async () => {
+  it("the Add box: with no match Enter makes a plain to-do on the block; Down then Enter makes a draft story, not in DevOps yet", async () => {
     const { page } = await freshPage(h);
     await openOn(page, "2026-11-02", "PM");
-    const box = panel(page).locator(".aw-box input");
+    const box = panel(page).locator("input.bp-box");
+    await box.fill("Call the warehouse about labels");
+    await panel(page).getByRole("option", { name: "New to-do: Call the warehouse about labels" }).waitFor();
+    await expect(panel(page).locator(".bp-result.hl").innerText()).resolves.toContain("New to-do: Call the warehouse about labels");
+    await box.press("Enter");
+    await expect.poll(() => cardTitles(page, "2026-11-02", "PM")).toContain("Call the warehouse about labels");
+    await expect(box.inputValue()).resolves.toBe("");
     await box.fill("Write the supplier import notes");
+    await box.press("ArrowDown");
+    await expect(panel(page).locator(".bp-result.hl").innerText()).resolves.toContain("New draft story: Write the supplier import notes");
     await box.press("Enter");
     await expect.poll(() => cardTitles(page, "2026-11-02", "PM")).toContain("Write the supplier import notes");
-    await box.fill("Call the warehouse about labels");
-    await box.press("Shift+Enter");
-    await expect.poll(() => cardTitles(page, "2026-11-02", "PM")).toContain("Call the warehouse about labels");
     await page.close();
   }, T);
 
-  it("More from DevOps: search narrows the rows; Esc clears the search first, then closes the panel", async () => {
+  it("the Add box searches this client's work: results replace the list and end with the two New rows; Esc clears the text first, then closes the panel", async () => {
     const { page } = await freshPage(h);
     await openOn(page, "2026-11-02", "PM");
-    const more = section(page, "More from DevOps");
-    const n0 = await more.locator(".aw-row").count();
-    const first = (await more.locator(".aw-row .aw-row-title").first().innerText()).trim();
-    const search = more.locator("input[type=search]");
-    await search.fill(first.split(" ")[0]!);
-    await expect.poll(() => more.locator(".aw-row").count()).toBeLessThanOrEqual(n0);
-    await expect(more.locator(".aw-row", { hasText: first }).count()).resolves.toBeGreaterThan(0);
-    await search.fill("zzzz no such item");
-    await more.getByText('Nothing matches "zzzz no such item".').waitFor();
-    await search.press("Escape");
-    await expect(search.inputValue()).resolves.toBe("");
+    const box = panel(page).locator("input.bp-box");
+    const first = (await section(page, "This week's features").locator(".aw-row .aw-row-title").first().innerText()).trim();
+    await box.fill(first.split(" ")[0]!);
+    const results = panel(page).locator("#bp-results");
+    await results.waitFor();
+    // The list is replaced while typing.
+    await expect(section(page, "This week's features").count()).resolves.toBe(0);
+    await expect(results.locator(".bp-result", { hasText: first }).count()).resolves.toBeGreaterThan(0);
+    await expect(results.locator(".bp-result").last().innerText()).resolves.toMatch(/^\+?\s*New draft story: /);
+    await box.fill("zzzz no such item");
+    await expect(results.locator(".bp-result").count()).resolves.toBe(2);
+    await expect(results.locator(".bp-result.hl").innerText()).resolves.toContain("New to-do: zzzz no such item");
+    await box.press("Escape");
+    await expect(box.inputValue()).resolves.toBe("");
     await expect(panel(page).count()).resolves.toBe(1);
+    await section(page, "This week's features").waitFor();
+    // With the box empty, Esc closes the panel.
+    await box.press("Escape");
+    await panel(page).waitFor({ state: "detached" });
     await page.close();
   }, T);
 
@@ -172,14 +193,14 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
     await page.close();
   }, T);
 
-  it("rows show their type as an icon named for the type; the panel is 360 px wide and nothing in it overflows sideways", async () => {
+  it("rows show their type as an icon named for the type; the panel is 380 px wide and nothing in it overflows sideways", async () => {
     const { page } = await freshPage(h, { width: 1440, height: 900 });
     await openOn(page, "2026-11-02", "PM");
     const icons = panel(page).locator(".aw-sec .type-icon");
     await icons.first().waitFor();
     for (const t of await icons.evaluateAll((els) => els.map((e) => e.getAttribute("data-type")))) expect(t).toBeTruthy();
     const box = (await panel(page).boundingBox())!;
-    expect(Math.round(box.width)).toBe(360);
+    expect(Math.round(box.width)).toBe(380);
     const over = await panel(page).evaluate((el) => [...el.querySelectorAll<HTMLElement>("*")].filter((e) => e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).overflowX === "visible" && e.clientWidth > 0).map((e) => e.className).slice(0, 5));
     expect(over).toEqual([]);
     await page.close();

@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { aDayPromise, anInboxRow } from "../test/builders/index.ts";
 import type { UrgentAsk } from "../actions/types.ts";
-import { inboxSource, moreInInbox, promiseUrgent, untimedDue, urgentLines, type UrgentSource } from "./urgent.ts";
+import { inboxSource, moreInInbox, dueTodayNotUrgent, promiseUrgent, urgentLines, type UrgentSource } from "./urgent.ts";
 
 const TODAY = "2026-11-05";
 const ZONE = "America/New_York";
@@ -57,16 +57,24 @@ describe("the urgent strip", () => {
     expect(promiseUrgent(aDayPromise({ dueDate: "2026-11-06", dueAt: "2026-11-06T15:00:00Z" }), { now: NOW, today: TODAY, dayEnd: DAY_END })).toBe(false);
   });
 
-  it("one due today with no time is in the attention line until the day's last 2 working hours, then in the strip", () => {
+  it("one due today with no time is in Day's chips until the day's last 2 working hours, then in the strip", () => {
     const row = anInboxRow({ key: "c1", dueAt: null });
     const untimed = aDayPromise({ id: 1, dueDate: TODAY, dueAt: null, toName: null });
     expect(strip([inbox([row])])).toEqual([]);
-    expect(untimedDue([untimed], { now: NOW, today: TODAY, dayEnd: DAY_END })).toEqual([untimed]);
+    expect(dueTodayNotUrgent([untimed], { now: NOW, today: TODAY, dayEnd: DAY_END })).toEqual([untimed]);
     const late = "2026-11-05T20:30:00Z"; // 3:30 PM
     expect(keys([inbox([row])], late)).toEqual(["c1"]);
-    expect(untimedDue([untimed], { now: late, today: TODAY, dayEnd: DAY_END })).toEqual([]);
+    expect(dueTodayNotUrgent([untimed], { now: late, today: TODAY, dayEnd: DAY_END })).toEqual([]);
     // No working time today: never early, only once late.
     expect(strip([inbox([row], null)], late)).toEqual([]);
+  });
+
+  it("WD-2: one due today at a time, more than 2 hours away, is in Day's chips too (the cards don't list it at its time); a later day's and an overdue one aren't", () => {
+    const at4 = aDayPromise({ id: 2, dueDate: TODAY, dueAt: "2026-11-05T21:00:00Z" });
+    expect(dueTodayNotUrgent([at4], { now: NOW, today: TODAY, dayEnd: DAY_END })).toEqual([at4]);
+    expect(dueTodayNotUrgent([at4], { now: "2026-11-05T19:30:00Z", today: TODAY, dayEnd: DAY_END })).toEqual([]);
+    expect(dueTodayNotUrgent([aDayPromise({ dueDate: "2026-11-06", dueAt: null })], { now: NOW, today: TODAY, dayEnd: DAY_END })).toEqual([]);
+    expect(dueTodayNotUrgent([aDayPromise({ dueDate: TODAY, dueAt: null, overdue: true })], { now: NOW, today: TODAY, dayEnd: DAY_END })).toEqual([]);
   });
 
   it("another source's lines show after the Inbox's", () => {

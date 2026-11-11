@@ -97,7 +97,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await expect.poll(() => hash(page)).toMatch(/^#\/week\/day\/2026-11-03/);
     await expect.poll(() => tab(page)).toBe("Week");
     await page.reload();
-    await expect.poll(() => page.locator("aside.block-panel").getAttribute("data-add-panel")).toMatch(/^2026-11-03\|/);
+    await expect.poll(() => page.locator("aside.block-panel").getAttribute("data-block-panel")).toMatch(/^2026-11-03\|/);
     await page.close();
   }, T);
 

@@ -160,7 +160,8 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
   useDevOpsChanged(clientKey ? [clientKey] : [], () => setMoved((n) => n + 1));
   const name = (k: string | null) => clients.find((c) => c.clientKey === k)?.clientName ?? week.days.flatMap((d) => [...d.am.focus, ...d.pm.focus]).find((f) => f.clientKey === k)?.clientName ?? k ?? "";
   const whole = !!day && (day.kind !== "work" || !!day.pto);
-  const title = panelTitle(clientKey ? name(clientKey) : null, at.date, at.half, { wholeDay: whole, open: day?.pto ? "PTO" : overflow ? "Catch-up" : slot?.off ? "No working hours" : "Open" });
+  // A PTO day reads PTO (its block, if any, stays in the data, read only).
+  const title = panelTitle(clientKey && !day?.pto ? name(clientKey) : null, at.date, at.half, { wholeDay: whole, open: day?.pto ? "PTO" : overflow ? "Catch-up" : slot?.off ? "No working hours" : "Open" });
   const when = slot ? panelWhen(shortRange(slot, tz), mode, freeMinutes(slot), planMinutes(blockPicks, pv.sizes, pv.timeboxes, slot)) : null;
   const weekPicks = useMemo(() => Object.values(pv.week ?? {}).flatMap((d) => d.picks), [pv.week]);
   const placed = useMemo(() => placedMap(weekPicks, at), [weekPicks, at.date, at.half]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -229,7 +230,7 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
       <header className="bp-head">
         <div className="bp-title">
           <h2>
-            {clientKey && <span className="swatch" aria-hidden="true" />}
+            {clientKey && !day?.pto && <span className="swatch" aria-hidden="true" />}
             {title}
           </h2>
           {when && <p className={`bp-when${when.over ? " over" : ""}`}>{when.text}</p>}

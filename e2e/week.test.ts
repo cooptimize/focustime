@@ -120,7 +120,7 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     await page.close();
   }, T);
 
-  it("the detail panel opens from a card and a due badge; Esc closes it; ticking there updates the card; no Details dialog", async () => {
+  it("WD-2: the block panel opens from a card and a due badge; Esc closes it; ticking there updates the card; no Details dialog", async () => {
     const { page, errors } = await freshPage(h);
     const { mon } = await seed(page);
     const card = page.locator(".half.card", { hasText: "Cooptimize" }).first();
@@ -128,23 +128,23 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     const panel = page.locator(".block-panel");
     await panel.waitFor();
     await expect(panel.locator("h2").textContent()).resolves.toContain("Cooptimize");
-    await expect(panel.locator(".dp-risks").textContent()).resolves.toContain("Dentist");
+    await expect(panel.locator(".bp-risks").textContent()).resolves.toContain("Dentist");
     await expect(page.locator("dialog.details").count()).resolves.toBe(0);
     // Ticking a pick in the panel ticks it on the card.
     await panel.locator(`[data-pick="${mon[1]}"] input[type=checkbox]`).check();
     await expect.poll(() => card.locator(`[data-pick="${mon[1]}"]`).getAttribute("class"), { timeout: 10_000 }).toContain("done");
     await page.keyboard.press("Escape");
     await expect.poll(() => panel.count()).toBe(0);
-    // PV-1: on Week the panel lists my stories grouped by feature (WD-1: from the card, the features line is gone).
+    // WD-2: the panel's Add list has this week's features with their stories (was PV-1's Your stories).
     await page.locator(".half.card", { hasText: "Northwind" }).first().locator(".card-when").click();
     await panel.waitFor();
-    await panel.getByRole("region", { name: "Your stories for Northwind" }).waitFor();
+    await panel.locator(".aw-features .aw-feature").first().waitFor();
     await page.keyboard.press("Escape");
     await expect.poll(() => panel.count()).toBe(0);
-    // A due badge opens the panel on that follow-up.
+    // A due badge opens the panel on that promise's row.
     await page.locator(".due-open").first().click();
     await panel.waitFor();
-    await expect(panel.locator(".follow-up.dp-focused").count()).resolves.toBe(1);
+    await expect.poll(() => panel.locator(".aw-row.dp-focused[data-promise]").count()).toBe(1);
     await page.keyboard.press("Escape");
     await expect.poll(() => panel.count()).toBe(0);
     // Enter on the focused card opens the panel (the old Details shortcut), not a dialog.
@@ -156,27 +156,29 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     await page.close();
   }, T);
 
-  it("Today uses the same panel from a block card", async () => {
+  it("WD-2: Day uses the same panel from a block card, at its own address", async () => {
     const { page, errors } = await freshPage(h);
     await seed(page);
     await go(page, "#/today");
-    await page.waitForSelector(".today-block");
-    await page.locator(".today-block").first().locator("header").click();
+    await page.waitForSelector(".day-view .half.card");
+    await page.locator(".day-view .half.card").first().locator(".card-when").click();
     await page.locator(".block-panel").waitFor();
     await expect(page.locator(".block-panel h2").textContent()).resolves.toContain("Cooptimize");
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/day/2026-11-02/AM");
     await page.keyboard.press("Escape");
     await expect.poll(() => page.locator(".block-panel").count()).toBe(0);
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/day");
     expect(errors).toEqual([]);
     await page.close();
   }, T);
 
-  it("type scale: Today › Now and Week use only 11, 12, 13 and 15 px at 400, 500 and 600, at 1920 and 3840", async () => {
+  it("type scale: Day and Week use only 11, 12, 13 and 15 px at 400, 500 and 600, at 1920 and 3840", async () => {
     for (const viewport of [{ width: 1920, height: 1080 }, { width: 3840, height: 1600 }]) {
       const { page, errors } = await freshPage(h, viewport);
       await seed(page);
       expect(await offScale(page)).toEqual([]);
       await go(page, "#/today");
-      await page.waitForSelector(".today-block");
+      await page.waitForSelector(".day-view .half.card");
       expect(await offScale(page)).toEqual([]);
       expect(errors).toEqual([]);
       await page.close();

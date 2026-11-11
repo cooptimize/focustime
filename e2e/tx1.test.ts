@@ -45,7 +45,7 @@ describe.skipIf(!CHROMIUM)("TX-1 timeboxes and check-ins (browser, demo mode)", 
     const { page, errors } = await freshPage(h);
     const ids = await monday(page);
     await go(page, "#/today");
-    await page.locator(".today-block, .tt-check, .pick-row").first().waitFor();
+    await page.locator(".day-view .half.card, .tt-check, .pick-row").first().waitFor();
     expect(await page.locator(".tc-box").count()).toBe(0);
     await go(page, "#/week");
     await page.locator(".week-card, .wk-card, .card").first().waitFor();

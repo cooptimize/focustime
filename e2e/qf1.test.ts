@@ -52,7 +52,7 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     await expect.poll(() => hash(page)).toBe("#/day/2026-10-30");
     await expect.poll(() => title(page)).toMatch(/^Friday.*past/);
     await expect.poll(() => page.getByRole("button", { name: "Close out Friday" }).count(), { timeout: 10_000 }).toBe(1);
-    await expect(page.locator(".today-block input[type=checkbox]:not(:disabled)").count()).resolves.toBe(0);
+    await expect(page.locator(".day-view .half.card input[type=checkbox]:not(:disabled)").count()).resolves.toBe(0);
     await shots(page, "past-day");
     // A link opens that day again.
     await page.reload();

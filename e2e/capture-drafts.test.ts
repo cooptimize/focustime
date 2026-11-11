@@ -210,7 +210,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     const card = page.locator('[data-drop^="2026-11-02:"]', { has: page.locator(".card-client", { hasText: "Northwind" }) }).first();
     const todos = card.locator(".pr-title");
     const before = await todos.count();
-    const look = page.locator("aside.block-panel .aw-box input");
+    const look = page.locator("aside.block-panel input.bp-box");
     await look.fill("export");
     await look.press("ArrowDown");
     await look.press("Enter");

@@ -71,7 +71,7 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await expect.poll(() => hash(page)).toMatch(/^#\/week\/day\/2026-11-02/);
     await expect.poll(() => tab(page).textContent()).toMatch(/^Week/);
     expect(await page.getByRole("navigation", { name: "Week modes" }).count()).toBe(0);
-    await expect.poll(() => page.locator("aside.block-panel").getAttribute("data-add-panel")).toMatch(/^2026-11-02\|/);
+    await expect.poll(() => page.locator("aside.block-panel").getAttribute("data-block-panel")).toMatch(/^2026-11-02\|/);
     await page.getByPlaceholder(/^Type a story for /).waitFor();
     await page.keyboard.press("Escape");
     await expect.poll(() => page.locator("aside.block-panel").count()).toBe(0);

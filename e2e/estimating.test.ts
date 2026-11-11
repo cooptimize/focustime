@@ -97,7 +97,7 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     await page.keyboard.press("Escape");
     // A plain to-do from Add work's type box is unsized.
     await openPlanDay(page);
-    const box = page.locator("aside.block-panel .aw-box input");
+    const box = page.locator("aside.block-panel input.bp-box");
     await box.fill("Unsized check for SZ-1");
     await box.press("Shift+Enter");
     const unsized = page.locator(".half.card li", { hasText: "Unsized check for SZ-1" }).locator(".size-chip.unsized").first();
