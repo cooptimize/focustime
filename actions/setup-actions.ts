@@ -53,7 +53,11 @@ export function setupView(demo: boolean, state: SetupState, through = false): Se
 }
 
 /** RF-1: whether the person has stepped through the flow to its end (a once-mark; no migration). */
-const throughOf = async (plan: PlanStore) => (await plan.markedDates(SETUP_THROUGH_MARK)).size > 0;
+// RF-1 review: someone who stepped through before RF-1 has no mark, but their last step's record says they reached
+// the end (closing early records it as dismissed, which doesn't count).
+const throughOf = async (plan: PlanStore, state?: SetupState) =>
+  (await plan.markedDates(SETUP_THROUGH_MARK)).size > 0 || (!!state?.[LAST_STEP] && reachesEnd(LAST_STEP, state[LAST_STEP]!));
+const LAST_STEP = SETUP_STEPS[SETUP_STEPS.length - 1]!;
 
 export async function setupAction(ctx: SetupContext, action: SetupAction, input: unknown): Promise<ActionResponse> {
   const o = (typeof input === "object" && input !== null && !Array.isArray(input) ? input : null) as Record<string, unknown> | null;
@@ -65,7 +69,8 @@ export async function setupAction(ctx: SetupContext, action: SetupAction, input:
   switch (action) {
     case "setup.load": {
       if (Object.keys(o).some((k) => k !== "clients")) return bad("setup.load takes { clients? }");
-      const view = setupView(false, await plan.setupState(), await throughOf(plan));
+      const state = await plan.setupState();
+      const view = setupView(false, state, await throughOf(plan, state));
       if (o.clients !== true) return { ok: true, data: view };
       const cfg = await ctx.config();
       const clients = cfg ? await ctx.clients(cfg).catch(() => null) : null;
@@ -99,7 +104,8 @@ export async function setupAction(ctx: SetupContext, action: SetupAction, input:
         // RF-1: the last step done or skipped is the end of the flow: Today stops offering what's left.
         if (reachesEnd(o.step, o.status)) await plan.markOnce(SETUP_THROUGH_MARK, ctx.today());
       }
-      return { ok: true, data: setupView(false, await plan.setupState(), await throughOf(plan)) };
+      const after = await plan.setupState();
+      return { ok: true, data: setupView(false, after, await throughOf(plan, after)) };
     }
     case "setup.reset": {
       if (Object.keys(o).length) return bad("setup.reset takes {}");

@@ -91,7 +91,7 @@ describe("the Status dot", () => {
     expect(tone(days, at("2026-11-02T10:00"))).toBe("none");
   });
 
-  it("in Los Angeles: the days start at 9:00 there, and the report goes out Monday 4:00 AM there", () => {
+  it("in Los Angeles: the days start at 9:00 there; the report goes out at 4:00 AM there", () => {
     const days = week(MON_THU, { zone: LA, next: true });
     expect(tone(days, at("2026-11-04T08:59", LA))).toBe("none");
     expect(tone(days, at("2026-11-04T09:00", LA))).toBe("amber");
@@ -109,6 +109,19 @@ describe("the Status dot", () => {
     expect(dotSchedule(days, LAST, NEXT)?.redFrom).toBe(at("2026-11-09T09:00", tokyo));
   });
 
+  it("review: a Monday that starts before the 7:00 AM ET send is the next report's, never this week's last day", () => {
+    const early = (zone: string, start: string) => {
+      const hours = legacyHours({ start, split: "12:30", end: "17:00", timeZone: zone });
+      const config = aWeekConfig({ hours });
+      const built = (weekStart: string) => aWeek({ weekStart, config, patterns: [aFocusBlock({ client: northwind, days: MON_THU })] });
+      return [...built("2026-11-02").days, ...built("2026-11-09").days].flatMap((d) => dotDays([d], zone));
+    };
+    for (const [zone, start] of [[NY, "06:30"], ["America/Chicago", "05:30"], ["Europe/London", "09:00"]] as const) {
+      const s = dotSchedule(early(zone, start), LAST, NEXT)!;
+      expect([s.amberFrom, s.redFrom], zone).toEqual([at(`2026-11-04T${start}`, zone), at(`2026-11-05T${start}`, zone)]);
+    }
+  });
+
   it("the send instants come from the report's own schedule", () => {
     expect(lastKatRun(Temporal.Instant.from(at("2026-11-04T10:00")))).toEqual(Temporal.Instant.from(LAST));
     expect(nextKatRun(Temporal.Instant.from(at("2026-11-04T10:00")))).toEqual(Temporal.Instant.from(NEXT));
@@ -116,6 +129,7 @@ describe("the Status dot", () => {
 
   it("says why, with the send time in my zone", () => {
     expect(dotText(3, NEXT, NY)).toBe("3 features you worked on have no update. The report goes out Monday 7:00 AM.");
-    expect(dotText(1, NEXT, LA)).toBe("1 feature you worked on has no update. The report goes out Monday 4:00 AM.");
+    expect(dotText(1, NEXT, LA)).toBe("1 feature you worked on has no update. The report goes out Monday 7:00 AM ET.");
+    expect(dotText(2, NEXT, "Pacific/Auckland")).toBe("2 features you worked on have no update. The report goes out Monday 7:00 AM ET.");
   });
 });

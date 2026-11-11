@@ -64,6 +64,16 @@ for (const when of clocks) {
           await page.screenshot({ path: `${out}/tabs-${tag}.png`, clip: { x: 0, y: 0, width: 1440, height: 64 } });
           if (phase === "after" && when !== "none") {
             await page.getByRole("button", { name: /^Status/ }).hover();
+            // Headless Chromium draws no native tooltip: draw the mark's own title text under it, as the browser would.
+            await page.evaluate(() => {
+              const m = document.querySelector(".view-tab .status-mark") as HTMLElement | null;
+              if (!m) return;
+              const r = m.getBoundingClientRect();
+              const tip = document.createElement("div");
+              tip.textContent = m.title;
+              Object.assign(tip.style, { position: "fixed", left: `${r.left}px`, top: `${r.bottom + 14}px`, padding: "3px 7px", font: "12px system-ui, sans-serif", background: "#fffffe", color: "#111", border: "1px solid #888", boxShadow: "0 2px 4px #0003", zIndex: "9999", whiteSpace: "nowrap" });
+              document.body.appendChild(tip);
+            });
             await page.waitForTimeout(900);
             await page.screenshot({ path: `${out}/tab-hover-${tag}.png`, clip: { x: 0, y: 0, width: 1440, height: 140 } });
           }

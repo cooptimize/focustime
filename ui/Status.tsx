@@ -1143,6 +1143,24 @@ export function useStatusNeeds(version: unknown): StatusNeeds | null {
   const [after, setAfter] = useState(0);
   const sendsAt = n?.sendsAt ?? null;
   const skew = n?.skewMs ?? 0;
+  // RF-1 review: the list changes as I work, so read it again every 30 minutes while the window is shown, and when it
+  // comes back into view after 10 minutes or more (status.load reads DevOps, so not as often as the Inbox's count).
+  useEffect(() => {
+    let last = Date.now();
+    const again = () => {
+      if (document.hidden || Date.now() - last < 10 * 60_000) return;
+      last = Date.now();
+      setAfter((k) => k + 1);
+    };
+    const id = window.setInterval(() => !document.hidden && (last = Date.now(), setAfter((k) => k + 1)), 30 * 60_000);
+    document.addEventListener("visibilitychange", again);
+    window.addEventListener("focus", again);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", again);
+      window.removeEventListener("focus", again);
+    };
+  }, []);
   useEffect(() => {
     if (!sendsAt) return;
     const wait = Date.parse(sendsAt) - (Date.now() + skew) + 60_000;

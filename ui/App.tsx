@@ -1694,7 +1694,7 @@ export function App() {
         </div>
         {!phone && <nav className="views" aria-label="Tabs">
           {TABS.map((t, n) => (
-            <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} title={TAB_TITLES[t] + ` (${n + 1})`} data-tour={t === "status" ? "tab-status" : undefined}>
+            <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} title={TAB_TITLES[t] + ` (${n + 1})` + (t === "status" && statusTone !== "none" ? `. ${statusText}` : "")} data-tour={t === "status" ? "tab-status" : undefined}>
               {TAB_NAMES[t]}
               {t === "inbox" && inboxCount > 0 && <span className="count" aria-label={`${inboxCount} need you`}>{inboxCount}</span>}
               {t === "status" && <StatusMark tone={statusTone} text={statusText} />}

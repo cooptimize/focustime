@@ -1421,6 +1421,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .status-mark.red { background: var(--risk); border: 2px solid var(--risk); }
 .view-tab .status-mark { margin-left: 2px; }
 .menu-label .status-mark { margin-left: 4px; }
+@media (forced-colors: active) { .status-mark { forced-color-adjust: none; border-color: CanvasText; } .status-mark.red { background: CanvasText; } .status-mark.amber { background: Canvas; } }
 
 /* Close out and Check-in (step 7) */
 .closeout { flex: 1; overflow: auto; padding: 8px 24px 32px; }

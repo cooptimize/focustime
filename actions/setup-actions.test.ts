@@ -137,3 +137,15 @@ describe("RF-1: stepping through to the end", () => {
     expect((await s.run<SetupView>("setup.load")).through).toBe(false);
   });
 });
+
+describe("RF-1 review: before the mark", () => {
+  it("someone who reached the end before RF-1 (Calendars recorded) has no Day line, without a mark", async () => {
+    const s = setup();
+    await s.plan.setSetupStep("day", "done");
+    await s.plan.setSetupStep("clients", "skipped");
+    await s.plan.setSetupStep("blocks", "skipped");
+    await s.plan.setSetupStep("calendars", "skipped");
+    expect(await s.run<SetupView>("setup.load")).toMatchObject({ through: true, line: null, left: { text: "3 setup steps left" } });
+  });
+});
+

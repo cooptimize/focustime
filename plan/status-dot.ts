@@ -7,12 +7,15 @@
 // that isn't PTO. Someone with no such day in the window (no focus blocks at all) falls back to their working days;
 // someone off for the whole window gets no dot. Pure: no I/O, no clock.
 import type { Day, IsoDate } from "../week/types.ts";
+import { KAT_ZONE as REPORT_ZONE } from "./status-report.ts";
 
 /** One local date as the dot reads it: when its working hours start (null: no working hours) and what kind it is. */
 export type DotDay = {
   date: IsoDate;
   /** The instant its first working segment starts, or null when the day has no working hours. */
   start: string | null;
+  /** The instant its last working segment ends (null with no working hours). */
+  end?: string | null;
   /** A working day (not catch-up, not a weekend) that isn't a whole PTO day. */
   working: boolean;
   /** A working day with a focus block on a half that isn't PTO. */
@@ -29,20 +32,26 @@ const ms = (iso: string) => Temporal.Instant.from(iso).epochMilliseconds;
 export function dotDays(days: readonly Day[], zone: string): DotDay[] {
   return days.map((d) => {
     const first = d.hours.segments[0];
-    const start = first ? Temporal.PlainDate.from(d.date).toZonedDateTime({ timeZone: zone, plainTime: Temporal.PlainTime.from(first.start) }).toInstant().toString() : null;
+    const last = d.hours.segments.at(-1);
+    const at = (t: string) => Temporal.PlainDate.from(d.date).toZonedDateTime({ timeZone: zone, plainTime: Temporal.PlainTime.from(t) }).toInstant().toString();
+    const start = first ? at(first.start) : null;
+    const end = last ? at(last.end) : null;
     const working = d.kind === "work" && !d.pto && !!first;
     const halfWorks = (s: Day["am"]) => s.focus.length > 0 && !s.pto && !s.off;
-    return { date: d.date, start, working, scheduled: working && (halfWorks(d.am) || halfWorks(d.pm)) };
+    return { date: d.date, start, end, working, scheduled: working && (halfWorks(d.am) || halfWorks(d.pm)) };
   });
 }
 
 /**
  * The dot's schedule for the report that goes out at `nextSend` (the one before went out at `lastSend`): the days whose
- * working hours start inside that window, the last scheduled one red and the one before it amber.
+ * working hours end inside that window (RF-1 review: a day still under way at a send belongs to the next report, so a
+ * Monday that starts before 7:00 AM ET is never "the last day" of the week before), the last scheduled one red from its
+ * start and the one before it amber.
  */
 export function dotSchedule(days: readonly DotDay[], lastSend: string, nextSend: string): DotSchedule | null {
   const [from, to] = [ms(lastSend), ms(nextSend)];
-  const inWindow = days.filter((d) => d.start !== null && ms(d.start) >= from && ms(d.start) < to).sort((a, b) => ms(a.start!) - ms(b.start!));
+  const endOf = (d: DotDay) => ms(d.end ?? d.start!);
+  const inWindow = days.filter((d) => d.start !== null && endOf(d) > from && endOf(d) <= to).sort((a, b) => ms(a.start!) - ms(b.start!));
   const scheduled = inWindow.filter((d) => d.scheduled);
   const pool = scheduled.length ? scheduled : inWindow.filter((d) => d.working);
   const red = pool.at(-1);
@@ -61,10 +70,15 @@ export function dotTone(s: DotSchedule | null | undefined, needs: number, now: s
   return "none";
 }
 
-/** The dot's words, for its tooltip and screen readers: "3 features you worked on have no update. The report goes out Monday 7:00 AM." */
+/**
+ * The dot's words, for its tooltip and screen readers: "3 features you worked on have no update. The report goes out
+ * Monday 7:00 AM." The time is the report's own (New York); "ET" is added when my zone shows a different clock.
+ */
 export function dotText(needs: number, sendsAt: string, zone: string): string {
-  const z = Temporal.Instant.from(sendsAt).toZonedDateTimeISO(zone);
+  const z = Temporal.Instant.from(sendsAt).toZonedDateTimeISO(REPORT_ZONE);
   const day = z.toPlainDate().toLocaleString("en-US", { weekday: "long" });
   const time = `${z.hour % 12 || 12}:${String(z.minute).padStart(2, "0")} ${z.hour < 12 ? "AM" : "PM"}`;
-  return `${needs === 1 ? "1 feature you worked on has" : `${needs} features you worked on have`} no update. The report goes out ${day} ${time}.`;
+  const mine = Temporal.Instant.from(sendsAt).toZonedDateTimeISO(zone);
+  const same = mine.toPlainDateTime().equals(z.toPlainDateTime());
+  return `${needs === 1 ? "1 feature you worked on has" : `${needs} features you worked on have`} no update. The report goes out ${day} ${time}${same ? "" : " ET"}.`;
 }
