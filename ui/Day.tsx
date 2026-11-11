@@ -533,16 +533,6 @@ export function Day(props: Props) {
               }}
             />
           </NextTodoCtx.Provider>
-          {mode === "now" && past && !ptoDay && (
-            <p className="today-other muted">
-              A past day: tick what got done, or move what didn't forward.{" "}
-              {props.onCloseOutOn && (
-                <button type="button" className="link-btn" onClick={() => props.onCloseOutOn!(date)}>
-                  Close out {dayWord}
-                </button>
-              )}
-            </p>
-          )}
           {ptoDay && picks.some(live) && (
             <ul className="checklist day-pto-todos" aria-label={`Planned on ${dayWord}, read only`}>
               {picks.filter(live).map((p) => <PickRow key={p.id} pick={p} toggle={view.toggle} density="today" readOnly canTick={false} timeEditable={false} />)}
@@ -569,6 +559,17 @@ export function Day(props: Props) {
             {mode === "checkin" && <CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} act={act} onAsks={props.onAsks ?? props.onInbox} />}
           </div>
         </div>
+      )}
+
+      {mode === "now" && past && !ptoDay && day && !weekendDay && (
+        <p className="today-other muted">
+          A past day: tick what got done, or move what didn't forward.{" "}
+          {props.onCloseOutOn && (
+            <button type="button" className="link-btn" onClick={() => props.onCloseOutOn!(date)}>
+              Close out {dayWord}
+            </button>
+          )}
+        </p>
       )}
 
       {mode === "closeout" && (

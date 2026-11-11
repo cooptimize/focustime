@@ -793,7 +793,9 @@ export function App() {
   }, [data, zonedNow, clock, hasHours]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** WD-2: Day's own screen (no flow open): its date, and whether its block panel was left open on this device. */
-  const dayOn = nav.tab === "today" && !nav.flow && !loc.overlay;
+  // A Guide tour runs over the real screen, so the panel stays where it is under one.
+  const underTour = !loc.overlay || loc.overlay.kind === "tour";
+  const dayOn = nav.tab === "today" && !nav.flow && underTour;
   const dayDate: IsoDate | null = dayOn && data ? (dayShown ?? data.planDay.date) : null;
   const [dayPanelKept, setDayPanelKept] = useState(() => readDayPanel());
   const keepDayPanel = useCallback((open: boolean) => {
@@ -1616,7 +1618,7 @@ export function App() {
   const { week } = shownData ?? data;
   // WD-2: the one block panel, on Week and on Day: where the address (or Day's remembered state) puts it, or, while a
   // to-do is dragged out of its block with the panel closed, on that block as the drop area for Take off the plan.
-  const panelScreen = dayOn || (nav.tab === "week" && nav.mode === "board" && !loc.overlay);
+  const panelScreen = dayOn || (nav.tab === "week" && nav.mode === "board" && underTour);
   const shownPanel = !panelScreen ? null : panelAt ?? (dragAt && !phone && week.days.some((d) => d.date === dragAt.date) ? dragAt : null);
   const panelEl = shownPanel ? (
     <BlockPanel
@@ -1739,7 +1741,12 @@ export function App() {
       }}
       // WD-2: a to-do dragged out of its block: the block panel shows as the drop area (it opens when it was closed);
       // dropped there, it comes off the plan and the panel stays on that block.
-      onPickDrag={setDragAt}
+      onPickDrag={(at) => {
+        setDragAt(at);
+        // The block it is dragged from is the selected one, so its day stays open while the panel takes its room.
+        const i = at && !panelAt ? week.days.findIndex((d) => d.date === at.date) : -1;
+        if (at && i >= 0) setSel({ dayIndex: i, half: at.half });
+      }}
       onTookOff={(at) => {
         if (!panelAt && !phone) openBlock(at.date, at.half);
       }}

@@ -69,15 +69,15 @@ describe.skipIf(!CHROMIUM)("UI-8 bug round", () => {
       const mon = page.locator('.half[data-drop="2026-11-02:AM"]');
       // Open Monday AM's panel (Cooptimize): its stories are the drag source.
       await mon.click({ position: { x: 60, y: 140 } });
-      const panel = page.getByRole("region", { name: "Your stories for Cooptimize" });
-      await panel.waitFor();
+      const panel = page.locator("aside.block-panel");
+      await panel.locator(".aw-features .aw-row[draggable=true]").first().waitFor();
       const box = await page.locator("aside.block-panel").boundingBox();
       expect(overlaps(box!, (await friday.boundingBox())!)).toBe(false);
       await expect(uncovered(friday)).resolves.toBe(true);
       if (vp.width === 1920) await shots(page, "ui8-friday-panel");
 
       // A story onto Monday AM, then that pick from Monday's card onto Friday.
-      await drag(page, panel.locator(".ps-row[data-story]").first(), mon);
+      await drag(page, panel.locator(".aw-features .aw-row[draggable=true]:not(:has(.aw-where))").first(), mon);
       await page.locator(".undo-toast", { hasText: /^Added to Mon/ }).waitFor();
       const pick = mon.locator("li[draggable='true']").first();
       await pick.waitFor();

@@ -34,32 +34,40 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("Today steps to any day: ‹ › and [ ], the date in the address, Back to today; other days read only; [ never fires while typing", async () => {
+  it("Day steps to any day: ‹ › and [ ], the date in the address, Today comes back; a day ahead takes work, a past day ticks and moves; [ never fires while typing", async () => {
     const { page, errors } = await freshPage(h);
     await page.evaluate(() => (location.hash = "#/today"));
     await page.locator(".today-head h1").waitFor();
-    await expect(title(page)).resolves.toMatch(/^Today/);
+    // WD-2: one header row: the date, then a Today chip on today (a Today button on another day).
+    await expect(title(page)).resolves.toBe("Mon, Nov 2");
+    await expect(page.locator(".day-bar .day-today").textContent()).resolves.toBe("Today");
+    expect(await page.locator(".day-bar").getByRole("button", { name: "Today", exact: true }).count()).toBe(0);
     await shots(page, "today");
     await page.keyboard.press("]");
     await expect.poll(() => hash(page)).toBe("#/day/2026-11-03");
-    await expect.poll(() => title(page)).toMatch(/^Tuesday.*ahead/);
-    await expect.poll(() => page.locator(".today-other").textContent(), { timeout: 10_000 }).toContain("A day ahead");
+    await expect.poll(() => title(page)).toBe("Tue, Nov 3");
+    await expect(page.locator(".day-bar .day-when").textContent()).resolves.toBe("ahead");
+    // A day ahead is a day: no "A day ahead" line, and its blocks have + Add.
+    expect(await page.locator(".today-other").count()).toBe(0);
+    await expect.poll(() => page.locator(".day-view .half.card .add-work.add-row").count()).toBeGreaterThan(0);
     // Nothing nags on another day, and nothing starts there.
     await expect(page.locator(".urgent-strip, .attention, .moment-card, .start-focus").count()).resolves.toBe(0);
     // Back past the weekend with ‹ (the button) and [ (the key): Friday, Oct 30, a past day with Close out.
     await page.getByRole("button", { name: "Previous day" }).click();
     await page.keyboard.press("[");
     await expect.poll(() => hash(page)).toBe("#/day/2026-10-30");
-    await expect.poll(() => title(page)).toMatch(/^Friday.*past/);
+    await expect.poll(() => title(page)).toBe("Fri, Oct 30");
+    await expect(page.locator(".day-bar .day-when").textContent()).resolves.toBe("past");
     await expect.poll(() => page.getByRole("button", { name: "Close out Friday" }).count(), { timeout: 10_000 }).toBe(1);
-    await expect(page.locator(".day-view .half.card input[type=checkbox]:not(:disabled)").count()).resolves.toBe(0);
+    // A past day takes no work.
+    expect(await page.locator(".day-view .add-work").count()).toBe(0);
     await shots(page, "past-day");
     // A link opens that day again.
     await page.reload();
-    await expect.poll(() => title(page)).toMatch(/^Friday/);
-    await page.getByRole("button", { name: "Back to today" }).click();
+    await expect.poll(() => title(page)).toBe("Fri, Oct 30");
+    await page.locator(".day-bar").getByRole("button", { name: "Today", exact: true }).click();
     await expect.poll(() => hash(page)).toBe("#/day");
-    await expect.poll(() => title(page)).toMatch(/^Today/);
+    await expect.poll(() => title(page)).toBe("Mon, Nov 2");
     // Typing [ in the capture box changes nothing.
     await page.keyboard.press("n");
     const box = page.getByRole("textbox").first();

@@ -422,8 +422,9 @@ export function CardPick({ pick, tabIndex }: { pick: Pick; tabIndex: number }) {
   const drag = useDragSource(pickDragged(pick));
   // WD-2: on Day today the next to-do is highlighted and is the only one with Start focus (or the running timer).
   const next = useContext(NextTodoCtx);
-  if (next && next.id === pick.id) return <PickRow pick={pick} toggle={plan.toggle} density="week" tabIndex={tabIndex} typeIcon dragProps={drag} next extra={next.actions(pick)} />;
-  return <PickRow pick={pick} toggle={plan.toggle} density="week" tabIndex={tabIndex} typeIcon dragProps={drag} />;
+  // The title opens the story card (FN-1), on Week and on Day; a click on a row never opens the block panel.
+  if (next && next.id === pick.id) return <PickRow pick={pick} toggle={plan.toggle} link density="week" tabIndex={tabIndex} typeIcon dragProps={drag} next extra={next.actions(pick)} />;
+  return <PickRow pick={pick} toggle={plan.toggle} link density="week" tabIndex={tabIndex} typeIcon dragProps={drag} />;
 }
 
 /** Picks moved to the overflow day (step 13.6, D238): planned and done ones, committed or not. */

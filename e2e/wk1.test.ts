@@ -73,8 +73,9 @@ async function dragAcross(page: Page, from: Locator, to: string, toast: RegExp):
 
 async function openPanel(page: Page): Promise<Locator> {
   await page.locator(`main.grid ${MON_AM}`).click({ position: { x: 14, y: 12 } });
-  const panel = page.getByRole("region", { name: "Your stories for Cooptimize" });
-  await panel.waitFor();
+  // WD-2: the block panel; its Add list's rows are the stories to drag.
+  const panel = page.locator("aside.block-panel");
+  await panel.locator(".aw-features .aw-row[draggable=true]").first().waitFor();
   return panel;
 }
 
@@ -101,7 +102,7 @@ describe.skipIf(!CHROMIUM)("WK-1: Week fits every width from 1024", () => {
       // Panel open, Default: a story from the panel over every day, onto Friday's catch-up.
       let panel = await openPanel(page);
       await fits(page);
-      await dragAcross(page, panel.locator(".ps-row[data-story]").first(), FRI, /^Added to Fri/);
+      await dragAcross(page, panel.locator(".aw-features .aw-row[draggable=true]:not(:has(.aw-where))").first(), FRI, /^Added to Fri/);
 
       // Panel closed, Default: Friday's pick over every day, back to Monday.
       await closePanel(page);
@@ -116,7 +117,7 @@ describe.skipIf(!CHROMIUM)("WK-1: Week fits every width from 1024", () => {
       // Panel open, Larger: another story from the panel over every day (Friday may be folded now), onto Friday.
       panel = await openPanel(page);
       await fits(page);
-      await dragAcross(page, panel.locator(".ps-row[data-story]").nth(1), FRI, /^Added to Fri/);
+      await dragAcross(page, panel.locator(".aw-features .aw-row[draggable=true]:not(:has(.aw-where))").first(), FRI, /^Added to Fri/);
       expect(errors).toEqual([]);
       await page.close();
     }, T);

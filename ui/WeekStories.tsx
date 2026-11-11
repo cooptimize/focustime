@@ -152,6 +152,18 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
     return () => onPickDrag?.(null);
   }, [dragPick]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // WD-2: a native drag whose source left the page (its day folded when the panel opened) never gets its dragend, so
+  // the drop area would stay. The pointer moving again means the drag is over: end it. (No mousemove fires during a
+  // native drag; a touch drag has its own end.)
+  const nativeDrag = !!dragging && !touch;
+  useEffect(() => {
+    if (!nativeDrag) return;
+    const done = () => (setDragging(null), setHover(null));
+    window.addEventListener("mousemove", done);
+    window.addEventListener("dragend", done, true);
+    return () => (window.removeEventListener("mousemove", done), window.removeEventListener("dragend", done, true));
+  }, [nativeDrag]);
+
   const menuFor = useCallback(
     (d: Dragged, title: string): MenuStep => ({
       title: `${d.pickId !== undefined ? "Move" : "Add"} ${title} to…`,
