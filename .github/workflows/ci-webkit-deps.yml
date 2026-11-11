@@ -1,0 +1,143 @@
+# CI-2: proof that the browser jobs' WebKit packages install with the package servers unreachable
+# (scripts/ci-webkit-deps.sh). Runs only when the script or the CI workflows change, and on manual dispatch. Tests
+# nothing of FocusTime's and isn't part of ci's gate or deploy-dev.
+#
+# Two legs, in order: "empty cache, network open" installs the usual way and saves the cache; then "cache, package
+# servers blocked" restores it the way the browser jobs do, points every apt server's name at 127.0.0.1, and requires
+# the offline path and a WebKit that starts.
+name: ci-webkit-deps
+on:
+  pull_request:
+    paths:
+      - scripts/ci-webkit-deps.sh
+      - .github/workflows/ci.yml
+      - .github/workflows/ci-webkit-deps.yml
+      # A new Playwright version can change the package list and always changes the cache's stamp.
+      - package.json
+      - package-lock.json
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  online:
+    name: WebKit packages, empty cache, network open
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      image: ${{ steps.pw.outputs.image }}
+      version: ${{ steps.pw.outputs.version }}
+      hash: ${{ steps.deps.outputs.hash }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Versions
+        id: pw
+        run: |
+          echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageOS:?}-${ImageVersion:?}" >> "$GITHUB_OUTPUT"
+      - name: Cache the Playwright browser
+        id: browser-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-webkit-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: Install WebKit
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: npx playwright-core install webkit
+      - name: Install WebKit's system packages
+        id: deps
+        env:
+          CI2_IMAGE: ${{ steps.pw.outputs.image }}
+        run: bash scripts/ci-webkit-deps.sh
+      - name: It took the usual way and rewrote the cache
+        run: |
+          test "${{ steps.deps.outputs.path }}" = online
+          test "${{ steps.deps.outputs.save }}" = true
+          test -s ~/apt-webkit/manifest && test -s ~/apt-webkit/stamp
+          echo "$(wc -l < ~/apt-webkit/manifest) packages, hash ${{ steps.deps.outputs.hash }}"
+      - name: Save WebKit's system packages
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ~/apt-webkit
+          key: apt-webkit2-${{ steps.pw.outputs.image }}-${{ steps.pw.outputs.version }}-${{ steps.deps.outputs.hash }}
+  offline:
+    name: WebKit packages, cache, package servers blocked
+    needs: online
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Versions
+        id: pw
+        run: |
+          echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageOS:?}-${ImageVersion:?}" >> "$GITHUB_OUTPUT"
+      # GitHub rolls a new runner image out over days, so the two legs can land on different ones. The cache is only
+      # meant for its own image, so a mismatch can't prove anything: re-run the workflow.
+      - name: Same runner image as the first leg
+        run: |
+          if [ "${{ steps.pw.outputs.image }}" != "${{ needs.online.outputs.image }}" ]; then
+            echo "::error::This leg runs on ${{ steps.pw.outputs.image }}, the cache was written on ${{ needs.online.outputs.image }}. Re-run the workflow."
+            exit 1
+          fi
+      - name: Cache the Playwright browser
+        id: browser-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-webkit-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: Install WebKit
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: npx playwright-core install webkit
+      # Exactly the cache the first leg saved, with the browser jobs' prefixes after it.
+      - name: Restore WebKit's system packages
+        id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/apt-webkit
+          key: apt-webkit2-${{ needs.online.outputs.image }}-${{ needs.online.outputs.version }}-${{ needs.online.outputs.hash }}
+          restore-keys: |
+            apt-webkit2-${{ steps.pw.outputs.image }}-${{ steps.pw.outputs.version }}-
+      - name: Block the package servers
+        run: |
+          # Every host apt would use (the mirror list and the sources), plus Ubuntu's own names.
+          hosts=$( { cat /etc/apt/apt-mirrors.txt 2>/dev/null; cat /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; } \
+            | grep -oE '[a-z]+://[^/[:space:]]+' | sed -E 's#^[a-z]+://##' | sort -u)
+          hosts="$hosts archive.ubuntu.com azure.archive.ubuntu.com security.ubuntu.com ports.ubuntu.com"
+          for h in $hosts; do echo "127.0.0.1 $h"; echo "::1 $h"; done | sort -u | sudo tee -a /etc/hosts >/dev/null
+          echo "blocked: $(echo $hosts | tr ' ' '\n' | sort -u | tr '\n' ' ')"
+          for h in $hosts; do
+            if curl -sS --max-time 10 -o /dev/null "http://$h/"; then echo "$h is still reachable"; exit 1; fi
+          done
+          # And apt itself can't fetch: a download of any package from the lists fails.
+          if timeout 120 sudo apt-get install -y -q --download-only --reinstall -o Acquire::Retries=0 "$(dpkg-query -W -f='${Package}\n' coreutils)"; then
+            echo "apt could still download"; exit 1
+          fi
+          echo "no package server answers, and apt can't download"
+      - name: Install WebKit's system packages
+        id: deps
+        env:
+          CI2_IMAGE: ${{ steps.pw.outputs.image }}
+        run: bash scripts/ci-webkit-deps.sh
+      - name: It took the offline path and WebKit starts
+        run: |
+          test "${{ steps.deps.outputs.path }}" = offline
+          node -e '
+            const { webkit } = require("playwright-core");
+            (async () => { const b = await webkit.launch(); const p = await b.newPage();
+              await p.setContent("<p>ok</p>"); console.log("WebKit", b.version(), "started"); await b.close(); })()
+              .catch((e) => { console.error(e); process.exit(1); });
+          '

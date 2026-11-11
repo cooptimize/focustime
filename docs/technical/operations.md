@@ -1,6 +1,6 @@
 # Operations
 
-For whoever deploys, watches or fixes FocusTime. The step-by-step commands are in the [runbook](../azure/runbook.md); this page is the map. Checked against `13cd461` on Nov 7, 2026 (the Find an item row against `feat/dv2-devops-fresh` on Nov 11).
+For whoever deploys, watches or fixes FocusTime. The step-by-step commands are in the [runbook](../azure/runbook.md); this page is the map. Checked against `13cd461` on Nov 7, 2026 (the Find an item row against `feat/dv2-devops-fresh` on Nov 11, the browser shards row against `chore/ci2-webkit-deps` on Nov 11).
 
 ## Environments
 
@@ -73,6 +73,7 @@ The bot itself deploys with the Bicep. The Teams app package (the manifest and i
 | FocusTime doesn't show in Teams | Prod: the package isn't uploaded, isn't Allowed in Manage apps, or a permission policy blocks custom apps; it can take a few hours to reach people. Dev: the tester's setup policy hasn't applied yet (hours), or they haven't uploaded the package | Check Teams admin center › Manage apps and the policies ([teams-bot.md](../setup/teams-bot.md)) |
 | The bot doesn't answer the first message on dev | Dev wakes from zero in about 30 seconds; Teams gives a bot 10 to 15 | Send it again. Prod always runs |
 | A source shows as not live: Outlook, Google or DevOps writes say they aren't connected | That person hasn't connected it, their sign-in expired, or a consent is missing | The source's own message names the fix: Settings › Connections (consents, Reconnect), Settings › Clients (Enable DevOps writes) |
+| Every browser shard fails at "Install WebKit's system packages" (or another step before "Browser tests") with `Temporary failure resolving` or `Failed to fetch` | The Ubuntu package servers, npm or the Playwright CDN couldn't be reached; nothing is wrong with the code. Since CI-2 the packages install from the cache with no network on the same runner image, so this is left only on a new image or Playwright version | Re-run the failed jobs once it's back: `gh run rerun <run id> --failed`. A deploy-dev that ran CI itself waits on it: re-run its failed jobs too. Runbook, [When CI's browser jobs fail before testing](../azure/runbook.md#when-cis-browser-jobs-fail-before-testing-ci-2) |
 | Dev is slow on the first request | A cold start: dev scales to zero | Wait a few seconds; it stays awake for 300 s after the last request |
 | "AI isn't set up" | No `ft-openai-key` in that environment's vault | `infra/scripts/openai-key.sh` (used within a minute, no restart) |
 | Push notifications aren't set up | No `ft-vapid-key` | `infra/scripts/vapid-key.sh` |

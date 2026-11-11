@@ -22,15 +22,25 @@ const cardTitles = (page: Page, date: string, half: string) => block(page, date,
 const onBlock = (page: Page) => panel(page).locator(".bp-on .pr-title").allInnerTexts();
 const inBox = (page: Page) => page.evaluate(() => !!document.activeElement?.classList.contains("bp-box"));
 const toast = (page: Page) => page.locator(".undo-toast");
+/**
+ * Go to an address and wait for its page. By its address, not the 2 key: after a reload the key can land before the app
+ * listens (Day has cards too). The address alone has the same gap: set between the app's first render and its effects,
+ * the app's own address is pushed over it and no hashchange follows (seen in CI under load, a different test each run).
+ * So it is set again, while the page hasn't shown, whenever the address isn't the one asked for.
+ */
+async function goTo(page: Page, address: string, ready: Locator) {
+  const set = () => page.evaluate((a) => void (location.hash !== a && (location.hash = a)), address);
+  await set();
+  await expect
+    .poll(async () => (await ready.isVisible()) || (await set(), false), { timeout: 30_000, interval: 250 })
+    .toBe(true);
+}
 async function week(page: Page) {
-  // By its address, not the 2 key: after a reload the key can land before the app listens (Day has cards too).
-  await page.evaluate(() => (location.hash = "#/week"));
-  await page.locator(".week-head").waitFor({ timeout: 30_000 });
+  await goTo(page, "#/week", page.locator(".week-head").first());
   await page.locator("main.grid .half.card").first().waitFor({ timeout: 30_000 });
 }
 async function day(page: Page, date?: string) {
-  await page.evaluate((d) => (location.hash = d ? `#/day/${d}` : "#/day"), date ?? null);
-  await page.locator(".day-view .day-bar").waitFor({ timeout: 30_000 });
+  await goTo(page, date ? `#/day/${date}` : "#/day", page.locator(".day-view .day-bar").first());
 }
 /** A real pointer drag (the HTML5 drag starts once the pointer moves), ending over `to`. */
 async function drag(page: Page, from: Locator, to: Locator, mid?: () => Promise<void>) {
