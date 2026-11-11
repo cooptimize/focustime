@@ -4603,8 +4603,20 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .sug-phone .sug-row .sug-plus, .sug-phone .sug-row .sug-x { width: 36px; height: 36px; }
 .sug-phone .sug-line .link-btn { font-size: var(--fs-2); padding: 6px 0; }
 .sug-timeline { margin-top: 4px; }
-.day-head:has(.sug-week-day) { flex-wrap: wrap; row-gap: 2px; height: auto; min-height: calc(26px * var(--text-scale)); overflow: visible; }
-.sug-week-day { flex: 1 0 100%; order: 10; padding: 0 2px; }
+/* Week's day line sits on the header's own row, right of the date and before ⋯ (the header keeps its height: the
+   grid's rows are shared); in a narrow column the count drops its word; Keep all and Clear always show. */
+.day-head:has(.sug-week-day) { flex-wrap: nowrap; }
+.day-head:has(.sug-week-day) .day-gap { display: none; }
+.day-head:has(.sug-week-day) .more-btn { order: 2; }
+.sug-week-day { order: 1; margin: 0 0 0 auto; align-self: center; white-space: nowrap; column-gap: 4px; flex-wrap: nowrap; min-width: 0; }
+.sug-week-day > * { flex: none; }
+.day-head:has(.sug-week-day) { container-type: inline-size; }
+/* A narrow column: the count alone ("2", "2 suggested" on hover). */
+@container (max-width: 25em) { .sug-week-day .sug-w { display: none; } }
+.sug-week-day .link-btn { font-size: var(--fs-1); }
+/* Room for the line: the short date ("Wed 4") while it shows. */
+.day-head:has(.sug-week-day) .date-long { display: none; }
+.day-head:has(.sug-week-day) .date-short { display: inline; }
 .sug-day-head { align-self: center; margin-left: 4px; font-size: var(--fs-2); }
 .sug-day-head .link-btn { font-size: var(--fs-2); }
 .moment-card .sug-morning-keep { flex: none; }

@@ -5,6 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { emptyFrom } from "./sg1-helpers.ts";
 
 const T = 180_000;
 const block = (page: Page, date: string, half: string) => page.locator(`[data-drop="${date}:${half}"]`).first();
@@ -45,7 +46,8 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     // The row now says it's here.
     await expect.poll(() => panel(page).locator(".aw-row.placed", { hasText: title }).count()).toBeGreaterThan(0);
     await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
-    await expect.poll(() => block(page, "2026-11-03", "AM").innerText()).not.toContain(title);
+    // SG-1: the emptied block may offer it again as a suggestion; it is no longer a to-do there.
+    await expect.poll(() => block(page, "2026-11-03", "AM").locator(".checklist .pr-title").allInnerTexts()).not.toContain(title);
     await expect.poll(() => room(page)).toBe(before);
     expect(errors).toEqual([]);
     await page.close();
@@ -267,27 +269,20 @@ describe.skipIf(!CHROMIUM)("WD-1: the To place line (browser, demo on Tuesday)",
   }, T);
   afterAll(async () => h?.stop());
 
-  it("an unfinished to-do from yesterday shows in the notice line; Review, keep it: the count drops, and the line goes at zero", async () => {
+  it("an unfinished to-do from yesterday shows in the notice line; keep its suggestion: the count drops", async () => {
     const { page, errors } = await freshPage(h);
+    // SG-1: suggestions show only in empty blocks; the demo's to-dos from today on come off.
+    await emptyFrom(page, "2026-11-03");
     await openWeek(page);
     const line = page.locator(".to-place-line");
     await line.waitFor({ timeout: 30_000 });
     const n0 = Number((await line.innerText()).match(/^(\d+) to place/)![1]);
     expect(await line.innerText()).toMatch(/\d+ unfinished/);
-    await line.getByRole("button", { name: "Review" }).click();
-    const summary = panel(page).locator("section.carry-summary");
-    await summary.waitFor();
-    await summary.getByRole("button", { name: "Review" }).click();
-    await summary.locator(".flw-row").first().getByRole("button", { name: "Keep" }).click();
+    // The unfinished to-do is a suggested row in its client's next block (since SG-1; UI-B's Review list is gone).
+    const unfinished = page.locator("main.grid .sug-row:has(.sug-take[title^='Unfinished from'])").first();
+    await unfinished.waitFor({ timeout: 30_000 });
+    await unfinished.locator(".sug-plus").click();
     await expect.poll(async () => ((await line.count()) ? Number((await line.innerText()).match(/^(\d+)/)![1]) : 0)).toBeLessThan(n0);
-    // Keep all: the suggestions are placed and the count drops again (what has no block left this week stays in its fold,
-    // and the line goes only when nothing at all waits: plan/addwork.test.ts).
-    const n1 = Number((await line.innerText()).match(/^(\d+)/)![1]);
-    if (await summary.getByRole("button", { name: "Keep all" }).count()) {
-      await summary.getByRole("button", { name: "Keep all" }).click();
-      await expect.poll(async () => ((await line.count()) ? Number((await line.innerText()).match(/^(\d+)/)![1]) : 0)).toBeLessThan(n1);
-    }
-    await expect.poll(() => summary.getByRole("button", { name: "Keep all" }).count()).toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

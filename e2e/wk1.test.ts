@@ -2,10 +2,11 @@
 // panel open and closed, at Default and Larger text: the page never scrolls sideways, every day column is fully in view
 // and clear of the panel, and each day answers a dragged story (its fit tip, or why it can't take it), with real drops
 // on Monday and Friday. The now line and the PTO day show in every tier (rail, ruler, strip, mini, and on a folded
-// strip). UI-B's unfinished suggestions still show at a mid-week clock (Wednesday 2:00 PM).
+// strip). SG-1's suggestions (UI-B's unfinished to-dos among them) still show at a mid-week clock (Wednesday 2:00 PM).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
 import { CHROMIUM, freshPage, timelineOn, startDemo, type Harness } from "./harness.ts";
+import { emptyFrom } from "./sg1-helpers.ts";
 
 const T = 240_000;
 const WIDTHS: [number, number][] = [[1920, 1080], [1600, 900], [1440, 900], [1366, 768], [1280, 800], [1024, 768]];
@@ -186,10 +187,12 @@ describe.skipIf(!CHROMIUM)("WK-1: unfinished suggestions at every tier (Wednesda
   for (const [width, height, big] of [[1920, 1080, false], [1440, 900, false], [1024, 768, false], [1024, 768, true]] as const) {
     it(`shows them at ${width}${big ? ", Larger" : ""}, with the panel open and closed`, async () => {
       const { page, errors } = await freshPage(h, { width, height });
+      // SG-1: suggestions sit only in an empty block; Wednesday PM (today) is emptied.
+      await emptyFrom(page, "2026-11-04", ["2026-11-04:PM"]);
       await page.keyboard.press("2");
       await page.locator("main.grid").waitFor();
       if (big) await larger(page, true);
-      const card = page.locator("main.grid .suggested-card").first();
+      const card = page.locator('main.grid [data-drop="2026-11-04:PM"] .sug-row').first();
       await card.waitFor();
       await expect(card.isVisible()).resolves.toBe(true);
       // Open the panel on Wednesday PM (today, where the suggestion sits): still in view beside it.

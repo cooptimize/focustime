@@ -6,13 +6,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
 import { phonePage } from "./mb1-helpers.ts";
+import { call, emptyFrom } from "./sg1-helpers.ts";
 
 const T = 180_000;
 const MON = "2026-11-02";
 const TUE = "2026-11-03";
 const WED = "2026-11-04";
-const call = (page: Page, action: string, input: unknown) =>
-  page.evaluate(([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()), [action, input] as const) as Promise<{ ok: boolean; data: Record<string, unknown> }>;
 const block = (page: Page, date: string, half: string) => page.locator(`[data-drop="${date}:${half}"]`).first();
 const sugIn = (b: Locator) => b.locator(".sug-block");
 const sugTitles = (b: Locator) => b.locator(".sug-row .sug-title").allInnerTexts();
@@ -27,13 +26,6 @@ async function goTo(page: Page, address: string, ready: Locator) {
 const week = (page: Page) => goTo(page, "#/week", page.locator("main.grid .half.card").first());
 const day = (page: Page, date?: string) => goTo(page, date ? `#/day/${date}` : "#/day", page.locator(".day-view .day-bar").first());
 
-/** Every planned to-do from `from` on comes off, then the page reloads. */
-async function emptyFrom(page: Page, from: string) {
-  const w = (await call(page, "week.load", {})).data as { plan?: Record<string, { picks: { id: number; status: string }[] }> };
-  for (const [date, d] of Object.entries(w.plan ?? {})) if (date >= from) for (const p of d.picks) if (p.status === "planned") await call(page, "pick.remove", { id: p.id });
-  await page.reload();
-  await page.waitForSelector(".topbar", { timeout: 60_000 });
-}
 async function start(h: Harness, viewport = { width: 1440, height: 900 }) {
   const { page, errors } = await freshPage(h, viewport);
   await emptyFrom(page, TUE);

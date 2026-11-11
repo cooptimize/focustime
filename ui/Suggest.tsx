@@ -96,7 +96,10 @@ export function DaySuggestLine({ date, className = "", tabIndex = 0 }: { date: I
   const day = dayWord(date);
   return (
     <p className={`sug-day ${className}`.trim()} role="group" aria-label={`Suggested for ${day}`}>
-      <span className="sug-count">{all.length} suggested</span>
+      <span className="sug-count" title={`${all.length} suggested`}>
+        {all.length}
+        <span className="sug-w"> suggested</span>
+      </span>
       <span className="sug-sep" aria-hidden="true">·</span>
       <button type="button" className="link-btn sug-keep-all" tabIndex={tabIndex} onClick={(e) => act(e, () => void sg.keep(all, `${all.length === 1 ? "1 to-do" : `${all.length} to-dos`} for ${day}`, true))} aria-label={`Keep all ${all.length} suggested for ${day}`}>
         Keep all
