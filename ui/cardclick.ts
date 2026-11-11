@@ -14,6 +14,6 @@ export function interactive(e: ReactMouseEvent): boolean {
 export function onRowOrChip(e: ReactMouseEvent): boolean {
   const t = e.target as HTMLElement;
   const card = e.currentTarget as HTMLElement;
-  const hit = t.closest("[data-pick], .checklist li, .placed-features li, .checkin-chips li, .card-events li, .flex-list li, .status-pill, .due-badge, .late-chip, .card-live, .card-calls");
+  const hit = t.closest("[data-pick], .checklist li, .placed-features li, .checkin-chips li, .sug-block, .card-events li, .flex-list li, .status-pill, .due-badge, .late-chip, .card-live, .card-calls");
   return !!hit && card.contains(hit);
 }

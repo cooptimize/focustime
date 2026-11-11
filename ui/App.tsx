@@ -42,7 +42,7 @@ import { AddPanelCtx } from "./weekctx.ts";
 /** WD-1: Thursday and Friday offer next week when it's empty. */
 const nextWeekEmptyDay = (d: IsoDate) => [4, 5].includes(Temporal.PlainDate.from(d).dayOfWeek);
 import { dayRolledOver } from "./planday.ts";
-import { PlanCtx, resumeSlots } from "./planview.ts";
+import { clientNames, PlanCtx, resumeSlots } from "./planview.ts";
 import { DevOpsWork, workByClient } from "./work.ts";
 import { afterLoad, createAutoRefresh, type LoadState, type RefreshTrigger } from "./refresh.ts";
 import { StatusBar } from "./StatusBar.tsx";
@@ -514,6 +514,21 @@ export function App() {
     }
   }, []);
   const shownData = useMemo(() => (data && !showPersonal ? { ...data, week: hidePersonal(data.week) } : data), [data, showPersonal]);
+  // SG-1: "Suggest work for empty blocks" (Settings › Planning, Week's and Day's ⋯ as "Suggestions"). Saved as the person's setting.
+  const [suggestOn, setSuggestOn] = useState(true);
+  useEffect(() => {
+    if (data) setSuggestOn(data.planning.suggest !== false);
+  }, [data?.planning.suggest]); // eslint-disable-line react-hooks/exhaustive-deps
+  const saveSuggest = useCallback(async (on: boolean) => {
+    setSuggestOn(on);
+    try {
+      await call("settings.save", { section: "planning", values: { suggest: on } });
+      setNotice(on ? "Suggestions on" : "Suggestions off");
+    } catch (e) {
+      setSuggestOn(!on);
+      setNotice(`Not saved: ${e instanceof Error ? e.message : "unknown error"}`);
+    }
+  }, []);
   /**
    * WK-2: the Board's Timeline toggle (its header button, B, Week's ⋯, the command). Hidden, every card uses its full
    * width for its to-dos and lists its meetings; remembered per person in [ui] show_timelines.
@@ -1715,6 +1730,12 @@ export function App() {
   };
   tbEnvRef.current = tbEnv;
   // U5.1: the "N personal hidden" switch: the footer's chip on a computer, a line in the status sheet on the phone (MB-1).
+  // SG-1: the unfinished lists on today's week; the suggestions on a week that holds today or the next working day.
+  const carryProps = (nowIso: string) => {
+    const nwd = data.nextWorkDay ?? null;
+    const holds = week.days.some((d) => d.date === data.planDay.date || d.date === nwd);
+    return { thisWeek: data.weekStart === data.today.weekStart, suggest: suggestOn && holds, nextWorkDay: nwd, version: data, week, now: nowIso, onChanged: reloadQuiet, clientName: clientNames(data) };
+  };
   const personalHiddenChip =
     !showPersonal && (base === "week" || base === "today") ? (() => {
       // Week counts the week's personal events, Today today's.
@@ -1735,7 +1756,7 @@ export function App() {
     <CoworkCtx.Provider value={cowork}>
     <DevOpsWork.Provider value={work}>
     <WeekItems.Provider value={weekItems}>
-    <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, minSizes: data.planning.minSizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures, timeboxes: data.timeboxes, followUps: data.followUps, today: data.planDay.date, checkins: data.checkins ?? [] }}>
+    <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, minSizes: data.planning.minSizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures, timeboxes: data.timeboxes, followUps: data.followUps, today: data.planDay.date, checkins: data.checkins ?? [], resolved: data.planBits?.resolved ?? [] }}>
     <TimeboxCtx.Provider value={tbEnv}>
     <DevOpsFreshCtx.Provider value={fresh}>
     <DevOpsWriteCtx.Provider value={devopsWrites.env}>
@@ -2004,7 +2025,7 @@ export function App() {
           phone && !aheadAnyway && loc.overlay?.kind !== "tour" ? <AheadNotice onOpen={() => setAheadAnyway(true)} onToday={() => openTab("today")} /> : <PhoneGate phone={phone}><Ahead data={data} mode={nav.mode} item={nav.item ?? null} switcher={switches.ahead} renderSwitch={aheadSwitch} onChanged={reloadQuiet} readOnly={phone} /></PhoneGate>
         ) : null
       ) : base === "today" ? (
-        <CarryProvider active={data.weekStart === data.today.weekStart} version={data} week={week} now={now ?? new Date(clock).toISOString()} onChanged={reloadQuiet}>
+        <CarryProvider {...carryProps(now ?? new Date(clock).toISOString())}>
         <AddPanelCtx.Provider value={{ at: shownPanel, open: (d, h) => openBlock(d, h, { add: true }) }}>
         <Day
           viewDate={dayShown}
@@ -2027,6 +2048,8 @@ export function App() {
           closeOutDate={closeOutAt}
           showPersonal={showPersonal}
           onShowPersonal={(show) => void saveShowPersonal(show)}
+          suggestOn={suggestOn}
+          onSuggest={(on) => void saveSuggest(on)}
           onStart={startFocus}
           onFocusScreen={() => setView("focus")}
           onTimer={(a) => void runTimer(a)}
@@ -2114,7 +2137,7 @@ export function App() {
               />
             </ModeArea>
           </header>
-      <CarryProvider active={thisWeek} version={data} week={week} now={nowIso} onChanged={reloadQuiet}>
+      <CarryProvider {...carryProps(nowIso)}>
       {thisWeek && <ToPlaceNotice weekStart={data.weekStart} version={data} short={phone} onReview={() => addWork(null, null, true)} />}
       {thisWeek && data.nextWeekEmpty && nextWeekEmptyDay(localToday) && (
         <p className="next-empty-line" role="status">
@@ -2306,6 +2329,8 @@ export function App() {
               // U5.1 (D407): Timelines, the hours the rails and timelines show (V cycles them).
               ...VIEW_RANGES.map((r) => ({ id: `range-${r}`, label: VIEW_RANGE_NAMES[r], group: "Timelines", checked: data.week.range.mode === r, ...(data.week.range.mode === r ? {} : { hint: "V" }), run: () => void setViewRange(r) })),
               { id: "personal", label: "Personal events", group: "Show", checked: showPersonal, hint: "G", run: () => void saveShowPersonal(!showPersonal) },
+              // SG-1: the same switch as Settings › Planning "Suggest work for empty blocks".
+              { id: "suggestions", label: "Suggestions", group: "Show", checked: suggestOn, hint: suggestOn ? "on" : "off", run: () => void saveSuggest(!suggestOn) },
               // WK-2: the Board's timeline, the same toggle as the button beside the modes.
               { id: "timeline", label: "Timeline", group: "Show", checked: showTimelines, hint: "B", run: () => void saveShowTimelines(!showTimelines) },
               // WK-3: Saturday and Sunday always (they show anyway when something lands on them).

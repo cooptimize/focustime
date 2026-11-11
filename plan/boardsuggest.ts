@@ -73,6 +73,8 @@ export type SuggestInput = {
   weekPicks: readonly PickLike[];
   /** Other work on a block that isn't a to-do (a feature placed as a placeholder, a Watching check-in). */
   busy?: (date: IsoDate, half: Half) => boolean;
+  /** Work placed on the board this week that isn't a to-do (a feature's placeholder), as todoKey: never suggested. */
+  placed?: ReadonlySet<string>;
   /** To-dos kept from a suggestion in this session: they don't stop the block's other suggestions. */
   kept?: ReadonlySet<number>;
   /** Unfinished to-dos from earlier days (planday.carry), oldest first. */
@@ -212,7 +214,7 @@ export function boardSuggestions(i: SuggestInput): Suggestion[] {
       let n = 0;
       for (const c of candidates(i, clientKey, { date: d.date })) {
         if (n >= MAX_PER_BLOCK) break;
-        if (taken.has(c.key) || placed.has(c.key)) continue;
+        if (taken.has(c.key) || placed.has(c.key) || i.placed?.has(c.key)) continue;
         if (i.cleared.has(clearKey({ scope: "item", date: d.date, key: c.key }))) continue;
         if (n > 0 || here.length) {
           if (total + c.minutes > free) break;

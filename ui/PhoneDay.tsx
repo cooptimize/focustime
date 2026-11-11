@@ -2,6 +2,7 @@
 // the next one; the to-do in progress or next, with big Start and Done), today's to-dos grouped by block (a tap opens
 // the to-do's sheet), and Next up (the rest of today's meetings and blocks). Between blocks or after the day it says
 // so plainly. Every change is an existing action; ticking my own to-do runs at once (Undo in the toast).
+import { BlockSuggestions } from "./Suggest.tsx";
 import type { CSSProperties, ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import type { Slot } from "../week/types.ts";
@@ -142,6 +143,8 @@ export function PhoneTodos({ blocks, picks, data, nameOf, tickable, now, onTick,
             ) : (
               <p className="ph-block-none muted">Nothing here yet.</p>
             )}
+            {/* SG-1: an empty block's suggestions with Keep all and Clear. */}
+            {!mine.length && <BlockSuggestions date={s.date} half={s.half} where="phone" />}
             {onAdd && !over && !s.off && !s.pto && (
               <button type="button" className="add-work add-row ph-add" onClick={() => onAdd(s.half)} aria-label={`Add to ${client ? nameOf(client) : "this block"}`}>
                 + Add

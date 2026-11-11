@@ -73,7 +73,7 @@ describe.skipIf(!CHROMIUM || !DIR)("SG-1 screenshots", () => {
         }
 
         // A block's line, the day's line, the hover reason.
-        const sg = page.locator(".sg-block").first();
+        const sg = page.locator(".sug-block").first();
         await sg.hover();
         await page.waitForTimeout(300);
         await shot("week-block-line");
@@ -92,13 +92,13 @@ describe.skipIf(!CHROMIUM || !DIR)("SG-1 screenshots", () => {
         await page.locator(".day-switch button", { hasText: "Cards" }).click();
         await page.waitForTimeout(500);
         // Clear on a block, with Undo showing.
-        await page.locator(".sg-block .sg-clear").first().click();
+        await page.locator(".sug-block .sug-clear").first().click();
         await page.waitForTimeout(400);
         await shot("after-clear");
-        await page.locator(".toast button", { hasText: "Undo" }).first().click().catch(() => {});
+        await page.locator(".undo-toast button", { hasText: "Undo" }).first().click().catch(() => {});
         await page.waitForTimeout(800);
         // Keep all for the day.
-        await page.locator(".sg-day .sg-keep-all").first().click();
+        await page.locator(".sug-day .sug-keep-all").first().click();
         await page.waitForTimeout(1200);
         await shot("after-keep-all");
         await page.close();
@@ -112,7 +112,7 @@ describe.skipIf(!CHROMIUM || !DIR)("SG-1 screenshots", () => {
       await themed(page, theme);
       await go(page, "#/day");
       await page.screenshot({ path: `${DIR}/phone-day-390x844-${theme}.png`, fullPage: false });
-      await page.locator(".sg-block").first().scrollIntoViewIfNeeded().catch(() => {});
+      await page.locator(".sug-block").first().scrollIntoViewIfNeeded().catch(() => {});
       await page.screenshot({ path: `${DIR}/phone-block-390x844-${theme}.png`, fullPage: false });
     }
     await page.close();

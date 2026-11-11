@@ -34,7 +34,8 @@ import type { RailItem } from "../plan/inbox-items.ts";
 import { cardGroups } from "../plan/blockstories.ts";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { pickDragged, useDragSource, useDropTarget } from "./WeekStories.tsx";
-import { OriginPick, SuggestedCards, useIsOrigin } from "./Carry.tsx";
+import { OriginPick, useIsOrigin } from "./Carry.tsx";
+import { BlockSuggestions } from "./Suggest.tsx";
 import { NowEdge, NowLine, NowPast, NowTick } from "./NowLine.tsx";
 import { Timeline, ms, offHours, pct, useEventMenu, type RailNow } from "./Timeline.tsx";
 import { AddPanelCtx, LiveOnCard, NextTodoCtx, RulerCtx, TierCtx, TimelineCtx, type PanelFocus } from "./weekctx.ts";
@@ -250,7 +251,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       )}
       {shown.length > 0 && <CardPicks picks={shown} label={`Plan for ${dayLabel} ${slot.half}`} tabIndex={selected ? 0 : -1} />}
       {!eve && primary && <PlacedFeatures clientKey={primary.clientKey} date={slot.date} half={slot.half} tabIndex={selected ? 0 : -1} />}
-      {!eve && <SuggestedCards date={slot.date} half={slot.half} tabIndex={selected ? 0 : -1} />}
+      {!eve && <BlockSuggestions date={slot.date} half={slot.half} tabIndex={selected ? 0 : -1} where={phone ? "phone" : "card"} />}
       {!eve && <CheckinChips date={slot.date} half={slot.half as "AM" | "PM"} tabIndex={selected ? 0 : -1} />}
       {doneHidden.length > 0 && <div className="card-done">{doneHidden.length} done</div>}
       {addWork && (
