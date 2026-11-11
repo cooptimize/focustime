@@ -10,10 +10,11 @@ import type { CalEvent, ClientWork, SourceId, SourceResult } from "../../week/ty
 import { createGraphWriter, type GraphWriter } from "../graph/write.ts";
 import type { DemoOutlook } from "./outlook.ts";
 import { demoDirectory } from "./directory.ts";
-import { DEMO_CLIENTS, DEMO_ME, DEMO_TZ, ME, DEMO_PEOPLE, demoGoogle, demoOutlook, demoPatterns, demoPortfolio, demoProcess, demoPto, demoWork, demoWorkItem, isDemoClient, demoAheadClient, demoProjectPeople, type DemoClientKey } from "./data.ts";
+import { DEMO_CLIENTS, DEMO_ME, DEMO_TZ, ME, DEMO_PEOPLE, demoGoogle, demoOutlook, demoPatterns, demoPortfolio, demoProcess, demoPto, demoWork, demoWorkItem, isDemoClient, demoAheadClient, demoProjectPeople, demoScopeItems, demoAreas, areaOf, type DemoClientKey } from "./data.ts";
 import { itemUrlOf, ME_NAME, STATES as DEMO_STATES, type DemoDevOps } from "./devops.ts";
 import { demoKatSent } from "./seeds/status.ts";
 import { typeOf } from "../../plan/process.ts";
+import { scopeOf, scopeWords } from "../../plan/devops-scope.ts";
 
 const NO = "Demo data: nothing leaves FocusTime";
 
@@ -80,7 +81,32 @@ export function createDemoSources(world: DemoDevOps, cal: DemoOutlook, now: () =
   const work = (k: DemoClientKey) => demoWork(world, k, now());
   const portfolio = (k: DemoClientKey) => demoPortfolio(world, k, now());
   const ahead = async (k: DemoClientKey, whole: boolean) => demoAheadClient(world, k, now(), { deps: await scope(k).catch(() => null), whole });
+  // DV-2: the demo's own DevOps answers versions, Refresh and Find an item from memory: checked now, every time.
+  const freshOf = (k: string) => ({ clientKey: k, version: isDemoClient(k) ? world.versionOf(k) : null, checkedAt: now(), okAt: now(), nextAt: null, problem: null });
+  const demoTier = (k: DemoClientKey, type: string) => {
+    const level = typeOf(demoProcess(k), type)?.level ?? null;
+    return level === "top" ? ("epic" as const) : level === "parent" ? ("feature" as const) : level === "child" ? ("story" as const) : level === "task" ? ("task" as const) : null;
+  };
   const devops: DevOpsSource = {
+    freshness: async (clients) => clients.filter((c) => isDemoClient(c.clientKey)).map((c) => freshOf(c.clientKey)),
+    refreshNow: async (clients) => clients.filter((c) => isDemoClient(c.clientKey)).map((c) => ({ ...freshOf(c.clientKey), forced: true, pending: false, changes: world.takeChanges(c.clientKey as DemoClientKey) })),
+    findItem: async (ref, id) => {
+      if (!isDemoClient(ref.clientKey)) return null;
+      const k = ref.clientKey;
+      const i = world.item(id);
+      const at = now();
+      // Another client's item reads as missing, with nothing about it (the demo's clients share one id space).
+      if (!i || i.clientKey !== k) return { devops: { kind: "missing" as const }, store: { has: false, changedAt: null, rev: null, checkedAt: at, okAt: at }, scope: null };
+      const deps = await scope(k).catch(() => null);
+      const result = deps ? scopeOf(demoScopeItems(world, k), deps.rule, { areas: demoAreas(k), isCooptimizer: deps.isCooptimizer, me: "you@example.com" }) : null;
+      const closed = (DEMO_STATES[i.type]?.find((x) => x.name === i.state)?.category ?? "") === "Completed" || i.state === "Removed";
+      return {
+        devops: { kind: "found" as const, item: { id, title: i.title, type: i.type, state: i.state, closed, tier: demoTier(k, i.type), parentId: i.parent, assignee: !i.whoEmail ? ("nobody" as const) : i.who === ME ? ("me" as const) : ("someone" as const), area: areaOf(k, i) } },
+        devopsRev: i.rev,
+        store: { has: true, changedAt: i.changedAt, rev: i.rev, checkedAt: at, okAt: at },
+        scope: result && !result.all ? { inScope: result.ids.has(id), rule: scopeWords(deps?.rule ?? null) } : null,
+      };
+    },
     load: async (clients) => {
       const out = clients.filter((c) => isDemoClient(c.clientKey)).map((c) => work(c.clientKey as DemoClientKey));
       for (const w of out) last.set(w.clientKey, w);

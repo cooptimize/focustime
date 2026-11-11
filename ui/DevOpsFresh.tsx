@@ -78,8 +78,9 @@ export function useDevOpsFreshFlow(on: boolean): FreshEnv {
  * Calls `onMoved` with the clients whose DevOps version moved since this screen last looked (null: any client). The
  * first answer only sets the starting point, so opening a screen never rereads it twice.
  */
-export function useDevOpsChanged(clients: readonly string[] | null, onMoved: (clientKeys: string[]) => void): void {
-  const env = useContext(DevOpsFreshCtx);
+export function useDevOpsChanged(clients: readonly string[] | null, onMoved: (clientKeys: string[]) => void, /** The provider's own env (App renders the provider, so its context is above it). */ own?: FreshEnv): void {
+  const ctx = useContext(DevOpsFreshCtx);
+  const env = own ?? ctx;
   const seen = useRef<Map<string, string | null> | null>(null);
   const cb = useRef(onMoved);
   cb.current = onMoved;
