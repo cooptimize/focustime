@@ -648,3 +648,14 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - In the demo the environment comes only from `FOCUSTIME_DEMO_AUTOSTART_ENV` (tests); the hosted demo sessions never set it, so they show "production only". Fine?
 - The auto-start uses each person's stored sign-in (their refresh token) while they're away. If Entra's token lifetime or a conditional access policy ends it, the start is skipped with "couldn't sign in". Worth watching on prod for a week.
 - The demo's working week is Monday to Thursday, so its pause takes a calendar week; on prod it depends on each person's hours.
+
+## QC-1
+
+- DevOps' title limit: 255 characters is what FocusTime enforces (a String field). The pages read for this step (work items create, work item type fields list, 7.1) don't state it; confirm on dev with a 256-character title.
+- Capture keeps plain Enter as "save" (Capture is saved at once, never a form); only Ctrl+Enter on a Draft story or Draft feature opens the New form. Should plain Enter on those two kinds open the form too?
+- Save as draft keeps the type, parent, assignee, date and description, but not the More's size number (a draft keeps S, M or L). Worth a field?
+- The step expected no migration; drafts at any level needed one additive column pair (`item_type`, `assign_to`). Fine?
+- A new item assigned to someone else gets DevOps' own notice only, no FocusTime note. Should they get Ahead's quiet note too?
+- A created feature from the block panel sits on the block as a to-do (the draft path), not as WD-1's week pin. Should it also go on the week's features list?
+- "+ New" sits in Ahead's header beside Refresh rather than in the filter toolbar, so it is there in every mode. Right place?
+- The epic tier's label in Gantt lists every top type ("Domains / Epics") when a level sits above epics. Better as separate rows per level?
