@@ -146,7 +146,7 @@ describe("Send to someone's week (SW-1)", () => {
     expect(await incoming(t.as(dana))).toEqual([expect.objectContaining({ id: s.id, canAnswer: true, kind: "must" })]);
     const a = await t.as(dana).run<{ send: SendView; assign: { ticked: boolean } }>("send.accept", { id: s.id });
     expect(a.assign).toMatchObject({ clientKey: ADATUM, itemId: 701, ticked: true });
-    expect((await t.as(dana).plan.weekPlan(THIS_WEEK)).features).toEqual([expect.objectContaining({ itemId: 701, tier: "must", level: "feature" })]);
+    expect((await t.as(dana).plan.weekPlan(THIS_WEEK)).features).toEqual([expect.objectContaining({ itemId: 701, level: "feature" })]);
     expect(await incoming(t.as(dana))).toEqual([]);
     expect((await sent(t.as(lead)))[0]).toMatchObject({ shown: "accepted", words: "Accepted" });
     // Without "Ask them to take it in DevOps", Accept offers the assign unticked.
@@ -238,38 +238,51 @@ describe("Send to someone's week (SW-1)", () => {
 });
 
 describe("The Team view (SW-1)", () => {
-  it("shows each teammate's committed features only: no picks, focus, notes, estimates or hours", async () => {
+  it("shows each teammate's week features only: no picks, focus, notes, estimates or hours", async () => {
     const t = world({ moved: [801] });
     const d = t.as(dana);
-    await d.plan.addWeekItem({ weekStart: THIS_WEEK, clientKey: ADATUM, itemId: 701, title: "Order history export", itemType: "Feature", url: null, level: "feature", tier: "must", estimate: 600 });
-    await d.plan.addWeekItem({ weekStart: THIS_WEEK, clientKey: ADATUM, itemId: 711, title: "Export orders to CSV", itemType: "User Story", url: null, level: "story", tier: "must", size: "L", parentId: 701 });
-    await d.plan.addWeekItem({ weekStart: THIS_WEEK, clientKey: ADATUM, itemId: 720, title: "Date filter", itemType: "Feature", url: null, level: "feature", tier: "nice" });
+    await d.plan.addWeekItem({ weekStart: THIS_WEEK, clientKey: ADATUM, itemId: 701, title: "Order history export", itemType: "Feature", url: null, level: "feature", estimate: 600 });
+    await d.plan.addWeekItem({ weekStart: THIS_WEEK, clientKey: ADATUM, itemId: 711, title: "Export orders to CSV", itemType: "User Story", url: null, level: "story", size: "L", parentId: 701 });
+    await d.plan.addWeekItem({ weekStart: THIS_WEEK, clientKey: ADATUM, itemId: 720, title: "Date filter", itemType: "Feature", url: null, level: "feature" });
     await d.plan.addWatch({ weekStart: THIS_WEEK, clientKey: ADATUM, itemId: 801, title: "Carrier alerts", itemType: "Feature", url: null, why: "chosen", checkin: null });
     // Personal things that must never show.
     const pick = await d.plan.addPick({ date: "2026-11-04", half: "AM", clientKey: ADATUM, kind: "intention", title: "Private pick text", size: "M" });
     await d.plan.addFocus({ pickId: pick.id, label: "Private focus label", startedAt: "2026-11-04T09:00:00-05:00[America/New_York]", endedAt: "2026-11-04T10:00:00-05:00[America/New_York]", seconds: 3600 });
     await d.plan.setResumeNote(ADATUM, "2026-11-03", "Private resume note");
-    await d.plan.commitWeek(THIS_WEEK);
+    // CF-1: no confirm; publishing happens on every change (the dispatcher calls publishWeek).
     await publishWeek(d.ctx, THIS_WEEK);
 
     const v = await t.as(sam).run<TeamData>("team.view", { weekStart: THIS_WEEK });
     const adatum = v.clients.find((c) => c.clientKey === ADATUM)!;
     const danaRow = adatum.people.find((p) => p.id === id(dana))!;
-    expect(danaRow).toMatchObject({ state: "committed", features: [{ itemId: 701, tier: "must" }, { itemId: 720, tier: "nice" }], watching: [{ itemId: 801, moved: true }] });
+    expect(danaRow).toMatchObject({ state: "shared", features: [{ itemId: 701 }, { itemId: 720 }], watching: [{ itemId: 801, moved: true }] });
     const json = JSON.stringify(v);
-    for (const leak of ["Private pick text", "Private focus label", "Private resume note", "Export orders to CSV", "estimate", "minutes", "hours", "size", "pins", "seconds"]) expect(json).not.toContain(leak);
-    // A teammate who hasn't committed: "Not committed yet"; one who never signed in: not on FocusTime.
-    expect(adatum.people.find((p) => p.id === id(sam))).toMatchObject({ state: "draft", features: [] });
+    for (const leak of ["Private pick text", "Private focus label", "Private resume note", "Export orders to CSV", "estimate", "minutes", "hours", "size", "pins", "seconds", "tier", "must", "nice", "committedAt", "confirm"]) expect(json).not.toContain(leak);
+    // Only the feature, its type and title (and its DevOps link) per feature.
+    expect(Object.keys(danaRow.features[0]!).sort()).toEqual(["itemId", "itemType", "title", "url"]);
+    // A teammate with nothing on the week: "empty"; one who never signed in: not on FocusTime.
+    expect(adatum.people.find((p) => p.id === id(sam))).toMatchObject({ state: "empty", features: [] });
     expect(adatum.people.find((p) => p.id === id(newbie))).toMatchObject({ state: "not_on_focustime" });
     expect(adatum.people.map((p) => p.id)).not.toContain(id(guest));
     expect(adatum.people.map((p) => p.id)).not.toContain(id(bot));
   });
 
+  it("CF-1: the last feature taken off the week is gone for teammates on the next publish", async () => {
+    const t = world();
+    const d = t.as(dana);
+    const f = await d.plan.addWeekItem({ weekStart: THIS_WEEK, clientKey: ADATUM, itemId: 701, title: "Order history export", itemType: "Feature", url: null, level: "feature" });
+    await publishWeek(d.ctx, THIS_WEEK);
+    const row = async () => (await t.as(sam).run<TeamData>("team.view", { weekStart: THIS_WEEK })).clients.find((c) => c.clientKey === ADATUM)!.people.find((p) => p.id === id(dana))!;
+    expect(await row()).toMatchObject({ state: "shared", features: [{ itemId: 701 }] });
+    await d.plan.removeWeekItem(f.id);
+    await publishWeek(d.ctx, THIS_WEEK);
+    expect(await row()).toMatchObject({ state: "empty", features: [] });
+  });
+
   it("is scoped per client: someone on another client sees none of it", async () => {
     const t = world();
     const d = t.as(dana);
-    await d.plan.addWeekItem({ weekStart: THIS_WEEK, clientKey: ADATUM, itemId: 701, title: "Order history export", itemType: "Feature", url: null, level: "feature", tier: "must" });
-    await d.plan.commitWeek(THIS_WEEK);
+    await d.plan.addWeekItem({ weekStart: THIS_WEEK, clientKey: ADATUM, itemId: 701, title: "Order history export", itemType: "Feature", url: null, level: "feature" });
     await publishWeek(d.ctx, THIS_WEEK);
     await sendTo(t.as(lead), sam);
     const v = await t.as(fay).run<TeamData>("team.view", { weekStart: THIS_WEEK });
@@ -297,7 +310,7 @@ describe("Client priorities (SW-1)", () => {
     const c = (await t.as(sam).run<CommitData>("team.commit", { weekStart: THIS_WEEK })).clients.find((x) => x.clientKey === ADATUM)!;
     expect(c.priorities).toEqual([expect.objectContaining({ itemId: 701, note: "The client's ask for this month", onMyWeek: false, canUnflag: false, flaggedBy: { id: id(lead), name: "Lee Lead" } })]);
     await t.as(sam).run("priority.add_to_week", { clientKey: ADATUM, itemId: 701, weekStart: THIS_WEEK });
-    expect((await t.as(sam).plan.weekPlan(THIS_WEEK)).features).toEqual([expect.objectContaining({ itemId: 701, tier: "must" })]);
+    expect((await t.as(sam).plan.weekPlan(THIS_WEEK)).features).toEqual([expect.objectContaining({ itemId: 701 })]);
     expect((await t.as(sam).run<CommitData>("team.commit", { weekStart: THIS_WEEK })).clients.find((x) => x.clientKey === ADATUM)!.priorities[0]).toMatchObject({ onMyWeek: true });
     // Someone on another client doesn't see it.
     expect(JSON.stringify(await t.as(fay).run("team.commit", { weekStart: THIS_WEEK }))).not.toContain("Order history export");

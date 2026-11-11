@@ -13,7 +13,7 @@ const bits = (o: Partial<PlanBits> = {}): PlanBits => ({ planShare: 100, keepOpe
 
 describe("Commit and the Board show the same numbers (PL-1)", () => {
   it("for the same week, with plan share, Keep open, resolved items and check-ins", () => {
-    const features = [aWeekFeature({ itemId: 11, estimate: 4 * H }), aWeekFeature({ itemId: 12, estimate: 8 * H }), aWeekFeature({ itemId: 13, tier: "nice", estimate: 2 * H })];
+    const features = [aWeekFeature({ itemId: 11, estimate: 4 * H }), aWeekFeature({ itemId: 12, estimate: 8 * H }), aWeekFeature({ itemId: 13, estimate: 2 * H })];
     const data = {
       week,
       weekStart: WEEK,
@@ -26,8 +26,9 @@ describe("Commit and the Board show the same numbers (PL-1)", () => {
     const board = boardFits(data, features);
     expect(commitFits(data, features)).toEqual(board);
     const a = board.find((c) => c.clientKey === "adatum")!;
-    expect(a).toMatchObject({ plannedMinutes: 4 * H + 30, keepOpen: 20, planUpTo: Math.round(a.freeMinutes * 0.8 * 0.8) });
+    // CF-1: one total: 11 and 13 count (12 is resolved), plus the 30 min check-in.
+    expect(a).toMatchObject({ plannedMinutes: 6 * H + 30, keepOpen: 20, planUpTo: Math.round(a.freeMinutes * 0.8 * 0.8) });
     // The plain weekBudget without these inputs (what the Board used to show) disagrees.
-    expect(weekBudget(week, features, { borrowedMinutes: { adatum: 30 } }).find((c) => c.clientKey === "adatum")!.plannedMinutes).toBe(12 * H);
+    expect(weekBudget(week, features, { borrowedMinutes: { adatum: 30 } }).find((c) => c.clientKey === "adatum")!.plannedMinutes).toBe(14 * H);
   });
 });

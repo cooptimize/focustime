@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { aheadRitualsDue, directionOccasion, lookAheadOccasion, nextRituals, type RitualFacts } from "./rituals.ts";
 
-const base: RitualFacts = { today: "2026-11-05", time: "09:00", workStart: "08:30", pto: false, weekCommitted: () => true, seen: () => false };
+const base: RitualFacts = { today: "2026-11-05", time: "09:00", workStart: "08:30", pto: false, weekHasWork: () => true, seen: () => false };
 const due = (f: Partial<RitualFacts>) => aheadRitualsDue({ ...base, ...f }).map((r) => r.key);
 /** Look ahead only (Nov 5 is also November's first Thursday). */
 const la = (f: Partial<RitualFacts>) => due(f).filter((k) => k.startsWith("plan_ahead:"));
@@ -15,10 +15,10 @@ describe("Look ahead 4 weeks: every other Thursday, after Done in Plan the week"
     expect(lookAheadOccasion("2026-11-19")).toBe("2026-11-19");
     expect(lookAheadOccasion("2026-11-04")).toBeNull();
   });
-  it("due once next week is committed, from work start; not before", () => {
+  it("due once next week has anything on it (CF-1), from work start; not before", () => {
     expect(la({ today: "2026-11-05", time: "08:00" })).toEqual([]);
-    expect(la({ today: "2026-11-05", weekCommitted: (w) => w !== "2026-11-09" })).toEqual([]);
-    expect(la({ today: "2026-11-05", weekCommitted: (w) => w === "2026-11-09" })).toEqual(["plan_ahead:2026-11-05"]);
+    expect(la({ today: "2026-11-05", weekHasWork: (w) => w !== "2026-11-09" })).toEqual([]);
+    expect(la({ today: "2026-11-05", weekHasWork: (w) => w === "2026-11-09" })).toEqual(["plan_ahead:2026-11-05"]);
     // Done in Plan the week on Friday: it is offered then.
     expect(la({ today: "2026-11-06" })).toEqual(["plan_ahead:2026-11-05"]);
   });
@@ -39,10 +39,10 @@ describe("the direction review: first Thursday of each month", () => {
     expect(directionOccasion("2027-01-07")).toBe("2027-01-07");
   });
   it("due at work start on a working day, once seen no more; PTO waits for the next working day", () => {
-    expect(due({ today: "2026-12-03", weekCommitted: () => false })).toEqual(["direction:2026-12"]);
-    expect(due({ today: "2026-12-03", pto: true, weekCommitted: () => false })).toEqual([]);
-    expect(due({ today: "2026-12-04", weekCommitted: () => false })).toEqual(["direction:2026-12"]);
-    expect(due({ today: "2026-12-04", weekCommitted: () => false, seen: (k) => k === "direction:2026-12" })).toEqual([]);
+    expect(due({ today: "2026-12-03", weekHasWork: () => false })).toEqual(["direction:2026-12"]);
+    expect(due({ today: "2026-12-03", pto: true, weekHasWork: () => false })).toEqual([]);
+    expect(due({ today: "2026-12-04", weekHasWork: () => false })).toEqual(["direction:2026-12"]);
+    expect(due({ today: "2026-12-04", weekHasWork: () => false, seen: (k) => k === "direction:2026-12" })).toEqual([]);
   });
   it("Nov 5 is both: a look-ahead Thursday and November's first Thursday", () => {
     expect(due({ today: "2026-11-05" })).toEqual(["plan_ahead:2026-11-05", "direction:2026-11"]);

@@ -55,8 +55,7 @@ describe("trimCandidates", () => {
     expect(trimCandidates(picks, 100, SIZES)).toEqual([2]);
     expect(trimCandidates(picks, 250, SIZES)).toEqual([2, 3]);
   });
-  it("keeps musts for last and skips timed ones when it can", () => {
-    expect(trimCandidates(picks, 100, SIZES, { musts: new Set([2]) })).toEqual([3]);
+  it("skips timed ones when it can (CF-1: no musts to spare)", () => {
     expect(trimCandidates([pick(1, "M"), pick(2, "M")], 60, SIZES, { timed: new Set([2]) })).toEqual([1]);
   });
   it("nothing when within the grace", () => expect(trimCandidates(picks, 10, SIZES)).toEqual([]));

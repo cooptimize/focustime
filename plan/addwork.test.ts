@@ -2,7 +2,7 @@
 // notice line's counts, Thursday's next-week line, where a row is already placed, the remove rule, the client chips
 // and the panel's sections (one client's rows never under another's heading).
 import { describe, expect, it } from "vitest";
-import { blockWord, chipsThatFit, clientChip, confirmLabel, defaultAddBlock, nextWeekEmpty, panelModel, placedWhere, removeRule, roomWords, storiesUnder, toPlaceCount, toPlaceLine, toPlaceShort, weekTag, type BlockAt } from "./addwork.ts";
+import { blockWord, chipsThatFit, clientChip, defaultAddBlock, nextWeekEmpty, panelModel, placedWhere, removeRule, roomWords, storiesUnder, toPlaceCount, toPlaceLine, toPlaceShort, type BlockAt } from "./addwork.ts";
 import type { WorkItem } from "../week/types.ts";
 
 const blocks: BlockAt[] = [
@@ -41,15 +41,6 @@ describe("the room line", () => {
     expect(roomWords(120, 160).over).toBe(true);
     expect(roomWords(120, 160).text).toBe("a little over");
     expect(roomWords(120, 260).text).toBe("about 2h over");
-  });
-});
-
-describe("the week's tag and its button", () => {
-  it("Draft, Confirmed, Changed since you confirmed; none for past weeks", () => {
-    expect(weekTag(null, false)).toBeNull();
-    expect(weekTag({ committedAt: null }, true)).toBeNull();
-    expect([weekTag({ committedAt: null }, false), weekTag({ committedAt: "x", changed: false }, false), weekTag({ committedAt: "x", changed: true }, false)]).toEqual(["Draft", "Confirmed", "Changed since you confirmed"]);
-    expect([confirmLabel("Draft"), confirmLabel("Confirmed"), confirmLabel("Changed since you confirmed"), confirmLabel(null)]).toEqual(["Confirm week", null, "Confirm again", null]);
   });
 });
 
@@ -115,8 +106,8 @@ describe("the panel's sections", () => {
     fabrikam: { items: [item(20, { level: "portfolio", tier: "feature", type: "Feature" })], children: [item(21, { parentId: 20 })] },
   })[k];
   const week = [
-    { clientKey: "contoso", itemId: 10, title: "Contoso feature", url: null, slots: [], tier: "must" as const, level: "feature" as const },
-    { clientKey: "fabrikam", itemId: 20, title: "Fabrikam feature", url: null, slots: [], tier: "nice" as const, level: "feature" as const },
+    { clientKey: "contoso", itemId: 10, title: "Contoso feature", url: null, slots: [], level: "feature" as const },
+    { clientKey: "fabrikam", itemId: 20, title: "Fabrikam feature", url: null, slots: [], level: "feature" as const },
   ];
   const input = { date: "2026-11-03", half: "AM" as const, clients: ["contoso", "fabrikam"], workOf: work, week, followUps: [{ id: 1, clientKey: "contoso", due: null, openedAt: "2026-11-01T00:00:00Z" }, { id: 2, clientKey: "fabrikam", due: null, openedAt: "2026-11-01T00:00:00Z" }], drafts: [], picked: new Set<string>(), here: new Set<string>() };
   it("the block's client first; each client's stories only under its own heading; promises and More from DevOps only the block's client's", () => {

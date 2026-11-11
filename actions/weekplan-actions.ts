@@ -6,15 +6,16 @@
 import { mapSeq } from "./seq.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { briefMarkdown, prioritiesKey, withCurrentTitles } from "../plan/weekplan.ts";
-import { headsUpKey, offersHeadsUp, validHours, weekHeadsUpDraft, type ItemLevel, type Tier } from "../plan/weeklist.ts";
+import { NO_TIERS, NOTHING_TO_CONFIRM_WEEK } from "../plan/no-confirm.ts";
+import { headsUpKey, validHours, type ItemLevel } from "../plan/weeklist.ts";
 import { validStorySize, type StorySize } from "../plan/estimate.ts";
 import { resizedRemaining } from "../plan/progress.ts";
 import { SIZE_MINUTES } from "../plan/types.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
-import { PlanError, type PlanStore, type WeekFeature, type WeekPlanRecord } from "../store/plan-store.ts";
+import { KEPT_TIER, PlanError, type PlanStore, type WeekFeature, type WeekPlanRecord } from "../store/plan-store.ts";
 import { mondayOf } from "../week/dates.ts";
 import type { ClientPortfolio, ClientWork, IsoDate, PortfolioItem, Week } from "../week/types.ts";
-import { internalClients, followUpView, nameOf } from "./followup-rules.ts";
+import { followUpView, nameOf } from "./followup-rules.ts";
 import type { ActionResponse, WeekPlanState, WeekPlanView } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
@@ -87,10 +88,6 @@ function clientKey(v: unknown): string {
   if (typeof v !== "string" || !v.trim() || v.length > 100) throw new Invalid("clientKey must be text");
   return v;
 }
-function tier(v: unknown): Tier {
-  if (v !== "must" && v !== "nice") throw new Invalid("tier must be must or nice");
-  return v;
-}
 /** E2: an estimate in whole hours, 1 to 80; kept in minutes. */
 function hours(v: unknown): number {
   if (!validHours(v)) throw new Invalid("hours must be a whole number from 1 to 80");
@@ -116,9 +113,7 @@ async function clock(ctx: WeekPlanContext) {
 
 export const weekPlanView = (p: WeekPlanRecord): WeekPlanView => ({
   weekStart: p.weekStart,
-  committedAt: p.committedAt,
   updatedAt: p.updatedAt,
-  changed: !!p.committedAt && !!p.updatedAt && Temporal.Instant.compare(Temporal.ZonedDateTime.from(p.updatedAt).toInstant(), Temporal.ZonedDateTime.from(p.committedAt).toInstant()) > 0,
   features: p.features,
 });
 
@@ -182,7 +177,7 @@ export async function placeFeature(ctx: WeekPlanContext, input: { date: IsoDate;
   if (!feature) return null;
   const week = await plan.weekPlan(weekStart);
   if (week.features.some((f) => f.clientKey === key && f.itemId === feature.id)) return null;
-  return plan.addWeekItem({ weekStart, clientKey: key, itemId: feature.id, title: feature.title, itemType: feature.type, url: feature.url, level: "feature", tier: "nice" });
+  return plan.addWeekItem({ weekStart, clientKey: key, itemId: feature.id, title: feature.title, itemType: feature.type, url: feature.url, level: "feature" });
 }
 
 /** Where a feature can go: that client's own blocks, or an Open half-day (Mon to Thu, no focus block). */
@@ -240,7 +235,7 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
             const d = created.get(wd.draftId);
             const item = d ? portfolios.find((p) => p.clientKey === d.clientKey && p.status === "ok")?.items.find((i) => i.id === d.devopsId && i.tier === "feature") : undefined;
             if (!d || !item) continue;
-            if (!(await plan.weekPlan(weekStart)).features.some((f) => f.clientKey === d.clientKey && f.itemId === item.id)) (await plan.addWeekItem({ weekStart, clientKey: d.clientKey, itemId: item.id, title: item.title, itemType: item.type, url: item.url, level: "feature", tier: wd.tier }));
+            if (!(await plan.weekPlan(weekStart)).features.some((f) => f.clientKey === d.clientKey && f.itemId === item.id)) (await plan.addWeekItem({ weekStart, clientKey: d.clientKey, itemId: item.id, title: item.title, itemType: item.type, url: item.url, level: "feature" }));
             (await plan.setWeekDraft(weekStart, wd.draftId, null));
           }
         }
@@ -297,19 +292,19 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const placed = (await plan.placeFeature(feature.id, d, h, on));
         return { ok: true, data: { feature: placed, plan: weekPlanView((await plan.weekPlan(weekStart))) } };
       }
-      case "weekplan.commit": {
-        const o = fields(input, ["weekStart"]);
-        const weekStart = monday(o.weekStart);
-        editable(weekStart);
-        return { ok: true, data: { plan: weekPlanView((await plan.commitWeek(weekStart))) } };
-      }
+      case "weekplan.commit":
+        // CF-1 (F3): nothing confirms a week now; the week is shared on every change. A plain answer, nothing changes.
+        return { ok: true, data: { unchanged: true, message: NOTHING_TO_CONFIRM_WEEK } };
+      case "weekplan.set_tier":
+        // CF-1 (F3): musts are gone; every feature on the week counts the same. A plain answer, nothing changes.
+        return { ok: true, data: { unchanged: true, message: NO_TIERS } };
       case "weekplan.add": {
         const o = fields(input, ["weekStart", "clientKey", "itemId"], ["tier", "hours", "size"]);
         const weekStart = monday(o.weekStart);
         editable(weekStart);
         const key = clientKey(o.clientKey);
         const itemId = id(o.itemId, "itemId");
-        const t = o.tier === undefined ? undefined : tier(o.tier);
+        // CF-1: an old client may still send a tier; it is accepted and ignored (every feature counts the same).
         const b = o.hours === undefined ? undefined : hours(o.hours);
         const z = o.size === undefined ? undefined : sizeOrNull(o.size);
         // DevOps first: only what DevOps shows as this client's feature or story now goes on the list.
@@ -320,26 +315,17 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const src = feature ? { title: feature.item.title, type: feature.item.type, url: feature.item.url } : story!;
         if (level === "story" && b !== undefined) throw new Invalid("A story has a size (XS, S, M or L), not an estimate");
         if (level === "feature" && z !== undefined) throw new Invalid("A feature has an estimate, not a size");
-        const item = (await plan.addWeekItem({ weekStart, clientKey: key, itemId, title: src.title, itemType: src.type, url: src.url, level, ...(t ? { tier: t } : {}), ...(b !== undefined ? { estimate: b } : {}), ...(z !== undefined ? { size: z } : {}), ...(story ? { parentId: story.parentId } : {}) }));
+        const item = (await plan.addWeekItem({ weekStart, clientKey: key, itemId, title: src.title, itemType: src.type, url: src.url, level, ...(b !== undefined ? { estimate: b } : {}), ...(z !== undefined ? { size: z } : {}), ...(story ? { parentId: story.parentId } : {}) }));
         return { ok: true, data: { item, plan: weekPlanView((await plan.weekPlan(weekStart))) } };
       }
-      case "weekplan.set_tier":
       case "weekplan.remove": {
-        const o = fields(input, action === "weekplan.set_tier" ? ["id", "tier"] : ["id"]);
+        const o = fields(input, ["id"]);
         const before = (await plan.weekItem(id(o.id, "id")));
         if (!before) return bad("That item isn't on a week plan", 422);
         editable(before.weekStart);
-        const week = (await plan.weekPlan(before.weekStart));
-        const committedAt = week.committedAt;
-        const to = action === "weekplan.set_tier" ? tier(o.tier) : null;
-        // Step 16.4: a story under a listed feature takes the feature's tier.
-        if (to && before.level === "story" && before.parentId !== null && week.features.some((f) => f.level === "feature" && f.clientKey === before.clientKey && f.itemId === before.parentId))
-          return bad("Stories take their feature's tier: change the feature's", 422);
-        if (to) (await plan.setWeekItemTier(before.id, to));
-        else (await plan.removeWeekItem(before.id));
-        // Dropping a must the week was committed with offers the heads-up follow-up; nothing else is asked (D197).
-        const dropped = to !== "must" && offersHeadsUp(before, committedAt) && !internalClients(cfg).has(before.clientKey);
-        return { ok: true, data: { plan: weekPlanView((await plan.weekPlan(before.weekStart))), headsUp: dropped ? { weekStart: before.weekStart, clientKey: before.clientKey, itemId: before.itemId, title: before.title, trigger: to ? "demoted" : "dropped" } : null } };
+        (await plan.removeWeekItem(before.id));
+        // CF-1 (E1): no heads-up offer; the answer keeps its field (always null) for an old tab.
+        return { ok: true, data: { plan: weekPlanView((await plan.weekPlan(before.weekStart))), headsUp: null } };
       }
       case "weekplan.set_estimate": {
         const o = fields(input, ["id", "hours"]);
@@ -374,7 +360,8 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         return { ok: true, data: { item, plan: weekPlanView((await plan.weekPlan(before.weekStart))) } };
       }
       case "weekplan.reorder": {
-        // The order as shown, top first; or reset: back to DevOps stack rank for the client's whole list.
+        // The order as shown, top first; or reset: back to DevOps stack rank for the client's whole list. CF-1: nothing
+        // in FocusTime offers it (Move up and Move down went); `tier` is accepted from an old tab and ignored.
         const o = fields(input, ["weekStart", "clientKey"], ["tier", "order", "reset"]);
         const weekStart = monday(o.weekStart);
         editable(weekStart);
@@ -382,13 +369,12 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         if (o.reset !== undefined) {
           if (o.reset !== true) throw new Invalid("reset must be true");
           if (o.order !== undefined || o.tier !== undefined) throw new Invalid("reset takes no order");
-          return { ok: true, data: { plan: weekPlanView((await plan.reorderWeekItems(weekStart, key, "must", null))) } };
+          return { ok: true, data: { plan: weekPlanView((await plan.reorderWeekItems(weekStart, key, null))) } };
         }
-        const t = tier(o.tier);
         if (!Array.isArray(o.order) || !o.order.length || o.order.length > 200) throw new Invalid("order must be a list of item numbers");
         const ids = o.order.map((x) => id(x, "order"));
         if (new Set(ids).size !== ids.length) throw new Invalid("order has an item twice");
-        return { ok: true, data: { plan: weekPlanView((await plan.reorderWeekItems(weekStart, key, t, ids.map((itemId, i) => ({ itemId, position: i + 1 }))))) } };
+        return { ok: true, data: { plan: weekPlanView((await plan.reorderWeekItems(weekStart, key, ids.map((itemId, i) => ({ itemId, position: i + 1 }))))) } };
       }
       case "weekplan.headsup": {
         const o = fields(input, ["weekStart", "clientKey", "itemId", "title"], ["trigger"]);
@@ -397,26 +383,23 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const key = clientKey(o.clientKey);
         const itemId = id(o.itemId, "itemId");
         if (typeof o.title !== "string" || !o.title.trim() || o.title.length > 500) throw new Invalid("title must be text");
+        // CF-1 (E1): no new heads-up. One opened before is returned as it is (E2); nothing is created.
         const clients = await ctx.clients(cfg, weekStart, false);
         const name = nameOf(cfg, (k) => clients.find((c) => c.clientKey === k)?.clientName)(key);
-        const followUp = (await plan.openRuleFollowUp({ kind: "slip", ruleKey: headsUpKey(weekStart, key, itemId), clientKey: key, who: name, what: `Heads-up to ${name}: #${itemId} moves out of the week`, itemId, draft: weekHeadsUpDraft(name, weekStart, { itemId, title: o.title.trim() }),
-          // Step 13.5: where it came from, shown on the follow-up.
-          origin: { trigger: o.trigger === "demoted" ? "A confirmed must was made a nice to have" : "A confirmed must was taken off the week", items: [{ itemId, title: o.title.trim() }], at: ctx.now() } }));
-        const existing = followUp ?? (await plan.allFollowUps()).find((l) => l.ruleKey === headsUpKey(weekStart, key, itemId)) ?? null;
-        return { ok: true, data: { followUp: existing ? await followUpView(plan, existing, today, () => name) : null, created: !!followUp } };
+        const existing = (await plan.allFollowUps()).find((l) => l.ruleKey === headsUpKey(weekStart, key, itemId)) ?? null;
+        return { ok: true, data: { followUp: existing ? await followUpView(plan, existing, today, () => name) : null, created: false } };
       }
       case "weekplan.add_draft": {
-        // U6 (D414): the type box in Plan the week. A local draft feature on the client's list (Enter a must,
-        // Shift+Enter a nice to have), shown with its Draft marker until it is created in DevOps.
-        const o = fields(input, ["weekStart", "clientKey", "title", "tier"], ["parentItemId"]);
+        // U6 (D414): the type box in Plan the week. A local draft feature on the client's list, shown with its Draft
+        // marker until it is created in DevOps. CF-1: no tier; the stored column only marks it as on the week.
+        const o = fields(input, ["weekStart", "clientKey", "title"], ["parentItemId", "tier"]);
         const weekStart = monday(o.weekStart);
         editable(weekStart);
         const key = clientKey(o.clientKey);
-        const t = tier(o.tier);
         if (typeof o.title !== "string" || !o.title.trim() || o.title.length > 200) throw new Invalid("A draft feature needs a title (up to 200 characters)");
         const parentItemId = o.parentItemId === undefined || o.parentItemId === null ? null : id(o.parentItemId, "parentItemId");
         const draft = (await plan.addDraft({ clientKey: key, parentItemId, title: o.title.trim(), size: "M", level: "feature" }));
-        (await plan.setWeekDraft(weekStart, draft.id, t));
+        (await plan.setWeekDraft(weekStart, draft.id, KEPT_TIER));
         return { ok: true, data: { draft, weekDrafts: (await plan.weekDrafts(weekStart)) } };
       }
       case "weekplan.draft_tier": {
@@ -425,7 +408,7 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         editable(weekStart);
         const draftId = id(o.draftId, "draftId");
         if (!(await plan.weekDrafts(weekStart)).some((d) => d.draftId === draftId) && o.tier === "off") return bad("That draft isn't on this week's list", 422);
-        (await plan.setWeekDraft(weekStart, draftId, o.tier === "off" ? null : tier(o.tier)));
+        (await plan.setWeekDraft(weekStart, draftId, o.tier === "off" ? null : KEPT_TIER));
         return { ok: true, data: { weekDrafts: (await plan.weekDrafts(weekStart)) } };
       }
       case "weekplan.nothing": {

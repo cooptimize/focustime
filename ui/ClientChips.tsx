@@ -1,6 +1,6 @@
 // WD-1: Week's client chips, in its one header row. They replace Plan the week's per-client card lines: each chip says
 // the room left, "Northwind · 2h free" or "Northwind · 6h over" (amber only when over), with a count of features that
-// aren't ready; its popover has the same total (musts plus nice to have), the musts done, what isn't ready (Needs
+// aren't ready; its popover has the same total (CF-1: every feature counts the same), what isn't ready (Needs
 // stories · Break down) and Keep open for walk-ins. The budget is the Board's and Commit's (planBudget through
 // weekMusts), so they never disagree. Chips that don't fit the row collapse into "+N", which opens the rest; they never
 // clip (WD-1 review).
@@ -41,7 +41,8 @@ export function ClientChips({ data, now, onChanged }: { data: WeekLoadData; now:
   }, [open]);
   const m = weekMusts(data, data.weekStart, now);
   const work = new Map((data.devops ?? []).map((w) => [w.clientKey, w]));
-  const keys = [...new Set([...m.fits.filter((f) => f.blocks.length > 0).map((f) => f.clientKey), ...m.rows.map((r) => r.clientKey)])];
+  const keys = [...new Set([...m.fits.filter((f) => f.blocks.length > 0).map((f) => f.clientKey), ...m.items.map((i) => i.clientKey)])];
+  const names = new Map([...(data.devops ?? []).map((c) => [c.clientKey, c.clientName] as const), ...data.planClients.map((c) => [c.clientKey, c.clientName] as const)]);
   const notReady = (k: string) => {
     const w = work.get(k);
     if (!w) return [];
@@ -49,12 +50,11 @@ export function ClientChips({ data, now, onChanged }: { data: WeekLoadData; now:
   };
   const chips = keys.map((k) => {
     const fit = m.fits.find((f) => f.clientKey === k);
-    const row = m.rows.find((r) => r.clientKey === k);
-    const name = fit?.clientName ?? row?.name ?? k;
+    const name = fit?.clientName ?? names.get(k) ?? k;
     const nr = notReady(k);
-    // One total everywhere: musts plus nice to have.
-    const c = clientChip({ name, plannedMinutes: (fit?.plannedMinutes ?? 0) + (fit?.nicePlannedMinutes ?? 0), freeMinutes: fit?.freeMinutes ?? 0, notReady: nr.length });
-    return { k, fit, row, name, nr, c };
+    // One total everywhere (CF-1): every feature on the week counts the same.
+    const c = clientChip({ name, plannedMinutes: fit?.plannedMinutes ?? 0, freeMinutes: fit?.freeMinutes ?? 0, notReady: nr.length });
+    return { k, fit, name, nr, c };
   });
   const sig = chips.map((x) => `${x.c.text}|${x.c.badge ?? ""}`).join("\n");
 
@@ -148,12 +148,6 @@ export function ClientChips({ data, now, onChanged }: { data: WeekLoadData; now:
           <p className={opened.c.over ? "cc-over" : undefined}>
             {opened.c.room} · {opened.c.detail}
           </p>
-          {opened.row && opened.row.musts > 0 && (
-            <p>
-              {/* One total (WD-1 review): the hours are on the line above, so this line counts musts only. */}
-              {opened.row.done} of {opened.row.musts} musts done
-            </p>
-          )}
           {opened.nr.length > 0 && (
             <>
               <h4 className="pl-label">Not ready</h4>

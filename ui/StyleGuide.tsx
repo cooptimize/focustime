@@ -41,7 +41,6 @@ const pick = (half: Pick["half"], clientKey: string, title: string, size: Pick["
 });
 const plan: PlanWeek = {
   [SAMPLE_WEEK]: {
-    committedAt: "2026-11-02T08:40:00-05:00[America/New_York]",
     picks: [pick("AM", "proseware", "Review the intake form", "S", "done"), pick("AM", "proseware", "Draft the release notes", "L"), pick("PM", "adatum", "Pair on the import job", "M")],
   },
 };
@@ -55,11 +54,10 @@ const sources: SourceSummary[] = [
   { source: "google", status: "unreachable", fetchedAt: "2026-11-02T08:00:00-05:00", fromCache: true, itemCount: 3, sample: true, message: "Could not reach Google. Showing data from 8:00 AM", cause: "network" },
 ];
 
-const base: Strip = { kind: "slot", half: "AM", title: "Proseware focus", until: "12:00", untilMinutes: 110, event: { title: "Design review", at: "11:00", minutes: 50, now: false }, picks: { done: 1, total: 3 }, overBy: 95, nextPick: "Draft the release notes", next: null, flex: false, draft: false };
+const base: Strip = { kind: "slot", half: "AM", title: "Proseware focus", until: "12:00", untilMinutes: 110, event: { title: "Design review", at: "11:00", minutes: 50, now: false }, picks: { done: 1, total: 3 }, overBy: 95, nextPick: "Draft the release notes", next: null, flex: false };
 const strips: [string, Strip][] = [
   ["In a block, over by", base],
   ["Before work", { ...base, kind: "before", title: "Work starts", until: "09:00", untilMinutes: 30, overBy: null, event: null }],
-  ["Not confirmed yet", { ...base, draft: true, overBy: null, picks: { done: 0, total: 3 } }],
   ["In a meeting", { ...base, event: { title: "Standup", at: "10:30", minutes: 20, now: true }, overBy: null }],
   ["Flex session", { ...base, half: "EVE", title: "Flex session: Adatum", until: "21:00", flex: true, event: null, overBy: null, nextPick: "Finish the import mapping" }],
   ["PTO", { ...base, kind: "pto", half: null, title: "PTO today", until: null, event: null, picks: null, overBy: null, nextPick: null, next: "2026-11-09" }],
@@ -333,7 +331,7 @@ export function StyleGuide() {
 
       <section className="sg-section">
         <h2>Week</h2>
-        <p className="muted">Sample week at Mon 10:10 AM: a confirmed plan over its free time, a split day with an evening, unavailable time, a flex session, a PTO day.</p>
+        <p className="muted">Sample week at Mon 10:10 AM: a plan over its free time, a split day with an evening, unavailable time, a flex session, a PTO day.</p>
         <div className="sg-week">
           <PlanCtx.Provider value={{ week: plan, toggle: noop, sizes: SIZE_MINUTES, focused: SAMPLE_FOCUSED, timer: null, nowMs: Date.parse(NOW) }}>
             <WeekGrid week={week} colors={colors} minFocusWindow={90} today={SAMPLE_WEEK} now={NOW} selection={{ dayIndex: 0, half: "AM" }} cellRefs={cellRefs} onSelect={noop} onOpen={noop} layout={layout} compact={compact} />

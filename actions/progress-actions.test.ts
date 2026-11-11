@@ -87,7 +87,7 @@ describe("XS wherever a size is picked", () => {
     const t = setup();
     const { pickId } = await t.boxed(500, "M", 60);
     await t.answer(pickId, "partly", 60);
-    const w = await t.plan.addWeekItem({ weekStart: D, clientKey: COOP, itemId: 500, title: "Mapping", level: "story", tier: "must", size: "M", url: null, type: "Task", parentId: null } as never);
+    const w = await t.plan.addWeekItem({ weekStart: D, clientKey: COOP, itemId: 500, title: "Mapping", level: "story", size: "M", url: null, type: "Task", parentId: null } as never);
     await t.run("weekplan.set_size", { id: w.id, size: "L" });
     expect((await t.plan.getPick(pickId))?.remainingMinutes).toBe(180);
   });
@@ -256,7 +256,7 @@ describe("TX-1b: fixes from the TX-1 review", () => {
     await t.plan.start(date);
     return t.plan.addPick({ date, half: "AM", clientKey: COOP, kind: "item", itemId, title: "Mapping", itemType: "Task", size: "M" });
   };
-  const story = (t: T, weekStart: string, itemId = 500) => t.plan.addWeekItem({ weekStart, clientKey: COOP, itemId, title: "Mapping", itemType: "Task", url: null, level: "story", tier: "must", size: "M" });
+  const story = (t: T, weekStart: string, itemId = 500) => t.plan.addWeekItem({ weekStart, clientKey: COOP, itemId, title: "Mapping", itemType: "Task", url: null, level: "story", size: "M" });
   const leftOn = async (t: T, weekStart: string, itemId = 500) => (await t.plan.weekPlan(weekStart)).features.find((f) => f.itemId === itemId)?.remainingMinutes ?? null;
   const allToPlan = (t: T) => t.run<{ applied: Applied[]; timeboxIds: number[]; done: number[] }>("checkin.all_to_plan", { date: D, moment: "midday" });
 
@@ -363,7 +363,7 @@ describe("TX-1c: a plain tick, a removed to-do's time, and inherited time left",
   };
   const boxOn = (t: T, date: string, pickId: number, outlook = false) => t.plan.addTimebox({ date, clientKey: COOP, pickId, title: "Mapping", start: `${date}T09:00:00-05:00`, end: `${date}T10:00:00-05:00`, outlook });
   const tick = (t: T, id: number, done: boolean) => t.run<Tick>("pick.mark_done", { id, done });
-  const story = (t: T, weekStart: string) => t.plan.addWeekItem({ weekStart, clientKey: COOP, itemId: 500, title: "Mapping", itemType: "Task", url: null, level: "story", tier: "must", size: "M" });
+  const story = (t: T, weekStart: string) => t.plan.addWeekItem({ weekStart, clientKey: COOP, itemId: 500, title: "Mapping", itemType: "Task", url: null, level: "story", size: "M" });
   const leftOn = async (t: T, weekStart: string) => (await t.plan.weekPlan(weekStart)).features.find((f) => f.itemId === 500)?.remainingMinutes ?? null;
 
   it("item 1: a tick takes the story's later planned to-dos off with one notice; earlier days, the same day and other stories stay", async () => {

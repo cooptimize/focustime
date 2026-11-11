@@ -21,4 +21,4 @@ FocusTime opens on Today.
 
 ## Week
 
-One day at a time; tap a day chip or swipe. Each to-do shows its title on its own line and its time and size underneath; ⋯ opens the same sheet as on Today. A block's agenda is folded ("Agenda · 2 meetings · 2h free"); tap to open it. A block with late promises says "1 late" beside its status, or at the end of its title line when it has none; tap it to open them. Musts at the top name each client with its count. Plan and Team are read only on a phone.
+One day at a time; tap a day chip or swipe. Each to-do shows its title on its own line and its time and size underneath; ⋯ opens the same sheet as on Today. A block's agenda is folded ("Agenda · 2 meetings · 2h free"); tap to open it. A block with late promises says "1 late" beside its status, or at the end of its title line when it has none; tap it to open them. Client chips at the top name each client with its hours. Plan and Team are read only on a phone.

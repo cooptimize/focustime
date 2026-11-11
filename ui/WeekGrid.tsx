@@ -278,7 +278,6 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
   // Medium layout shares rows across days: a day without a card in a row keeps an empty cell there.
   // An evening-only day (a weekend flex session) gets one card spanning the three rows.
   const rows: (typeof halves[number] | null)[] = props.layout === "medium" && props.hasEve && !eveOnly(day) && !day.eve ? [...halves, null] : halves;
-  // Step 13.6 (D240); U3: a Plan chip only on a day not planned yet; Friday's Add hours link; or nothing.
   const dayPlan = pv.week?.[day.date];
   // WD-1: no Plan chip any more; Friday's Add hours link stays.
   const btn = planButton({
@@ -286,7 +285,6 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
     today: pv.today ?? "",
     pto: !!day.pto,
     hasHours: !(day.am.off && day.pm.off && (!day.eve || day.eve.off)) || day.flexMinutes > 0,
-    committed: !!dayPlan?.committedAt,
     hasPicks: (dayPlan?.picks ?? []).some((p) => p.status === "planned" || p.status === "done"),
   });
   const daySelected = props.selection.dayIndex === dayIndex;

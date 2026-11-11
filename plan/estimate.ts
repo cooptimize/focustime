@@ -82,7 +82,6 @@ export type EstItem = {
   clientKey: string;
   itemId: number;
   level: "feature" | "story";
-  tier: "must" | "nice";
   /** Features: the person's estimate in minutes (whole hours), or null for the default (4h). Stories: ignored. */
   estimate: number | null;
   /** Stories: XS, S, M or L, or null when not sized yet. Features: ignored. */
@@ -96,7 +95,7 @@ export type EstItem = {
 
 export type Envelope<T> = {
   feature: T;
-  /** The stories on the list under it (they take its tier). */
+  /** The stories on the list under it. */
   stories: T[];
   /** Its load this week in minutes. */
   minutes: number;
@@ -141,20 +140,14 @@ export function estimate<T extends EstItem>(items: readonly T[], scale: SizeScal
   return { envelopes, loose, scale };
 }
 
-/** A story's tier: its feature's when nested (no separate rule), else its own. */
-export function tierOf<T extends EstItem>(e: Estimate<T>, item: T): "must" | "nice" {
-  if (item.level === "story") for (const env of e.envelopes) if (env.stories.includes(item)) return env.feature.tier;
-  return item.tier;
-}
-
 /**
- * Minutes planned per client and tier: each feature's load, plus loose stories by size (unsized as the assumption). PL-1: work marked
+ * Minutes planned per client (CF-1: one total, every feature on the week the same): each feature's load, plus loose stories by size (unsized as the assumption). PL-1: work marked
  * done in the estimate (weekBudget marks what DevOps has resolved, closed or removed) counts zero: a resolved feature
  * all of it, a resolved story under a feature its share, a resolved loose story its size.
  */
-export function plannedMinutesOf<T extends EstItem>(e: Estimate<T>, clientKey: string, tier: "must" | "nice"): number {
-  const features = e.envelopes.filter((x) => x.feature.clientKey === clientKey && x.feature.tier === tier).reduce((n, x) => n + Math.max(0, x.minutes - x.doneMinutes), 0);
-  return features + e.loose.filter((s) => s.clientKey === clientKey && s.tier === tier && !s.done).reduce((n, s) => n + storyLoad(s, e.scale), 0);
+export function plannedMinutesOf<T extends EstItem>(e: Estimate<T>, clientKey: string): number {
+  const features = e.envelopes.filter((x) => x.feature.clientKey === clientKey).reduce((n, x) => n + Math.max(0, x.minutes - x.doneMinutes), 0);
+  return features + e.loose.filter((s) => s.clientKey === clientKey && !s.done).reduce((n, s) => n + storyLoad(s, e.scale), 0);
 }
 
 /** A feature's load in words: "6h" when every story under it is sized, else "about 6h". */
@@ -189,7 +182,7 @@ export const overText = (plannedMinutes: number, freeMinutes: number) => {
 
 /**
  * A client's week in words (Plan the week's line and header, Plan ahead): "7h free" and "9h planned", with the amber
- * "about 2h over" when its musts need more than its free time. Never red.
+ * "about 2h over" when what's on its week needs more than its free time. Never red.
  */
 export function budgetWords(freeMin: number, plannedMin: number, planShare = 100, keepOpen = 0): { kind: "none" | "all" | "free" | "over"; free: string; planned: string | null; over: string | null; text: string; /** PL-1: minutes it plans up to (the over line). */ line: number } {
   // ADM-1: "Plan up to N% of free time" (a person's guidance) moves only where the amber over line falls; it never
@@ -208,14 +201,14 @@ export function budgetWords(freeMin: number, plannedMin: number, planShare = 100
 }
 
 /**
- * The one amber line under a client's musts when they need more than its free time: "About 2h more than Northwind's
- * free time this week. Make one a nice to have, or borrow Friday." Friday only when the week has a catch-up day.
+ * The one amber line when a client's week needs more than its free time: "About 2h more than Northwind's free time
+ * this week. Move one to another week, or borrow Friday." Friday only when the week has a catch-up day.
  */
 export function overLine(clientName: string, freeMin: number, plannedMin: number, friday: boolean): string | null {
   if (!isOver(plannedMin, freeMin)) return null;
   const h = overHours(plannedMin, freeMin);
   const amount = h < 1 ? "A little more" : `About ${h}h more`;
-  return `${amount} than ${clientName}'s free time this week. Make one a nice to have${friday ? ", or borrow Friday" : ""}.`;
+  return `${amount} than ${clientName}'s free time this week. Move one to another week${friday ? ", or borrow Friday" : ""}.`;
 }
 
 /** 1 block = 4h: what E1 (half blocks) and step 16.4 (whole blocks) stored, as minutes to the nearest hour (1h to 80h). */

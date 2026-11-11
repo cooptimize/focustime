@@ -385,10 +385,10 @@ export function aPick(o: Partial<import("../../plan/types.ts").Pick> = {}): impo
   return { id, date: WEEK, half: "AM", clientKey: "adatum", kind: "item", itemId: null, draftId: null, title: `Pick ${id}`, itemType: "User Story", itemUrl: null, size: null, status: "planned", carriedFrom: null, carriedFromDate: null, notes: null, followUpId: null, position: id, createdAt: `${WEEK}T09:00:00-05:00[${ZONE}]`, updatedAt: `${WEEK}T09:00:00-05:00[${ZONE}]`, ...o } as import("../../plan/types.ts").Pick;
 }
 
-/** PV-1: an item on a client's week list: a feature must for Adatum this week. */
+/** PV-1: an item on a client's week list: a feature for Adatum this week. */
 export function aWeekFeature(o: Partial<import("../../plan/types.ts").WeekFeature> = {}): import("../../plan/types.ts").WeekFeature {
   const id = o.id ?? next();
-  return { id, weekStart: WEEK, clientKey: "adatum", itemId: 1, title: `Feature ${o.itemId ?? 1}`, itemType: "Feature", url: null, level: "feature", tier: "must", estimate: null, size: null, parentId: null, slots: [], doneAt: null, position: null, createdAt: `${WEEK}T09:00:00-05:00[${ZONE}]`, updatedAt: `${WEEK}T09:00:00-05:00[${ZONE}]`, ...o };
+  return { id, weekStart: WEEK, clientKey: "adatum", itemId: 1, title: `Feature ${o.itemId ?? 1}`, itemType: "Feature", url: null, level: "feature", estimate: null, size: null, parentId: null, slots: [], doneAt: null, position: null, createdAt: `${WEEK}T09:00:00-05:00[${ZONE}]`, updatedAt: `${WEEK}T09:00:00-05:00[${ZONE}]`, ...o };
 }
 
 /** ADM-2: an active Dataverse account (store/admin-store.ts DirectoryAccount): a customer named Adatum by default. */

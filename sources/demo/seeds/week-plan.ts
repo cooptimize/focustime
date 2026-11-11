@@ -1,4 +1,4 @@
-// The week plan per client (musts, nice to haves, a pin), committed. E2: a feature's load comes from its stories on the
+// The week plan per client (features and their stories, a pin). CF-1: nothing is confirmed; adding is enough. E2: a feature's load comes from its stories on the
 // list once one is sized (Harbor's S and S: 2h; Northwind 1110's L and an unsized one: 4h + 1h), else its estimate in
 // hours (Northwind 1120: 4h, none set); stories S, M, L or not sized yet. Northwind needs about 2h more than its free
 // time (the amber line); the others fit.
@@ -10,23 +10,22 @@ export const weekPlanSeed: DemoSeed = {
   seed: async ({ run, weekStart }) => {
     await run("week.load", { weekStart });
     await run("weekplan.load", { weekStart });
-    const list: [string, number, "must" | "nice", { hours?: number; size?: "XS" | "S" | "M" | "L" }][] = [
-      ["Cooptimize", 4410, "must", { hours: 4 }],
-      ["Cooptimize", 4411, "must", { size: "S" }],
-      ["Cooptimize", 4412, "must", { size: "S" }],
-      ["Northwind", 1110, "must", { hours: 8 }],
-      ["Northwind", 1111, "must", { size: "L" }],
-      ["Northwind", 1112, "must", {}],
-      ["Northwind", 1120, "must", {}],
-      ["Northwind", 1130, "nice", { size: "M" }],
-      ["Harbor", 2210, "must", { hours: 4 }],
-      ["Harbor", 2211, "must", { size: "S" }],
-      ["Harbor", 2212, "must", { size: "S" }],
-      ["Atlas", 3311, "must", { size: "S" }],
-      ["Atlas", 3330, "nice", { size: "S" }],
+    const list: [string, number, { hours?: number; size?: "XS" | "S" | "M" | "L" }][] = [
+      ["Cooptimize", 4410, { hours: 4 }],
+      ["Cooptimize", 4411, { size: "S" }],
+      ["Cooptimize", 4412, { size: "S" }],
+      ["Northwind", 1110, { hours: 8 }],
+      ["Northwind", 1111, { size: "L" }],
+      ["Northwind", 1112, {}],
+      ["Northwind", 1120, {}],
+      ["Northwind", 1130, { size: "M" }],
+      ["Harbor", 2210, { hours: 4 }],
+      ["Harbor", 2211, { size: "S" }],
+      ["Harbor", 2212, { size: "S" }],
+      ["Atlas", 3311, { size: "S" }],
+      ["Atlas", 3330, { size: "S" }],
     ];
-    for (const [clientKey, itemId, tier, est] of list) await run("weekplan.add", { weekStart, clientKey, itemId, tier, ...est });
+    for (const [clientKey, itemId, est] of list) await run("weekplan.add", { weekStart, clientKey, itemId, ...est });
     await run("weekplan.place", { weekStart, clientKey: "Cooptimize", itemId: 4410, date: weekStart, half: "AM", on: true });
-    await run("weekplan.commit", { weekStart });
   },
 };

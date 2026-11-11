@@ -92,8 +92,8 @@ describe.each([
     expect(commit.data!.clients.map((c) => c.clientKey)).not.toContain(PROSPECT);
 
     // My week has a feature of each; only the client's is published (week_commitments).
-    await w.plan.addWeekItem({ weekStart: THIS_WEEK, clientKey: CLIENT, itemId: 1, title: "Client feature", itemType: "Feature", url: null, level: "feature", tier: "must" });
-    await w.plan.addWeekItem({ weekStart: THIS_WEEK, clientKey: PROSPECT, itemId: 2, title: "Prospect feature", itemType: "Feature", url: null, level: "feature", tier: "must" });
+    await w.plan.addWeekItem({ weekStart: THIS_WEEK, clientKey: CLIENT, itemId: 1, title: "Client feature", itemType: "Feature", url: null, level: "feature" });
+    await w.plan.addWeekItem({ weekStart: THIS_WEEK, clientKey: PROSPECT, itemId: 2, title: "Prospect feature", itemType: "Feature", url: null, level: "feature" });
     await publishWeek(w.ctx, THIS_WEEK);
     const published = await w.team.commitments([CLIENT, PROSPECT], THIS_WEEK);
     expect(published.map((c) => c.clientKey)).toEqual([CLIENT]);

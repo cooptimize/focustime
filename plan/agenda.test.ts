@@ -91,20 +91,19 @@ describe("planMyDay", () => {
   const sizes = { XS: 30, S: 30, M: 60, L: 120, unsized: 60 };
   const pm = slot("PM", [], [gap("13:00", "14:00"), gap("15:00", "17:00")], [["13:00", "17:00"]]);
 
-  it("places musts first, then larger sizes, then pick order", () => {
-    const r = planMyDay([pick(1, "PM", "S"), pick(2, "PM", "L"), pick(3, "PM", "M"), pick(4, "PM", "S")], { PM: pm }, [], sizes, new Set([4]));
+  it("places larger sizes first, then pick order (CF-1: no musts first)", () => {
+    const r = planMyDay([pick(1, "PM", "S"), pick(2, "PM", "L"), pick(3, "PM", "M"), pick(4, "PM", "S")], { PM: pm }, [], sizes);
     expect(r.placed.map((p) => [p.pickId, p.start.slice(11, 16), p.end.slice(11, 16)])).toEqual([
-      [4, "13:00", "13:30"],
       [2, "15:00", "17:00"],
-      [1, "13:30", "14:00"],
+      [3, "13:00", "14:00"],
     ]);
-    // M (60) doesn't fit whole after 4 and 2, and the 30 minutes left are under its shortest useful time (D273).
-    expect(r.unplaced.map((u) => u.pickId)).toEqual([3]);
-    expect(r.unplaced[0]!.reason).toBe("No gap of 1h or more left in the afternoon");
+    // L and M fill both gaps; the two S picks find no gap left.
+    expect(r.unplaced.map((u) => u.pickId)).toEqual([1, 4]);
+    expect(r.unplaced[0]!.reason).toMatch(/^No gap of .+ left in the afternoon$/);
   });
   it("keeps each pick in its own block and skips timeboxed, done and dropped picks", () => {
     const done = { ...pick(5, "AM", "S"), status: "done" as const };
-    const r = planMyDay([pick(1, "AM", "M"), pick(2, "PM", "M"), pick(3, "AM", "S"), done], { AM: am, PM: pm }, [tb(9, "08:00", "08:30", { pickId: 3 })], sizes, new Set());
+    const r = planMyDay([pick(1, "AM", "M"), pick(2, "PM", "M"), pick(3, "AM", "S"), done], { AM: am, PM: pm }, [tb(9, "08:00", "08:30", { pickId: 3 })], sizes);
     expect(r.placed.map((p) => [p.pickId, p.half, p.start.slice(11, 16)])).toEqual([
       [1, "AM", "09:30"],
       [2, "PM", "13:00"],
@@ -113,7 +112,7 @@ describe("planMyDay", () => {
     expect(r.unplaced).toEqual([]);
   });
   it("starts at now on today", () => {
-    const r = planMyDay([pick(1, "AM", "S")], { AM: am }, [], sizes, new Set(), T("11:10"));
+    const r = planMyDay([pick(1, "AM", "S")], { AM: am }, [], sizes, T("11:10"));
     expect(r.placed[0]!.start).toBe(T("11:10"));
   });
 });

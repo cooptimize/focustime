@@ -1,4 +1,4 @@
-// One desktop reminder per day with working hours when today isn't committed yet (step 5), only near the day start (Q23). Never
+// One desktop reminder per day with working hours when today has no to-dos yet (step 5; CF-1: was "not committed"), only near the day start (Q23). Never
 // repeats: the store keeps a marker per date, so a restart or a second check the same day sends nothing.
 import { WEEK_NUDGE_MESSAGE, weekNudges, type NudgeTimes } from "../plan/weekplan.ts";
 import { hoursOn, type TimeModel } from "../week/hours.ts";
@@ -9,10 +9,10 @@ export const REMINDER_WINDOW_MINUTES = 90;
 
 /**
  * Whether the reminder is due now: on a day with working hours, from the start of its main span until 90 minutes
- * after it, today not committed (step 6b: the time model, not Mon–Thu).
+ * after it, while today has no to-dos (step 6b: the time model, not Mon–Thu; CF-1: was "not confirmed").
  */
-export function reminderDue(now: Temporal.ZonedDateTime, model: TimeModel, committed: boolean, offsetMinutes = 0): boolean {
-  if (committed) return false;
+export function reminderDue(now: Temporal.ZonedDateTime, model: TimeModel, hasWork: boolean, offsetMinutes = 0): boolean {
+  if (hasWork) return false;
   const main = hoursOn(model, now.toPlainDate().toString()).main;
   if (!main) return false;
   // Settings > Planning (step 6c): the reminder can start later than the day does.
@@ -26,7 +26,8 @@ export type ReminderDeps = {
   hours: () => Promise<TimeModel | null>;
   /** Minutes after the day's start the reminder may first fire ([plan] reminder_offset_minutes). */
   offsetMinutes?: () => Promise<number>;
-  committed: (date: string) => boolean | Promise<boolean>;
+  /** CF-1: whether the date has to-dos (planned or done). */
+  hasWork: (date: string) => boolean | Promise<boolean>;
   /** Whether a date is a PTO day (D106): no reminder then. Asked only when a reminder would otherwise be due. */
   off?: (date: string) => Promise<boolean>;
   /** True the first time for a date (the store's markOnce). */
@@ -41,10 +42,10 @@ export async function checkReminder(d: ReminderDeps): Promise<boolean> {
   const now = d.now().withTimeZone(userZone(model));
   const date = now.toPlainDate().toString();
   const offset = d.offsetMinutes ? await d.offsetMinutes().catch(() => 0) : 0;
-  if (!reminderDue(now, model, await d.committed(date), offset)) return false;
+  if (!reminderDue(now, model, await d.hasWork(date), offset)) return false;
   if (d.off && (await d.off(date).catch(() => false))) return false;
   if (!(await d.once(date))) return false;
-  d.send("FocusTime", "Today isn't planned yet. Open FocusTime and press P to plan the day.");
+  d.send("FocusTime", "Nothing on today yet. Open FocusTime and add work to today.");
   return true;
 }
 
@@ -60,9 +61,9 @@ export function closeoutReminderDue(now: Temporal.ZonedDateTime, model: TimeMode
   return !!end && within(now, at(now, end).subtract({ minutes: offsetMinutes }));
 }
 
-/** Check-in: from the end of lunch (or midday without one) plus `offset`, for 90 minutes, only on a committed day. */
-export function checkinReminderDue(now: Temporal.ZonedDateTime, model: TimeModel, committed: boolean, offsetMinutes: number): boolean {
-  if (!committed) return false;
+/** Check-in: from the end of lunch (or midday without one) plus `offset`, for 90 minutes, only when today has to-dos (CF-1). */
+export function checkinReminderDue(now: Temporal.ZonedDateTime, model: TimeModel, hasWork: boolean, offsetMinutes: number): boolean {
+  if (!hasWork) return false;
   const pm = hoursOn(model, now.toPlainDate().toString()).pm;
   return !!pm && within(now, at(now, pm.start).add({ minutes: offsetMinutes }));
 }
@@ -95,13 +96,14 @@ export const CHECKIN_MESSAGE = "Midday check-in: what still fits this afternoon.
 
 /**
  * Plan the week nudges (step 8): Thursday and Friday for next week, Monday for this week, each from its time (Settings
- * > Planning) until the end of that day, only while that week isn't committed, never on a PTO day, and each once per
+ * > Planning) until the end of that day, only while that week has nothing placed (CF-1), never on a PTO day, and each once per
  * week (`once`, the store's markOnce). Returns how many were sent.
  */
 export async function checkWeekNudges(d: {
   now: () => Temporal.ZonedDateTime;
   times: () => Promise<NudgeTimes | null>;
-  committed: (weekStart: string) => boolean | Promise<boolean>;
+  /** CF-1: whether the week has anything placed (a feature or a to-do). */
+  hasWork: (weekStart: string) => boolean | Promise<boolean>;
   off: (date: string) => Promise<boolean>;
   once: (key: string, weekStart: string) => boolean | Promise<boolean>;
   send: (body: string, weekStart: string) => void;
@@ -115,9 +117,9 @@ export async function checkWeekNudges(d: {
   const start = d.workStart ? await d.workStart(today).catch(() => null) : undefined;
   // The nudges look back 7 days, so they weigh last week, this one and next (A3: read up front; weekNudges is sync).
   const monday = now.toPlainDate().subtract({ days: now.dayOfWeek - 1 });
-  const committed = new Set<string>();
-  for (const w of [monday.subtract({ days: 7 }), monday, monday.add({ days: 7 })].map(String)) if (await d.committed(w)) committed.add(w);
-  const { due } = weekNudges(now, times, (w) => committed.has(w), start === undefined ? {} : { workStart: start ? Temporal.PlainTime.from(start) : null });
+  const withWork = new Set<string>();
+  for (const w of [monday.subtract({ days: 7 }), monday, monday.add({ days: 7 })].map(String)) if (await d.hasWork(w)) withWork.add(w);
+  const { due } = weekNudges(now, times, (w) => withWork.has(w), start === undefined ? {} : { workStart: start ? Temporal.PlainTime.from(start) : null });
   if (!due.length) return 0;
   if (await d.off(today).catch(() => false)) return 0;
   const thisWeek = now.toPlainDate().subtract({ days: now.dayOfWeek - 1 }).toString();

@@ -47,7 +47,7 @@ a secret, an outside address), `which_client` (two clients named; nothing sent).
 ## Proposals from a button (TB-2)
 
 `propose({ person, tool, args })` makes a proposal without an AI call, for a front end's own button (the Teams
-rhythm's Confirm today, Move…, Move the rest and Close out, and PK-1's Done and Undo). Only `PROPOSE_TOOLS` in
+rhythm's Move…, Move the rest and Close out, and PK-1's Done and Undo). Only `PROPOSE_TOOLS` in
 `assistant/allowlist.ts`: FocusTime's plan tools `move_pick`, `keep_pick`, `drop_pick`, `confirm_day`, `move_picks`,
 `close_day`, and PK-1's `item_done` and `item_undo`; anything else returns `{ ok: false, message }`. The args are the tool's own, as the model would give them. The proposal is built,
 stored, expires and is confirmed exactly like a typed request's, with the same checks (the person's own picks, the

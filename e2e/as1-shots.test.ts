@@ -65,7 +65,7 @@ describe.skipIf(!CHROMIUM || !SHOTS)("AS-1 screenshots", () => {
       await page.getByTestId("assistant-panel").waitFor();
       await ask(page, "What's #1110?", ".as-card.item");
       await shot("lookup");
-      await ask(page, "Confirm today", ".as-card.proposal");
+      await ask(page, "Capture: ask about the March totals", ".as-card.proposal");
       await shot("proposal");
       await ask(page, "Comment on #1110 that the CSV export is ready for review", ".as-card.proposal");
       await shot("comment");

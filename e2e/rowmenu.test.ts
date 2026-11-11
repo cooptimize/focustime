@@ -15,7 +15,6 @@ async function seed(page: Page) {
   if (!JSON.stringify(picks?.data ?? "").includes("Review the export spec")) {
     await call(page, "pick.add", { date: "2026-11-02", half: "PM", clientKey: "Northwind", itemId: 1111, size: "M" });
     await call(page, "pick.add", { date: "2026-11-02", half: "PM", clientKey: "Northwind", intention: "Review the export spec", size: "S" });
-    await call(page, "planday.commit", { date: "2026-11-02" });
   }
   await page.reload();
   await page.waitForSelector(".today-block");

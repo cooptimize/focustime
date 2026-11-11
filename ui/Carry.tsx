@@ -35,7 +35,6 @@ type CarryApi = {
   drop: (p: Pick) => Promise<void>;
   /** "Move to…": the week's blocks with their fit. */
   moveMenu: (p: Pick) => MenuStep;
-  committed: (date: IsoDate) => boolean;
 };
 
 const EMPTY: CarryPlan = { cards: [], earlierDays: [], earlierWeeks: [] };
@@ -62,7 +61,6 @@ export function CarryProvider({ active, version, week, now, onChanged, children 
   const suggested = useMemo(() => new Map(plan.cards.map((s) => [s.pick.id, s.to] as const)), [plan]);
   const listed = useMemo(() => new Set([...plan.earlierDays, ...plan.earlierWeeks].map((p) => p.id)), [plan]);
   const note = useCallback((t: string, undo: (() => Promise<void>) | null = null) => dnd?.note(t, undo), [dnd]);
-  const committed = useCallback((d: IsoDate) => !!pv.week?.[d]?.committedAt, [pv.week]);
 
   const moveTo = useCallback(
     async (p: Pick, to: { date: IsoDate; half: Half }, label: string, anyway = false) => {
@@ -132,7 +130,6 @@ export function CarryProvider({ active, version, week, now, onChanged, children 
         }),
       };
     },
-    committed,
   };
   return <CarryCtx.Provider value={active ? api : null}>{children}</CarryCtx.Provider>;
 }
@@ -147,7 +144,7 @@ function suggestionMenu(c: CarryApi, s: Suggestion): MenuStep {
   return {
     title: s.pick.title,
     items: [
-      { id: "keep", label: `Keep here, ${blockName(s.to)}`, action: "pick.move", ...(c.committed(s.to.date) ? { hint: "Adds to a confirmed day" } : {}), run: () => c.keep(s) },
+      { id: "keep", label: `Keep here, ${blockName(s.to)}`, action: "pick.move", run: () => c.keep(s) },
       { id: "move", label: "Move to…", action: "pick.move", next: () => c.moveMenu(s.pick) },
       { id: "drop", label: "Drop", danger: true, action: "pick.remove", run: () => c.drop(s.pick) },
     ],
@@ -172,7 +169,7 @@ function SuggestedCard({ s, c, tabIndex }: { s: Suggestion; c: CarryApi; tabInde
   const { open } = useContext(MenuCtx);
   const drag = useDragSource(pickDragged(s.pick));
   const from = `From ${weekday(s.pick.date)}`;
-  const title = `Suggested from ${blockName(s.pick)}. It doesn't count against this block until you keep it${c.committed(s.to.date) ? ". Adds to a confirmed day" : ""}`;
+  const title = `Suggested from ${blockName(s.pick)}. It doesn't count against this block until you keep it`;
   return (
     <li className="suggested-card" {...drag}>
       <button type="button" className="sc-open" tabIndex={tabIndex} title={title} aria-label={`${s.pick.title}, ${from.toLowerCase()}, suggested here. Keep, move or drop`} onClick={(e) => openAt(e, open, suggestionMenu(c, s))}>
@@ -299,7 +296,7 @@ function ReviewRow({ pick, s }: { pick: Pick; s: Suggestion }) {
         <span className="pr-note">
           from {shortDate(pick.date)} · suggested {blockName(s.to)}
         </span>
-        <button type="button" className="link-btn" onClick={() => void c.keep(s)} title={c.committed(s.to.date) ? "Adds to a confirmed day" : `Keep it in ${blockName(s.to)}`}>
+        <button type="button" className="link-btn" onClick={() => void c.keep(s)} title={`Keep it in ${blockName(s.to)}`}>
           Keep
         </button>
         <button type="button" className="link-btn" onClick={(e) => openAt(e, open, c.moveMenu(pick))}>

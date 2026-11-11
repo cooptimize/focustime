@@ -62,7 +62,7 @@ export async function todayRead(d: ReadDeps, when: "now" | "today" | "tonight", 
     const order = ["AM", "PM", "EVE"];
     const next = timed ?? open.filter((p) => order.indexOf(p.half) >= order.indexOf(half)).sort((a, b) => order.indexOf(a.half) - order.indexOf(b.half) || a.id - b.id)[0];
     if (next) cards.push(pickCard(d, next));
-    else cards.push({ kind: "note", text: open.length ? "Nothing planned for the rest of today's blocks." : w.planDay.committed ? "Everything planned for today is done." : "Today isn't planned yet.", link: d.link("#/day", "Open Day") });
+    else cards.push({ kind: "note", text: open.length ? "Nothing planned for the rest of today's blocks." : picks.length ? "Everything planned for today is done." : "Nothing on today yet.", link: d.link("#/day", "Open Day") });
     facts.next = next ? { pickId: next.id, title: next.title, half: halfName(next.half), focusRunning: !!timed } : null;
   } else {
     const list = when === "tonight" ? open.filter((p) => p.half === "EVE") : open;

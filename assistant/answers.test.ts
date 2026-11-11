@@ -61,9 +61,9 @@ describe("AS-3 golden set: the six questions from the brief", () => {
     expect(all).toContain("#9100 Claims intake: no update yet for Monday's report");
     expectGrounded(r);
     expectNoLeak(r, s);
-    // Up to 3 suggestions, only allowlisted proposals: move the over-full block's to-dos, confirm next week.
+    // Up to 3 suggestions, only allowlisted proposals: move the over-full block's to-dos (CF-1: no Confirm next week).
     const sg = suggest(r)!;
-    expect(sg.choices.map((c) => c.label)).toEqual(["Move the Tailspin to-dos from Wed PM to Fri AM", "Confirm next week"]);
+    expect(sg.choices.map((c) => c.label)).toEqual(["Move the Tailspin to-dos from Wed PM to Fri AM"]);
     for (const t2 of SUGGEST_TOOLS) expect(TOOLS[t2].kind).toBe("proposal");
     // Only the intent round went to the AI, and it heard only my words.
     expect(s.calls.map((c) => c.schemaName)).toEqual(["assistant_intent"]);
@@ -350,10 +350,10 @@ describe("AS-3 rules", () => {
     s.question({ topic: "plan_check", period: "next_week" });
     const r = await s.a.handle("I'm planning next week. What should I look out for?");
     const sg = suggest(r)!;
-    const confirm = sg.choices.find((c) => c.label === "Confirm next week")!;
+    const confirm = sg.choices[0]!;
     const p = await s.a.handle(confirm.label, {}, confirm.value);
-    expect(p.proposals[0]).toMatchObject({ action: "weekplan.commit" });
-    expect(s.ran.filter((x) => x.action === "weekplan.commit")).toEqual([]);
+    expect(p.proposals[0]).toMatchObject({ action: "pick.move" });
+    expect(s.ran.filter((x) => x.action === "pick.move")).toEqual([]);
     // The same tap again: that answer's turn is no longer the newest, so it's a fresh request.
     s.action([], {}, say("ok"));
     const again = await s.a.handle(confirm.label, {}, confirm.value);
@@ -370,7 +370,7 @@ describe("AS-3 rules", () => {
     const shown2 = JSON.stringify(t.cards);
     for (const x of ["Your days", "Tailspin", "Wingtip", "Late promise to Dana Reyes: Send the row counts (was due Nov 3)"]) expect(shown2).toContain(x);
     expect(shown2).toContain("https://focustime.example.com/#/");
-    expect(t.question).toMatchObject({ suggest: true, choices: [{ label: "Move the Tailspin to-dos from Wed PM to Fri AM" }, { label: "Confirm next week" }] });
+    expect(t.question).toMatchObject({ suggest: true, choices: [{ label: "Move the Tailspin to-dos from Wed PM to Fri AM" }] });
     expect(JSON.stringify(t)).not.toMatch(/Initech/);
   });
 });

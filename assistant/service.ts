@@ -15,6 +15,7 @@
 //   to-dos, which item) asks one short question with choices; my next message answers it for 10 minutes.
 //   4. confirm() re-checks everything (mine, open, not expired, still allowlisted, the client still mine and the
 //      proposal's own, nothing changed since: a fresh preview) and then dispatches the same action the button does.
+import { NOTHING_TO_CONFIRM_DAY, NOTHING_TO_CONFIRM_WEEK } from "../plan/no-confirm.ts";
 import type { ConversationsData } from "../plan/conversation-views.ts";
 import { removedNotice } from "../plan/progress.ts";
 import { SIZE_MINUTES } from "../plan/types.ts";
@@ -63,16 +64,26 @@ export type AssistantEnv = {
 
 const COMMANDS: Link = { label: "Open the command menu", href: "#/commands" };
 
+/** CF-1: "confirm my day", "lock in my week": a request to confirm a plan, which FocusTime no longer has; null otherwise. */
+export function asksToConfirm(text: string): "day" | "week" | null {
+  // Only a confirm verb that starts the request and whose object is my plan; anything else goes to the model (which has
+  // no confirm tool). "Did I commit to…" or "…, I'll confirm" are ordinary requests (CF-1 review).
+  const s = text.toLowerCase().trim().replace(/[.!?]+$/, "");
+  const m = s.match(/^(?:(?:please|can you|could you)\s+)?(?:confirm|lock in|commit)\s+(?:to\s+)?(?:(?:my|the|this|next|today's|tomorrow's)\s+)*(day|today|tomorrow|plan|day's plan|week|week's plan|monday|tuesday|wednesday|thursday|friday)(?:'s plan| plan)?(?:\s+(?:for\s+)?(?:today|tomorrow|this week|next week))?$/);
+  if (!m) return null;
+  return /week/.test(m[0]) ? "week" : "day";
+}
+
 /** AS-2: FocusTime's own words, in both rounds' fixed instructions. */
-export const GLOSSARY = `FocusTime's words: the tabs are Day, Week, Ahead, Status and Inbox. Week is the week grid of blocks, with the Add work panel beside it for placing work on a block and choosing the week's musts and nice to haves ("Plan the week", "Plan today" and "the Board" are old names for it). Status is Monday's status report; "write my status updates" opens it. A block is a half-day of focus time for one client: AM is the morning, PM the afternoon. A to-do (code name pick; people say either, and both mean the same) is a planned piece of work on a block. Friday is the catch-up day. PTO is a day off. A must is a week item that should get done this week; a nice to have only if there's room. A send puts a feature or story on a teammate's week. A promise is something I owe someone (Inbox › Promises); In progress is a conversation or promise linked to an item. Confirm today and Confirm week finish a plan. Ahead has Grid, Gantt, Gaps (items missing stories, a target date, an owner or a size) and Backlog (each client's backlog order; Stale is an open item unchanged for weeks). "Complete", "done", "close" and "finish" an item all mean its process's done state.`;
+export const GLOSSARY = `FocusTime's words: the tabs are Day, Week, Ahead, Status and Inbox. Week is the week grid of blocks, with the Add work panel beside it for placing work on a block and adding features to the week ("Plan the week", "Plan today" and "the Board" are old names for it). Status is Monday's status report; "write my status updates" opens it. A block is a half-day of focus time for one client: AM is the morning, PM the afternoon. A to-do (code name pick; people say either, and both mean the same) is a planned piece of work on a block. Friday is the catch-up day. PTO is a day off. Every feature on the week counts the same. A send puts a feature or story on a teammate's week. A promise is something I owe someone (Inbox › Promises); In progress is a conversation or promise linked to an item. Nothing is confirmed: a day's or a week's plan is simply what's on it, and it changes freely. Ahead has Grid, Gantt, Gaps (items missing stories, a target date, an owner or a size) and Backlog (each client's backlog order; Stale is an open item unchanged for weeks). "Complete", "done", "close" and "finish" an item all mean its process's done state.`;
 
 const examples = TOOL_NAMES.filter((t) => !BUTTON_ONLY.includes(t)).map((t) => `${t}: ${TOOLS[t].examples.map((e) => `"${e}"`).join(" | ")}`).join("\n");
 
-export const INTENT_INSTRUCTIONS = `You route requests in FocusTime, a planning app for consultants. Read the person's request and the screen they are on, and name the tools the request needs, in order, at most 4. Only name a tool the person's own words ask for: a move, drop, keep, confirm, add, change, send, comment, description, update, unlink, snooze, capture or plan_deployment only when they ask for that. If they ask to close a loop or a follow-up, name close_loop. If the request isn't something these tools do, name none.
+export const INTENT_INSTRUCTIONS = `You route requests in FocusTime, a planning app for consultants. Read the person's request and the screen they are on, and name the tools the request needs, in order, at most 4. Only name a tool the person's own words ask for: a move, drop, keep, add, change, send, comment, description, update, unlink, snooze, capture or plan_deployment only when they ask for that. If they ask to close a loop or a follow-up, name close_loop. If the request isn't something these tools do, name none.
 Words: a to-do is a planned piece of work on a half-day block (code name pick). People may say pick or to-do; both mean the same, and the *_pick and *_picks tools act on to-dos.
 For a move of to-dos by day or block ("move those to Friday", "everything from Wednesday PM to Friday AM", "push today to tomorrow"), name move_plan, even when the to-dos are with different clients. For two or three changes to one item in one request (done and a comment, a date), name item_update.
 ${GLOSSARY}
-Tools: today (what's next, due today, due tonight), day (what I did or planned on a day), item (a work item's state, owner, dates, children), gaps (features with readiness gaps), commitments (what someone committed to in a conversation), sends (my sends and their states), status (Monday's status report: writing my status updates, or finding the feature an update goes on; with comment when they give the update's words), inbox (a view of my Inbox: needs you, promises, waiting, in progress, captures, done), link_search (items to link a conversation or promise to), move_pick, drop_pick, keep_pick, move_picks (several to-dos at once, by id), move_plan (to-dos by day or block), close_day (close out a day: to-dos done, the rest moved on, the day closed out), confirm_day, confirm_week, add_must, ahead_change (start, target, size or owner of an item), send (send work to a teammate's week), comment (a comment on a DevOps item), description (a new description for a DevOps item), item_update (done, a comment and a target date on one item), unlink, link_comment, conversation_owner (claim, give, add a helper, release, close out or reopen a conversation), inbox_seen, snooze, capture, close_loop, plan_deployment (plan a deployment, release or go-live with a time window).
+Tools: today (what's next, due today, due tonight), day (what I did or planned on a day), item (a work item's state, owner, dates, children), gaps (features with readiness gaps), commitments (what someone committed to in a conversation), sends (my sends and their states), status (Monday's status report: writing my status updates, or finding the feature an update goes on; with comment when they give the update's words), inbox (a view of my Inbox: needs you, promises, waiting, in progress, captures, done), link_search (items to link a conversation or promise to), move_pick, drop_pick, keep_pick, move_picks (several to-dos at once, by id), move_plan (to-dos by day or block), close_day (close out a day: to-dos done, the rest moved on, the day closed out), add_to_week, ahead_change (start, target, size or owner of an item), send (send work to a teammate's week), comment (a comment on a DevOps item), description (a new description for a DevOps item), item_update (done, a comment and a target date on one item), unlink, link_comment, conversation_owner (claim, give, add a helper, release, close out or reopen a conversation), inbox_seen, snooze, capture, close_loop, plan_deployment (plan a deployment, release or go-live with a time window).
 Questions (AS-3): when the request asks something rather than asking for a change, set ask and name no tools: topic is plan_check (what to look out for, planning a period, risks, "anything I should know"), capabilities (what you can help with, what you can do here), agenda (what's on a day or period, my plate, my schedule), promises (promises late or due; lateOnly true when it asks only about late ones), waiting (what I'm waiting on), readiness (what's not ready, gaps, missing stories, dates or owners for a period or a client's work), deployments (deployments, releases, go-lives, after-hours or weekend work), status_updates (features that still need an update for Monday's status report), done (what I got done or finished), calls (client calls or meeting proposals to review), standards (what Cooptimize's development standards say: naming, formatting or design rules for SQL, DAX, semantic models or reports, such as "what's our standard for fact table naming?" or "how should DAX measures be formatted?"), items (about named features, stories or items: what's under a feature, their state), general (any other question about my plan or FocusTime). period is today, tomorrow, this_week, next_week, weekend, last_week, or day with date (YYYY-MM-DD; null otherwise); this_week when it doesn't say. A question about one item by #id may name item instead; who committed to something, commitments; my sends, sends. A request for a change sets ask to null.
 followUp is true when the request continues or corrects the earlier request shown ("those", "they", "it", "that feature", "I meant", "no,", "can't you", or a missing detail); then route it as the two together would be. Otherwise false.
 How people ask:
@@ -415,6 +426,9 @@ export function createAssistant(env: AssistantEnv) {
     // the AI can't run (below), so AI off answers them the same way in the panel and in Teams.
     const quick = quickOf(text);
     if (quick && (quick === "help" || quick === "open" || !env.ai)) return quickAnswer(turnId, quick, context, prior);
+    // CF-1: nothing confirms a day or a week now. Asked to, it says so plainly, with or without AI, and changes nothing.
+    const confirmAsk = asksToConfirm(text);
+    if (confirmAsk) return finish(turnId, "ok", confirmAsk === "week" ? NOTHING_TO_CONFIRM_WEEK : NOTHING_TO_CONFIRM_DAY, [], [], []);
     // 1. One client: chosen in a question, named in my words (the guard's rule), matched by the resolver, or the screen's.
     const named = clientsNamed(text, env.directory, env.isInternal).filter(env.isMine);
     if (!o.client && named.length > 1) return ask(turnId, "which_client", { ...clientQuestion(text, context, named, null), question: "That names more than one client. Which one is it about?" }, [], prior);
@@ -838,24 +852,11 @@ export function createAssistant(env: AssistantEnv) {
         const preview = plain("Drop a to-do", `To-do: ${p.title}`, [{ label: "To-do", before: `Planned ${dayWords(p.date)} ${halfWords(p.half)}`, after: "Dropped" }]);
         return { view: base("pick.remove", p.clientKey, `Drop "${p.title}"`, preview, "Only you"), held: { tool, args, run: { action: "pick.remove", input: { id: p.id } } }, snapshot: { date: p.date, half: p.half, status: p.status } };
       }
-      case "confirm_day": {
-        const date = String(args.date);
-        const picks = (await env.plan.picksFor(date)).filter((p) => p.status === "planned" && env.isMine(p.clientKey));
-        const preview = plain("Confirm a day's plan", `Plan for ${dayWords(date)}`, [{ label: "Plan", before: "Draft", after: `Confirmed, ${picks.length} to-do${picks.length === 1 ? "" : "s"}` }]);
-        return { view: base("planday.commit", null, `Confirm ${dayWords(date)}`, preview, "Only you"), held: { tool, args, run: { action: "planday.commit", input: { date } } }, snapshot: { picks: picks.map((p) => p.id).sort() } };
-      }
-      case "confirm_week": {
-        const weekStart = mondayOf(String(args.weekStart));
-        const week = await env.plan.weekPlan(weekStart);
-        const n = week.features.length;
-        const preview = plain("Confirm a week's plan", `Week of ${dayWords(weekStart)}`, [{ label: "Week", before: week.committedAt ? "Confirmed, changed since" : "Draft", after: `Confirmed, ${n} item${n === 1 ? "" : "s"}` }], ["Your teammates on these clients see what you confirmed in Team."]);
-        return { view: base("weekplan.commit", null, `Confirm the week of ${dayWords(weekStart)}`, preview, "Your teammates on these clients, in Team"), held: { tool, args: { weekStart }, run: { action: "weekplan.commit", input: { weekStart } } }, snapshot: { items: week.features.map((f) => f.id).sort() } };
-      }
-      case "add_must": {
+      case "add_to_week": {
         const f = await item(Number(args.itemId), client);
         const weekStart = mondayOf(typeof args.weekStart === "string" ? args.weekStart : today());
-        const preview = plain("Add to the week as a must", `#${f.item.id} ${f.item.title}`, [{ label: `Week of ${dayWords(weekStart)}`, before: "Not on it", after: "Must" }]);
-        return { view: base("weekplan.add", f.clientKey, `Add #${f.item.id} as a must`, preview, "Only you, until you confirm the week"), held: { tool, args, run: { action: "weekplan.add", input: { weekStart, clientKey: f.clientKey, itemId: f.item.id, tier: "must" } } }, snapshot: null };
+        const preview = plain("Add to the week", `#${f.item.id} ${f.item.title}`, [{ label: `Week of ${dayWords(weekStart)}`, before: "Not on it", after: "On it" }]);
+        return { view: base("weekplan.add", f.clientKey, `Add #${f.item.id} to the week`, preview, "Your teammates on this client, in Team"), held: { tool, args, run: { action: "weekplan.add", input: { weekStart, clientKey: f.clientKey, itemId: f.item.id } } }, snapshot: null };
       }
       case "ahead_change": {
         const f = await item(Number(args.itemId), client);
@@ -1395,8 +1396,8 @@ export function createAssistant(env: AssistantEnv) {
       if (held.tool === "plan_deployment") return { ok: true, result: { kind: "pick", id: p.id, clientKey: p.clientKey, clientName: env.clientName(p.clientKey), title: p.title, date: p.date, half: p.half === "PM" ? "PM" : "AM", time: p.window ? windowText(p.window) : null, done: false, link: link(`#/week/day/${p.date}`, `Open ${dayWords(p.date)}`) }, message: "Deployment planned" };
       return { ok: true, result: { kind: "pick", id: p.id, clientKey: p.clientKey, clientName: env.clientName(p.clientKey), title: p.title, date: p.date, half: p.half === "PM" ? "PM" : "AM", time: null, done: p.status === "done", link: link(`#/week/day/${p.date}/${p.half}`, `Open ${dayWords(p.date)}`) }, message: "Moved" };
     }
-    const messages: Partial<Record<ToolName, string>> = { drop_pick: "Dropped", confirm_day: "Day confirmed", confirm_week: "Week confirmed", add_must: "Added as a must", ahead_change: "In your change set. Save it in Ahead to write it to DevOps", send: "Sent", unlink: "Unlinked", conversation_owner: "Done. Nothing was posted to Teams", inbox_seen: "Marked seen", snooze: "Snoozed" };
-    const hrefs: Partial<Record<ToolName, [string, string]>> = { drop_pick: ["#/day", "Open Day"], confirm_day: ["#/day", "Open Day"], confirm_week: ["#/week/add", "Open Add work"], add_must: ["#/week/add", "Open Add work"], ahead_change: ["#/ahead", "Open Ahead"], send: ["#/week/add", "Open Add work"], unlink: ["#/inbox", "Open the Inbox"], inbox_seen: ["#/inbox", "Open the Inbox"], snooze: ["#/inbox", "Open the Inbox"] };
+    const messages: Partial<Record<ToolName, string>> = { drop_pick: "Dropped", add_to_week: "Added to the week", ahead_change: "In your change set. Save it in Ahead to write it to DevOps", send: "Sent", unlink: "Unlinked", conversation_owner: "Done. Nothing was posted to Teams", inbox_seen: "Marked seen", snooze: "Snoozed" };
+    const hrefs: Partial<Record<ToolName, [string, string]>> = { drop_pick: ["#/day", "Open Day"], add_to_week: ["#/week/add", "Open Add work"], ahead_change: ["#/ahead", "Open Ahead"], send: ["#/week/add", "Open Add work"], unlink: ["#/inbox", "Open the Inbox"], inbox_seen: ["#/inbox", "Open the Inbox"], snooze: ["#/inbox", "Open the Inbox"] };
     const [h, l] = hrefs[held.tool] ?? ["#/day", "Open Day"];
     return { ok: true, result: { kind: "note", text: messages[held.tool] ?? "Done", link: link(h, l) }, message: messages[held.tool] ?? "Done" };
   }

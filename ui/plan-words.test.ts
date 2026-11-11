@@ -8,7 +8,6 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ACTIONS, type ActionSpec } from "../actions/registry.ts";
 import { pendingText } from "../plan/ahead-edit.ts";
-import { confirmLabel, weekTag } from "../plan/addwork.ts";
 import { KEYS } from "./keys.ts";
 import { filterCommands, type MenuItem } from "./menu.ts";
 
@@ -45,24 +44,25 @@ describe("planning words (UI-7)", () => {
     expect(files.flatMap(readable)).toEqual([]);
     expect((ACTIONS as readonly ActionSpec[]).flatMap((a) => [a.title, a.summary]).filter((t) => WORD.test(t) && !KEEP.some((k) => k.test(t)))).toEqual([]);
   });
-  it("the key legend, the week's states and Ahead's pending line", () => {
+  it("the key legend and Ahead's pending line", () => {
     expect(KEYS.filter((k) => WORD.test(k.does)).map((k) => k.does)).toEqual([]);
     // WD-1: W and P open Week with the Add work panel (there is no Plan mode).
     expect(KEYS.find((k) => k.keys.includes("W"))?.does).toMatch(/^Week with Add work open/);
     expect(KEYS.find((k) => k.keys.includes("P"))?.does).toMatch(/^Week with Add work open/);
-    // WD-1: the week's tag in Week's header, and its button.
-    expect(weekTag({ committedAt: null }, false)).toBe("Draft");
-    expect(weekTag({ committedAt: "2026-11-05T10:00:00Z", changed: false }, false)).toBe("Confirmed");
-    expect(weekTag({ committedAt: "2026-11-05T10:00:00Z", changed: true }, false)).toBe("Changed since you confirmed");
-    expect(weekTag({ committedAt: null }, true)).toBeNull();
-    expect(confirmLabel(weekTag({ committedAt: null }, false))).toBe("Confirm week");
-    expect(confirmLabel(weekTag({ committedAt: "2026-11-05T10:00:00Z", changed: true }, false))).toBe("Confirm again");
-    expect(confirmLabel(weekTag({ committedAt: "2026-11-05T10:00:00Z", changed: false }, false))).toBeNull();
     expect(pendingText(3)).toBe("3 changes to save");
   });
-  it("the command menu still finds the renamed commands by commit", () => {
+  it("CF-1: searching commit or confirm finds no Confirm command", () => {
     const items = (ACTIONS as readonly ActionSpec[]).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}) }));
-    const found = filterCommands(items, "commit").map((i) => i.label);
-    expect(found).toEqual(expect.arrayContaining(["Confirm the week", "Confirm the day"]));
+    for (const q of ["commit", "confirm"]) expect(filterCommands(items, q).map((i) => i.label).filter((l) => /^Confirm (the )?(week|day|today)/i.test(l))).toEqual([]);
+  });
+});
+
+describe("CF-1 review: the Guide and the menus never use the retired words", () => {
+  it("no confirming a plan, no musts, no nice to haves in the Guide", async () => {
+    const { readFileSync } = await import("node:fs");
+    const guide = readFileSync(new URL("./guide/content.ts", import.meta.url), "utf8");
+    expect(guide).not.toMatch(/confirming today|Confirm today|Confirm week|nice to haves?\b|\bmusts\b/i);
+    const menu = readFileSync(new URL("./menu.ts", import.meta.url), "utf8");
+    expect(menu).not.toMatch(/"as a nice to have"/);
   });
 });

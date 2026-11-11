@@ -13,7 +13,7 @@ To run the script yourself against a running FocusTime: `node scripts/demo-walkt
 
 ## Where things are
 - **Today** (1): Now · Plan · Check-in · Close out. A ✓ on a mode means it's done for the day; a small dot means it's due now (Plan in the morning, Check-in after lunch, Close out near the end of the day). Nothing switches by itself.
-- **Week** (2): Week · Plan the week (next week by default, ‹ › for others). The header has the week, the musts and any borrowed time.
+- **Week** (2): Week · Plan the week (next week by default, ‹ › for others). The header has the week, the client chips and any borrowed time (CF-1: no musts, nothing to confirm).
 - **Roadmap** (3): Roadmap · Plan ahead (coming next).
 - **Inbox** (5 since RF-1; 4 before): follow-ups and captures.
 - **P** toggles the current tab's planning mode. Every place has its own address, so browser back and reopening land where you were.
@@ -24,8 +24,8 @@ To run the script yourself against a running FocusTime: `node scripts/demo-walkt
 | # | Do | Say | Screenshot |
 |---|---|---|---|
 | 1 | Open FocusTime (Today › Now, `1`) | "This is Today: what's now and next, what's due, and one big button. The switch on the right says Plan is due this morning." | `01-today.png` |
-| 2 | Press `2` | "The week: each half-day is a focus block for a client, from Dataverse, with meetings and personal events on it. The header shows this week's musts." | `02-week.png` |
-| 3 | Click **Plan the week** on the switch, then ‹ to this week | "Plan the week opens on next week. Each client's musts and nice to haves, from DevOps in stack rank order, with the fit in plain words." | `03-plan-week.png` |
+| 2 | Press `2` | "The week: each half-day is a focus block for a client, from Dataverse, with meetings and personal events on it. The header shows this week's clients and their hours." | `02-week.png` |
+| 3 | Click **Plan the week** on the switch, then ‹ to this week | "Plan the week opens on next week. Each client's features on the week, from DevOps in backlog order, with the fit in plain words." | `03-plan-week.png` |
 | 4 | Click ⋯ on a row | "Everything else about an item lives here: reorder, blocks, pin, mark done, get help, target date, Coop brief." | `04-plan-week-menu.png` |
 | 5 | Esc, click **Week** on the switch, then Monday's **Plan** chip | "A day's Plan chip opens Today in Plan mode for that day: my Monday on the left, what I can add on the right." | `05-plan-day.png` |
 | 6 | Click the Northwind block | "Select a block and the right pane follows: this week's priorities first, then follow-ups, then everything else." | `06-plan-day-northwind.png` |

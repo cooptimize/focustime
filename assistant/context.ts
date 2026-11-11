@@ -45,8 +45,6 @@ export type AnswerContext = {
   statusTitle: string | null;
   calls: CtxCall[];
   afterHours: { minutes: number; parts: { pickId: number | null; date: string; title: string; minutes: number; why: string }[] };
-  /** Whether each week of the period is confirmed, by its Monday. */
-  confirmed: Record<string, boolean>;
   /** The person's clients that appear anywhere above, in first-seen order. */
   clients: { key: string; name: string }[];
   /** What couldn't be read, in plain words ("Ahead couldn't be read: …"): the answer says so instead of guessing. */
@@ -106,7 +104,7 @@ export type Want = { ahead?: boolean; status?: boolean; inbox?: boolean; calls?:
 export async function buildContext(d: ContextDeps, period: Period, client: string | null, want: Want = { ahead: true, status: true, inbox: true, calls: true }): Promise<AnswerContext> {
   const ok = (k: string | null | undefined): k is string => !!k && d.isMine(k) && (client === null || k === client);
   const unknown: string[] = [];
-  const ctx: AnswerContext = { period, today: d.today, days: [], todos: [], promises: [], waiting: [], gaps: [], statusMissing: null, statusTitle: null, calls: [], afterHours: { minutes: 0, parts: [] }, confirmed: {}, clients: [], unknown };
+  const ctx: AnswerContext = { period, today: d.today, days: [], todos: [], promises: [], waiting: [], gaps: [], statusMissing: null, statusTitle: null, calls: [], afterHours: { minutes: 0, parts: [] }, clients: [], unknown };
   const dates = range(period.from, period.to);
   const weeks = [...new Set(dates.map(mondayOf))];
   const promiseSeen = new Set<number>();
@@ -118,7 +116,6 @@ export async function buildContext(d: ContextDeps, period: Period, client: strin
       unknown.push(`The week of ${dayLabel(weekStart)} couldn't be read: ${w}`);
       continue;
     }
-    ctx.confirmed[weekStart] = !!w.weekCommitted?.[weekStart];
     const sizes = w.planning?.sizes ?? SIZE_MINUTES;
     for (const day of w.week.days) {
       if (!inP(period, day.date)) continue;

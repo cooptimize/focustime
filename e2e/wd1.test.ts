@@ -1,6 +1,6 @@
 // WD-1: one Week, in a real browser on the demo (Monday Nov 2, 9:30 AM; Tuesday for the unfinished to-do). The
 // scenarios from the step: + Add and Undo, a feature placed as a placeholder then broken down, the panel following the
-// selected block, Confirm week and Changed since you confirmed, the To place line, the star and the remove rule, every
+// selected block, no Confirm (CF-1), the To place line, no star and the remove rule, every
 // old address, no Plan buttons, Team hidden, Status on the tabs, the phone's sheet, and the first block's height at 1440×900.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
@@ -23,7 +23,6 @@ async function addOn(page: Page, date: string, half: string) {
 }
 /** The first story row in the panel's own sections (not To place) that isn't on this block yet. */
 const freeRow = (page: Page) => panel(page).locator(".aw-sec .aw-row:not(.placed)").filter({ has: page.locator("button.aw-plus") }).first();
-const tag = (page: Page) => page.locator(".week-tag").innerText();
 
 describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
   let h: Harness;
@@ -93,34 +92,28 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     await page.close();
   }, T);
 
-  it("Confirm week, add a story: the tag reads Changed since you confirmed; Confirm again", async () => {
+  it("CF-1: add, take off, add again: no Confirm, Confirmed, Draft or Changed anywhere on Week", async () => {
     const { page } = await freshPage(h);
     await openWeek(page);
-    if ((await tag(page)) === "Draft") await page.getByRole("button", { name: "Confirm week" }).click();
-    await expect.poll(() => tag(page)).toBe("Confirmed");
+    const words = /\bConfirm|\bConfirmed\b|\bDraft\b(?! story| feature)|Changed since/;
+    const header = () => page.locator(".week-head").first().innerText();
+    expect(await page.locator(".week-tag").count()).toBe(0);
+    expect(await header()).not.toMatch(words);
     await addOn(page, "2026-11-03", "PM");
-    await freeRow(page).locator("button.aw-plus").click();
-    await expect.poll(() => tag(page)).toBe("Changed since you confirmed");
-    await page.getByRole("button", { name: "Confirm again" }).click();
-    await expect.poll(() => tag(page)).toBe("Confirmed");
-    await expect(page.getByRole("button", { name: "Confirm again" }).count()).resolves.toBe(0);
-    await page.close();
-  }, T);
-
-  it("review fix: Confirm week, add a story, Undo: the week reads Confirmed again and the add's feature is gone", async () => {
-    const { page } = await freshPage(h);
-    await openWeek(page);
-    if ((await tag(page)) === "Draft") await page.getByRole("button", { name: "Confirm week" }).click();
-    await expect.poll(() => tag(page)).toBe("Confirmed");
-    await addOn(page, "2026-11-03", "PM");
-    const features = () => panel(page).locator(".aw-feature .aw-feat-name").allInnerTexts();
-    const before = await features();
-    // A story under More from DevOps whose feature isn't on the week yet, else any free row.
-    await freeRow(page).locator("button.aw-plus").click();
-    await expect.poll(() => tag(page)).toBe("Changed since you confirmed");
+    const placedHere = (t: string) => panel(page).locator(".aw-row.placed", { hasText: t }).count();
+    const row = freeRow(page);
+    const title = (await row.locator(".aw-row-title").innerText()).trim();
+    await row.locator("button.aw-plus").click();
+    await expect.poll(() => placedHere(title)).toBeGreaterThan(0);
+    expect(await header()).not.toMatch(words);
+    // Off again (Undo of the add), then on again: each change stands at once.
     await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
-    await expect.poll(() => tag(page)).toBe("Confirmed");
-    await expect.poll(features).toEqual(before);
+    await expect.poll(() => placedHere(title)).toBe(0);
+    expect(await header()).not.toMatch(words);
+    await panel(page).locator(".aw-row:not(.placed)", { hasText: title }).first().locator("button.aw-plus").click();
+    await expect.poll(() => placedHere(title)).toBeGreaterThan(0);
+    expect(await header()).not.toMatch(words);
+    expect(await page.getByRole("button", { name: /Confirm/ }).count()).toBe(0);
     await page.close();
   }, T);
 
@@ -140,19 +133,12 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     await page.close();
   }, T);
 
-  it("star a feature and reload: still a must; Remove from this week is refused while one of its stories is placed", async () => {
+  it("no star (CF-1); Remove from this week is refused while one of its stories is placed", async () => {
     const { page } = await freshPage(h);
     await openWeek(page);
     await addOn(page, "2026-11-02", "PM");
-    const feature = panel(page).locator(".aw-feature", { has: page.locator(".aw-star:not(.on)") }).first();
-    const name = (await feature.locator(".aw-feat-name").innerText()).trim();
-    const row = () => panel(page).locator(".aw-feature", { hasText: name }).first();
-    await row().locator(".aw-star").click();
-    await expect.poll(() => row().locator(".aw-star").getAttribute("aria-pressed")).toBe("true");
-    await page.reload();
-    await panel(page).waitFor({ timeout: 30_000 });
-    await expect.poll(() => row().locator(".aw-star").getAttribute("aria-pressed"), { timeout: 30_000 }).toBe("true");
-    // A must with a story placed: the remove item names where it's placed instead of removing it.
+    expect(await panel(page).locator(".aw-star").count()).toBe(0);
+    // A feature with a story placed: the remove item names where it's placed instead of removing it.
     const placedFeature = panel(page).locator(".aw-feature", { has: page.locator(".aw-where") }).first();
     const fname = (await placedFeature.locator(".aw-feat-name").innerText()).trim();
     await placedFeature.getByRole("button", { name: `More for ${fname}` }).click();

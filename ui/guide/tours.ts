@@ -79,7 +79,7 @@ const PLAN_WEEK: Tour = {
     {
       target: "aw-features",
       title: "This week's features",
-      text: "The star makes a feature a must; the rest are nice to have. Placing a story adds its feature to the week for you. + puts a row on this block, or drag it onto any block.",
+      text: "This week's features, in the client's backlog order. Placing a story adds its feature to the week for you. + puts a row on this block, or drag it onto any block.",
       example: "todo-drag",
       phone: "skip",
     },
@@ -87,12 +87,6 @@ const PLAN_WEEK: Tour = {
       target: "aw-box",
       title: "Type it",
       text: "Not in DevOps yet? Type a story and press Enter for a draft story, or Shift+Enter for a plain to-do.",
-      phone: "skip",
-    },
-    {
-      target: "wk-confirm",
-      title: "Confirm week",
-      text: "Confirm week saves your plan. Change it any time; the header says when it changed since you confirmed.",
       phone: "skip",
     },
   ],

@@ -1,8 +1,8 @@
-// Step 17.5: the opening's loader timing, what a source says while loading, and the Close out musts moment.
+// Step 17.5: the opening's loader timing, what a source says while loading, and the Close out all-done moment.
 import { describe, expect, it } from "vitest";
 import type { SourceSummary } from "../../actions/types.ts";
 import type { ClientWork } from "../../week/types.ts";
-import { mustsDone, openingAt, sourceLines } from "./opening.ts";
+import { allDone, openingAt, sourceLines } from "./opening.ts";
 
 const src = (source: SourceSummary["source"], status: SourceSummary["status"]) => ({ source, status, fetchedAt: null, fromCache: false, itemCount: 0 }) as SourceSummary;
 const client = (status: ClientWork["status"]) => ({ status }) as ClientWork;
@@ -40,22 +40,11 @@ describe("source lines while loading", () => {
   });
 });
 
-describe("today's musts done (the Close out moment)", () => {
-  const items = [
-    { clientKey: "a", itemId: 1, tier: "must" as const },
-    { clientKey: "a", itemId: 2, tier: "nice" as const },
-    { clientKey: "a", itemId: 3, tier: "nice" as const, parentId: 1 },
-  ];
-  it("needs at least one must pick, all done; nice to haves and dropped or moved picks don't count", () => {
-    expect(mustsDone([{ clientKey: "a", itemId: 1, status: "done" }, { clientKey: "a", itemId: 2, status: "planned" }], items)).toBe(true);
-    expect(mustsDone([{ clientKey: "a", itemId: 1, status: "planned" }], items)).toBe(false);
-    expect(mustsDone([{ clientKey: "a", itemId: 2, status: "done" }], items)).toBe(false);
-    expect(mustsDone([{ clientKey: "a", itemId: 1, status: "done" }, { clientKey: "a", itemId: 1, status: "moved" }], items)).toBe(true);
-    expect(mustsDone([], items)).toBe(false);
-  });
-  it("a story in a must's envelope is a must", () => {
-    expect(mustsDone([{ clientKey: "a", itemId: 3, status: "planned" }, { clientKey: "a", itemId: 1, status: "done" }], items)).toBe(false);
-    expect(mustsDone([{ clientKey: "a", itemId: 3, status: "done" }], items)).toBe(true);
-    expect(mustsDone([{ clientKey: "b", itemId: 1, status: "done" }], items)).toBe(false);
+describe("all done today (the Close out moment, CF-1)", () => {
+  it("needs at least one to-do, all done; dropped or moved to-dos don't count", () => {
+    expect(allDone([{ status: "done" }, { status: "moved" }] as never)).toBe(true);
+    expect(allDone([{ status: "done" }, { status: "planned" }] as never)).toBe(false);
+    expect(allDone([{ status: "dropped" }] as never)).toBe(false);
+    expect(allDone([])).toBe(false);
   });
 });

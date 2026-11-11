@@ -15,7 +15,7 @@ describe.skipIf(!CHROMIUM)("From last week and Watching (PL-1)", () => {
     await h?.stop();
   }, T);
 
-  it("proposes, watches with a check-in, keeps a must, and proposes next week in Commit", async () => {
+  it("proposes, watches with a check-in, keeps one, and proposes next week in Commit", async () => {
     const { page, errors } = await freshPage(h);
     // WD-1: From last week is in Add work › To place.
     await page.evaluate(() => (location.hash = "#/week/add"));
@@ -27,7 +27,7 @@ describe.skipIf(!CHROMIUM)("From last week and Watching (PL-1)", () => {
     const row = (title: string) => flw.locator(".carry-row", { hasText: title });
     await expect(row("Carrier rate alerts").textContent()).resolves.toContain("Watching");
     await expect(row("Carrier contact list").textContent()).resolves.toContain("Finished last week");
-    await expect(row("Shipment tracking dashboard").textContent()).resolves.toContain("Carry over as a must");
+    await expect(row("Shipment tracking dashboard").textContent()).resolves.toContain("Carry over");
 
     // Watch: the row moves to Watching, with a 30-minute check-in on Atlas's first block (Tue PM) and a ghost chip there.
     await row("Carrier rate alerts").getByRole("button", { name: "Watch", exact: true }).click();

@@ -131,11 +131,8 @@ export type MenuEnv = {
   /** WK-3: a plan action whose answer the menu reads (the new deployment's id for Undo); null on refusal (with a notice). */
   planAction?: (action: string, input: Record<string, unknown>) => Promise<unknown>;
   openPlanDay: (date?: IsoDate) => void;
-  /** QF-1: Timebox my day on a date (confirming the day first when it isn't). */
+  /** QF-1: Timebox my day on a date. */
   timeboxDay?: (date: IsoDate) => void;
-  commitPlan: () => void;
-  /** WD-1: Confirm <day> from a day header's ⋯ (saves that day's plan, as Plan the day's Confirm did). */
-  confirmDay?: (date: IsoDate) => void;
   openDetails: (date: IsoDate, half: Half) => void;
   openLink: (clientKey: string, url: string) => void;
   /** FN-1: copy a work item's DevOps link, with a "Link copied" toast (announced). */
@@ -232,7 +229,6 @@ export type MenuEnv = {
   /** The Plan button (step 10): the ritual for the moment. */
   openRitual: () => void;
   planWeekOpen: IsoDate | null;
-  commitWeek: () => void;
   /** Timeboxes (step 12): the Timebox… dialog for a pick or a work item, and Reconnect Outlook with calendar changes. */
   openTimebox: (t: TimeboxTarget) => void;
   connectWrite: () => void;
@@ -943,7 +939,6 @@ export function dayMenu(env: MenuEnv, date: IsoDate): MenuStep {
     title: dayName(date),
     items: [
       { id: "plan", label: isPast(env, date) && !refused ? "Add work to this day (past: done and drop only)" : "Add work to this day", action: "planday.start", ...(refused ? { disabled: refused } : {}), run: () => env.openPlanDay(date) },
-      ...(env.confirmDay ? [confirmItem(env, date, refused)] : []),
       ...(env.timeboxDay ? [timeboxItem(env, date, refused)] : []),
       { id: "am", label: "Details of AM", action: "ui.details", run: () => env.openDetails(date, "AM") },
       { id: "pm", label: "Details of PM", action: "ui.details", run: () => env.openDetails(date, "PM") },
@@ -954,18 +949,10 @@ export function dayMenu(env: MenuEnv, date: IsoDate): MenuStep {
   };
 }
 
-/** WD-1: the day menu's Confirm <day> (Confirm again once confirmed and changed; nothing to do once confirmed). */
-function confirmItem(env: MenuEnv, date: IsoDate, refused: string | undefined): MenuItem {
-  const committed = !!env.planWeek?.[date]?.committedAt;
-  const why = refused ?? (isPast(env, date) ? "That day is past" : undefined);
-  return { id: "confirm", label: committed ? `Confirm ${dayName(date)} again` : `Confirm ${dayName(date)}`, action: "planday.commit", ...(why ? { disabled: why } : { run: () => env.confirmDay!(date) }) };
-}
-
-/** QF-1: the day menu's Timebox my day, or Confirm and timebox while the day isn't confirmed. */
+/** QF-1: the day menu's Timebox my day (CF-1: no confirm first). */
 function timeboxItem(env: MenuEnv, date: IsoDate, refused: string | undefined): MenuItem {
-  const committed = !!env.planWeek?.[date]?.committedAt;
   const why = refused ?? (isPast(env, date) ? "That day is past" : undefined);
-  return { id: "timebox", label: committed ? "Timebox my day" : "Confirm and timebox", action: "timebox.add_many", ...(why ? { disabled: why } : { run: () => env.timeboxDay!(date) }) };
+  return { id: "timebox", label: "Timebox my day", action: "timebox.add_many", ...(why ? { disabled: why } : { run: () => env.timeboxDay!(date) }) };
 }
 
 // ---------- time model (step 6b) ----------
@@ -1207,7 +1194,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     }
     case "planday.start": return { next: () => planDayStep(env) };
     case "planday.carry": return { run: () => env.setView("week") };
-    case "planday.commit": return { run: env.commitPlan };
+    case "planday.commit": return { disabled: "There's nothing to confirm now" };
     case "pick.add": return { next: () => chooseItem(env, "Add which work item?", isPickable, (k, i) => addStep(env, k, i)) };
     case "pick.set_size": return { next: () => choosePick(env, "Set the size of which to-do?", (p) => sizeStep(env, p)) };
     case "pick.move": return { next: () => choosePick(env, "Move which to-do?", (p) => moveStep(env, p)) };
@@ -1476,7 +1463,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       return { run: () => env.setView("roadmap") };
     case "ahead.stage_bulk":
       return { run: () => env.setView("backlog") };
-    case "weekplan.commit": return env.planWeekOpen ? { run: env.commitWeek } : { disabled: "That week is over" };
+    case "weekplan.commit": return { disabled: "There's nothing to confirm now" };
     // Features are chosen in Plan the week itself.
     case "weekplan.set_feature":
     case "weekplan.place":
@@ -1726,7 +1713,8 @@ function uiCommands(env: MenuEnv): MenuItem[] {
 
 /** Every command: window commands, then one per registered action (built from the registry). */
 /** WD-1: Team is hidden for now (its address still opens it); its own commands aren't offered. */
-export const HIDDEN_FOR_NOW: ReadonlySet<string> = new Set(["team.view", "look.reply"]);
+// CF-1: confirming and tiers are retired; their old actions stay (they answer plainly) but leave the command menu.
+export const HIDDEN_FOR_NOW: ReadonlySet<string> = new Set(["team.view", "look.reply", "weekplan.commit", "planday.commit", "weekplan.set_tier", "weekplan.reorder", "weekplan.headsup"]);
 
 export function commandList(env: MenuEnv): MenuItem[] {
   // IB-1: Make it a follow-up is gone from the UI (a promise does everything a follow-up did); the old actions stay for now.
@@ -1759,11 +1747,7 @@ export type WeekItemFacts = {
   title: string;
   /** The row's client, so the header doesn't repeat it. */
   clientName?: string | null;
-  tier: "must" | "nice";
   level: "feature" | "story";
-  /** First or last in its list (no Move up / Move down). */
-  first: boolean;
-  last: boolean;
   /** A past week is a review: nothing changes. */
   past: boolean;
   /** How it is done: "local" (my own mark) can be undone; DevOps or a done pick can't from here. */
@@ -1773,8 +1757,6 @@ export type WeekItemFacts = {
   /** The load comes from its sized stories, so there is no estimate to set. */
   derived?: boolean;
   size?: Size | null;
-  /** A story under a listed feature: it takes the feature's tier (no tier choice of its own). */
-  nested?: boolean;
   /** Where it can be pinned, and where it is. */
   places: { date: IsoDate; half: "AM" | "PM"; label: string }[];
   pinned: { date: IsoDate; half: "AM" | "PM" }[];
@@ -1787,8 +1769,6 @@ export type WeekItemFacts = {
   canWrite: boolean;
 };
 export type WeekItemOps = {
-  move: (by: -1 | 1) => void;
-  tier: (to: "must" | "nice") => void;
   pin: (date: IsoDate, half: "AM" | "PM", on: boolean) => void;
   /** A feature's estimate in whole hours. */
   hours: (n: number) => void;
@@ -1833,14 +1813,10 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps, sizes: SizeScal
   const closed = f.past ? { disabled: "A past week is a review" } : {};
   const isPinned = (p: { date: IsoDate; half: string }) => f.pinned.some((x) => x.date === p.date && x.half === p.half);
   const writes = (_why: string) => (f.canWrite ? {} : { hint: "Enable DevOps writes first" });
-  const other = f.tier === "must" ? "nice" : "must";
   return {
     title: f.title,
     head: rowHead({ id: f.itemId, title: f.title, client: f.clientName ?? null }),
     items: [
-      { id: "up", label: "Move up", action: "weekplan.reorder", ...(f.past ? closed : f.first ? { disabled: "Already first" } : {}), run: () => ops.move(-1) },
-      { id: "down", label: "Move down", action: "weekplan.reorder", ...(f.past ? closed : f.last ? { disabled: "Already last" } : {}), run: () => ops.move(1) },
-      { id: "tier", label: other === "nice" ? "Make it a nice to have" : "Make it a must", action: "weekplan.set_tier", ...(f.past ? closed : f.nested ? { disabled: "Stories take their feature's tier" } : {}), run: () => ops.tier(other) },
       f.level === "story"
         ? { id: "size", label: "Size", hint: f.size ?? "not sized", action: "weekplan.set_size", ...closed, next: () => storySizeStep(f, ops, sizes) }
         : { id: "estimate", label: "Estimate", hint: f.derived ? hoursText(f.minutes) : aboutText(f.minutes), action: "weekplan.set_estimate", ...(f.derived ? { disabled: "From its stories: size them to change it" } : closed), next: () => estimateStep(f, ops) },
@@ -1881,7 +1857,7 @@ export function roadmapRowMenu(f: RoadmapRowFacts, ops: RoadmapRowOps): MenuStep
       { id: "copy", label: COPY_LINK, ...(f.hasLink ? {} : { disabled: "No link for this item" }), run: ops.copy },
       { id: "brief", label: "Copy Coop brief", action: "feature.brief", ...(epic ? { disabled: "Briefs are for features" } : { hint: f.open ? `${f.open} open ${f.open === 1 ? "story" : "stories"} already` : "ask Coop for stories" }), run: ops.brief },
       { id: "help", label: "Ask to collaborate", hint: "who is free", action: "collab.candidates", run: ops.help },
-      { id: "week", label: "Add to this week's plan", action: "weekplan.add", ...(epic ? { disabled: "Add its features instead" } : f.onWeek ? { disabled: "Already on this week's plan" } : { hint: "as a nice to have" }), run: ops.addToWeek },
+      { id: "week", label: "Add to this week's plan", action: "weekplan.add", ...(epic ? { disabled: "Add its features instead" } : f.onWeek ? { disabled: "Already on this week's plan" } : {}), run: ops.addToWeek },
       { id: "target", label: f.targetDate ? "Change target date" : "Set target date", action: "devops.preview", ...(f.owned === false ? { disabled: "Only on features and epics assigned to you" } : f.canWrite ? {} : { hint: "Enable DevOps writes first" }), run: f.canWrite ? ops.targetDate : ops.enableWrites },
     ],
   };

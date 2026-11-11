@@ -126,21 +126,19 @@ describe("plan store", () => {
     const { store } = await fresh();
     const plan = (await store.start("2026-11-02"));
     expect(plan.createdAt).toBe("2026-11-02T08:01:00-05:00[America/New_York]");
-    expect((await store.commit("2026-11-02")).committedAt).toMatch(/-05:00\[America\/New_York\]$/);
   });
 
-  it("commit and picks persist across a restart", async () => {
+  it("picks persist across a restart (CF-1: nothing to confirm)", async () => {
     const { path, store } = await fresh();
     (await store.start("2026-11-02"));
     const a = (await store.addPick({ date: "2026-11-02", ...item }));
     (await store.addPick({ date: "2026-11-02", half: "PM", clientKey: "Cooptimize", kind: "intention", title: "Write the planning doc", size: "S" }));
     (await store.setSize(a.id, "L"));
-    (await store.commit("2026-11-02"));
     (await store.setDone(a.id, true));
     await store.close();
 
     const reopened = await createPlanStore({ path, now, files: localStoreFiles });
-    expect((await reopened.day("2026-11-02"))?.committedAt).not.toBeNull();
+    expect((await reopened.day("2026-11-02"))).not.toBeNull();
     const picks = (await reopened.picksFor("2026-11-02"));
     expect(picks.map((p) => [p.half, p.title, p.size, p.status])).toEqual([
       ["AM", "Story", "L", "done"],
@@ -169,7 +167,6 @@ describe("plan store", () => {
     const { store } = await fresh();
     const done = (await store.addPick({ date: "2026-10-29", ...item, title: "done" }));
     const open = (await store.addPick({ date: "2026-10-29", ...item, title: "unfinished" }));
-    (await store.commit("2026-10-29"));
     (await store.setDone(done.id, true));
     expect((await store.carryOverFor("2026-11-02")).map((p) => p.title)).toEqual(["unfinished"]);
     (await store.move(open.id, "2026-11-02", "AM"));
@@ -177,22 +174,24 @@ describe("plan store", () => {
     expect((await store.picksFor("2026-11-02"))[0]).toMatchObject({ title: "unfinished", carriedFromDate: "2026-10-29" });
   });
 
-  it("remove: deleted before commit, kept as dropped after; a carried pick dropped again goes back to its day", async () => {
+  it("remove (CF-1): taken off freely; a carried pick dropped again goes back to its day; one with time on it is kept as dropped", async () => {
     const { store } = await fresh();
     const a = (await store.addPick({ date: "2026-11-02", ...item }));
     expect((await store.removePick(a.id)).result).toBe("deleted");
     expect((await store.getPick(a.id))).toBeNull();
 
     const old = (await store.addPick({ date: "2026-10-29", ...item }));
-    (await store.commit("2026-10-29"));
     const carried = (await store.move(old.id, "2026-11-02", "AM"));
     expect((await store.removePick(carried.id)).result).toBe("deleted");
     expect((await store.getPick(old.id))!.status).toBe("planned");
     expect((await store.carryOverFor("2026-11-02"))).toHaveLength(1);
 
+    // Once confirmed days kept every removed to-do as dropped; now only one with time on it is kept.
     const b = (await store.addPick({ date: "2026-11-02", ...item }));
-    (await store.commit("2026-11-02"));
-    expect((await store.removePick(b.id))).toMatchObject({ result: "dropped", pick: { status: "dropped" } });
+    expect((await store.removePick(b.id)).result).toBe("deleted");
+    const c = (await store.addPick({ date: "2026-11-02", ...item }));
+    (await store.setRemaining(c.id, 60));
+    expect((await store.removePick(c.id))).toMatchObject({ result: "dropped", pick: { status: "dropped" } });
   });
 
   it("markOnce is true only the first time, across restarts", async () => {
@@ -209,7 +208,6 @@ describe("plan store", () => {
     const { store } = await fresh();
     (await store.addPick({ date: "2026-11-02", ...item }));
     (await store.addDraft({ clientKey: "Adatum", parentItemId: 130, title: "Split the feature", size: "S" }));
-    (await store.commit("2026-11-02"));
     const out = JSON.parse(JSON.stringify((await store.exportJson())));
     expect(out.schemaVersion).toBe(USER_SCHEMA_VERSION);
     expect(out.dayPlans).toHaveLength(1);
@@ -275,9 +273,9 @@ describe("step 6c: follow-ups, timer state, focused time and reset", () => {
 describe("week plan (step 8)", () => {
   const W = "2026-11-09";
   const f = { weekStart: W, clientKey: "Adatum", itemId: 210, title: "Dana's feature", itemType: "Feature", url: "https://dev.azure.com/x/y/_workitems/edit/210" };
-  it("commits features to a week with an estimate in minutes (whole hours); 0 takes it off", async () => {
+  it("puts features on a week with an estimate in minutes (whole hours); 0 takes it off", async () => {
     const { store } = await fresh();
-    expect((await store.weekPlan(W))).toEqual({ weekStart: W, committedAt: null, updatedAt: null, features: [] });
+    expect((await store.weekPlan(W))).toEqual({ weekStart: W, updatedAt: null, features: [] });
     const a = (await store.setWeekFeature({ ...f, estimate: 480 }));
     expect(a).toMatchObject({ clientKey: "Adatum", itemId: 210, estimate: 480, slots: [] });
     (await store.setWeekFeature({ ...f, estimate: 720 }));
@@ -299,51 +297,36 @@ describe("week plan (step 8)", () => {
     await expect(store.placeFeature(a.id, "2026-11-17", "AM", true)).rejects.toThrow(/week/);
     await expect(store.placeFeature(999, "2026-11-09", "AM", true)).rejects.toThrow();
   });
-  it("commits the week, stays editable, and knows when it changed since the commit", async () => {
+  it("WD-1, CF-1: Undo of an add takes back its feature, only while nothing else changed it", async () => {
     const { store } = await fresh();
     (await store.setWeekFeature({ ...f, estimate: 480 }));
-    const c = (await store.commitWeek(W));
-    expect(c.committedAt).toBe(clock.toString({ smallestUnit: "second" }));
-    clock = clock.add({ minutes: 5 });
-    (await store.setWeekFeature({ ...f, estimate: 720 }));
-    const p = (await store.weekPlan(W));
-    expect(p.updatedAt! > p.committedAt!).toBe(true);
-    clock = clock.add({ minutes: 5 });
-    expect((await store.commitWeek(W)).committedAt! >= p.updatedAt!).toBe(true);
-  });
-  it("WD-1: a change in the same second as the confirm still counts as a change; confirming again clears it", async () => {
-    const { store } = await fresh();
-    (await store.setWeekFeature({ ...f, estimate: 480 }));
-    (await store.commitWeek(W));
-    (await store.touchWeekPlan(W)); // same clock second
-    const p = (await store.weekPlan(W));
-    expect(Temporal.Instant.compare(Temporal.ZonedDateTime.from(p.updatedAt!).toInstant(), Temporal.ZonedDateTime.from(p.committedAt!).toInstant())).toBe(1);
-    const again = (await store.commitWeek(W));
-    expect(again.updatedAt).toBe(again.committedAt);
-  });
-  it("WD-1: Undo of an add takes back its feature and the change mark, only while nothing else changed the week", async () => {
-    const { store } = await fresh();
-    (await store.setWeekFeature({ ...f, estimate: 480 }));
-    (await store.commitWeek(W));
-    const before = (await store.weekStamp(W))!;
     clock = clock.add({ minutes: 1 });
-    const added = (await store.addWeekItem({ weekStart: W, clientKey: "Adatum", itemId: 777, title: "Placed by a story", itemType: "Feature", url: null, level: "feature", tier: "nice" }));
-    (await store.touchWeekPlan(W));
-    const after = (await store.weekStamp(W))!;
+    const added = (await store.addWeekItem({ weekStart: W, clientKey: "Adatum", itemId: 777, title: "Placed by a story", itemType: "Feature", url: null, level: "feature" }));
     expect((await store.weekPlan(W)).features.map((x) => x.itemId)).toContain(777);
-    expect((await store.undoWeekAdd(W, added.id, before, after))).toBe(true);
-    const p = (await store.weekPlan(W));
-    expect(p.features.map((x) => x.itemId)).not.toContain(777);
-    expect(p.updatedAt).toBe(p.committedAt);
-    // Something else changed the week since: Undo leaves the week alone.
+    expect((await store.undoWeekAdd(W, added.id))).toBe(true);
+    expect((await store.weekPlan(W)).features.map((x) => x.itemId)).not.toContain(777);
+    // Changed since (an estimate set): Undo leaves it alone.
+    const again = (await store.addWeekItem({ weekStart: W, clientKey: "Adatum", itemId: 778, title: "Another", itemType: "Feature", url: null, level: "feature" }));
     clock = clock.add({ minutes: 1 });
-    const b2 = (await store.weekStamp(W))!;
-    const again = (await store.addWeekItem({ weekStart: W, clientKey: "Adatum", itemId: 778, title: "Another", itemType: "Feature", url: null, level: "feature", tier: "nice" }));
-    const a2 = (await store.weekStamp(W))!;
-    clock = clock.add({ minutes: 1 });
-    (await store.setWeekItemTier(again.id, "must"));
-    expect((await store.undoWeekAdd(W, again.id, b2, a2))).toBe(false);
-    expect((await store.weekPlan(W)).features.map((x) => x.itemId)).toContain(778);
+    (await store.setWeekItemEstimate(again.id, 360));
+    expect((await store.undoWeekAdd(W, again.id))).toBe(false);
+    // Pinned since: also left alone.
+    const pinned = (await store.addWeekItem({ weekStart: W, clientKey: "Adatum", itemId: 779, title: "Pinned", itemType: "Feature", url: null, level: "feature" }));
+    (await store.placeFeature(pinned.id, "2026-11-10", "AM", true));
+    expect((await store.undoWeekAdd(W, pinned.id))).toBe(false);
+    expect((await store.weekPlan(W)).features.map((x) => x.itemId)).toEqual(expect.arrayContaining([778, 779]));
+  });
+  it("CF-1: weeksWithWork and dayHasWork: a feature on the week or a to-do planned or done on one of its days", async () => {
+    const { store } = await fresh();
+    expect([...(await store.weeksWithWork([W, "2026-11-16"]))]).toEqual([]);
+    expect((await store.dayHasWork("2026-11-17"))).toBe(false);
+    (await store.setWeekFeature({ ...f, estimate: 480 }));
+    const p = (await store.addPick({ date: "2026-11-17", half: "AM", clientKey: "Adatum", kind: "intention", title: "Call", size: "S" }));
+    expect([...(await store.weeksWithWork([W, "2026-11-16", "2026-11-23"]))].sort()).toEqual(["2026-11-09", "2026-11-16"]);
+    expect((await store.dayHasWork("2026-11-17"))).toBe(true);
+    (await store.removePick(p.id));
+    expect((await store.dayHasWork("2026-11-17"))).toBe(false);
+    expect([...(await store.weeksWithWork(["2026-11-16"]))]).toEqual([]);
   });
   it("marks a feature as being broken down (local only), and the reset and export cover the week plan", async () => {
     const { store } = await fresh();
@@ -352,7 +335,6 @@ describe("week plan (step 8)", () => {
     (await store.markBreakdown("Adatum", 240, false));
     expect((await store.breakdownMarks())).toEqual([]);
     (await store.setWeekFeature({ ...f, estimate: 480 }));
-    (await store.commitWeek(W));
     (await store.markBreakdown("Adatum", 240, true));
     const e = (await store.exportJson());
     expect(e.weekPlans).toHaveLength(1);
@@ -386,11 +368,10 @@ describe("week plan by client (step 11)", () => {
     expect((await store.schemaVersion())).toBe(MIGRATIONS.length);
     expect(readdirSync(dir).filter((x) => x.startsWith("plan.db.bak-v7-"))).toHaveLength(1);
     const p = (await store.weekPlan(W));
-    expect(p.committedAt).toBe("2026-11-06T16:00:00-05:00[America/New_York]");
-    // E2 (migration 28): 3 blocks and 1 block become 12h and 4h.
-    expect(p.features.map((x) => [x.id, x.itemId, x.level, x.tier, x.estimate, x.position, x.doneAt, x.slots.length])).toEqual([
-      [7, 210, "feature", "must", 720, null, null, 2],
-      [9, 300, "feature", "must", 240, null, null, 0],
+    // E2 (migration 28): 3 blocks and 1 block become 12h and 4h. CF-1: the confirm time and tier stay stored, unread.
+    expect(p.features.map((x) => [x.id, x.itemId, x.level, x.estimate, x.position, x.doneAt, x.slots.length])).toEqual([
+      [7, 210, "feature", 720, null, null, 2],
+      [9, 300, "feature", 240, null, null, 0],
     ]);
     await store.close();
   });
@@ -418,27 +399,27 @@ describe("week plan by client (step 11)", () => {
     expect(readdirSync(dir).filter((x) => x.startsWith("plan.db.bak-v18-"))).toHaveLength(1);
     const f = (await store.weekPlan(W)).features;
     // Then E2 (migration 28): whole blocks at 4h each.
-    expect(f.map((x) => [x.id, x.level, x.tier, x.estimate, x.size, x.parentId, x.position, !!x.doneAt, x.slots.length])).toEqual([
-      [3, "feature", "must", 480, null, null, null, false, 1],
-      [4, "feature", "nice", 240, null, null, 2, false, 0],
-      [5, "feature", "must", 480, null, null, null, false, 0],
-      [6, "story", "must", null, "M", null, null, true, 0],
-      [8, "story", "nice", null, "L", null, null, false, 0],
+    expect(f.map((x) => [x.id, x.level, x.estimate, x.size, x.parentId, x.position, !!x.doneAt, x.slots.length])).toEqual([
+      [3, "feature", 480, null, null, null, false, 1],
+      [4, "feature", 240, null, null, 2, false, 0],
+      [5, "feature", 480, null, null, null, false, 0],
+      [6, "story", null, "M", null, null, true, 0],
+      [8, "story", null, "L", null, null, false, 0],
     ]);
     // No fraction survives anywhere in the week plan.
     expect(f.every((x) => x.estimate === null || x.estimate % 60 === 0)).toBe(true);
     await store.close();
   });
 
-  it("adds features (an estimate in whole hours, or none) and stories (S, M, L, or not sized yet) as musts or nice to haves, sets tier and a done mark", async () => {
+  it("adds features (an estimate in whole hours, or none) and stories (S, M, L, or not sized yet), and a done mark (CF-1: no tier)", async () => {
     const { store } = await fresh();
     const a = (await store.addWeekItem({ ...base, itemId: 210, level: "feature" }));
-    expect(a).toMatchObject({ level: "feature", tier: "must", estimate: null, size: null, position: null, doneAt: null });
-    const b = (await store.addWeekItem({ ...base, itemId: 501, itemType: "User Story", level: "story", tier: "nice", parentId: 210 }));
-    expect(b).toMatchObject({ level: "story", tier: "nice", estimate: null, size: null, parentId: 210 });
+    expect(a).toMatchObject({ level: "feature", estimate: null, size: null, position: null, doneAt: null });
+    expect(a).not.toHaveProperty("tier");
+    const b = (await store.addWeekItem({ ...base, itemId: 501, itemType: "User Story", level: "story", parentId: 210 }));
+    expect(b).toMatchObject({ level: "story", estimate: null, size: null, parentId: 210 });
     // Adding again updates it in place.
-    expect((await store.addWeekItem({ ...base, itemId: 210, title: "Renamed", level: "feature", tier: "nice", estimate: 720 }))).toMatchObject({ id: a.id, title: "Renamed", tier: "nice", estimate: 720 });
-    expect((await store.setWeekItemTier(a.id, "must")).tier).toBe("must");
+    expect((await store.addWeekItem({ ...base, itemId: 210, title: "Renamed", level: "feature", estimate: 720 }))).toMatchObject({ id: a.id, title: "Renamed", estimate: 720 });
     expect((await store.setWeekItemEstimate(a.id, 360)).estimate).toBe(360);
     expect((await store.setWeekItemEstimate(a.id, 4800)).estimate).toBe(4800);
     expect((await store.setWeekItemEstimate(a.id, null)).estimate).toBeNull();
@@ -460,19 +441,15 @@ describe("week plan by client (step 11)", () => {
     expect((await store.weekItem(a.id))?.itemId).toBe(210);
   });
 
-  it("keeps a local order per client and tier, resets to DevOps order, and a tier change drops the position", async () => {
+  it("keeps a local order per client (stored; CF-1 lists by backlog order) and resets to DevOps order", async () => {
     const { store } = await fresh();
-    const ids: number[] = [];
-    for (const itemId of [210, 220, 230]) ids.push((await store.addWeekItem({ ...base, itemId, level: "feature" })).id);
+    for (const itemId of [210, 220, 230]) (await store.addWeekItem({ ...base, itemId, level: "feature" }));
     (await store.addWeekItem({ ...base, clientKey: "T&W", itemId: 300, level: "feature" }));
-    (await store.reorderWeekItems(W, "Adatum", "must", [{ itemId: 230, position: 1 }, { itemId: 210, position: 2 }]));
+    (await store.reorderWeekItems(W, "Adatum", [{ itemId: 230, position: 1 }, { itemId: 210, position: 2 }]));
     const pos = async () => Object.fromEntries((await store.weekPlan(W)).features.map((x) => [x.itemId, x.position]));
     expect((await pos())).toEqual({ 210: 2, 220: null, 230: 1, 300: null });
-    await expect(store.reorderWeekItems(W, "Adatum", "nice", [{ itemId: 230, position: 1 }])).rejects.toThrow(/nice to have/);
-    await expect(store.reorderWeekItems(W, "T&W", "must", [{ itemId: 210, position: 1 }])).rejects.toThrow();
-    (await store.setWeekItemTier(ids[2]!, "nice"));
-    expect((await pos())[230]).toBeNull();
-    (await store.reorderWeekItems(W, "Adatum", "must", null));
+    await expect(store.reorderWeekItems(W, "T&W", [{ itemId: 210, position: 1 }])).rejects.toThrow();
+    (await store.reorderWeekItems(W, "Adatum", null));
     expect((await pos())).toEqual({ 210: null, 220: null, 230: null, 300: null });
   });
 });

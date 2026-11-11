@@ -38,7 +38,7 @@ export type StoryGroup = {
 };
 
 type PickLike = { id: number; date: IsoDate; half: Half; clientKey: string; itemId: number | null; status: string; size: StorySize | null };
-type ListLike = { clientKey: string; itemId: number; level: "feature" | "story"; tier: "must" | "nice"; position: number | null; size: StorySize | null; weekStart: IsoDate };
+type ListLike = { clientKey: string; itemId: number; level: "feature" | "story"; position: number | null; size: StorySize | null; weekStart: IsoDate };
 
 /** Child level in the project's process (stories, and bugs on the story backlog); tasks and portfolio items aren't. */
 export function isChildLevel(item: Pick<WorkItem, "type" | "level">, types: readonly TypeLook[] | undefined): boolean {

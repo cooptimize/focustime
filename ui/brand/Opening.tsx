@@ -130,13 +130,13 @@ function useSkip(onSkip: () => void, on: boolean) {
 
 /**
  * After Close out's Done: the opening played backwards over the app (the week grows out of the top bar's mark,
- * Lumen hops out of Mon AM and the week rolls back into the ring), then back to Today. With all of today's musts
- * done, a fun moment follows: Lumen settles and bobs, "Musts done. See you tomorrow." Click or any key skips.
+ * Lumen hops out of Mon AM and the week rolls back into the ring), then back to Today. With all of today's to-dos
+ * done, a fun moment follows: Lumen settles and bobs, "All done. See you tomorrow." Click or any key skips.
  * Reduced motion: no animation; the moment shows still.
  */
-export function CloseReverse({ musts, onDone }: { musts: boolean; onDone: () => void }) {
+export function CloseReverse({ allDone: done, onDone }: { allDone: boolean; onDone: () => void }) {
   const reduced = useReducedMotion();
-  const [phase, setPhase] = useState<"in" | "unroll" | "moment" | "out">(reduced ? (musts ? "moment" : "out") : "in");
+  const [phase, setPhase] = useState<"in" | "unroll" | "moment" | "out">(reduced ? (done ? "moment" : "out") : "in");
   const svg = useRef<SVGSVGElement | null>(null);
   const ended = useRef(false);
   const end = useCallback(() => {
@@ -178,9 +178,9 @@ export function CloseReverse({ musts, onDone }: { musts: boolean; onDone: () => 
       <div className={`brand-stage-bg${phase === "out" ? " gone" : ""}`} />
       <div className={`brand-stage-body${phase === "out" ? " gone" : ""}`}>
         {(
-          <Unroll direction="close" paused={phase === "in"} pose={phase === "moment" ? "bob" : undefined} height={STAGE_H} svgRef={(el) => void (svg.current = el)} onDone={phase === "unroll" ? () => setPhase(musts ? "moment" : "out") : undefined} />
+          <Unroll direction="close" paused={phase === "in"} pose={phase === "moment" ? "bob" : undefined} height={STAGE_H} svgRef={(el) => void (svg.current = el)} onDone={phase === "unroll" ? () => setPhase(done ? "moment" : "out") : undefined} />
         )}
-        {musts && <p className={`brand-moment-line${phase === "moment" ? "" : " gone"}`}>Musts done. See you tomorrow.</p>}
+        {done && <p className={`brand-moment-line${phase === "moment" ? "" : " gone"}`}>All done. See you tomorrow.</p>}
       </div>
     </div>
   );

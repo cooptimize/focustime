@@ -46,9 +46,9 @@ Each step: **Click** what to do · **Say** one line · **Expect** what appears �
 ### 2. Add work (1.5 min)
 
 - **Click**: **Add work** (or P). Week opens with the Add work panel. Click Monday's Northwind block, then drag
-  **Filter orders by date range** from the panel onto it. Then Monday's day header ⋯ › **Confirm Mon, Nov 2**.
-- **Say**: "Planning is dragging this week's stories onto your real free time, right on the week. What's left from
-  last week waits in To place."
+  **Filter orders by date range** from the panel onto it. There is nothing to confirm.
+- **Say**: "Planning is dragging this week's stories onto your real free time, right on the week. What's on it is the
+  plan, and the team sees it. What's left from last week waits in To place."
 - **Expect**: the to-do lands in Northwind's block with its size, and the panel's room line drops ("1h 30m free").
   The line above the week says what's to place.
 - **If not**: use the row's **+** instead of dragging.
@@ -158,5 +158,5 @@ Afterwards: Settings › Demo › **Reset demo** for the next run.
 - **Connecting, signing in, secrets and export** stay refused in the demo, with "Demo data: nothing leaves FocusTime".
 - **Real AI varies**: with AI on, Break down and the drafts differ from the stored samples. AI off or slow: the
   samples. The assistant with AI off understands only the script's sentences and a few others (what's next, an
-  item by #id, gaps, sends, confirm today, push everything from today to tomorrow).
+  item by #id, gaps, sends, push everything from today to tomorrow).
 - **A restart** (deploy, dev scale-to-zero) loses the demo's changes and starts a fresh one at the next Try the demo.

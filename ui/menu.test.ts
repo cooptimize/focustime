@@ -103,8 +103,10 @@ describe("command menu (built from the action registry)", () => {
     expect(list.find((c) => c.action === "week.load")?.hint).toBe("R");
     for (const id of ["view.checkin", "view.closeout", "view.planweek"]) expect(list.find((c) => c.id === id)?.disabled).toBeUndefined();
     expect(list.find((c) => c.id === "view.planweek")?.hint).toBe("W");
-    // WD-1: Confirm week works from the week shown, unless that week is over.
-    expect(list.find((c) => c.action === "weekplan.commit")?.disabled).toBe("That week is over");
+    // CF-1: nothing confirms a plan; the retired commands aren't listed.
+    for (const a of ["weekplan.commit", "planday.commit"]) expect(list.find((c) => c.action === a)).toBeUndefined();
+    // A send's own Must (G5) stays.
+    for (const l of list.map((c) => c.label).filter((l) => l !== "Withdraw a Must")) expect(l).not.toMatch(/Confirm (week|today|the (week|day))|Nice to have|\bmusts?\b/i);
   });
   it("step 16.2: no place lost: every tab and mode is reachable from the command menu", async () => {
     const t = env();
@@ -212,14 +214,9 @@ describe("Plan any day (menus)", () => {
     expect(items(dayMenu(t.e, "2026-11-02"))[0]!.label).toBe("Add work to this day (past: done and drop only)");
   });
 
-  it("WD-1: a day header's ⋯ confirms that day (once its menu has Confirm), refused on past and PTO days", () => {
+  it("CF-1: a day header's ⋯ has no Confirm", () => {
     const t = env();
-    const days: string[] = [];
-    t.e.confirmDay = (d) => void days.push(d);
-    void find(dayMenu(t.e, "2026-11-04"), "Confirm Wed, Nov 4").run!();
-    expect(days).toEqual(["2026-11-04"]);
-    expect(find(dayMenu(t.e, "2026-11-05"), "Confirm Thu, Nov 5").disabled).toBe("PTO day (Watch Kids)");
-    expect(find(dayMenu(t.e, "2026-11-02"), "Confirm Mon, Nov 2").disabled).toBe("That day is past");
+    for (const d of ["2026-11-02", "2026-11-04", "2026-11-05"]) expect(items(dayMenu(t.e, d)).map((i) => i.label).join(" ")).not.toMatch(/Confirm/);
   });
 
   it("Add work to a day… is a date picker that opens the chosen date", async () => {

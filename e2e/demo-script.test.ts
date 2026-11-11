@@ -54,7 +54,7 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await shot(page, "today");
 
     // 2. Add work (WD-1): P opens Week with the panel; drag Filter orders by date range onto Northwind's Monday
-    // afternoon, then Confirm Mon from the day header's ⋯.
+    // afternoon (CF-1: nothing to confirm).
     await page.keyboard.press("p");
     await page.locator("aside.add-work-panel").waitFor({ timeout: 30_000 });
     await selectBlock(page, "Northwind");
@@ -64,12 +64,6 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await row.dragTo(nwMon);
     await expect.poll(() => blockPicks(page, "Northwind")).toContain("Filter orders by date range");
     await shot(page, "plan-today");
-    const mon = page.locator("header.day-head", { has: page.locator(".dow", { hasText: "Mon" }) }).first();
-    await mon.hover();
-    await mon.getByRole("button", { name: /^Actions for Mon/ }).click();
-    await page.getByRole("menuitem", { name: /^Confirm Mon, Nov 2/ }).click();
-    await page.waitForTimeout(800);
-    await page.keyboard.press("Escape");
 
     // 3. Week: From last week (Monday), the at-risk Wednesday afternoon (Out), Thursday's PTO, Friday's catch-up, the now line.
     await go(page, "#/week");

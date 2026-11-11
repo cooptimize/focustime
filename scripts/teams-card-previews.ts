@@ -32,7 +32,7 @@ const briefBlocks = [
   { label: "Morning 08:00–12:00", client: "Northwind", meetings: ["10:30 Standup (20 min)"], picks: [pk(1, "Fix the login timeout", "Northwind"), pk(2, "Review the export mapping", "Northwind")] },
   { label: "Afternoon 13:00–17:00", client: "Internal", meetings: [], picks: [pk(3, "Write the onboarding note", "Internal")] },
 ];
-const brief = { kind: "brief" as const, occasion: "brief:2026-11-05", ...D, blocks: briefBlocks, promises: ["Send the March totals (Northwind)"], sends: ["Export spec (Northwind), from Sam"], committed: false, destinations: dests, more: 0 };
+const brief = { kind: "brief" as const, occasion: "brief:2026-11-05", ...D, blocks: briefBlocks, promises: ["Send the March totals (Northwind)"], sends: ["Export spec (Northwind), from Sam"], destinations: dests, more: 0 };
 const checkPicks = [pk(1, "Fix the login timeout", "Northwind"), pk(2, "Review the export mapping", "Northwind"), pk(3, "Write the onboarding note", "Internal")];
 const checkin = { kind: "checkin" as const, occasion: "checkin:2026-11-05", ...D, picks: checkPicks, destinations: dests };
 const closeout = { kind: "closeout" as const, occasion: "closeout:2026-11-05", ...D, picks: checkPicks, closed: false };
@@ -47,8 +47,10 @@ const sessionRows = [
 ];
 const rhythmCards: [string, Card][] = [
   ["brief", briefCard(brief, URL_)],
-  ["brief-proposal", briefCard({ ...brief, proposal: ip({ title: "Confirm Thursday, Nov 5", changes: [{ field: "Plan", before: "Draft", after: "Confirmed, 3 to-dos" }] }) }, URL_)],
-  ["brief-done", briefCard({ ...brief, committed: true, proposal: ip({ title: "Confirm Thursday, Nov 5", changes: [{ field: "Plan", before: "Draft", after: "Confirmed, 3 to-dos" }], state: "done", message: "Thursday is confirmed." }) }, URL_)],
+  ["brief-proposal", briefCard({ ...brief, proposal: ip({ title: "Move 1 to-do", changes: [{ field: "Review the export mapping", before: "Thu, Nov 5 morning", after: "Thu, Nov 5 afternoon" }] }) }, URL_)],
+  ["brief-done", briefCard({ ...brief, proposal: ip({ title: "Move 1 to-do", state: "done", message: "Moved 1 to-do." }) }, URL_)],
+  // CF-1: an earlier card's Confirm today, tapped now.
+  ["brief-old-confirm", briefCard({ ...brief, notice: "There's nothing to confirm now. Your plan is what's on your day." }, URL_)],
   ["checkin", checkinCard(checkin, URL_)],
   ["checkin-ticked", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), pk(2, "Review the export mapping", "Northwind", "not_yet"), checkPicks[2]!] }, URL_)],
   ["checkin-proposal", checkinCard({ ...checkin, picks: [pk(1, "Fix the login timeout", "Northwind", "done"), checkPicks[1]!, checkPicks[2]!], proposal: ip({ title: "Move 2 to-dos", changes: [{ field: "Review the export mapping", before: "Thu, Nov 5 morning", after: "Thu, Nov 5 afternoon" }, { field: "Write the onboarding note", before: "Thu, Nov 5 afternoon", after: "Mon, Nov 9 morning" }] }) }, URL_)],

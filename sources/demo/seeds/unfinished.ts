@@ -33,7 +33,6 @@ export const unfinishedSeed: DemoSeed = {
     for (const [date, picks] of days) {
       await plan.start(date);
       for (const [, half, clientKey, itemId, title, size] of picks) await plan.addPick({ date, half, clientKey, kind: "item", itemId, title, itemType: "User Story", size });
-      await plan.commit(date);
     }
   },
 };

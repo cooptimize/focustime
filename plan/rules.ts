@@ -106,18 +106,17 @@ type CommittedRef = {
   title: string;
   url: string | null;
   slots: readonly { date: IsoDate; half: "AM" | "PM" }[];
-  /** Step 11: must or nice to have (missing: must), feature or story (missing: feature), done this week. */
-  tier?: "must" | "nice";
+  /** Step 11: feature or story (missing: feature), done this week. */
   level?: "feature" | "story";
   done?: boolean;
 };
 type WorkLike = { items: readonly WorkItem[]; children: readonly WorkItem[]; committed?: readonly WorkItem[] };
 
-export type WeekEntry<R extends CommittedRef = CommittedRef> = { feature: R; tier: "must" | "nice"; level: "feature" | "story"; placedHere: boolean; pinnedToday: boolean; item: WorkItem | null; kids: WorkItem[] };
+export type WeekEntry<R extends CommittedRef = CommittedRef> = { feature: R; level: "feature" | "story"; placedHere: boolean; pinnedToday: boolean; item: WorkItem | null; kids: WorkItem[] };
 
 /**
- * Plan the day draws from the week (step 11): in a client's block, its unfinished musts first, then nice-to-haves,
- * then the rest of the board. Within each, items pinned to this half-day, then to this day, then the week list's
+ * Plan the day draws from the week (step 11): in a client's block, its unfinished week features first, then the rest
+ * of the board (CF-1: no musts or nice to haves). Among the week's, items pinned to this half-day, then to this day, then the week list's
  * order (the caller passes it ordered). A feature opens into its pickable stories (anyone's open stories under it); a
  * story is picked directly. `item` is null when DevOps can't show it right now. `rest` is the board without them.
  */
@@ -129,17 +128,15 @@ export function weekFirst<R extends CommittedRef>(work: WorkLike | undefined, re
   const entries = mine.map((r): WeekEntry<R> => {
     const level = r.level ?? "feature";
     const item = pool.find((i) => i.id === r.itemId) ?? null;
-    return { feature: r, tier: r.tier ?? "must", level, placedHere: pin(r) === 0, pinnedToday: pin(r) <= 1, item, kids: work && level === "feature" ? pickableChildren(r.itemId, pool) : [] };
+    return { feature: r, level, placedHere: pin(r) === 0, pinnedToday: pin(r) <= 1, item, kids: work && level === "feature" ? pickableChildren(r.itemId, pool) : [] };
   });
   const listed = new Set(refs.filter((r) => r.clientKey === clientKey).map((r) => r.itemId));
   const under = new Set(entries.flatMap((e) => e.kids.map((k) => k.id)));
   const rest = (work?.items ?? []).filter((i) => !listed.has(i.id) && !under.has(i.id));
-  const musts = entries.filter((e) => e.tier === "must");
-  const nice = entries.filter((e) => e.tier === "nice");
-  return { musts, nice, committed: [...musts, ...nice], rest };
+  return { committed: entries, rest };
 }
 
-/** Step 8's name for it: features committed to the week first (now musts, then nice-to-haves). */
+/** Step 8's name for it: the week's features first. */
 export const committedFirst = weekFirst;
 
 /** Step 13.6 (D243): an epic with no features offers a draft feature; a feature (or an older cached item) a draft story. */

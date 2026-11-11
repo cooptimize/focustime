@@ -84,7 +84,6 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
       { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", itemId: 4411, size: "S" },
       { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", intention: "Write the release notes", size: "S" },
     ]) expect((await call(page, "pick.add", input)).ok).toBe(true);
-    expect((await call(page, "planday.commit", { date: "2026-11-02" })).ok).toBe(true);
 
     // Today: Now leads with the block and its next to-do; one Start on the page (MB-1).
     await open(page, "#/today");

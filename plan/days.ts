@@ -48,28 +48,29 @@ export function stepDay(date: IsoDate, dir: 1 | -1, pto: ReadonlySet<IsoDate> = 
 }
 
 /**
- * The one day carry-over is offered on: the earliest upcoming day (from `start`) that can be planned and is
- * not committed yet. Never several days at once, so an unfinished pick can't be offered twice.
+ * The one day carry-over is offered on: the next day (from `start`) that can take work (working hours, not PTO).
+ * Never several days at once, so an unfinished pick can't be offered twice. CF-1: was "the earliest day that isn't
+ * confirmed"; there is no confirm.
  */
-export function carryTarget(start: IsoDate, isCommitted: (d: IsoDate) => boolean, pto: ReadonlySet<IsoDate> = new Set(), hasHours: HasHours = monToThu): IsoDate | null {
+export function carryTarget(start: IsoDate, pto: ReadonlySet<IsoDate> = new Set(), hasHours: HasHours = monToThu): IsoDate | null {
   let d = Temporal.PlainDate.from(start);
   for (let n = 0; n < SCAN_DAYS; n++, d = d.add({ days: 1 })) {
     const s = d.toString();
-    if (hasHours(s) && !pto.has(s) && !isCommitted(s)) return s;
+    if (hasHours(s) && !pto.has(s)) return s;
   }
   return null;
 }
 
 export type PlanButton = "hidden" | "plan" | "planned" | "add_hours";
 /**
- * The Plan button in a day header (step 13.6, D240): "Plan", "Planned ✓" once committed, or hidden. Friday with work
+ * The Plan button in a day header (step 13.6, D240): "Plan", "Planned ✓" once it has to-dos (CF-1), or hidden. Friday with work
  * on it and no hours shows the "Add hours" link instead (Plan the day plans against working time).
  */
-export function planButton(d: { date: IsoDate; today: IsoDate; pto: boolean; hasHours: boolean; committed: boolean; hasPicks: boolean }): PlanButton {
+export function planButton(d: { date: IsoDate; today: IsoDate; pto: boolean; hasHours: boolean; hasPicks: boolean }): PlanButton {
   if (d.pto) return "hidden";
   if (!d.hasHours) return Temporal.PlainDate.from(d.date).dayOfWeek === 5 && d.hasPicks ? "add_hours" : "hidden";
-  if (d.date < d.today) return d.committed ? "planned" : "hidden";
-  return d.committed ? "planned" : "plan";
+  if (d.date < d.today) return d.hasPicks ? "planned" : "hidden";
+  return d.hasPicks ? "planned" : "plan";
 }
 
 /** "+ Add work" on a block card and key A (step 13.6, D241): today or later, not PTO, with working time. */

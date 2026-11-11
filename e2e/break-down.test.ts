@@ -143,7 +143,7 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
       page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
       await page.goto(app.url);
       await appReady(page);
-      const added = await dispatch(ctx, { action: "weekplan.add", input: { weekStart: WEEK, clientKey: "Adatum", itemId: FEATURE, tier: "must" } });
+      const added = await dispatch(ctx, { action: "weekplan.add", input: { weekStart: WEEK, clientKey: "Adatum", itemId: FEATURE } });
       expect(added.ok, JSON.stringify(added)).toBe(true);
 
       // WD-1: a feature with no stories is under Not ready in its client chip's popover on Week, with Break down.

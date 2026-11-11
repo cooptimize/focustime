@@ -15,8 +15,7 @@ export const historySeed: DemoSeed = {
     ];
     for (const [n, features, picks] of past) {
       const ws = Temporal.PlainDate.from(weekStart).add({ days: n }).toString();
-      for (const [clientKey, itemId, title, blocks] of features) await plan.addWeekItem({ weekStart: ws, clientKey, itemId, title, itemType: "Feature", url: null, level: "feature", tier: "must", estimate: blocks * 240 });
-      await plan.commitWeek(ws);
+      for (const [clientKey, itemId, title, blocks] of features) await plan.addWeekItem({ weekStart: ws, clientKey, itemId, title, itemType: "Feature", url: null, level: "feature", estimate: blocks * 240 });
       for (const [clientKey, itemId, title, dayN, minutes] of picks) {
         const date = Temporal.PlainDate.from(ws).add({ days: dayN }).toString();
         const pick = await plan.addPick({ date, half: "AM", clientKey, kind: "item", itemId, title, itemType: "User Story", size: "L" });
