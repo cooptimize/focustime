@@ -6351,3 +6351,124 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
   .cal-link-input .set-inline input { width: 100%; }
   .cal-link-input .set-inline { flex-basis: 100%; }
 }
+
+/* ---------- WD-1: one Week. The header row, the notice lines, the client chips, the Add work panel, the block card. ---------- */
+:root { --aw-w: 360px; }
+.week-head.wd1-head { flex-wrap: nowrap; gap: 10px; padding-top: 8px; padding-bottom: 4px; }
+.week-head.wd1-head .ph-title { flex-wrap: nowrap; min-width: 0; }
+.week-head.wd1-head .ph-title > :not(.client-chips) { flex: none; }
+.week-head.wd1-head h2 { white-space: nowrap; }
+/* The phone (and the largest text on it): the header wraps instead of pushing the page sideways. */
+.app.phone .week-head.wd1-head, .app.phone .week-head.wd1-head .ph-title { flex-wrap: wrap; }
+.app.phone .week-head.wd1-head h2 { white-space: normal; min-width: 0; }
+.week-tag { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: var(--fs-2); font-weight: 600; border: 1px solid var(--border-strong); color: var(--text-muted); white-space: nowrap; }
+.week-tag.tag-confirmed { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 45%, var(--border)); }
+.week-tag.tag-changed { color: var(--watch); border-color: color-mix(in oklab, var(--watch) 45%, var(--border)); }
+.confirm-week { white-space: nowrap; }
+.add-work-head[aria-pressed="true"] { background: var(--raised); border-color: var(--accent); }
+.to-place-line, .next-empty-line { margin: 0 0 6px; padding: 3px 10px; font-size: var(--fs-2); color: var(--text-muted); }
+.to-place-line .link-btn, .next-empty-line .link-btn { font-size: var(--fs-2); }
+
+.client-chips { display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; flex: 1 1 auto; min-width: 0; overflow-x: auto; padding: 2px 0; }
+/* Firefox has no ::-webkit-scrollbar: hide the chips row's bar there too (only inside this fallback, see textbox.test.ts). */
+@supports not selector(::-webkit-scrollbar) {
+  .client-chips { scrollbar-width: none; }
+}
+.client-chips::-webkit-scrollbar { display: none; }
+.cc-wrap { position: relative; }
+.cc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-2); white-space: nowrap; cursor: pointer; }
+.cc-chip .swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--c); }
+.cc-chip.over { color: var(--watch); border-color: color-mix(in oklab, var(--watch) 45%, var(--border)); }
+.cc-badge { min-width: 16px; padding: 0 4px; border-radius: 99px; background: color-mix(in oklab, var(--watch) 20%, var(--surface)); color: var(--text); font-size: var(--fs-1); font-weight: 600; text-align: center; }
+.cc-pop { position: fixed; z-index: 40; width: 300px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-panel); font-size: var(--fs-3); }
+.cc-pop h3 { margin: 0 0 4px; font-size: var(--fs-3); font-weight: 600; }
+.cc-pop p { margin: 2px 0; }
+.cc-over { color: var(--watch); }
+.cc-ready { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 4px; }
+.cc-ready li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.cc-ready-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cc-keep { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--text-muted); font-size: var(--fs-2); }
+
+/* The panel: on the right like the detail panel, narrower; the grid keeps clear of it. */
+/* The grid keeps .app > .grid's height rule inside the wrapper (it holds the grid and the panel). */
+.app > .wd1-body { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.wd1-body > .grid { flex: 1; }
+.wd1-body.with-panel .grid.with-panel:not(.narrow) { padding-right: calc(var(--aw-w) + 12px); }
+.add-work-panel {
+  position: fixed; top: 57px; right: 0; bottom: 32px; width: var(--aw-w); z-index: 20;
+  display: flex; flex-direction: column; box-sizing: border-box;
+  background: var(--surface); border-left: 1px solid var(--border-strong); box-shadow: var(--shadow-panel);
+  font-size: var(--fs-3);
+}
+.aw-head { display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px 2px; }
+.aw-title { flex: 1; min-width: 0; margin: 0; font-size: var(--fs-4); font-weight: 600; }
+.aw-client { color: var(--c, var(--text)); }
+.aw-room { margin: 0 14px 6px; color: var(--text-muted); font-size: var(--fs-2); }
+.aw-room.over { color: var(--watch); }
+.aw-chooser { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 6px; }
+.aw-scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 14px 10px; }
+.aw-scroll > .aw-toplace > * { margin-left: 0; margin-right: 0; }
+.aw-sec { margin-top: 10px; }
+.aw-list, .aw-list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.aw-list ul { padding-left: 14px; }
+.aw-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 3px 4px; border-radius: 6px; }
+.aw-row:hover { background: var(--raised); }
+.aw-row[draggable="true"] { cursor: grab; }
+.aw-row.placed .aw-row-title { color: var(--text-muted); }
+.aw-row-title { flex: 1; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }
+.aw-row-note, .aw-where, .aw-size, .aw-count, .aw-type { flex: none; color: var(--text-muted); font-size: var(--fs-2); }
+.aw-plus {
+  flex: none; width: calc(24px * var(--text-scale)); height: calc(24px * var(--text-scale)); padding: 0; border-radius: 6px; border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--accent); font: inherit; font-size: var(--fs-4); font-weight: 600; line-height: 1; cursor: pointer;
+}
+.aw-plus:hover { background: var(--action); border-color: var(--action); color: var(--on-action); }
+.aw-plus.done { display: inline-grid; place-items: center; border-color: transparent; color: var(--ok); cursor: default; }
+.aw-feature { padding: 4px 0; }
+.aw-feat-head { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 0; }
+.aw-feat-head > .aw-needs, .aw-feat-head > .aw-count { order: 10; flex-basis: 100%; padding-left: calc(56px * var(--text-scale)); }
+.aw-feat-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }
+.aw-star { flex: none; width: calc(22px * var(--text-scale)); padding: 0; border: 0; background: none; color: var(--text-faint); font: inherit; font-size: var(--fs-4); line-height: 1; cursor: pointer; }
+.aw-star.on { color: var(--watch); }
+.aw-needs { display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: var(--fs-2); }
+.aw-needs-word { color: var(--watch); font-weight: 600; }
+.aw-group-title { display: flex; align-items: center; gap: 6px; padding: 4px 4px 2px; font-weight: 600; min-width: 0; }
+.aw-addweek { flex: none; font-size: var(--fs-2); }
+.aw-search { width: 100%; margin: 2px 0 6px; box-sizing: border-box; }
+.aw-note { margin: 6px 0; font-size: var(--fs-2); }
+.aw-also-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.aw-box { flex: none; padding: 8px 14px 10px; border-top: 1px solid var(--border); background: var(--surface); }
+.aw-typebox { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.aw-typebox .item-lookup { display: block; flex: none; width: 100%; }
+.aw-typebox input { width: 100%; box-sizing: border-box; }
+/* To place: the Board's carry and team rows, stacked to fit the panel's width. */
+.add-work-panel .carry-row, .add-work-panel .send-row, .add-work-panel .sent-row { grid-template-columns: minmax(0, 1fr); padding: 4px 0; }
+.add-work-panel .carry-acts { justify-content: flex-start; flex-wrap: wrap; }
+.add-work-panel .carry, .add-work-panel .carry-summary { margin: 8px 0 0; padding: 8px 10px; }
+/* From last week holds its own .carry box: no second border around it. Rows wrap inside the panel's width. */
+.add-work-panel .from-last-week { margin: 0; padding: 0; border: 0; }
+.add-work-panel .carry-summary .cs-text { flex-basis: 100%; }
+.add-work-panel .carry-summary .cs-text + .cs-sep { display: none; }
+.add-work-panel .flw-row, .add-work-panel .flw-row-inner { flex-wrap: wrap; min-width: 0; }
+.add-work-panel .flw-row-inner > * { min-width: 0; overflow-wrap: anywhere; }
+.add-work-panel .flw-row-inner > .pr-title { flex: 1 1 auto; min-width: 8em; }
+.aw-hint { margin: 4px 0 0; color: var(--text-muted); font-size: var(--fs-2); }
+/* The phone: a bottom sheet over the day. */
+.add-work-panel.sheet { top: auto; left: 0; width: auto; bottom: 0; max-height: 82dvh; border-left: 0; border-top: 1px solid var(--border-strong); border-radius: 14px 14px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+/* Above the phone's bottom bar (its + would sit over the type box otherwise). */
+.app.phone .add-work-panel.sheet { bottom: var(--bb-h, 0px); max-height: calc(82dvh - var(--bb-h, 0px)); padding-bottom: 0; }
+/* The phone's day header: the weekday, date and Today on one line with the ⋯ (the button's tap height pushed Today down). */
+.app.phone .day-head, .app.phone .day-head .day-open { align-items: center; }
+.add-work-panel.sheet .aw-plus { width: 36px; height: 36px; }
+.add-work-panel.sheet .aw-row { min-height: 40px; }
+
+/* The block card: one status chip in the header that never wraps (the rest in its tooltip), the + Add row last,
+   the card the panel is on marked, the slim rail. */
+.half .head-chip { flex: none; max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; }
+.half.adding { outline: 2px solid var(--accent); outline-offset: -2px; }
+.half .add-work.add-row { visibility: visible; align-self: stretch; text-align: left; border-style: dashed; margin-top: 4px; }
+.half.slim { --rail-w: 56px; }
+.placed-features { list-style: none; margin: 2px 0; padding: 0; display: grid; gap: 2px; }
+.placed-feature { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: var(--fs-2); }
+.pf-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.day-head .day-open { display: inline-flex; align-items: baseline; gap: 10px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.day-head .day-open:hover .dow, .day-head .day-open:focus-visible .dow { text-decoration: underline; }

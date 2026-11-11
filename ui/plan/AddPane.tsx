@@ -1,47 +1,10 @@
-// U6: the right pane on both planning screens: "Add to <client>" in its color with a muted count, an optional search,
-// the sections (THIS WEEK'S MUSTS or FROM DEVOPS first, then "▸ More from <client>'s DevOps · N" in DevOps order, open on its own when nothing is above it), and the type
-// box pinned at the bottom with its one-line hint.
-import type { CSSProperties, ReactNode } from "react";
-
-type Props = {
-  className?: string | undefined;
-  color: string;
-  /** The client's name (in its color), or a fallback like "this block". */
-  client: ReactNode;
-  /** After the client's name ("morning"). */
-  suffix?: ReactNode | undefined;
-  count?: ReactNode | undefined;
-  titleClass?: string | undefined;
-  /** Between the title and the sections: a client chooser, the search box. */
-  top?: ReactNode | undefined;
-  children: ReactNode;
-  scrollClass?: string | undefined;
-  /** The type box and its hint, pinned at the bottom. */
-  box?: ReactNode | undefined;
-  label?: string | undefined;
-  /** UI-5: a Guide tour's hook (data-tour), nothing else. */
-  tour?: string | undefined;
-};
-
-export function AddPane({ className = "", color, client, suffix, count, titleClass = "", top, children, scrollClass = "", box, label = "Add work", tour }: Props) {
-  return (
-    <div className={`pl-add ${className}`} data-plan="add" data-tour={tour} style={{ "--c": color } as CSSProperties} aria-label={label}>
-      <h3 className={`pl-add-title ${titleClass}`}>
-        Add to <span className="pl-add-client">{client}</span>
-        {suffix != null && <> {suffix}</>}
-        {count != null && count !== "" && <span className="pl-add-count"> · {count}</span>}
-      </h3>
-      {top}
-      <div className={`pl-add-scroll ${scrollClass}`}>{children}</div>
-      {box && <div className="pl-add-box">{box}</div>}
-    </div>
-  );
-}
+// U6, WD-1: a section of the Add work panel with its uppercase label, and the type box's one-line hint.
+import type { ReactNode } from "react";
 
 /** A section in the right pane with its uppercase label. */
-export function AddSection({ label, title, children, className = "" }: { label: string; title?: ReactNode | undefined; children: ReactNode; className?: string | undefined }) {
+export function AddSection({ label, title, children, className = "", tour }: { label: string; title?: ReactNode | undefined; children: ReactNode; className?: string | undefined; /** WD-1: a Guide tour's hook. */ tour?: string | undefined }) {
   return (
-    <section className={`pl-sec ${className}`} aria-label={label}>
+    <section className={`pl-sec ${className}`} aria-label={label} data-tour={tour}>
       {title !== null && <h4 className="pl-label">{title ?? label}</h4>}
       {children}
     </section>

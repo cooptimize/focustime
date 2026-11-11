@@ -5,7 +5,7 @@ import { hidePersonal, personalCount } from "../week/personal.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import { SignInAgainButton } from "./Reopen.tsx";
 import { parseRoute, ROUTE_EVENT } from "../plan/notify.ts";
-import { ActionRefusal, call, connectSource, disconnectSource, endSession, planAction, SessionError, setThemeAction, startDemo, takeOpenRequest, weekLoad } from "./api.ts";
+import { call, connectSource, disconnectSource, endSession, planAction, SessionError, setThemeAction, startDemo, takeOpenRequest, weekLoad } from "./api.ts";
 import { dayEndOf, hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type ViewRange } from "../week/hours.ts";
 import { applyTheme, initialTheme } from "./theme.ts";
 import { rememberReduceMotion } from "./brand/motion.ts";
@@ -24,14 +24,19 @@ import { itemIdOfUrl } from "../plan/item-card.ts";
 import { TimeboxCtx, TimeboxDialog, timeboxChange as tbChange, useWriteFlow, type TimeboxEnv } from "./Timeboxes.tsx";
 import { HelpFinder } from "./HelpFinder.tsx";
 import { SendHost, TeamView } from "./Team.tsx";
-import { StatusView } from "./Status.tsx";
+import { StatusView, useStatusNeeds } from "./Status.tsx";
 import type { HelpTarget } from "./menu.ts";
 import type { TimeboxTarget } from "./menu.ts";
 import type { WriteState } from "../actions/types.ts";
-import type { PlanDayState } from "../plan/types.ts";
 import { planTarget } from "../plan/target.ts";
-import { canAddWork, stepDay } from "../plan/days.ts";
-import { PlanDay } from "./PlanDay.tsx";
+import { canAddWork } from "../plan/days.ts";
+import { AddWorkPanel, ToPlaceNotice } from "./AddWork.tsx";
+import { ClientChips } from "./ClientChips.tsx";
+import { defaultAddBlock, weekTag, confirmLabel } from "../plan/addwork.ts";
+import { AddPanelCtx } from "./weekctx.ts";
+
+/** WD-1: Thursday and Friday offer next week when it's empty. */
+const nextWeekEmptyDay = (d: IsoDate) => [4, 5].includes(Temporal.PlainDate.from(d).dayOfWeek);
 import { dayRolledOver } from "./planday.ts";
 import { PlanCtx, resumeSlots } from "./planview.ts";
 import { DevOpsWork, workByClient } from "./work.ts";
@@ -40,11 +45,11 @@ import { DetailPanel } from "./DetailPanel.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { causeLines, sourceActions, sourceLabel, stateOf } from "./status.ts";
 import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
-import { MustsSummary, TopTimer } from "./NowStrip.tsx";
+import { TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
-import { stepWeekday, weekendStops, afterDone, defaultNav, focusOf, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, planDayNav, planWeekOf, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
+import { stepWeekday, weekendStops, afterDone, addOf, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
 import { ModeArea, ModeSwitch, TimelineToggle } from "./ModeSwitch.tsx";
-import { dayModeStatus, momentCard, weekModeStatus } from "../plan/modes.ts";
+import { momentCard } from "../plan/modes.ts";
 import { FocusScreen, SoundControl } from "./FocusScreen.tsx";
 import { sound } from "./sound.ts";
 import type { TimerView } from "../actions/types.ts";
@@ -56,8 +61,6 @@ import { railItems } from "../plan/inbox-items.ts";
 import { Ahead } from "./ahead/Ahead.tsx";
 import { Today } from "./Today.tsx";
 import { pickNeed, type DraftStory, type Pick } from "../plan/types.ts";
-import { PlanWeek } from "./PlanWeek.tsx";
-import { weekMusts } from "./WeekMusts.tsx";
 import { CaptureDialog, captureClients } from "./Capture.tsx";
 import { AssistantPanel, COMMANDS_HREF } from "./Assistant.tsx";
 import type { AssistantContext } from "../assistant/types.ts";
@@ -76,8 +79,7 @@ import { SetupFlow } from "./Setup.tsx";
 import { AboutDialog } from "./About.tsx";
 import { FeedbackDialog } from "./Feedback.tsx";
 import { BreakDownHost, CoopBriefHost } from "./BreakDownPanel.tsx";
-import { FromLastWeek } from "./FromLastWeek.tsx";
-import { CarryProvider, CarrySummary } from "./Carry.tsx";
+import { CarryProvider } from "./Carry.tsx";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { Settings } from "./Settings.tsx";
 import { useAdmin } from "./settings/Admin.tsx";
@@ -133,10 +135,11 @@ function storedLoc(): Loc | null {
 }
 
 const TAB_TITLES: Record<Tab, string> = {
-  today: "Today: what's next, what's urgent and the day's blocks",
-  week: "The week: the Board (Plan today) and Plan (each client's features)",
+  today: "Day: what's next, what's urgent and the day's blocks",
+  week: "The week's blocks, with Add work beside them",
   ahead: "Features, epics and stories ahead: Grid, Gantt, Readiness and Backlog",
   inbox: "What needs you: promises, conversations, sends, captures and drafts",
+  status: "Monday's status report: this week's feature updates",
 };
 
 const shortDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -298,8 +301,8 @@ export function App() {
   const asksOpen = nav.tab === "inbox";
   const roadmapOpen = nav.tab === "ahead";
   const checkInOpen = nav.tab === "today" && nav.flow === "checkin";
-  /** NV-1: the Board focused on a day (Plan the day lives here now). */
-  const planDayFocus = focusOf(nav);
+  /** WD-1: the Add work panel's asked-for block (null: closed). */
+  const addAt = addOf(nav);
   /** Settings (step 6b) at a section, or closed (back to the place under it). */
   const setSettingsAt = useCallback((section: string | null, setting: string | null = null) => go((l) => ({ nav: l.nav, overlay: section !== null ? { kind: "settings", section, setting } : null })), [go]);
   // CV-3: the account menu, for the phone's ⋯ first row (the person chip on wider screens).
@@ -326,6 +329,9 @@ export function App() {
   const setFocusOpen = useCallback((on: boolean) => go((l) => ({ nav: on ? l.nav : l.nav, overlay: on ? { kind: "focus" } : null })), [go]);
   /** Bumped when something outside Plan the week (the command menu) changes its plan, so it reloads. */
   const [planWeekVersion, setPlanWeekVersion] = useState(0);
+  /** WD-1: the Status tab's count (Needs your update), read again after a change in Status. */
+  const [statusVersion, setStatusVersion] = useState(0);
+  const statusNeeds = useStatusNeeds(statusVersion);
   /** Quick capture (step 9): the box over any view, and the Capture view (inbox and notes) in the week's place. */
   const [captureOpen, setCaptureOpen] = useState(false);
   // AS-1: the assistant panel (Ctrl+J, /, the top bar's Ask), with any text it opens with.
@@ -387,16 +393,8 @@ export function App() {
     };
   }, []);
   const [clock, setClock] = useState(() => Date.now());
-  const [pd, setPd] = useState<PlanDayState | null>(null);
-  /** Step 15.2: the block selected in Plan the day, so menus add to it. */
-  const [pdHalf, setPdHalf] = useState<Half | null>(null);
-  const [justCommitted, setJustCommitted] = useState(false);
-  useEffect(() => setJustCommitted(false), [pd?.date]);
-  // Step 13.6: "+ Add work" and A open Plan the day on one block's picker.
-  const [pdStart, setPdStart] = useState<{ half: Half; n: number; focus?: number | null } | null>(null);
   // TY-1: Timebox my day asked for: Today shows its placeholders for this date, once per ask.
   const [timeboxAsk, setTimeboxAsk] = useState<{ date: IsoDate; n: number } | null>(null);
-  const [pdError, setPdError] = useState<string | null>(null);
   const cellRefs = useRef(new Map<string, HTMLDivElement>());
   // The week the window is on (or moving to), and a counter so a slow older response never overwrites a newer one.
   const weekRef = useRef<string | undefined>(undefined);
@@ -409,7 +407,6 @@ export function App() {
   const closeOutAt: IsoDate | null = nav.tab === "today" && nav.flow === "closeout" && data ? (nav.date ?? data.planDay.date) : null;
   /** QF-1: the day Today shows (#/today/<date>); null is today. */
   const todayAt: IsoDate | null = nav.tab === "today" && !nav.flow && data && nav.date && nav.date !== data.planDay.date ? nav.date : null;
-  const planWeekAt: IsoDate | null = nav.tab === "week" && nav.mode === "commit" && data ? planWeekOf(nav.week, mondayOf(data.planDay.date)) : null;
 
   // Theme: the config's value once loaded; a change applies at once and is saved, and reverts if saving fails.
   const [theme, setThemeState] = useState<Theme>(initialTheme);
@@ -738,10 +735,11 @@ export function App() {
   const changeWeek = useCallback(
     (n: number) => {
       if (!data) return;
-      if (nav.tab === "week" && nav.mode === "commit" && planWeekAt) return goNav(navOf.week("commit", addWeeks(planWeekAt, n)));
-      goNav(navOf.week("board", addWeeks(data.weekStart, n)));
+      // WD-1: the Add work panel stays open on the other week (on its first open block).
+      const w = addWeeks(data.weekStart, n);
+      goNav(addAt ? navOf.weekAdd(w) : navOf.week("board", w));
     },
-    [data, nav, planWeekAt, goNav],
+    [data, addAt, goNav],
   );
   const goToday = useCallback(() => {
     if (!data) return;
@@ -772,6 +770,28 @@ export function App() {
     return planTarget(now, dayEndOf(data.hours, now.toPlainDate().toString()) ?? "24:00", pto, hasHours);
   }, [data, zonedNow, clock, hasHours]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * WD-1: the block the Add work panel is on: the one the address asks for when it can take work, else the block under
+   * way or the next one not over in the week shown, else its first block that can take work.
+   */
+  const panelAt = useMemo(() => {
+    if (!addAt || !data) return null;
+    const today = data.planDay.date;
+    const blocks = data.week.days.flatMap((d) =>
+      cardHalves(d).flatMap((h) => {
+        const sl = slotOf(d, h);
+        return sl ? [{ date: d.date, half: h, end: sl.end, plannable: canAddWork({ date: d.date, today, pto: !!d.pto, off: sl.off }) || (d.kind !== "work" && d.date >= today) }] : [];
+      }),
+    );
+    return defaultAddBlock(blocks, now ?? new Date(clock).toISOString(), addAt);
+  }, [addAt, data, now, clock]);
+  // WD-1: the panel's block is the selected block.
+  useEffect(() => {
+    if (!panelAt || !data) return;
+    const dayIndex = data.week.days.findIndex((d) => d.date === panelAt.date);
+    if (dayIndex >= 0) setSel((s) => (s.dayIndex === dayIndex && s.half === panelAt.half ? s : { dayIndex, half: panelAt.half }));
+  }, [panelAt?.date, panelAt?.half, data?.weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /** The Now strip (slice 4): from the loaded week and today's picks, recomputed on the 30 s clock. */
   const strip = useMemo(() => {
     if (!data || !target) return null;
@@ -792,49 +812,16 @@ export function App() {
     });
   }, [data, target, zonedNow, clock, hasHours]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /**
-   * Opens Plan the day for a date (default: today or the next workday). Moves to that date's week when it isn't
-   * on screen. The automatic open is for today only, once per day.
-   */
-  const showPlanDay = useCallback(
-    async (st: PlanDayState) => {
-      if (!data) return;
-      setPdError(null);
-      setDetailsOpen(false);
-      const monday = mondayOf(st.date);
-      const w = monday !== data.weekStart ? ((await load({ weekStart: monday })) ?? null) : data;
-      const dayIndex = Math.max(0, (w ?? data).week.days.findIndex((d) => d.date === st.date));
-      const first = (w ?? data).week.days[dayIndex];
-      const firstHalf: Half = first ? cardHalves(first)[0]! : "AM";
-      setSel((s) => ({ dayIndex, half: s.dayIndex === dayIndex ? s.half : firstHalf }));
-      setPd(st);
-    },
-    [data, load],
-  );
-  /** Loads Plan the day's state for a date (Today › Plan asks for it); a refusal says why and goes back to Now. */
-  const loadPlanDay = useCallback(
-    async (date: IsoDate) => {
-      if (!data || !data.planDay.available) return void setNotice("The local plan store isn't available, so planning is off");
-      try {
-        await showPlanDay(await planAction("planday.start", { date }));
-      } catch (e) {
-        setNotice(e instanceof Error ? e.message : "Could not open planning");
-        goNav(navOf.week());
-      }
-    },
-    [data, showPlanDay, goNav],
-  );
-  /** NV-1: the Board focused on a date (default: today or the next workday), from anywhere. */
-  const openPlanDay = useCallback((date?: IsoDate) => goNav(navOf.planDay(date ?? null)), [goNav]);
-
-  /** "+ Add work" and A (step 13.6): the Board focused on that day, with that block's picker. */
+  /** WD-1: Week with the Add work panel on a block (a date alone: that day's first block; nothing: the next one). */
   const addWork = useCallback(
-    (date: IsoDate, half: Half, focus: number | null = null) => {
-      setPdStart((s) => ({ half, n: (s?.n ?? 0) + 1, focus }));
-      goNav(planDayNav(date, half));
+    (date: IsoDate | null = null, half: Half | null = null) => {
+      setDetailsOpen(false);
+      goNav(navOf.addWork(date, half));
     },
     [goNav],
   );
+  /** Day's Add work and the command menu's Plan today: Week with the panel on that day (default: today or the next workday). */
+  const openPlanDay = useCallback((date?: IsoDate) => addWork(date ?? null), [addWork]);
 
   /**
    * QF-1, TY-1: Timebox my day from anywhere: confirms the day first when it isn't ("Confirm and timebox"), then goes to
@@ -856,106 +843,59 @@ export function App() {
   );
 
   /**
-   * ← → in Plan the day: the previous or next day that can be planned. Days without working hours and known PTO
-   * are skipped here; a PTO day only the server knows of is skipped too (it refuses with 422), up to a few times.
-   */
-  const stepPlanDay = useCallback(
-    async (dir: 1 | -1) => {
-      if (!data || !pd) return;
-      const pto = new Set([...data.ptoAhead, ...data.week.days.filter((d) => d.pto).map((d) => d.date)]);
-      let from = pd.date;
-      for (let tries = 0; tries < 5; tries++) {
-        const next = stepDay(from, dir, pto, hasHours);
-        if (!next) return setPdError(`No day to plan ${dir > 0 ? "after" : "before"} ${shortDay(from)} within a month`);
-        try {
-          const st = await planAction("planday.start", { date: next });
-          await showPlanDay(st);
-          return goNav(navOf.planDay(st.date));
-        } catch (e) {
-          if (!(e instanceof ActionRefusal && e.status === 422)) return setPdError(e instanceof Error ? e.message : "Could not open that day");
-          from = next;
-        }
-      }
-    },
-    [data, pd, showPlanDay, hasHours, goNav],
-  );
-
-  /**
    * Runs a plan action from anywhere (the panel, a "⋯" menu, the command menu). The panel shows its own day's
    * new state; the week view reloads quietly so its checklist matches. False, with a message, on refusal.
    */
   const runPlan = useCallback(
     async (action: string, input: Record<string, unknown>) => {
       try {
-        const r = await planAction(action, input);
-        setPdError(null);
-        if (pd) setPd(r.state?.date === pd.date ? r.state : await planAction("planday.start", { date: pd.date }));
+        await planAction(action, input);
         reloadQuiet();
         return true;
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "That did not work";
-        if (pd) setPdError(msg);
-        else setNotice(msg);
+        setNotice(e instanceof Error ? e.message : "That did not work");
         return false;
       }
     },
-    [pd, reloadQuiet],
+    [reloadQuiet],
   );
 
-  // HK-3: after Keep, Move to… or Drop on a suggested card in Plan today, its state and the week both read again.
-  const refreshPlanDay = useCallback(() => {
-    reloadQuiet();
-    if (pd) void planAction("planday.start", { date: pd.date }).then((st) => setPd((cur) => (cur?.date === st.date ? st : cur)), () => undefined);
-  }, [pd, reloadQuiet]);
-
-  const closePlanDay = useCallback(() => {
-    setPd(null);
-    setPdError(null);
-  }, []);
-
-  // The Board focused on a day: keep Plan the day's state on the day the address asks for (default: today or the next workday).
-  const wantPlanDate = planDayFocus && target ? (planDayFocus.date ?? target.date) : null;
-  const pdTried = useRef<string | null>(null);
-  useEffect(() => {
-    if (!wantPlanDate) {
-      pdTried.current = null;
-      if (pd) closePlanDay();
-      return;
-    }
-    if (pd?.date === wantPlanDate || pdTried.current === wantPlanDate) return;
-    pdTried.current = wantPlanDate;
-    void loadPlanDay(wantPlanDate);
-  }, [wantPlanDate, pd, closePlanDay, loadPlanDay]);
-
-  // The week each place shows: Week its week (this week by default), Plan the week its week, Today and Check-in today's.
-  // A focused day loads its own week (showPlanDay).
-  const wantWeek = !data ? null : nav.tab === "week" ? (planDayFocus ? null : (planWeekAt ?? nav.week ?? data.today.weekStart)) : nav.tab === "today" && !loc.overlay ? (todayAt ? mondayOf(todayAt) : data.today.weekStart) : null;
+  // The week each place shows: Week its week (this week by default; the Add work panel's block's week), Day and its flows the day's.
+  const wantWeek = !data ? null : nav.tab === "week" ? (nav.week ?? (addAt?.date ? mondayOf(addAt.date) : data.today.weekStart)) : nav.tab === "today" && !loc.overlay ? (todayAt ? mondayOf(todayAt) : data.today.weekStart) : null;
   useEffect(() => {
     if (!data || !wantWeek || wantWeek === weekRef.current) return;
     void load({ weekStart: wantWeek }, { selectToday: wantWeek === data.today.weekStart });
   }, [wantWeek]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const commit = useCallback(async () => {
-    if (!pd) return;
-    try {
-      await planAction("planday.commit", { date: pd.date });
-      // Step 15 (D265): the first Done commits. When planned picks still have no time (and timeboxing is on), the view
-      // stays open once to offer Timebox my day (D254); otherwise it closes.
-      const st = await planAction("planday.start", { date: pd.date });
-      const boxed = new Set((data?.timeboxes ?? []).filter((t) => t.date === pd.date && !t.removedAt).map((t) => t.pickId));
-      const unboxed = st.picks.some((p) => p.date === pd.date && p.status === "planned" && !boxed.has(p.id));
-      reloadQuiet();
-      if (unboxed && data?.timeboxSettings.enabled !== false) {
-        setPd(st);
-        setJustCommitted(true);
-      } else {
-        setNotice(`Planned ${shortDay(pd.date)}`);
-        goNav(afterDone(nav));
+  /** Confirm <day> (the day header's ⋯ and the command menu): saves that day's plan, as Plan the day's Confirm did. */
+  const commitDay = useCallback(
+    async (date: IsoDate) => {
+      try {
+        await planAction("planday.commit", { date });
+        setNotice(`Confirmed ${shortDay(date)}`);
+        reloadQuiet();
+      } catch (e) {
+        setNotice(e instanceof Error ? e.message : "Couldn't save the plan");
       }
-    } catch (e) {
-      setPdError(e instanceof Error ? e.message : "Couldn't save the plan");
-    }
-  }, [pd, data, reloadQuiet, goNav, nav]);
+    },
+    [reloadQuiet],
+  );
+  /** Confirm week (the header's tag): saves the week's lists, as Plan the week's Confirm week did. */
+  const commitWeek = useCallback(
+    async (weekStart: IsoDate) => {
+      try {
+        await call("weekplan.commit", { weekStart });
+        setNotice("Week confirmed");
+        setPlanWeekVersion((n) => n + 1);
+        // Step 17: after confirming next week, offer Look ahead 4 weeks when it is due.
+        if (data && weekStart > data.today.weekStart) setOfferAhead(true);
+        reloadQuiet();
+      } catch (e) {
+        setNotice(e instanceof Error ? e.message : "Couldn't save the week plan");
+      }
+    },
+    [reloadQuiet, data],
+  );
 
   /** Step 15 (D272): demo mode on or off; the server swaps every source and the plan store, then the week reloads. */
   // A2: the demo is its own session. Turning it on starts a demo session in place of this one (sign in again for your own
@@ -1017,11 +957,15 @@ export function App() {
     [load],
   );
 
-  /** Week › Plan the week for a week (its Monday); the week loads too, since fit and readiness use it. */
-  const openPlanWeek = useCallback((w: IsoDate) => goNav(navOf.week("commit", w)), [goNav]);
-  /** fix/planday-pane: the client Plan the week opens on (Plan the day's "plan the week"), until it has. */
-  const [planWeekClient, setPlanWeekClient] = useState<string | null>(null);
-  const clearPlanWeekClient = useCallback(() => setPlanWeekClient(null), []);
+  /** The old Plan the week entry points: Week with the Add work panel on that week. */
+  // A week opens with the panel on its block under way (or its first one), never pinned to its Monday.
+  const openPlanWeek = useCallback(
+    (w: IsoDate) => {
+      setDetailsOpen(false);
+      goNav(navOf.weekAdd(w === data?.today.weekStart ? null : w));
+    },
+    [goNav, data?.today.weekStart],
+  );
 
   /** A view by name (the command menu, older entry points): its tab and mode, or an overlay. */
   const setView = useCallback(
@@ -1029,7 +973,7 @@ export function App() {
       setDetailsOpen(false);
       const r = viewNav(v);
       if (r.overlay) return go((l) => ({ nav: r.nav ?? l.nav, overlay: r.overlay }));
-      if (r.nav?.tab === "week" && r.nav.mode === "board" && !r.nav.focus && data) setSel({ dayIndex: data.today.dayIndex, half: data.today.half });
+      if (r.nav?.tab === "week" && r.nav.mode === "board" && !r.nav.add && data) setSel({ dayIndex: data.today.dayIndex, half: data.today.half });
       if (r.nav) goNav(r.nav);
     },
     [go, goNav, data],
@@ -1142,8 +1086,9 @@ export function App() {
   }, [clock]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!pd && !cmdOpen && !keysOpen) cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
-  }, [sel, data?.weekStart, layout, pd, cmdOpen, keysOpen]);
+    // WD-1: not while the Add work panel has focus (its search and type box keep it).
+    if (!cmdOpen && !keysOpen && !document.activeElement?.closest(".add-work-panel")) cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
+  }, [sel, data?.weekStart, layout, cmdOpen, keysOpen]);
 
   useEffect(() => {
     const on = (e: FocusEvent) => {
@@ -1169,8 +1114,8 @@ export function App() {
     [sel, detailsOpen],
   );
   const moveRegion = useCallback(
-    (dir: 1 | -1) => focusRegion(nextRegion(regionOf(document.activeElement), regionsAvailable({ planOpen: !!pd, detailsOpen }), dir)),
-    [focusRegion, pd, detailsOpen],
+    (dir: 1 | -1) => focusRegion(nextRegion(regionOf(document.activeElement), regionsAvailable({ planOpen: false, detailsOpen }), dir)),
+    [focusRegion, detailsOpen],
   );
 
   // F6, O and ? work everywhere (capture phase: the ⋯ buttons keep other keys to themselves), except while typing
@@ -1258,7 +1203,7 @@ export function App() {
         // shell takes Esc first (ST-1), so its unsaved fields are saved on the way out.
         e.preventDefault();
         go((l) => ({ nav: l.nav, overlay: null }));
-      } else if (k === "Escape" && !captureOpen && !pd && isPlanning(nav)) {
+      } else if (k === "Escape" && !captureOpen && isPlanning(nav)) {
         // A planning mode: Esc goes back to the tab's view mode without saving (Plan the day handles its own Esc).
         e.preventDefault();
         goNav(afterDone(nav));
@@ -1290,15 +1235,16 @@ export function App() {
         openTab("inbox");
       } else if ((k === "w" || k === "W") && free && settingsAt === null) {
         e.preventDefault();
-        goNav(planWeekAt !== null ? navOf.week("board", nav.tab === "week" ? nav.week : null) : navOf.week("commit"));
+        // WD-1: W opens Week with the Add work panel (again: closes it).
+        goNav(addAt ? navOf.week("board", nav.tab === "week" ? nav.week : null) : navOf.addWork());
       } else if ((k === "e" || k === "E") && free && settingsAt === null) {
         e.preventDefault();
         goNav(closeOutAt !== null ? navOf.today() : navOf.today("closeout"));
       } else if ((k === "m" || k === "M") && free && settingsAt === null) {
         e.preventDefault();
         goNav(checkInOpen ? navOf.today() : navOf.today("checkin"));
-      } else if ((e.key === "n" || e.key === "N" || ((e.key === "c" || e.key === "C") && !pd && !e.ctrlKey && !e.metaKey && !e.altKey)) && !typing && !captureOpen) {
-        // P1: C opens Capture too, everywhere but Today › Plan, where C is still Done.
+      } else if ((e.key === "n" || e.key === "N" || ((e.key === "c" || e.key === "C") && !e.ctrlKey && !e.metaKey && !e.altKey)) && !typing && !captureOpen) {
+        // P1: C opens Capture too.
         e.preventDefault();
         setCaptureOpen(true);
       } else if ((e.key === "f" || e.key === "F") && !typing) {
@@ -1310,11 +1256,11 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [loc, nav, settingsAt, closeOutAt, checkInOpen, planWeekAt, captureOpen, cmdOpen, keysOpen, pd, detailsOpen, go, goNav, openTab, togglePlanning, setSettingsAt]);
+  }, [loc, nav, addAt, settingsAt, closeOutAt, checkInOpen, captureOpen, cmdOpen, keysOpen, detailsOpen, go, goNav, openTab, togglePlanning, setSettingsAt]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (base !== "week" || (nav.tab === "week" && (nav.mode === "team" || nav.mode === "status")) || focusOpen || guideAt || docsAt || meetingAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (base !== "week" || (nav.tab === "week" && nav.mode === "team") || focusOpen || guideAt || docsAt || meetingAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || captureOpen || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
       const days = data.week.days;
@@ -1346,7 +1292,7 @@ export function App() {
           return setDetailsOpen(true);
         case "a":
         case "A": {
-          // Step 13.6 (D241): add work to the selected block (its picker in Plan the day).
+          // Step 13.6 (D241), WD-1: the Add work panel on the selected block.
           e.preventDefault();
           const d = days[sel.dayIndex];
           const sl = d ? slotOf(d, sel.half) : undefined;
@@ -1364,7 +1310,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, guideAt, docsAt, meetingAt, base, captureOpen, layout, nav]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, cmdOpen, keysOpen, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, focusOpen, guideAt, docsAt, meetingAt, base, captureOpen, layout, nav]);
 
   // QF-1: [ and ] on Today step a day back or ahead (never while typing; Week keeps them for its weeks).
   useEffect(() => {
@@ -1397,14 +1343,13 @@ export function App() {
       cowork,
       openChat,
       week: data.week,
-      // Step 15.2: while Plan the day is open, its selected block is the selection (⋯ → Add to the plan targets it).
+      // Step 15.2, WD-1: the selected block (the Add work panel's while it is open) is the selection.
       selection: (() => {
-        const pdDay = pd ? data.week.days.find((d) => d.date === pd.date) : undefined;
-        const at = pdDay && pdHalf ? { d: pdDay, half: pdHalf } : { d: day, half: sel.half };
+        const at = { d: day, half: sel.half };
         return { date: at.d.date, half: at.half, clientKey: (at.half === "AM" ? at.d.am : at.half === "PM" ? at.d.pm : at.d.eve)?.focus[0]?.clientKey ?? null };
       })(),
       planWeek: data.plan,
-      planState: pd,
+      planState: null,
       focusNext: focusPick(data.plan?.[data.planDay.date]?.picks ?? [], strip?.half ?? null),
       planTarget: target,
       today: data.planDay.date,
@@ -1413,7 +1358,8 @@ export function App() {
       runPlan,
       openPlanDay: (d) => void openPlanDay(d),
       ...(data.timeboxSettings.enabled !== false ? { timeboxDay: (d: IsoDate) => void timeboxDay(d) } : {}),
-      commitPlan: () => void commit(),
+      commitPlan: () => void commitDay(day.date),
+      confirmDay: (d: IsoDate) => void commitDay(d),
       openDetails: (date, half) => {
         const i = data.week.days.findIndex((x) => x.date === date);
         if (i < 0) return;
@@ -1483,18 +1429,12 @@ export function App() {
       openCloseOut: (d) => goNav(navOf.today("closeout", d ?? null)),
       openCheckIn: () => goNav(navOf.today("checkin")),
       openPlanWeek: (w) => (w ? openPlanWeek(w) : setView("planweek")),
-      planWeekOpen: planWeekAt,
+      planWeekOpen: data.weekStart >= data.today.weekStart ? data.weekStart : null,
       openCapture: (kind) => (setCaptureKind(kind ?? null), setCaptureOpen(true)),
       openAssistant: (text) => setAssistantAt({ text: text ?? "" }),
       openCaptures: () => setView("capture"),
       openRitual: togglePlanning,
-      commitWeek: () => {
-        if (planWeekAt)
-          void call("weekplan.commit", { weekStart: planWeekAt }).then(
-            () => { setNotice("Week confirmed"); setPlanWeekVersion((n) => n + 1); reloadQuiet(); },
-            (e: unknown) => setNotice(e instanceof Error ? e.message : "Couldn't save the week plan"),
-          );
-      },
+      commitWeek: () => void commitWeek(data.weekStart),
       closeOutDate: closeOutAt,
       commitCloseOut: () => {
         if (closeOutAt) void call("closeout.commit", { date: closeOutAt }).then(() => { setNotice("Closed out"); reloadQuiet(); }, (e: unknown) => setNotice(e instanceof Error ? e.message : "Couldn't save Close out"));
@@ -1506,7 +1446,6 @@ export function App() {
           const o = r.flexOffer;
           if (o && window.confirm(`Add a flex session ${shortDay(o.date)}, ${o.start} to ${o.end} for ${r.pick.clientKey}? Local only; nothing goes on your calendar.`))
             await call("flex.add", { date: o.date, clientKey: r.pick.clientKey, start: o.start, end: o.end, note: `Make up: ${r.pick.title}`.slice(0, 500) }).catch((e: unknown) => setNotice(e instanceof Error ? e.message : "Could not add the flex session"));
-          if (pd) setPd(await planAction("planday.start", { date: pd.date }));
           reloadQuiet();
           return true;
         } catch (e) {
@@ -1555,7 +1494,7 @@ export function App() {
       timeboxes: data.timeboxes,
       now: now ?? new Date(clock).toISOString(),
       addWork,
-      planFeature: (date: IsoDate, half: Half, itemId: number) => addWork(date, half, itemId),
+      planFeature: (date: IsoDate, half: Half) => addWork(date, half),
       demo: data.demo,
       admin: isAdmin === true,
       asksOpen,
@@ -1566,7 +1505,7 @@ export function App() {
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, openGuide, pd, pdHalf, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, togglePlanning, connectWrite, addWork, timeboxDay, goNav, asksOpen, cowork]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, openGuide, work, runPlan, openPlanDay, commitDay, commitWeek, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, openPlanWeek, togglePlanning, connectWrite, addWork, timeboxDay, goNav, asksOpen, cowork]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // AS-1: what the assistant hears about the screen: its address, the client and item in focus, the selected block and
   // today. Nothing else on screen is sent; the server reads what a question needs.
@@ -1621,27 +1560,7 @@ export function App() {
 
   const samples = new Set(data.sources.filter((s) => s.sample).map((s) => s.source));
 
-  // Step 16.2: the mode switches. Today's modes show ✓ and due dots for the day they are on; Plan the week for its week.
   const zn = zonedNow(userZone(data));
-  const statusDay: IsoDate = planDayFocus ? (pd?.date ?? planDayFocus.date ?? target.date) : closeOutAt ?? localToday;
-  const sh = hoursOn(data.hours, statusDay);
-  const statusPlan = data.plan?.[statusDay] ?? null;
-  const dayStatus = dayModeStatus({
-    date: statusDay,
-    today: zn.toPlainDate().toString(),
-    time: zn.toPlainTime().toString({ smallestUnit: "minute" }),
-    workday: statusDay === localToday ? data.planDay.workday : sh.segments.length > 0 && !week.days.find((d) => d.date === statusDay)?.pto,
-    amEnd: sh.am?.end ?? null,
-    pmStart: sh.pm?.start ?? null,
-    end: dayEndOf(data.hours, statusDay),
-    committed: !!(pd?.date === statusDay ? pd.plan.committedAt : statusPlan?.committedAt),
-    checkedIn: data.checkIn.date === statusDay && data.checkIn.done,
-    closedOut: data.closeOut.date === statusDay ? data.closeOut.done : !!statusPlan?.closedOutAt,
-    checkinOffsetMinutes: data.planning.checkinReminderMinutes,
-    closeoutLeadMinutes: data.planning.closeoutReminderMinutes,
-  });
-  const thisMonday = mondayOf(localToday);
-  const weekToPlan = planWeekAt ?? planWeekOf(null, thisMonday);
   // NV-1: today's card for the moment of the day (Plan today, Midday check-in or Close out), from today's facts.
   const th = hoursOn(data.hours, localToday);
   const todayPlan = data.plan?.[localToday] ?? null;
@@ -1653,7 +1572,7 @@ export function App() {
     amEnd: th.am?.end ?? null,
     pmStart: th.pm?.start ?? null,
     end: dayEndOf(data.hours, localToday),
-    committed: !!(pd?.date === localToday ? pd.plan.committedAt : todayPlan?.committedAt),
+    committed: !!todayPlan?.committedAt,
     checkedIn: data.checkIn.date === localToday && data.checkIn.done,
     closedOut: data.closeOut.date === localToday ? data.closeOut.done : !!todayPlan?.closedOutAt,
     checkinOffsetMinutes: data.planning.checkinReminderMinutes,
@@ -1661,16 +1580,11 @@ export function App() {
   });
   const switches: Record<Tab, React.ReactNode> = {
     today: null,
-    week: (
-      <ModeSwitch
-        tab="week"
-        current={nav.tab === "week" ? nav.mode : "board"}
-        status={{ board: dayStatus.plan === "due" ? "due" : null, commit: weekModeStatus(!!data.weekCommitted[weekToPlan], data.weekNudge.badge, weekToPlan) }}
-        onMode={(m: ModeName) => goNav(m === "board" ? navOf.week("board") : m === "team" ? navOf.week("team") : m === "status" ? navOf.week("status") : navOf.week("commit"))}
-      />
-    ),
+    // WD-1: Week has no modes (Team keeps its address, unlinked); Status is its own tab.
+    week: null,
     ahead: <ModeSwitch tab="ahead" current={nav.tab === "ahead" ? nav.mode : "grid"} status={{ gantt: data.aheadDue.length ? "due" : null }} onMode={(m: ModeName) => goNav(modeNav("ahead", m))} />,
     inbox: null,
+    status: null,
   };
   // AH-3: Ahead's switch with Fix next's count, given by Ahead once it knows it.
   const aheadSwitch = (counts: Partial<Record<ModeName, number>>) => <ModeSwitch tab="ahead" current={nav.tab === "ahead" ? nav.mode : "grid"} status={{ gantt: data.aheadDue.length ? "due" : null }} counts={counts} onMode={(m: ModeName) => goNav(modeNav("ahead", m))} />;
@@ -1696,7 +1610,7 @@ export function App() {
   tbEnvRef.current = tbEnv;
   // U5.1: the "N personal hidden" switch: the footer's chip on a computer, a line in the status sheet on the phone (MB-1).
   const personalHiddenChip =
-    !showPersonal && (base === "week" || base === "today") && !planWeekAt && !pd ? (() => {
+    !showPersonal && (base === "week" || base === "today") ? (() => {
       // Week counts the week's personal events, Today today's.
       const n = personalCount(base === "today" ? data.week.days.filter((d) => d.date === data.planDay.date) : data.week.days);
       return (
@@ -1742,7 +1656,7 @@ export function App() {
     <div className={`app ${layout}${compact ? " compact" : ""}${phone ? " phone" : ""}`}>
       <header className="topbar">
         <div className="brand">
-          <button type="button" className="brand-home" onClick={() => setView("today")} title="Today">
+          <button type="button" className="brand-home" onClick={() => setView("today")} title="Day">
             <WeekMark height={18} />
             <span className="name">FocusTime</span>
           </button>
@@ -1754,9 +1668,10 @@ export function App() {
         </div>
         {!phone && <nav className="views" aria-label="Tabs">
           {TABS.map((t, n) => (
-            <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} title={TAB_TITLES[t] + ` (${n + 1})`}>
+            <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} title={TAB_TITLES[t] + ` (${n + 1})`} data-tour={t === "status" ? "tab-status" : undefined}>
               {TAB_NAMES[t]}
               {t === "inbox" && inboxCount > 0 && <span className="count" aria-label={`${inboxCount} need you`}>{inboxCount}</span>}
+              {t === "status" && !!statusNeeds && <span className="count" aria-label={`${statusNeeds} need your update`}>{statusNeeds}</span>}
             </button>
           ))}
         </nav>}
@@ -1847,7 +1762,7 @@ export function App() {
         </div>
       )}
 
-      {offerAhead && nav.tab === "week" && nav.mode === "board" && !planDayFocus && data.aheadDue.includes("plan_ahead") && (
+      {offerAhead && nav.tab === "week" && nav.mode === "board" && !addAt && data.aheadDue.includes("plan_ahead") && (
         <div className="ahead-offer" role="status">
           <span>Next week is planned. Look ahead 4 weeks: blocks per week and dates.</span>
           <button type="button" className="primary" onClick={() => (setOfferAhead(false), goNav(navOf.ahead("gantt")))}>
@@ -1972,14 +1887,12 @@ export function App() {
             />
           }
         />
-      ) : planWeekAt !== null ? (
-        <PhoneGate phone={phone} onBack={leavePlanning} backLabel="Back to Week"><PlanWeek openClient={planWeekClient} onOpenClientSeen={clearPlanWeekClient} switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} onOpenDay={(d, h) => goNav(navOf.planDay(d, h))} /></PhoneGate>
-      ) : nav.tab === "week" && nav.mode === "status" ? (
-        // SR-1: Week › Status. SR-3: the phone can write too (Add a line, suggestions, Push all).
-        <StatusView tz={userZone(data)} switcher={switches.week} colors={data.clients} readOnly={false} phone={phone} group={nav.tab === "week" ? nav.group : undefined} version={planWeekVersion} onChanged={reloadQuiet} />
+      ) : nav.tab === "status" ? (
+        // SR-1, WD-1: Status is its own tab (was Week › Status). SR-3: the phone can write too.
+        <StatusView tz={userZone(data)} colors={data.clients} readOnly={false} phone={phone} group={nav.group} version={planWeekVersion} onChanged={() => (reloadQuiet(), setStatusVersion((n) => n + 1))} />
       ) : nav.tab === "week" && nav.mode === "team" ? (
         // SW-1: Week › Team, read-only on the phone (allowed there, no gate).
-        <TeamView switcher={switches.week} weekStart={nav.week ?? data.today.weekStart} thisWeek={data.today.weekStart} colors={data.clients} readOnly={phone} onWeek={(w) => goNav(navOf.week("team", w))} version={planWeekVersion} onChanged={reloadQuiet} />
+        <TeamView weekStart={nav.week ?? data.today.weekStart} thisWeek={data.today.weekStart} colors={data.clients} readOnly={phone} onWeek={(w) => goNav(navOf.week("team", w))} version={planWeekVersion} onChanged={reloadQuiet} />
       ) : followUpsOpen ? (
         <div className="inbox-page">
           {nav.tab === "inbox" && <InboxPage nav={nav} data={data} version={captureVersion} onNav={goNav} onChanged={reloadQuiet} onFeedback={() => setFeedbackOpen(true)} />}
@@ -1988,55 +1901,6 @@ export function App() {
         nav.tab === "ahead" ? (
           phone && !aheadAnyway && loc.overlay?.kind !== "tour" ? <AheadNotice onOpen={() => setAheadAnyway(true)} onToday={() => openTab("today")} /> : <PhoneGate phone={phone}><Ahead data={data} mode={nav.mode} item={nav.item ?? null} switcher={switches.ahead} renderSwitch={aheadSwitch} onChanged={reloadQuiet} readOnly={phone} /></PhoneGate>
         ) : null
-      ) : planDayFocus ? (
-        pd && week.days.some((d) => d.date === pd.date) ? (
-          (() => {
-            const dayIndex = week.days.findIndex((d) => d.date === pd.date);
-            const fri = week.days[4]!.date;
-            return (
-                    // NV-1 (narrowing D476): Plan today works on the phone too, so no read-only gate here. HK-3: inside the
-                    // Board's CarryProvider, so a pick suggested in one of this day's blocks is the same dashed card here.
-                    <CarryProvider active={data.weekStart === data.today.weekStart} version={pd} week={week} now={now ?? new Date(clock).toISOString()} onChanged={refreshPlanDay}>
-                    <PlanDay
-                      switcher={switches.week}
-                      key={pd.date}
-                      day={week.days[dayIndex]!}
-                      state={pd}
-                      which={pd.date === target.date && !target.isToday ? "Next workday" : null}
-                      today={localToday}
-                      friday={fri === pd.date ? null : fri}
-                      onTimebox={(d) => void timeboxDay(d)}
-                      now={now ?? new Date(clock).toISOString()}
-                      tz={userZone(week)}
-                      colors={data.clients}
-                      clients={data.planClients}
-                      error={pdError}
-                      act={runPlan}
-                      onCommit={() => void commit()}
-                      justCommitted={justCommitted}
-                      onCommitSeen={() => setJustCommitted(false)}
-                      onClose={leavePlanning}
-                      onStep={(dir) => void stepPlanDay(dir)}
-                      start={pdStart}
-                      onSelectBlock={setPdHalf}
-                      onPlanWeek={(clientKey) => {
-                        // The week this day is in (the line says "this week").
-                        setPlanWeekClient(clientKey);
-                        openPlanWeek(week.days[0]!.date);
-                      }}
-                    />
-                    </CarryProvider>
-          );
-          })()
-        ) : (
-          <main className="today-view" aria-label="Plan">
-            <header className="page-head">
-              <h2>Plan</h2>
-              <ModeArea>{switches.week}</ModeArea>
-            </header>
-            <p className="muted">{pdError ?? "Opening the plan…"}</p>
-          </main>
-        )
       ) : base === "today" ? (
         <Today
           viewDate={todayAt}
@@ -2085,17 +1949,34 @@ export function App() {
           onSetup={(step) => setSetupAt(step)}
         />
       ) : (
+        (() => {
+          const nowIso = now ?? new Date(clock).toISOString();
+          const thisWeek = data.weekStart === data.today.weekStart;
+          const past = data.weekStart < data.today.weekStart;
+          const tag = weekTag(data.weekPlan, past);
+          const confirm = confirmLabel(tag);
+          return (
         <>
-          <header className="page-head week-head">
+          <header className="page-head week-head wd1-head">
             <div className="ph-title">
               <span className="pd-step" role="group" aria-label="Week">
                 <button type="button" onClick={() => changeWeek(-1)} aria-label="Previous week" title="Previous week ([)">‹</button>
                 <button type="button" onClick={() => changeWeek(1)} aria-label="Next week" title="Next week (])">›</button>
               </span>
               <h2>Week of {weekLabel(week.days[0]!.date, week.days[4]!.date)}</h2>
-              {data.weekStart !== data.today.weekStart && (
+              {!thisWeek && (
                 <button type="button" className="mini today-btn" onClick={goToday} title="Back to this week">
                   This week
+                </button>
+              )}
+              {tag && (
+                <span className={`week-tag tag-${tag === "Draft" ? "draft" : tag === "Confirmed" ? "confirmed" : "changed"}`} role="status">
+                  {tag}
+                </span>
+              )}
+              {confirm && (
+                <button type="button" className="mini primary confirm-week" data-tour="wk-confirm" onClick={() => void commitWeek(data.weekStart)} title="Save this week's plan. You can change it and confirm again any time">
+                  {confirm}
                 </button>
               )}
               {weekendNote && <span className="weekend-note">{weekendNote}</span>}
@@ -2113,7 +1994,15 @@ export function App() {
                 </button>
               )}
               <AfterHoursChip after={data.afterHours} />
-              <MustsSummary musts={weekMusts(data, data.weekStart, data.weekStart === data.today.weekStart ? (now ?? new Date(clock).toISOString()) : null).rows} colors={data.clients} onPlanWeek={() => openPlanWeek(data.weekStart)} />
+              {!phone && <ClientChips data={data} now={thisWeek ? nowIso : null} onChanged={reloadQuiet} />}
+            </div>
+            <ModeArea>
+              <TimelineToggle shown={showTimelines} onToggle={() => void saveShowTimelines(!showTimelines)} />
+              {!past && (
+                <button type="button" className="mini add-work-head" data-tour="wk-add" aria-pressed={!!addAt} onClick={() => (addAt ? goNav(navOf.week("board", nav.tab === "week" ? nav.week : null)) : addWork())} title="Add work to a block (A)">
+                  + Add
+                </button>
+              )}
               <MoreButton
                 label="View options for Week"
                 onClick={(e) => {
@@ -2121,50 +2010,79 @@ export function App() {
                   setWeekMoreAt({ x: r.left, y: r.bottom + 4 });
                 }}
               />
-            </div>
-            <ModeArea>
-              {data.weekStart === data.today.weekStart && data.planDay.workday && (
-                <button type="button" className="mini plan-today-btn" onClick={() => openPlanDay(target.isToday ? target.date : undefined)} title="The Board focused on today: put stories into today's blocks, then Confirm today">
-                  {target.isToday ? "Plan today" : "Plan the next workday"}
-                </button>
-              )}
-              <TimelineToggle shown={showTimelines} onToggle={() => void saveShowTimelines(!showTimelines)} />
-              {switches.week}
             </ModeArea>
           </header>
-      <CarryProvider active={data.weekStart === data.today.weekStart} version={data} week={week} now={now ?? new Date(clock).toISOString()} onChanged={reloadQuiet}>
-      {data.weekStart === data.today.weekStart && <CarrySummary colors={data.clients} nameOf={(k) => data.planClients.find((c) => c.clientKey === k)?.clientName ?? k} />}
-      {data.weekStart === data.today.weekStart && <FromLastWeek version={data} colors={data.clients} nameOf={(k) => data.planClients.find((c) => c.clientKey === k)?.clientName ?? k} weekStart={data.weekStart} week={week} today={data.planDay.date} onChanged={reloadQuiet} />}
+      <CarryProvider active={thisWeek} version={data} week={week} now={nowIso} onChanged={reloadQuiet}>
+      {thisWeek && <ToPlaceNotice weekStart={data.weekStart} version={data} onReview={() => addWork()} />}
+      {thisWeek && data.nextWeekEmpty && nextWeekEmptyDay(localToday) && (
+        <p className="next-empty-line" role="status">
+          Next week is empty ·{" "}
+          <button type="button" className="link-btn" onClick={() => goNav(navOf.weekAdd(addWeeks(data.weekStart, 1)))}>
+            Open next week
+          </button>
+        </p>
+      )}
+      <div className={`wd1-body${panelAt ? " with-panel" : ""}`}>
+      <AddPanelCtx.Provider value={{ at: panelAt, open: (d, h) => addWork(d, h) }}>
       <WeekGrid
         week={week}
         colors={data.clients}
         minFocusWindow={data.thresholds.minFocusWindowMinutes}
         today={today}
-        now={now ?? new Date(clock).toISOString()}
+        now={nowIso}
         selection={sel}
         cellRefs={cellRefs.current}
         layout={layout}
         compact={compact}
-        onPlanDay={(d) => goNav(planDayNav(d))}
+        onDayHead={(d) => addWork(d)}
         promises={railItems(inboxToday?.items ?? [])}
         onPromise={(key) => goNav(navOf.inboxItem(key))}
         onLate={(client) => goNav(navOf.inboxLate(client))}
-        onAddWork={addWork}
+        onAddWork={(d, h) => addWork(d, h)}
         onAddHours={() => {
           setDetailsOpen(false);
           setSettingsAt("hours");
         }}
-        panelOpen={detailsOpen && !planWeekAt && !pd}
+        panelOpen={(detailsOpen || !!panelAt) && !phone}
         timeline={showTimelines}
-        onSelect={(s) => setSel(s)}
+        onSelect={(s) => {
+          setSel(s);
+          // WD-1: clicking another block keeps the Add work panel open on it.
+          const d = week.days[s.dayIndex];
+          if (panelAt && d) addWork(d.date, s.half);
+        }}
         onOpen={(s, focus) => {
           setSel(s);
+          const d = week.days[s.dayIndex];
+          if (panelAt && d) return addWork(d.date, s.half);
           setPanelFocus(focus ?? null);
           setDetailsOpen(true);
         }}
       />
+      </AddPanelCtx.Provider>
+      {panelAt && (
+        <AddWorkPanel
+          at={panelAt}
+          week={week}
+          version={data}
+          thisWeek={data.today.weekStart}
+          today={data.planDay.date}
+          colors={data.clients}
+          clients={data.planClients}
+          sheet={phone}
+          onClose={() => {
+            goNav(navOf.week("board", nav.tab === "week" ? nav.week : null));
+            cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
+          }}
+          onChanged={reloadQuiet}
+          onSelect={(d, h) => addWork(d, h)}
+        />
+      )}
+      </div>
       </CarryProvider>
         </>
+          );
+        })()
       )}
 
       {phone ? (
@@ -2203,12 +2121,12 @@ export function App() {
         />
       )}
 
-      {detailsOpen && base === "week" && !planWeekAt && !pd && !(nav.tab === "week" && (nav.mode === "team" || nav.mode === "status")) && (
+      {detailsOpen && base === "week" && !panelAt && !(nav.tab === "week" && nav.mode === "team") && (
         <DetailPanel variant="week" data={data} day={day} slot={slot} focus={panelFocus} now={now ?? new Date(clock).toISOString()} onClose={() => (setDetailsOpen(false), setPanelFocus(null), cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true }))} onStart={startFocus} onChanged={reloadQuiet} onNotice={setNotice} />
       )}
       {phone && (
         <BottomBar
-          current={settingsAt !== null || guideAt || docsAt || meetingAt || focusOpen ? null : nav.tab}
+          current={settingsAt !== null || guideAt || docsAt || meetingAt || focusOpen || nav.tab === "status" ? null : nav.tab}
           inboxCount={inboxCount}
           onTab={(t: BottomTab) => {
             // The bar stays on screen under Capture and Ask: a tab closes them and goes there.
@@ -2324,7 +2242,7 @@ export function App() {
         }}
       />
       {tbTarget && (() => {
-        const pick = "pickId" in tbTarget ? Object.values(data.plan ?? {}).flatMap((d) => d.picks).concat(pd?.picks ?? []).find((p) => p.id === tbTarget.pickId) : null;
+        const pick = "pickId" in tbTarget ? Object.values(data.plan ?? {}).flatMap((d) => d.picks).find((p) => p.id === tbTarget.pickId) : null;
         return <TimeboxDialog target={tbTarget} env={tbEnv} title={pick ? pick.title : "title" in tbTarget ? tbTarget.title : "To-do"} defaultMinutes={pick ? pickNeed(pick, data.planning.sizes) : 60} onClose={() => setTbTarget(null)} />;
       })()}
       {helpTarget && (
@@ -2341,8 +2259,9 @@ export function App() {
       {writes.dialog}
       {devopsWrites.dialog}
       {doneOffer.sheet}
-      <SendHost thisWeek={data.today.weekStart} onSent={() => setPlanWeekVersion((v) => v + 1)} />
-      <BreakDownHost onDone={() => (setPlanWeekVersion((v) => v + 1), reloadQuiet())} />
+      <SendHost thisWeek={data.today.weekStart} onSent={() => (setPlanWeekVersion((v) => v + 1), reloadQuiet())} />
+      {/* WD-1: a breakdown's new stories show under their feature on Week at once: DevOps is read again. */}
+      <BreakDownHost onDone={() => (setPlanWeekVersion((v) => v + 1), void load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}), refresh: true }, { quiet: true }))} />
       <CoopBriefHost />
       {feedbackOpen && <FeedbackDialog view={viewName(loc)} zone={userZone(data)} onClose={() => setFeedbackOpen(false)} />}
       {aboutOpen && <AboutDialog zone={userZone(data)} onClose={() => setAboutOpen(false)} onGuide={() => openGuide()} onDocs={() => openDocs()} />}
