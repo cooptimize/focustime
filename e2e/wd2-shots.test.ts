@@ -77,7 +77,8 @@ describe.skipIf(!CHROMIUM || !DIR)("WD-2 screenshots", () => {
         await panel(page).locator("input.bp-box").fill("");
 
         // The drop area while a to-do is dragged off its block.
-        const todo = block(page, MON, "PM").locator("li.pick-row.planned").first();
+        // From the panel's own row (at 720 high the card's rows can be below the fold); a card's row drags the same way.
+        const todo = panel(page).locator(".bp-on li.pick-row.planned").first();
         const a = (await todo.boundingBox())!;
         await page.mouse.move(a.x + Math.min(40, a.width / 2), a.y + a.height / 2);
         await page.mouse.down();
@@ -90,8 +91,9 @@ describe.skipIf(!CHROMIUM || !DIR)("WD-2 screenshots", () => {
         await page.waitForTimeout(250);
         await shot("drag-off-drop-area");
         // Let go back on its own block: nothing changes.
-        const home = (await block(page, MON, "PM").boundingBox())!;
+        const home = (await block(page, MON, "AM").boundingBox())!;
         await page.mouse.move(home.x + 40, home.y + 20, { steps: 8 });
+        await page.keyboard.press("Escape");
         await page.mouse.up();
         await page.waitForTimeout(400);
         await page.locator(".undo-toast").getByRole("button", { name: "Dismiss" }).click().catch(() => undefined);
