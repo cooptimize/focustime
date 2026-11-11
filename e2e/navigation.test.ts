@@ -42,9 +42,9 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     const { page, errors } = await freshPage(h);
     page.setDefaultTimeout(30_000);
 
-    // WD-1: five tabs, Day first and Status last; 1 to 5 pick them.
+    // WD-1, RF-1: five tabs, Day first, Status fourth and the Inbox last; 1 to 5 pick them.
     expect(await page.getByRole("navigation", { name: "Tabs" }).getByRole("button").allTextContents()).toEqual(expect.arrayContaining([expect.stringMatching(/^Day/), expect.stringMatching(/^Week/), expect.stringMatching(/^Ahead/), expect.stringMatching(/^Inbox/), expect.stringMatching(/^Status/)]));
-    for (const [key, name, where] of [["2", "Week", "#/week"], ["3", "Ahead", "#/ahead"], ["4", "Inbox", "#/inbox"], ["5", "Status", "#/status"], ["1", "Day", "#/day"]] as const) {
+    for (const [key, name, where] of [["2", "Week", "#/week"], ["3", "Ahead", "#/ahead"], ["4", "Status", "#/status"], ["5", "Inbox", "#/inbox"], ["1", "Day", "#/day"]] as const) {
       await page.keyboard.press(key);
       await expect.poll(() => tab(page).textContent()).toMatch(new RegExp(`^${name}`));
       expect(await hash(page)).toBe(where);

@@ -87,7 +87,7 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     await page.close();
   }, T);
 
-  it("the attention line is absent when healthy, and a failed source shows its age and Retry", async () => {
+  it("the attention line is absent when healthy, and a failed source shows only in the status bar, with its age and Retry (RF-1)", async () => {
     const { page, errors } = await freshPage(h);
     await call(page, "vm.dismiss_prompt", {});
     let fail = false;
@@ -108,10 +108,12 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     await expect(page.locator(".attention").count()).resolves.toBe(0);
     fail = true;
     await page.reload();
-    await page.waitForSelector(".attention");
-    const chip = page.locator(".att-chip.source");
-    await expect(chip.textContent()).resolves.toMatch(/Google.*from/);
-    await expect(chip.getByRole("button", { name: "Retry" }).count()).resolves.toBe(1);
+    // RF-1: no strip on Day; the status bar has the line, its saved data's time and Retry.
+    const line = page.locator("footer.statusbar .status-line", { hasText: "Google" });
+    await line.waitFor();
+    await expect(line.textContent()).resolves.toMatch(/Showing data saved/);
+    await expect(line.getByRole("button", { name: "Retry" }).count()).resolves.toBe(1);
+    await expect(page.locator(".attention, .att-chip.source").count()).resolves.toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

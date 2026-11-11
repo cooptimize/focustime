@@ -88,7 +88,7 @@ export function SetupFlow(p: Props) {
               </li>
             ))}
           </ol>
-          <CloseButton onClose={() => void close()} title="Close setup. Today keeps a line to finish it later" />
+          <CloseButton onClose={() => void close()} title="Close setup. Day keeps a line to finish it later" />
         </div>
         <div ref={body} className="setup-body">
           {step === "day" && <DayStep onSaved={() => mark("day", "done").then(() => go("day"))} onSkip={() => void skip("day")} />}
@@ -477,9 +477,9 @@ function CalendarsStep({ connected, onConnect, onDone, onSkip, onBack }: { conne
 }
 
 function DoneStep({ view, onPlanWeek, onGuide, onBack }: { view: SetupView | null; onPlanWeek: () => void; onGuide: () => void; onBack: () => void }) {
-  const left = view?.line?.text ?? null;
+  const left = view?.left?.text ?? null;
   return (
-    <Screen title="You're set up" intro={left ? `${left}. Day keeps a line to finish them, and Settings › Setup runs this again.` : "Settings › Setup runs this again whenever you like."} onSubmit={onPlanWeek} primary="Plan your week" onBack={onBack}>
+    <Screen title="You're set up" intro={left ? `${left}. Finish them any time in Settings › Setup.` : "Settings › Setup runs this again whenever you like."} onSubmit={onPlanWeek} primary="Plan your week" onBack={onBack}>
       <p>
         New here? The{" "}
         <a

@@ -393,7 +393,9 @@ export function Today(props: Props) {
   }, [props.timeboxAsk?.n, date, !!day]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => setProposals((p) => (p && p.date !== date ? null : p)), [date]);
 
-  const attention = mode === "now" && nudges ? <Attention noDue={phone} promises={untimed} inStrip={inStrip} onItem={props.onItem} onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
+  // RF-1: on a computer a source that needs reconnecting is in the status bar only (with its Reconnect); the phone has
+  // no status bar, so it keeps the chip.
+  const attention = mode === "now" && nudges ? <Attention noDue={phone} sources={phone} promises={untimed} inStrip={inStrip} onItem={props.onItem} onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
   const toggleTimeline = () => {
     const show = !timelineShown;
     setTlForced(false);
@@ -507,7 +509,7 @@ export function Today(props: Props) {
             </button>
           ) : !past && workday ? (
             <button type="button" className="link-btn" onClick={() => props.onPlan(date)}>
-              Plan {dayWord}
+              Add work
             </button>
           ) : null}
         </p>
@@ -521,7 +523,7 @@ export function Today(props: Props) {
           {!isToday ? `Nothing scheduled ${dayWord}.` : target.isToday ? "Nothing scheduled today." : `No work today. Next workday is ${longDate(target.date).replace(/,\s*\d{4}$/, "")}.`}{" "}
           {(isToday || !past) && (
             <button type="button" className="link-btn" onClick={() => props.onPlan(target.date)}>
-              Plan {longDate(target.date).replace(/,\s*\d{4}$/, "")}
+              Add work to {longDate(target.date).replace(/,\s*\d{4}$/, "")}
             </button>
           )}
         </p>
@@ -636,12 +638,12 @@ function checkLeft(check: readonly CheckSlot[]): string {
  * The attention line: only when something needs it. Follow-ups due collapse to one chip that opens into rows; a source
  * that failed shows with how old its data is and Retry; an expiring secret links to its setting. Nothing when healthy.
  */
-function Attention({ noDue = false, promises = [], soon = [], inStrip, onItem, onPromises, data, date, clockMs, onInbox, onRetry, onFix, onSettings }: { noDue?: boolean; promises?: DayPromise[]; soon?: DayPromise[]; inStrip?: ReadonlySet<string>; onItem?: ((key: string) => void) | undefined; onPromises?: () => void; data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void}) {
+function Attention({ noDue = false, sources = true, promises = [], soon = [], inStrip, onItem, onPromises, data, date, clockMs, onInbox, onRetry, onFix, onSettings }: { noDue?: boolean; /** RF-1: show sources that need a fix (the phone only; a computer has the status bar). */ sources?: boolean; promises?: DayPromise[]; soon?: DayPromise[]; inStrip?: ReadonlySet<string>; onItem?: ((key: string) => void) | undefined; onPromises?: () => void; data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void}) {
   const [open, setOpen] = useState(false);
   // P1: the phone lists due follow-ups at the foot of Today instead.
   // IB-1 slice 4: a late promise I added is in the urgent strip now (the Inbox's rows), so it isn't listed twice.
   const due: FollowUpView[] = noDue ? [] : urgentFollowUps(data.followUps, date).filter((l) => !inStrip?.has(`f${l.id}`));
-  const down = causeLines(data.sources, data.devops);
+  const down = sources ? causeLines(data.sources, data.devops) : [];
   const vm = vmNeedsToday(useContext(VmCtx).status);
   // NV-1: urgent requests and my promises due are in the urgent strip above this line.
   if (!due.length && !promises.length && !soon.length && !down.length && !data.expiring.length && !vm) return null;
