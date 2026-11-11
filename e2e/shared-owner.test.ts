@@ -25,7 +25,7 @@ describe.skipIf(!CHROMIUM)("a shared owner per conversation (Part 0)", () => {
 
   it("take it, Undo, take it again, close it out", async () => {
     const { page, errors } = await freshPage(h);
-    await page.keyboard.press("4");
+    await page.keyboard.press("5");
     const main = await openInboxView(page, "needs-you");
     await main.locator(".ib-row").first().waitFor();
     const open = (await rows(page)).find((r) => r.kind === "conversation" && r.views.includes("needs_you") && (r.personView === "up_for_grabs" || r.personView === "asked_you"))!;

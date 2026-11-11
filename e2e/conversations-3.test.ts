@@ -222,7 +222,7 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       graph.say(DELIVERY, EVAN, "<p>The filter bug needs tracking somewhere.</p>", 12);
       graph.say(DELIVERY, ME, "<p>I'll log a ticket for the unassigned feature.</p>", 13);
 
-      await page.keyboard.press("4");
+      await page.keyboard.press("5");
       const main = await openInboxView(page, "needs-you");
       await main.getByRole("button", { name: "Refresh conversations" }).click();
       const conv = await openInboxItem(page, /^Evan Ford the October totals on the Movement Dashboard look 4% low/);

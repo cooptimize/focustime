@@ -42,6 +42,8 @@ export type MenuItem = {
   hint?: string;
   /** Older names the search still finds (BD-1). */
   aka?: readonly string[];
+  /** RF-1: a status dot after the label (Status in the phone's ⋯), with its reason for screen readers. */
+  mark?: { tone: "amber" | "red"; text: string };
   /** WT-1: a work item's type, drawn as its icon before the label (the type name is its tooltip). */
   typeIcon?: { clientKey: string; type: string };
   /** Plain reason when the item can't be used now; the item shows but does nothing. */
@@ -1682,8 +1684,8 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "view.today", action: "view.today", group: "Views", label: "Day", aka: ["Today"], hint: "1", run: () => env.setView("today") },
     { id: "view.week", action: "view.week", group: "Views", label: "Week", aka: ["Board"], hint: "2", run: () => env.setView("week") },
     { id: "view.roadmap", action: "view.roadmap", group: "Views", label: "Ahead: features and epics ahead (Roadmap)", hint: "3", run: () => env.setView("roadmap") },
-    { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: what needs you, promises, waiting on, captures and drafts", hint: "4", run: () => env.setView("inbox") },
-    { id: "view.status", action: "view.status", aka: ["status report", "Week › Status"], group: "Views", label: "Status: this week's feature updates for Monday's report", hint: "5", run: () => env.setView("status") },
+    { id: "view.status", action: "view.status", aka: ["status report", "Week › Status"], group: "Views", label: "Status: this week's feature updates for Monday's report", hint: "4", run: () => env.setView("status") },
+    { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: what needs you, promises, waiting on, captures and drafts", hint: "5", run: () => env.setView("inbox") },
     { id: "view.requests", action: "view.requests", group: "Views", label: "Inbox › Needs you: what your clients' chats and your promises need from you", run: () => env.setView("requests") },
     ...ASK_KEYS.map((k): MenuItem => ({ id: k.id, action: k.id, group: "Inbox", label: k.label, hint: k.hint, ...(env.asksOpen ? { run: () => askKey(k.id) } : { disabled: "Open the Inbox first" }) })),
     { id: "view.plan", action: "view.plan", aka: ["commit", "plan"], group: "Views", label: "Add work beside Week (on Ahead: Grid or Gantt)", hint: "P", run: env.openRitual },
