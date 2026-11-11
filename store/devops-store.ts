@@ -30,9 +30,11 @@ export type PollRow = {
   day: string | null;
   changedToday: number;
   callsToday: number;
+  /** DV-2: when a change for this client last reached the store (null: none since DV-2). Screens reread when it moves. */
+  versionAt: string | null;
 };
 
-export const emptyPoll = (clientKey: string): PollRow => ({ clientKey, watermark: null, checkedAt: null, okAt: null, loadedAt: null, reconciledOn: null, errorKind: null, error: null, slow: 1, slowReason: null, retryAt: null, day: null, changedToday: 0, callsToday: 0 });
+export const emptyPoll = (clientKey: string): PollRow => ({ clientKey, watermark: null, checkedAt: null, okAt: null, loadedAt: null, reconciledOn: null, errorKind: null, error: null, slow: 1, slowReason: null, retryAt: null, day: null, changedToday: 0, callsToday: 0, versionAt: null });
 
 export type LoggedChange = ChangeEntry & { id: number; clientKey: string; loggedAt: string };
 
@@ -54,14 +56,15 @@ const pollOf = (r: Row): PollRow => ({
   day: s(r.day),
   changedToday: n(r.changed_today),
   callsToday: n(r.calls_today),
+  versionAt: s(r.version_at),
 });
 
 export function createDevOpsStore(conn: Conn, now: () => Temporal.Instant) {
   async function writeState(p: PollRow) {
     await conn.run(
-      `INSERT INTO devops_poll (client_key, watermark, checked_at, ok_at, loaded_at, reconciled_on, error_kind, error, slow, slow_reason, retry_at, day, changed_today, calls_today) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (client_key) DO UPDATE SET watermark = excluded.watermark, checked_at = excluded.checked_at, ok_at = excluded.ok_at, loaded_at = excluded.loaded_at, reconciled_on = excluded.reconciled_on, error_kind = excluded.error_kind, error = excluded.error, slow = excluded.slow, slow_reason = excluded.slow_reason, retry_at = excluded.retry_at, day = excluded.day, changed_today = excluded.changed_today, calls_today = excluded.calls_today`,
-      [p.clientKey.slice(0, 100), p.watermark, p.checkedAt, p.okAt, p.loadedAt, p.reconciledOn, p.errorKind, p.error?.slice(0, 300) ?? null, p.slow, p.slowReason?.slice(0, 200) ?? null, p.retryAt, p.day, p.changedToday, p.callsToday],
+      `INSERT INTO devops_poll (client_key, watermark, checked_at, ok_at, loaded_at, reconciled_on, error_kind, error, slow, slow_reason, retry_at, day, changed_today, calls_today, version_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (client_key) DO UPDATE SET watermark = excluded.watermark, checked_at = excluded.checked_at, ok_at = excluded.ok_at, loaded_at = excluded.loaded_at, reconciled_on = excluded.reconciled_on, error_kind = excluded.error_kind, error = excluded.error, slow = excluded.slow, slow_reason = excluded.slow_reason, retry_at = excluded.retry_at, day = excluded.day, changed_today = excluded.changed_today, calls_today = excluded.calls_today, version_at = excluded.version_at`,
+      [p.clientKey.slice(0, 100), p.watermark, p.checkedAt, p.okAt, p.loadedAt, p.reconciledOn, p.errorKind, p.error?.slice(0, 300) ?? null, p.slow, p.slowReason?.slice(0, 200) ?? null, p.retryAt, p.day, p.changedToday, p.callsToday, p.versionAt],
     );
   }
 

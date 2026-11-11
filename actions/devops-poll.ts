@@ -60,6 +60,11 @@ export type PollerDeps = {
   ruleMinutes: () => Promise<number>;
   /** Whether someone is using FocusTime now (outside hours, checks run only then). */
   active: () => boolean;
+  /**
+   * DV-2: whether someone who follows this client is using FocusTime now. Outside hours their client is checked at the
+   * Rule's interval instead of every 10 minutes. Absent: never (the 10 minutes, as before).
+   */
+  activeFor?: (clientKey: string) => boolean | Promise<boolean>;
   now: () => Temporal.Instant;
   log: Logger;
   /** HK-1: each check as a job operation for telemetry (devops_check, or devops_reconcile for the day's first). */
@@ -160,7 +165,42 @@ type Client = {
   target: { at: number; target: DevOpsTarget | null; failure: DevOpsFailure | null } | null;
   persistedAt: number;
   rate: RateSeen | null;
+  /** DV-2: what the last check found (items added, changed or removed), for Refresh's answer. */
+  last: { at: string; changes: number; failed: boolean } | null;
 };
+
+/** DV-2: what a person's page may know about a client's DevOps: its version and how fresh it is. Never an item. */
+export type Freshness = {
+  clientKey: string;
+  /** Moves whenever a change for the client reaches the store (null: none yet). */
+  version: string | null;
+  checkedAt: string | null;
+  okAt: string | null;
+  /** When the next check is due (null: now, or not known). */
+  nextAt: string | null;
+  problem: FreshProblem | null;
+};
+export type FreshProblem = { kind: "slowed" | "refused" | "failed" | "first"; words: string };
+/** DV-2: Refresh's answer for one client. `changes` is what the check it ran (or the one just before) found. */
+export type ForcedCheck = Freshness & { forced: boolean; pending: boolean; changes: number | null };
+/** DV-2: Find an item's one read by id. `elsewhere`: DevOps has it, in a project this client isn't set up with. */
+export type FoundRaw = { status: "found"; value: RawValue } | { status: "missing" } | { status: "elsewhere" } | { status: "unavailable"; words: string };
+
+/** A version strictly after the one before (two changes in one millisecond still move it). */
+export function nextVersion(prev: string | null, t: Temporal.Instant): string {
+  const p = prev ? Date.parse(prev) : Number.NEGATIVE_INFINITY;
+  return Number.isFinite(p) && p >= t.epochMilliseconds ? new Date(p + 1).toISOString() : t.toString();
+}
+
+/** DV-2: a client's freshness problem in plain words, from its poll row and pace. */
+export function problemOf(row: Pick<PollRow, "errorKind" | "error" | "loadedAt">, pace: Pick<Pace, "slow" | "retryAt" | "reason">, now: Temporal.Instant): FreshProblem | null {
+  if (row.errorKind === "auth_failed") return { kind: "refused", words: "DevOps sign-in was refused" };
+  if (row.errorKind) return { kind: "failed", words: failureWords(row.errorKind, row.error) ?? "DevOps couldn't be read" };
+  const waiting = pace.retryAt && Temporal.Instant.compare(Temporal.Instant.from(pace.retryAt), now) > 0;
+  if (pace.slow > 1 || waiting) return { kind: "slowed", words: "slowed by DevOps" };
+  if (!row.loadedAt) return { kind: "first", words: "being read for the first time" };
+  return null;
+}
 
 /** One status row per client (Admin › Status, through the status rows registry). */
 export type DevOpsStatusRow = {
@@ -202,7 +242,7 @@ export function createDevOpsPoller(d: PollerDeps) {
     const again = clients.get(key);
     if (again) return again;
     const r = row ?? emptyPoll(key);
-    const c: Client = { key, row: r, pace: { ...NORMAL, slow: r.slow, reason: r.slowReason, retryAt: r.retryAt }, items: new Map(items.map((i) => [i.id, i])), process: null, fields: null, areas: null, inflight: null, forcedAt: null, writePending: false, target: null, persistedAt: nowMs(), rate: null };
+    const c: Client = { key, row: r, pace: { ...NORMAL, slow: r.slow, reason: r.slowReason, retryAt: r.retryAt }, items: new Map(items.map((i) => [i.id, i])), process: null, fields: null, areas: null, inflight: null, forcedAt: null, writePending: false, target: null, persistedAt: nowMs(), rate: null, last: null };
     if (r.retryAt) d.limiter.hold(key, r.retryAt);
     clients.set(key, c);
     return c;
@@ -344,16 +384,22 @@ export function createDevOpsPoller(d: PollerDeps) {
     return { write: upsert.length || remove.length || changes.length ? { upsert, remove, changes } : null, row };
   }
 
-  /** A check, unless one is already running for the client (then that one). Never throws. */
-  function check(key: string): Promise<void> {
-    return stateOf(key).then((c) => {
-      if (c.inflight) return c.inflight;
-      c.inflight = (d.job ?? plainJob)("devops_check", { client: key }, (job) => run(c, job)).catch(() => log("check", { kind: "unexpected" })).finally(() => {
-        c.inflight = null;
-        c.writePending = false;
-      });
-      return c.inflight;
+  /**
+   * A check, unless one is already running for the client (then that one). Never throws. DV-2: `c.inflight` is set
+   * before this returns, so a caller can wait for it at once (before, it was set a tick later and Refresh's 8 s wait
+   * never happened).
+   */
+  function start(c: Client): Promise<void> {
+    if (c.inflight) return c.inflight;
+    c.inflight = (d.job ?? plainJob)("devops_check", { client: c.key }, (job) => run(c, job)).catch(() => log("check", { kind: "unexpected" })).finally(() => {
+      c.inflight = null;
+      c.writePending = false;
     });
+    return c.inflight;
+  }
+  function check(key: string): Promise<void> {
+    const hit = clients.get(key);
+    return hit ? start(hit) : stateOf(key).then(start);
   }
 
   async function run(c: Client, job: Job = { set: () => {} }): Promise<void> {
@@ -394,6 +440,8 @@ export function createDevOpsPoller(d: PollerDeps) {
       slowReason: c.pace.reason,
       retryAt: c.pace.retryAt,
       callsToday: next.callsToday + taken.calls,
+      // DV-2: the version moves only when the store's items change (added, changed or removed).
+      versionAt: write && (write.upsert.length || write.remove.length) ? nextVersion(c.row.versionAt, t) : c.row.versionAt,
     };
     const changedState = before.errorKind !== row.errorKind || before.error !== row.error || before.slow !== row.slow || before.retryAt !== row.retryAt || before.loadedAt !== row.loadedAt || before.reconciledOn !== row.reconciledOn || before.day !== row.day;
     if (write || changedState || nowMs() - c.persistedAt >= PERSIST_MS) {
@@ -401,6 +449,7 @@ export function createDevOpsPoller(d: PollerDeps) {
       c.persistedAt = nowMs();
     }
     c.row = row;
+    c.last = { at: t.toString(), changes: before.loadedAt ? (write?.upsert.length ?? 0) + (write?.remove.length ?? 0) : 0, failed: !!failure };
     for (const u of write?.upsert ?? []) c.items.set(u.id, u);
     for (const id of write?.remove ?? []) c.items.delete(id);
     log("check", { count: (write?.upsert.length ?? 0) + (write?.remove.length ?? 0), ...(failure ? { kind: failure.status } : c.pace.reason ? { kind: "slowed" } : {}) });
@@ -413,6 +462,9 @@ export function createDevOpsPoller(d: PollerDeps) {
       flags: { slowed: c.pace.slow > 1 || c.pace.retryAt ? "yes" : "no", load: !before.loadedAt ? "full" : "changed", ...(failure ? { error: failure.status } : {}) },
     });
   }
+
+  /** DV-2: someone who follows the client is using FocusTime (outside hours: the Rule's interval, not 10 minutes). */
+  const activeHere = async (key: string) => (d.activeFor ? !!(await Promise.resolve(d.activeFor(key)).catch(() => false)) : false);
 
   async function minutesFor(c: Client, inHours: boolean): Promise<number> {
     const rule = await d.ruleMinutes().catch(() => DEFAULT_MINUTES);
@@ -429,7 +481,9 @@ export function createDevOpsPoller(d: PollerDeps) {
       const inHours = inUnion(t, await hoursOf(key));
       // Outside hours only while someone is using FocusTime; otherwise nothing (the database can pause).
       if (!inHours && !d.active()) continue;
-      if (!isDue({ checkedAt: c.row.checkedAt, minutes: await minutesFor(c, inHours), retryAt: c.pace.retryAt }, t)) continue;
+      // DV-2: outside hours, a client someone working late follows is checked as often as in hours.
+      const pace = inHours || (await activeHere(key));
+      if (!isDue({ checkedAt: c.row.checkedAt, minutes: await minutesFor(c, pace), retryAt: c.pace.retryAt }, t)) continue;
       started.push(key);
       void check(key);
     }
@@ -459,10 +513,10 @@ export function createDevOpsPoller(d: PollerDeps) {
       const c = await stateOf(key);
       if (o.force && refreshAllowed(c.forcedAt, nowMs())) {
         c.forcedAt = nowMs();
-        void check(key);
+        void start(c);
       }
       // Nothing to show yet (the first read, or a restart before the process is known): check now.
-      if (!c.process && !c.inflight) void check(key);
+      if (!c.process && !c.inflight) void start(c);
       if (c.inflight && (o.force || c.writePending || !c.process || !c.row.loadedAt)) await within(c.inflight, WAIT_MS);
       const failure = c.row.errorKind ? { status: c.row.errorKind as ClientWorkStatus, message: c.row.error ?? "DevOps couldn't be read" } : null;
       return { values: [...c.items.values()].map((i) => ({ id: i.id, fields: i.fields })), process: c.process, fields: c.fields, okAt: c.row.okAt, failure, loaded: !!c.row.loadedAt, areas: c.areas };
@@ -516,6 +570,7 @@ export function createDevOpsPoller(d: PollerDeps) {
       const c = await stateOf(key);
       if (!c.process || !c.fields) return;
       const keep = new Set(fieldsOf(c.process, c.fields));
+      const was = c.row;
       const before = c.items.get(v.id) ?? null;
       const fields = Object.fromEntries(Object.entries({ ...(before?.fields ?? {}), ...v.fields }).filter(([k]) => keep.has(k)));
       const s = stored({ id: v.id, fields });
@@ -523,8 +578,15 @@ export function createDevOpsPoller(d: PollerDeps) {
       const type = typeof fields["System.WorkItemType"] === "string" ? (fields["System.WorkItemType"] as string) : "";
       const changes = diffItem({ id: v.id, before: before?.fields ?? null, after: fields, targetField: c.fields.fields[type] ?? null, startField: c.fields.starts[type] ?? null, sizeField: c.fields.sizes?.[type] ?? null, newSince: d.now().subtract({ hours: 1 }).toString() });
       c.items.set(s.id, s);
+      // DV-2: a write's read-back is a change too: other tabs and people see it on their next versions ask.
+      c.row = { ...was, versionAt: nextVersion(was.versionAt, d.now()) };
       await d.store.apply(key, { upsert: [s], changes, state: c.row });
     },
+    // DV-2 (declared below; function declarations are hoisted).
+    freshness: (keys) => freshness(keys),
+    force: (key) => force(key),
+    find: (key, id) => find(key, id),
+    storedOf: (key, id) => storedOf(key, id),
     afterWrite(key) {
       void stateOf(key).then((c) => {
         c.writePending = true;
@@ -556,6 +618,68 @@ export function createDevOpsPoller(d: PollerDeps) {
     return out;
   }
 
+  async function freshnessOf(c: Client): Promise<Freshness> {
+    const t = d.now();
+    const inHours = inUnion(t, await hoursOf(c.key));
+    const minutes = await minutesFor(c, inHours || (await activeHere(c.key)));
+    const due = c.inflight ? null : nextDue({ checkedAt: c.row.checkedAt, minutes, retryAt: c.pace.retryAt });
+    return { clientKey: c.key, version: c.row.versionAt, checkedAt: c.row.checkedAt, okAt: c.row.okAt, nextAt: due ? due.toString() : null, problem: problemOf(c.row, c.pace, t) };
+  }
+
+  /**
+   * DV-2: each client's version and freshness, from memory (a client not yet in memory is read once). No check is
+   * started and nothing counts as use; a client's items are never in the answer.
+   */
+  async function freshness(keys: readonly string[]): Promise<Freshness[]> {
+    return Promise.all(keys.map(async (k) => freshnessOf(await stateOf(k))));
+  }
+
+  /**
+   * DV-2: Refresh for one client: a check now unless one ran in the last 30 s (shared by everyone, D592) or DevOps asked
+   * to wait, then up to 8 s for it. The answer says what the check (or the one just before) found.
+   */
+  async function force(key: string): Promise<ForcedCheck> {
+    asked.set(key, nowMs());
+    const c = await stateOf(key);
+    let forced = false;
+    if (!d.limiter.waiting(key) && refreshAllowed(c.forcedAt, nowMs())) {
+      c.forcedAt = nowMs();
+      forced = true;
+      void start(c);
+    }
+    if (c.inflight) await within(c.inflight, WAIT_MS);
+    const recent = !!c.last && nowMs() - Date.parse(c.last.at) < 60_000;
+    return { ...(await freshnessOf(c)), forced, pending: !!c.inflight, changes: c.last && !c.last.failed && (forced || recent) && !c.inflight ? c.last.changes : null };
+  }
+
+  /**
+   * DV-2: Find an item: one read by id through the client's limiter, whether or not the store has it. Never stored.
+   * An item in a project the client isn't set up with is "elsewhere", with nothing about it.
+   */
+  async function find(key: string, id: number): Promise<FoundRaw> {
+    if (!Number.isInteger(id) || id <= 0) return { status: "missing" };
+    const c = await stateOf(key);
+    if (d.limiter.waiting(key)) return { status: "unavailable", words: "DevOps asked FocusTime to wait" };
+    if (!c.process || !c.fields) return { status: "unavailable", words: "FocusTime hasn't read this client's DevOps yet" };
+    try {
+      const target = await targetOf(c);
+      const v = (await d.source().batch(target, [id], fieldsOf(c.process, c.fields))).find((x) => x.id === id);
+      if (!v) return { status: "missing" };
+      const project = typeof v.fields[PROJECT_FIELD] === "string" ? (v.fields[PROJECT_FIELD] as string) : "";
+      if (project.toLowerCase() !== (target.project ?? "").toLowerCase()) return { status: "elsewhere" };
+      return { status: "found", value: v };
+    } catch (e) {
+      if (e instanceof DevOpsFailure && e.status === "auth_failed") return { status: "unavailable", words: "DevOps sign-in was refused" };
+      return { status: "unavailable", words: e instanceof DevOpsFailure ? (failureWords(e.status, e.message) ?? "DevOps couldn't be read") : "DevOps couldn't be read" };
+    }
+  }
+
+  /** DV-2: what the store holds of one item (for Find an item), and the client's last check. */
+  async function storedOf(key: string, id: number): Promise<{ item: StoredItem | null; checkedAt: string | null; okAt: string | null }> {
+    const c = await stateOf(key);
+    return { item: c.items.get(id) ?? null, checkedAt: c.row.checkedAt, okAt: c.row.okAt };
+  }
+
   /** Admin's Check now: a check at once (a pending Retry-After still holds). */
   async function checkNow(key: string): Promise<void> {
     if (!(await keys()).includes(key)) return;
@@ -567,7 +691,7 @@ export function createDevOpsPoller(d: PollerDeps) {
     await Promise.all([...clients.values()].map((c) => c.inflight ?? Promise.resolve()));
   }
 
-  return { tick, wake, reads, status, checkNow, idle, check };
+  return { tick, wake, reads, status, checkNow, idle, check, freshness, force, find, storedOf };
 }
 
 export type DevOpsPoller = ReturnType<typeof createDevOpsPoller>;

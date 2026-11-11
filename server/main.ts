@@ -861,7 +861,7 @@ const server = createApp({
   onUse: (s) => {
     if (s.demo) return null;
     const wasIdle = !use.active();
-    use.used();
+    use.used(s.userId);
     if (wasIdle) void refreshRules();
     return use.minutes();
   },
@@ -1148,10 +1148,23 @@ const devopsApp = directorySource
       limiter: devopsLimiter,
     })
   : null;
+/** A client's followers who use FocusTime (live users who work on the client). */
+const followerIds = async (clientKey: string) => {
+  const users = new Map((await accounts.users.all()).filter((u) => !u.deletedAt).map((u) => [u.id.toLowerCase(), u.id]));
+  return [...new Set((await adminStore.peopleClients()).filter((p) => p.clientKey === clientKey).map((p) => users.get(p.personId.toLowerCase())).filter((x): x is string => !!x))];
+};
+/** DV-2: followers per client, kept 5 minutes, so "is a follower working late?" is a memory read on most ticks. */
+const followersMemo = new Map<string, { at: number; ids: string[] }>();
+const activeFollower = async (clientKey: string) => {
+  // Nobody active at all: no read (the database stays asleep, D431).
+  if (!use.active()) return false;
+  let hit = followersMemo.get(clientKey);
+  if (!hit || Date.now() - hit.at >= 5 * 60_000) followersMemo.set(clientKey, (hit = { at: Date.now(), ids: await followerIds(clientKey).catch(() => hit?.ids ?? []) }));
+  return hit.ids.some((id) => use.activeUser(id));
+};
 /** The union of a client's followers' own working hours (people who use FocusTime and work on the client). */
 const followerHours = async (clientKey: string) => {
-  const users = new Map((await accounts.users.all()).filter((u) => !u.deletedAt).map((u) => [u.id.toLowerCase(), u.id]));
-  const ids = [...new Set((await adminStore.peopleClients()).filter((p) => p.clientKey === clientKey).map((p) => users.get(p.personId.toLowerCase())).filter((x): x is string => !!x))];
+  const ids = await followerIds(clientKey);
   const hours: TimeModel[] = [];
   for (const id of ids) {
     const loaded = await (await runtimeFor(id)).loadConfig().catch(() => null);
@@ -1175,6 +1188,7 @@ devopsPoller = devopsApp && directorySource
       hours: followerHours,
       ruleMinutes: async () => (await refreshRules())?.devops.pollMinutes ?? DEFAULT_MINUTES,
       active: use.active,
+      activeFor: activeFollower,
       now: instantNow,
       log,
       job: jobs,

@@ -94,7 +94,8 @@ import { markScheduled, publishWeek, reportTeam, sendFacts, teamAction, type Tea
 import { inboxAction } from "./inbox-actions.ts";
 import { diagnosticsAction } from "./diagnostics.ts";
 import { snoozeDayOf } from "../plan/inbox-items.ts";
-import { statusAction, type StatusAction, type StatusContext } from "./status-actions.ts";
+import { statusAction, statusFeatures, type StatusAction, type StatusContext } from "./status-actions.ts";
+import { freshAction, type FreshContext } from "./devops-fresh-actions.ts";
 import { reportWindow } from "../plan/status-report.ts";
 import { carryAction, idsByClient, markResolved, planBitsFor, resolvedKeys, type CarryContext } from "./carry-actions.ts";
 import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
@@ -205,7 +206,7 @@ export type ActionContext = {
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
   media?: MediaControl;
   /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
-  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus };
+  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus; /** DV-2: a teammate's change in the demo's DevOps (not through FocusTime), to watch it arrive. */ devopsChange?: (clientKey: string, change: unknown) => { ok: true; id: number } | { ok: false; error: string } };
   /**
    * Step 15.4: the Microsoft sign-in for a config (null without an [outlook] app registration), and an Azure Resource
    * Manager client on a token. Absent: no sign-in here (tests that don't need it), and the config's "me" is used.
@@ -1552,6 +1553,14 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       await ctx.demo.reset();
       return { ok: true, data: { reset: true, ms: Date.now() - started } };
     }
+    case "demo.devops_change": {
+      // DV-2: only in a demo session: a teammate changes or adds an item in the session's own fictional DevOps.
+      if (!ctx.demo?.on || !ctx.demo.devopsChange) return { ok: false, status: 403, error: "Only in the demo" };
+      const i = req.input as Record<string, unknown> | null;
+      if (!i || typeof i !== "object" || typeof i.clientKey !== "string" || typeof i.change !== "object" || i.change === null) return bad("demo.devops_change takes { clientKey, change }");
+      const r = ctx.demo.devopsChange(i.clientKey, i.change);
+      return r.ok ? { ok: true, data: { id: r.id } } : bad(r.error);
+    }
     case "demo.status": {
       if (!noInput(req.input)) return bad("demo.status takes no input");
       if (!ctx.demo?.on || !ctx.demo.status) return { ok: false, status: 403, error: "Only in the demo" };
@@ -2293,6 +2302,10 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "lookup.day":
     case "items.get":
       return assistantAction(async () => (await assistantFor(ctx, "panel"))?.service ?? null, async () => (await assistantFor(ctx, "panel"))?.reads ?? null, action, req.input, (c) => assistantGate(ctx, c));
+    case "devops.versions":
+    case "devops.refresh":
+    case "devops.find":
+      return freshAction(await freshContext(ctx), action, req.input);
     case "status.load":
     case "status.draft":
     case "status.report":
@@ -2435,6 +2448,37 @@ async function afterPlanChange(ctx: ActionContext, action: string, input: unknow
 
 /** PL-1: the "From last week" proposal and Watching rows' context. */
 /** SR-1: Status's reads: Ahead's items and identities, Kat's last send, the comments, the change log, AI. */
+/** DV-2: versions, Refresh and Find an item, over the same clients and store as Ahead. */
+async function freshContext(ctx: ActionContext): Promise<FreshContext> {
+  const today = async () => {
+    const cfg = await configured(ctx);
+    return cfg ? localToday(ctx.now(), userZone(cfg)) : null;
+  };
+  return {
+    config: () => configured(ctx),
+    clients: async (cfg) => aheadClients(ctx, cfg, mondayOf(localToday(ctx.now(), userZone(cfg))), false),
+    devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
+    ahead: async () => {
+      const actx = await aheadContext(ctx);
+      const [l, f] = await Promise.all([aheadAction(actx, "ahead.load", {}), aheadAction(actx, "ahead.filters", {})]);
+      return l.ok ? { load: l.data as import("./types.ts").AheadLoad, filters: f.ok ? ((f.data as { filters: import("../plan/ahead-edit.ts").AheadFilters | null }).filters ?? null) : null } : null;
+    },
+    status: async (k) => statusFeatures(await statusCtx(ctx), k),
+    todayItems: async (k) => {
+      const d = await today();
+      if (!d || !ctx.plan) return [];
+      return (await ctx.plan.picksBetween(d, d)).filter((p) => p.clientKey === k && p.itemId !== null && p.status !== "dropped").map((p) => p.itemId!);
+    },
+    weekItems: async (k) => {
+      const d = await today();
+      if (!d || !ctx.plan) return [];
+      return (await ctx.plan.weekPlan(mondayOf(d))).features.filter((f) => f.clientKey === k).flatMap((f) => [f.itemId, ...(f.parentId !== null ? [f.parentId] : [])]);
+    },
+    nowMs: () => Temporal.Instant.from(ctx.now()).epochMilliseconds,
+    who: ctx,
+  };
+}
+
 async function statusCtx(ctx: ActionContext): Promise<StatusContext> {
   const ahead = await aheadContext(ctx);
   let ids: Promise<import("./ahead-actions.ts").AheadIdentities | null> | null = null;

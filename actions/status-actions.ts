@@ -263,6 +263,16 @@ async function readAll(ctx: StatusContext, cfg: AppConfig, only?: string): Promi
   };
 }
 
+/** DV-2: which features Status shows for one client (and under Also assigned), for Find an item. */
+export async function statusFeatures(ctx: StatusContext, clientKey: string): Promise<{ shown: number[]; also: number[] } | null> {
+  const cfg = await ctx.config();
+  if (!cfg) return null;
+  const { reads } = await readAll(ctx, cfg, clientKey);
+  const r = reads[0];
+  if (!r || r.out.status !== "ok") return null;
+  return { shown: r.out.features.map((f) => f.id), also: r.out.also.map((f) => f.id) };
+}
+
 async function load(ctx: StatusContext, input: unknown): Promise<StatusLoad> {
   obj(input, ["quiet"]);
   const cfg = await ctx.config();

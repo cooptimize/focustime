@@ -379,7 +379,7 @@ export function demoAreas(k: DemoClientKey): ProjectAreas {
     ],
   };
 }
-const areaOf = (k: DemoClientKey, i: DemoItem) => (k !== "Northwind" ? client(k).project : i.projectOnly ? `${client(k).project}\\Finance` : `${client(k).project}\\Web`);
+export const areaOf = (k: DemoClientKey, i: DemoItem) => (k !== "Northwind" ? client(k).project : i.projectOnly ? `${client(k).project}\\Finance` : `${client(k).project}\\Web`);
 
 /** AH-2: the demo's items as the scope rules read them (every level, the project-only ones too). */
 export function demoScopeItems(d: DemoItems, k: DemoClientKey): ScopeItem[] {
