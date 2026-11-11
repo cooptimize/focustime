@@ -34,6 +34,8 @@ export type PlanView = {
   today?: IsoDate;
   /** PL-1: Watching check-ins not yet picks, shown as ghost chips on their half-day. */
   checkins?: readonly import("../plan/carry.ts").CheckinGhost[];
+  /** SG-1: items DevOps has resolved, closed or removed ("<client>\u0000<id>", planBits): never suggested. */
+  resolved?: readonly string[];
 };
 type TimeboxLike = { date: IsoDate; pickId: number | null; start: string; end: string; removedAt: string | null };
 export type ResumeNote = { clientKey: string; date: IsoDate; note: string };

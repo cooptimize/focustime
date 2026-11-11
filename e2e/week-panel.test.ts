@@ -139,14 +139,14 @@ describe.skipIf(!CHROMIUM)("Week block panel (PV-1)", () => {
       });
       await page.locator(".undo-toast", { hasText: "Added to Tue PM" }).waitFor();
       await rowOf().locator(".aw-where", { hasText: "Tue PM" }).waitFor();
-      const onTue = tue.locator("li[draggable='true']").first();
+      const onTue = tue.locator("li[draggable='true']:not(.sug-row)").first();
       await onTue.waitFor();
 
       // Move it back from the card to Monday.
       await drag(page, onTue, mon);
       await page.locator(".undo-toast", { hasText: "Moved to Mon PM" }).waitFor();
       await rowOf().getByRole("img", { name: "On this block" }).waitFor();
-      expect(await tue.locator("li[draggable='true']").count()).toBe(0);
+      expect(await tue.locator("li[draggable='true']:not(.sug-row)").count()).toBe(0);
 
       // A story for me under the feature with none: New draft story under it, then Create in DevOps: preview →
       // Confirm → it is in this block.

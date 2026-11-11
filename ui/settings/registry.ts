@@ -100,6 +100,7 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "count-unsized", section: "planning", label: "Count unsized work as", old: ["Unsized", "Size? hours"] },
   { id: "shortest-useful-time", section: "planning", label: "Shortest useful time per size", old: ["Shortest useful time, S", "Shortest useful time, M", "Shortest useful time, L"], keywords: ["timebox my day", "minimum"] },
   { id: "carry-over", section: "planning", label: "Carry-over (days back)", old: ["Carry-over"], keywords: ["unfinished"] },
+  { id: "suggest-empty-blocks", section: "planning", label: "Suggest work for empty blocks", keywords: ["suggestions", "suggested", "keep all", "clear"] },
   { id: "plan-reminder", section: "planning", label: "Add work reminder", old: ["Reminder", "Plan today reminder"], keywords: ["minutes after the day starts"] },
   { id: "devops-on-done", section: "planning", label: "When I tick a story", keywords: ["devops update", "mark done", "ask to update devops", "wrap it up", "when I check off a to-do", "skip devops"] },
   { id: "checkin-reminder", section: "planning", label: "Midday check-in reminder", old: ["Check-in reminder"] },

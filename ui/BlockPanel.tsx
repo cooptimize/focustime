@@ -42,6 +42,7 @@ import { useOpenNew } from "./NewItem.tsx";
 import { WeekDnd, pickDragged, useDragSource } from "./WeekStories.tsx";
 import { FromYourTeam, useTeamCommit } from "./Team.tsx";
 import { CarryCtx, CarrySummary } from "./Carry.tsx";
+import { BlockSuggestions } from "./Suggest.tsx";
 import { FromLastWeek } from "./FromLastWeek.tsx";
 import { useProposal } from "./Watching.tsx";
 import { isTypingTarget, topOverlay } from "./keys.ts";
@@ -347,6 +348,8 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
           ) : (
             <p className="bp-empty">Nothing here yet.</p>
           )}
+          {/* SG-1: an empty block's suggestions, as "Suggested" rows with Keep and ×. */}
+          {mode === "add" && <BlockSuggestions date={at.date} half={at.half} where="panel" />}
           {note && mode !== "off" && <p className="bp-line bp-note" title="Where you left off last time">Left off: {note.note}</p>}
         </section>
 
@@ -819,7 +822,7 @@ function useToPlaceCounts(weekStart: IsoDate, thisWeek: boolean, version: unknow
   const sent = (team.data?.clients ?? []).reduce((n, c) => n + c.incoming.filter((x) => !x.conflict).length, 0);
   const lastWeekRows = proposal.data ? proposal.data.clients.flatMap((c) => c.rows).length : 0;
   const mine = thisWeek ? carry : null;
-  return { unfinished: (mine?.plan.cards.length ?? 0) + (mine?.plan.earlierDays.length ?? 0), lastWeek: (mine?.plan.earlierWeeks.length ?? 0) + lastWeekRows, sent };
+  return { unfinished: mine?.unfinished.thisWeek ?? 0, lastWeek: (mine?.unfinished.earlier ?? 0) + lastWeekRows, sent };
 }
 
 /**

@@ -1201,6 +1201,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "pick.uncarry":
     case "pick.undrop": return { disabled: "Use Undo right after Keep, Move or Drop on a suggested to-do" };
     case "planday.carry_hint": return { run: () => env.setView("week") };
+    case "suggest.load": return { run: () => env.setView("today") };
+    case "suggest.clear":
+    case "suggest.unclear": return { disabled: "Use Clear, or its Undo, beside the suggestions on a block or a day" };
     case "draft.add_story": return { next: () => chooseItem(env, "Draft a story under which epic or feature?", (i) => i.level === "portfolio", (k, i) => draftPrompt(env, k, i)) };
     case "draft.set_parent": return { run: () => env.setView("capture") };
     case "draft.remove": return { run: () => env.setView("capture") };

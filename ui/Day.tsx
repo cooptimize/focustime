@@ -5,6 +5,7 @@
 // side when there's room, the Evening band when it has work), or the timeline (TY-1). The block panel opens on the
 // right the same ways as on Week (App draws it). Midday check-in (ui/Checkin.tsx) and Close out (ui/CloseOut.tsx) are
 // flows over the same page. Was ui/Today.tsx with its own block card, "This week" chips and a 3840 day timeline.
+import { DaySuggestLine, useMorningSuggestions } from "./Suggest.tsx";
 import type { SetupStep } from "../plan/setup.ts";
 import { ModeArea } from "./ModeSwitch.tsx";
 import { DueBadge, Fading } from "./FollowUps.tsx";
@@ -96,6 +97,9 @@ type Props = {
   closeOutDate: IsoDate | null;
   /** U5.1 (D408): personal events shown, and the switch (Day's ⋯ and G). */
   showPersonal: boolean;
+  /** SG-1: Suggestions on or off (the person's setting), and its switch in ⋯. */
+  suggestOn?: boolean;
+  onSuggest?: (on: boolean) => void;
   onShowPersonal: (show: boolean) => void;
   /** Starts focus on a to-do (null: a plain focus timer). */
   onStart: (pick: Pick | null) => void;
@@ -346,6 +350,8 @@ export function Day(props: Props) {
   const openBlock = (half: Half, o?: { add?: boolean; focus?: PanelFocus | null }) => props.onOpenBlock(date, half, o);
   const panelHere = props.panelAt?.date === date ? props.panelAt : null;
   const head = dayHeadline(date, realToday);
+  // SG-1: the morning card says when suggestions wait in today's blocks, with Keep all beside + Add.
+  const morning = useMorningSuggestions(date);
 
   return (
     <main className={`today-view day-view u2 mode-${mode}${panelHere && !phone ? " with-panel" : ""}`} aria-label="Day">
@@ -374,6 +380,8 @@ export function Day(props: Props) {
                 )
               )}
               {!isToday && <span className="muted day-when">{head.when}</span>}
+              {/* SG-1: the day's suggestions, in the header row. */}
+              {mode === "now" && !weekendDay && <DaySuggestLine date={date} className="sug-day-head" />}
             </>
           )}
         </div>
@@ -421,6 +429,7 @@ export function Day(props: Props) {
           at={moreAt}
           step={{ title: "Day", items: [
             { id: "personal", label: "Personal events", group: "Show", checked: props.showPersonal, hint: "G", run: () => props.onShowPersonal(!props.showPersonal) },
+            ...(props.onSuggest ? [{ id: "suggestions", label: "Suggestions", group: "Show", checked: props.suggestOn !== false, hint: props.suggestOn !== false ? "on" : "off", run: () => props.onSuggest!(props.suggestOn === false) }] : []),
             ...(mode === "now" && !weekendDay && props.onTimeline ? [{ id: "timeline", label: "Timeline", group: "Show", checked: timelineShown, hint: "B", run: () => toggleTimeline() }] : []),
             ...(mode === "now" && past && props.onCloseOutOn ? [{ id: "closeout", label: `Close out ${dayWord}`, run: () => props.onCloseOutOn!(date) }] : []),
           ] }}
@@ -439,7 +448,7 @@ export function Day(props: Props) {
         ) : part === "chips" ? (
           <div key={part} className="day-chips">{chips}</div>
         ) : (
-          <MomentCard key={part} phone={phoneToday} m={props.moment!} onPlan={() => props.onAdd(date)} onCheckIn={props.onCheckIn} onCloseOut={props.onCloseOut} />
+          <MomentCard key={part} phone={phoneToday} m={props.moment!} onPlan={() => props.onAdd(date)} onCheckIn={props.onCheckIn} onCloseOut={props.onCloseOut} suggested={morning} />
         ),
       )}
       {mode === "now" && nudges && props.setupLine && props.onSetup && (
@@ -723,9 +732,11 @@ const MOMENTS = {
 } as const;
 
 /** NV-1: the card for the moment of the day. Plan today opens Week's Board on today; the others open their flow here. Done is one small line, reopenable. */
-export function MomentCard({ m, onPlan, onCheckIn, onCloseOut, phone = false }: { /** MB-1: on the phone, Close out's card reads "Wrap up the day". */ phone?: boolean; m: Moment; onPlan: () => void; onCheckIn?: (() => void) | undefined; onCloseOut?: (() => void) | undefined }) {
+export function MomentCard({ m, onPlan, onCheckIn, onCloseOut, phone = false, suggested = null }: { /** SG-1: suggestions waiting in today's blocks (the plan card only). */ suggested?: { body: string; keepAll: () => void } | null; /** MB-1: on the phone, Close out's card reads "Wrap up the day". */ phone?: boolean; m: Moment; onPlan: () => void; onCheckIn?: (() => void) | undefined; onCloseOut?: (() => void) | undefined }) {
   const open = m.kind === "plan" ? onPlan : m.kind === "checkin" ? onCheckIn : onCloseOut;
-  const t = phone && m.kind === "closeout" ? { ...MOMENTS.closeout, title: "Wrap up the day" } : MOMENTS[m.kind];
+  const base = phone && m.kind === "closeout" ? { ...MOMENTS.closeout, title: "Wrap up the day" } : MOMENTS[m.kind];
+  const sg = m.kind === "plan" ? suggested : null;
+  const t = sg ? { ...base, body: sg.body } : base;
   if (m.done)
     return (
       <p className="moment-done" role="status">
@@ -743,6 +754,11 @@ export function MomentCard({ m, onPlan, onCheckIn, onCloseOut, phone = false }: 
         <h2>{t.title}</h2>
         <p>{t.body}</p>
       </div>
+      {sg && (
+        <button type="button" className="sug-morning-keep" onClick={sg.keepAll} title="Keep every suggestion in today's blocks">
+          Keep all
+        </button>
+      )}
       {open && (
         <button type="button" className="primary" onClick={open}>
           {t.button}

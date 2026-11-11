@@ -119,3 +119,13 @@ Fit is never red. QT-1 and QT-2: nothing a person reads says they planned too mu
 - **Allow AI is off for this client (Admin › AI)**: a client the estimate and the classification skip.
 - **Request type**, **layer**, **readiness as written**, **missing**, **confidence**, **feature shape** (the layers a parent's children touch, in order): the classification's words. **Check by hand**: 30 items with their labels, only for clients you're on.
 - **Platform**: Azure, Fabric, Both or Not set, set on the page.
+
+## SG-1 words (Nov 11)
+
+- **Suggested**: the small word over a block's offers ("Suggested · Keep all · Clear"); its hover says they're offers and nothing is planned until kept. A row's hover gives its reason: "Unfinished from Mon", "Next in <client>'s backlog", "Target date Fri", "Needs breakdown".
+- **"5 suggested · Keep all · Clear"**: a day's line, in Day's header row and in the day's header on Week.
+- **Keep**, **Keep all**: make the offer an ordinary to-do (a feature: placed on the block). The notice says "Kept <title>" or "Kept 3 to-dos for Tuesday", with Undo.
+- **Clear**: a row, "not this one this week"; a block, "no suggestions on this block for the rest of the day"; a day, "no suggestions on Tuesday". The notice says "Cleared …" with Undo.
+- **"3 suggestions are in your blocks."**: the morning card's line under "Nothing on today yet", with Keep all.
+- **Suggestions**: the switch in Day's and Week's ⋯; **Suggest work for empty blocks** in Settings › Planning.
+- Retired: the dashed "From Mon" cards' Keep here, "N unfinished to-dos suggested in your next blocks · Keep all · Review".

@@ -2942,6 +2942,10 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     /** Every date marked with this kind (A3: read once where a plain rule asks about several). */
     markedDates: async (kind: string): Promise<Set<IsoDate>> => new Set(((await db.all("SELECT date FROM markers WHERE kind = ?", kind)) as Row[]).map((r) => r.date as string)),
     /** The weeks whose plan is committed (A3: read once where a plain rule asks about several). */
+    /** SG-1: takes a mark away (Undo of a Clear). */
+    async unmark(kind: string, date: IsoDate): Promise<void> {
+      await tx(async () => void (await db.run("DELETE FROM markers WHERE kind = ? AND date = ?", kind, date)));
+    },
     /** Whether (kind, date) was marked (step 15.4: the morning VM prompt dismissed for the day). */
     async marked(kind: string, date: IsoDate): Promise<boolean> {
       return !!(await db.get("SELECT 1 FROM markers WHERE kind = ? AND date = ?", kind, date));

@@ -4574,21 +4574,53 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 /* AH-1 (D665): Send to… opens over Break down's side panel (both were z-index 60 and the panel came later). */
 .cap-backdrop:has(> .send-dialog) { z-index: 61; }
 
-/* UI-B: unfinished picks as suggested cards on Week's Board. */
-.suggested-cards { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.suggested-card { min-width: 0; }
-.suggested-card[draggable="true"] { cursor: grab; }
-.suggested-card .sc-open { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 3px 6px; border: 1px dashed var(--c, var(--border-strong)); border-radius: 6px; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-2); text-align: left; cursor: pointer; }
-.suggested-card .sc-open:hover, .suggested-card .sc-open:focus-visible { color: var(--text); border-style: solid; }
-.suggested-card .sc-title { flex: 1 1 auto; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
-.suggested-card .sc-from { flex: none; color: var(--text-faint); }
+/* SG-1: the board's suggestions. Offers in the dotted style (UI-B's dashed edge), quieter than to-dos: no checkbox, muted
+   text, a + to keep and a × to clear on each row, one small line over them, and a day's line under its header. */
+.sug-block { margin: 6px 0 0; min-width: 0; display: grid; gap: 3px; }
+.sug-line, .sug-day { margin: 0; display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 6px; row-gap: 0; font-size: var(--fs-1); color: var(--text-muted); }
+.sug-line .sug-word { font-weight: 500; }
+.sug-sep { color: var(--text-faint); }
+.sug-line .link-btn, .sug-day .link-btn { font-size: var(--fs-1); }
+.sug-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sug-row { display: flex; align-items: center; min-width: 0; border: 1px dashed var(--c, var(--border-strong)); border-radius: 6px; color: var(--text-muted); }
+.sug-row[draggable="true"] { cursor: grab; }
+.sug-row:hover, .sug-row:focus-within { color: var(--text); border-style: solid; }
+.sug-row .sug-take { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 3px 4px 3px 6px; border: 0; background: transparent; color: inherit; font: inherit; font-size: var(--fs-2); text-align: left; cursor: pointer; }
+.sug-row .sug-title { flex: 1 1 auto; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }
+.sug-row .sug-needs { flex: none; color: var(--watch); font-size: var(--fs-1); font-weight: 500; }
+.sug-row .sug-plus, .sug-row .sug-x { flex: none; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-3); line-height: 1; cursor: pointer; }
+.sug-row .sug-plus:hover, .sug-row .sug-plus:focus-visible { color: var(--accent); background: var(--raised); }
+.sug-row .sug-x { font-size: var(--fs-3); color: var(--text-faint); }
+.sug-row .sug-x:hover, .sug-row .sug-x:focus-visible { color: var(--text); background: var(--raised); }
+.sug-row .sug-keep { flex: none; margin: 0 2px; }
+.sug-panel { margin-top: 8px; }
+.sug-panel .sug-row .sug-take { font-size: var(--fs-3); padding: 4px 6px; }
+.sug-phone .sug-row .sug-take { font-size: var(--fs-3); padding: 8px 6px; }
+.sug-phone .sug-row .sug-plus, .sug-phone .sug-row .sug-x { width: 36px; height: 36px; }
+.sug-phone .sug-line .link-btn { font-size: var(--fs-2); padding: 6px 0; }
+.sug-timeline { margin-top: 4px; }
+/* Week's day line sits on the header's own row, right of the date and before ⋯ (the header keeps its height: the
+   grid's rows are shared); in a narrow column the count drops its word; Keep all and Clear always show. */
+.day-head:has(.sug-week-day) { flex-wrap: nowrap; }
+.day-head:has(.sug-week-day) .day-gap { display: none; }
+.day-head:has(.sug-week-day) .more-btn { order: 2; }
+.sug-week-day { order: 1; margin: 0 0 0 auto; align-self: center; white-space: nowrap; column-gap: 4px; flex-wrap: nowrap; min-width: 0; }
+.sug-week-day > * { flex: none; }
+.day-head:has(.sug-week-day) { container-type: inline-size; }
+/* A narrow column: the count alone ("2", "2 suggested" on hover). */
+@container (max-width: 23em) { .sug-week-day .sug-w { display: none; } }
+.sug-week-day .link-btn { font-size: var(--fs-1); }
+/* Room for the line: the short date ("Wed 4") while it shows. */
+.day-head:has(.sug-week-day) .date-long { display: none; }
+.day-head:has(.sug-week-day) .date-short { display: inline; }
+.sug-day-head { align-self: center; margin-left: 4px; font-size: var(--fs-2); }
+.sug-day-head .link-btn { font-size: var(--fs-2); }
+.moment-card .sug-morning-keep { flex: none; }
+.grid.tier-mini .sug-row .sug-take, .day.tier-mini .sug-row .sug-take { flex-wrap: wrap; }
 .checklist .pick-origin { display: flex; align-items: center; gap: 6px; min-width: 0; opacity: 0.55; font-size: var(--fs-2); padding-left: 21px; }
 .pick-origin .po-title { flex: 1 1 auto; min-width: 4em; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
 .pick-origin .po-note { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); white-space: nowrap; }
 .carry-summary { margin: 0 24px 10px; padding: 6px 12px; border: 1px dashed var(--border-strong); border-radius: 10px; display: grid; gap: 6px; font-size: var(--fs-3); }
-.carry-summary .cs-line { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
-.carry-summary .cs-sep { color: var(--text-faint); }
-.carry-summary .cs-hint { margin: 0; display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: var(--fs-2); }
 .cs-groups { display: grid; gap: 8px; }
 .cs-client h3 { margin: 0 0 2px; display: flex; align-items: center; gap: 6px; font-size: var(--fs-2); font-weight: 600; }
 .cs-client .swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--c); flex: none; }
@@ -4598,9 +4630,6 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .flw-row .link-btn.danger { color: var(--text-muted); }
 @media (max-width: 700px) {
   .carry-summary { margin: 0 16px 10px; }
-  .carry-summary .cs-line { column-gap: 14px; }
-  .carry-summary .cs-text { flex-basis: 100%; }
-  .carry-summary .cs-sep { display: none; }
 }
 
 /* UI-B: the now line on today (Board rails, PTO and catch-up cells, the day's edges, agendas). */
@@ -5056,7 +5085,6 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 @container (max-width: 7em) { .day-head .date, .day-head .today-pill { display: none; } }
 /* On a narrow PTO column the hatched cell already says PTO. */
 @container (max-width: 9em) { .day-head .pto-pill { display: none; } }
-.grid.tier-mini .suggested-card .sc-open { flex-wrap: wrap; }
 /* SR-1: Week › Status, the preview of Monday's status report and the boxes that feed it. */
 .status-view { flex: 1; overflow: auto; padding: 8px 24px 32px; display: grid; align-content: start; gap: 12px; }
 .status-view .page-head { flex-wrap: wrap; row-gap: 4px; }
@@ -5421,7 +5449,6 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .day.tier-mini .day-head .date-long { display: none; } .day.tier-mini .day-head .date-short { display: inline; }
 .day.tier-mini .day-head { gap: 4px; }
 .day.tier-mini .day-head .day-plan { padding: 0 6px; }
-.day.tier-mini .suggested-card .sc-open { flex-wrap: wrap; }
 
 /* A card header never cuts a word or a number: the client name keeps its longest word whole unless that word alone is
    wider than the card; a one-word label (Catch-up, Open, PTO) stays on one line and gives way to its short form on a

@@ -8,6 +8,7 @@ import { deployItemAction, type DeployItemAction } from "./deploy-item-actions.t
 import { pickNeed } from "../plan/types.ts";
 import { scopeDepsOf } from "./scope-deps.ts";
 import { TEAMS_KINDS, type TeamsKind } from "../plan/teams-rhythm.ts";
+import { nextWorkDay } from "../plan/boardsuggest.ts";
 import { checkinGhosts } from "../plan/carry.ts";
 import { isClosed, isCompleted } from "../plan/process.ts";
 import { clearPhotos, photoAction } from "./photo-actions.ts";
@@ -573,6 +574,12 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const own = ctx.plan ? ownEventIds((await ctx.plan.ownEvents())) : new Set<string>();
   const week = buildWeek({ weekStart, patterns: dataverse.items, events: withoutOwn([...outlook.items, ...google.items, ...linked.flatMap((l) => l.items)], own), config: weekConfig, pto, unavailable, flex, viewRange: input.viewRange ?? cfg?.ui.viewRange ?? DEFAULT_UI.viewRange, weekendPlanned });
   const todayDay = week.days.find((d) => d.date === todayDate);
+  // SG-1: the next working day (focus blocks, not PTO, not a day off) after today, for the board's suggestions. From the
+  // focus patterns alone (no calendar), over today's week and the next, reusing the week built when it is one of them.
+  const todayMon = mondayOf(todayDate);
+  const followingMon = Temporal.PlainDate.from(todayMon).add({ days: 7 }).toString();
+  const patternWeek = (ws: IsoDate) => (ws === weekStart ? week.days : buildWeek({ weekStart: ws, patterns: dataverse.items, events: [], config: weekConfig, pto: ptoByDate(ahead?.items ?? [], weekDates7(ws)) }).days);
+  const nextWork = cfg ? nextWorkDay([...patternWeek(todayMon), ...patternWeek(followingMon)], todayDate) : null;
   let clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
   // ADM-1: every client on the week has a team color (suggested the first time), unless the person picked their own.
   if (cfg && ctx.org) {
@@ -637,6 +644,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     planClients,
     planDay: { date: todayDate, workday: (await hasHoursFor(ctx, model, todayDate)) && !todayOff, available: !!ctx.plan },
     ptoAhead,
+    nextWorkDay: nextWork,
     sources: [dataverse, ...(ptoResult ? [ptoResult] : []), outlook, google, ...linked].map(summarize),
     devops,
     clients: clientColors,
@@ -2512,6 +2520,9 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "pick.uncarry":
     case "pick.undrop":
     case "planday.carry_hint":
+    case "suggest.load":
+    case "suggest.clear":
+    case "suggest.unclear":
     case "draft.add_story":
     case "draft.set_parent":
     case "draft.remove":

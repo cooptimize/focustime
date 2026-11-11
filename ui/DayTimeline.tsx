@@ -4,6 +4,7 @@
 // here: drag from the checklist, drag or resize the band, drag it back to the checklist, or the keyboard. Timebox my day
 // shows its suggestions as dashed placeholders to accept, drop or move. The phone keeps TY-1's in-block tray, all by tap.
 // Own-plan changes run at once with Undo. A timebox on Outlook goes through the usual preview; nothing else leaves FocusTime.
+import { BlockSuggestions } from "./Suggest.tsx";
 import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { TimeboxView, WeekLoadData } from "../actions/types.ts";
 import { didntFitText, openGaps, type DayPlacement, type Unplaced, type AgendaTimebox } from "../plan/agenda.ts";
@@ -593,6 +594,8 @@ function TodoChecklist({ b }: { b: BlockProps }) {
         {rest.length > 0 && <ul className="today-picks tt-check-rest">{rest.map((p) => row(p, "rest"))}</ul>}
         {rest.length === 0 && heading && <p className="tt-tray-empty muted">Everything here has a time. Drag one back here to take its time off.</p>}
         {count === 0 && <p className="tt-tray-empty muted">Nothing here yet.</p>}
+        {/* SG-1: an empty block's suggestions, as on its card. */}
+        {count === 0 && <BlockSuggestions date={slot.date} half={slot.half} where="timeline" />}
         {b.onAdd && !slot.pto && !slot.off && (
           <button type="button" className="add-work add-row tt-add" onClick={b.onAdd} title="Add to this block (A)" aria-label={`Add to ${b.name}, ${halfName(slot.half)}`}>
             + Add
