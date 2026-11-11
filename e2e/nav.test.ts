@@ -1,4 +1,4 @@
-// Step 16.2, NV-1, WD-1: five tabs (1–5: Day · Week · Ahead · Inbox · Status), Week with no switch and the Add work panel,
+// Step 16.2, NV-1, WD-1, RF-1: five tabs (1–5: Day · Week · Ahead · Status · Inbox), Week with no switch and the Add work panel,
 // Ahead's Grid · Gantt · Readiness · Backlog, addresses (back and reload), P, entry points from the Week and notification routes. Demo mode (fictional data), clock pinned to Mon Nov 2, 9:30 AM.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
@@ -16,11 +16,11 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("five tabs in order (Day · Week · Ahead · Inbox · Status), no Plan or Team tab, no ritual chips, no context line; 1–5 switch them", async () => {
+  it("five tabs in order (Day · Week · Ahead · Status · Inbox), no Plan or Team tab, no ritual chips, no context line; 1–5 switch them", async () => {
     const { page, errors } = await freshPage(h);
-    await expect(page.locator(".views .view-tab").allTextContents()).resolves.toEqual(["Day", "Week", "Ahead", expect.stringMatching(/^Inbox/), expect.stringMatching(/^Status/)]);
+    await expect(page.locator(".views .view-tab").allTextContents()).resolves.toEqual(["Day", "Week", "Ahead", "Status", expect.stringMatching(/^Inbox/)]);
     await expect(page.locator(".ritual-bar, .context-line, .weeknav").count()).resolves.toBe(0);
-    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Ahead", "#/ahead"], ["4", "Inbox", "#/inbox"], ["5", "Status", "#/status"], ["1", "Day", "#/day"]] as const) {
+    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Ahead", "#/ahead"], ["4", "Status", "#/status"], ["5", "Inbox", "#/inbox"], ["1", "Day", "#/day"]] as const) {
       await page.keyboard.press(k);
       await expect.poll(() => tab(page)).toMatch(new RegExp(`^${name}`));
       expect(await hash(page)).toBe(h2);

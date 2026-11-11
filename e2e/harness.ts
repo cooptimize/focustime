@@ -247,10 +247,10 @@ export async function settingsClient(page: Page, name: string): Promise<void> {
   await page.locator(".ps-head h2", { hasText: name }).waitFor();
 }
 
-/** UI-7: Inbox › Captures (the capture box, follow-ups and drafts): 4, then its segment in the Inbox's mode switch. */
+/** UI-7: Inbox › Captures (the capture box, follow-ups and drafts): 5 (RF-1), then its segment in the Inbox's mode switch. */
 export async function openCaptures(page: Page): Promise<void> {
   // IB-1: one Inbox with views; Captures and drafts holds the capture box, promises I added and drafts.
-  await page.keyboard.press("4");
+  await page.keyboard.press("5");
   await page.evaluate(() => (location.hash = "#/inbox/captures"));
   await page.locator(".ib-capture").waitFor();
 }

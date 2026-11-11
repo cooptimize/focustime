@@ -27,7 +27,7 @@ describe.skipIf(!CHROMIUM)("the Inbox (IB-1)", () => {
 
   it("one count: the tab's badge, the rail's Needs you and the header agree, also after an action", async () => {
     const { page, errors } = await freshPage(h);
-    await page.keyboard.press("4");
+    await page.keyboard.press("5");
     const main = await openInboxView(page, "needs-you");
     await main.locator(".ib-row").first().waitFor();
     const rail = main.getByRole("navigation", { name: "Inbox views and clients" });
@@ -56,7 +56,7 @@ describe.skipIf(!CHROMIUM)("the Inbox (IB-1)", () => {
 
   it("slice 3: each Needs you row says why; Snooze takes it out of the counts until then, and it can be woken", async () => {
     const { page, errors } = await freshPage(h);
-    await page.keyboard.press("4");
+    await page.keyboard.press("5");
     const main = await openInboxView(page, "needs-you");
     await main.locator(".ib-row").first().waitFor();
     const rail = main.getByRole("navigation", { name: "Inbox views and clients" });
@@ -116,7 +116,7 @@ describe.skipIf(!CHROMIUM)("the Inbox (IB-1)", () => {
 
   it("keys do what their buttons do, and never while typing", async () => {
     const { page, errors } = await freshPage(h);
-    await page.keyboard.press("4");
+    await page.keyboard.press("5");
     const main = await openInboxView(page, "promises");
     await main.locator(".ib-row").first().waitFor();
     const keys = await main.locator(".ib-row").evaluateAll((rs) => rs.map((r) => r.getAttribute("data-key")));

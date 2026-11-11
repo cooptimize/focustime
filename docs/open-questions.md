@@ -539,7 +539,7 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - Plan the week's draft feature from the type box and "Epic needs features" aren't in the panel (the type box makes stories; draft features come from Capture). Is that enough?
 - J and K between clients and "N of M clients planned" are gone with Plan mode. Does anyone miss them?
 - Team is hidden but its address still works. When it comes back, as a tab or inside Week?
-- Status's tab count is SR-3's "need your update" count. Should it show only from Friday, like the nudge?
+- Status's tab count is SR-3's "need your update" count. Should it show only from Friday, like the nudge? (RF-1: answered. A dot, not a count, amber and red on the person's last two scheduled workdays before the report.)
 - "This week's features: the selected block's client first, then the others": the panel lists the selected block's client's features in full and every other client as one line ("Atlas · 2 features") that moves the panel to that client's next block, since + adds to the selected block and another client's block refuses the drop. Full lists for every client instead?
 - DevOps health's Mark as being broken down and Ask the client about priorities aren't on Week any more (Break down is in the client chip's popover, dates and owners in Ahead › Readiness). Bring them into the chip's popover?
 - Esc in More from DevOps' search takes up to three presses (clear the text, leave the box, close the panel). Should Esc close the panel at once when the box is already empty?
@@ -547,3 +547,14 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - WD-1 review: the timeline default changed to off only for people who never chose; anyone who saved "on" keeps it. Should everyone be reset to Cards once?
 - WD-1 review: To place folds again when another block is chosen in the panel, even after Review opened it. Should it stay open for the rest of that panel session?
 - WD-1 review: the client chip popover no longer shows the musts pace line ("about 2h free left. Still realistic?") so the hours appear once. Is the pace nudge wanted elsewhere (the chip's tooltip, the notice line)?
+
+## RF-1
+
+- The week model always treats Friday as the catch-up day (`week/build.ts`), and Dataverse focus blocks are Monday to Thursday only, so a "Monday to Friday" week behaves like Monday to Thursday: amber Wednesday, red Thursday. If someone's catch-up day is ever another day, `dotDays` already reads the day's kind, not its name.
+- Late in Kolkata or Tokyo, Monday's working day ends before the 7:00 AM ET send, so Monday is red for them (their last day before the report). Right?
+- "Start of the day" for the dot is the start of that day's working hours, not midnight. Amber Wednesday means from Wednesday's first working hour. Right, or should it be midnight?
+- The dot uses Kat's fixed schedule (Monday 7:00 AM ET) for the send, not each client's watermark. If Kat sends late, the dot goes at 7:00 anyway. Fine?
+- With no focus blocks at all the working days stand in. Should such a person get no dot instead?
+- If Kat sends a client's report late, the dot still goes at 7:00 AM ET while the "3 to update" hint (counted against Kat's real last send) can stay until the next read. Worth reading Kat's send per client for the dot?
+- The brief said the command menu's Status entry keeps its hint "3 to update". The Ctrl+K entry's hint is its key (now 4); "3 to update" is the phone ⋯ menu's, which keeps it. Should Ctrl+K show "3 to update" too?
+- Setup's Done screen still offers "Plan your week" (a setup screen, not Day). Rename it to "Add work to your week" with WD-1's words?

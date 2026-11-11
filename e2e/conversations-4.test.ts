@@ -201,7 +201,7 @@ describe.skipIf(!CHROMIUM)("Chat images, CV-4", () => {
 
       // Refresh: one AI request with the two readable images after their message's label.
       // The Inbox opens a view's first item at once, so Refresh runs from Captures and drafts (no conversation open).
-      await page.keyboard.press("4");
+      await page.keyboard.press("5");
       const caps = await openInboxView(page, "captures");
       await caps.getByRole("button", { name: "Refresh conversations" }).click();
       await page.getByText("Chats read").first().waitFor();

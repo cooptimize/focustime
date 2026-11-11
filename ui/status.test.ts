@@ -95,3 +95,16 @@ describe("calendar links in the status (CAL-1)", () => {
     ]);
   });
 });
+
+describe("RF-1: the status bar is the one place a computer reconnects a source", () => {
+  it("every line Day's strip used to show has a fix the bar draws: Reconnect for a calendar that needs sign-in, else Retry or Replace link", () => {
+    const google = src("google", { status: "auth_required", fixAction: "connect_google", fetchedAt: null, itemCount: 0, message: "Google needs you to sign in again" });
+    const outlook = src("outlook", { status: "auth_required", fixAction: "connect_microsoft", fromCache: true, message: "Sign in again" });
+    const dv = src("dataverse", { status: "unreachable", fromCache: true, message: "Dataverse didn't answer" });
+    const lines = causeLines([google, outlook, dv, locked("pto")], [lockedClient("A")]);
+    expect(lines.length).toBeGreaterThan(0);
+    for (const l of lines) expect(l.fixes.length, l.text).toBeGreaterThan(0);
+    const fixes = lines.flatMap((l) => l.fixes);
+    expect(fixes).toEqual(expect.arrayContaining([{ kind: "reconnect", calendar: "google" }, { kind: "reconnect", calendar: "outlook" }, { kind: "retry" }]));
+  });
+});

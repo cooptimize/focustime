@@ -236,7 +236,7 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       // The Inbox (IB-1): Refresh reads the chats; the conversation opens in the detail pane.
       // CV-4: the poll never reads images; they are read from Teams when shown, with the viewer's token. The Inbox opens a
       // view's first item at once, so Refresh runs from Captures and drafts, where no conversation is open.
-      await page.keyboard.press("4");
+      await page.keyboard.press("5");
       const caps = await openInboxView(page, "captures");
       await caps.getByRole("button", { name: "Refresh conversations" }).click();
       await page.getByText("Chats read").first().waitFor();

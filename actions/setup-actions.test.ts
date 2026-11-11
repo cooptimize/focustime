@@ -25,6 +25,7 @@ function setup(o: Partial<SetupContext> = {}) {
     config: async () => cfg,
     clients: async () => [{ key: adatum.clientKey, name: adatum.clientName, org: "contoso", write: null }],
     workingHours: async () => null,
+    today: () => "2026-11-02",
     ...o,
   };
   const run = async <T>(action: Parameters<typeof setupAction>[1], input: unknown = {}) => {
@@ -102,3 +103,49 @@ describe("Your day's values", () => {
     }
   });
 });
+
+describe("RF-1: stepping through to the end", () => {
+  it("the last step done or skipped ends Day's line, with a step skipped; Settings still says what's left", async () => {
+    const s = setup();
+    await s.run("setup.mark", { step: "day", status: "done" });
+    await s.run("setup.mark", { step: "clients", status: "skipped" });
+    await s.run("setup.mark", { step: "blocks", status: "done" });
+    const mid = await s.run<SetupView>("setup.load");
+    expect(mid.through).toBe(false);
+    const v = await s.run<SetupView>("setup.mark", { step: "calendars", status: "skipped" });
+    expect(v).toMatchObject({ through: true, line: null, left: { text: "2 setup steps left", step: "clients" } });
+    // After a reload too.
+    expect(await s.run<SetupView>("setup.load")).toMatchObject({ through: true, line: null, left: { step: "clients" } });
+  });
+
+  it("closing the flow early keeps the line; a later step through to the end removes it", async () => {
+    const s = setup();
+    await s.run("setup.mark", { step: "day", status: "done" });
+    const closed = await s.run<SetupView>("setup.mark", { closeFrom: "clients" });
+    expect(closed).toMatchObject({ through: false, line: { text: "3 setup steps left" } });
+    // Run from Settings, skipping to the end.
+    for (const step of ["clients", "blocks", "calendars"]) await s.run("setup.mark", { step, status: "skipped" });
+    expect(await s.run<SetupView>("setup.load")).toMatchObject({ through: true, line: null, left: { text: "3 setup steps left" } });
+  });
+
+  it("someone who never opened the flow has no line yet (it opens by itself), and Start over forgets the mark", async () => {
+    const s = setup();
+    expect(await s.run<SetupView>("setup.load")).toMatchObject({ through: false, line: null, open: "day" });
+    await s.run("setup.mark", { step: "calendars", status: "done" });
+    expect((await s.run<SetupView>("setup.load")).through).toBe(true);
+    expect(await s.run<SetupView>("setup.reset")).toMatchObject({ through: false });
+    expect((await s.run<SetupView>("setup.load")).through).toBe(false);
+  });
+});
+
+describe("RF-1 review: before the mark", () => {
+  it("someone who reached the end before RF-1 (Calendars recorded) has no Day line, without a mark", async () => {
+    const s = setup();
+    await s.plan.setSetupStep("day", "done");
+    await s.plan.setSetupStep("clients", "skipped");
+    await s.plan.setSetupStep("blocks", "skipped");
+    await s.plan.setSetupStep("calendars", "skipped");
+    expect(await s.run<SetupView>("setup.load")).toMatchObject({ through: true, line: null, left: { text: "3 setup steps left" } });
+  });
+});
+

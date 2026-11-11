@@ -59,7 +59,7 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
 
     const { page: desk } = await freshPage(h);
     await at(desk, "#/today");
-    expect((await desk.locator(".topbar nav.views").textContent())!.replace(/\d+/g, "")).toMatch(/Day.*Week.*Ahead.*Inbox.*Status/);
+    expect((await desk.locator(".topbar nav.views").textContent())!.replace(/\d+/g, "")).toMatch(/Day.*Week.*Ahead.*Status.*Inbox/);
     expect(await desk.locator(".bottom-bar, .status-dot-btn").count()).toBe(0);
     expect(await desk.locator("footer.statusbar").count()).toBe(1);
     await desk.close();

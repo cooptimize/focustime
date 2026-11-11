@@ -88,7 +88,7 @@ export function SetupFlow(p: Props) {
               </li>
             ))}
           </ol>
-          <CloseButton onClose={() => void close()} title="Close setup. Today keeps a line to finish it later" />
+          <CloseButton onClose={() => void close()} title="Close setup. Day keeps a line to finish it later" />
         </div>
         <div ref={body} className="setup-body">
           {step === "day" && <DayStep onSaved={() => mark("day", "done").then(() => go("day"))} onSkip={() => void skip("day")} />}
@@ -265,7 +265,7 @@ function ClientsStep({ onDone, onSkip, onBack }: { onDone: () => Promise<void>; 
   const [busy, setBusy] = useState(false);
   const load = useCallback(() => call<SetupView & { clients: SetupClient[]; clientsProblem: string | null }>("setup.load", { clients: true }).then(setData), []);
   useEffect(() => {
-    void load().catch(() => setData({ demo: false, state: {}, open: null, next: "clients", line: null, clients: [], clientsProblem: "FocusTime couldn't read your clients just now." }));
+    void load().catch(() => setData({ demo: false, state: {}, open: null, next: "clients", line: null, left: null, through: false, clients: [], clientsProblem: "FocusTime couldn't read your clients just now." }));
   }, [load]);
   const finish = async () => {
     setBusy(true);
@@ -477,9 +477,9 @@ function CalendarsStep({ connected, onConnect, onDone, onSkip, onBack }: { conne
 }
 
 function DoneStep({ view, onPlanWeek, onGuide, onBack }: { view: SetupView | null; onPlanWeek: () => void; onGuide: () => void; onBack: () => void }) {
-  const left = view?.line?.text ?? null;
+  const left = view?.left?.text ?? null;
   return (
-    <Screen title="You're set up" intro={left ? `${left}. Day keeps a line to finish them, and Settings › Setup runs this again.` : "Settings › Setup runs this again whenever you like."} onSubmit={onPlanWeek} primary="Plan your week" onBack={onBack}>
+    <Screen title="You're set up" intro={left ? `${left}. Finish them any time in Settings › Setup.` : "Settings › Setup runs this again whenever you like."} onSubmit={onPlanWeek} primary="Plan your week" onBack={onBack}>
       <p>
         New here? The{" "}
         <a

@@ -75,7 +75,7 @@ describe.skipIf(!CHROMIUM)("Outlook needs sign-in and no Microsoft identity yet 
     await expect(page.locator(".statusbar").getByRole("button", { name: /needs sign-in/ }).count()).resolves.toBeGreaterThan(0);
     // The top bar: the mark, the tabs and a Sign in button (no account yet).
     await expect(page.locator(".topbar .brand, .topbar .lockup, .topbar svg").first().isVisible()).resolves.toBe(true);
-    for (const tab of ["Day", "Week", "Ahead", "Inbox", "Status"]) await expect(page.locator(".topbar").getByRole("tab", { name: new RegExp(tab) }).or(page.locator(".topbar").getByRole("button", { name: new RegExp(`^${tab}`) })).count()).resolves.toBeGreaterThan(0);
+    for (const tab of ["Day", "Week", "Ahead", "Status", "Inbox"]) await expect(page.locator(".topbar").getByRole("tab", { name: new RegExp(tab) }).or(page.locator(".topbar").getByRole("button", { name: new RegExp(`^${tab}`) })).count()).resolves.toBeGreaterThan(0);
     await expect(page.locator(".topbar").getByRole("button", { name: "Sign in", exact: true }).isVisible()).resolves.toBe(true);
     expect(errors).toEqual([]);
     await page.close();

@@ -186,7 +186,7 @@ const STATUS: Tour = {
   start: { tab: "status" },
   section: "week",
   steps: [
-    { target: "tab-status", title: "Status", text: "Status is its own tab (5): what Monday's report will say for your features, by client." },
+    { target: "tab-status", title: "Status", text: "Status is its own tab (4): what Monday's report will say for your features, by client." },
     { target: "st-toggle", title: "Edit and Preview", text: "Preview shows the report as its email will read: a heading per feature, each comment this week a bullet with its author." },
     { target: "st-add", title: "+ Add a line", text: "Each line becomes its own DevOps comment on the feature. Edit changes your own comments from this week.", example: "status-line" },
     { target: "st-draft", example: "status-draft", title: "Draft", text: "With AI allowed for the client, a first version from your story changes, close-out notes and captures. Edit it as you like." },

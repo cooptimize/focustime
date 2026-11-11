@@ -39,7 +39,7 @@ describe.skipIf(!CHROMIUM)("Everything (IB-2)", () => {
   it("is the default: every status in one list, by day, newest first; the sort is remembered", async () => {
     const { page, errors } = await freshPage(h);
     const { since } = await markHalfway(page);
-    await page.keyboard.press("4");
+    await page.keyboard.press("5");
     await main(page).locator(".ib-row").first().waitFor();
     expect(await main(page).locator(".ib-list-head h2").textContent()).toMatch(/^Everything \d+/);
     await expect.poll(async () => main(page).getByRole("button", { name: /^Everything/ }).getAttribute("aria-current")).toBe("page");
@@ -74,7 +74,7 @@ describe.skipIf(!CHROMIUM)("Everything (IB-2)", () => {
   it("the divider moves after I've been: the next visit has nothing new, and the server has the marker", async () => {
     const { page, errors } = await freshPage(h);
     const { since } = await markHalfway(page);
-    await page.keyboard.press("4");
+    await page.keyboard.press("5");
     await main(page).locator(".ib-new-divider").waitFor();
     // Seeing the divider moves the marker on the server (any device reads it from there).
     await expect.poll(async () => Date.parse((await call<List>(page, "inbox.list", {})).data.lastLooked ?? "0")).toBeGreaterThan(Date.parse(since));
@@ -85,7 +85,7 @@ describe.skipIf(!CHROMIUM)("Everything (IB-2)", () => {
     expect((await call(page, "capture.add", { text: "Arrived after I looked" })).ok).toBe(true);
     await page.keyboard.press("1");
     await page.locator("main.today-view").waitFor();
-    await page.keyboard.press("4");
+    await page.keyboard.press("5");
     await main(page).locator(".ib-row").first().waitFor();
     await expect.poll(() => main(page).locator(".ib-row.new").count()).toBe(1);
     expect(await main(page).locator(".ib-row.new .ib-row-title").textContent()).toBe("Arrived after I looked");
@@ -96,7 +96,7 @@ describe.skipIf(!CHROMIUM)("Everything (IB-2)", () => {
 
   it("status chips filter with counts, Chatter is off until asked, the choice is remembered; a view on the left lights its chip", async () => {
     const { page, errors } = await freshPage(h);
-    await page.keyboard.press("4");
+    await page.keyboard.press("5");
     await main(page).locator(".ib-row").first().waitFor();
     await expect.poll(() => chip(page, /^Chatter/).getAttribute("aria-pressed")).toBe("false");
     expect(await chip(page, /^Needs you/).getAttribute("aria-pressed")).toBe("true");
@@ -137,7 +137,7 @@ describe.skipIf(!CHROMIUM)("Everything (IB-2)", () => {
 
   it("old deep links open their view, and an item's address keeps the place it was opened from", async () => {
     const { page, errors } = await freshPage(h);
-    await page.keyboard.press("4");
+    await page.keyboard.press("5");
     for (const [slug, label] of [["needs-you", "Needs you"], ["promises", "Promises"], ["waiting", "Waiting on"], ["in-progress", "In progress"], ["captures", "Captures and drafts"], ["teammates", "Teammate has it"], ["done", "Done"], ["chatter", "Chatter"]] as const) {
       const m = await openInboxView(page, slug);
       await expect.poll(async () => (await m.locator(".ib-list-head h2").textContent())?.replace(/\s*\d+$/, "")).toBe(label);
@@ -153,7 +153,7 @@ describe.skipIf(!CHROMIUM)("Everything (IB-2)", () => {
 
   it("timestamps in the detail pane are the shared words, with the full time on hover; J and K walk the timeline", async () => {
     const { page, errors } = await freshPage(h);
-    await page.keyboard.press("4");
+    await page.keyboard.press("5");
     await main(page).locator(".ib-row").first().waitFor();
     await main(page).locator(".ib-row").first().click();
     const t = page.locator(".ib-pane .ib-detail-meta time");
@@ -171,7 +171,7 @@ describe.skipIf(!CHROMIUM)("Everything (IB-2)", () => {
   it("day headings stick while their day scrolls", async () => {
     const { page } = await freshPage(h);
     await seedLong(page, 400);
-    await page.keyboard.press("4");
+    await page.keyboard.press("5");
     const head = main(page).locator(".ib-day-head").first();
     await head.waitFor();
     await page.evaluate(() => (document.querySelector(".ib-list-body")!.scrollTop = 600));
@@ -184,7 +184,7 @@ describe.skipIf(!CHROMIUM)("Everything (IB-2)", () => {
   it.skipIf(!SHOTS)("screenshots: spread over days, so the headings and stamps show (demo data, fictional names)", async () => {
     const { page, errors } = await freshPage(h);
     await spreadDates(page);
-    await page.keyboard.press("4");
+    await page.keyboard.press("5");
     await main(page).locator(".ib-new-divider").waitFor();
     await shot(page, "everything-newest");
     await main(page).locator(".ib-new-divider").scrollIntoViewIfNeeded();
@@ -228,7 +228,7 @@ describe.skipIf(!CHROMIUM)("Everything (IB-2)", () => {
   it("3,000 items: few rows at first, more as it scrolls, and the scroll stays smooth", async () => {
     const { page, errors } = await freshPage(h);
     await seedLong(page, 3000);
-    await page.keyboard.press("4");
+    await page.keyboard.press("5");
     await main(page).locator(".ib-row").first().waitFor();
     expect(await main(page).locator(".ib-row").count()).toBeLessThanOrEqual(240);
     expect(await main(page).locator(".ib-list-head h2").textContent()).toMatch(/2250/); // Part 0: the quarter a teammate has are folded out of the count.

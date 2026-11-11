@@ -1415,6 +1415,13 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .app.phone .send-loop .mini { min-height: 44px; }
 .app.phone .sl-checks label, .app.phone .sl-targets label { min-height: 44px; }
 .view-tab .count { margin-left: 6px; padding: 0 6px; border-radius: 99px; font-size: var(--fs-1); line-height: calc(16px * var(--text-scale)); background: var(--sunken); color: var(--text); }
+/* RF-1: the Status dot. Never color alone: amber is a ring, red a filled disc; the reason is its tooltip and label. */
+.status-mark { display: inline-block; flex: none; width: calc(8px * var(--text-scale)); height: calc(8px * var(--text-scale)); border-radius: 50%; box-sizing: border-box; vertical-align: middle; }
+.status-mark.amber { border: 2px solid var(--watch); background: transparent; }
+.status-mark.red { background: var(--risk); border: 2px solid var(--risk); }
+.view-tab .status-mark { margin-left: 2px; }
+.menu-label .status-mark { margin-left: 4px; }
+@media (forced-colors: active) { .status-mark { forced-color-adjust: none; border-color: CanvasText; } .status-mark.red { background: CanvasText; } .status-mark.amber { background: Canvas; } }
 
 /* Close out and Check-in (step 7) */
 .closeout { flex: 1; overflow: auto; padding: 8px 24px 32px; }
