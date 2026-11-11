@@ -422,7 +422,7 @@ export function CardPick({ pick, tabIndex }: { pick: Pick; tabIndex: number }) {
   const drag = useDragSource(pickDragged(pick));
   // WD-2: on Day today the next to-do is highlighted and is the only one with Start focus (or the running timer).
   const next = useContext(NextTodoCtx);
-  if (next && next.id === pick.id) return <PickRow pick={pick} toggle={plan.toggle} density="week" tabIndex={tabIndex} typeIcon dragProps={drag} next actions={next.actions(pick)} />;
+  if (next && next.id === pick.id) return <PickRow pick={pick} toggle={plan.toggle} density="week" tabIndex={tabIndex} typeIcon dragProps={drag} next extra={next.actions(pick)} />;
   return <PickRow pick={pick} toggle={plan.toggle} density="week" tabIndex={tabIndex} typeIcon dragProps={drag} />;
 }
 

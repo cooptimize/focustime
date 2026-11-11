@@ -76,8 +76,8 @@ function tsxFiles(dir: string): string[] {
 }
 
 describe("every multi-line input is the shared TextBox", () => {
-  /** Read-only copy boxes, not inputs: a hidden clipboard helper, the Coop brief and Diagnostics' copy text. */
-  const READ_ONLY = ["DetailPanel.tsx", "BreakDownPanel.tsx", "settings/Diagnostics.tsx"];
+  /** Read-only copy boxes, not inputs: the Coop brief and Diagnostics' copy text. */
+  const READ_ONLY = ["BreakDownPanel.tsx", "settings/Diagnostics.tsx"];
   it("no editable <textarea> outside TextBox.tsx", () => {
     const bad: string[] = [];
     for (const f of tsxFiles(UI)) {

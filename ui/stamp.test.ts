@@ -63,7 +63,7 @@ describe("day headings", () => {
 
 // Step 0's list (docs/ux/ib2/date-inventory.md): every place that says when something happened uses the formatter.
 describe("every place uses the shared formatter", () => {
-  const files = ["ui/inbox/InboxPage.tsx", "ui/inbox/Detail.tsx", "ui/inbox/HeldBack.tsx", "ui/inbox/MergePane.tsx", "ui/MessageThread.tsx", "ui/Conversations.tsx", "ui/FollowUps.tsx", "ui/StatusBar.tsx", "ui/Status.tsx", "ui/Today.tsx", "ui/WeekGrid.tsx", "ui/Phone.tsx", "ui/PhoneToday.tsx", "ui/DetailPanel.tsx"];
+  const files = ["ui/inbox/InboxPage.tsx", "ui/inbox/Detail.tsx", "ui/inbox/HeldBack.tsx", "ui/inbox/MergePane.tsx", "ui/MessageThread.tsx", "ui/Conversations.tsx", "ui/FollowUps.tsx", "ui/StatusBar.tsx", "ui/Status.tsx", "ui/Day.tsx", "ui/CloseOut.tsx", "ui/Checkin.tsx", "ui/WeekGrid.tsx", "ui/Phone.tsx", "ui/PhoneToday.tsx", "ui/BlockPanel.tsx"];
   it.each(files)("%s has no other stamp formatter", (f) => {
     const src = readFileSync(f, "utf8");
     expect(src).not.toMatch(/\bwhenText\(/);

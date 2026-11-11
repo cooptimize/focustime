@@ -37,7 +37,7 @@ import { openSend } from "./send-event.ts";
 import { DEFAULT_FEATURE_MINUTES } from "../plan/estimate.ts";
 import { AddSection } from "./plan/AddPane.tsx";
 import { CloseButton } from "./CloseButton.tsx";
-import { MoveTo, WeekDnd, pickDragged, useDragSource } from "./WeekStories.tsx";
+import { WeekDnd, pickDragged, useDragSource } from "./WeekStories.tsx";
 import { FromYourTeam, useTeamCommit } from "./Team.tsx";
 import { CarryCtx, CarrySummary } from "./Carry.tsx";
 import { FromLastWeek } from "./FromLastWeek.tsx";
@@ -346,7 +346,6 @@ function PanelTodo({ pick, mode, today, focused, extra }: { pick: Pick; mode: Pa
               {to.date === today ? "Move to today" : `Move to ${to.label}`}
             </button>
           )}
-          {mode === "add" && <MoveTo pick={pick} />}
         </>
       }
     />

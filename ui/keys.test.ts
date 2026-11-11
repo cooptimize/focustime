@@ -34,7 +34,7 @@ describe("F6 regions", () => {
 
   it("finds the region of the focused element; Plan the day counts as the panel although it sits in the grid", () => {
     expect(regionOf(inside(".planday", ".grid"))).toBe("panel");
-    expect(regionOf(inside(".detail-panel"))).toBe("panel");
+    expect(regionOf(inside(".block-panel"))).toBe("panel");
     expect(regionOf(inside(".grid"))).toBe("grid");
     expect(regionOf(inside(".topbar"))).toBe("top");
     expect(regionOf(inside(".statusbar"))).toBe("status");
@@ -61,7 +61,7 @@ describe("the keyboard legend and the command menu agree", () => {
   const noop = () => {};
   const env: MenuEnv = {
     week, selection: { date: "2026-11-02", half: "AM" }, planWeek: null, planState: null, planTarget: { date: "2026-11-02", isToday: true }, today: "2026-11-02", work: new Map(), calendars: { outlook: false, google: false },
-    runPlan: async () => true, openPlanDay: noop, commitPlan: noop, openDetails: noop, openLink: noop, changeWeek: noop, goToday: noop, refresh: noop, showSourceStatus: noop, connect: noop, disconnect: noop, setView: noop,
+    runPlan: async () => true, openPlanDay: noop, commitPlan: noop, openBlock: noop, openLink: noop, changeWeek: noop, goToday: noop, refresh: noop, showSourceStatus: noop, connect: noop, disconnect: noop, setView: noop,
     moveRegion: noop, focusedItem: null, showKeys: noop, showGuide: noop, theme: "cooptimize-dark", setTheme: noop, viewRange: "business", setViewRange: noop, hours: legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" }), runTime: async () => true, openSettings: noop, exportPlan: noop,
     openCloseOut: noop, openCheckIn: noop, closeOutDate: null, commitCloseOut: noop, makeUp: async () => true, runFollowUps: async () => true, borrowed: [],
   } as MenuEnv;

@@ -32,7 +32,7 @@ describe("wordsHits", () => {
     expect(wordsHits("docs/demo/script.md", "- Pick the Northwind block\n- the pick lands in the block\n")).toEqual([2]);
   });
   it("scans the app's text, not tests, fakes, migrations or SQL files", () => {
-    for (const f of ["ui/Today.tsx", "server/teams/cards.ts", "store/plan-store.ts", "docs/demo/script.md", "public/manifest.webmanifest", "scripts/teams-package.ts"]) expect(wordsScanned(f), f).toBe(true);
+    for (const f of ["ui/Day.tsx", "server/teams/cards.ts", "store/plan-store.ts", "docs/demo/script.md", "public/manifest.webmanifest", "scripts/teams-package.ts"]) expect(wordsScanned(f), f).toBe(true);
     for (const f of ["ui/Today.test.tsx", "host/fakes.ts", "store/sql/baseline.ts", "store/migrations/20261106T0900_week_carry.ts", "docs/decisions.md", "e2e/today.test.ts"]) expect(wordsScanned(f), f).toBe(false);
   });
 });

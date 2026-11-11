@@ -6559,6 +6559,9 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .bp-todos > li { border-radius: 6px; }
 .bp-todos > li.dp-focused, .block-panel .aw-row.dp-focused { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in oklab, var(--accent) 8%, transparent); }
 .bp-forward { flex: none; }
+/* A to-do's title keeps its own width in the panel: up to two lines, the controls after it. */
+.bp-todos .pick-row { flex-wrap: wrap; row-gap: 2px; }
+.bp-todos .pick-row .pr-title { flex: 1 1 60%; white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }
 .bp-meet-line { width: 100%; text-align: left; }
 .bp-meetings .pd-agenda ol { margin: 4px 0 0; }
 .bp-addbox { display: flex; flex-direction: column; gap: 4px; }
@@ -6600,7 +6603,7 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .day-switch button[aria-pressed="true"] { background: var(--raised); color: var(--text); }
 .day-chips { display: contents; }
 .day-cards { display: flex; flex-direction: column; gap: 12px; }
-.grid.day-only { display: block; padding: 0; }
+.grid.day-only { display: block; padding: 0; width: 100%; min-width: 0; box-sizing: border-box; align-self: stretch; }
 .grid.day-only .day { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px; align-items: start; }
 .grid.day-only .day > :not(.half) { grid-column: 1 / -1; }
 .grid.day-only .day > .half { flex-basis: auto; min-height: 150px; }
