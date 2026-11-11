@@ -116,6 +116,25 @@ async function placeAt(ctx: PlanContext, d: IsoDate, _h: Half): Promise<{ ended:
   return { ended: null, note: placeNote(d, { pto: !!pto, hasHours: await hasHours(d) }) };
 }
 
+/** QT-1: the local timeboxes Take off answered for Undo: at most 4, each a start before its end, as instants. */
+function putBackBoxes(v: unknown): { start: string; end: string }[] {
+  if (v === undefined) return [];
+  if (!Array.isArray(v) || v.length > 4) throw new Invalid("boxes must be a list of at most 4");
+  return v.map((x) => {
+    const o = fields(x, ["start", "end"]);
+    if (typeof o.start !== "string" || typeof o.end !== "string") throw new Invalid("a box needs a start and an end");
+    let a: Temporal.Instant, b: Temporal.Instant;
+    try {
+      a = Temporal.Instant.from(o.start);
+      b = Temporal.Instant.from(o.end);
+    } catch {
+      throw new Invalid("a box's start and end must be times");
+    }
+    if (Temporal.Instant.compare(a, b) >= 0) throw new Invalid("a box must start before it ends");
+    return { start: o.start, end: o.end };
+  });
+}
+
 const pastReason = (d: IsoDate) => `${dayLabel(d)} is past. Its to-dos can only be ticked done or dropped`;
 
 /** Refuses changes to a past day (anything but done and drop), with the reason; null when allowed. */
@@ -419,13 +438,16 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
           add: { ...at, ...(plain ? { intention: before.title } : before.followUpId !== null ? { followUpId: before.followUpId } : before.kind === "draft" ? { draftId: before.draftId } : { itemId: before.itemId }) },
           ...(draft ? { draftId: draft.id } : {}),
           ...(before.carriedFrom !== null ? { carriedFrom: before.carriedFrom } : {}),
+          // QT-1 (WD-2 review): Undo puts a local timebox back at its time (an Outlook one never got this far).
+          ...(boxes.length ? { boxes: boxes.map((t) => ({ start: t.start, end: t.end })) } : {}),
         };
         return { ok: true, data: { result: "deleted", kind, title: before.title, timeboxes: boxes.length, draftId: draft?.id ?? null, undo, state: await state(ctx, plan, before.date) } };
       }
       case "pick.put_back": {
         // WD-2: Undo of Take off the plan, from what pick.take_off answered: the to-do is added to its block again by
         // pick.add's own rules, a plain to-do's kept draft goes, and a carried one is linked to where it came from.
-        const u = fields(fields(input, ["undo"]).undo, ["add"], ["draftId", "carriedFrom"]);
+        const u = fields(fields(input, ["undo"]).undo, ["add"], ["draftId", "carriedFrom", "boxes"]);
+        const boxes = putBackBoxes(u.boxes);
         const again = await planAction(ctx, "pick.add", u.add);
         if (!again.ok) return again;
         const pick = (again.data as { pick: import("../plan/types.ts").Pick }).pick;
@@ -436,6 +458,8 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
           if (kept && kept.parentItemId === null && kept.title === pick.title && pick.kind === "intention") await plan.removeDraft(d).catch(() => undefined);
         }
         if (u.carriedFrom !== undefined) await plan.relinkCarried(pick.id, id(u.carriedFrom, "carriedFrom")).catch(() => undefined);
+        // Only on the to-do's own day, local only (never Outlook): the time it had before Take off.
+        for (const b of boxes) if (Temporal.Instant.from(b.start).toZonedDateTimeISO(userZone((await clock(ctx)).model)).toPlainDate().toString() === pick.date) await plan.addTimebox({ date: pick.date, clientKey: pick.clientKey, pickId: pick.id, itemId: pick.itemId, title: pick.title, url: pick.itemUrl, start: b.start, end: b.end, outlook: false });
         return { ok: true, data: { pick: (await plan.getPick(pick.id)) ?? pick, state: await state(ctx, plan, pick.date) } };
       }
       case "pick.set_size": {

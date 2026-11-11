@@ -662,6 +662,21 @@ describe("UI-B: unfinished picks suggested in the next block", () => {
     expect((await t.plan.getPick(b.pick.id))?.status).toBe("planned");
   });
 
+  it("QT-1 (WD-2 review): Undo of Take off puts a local timebox back at its time", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    await t.run("planday.start", { date: D });
+    const a = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
+    await t.plan.addTimebox({ date: D, clientKey: "Adatum", pickId: a.pick.id, title: "x", start: `${D}T14:00:00Z`, end: `${D}T15:00:00Z`, outlook: false });
+    const r = await t.run<{ undo: Record<string, unknown> }>("pick.take_off", { id: a.pick.id });
+    const back = await t.run<{ pick: Pick }>("pick.put_back", { undo: r.undo });
+    const live = (await t.plan.timeboxesBetween(D, D)).filter((x) => x.pickId === back.pick.id && !x.removedAt);
+    expect(live).toHaveLength(1);
+    expect(live[0]).toMatchObject({ outlook: false });
+    expect(Temporal.Instant.from(live[0]!.start).epochMilliseconds).toBe(Temporal.Instant.from(`${D}T14:00:00Z`).epochMilliseconds);
+    expect(Temporal.Instant.from(live[0]!.end).epochMilliseconds).toBe(Temporal.Instant.from(`${D}T15:00:00Z`).epochMilliseconds);
+  });
+
   it("WD-2 review: a to-do moved here from another day comes off without going back on that day; Undo restores exactly one, linked again", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
