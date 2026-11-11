@@ -48,6 +48,7 @@ import { PickRow } from "./PickRow.tsx";
 import { userZone } from "../week/zone.ts";
 import { HalfScope } from "./scope.ts";
 import type { PanelFocus } from "./weekctx.ts";
+import { useDevOpsChanged } from "./DevOpsFresh.tsx";
 
 const mondayOf = (d: IsoDate) => {
   const x = Temporal.PlainDate.from(d);
@@ -121,6 +122,8 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
   // The day's drafts and the week's list, for the Add list (not read on a past day or a day off: nothing is added there).
   const [state, setState] = useState<PlanDayState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** DV-2: bumped when the block's client moves in DevOps, so the panel reads its lists again (quietly, in place). */
+  const [moved, setMoved] = useState(0);
   useEffect(() => {
     if (mode !== "add") return setState(null);
     let live = true;
@@ -132,7 +135,7 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
     return () => {
       live = false;
     };
-  }, [at.date, data, mode]);
+  }, [at.date, data, mode, moved]);
 
   // Esc closes the panel (not behind a menu or a dialog). In a text box it leaves the box first; the Add box has its own.
   useEffect(() => {
@@ -152,6 +155,9 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
   const [chosen, setChosen] = useState<string | null>(null);
   useEffect(() => setChosen(null), [at.date, at.half]);
   const { clientKey, choose } = panelClient(block?.clientKey ?? null, chosen, blockPicks);
+  // DV-2: like every other screen, through the shared hook: a change in this client's DevOps rereads the panel's own
+  // lists. Its DevOps items come with the week load, which follows the same signal.
+  useDevOpsChanged(clientKey ? [clientKey] : [], () => setMoved((n) => n + 1));
   const name = (k: string | null) => clients.find((c) => c.clientKey === k)?.clientName ?? week.days.flatMap((d) => [...d.am.focus, ...d.pm.focus]).find((f) => f.clientKey === k)?.clientName ?? k ?? "";
   const whole = !!day && (day.kind !== "work" || !!day.pto);
   const title = panelTitle(clientKey ? name(clientKey) : null, at.date, at.half, { wholeDay: whole, open: day?.pto ? "PTO" : overflow ? "Catch-up" : slot?.off ? "No working hours" : "Open" });

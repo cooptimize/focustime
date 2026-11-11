@@ -588,3 +588,23 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - Find an item answers from FocusTime's store (the review's call: the brief keeps the company PAT off a person's request, and the poller already reads the whole project). The cost: an item made in the last minute reads as "found no #N … If you just made it, Refresh checks now" until the next check, and the finder can't say the store is behind DevOps. Fine, or is a live read worth an exception?
 - The finder's Status line comes from my plan and the item, not Status's own read: a feature I only commented on this week reads "unless you commented on it this week". Good enough?
 - Not done from the review: "Changed in DevOps just now" also shows for my own writes from other screens (a story card comment raises the item's revision). Rare; worth separating?
+
+## WD-2
+
+- A plain to-do taken off the plan is kept as a draft with no feature, listed under To place ("Not in DevOps"). That was the route with no migration. Put back from there it is a draft story on the block, not a plain to-do (Undo right after the take off does restore the plain to-do). Is a draft the right home, or should a plain to-do stay plain while it waits (that needs a column or a table)?
+- To place lists that draft only in the panel of its own client's blocks (one client's items never show under another's heading). The line over Week ("N to place") doesn't count it. Should it?
+- "Above the blocks: the urgent strip, the chips, the moment card, and nothing else" was read literally, so the "What's next" card with Start focus is gone from the top of Day. Start focus is on the next to-do's row on its card, in the panel, in a to-do's ⋯ and under Focus in the top bar. Is that enough, or should what's next come back somewhere?
+- "2 setup steps left" still shows above the blocks while setup is unfinished (it is a first-run aid, not part of the day). Keep it there?
+- The line of chips keeps a secret about to expire (and, on the phone, a source that needs reconnecting) beside promises due and the VM. The brief named only promises due and the VM. Move the others elsewhere?
+- The 3840 day timeline beside Day's cards is gone: Day's Timeline (TY-1) covers it at every width, and its drop target took Day's old row drag. Anyone who used it on a very wide screen now switches to Timeline. Fine?
+- A to-do with a timebox on Outlook can't be taken off until its timebox is removed (removing an Outlook event is an external write with its own preview). Should Take off offer that preview in one step?
+- Taking off a to-do with a local timebox removes the timebox, and Undo puts the to-do back without its time. Should Undo restore the time too?
+- A deployment can't be taken off the plan (it is its window); Move and Drop work. Right?
+- "+" on a story that is on another block moves it here (with Undo) instead of refusing. The search's Enter does the same. Is a move the right default, or should it ask?
+- The block's ⋯ menu keeps Open and the calls. The panel does both, so the menu could go entirely; it stays so a right-click on a card isn't empty and a call is one step away. Drop it?
+- The command menu still has "Add work to today", "Add work to a day…" and "Add work to the week", which open Week with the panel. Should "to today" and "to a day" open Day instead?
+- Day's panel being open or closed is remembered per device on a computer; on the phone the sheet always starts closed. Fine?
+- Dragging a to-do out of its block opens the panel as the drop area, which moves the cards over while the drag is under way. It closes again if the to-do is dropped on another block. Acceptable, or should the drop area be a strip that doesn't move the grid?
+- The panel no longer lists a feature's teammates as faces with "N open stories by <name>" (PV-1's "No stories for you yet"); each teammate's story is a row with its owner and Take one. "Add a story for me" is "New draft story" under the feature, then Create in DevOps on the draft. Good enough?
+- Day's old card listed a block's meetings as rows in time order among the to-dos. Day's cards now show one meetings line that opens the list (as Week does), and the panel's agenda and the Timeline have the times. Does Day's Cards view need the meetings always open?
+- Not done here (the brief's "not in this step"): Week's timeline as calendar columns (WD-3).
