@@ -9,6 +9,7 @@ import { matches } from "./addpane.ts";
 import { isOpen, typeNeedsBreakdown } from "./process.ts";
 import { blockWord, defaultAddBlock, roomWords, type BlockAt } from "./addwork.ts";
 import { blockClient, isPickable } from "./rules.ts";
+import { aboutText, sizeChipText, type SizeScale, type StorySize } from "./estimate.ts";
 
 type FollowLike = { id: number; clientKey: string | null; due: string | null; openedAt: string; what: string; who?: string | null; hasWho?: boolean };
 type PickLike = { id: number; date: IsoDate; half: Half; clientKey: string; itemId: number | null; draftId: number | null; followUpId: number | null; status: string };
@@ -97,10 +98,17 @@ export function placedMap(weekPicks: readonly PickLike[], at: { date: IsoDate; h
 
 /** WD-2 follow-up: how the Add list is ordered: the project's backlog order, or by target date (none last). */
 export type ListSort = "backlog" | "target";
-type Ordered = Pick<WorkItem, "id" | "order"> & { targetDate?: IsoDate | null };
+type Ordered = Pick<WorkItem, "id" | "order"> & { targetDate?: IsoDate | null; parentId?: number | null };
 const byBacklog = (a: Ordered, b: Ordered) => (a.order ?? Number.POSITIVE_INFINITY) - (b.order ?? Number.POSITIVE_INFINITY) || a.id - b.id;
-const byTarget = (a: Ordered, b: Ordered) => (a.targetDate ?? "9999").localeCompare(b.targetDate ?? "9999") || byBacklog(a, b);
-export const sorter = (sort: ListSort) => (sort === "target" ? byTarget : byBacklog);
+/**
+ * By target date: an item with none uses its parent's (a story its feature's, `parent` finds it); items with neither
+ * go last, in backlog order. Equal dates keep backlog order.
+ */
+export function sorter(sort: ListSort, parent: (id: number) => Ordered | undefined = () => undefined) {
+  if (sort !== "target") return byBacklog;
+  const date = (x: Ordered) => x.targetDate ?? (x.parentId != null ? parent(x.parentId)?.targetDate : null) ?? "9999";
+  return (a: Ordered, b: Ordered) => date(a).localeCompare(date(b)) || byBacklog(a, b);
+}
 const open = (x: Pick<WorkItem, "stateCategory">) => isOpen(x.stateCategory);
 
 /**
@@ -110,7 +118,7 @@ const open = (x: Pick<WorkItem, "stateCategory">) => isOpen(x.stateCategory);
 export type AssignedGroup = {
   /** Null: my stories with no feature. */
   feature: WorkItem | null;
-  /** The feature is assigned to me (else it is here only because a story of mine is under it). */
+  /** The feature is assigned to me (else it is here because a story of mine is under it, or it is on my week). */
   mine: boolean;
   /** My open stories under it, in the list's order. */
   stories: WorkItem[];
@@ -131,7 +139,7 @@ export type AssignedInput = {
   drafts: readonly DraftStory[];
   /** The week's to-dos (any client). */
   weekPicks: readonly PickLike[];
-  /** Ids of the client's features on this week's list. */
+  /** Ids of the client's features on this week's list (a feature I put on my week is listed even when it isn't mine). */
   onWeek?: ReadonlySet<number>;
   sort?: ListSort;
 };
@@ -139,16 +147,18 @@ export type AssignedInput = {
 /**
  * "Assigned to you" for one client (GD-2: only that client's key): every open feature assigned to me and every open
  * story assigned to me, grouped under its feature. A story of mine shows under its feature even when the feature isn't
- * mine; one with no feature goes under "No feature", last. Features in the list's order (backlog, or target date); a
+ * mine; one with no feature goes under "No feature", last. A feature on my week (on the week's list, placed as a
+ * placeholder, or with a story of it placed) is listed too, even when it isn't mine and holds no story of mine; it
+ * says whose it is. Features in the list's order (backlog, or target date); a
  * feature I don't own sits where its first story of mine falls. Done, closed and removed items are left out; epics
  * are never groups of their own.
  */
 export function assignedList(i: AssignedInput): AssignedGroup[] {
   const w = i.work;
   if (!w) return [];
-  const cmp = sorter(i.sort ?? "backlog");
   const pool = [...new Map([...w.items, ...w.children, ...(w.committed ?? []), ...(w.parents ?? [])].map((x) => [x.id, x])).values()];
   const byId = new Map(pool.map((x) => [x.id, x]));
+  const cmp = sorter(i.sort ?? "backlog", (id) => byId.get(id));
   const placed = new Set(i.weekPicks.filter(live).map(keyOf).filter((k): k is string => !!k));
   const isFeature = (x: WorkItem) => x.level === "portfolio" && x.tier !== "epic";
   const myStories = pool.filter((x) => x.assignedToMe && isPickable(x) && open(x));
@@ -163,7 +173,12 @@ export function assignedList(i: AssignedInput): AssignedGroup[] {
     const k = parentOf(st)?.id ?? null;
     under.set(k, [...(under.get(k) ?? []), st]);
   }
-  const ids = new Set<number>([...myFeatures.map((f) => f.id), ...[...under.keys()].filter((k): k is number => k !== null)]);
+  // On my week: on the week's list, placed as a placeholder, or the feature of a placed story.
+  const isPlaced = (x: WorkItem) => placed.has(`i${i.clientKey}:${x.id}`);
+  const weekIds = pool
+    .filter((x) => isFeature(x) && open(x) && (!!i.onWeek?.has(x.id) || isPlaced(x) || pool.some((c) => c.parentId === x.id && isPickable(c) && isPlaced(c))))
+    .map((x) => x.id);
+  const ids = new Set<number>([...myFeatures.map((f) => f.id), ...[...under.keys()].filter((k): k is number => k !== null), ...weekIds]);
   const group = (id: number): AssignedGroup & { key: Ordered } => {
     const feature = byId.get(id)!;
     const mine = !!feature.assignedToMe && isFeature(feature) && open(feature);
@@ -203,7 +218,8 @@ export type MoreGroup = { feature: WorkItem | null; stories: WorkItem[] };
  * (`shown`), as are epics. A story whose feature is in Assigned to you sits there (behind "N more in this feature").
  */
 export function moreList(all: readonly WorkItem[], shown: ReadonlySet<number>, sort: ListSort = "backlog"): MoreGroup[] {
-  const cmp = sorter(sort);
+  const byId = new Map(all.map((x) => [x.id, x]));
+  const cmp = sorter(sort, (id) => byId.get(id));
   const openOnes = all.filter((x) => open(x) && !shown.has(x.id) && !x.assignedToMe);
   const features = openOnes.filter((x) => x.level === "portfolio" && x.tier !== "epic").sort(cmp);
   const stories = openOnes.filter((x) => isPickable(x));
@@ -215,10 +231,29 @@ export function moreList(all: readonly WorkItem[], shown: ReadonlySet<number>, s
 }
 export const moreCount = (groups: readonly MoreGroup[]) => groups.reduce((n, g) => n + (g.feature ? 1 : 0) + g.stories.length, 0);
 
-/** A row's hover: its type and number, state, target date and size, joined with " · " (what the row doesn't spell out). */
-export function hoverWords(x: Pick<WorkItem, "type" | "id" | "state"> & { targetDate?: IsoDate | null; size?: number | null; assignedTo?: string | null }, o: { sizeName?: string } = {}): string {
+/**
+ * A row's hover: its type and number, state, target date and size, joined with " · " (what the row doesn't spell out).
+ * `size` is FocusTime's own words for it ("M · 2h", "Size? · 2h", "about 6h"), never the DevOps field's raw value;
+ * left out when there is none to say.
+ */
+export function hoverWords(x: Pick<WorkItem, "type" | "id" | "state"> & { targetDate?: IsoDate | null }, size?: string | null): string {
   const target = x.targetDate ? `target ${Temporal.PlainDate.from(x.targetDate).toLocaleString("en-US", { month: "short", day: "numeric" })}` : "no target date";
-  return [`${x.type} ${x.id}`, x.state, target, x.size != null ? `${o.sizeName ?? "size"} ${x.size}` : "not sized"].join(" · ");
+  return [`${x.type} ${x.id}`, x.state, target, ...(size ? [size] : [])].join(" · ");
+}
+
+/**
+ * A row's size in FocusTime's words, for its hover: a story's size letter and hours from its to-do this week, else
+ * from the week's list, else "Size? · 2h" (the person's assumption); a feature's estimate ("about 6h") when it is on
+ * the week's list with one, else nothing.
+ */
+export function sizeHover(
+  x: Pick<WorkItem, "id" | "level">,
+  o: { clientKey: string; weekPicks: readonly (PickLike & { size?: StorySize | null })[]; weekFeatures: readonly { clientKey: string; itemId: number; estimate: number | null; size?: StorySize | null }[]; scale: SizeScale },
+): string | null {
+  const listed = o.weekFeatures.find((f) => f.clientKey === o.clientKey && f.itemId === x.id);
+  if (x.level === "portfolio") return listed?.estimate ? aboutText(listed.estimate) : null;
+  const todo = o.weekPicks.find((p) => live(p) && p.clientKey === o.clientKey && p.itemId === x.id);
+  return sizeChipText(todo?.size ?? listed?.size ?? null, o.scale);
 }
 
 /** The header's one status line: "At risk · 2 reasons" (the worst state and how many reasons), or null with none. */

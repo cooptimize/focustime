@@ -448,7 +448,11 @@ describe.skipIf(!CHROMIUM)("WD-2: one panel, one Day (browser, demo)", () => {
     // Hover: the type and number, the state, the target date and the size; nothing of that is on the row itself.
     const tips = await panel(page).locator(".bp-assigned .aw-feature .aw-feat-name[title]").evaluateAll((els) => els.map((e) => e.getAttribute("title")!));
     expect(tips.length).toBeGreaterThan(1);
-    for (const t of tips) expect(t).toMatch(/^\S.* \d+ · \S.* · (target \w+ \d+|no target date) · (\S+ \d+|not sized)$/);
+    // A feature's size is its estimate when it is on the week's list; a story's is the letter and its hours, never the DevOps value.
+    for (const t of tips) expect(t).toMatch(/^\S.* \d+ · \S.* · (target \w+ \d+|no target date)( · about \d+h)?$/);
+    const storyTips = await panel(page).locator(".bp-assigned .aw-row .aw-row-title[title]").evaluateAll((els) => els.map((e) => e.getAttribute("title")!).filter((t) => /(target|no target date)/.test(t)));
+    expect(storyTips.length).toBeGreaterThan(0);
+    for (const t of storyTips) expect(t).toMatch(/ · (XS|S|M|L|Size\?) · \d+ ?(h|min)$/);
     expect(tips.some((t) => /target \w+ \d+/.test(t))).toBe(true);
     expect(await panel(page).locator(".bp-assigned").innerText()).not.toMatch(/target/i);
     const more = panel(page).locator(".bp-head").getByRole("button", { name: /^More for/ });

@@ -1,7 +1,7 @@
 // WD-2: the block panel's model: what a block can take, whose work it lists, what's on it, the Add list's order, the
 // search with its two "New" rows, where the panel opens, and what Take off the plan does to each kind of to-do.
 import { describe, expect, it } from "vitest";
-import { assignedList, draftParents, hoverWords, looseDrafts, moreCount, moreList, riskLine, meetingsWords, moveHighlight, onBlock, panelBlock, panelClient, panelMode, panelTitle, panelWhen, placedMap, RESULT_LIMIT, searchPanel, takeOffRule, takenOffWords, todoSort } from "./blockpanel.ts";
+import { assignedList, draftParents, hoverWords, looseDrafts, moreCount, moreList, riskLine, meetingsWords, moveHighlight, onBlock, sizeHover, panelBlock, panelClient, panelMode, panelTitle, panelWhen, placedMap, RESULT_LIMIT, searchPanel, takeOffRule, takenOffWords, todoSort } from "./blockpanel.ts";
 import type { BlockAt } from "./addwork.ts";
 import type { DraftStory, Pick } from "./types.ts";
 import type { WorkItem } from "../week/types.ts";
@@ -119,6 +119,39 @@ describe("Assigned to you", () => {
     expect(ids(assignedList({ ...base, work: flipped, sort: "target" })).map(([f]) => f)).toEqual([3, 2, 1, null]);
     expect(ids(assignedList({ ...base, work: flipped, sort: "backlog" })).map(([f]) => f)).toEqual([2, 1, 3, null]);
   });
+  it("a feature on my week is listed even when it isn't mine and holds no story of mine, and says whose it is", () => {
+    // Feature 6 is Dana's with only her story 61; feature 7 is Dana's with nothing of mine either.
+    const theirs = [feature(6, { assignedTo: "Dana Morales", order: 40 }), item(61, { parentId: 6, assignedTo: "Dana Morales", order: 41 }), feature(7, { assignedTo: "Dana Morales", order: 45 })];
+    const w = { ...mineWork, items: [...mineWork.items, ...theirs] };
+    const has = (x: Partial<Parameters<typeof assignedList>[0]>, id: number) => assignedList({ ...base, work: w, ...x }).find((g) => g.feature?.id === id);
+    // Not on my week: neither is listed.
+    expect(has({}, 6)).toBeUndefined();
+    // On the week's list.
+    const listed = has({ onWeek: new Set([6]) }, 6)!;
+    expect([listed.mine, listed.feature?.assignedTo, listed.stories, listed.others.map((x) => x.id)]).toEqual([false, "Dana Morales", [], [61]]);
+    // Placed as a placeholder, and something of it placed (her story on one of my blocks).
+    expect(has({ weekPicks: [pick(1, { itemId: 7 })] }, 7)?.mine).toBe(false);
+    expect(has({ weekPicks: [pick(1, { itemId: 61 })] }, 6)?.label).toBe("1 of 1 on");
+    expect(has({ weekPicks: [pick(1, { itemId: 61, status: "dropped" })] }, 6)).toBeUndefined();
+    // Another client's to-do with the same number doesn't count; nor does a closed feature on the list.
+    expect(has({ weekPicks: [pick(1, { itemId: 7, clientKey: "fabrikam" })] }, 7)).toBeUndefined();
+    expect(assignedList({ ...base, onWeek: new Set([4]) }).some((g) => g.feature?.id === 4)).toBe(false);
+    // In backlog order it sits where the feature itself falls (order 40: after feature 1, before feature 3).
+    expect(ids(assignedList({ ...base, work: w, onWeek: new Set([6]) })).map(([f]) => f)).toEqual([2, 1, 6, 3, null]);
+  });
+  it("by target date, a story with none uses its feature's date; items with neither go last, in backlog order", () => {
+    // Under my feature 1 (Dec 1): 11 has no date, 12 targets Nov 25. No feature: 31 (none), 32 (Nov 12), 33 (none).
+    const w = { ...mineWork, items: [...mineWork.items.map((x) => (x.id === 12 ? { ...x, targetDate: "2026-11-25" } : x)), item(32, { assignedToMe: true, order: 9, targetDate: "2026-11-12" }), item(33, { assignedToMe: true, order: 2 })] };
+    const out = ids(assignedList({ ...base, work: w, sort: "target" }));
+    expect(out.find(([f]) => f === 1)?.[1]).toEqual([12, 11]);
+    expect(out.find(([f]) => f === null)?.[1]).toEqual([32, 33, 31]);
+    // A feature I don't own sorts by my first story under it, which takes the feature's date when it has none.
+    const dated = { ...mineWork, items: mineWork.items.map((x) => (x.id === 21 ? { ...x, targetDate: null } : x)), parents: [feature(2, { assignedTo: "Dana Morales", order: 90, targetDate: "2026-12-20" })] };
+    expect(ids(assignedList({ ...base, work: dated, sort: "target" })).map(([f]) => f)).toEqual([1, 2, 3, null]);
+    // More in the client: the same rule.
+    const all = [feature(8, { order: 1, targetDate: "2026-11-30" }), item(81, { parentId: 8, order: 2 }), item(82, { parentId: 8, order: 3, targetDate: "2026-11-15" }), item(91, { order: 4 }), item(92, { order: 5, targetDate: "2026-12-05" })];
+    expect(moreList(all, new Set(), "target").map((g) => g.stories.map((x) => x.id))).toEqual([[82, 81], [92, 91]]);
+  });
   it("no DevOps read is an empty list; a new draft story goes under a feature shown, or none yet", () => {
     expect(assignedList({ ...base, work: undefined })).toEqual([]);
     expect(draftParents(assignedList(base)).map((p) => p.id)).toEqual([2, 1, 3, null]);
@@ -168,8 +201,19 @@ describe("More in the client", () => {
 
 describe("a row's hover and the header's status line", () => {
   it("the hover has the type and number, state, target date and size", () => {
-    expect(hoverWords(item(11, { targetDate: "2026-11-20", size: 3 }))).toBe("User Story 11 · Active · target Nov 20 · size 3");
-    expect(hoverWords(item(12))).toBe("User Story 12 · Active · no target date · not sized");
+    expect(hoverWords(item(11, { targetDate: "2026-11-20", size: 3 }), "M · 2h")).toBe("User Story 11 · Active · target Nov 20 · M · 2h");
+    expect(hoverWords(item(12))).toBe("User Story 12 · Active · no target date");
+  });
+  it("the size is FocusTime's: the letter and its hours, never the DevOps field's value", () => {
+    const scale = { XS: 30, S: 60, M: 120, L: 240, unsized: 120 };
+    const o = { clientKey: "contoso", scale, weekPicks: [pick(1, { itemId: 11, size: "L" }), pick(2, { itemId: 12, size: "S", status: "dropped" })], weekFeatures: [{ clientKey: "contoso", itemId: 12, estimate: null, size: "S" as const }, { clientKey: "contoso", itemId: 1, estimate: 360 }, { clientKey: "fabrikam", itemId: 2, estimate: 360 }] };
+    // Its to-do's size, else the week list's, else the assumption; the raw 8 points never shows.
+    expect(sizeHover(item(11, { size: 8 }), o)).toBe("L · 4h");
+    expect(sizeHover(item(12, { size: 8 }), o)).toBe("S · 1h");
+    expect(sizeHover(item(13, { size: 8 }), o)).toBe("Size? · 2h");
+    // A feature: its estimate when it is on the week's list with one (this client's), else nothing.
+    expect(sizeHover(feature(1), o)).toBe("about 6h");
+    expect(sizeHover(feature(2), o)).toBeNull();
   });
   it("one status line: the worst state and how many reasons; none with no risk", () => {
     expect(riskLine([])).toBeNull();

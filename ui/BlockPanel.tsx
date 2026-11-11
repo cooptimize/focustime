@@ -12,7 +12,7 @@ import { DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { BreakDownButton } from "./BreakDownPanel.tsx";
 import { blockWord, removeRule, storiesUnder, toPlaceCount, toPlaceLine, toPlaceShort, type ToPlace as ToPlaceCounts } from "../plan/addwork.ts";
-import { assignedList, draftParents, hoverWords, looseDrafts, meetingsWords, moreCount, moreList, moveHighlight, onBlock, panelClient, panelMode, panelTitle, panelWhen, placedMap, riskLine, searchPanel, takeOffRule, type AssignedGroup, type ListSort, type MoreGroup, type NewRow, type PanelMode, type Result } from "../plan/blockpanel.ts";
+import { assignedList, draftParents, hoverWords, looseDrafts, meetingsWords, moreCount, moreList, moveHighlight, onBlock, sizeHover, panelClient, panelMode, panelTitle, panelWhen, placedMap, riskLine, searchPanel, takeOffRule, type AssignedGroup, type ListSort, type MoreGroup, type NewRow, type PanelMode, type Result } from "../plan/blockpanel.ts";
 import { FoldLine } from "./plan/FoldLine.tsx";
 import { planMinutes } from "../plan/fit.ts";
 import { freeMinutes } from "../week/free.ts";
@@ -104,6 +104,8 @@ type Ctx = {
   places: { date: IsoDate; half: "AM" | "PM"; label: string }[];
   /** A past week is a review. */
   past: boolean;
+  /** A row's hover: type and number, state, target date, and its size in FocusTime's words. */
+  hover: (x: WorkItem) => string;
 };
 
 type Props = {
@@ -217,6 +219,7 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
         clientKey,
         at,
         place,
+        hover: (x) => hoverWords(x, sizeHover(x, { clientKey, weekPicks, weekFeatures: state?.weekFeatures ?? [], scale: pv.sizes })),
         where: (key) => {
           const p = placed.get(key);
           return p ? { here: p.here, label: p.here ? "On this block" : blockWord(p.date, p.half, wholeOf(p.date)), pickId: p.pickId, done: p.done } : null;
@@ -835,7 +838,7 @@ function ItemAdd({ item, ctx, take = false }: { item: WorkItem; ctx: Ctx; take?:
   return (
     <AddRow ctx={ctx} k={`i${ctx.clientKey}:${item.id}`} d={{ clientKey: ctx.clientKey, itemId: item.id, size: null, title: item.title }} menu={menu}>
       <TypeIcon clientKey={ctx.clientKey} type={item.type} />
-      <span className="aw-row-title" title={hoverWords(item)}>
+      <span className="aw-row-title" title={ctx.hover(item)}>
         <WorkLink clientKey={ctx.clientKey} url={item.url}>{item.title}</WorkLink>
       </span>
       {theirs && <span className="aw-who" title="Who it is assigned to in DevOps">{item.assignedTo ?? "Unassigned"}</span>}
@@ -874,7 +877,7 @@ function Group({ g, ctx, pinnedHere, onWeek, onAddToWeek, menuOf }: { g: Assigne
         )}
         {f && <TypeIcon clientKey={ctx.clientKey} type={f.type} />}
         {f ? (
-          <span className="aw-feat-name" title={hoverWords(f)}>
+          <span className="aw-feat-name" title={ctx.hover(f)}>
             <ItemTitleLink clientKey={ctx.clientKey} id={f.id} url={f.url}>{f.title}</ItemTitleLink>
           </span>
         ) : (

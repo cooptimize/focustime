@@ -141,12 +141,12 @@ None of these marks a to-do dropped. Drop is still its own entry in the to-do's 
 |---|---|
 | ADD › This week's features (features on my week, with their stories) | ADD › **Assigned to you**: my open features and my open stories for the client, each story under its feature, even when the feature isn't mine ("No feature" last) |
 | ADD › Other work assigned to you (collapsed) | Part of Assigned to you |
-| A week feature that isn't mine, with no story of mine | Under **More in <client>** |
+| A week feature that isn't mine, with no story of mine | Still in **Assigned to you** (it is on my week), saying whose it is |
 | Nothing listed other people's work unless it was under my feature | **More in <client>** (collapsed): everything else open in the client's DevOps; the search covers it |
 | A feature's teammates' stories listed among mine | Folded behind "2 more in this feature" (with Take one) |
 | "2 of 3 on" on every feature with stories | Only once the feature has work on this week |
 | Backlog order only | The panel's ⋯: Sort by target date / Sort by backlog order, remembered on the device |
-| Target date not shown | On hover, with the state and size |
+| Target date not shown | On hover, with the state and FocusTime's size ("M · 2h"); sorting by it, a story with none uses its feature's |
 | Two risk sentences above the to-dos | One line under the time ("At risk · 2 reasons"); reasons on hover and on a click |
 | A browser select for "New draft story"'s feature; selects in Check-in's walk-on and Close out's "+ Another client" | The app's own menu and picker |
 
