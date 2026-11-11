@@ -134,6 +134,23 @@ export type ConversationsPort = {
 };
 
 export const PREVIEW_MS = 5 * 60_000;
+const cleanTitleText = (t: string) => t.replace(/\s+/g, " ").trim();
+const msOf = (stamp: string) => Date.parse(String(stamp).replace(/\[.*\]$/, ""));
+/** QC-1: a confirmed create of the same title, type and parent this recently counts as a twin (a lost response, a second tab). */
+const TWIN_MS = 15 * 60_000;
+/**
+ * QC-1: a create that would make a second item: the draft already in DevOps or on its way, or the same title, type and
+ * parent pending, maybe landed, or confirmed in the last minutes (not undone). Checked at the preview and again at confirm.
+ */
+async function twinOf(plan: PlanStore, c: { clientKey: string; title: string; type: string; parentId: number | null; draftId: number | null }, nowMs: number): Promise<{ message: string } | null> {
+  if (c.draftId !== null) {
+    const d = await plan.getDraft(c.draftId);
+    if (d?.devopsId) return { message: `"${d.title}" is already in DevOps as #${d.devopsId}` };
+  }
+  const e = (await plan.devopsWriteLog(200)).find((x) => x.op === "create" && x.clientKey === c.clientKey && x.undoneBy === null && ((c.draftId !== null && x.draftId === c.draftId && x.status !== "failed" && x.status !== "refused") || (x.title === c.title && x.after.Type === c.type && x.parentId === c.parentId && (x.status === "pending" || x.status === "unconfirmed" || (x.status === "confirmed" && nowMs - msOf(x.updatedAt) < TWIN_MS)))));
+  if (!e) return null;
+  return { message: e.status === "confirmed" ? `"${e.title}" is already in DevOps as #${e.itemId}` : `"${e.title}" may already be in DevOps. Retry it in Settings > Data > Audit log: it checks first and won't make a second one` };
+}
 type Held = {
   id: string; expiresAt: number; clientKey: string; org: string; project: string; projectName: string; op: WriteOp; itemId: number | null; parentId: number | null; title: string;
   identity: string; ops: PatchOp[] | { text: string; commentId?: number } | null; rev: number | null; before: Record<string, string | null>; after: Record<string, string | null>;
@@ -144,6 +161,10 @@ type Held = {
   proposal?: { draftId: string; proposalId: string } | null;
   /** CV-1: the conversation, commitment and suggestion it comes from. */
   conv?: DevOpsWriteEntry["conv"];
+  /** QC-1: a New form create, checked again for a twin at confirm. */
+  quick?: boolean;
+  /** QC-1: the text is the draft's AI version (GD-2 point 5: another client's name is always replaced, never sent on a confirm). */
+  aiText?: boolean;
   /** AH-1: extra lines for the preview (a kept half-day, who gets a notice). */
   notes?: string[];
   /** CV-4: the conversation's images offered, and the ones ticked (uploaded on confirm with my token). */
@@ -217,7 +238,7 @@ class Refused extends Error {
   }
 }
 
-type Env = { reportSince: DevOpsWriteContext["reportSince"]; cfg: AppConfig; clientKey: string; org: string; project: string; projectName: string; pat: Pat; me: DevOpsIdentityRow; writer: DevOpsWriter; plan: PlanStore; requests: DevOpsWriteContext["requests"]; conversations: DevOpsWriteContext["conversations"]; ahead: AheadPort | undefined; clientName: string };
+type Env = { reportSince: DevOpsWriteContext["reportSince"]; cfg: AppConfig; clientKey: string; org: string; project: string; projectName: string; pat: Pat; me: DevOpsIdentityRow; writer: DevOpsWriter; plan: PlanStore; requests: DevOpsWriteContext["requests"]; conversations: DevOpsWriteContext["conversations"]; ahead: AheadPort | undefined; clientName: string; /** QC-1: the clock, for the twin check. */ now: () => string };
 
 /** The client's org and project (never its company PAT) and my write PAT, checked to belong together. */
 async function envFor(ctx: DevOpsWriteContext, plan: PlanStore, cfg: AppConfig, clientKey: string): Promise<Env> {
@@ -238,7 +259,7 @@ async function envFor(ctx: DevOpsWriteContext, plan: PlanStore, cfg: AppConfig, 
   } catch {
     throw new Refused(NO_PAT(clientName(clientKey)), 409, "no_write_pat");
   }
-  return { reportSince: ctx.reportSince, cfg, clientKey, org: target.org, project: target.project, projectName: target.projectName ?? target.project, pat, me, writer: ctx.writer, plan, requests: ctx.requests, conversations: ctx.conversations, ahead: ctx.ahead, clientName: clientName(clientKey) };
+  return { reportSince: ctx.reportSince, cfg, clientKey, org: target.org, project: target.project, projectName: target.projectName ?? target.project, pat, me, writer: ctx.writer, plan, requests: ctx.requests, conversations: ctx.conversations, ahead: ctx.ahead, clientName: clientName(clientKey), now: ctx.now };
 }
 
 async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
@@ -480,7 +501,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
         let h: HeldIn | string;
         try {
           h = await previewOne(env, c0 && typeof c0 === "object" && !Array.isArray(c0) ? c : c0, tz, memo);
-          if (typeof h !== "string") h = await withBoundary(ctx, env, h, wants === "replace");
+          if (typeof h !== "string") h = await withBoundary(ctx, env, h, wants === "replace" || h.aiText === true);
         } catch (e) {
           if (o.changes !== undefined && (e instanceof Refused || e instanceof WriteFailure || e instanceof Invalid) && PER_ITEM.has(String((c as { kind?: unknown })?.kind))) {
             // SR-1: Push all's lines carry a key back, so each refusal lands on its own line.
@@ -520,6 +541,14 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
         try {
           const env = await envOf(h.clientKey);
           // DS-1: a card that already has a write is never sent again (Retry checks that one instead).
+          // QC-1: two tabs, or a lost answer: a New form create is checked for a twin again just before it is sent.
+          if (h.quick && h.type) {
+            const twin = await twinOf(plan, { clientKey: h.clientKey, title: h.title, type: h.type, parentId: h.parentId, draftId: h.draftId }, msOf(ctx.now()));
+            if (twin) {
+              results.push({ error: twin.message, status: 409, code: "pending_write" });
+              continue;
+            }
+          }
           if (h.proposal && (await plan.storyDraftWrites(h.proposal.draftId)).has(h.proposal.proposalId)) {
             results.push({ error: `"${h.title}" was already sent. Retry it; it checks first and won't make a second one`, status: 409 });
             continue;
@@ -971,7 +1000,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const description = o.description !== undefined ? str(o.description, "description", 8000, true) : (draft?.description ?? null);
       const acceptance = o.acceptance !== undefined ? str(o.acceptance, "acceptance", 8000, true) : (draft?.acceptance ?? null);
       const date = o.date !== undefined && o.date !== null && o.date !== "" ? isoDate(o.date, "date") : o.date === undefined ? (draft?.targetDate ?? null) : null;
-      const startDay = o.date === undefined ? (draft?.startDate ?? null) : null;
+      const startDay = draft?.startDate ?? null;
       const sizeIn = o.size === undefined || o.size === null || o.size === "" ? null : Number(o.size);
       if (sizeIn !== null && (!Number.isFinite(sizeIn) || sizeIn < 0 || sizeIn > 10_000)) throw new Invalid("size must be a number from 0 to 10000");
       const info = await writer.typeFieldInfo(org, pat, project, type);
@@ -993,15 +1022,15 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const missing = missingRequired(info, new Set(ops.filter((x) => x.path.startsWith("/fields/")).map((x) => x.path.slice(8))));
       if (missing.length) throw new Refused(`${env.projectName}'s process needs ${missing.map((f) => f.name ?? f.ref).join(", ")} on a new ${type}, which FocusTime doesn't fill. Create this one in DevOps, or save it as a draft`, 409, "required_field");
       // Never two: a create of this title, type and parent that may have landed (from another tab or a double click).
-      const same = (await plan.devopsWriteLog(200)).find((e) => e.op === "create" && e.clientKey === env.clientKey && e.title === title && e.after.Type === type && e.parentId === (parent?.id ?? null) && (e.status === "pending" || e.status === "unconfirmed" || (draft !== null && e.draftId === draft.id && e.status === "confirmed" && e.undoneBy === null)));
-      if (same) throw new Refused(same.status === "confirmed" ? `"${title}" is already in DevOps as #${same.itemId}` : `"${title}" may already be in DevOps. Retry it in Settings > Data > Audit log: it checks first and won't make a second one`, 409, "pending_write");
+      const twin = await twinOf(plan, { clientKey: env.clientKey, title, type, parentId: parent?.id ?? null, draftId: draft?.id ?? null }, msOf(env.now()));
+      if (twin) throw new Refused(twin.message, 409, "pending_write");
       const after: Record<string, string | null> = {
         Type: type, Title: title, Description: description, ...(acField ? { "Acceptance criteria": acceptance } : {}),
         "Assigned to": assignee?.text ?? "Nobody", ...(targetDate ? { "Target date": targetDate.date } : {}), ...(startDate ? { "Start date": startDate.date } : {}), ...(sizeField && sizeIn !== null ? { Size: String(sizeIn) } : {}),
         Area: area ?? "The project's default", Iteration: iteration ?? "The project's default", Parent: parent ? `#${parent.id} ${parent.title}` : "None",
       };
       const notes = [`Created as you: DevOps shows ${env.me.name} as who made it.`, ...(draft ? ["The draft becomes this item wherever it is placed, keeping its block, size and time."] : []), ...(assignee && assignee.email !== env.me.email ? ["DevOps tells them as it usually does; FocusTime sends no note of its own."] : [])];
-      return { ...base(env), ...none, op: "create", itemId: null, parentId: parent?.id ?? null, title, ops, rev: null, before: {}, after, type, draftId: draft?.id ?? null, notes };
+      return { ...base(env), ...none, op: "create", itemId: null, parentId: parent?.id ?? null, title, ops, rev: null, before: {}, after, type, draftId: draft?.id ?? null, notes, quick: true, aiText: !!draft?.ai && ((!!draft.ai.title && title === cleanTitleText(draft.ai.title)) || (!!draft.ai.description && description === draft.ai.description)) };
     }
     case "proposal_create": {
       // DS-1: one kept card of a Draft stories draft, as a story under its feature: the process's story type, the

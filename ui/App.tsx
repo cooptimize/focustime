@@ -1323,11 +1323,11 @@ export function App() {
       } else if ((k === "m" || k === "M") && free && settingsAt === null) {
         e.preventDefault();
         goNav(checkInOpen ? navOf.today() : navOf.today("checkin"));
-      } else if (e.key === "N" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !typing && !captureOpen) {
+      } else if (e.key === "N" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !typing && !captureOpen && topOverlay(document) !== "modal") {
         // QC-1: Shift+N, the New form for the selected block's client (or the one I choose).
         e.preventDefault();
         openNew({ from: "command", clientKey: envRef.current?.selection.clientKey ?? null });
-      } else if ((e.key === "n" || e.key === "N" || ((e.key === "c" || e.key === "C") && !e.ctrlKey && !e.metaKey && !e.altKey)) && !typing && !captureOpen) {
+      } else if ((e.key === "n" || (e.key === "N" && !e.shiftKey) || ((e.key === "c" || e.key === "C") && !e.ctrlKey && !e.metaKey && !e.altKey)) && !typing && !captureOpen) {
         // P1: C opens Capture too.
         e.preventDefault();
         setCaptureOpen(true);

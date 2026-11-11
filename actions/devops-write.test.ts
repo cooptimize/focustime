@@ -1341,6 +1341,18 @@ describe("QC-1: new_item, the New form's create", () => {
     expect(posts(s)).toHaveLength(1);
   });
 
+  it("two tabs: two previews of the same create, both confirmed, make one item; a later same create says where it is", async () => {
+    const a = await s.preview({ kind: "new_item", title: "Two tabs", type: "Feature" });
+    const b = await s.preview({ kind: "new_item", title: "Two tabs", type: "Feature" });
+    const ra = await s.confirm(a);
+    expect(ra.confirmed).toBe(true);
+    expect(await s.fail("devops.confirm", { previewId: b.previewId })).toMatchObject({ status: 409, error: `"Two tabs" is already in DevOps as #${ra.entry.itemId}` });
+    expect(posts(s)).toHaveLength(1);
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "Two tabs", type: "Feature" } })).error).toBe(`"Two tabs" is already in DevOps as #${ra.entry.itemId}`);
+    // Another type or another title is not a twin.
+    expect((await s.preview({ kind: "new_item", title: "Two tabs", type: "Epic" })).fields.length).toBeGreaterThan(0);
+  });
+
   it("assigning: nobody, or only someone on the client's project", async () => {
     const p = await s.preview({ kind: "new_item", title: "Nobody's", type: "Feature", assignTo: null });
     expect(shown(p)["Assigned to"]).toBe("Nobody");

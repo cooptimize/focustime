@@ -93,7 +93,7 @@ describe.skipIf(!CHROMIUM)("WD-2: one panel, one Day (browser, demo)", () => {
     await expect.poll(() => inBox(page)).toBe(true);
     await page.keyboard.type("Ring the print shop about proofs");
     const rows = panel(page).locator("#bp-results .bp-result");
-    await expect.poll(() => rows.allInnerTexts().then((t) => t.map((x) => x.replace(/^\+\s*/, "").split("\n")[0]))).toEqual(["New to-do: Ring the print shop about proofs", "New draft story: Ring the print shop about proofs"]);
+    await expect.poll(() => rows.allInnerTexts().then((t) => t.map((x) => x.replace(/^\+\s*/, "").split("\n")[0]))).toEqual(["New to-do: Ring the print shop about proofs", "New draft story: Ring the print shop about proofs", "New feature: Ring the print shop about proofs"]);
     await expect(panel(page).locator(".bp-result.hl").innerText()).resolves.toContain("New to-do: Ring the print shop about proofs");
     await page.keyboard.press("Enter");
     await expect.poll(() => cardTitles(page, MON, "PM")).toContain("Ring the print shop about proofs");

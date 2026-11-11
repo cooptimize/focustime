@@ -40,6 +40,7 @@ const optionsMemo = new Map<string, Promise<NewOptions>>();
 /** Forget what was read (after a create: the new item can be a parent next). */
 export const forgetNewOptions = () => optionsMemo.clear();
 
+/** What the form reads per client, fresh each time it opens (a PAT added in Settings shows at once); kept only while it is open. */
 function useOptions(clientKey: string | null): { opts: NewOptions | null; error: string | null } {
   const [opts, setOpts] = useState<NewOptions | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +61,8 @@ type Client = { clientKey: string; clientName: string };
 
 export function NewItemDialog({ place, hooks, clients, colors, today, onClose }: { place: NewPlace; hooks: NewHooks; clients: readonly Client[]; colors: (k: string) => string | undefined; today: string; onClose: () => void }) {
   const w = useDevOpsWrite();
+  // Read fresh on every open: my write PAT, the process and the parents can change between opens.
+  useState(() => forgetNewOptions());
   const [draftId, setDraftId] = useState<number | null>(place.from === "draft" || place.from === "capture" ? place.draftId : null);
   // A draft (from Capture or a draft's row): its own values, and its AI version once it is there (never required).
   const dv = useDraftViewMaybe(draftId);
@@ -144,6 +147,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
       try {
         const r = await call<{ draft: DraftStory }>("draft.add", draftBody());
         await hooks.place(r.draft);
+        placedHere.current = true;
         did = r.draft.id;
         setDraftId(did);
       } catch (e) {
@@ -160,6 +164,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
         const c: Created = { clientKey, itemId: r.created[0].itemId, url: r.created[0].url, title: madeTitle, type, parentId, assignTo: change.assignTo };
         window.dispatchEvent(new CustomEvent(CREATED_EVENT, { detail: c }));
         hooks.onCreated?.(c);
+        placedHere.current = false;
         onClose();
         return;
       }
@@ -169,6 +174,12 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
       if (r.error) setError(r.error);
       requestAnimationFrame(() => titleRef.current?.focus());
     }, { inline: true });
+  };
+  // The panel's draft that this form placed, until it is created: closing keeps it on the block, said once.
+  const placedHere = useRef(false);
+  const close = () => {
+    if (placedHere.current) notify("Kept on the block as a draft. Create it in DevOps from its ⋯, or drop it");
+    onClose();
   };
   const draftBody = () => ({ clientKey: clientKey!, title: trimmed, ...(type ? { type } : {}), parentItemId: parentId, assignTo: assignTo === "me" ? null : assignTo || "none", description: description.trim() || null, targetDate: target });
   const saveDraft = async () => {
@@ -193,7 +204,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
   const parentWords = [...allowedParents].join(" or ").toLowerCase();
 
   return (
-    <div className="cap-backdrop nf-backdrop" hidden={hidden} onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
+    <div className="cap-backdrop nf-backdrop" hidden={hidden} onMouseDown={(e) => e.target === e.currentTarget && !busy && close()}>
       <div
         className="cap-dialog new-form"
         data-overlay="modal"
@@ -205,7 +216,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
           if (e.key === "Escape" && !busy) {
             e.stopPropagation();
             e.preventDefault();
-            onClose();
+            close();
           }
         }}
       >
@@ -214,11 +225,16 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
             {clientKey && <span className="swatch" aria-hidden="true" />}
             {clientKey ? `New in ${clientName}'s DevOps` : "New work item"}
           </h2>
-          <CloseButton onClose={onClose} disabled={busy} />
+          <CloseButton onClose={close} disabled={busy} />
         </div>
         <div className="nf-grid">
           <span className="set-label" id="nf-client">Client</span>
-          <SelectField label="Client" value={clientKey ?? ""} options={clients.map((c) => ({ key: c.clientKey, label: c.clientName }))} onChange={(k) => (setClientKey(k), setParentId(null))} className="nf-select" empty="Choose a client" />
+          {draftId !== null && clientKey ? (
+            // A draft belongs to its client.
+            <span className="nf-fixed">{clientName}</span>
+          ) : (
+            <SelectField label="Client" value={clientKey ?? ""} options={clients.map((c) => ({ key: c.clientKey, label: c.clientName }))} onChange={(k) => (setClientKey(k), setParentId(null))} className="nf-select" empty="Choose a client" />
+          )}
           <span className="set-label" id="nf-type">Level</span>
           <span className="nf-types">
             {!clientKey ? <span className="muted">Choose a client first</span> : !opts ? <span className="muted">{optsError ?? "Reading the client's process…"}</span> : types.length ? <Segmented label="Level" options={typeOptions} value={type} onChange={setType} /> : <span className="muted">{opts.problem}</span>}
@@ -232,10 +248,13 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
               maxLength={TITLE_MAX + 100}
               placeholder={type ? `What is this ${type.toLowerCase()}?` : "What is it?"}
               autoComplete="off"
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => (setTitle(e.target.value), error === "Type a title" && setError(null))}
               onKeyDown={(e) => {
                 if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
                 e.preventDefault();
+                // Until the client's options are read, Enter waits (never a draft by mistake while my PAT is being checked).
+                if (!trimmed) return void setError("Type a title");
+                if (!opts || opts.clientKey !== clientKey) return;
                 if (canWrite) void create();
                 else void saveDraft();
               }}
@@ -304,7 +323,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
           <button type="button" className={canWrite ? "mini" : "commit"} disabled={!clientKey || !trimmed || !!titleProblem || busy} onClick={() => void saveDraft()}>
             Save as draft
           </button>
-          <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>
+          <button type="button" className="mini quiet" disabled={busy} onClick={close}>
             Cancel
           </button>
           <span className="muted">{canWrite ? "Nothing is created until you confirm the preview." : "Saved in FocusTime only."}</span>

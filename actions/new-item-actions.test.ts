@@ -77,7 +77,8 @@ describe("Save as draft, at any level", () => {
     const s = setup();
     expect(await s.refused("draft.add", { clientKey: "Northwind", title: "X", type: "Initiative" })).toContain("isn't a level");
     expect(await s.refused("draft.add", { clientKey: "Northwind", title: "X", type: "Bug", parentItemId: 2 })).toContain("doesn't go under an Epic");
-    expect(await s.refused("draft.add", { clientKey: "Northwind", title: "X", type: "Epic", parentItemId: 99 })).toContain("isn't one of this client's open items");
+    // A parent outside the pool is kept as chosen (the create's preview checks it).
+    expect((await s.run<{ draft: { parentItemId: number } }>("draft.add", { clientKey: "Northwind", title: "X", type: "Epic", parentItemId: 99 })).draft.parentItemId).toBe(99);
     expect(await s.refused("draft.add", { clientKey: "Northwind", title: "   ", type: "Epic" })).toBe("Type a title");
     expect(await s.refused("draft.add", { clientKey: "Northwind", title: "y".repeat(256), type: "Epic" })).toContain("at most 255");
     const { draft } = await s.run<{ draft: { parentItemId: number | null } }>("draft.add", { clientKey: "Northwind", title: "Under the domain", type: "Epic", parentItemId: 1 });
@@ -92,6 +93,12 @@ describe("Save as draft, at any level", () => {
     await s.run("draft.save", { id: draft.id, clientKey: "Northwind", title: "Mine again", type: "Product Backlog Item", assignTo: "me" });
     expect((await s.plan.getDraft(draft.id))!.assignTo).toBeUndefined();
     expect(await s.refused("draft.add", { clientKey: "Northwind", title: "X", targetDate: "2026-02-30" })).toContain("real date");
+  });
+  it("Save keeps the draft's size and level unless they are sent", async () => {
+    const s = setup({ model: null, items: null });
+    const d = await s.plan.addDraft({ clientKey: "Northwind", parentItemId: null, title: "Small story", size: "S", level: "story" });
+    await s.run("draft.save", { id: d.id, clientKey: "Northwind", title: "Small story, renamed" });
+    expect(await s.plan.getDraft(d.id)).toMatchObject({ title: "Small story, renamed", size: "S", level: "story" });
   });
   it("works with no process read (DevOps down): saved as typed", async () => {
     const s = setup({ model: null, items: null });

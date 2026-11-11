@@ -92,27 +92,29 @@ async function optionsOf(ctx: NewItemContext, cfg: AppConfig, clientKey: string)
 }
 
 /** Save as draft's values, checked against the process when it can be read. */
-async function draftValues(ctx: NewItemContext, cfg: AppConfig | null, o: Obj): Promise<{ clientKey: string; title: string; itemType: string | null; level: "story" | "feature"; parentItemId: number | null; assignTo: string | null; description: string | null; targetDate: string | null; size: Size }> {
+async function draftValues(ctx: NewItemContext, cfg: AppConfig | null, o: Obj, was: DraftStory | null = null): Promise<{ clientKey: string; title: string; itemType: string | null; level: "story" | "feature"; parentItemId: number | null; assignTo: string | null; description: string | null; targetDate: string | null; size: Size }> {
   const clientKey = key(o.clientKey);
   const t = cleanTitle(o.title);
   if ("problem" in t) throw new Invalid(t.problem);
   const type = optText(o.type, "type", 200);
   const parentItemId = optId(o.parentItemId, "parentItemId");
-  let level: "story" | "feature" = o.level === "story" ? "story" : "feature";
+  // Saving an existing draft keeps its level and size unless they are sent (the form sends neither).
+  let level: "story" | "feature" = o.level === "story" || o.level === "feature" ? o.level : (was?.level ?? "feature");
   if (cfg && type) {
     const opts = await optionsOf(ctx, cfg, clientKey);
     if (opts.levels.length) {
       if (!opts.levels.some((l) => l.types.includes(type))) throw new Invalid(`${type} isn't a level in this client's process`);
       level = draftLevelOf(opts.levels, type);
-      if (parentItemId !== null) {
-        const p = opts.parents.find((x) => x.id === parentItemId);
-        if (!p) throw new Invalid(`#${parentItemId} isn't one of this client's open items`);
+      // A parent outside the pool (a row shown with Show the whole project, Break down's item) is kept as chosen; the
+      // create's preview reads and checks it before anything is sent.
+      const p = parentItemId !== null ? opts.parents.find((x) => x.id === parentItemId) : undefined;
+      if (p) {
         const why = parentProblem(opts.levels.map((l) => l.types), p.type, type);
         if (why) throw new Invalid(why);
       }
     }
   }
-  return { clientKey, title: t.title, itemType: type, level, parentItemId, assignTo: optEmail(o.assignTo), description: optText(o.description, "description", 8000), targetDate: optDate(o.targetDate), size: optSize(o.size) };
+  return { clientKey, title: t.title, itemType: type, level, parentItemId, assignTo: optEmail(o.assignTo), description: optText(o.description, "description", 8000), targetDate: optDate(o.targetDate), size: o.size === undefined && was ? was.size : optSize(o.size) };
 }
 
 const INPUT = ["clientKey", "title"];
@@ -140,7 +142,7 @@ export async function newItemAction(ctx: NewItemContext, action: NewItemAction, 
         const id = optId(o.id, "id");
         const was = id ? await plan.getDraft(id) : null;
         if (!was || was.devopsId) throw new PlanError("No such draft, or it is already in DevOps");
-        const v = await draftValues(ctx, cfg, o);
+        const v = await draftValues(ctx, cfg, o, was);
         const draft = await plan.updateDraft(was.id, v);
         return { ok: true, data: { draft } };
       }
