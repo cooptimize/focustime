@@ -45,7 +45,7 @@ The "before" screenshots are in `docs/ux/wd2/before/`.
 | Week: Your stories for <client>: my open stories grouped by feature, this week's first, "Planned · Thu AM", "Add to this block" | ADD: This week's features with their stories, then Other work assigned to you. Each row has "+" and says where it is |
 | Week: a story's size and state on its row | The row's tooltip (type, number, state); the size is on the to-do once it is on a block |
 | Week: a story's ⋯ (Copy link, Add to…, Move from… to…, Send to…) | The story's ⋯ in the Add list (the item's menu), and the to-do's ⋯ once it is on a block |
-| Week: "No stories for you yet" on a feature with none of mine: Add a story for me, Break down, teammates' stories with Take one | Break down is on the feature's row ("Needs stories · Break down"). Add a story for me is "New draft story" in the Add box under that feature, then Create in DevOps on the draft. Dropped from the panel: the list of teammates' stories with Take one (PV-1). Take one is still in Ahead's grid (Assign to me) and in a story's card; an open question asks whether it should come back here |
+| Week: "No stories for you yet" on a feature with none of mine: Add a story for me, Break down, teammates' stories with Take one | Break down is on the feature's row ("Needs stories · Break down"). A teammate's story under one of this week's features is a row with its owner and **Take one** (the same write, with its preview and Undo). Add a story for me is "New draft story" in the Add box under that feature, then Create in DevOps on the draft. Dropped: the row of teammates' faces with "N open stories by <name>" |
 | Day: This week's features with "N of M stories planned", Needs stories, Break down, Coop brief | ADD › This week's features ("2 of 3 on", Needs stories · Break down). The Coop brief is in the feature's ⋯ |
 | Promises for the client as full rows (Close the loop, Due, Done and more) | ADD › Promises: "+" puts one on the block, and its words open it in the Inbox, where every action is |
 | Day: "Assigned to you, not planned" | ADD › Other work assigned to you |
@@ -117,3 +117,20 @@ The command menu's two entries ("Details of the selected half-day", "Add work to
 | Day on any date | ‹ ›, [ and ], a day header on Week. Today and later take work; a past day ticks and moves forward |
 | Day's panel address | `#/day/<date>/<half>`; open or closed is remembered on the device |
 | A day header on Week | Opens Day on that date (it opened Add work on the day's first block) |
+
+## What Take off the plan does, by kind of to-do
+
+| The to-do | After Take off | Undo |
+|---|---|---|
+| A DevOps story | Off its block; back in its feature's list in the panel, not placed (a "+" again) | On its block again |
+| A draft story | Off its block; still a draft, not placed | On its block again |
+| A promise | Off its block; still in Promises, not placed | On its block again |
+| A plain to-do (not in DevOps) | Off its block; its words kept under To place ("Not in DevOps"), from where "+" puts it on a block | A plain to-do on its block again, and the kept copy goes |
+| One moved or carried here from another day | Off its block; it doesn't go back on the day it came from | On its block again, linked to where it came from |
+| One with a timebox | The timebox goes with it. If the timebox is on Outlook: refused, "Remove the timebox first" | The to-do comes back without its time |
+| A done to-do | Refused: "A done to-do stays on its day" | |
+| A past day's to-do | Refused: "A past day keeps its record. Move the to-do to today instead" | |
+| A story with time on it | Refused: "It has time on it. Move it to another block instead" | |
+| A deployment | Refused: "A deployment keeps its window. Move it or drop it instead" | |
+
+None of these marks a to-do dropped. Drop is still its own entry in the to-do's ⋯.
