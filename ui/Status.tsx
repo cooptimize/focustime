@@ -1128,3 +1128,22 @@ function UndoDialog({ u, onConfirm, onClose }: { u: { p: Pushed; preview: DevOps
     </Modal>
   );
 }
+
+/**
+ * WD-1: the Status tab's count (SR-3's Needs your update): features I worked on this week with no update of mine.
+ * Read once, then again when `version` changes; null until read or when Status can't load.
+ */
+export function useStatusNeeds(version: unknown): number | null {
+  const [n, setN] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    call<StatusLoad>("status.load", {}).then(
+      (d) => live && setN(d.clients.reduce((k, c) => k + c.features.filter((f) => f.needsYou).length, 0)),
+      () => live && setN(null),
+    );
+    return () => {
+      live = false;
+    };
+  }, [version]);
+  return n;
+}

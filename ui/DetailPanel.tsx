@@ -18,7 +18,7 @@ import { clientColor, longDate, slotRange } from "./labels.ts";
 import { itemMenu, openCoopBrief, slotMenu } from "./menu.ts";
 import { BreakDownButton } from "./BreakDownPanel.tsx";
 import { MenuRow, useMenu } from "./Menus.tsx";
-import { Agenda } from "./PlanDay.tsx";
+import { Agenda } from "./Agenda.tsx";
 import { PickRow } from "./PickRow.tsx";
 import { checklistFor, clientFeatures, clientNames, PlanCtx, storiesUnder } from "./planview.ts";
 import { HalfScope } from "./scope.ts";

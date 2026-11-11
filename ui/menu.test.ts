@@ -6,7 +6,7 @@ import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
 import type { ClientWork, WorkItem } from "../week/types.ts";
 import type { CoworkData } from "../plan/cowork.ts";
-import { callItems, eventMenu, timerStep, timeboxStep, timeStep, commandList, dayMenu, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
+import { callItems, eventMenu, timerStep, timeboxStep, timeStep, commandList, dayMenu, HIDDEN_FOR_NOW, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
 
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
 const item = (id: number, level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `Item ${id}`, type: level === "story" ? "User Story" : "Feature", state: "New", stateCategory: "Proposed", level, order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
@@ -90,7 +90,9 @@ const find = (s: MenuStep, label: string) => items(s).find((i) => i.label === la
 describe("command menu (built from the action registry)", () => {
   it("lists every dispatcher action, so new actions appear automatically", () => {
     const listed = commandList(env().e).map((c) => c.action);
-    for (const name of ACTION_NAMES) expect(listed, name).toContain(name);
+    for (const name of ACTION_NAMES) if (!HIDDEN_FOR_NOW.has(name)) expect(listed, name).toContain(name);
+    // WD-1: Team is hidden for now: its commands aren't offered.
+    for (const name of HIDDEN_FOR_NOW) expect(listed, name).not.toContain(name);
     // CL-1: Make it a follow-up (gone from the UI in IB-1) is gone from the server too.
     for (const name of ["my_promises.followup", "promises.followup"]) expect(ACTION_NAMES as readonly string[]).not.toContain(name);
   });
@@ -101,8 +103,8 @@ describe("command menu (built from the action registry)", () => {
     expect(list.find((c) => c.action === "week.load")?.hint).toBe("R");
     for (const id of ["view.checkin", "view.closeout", "view.planweek"]) expect(list.find((c) => c.id === id)?.disabled).toBeUndefined();
     expect(list.find((c) => c.id === "view.planweek")?.hint).toBe("W");
-    // Committing the week needs Plan the week open.
-    expect(list.find((c) => c.action === "weekplan.commit")?.disabled).toBe("Open Plan the week first");
+    // WD-1: Confirm week works from the week shown, unless that week is over.
+    expect(list.find((c) => c.action === "weekplan.commit")?.disabled).toBe("That week is over");
   });
   it("step 16.2: no place lost: every tab and mode is reachable from the command menu", async () => {
     const t = env();
@@ -118,7 +120,8 @@ describe("command menu (built from the action registry)", () => {
     const list = commandList(env().e);
     expect(filterCommands(list, "pick drop").map((c) => c.action)).toEqual(["pick.remove", "pick.undrop"]);
     expect(filterCommands(list, "BROWSER open").map((c) => c.action)).toEqual(["ui.open_focused", "link.open"]);
-    expect(filterCommands(list, "plan a day")[0]?.label).toBe("Plan a day…");
+    // WD-1: the old words still find the new commands.
+    expect(filterCommands(list, "plan a day").map((c) => c.label)).toContain("Add work to a day…");
   });
   it("BD-1: finds Break down by its old name, Draft stories", () => {
     const list = commandList(env().e);
@@ -126,8 +129,8 @@ describe("command menu (built from the action registry)", () => {
     expect(filterCommands(list, "draft stories").map((c) => c.action)).toContain("stories.prepare");
     expect(list.find((c) => c.action === "stories.prepare")?.label).toBe("Break down with AI");
   });
-  it("commit is only available while Plan the day is open", () => {
-    expect(commandList(env().e).find((c) => c.action === "planday.commit")?.disabled).toBe("Open Plan the day first");
+  it("WD-1: Confirm today runs from anywhere (there is no Plan the day to open first)", () => {
+    expect(commandList(env().e).find((c) => c.action === "planday.commit")?.disabled).toBeUndefined();
   });
   it("a pick action asks which pick, then acts on it", async () => {
     const t = env({ selection: { date: "2026-11-03", half: "AM" } });
@@ -199,21 +202,31 @@ describe("⋯ menus", () => {
 });
 
 describe("Plan any day (menus)", () => {
-  it("every day header's ⋯ has Plan this day; PTO and no-hours days say why it can't open", () => {
+  it("every day header's ⋯ has Add work to this day; PTO and no-hours days say why it can't open", () => {
     const t = env();
-    const plan = (d: string) => find(dayMenu(t.e, d), "Plan this day");
+    const plan = (d: string) => find(dayMenu(t.e, d), "Add work to this day");
     void plan("2026-11-04").run!();
     expect(t.calls).toEqual([["openPlanDay", "2026-11-04"]]);
-    expect(find(dayMenu(t.e, "2026-11-05"), "Plan this day").disabled).toBe("PTO day (Watch Kids)");
-    expect(find(dayMenu(t.e, "2026-11-06"), "Plan this day").disabled).toBe("No working hours: give the day hours or a flex session from its menu");
-    expect(items(dayMenu(t.e, "2026-11-02"))[0]!.label).toBe("Plan this day (past: done and drop only)");
+    expect(find(dayMenu(t.e, "2026-11-05"), "Add work to this day").disabled).toBe("PTO day (Watch Kids)");
+    expect(find(dayMenu(t.e, "2026-11-06"), "Add work to this day").disabled).toBe("No working hours: give the day hours or a flex session from its menu");
+    expect(items(dayMenu(t.e, "2026-11-02"))[0]!.label).toBe("Add work to this day (past: done and drop only)");
   });
 
-  it("Plan a day… is a date picker that opens the chosen date", async () => {
+  it("WD-1: a day header's ⋯ confirms that day (once its menu has Confirm), refused on past and PTO days", () => {
     const t = env();
-    const cmd = commandList(t.e).find((c) => c.label === "Plan a day…")!;
+    const days: string[] = [];
+    t.e.confirmDay = (d) => void days.push(d);
+    void find(dayMenu(t.e, "2026-11-04"), "Confirm Wed, Nov 4").run!();
+    expect(days).toEqual(["2026-11-04"]);
+    expect(find(dayMenu(t.e, "2026-11-05"), "Confirm Thu, Nov 5").disabled).toBe("PTO day (Watch Kids)");
+    expect(find(dayMenu(t.e, "2026-11-02"), "Confirm Mon, Nov 2").disabled).toBe("That day is past");
+  });
+
+  it("Add work to a day… is a date picker that opens the chosen date", async () => {
+    const t = env();
+    const cmd = commandList(t.e).find((c) => c.label === "Add work to a day…")!;
     const step = cmd.next!();
-    expect(step).toMatchObject({ input: "date", value: "2026-11-03", button: "Plan" });
+    expect(step).toMatchObject({ input: "date", value: "2026-11-03", button: "Open" });
     if ("submit" in step) await step.submit("2026-12-01");
     expect(t.calls).toEqual([["openPlanDay", "2026-12-01"]]);
   });
@@ -385,7 +398,7 @@ describe("Timebox a pick into a free gap (step 13.6, D245)", () => {
 describe("+ Add work entry points (step 13.6, D241)", () => {
   it("the block menu and the command menu add work to a block with working time (key A)", async () => {
     const { e, calls } = env({ addWork: (d, h) => calls.push(["addWork", d, h]), selection: { date: "2026-11-04", half: "PM" } });
-    await find(slotMenu(e, "2026-11-04", "AM", "internal", "Internal"), "Add a to-do…").run?.();
+    await find(slotMenu(e, "2026-11-04", "AM", "internal", "Internal"), "Add work…").run?.();
     expect(calls.at(-1)).toEqual(["addWork", "2026-11-04", "AM"]);
     const cmd = commandList(e).find((c) => c.action === "ui.add_work")!;
     expect(cmd.hint).toBe("A");
@@ -394,9 +407,9 @@ describe("+ Add work entry points (step 13.6, D241)", () => {
   });
   it("is disabled on a past day, a PTO day and a block without working hours", () => {
     const { e } = env();
-    expect(find(slotMenu(e, "2026-11-02", "AM", "internal", "Internal"), "Add a to-do…").disabled).toMatch(/Past day/);
-    expect(find(slotMenu(e, "2026-11-05", "AM", "internal", "Internal"), "Add a to-do…").disabled).toMatch(/PTO/);
-    expect(find(slotMenu(e, "2026-11-07", "AM", null, null), "Add a to-do…").disabled).toBe("No working hours in this block");
+    expect(find(slotMenu(e, "2026-11-02", "AM", "internal", "Internal"), "Add work…").disabled).toMatch(/Past day/);
+    expect(find(slotMenu(e, "2026-11-05", "AM", "internal", "Internal"), "Add work…").disabled).toMatch(/PTO/);
+    expect(find(slotMenu(e, "2026-11-07", "AM", null, null), "Add work…").disabled).toBe("No working hours in this block");
   });
 });
 

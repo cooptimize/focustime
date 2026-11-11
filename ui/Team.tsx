@@ -379,7 +379,7 @@ function AskToLook({ c, weekStart, act, label }: { c: CommitClient; weekStart: I
         </p>
       ))}
       {c.leads.length > 0 && !open && (
-        <button type="button" className="link-btn look-ask" onClick={() => setOpen(true)} title={`Sends a link to your planned ${c.clientName} features in Week › Team`}>
+        <button type="button" className="link-btn look-ask" onClick={() => setOpen(true)} title={`Sends a link to your planned ${c.clientName} features in Team`}>
           {label ? `${label} (${c.leads.map((l) => first(l.name)).join(", ")})` : `Ask ${c.leads.length === 1 ? first(lead0!.name) : "a lead"} to look`}
         </button>
       )}

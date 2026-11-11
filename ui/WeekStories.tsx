@@ -107,7 +107,15 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
       const c = check(d, b);
       if (!c.ok) return note(`Can't add it to ${b.label}: ${c.why}`);
       try {
-        if (d.pickId !== undefined) {
+        if (d.feature) {
+          // WD-1: a feature dropped as a placeholder: its pin on that block (the week's features list), Undo unpins.
+          const p = Temporal.PlainDate.from(b.date);
+          const weekStart = p.subtract({ days: p.dayOfWeek - 1 }).toString();
+          const pin = (on: boolean) => planAction("weekplan.place", { weekStart, clientKey: d.clientKey, itemId: d.itemId, date: b.date, half: b.half, on });
+          await pin(true);
+          onChanged();
+          note(`${d.title} placed on ${b.label}`, async () => (await pin(false), onChanged()));
+        } else if (d.pickId !== undefined) {
           const from = picks.find((p) => p.id === d.pickId);
           const r = await planAction("pick.move", { id: d.pickId, date: b.date, half: b.half, ...(b.catchUp ? { anyway: true } : {}) });
           onChanged();
@@ -119,7 +127,7 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
           const back = copy !== null ? async () => (await planAction("pick.uncarry", { id: copy }), onChanged()) : from ? async () => (await planAction("pick.move", { id: d.pickId, date: from.date, half: from.half, anyway: true }), onChanged()) : null;
           note(`Moved to ${b.label}${r.note ? ` · ${r.note}` : ""}`, back);
         } else {
-          const r = await planAction("pick.add", { date: b.date, half: b.half, clientKey: d.clientKey, itemId: d.itemId, ...(d.size ? { size: d.size } : {}) });
+          const r = await planAction("pick.add", { date: b.date, half: b.half, clientKey: d.clientKey, ...(d.add ? d.add : { itemId: d.itemId }), ...(d.size ? { size: d.size } : {}) });
           onChanged();
           const id = r.pick?.id;
           note(`Added to ${b.label}${r.note ? ` · ${r.note}` : ""}`, id ? async () => (await planAction("pick.remove", { id }), onChanged()) : null);

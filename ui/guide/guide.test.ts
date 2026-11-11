@@ -21,14 +21,14 @@ describe("the Guide's shortcuts are ui/keys.ts's", () => {
       expect(keysFor(card.keys, card.all), card.label).toEqual(rows.flatMap((r) => ("all" in card && card.all ? r!.keys : [r!.keys[0]!])));
     }
   });
-  it("the cards say what the keys do (the tabs are 1 2 3 4, capture N or C, midday check-in M, close out E, commit the week W)", () => {
+  it("the cards say what the keys do (WD-1: the tabs are 1 to 5, capture N or C, midday check-in M, close out E, Add work A or W)", () => {
     const shown = Object.fromEntries(C.SHORTCUTS.cards.map((c) => [c.label, keysFor(c.keys, c.all)]));
-    expect(shown["Today, Week, Ahead, Inbox"]).toEqual(["1", "2", "3", "4"]);
-    expect(shown["The tab's planning mode"]).toEqual(["P"]);
+    expect(shown["Day, Week, Ahead, Inbox, Status"]).toEqual(["1", "2", "3", "4", "5"]);
+    expect(shown["Add work (on Ahead, the Gantt)"]).toEqual(["P"]);
     expect(shown["Capture a thought"]).toEqual(["N", "C"]);
     expect(shown["Midday check-in"]).toEqual(["M"]);
     expect(shown["Close out"]).toEqual(["E"]);
-    expect(shown["Week › Plan"]).toEqual(["W"]);
+    expect(shown["Add work"]).toEqual(["A", "W"]);
     expect(shown["Every action"]).toEqual(["Ctrl K"]);
     expect(shown["Next or previous client"]).toEqual(["J", "K"]);
     expect(shown["Text size"]).toEqual(KEYS.find((k) => k.command === "ui.set_text_size")!.keys);

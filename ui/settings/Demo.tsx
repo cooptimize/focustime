@@ -10,7 +10,7 @@ export function DemoSection() {
     try {
       await call<{ reset: boolean; ms: number }>("demo.reset", {});
       // Everything on screen was the old demo: start again from the top.
-      location.hash = "#/today";
+      location.hash = "#/day";
       location.reload();
     } catch (e) {
       setState({ error: e instanceof Error ? e.message : "Reset didn't work. Try again" });

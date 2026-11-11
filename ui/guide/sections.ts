@@ -3,7 +3,7 @@
 
 export const SECTION_GROUPS = [
   { id: "start", label: "Start" },
-  { id: "tabs", label: "The four tabs" },
+  { id: "tabs", label: "The five tabs" },
   { id: "more", label: "Everything else" },
 ] as const;
 

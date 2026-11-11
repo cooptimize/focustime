@@ -297,7 +297,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged, onFeedback }: 
           const d = src.caps?.drafts.find((x) => x.id === id);
           if (d) editDraft?.(d);
         },
-        planWeek: () => onNav(navOf.planDay()),
+        planWeek: () => onNav(navOf.addWork()),
         canMerge: mergeOthers.length > 0,
         today,
         openItem: open,

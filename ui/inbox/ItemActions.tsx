@@ -138,7 +138,7 @@ function baseActs(e: Entry, env: ActEnv): Act[] {
       out.push(act("close", "Close the loop", () => env.form("close"), { primary: true }));
       out.push(act("due", "Due", () => env.form("due")));
       out.push(act("who", "Who", () => env.form("who")));
-      out.push(act("week", "Plan it on my week", env.planWeek));
+      out.push(act("week", "Add to my week", env.planWeek));
       out.push(act("done", "Done", () => void env.run("followup.close", { id: f.id, note: null }, "Done")));
       out.push(act("edit", "Edit…", () => env.form("edit"), { more: true }));
       out.push(act("not_needed", "Not needed", () => void env.run("followup.not_needed", { id: f.id }, "Closed as not needed"), { more: true }));

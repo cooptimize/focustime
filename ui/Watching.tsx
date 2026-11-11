@@ -162,7 +162,7 @@ export function ProposalSection({ data, act, onRefresh, colors, title = "From la
         <h2 className="section-label">{title}</h2>
         {rows.length > 0 && (
           <button type="button" className="link-btn carry-fold" aria-expanded={open} onClick={toggle} title={open ? "Hide these rows" : "Review last week's features"}>
-            {plannable ? `${plannable} to plan` : "Nothing to plan"}
+            {plannable ? `${plannable} to place` : "Nothing to place"}
             {open && data.counts.finished ? ` · ${data.counts.finished} finished` : ""}
           </button>
         )}
