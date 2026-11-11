@@ -34,16 +34,28 @@ export function autoOpen(o: { demo: boolean; state: SetupState }): SetupStep | n
   return SETUP_STEPS.find((k) => !o.state[k]) ?? null;
 }
 
-/**
- * The quiet line on Today: "2 setup steps left", opening the flow at the first step not done; or null. Never in demo
- * mode, never while the flow would open by itself, never once all four are done.
- */
-export function todayLine(o: { demo: boolean; state: SetupState }): { text: string; step: SetupStep } | null {
-  if (o.demo || autoOpen(o)) return null;
-  const left = remainingSteps(o.state);
+/** What's left, in words: "2 setup steps left", opening the flow at the first step not done; or null once all four are done. */
+export function leftLine(state: SetupState): { text: string; step: SetupStep } | null {
+  const left = remainingSteps(state);
   if (!left.length) return null;
   return { text: `${left.length} setup ${left.length === 1 ? "step" : "steps"} left`, step: left[0]! };
 }
+
+/**
+ * The quiet line on Today: what's left (`leftLine`), or null. Never in demo mode, never while the flow would open by
+ * itself, never once all four are done, and (RF-1) never once the person has stepped through the flow to its end, even
+ * with steps skipped: Settings › Setup still says what's left. Closing the flow early keeps the line.
+ */
+export function todayLine(o: { demo: boolean; state: SetupState; through?: boolean }): { text: string; step: SetupStep } | null {
+  if (o.demo || o.through || autoOpen(o)) return null;
+  return leftLine(o.state);
+}
+
+/** RF-1: the plan store's once-mark recording that the person reached the flow's end (the last step done or skipped). */
+export const SETUP_THROUGH_MARK = "setup_through";
+
+/** RF-1: recording `status` for `step` reaches the end of the flow: the last step, done or skipped (not closed). */
+export const reachesEnd = (step: SetupStep, status: SetupStatus) => step === SETUP_STEPS[SETUP_STEPS.length - 1] && status !== "dismissed";
 
 /** The step after this one, or null after the last (the Done screen). */
 export const nextStep = (s: SetupStep): SetupStep | null => SETUP_STEPS[SETUP_STEPS.indexOf(s) + 1] ?? null;
@@ -68,8 +80,12 @@ export type SetupView = {
   open: SetupStep | null;
   /** The first step not done (the Today line and Settings > Setup open here). */
   next: SetupStep;
-  /** Today's quiet line ("2 setup steps left"), or null. */
+  /** Today's quiet line ("2 setup steps left"), or null (RF-1: also once the person stepped through to the end). */
   line: { text: string; step: SetupStep } | null;
+  /** RF-1: what's left whether or not Today shows it, for Settings › Setup; null once every step is done. */
+  left: { text: string; step: SetupStep } | null;
+  /** RF-1: the person has stepped through the flow to its end at least once. */
+  through: boolean;
 };
 
 export type SetupPrefill = {

@@ -1,8 +1,8 @@
 // S1 (D451): first-run setup, the main path, in a real (not demo) session on fake sources. A new person sees Your day
 // with the saved hours (Outlook isn't set up here: the fallback), signs out halfway and comes back to Your clients,
 // tries a PAT DevOps refuses (a plain error, nothing saved), then their own (checked, never shown again), skips
-// Standing blocks with Esc and Calendars with Enter, and lands on Done. Today then has one quiet line; it reopens the
-// flow at the first step left. Edge cases are unit tests (plan/setup.test.ts, actions/setup-actions.test.ts).
+// Standing blocks with Esc and Calendars with Enter, and lands on Done. RF-1: having stepped through to the end, Day
+// has no "steps left" line (after a reload too); Settings › Setup still says what's left and reopens the flow there. Edge cases are unit tests (plan/setup.test.ts, actions/setup-actions.test.ts).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pat } from "../sources/devops/pat.ts";
 import { WriteFailure } from "../sources/devops/write.ts";
@@ -21,7 +21,7 @@ describe.skipIf(!CHROMIUM)("first-run setup", () => {
     await lb?.close();
   }, T);
 
-  it("a new person goes through the four screens, resumes after a reload, and Today keeps one line", async () => {
+  it("a new person goes through the four screens, resumes after a reload, and Day has no line once through (RF-1)", async () => {
     const saved = new Map<string, string>();
     const ctx = await liveContext({
       setupDone: false,
@@ -107,17 +107,20 @@ describe.skipIf(!CHROMIUM)("first-run setup", () => {
       await dialog.getByRole("button", { name: "Plan your week" }).click();
       await page.waitForURL(/#\/week\/(commit|add|day)/);
 
-      // Today: one quiet line, which opens the flow at the first step left.
-      await page.goto(`${app.url}#/today`);
-      const line = page.locator(".setup-line").getByRole("button", { name: "2 setup steps left" });
-      await line.waitFor({ timeout: 60_000 });
+      // RF-1: stepped through to the end (two steps skipped), so Day has no "steps left" line, after a reload too.
+      await page.goto(`${app.url}#/day`);
+      await page.reload();
+      await page.locator(".today-view").waitFor({ timeout: 60_000 });
+      await page.waitForTimeout(1500);
+      expect(await page.locator(".setup-line").count()).toBe(0);
       expect(await dialog.count()).toBe(0);
-      await shot("setup-today-line");
-      await line.click();
-      await dialog.getByRole("heading", { name: "Standing blocks" }).waitFor();
-      await dialog.getByRole("button", { name: "Close" }).click();
-      await line.waitFor();
       expect(await ctx.plan!.setupState()).toEqual({ day: "done", clients: "done", blocks: "skipped", calendars: "skipped" });
+      // Settings › Setup still says what's left, and Finish setup opens the flow at the first step left.
+      await page.evaluate(() => (location.hash = "#/settings/you"));
+      await page.getByText("2 setup steps left.").waitFor({ timeout: 60_000 });
+      await shot("setup-settings-left");
+      await page.getByRole("button", { name: "Finish setup" }).click();
+      await dialog.getByRole("heading", { name: "Standing blocks" }).waitFor();
     } finally {
       await app.close();
     }

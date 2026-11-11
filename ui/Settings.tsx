@@ -1928,13 +1928,14 @@ function SetupSection(p: Props) {
     call<SetupView>("setup.load", {}).then(setView, () => setView(null));
   }, []);
   if (p.demo) return <p className="muted">Setup isn't part of the demo.</p>;
-  const left = view?.line?.text;
+  // RF-1: what's left, even once Today stopped offering it.
+  const left = view?.left?.text;
   return (
     <div className="set-form">
       <p className="muted">The four first-run screens: your day, your clients, standing blocks and calendars. They change the same settings as the sections here.</p>
       <p>{view ? (left ? `${left}.` : "Every step is done.") : ""}</p>
       <div className="set-save">
-        <button type="button" className="mini primary" onClick={() => p.onSetup?.(view?.line?.step ?? "day")}>
+        <button type="button" className="mini primary" onClick={() => p.onSetup?.(view?.left?.step ?? "day")}>
           {left ? "Finish setup" : "Run setup again"}
         </button>
         {left && (

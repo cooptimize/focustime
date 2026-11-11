@@ -265,7 +265,7 @@ function ClientsStep({ onDone, onSkip, onBack }: { onDone: () => Promise<void>; 
   const [busy, setBusy] = useState(false);
   const load = useCallback(() => call<SetupView & { clients: SetupClient[]; clientsProblem: string | null }>("setup.load", { clients: true }).then(setData), []);
   useEffect(() => {
-    void load().catch(() => setData({ demo: false, state: {}, open: null, next: "clients", line: null, clients: [], clientsProblem: "FocusTime couldn't read your clients just now." }));
+    void load().catch(() => setData({ demo: false, state: {}, open: null, next: "clients", line: null, left: null, through: false, clients: [], clientsProblem: "FocusTime couldn't read your clients just now." }));
   }, [load]);
   const finish = async () => {
     setBusy(true);

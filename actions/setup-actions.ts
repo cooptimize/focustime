@@ -2,10 +2,11 @@
 // "hours" and "standing", devops.set_write_pat, auth.connect_google); these only read what the screens show and keep
 // the per-person record of each step (done, skipped or dismissed). Never in demo mode.
 import type { AppConfig } from "../config/schema.ts";
-import { autoOpen, dismissFrom, firstRemaining, SETUP_STEPS, todayLine, validSetupStatus, validSetupStep, type SetupClient, type SetupPrefill, type SetupState, type SetupStep, type SetupView } from "../plan/setup.ts";
+import { autoOpen, dismissFrom, firstRemaining, leftLine, reachesEnd, SETUP_STEPS, SETUP_THROUGH_MARK, todayLine, validSetupStatus, validSetupStep, type SetupClient, type SetupPrefill, type SetupState, type SetupStep, type SetupView } from "../plan/setup.ts";
 export type { SetupClient, SetupPrefill, SetupView };
 import type { WorkingHours } from "../plan/collab.ts";
 import type { PlanStore } from "../store/plan-store.ts";
+import type { IsoDate } from "../week/types.ts";
 import { WEEKDAY_KEYS, type Span } from "../week/hours.ts";
 import { userZone } from "../week/zone.ts";
 import type { ActionResponse } from "./types.ts";
@@ -23,6 +24,8 @@ export type SetupContext = {
   clients: (cfg: AppConfig) => Promise<SetupClient[] | null>;
   /** My working hours from Outlook (getSchedule on my own address: my mailbox settings); null when Outlook can't say. */
   workingHours: (cfg: AppConfig) => Promise<WorkingHours | null>;
+  /** RF-1: today's date (UTC), stamped on the once-mark that I stepped through to the end; only its presence is read. */
+  today: () => IsoDate;
 };
 
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
@@ -45,9 +48,12 @@ export function prefillFrom(cfg: AppConfig, wh: WorkingHours | null): SetupPrefi
   };
 }
 
-export function setupView(demo: boolean, state: SetupState): SetupView {
-  return { demo, state, open: autoOpen({ demo, state }), next: firstRemaining(state), line: todayLine({ demo, state }) };
+export function setupView(demo: boolean, state: SetupState, through = false): SetupView {
+  return { demo, state, open: autoOpen({ demo, state }), next: firstRemaining(state), line: todayLine({ demo, state, through }), left: leftLine(state), through };
 }
+
+/** RF-1: whether the person has stepped through the flow to its end (a once-mark; no migration). */
+const throughOf = async (plan: PlanStore) => (await plan.markedDates(SETUP_THROUGH_MARK)).size > 0;
 
 export async function setupAction(ctx: SetupContext, action: SetupAction, input: unknown): Promise<ActionResponse> {
   const o = (typeof input === "object" && input !== null && !Array.isArray(input) ? input : null) as Record<string, unknown> | null;
@@ -59,7 +65,7 @@ export async function setupAction(ctx: SetupContext, action: SetupAction, input:
   switch (action) {
     case "setup.load": {
       if (Object.keys(o).some((k) => k !== "clients")) return bad("setup.load takes { clients? }");
-      const view = setupView(false, await plan.setupState());
+      const view = setupView(false, await plan.setupState(), await throughOf(plan));
       if (o.clients !== true) return { ok: true, data: view };
       const cfg = await ctx.config();
       const clients = cfg ? await ctx.clients(cfg).catch(() => null) : null;
@@ -90,8 +96,10 @@ export async function setupAction(ctx: SetupContext, action: SetupAction, input:
         if (!validSetupStep(o.step)) return bad(`step must be one of ${SETUP_STEPS.join(", ")}`);
         if (!validSetupStatus(o.status) || o.status === "dismissed") return bad("status must be done or skipped");
         await plan.setSetupStep(o.step, o.status);
+        // RF-1: the last step done or skipped is the end of the flow: Today stops offering what's left.
+        if (reachesEnd(o.step, o.status)) await plan.markOnce(SETUP_THROUGH_MARK, ctx.today());
       }
-      return { ok: true, data: setupView(false, await plan.setupState()) };
+      return { ok: true, data: setupView(false, await plan.setupState(), await throughOf(plan)) };
     }
     case "setup.reset": {
       if (Object.keys(o).length) return bad("setup.reset takes {}");
