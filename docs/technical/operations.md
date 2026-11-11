@@ -43,7 +43,7 @@ Everything FocusTime does with nobody pressing a button (checked against the cod
 | People refresh (`people_refresh`) | App job, once a day | Dataverse (the app's own access) | Reads shared data | Runs | Runs |
 | Standards sync (`standards_sync`) | App job and once at start | Public GitHub, no token | Reads public data | Runs | Runs |
 | Calendar refresh (`calendar_refresh`) | Fast pass, every 5 min while a focus timer runs | Outlook, Google (the person's own) | Reads | Runs | Runs (the person started the timer) |
-| The focus timer (`focus_timer`) | Fast pass | none | That database only | Runs | Runs; its end shows in the page, no push without the switch |
+| The focus timer (`focus_timer`) | Fast pass | none | That database only | Runs | Runs; its end shows in the page, no push without the switch. Its meeting warnings are timed reminders: only with the switch |
 | Retention purge (`retention_purge`), ownership backfill (`conversation_ownership_backfill`), maintenance (`maintenance`), notice sweep (`notice_sweep`), old chat rows (`chat_text_cleanup`) | App jobs and passes | none | That database only | Runs | Runs |
 | Start-up moves (`startup_upkeep`): team settings, Who repair, AP-1 requests to conversations, guest sessions, cancelled VM restores | Once at start | none | That database only | Runs | Runs |
 

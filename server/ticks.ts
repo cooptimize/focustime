@@ -550,10 +550,14 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     await d.teams.tick({ config: c, inHours: f.inHours, pto: f.pto, focusRunning: f.focusRunning });
   };
   /** ENV-1: the parts this pass may run (production: all of them; elsewhere the policy's, with the person's opt-in). */
-  const parts = async () => partsFor(d.policy, !!(await configOrNull().catch(() => null))?.notify.fromTestSite);
+  // Production runs every part whatever the switch says, so it reads no settings for this (as before ENV-1).
+  const parts = async () => partsFor(d.policy, d.policy.production ? false : !!(await configOrNull().catch(() => null))?.notify.fromTestSite);
+  /** ENV-1: whether this person may get notices here (the focus timer's meeting warnings ask it too). */
+  const noticesHere = async () => (await parts()).fast.includes("held");
   const tick = async () => {
     const allowed = new Set<string>((await parts()).slow);
-    const facts = await notifier.refresh().catch(() => null);
+    // The gate's facts (settings, hours, PTO from Dataverse) only when a part that uses them may run.
+    const facts = SLOW_PARTS.some(([p, n]) => allowed.has(p) && (n === "notices" || n === "teams_rhythm")) ? await notifier.refresh().catch(() => null) : null;
     const slow: Record<SlowPart, () => Promise<unknown>> = {
       teams_rhythm: () => teamsTick(facts).catch(() => log({ source: "server", op: "teams_rhythm", kind: "failed" })),
       day_reminders: () => dayReminders(),
@@ -577,9 +581,13 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       plan: store,
       now: () => instantNow(),
       endSound: async () => (await configOrNull())?.plan.endSound ?? false,
-      // Through the notifier (its switch); the buttons come back here, where the session is checked.
-      notify: (n) =>
-        new Promise((resolve) => {
+      // Through the notifier (its switch); the buttons come back here, where the session is checked. ENV-1: a meeting
+      // warning is a timed reminder, so on a test site only for someone who switched them on; the end of the session
+      // the person started here always shows (no push without the switch).
+      notify: async (n) =>
+        n.kind === "meeting" && !(await noticesHere())
+          ? null
+          : new Promise((resolve) => {
           void track(notifier.offer(n, (key) => resolve(key || null))).then((g) => g !== "send" && resolve(null), () => resolve(null));
         }),
       sound: () => host.media.endSound(),

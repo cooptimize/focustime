@@ -131,4 +131,19 @@ describe("ENV-1: a person's passes outside production", () => {
     expect(p.shown.map((n) => n.kind)).toEqual(["timer"]);
     expect(p.pushed).toEqual([]);
   });
+
+  for (const [label, policy, optIn, expected] of [
+    ["a test site", DEV, false, 0],
+    ["a test site, switch on", DEV, true, 1],
+    ["production", PROD, false, 1],
+  ] as const) {
+    it(`a meeting warning during focus (a timed reminder): ${label}`, async () => {
+      const p = await person(policy, { optIn });
+      await timerAction({ plan: p.plan, config: async () => null, now: () => p.now().toString() }, "timer.start", { minutes: 50 });
+      await p.plan.setState("warn_points", { date: "2026-11-02", points: [{ key: "m1", at: "2026-11-02T13:50:00Z", label: "A meeting at 8:50" }] });
+      p.setTime("2026-11-02T13:47:00Z");
+      await p.passes();
+      expect(p.shown.filter((n) => n.kind === "meeting")).toHaveLength(expected);
+    });
+  }
 });

@@ -161,6 +161,14 @@ describe("background work starts only from the scheduler", () => {
     const hits = ["server", "actions", "sources", "store", "ai", "plan", "week", "config", "host"].flatMap(files).filter((p) => /\bsetInterval\(/.test(readFileSync(join(root, p), "utf8")));
     expect(hits).toEqual(["server/scheduler.ts"]);
   });
+  it("every top-level start-up call in server/main.ts goes through atStart under a policy name", () => {
+    const src = readFileSync(join(root, "server/main.ts"), "utf8");
+    const starts = src.split("\n").filter((l) => /^(void|await) /.test(l) || /^if \([^)]*\) void /.test(l));
+    expect(starts.length).toBeGreaterThan(5);
+    for (const l of starts) expect(l, l).toMatch(/atStart\("([a-z_]+)"/);
+    for (const m of src.matchAll(/atStart\("([a-z_]+)"/g)) expect(isBackgroundName(m[1]!), m[1]).toBe(true);
+  });
+
   it("nothing reads FOCUSTIME_ENV to decide what runs but the policy (buildinfo only labels the build)", () => {
     const hits = ["server", "actions", "sources", "store", "ai", "plan", "week", "config", "host"].flatMap(files).filter((p) => readFileSync(join(root, p), "utf8").includes("FOCUSTIME_ENV"));
     expect(hits.sort()).toEqual(["config/background-policy.ts", "server/buildinfo.ts"]);
