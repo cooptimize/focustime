@@ -151,3 +151,5 @@ A timebox is a work session, and an item's size is an estimate. The two are inde
 These columns are the person's own plan data and are in Export. `timeboxes.settle_before` holds only numbers and a status. `plan/types.ts` `pickNeed` is the one place that says what a to-do still needs; capacity, Today, Timebox my day and the assistant's checks all read it.
 
 Offering the end of day DevOps update once is a day mark (`plan.markOnce("progress_offer", date)`). What a DevOps update wrote is in the audit log as `remaining_work` or a comment, with the prior value for Undo.
+
+RF-1: stepping through first-run setup to its end (the last step done or skipped) is a once-mark, `markers` kind `setup_through` (`SETUP_THROUGH_MARK` in `plan/setup.ts`), written by `setup.mark`; `setup.load` reads it as `through`, and Day's "N setup steps left" line is then gone (`todayLine`) while Settings › Setup still says what's left (`left`). Start over (`setup.reset`) deletes it with the setup rows. No new table or column.
