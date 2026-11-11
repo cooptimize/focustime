@@ -693,8 +693,9 @@ export const RENAMED = {
   rows: [
     ["Coopilot", "FocusTime"],
     ["Today (the tab)", "Day"],
-    ["Plan the day, Plan today, Week › Plan (Commit)", "+ Add on a block"],
-    ["Details, Add work (panels)", "A block's panel"],
+    ["Plan the day, Plan today", "+ Add on a block"],
+    ["Week › Plan (Plan the week, Commit)", "+ Add"],
+    ["Details, Add work", "A block's panel"],
     ["Week › Board", "Week"],
     ["Week › Status", "Status (its own tab)"],
     ["Roadmap", "Ahead, and its Grid"],

@@ -430,7 +430,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const u = fields(fields(input, ["undo"]).undo, ["add"], ["draftId", "carriedFrom"]);
         const again = await planAction(ctx, "pick.add", u.add);
         if (!again.ok) return again;
-        const pick = (again.data as { pick: Pick }).pick;
+        const pick = (again.data as { pick: import("../plan/types.ts").Pick }).pick;
         if (u.draftId !== undefined) {
           const d = id(u.draftId, "draftId");
           // Only the draft this take off made: one with no feature, with the to-do's own words, not on a block.

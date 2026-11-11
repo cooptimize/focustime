@@ -1,11 +1,12 @@
-import { DEFAULT_SIZE_SCALE } from "./estimate.ts";
 import { describe, expect, it } from "vitest";
 import { blockLabel, cardGroups, isChildLevel } from "./blockstories.ts";
-import { aClientWork, aFeature, aPick, aWeekFeature, aWorkItem, TYPE_LOOKS, WEEK } from "../test/builders/index.ts";
+import { aClientWork, aFeature, aPick, aWorkItem, TYPE_LOOKS, WEEK } from "../test/builders/index.ts";
 
-const at = { weekStart: WEEK, date: WEEK, half: "AM" as const };
 
 describe("child level (PV-1)", () => {
+  it("names a block in short", () => {
+    expect(blockLabel({ date: WEEK, half: "PM" })).toMatch(/^Mon PM$/);
+  });
   it("uses the process level when known, the backlog level otherwise", () => {
     expect(isChildLevel(aWorkItem({ type: "Task" }), TYPE_LOOKS)).toBe(false);
     expect(isChildLevel(aWorkItem({ type: "Task" }), undefined)).toBe(true);
