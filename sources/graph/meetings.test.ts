@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createMeetingsClient, MeetingRefused, transcriptFor, type MeetingGate } from "./meetings.ts";
+import { HttpError, NetworkError } from "../calendar/http.ts";
+import { AuthFailure } from "../oauth/oauth.ts";
+import { createMeetingsClient, graphFailureOf, MeetingRefused, transcriptFor, type MeetingGate } from "./meetings.ts";
 
 const REG = "https://teams.microsoft.com/l/meetup-join/registered";
 const OTHER = "https://teams.microsoft.com/l/meetup-join/someone-elses";
@@ -43,14 +45,11 @@ describe("Graph meetings (MC-1)", () => {
 
   it("offers only weekly online series with outside people, counting them without keeping who", async () => {
     const { c } = client(onlyRegistered, {
-      "/me/events?": {
-        value: [
-          { id: "s1", subject: "Contoso sync", organizer: { emailAddress: { name: "Kat", address: "kat@cooptimize.example" } }, attendees: [{ emailAddress: { address: "me@cooptimize.example" } }, { emailAddress: { address: "pm@contoso.example" } }], onlineMeeting: { joinUrl: REG }, start: { dateTime: "2026-11-03T10:00:00.0000000" }, end: { dateTime: "2026-11-03T11:00:00.0000000" }, recurrence: { pattern: { type: "weekly", interval: 1, daysOfWeek: ["tuesday"] } } },
-          { id: "s2", subject: "Team only", attendees: [{ emailAddress: { address: "me@cooptimize.example" } }], onlineMeeting: { joinUrl: OTHER }, start: { dateTime: "2026-11-03T10:00:00" }, end: { dateTime: "2026-11-03T10:30:00" }, recurrence: { pattern: { type: "weekly", interval: 1, daysOfWeek: ["monday"] } } },
-        ],
-      },
+      "/me/calendarView?": { value: [{ id: "o1", seriesMasterId: "s1", isOnlineMeeting: true, onlineMeeting: { joinUrl: REG } }, { id: "o2", seriesMasterId: "s2", isOnlineMeeting: true, onlineMeeting: { joinUrl: OTHER } }, { id: "o3", seriesMasterId: "s1", isOnlineMeeting: true, onlineMeeting: { joinUrl: REG } }] },
+      "/me/events/s1?": { id: "s1", type: "seriesMaster", isOnlineMeeting: true, subject: "Contoso sync", organizer: { emailAddress: { name: "Kat", address: "kat@cooptimize.example" } }, attendees: [{ emailAddress: { address: "me@cooptimize.example" } }, { emailAddress: { address: "pm@contoso.example" } }], onlineMeeting: { joinUrl: REG }, start: { dateTime: "2026-11-03T10:00:00.0000000" }, end: { dateTime: "2026-11-03T11:00:00.0000000" }, recurrence: { pattern: { type: "weekly", interval: 1, daysOfWeek: ["tuesday"] } } },
+      "/me/events/s2?": { id: "s2", type: "seriesMaster", subject: "Team only", attendees: [{ emailAddress: { address: "me@cooptimize.example" } }], onlineMeeting: { joinUrl: OTHER }, start: { dateTime: "2026-11-03T10:00:00" }, end: { dateTime: "2026-11-03T10:30:00" }, recurrence: { pattern: { type: "weekly", interval: 1, daysOfWeek: ["monday"] } } },
     });
-    const got = await c.seriesOnMyCalendar("America/New_York");
+    const got = await c.seriesOnMyCalendar("America/New_York", "2026-11-11T12:00:00Z");
     expect(got).toHaveLength(1);
     expect(got[0]).toMatchObject({ eventId: "s1", subject: "Contoso sync", weekday: 2, start: "10:00", minutes: 60, outside: 1, homeAttendees: ["me@cooptimize.example"], organizerEmail: "kat@cooptimize.example" });
     expect(JSON.stringify(got)).not.toContain("contoso.example");
@@ -60,5 +59,40 @@ describe("Graph meetings (MC-1)", () => {
     const refs = [{ id: "b", createdAt: "2026-11-10T16:02:00Z", endAt: null }, { id: "a", createdAt: "2026-11-03T16:01:00Z", endAt: null }];
     expect(transcriptFor(refs, "2026-11-10T15:00:00Z", "2026-11-10T16:00:00Z")?.id).toBe("b");
     expect(transcriptFor(refs, "2026-11-17T15:00:00Z", "2026-11-17T16:00:00Z")).toBeNull();
+  });
+
+  // MC-1c: Microsoft's docs don't say `type` or `isOnlineMeeting` can be filtered on /me/events, so candidates come from
+  // the next 5 weeks' calendar view, with no $filter, each series master read once.
+  it("reads the calendar view without a filter and each series master once", async () => {
+    const weekly = { recurrence: { pattern: { type: "weekly", interval: 1, daysOfWeek: ["tuesday"] } }, start: { dateTime: "2026-11-03T10:00:00" }, end: { dateTime: "2026-11-03T11:00:00" }, attendees: [{ emailAddress: { address: "pm@contoso.example" } }] };
+    const { c, calls } = client(onlyRegistered, {
+      "/me/calendarView?": { value: [{ id: "single", onlineMeeting: { joinUrl: REG } }, { id: "x1", seriesMasterId: "offline", isOnlineMeeting: false }, { id: "x2", seriesMasterId: "master", isOnlineMeeting: true, onlineMeeting: { joinUrl: REG } }, { id: "x3", seriesMasterId: "master", isOnlineMeeting: true, onlineMeeting: { joinUrl: REG } }] },
+      "/me/events/master?": { id: "master", type: "seriesMaster", isOnlineMeeting: true, subject: "Fabrikam weekly", organizer: { emailAddress: { name: "Lee", address: "lee@cooptimize.example" } }, onlineMeeting: { joinUrl: REG }, ...weekly },
+    });
+    expect((await c.seriesOnMyCalendar("UTC", "2026-11-11T12:00:00Z")).map((x) => x.eventId)).toEqual(["master"]);
+    expect(calls.some((u) => u.includes("$filter"))).toBe(false);
+    expect(calls.filter((u) => u.includes("/me/events/"))).toHaveLength(1);
+  });
+
+  it("finds a pasted link however it was copied", async () => {
+    const { c } = client(onlyRegistered, {
+      "/me/calendarView?": { value: [{ id: "o", seriesMasterId: "m", onlineMeeting: { joinUrl: "https://teams.microsoft.com/l/meetup-join/19%3ameeting_x%40thread.v2/0?context=%7b%7d" } }] },
+      "/me/events/m?": { id: "m", type: "seriesMaster", onlineMeeting: { joinUrl: "https://teams.microsoft.com/l/meetup-join/19%3ameeting_x%40thread.v2/0?context=%7b%7d" }, recurrence: { pattern: { type: "weekly", interval: 1, daysOfWeek: ["monday"] } }, start: { dateTime: "2026-11-03T10:00:00" }, end: { dateTime: "2026-11-03T10:30:00" } },
+    });
+    expect((await c.seriesByJoinUrl("https://teams.microsoft.com/l/meetup-join/19%3Ameeting_x%40thread.v2/0", "UTC", "2026-11-11T12:00:00Z"))?.eventId).toBe("m");
+  });
+
+  it("names what went wrong as one kind", () => {
+    expect([new HttpError(400), new HttpError(401), new HttpError(403), new HttpError(404), new HttpError(429), new HttpError(503), new NetworkError("network")].map(graphFailureOf)).toEqual(["refused", "signin", "consent", "missing", "busy", "busy", "busy"]);
+    expect(graphFailureOf(new AuthFailure("not_connected", "x"))).toBe("signin");
+    expect(graphFailureOf(new AuthFailure("network", "x"))).toBe("busy");
+    expect(graphFailureOf(new AuthFailure("keyring", "x"))).toBe("setup");
+    expect(graphFailureOf(new Error("x"))).toBeNull();
+  });
+
+  it("still refuses an unregistered meeting after a teammate's registration of another", async () => {
+    const { c, calls } = client(onlyRegistered);
+    await expect(c.onlineMeetingId(`${REG}-x`)).rejects.toBeInstanceOf(MeetingRefused);
+    expect(calls).toEqual([]);
   });
 });

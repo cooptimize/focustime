@@ -11,6 +11,8 @@
 // Logs carry the op, status, count and duration: never a subject, a link, an id, a person or transcript text.
 import type { Logger } from "../../log/logger.ts";
 import { HttpError, NetworkError } from "../calendar/http.ts";
+import { AuthFailure } from "../oauth/oauth.ts";
+import { joinKey } from "../../plan/meetings.ts";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 /** The longest transcript read (a few hours of meeting is well under this). */
@@ -21,6 +23,24 @@ export class MeetingRefused extends Error {
     super("FocusTime reads only registered meetings");
     this.name = "MeetingRefused";
   }
+}
+
+/**
+ * MC-1c: what went wrong with a Graph meeting call, as one kind (logged, counted, and turned into plain words by the
+ * caller), or null when the error isn't one of Graph's or the sign-in's:
+ *   signin   signed out, the token was refused (401) or the sign-in needs an interactive step
+ *   consent  Microsoft refused the permission (403)
+ *   missing  not there (404)
+ *   refused  Microsoft didn't accept the request (400 and other 4xx)
+ *   busy     throttled, Microsoft down or unreachable (429, 5xx, network)
+ *   setup    FocusTime's own Microsoft sign-in isn't set up here (keyring, config)
+ */
+export type GraphFailure = "signin" | "consent" | "missing" | "refused" | "busy" | "setup";
+export function graphFailureOf(e: unknown): GraphFailure | null {
+  if (e instanceof AuthFailure) return e.kind === "network" ? "busy" : e.kind === "misconfigured" || e.kind === "keyring" ? "setup" : "signin";
+  if (e instanceof NetworkError) return "busy";
+  if (e instanceof HttpError) return e.status === 401 ? "signin" : e.status === 403 ? "consent" : e.status === 404 ? "missing" : e.status === 429 || e.status >= 500 ? "busy" : "refused";
+  return null;
 }
 
 export type MeetingGate = {
@@ -76,6 +96,8 @@ type GraphSeries = {
   end?: { dateTime?: unknown; timeZone?: unknown };
   originalStartTimeZone?: unknown;
   recurrence?: { pattern?: { type?: unknown; interval?: unknown; daysOfWeek?: unknown } } | null;
+  type?: unknown;
+  isOnlineMeeting?: unknown;
   seriesMasterId?: unknown;
   isCancelled?: unknown;
 };
@@ -151,21 +173,33 @@ export function createMeetingsClient(d: MeetingsDeps) {
     };
   }
 
-  const SELECT = "id,subject,organizer,attendees,onlineMeeting,start,end,recurrence,isOnlineMeeting";
+  const SELECT = "id,subject,organizer,attendees,onlineMeeting,start,end,recurrence,isOnlineMeeting,type";
 
   return {
-    /** My recurring online meetings with someone from outside Cooptimize on them (at most 200 series). */
-    async seriesOnMyCalendar(zone: string): Promise<SeriesCandidate[]> {
-      const out: SeriesCandidate[] = [];
-      let url: string | null = `${GRAPH}/me/events?$filter=${encodeURIComponent("type eq 'seriesMaster' and isOnlineMeeting eq true")}&$select=${SELECT}&$top=50`;
-      for (let page = 0; url && page < 4; page++) {
+    /**
+     * My recurring online meetings with someone from outside Cooptimize on them. MC-1c: Microsoft's docs don't say
+     * `type` or `isOnlineMeeting` can be filtered on /me/events (checked Nov 11, 2026), and reading every event is slow,
+     * so this reads the next 5 weeks of my calendar (`calendarView`, up to 500 occurrences), keeps the online ones that
+     * belong to a series, and reads each series master once (at most 40), all filtered in code.
+     */
+    async seriesOnMyCalendar(zone: string, nowIso: string = new Date().toISOString()): Promise<SeriesCandidate[]> {
+      const from = Temporal.Instant.from(nowIso);
+      const to = from.add({ hours: 24 * 35 });
+      const masters: string[] = [];
+      let url: string | null = `${GRAPH}/me/calendarView?startDateTime=${from.toString()}&endDateTime=${to.toString()}&$select=id,seriesMasterId,type,isOnlineMeeting,onlineMeeting&$top=100`;
+      for (let page = 0; url && page < 5; page++) {
         const j = (await request("meetings_series", url, d.calendarToken, { prefer: `outlook.timezone="${zone}"` })) as { value?: GraphSeries[]; "@odata.nextLink"?: unknown } | null;
         for (const e of j?.value ?? []) {
-          const c = candidateOf(e, zone);
-          if (c && c.outside > 0) out.push(c);
+          const m = str(e.seriesMasterId, 1000);
+          if (m && e.isOnlineMeeting !== false && str(e.onlineMeeting?.joinUrl, 4000) && !masters.includes(m)) masters.push(m);
         }
         const next = str(j?.["@odata.nextLink"], 4000);
         url = next && next.startsWith(`${GRAPH}/`) ? next : null;
+      }
+      const out: SeriesCandidate[] = [];
+      for (const m of masters.slice(0, 40)) {
+        const c = await this.series(m, zone);
+        if (c && c.outside > 0) out.push(c);
       }
       return out;
     },
@@ -186,7 +220,8 @@ export function createMeetingsClient(d: MeetingsDeps) {
       let url: string | null = `${GRAPH}/me/calendarView?startDateTime=${from.toString()}&endDateTime=${to.toString()}&$select=id,onlineMeeting,seriesMasterId,type&$top=100`;
       for (let page = 0; url && page < 5; page++) {
         const j = (await request("meetings_find_link", url, d.calendarToken, { prefer: `outlook.timezone="${zone}"` })) as { value?: GraphSeries[]; "@odata.nextLink"?: unknown } | null;
-        const hit = (j?.value ?? []).find((e) => str(e.onlineMeeting?.joinUrl, 4000) === joinUrl);
+        // MC-1c: the same link however it was copied (encoding, case, ?context=…).
+        const hit = (j?.value ?? []).find((e) => { const u = str(e.onlineMeeting?.joinUrl, 4000); return !!u && joinKey(u) === joinKey(joinUrl); });
         if (hit) {
           const master = str(hit.seriesMasterId, 1000);
           return master ? this.series(master, zone) : null;

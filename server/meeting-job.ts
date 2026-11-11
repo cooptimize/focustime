@@ -15,10 +15,10 @@ import type { AiService } from "../ai/service.ts";
 import type { CaptureContext, MeetingUser } from "../actions/meeting-actions.ts";
 import { runPass } from "../actions/meeting-actions.ts";
 import type { Logger } from "../log/logger.ts";
-import { attendeeIds, graphReadable, nextCheck, occurrencesBetween, type MeetingSeries } from "../plan/meetings.ts";
+import { attendeeIds, graphReadable, nextCheck, occurrencesBetween, type LastRead, type MeetingSeries } from "../plan/meetings.ts";
 import { parseVtt, TranscriptError } from "../plan/transcript.ts";
 import { HttpError } from "../sources/calendar/http.ts";
-import { MeetingRefused, transcriptFor, type MeetingsClient } from "../sources/graph/meetings.ts";
+import { graphFailureOf, MeetingRefused, transcriptFor, type MeetingsClient } from "../sources/graph/meetings.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";
 import type { MeetingStore } from "../store/meeting-store.ts";
 
@@ -59,10 +59,14 @@ export function meetingJob(d: MeetingJobDeps) {
       try {
         if (graphReadable(s) && s.eventId) {
           let done = false;
+          let why: string | null = null;
           // Only the registrant's calendar has the series' event id (event ids are per mailbox).
           for (const uid of [s.registrantId]) {
             const p = await who(uid);
-            if (!p?.graph) continue;
+            if (!p?.graph) {
+              why = "signin";
+              continue;
+            }
             try {
               const xs = await p.graph.instances(s.eventId, from.toString(), to.add({ days: 1 }).toString());
               for (const x of xs.filter((i) => !i.cancelled)) {
@@ -75,17 +79,24 @@ export function meetingJob(d: MeetingJobDeps) {
               break;
             } catch (e) {
               if (!refused(e)) throw e;
+              why = graphFailureOf(e);
             }
           }
-          if (!done) d.log({ source: "plan", op: "meeting_layout", kind: "no_token" });
+          if (!done) {
+            // MC-1c: the registrant's calendar can't be read (signed out, consent): lay the call out from its stored
+            // pattern so the other reviewers' sign-ins are still tried for the transcript. Never when the series isn't
+            // there (404: deleted, ended or re-created), which would ask for uploads of calls that never happened.
+            d.log({ source: "plan", op: "meeting_layout", kind: why === "missing" ? "missing" : "no_token" });
+            if (why === "signin" || why === "consent") for (const x of occurrencesBetween(s, from.toString(), to.toString())) await d.store.ensureOccurrence(s.id, x.date, x.startAt, x.endAt, "waiting", nextCheck(x.endAt, now.toString()));
+          }
         } else {
           for (const x of occurrencesBetween(s, from.toString(), to.toString())) {
             if (Date.parse(x.endAt) > now.epochMilliseconds) continue;
             await d.store.ensureOccurrence(s.id, x.date, x.startAt, x.endAt, "needs_upload", null);
           }
         }
-      } catch {
-        d.log({ source: "plan", op: "meeting_layout", kind: "failed" });
+      } catch (e) {
+        d.log({ source: "plan", op: "meeting_layout", kind: graphFailureOf(e) ?? "failed" });
       }
     }
   }
@@ -101,10 +112,17 @@ export function meetingJob(d: MeetingJobDeps) {
         await d.store.updateOccurrence(occ.id, { nextCheckAt: nextCheck(occ.endAt, now.toString()) });
         continue;
       }
-      let outcome: "found" | "not_yet" | "no_token" | "failed" = "no_token";
+      let outcome: LastRead["kind"] = "no_token";
+      let by: string | null = null;
+      // MC-1c: why each person's sign-in couldn't read it; the first one tried is what Admin's line says.
+      const tried: { first: { kind: "no_token" | "consent" | "missing"; by: string } | null } = { first: null };
+      const note = (kind: "no_token" | "consent" | "missing", uid: string) => void (tried.first ??= { kind, by: uid });
       for (const uid of order(s)) {
         const p = await who(uid);
-        if (!p?.graph) continue;
+        if (!p?.graph) {
+          note("no_token", uid);
+          continue;
+        }
         try {
           let meetingId = s.onlineMeetingId;
           if (!meetingId) {
@@ -114,6 +132,7 @@ export function meetingJob(d: MeetingJobDeps) {
             s.onlineMeetingId = meetingId;
           }
           const ref = transcriptFor(await p.graph.transcripts(meetingId), occ.startAt, occ.endAt);
+          by = uid;
           if (!ref) {
             outcome = "not_yet";
             break;
@@ -121,6 +140,7 @@ export function meetingJob(d: MeetingJobDeps) {
           await d.store.updateOccurrence(occ.id, { state: "fetching" });
           const lines = parseVtt(await p.graph.transcriptVtt(meetingId, ref.id));
           await d.store.saveTranscript(occ.id, lines, "automatic", null);
+          await d.store.updateOccurrence(occ.id, { lastRead: { kind: "found", by: uid, at: now.toString() } });
           await runPass({ store: d.store, ai: p.ai, capture: p.capture, users: d.users, log: d.log }, s, (await d.store.occurrence(occ.id))!, lines);
           outcome = "found";
           break;
@@ -129,13 +149,23 @@ export function meetingJob(d: MeetingJobDeps) {
             outcome = "failed";
             break;
           }
-          if (refused(e)) continue;
-          outcome = e instanceof TranscriptError ? "failed" : "not_yet";
+          if (refused(e)) {
+            const k = graphFailureOf(e);
+            note(k === "consent" ? "consent" : k === "missing" ? "missing" : "no_token", uid);
+            continue;
+          }
+          by = uid;
+          // MC-1c: throttled, Microsoft down or unreachable is "busy" (looked at again on schedule), not "no transcript".
+          outcome = e instanceof TranscriptError ? "failed" : graphFailureOf(e) === "busy" ? "busy" : "not_yet";
           if (outcome === "failed") await d.store.updateOccurrence(occ.id, { state: "needs_upload", nextCheckAt: null });
           break;
         }
       }
-      if (outcome === "not_yet" || outcome === "no_token") {
+      // Who has to sign in again when nobody's sign-in could: the registrant (theirs is tried first).
+      const first = tried.first;
+      if (outcome === "no_token" && first) await d.store.updateOccurrence(occ.id, { lastRead: { kind: first.kind, by: first.by, at: now.toString() } });
+      else if (outcome !== "found") await d.store.updateOccurrence(occ.id, { lastRead: { kind: outcome, by: outcome === "no_token" ? s.registrantId : by, at: now.toString() } });
+      if (outcome === "not_yet" || outcome === "no_token" || outcome === "busy") {
         const next = nextCheck(occ.endAt, now.toString());
         await d.store.updateOccurrence(occ.id, next ? { state: "waiting", nextCheckAt: next, checks: occ.checks + 1 } : { state: "needs_upload", nextCheckAt: null, checks: occ.checks + 1 });
       }

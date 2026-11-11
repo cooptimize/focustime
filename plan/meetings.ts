@@ -66,11 +66,30 @@ export type Occurrence = {
   aiOutcome: string | null;
   dismissedBy: string | null;
   reviewedBy: string | null;
+  /** MC-1c: the job's last look for the transcript (Automatic): what it found and through whose sign-in. */
+  lastRead: LastRead | null;
   updatedAt: string;
 };
 
+/** MC-1c: one look for a transcript. `by` is whose sign-in read it (found) or who has to sign in again (no_token). */
+export type LastRead = { kind: "found" | "not_yet" | "no_token" | "consent" | "missing" | "busy" | "failed"; by: string | null; at: string };
+
 const lower = (s: string) => s.trim().toLowerCase();
 const has = (xs: readonly string[], id: string) => xs.some((x) => lower(x) === lower(id));
+
+/**
+ * MC-1c: one meeting's join link however it was copied: percent-decoded, lowercase, without its query (`?context=…`)
+ * or a trailing slash. Two registrations with the same key are the same meeting.
+ */
+export function joinKey(url: string): string {
+  let u = url.trim();
+  try {
+    u = decodeURIComponent(u);
+  } catch {
+    // A malformed escape: compare it as written.
+  }
+  return u.split(/[?#]/)[0]!.replace(/\/+$/, "").toLowerCase();
+}
 
 /** Registered (and not removed), or one FocusTime scheduled: the only meetings FocusTime may read. */
 export function mayRead(m: { registered: MeetingSeries | null; scheduledByFocusTime?: boolean }): boolean {
@@ -209,3 +228,59 @@ export function nudgesFor(userId: string, series: readonly MeetingSeries[], occs
 
 /** Raw transcripts and their quotes are kept this long (HK-4's purge); proposals and results stay. */
 export const TRANSCRIPT_DAYS = 30;
+
+/**
+ * MC-1c: Admin › Clients › <client> › Meetings' one line of proof for a series: its latest call that has started (else
+ * the next one) and what happened to its transcript, in plain words. Names come from `nameOf` (FocusTime users only);
+ * times in the viewer's zone. Never a transcript's words.
+ */
+export function lastReadLine(s: Pick<MeetingSeries, "source" | "registrantId" | "weekday" | "start" | "minutes" | "zone" | "interval" | "createdAt">, occs: readonly Occurrence[], nowIso: string, zone: string, nameOf: (userId: string) => string | null, windowDays = 21): string {
+  const now = Date.parse(nowIso);
+  const started = occs.filter((o) => Date.parse(o.startAt) <= now).sort((a, b) => b.startAt.localeCompare(a.startAt));
+  const fmt = (iso: string, o: Intl.DateTimeFormatOptions) => Temporal.Instant.from(iso).toZonedDateTimeISO(zone).toLocaleString("en-US", o);
+  const at = (iso: string) => `${fmt(iso, { month: "short", day: "numeric" })}, ${fmt(iso, { hour: "numeric", minute: "2-digit" })}`;
+  const o = started[0];
+  if (!o) {
+    const today = Temporal.Instant.from(nowIso).toZonedDateTimeISO(s.zone).toPlainDate();
+    const next = [...occs, ...occurrencesBetween(s, today.toString(), today.add({ days: 35 }).toString())].filter((x) => Date.parse(x.startAt) > now).sort((a, b) => a.startAt.localeCompare(b.startAt))[0];
+    const old = now - Date.parse(s.createdAt) > windowDays * 86_400_000;
+    const nextDay = next ? fmt(next.startAt, { weekday: "short", month: "short", day: "numeric" }) : null;
+    if (old) return nextDay ? `No call in the last ${Math.round(windowDays / 7)} weeks. The next one is ${nextDay}` : `No call in the last ${Math.round(windowDays / 7)} weeks`;
+    return nextDay ? `Not read yet: the first call is ${nextDay}` : "Not read yet";
+  }
+  const day = `${fmt(o.startAt, { month: "short", day: "numeric" })} call`;
+  const r = o.lastRead;
+  const who = (id: string | null) => (id ? nameOf(id) : null);
+  if (o.transcriptAt && o.transcriptFrom === "automatic") {
+    const n = r?.kind === "found" ? who(r.by) : null;
+    return `Transcript read ${at(o.transcriptAt)}${n ? ` through ${n}'s sign-in` : ""}`;
+  }
+  if (o.transcriptAt && o.transcriptFrom === "upload") return `Transcript uploaded ${at(o.transcriptAt)}`;
+  if (o.state === "no_transcript") return `${day}: no transcript this week`;
+  // Why nobody's sign-in could read it, for the first person tried; someone no longer in FocusTime can't fix it.
+  const tried = r && (r.kind === "no_token" || r.kind === "consent" || r.kind === "missing") ? r : null;
+  const tn = tried ? who(tried.by ?? s.registrantId) : null;
+  const signIn = !tried
+    ? null
+    : !tn
+      ? "a former teammate's sign-in was the one to read it. Change the reviewers"
+      : tried.kind === "no_token"
+        ? `${tn} needs to sign in with Microsoft again`
+        : tried.kind === "consent"
+          ? `Microsoft refused ${tn}'s sign-in the transcript permission. A Cooptimize admin grants it once for everyone`
+          : `Microsoft didn't find this call for ${tn}. Check they're on its invite, or switch it to Upload`;
+  if (o.state === "waiting" || o.state === "fetching") {
+    if (Date.parse(o.endAt) > now) return `${day}: waiting for the call to end`;
+    if (o.state === "fetching") return `${day}: reading the transcript now`;
+    if (signIn) return `${day}: ${signIn}`;
+    if (r?.kind === "busy") return `${day}: Microsoft wasn't answering at the last look. FocusTime tries again`;
+    return `${day}: no transcript yet. FocusTime looks again${o.nextCheckAt ? ` at ${fmt(o.nextCheckAt, { hour: "numeric", minute: "2-digit" })}` : ""}`;
+  }
+  if (o.state === "needs_upload") {
+    if (s.source === "upload" && !r) return `${day}: waiting for a reviewer to upload the transcript`;
+    if (signIn) return `${day}: ${signIn}. A reviewer can upload the transcript`;
+    if (r?.kind === "failed") return `${day}: the transcript couldn't be read. A reviewer can upload it`;
+    return `${day}: no transcript was recorded. A reviewer can upload one`;
+  }
+  return `${day}: ${o.state === "reviewed" ? "reviewed" : "ready to review"}`;
+}
