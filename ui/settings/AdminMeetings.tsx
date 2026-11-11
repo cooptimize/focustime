@@ -5,11 +5,27 @@
 // allowed, Automatic only for a Cooptimize organizer). The server checks the admin on every action.
 import { useCallback, useEffect, useState } from "react";
 import { ActionRefusal, call } from "../api.ts";
+import { SignInAgainButton } from "../Reopen.tsx";
 import type { SeriesView } from "../../plan/meeting-views.ts";
 
 type ListData = { meetings: SeriesView[]; people: { id: string; name: string }[] };
 type Candidate = { eventId: string; subject: string; organizerName: string | null; organizer: "home" | "other" | "unknown"; when: string; outside: number; match: boolean };
 const errText = (e: unknown) => (e instanceof ActionRefusal || e instanceof Error ? e.message : "Something went wrong");
+/** MC-1c: a refusal in plain words, kept with its code so the form can answer it (Sign in again, Try again). */
+type Problem = { text: string; code: string | null };
+const problemOf = (e: unknown): Problem => ({ text: errText(e), code: e instanceof ActionRefusal ? (e.code ?? null) : null });
+/** Codes that come from reading my calendar (shown beside the calendar list or the link, not the Register button). */
+const GRAPH_CODES = new Set(["signin", "consent", "graph_refused", "busy", "setup", "missing"]);
+
+function ProblemLine({ p, retry }: { p: Problem; retry?: () => void }) {
+  return (
+    <p className="set-problem mtg-problem" role="alert">
+      <span>{p.text}</span>
+      {p.code === "signin" && <SignInAgainButton />}
+      {p.code === "busy" && retry && <button type="button" className="mini" onClick={retry}>Try again</button>}
+    </p>
+  );
+}
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const ROLES = [["status", "Weekly status call"], ["planning", "Planning"]] as const;
 
@@ -61,6 +77,7 @@ function SeriesCard({ m, people, act }: { m: SeriesView; people: ListData["peopl
         <strong>{m.name}</strong>
         <span className="muted">{m.when}</span>
       </div>
+      {m.lastRead && <p className="mtg-last-read muted" aria-label="Last read">{m.lastRead}</p>}
       <div className="mtg-card-grid">
         <label>
           <span className="set-label">Role</span>
@@ -106,7 +123,7 @@ function SeriesCard({ m, people, act }: { m: SeriesView; people: ListData["peopl
 function RegisterForm({ clientKey, clientName, people, onDone, onCancel }: { clientKey: string; clientName: string; people: ListData["people"]; onDone: (line: string) => Promise<void>; onCancel: () => void }) {
   const [how, setHow] = useState<"calendar" | "link">("calendar");
   const [cands, setCands] = useState<Candidate[] | null>(null);
-  const [candError, setCandError] = useState<string | null>(null);
+  const [candError, setCandError] = useState<Problem | null>(null);
   const [eventId, setEventId] = useState<string | null>(null);
   const [joinUrl, setJoinUrl] = useState("");
   const [weekday, setWeekday] = useState(1);
@@ -115,13 +132,18 @@ function RegisterForm({ clientKey, clientName, people, onDone, onCancel }: { cli
   const [name, setName] = useState("");
   const [role, setRole] = useState<"status" | "planning">("status");
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<Problem | null>(null);
   const [needPattern, setNeedPattern] = useState(false);
+  const [tries, setTries] = useState(0);
   useEffect(() => {
     if (how !== "calendar" || cands) return;
-    call<{ candidates: Candidate[] }>("meeting.candidates", { clientKey }).then((r) => setCands(r.candidates), (e: unknown) => setCandError(errText(e)));
-  }, [how, cands, clientKey]);
+    setCandError(null);
+    call<{ candidates: Candidate[] }>("meeting.candidates", { clientKey }).then((r) => setCands(r.candidates), (e: unknown) => setCandError(problemOf(e)));
+  }, [how, cands, clientKey, tries]);
   const picked = cands?.find((c) => c.eventId === eventId) ?? null;
+  // Where a refusal shows: beside the calendar list, under the link, or by Register (anything else).
+  const graphProblem = how === "calendar" && !!problem && GRAPH_CODES.has(problem.code ?? "");
+  const linkProblem = how === "link" && !!problem && (GRAPH_CODES.has(problem.code ?? "") || /link|weekday/i.test(problem.text));
   const submit = async () => {
     setBusy(true);
     setProblem(null);
@@ -132,9 +154,9 @@ function RegisterForm({ clientKey, clientName, people, onDone, onCancel }: { cli
       const r = await call<{ meeting: SeriesView }>("meeting.register", input);
       await onDone(`Registered ${r.meeting.name}: ${r.meeting.source === "automatic" ? "read after each call" : "reviewers upload the transcript"}`);
     } catch (e) {
-      const msg = errText(e);
       if (e instanceof ActionRefusal && e.status === 422) setNeedPattern(true);
-      setProblem(msg);
+      // The error stays until the next try; everything typed stays as it was.
+      setProblem(problemOf(e));
     } finally {
       setBusy(false);
     }
@@ -147,23 +169,25 @@ function RegisterForm({ clientKey, clientName, people, onDone, onCancel }: { cli
       </span>
       {how === "calendar" ? (
         <div className="mtg-cands">
-          {candError && <p className="set-problem">{candError}</p>}
+          {candError && <ProblemLine p={candError} retry={() => setTries((n) => n + 1)} />}
           {!cands && !candError && <p className="muted">Reading your calendar's recurring Teams meetings…</p>}
           {cands?.length === 0 && <p className="muted">No recurring Teams meetings with people from outside Cooptimize on your calendar. Paste its join link instead.</p>}
           {cands?.map((c) => (
             <label key={c.eventId} className={`mtg-cand${c.match ? " match" : ""}`}>
               <input type="radio" name={`mtg-cand-${clientKey}`} checked={eventId === c.eventId} onChange={() => setEventId(c.eventId)} />
               <span className="mtg-cand-name">{c.subject}</span>
-              <span className="muted">{c.when} · {c.organizer === "home" ? "Cooptimize organizes it" : `${c.organizerName ?? "Someone outside Cooptimize"} organizes it`} · {c.outside} from outside</span>
+              <span className="muted">{c.when} · {c.organizer === "home" ? `${c.organizerName ?? "Cooptimize"} organizes it at Cooptimize` : `${c.organizerName ?? "Someone outside Cooptimize"} organizes it`} · {c.outside} from outside</span>
             </label>
           ))}
+          {problem && graphProblem && <ProblemLine p={problem} />}
         </div>
       ) : (
         <div className="mtg-link">
           <label>
             <span className="set-label">Teams join link</span>
-            <input value={joinUrl} onChange={(e) => setJoinUrl(e.target.value)} placeholder="https://teams.microsoft.com/l/meetup-join/…" maxLength={4000} />
+            <input value={joinUrl} onChange={(e) => setJoinUrl(e.target.value)} placeholder="https://teams.microsoft.com/l/meetup-join/…" maxLength={4000} aria-invalid={!!problem && linkProblem} />
           </label>
+          {problem && linkProblem && <ProblemLine p={problem} />}
           {needPattern && (
             <span className="mtg-pattern">
               <select aria-label="Weekday" value={weekday} onChange={(e) => setWeekday(Number(e.target.value))}>{WEEKDAYS.map((d, i) => <option key={d} value={i + 1}>{d}</option>)}</select>
@@ -184,7 +208,7 @@ function RegisterForm({ clientKey, clientName, people, onDone, onCancel }: { cli
         </label>
       </div>
       <p className="set-hint">Reviewers: you and {clientName}'s leads, to start ({people.length} FocusTime users to choose from after). FocusTime decides Automatic or Upload from the organizer; you can change it after.</p>
-      {problem && <p className="set-problem" role="alert">{problem}</p>}
+      {problem && !graphProblem && !linkProblem && <ProblemLine p={problem} />}
       <span className="set-row-actions">
         <button type="button" className="mini primary" disabled={busy || (how === "calendar" ? !eventId : !joinUrl.trim())} onClick={() => void submit()}>{busy ? "Registering…" : "Register"}</button>
         <button type="button" className="mini quiet" onClick={onCancel}>Cancel</button>

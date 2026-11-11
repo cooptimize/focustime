@@ -124,7 +124,7 @@ function viewOf(s: MeetingSeries, cfg: AppConfig, users: readonly MeetingUser[],
 // MC-1c: a Graph meeting call that failed, in plain words with a next step, never "bad request". `code` lets the
 // form answer it (Sign in again for "signin"; the pattern fields for a pasted link).
 const NOT_A_CLIENT = "That isn't one of FocusTime's clients";
-const GRAPH_WORDS: Record<Exclude<GraphFailure, "missing">, { status: number; error: string }> = {
+export const GRAPH_WORDS: Record<Exclude<GraphFailure, "missing">, { status: number; error: string }> = {
   signin: { status: 409, error: "Sign in with Microsoft again to see your calendar's meetings" },
   consent: { status: 403, error: "Microsoft refused FocusTime access to your calendar (Calendars.ReadWrite). A Cooptimize admin grants it once for everyone in the Entra admin center" },
   refused: { status: 502, error: "Microsoft didn't accept that request. Paste the meeting's Teams join link instead" },

@@ -5447,8 +5447,13 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-cand { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 8px; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
 .mtg-cand .muted { grid-column: 2; font-size: var(--fs-1); }
 .mtg-cand.match .mtg-cand-name { font-weight: 600; }
-.mtg-link input { width: 100%; }
+.mtg-link > label input { width: 100%; }
 .mtg-pattern { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+/* MC-1c: a refusal beside the control that caused it, with its one next step (Sign in again, Try again). */
+.mtg-problem { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 4px 0 0; color: var(--watch); font-size: var(--fs-2); }
+.mtg-problem .reopen-actions { display: inline-flex; }
+.mtg-link input[aria-invalid="true"] { border-color: var(--watch); }
+.mtg-last-read { margin: 2px 0 6px; font-size: var(--fs-2); }
 @media (max-width: 700px) {
   .mtg-view { padding: 8px 16px 24px; }
   .mtg-prop { grid-template-columns: auto minmax(0, 1fr); }
