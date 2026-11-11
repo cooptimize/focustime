@@ -57,7 +57,7 @@ export function useInboxData(version: number | string): InboxSources & { reload:
   }, []);
   useEffect(() => void reload(), [reload, version]);
   // DV-2: a change in DevOps (a linked item's state) rereads the Inbox quietly.
-  useDevOpsChanged(null, () => void reload());
+  useDevOpsChanged(null, () => void reload(), { gapMs: 60_000 });
   const setConvs = useCallback((d: ConversationsData) => setS((c) => ({ ...c, convs: d })), []);
   const setPromises = useCallback((d: MyPromisesData) => setS((c) => ({ ...c, promises: d })), []);
   return { ...s, reload, setConvs, setPromises };

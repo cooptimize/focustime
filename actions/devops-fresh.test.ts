@@ -186,7 +186,7 @@ describe("freshness and Refresh", () => {
     expect(Object.keys(mine[0]!).sort()).toEqual(["checkedAt", "clientKey", "nextAt", "okAt", "problem", "version"]);
   });
 
-  it("Refresh checks now, waits for it, and says how many changed; a second within 30 s reads the same answer", async () => {
+  it("Refresh checks now, waits for it, and says how many changed; a second within 30 s says when the last check was", async () => {
     const h = harness({ contoso: project([aFakeItem({ id: 1 }), aFakeItem({ id: 2 })]) });
     await h.tick();
     h.advance(5_000);
@@ -196,7 +196,8 @@ describe("freshness and Refresh", () => {
     expect(r).toMatchObject({ forced: true, pending: false, changes: 2 });
     h.advance(5_000);
     const [again] = await h.reader().refreshNow!([ref("contoso")]);
-    expect(again).toMatchObject({ forced: false, changes: 2 });
+    expect(again).toMatchObject({ forced: false, changes: null });
+    expect(refreshWords([{ ...again!, clientName: "Contoso" }], Date.parse(again!.checkedAt!) + 20_000).line).toBe("DevOps was checked 20s ago");
   });
 
   it("the week load's Refresh now waits for the check it starts (it used to start one a tick too late to wait)", async () => {
@@ -287,22 +288,22 @@ describe("the actions", () => {
     const two = await lines("contoso", 2);
     expect(two.join("\n")).toMatch(/It's in area Contoso Project\\Finance, outside what FocusTime shows for contoso/);
     const none = await lines("contoso", 4242);
-    expect(none[0]).toBe("DevOps has no #4242 in contoso's project. If you made it in another project, FocusTime doesn't read that project for contoso.");
+    expect(none[0]).toMatch(/^FocusTime's last check of contoso's project \(.+\) found no #4242\. If you just made it, Refresh checks now\. If you made it in another project, FocusTime doesn't read that project for contoso\.$/);
     // #7 exists, in fabrikam's org (another client): from contoso it's the same answer as one that doesn't exist.
     const other = await lines("contoso", 99);
-    expect(other[0]).toBe("DevOps has no #99 in contoso's project. If you made it in another project, FocusTime doesn't read that project for contoso.");
+    expect(other[0]).toBe(none[0]!.replace("#4242", "#99"));
     expect(other.join(" ")).not.toMatch(/Other Project|Item 99/);
   });
 
-  it("find: one read by id, never kept in the store", async () => {
+  it("find: answers from the store only; a person's lookup never sends a request to DevOps", async () => {
     const { h, ctx } = await setup();
     h.advance(61_000);
     h.fake.add("contoso", { id: 30, type: "User Story", state: "New", title: "Not checked yet" });
     h.fake.reset();
     const r = await freshAction(ctx(), "devops.find", { clientKey: "contoso", itemId: 30 });
     const text = r.ok ? (r.data as FindAnswer).lines.map((l) => l.text).join("\n") : "";
-    expect(text).toMatch(/FocusTime doesn't have it yet/);
-    expect(h.fake.calls.filter((c) => c.op === "batch").flatMap((c) => c.ids)).toEqual([30]);
+    expect(text).toMatch(/found no #30\. If you just made it, Refresh checks now/);
+    expect(h.fake.calls).toEqual([]);
     expect((await h.store.items("contoso")).some((i) => i.id === 30)).toBe(false);
   });
 });

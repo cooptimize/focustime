@@ -94,7 +94,7 @@ import { markScheduled, publishWeek, reportTeam, sendFacts, teamAction, type Tea
 import { inboxAction } from "./inbox-actions.ts";
 import { diagnosticsAction } from "./diagnostics.ts";
 import { snoozeDayOf } from "../plan/inbox-items.ts";
-import { statusAction, statusFeatures, type StatusAction, type StatusContext } from "./status-actions.ts";
+import { statusAction, type StatusAction, type StatusContext } from "./status-actions.ts";
 import { freshAction, type FreshContext } from "./devops-fresh-actions.ts";
 import { reportWindow } from "../plan/status-report.ts";
 import { carryAction, idsByClient, markResolved, planBitsFor, resolvedKeys, type CarryContext } from "./carry-actions.ts";
@@ -2463,7 +2463,6 @@ async function freshContext(ctx: ActionContext): Promise<FreshContext> {
       const [l, f] = await Promise.all([aheadAction(actx, "ahead.load", {}), aheadAction(actx, "ahead.filters", {})]);
       return l.ok ? { load: l.data as import("./types.ts").AheadLoad, filters: f.ok ? ((f.data as { filters: import("../plan/ahead-edit.ts").AheadFilters | null }).filters ?? null) : null } : null;
     },
-    status: async (k) => statusFeatures(await statusCtx(ctx), k),
     todayItems: async (k) => {
       const d = await today();
       if (!d || !ctx.plan) return [];

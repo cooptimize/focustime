@@ -4,12 +4,14 @@
 // none keeps a timer of its own for this.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { RefreshAnswer, VersionsAnswer } from "../plan/devops-fresh-types.ts";
-import { call } from "./api.ts";
+import { call, pageInUse } from "./api.ts";
 import { movedClients, type FreshEntry } from "./devops-fresh.ts";
 
 export const VERSIONS_MS = 30_000;
 /** Coming back into view asks again, at most this often. */
 const FOCUS_GAP_MS = 5_000;
+/** A tab left open with nobody using it asks this often (the old quiet refresh's pace), so it never keeps the database awake. */
+const IDLE_MS = 5 * 60_000;
 
 export type FreshEnv = {
   entries: FreshEntry[];
@@ -36,8 +38,9 @@ export function useDevOpsFreshFlow(on: boolean): FreshEnv {
   const skew = (serverNow: string) => (Number.isFinite(Date.parse(serverNow)) ? Date.parse(serverNow) - Date.now() : 0);
   const inflight = useRef(false);
   const last = useRef(0);
-  const ask = useCallback(async () => {
+  const ask = useCallback(async (idleGap = true) => {
     if (inflight.current || (typeof document !== "undefined" && document.hidden)) return;
+    if (idleGap && !pageInUse() && Date.now() - last.current < IDLE_MS) return;
     inflight.current = true;
     last.current = Date.now();
     try {
@@ -52,10 +55,10 @@ export function useDevOpsFreshFlow(on: boolean): FreshEnv {
   }, []);
   useEffect(() => {
     if (!on) return;
-    void ask();
+    void ask(false);
     const id = window.setInterval(() => void ask(), VERSIONS_MS);
     const back = () => {
-      if (document.visibilityState === "visible" && Date.now() - last.current >= FOCUS_GAP_MS) void ask();
+      if (document.visibilityState === "visible" && Date.now() - last.current >= FOCUS_GAP_MS) void ask(false);
     };
     window.addEventListener("focus", back);
     document.addEventListener("visibilitychange", back);
@@ -81,12 +84,44 @@ export function useDevOpsFreshFlow(on: boolean): FreshEnv {
  * Calls `onMoved` with the clients whose DevOps version moved since this screen last looked (null: any client). The
  * first answer only sets the starting point, so opening a screen never rereads it twice.
  */
-export function useDevOpsChanged(clients: readonly string[] | null, onMoved: (clientKeys: string[]) => void, /** The provider's own env (App renders the provider, so its context is above it). */ own?: FreshEnv): void {
+export function useDevOpsChanged(
+  clients: readonly string[] | null,
+  onMoved: (clientKeys: string[]) => void,
+  opts: {
+    /** The provider's own env (App renders the provider, so its context is above it). */
+    env?: FreshEnv;
+    /** At most one reread this often: moves inside the gap wait and land together at its end (for reads that cost DevOps calls). */
+    gapMs?: number;
+  } = {},
+): void {
   const ctx = useContext(DevOpsFreshCtx);
-  const env = own ?? ctx;
+  const env = opts.env ?? ctx;
   const seen = useRef<Map<string, string | null> | null>(null);
   const cb = useRef(onMoved);
   cb.current = onMoved;
+  const gap = opts.gapMs ?? 0;
+  const lastRun = useRef(0);
+  const pending = useRef<{ keys: Set<string>; timer: number } | null>(null);
+  useEffect(() => () => void (pending.current && window.clearTimeout(pending.current.timer)), []);
+  const fire = useRef((keys: string[]) => {
+    const wait = lastRun.current + gap - Date.now();
+    if (wait <= 0 && !pending.current) {
+      lastRun.current = Date.now();
+      cb.current(keys);
+      return;
+    }
+    if (pending.current) {
+      for (const k of keys) pending.current.keys.add(k);
+      return;
+    }
+    const p = { keys: new Set(keys), timer: 0 };
+    p.timer = window.setTimeout(() => {
+      pending.current = null;
+      lastRun.current = Date.now();
+      cb.current([...p.keys]);
+    }, Math.max(0, wait));
+    pending.current = p;
+  });
   const key = clients ? [...clients].sort().join("|") : "*";
   useEffect(() => {
     if (!env) return;
@@ -96,7 +131,7 @@ export function useDevOpsChanged(clients: readonly string[] | null, onMoved: (cl
     seen.current = new Map(list.map((e) => [e.clientKey, e.version] as const));
     if (!before) return;
     const moved = movedClients(before, list);
-    if (moved.length) cb.current(moved);
+    if (moved.length) fire.current(moved);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [env?.seq, key]);
 }

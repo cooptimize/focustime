@@ -726,7 +726,7 @@ export function App() {
   // (Day, Week's cards, Add work and the Details panel read it). Ahead, Status, the Inbox and the story card follow the
   // same signal on their own data.
   const fresh = useDevOpsFreshFlow(state.kind === "ready");
-  useDevOpsChanged(null, reloadQuiet, fresh);
+  useDevOpsChanged(null, reloadQuiet, { env: fresh, gapMs: 60_000 });
   /** DV-2: R and every Refresh: check DevOps now for my clients, say what it found, then reread every source. */
   const refreshAll = useCallback(async () => {
     setNotice("Checking DevOps…");

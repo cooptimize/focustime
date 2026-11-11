@@ -36,7 +36,7 @@ describe("Find an item", () => {
 
   it("not in DevOps: one answer, whether it doesn't exist or is in another project", () => {
     const lines = text(facts({ devops: { kind: "missing" }, store: { has: false, changedAt: null, rev: null, checkedAt: ago(40), okAt: ago(40) } }));
-    expect(lines).toEqual(["devops:no: DevOps has no #42 in Contoso's project. If you made it in another project, FocusTime doesn't read that project for Contoso."]);
+    expect(lines).toEqual(["devops:no: FocusTime's last check of Contoso's project (just now) found no #42. If you just made it, Refresh checks now. If you made it in another project, FocusTime doesn't read that project for Contoso."]);
   });
 
   it("in DevOps, not in FocusTime's store yet", () => {
@@ -82,6 +82,6 @@ describe("Find an item", () => {
     const lines = text(facts({ todayTodo: false, weekPlanned: false, status: { kind: "absent", featureId: 42 } }, { tier: "feature", type: "Feature", assignee: "nobody", parentId: null, state: "New" }));
     expect(lines).toContain("day:no: Day doesn't show it: Day shows to-dos, and a Feature shows there only as This week's chip once it's on the week's plan.");
     expect(lines).toContain("week:no: Week's cards don't show it: it isn't on this week's plan. Add it in Week › Plan.");
-    expect(lines).toContain("status:no: Status doesn't show it: Status lists features on this week's plan, ones you worked on this week, and open ones assigned to you.");
+    expect(lines).toContain("status:no: Status doesn't show it unless you commented on it this week: Status lists features on this week's plan, open ones assigned to you, and ones you worked on this week.");
   });
 });

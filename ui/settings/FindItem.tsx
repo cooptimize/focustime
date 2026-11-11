@@ -1,6 +1,6 @@
 // DV-2: Settings › DevOps › Find an item. One of my clients and an item number; the answer, in order: whether DevOps
 // has it, whether FocusTime has it (and how fresh), the scope, then Day, Week, Ahead and Status, each with why not.
-// It reads that one item and nothing else, only for a client I can already see.
+// It answers from FocusTime's store (never a request to DevOps), only for a client I can already see.
 import { useState, type FormEvent } from "react";
 import type { FindAnswer } from "../../plan/devops-fresh-types.ts";
 import { call } from "../api.ts";

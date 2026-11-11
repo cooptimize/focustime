@@ -1543,7 +1543,7 @@ function DevOpsSection(p: BodyProps) {
           withDevOps.map((c) => <WriteAccess key={c.key} client={c} onDone={p.reload} />)
         )}
       </Group>
-      <Group title="Find an item" sid="find-item" intro="Why an item isn't showing: whether DevOps and FocusTime have it, the scope, and where it shows. It reads only that one item.">
+      <Group title="Find an item" sid="find-item" intro="Why an item isn't showing: whether FocusTime's last check of DevOps found it, the scope, and where it shows. It answers from what FocusTime already read; Refresh checks DevOps now.">
         <FindItem clients={withDevOps.map((c) => ({ key: c.key, name: c.setting.name ?? c.dataverseName ?? c.key }))} />
       </Group>
     </div>

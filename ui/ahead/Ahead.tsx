@@ -98,9 +98,13 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   // DV-2: the revision of each item as last read, to see an item I have staged changes on change in DevOps underneath.
   const revs = useRef<Map<string, number>>(new Map());
   const [changedNow, setChangedNow] = useState<Set<string>>(new Set());
+  // DV-2: moves on every stage, unstage and skip (as each starts and ends). A quiet reread that overlapped one keeps the
+  // page's own staged changes and skips, so a teammate's change never hides one I just made.
+  const local = useRef(0);
   /** `quiet` (DV-2's signal): no "Reading…", and the place, filters, folds and staged changes all stay. */
   const reload = useCallback(async (refresh = false, quiet = false) => {
     if (!quiet) setBusy(true);
+    const startedAt = local.current;
     try {
       const l = await call<AheadLoad>("ahead.load", { ...(refresh ? { refresh: true } : {}), ...(wantLast.current ? { lastChanges: true } : {}) }, quiet ? { background: true } : {});
       const staged = new Set(l.changes.map((c) => `${c.clientKey}:${c.itemId}`));
@@ -112,8 +116,9 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
           if (staged.has(k) && was !== undefined && i.rev > was) moved.push(k);
           revs.current.set(k, i.rev);
         }
-      if (moved.length) setChangedNow((x) => new Set([...x, ...moved]));
-      setLoad(l);
+      // Only items still staged keep the flag (saved or unstaged ones lose it).
+      setChangedNow((x) => (moved.length || [...x].some((k) => !staged.has(k)) ? new Set([...x, ...moved].filter((k) => staged.has(k))) : x));
+      setLoad((was) => (quiet && was && local.current !== startedAt ? { ...l, changes: was.changes, ...(was.skips ? { skips: was.skips } : {}) } : l));
       setError(null);
       void call<RoadmapState>("roadmap.load", refresh ? { refresh: true } : {}).then(
         (r) => setRoadmap(new Map(r.clients.flatMap((c) => c.rows.map((x) => [`${c.clientKey}:${x.id}`, x] as const)))),
@@ -176,8 +181,10 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   };
 
   const stage: AheadEnv["stage"] = async (r, field, value, half = null) => {
+    local.current++;
     try {
       const res = await call<{ changes: StagedChange[] }>("ahead.stage", { clientKey: r.clientKey, itemId: r.item.id, field, value, ...(half ? { half } : {}) });
+      local.current++;
       setLoad((l) => (l ? { ...l, changes: res.changes } : l));
       return true;
     } catch (e) {
@@ -186,7 +193,9 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
     }
   };
   const unstage: AheadEnv["unstage"] = async (r, field) => {
+    local.current++;
     const res = await call<{ changes: StagedChange[] }>("ahead.unstage", { clientKey: r.clientKey, itemId: r.item.id, ...(field ? { field } : {}) }).catch(() => null);
+    local.current++;
     if (res) setLoad((l) => (l ? { ...l, changes: res.changes } : l));
   };
   // The side panel's action list (D665): Send to… for a feature, SW-1's one dialog and rules (an epic is sent through its features).
@@ -259,7 +268,9 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
     if (on) next[key] = load?.today ?? "";
     else delete next[key];
     setSkipOverride(next);
-    void call<{ skips: Skips }>(on ? "ahead.skip" : "ahead.unskip", { clientKey, itemId }).then((r) => setSkipOverride(r.skips), (e: unknown) => {
+    local.current++;
+    void call<{ skips: Skips }>(on ? "ahead.skip" : "ahead.unskip", { clientKey, itemId }).then((r) => (local.current++, setSkipOverride(r.skips)), (e: unknown) => {
+      local.current++;
       setSkipOverride(skips);
       setError(e instanceof Error ? e.message : "That skip couldn't be kept");
     });
@@ -281,7 +292,7 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
 
   const n = load?.changes.length ?? 0;
   const color = (k: string) => clientColor(k, data.clients);
-  const setChanges = (changes: StagedChange[]) => setLoad((l) => (l ? { ...l, changes } : l));
+  const setChanges = (changes: StagedChange[]) => (local.current++, setLoad((l) => (l ? { ...l, changes } : l)));
   const changedUnder: AheadEnv["changedUnder"] = (clientKey, itemId) => {
     if (!load || !changedNow.has(`${clientKey}:${itemId}`)) return null;
     const mine = load.changes.filter((c) => c.clientKey === clientKey && c.itemId === itemId);

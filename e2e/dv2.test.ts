@@ -160,7 +160,7 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
     expect(fine).toMatch(/Ahead shows it/);
     await shot(page, "dv2-find-fine");
     const none = await find("999999");
-    expect(none).toMatch(/DevOps has no #999999 in Northwind's project/);
+    expect(none).toMatch(/found no #999999\. If you just made it, Refresh checks now/);
     await shot(page, "dv2-find-missing");
     expect(errors).toEqual([]);
   }, T);

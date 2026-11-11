@@ -254,7 +254,8 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
       window.setTimeout(() => setSaid((x) => (x === r.line ? null : x)), 6000);
     }
   };
-  useDevOpsChanged(onReport ? [scope] : (data?.clients.map((c) => c.clientKey) ?? null), () => void load());
+  // Status reads each feature's comments from DevOps on the person's own request, so a move rereads at most every 5 minutes.
+  useDevOpsChanged(onReport ? [scope] : (data?.clients.map((c) => c.clientKey) ?? null), () => void load(), { gapMs: 5 * 60_000 });
   const shownReport = onReport && report?.clientKey === scope ? report : null;
   const known: Known | null = onReport ? (shownReport ? reportKnown(shownReport) : null) : data;
 

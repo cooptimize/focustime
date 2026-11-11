@@ -1,6 +1,6 @@
-// DV-2: Find an item (Settings › DevOps). The facts are gathered by `devops.find` (one read by id through the client's
-// limiter, the store, the scope, my plan, Ahead's filters, Status's features); this turns them into plain lines, in
-// order: DevOps, FocusTime's store, the scope, then Day, Week, Ahead and Status. Pure: no I/O, no clock.
+// DV-2: Find an item (Settings › DevOps). `devops.find` gathers the facts from FocusTime's store only (the poller fills
+// it from the client's whole project), the scope, my plan, Ahead's filters and Status's features; this turns them into
+// plain lines, in order: DevOps, FocusTime's store, the scope, then Day, Week, Ahead and Status. Pure: no I/O, no clock.
 
 export type ItemTier = "epic" | "feature" | "story" | "task";
 
@@ -75,7 +75,7 @@ export function findAnswer(f: FindFacts, nowMs: number): FindLine[] {
     out.push({ part: "devops", ok: false, text: `DevOps couldn't be asked about ${n} now: ${f.devops.words}.` });
   } else if (f.devops.kind === "missing") {
     // One answer for "doesn't exist" and "exists in another project", so the finder can't probe item numbers.
-    out.push({ part: "devops", ok: false, text: `DevOps has no ${n} in ${f.clientName}'s project. If you made it in another project, FocusTime doesn't read that project for ${f.clientName}.` });
+    out.push({ part: "devops", ok: false, text: `FocusTime's last check of ${f.clientName}'s project (${ago(f.store.checkedAt, nowMs)}) found no ${n}. If you just made it, Refresh checks now. If you made it in another project, FocusTime doesn't read that project for ${f.clientName}.` });
     if (!f.store.has) return out;
   } else {
     const i = f.devops.item;
@@ -140,6 +140,6 @@ export function findAnswer(f: FindFacts, nowMs: number): FindLine[] {
   else if (s.kind === "feature_shown") out.push({ part: "status", ok: true, text: `Status shows its feature #${s.featureId}; Status lists features, with stories under them.` });
   else if (s.kind === "unavailable") out.push({ part: "status", ok: false, text: "Status couldn't be read now." });
   else if (item.tier === "epic") out.push({ part: "status", ok: false, text: "Status doesn't show it: Status lists features, not epics." });
-  else out.push({ part: "status", ok: false, text: `Status doesn't show ${s.featureId && s.featureId !== item.id ? `its feature #${s.featureId}` : "it"}: Status lists features on this week's plan, ones you worked on this week, and open ones assigned to you.` });
+  else out.push({ part: "status", ok: false, text: `Status doesn't show ${s.featureId && s.featureId !== item.id ? `its feature #${s.featureId}` : "it"} unless you commented on it this week: Status lists features on this week's plan, open ones assigned to you, and ones you worked on this week.` });
   return out;
 }

@@ -630,36 +630,36 @@ export function createDevOpsPoller(d: PollerDeps) {
     asked.set(key, nowMs());
     const c = await stateOf(key);
     let forced = false;
-    if (!d.limiter.waiting(key) && refreshAllowed(c.forcedAt, nowMs())) {
+    const held = d.limiter.waiting(key);
+    // A client DevOps slowed keeps its slower pace: Refresh, pressed by many people, never checks it every 30 s.
+    if (!held && c.pace.slow <= 1 && refreshAllowed(c.forcedAt, nowMs())) {
       c.forcedAt = nowMs();
       forced = true;
       void start(c);
     }
     if (c.inflight) await within(c.inflight, WAIT_MS);
-    const recent = !!c.last && nowMs() - Date.parse(c.last.at) < 60_000;
-    return { ...(await freshnessOf(c)), forced, pending: !!c.inflight, changes: c.last && !c.last.failed && (forced || recent) && !c.inflight ? c.last.changes : null };
+    const f = await freshnessOf(c);
+    const problem = f.problem ?? (held ? { kind: "slowed" as const, words: "DevOps asked FocusTime to wait" } : null);
+    // Changes only from the check this Refresh ran: an earlier one's count would read as new.
+    return { ...f, problem, forced, pending: !!c.inflight, changes: forced && c.last && !c.last.failed && !c.inflight ? c.last.changes : null };
   }
 
   /**
-   * DV-2: Find an item: one read by id through the client's limiter, whether or not the store has it. Never stored.
-   * An item in a project the client isn't set up with is "elsewhere", with nothing about it.
+   * DV-2: Find an item, from the store only: the poller reads the client's whole project, so the store already holds
+   * every item FocusTime can show. A person's lookup never sends a request to DevOps (the company read PAT stays on
+   * the poller's own checks). An item the store doesn't have, and one from a project the client isn't set up with,
+   * are both "missing", with nothing about them.
    */
   async function find(key: string, id: number): Promise<FoundRaw> {
     if (!Number.isInteger(id) || id <= 0) return { status: "missing" };
     const c = await stateOf(key);
-    if (d.limiter.waiting(key)) return { status: "unavailable", words: "DevOps asked FocusTime to wait" };
-    if (!c.process || !c.fields) return { status: "unavailable", words: "FocusTime hasn't read this client's DevOps yet" };
-    try {
-      const target = await targetOf(c);
-      const v = (await d.source().batch(target, [id], fieldsOf(c.process, c.fields))).find((x) => x.id === id);
-      if (!v) return { status: "missing" };
-      const project = typeof v.fields[PROJECT_FIELD] === "string" ? (v.fields[PROJECT_FIELD] as string) : "";
-      if (project.toLowerCase() !== (target.project ?? "").toLowerCase()) return { status: "elsewhere" };
-      return { status: "found", value: v };
-    } catch (e) {
-      if (e instanceof DevOpsFailure && e.status === "auth_failed") return { status: "unavailable", words: "DevOps sign-in was refused" };
-      return { status: "unavailable", words: e instanceof DevOpsFailure ? (failureWords(e.status, e.message) ?? "DevOps couldn't be read") : "DevOps couldn't be read" };
-    }
+    if (!c.row.loadedAt) return { status: "unavailable", words: "FocusTime hasn't finished its first read of this client's DevOps" };
+    const it = c.items.get(id);
+    if (!it) return { status: "missing" };
+    // The store holds only the client's own project; one the client was moved off (in memory, never read for this) is elsewhere.
+    const project = c.target?.target?.project ?? it.project;
+    if (it.project.toLowerCase() !== project.toLowerCase()) return { status: "elsewhere" };
+    return { status: "found", value: { id: it.id, fields: { ...it.fields, [REV_FIELD]: it.rev } } };
   }
 
   /** DV-2: what the store holds of one item (for Find an item), and the client's last check. */

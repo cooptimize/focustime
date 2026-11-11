@@ -56,6 +56,8 @@ async function pingUse(): Promise<number | null> {
 }
 let activity: ReturnType<typeof pageActivity> | null = null;
 const activityNow = () => (activity ??= pageActivity(pingUse));
+/** DV-2: someone is using the page now (visible, with input in the last N minutes). */
+export const pageInUse = (): boolean => activityNow().active();
 /** HK-3: a call a timer makes (polls, the quiet refresh) says so and never counts as someone using FocusTime. */
 export type CallOptions = { background?: boolean };
 

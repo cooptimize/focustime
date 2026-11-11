@@ -26,8 +26,6 @@ export type FreshContext = {
   devops: (cfg: AppConfig) => Pick<DevOpsSource, "freshness" | "refreshNow" | "findItem">;
   /** Ahead's load and my saved filters (absent or failing: "Ahead couldn't be read"). */
   ahead?: () => Promise<{ load: AheadLoad; filters: AheadFilters | null } | null>;
-  /** Status's features for one client: shown and Also assigned (absent or failing: unavailable). */
-  status?: (clientKey: string) => Promise<{ shown: number[]; also: number[] } | null>;
   /** To-dos on today's plan (item ids), and the items on this week's plan (with their parents) for a client. */
   todayItems?: (clientKey: string) => Promise<number[]>;
   weekItems?: (clientKey: string) => Promise<number[]>;
@@ -60,6 +58,12 @@ const inMinutes = (at: string | null, nowMs: number) => {
   return m <= 0 ? "soon" : `in ${m} min`;
 };
 
+/** "just now", "20s ago", "3 min ago". */
+const agoWords = (at: string, nowMs: number) => {
+  const sec = Math.max(0, Math.round((nowMs - Date.parse(at)) / 1000));
+  return sec < 10 ? "just now" : sec < 60 ? `${sec}s ago` : `${Math.floor(sec / 60)} min ago`;
+};
+
 /** DV-2: Refresh's one line and its problems, in plain words. Pure. */
 export function refreshWords(results: readonly (ForcedCheck & { clientName: string })[], nowMs: number): { line: string; problems: string[] } {
   if (!results.length) return { line: "No DevOps to check for the clients here", problems: [] };
@@ -72,7 +76,12 @@ export function refreshWords(results: readonly (ForcedCheck & { clientName: stri
     else if (r.pending) problems.push(`${r.clientName} is still being checked`);
   }
   const counted = results.filter((r) => r.changes !== null);
-  if (!counted.length) return { line: problems.length ? `DevOps couldn't be checked now · ${problems.join(" · ")}` : "DevOps checked just now", problems };
+  if (!counted.length) {
+    if (problems.length) return { line: `DevOps couldn't be checked now · ${problems.join(" · ")}`, problems };
+    // Nothing checked now (one ran in the last 30 s): say when the last one was.
+    const last = results.map((r) => r.checkedAt).filter((x): x is string => !!x).sort()[0] ?? null;
+    return { line: last ? `DevOps was checked ${agoWords(last, nowMs)}` : "DevOps is being checked", problems };
+  }
   const n = counted.reduce((k, r) => k + (r.changes ?? 0), 0);
   const line = `DevOps checked just now · ${n === 0 ? "no changes" : n === 1 ? "1 change" : `${n} changes`}`;
   return { line: problems.length ? `${line} · ${problems.join(" · ")}` : line, problems };
@@ -145,11 +154,10 @@ export async function freshAction(ctx: FreshContext, action: FreshAction, input:
   const base = await src.findItem(ref, id).catch(() => null);
   if (!base) return bad(`FocusTime can't read ${ref.clientName}'s DevOps for you now`, 409);
   const item = base.devops.kind === "found" ? base.devops.item : null;
-  const [today, week, ahead, status] = await Promise.all([
+  const [today, week, ahead] = await Promise.all([
     item && ctx.todayItems ? ctx.todayItems(ref.clientKey).catch(() => []) : Promise.resolve([] as number[]),
     item && ctx.weekItems ? ctx.weekItems(ref.clientKey).catch(() => []) : Promise.resolve([] as number[]),
     item && ctx.ahead ? ctx.ahead().catch(() => null) : Promise.resolve(null),
-    item && ctx.status ? ctx.status(ref.clientKey).catch(() => null) : Promise.resolve(null),
   ]);
   const aheadP: AheadPresence = !ahead ? { kind: "unavailable" } : aheadPresence(ahead.load, ahead.filters, ref.clientKey, id);
   // Status lists features: a story or task answers for its feature (from Ahead's items, the same store).
@@ -161,7 +169,16 @@ export async function freshAction(ctx: FreshContext, action: FreshAction, input:
     return it.level === "parent" ? it.id : it.level === "top" ? null : featureOf(it.parentId, depth + 1);
   };
   const fid = item?.tier === "feature" ? id : item ? featureOf(item.parentId) : null;
-  const statusP: StatusPresence = !status ? { kind: "unavailable" } : status.shown.includes(id) ? { kind: "shown" } : status.also.includes(id) ? { kind: "also" } : fid !== null && fid !== id && status.shown.includes(fid) ? { kind: "feature_shown", featureId: fid } : { kind: "absent", featureId: fid };
+  // Status from the plan and the item alone: never Status's own read, which reads each feature's comments from DevOps.
+  const statusP: StatusPresence = !item
+    ? { kind: "unavailable" }
+    : item.tier === "feature" && week.includes(id)
+      ? { kind: "shown" }
+      : item.tier === "feature" && !item.closed && item.assignee === "me"
+        ? { kind: "also" }
+        : fid !== null && fid !== id && week.includes(fid)
+          ? { kind: "feature_shown", featureId: fid }
+          : { kind: "absent", featureId: fid };
   const facts: FindFacts = { clientName: ref.clientName, id, ...base, todayTodo: today.includes(id), weekPlanned: week.includes(id), ahead: aheadP, status: statusP };
   return { ok: true, data: { clientName: ref.clientName, id, lines: findAnswer(facts, ctx.nowMs()) } satisfies FindAnswer };
 }
