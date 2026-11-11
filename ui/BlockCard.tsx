@@ -135,7 +135,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
   const menu = useMenu((env) => slotMenu(env, slot.date, slot.half, primary?.clientKey ?? null, primary?.clientName ?? null));
   // MB-1b (Q-MB1-7): on the phone a card with no status pill shows the late chip at the end of its title line, so the
   // chip adds no line; beside a status pill it stays on the chips line.
-  const chipInHead = phone && (status.kind === "none" || folded) && !!lateChip;
+  const chipInHead = phone && status.kind === "none" && !!lateChip;
   // WD-1: one chip in the header that never wraps: the worst state alone; its reason and the rest in its tooltip.
   const pill = status.label;
   // Its tooltip: the at-risk reason, then the other reasons (Watch ones included).
@@ -186,7 +186,22 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
         <span className="card-more">{menu.button(`Actions for ${dayLabel} ${slot.half}`)}</span>
       </div>
       {folded ? (
-        <div className="card-folded">{foldedLine(ticks, movedOn)}</div>
+        <>
+          {drop.tip}
+          <div className="card-folded">{foldedLine(ticks, movedOn)}</div>
+          {/* What still needs me stays: a past call to review, and late promises (beside the line, not in the header). */}
+          {lateChip && !chipInHead && <div className="card-status">{lateChip}</div>}
+          {calls.length > 0 && (
+            <div className="card-calls">
+              {calls.map((c) => (
+                <a key={c.occurrenceId} href={`#/meetings/${c.occurrenceId}`} className={`call-mark${c.needsMe ? " needs" : ""}`} tabIndex={selected ? 0 : -1} onClick={(e) => e.stopPropagation()} title={`${c.name}: ${c.label}`}>
+                  <span className="call-name">{c.role}</span>
+                  <span className="call-what">· {c.label}</span>
+                </a>
+              ))}
+            </div>
+          )}
+        </>
       ) : (
         <>
       {rail === "strip" && <DayStrip slot={slot} tz={tz} label={`${dayLabel} ${eve ? "evening" : slot.half}`} now={railNow} />}

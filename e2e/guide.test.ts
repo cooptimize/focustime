@@ -145,17 +145,17 @@ describe.skipIf(!CHROMIUM)("the Guide (UI-5)", () => {
     const mon = drag.locator(".try-block").first();
     await expect.poll(() => mon.locator(".try-todo").count()).toBe(1);
     expect(await mon.locator(".try-fit").textContent()).toBe(TRY.drag.fit(TRY.drag.todos[0]!.minutes, 180));
-    // And by dragging: the L story onto Mon PM goes over.
+    // And by dragging: the L story onto Mon PM fills it (QT-1: no free time left, never amber).
     await drag.locator(".try-pool .try-todo", { hasText: "CSV column order" }).dragTo(mon);
     await expect.poll(() => mon.locator(".try-todo").count()).toBe(2);
     expect(await mon.locator(".try-fit").textContent()).toBe(TRY.drag.fit(360, 180));
-    expect(await mon.locator(".try-fit.amber").count()).toBe(1);
+    expect(await mon.locator(".try-fit.amber").count()).toBe(0);
     // Timeline: the toggle says its state.
     const tl = page.locator("[data-try='timeline'] [aria-pressed]");
     expect(await tl.getAttribute("aria-pressed")).toBe("true");
     await tl.click();
     expect(await tl.getAttribute("aria-pressed")).toBe("false");
-    // Sizing: the words are plan/fit.ts's.
+    // Sizing: the words are the block panel's free time (QT-1).
     const fit = page.getByTestId("guide-fit");
     expect(await fit.textContent()).toBe(sandbox(SIZING.start, SIZING.block).fit.text);
     await page.locator('[data-add="L"]').click();
