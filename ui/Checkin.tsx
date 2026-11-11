@@ -1,10 +1,10 @@
-// Day's Midday check-in (U2; its own file since WD-2, unchanged in what it does): the day's blocks as check-in cards
-// (ended blocks dim, done to-dos a count, each to-do that won't fit with one suggested move, one amber line per
-// block), then walk-on work once at the foot. Day opens it from its moment card; Done marks the day checked in.
+// Day's Midday check-in (U2; its own file since WD-2): the day's blocks as check-in cards (ended blocks dim, done
+// to-dos a count, each unfinished to-do with its Move to…), then walk-on work once at the foot. QT-2: nothing says
+// a to-do doesn't fit or that a block is over; the afternoon's free time is said once, in the header, as a fact.
+// Day opens it from its moment card; Done marks the day checked in.
 import { DueBadge } from "./FollowUps.tsx";
 import { useContext, useState, type CSSProperties } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
-import { aboutHours } from "../plan/fit.ts";
 import { PickRow } from "./PickRow.tsx";
 import type { Pick } from "../plan/types.ts";
 import type { Half, IsoDate, Slot } from "../week/types.ts";
@@ -18,13 +18,19 @@ import { DevOpsWork } from "./work.ts";
 import { dayName } from "./PickReview.tsx";
 import { SelectField } from "./SelectField.tsx";
 
-const cap = (s: string) => `${s[0]!.toUpperCase()}${s.slice(1)}`;
 const live = (p: Pick) => p.status === "planned" || p.status === "done";
 
-/** "about 4 hours left today", from the blocks that haven't ended. */
+/**
+ * QT-2: the free time left, once, as a fact: "1h 45m free this afternoon" (after meetings and personal events, from
+ * the blocks that haven't ended), "this evening" or "the rest of today" when an evening is still ahead. Never what's
+ * planned against it.
+ */
 export function checkLeft(check: readonly CheckSlot[]): string {
-  const left = check.reduce((n, c) => n + (c.ended ? 0 : c.leftMinutes), 0);
-  return left > 0 ? `${aboutHours(left)} left today` : "no time left today";
+  const open = check.filter((c) => !c.ended);
+  if (!open.length) return "No free time left today";
+  const left = open.reduce((n, c) => n + c.leftMinutes, 0);
+  const when = open.every((c) => c.half === "PM") ? "this afternoon" : open.every((c) => c.half === "EVE") ? "this evening" : "the rest of today";
+  return left > 0 ? `${formatDuration(left)} free ${when}` : `No free time ${when}`;
 }
 
 type BlockProps = {
@@ -41,7 +47,7 @@ type BlockProps = {
   makeUp: (p: Pick, i: { when: "tonight" | "friday" | "day"; date?: IsoDate; half?: Half }) => Promise<boolean>;
 };
 
-/** One block in the check-in: what's left, whether each to-do still fits, and one suggested move. */
+/** One block in the check-in: what's left, each unfinished to-do with one Move to… (QT-2: never whether it fits). */
 export function CheckinBlock(b: BlockProps) {
   const { slot, data, nameOf, ended } = b;
   const view = useContext(PlanCtx);
@@ -51,7 +57,7 @@ export function CheckinBlock(b: BlockProps) {
   const followUp = (p: Pick) => (p.followUpId !== null ? data.followUps.find((f) => f.id === p.followUpId) ?? null : null);
   const c = b.check;
   const left = c.picks.filter((x) => x.pick.status === "planned");
-  const head = ended ? `${halfName(slot.half)} · ended` : c.leftMinutes > 0 ? `${halfName(slot.half)} · ${aboutHours(c.leftMinutes)} left after meetings` : `${halfName(slot.half)} · no time left`;
+  const head = ended ? `${halfName(slot.half)} · ended` : halfName(slot.half);
   const owed = (p: Pick) => {
     const f = followUp(p);
     return !!f && f.due !== null && f.due <= data.planDay.date;
@@ -64,8 +70,9 @@ export function CheckinBlock(b: BlockProps) {
         <span className="tb-count">{done.length} done</span>
       </header>
       <ul className="today-picks">
-        {left.map(({ pick: p, fits, focusedMinutes }) => {
-          const move = !fits || ended ? suggestedMove(p, { owedToday: owed(p), later: b.later, carryTo: b.carryTo }) : null;
+        {left.map(({ pick: p, focusedMinutes }) => {
+          // QT-2: every unfinished to-do has its move, never only the ones that "don't fit".
+          const move = suggestedMove(p, { owedToday: owed(p), later: b.later, carryTo: b.carryTo });
           return (
             <PickRow
               key={p.id}
@@ -75,12 +82,10 @@ export function CheckinBlock(b: BlockProps) {
               density="today"
               canTick={b.tickable}
               timeEditable={!ended}
-              className={!fits && !ended ? "nofit" : ""}
               badge={
                 <>
                   {followUp(p) && <DueBadge l={followUp(p)!} />}
                   {focusedMinutes > 0 && <span className="pr-note">{formatDuration(focusedMinutes)} focused</span>}
-                  {!ended && <span className={`pr-fit${fits ? "" : " watch"}`}>{p.size} · {fits ? "fits" : "doesn't fit"}</span>}
                 </>
               }
               actions={move ? (
@@ -93,8 +98,7 @@ export function CheckinBlock(b: BlockProps) {
         })}
       </ul>
       {!left.length && <p className="tb-empty">{done.length ? "All done here." : "Nothing planned here."}</p>}
-      {ended && left.length > 0 && <p className="tb-line watch">{left.length} not done. Move {left.length === 1 ? "it" : "them"}, or leave {left.length === 1 ? "it" : "them"} for Close out.</p>}
-      {!ended && c.overBy > 0 && <p className="tb-line watch">{c.overBy < 45 ? "A little over" : `${cap(aboutHours(c.overBy))} over`}. Move one?</p>}
+      {ended && left.length > 0 && <p className="tb-line">{left.length} not done. Move {left.length === 1 ? "it" : "them"}, or leave {left.length === 1 ? "it" : "them"} for Close out.</p>}
     </article>
   );
 }

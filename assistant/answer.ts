@@ -4,7 +4,7 @@
 // because the reader is the person, who sees all of their clients; nothing here is sent to an AI or posted anywhere.
 // Suggestions (at most 3) are FocusTime plan proposals (SUGGEST_TOOLS): a tap builds the usual preview, which runs
 // only on Confirm.
-import type { AnswerContext, CtxBlock, CtxDay, CtxTodo } from "./context.ts";
+import type { AnswerContext, CtxDay, CtxTodo } from "./context.ts";
 import type { Link } from "./types.ts";
 
 export const TOPICS = ["plan_check", "capabilities", "agenda", "promises", "waiting", "readiness", "deployments", "status_updates", "done", "calls", "items", "standards", "general"] as const;
@@ -19,11 +19,11 @@ export type Composed = { reply: string; sections: Section[]; suggestions: Sugges
 
 type LinkFn = (href: string, label: string) => Link;
 
-/** How long a block may run over before it's "too much" (the Board's amber is any minute over; this is the answer's). */
-const OVER_SLACK = 30;
 /** A workday with less free focus time than this, or this many minutes of meetings, is worth a line. */
 const LITTLE_FOCUS = 120;
 const HEAVY_MEETINGS = 240;
+/** QT-2: an at-risk block gets "Move the <client> to-dos … to Fri AM" only when its meetings leave less than this free. */
+const MOVE_UNDER = 60;
 
 const P = (d: string) => Temporal.PlainDate.from(d);
 const short = (d: string) => P(d).toLocaleString("en-US", { weekday: "short" });
@@ -36,17 +36,19 @@ const halfWord = (h: string) => (h === "EVE" ? "evening" : h);
 /** Gap words mid-line ("needs stories, unassigned"). */
 const gapText = (gs: readonly string[]) => gs.map((g) => g.charAt(0).toLowerCase() + g.slice(1)).join(", ");
 
-/** Days that need a word: PTO, little focus time, many meetings, a block with more planned than fits. */
-export function overloaded(b: CtxBlock): boolean {
-  return !b.pto && b.plannedMinutes > b.freeMinutes + OVER_SLACK;
-}
-function dayFlags(x: CtxDay): string | null {
+/**
+ * Days that need a word: PTO, little focus time, many meetings. QT-2: only the calendar decides; how much is planned
+ * never does (no "overloaded" block or day). Asked about one day (`oneDay`), the day's meetings and free time are
+ * said as facts even when they're ordinary ("2h of meetings, 4h free for focus").
+ */
+function dayFlags(x: CtxDay, oneDay = false): string | null {
   if (x.pto) return "PTO";
   if (x.ptoHalf) return `PTO in the ${x.ptoHalf === "AM" ? "morning" : "afternoon"}`;
   if (x.kind !== "work" || x.workMinutes === 0) return null;
   const parts: string[] = [];
-  if (x.meetingMinutes >= HEAVY_MEETINGS) parts.push(`${hours(x.meetingMinutes)} of meetings`);
-  if (x.freeMinutes < LITTLE_FOCUS) parts.push(`${x.freeMinutes ? hours(x.freeMinutes) : "no time"} free for focus`);
+  if (x.meetingMinutes >= HEAVY_MEETINGS || (oneDay && x.meetingMinutes > 0)) parts.push(`${hours(x.meetingMinutes)} of meetings`);
+  else if (oneDay) parts.push("no meetings");
+  if (x.freeMinutes < LITTLE_FOCUS || oneDay) parts.push(`${x.freeMinutes ? hours(x.freeMinutes) : "no time"} free for focus`);
   return parts.length ? parts.join(", ") : null;
 }
 
@@ -75,16 +77,22 @@ function todoLine(t: CtxTodo, link: LinkFn, withDay = true): Line {
 const fridayOf = (d: string) => P(d).subtract({ days: P(d).dayOfWeek - 1 }).add({ days: 4 }).toString();
 
 /**
- * "I'm planning next week. What should I look out for?": days with little focus or PTO, then per client: blocks with
- * more planned than fits, late or due promises, readiness gaps for work dated then, deployments and after-hours time,
- * features with no update for Monday's report, calls to review. Up to 3 suggestions.
+ * "I'm planning next week. What should I look out for?": days with little focus, heavy meetings or PTO, then per
+ * client: blocks the calendar puts at risk, late or due promises, readiness gaps for work dated then, deployments and
+ * after-hours time, features with no update for Monday's report, calls to review. Up to 3 suggestions: moving the
+ * to-dos of an at-risk block whose meetings leave under an hour free to Friday (QT-2: never because of how much is
+ * planned).
  */
 function planCheck(ctx: AnswerContext, link: LinkFn): Composed {
   const sections: Section[] = [];
   const dayLines: Line[] = [];
+  const oneDay = ctx.period.from === ctx.period.to;
+  // A day's plain facts (asked about one day) are shown but aren't "things to look at": only flags count.
+  let flagged = 0;
   for (const x of ctx.days) {
-    const f = dayFlags(x);
+    const f = dayFlags(x, oneDay);
     if (f) dayLines.push({ text: `${x.label}: ${f}`, link: link(`#/week/day/${x.date}`, `Open ${x.label}`) });
+    if (dayFlags(x)) flagged++;
   }
   if (dayLines.length) sections.push({ title: "Your days", lines: dayLines });
 
@@ -92,18 +100,18 @@ function planCheck(ctx: AnswerContext, link: LinkFn): Composed {
   const usedTodos: CtxTodo[] = [];
   const itemRefs: Refs["items"] = [];
   const promiseRefs: number[] = [];
-  let count = dayLines.length;
+  let count = flagged;
   for (const c of ctx.clients) {
     const lines: Line[] = [];
     for (const b of ctx.days.flatMap((x) => x.blocks).filter((b) => b.clientKey === c.key)) {
-      if (overloaded(b)) {
-        const these = ctx.todos.filter((t) => t.clientKey === c.key && t.date === b.date && t.half === b.half && !t.done);
-        usedTodos.push(...these);
-        lines.push({ text: `${short(b.date)} ${b.half}: ${about(b.plannedMinutes)} planned, ${b.freeMinutes ? hours(b.freeMinutes) : "no time"} free${b.risk ? ` (${b.risk})` : ""}`, link: link(blockHref(b.date, b.half), `Open ${dayLabel(b.date)}`) });
-        const fri = fridayOf(b.date);
-        if (these.length && b.date !== fri && suggestions.length < 2)
-          suggestions.push({ label: `Move the ${c.name} to-dos from ${short(b.date)} ${b.half} to Fri AM`, tool: "move_plan", args: { fromDate: b.date, fromHalf: b.half, toDate: fri, toHalf: "AM", which: "named", pickIds: these.map((t) => t.pickId) } });
-      } else if (b.risk) lines.push({ text: `${short(b.date)} ${b.half}: at risk, ${b.risk}`, link: link(blockHref(b.date, b.half), `Open ${dayLabel(b.date)}`) });
+      if (!b.risk) continue;
+      // QT-2: a block is worth a line only when the calendar cuts into it; its free time is the fact beside it.
+      const these = ctx.todos.filter((t) => t.clientKey === c.key && t.date === b.date && t.half === b.half && !t.done);
+      usedTodos.push(...these);
+      lines.push({ text: `${short(b.date)} ${b.half}: at risk, ${b.risk}, ${b.freeMinutes ? `${hours(b.freeMinutes)} free` : "no free time"}`, link: link(blockHref(b.date, b.half), `Open ${dayLabel(b.date)}`) });
+      const fri = fridayOf(b.date);
+      if (these.length && b.freeMinutes < MOVE_UNDER && b.date !== fri && suggestions.length < 2)
+        suggestions.push({ label: `Move the ${c.name} to-dos from ${short(b.date)} ${b.half} to Fri AM`, tool: "move_plan", args: { fromDate: b.date, fromHalf: b.half, toDate: fri, toHalf: "AM", which: "named", pickIds: these.map((t) => t.pickId) } });
     }
     for (const p of ctx.promises.filter((p) => p.clientKey === c.key)) {
       promiseRefs.push(p.id);
@@ -132,7 +140,7 @@ function planCheck(ctx: AnswerContext, link: LinkFn): Composed {
   if (ctx.unknown.length) sections.push({ title: "Not known", lines: ctx.unknown.map((u) => ({ text: u })) });
   const reply = count
     ? `For ${ctx.period.label}, ${plural(count, "thing")} to look at${ctx.clients.length > 1 ? `, by client` : ""}.`
-    : `Nothing stands out for ${ctx.period.label}: no overloaded blocks, late promises, readiness gaps, deployments or missing updates${ctx.unknown.length ? ", though some of it couldn't be read" : ""}.`;
+    : `Nothing stands out for ${ctx.period.label}: no blocks at risk, late promises, readiness gaps, deployments or missing updates${ctx.unknown.length ? ", though some of it couldn't be read" : ""}.`;
   const links = [link("#/week/add", "Open Week")];
   if (ctx.gaps.length) links.push(link("#/ahead/fix", "Open Gaps"));
   if (ctx.statusMissing?.length) links.push(link("#/status", "Open Status"));
@@ -163,7 +171,8 @@ function agenda(ctx: AnswerContext, link: LinkFn): Composed {
     const lines: Line[] = [];
     const f = dayFlags(x);
     if (f) lines.push({ text: f });
-    for (const b of x.blocks) lines.push({ text: `${b.half}: ${b.clientName} block, ${b.freeMinutes ? `${hours(b.freeMinutes)} free` : "no free time"}${b.plannedMinutes ? `, ${about(b.plannedMinutes)} planned` : ""}${b.risk ? ` (${b.risk})` : ""}`, link: link(blockHref(b.date, b.half), `Open ${x.label}`) });
+    // QT-2: a block's free time, never what's planned against it (the to-dos are listed below).
+    for (const b of x.blocks) lines.push({ text: `${b.half}: ${b.clientName} block, ${b.freeMinutes ? `${hours(b.freeMinutes)} free` : "no free time"}${b.risk ? ` (at risk, ${b.risk})` : ""}`, link: link(blockHref(b.date, b.half), `Open ${x.label}`) });
     for (const t of todos) lines.push({ ...todoLine(t, link, false), text: `${todoLine(t, link, false).text} · ${ctx.clients.find((c) => c.key === t.clientKey)?.name ?? t.clientKey}` });
     if (x.meetingMinutes && !f) lines.push({ text: `${hours(x.meetingMinutes)} of meetings` });
     if (lines.length) sections.push({ title: x.label, lines });

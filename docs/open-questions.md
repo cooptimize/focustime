@@ -649,6 +649,44 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - The auto-start uses each person's stored sign-in (their refresh token) while they're away. If Entra's token lifetime or a conditional access policy ends it, the start is skipped with "couldn't sign in". Worth watching on prod for a week.
 - The demo's working week is Monday to Thursday, so its pause takes a calendar week; on prod it depends on each person's hours.
 
+## ENV-1
+
+- The focus timer still ends on time on a test site and its end shows in the page (the person pressed Start there); only its Web Push waits for the person's switch. Read as "the person started it", not as an unprompted notice. Should a test site's timer end be silent in the page too?
+- Check now runs the AI pass when it finds a transcript, under the presser's switches and caps (a button press, for that person). Taken as allowed; say if a test site should store the transcript without the AI pass.
+- An admin editing a client's names on a test site doesn't re-sort held messages (it spends AI on everyone's chats, not just the admin's). Held messages stay held there. Is a button for it wanted on dev?
+- The retention purge still runs on dev, so dev's stored chat text and transcripts go after 14 and 30 days as the hard rules say. Read "what dev's database already holds stays" as "this step deletes nothing", not as "retention stops on dev". Confirm.
+- VM-2 merged while this step was open. Its production check now comes from the policy's `vm_autostart` (never outside production), and its tick part and wake are skipped on a test site, which shows "production only" as VM-2 designed. VM-2's demo override (`FOCUSTIME_DEMO_AUTOSTART_ENV`) is unchanged.
+- The Settings switch is hidden by `/version`'s env label, which is lowercased and trimmed, while the server's policy needs exactly `prod`. With a misspelled `FOCUSTIME_ENV` such as `Prod`, the label says prod and the switch is hidden while the server treats it as a test site: nothing is sent, the safe side. Fix the label too, or leave it?
+- The DevOps store on a test site runs only while someone is active there, so the first screen after a quiet night reads from a store up to a night old until the next poll (seconds). Acceptable?
+- Not run here: a live Bicep what-if against Azure (the step's rules allow nothing against Azure). The compiled parameters were compared offline (`az bicep build-params`); deploy-dev prints the real what-if on merge.
+
+## QT-2
+
+- **For the product owner: Ahead's amber.** The Gantt's weeks still say "8h free · 10h planned · about 2h over" in amber when a week's features need more than its free time. It's the one place left that says "over" about a plan, kept because it's a forward-planning view (QT-2 point 4). Keep the amber, show only "8h free · 10h planned" in the neutral style, or drop the planned hours there too?
+- The check-in's "2h 30m free this afternoon" is the free time after meetings and personal events, not after what's planned (the block panel's "1h 45m free" subtracts the to-dos, QT-1). Saying the afternoon's time as a fact seemed the simpler reading of "the afternoon's free time"; subtracting the plan would bring "No free time" back as a fullness signal. Is that the right reading?
+- Every unfinished to-do in the check-in now has its move button. On a block with many to-dos that's a column of "Move to Thu". Fine, or show it on hover only?
+- The assistant's "Move the <client> to-dos from Wed PM to Fri AM" is now offered for a block the calendar puts at risk (it was for an over-full one). It's the same step a person relied on, for a calendar reason. Keep it, or drop suggestions from "what should I look out for" altogether?
+- Week's drop refusal on a past day still reads "Can't drop here · Already over" (QT-1's ground, not changed here). "Over" there means the day has ended. Reword to "That day has ended" in a later Week step?
+- The stored `plan_share` and `keep_open` values are no longer read anywhere. Settings' autosave still names "Plan up to" in its saved notice, but no control on screen can change it. Remove the stored values in a later release (a column drop needs `safe-drop`), or keep them in case Ahead's capacity wants them again?
+- `plan/addpane.ts` still picks a default block that isn't "over" (`BlockChoice.fit`); nothing shows a word for it. Left alone.
+- The style guide page (`/styleguide`, development builds only) still shows "fits, 1h spare" and "over by 30m" samples. Left as it is; it never ships to the hosted app.
+- From the review: the check-in's Move button is on every unfinished row, including the to-do under way in the open block. With two open blocks (an 11 AM check-in) only the total free time shows, not which block has it. A move keeps its half, so "Move to Thu" can land on another client's Thursday block and be refused (as before QT-2, now on more rows).
+- `ui/Roadmap.tsx` still says "Over-booked weeks", but nothing imports it. Delete the file in a cleanup step?
+
+## QC-1
+
+- DevOps' title limit: 255 characters is what FocusTime enforces (a String field). The pages read for this step (work items create, work item type fields list, 7.1) don't state it; confirm on dev with a 256-character title.
+- Capture keeps plain Enter as "save" (Capture is saved at once, never a form); only Ctrl+Enter on a Draft story or Draft feature opens the New form. Should plain Enter on those two kinds open the form too?
+- Save as draft keeps the type, parent, assignee, date and description, but not the More's size number (a draft keeps S, M or L). Worth a field?
+- The step expected no migration; drafts at any level needed one additive column pair (`item_type`, `assign_to`). Fine?
+- A new item assigned to someone else gets DevOps' own notice only, no FocusTime note. Should they get Ahead's quiet note too?
+- A created feature from the block panel sits on the block as a to-do (the draft path), not as WD-1's week pin. Should it also go on the week's features list?
+- "+ New" sits in Ahead's header beside Refresh rather than in the filter toolbar, so it is there in every mode. Right place?
+- Review pass: closing the form after the panel's New feature keeps the draft on the block (with a line saying so) rather than removing it. Should Cancel remove it?
+- Review pass: when a process has several types at a level, the form starts on the level above's default child type, else the first. A process rule can also make a field required only in some states; FocusTime checks only the always-required fields, so such a refusal comes back from DevOps at Confirm in its own words.
+- Review pass: "the same create" is the same title, type and parent within 15 minutes. Two people making the same title on purpose in that time each make their own (it's per person); one person must change the title or wait. Fine?
+- A level above epics shares the epic tier in Ahead (Show: Epics opens it too, named "Domains / Epics" once one is listed). Better as its own level in the control?
+
 ## SG-1
 
 - Kept rows are remembered only for the visit (in the page). After a reload a block that has only kept to-dos is an ordinary block with work and offers nothing more. Should a kept suggestion keep the rest of its block's offers across reloads?

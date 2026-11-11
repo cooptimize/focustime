@@ -20,6 +20,7 @@ import { STATE_WORDS } from "../../plan/roadmap.ts";
 import { gapChip, ReadyChips, stateChip } from "./Chips.tsx";
 import { isOpen } from "./model.ts";
 import { WorkLink } from "../WorkLink.tsx";
+import { NewUnder } from "./NewUnder.tsx";
 import { TypeIcon } from "../TypeIcon.tsx";
 import type { GridLayout } from "./layout.ts";
 import { useAhead } from "./Ahead.tsx";
@@ -182,6 +183,7 @@ function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, ba
     else if (e.key === "ArrowLeft" && col === "item" && hasKids && open) toggle(false);
     else if (e.key === "ArrowRight") move(0, 1);
     else if (e.key === "ArrowLeft") move(0, -1);
+    else if (e.key === "N" && e.shiftKey && col === "item" && a.newUnder && r.tier !== "story" && !a.readOnly) a.newUnder({ clientKey: c.clientKey, id: r.item.id, type: r.item.type, title: r.item.title });
     else if (e.key === "Enter" && col === "item" && hasKids) toggle();
     else if (e.key === "Enter" && field && canChange && can(col)) edit(col);
     else if ((e.key === "Delete" || e.key === "Backspace") && col === "dates" && canChange && (r.pending.start || r.pending.target)) void (async () => (r.pending.start && (await a.unstage(r, "start")), r.pending.target && (await a.unstage(r, "target"))))();
@@ -267,6 +269,7 @@ function GridRow({ r, g, open, toggle, focus, first, editing, setFocus, edit, ba
                   {!r.editable && !r.context && <span className="ah-ro" title={c.note}>Read only</span>}
                   <ChangedUnder clientKey={c.clientKey} itemId={r.item.id} />
                   {r.item.inScope === false && !r.context && <span className="ah-ro" title="Outside Cooptimize's work in this project (shown with Show the whole project)">Outside scope</span>}
+                  <NewUnder clientKey={c.clientKey} item={r.item} />
                 </span>,
                 { label: `${r.item.type} #${r.item.id} ${r.item.title}${r.editable ? "" : `. ${c.note}`}${hasKids ? `. Enter to ${open ? "hide" : "show"} what's under it.` : ""}` },
               )}

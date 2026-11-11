@@ -7,6 +7,7 @@
 // client's). Nothing writes without Confirm; nobody's plan but my own is written.
 //
 // Transcript text never goes to a log or an error message; logs carry ids-free counts and outcomes only.
+import type { CheckNowResult } from "../plan/meetings.ts";
 import type { ClientEntry } from "../ai/guard.ts";
 import type { AiService } from "../ai/service.ts";
 import { AI_MESSAGES } from "../ai/types.ts";
@@ -28,7 +29,7 @@ import type { OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
 export type { MeetingNudgeView, OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
 import type { ActionResponse } from "./types.ts";
 
-export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.prepare", "meeting.confirm", "meeting.rerun"] as const;
+export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.prepare", "meeting.confirm", "meeting.rerun", "meeting.check_now"] as const;
 export type MeetingAction = (typeof MEETING_ACTIONS)[number];
 
 /** A FocusTime user as registration matches them: id, name and every address that is them. */
@@ -49,6 +50,8 @@ export type MeetingContext = {
   /** My Graph meetings client (my calendar; the meetings token), or null when I'm not signed in with Microsoft. */
   graph: (cfg: AppConfig) => MeetingsClient | null;
   users: () => Promise<MeetingUser[]>;
+  /** ENV-1: Check now (server/meeting-job.ts): one look, with my sign-in only. Absent: not available here. */
+  checkNow?: (seriesId: number, userId: string) => Promise<CheckNowResult>;
   /**
    * MC-1c: a client in the organization's list (the one Admin › Clients shows, clientAccounts()), matched the way the
    * rest of the app matches keys (case-insensitive), as its own key and name; null for anything that isn't a client.
@@ -160,6 +163,20 @@ function graphProblem(ctx: Pick<MeetingContext, "log">, e: unknown): Refusal | n
   return { ok: false, ...GRAPH_WORDS[kind], code };
 }
 
+/** ENV-1: Check now's answer in plain words (never a meeting name, link or person). */
+const CHECK_NOW_WORDS: Record<CheckNowResult, string> = {
+  found: "Found the transcript. Its reviewers can review it now.",
+  not_yet: "No transcript yet for the last call. Try again later.",
+  no_token: "Your Microsoft sign-in couldn't read this call. Sign in again, then try again.",
+  consent: "Your sign-in needs the meetings permission first. Sign in again and allow it.",
+  missing: "This call isn't on your calendar, so your sign-in can't read it.",
+  busy: "Microsoft is busy. Try again in a few minutes.",
+  failed: "The transcript couldn't be read. Its reviewers can upload it instead.",
+  upload: "This call's transcript is uploaded by its reviewers, so there is nothing to look for.",
+  none: "There's no ended call in the last two days to look for.",
+  not_found: "No such meeting.",
+};
+
 const aiMessage = (o: string | null) => (!o || o === "done" ? null : o === "no_ai" ? "AI isn't on for this client, so nothing was proposed. A FocusTime admin allows it in Admin › AI." : (AI_MESSAGES as Record<string, string>)[o] ?? "The AI pass didn't finish");
 
 export async function meetingAction(ctx: MeetingContext, action: MeetingAction, input: unknown): Promise<ActionResponse> {
@@ -225,6 +242,17 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         if (source === "automatic" && s.organizer === "other") return bad("This meeting is organized outside Cooptimize, so its transcript can only be uploaded", 409);
         const next = await store.updateSeries(s.id, { ...(o.name !== undefined ? { name: text(o.name, "name", 200)! } : {}), ...(role ? { role } : {}), ...(reviewers ? { reviewers } : {}), ...(source ? { source } : {}) });
         return { ok: true, data: { meeting: viewOf(next, clientName, users, me) } };
+      }
+      case "meeting.check_now": {
+        // ENV-1: Admin › Clients › <client> › Meetings › Check now: look once for the latest ended occurrence's
+        // transcript, with my own sign-in only. Schedules nothing; on a test site it is how capture is tried.
+        const o = obj(input, ["seriesId"]);
+        if (!(await ctx.isAdmin())) return bad("Only FocusTime admins check registered meetings", 403);
+        if (!ctx.checkNow) return bad("Check now isn't available here", 503);
+        const s = await store.series(id(o.seriesId, "seriesId"));
+        if (!s || s.removedAt) return bad("No such meeting", 404);
+        const result = await ctx.checkNow(s.id, me);
+        return { ok: true, data: { result, message: CHECK_NOW_WORDS[result] } };
       }
       case "meeting.remove": {
         const o = obj(input, ["seriesId"]);

@@ -176,6 +176,10 @@ export const ACTIONS = [
   { name: "draft.remove", title: "Delete a draft", group: "Work items", target: "portfolio", summary: "Delete a local draft no to-do uses; DevOps isn't touched" },
   { name: "draft.update", title: "Edit a draft", group: "Work items", target: "portfolio", summary: "Title, description, acceptance criteria, client, parent, size or dates of a local draft; saved locally" },
   { name: "draft.add_story", title: "Add a draft story", group: "Work items", target: "portfolio", summary: "A local story under an epic or feature, or under none yet" },
+  // QC-1: the one New form. Creating is devops.preview's "new_item"; these read its choices and save a draft at any level.
+  { name: "new.options", title: "What can be created for a client", group: "Work items", target: "none", summary: "The levels and types a client's process has, its open items to put a new one under, and whether you can create in its DevOps" },
+  { name: "draft.add", aka: ["save as draft"], title: "Save a new item as a draft", group: "Work items", target: "none", summary: "A local draft at any level the client's process has (a story, a feature, an epic or above), to create in DevOps later" },
+  { name: "draft.save", title: "Save a draft's level, parent and owner", group: "Work items", target: "portfolio", summary: "The New form's Save as draft for a draft that already exists; saved locally" },
   { name: "ui.set_theme", title: "Change theme", group: "Display", target: "theme", summary: "Cooptimize Dark, Cooptimize Light or Neutral; saved in config" },
   { name: "demo.status", title: "Demo status", group: "Display", target: "none", summary: "In the demo: whether AI answers came from the real provider or the stored samples (counts only), for the preflight" },
   { name: "demo.devops_change", title: "Simulate a teammate's DevOps change", group: "Display", target: "none", summary: "In the demo: a teammate changes or adds an item in the demo's DevOps, so you can watch FocusTime pick it up on its own" },
@@ -405,6 +409,7 @@ export const ACTIONS = [
   { name: "meeting.no_transcript", title: "No transcript this week", group: "Meetings", target: "meeting", summary: "Dismisses the upload nudge for that occurrence (reviewers only)" },
   { name: "meeting.prepare", title: "Preview a call's changes", group: "Meetings", target: "meeting", summary: "The DevOps creates and comments for the ticked proposals, in the usual preview, before anything is written" },
   { name: "meeting.confirm", title: "Confirm a call's changes", group: "Meetings", target: "meeting", summary: "Writes the previewed changes through the usual writes (read back, logged, Undo), adds the promises and Waiting on, and skips the rest" },
+  { name: "meeting.check_now", title: "Check a call now", group: "Meetings", target: "meeting", summary: "Looks once for a registered call's latest transcript, with your own sign-in (admins only); nothing is scheduled" },
   { name: "meeting.rerun", title: "Propose again", group: "Meetings", target: "meeting", summary: "Runs the AI pass again on the stored transcript (reviewers only, while it's kept)" },
   { name: "link.open", title: "Open in browser", group: "Work items", target: "item", summary: "Open a work item in your browser" },
   // AS-1: the assistant. Its reads (assistant.today, lookup.day, items.get) are also on its allowlist; ask, confirm,

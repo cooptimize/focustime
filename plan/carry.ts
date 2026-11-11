@@ -189,22 +189,10 @@ export function checkinTarget(days: readonly DayLike[], clientKey: string, now?:
 
 /** PL-1: one set of budget inputs for Commit, the Board and Today (week.load sends it), so their numbers agree. */
 export type PlanBits = {
-  /** ADM-1: plan up to this % of free time. */
-  planShare: number;
-  /** The person's level default for Keep open, and their own per client. */
-  keepOpenDefault: number;
-  keepOpen: Record<string, number>;
   /** Items DevOps has resolved, closed or removed: "<client>\u0000<id>". */
   resolved: string[];
   /** Watching check-in minutes per client that count. */
   checkins: Record<string, number>;
-};
-
-/** A client's Keep open share: the person's own for that client, else the level default. */
-export const keepOpenOf = (bits: Pick<PlanBits, "keepOpen" | "keepOpenDefault">) => (clientKey: string): number => {
-  const own = bits.keepOpen[clientKey] ?? Object.entries(bits.keepOpen).find(([k]) => k.toLowerCase() === clientKey.toLowerCase())?.[1];
-  const v = own ?? bits.keepOpenDefault;
-  return Number.isInteger(v) && v >= 0 && v <= 80 ? v : 0;
 };
 
 /** The resolved check for weekBudget and the pick fit. */

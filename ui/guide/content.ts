@@ -15,7 +15,7 @@ export type KeyRef = { command: string } | { key: string };
 
 /** The sizing try-it, in Week. */
 export const SIZING = {
-  title: "Try it: how much fits in a block?",
+  title: "Try it: how much time is free in a block?",
   sub: "A block is where you work: half a day for one client. Hours are how big the work is. Add stories and watch them fill the free time.",
   blockTitle: "One focus block",
   /** The example block: an afternoon with 4h of focus time left after its meetings (what the fit is measured against). */
@@ -73,6 +73,7 @@ export const DEVOPS = {
   },
   /** BD-1: Break down (was Draft stories), a side panel in three steps. */
   breakdown: [
+    { q: "How do I create a feature or an epic in DevOps?", a: "Press Shift+N anywhere (or + New in Ahead, or + New under on an Ahead row for a child of that row). Choose the client and the level: the levels are the client's own, so an epic, a feature, a story or a level above epics if the project has one. Type the title and press Enter: the preview shows exactly what will be written, and nothing is created until you confirm it. It's assigned to you unless you choose someone on the client's project or nobody; the parent and the target date are optional. Without your write PAT for that client, the form says so and saves it as a draft instead. The new item is selected in Ahead, and if a filter would hide it, Ahead says which one." },
     { q: "How FocusTime uses Cooptimize's standards", a: "Break down, Draft story, Draft feature and Create DevOps item read Cooptimize's development standards from GitHub, the ones that fit the work and the client's data platform and source systems. Drafts split along the standards' layers (each Gold fact and dimension its own story, the semantic model apart from the report, the app when publishing), never ask anyone to hand-write Bronze or Silver SQL, and add acceptance criteria that name the standard with a link. Standards used under the draft lists what shaped it, and each title opens the article. A client's own requirements win: if the draft followed the client instead, it says so. Nothing goes to DevOps until you confirm the preview. In Ask you can ask things like \"What's our standard for fact table naming?\": it quotes the rule and links the article, or says Not in the standards." },
     { q: "What does Break down do?", a: "On an item that {b:Needs stories}, {b:Break down} asks the AI to propose the child items it's missing. The button names the item's type, like {b:Break down Feature} or {b:Break down Recurring}; on Week it reads just {b:Break down}, with the type in its tooltip. It opens a side panel: the item stays on the left (its state, priority, parent, description and any children it has) and the proposals fill the right, in three steps: Prepare, Review and Publish. Run never creates anything; nothing is written to DevOps until you press Create all." },
     { q: "What is sent to the AI?", a: "Open {b:What's sent to the AI} under the item to see the list in plain words. Text from DevOps only: the item's fields and description, its parent's title and a short description, the titles and states of the children it already has, and its newest comments up to a limit (Coop briefs as one line). Also up to 5 of that client's own past items with their children as examples, the client's house style (learned each week, or the default), and your note. Never attachments, linked documents, email addresses or another client's work. What it costs is in the AI log." },
@@ -231,7 +232,7 @@ export const QUESTIONS = {
     { q: "An item I made in DevOps isn't showing. Why?", a: "Settings › DevOps › Find an item: choose the client, type the item number, and it says whether DevOps has it, whether FocusTime has it yet, whether it's inside the area FocusTime shows for that client, and whether Day, Week, Ahead and Status show it, with why not. It answers from FocusTime's last check of DevOps (about a minute old in working hours); Refresh checks now." },
     { q: "Where do my clients and blocks come from?", a: "From Focus Time in Dataverse, the schedule Cooptimize already keeps. If a block is wrong, change it there and FocusTime picks it up on the next refresh." },
     { q: "What does FocusTime change in DevOps or Outlook?", a: "Only what you confirm. Every change shows a preview first, is checked afterwards, and can be undone from Settings › Activity. In Outlook it only edits events it created, or your own events with no one else on them. It never deletes anything in DevOps." },
-    { q: "Does FocusTime tell me I planned too much?", a: "No. A block says how much free time it has left, or No free time; it never says you're over. Plan it like a punch list: what doesn't get done moves forward. A block says At risk only when your calendar cuts into it: meetings, a personal event or out of office." },
+    { q: "Does FocusTime tell me I planned too much?", a: "No. A block says how much free time it has left, or No free time; nothing warns you about how much is on it, not the midday check-in and not Ask. Plan it like a punch list: what doesn't get done moves forward. A block says At risk only when your calendar cuts into it: meetings, a personal event or out of office." },
     { q: "Do I have to size everything?", a: "No. Unsized stories count as 1h so the plan still adds up (change that in Settings › Planning), and nothing waits on a size. Size them when you know." },
     { q: "How do I plan stories into Week's blocks?", a: "Click a block on Week. The panel lists your open stories for that client, grouped under their features, in DevOps backlog order. Drag a story onto any of this week's blocks for that client, Friday's catch-up included. While you drag, the block shows its free time, like \"2h of 3h free\" or \"No free time left\"; PTO, past half-days and other clients' blocks say no. Drag a story from a card to another block to move it. Each drop has Undo. Without a mouse, use Add to… or Move to… (the drag handle or ⋯); on a tablet, press and hold; on a phone, Add to…. A story planned elsewhere stays in the list as \"Planned · Thu AM\", which opens that block." },
     { q: "This week's feature says No stories for you yet. Now what?", a: "Type a title in Add a story for me and press Enter (a size is optional). You see the DevOps preview; Create makes the story under the feature, assigned to you, and puts it in the block you're on. Not now leaves nothing behind. Break down opens the Break down panel for the feature, where AI can propose its stories. If teammates have stories there, Take one assigns one to you after a preview: the person who had it gets a quiet note in FocusTime, and Undo in Settings › Activity gives it back. Without DevOps write access for that client, the panel says where to add it." },
@@ -306,7 +307,7 @@ export const START = {
       { name: "Add work", text: "In the morning, + Add on today's blocks puts stories on them.", teams: true },
       { name: "Focus", text: "The next to-do has one Start focus. The urgent strip at the top shows what's due now.", teams: false },
       { name: "Check it off", text: "Tick a to-do when it's done. FocusTime offers the DevOps update.", teams: false },
-      { name: "Midday check-in", text: "After lunch, re-fit what's left. Anything that won't fit gets one suggested move.", teams: true },
+      { name: "Midday check-in", text: "After lunch: what's done, the free time left, and Move to… on anything unfinished.", teams: true },
       { name: "Close out", text: "One line per client on where you left off, and the DevOps updates you owe.", teams: true },
     ],
     teams: "Also in Teams",
@@ -580,10 +581,11 @@ export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "capture" | "a
     does: [
       { title: "Anywhere", text: "Press {key:capture.add}, or the Capture button. The client chip is where it goes; Enter saves, with Undo." },
       { title: "As what it is", text: "Decide later, Promise, Draft story or Draft feature. A draft gets a DevOps-ready version from AI in the background where AI is allowed." },
-      { title: "Into DevOps", text: "Create in DevOps shows your words and the AI version side by side. Edit, choose the parent, confirm the preview.", go: { href: "#/inbox/captures", label: "Open Captures and drafts" } },
+      { title: "Into DevOps", text: "Create in DevOps on a draft opens the preview straight away; it takes the draft's place wherever it was planned. Ctrl+Enter in the box saves and opens the New form, with the AI version under More.", go: { href: "#/inbox/captures", label: "Open Captures and drafts" } },
+      { title: "New in DevOps", text: "{key:ui.new_item} anywhere, + New in Ahead, or + New under on a row: one form for a story, feature, epic or any level the client's process has. Type the title, press Enter, confirm the preview." },
       { title: "Break down", text: "On an item that needs stories, AI proposes the child items. Edit the cards; nothing is created until Create all." },
     ],
-    faqs: ["Quick capture from anywhere?", "What does Break down do?", "How FocusTime uses Cooptimize's standards", "What is sent to the AI?", "What do I choose in Prepare?", "What is the house style?", "How do I review the proposals?", "What happens when I press Create all?", "Why can't I break an item down?"],
+    faqs: ["Quick capture from anywhere?", "How do I create a feature or an epic in DevOps?", "What does Break down do?", "How FocusTime uses Cooptimize's standards", "What is sent to the AI?", "What do I choose in Prepare?", "What is the house style?", "How do I review the proposals?", "What happens when I press Create all?", "Why can't I break an item down?"],
   },
   assistant: {
     lead: "The assistant answers questions about your plan and proposes changes that you then confirm.",
@@ -600,7 +602,7 @@ export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "capture" | "a
   ask: {
     lead: "Ask in your own words: the assistant answers from your own plan, grouped by client, and says plainly what it can't see.",
     does: [
-      { title: "Plan a week", text: "\"I'm planning next week. What should I look out for?\" Late promises, blocks with too much planned, items not ready, deployments and status updates owed, then up to 3 next steps to tap." },
+      { title: "Plan a week", text: "\"I'm planning next week. What should I look out for?\" Days heavy with meetings, blocks at risk, late promises, items not ready, deployments and status updates owed, then up to 3 next steps to tap." },
       { title: "Find out what it does", text: "\"What can you help me with here?\" Examples made from your own week, each one a tap away." },
       { title: "Ask about one thing", text: "\"Which promises are late?\", \"What's not ready for Northwind next week?\", \"Do I have any deployments this weekend?\", \"What am I waiting on?\"" },
       { title: "Follow up", text: "\"The ones under the Data export feature\" right after a request: it remembers what you asked for 2 hours, and asks when a name matches more than one thing." },

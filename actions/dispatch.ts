@@ -85,6 +85,7 @@ import { pastUrgency } from "../plan/asks-ai.ts";
 import { isActionName, type ActionName } from "./registry.ts";
 import { captureAction, featuresOf, type CaptureContext } from "./capture-actions.ts";
 import { draftAiAction, type PrepareContext } from "./draft-prepare.ts";
+import { newItemAction, type NewItemContext } from "./new-item-actions.ts";
 import { standardsForQuestion, standardsLookup, type StandardsLookup, type StandardsPort } from "./standards.ts";
 import { followUpAction } from "./followup-actions.ts";
 import { roadmapAction } from "./roadmap-actions.ts";
@@ -108,6 +109,8 @@ import { DATAVERSE_UNREACHABLE, manyDataverseMatches, noDataverseMatch, type Mat
 import { accountAction, storedIdentity, withMe, IDENTITY_KEY, type MicrosoftAccount, type StoredIdentity } from "./account.ts";
 import { vmAction, vmKey, type VmContext } from "./vm-actions.ts";
 import { presenceAction, syncTeamsStatusWith, type PresenceContext } from "./presence-actions.ts";
+import type { BackgroundPolicy } from "../config/background-policy.ts";
+import type { CheckNowResult } from "../plan/meetings.ts";
 import type { AzureClient } from "../sources/azure/client.ts";
 import { userZone } from "../week/zone.ts";
 import { inList } from "./admin.ts";
@@ -156,6 +159,11 @@ export type ActionContext = {
   log?: Logger;
   /** S1 (D452): where this runs: local, dev, prod or demo (runtime config). Absent: local. */
   env?: string;
+  /**
+   * ENV-1: what may run here (config/background-policy.ts), computed once by server/main.ts. Only the few on-demand
+   * paths that differ on a test site read it (Teams status, Refresh, Check now). Absent: as in production (tests).
+   */
+  background?: BackgroundPolicy;
   /**
    * VM-2: the environment the VM auto-start's gate reads: FOCUSTIME_ENV exactly as set (never normalized), or what the
    * demo and the tests pass in. Only exactly "prod" lets an automatic start run; absent means it never does.
@@ -595,7 +603,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const plan = ctx.plan;
   const open = plan ? await plan.openFollowUps() : [];
   const weekPlans0 = plan ? await plan.week(week.days.map((d) => d.date)) : null;
-  // PL-1: what DevOps resolved, the check-ins and Keep open: one set of budget inputs for Commit and the Board; and
+  // PL-1: what DevOps resolved and the check-ins: one set of budget inputs for Commit and the Board; and
   // a pick of a resolved item counts zero and shows as done.
   const listed = plan ? (await plan.weekPlan(weekStart)).features : [];
   const carry = cfg && plan
@@ -748,6 +756,8 @@ export async function presenceContext(ctx: ActionContext): Promise<PresenceConte
     ...(ctx.plan ? { plan: ctx.plan } : {}),
     config: () => configured(ctx),
     account: await accountOf(ctx),
+    // ENV-1: outside production the focus timer never sets or clears Teams status.
+    writes: ctx.background ? ctx.background.allows("teams_status") : true,
     team: async (cfg) => {
       const r = await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).teammates();
       return r.ok ? r.people : null;
@@ -1088,6 +1098,11 @@ function aheadPort(ctx: ActionContext, plan: PlanStore): AheadPort {
     isLead: async (clientKey) => (await cc).isLead(clientKey),
     automation: async () => (await aheadContext(ctx)).automation(),
     ...(ctx.devopsStored ? { stored: ctx.devopsStored } : {}),
+    // QC-1: a new item's assignee is anyone Ahead's own picker lists for that client (its project's people, never another client's).
+    assignable: async (clientKey, email) => {
+      const r = await aheadAction(await aheadContext(ctx), "ahead.people", { clientKey });
+      return r.ok && ((r.data as { people?: { email: string }[] }).people ?? []).some((p) => p.email.toLowerCase() === email.toLowerCase());
+    },
     // AH-5: only Cooptimizers (and their client logins) get FocusTime's quiet assigned note.
     ...(ctx.org ? { isCooptimizer: async (clientKey: string, email: string) => !!(await scopeDepsOf(ctx.org!)(clientKey))?.isCooptimizer(email) } : {}),
   };
@@ -1177,6 +1192,25 @@ function standardsOption(ctx: ActionContext): { standards?: StandardsLookup } {
     return rule ? { dataPlatform: rule.dataPlatform, sourceSystems: rule.sourceSystems } : null;
   });
   return standards ? { standards } : {};
+}
+
+/** QC-1: the New form's reads (the process model, the client's open items in the store) and write access. */
+function newItemContext(ctx: ActionContext): NewItemContext {
+  return {
+    plan: ctx.plan,
+    config: () => configured(ctx),
+    model: async (cfg, key) => {
+      const r = (await ctx.makeDevOps(cfg.dataverse, userZone(cfg)).processModels([key]))[0];
+      return r?.ok ? r.model : null;
+    },
+    items: async (cfg, key) => {
+      const src = ctx.makeDevOps(cfg.dataverse, userZone(cfg));
+      if (!src.searchItems) return null;
+      const hits = await src.searchItems({ clientKey: key, clientName: cfg.clientSettings[key]?.name ?? key }, "", 2000);
+      return hits ? hits.map((i) => ({ id: i.id, title: i.title, type: i.type, state: i.state, stateCategory: i.stateCategory, url: i.url, parentId: i.parentId })) : null;
+    },
+    canWrite: async (key) => !!ctx.devopsWriter && !!ctx.writePats && !!(await ctx.plan?.devopsIdentity(key).catch(() => null)),
+  };
 }
 
 function prepareContext(ctx: ActionContext): PrepareContext {
@@ -1312,7 +1346,12 @@ export function meetingChatsOf(series: readonly MeetingSeries[]): ClientChat[] {
 }
 
 /** MC-1: the meeting store and the FocusTime users (id, name, every address that is them) for registration. */
-export type MeetingsPort = { store: MeetingStore; users: () => Promise<MeetingUser[]> };
+export type MeetingsPort = {
+  store: MeetingStore;
+  users: () => Promise<MeetingUser[]>;
+  /** ENV-1: Check now: one look for one registered call's transcript with this person's sign-in (absent: not here). */
+  checkNow?: (seriesId: number, userId: string) => Promise<CheckNowResult>;
+};
 
 /**
  * MC-1: one client's AI pass context: its name, whether it is Cooptimize Internal (GD-1), its open DevOps items in
@@ -1349,6 +1388,7 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     },
     graph: (cfg) => ctx.account?.(cfg)?.meetings ?? null,
     users: async () => (ctx.meetings ? ctx.meetings.users() : []),
+    ...(ctx.meetings?.checkNow ? { checkNow: ctx.meetings.checkNow } : {}),
     // MC-1c: the organization's clients (Admin › Clients' clientAccounts()), never the admin's own settings; keys match
     // case-insensitively and come back as the organization's. It fails closed: with the team runtime, a list that can't
     // be read is "unavailable", never the admin's settings. Only without one (no team runtime) the configured clients.
@@ -2346,6 +2386,10 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "draft.prepare":
     case "draft.get":
       return draftAiAction(prepareContext(ctx), action, req.input);
+    case "new.options":
+    case "draft.add":
+    case "draft.save":
+      return newItemAction(newItemContext(ctx), action, req.input);
     case "ahead.load":
     case "ahead.people":
     case "ahead.stage":
@@ -2518,6 +2562,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.prepare":
     case "meeting.confirm":
     case "meeting.rerun":
+    case "meeting.check_now":
       return meetingAction(await meetingContext(ctx), action as MeetingAction, req.input);
     default: {
       const unhandled: never = action;

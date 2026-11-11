@@ -9,6 +9,9 @@ import { createAccountStore } from "./accounts.ts";
 import { purgeRetention } from "./retention.ts";
 import { scopedDb } from "./scope.ts";
 import type { Conn } from "./sql/conn.ts";
+import { backgroundPolicy } from "../config/background-policy.ts";
+
+const PRODUCTION = backgroundPolicy({ FOCUSTIME_ENV: "prod" });
 
 const NOW = Temporal.Instant.from("2026-11-20T12:00:00Z");
 const ago = (h: number) => NOW.subtract({ minutes: Math.round(h * 60) }).toString();
@@ -71,8 +74,8 @@ await forEachDriver("retention purge", ({ open }) => {
       const log = (r: LogRecord) => void logs.push(r);
       const expired: string[] = [];
       const job = () => retentionJob({ db, now: () => NOW, log, expireChats: async (t) => (expired.push(t), 3), chatRetentionDays: async () => 14 });
-      const a = createScheduler({ people: () => [], log, jobs: [job()], now: () => NOW });
-      const b = createScheduler({ people: () => [], log, jobs: [job()], now: () => NOW });
+      const a = createScheduler({ policy: PRODUCTION, people: () => [], log, jobs: [job()], now: () => NOW });
+      const b = createScheduler({ policy: PRODUCTION, people: () => [], log, jobs: [job()], now: () => NOW });
       await Promise.all([a.pass("slow"), b.pass("slow")]);
       await Promise.all([a.pass("slow"), b.pass("slow")]);
       const done = logs.filter((r) => r.op === "retention_purge" && r.kind === "done");

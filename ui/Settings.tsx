@@ -533,7 +533,7 @@ const SID: Record<string, string> = {
   confirmOwn: "confirm-own", meetingMinutes: "help-length", teams: "help-teams", daysAhead: "help-days", exclude: "exclude", teamsStatus: "teams-status",
   plainFocusStatus: "plain-focus-status", sound: "sound", volume: "volume", fadeSeconds: "fade", onBreak: "on-break", pauseMedia: "pause-media", staleWeeks: "stale-weeks",
   stalledDays: "stalled-days", watchWeeks: "watch-weeks", requestPhrases: "request-phrases", ackPhrases: "ack-phrases", promisePhrases: "promise-phrases",
-  status: "status-report-times", asksThroughFocus: "urgent-during-focus", quiet: "quiet", quietPto: "quiet-pto", pushDetails: "push-details", teamsMessages: "teams-messages",
+  status: "status-report-times", asksThroughFocus: "urgent-during-focus", quiet: "quiet", quietPto: "quiet-pto", pushDetails: "push-details", teamsMessages: "teams-messages", fromTestSite: "from-test-site",
   draftMonths: "draft-months", startWithoutAsking: "vm-start",
 };
 
@@ -1137,12 +1137,16 @@ function NotifyForm(p: FormProps) {
   const n = p.data.notify;
   const a = useAutoSave({
     section: "notify",
-    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false, teamsMessages: n.teamsMessages ?? false, teams: { ...DEFAULT_TEAMS_RHYTHM, ...(n.teams ?? {}) } as TeamsRhythm, status: { ...DEFAULT_STATUS_TIMES, ...(n.status ?? {}) } as StatusTimes },
+    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false, teamsMessages: n.teamsMessages ?? false, fromTestSite: n.fromTestSite ?? false, teams: { ...DEFAULT_TEAMS_RHYTHM, ...(n.teams ?? {}) } as TeamsRhythm, status: { ...DEFAULT_STATUS_TIMES, ...(n.status ?? {}) } as StatusTimes },
     payload: (v) => v,
     onSaved: p.onSavedData,
-    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent requests during focus" : k === "teamsMessages" ? "Messages in Teams" : k === "teams" ? "Teams messages" : k === "status" ? "Status report times" : "Quiet on PTO days"),
+    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent requests during focus" : k === "teamsMessages" ? "Messages in Teams" : k === "fromTestSite" ? "From this test site" : k === "teams" ? "Teams messages" : k === "status" ? "Status report times" : "Quiet on PTO days"),
   });
   const [test, setTest] = useState<string | null>(null);
+  // ENV-1: outside production nothing is sent on its own unless the person switches it on here (the server decides
+  // what is production; this only hides the switch where it means nothing).
+  const env = useAppEnv();
+  const testSite = env !== null && env !== "prod" && env !== "demo";
   const group = (title: string, list: readonly NotifyKind[]) => (
     <fieldset className="set-notify-group">
       <legend>{title}</legend>
@@ -1157,6 +1161,15 @@ function NotifyForm(p: FormProps) {
   );
   return (
     <div className="set-form">
+      {testSite && (
+        <Group title="This test site" sid="test-site" intro="This is a test site. It sends nothing on its own: no reminders, notices, pushes or Teams messages, unless you switch them on here. It never reads chats or calls on its own and never changes your Teams status.">
+          <AutoField a={a} k="fromTestSite" label="From this test site" hint="On: you get reminders, notices, pushes and Teams messages from this test site as the real FocusTime sends them, by the switches below. Only for you.">
+            <label className="set-check">
+              <input type="checkbox" checked={a.v.fromTestSite} onChange={(e) => a.change("fromTestSite", e.target.checked)} /> Send me reminders and Teams messages from this test site
+            </label>
+          </AutoField>
+        </Group>
+      )}
       <Group title="In FocusTime" sid="kinds" intro="Each is sent once; a click opens FocusTime there.">
       <div className="set-notify">
         {group("Ritual reminders", RITUAL_KINDS)}

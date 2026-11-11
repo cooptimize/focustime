@@ -9,21 +9,21 @@ const pick = (id: number, half: Pick["half"], size: Pick["size"], status: Pick["
 const pm = { start: Z("12:30"), end: Z("17:00"), longestFreeMinutes: 120, freeGaps: [{ start: Z("12:30"), end: Z("14:00"), minutes: 90 }, { start: Z("15:00"), end: Z("17:00"), minutes: 120 }] };
 const am = { start: Z("09:00"), end: Z("12:30"), longestFreeMinutes: 210, freeGaps: [{ start: Z("09:00"), end: Z("12:30"), minutes: 210 }] };
 
-describe("Check-in fit (step 7)", () => {
+describe("Check-in free time (step 7; QT-2: no fit, no over)", () => {
   const picks = [pick(1, "AM", "S", "done"), pick(2, "AM", "S"), pick(3, "PM", "M"), pick(4, "PM", "S")];
-  it("at 1:00 PM: the morning is over, so its open pick no longer fits; the afternoon has 3h 30m left", () => {
+  it("at 1:00 PM: the morning has ended; the afternoon has 3h free after its meeting", () => {
     const [a, p] = checkIn([{ half: "AM", slot: am }, { half: "PM", slot: pm }], picks, () => 0, SIZES, Z("13:00"));
-    expect(a).toMatchObject({ ended: true, leftMinutes: 0, overBy: 60 });
-    expect(a!.picks.map((x) => [x.pick.id, x.fits])).toEqual([[1, true], [2, false]]);
-    expect(p).toMatchObject({ ended: false, leftMinutes: 180, needMinutes: 180, overBy: 0 });
-    expect(p!.picks.every((x) => x.fits)).toBe(true);
+    expect(a).toMatchObject({ ended: true, leftMinutes: 0 });
+    expect(a!.picks.map((x) => x.pick.id)).toEqual([1, 2]);
+    expect(p).toMatchObject({ ended: false, leftMinutes: 180, needMinutes: 180 });
   });
-  it("as time passes the afternoon shrinks and the last pick stops fitting; focused time lowers the need", () => {
+  it("as time passes the free time shrinks; focused time lowers the need; nothing is flagged", () => {
     const [, p] = checkIn([{ half: "AM", slot: am }, { half: "PM", slot: pm }], picks, () => 0, SIZES, Z("15:30"));
-    expect(p).toMatchObject({ leftMinutes: 90, needMinutes: 180, overBy: 90 });
-    expect(p!.picks.map((x) => x.fits)).toEqual([false, false]);
+    expect(p).toMatchObject({ leftMinutes: 90, needMinutes: 180 });
+    expect(p).not.toHaveProperty("overBy");
+    expect(p!.picks.every((x) => !("fits" in x))).toBe(true);
     const [, q] = checkIn([{ half: "AM", slot: am }, { half: "PM", slot: pm }], picks, (id) => (id === 3 ? 90 * 60 : 0), SIZES, Z("15:30"));
-    expect(q).toMatchObject({ leftMinutes: 90, needMinutes: 90, overBy: 0 });
-    expect(q!.picks.map((x) => [x.needMinutes, x.focusedMinutes, x.fits])).toEqual([[30, 90, true], [60, 0, true]]);
+    expect(q).toMatchObject({ leftMinutes: 90, needMinutes: 90 });
+    expect(q!.picks.map((x) => [x.needMinutes, x.focusedMinutes])).toEqual([[30, 90], [60, 0]]);
   });
 });

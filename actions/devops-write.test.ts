@@ -24,9 +24,9 @@ const base = STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-
 const COOP = "Cooptimize";
 const Adatum = "Adatum";
 
-function setup(opts: { /** GD-1: extra config (clients) and Adatum's DevOps identity. */ toml?: string; adatumEmail?: string; adatumOrg?: string; /** CV-4: my Chat.Read reader, for a conversation's images. */ chat?: import("../sources/graph/chats.ts").ChatMessagesClient; email?: string | null; acceptance?: boolean; startDate?: boolean; sizeField?: "Microsoft.VSTS.Scheduling.StoryPoints" | "Microsoft.VSTS.Scheduling.Effort" | null } = {}) {
+function setup(opts: { /** GD-1: extra config (clients) and Adatum's DevOps identity. */ toml?: string; adatumEmail?: string; adatumOrg?: string; /** CV-4: my Chat.Read reader, for a conversation's images. */ chat?: import("../sources/graph/chats.ts").ChatMessagesClient; email?: string | null; acceptance?: boolean; startDate?: boolean; sizeField?: "Microsoft.VSTS.Scheduling.StoryPoints" | "Microsoft.VSTS.Scheduling.Effort" | null; /** QC-1: more fake process options (Domain, required fields). */ fake?: Parameters<typeof fakeDevOpsWrite>[0] } = {}) {
   clearDevopsPreviews();
-  const dv = fakeDevOpsWrite({ now: () => NOW, ...(opts.acceptance === false ? { acceptance: false } : {}), ...(opts.startDate === false ? { startDate: false } : {}), ...(opts.sizeField !== undefined ? { sizeField: opts.sizeField } : {}) });
+  const dv = fakeDevOpsWrite({ now: () => NOW, ...(opts.fake ?? {}), ...(opts.acceptance === false ? { acceptance: false } : {}), ...(opts.startDate === false ? { startDate: false } : {}), ...(opts.sizeField !== undefined ? { sizeField: opts.sizeField } : {}) });
   dv.add(437, { "System.WorkItemType": "Feature", "System.Title": "Need Features Here", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
   dv.add(500, { "System.WorkItemType": "User Story", "System.Title": "Import mapping", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } }, 437);
   dv.add(600, { "System.WorkItemType": "Epic", "System.Title": "Platform", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
@@ -1254,5 +1254,129 @@ describe("the client boundary in the preview", () => {
     await s.enable();
     await s.write({ kind: "comment", itemId: 500, text: "Adatum and Northwind Traders both need this" });
     expect(s.dv.writes().some((w) => w.method === "POST" && /comments/.test(w.url))).toBe(true);
+  });
+});
+
+describe("QC-1: new_item, the New form's create", () => {
+  let s: S;
+  beforeEach(async () => {
+    s = setup();
+    await s.enable();
+  });
+  const shown = (p: DevOpsPreview) => Object.fromEntries(p.fields.map((r) => [r.label, r.after]));
+  const posts = (t: S) => t.dv.writes().filter((w) => w.method === "POST" && /workitems\/\$/.test(w.url));
+
+  it("the preview is exactly what is sent: a feature with no parent, assigned to me, the project's default area", async () => {
+    const p = await s.preview({ kind: "new_item", title: "  Billing   export ", type: "Feature" });
+    expect(shown(p)).toMatchObject({ Type: "Feature", Title: "Billing export", "Assigned to": expect.stringContaining("avery@cooptimize.example"), Parent: "None", Area: "The project's default", Iteration: "The project's default" });
+    expect(posts(s)).toHaveLength(0);
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(true);
+    const it = s.dv.items.get(r.entry.itemId!)!;
+    expect(it.fields).toMatchObject({ "System.WorkItemType": "Feature", "System.Title": "Billing export" });
+    expect(it.relations).toEqual([]);
+    expect(it.fields["System.AreaPath"]).toBeUndefined();
+    expect(r.entry).toMatchObject({ op: "create", status: "confirmed", parentId: null });
+    expect(posts(s)).toHaveLength(1);
+  });
+
+  it("under an epic a feature; under a feature a story, with the parent's area and iteration", async () => {
+    const f = await s.write({ kind: "new_item", title: "Under the epic", type: "Feature", parentId: 600 });
+    expect(s.dv.items.get(f.entry.itemId!)!.fields["System.Parent"]).toBe(600);
+    const st = await s.write({ kind: "new_item", title: "Under the feature", type: "User Story", parentId: 437, size: 3 });
+    const it = s.dv.items.get(st.entry.itemId!)!;
+    expect(it.fields).toMatchObject({ "System.Parent": 437, "System.AreaPath": "Cooptimize\\Ops", "Microsoft.VSTS.Scheduling.StoryPoints": 3 });
+  });
+
+  it("refuses in plain words, before anything is sent: wrong level under a parent, unknown type, closed parent, another project", async () => {
+    const r1 = await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "Story under epic", type: "User Story", parentId: 600 } });
+    expect(r1).toMatchObject({ status: 409, error: expect.stringContaining("doesn't go under an Epic") });
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "Initiative" } })).error).toMatch(/isn't a level in .*It has: Epic, Feature, User Story/);
+    s.dv.add(700, { "System.WorkItemType": "Epic", "System.Title": "Old", "System.State": "Closed" });
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "Feature", parentId: 700 } })).error).toContain("only under open parents");
+    s.dv.add(701, { "System.WorkItemType": "Epic", "System.Title": "Elsewhere", "System.State": "Active", "System.TeamProject": "Another Project" });
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "Feature", parentId: 701 } })).error).toContain("isn't in Cooptimize's project");
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "Feature", parentId: 99999 } })).status).toBe(409);
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "Epic", size: 5 } })).error).toContain("no size field");
+    expect(posts(s)).toHaveLength(0);
+  });
+
+  it("a title is required, one line, at most 255 characters", async () => {
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "   ", type: "Feature" } })).error).toBe("Type a title");
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "x".repeat(300), type: "Feature" } })).error).toContain("at most 255");
+    const p = await s.preview({ kind: "new_item", title: `${"y".repeat(255)}`, type: "Feature" });
+    expect(shown(p).Title).toHaveLength(255);
+  });
+
+  it("a level above epic: Domain, and an epic under it", async () => {
+    const t = setup({ fake: { domain: true } });
+    await t.enable();
+    const d = await t.write({ kind: "new_item", title: "Payments", type: "Domain" });
+    expect(t.dv.items.get(d.entry.itemId!)!.fields["System.WorkItemType"]).toBe("Domain");
+    const e = await t.write({ kind: "new_item", title: "Card payments", type: "Epic", parentId: d.entry.itemId });
+    expect(t.dv.items.get(e.entry.itemId!)!.fields["System.Parent"]).toBe(d.entry.itemId);
+    expect((await t.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "Feature", parentId: d.entry.itemId } })).error).toContain("Under a Domain go: Epic");
+  });
+
+  it("a required field FocusTime doesn't fill is refused at the preview, never half-created", async () => {
+    const t = setup({ fake: { required: { Feature: ["Custom.CostCenter"] } } });
+    await t.enable();
+    const r = await t.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "Needs a cost center", type: "Feature" } });
+    expect(r).toMatchObject({ status: 409, error: expect.stringContaining("needs CostCenter on a new Feature") });
+    expect(t.dv.writes().filter((w) => w.method === "POST")).toHaveLength(0);
+  });
+
+  it("never two: after a create that may have landed, the same create is refused until Retry checks", async () => {
+    const p = await s.preview({ kind: "new_item", title: "Maybe landed", type: "Feature" });
+    s.dv.fail("POST", /workitems\/\$/, "lost");
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(false);
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "Maybe landed", type: "Feature" } })).toMatchObject({ status: 409, error: expect.stringContaining("may already be in DevOps") });
+  });
+
+  it("the same preview confirmed twice (a double click) creates once", async () => {
+    const p = await s.preview({ kind: "new_item", title: "Once", type: "Feature" });
+    const [a, b] = await Promise.allSettled([s.confirm(p), s.confirm(p)]);
+    expect([a, b].filter((x) => x.status === "fulfilled" && (x.value as DevOpsResult).confirmed)).toHaveLength(1);
+    expect(posts(s)).toHaveLength(1);
+  });
+
+  it("two tabs: two previews of the same create, both confirmed, make one item; a later same create says where it is", async () => {
+    const a = await s.preview({ kind: "new_item", title: "Two tabs", type: "Feature" });
+    const b = await s.preview({ kind: "new_item", title: "Two tabs", type: "Feature" });
+    const ra = await s.confirm(a);
+    expect(ra.confirmed).toBe(true);
+    expect(await s.fail("devops.confirm", { previewId: b.previewId })).toMatchObject({ status: 409, error: `"Two tabs" is already in DevOps as #${ra.entry.itemId}` });
+    expect(posts(s)).toHaveLength(1);
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "Two tabs", type: "Feature" } })).error).toBe(`"Two tabs" is already in DevOps as #${ra.entry.itemId}`);
+    // Another type or another title is not a twin.
+    expect((await s.preview({ kind: "new_item", title: "Two tabs", type: "Epic" })).fields.length).toBeGreaterThan(0);
+  });
+
+  it("assigning: nobody, or only someone on the client's project", async () => {
+    const p = await s.preview({ kind: "new_item", title: "Nobody's", type: "Feature", assignTo: null });
+    expect(shown(p)["Assigned to"]).toBe("Nobody");
+    const r = await s.confirm(p);
+    expect(s.dv.items.get(r.entry.itemId!)!.fields["System.AssignedTo"]).toBeUndefined();
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "Feature", assignTo: "stranger@example.com" } })).error).toContain("Only people on Cooptimize's DevOps project");
+  });
+
+  it("without my write PAT nothing is previewed", async () => {
+    const t = setup();
+    expect((await t.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "Feature" } })).status).toBeGreaterThanOrEqual(400);
+    expect(t.dv.writes().filter((w) => w.method === "POST")).toHaveLength(0);
+  });
+
+  it("a draft at any level keeps its exact type, and the created item takes its place: block, size and timebox", async () => {
+    const d = await s.plan.addDraft({ clientKey: COOP, title: "An epic draft", level: "feature", itemType: "Epic", size: "L" } as never);
+    expect(d.itemType).toBe("Epic");
+    const pick = await s.plan.addPick({ date: "2026-11-03", half: "PM", clientKey: COOP, kind: "draft", draftId: d.id, title: d.title, size: "L" } as never);
+    const p = await s.preview({ kind: "new_item", draftId: d.id });
+    expect(shown(p)).toMatchObject({ Type: "Epic", Title: "An epic draft" });
+    const r = await s.confirm(p);
+    const id = r.entry.itemId!;
+    expect(await s.plan.getPick(pick.id)).toMatchObject({ kind: "item", itemId: id, date: "2026-11-03", half: "PM", size: "L", itemType: "Epic" });
+    // From another tab: the same draft again says where it is.
+    expect(await s.run("devops.preview", { clientKey: COOP, change: { kind: "new_item", draftId: d.id } })).toEqual({ nothing: `"An epic draft" is already in DevOps as #${id}` });
   });
 });

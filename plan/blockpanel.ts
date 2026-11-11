@@ -271,7 +271,7 @@ export type Result<F extends FollowLike> =
   | { kind: "draft"; key: string; draft: DraftStory }
   | { kind: "promise"; key: string; followUp: F };
 /** The two rows that always end the list while typing. */
-export type NewRow = { kind: "todo" | "draft"; key: "new-todo" | "new-draft"; text: string; label: string };
+export type NewRow = { kind: "todo" | "draft" | "feature"; key: "new-todo" | "new-draft" | "new-feature"; text: string; label: string };
 
 export const RESULT_LIMIT = 30;
 
@@ -280,16 +280,18 @@ export type SearchModel<F extends FollowLike> = {
   results: Result<F>[];
   /** How many more matched and aren't shown ("12 more. Keep typing."). */
   more: number;
-  news: [NewRow, NewRow];
+  /** New to-do, New draft story, then (QC-1) New <feature type> when the New form is offered. */
+  news: NewRow[];
   /** The row Enter takes at first: the first result, or "New to-do" when nothing matches. */
   start: number;
 };
 
 /**
  * While typing: this client's DevOps work, drafts and my promises for it that match, then "New to-do: <text>" and
- * "New draft story: <text>". Empty text: null (the Add list shows instead).
+ * "New draft story: <text>", then (QC-1) "New feature: <text>" in the process's own word for the feature tier when the
+ * New form is offered (`feature`). Empty text: null (the Add list shows instead).
  */
-export function searchPanel<F extends FollowLike>(i: { clientKey: string; work: (WorkLike & { parents?: readonly WorkItem[] }) | undefined; followUps: readonly F[]; drafts: readonly DraftStory[]; /** "More in <client>": the rest of the client's open work, once read. */ more?: readonly WorkItem[] }, query: string): SearchModel<F> | null {
+export function searchPanel<F extends FollowLike>(i: { clientKey: string; work: (WorkLike & { parents?: readonly WorkItem[] }) | undefined; followUps: readonly F[]; drafts: readonly DraftStory[]; /** "More in <client>": the rest of the client's open work, once read. */ more?: readonly WorkItem[] }, query: string, feature?: string | null): SearchModel<F> | null {
   const text = query.trim();
   if (!text) return null;
   // Assigned to you first, then the rest of the client's work; each item once.
@@ -310,13 +312,14 @@ export function searchPanel<F extends FollowLike>(i: { clientKey: string; work: 
     news: [
       { kind: "todo", key: "new-todo", text, label: `New to-do: ${text}` },
       { kind: "draft", key: "new-draft", text, label: `New draft story: ${text}` },
+      ...(feature ? [{ kind: "feature" as const, key: "new-feature" as const, text, label: `New ${feature.toLowerCase()}: ${text}` }] : []),
     ],
     // The rows are the results then the two New rows, so index 0 is the first match, or "New to-do" with none.
     start: 0,
   };
 }
 
-/** Up and Down through the results and the two New rows (no wrap). */
+/** Up and Down through the results and the New rows (no wrap). */
 export function moveHighlight(at: number, dir: 1 | -1, rows: number): number {
   return Math.max(0, Math.min(rows - 1, at + dir));
 }

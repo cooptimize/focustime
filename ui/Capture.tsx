@@ -81,6 +81,7 @@ export function SortCapture({ capture, clients, today, onDone, onCancel }: { cap
   const features = useClientFeatures(client, kind === "draft" || kind === "draft_feature");
   const pool = useMemo(() => parentPool(kind === "draft_feature" ? features?.epics : features?.features, kind === "draft_feature" ? "epic" : "feature"), [features, kind]);
   useEffect(() => setParent(NO_ITEM), [client, kind]);
+  const openDraft = useContext(CreateDraftCtx);
 
   const save = async (as: CaptureKind | "dismissed") => {
     setBusy(true);
@@ -90,7 +91,9 @@ export function SortCapture({ capture, clients, today, onDone, onCancel }: { cap
         as === "follow_up" ? { who: who.who, ...(who.whoRef && who.who.trim() ? { whoRef: who.whoRef } : {}), what, ...(due ? { due } : {}), clientKey: client, ...(channel ? { channel } : {}), ...(client && item.itemId ? { itemId: item.itemId } : {}) } :
         as === "draft" ? { clientKey: client, title, size, ...(parent.itemId ? { parentItemId: parent.itemId } : {}) } :
         as === "draft_feature" ? { clientKey: client, title, ...(parent.itemId ? { parentItemId: parent.itemId } : {}), ...(target ? { targetDate: target } : {}) } : {};
-      await call("capture.route", { id: capture.id, as, ...input });
+      const routed = await call<{ capture: Capture }>("capture.route", { id: capture.id, as, ...input });
+      // QC-1: sorted into a story or feature, it opens the New form (Save as draft or Cancel keeps it a draft).
+      if ((as === "draft" || as === "draft_feature") && routed.capture.routedId !== null && openDraft) openDraft(routed.capture.routedId);
       const cname = clients.find((c) => c.clientKey === client)?.clientName ?? client;
       onDone(as === "dismissed" ? "Dismissed" : as === "follow_up" ? `Promise saved${who.who.trim() ? `: owed to ${who.who.trim()}` : ""}${due ? `, due ${plainDay(due)}` : ""}` : as === "draft" ? `Draft story saved for ${cname}` : `Draft feature saved for ${cname}`);
     } catch (e) {
@@ -350,7 +353,8 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
       setSaved({ captureId: r.capture.id, text: msg, body, client: key });
       onChanged();
       if (draftId !== null && open && openDraft) {
-        // The preview prepares it (once) and shows "AI still writing…" until it is ready.
+        // QC-1: Ctrl+Enter on a story or feature opens the New form, so it reaches DevOps without the Inbox; Cancel or
+        // Save as draft leaves the draft saved. Plain Enter only saves (Capture is saved at once, never a form).
         openDraft(draftId);
         onOpenedDraft?.();
       } else {
@@ -489,7 +493,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
           </button>
         ))}
         <span className="muted cap-kind-hint" id="cap-kind-hint">
-          {text.trim() ? `Tab changes the kind${kind !== "later" ? " · ↓ to its details" : ""} · Enter saves${kind === "draft" || kind === "draft_feature" ? " · Ctrl+Enter saves and opens the preview" : ""}` : "Enter saves · Shift+Enter for a new line"}
+          {text.trim() ? `Tab changes the kind${kind !== "later" ? " · ↓ to its details" : ""} · Enter saves${kind === "draft" || kind === "draft_feature" ? " · Ctrl+Enter saves and opens Create in DevOps" : ""}` : "Enter saves · Shift+Enter for a new line"}
         </span>
       </div>
       {kind !== "later" && text.trim() && (

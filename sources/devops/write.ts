@@ -72,6 +72,11 @@ export function createDevOpsWriter(d: { fetch: typeof fetch; log: Logger; timeou
       const r = await req<{ value?: { referenceName?: unknown }[] }>(org, pat, "typefields", "GET", `${p(project)}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/fields`, WIT_API);
       return new Set((r.value ?? []).map((f) => f.referenceName).filter((x): x is string => typeof x === "string"));
     },
+    /** QC-1: the type's fields with alwaysRequired and whether DevOps has a default (work item types field list, 7.1). */
+    async typeFieldInfo(org: string, pat: Pat, project: string, type: string): Promise<{ ref: string; name: string | null; required: boolean; hasDefault: boolean }[]> {
+      const r = await req<{ value?: { referenceName?: unknown; name?: unknown; alwaysRequired?: unknown; defaultValue?: unknown }[] }>(org, pat, "typefields", "GET", `${p(project)}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/fields`, WIT_API);
+      return (r.value ?? []).flatMap((f) => (typeof f.referenceName === "string" ? [{ ref: f.referenceName, name: typeof f.name === "string" ? f.name : null, required: f.alwaysRequired === true, hasDefault: f.defaultValue !== undefined && f.defaultValue !== null && f.defaultValue !== "" }] : []));
+    },
     async fields(org: string, pat: Pat, project: string): Promise<FieldInfo[]> {
       return (await req<{ value?: FieldInfo[] }>(org, pat, "fields", "GET", `${p(project)}/_apis/wit/fields`, WIT_API)).value ?? [];
     },

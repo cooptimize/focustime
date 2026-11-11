@@ -76,6 +76,8 @@ import { createApp } from "./app.ts";
 import { moveFromOldName } from "../host/local/rename.ts";
 import { createDemoContext, demoAutoStart, seedDemo, type DemoControl, type DemoRealAi } from "./demo.ts";
 import { buildInfo } from "./buildinfo.ts";
+import { backgroundPolicy, type BackgroundName } from "../config/background-policy.ts";
+import { backgroundStatusSource } from "./background-status.ts";
 import { execFileSync } from "node:child_process";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { userZone } from "../week/zone.ts";
@@ -155,6 +157,17 @@ const jobs: JobRunner = telemetry ? jobRunner({ done: telemetry.job, onError: (e
 if (telemetry) process.on("uncaughtExceptionMonitor", (e) => telemetry.exception(e, "uncaught"));
 
 const hostKind = process.env.FOCUSTIME_HOST ?? "local";
+// ENV-1: outside production, nothing happens on its own. The one decision from the environment about background work
+// (config/background-policy.ts), made once here and handed to the scheduler, everyone's ticks and the on-demand paths.
+const background = backgroundPolicy(process.env);
+/**
+ * ENV-1: work at server start, under its policy name: it runs only where the policy allows it (a test checks that every
+ * top-level start-up call in this file goes through here).
+ */
+function atStart(name: BackgroundName, run: () => Promise<unknown>): Promise<void> {
+  if (!background.allows(name)) return Promise.resolve(void log({ source: "plan", op: "startup", kind: `off:${name}` }));
+  return run().then(() => undefined);
+}
 /** A4 (hosted): the data key, wrapped by Key Vault (set once the store is open). */
 let dataKeys: KeyProvider | null = null;
 if (hostKind !== "local" && hostKind !== "azure") throw new Error("FOCUSTIME_HOST must be local or azure");
@@ -442,9 +455,11 @@ const devopsNotes = notesStore(db, instantNow);
 const team = teamStore(db, instantNow);
 pollDeps.conversations = conversations;
 // CV-1 migration (add-only, D468): AP-1's requests become conversations once; idempotent, so every start may run it.
-await backfillRequests(teams, conversations, app.entra?.tenantId ?? null).then(
-  (n) => n && log({ source: "plan", op: "requests_moved", count: n }),
-  () => log({ source: "plan", op: "requests_moved", kind: "failed" }),
+await atStart("startup_upkeep", () =>
+  backfillRequests(teams, conversations, app.entra?.tenantId ?? null).then(
+    (n) => n && log({ source: "plan", op: "requests_moved", count: n }),
+    () => log({ source: "plan", op: "requests_moved", kind: "failed" }),
+  ),
 );
 pollDeps.upkeep = (now) => jobs("conversations_upkeep", {}, () => upkeep(now));
 async function upkeep(now: string): Promise<void> {
@@ -476,11 +491,19 @@ async function upkeep(now: string): Promise<void> {
     log,
   });
 }
-const requestsPort: RequestsPort = { teams, refresh: (chatIds) => jobs("requests_refresh", {}, async (job) => cycleCounts(job, await pollCycle(pollDeps, { force: true, chatIds }))), conversations, users: pollDeps.users };
+// ENV-1: outside production, Refresh reads only with the sign-in of the person who pressed it and runs no upkeep.
+const requestsPort: RequestsPort = {
+  teams,
+  refresh: (chatIds, by) => jobs("requests_refresh", {}, async (job) => cycleCounts(job, await pollCycle(pollDeps, { force: true, chatIds, ...(background.production ? {} : { onlyAs: by ?? "", upkeep: false }) }))),
+  conversations,
+  users: pollDeps.users,
+};
 // D475: next-morning auto-shutdown restores from before (they'd write the schedule) never run; mark them cancelled.
-await cancelShutdownRestores(db, instantNow).then(
-  (c) => c.length && log({ source: "azure", op: "restore_cancelled", count: c.length }),
-  () => log({ source: "azure", op: "restore_cancelled", kind: "failed" }),
+await atStart("startup_upkeep", () =>
+  cancelShutdownRestores(db, instantNow).then(
+    (c) => c.length && log({ source: "azure", op: "restore_cancelled", count: c.length }),
+    () => log({ source: "azure", op: "restore_cancelled", kind: "failed" }),
+  ),
 );
 /** P1: the app's VAPID key (the hosted app's Key Vault); null in the developer loop, where push isn't offered. */
 let vapidSource: VapidSource | null = null;
@@ -941,10 +964,10 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     renameNote: renamed.note,
     demo: demoControl(false),
     env: build.env,
-    // VM-2: the auto-start's gate reads FOCUSTIME_ENV exactly as set (buildInfo trims and lowercases; this doesn't), so
-    // only the Bicep's 'prod' starts anyone's VM. Unset, dev, local or anything else: never. And only on the hosted app
-    // (FOCUSTIME_HOST=azure): a developer's machine never passes an environment, whatever FOCUSTIME_ENV says there.
-    ...(process.env.FOCUSTIME_HOST === "azure" && process.env.FOCUSTIME_ENV !== undefined ? { autoStartEnv: process.env.FOCUSTIME_ENV } : {}),
+    background,
+    // VM-2, ENV-1: the auto-start's gate gets "prod" only where the background policy allows vm_autostart (FOCUSTIME_ENV
+    // exactly "prod") and only on the hosted app (FOCUSTIME_HOST=azure): a developer's machine never passes one.
+    ...(process.env.FOCUSTIME_HOST === "azure" ? { autoStartEnv: background.allows("vm_autostart") ? "prod" : "test" } : {}),
     loadConfig,
     makeDataverse: dataverseFor(who),
     makeOutlook: outlookFor(who),
@@ -981,7 +1004,8 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     devopsNotes,
     devopsStored: async (k, v) => devopsPoller?.reads.stored?.(k, v),
     team,
-    meetings: { store: meetingStore, users: meetingUsers },
+    // ENV-1: Check now looks once with this person's sign-in (the job below; production and test sites alike).
+    meetings: { store: meetingStore, users: meetingUsers, checkNow: (seriesId, uid) => meetings.checkNow(seriesId, uid) },
     account: accountFor(who),
     photoCache: host.photos,
     push,
@@ -1011,7 +1035,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
       },
       test: async (kind) => (rhythm ? rhythm.test(userId, kind) : { ok: false, message: "FocusTime in Teams isn't running right now. Try again in a minute." }),
     };
-  const ticks = personTicks({ log, now: instantNow, notifications: host.notifications, media: host.media, openRoute: (route) => void openRouteFor(userId, route).catch(() => undefined), push, ...(teams ? { teams } : {}) }, plan, liveCtx, who);
+  const ticks = personTicks({ log, policy: background, now: instantNow, notifications: host.notifications, media: host.media, openRoute: (route) => void openRouteFor(userId, route).catch(() => undefined), push, ...(teams ? { teams } : {}) }, plan, liveCtx, who);
   runtimes.set(userId, { ctx: liveCtx, who, ticks });
   return liveCtx;
 }
@@ -1230,12 +1254,15 @@ if (devopsPoller) statusRows.register(devopsStatusSource(devopsPoller));
 statusRows.register(clientAccountsStatusSource({ accounts: () => org.clientAccounts(), refreshedAt: () => adminStore.directoryRefreshedAt(), refresh: () => refreshPeople() }));
 // HK-1: telemetry's own health in Admin › Status: one row, a warning once anything was dropped or refused.
 if (telemetry) statusRows.register(telemetryStatusSource(telemetry));
+// ENV-1: on a test site, what runs only on a button, and a declared chat watch period (production: nothing added).
+const backgroundRows = backgroundStatusSource(background);
+if (backgroundRows) statusRows.register(backgroundRows);
 
 // ADM-1: the one-time move of team settings out of people's own settings, at the first start of this build.
 // ADM-2: once at start, so a guest who signed in before this build is signed out.
-void endGuestSessions().catch(() => 0);
+void atStart("startup_upkeep", () => endGuestSessions()).catch(() => 0);
 
-void orgBootstrap({
+void atStart("startup_upkeep", () => orgBootstrap({
   store: adminStore,
   log,
   people: async () => {
@@ -1255,10 +1282,10 @@ void orgBootstrap({
     }
     return out;
   },
-}).then((r) => r.ran && org.invalidate(), () => log({ source: "plan", op: "org_bootstrap", kind: "failed" }));
+}).then((r) => r.ran && org.invalidate(), () => log({ source: "plan", op: "org_bootstrap", kind: "failed" })));
 
 // CV-3b: the one-time repair of Who (a follow-up's Who that is its owner, a promise or commitment "to" its author).
-void whoRepair({
+void atStart("startup_upkeep", () => whoRepair({
   store: adminStore,
   log,
   people: async () => {
@@ -1273,12 +1300,13 @@ void whoRepair({
     return out;
   },
   commitments: () => conversations.clearSelfTo(),
-}).catch(() => log({ source: "plan", op: "who_repair", kind: "failed" }));
+})).catch(() => log({ source: "plan", op: "who_repair", kind: "failed" }));
 
 // GD-3: every held message checked once under GD-2's rules, at the first start of this build; and a client's again when
 // an admin edits its names.
-void heldRecheckOnce({ store: adminStore, log, run: () => recheckHeld(pollDeps) }).catch(() => log({ source: "plan", op: "held_recheck", kind: "failed" }));
-adminOps.recheckHeld = async (clientKey) => void (await recheckHeld(pollDeps, { clientKey }));
+// ENV-1: it spends AI, so production only (an admin's name edit included); outside production held messages stay held.
+void atStart("held_recheck", () => heldRecheckOnce({ store: adminStore, log, run: () => recheckHeld(pollDeps) })).catch(() => log({ source: "plan", op: "held_recheck", kind: "failed" }));
+if (background.allows("held_recheck")) adminOps.recheckHeld = async (clientKey) => void (await recheckHeld(pollDeps, { clientKey }));
 
 // Everyone who has signed in before gets their background work back (a timer that was running ends on time), all of it
 // run by one scheduler (server/scheduler.ts) that reads what is due from each person's rows. A3, the idle rule: the
@@ -1287,9 +1315,9 @@ adminOps.recheckHeld = async (clientKey) => void (await recheckHeld(pollDeps, { 
 // so an idle start reads nothing), and the app's own upkeep (hard deletes, ended sessions) rides on the slow pass.
 let everyone = false;
 // D514, Option A: the chats are read in the background every 5 minutes inside the union of followers' working hours in
-// prod; dev (and the developer loop) read them only on Refresh, unless FOCUSTIME_REQUESTS_POLL says otherwise.
-const pollInBackground = (process.env.FOCUSTIME_REQUESTS_POLL?.trim().toLowerCase() || (build.env === "prod" ? "on" : "off")) === "on";
-log({ source: "plan", op: "requests_poll_mode", kind: pollInBackground ? "background" : "on_demand" });
+// prod; elsewhere only on Refresh, unless FOCUSTIME_REQUESTS_POLL=on declares a watch period (ENV-1: the policy decides).
+log({ source: "plan", op: "requests_poll_mode", kind: background.allows("requests_poll") ? (background.watchPeriod ? "watch_period" : "background") : "on_demand" });
+log({ source: "plan", op: "background_policy", kind: background.production ? "production" : "test_site" });
 // ADM-1: people's levels and client leads from Dataverse, once a day (the stored refresh time says when it's due).
 const PEOPLE_EVERY_MS = 24 * 3600_000;
 /** After a failed or impossible read, the next try is an hour on (in memory), so the scheduler can still sleep. */
@@ -1344,17 +1372,16 @@ const scheduler = createScheduler({
     { name: meetings.name, run: () => jobs("meeting_capture", {}, () => meetings.run()), wake: meetings.wake },
     ...(standardsSyncOn ? [{ name: standards.name, run: () => standards.run(), wake: standards.wake }] : []),
     ...(devopsPoller ? [{ name: "devops_poll", run: async () => void (await devopsPoller!.tick()), wake: () => devopsPoller!.wake() }] : []),
-    ...(pollInBackground
-      ? [{
-          name: "requests_poll",
-          run: () => jobs("requests_poll", {}, async (job) => void cycleCounts(job, await pollCycle(pollDeps))),
-          wake: async () => {
-            const due = await requestsNextDue(pollDeps);
-            return due ? Temporal.Instant.from(due) : null;
-          },
-        }]
-      : []),
+    {
+      name: "requests_poll",
+      run: () => jobs("requests_poll", {}, async (job) => void cycleCounts(job, await pollCycle(pollDeps))),
+      wake: async () => {
+        const due = await requestsNextDue(pollDeps);
+        return due ? Temporal.Instant.from(due) : null;
+      },
+    },
   ],
+  policy: background,
   people: async () => {
     if (!everyone) {
       for (const u of await accounts.users.all()) if (!u.deletedAt) await runtimeFor(u.id);
@@ -1375,7 +1402,7 @@ const scheduler = createScheduler({
 });
 const stopScheduler = scheduler.start();
 // KB-1: once at startup; a failure is recorded for Admin and the last good copy stays.
-if (standardsSyncOn) void standards.run().catch(() => log({ source: "server", op: "sync", kind: "failed" }));
+if (standardsSyncOn) void atStart("standards_sync", () => standards.run()).catch(() => log({ source: "server", op: "sync", kind: "failed" }));
 
 server.on("error", (e: NodeJS.ErrnoException) => {
   if (e.code === "EADDRINUSE") {

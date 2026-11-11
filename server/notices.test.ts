@@ -16,6 +16,9 @@ import type { PushControl } from "./push.ts";
 import { personTicks } from "./ticks.ts";
 import { takesStore } from "../store/devops-takes.ts";
 import { notesStore } from "../store/devops-notes.ts";
+import { backgroundPolicy } from "../config/background-policy.ts";
+
+const PRODUCTION = backgroundPolicy({ FOCUSTIME_ENV: "prod" });
 
 const NY = "America/New_York";
 const MEDIA = { status: async () => ({ players: false, spotify: false }), transition: async () => null, open: async () => {}, endSound: () => {} } as unknown as HostMedia;
@@ -34,7 +37,7 @@ function person(o: { toml?: (t: string) => string; takes?: boolean } = {}) {
   const takes = takesStore(appDb, () => at);
   const notes = notesStore(appDb, () => at);
   const ctx = { plan, loadConfig: async () => ({ path: "x", parsed }), now: () => at.toString(), ...(o.takes ? { takes, devopsNotes: notes, signedInAs: async () => ({ email: "ana@cooptimize.example", upn: "ana@cooptimize.example" }) } : {}) } as unknown as ActionContext;
-  const ticks = personTicks({ log: () => {}, now: () => at, notifications, media: MEDIA, openRoute: () => {}, push }, plan, ctx, { zone: NY });
+  const ticks = personTicks({ policy: PRODUCTION, log: () => {}, now: () => at, notifications, media: MEDIA, openRoute: () => {}, push }, plan, ctx, { zone: NY });
   const until = async (iso: string) => {
     const end = Temporal.Instant.from(iso);
     for (let n = 0; Temporal.Instant.compare(at, end) < 0; n++) {

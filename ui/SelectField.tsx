@@ -3,15 +3,15 @@
 import { useRef, useState } from "react";
 import { CellPopover, FilterList, type ListOption } from "./CellPopover.tsx";
 
-export function SelectField({ label, value, options, onChange, className = "" }: { label: string; value: string; options: readonly ListOption[]; onChange: (key: string) => void; className?: string }) {
+export function SelectField({ label, value, options, onChange, className = "", empty = "Any" }: { label: string; value: string; options: readonly ListOption[]; onChange: (key: string) => void; className?: string; /** What it says with nothing chosen. */ empty?: string }) {
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
   const close = () => (setOpen(false), requestAnimationFrame(() => btn.current?.focus()));
   const cur = options.find((o) => o.key === value);
   return (
     <>
-      <button ref={btn} type="button" className={`date-field select-field ${className}`} aria-label={`${label}: ${cur?.label ?? "none"}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span>{cur?.label ?? "Any"}</span>
+      <button ref={btn} type="button" className={`date-field select-field ${className}`} aria-label={`${label}: ${cur?.label ?? empty}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span>{cur?.label ?? empty}</span>
         <span className="date-field-icon" aria-hidden="true">▾</span>
       </button>
       {open && (

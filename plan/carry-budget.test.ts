@@ -1,4 +1,4 @@
-// PL-1: Keep open, resolved musts and Watching check-ins in the one budget Commit, the Board and Today share.
+// PL-1: resolved musts and Watching check-ins in the one budget (QT-2: Keep open and Plan up to are no longer read).
 import { DEFAULT_SIZE_SCALE } from "./estimate.ts";
 import { describe, expect, it } from "vitest";
 import { aClient, aFocusBlock, aPick, aWeek, aWeekFeature, WEEK } from "../test/builders/index.ts";
@@ -11,31 +11,18 @@ import { planBudget } from "./weekplan.ts";
 const H = 60;
 const SIZES = { XS: 30, S: 60, M: 120, L: 240, unsized: 60 };
 const week = aWeek({ patterns: [aFocusBlock({ client: aClient({ name: "Adatum" }), days: { Tue: "PM", Wed: "AM" } })] });
-const bits = (o: Partial<PlanBits> = {}): PlanBits => ({ planShare: 100, keepOpenDefault: 0, keepOpen: {}, resolved: [], checkins: {}, ...o });
+const bits = (o: Partial<PlanBits> = {}): PlanBits => ({ resolved: [], checkins: {}, ...o });
 const adatum = (b: PlanBits | null, items = [aWeekFeature({ itemId: 11, estimate: 4 * H })]) =>
   planBudget(week, items, { sizes: DEFAULT_SIZE_SCALE, borrowed: [], weekStart: WEEK, work: null, bits: b }).find((c) => c.clientKey === "adatum")!;
 
-describe("Keep open (PL-1)", () => {
-  it("plans up to free × share × (1 − keep open), and the over line uses the reduced hours", () => {
-    expect(budgetWords(10 * H, 0, 80, 25).line).toBe(6 * H);
-    expect(budgetWords(10 * H, 0, 80, 25).text).toBe("10h free · plan up to 6h");
-    // 7h planned fits 10h, but not the 5h left with half kept open.
-    expect(budgetWords(10 * H, 7 * H).kind).toBe("free");
-    expect(budgetWords(10 * H, 7 * H, 100, 50)).toMatchObject({ kind: "over", over: "about 2h over", line: 5 * H });
-  });
-
-  it("reduces a client's plannable hours in the week budget, by its own share or the default", () => {
+describe("QT-2: free time as it is (Plan up to and Keep open are no longer read)", () => {
+  it("the week's free time is the line: amber only when what's on it needs more than its free time", () => {
     const free = adatum(bits()).freeMinutes;
     expect(free).toBeGreaterThan(4 * H);
-    expect(adatum(bits()).planUpTo).toBe(free);
-    expect(adatum(bits({ keepOpen: { adatum: 30 } }))).toMatchObject({ keepOpen: 30, planUpTo: Math.round(free * 0.7) });
-    expect(adatum(bits({ keepOpenDefault: 20 })).planUpTo).toBe(Math.round(free * 0.8));
-    // A client's own 0 wins over the default.
-    expect(adatum(bits({ keepOpenDefault: 20, keepOpen: { adatum: 0 } })).planUpTo).toBe(free);
-    // Enough kept open turns a fitting week amber.
-    const big = [aWeekFeature({ itemId: 11, estimate: free - H })];
-    expect(adatum(bits(), big).status).not.toBe("over");
-    expect(adatum(bits({ keepOpen: { adatum: 50 } }), big).status).toBe("over");
+    expect(adatum(bits()).text).toBe(`${Math.round(free / H)}h free · 4h planned`);
+    expect(adatum(bits(), [aWeekFeature({ itemId: 11, estimate: free - H })]).status).not.toBe("over");
+    expect(adatum(bits(), [aWeekFeature({ itemId: 11, estimate: free + 2 * H })]).status).toBe("over");
+    expect(budgetWords(10 * H, 7 * H)).toMatchObject({ kind: "free", text: "10h free · 7h planned" });
   });
 });
 

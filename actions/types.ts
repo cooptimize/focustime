@@ -23,7 +23,7 @@ export type WeekLoadData = {
   clients: Record<string, string>;
   /** ADM-1: the person's guidance (their choice, else their level's team default): emphasis only, never a block. */
   guidance?: import("../config/org.ts").Guidance | null;
-  /** PL-1: the budget inputs Commit and the Board share (planShare, Keep open, what DevOps resolved, check-ins). */
+  /** PL-1: the budget inputs Commit and the Board share (what DevOps resolved, check-ins; QT-2: not Plan up to or Keep open). */
   planBits?: import("../plan/carry.ts").PlanBits | null;
   /** PL-1: Watching check-ins not yet picks (ghost chips on the Board). */
   checkins?: import("../plan/carry.ts").CheckinGhost[];
@@ -493,6 +493,8 @@ export type TeamsStatusView = {
   until: string | null;
   manual: boolean;
   error: string | null;
+  /** ENV-1: this is a test site, where the focus timer never changes Teams status. */
+  testSite?: boolean;
 };
 /** presence.people: a word per Cooptimizer on screen; nothing for anyone presence couldn't be read for. */
 export type PresencePeopleData = { available: boolean; reason: TeamsAccess | null; people: { email: string; name: string; word: import("../plan/presence.ts").PresenceWord }[]; /** Step 16.4: my own, when asked (the top bar's avatar). */ me?: import("../plan/presence.ts").PresenceWord | null };
