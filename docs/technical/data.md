@@ -1,6 +1,6 @@
 # Data
 
-For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026; `picks.done_removed` against `fix/tx1-loose-ends` on Nov 8; SR-3's parts against `feat/report-finish` on Nov 8; DP-2's parts against `feat/deployment-items` on Nov 8; IB-2's against `feat/inbox-everything` on Nov 8; TX-1's parts against `fix/tx1-review` on Nov 8; CAL-1's calendar links against `feat/ics-calendars` on Nov 10.
+For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026; `picks.done_removed` against `fix/tx1-loose-ends` on Nov 8; SR-3's parts against `feat/report-finish` on Nov 8; DP-2's parts against `feat/deployment-items` on Nov 8; IB-2's against `feat/inbox-everything` on Nov 8; TX-1's parts against `fix/tx1-review` on Nov 8; CAL-1's calendar links against `feat/ics-calendars` on Nov 10; WP-1's tables against `feat/wp1-devops-patterns` on Nov 11.
 
 ## One database, two kinds of table
 
@@ -54,6 +54,7 @@ Newer DevOps write kinds than the `op` column's CHECK are kept in `write_kind`, 
 | `devops_identities`, `devops_item_clients` | User | Yes | A person's checked DevOps identity per client (never the PAT), item to client links |
 | `devops_items`, `devops_changes`, `devops_poll` | App | Yes | Central DevOps reads, the change log, the poll's watermarks |
 | `devops_takes`, `devops_notes` | App | No | Quiet notes to someone whose item was taken or changed |
+| `patterns_runs`, `patterns_snapshots`, `patterns_items`, `patterns_labels`, `patterns_type_lists`, `patterns_platforms` | App | Yes | WP-1's DevOps patterns: runs (kind, state, the starter's user id, progress, estimate and spend), each client's numbers per run (the two newest are shown), items of the last 24 months and their parents (id, rev, type, state, dates, parent, title, and numbers about the text: lengths, empty or not, comment count, tags and estimate set or not, history booleans), labels per item, revision and list version, the request type lists, each client's platform. Never description, acceptance or comment text, never names |
 | `ai_requests`, `app_ai_requests`, `ai_app_spend`, `chat_ai_days` | User and app | Yes | AI request log (counts, cost, outcome; never text), spend per month and per chat per day |
 
 ### Client chats and meetings
@@ -117,6 +118,7 @@ Kept elsewhere:
 - **AI prompts and answers.** The request log keeps counts, cost and outcome only.
 - **Status report drafts and suggestions (SR-1, SR-3).** Feature comments are read live from DevOps and never stored. AI suggestions are held in server memory for 6 hours and never written to the plan store. Lines not pushed yet, features added by hand and dismissed suggestions stay only in that browser (`localStorage`). Upcoming PTO and Holidays is read from Dataverse each time (names and dates only).
 - **Calendar link details with Busy only (CAL-1).** No title, location or description is read into what is kept: only start, end and busy, free or tentative. Show titles keeps titles only. A calendar link's own address is never shown again, logged or exported; only its host is shown.
+- **DevOps item text (WP-1).** The patterns page reads descriptions and acceptance criteria to measure them and, for a classification, to send; the text is dropped once the request is done. Only lengths and labels are kept.
 - **Teams chat previews** (`lastMessagePreview`), status messages, out of office notes and work location are never read.
 
 ## Who can see what
@@ -126,6 +128,7 @@ Kept elsewhere:
 - **Meeting transcripts and proposals** show only to the call's reviewers and attendees (`store/meeting-store.ts`).
 - **Team views** (Team, sends, priorities) show a commit snapshot to people on the same client: no hours, to-dos, notes or focus.
 - **Admins** set team values and see health and counts. They never see anyone's plan, to-dos, promises, captures, focus sessions, PATs, AI request text, assistant history or chats they aren't in. Details in [Security](security.md#admins-guests-and-automation-accounts).
+- **DevOps patterns (WP-1)** shows counts, shares, labels and shapes for every client to the people an admin turned it on for, and item rows (id, title, labels) only for clients they are on, checked on every request. Being an admin changes nothing.
 - **Diagnostics** (Settings › Data › Diagnostics) is counts only, for a person's own chats, with no admin view.
 
 ## Deployment items (DP-2)

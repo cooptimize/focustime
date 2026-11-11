@@ -1502,6 +1502,23 @@ export function createDevOpsSource(d: DevOpsDeps) {
       const { ctx, project } = contextOf({ clientKey: target.clientKey, clientName: target.clientName }, target);
       return (await httpReads(ctx, project, null as never).byIds(ids, fields)).filter((v): v is RawValue => typeof (v as RawValue)?.id === "number" && typeof (v as RawValue)?.fields === "object" && (v as RawValue).fields !== null);
     },
+    /**
+     * WP-1: one item's history (Updates - List, 7.1), oldest first: each update's rev, date and changed fields with old
+     * and new values. 200 a page, 5 pages at most. Read only to work out booleans (DevOps patterns); never stored.
+     */
+    async updates(target: DevOpsTarget, id: number): Promise<{ rev?: unknown; revisedDate?: unknown; fields?: Record<string, { oldValue?: unknown; newValue?: unknown } | undefined> | null }[]> {
+      if (!Number.isInteger(id) || id <= 0) return [];
+      const { ctx, project } = contextOf({ clientKey: target.clientKey, clientName: target.clientName }, target);
+      type Page = { value?: { rev?: unknown; revisedDate?: unknown; fields?: Record<string, { oldValue?: unknown; newValue?: unknown }> | null }[] };
+      const out: NonNullable<Page["value"]> = [];
+      for (let skip = 0, page = 0; page < 5; page++, skip += 200) {
+        const r = await call<Page>(ctx, "updates", `${encodeURIComponent(project)}/_apis/wit/workItems/${id}/updates?$top=200&$skip=${skip}`);
+        const v = Array.isArray(r.value) ? r.value : [];
+        out.push(...v);
+        if (v.length < 200) break;
+      }
+      return out;
+    },
   };
 
   return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, lastChanges, aheadItems, projectPeople, linkedItems, searchItems, featureComments, activity, itemCard, freshness, refreshNow, findItem, internal };

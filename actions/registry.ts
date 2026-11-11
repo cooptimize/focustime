@@ -410,6 +410,17 @@ export const ACTIONS = [
   { name: "meeting.prepare", title: "Preview a call's changes", group: "Meetings", target: "meeting", summary: "The DevOps creates and comments for the ticked proposals, in the usual preview, before anything is written" },
   { name: "meeting.confirm", title: "Confirm a call's changes", group: "Meetings", target: "meeting", summary: "Writes the previewed changes through the usual writes (read back, logged, Undo), adds the promises and Waiting on, and skips the rest" },
   { name: "meeting.check_now", title: "Check a call now", group: "Meetings", target: "meeting", summary: "Looks once for a registered call's latest transcript, with your own sign-in (admins only); nothing is scheduled" },
+  // WP-1: the hidden DevOps patterns page. Only "DevOps patterns" (patterns.status) shows in the command menu, and only
+  // for people an admin turned it on for; the rest run from the page.
+  { name: "patterns.status", title: "DevOps patterns", group: "DevOps", target: "none", summary: "How work is entered and broken down in each client's DevOps (preview)" },
+  { name: "patterns.access", title: "DevOps patterns: access", group: "DevOps", target: "none", summary: "Whether the DevOps patterns page is on for you" },
+  { name: "patterns.run_inventory", title: "DevOps patterns: run inventory", group: "DevOps", target: "none", summary: "Reads every client's last 24 months of DevOps, slowly, and counts how work is written (no AI)" },
+  { name: "patterns.estimate", title: "DevOps patterns: estimate", group: "DevOps", target: "none", summary: "How many items a classification would send to AI and what it should cost" },
+  { name: "patterns.run_classification", title: "DevOps patterns: run classification", group: "DevOps", target: "none", summary: "Labels items with AI, one client per request, after an estimate" },
+  { name: "patterns.resume", title: "DevOps patterns: resume", group: "DevOps", target: "none", summary: "Carries on a stopped run from where it was" },
+  { name: "patterns.set_platform", title: "DevOps patterns: set a client's platform", group: "DevOps", target: "none", summary: "Azure, Fabric, Both or Not set, for splitting the tables" },
+  { name: "patterns.check", title: "DevOps patterns: check by hand", group: "DevOps", target: "none", summary: "30 labeled items of a client you're on, with links to DevOps" },
+  { name: "patterns.download", title: "DevOps patterns: download", group: "DevOps", target: "none", summary: "The summary or the request types as Markdown (counts and meanings, no titles)" },
   { name: "meeting.rerun", title: "Propose again", group: "Meetings", target: "meeting", summary: "Runs the AI pass again on the stored transcript (reviewers only, while it's kept)" },
   { name: "link.open", title: "Open in browser", group: "Work items", target: "item", summary: "Open a work item in your browser" },
   // AS-1: the assistant. Its reads (assistant.today, lookup.day, items.get) are also on its allowlist; ask, confirm,

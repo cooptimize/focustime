@@ -111,6 +111,15 @@ Fit is never red. QT-1 and QT-2: nothing a person reads says they planned too mu
 - Ahead after a create: **"Created #5101"**, or **"Created #5101. Shown until you leave Ahead. Hidden by: Assigned to me"**.
 - The block panel: **"New feature: <text>"** beside New to-do and New draft story; Break down: **"Add one by hand…"**.
 
+## WP-1 words (Nov 11)
+
+- **DevOps patterns**: the page's name, in the command menu and its heading. **DevOps patterns (preview)**: the switch in Admin › People.
+- **Run inventory**, **Estimate**, **Run classification (N items, about $X)**, **Resume inventory**, **Resume classification**: the page's buttons. Run classification always names the estimate it runs for.
+- **Stopped: the server restarted or scaled down**, **Waiting for DevOps budget**, **Giving way to FocusTime's own DevOps check**, **DevOps asked FocusTime to wait**, **DevOps is delaying requests**: a run's states in plain words.
+- **Allow AI is off for this client (Admin › AI)**: a client the estimate and the classification skip.
+- **Request type**, **layer**, **readiness as written**, **missing**, **confidence**, **feature shape** (the layers a parent's children touch, in order): the classification's words. **Check by hand**: 30 items with their labels, only for clients you're on.
+- **Platform**: Azure, Fabric, Both or Not set, set on the page.
+
 ## SG-1 words (Nov 11)
 
 - **Suggested**: the small word over a block's offers ("Suggested · Keep all · Clear"); its hover says they're offers and nothing is planned until kept. A row's hover gives its reason: "Unfinished from Mon", "Next in <client>'s backlog", "Target date Fri", "Needs breakdown".
