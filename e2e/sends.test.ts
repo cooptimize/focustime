@@ -18,7 +18,7 @@ async function larger(page: Page, on: boolean) {
 const commit = async (page: Page) => {
   await page.evaluate((w) => (location.hash = `#/week/commit/${w}`), THIS_WEEK);
   await unfoldAddWork(page);
-  await page.locator("aside.add-work-panel section.team-group").waitFor({ timeout: 30_000 });
+  await page.locator("aside.add-work-panel section.team-group").first().waitFor({ timeout: 30_000 });
   // The panel lists the selected block's client's features: Northwind's (Monday PM).
   await selectBlock(page, "Northwind");
   await unfoldAddWork(page);
