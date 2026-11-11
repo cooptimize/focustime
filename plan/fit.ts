@@ -1,7 +1,7 @@
-// Fit while planning (step 15, D266): picks against a block's whole free time, in calm words. Pure.
+// Fit while planning (step 15, D266): picks against a block's whole free time. Pure. QT-2: no fit words are left
+// here ("Fits", "Room for …", "About 2h over" went with their last screens); callers say free time instead.
 // Check-in alone compares against the time left (capacityMinutes with now); everything else uses this.
 import type { SizeScale } from "./estimate.ts";
-import { pickNeed } from "./types.ts";
 import { freeMinutes } from "../week/free.ts";
 import type { FreeGap, IsoDate } from "../week/types.ts";
 import { fitOf, type Fit } from "./rules.ts";
@@ -21,12 +21,11 @@ export function planMinutes(picks: readonly PickLike[], sizes: SizeScale, timebo
   return slotPlanned(live, sizes, timeboxes, slot);
 }
 
-/** Spare time from this much on reads "Room for about …". */
-export const ROOM_FROM = 30;
-/** Over by this much or less still reads "Fits" (sizes are estimates). */
+/** Over by this much or less counts as no more than the free time (sizes are estimates). */
 export const OVER_GRACE = 10;
 
-export type FitWords = { kind: "none" | "fits" | "room" | "over"; text: string; tone: "neutral" | "watch" };
+/** A block's kind as Add work's block choices name it (plan/addpane.ts). QT-2: no words come with it. */
+export type FitWords = { kind: "none" | "fits" | "room" | "over" };
 
 /** "45m", "1h", "1h 15m". */
 export function hm(minutes: number): string {
@@ -43,73 +42,4 @@ export function aboutHours(minutes: number): string {
   if (minutes < 45) return "under an hour";
   if (minutes < 90) return "about an hour";
   return `about ${Math.round(minutes / 60)} hours`;
-}
-
-/** The fit in a few calm words. Never red: over is amber with "About an hour over". */
-export function fitWords(f: Fit | null): FitWords {
-  if (!f || f.kind === "empty") return { kind: "none", text: "", tone: "neutral" };
-  if (f.kind === "over") {
-    if (f.by <= OVER_GRACE) return { kind: "fits", text: "Fits", tone: "neutral" };
-    if (f.by < 45) return { kind: "over", text: "A little over", tone: "watch" };
-    const w = aboutHours(f.by);
-    return { kind: "over", text: `${w[0]!.toUpperCase()}${w.slice(1)} over`, tone: "watch" };
-  }
-  if (f.spare >= 45) return { kind: "room", text: `Room for ${aboutHours(f.spare)} more`, tone: "neutral" };
-  return { kind: "fits", text: "Fits", tone: "neutral" };
-}
-
-/**
- * Picks to shrink or move so a block fits: the fewest planned picks whose sizes cover the overage. Larger first, untimed before timed, later in the list first. Empty when nothing is over.
- */
-export function trimCandidates<P extends PickLike>(picks: readonly P[], overBy: number, sizes: SizeScale, opts: { timed?: ReadonlySet<number> } = {}): number[] {
-  if (overBy <= OVER_GRACE) return [];
-  const timed = opts.timed ?? new Set<number>();
-  const order = picks
-    .map((p, i) => ({ p, i }))
-    .filter(({ p }) => p.status === "planned")
-    .sort((a, b) => pickNeed(b.p, sizes) - pickNeed(a.p, sizes) || Number(timed.has(a.p.id)) - Number(timed.has(b.p.id)) || b.i - a.i);
-  const out: number[] = [];
-  let covered = 0;
-  for (const { p } of order) {
-    if (covered >= overBy) break;
-    out.push(p.id);
-    covered += pickNeed(p, sizes);
-  }
-  return out;
-}
-
-/** Plan the day's status line in plain words: "About 7 hours of work · about 6 hours free". */
-export function dayTotals(blocks: readonly { planned: number; free: number }[]): string {
-  const work = blocks.reduce((s, b) => s + b.planned, 0);
-  const free = blocks.reduce((s, b) => s + b.free, 0);
-  const cap = (t: string) => `${t[0]!.toUpperCase()}${t.slice(1)}`;
-  return work ? `${cap(aboutHours(work))} of work · ${aboutHours(free)} free` : `Nothing planned yet · ${aboutHours(free)} free`;
-}
-
-/** Whole hours in short form for a card's fit (U4): "2h", or "1h 30m" under 2 hours; quarter hours only. */
-function shortHours(minutes: number): string {
-  const q = Math.max(15, Math.round(minutes / 15) * 15);
-  return q >= 120 ? `${Math.round(q / 60)}h` : hm(q);
-}
-
-/**
- * A Plan the day block's fit, said once on the right of its header (U4): "About 2h over" (amber, with Trim) or
- * "Fits · 30m spare" (muted). Never red. Nothing for an empty block.
- */
-export function blockFitWords(f: Fit | null): FitWords {
-  if (!f || f.kind === "empty") return { kind: "none", text: "", tone: "neutral" };
-  if (f.kind === "over" && f.by > OVER_GRACE) return { kind: "over", text: f.by < 45 ? "A little over" : `About ${shortHours(f.by)} over`, tone: "watch" };
-  const spare = f.kind === "over" ? 0 : f.spare;
-  return { kind: spare >= ROOM_FROM ? "room" : "fits", text: spare >= 15 ? `Fits · ${shortHours(spare)} spare` : "Fits", tone: "neutral" };
-}
-
-/**
- * Plan the day's header line (U4, E2: whole hours as everywhere else): "about 5h free" and, only when some block is
- * over, "about 2h over" (the amber part): the sum of each block's overage, so it agrees with the block fit words.
- */
-export function dayHeadline(blocks: readonly { planned: number; free: number }[]): { free: string; over: string | null } {
-  const free = blocks.reduce((s, b) => s + b.free, 0);
-  const over = blocks.reduce((s, b) => s + (b.planned - b.free > OVER_GRACE ? b.planned - b.free : 0), 0);
-  const h = (m: number) => (m < 30 ? "under 1h" : `about ${Math.round(m / 60)}h`);
-  return { free: free > 0 ? `${h(free)} free` : "no free time", over: over > 0 ? (over < 45 ? "a little over" : `${h(over)} over`) : null };
 }

@@ -12,12 +12,12 @@ Step 15 (D270). Applies to every string a person sees: views, buttons, menus, hi
 
 | Tone | Use for | Examples |
 |---|---|---|
-| Neutral (muted text) | Facts, free time | "1h 45m free", "No free time", "2 of 3 picks done" |
-| Amber (`--watch`) | Worth a look, not a problem | "Due tomorrow" (QT-1: never how much is planned on Day, Week or the panel) |
+| Neutral (muted text) | Facts, free time | "1h 45m free", "No free time", "2h 30m free this afternoon", "2 of 3 picks done" |
+| Amber (`--watch`) | Worth a look, not a problem | "Due tomorrow" (QT-2: never how much is planned, anywhere but Ahead's Gantt weeks) |
 | Orange (`--due`) | Due today | "Due today" |
 | Red (`--risk`) | Real problems only | "Overdue 2 days", "At risk", a source down, a write that failed |
 
-Fit is never red. QT-1: Day, Week and the block panel never say a person planned too much; they say the free time. The board is a punch list.
+Fit is never red. QT-1 and QT-2: nothing a person reads says they planned too much (Day, Week, the panel, the midday check-in, the assistant, Teams, notices, the Guide); they say the free time. The plan is a punch list. The one exception is Ahead's Gantt weeks ("about 2h over"), a forward-planning view and an open question.
 
 ## Words to avoid in visible copy
 
@@ -45,7 +45,7 @@ Fit is never red. QT-1: Day, Week and the block panel never say a person planned
 | Add work (the panel's name), "Add to <client> · Tue AM" | "<client> · Tue AM": the panel is the block (WD-2) |
 | Back to today | Today (a button beside the date, WD-2) |
 | This week (Day's chips), A day ahead: its plan so far | nothing: the panel's feature list, and "+ Add" on a day ahead's blocks (WD-2) |
-| Full, a little over, about 2h over, Too much planned, Fits, Room for … more (Day, Week, the panel) | "1h 45m free", "No free time" (QT-1) |
+| Full, a little over, about 2h over, Too much planned, Fits, Room for … more, overloaded, fits / doesn't fit, Move one?, Over your <day> hours by … (anywhere a person reads) | "1h 45m free", "No free time", "2h 30m free this afternoon", "Wednesday PM: 3h free" (QT-1, QT-2) |
 | Keep open for walk-ins, Plan up to (on screen) | nothing (QT-1; stored values stay) |
 | em dashes | a comma, a period or a middle dot (·) |
 
@@ -90,8 +90,16 @@ Fit is never red. QT-1: Day, Week and the block panel never say a person planned
 - **"2h of 3h free"**, **"1h free"**, **"No free time left"**: the tip while dragging onto a block, neutral.
 - **At risk**: a card's one chip, only when the calendar cuts into the block. Watch has no chip; its reasons are a hover.
 - **"2 done · 1 not done"**, **"Nothing planned"**: a past day's folded card.
-- Retired from visible copy on Day, Week and the panel: Full, a little over, about N hours over, Too much planned, Fits, Room for … more, Keep open for walk-ins, Plan up to, the client chips. The midday check-in, the assistant and Ahead still use their own fit words (not changed in QT-1).
+- Retired from visible copy on Day, Week and the panel: Full, a little over, about N hours over, Too much planned, Fits, Room for … more, Keep open for walk-ins, Plan up to, the client chips. (QT-2 retired them everywhere else too, below.)
 
+## QT-2 words (Nov 11)
+
+- **"2h 30m free this afternoon"**, **"No free time this afternoon"**: the midday check-in's header, once ("this evening" or "the rest of today" when an evening is still ahead). Free time after meetings and personal events, never what's planned against it.
+- **"Move to PM"**, **"Move to Thu"**, **"Move to Mon"**: on every unfinished to-do in the check-in; **Tonight** only for one whose promise is due today.
+- **"What's done and what's left"**: the check-in's moment card, reminder and push (was "what still fits").
+- **"Wednesday PM: 3h free"**, **"Wednesday PM: no free time"**: the assistant's move preview note (was "Over your Wednesday PM hours by 1h").
+- **"Wed PM: at risk, <reason>, 45 min free"**: the assistant names a block only when the calendar puts it at risk. **"3h of meetings, 5h free for focus"**: a day's facts when asked about one day.
+- Retired from visible copy everywhere: fits, doesn't fit, About N hours over. Move one?, A little over, overloaded blocks, too much planned, Over your <day> hours by …. Ahead's Gantt keeps "about 2h over" per week for now (open question).
 
 ## QC-1 words (Nov 11)
 

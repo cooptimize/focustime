@@ -2686,11 +2686,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .next-timer { display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .next-count { border: 0; background: none; padding: 0 4px; font: inherit; font-size: var(--fs-4); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ok); cursor: pointer; }
 .pr-note { flex: none; font-size: var(--fs-2); color: var(--text-muted); white-space: nowrap; }
-.pr-fit { flex: none; font-size: var(--fs-2); color: var(--text-muted); white-space: nowrap; }
-.pr-fit.watch { color: var(--watch); }
-.pick-row.dens-today.nofit { border: 1px dashed color-mix(in oklab, var(--watch) 70%, var(--border)); }
 .ci-move { flex: none; }
-.pick-row.nofit .ci-move { color: var(--watch); border-color: color-mix(in oklab, var(--watch) 55%, var(--border)); }
 .carry-chip { flex: none; padding: 0 8px; border: 0; border-radius: 4px; background: var(--raised); color: var(--text-muted); font: inherit; font-size: var(--fs-2); line-height: calc(20px * var(--text-scale)); cursor: pointer; }
 .carry-chip:hover { color: var(--text); }
 .draft-tag { flex: none; font-size: var(--fs-2); font-weight: 500; color: var(--text-faint); }

@@ -140,7 +140,7 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["Ctrl J", "/"], does: "The assistant: ask what's next or about an item, or ask for a change you then confirm (/ when no text field has focus)", command: "assistant.ask" },
   { keys: ["Ctrl +", "Ctrl −", "Ctrl 0"], does: "Text size: larger, smaller, or back to Default (not while typing)", command: "ui.set_text_size" },
   { keys: ["F"], does: "Focus timer: start one, or pause, +15, done, next to-do or stop", command: "timer.start" },
-  { keys: ["M"], does: "Day › Midday check-in: today's cards show what still fits, with one suggested move each; again to go back", command: "view.checkin" },
+  { keys: ["M"], does: "Day › Midday check-in: what's done, the free time left and Move to… on each unfinished to-do; again to go back", command: "view.checkin" },
   { keys: ["E"], does: "Day › Close out: its side panel (where you left off, DevOps updates, promises due); again to go back", command: "closeout.load" },
   { keys: [","], does: "Settings (Esc goes back)", command: "settings.load" },
   { keys: ["?"], does: "The Guide: start here, your first day, every area, tours and every key (not while typing)", command: "ui.guide" },

@@ -1,4 +1,4 @@
-// U2: Check-in's one suggested move for a pick that isn't done and no longer fits (or whose block has ended).
+// U2: Check-in's one move for a pick that isn't done (QT-2: every unfinished to-do has it, not only ones that "don't fit").
 // Owed today: make it up tonight. Else the same client's later block today, else the next workday, else tonight.
 // Everything else stays in the pick's ⋯ menu. Pure.
 import type { Half, IsoDate } from "../week/types.ts";

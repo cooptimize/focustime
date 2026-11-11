@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { capacityMinutes } from "./rules.ts";
-import { blockFitWords, dayHeadline, dayTotals, fitWords, planFit, trimCandidates } from "./fit.ts";
+import { planFit } from "./fit.ts";
 
 const SIZES = { XS: 30, S: 60, M: 120, L: 210, unsized: 60 };
 const at = (hm: string) => `2026-11-02T${hm}:00-05:00`;
@@ -25,59 +25,5 @@ describe("planFit: the whole block, not the time left", () => {
   });
   it("a PTO block has no free time", () => {
     expect(planFit([pick(1, "S")], SIZES, [], { ...slot, pto: true })).toEqual({ kind: "over", by: 60 });
-  });
-});
-
-describe("fitWords thresholds (plain words, step 16.4)", () => {
-  it("nothing planned says nothing", () => expect(fitWords({ kind: "empty" }).text).toBe(""));
-  it("under 45m spare is Fits", () => {
-    expect(fitWords({ kind: "tight", spare: 0 })).toEqual({ kind: "fits", text: "Fits", tone: "neutral" });
-    expect(fitWords({ kind: "fits", spare: 44 }).text).toBe("Fits");
-  });
-  it("more spare is room in whole hours", () => {
-    expect(fitWords({ kind: "fits", spare: 45 }).text).toBe("Room for about an hour more");
-    expect(fitWords({ kind: "fits", spare: 135 })).toEqual({ kind: "room", text: "Room for about 2 hours more", tone: "neutral" });
-  });
-  it("over by 10m or less still Fits", () => expect(fitWords({ kind: "over", by: 10 }).text).toBe("Fits"));
-  it("over by more is amber, in plain words", () => {
-    expect(fitWords({ kind: "over", by: 11 })).toEqual({ kind: "over", text: "A little over", tone: "watch" });
-    expect(fitWords({ kind: "over", by: 60 }).text).toBe("About an hour over");
-    expect(fitWords({ kind: "over", by: 195 }).text).toBe("About 3 hours over");
-  });
-  it("never uses red", () => {
-    for (const f of [{ kind: "over", by: 500 }, { kind: "fits", spare: 5 }] as const) expect(fitWords(f).tone).not.toBe("risk");
-  });
-});
-
-describe("trimCandidates", () => {
-  const picks = [pick(1, "S"), pick(2, "L"), pick(3, "M"), pick(4, "M", "done")];
-  it("takes the fewest, largest planned picks that cover the overage", () => {
-    expect(trimCandidates(picks, 100, SIZES)).toEqual([2]);
-    expect(trimCandidates(picks, 250, SIZES)).toEqual([2, 3]);
-  });
-  it("skips timed ones when it can (CF-1: no musts to spare)", () => {
-    expect(trimCandidates([pick(1, "M"), pick(2, "M")], 60, SIZES, { timed: new Set([2]) })).toEqual([1]);
-  });
-  it("nothing when within the grace", () => expect(trimCandidates(picks, 10, SIZES)).toEqual([]));
-});
-
-describe("dayTotals", () => {
-  it("reads work then free, in whole hours", () => expect(dayTotals([{ planned: 240, free: 210 }, { planned: 180, free: 165 }])).toBe("About 7 hours of work · about 6 hours free"));
-  it("says nothing planned yet", () => expect(dayTotals([{ planned: 0, free: 120 }])).toBe("Nothing planned yet · about 2 hours free"));
-});
-
-describe("U4: a block's fit once, and the day's headline", () => {
-  it("over is amber in short hours; fits says the spare time, muted; never red", () => {
-    expect(blockFitWords({ kind: "over", by: 130 })).toEqual({ kind: "over", text: "About 2h over", tone: "watch" });
-    expect(blockFitWords({ kind: "over", by: 30 })).toMatchObject({ text: "A little over", tone: "watch" });
-    expect(blockFitWords({ kind: "over", by: 5 })).toMatchObject({ text: "Fits", tone: "neutral" });
-    expect(blockFitWords({ kind: "tight", spare: 30 })).toEqual({ kind: "room", text: "Fits · 30m spare", tone: "neutral" });
-    expect(blockFitWords({ kind: "fits", spare: 95 })).toMatchObject({ text: "Fits · 1h 30m spare" });
-    expect(blockFitWords({ kind: "fits", spare: 5 })).toMatchObject({ text: "Fits" });
-    expect(blockFitWords({ kind: "empty" }).text).toBe("");
-  });
-  it("the headline adds each block's overage; no over part when nothing is over", () => {
-    expect(dayHeadline([{ planned: 330, free: 210 }, { planned: 60, free: 90 }])).toEqual({ free: "about 5h free", over: "about 2h over" });
-    expect(dayHeadline([{ planned: 60, free: 90 }])).toEqual({ free: "about 2h free", over: null });
   });
 });

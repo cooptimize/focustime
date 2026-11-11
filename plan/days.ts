@@ -2,6 +2,7 @@
 // ("Plan any day"). Pure: the caller passes today, PTO and commits.
 import type { IsoDate } from "../week/types.ts";
 import { isPlanWorkday } from "./target.ts";
+import { hoursText } from "./estimate.ts";
 
 /** "plan": everything can change. "past": only ticking picks done or dropping them. */
 export type DayAccess = "plan" | "past";
@@ -91,6 +92,9 @@ export function placeNote(date: IsoDate, o: { pto: boolean; hasHours: boolean })
   return `${name} has no working hours: this is flex time`;
 }
 
-/** AS-2: "Over your Wednesday PM hours by 1h". QT-1: only the assistant's move preview says it now; Week never does. */
-export const overNote = (date: IsoDate, half: "AM" | "PM" | "EVE", over: string) =>
-  `Over your ${Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" })} ${half === "EVE" ? "evening" : half} hours by ${over}`;
+/**
+ * QT-2: the assistant's move preview note, the target block's free time as a fact: "Wednesday PM: 3h free", or
+ * "Wednesday PM: no free time". Replaced AS-2's "Over your Wednesday PM hours by 1h"; nothing says the work is too much.
+ */
+export const freeNote = (date: IsoDate, half: "AM" | "PM" | "EVE", freeMinutes: number) =>
+  `${Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" })} ${half === "EVE" ? "evening" : half}: ${freeMinutes > 0 ? `${hoursText(freeMinutes)} free` : "no free time"}`;

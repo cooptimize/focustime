@@ -596,7 +596,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const plan = ctx.plan;
   const open = plan ? await plan.openFollowUps() : [];
   const weekPlans0 = plan ? await plan.week(week.days.map((d) => d.date)) : null;
-  // PL-1: what DevOps resolved, the check-ins and Keep open: one set of budget inputs for Commit and the Board; and
+  // PL-1: what DevOps resolved and the check-ins: one set of budget inputs for Commit and the Board; and
   // a pick of a resolved item counts zero and shows as done.
   const listed = plan ? (await plan.weekPlan(weekStart)).features : [];
   const carry = cfg && plan

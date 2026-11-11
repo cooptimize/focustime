@@ -15,7 +15,7 @@ export type KeyRef = { command: string } | { key: string };
 
 /** The sizing try-it, in Week. */
 export const SIZING = {
-  title: "Try it: how much fits in a block?",
+  title: "Try it: how much time is free in a block?",
   sub: "A block is where you work: half a day for one client. Hours are how big the work is. Add stories and watch them fill the free time.",
   blockTitle: "One focus block",
   /** The example block: an afternoon with 4h of focus time left after its meetings (what the fit is measured against). */
@@ -232,7 +232,7 @@ export const QUESTIONS = {
     { q: "An item I made in DevOps isn't showing. Why?", a: "Settings › DevOps › Find an item: choose the client, type the item number, and it says whether DevOps has it, whether FocusTime has it yet, whether it's inside the area FocusTime shows for that client, and whether Day, Week, Ahead and Status show it, with why not. It answers from FocusTime's last check of DevOps (about a minute old in working hours); Refresh checks now." },
     { q: "Where do my clients and blocks come from?", a: "From Focus Time in Dataverse, the schedule Cooptimize already keeps. If a block is wrong, change it there and FocusTime picks it up on the next refresh." },
     { q: "What does FocusTime change in DevOps or Outlook?", a: "Only what you confirm. Every change shows a preview first, is checked afterwards, and can be undone from Settings › Activity. In Outlook it only edits events it created, or your own events with no one else on them. It never deletes anything in DevOps." },
-    { q: "Does FocusTime tell me I planned too much?", a: "No. A block says how much free time it has left, or No free time; it never says you're over. Plan it like a punch list: what doesn't get done moves forward. A block says At risk only when your calendar cuts into it: meetings, a personal event or out of office." },
+    { q: "Does FocusTime tell me I planned too much?", a: "No. A block says how much free time it has left, or No free time; nothing warns you about how much is on it, not the midday check-in and not Ask. Plan it like a punch list: what doesn't get done moves forward. A block says At risk only when your calendar cuts into it: meetings, a personal event or out of office." },
     { q: "Do I have to size everything?", a: "No. Unsized stories count as 1h so the plan still adds up (change that in Settings › Planning), and nothing waits on a size. Size them when you know." },
     { q: "How do I plan stories into Week's blocks?", a: "Click a block on Week. The panel lists your open stories for that client, grouped under their features, in DevOps backlog order. Drag a story onto any of this week's blocks for that client, Friday's catch-up included. While you drag, the block shows its free time, like \"2h of 3h free\" or \"No free time left\"; PTO, past half-days and other clients' blocks say no. Drag a story from a card to another block to move it. Each drop has Undo. Without a mouse, use Add to… or Move to… (the drag handle or ⋯); on a tablet, press and hold; on a phone, Add to…. A story planned elsewhere stays in the list as \"Planned · Thu AM\", which opens that block." },
     { q: "This week's feature says No stories for you yet. Now what?", a: "Type a title in Add a story for me and press Enter (a size is optional). You see the DevOps preview; Create makes the story under the feature, assigned to you, and puts it in the block you're on. Not now leaves nothing behind. Break down opens the Break down panel for the feature, where AI can propose its stories. If teammates have stories there, Take one assigns one to you after a preview: the person who had it gets a quiet note in FocusTime, and Undo in Settings › Activity gives it back. Without DevOps write access for that client, the panel says where to add it." },
@@ -307,7 +307,7 @@ export const START = {
       { name: "Add work", text: "In the morning, + Add on today's blocks puts stories on them.", teams: true },
       { name: "Focus", text: "The next to-do has one Start focus. The urgent strip at the top shows what's due now.", teams: false },
       { name: "Check it off", text: "Tick a to-do when it's done. FocusTime offers the DevOps update.", teams: false },
-      { name: "Midday check-in", text: "After lunch, re-fit what's left. Anything that won't fit gets one suggested move.", teams: true },
+      { name: "Midday check-in", text: "After lunch: what's done, the free time left, and Move to… on anything unfinished.", teams: true },
       { name: "Close out", text: "One line per client on where you left off, and the DevOps updates you owe.", teams: true },
     ],
     teams: "Also in Teams",
@@ -602,7 +602,7 @@ export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "capture" | "a
   ask: {
     lead: "Ask in your own words: the assistant answers from your own plan, grouped by client, and says plainly what it can't see.",
     does: [
-      { title: "Plan a week", text: "\"I'm planning next week. What should I look out for?\" Late promises, blocks with too much planned, items not ready, deployments and status updates owed, then up to 3 next steps to tap." },
+      { title: "Plan a week", text: "\"I'm planning next week. What should I look out for?\" Days heavy with meetings, blocks at risk, late promises, items not ready, deployments and status updates owed, then up to 3 next steps to tap." },
       { title: "Find out what it does", text: "\"What can you help me with here?\" Examples made from your own week, each one a tap away." },
       { title: "Ask about one thing", text: "\"Which promises are late?\", \"What's not ready for Northwind next week?\", \"Do I have any deployments this weekend?\", \"What am I waiting on?\"" },
       { title: "Follow up", text: "\"The ones under the Data export feature\" right after a request: it remembers what you asked for 2 hours, and asks when a name matches more than one thing." },
