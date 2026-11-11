@@ -732,6 +732,11 @@ A client's registered weekly call becomes proposals its reviewers confirm. Setup
   `actions/meeting-actions.test.ts`, `actions/meeting-capture.test.ts`, `sources/graph/meetings.test.ts`,
   `server/meeting-job.test.ts`, `store/meeting-store.test.ts`, `server/demo-meetings.test.ts`, the MC-1 parts of
   `server/teams/rhythm.test.ts` and `store/isolation.test.ts`; e2e `e2e/meetings.test.ts`.
+- **MC-1c.** `meetingContext.client` in `actions/dispatch.ts` (the organization's clients, `clientAccounts()`, not
+  the admin's settings); `graphFailureOf` in `sources/graph/meetings.ts` and the plain words (`GRAPH_WORDS`) in
+  `actions/meeting-actions.ts`; `lastReadLine` in `plan/meetings.ts`; the column `meeting_occurrences.last_read`
+  (`store/migrations/20261129T1100_meeting_last_read.ts`); the demo's calendar `sources/demo/meetings-graph.ts`;
+  e2e `e2e/meetings-register.test.ts`.
 
 ## ST-1: Settings overhaul (Nov 6)
 

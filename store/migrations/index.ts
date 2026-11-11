@@ -35,6 +35,7 @@ import { chatSocial } from "./20261113T0900_chat_social.ts";
 import { jobClaims } from "./20261114T0900_job_claims.ts";
 import { aiTier } from "./20261115T0900_ai_tier.ts";
 import { meetings } from "./20261116T0900_meetings.ts";
+import { meetingLastRead } from "./20261129T1100_meeting_last_read.ts";
 import { assistantPending } from "./20261117T0900_assistant_pending.ts";
 import { peopleInvites } from "./20261118T0310_people_invites.ts";
 import { loopSends } from "./20261119T0900_loop_sends.ts";
@@ -54,4 +55,4 @@ import { conversationOwnership } from "./20261127T0900_conversation_ownership.ts
 import { calendarLinks } from "./20261128T0900_calendar_links.ts";
 import type { NamedMigration } from "./named.ts";
 
-export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll, clientAccounts, weekCarry, conversationMerges, messageReactions, messageImages, followUpWhoRef, teamSends, aheadChanges, draftAi, imagesNoBytes, clientLogins, teamsBot, assistant, teamsBotSeen, inboxMarks, teamsRhythm, commitmentClose, chatSocial, jobClaims, aiTier, meetings, assistantPending, peopleInvites, loopSends, aheadStateChanges, pickDeployments, conversationMentions, chatCalls, pickDeployItems, followUpChangedAt, heldMatch, standards, draftAiStandards, timeboxProgress, pickItemIndex, pickDoneRemoved, conversationOwnership, calendarLinks];
+export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll, clientAccounts, weekCarry, conversationMerges, messageReactions, messageImages, followUpWhoRef, teamSends, aheadChanges, draftAi, imagesNoBytes, clientLogins, teamsBot, assistant, teamsBotSeen, inboxMarks, teamsRhythm, commitmentClose, chatSocial, jobClaims, aiTier, meetings, assistantPending, peopleInvites, loopSends, aheadStateChanges, pickDeployments, conversationMentions, chatCalls, pickDeployItems, followUpChangedAt, heldMatch, standards, draftAiStandards, timeboxProgress, pickItemIndex, pickDoneRemoved, conversationOwnership, calendarLinks, meetingLastRead];

@@ -6,6 +6,9 @@ import { describe, expect, it } from "vitest";
 import { createAi } from "../ai/service.ts";
 import { stubProvider } from "../ai/stub.ts";
 import type { ProviderCall } from "../ai/types.ts";
+import type { LogRecord } from "../log/logger.ts";
+import { HttpError, NetworkError } from "../sources/calendar/http.ts";
+import { AuthFailure } from "../sources/oauth/oauth.ts";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import { buildProcessModel } from "../plan/process.ts";
@@ -85,10 +88,14 @@ async function setup() {
     { id: MATE, name: "Lee Mate", emails: ["lee@cooptimize.example"] },
     { id: OUTSIDER, name: "Out Sider", emails: ["out@cooptimize.example"] },
   ];
-  const ctxAs = (me: string, o: { admin?: boolean; write?: boolean } = {}): MeetingContext => ({
+  // MC-1c: the organization's clients (Admin › Clients' list), whatever the admin's own settings hold.
+  const orgClients = ["contoso", "fabrikam", "Northwind"];
+  const ctxAs = (me: string, o: { admin?: boolean; write?: boolean; graph?: MeetingsClient | null; log?: (r: LogRecord) => void; clientsDown?: boolean; usersFail?: boolean } = {}): MeetingContext => ({
     meetings, conversations, plan: planStoreOn(db.conn, { now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("UTC"), userId: me }),
     me: async () => me, isAdmin: async () => !!o.admin, config: async () => cfg.config, now: () => NOW, homeDomains: async () => ["cooptimize.example"],
-    graph: () => graph, users: async () => users, leads: async () => [LEAD],
+    graph: () => (o.graph === undefined ? graph : o.graph), users: async () => { if (o.usersFail) throw new Error("db down"); return users; },
+    client: async (k) => {
+      if (o.clientsDown) return "unavailable"; const hit = orgClients.find((c) => c.toLowerCase() === k.trim().toLowerCase()); return hit ? { key: hit, name: hit } : null; }, leads: async () => [LEAD],
     capture: async (_c, k) => (k === "contoso" ? { clientName: "Contoso", internal: false, items: [aWorkItem({ id: 1201, title: "Rates export", type: "Feature", tier: "feature" })], model: buildProcessModel(aClientProcess()), directory: [aClientEntry({ key: "contoso", names: ["Contoso"], itemIds: [1201] }), aClientEntry({ key: "fabrikam", names: ["Fabrikam"], itemIds: [4410] })] } : null),
     ai: async () => ai,
     devops: async (action, input): Promise<ActionResponse> => {
@@ -101,10 +108,10 @@ async function setup() {
       return { ok: true, data: { results: pids.map((p, i) => ({ entry: { id: 100 + i }, confirmed: true, message: `Done ${p}`, itemId: 9000 + i })) } };
     },
     canWrite: async () => o.write ?? true,
-    log: () => {},
+    log: o.log ?? (() => {}),
   });
-  const act = (me: string, action: MeetingAction, input: unknown, o?: { admin?: boolean; write?: boolean }) => meetingAction(ctxAs(me, o), action, input);
-  return { db, meetings, conversations, graphCalls, providerCalls, devopsCalls, act, ctxAs };
+  const act = (me: string, action: MeetingAction, input: unknown, o?: Parameters<typeof ctxAs>[1]) => meetingAction(ctxAs(me, o), action, input);
+  return { db, meetings, conversations, graphCalls, providerCalls, devopsCalls, act, ctxAs, graph, candidate };
 }
 
 const data = <T>(r: ActionResponse): T => {
@@ -199,5 +206,126 @@ describe("meeting capture actions (MC-1)", () => {
     const o2 = await meetings.ensureOccurrence(m.id, "2026-11-17", "2026-11-17T15:00:00Z", "2026-11-17T16:00:00Z", "needs_upload", null);
     expect(await act(MATE, "meeting.no_transcript", { occurrenceId: o2.id })).toMatchObject({ ok: false, status: 403 });
     expect(data<{ occurrence: { state: string } }>(await act(LEAD, "meeting.no_transcript", { occurrenceId: o2.id })).occurrence.state).toBe("no_transcript");
+  });
+});
+
+// MC-1c: the two reported errors. An admin registering for a client they keep no personal settings for was told "That
+// isn't one of FocusTime's clients"; any refusal from Microsoft while listing or registering escaped as "bad request".
+describe("meeting registration fixes (MC-1c)", () => {
+  const failing = (e: () => Error) => ({ seriesOnMyCalendar: async () => { throw e(); }, series: async () => { throw e(); }, seriesByJoinUrl: async () => { throw e(); } }) as unknown as MeetingsClient;
+  const FAILURES: [string, () => Error, RegExp, string][] = [
+    ["400", () => new HttpError(400), /Microsoft didn't accept that request/, "graph_refused"],
+    ["401", () => new HttpError(401), /Sign in with Microsoft again/, "signin"],
+    ["signed out", () => new AuthFailure("expired", "x"), /Sign in with Microsoft again/, "signin"],
+    ["403", () => new HttpError(403), /Calendars\.ReadWrite.*Cooptimize admin grants it once for everyone/, "consent"],
+    ["429", () => new HttpError(429, 30), /Microsoft isn't answering right now\. Try again in a minute/, "busy"],
+    ["500", () => new HttpError(500), /Microsoft isn't answering right now/, "busy"],
+    ["network", () => new NetworkError("network"), /Microsoft isn't answering right now/, "busy"],
+  ];
+
+  it("registers for a client in the organization's list that the admin keeps no settings for", async () => {
+    const { act } = await setup();
+    const r = data<{ meeting: { clientKey: string; name: string } }>(await act(ADMIN, "meeting.register", { clientKey: "Northwind", role: "status", eventId: "E-contoso" }, { admin: true }));
+    expect(r.meeting.clientKey).toBe("Northwind");
+    expect(data<{ meetings: unknown[] }>(await act(ADMIN, "meeting.list", { clientKey: "Northwind" }, { admin: true })).meetings).toHaveLength(1);
+    expect((await act(ADMIN, "meeting.candidates", { clientKey: "Northwind" }, { admin: true })).ok).toBe(true);
+  });
+
+  it("matches a client key in another case to the organization's key, and refuses a key that isn't a client", async () => {
+    const { act, meetings } = await setup();
+    const r = data<{ meeting: { clientKey: string } }>(await act(ADMIN, "meeting.register", { clientKey: "NORTHWIND", role: "status", eventId: "E-contoso" }, { admin: true }));
+    expect(r.meeting.clientKey).toBe("Northwind");
+    expect(await meetings.seriesOf("Northwind")).toHaveLength(1);
+    expect(data<{ meetings: unknown[] }>(await act(ADMIN, "meeting.list", { clientKey: "northwind" }, { admin: true })).meetings).toHaveLength(1);
+    for (const action of ["meeting.list", "meeting.candidates", "meeting.register"] as const) {
+      const out = await act(ADMIN, action, action === "meeting.register" ? { clientKey: "tailspin", role: "status", eventId: "E-contoso" } : { clientKey: "tailspin" }, { admin: true });
+      expect(out).toMatchObject({ ok: false, status: 404, error: "That isn't one of FocusTime's clients" });
+    }
+  });
+
+  it("names a pasted link's meeting from the organization's name for the client", async () => {
+    const { act } = await setup();
+    const r = data<{ meeting: { name: string } }>(await act(ADMIN, "meeting.register", { clientKey: "northwind", role: "status", joinUrl: JOIN, weekday: 2, start: "10:00", minutes: 30 }, { admin: true }));
+    expect(r.meeting.name).toBe("Northwind weekly call");
+  });
+
+  for (const [label, err, words, code] of FAILURES) {
+    it(`says why when Microsoft answers ${label} during candidates and register, and logs its kind`, async () => {
+      const { act } = await setup();
+      const logs: LogRecord[] = [];
+      const o = { admin: true, graph: failing(err), log: (r: LogRecord) => void logs.push(r) };
+      const c = await act(ADMIN, "meeting.candidates", { clientKey: "contoso" }, o);
+      expect(c).toMatchObject({ ok: false, code });
+      expect(!c.ok && c.error).toMatch(words);
+      expect(!c.ok && c.error).not.toMatch(/bad request/i);
+      const r = await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, o);
+      expect(r).toMatchObject({ ok: false, code });
+      expect(!r.ok && r.error).toMatch(words);
+      expect(logs.filter((l) => l.op === "meeting_graph_failed").map((l) => l.kind)).toEqual([code, code]);
+      expect(JSON.stringify(logs)).not.toMatch(/Bearer|E-contoso|meetup-join/);
+    });
+  }
+
+  it("for a pasted link Microsoft couldn't check, says why and asks for the pattern; with the pattern it registers as Upload", async () => {
+    const { act } = await setup();
+    const o = { admin: true, graph: failing(() => new HttpError(503)) };
+    const r = await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", joinUrl: JOIN }, o);
+    expect(r).toMatchObject({ ok: false, status: 422, code: "busy" });
+    expect(!r.ok && r.error).toMatch(/Microsoft isn't answering right now.*weekday, start time and length/);
+    const m = data<{ meeting: { source: string; organizer: string } }>(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", joinUrl: JOIN, weekday: 2, start: "10:00", minutes: 30 }, o)).meeting;
+    expect(m).toMatchObject({ source: "upload", organizer: "unknown" });
+  });
+
+  it("registers a call a Cooptimize teammate organizes, from my calendar and by pasted link, as Automatic", async () => {
+    const { act, graph, candidate } = await setup();
+    const mates = candidate({ eventId: "E-mate", organizerName: "Lee Mate", organizerEmail: "lee@cooptimize.example", subject: "Contoso weekly" });
+    const g = { ...graph, seriesOnMyCalendar: async () => [mates], series: async (id: string) => (id === "E-mate" ? mates : null), seriesByJoinUrl: async () => mates } as unknown as MeetingsClient;
+    const cands = data<{ candidates: { eventId: string; organizer: string }[] }>(await act(ADMIN, "meeting.candidates", { clientKey: "contoso" }, { admin: true, graph: g })).candidates;
+    expect(cands).toEqual([expect.objectContaining({ eventId: "E-mate", organizer: "home" })]);
+    const a = data<{ meeting: { source: string; organizer: string; reviewers: { id: string }[] } }>(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-mate" }, { admin: true, graph: g })).meeting;
+    expect(a).toMatchObject({ source: "automatic", organizer: "home" });
+    expect(a.reviewers[0]!.id).toBe(ADMIN);
+    const b = data<{ meeting: { source: string } }>(await act(ADMIN, "meeting.register", { clientKey: "fabrikam", role: "status", joinUrl: "https://teams.microsoft.com/l/meetup-join/19%3ameeting_other%40thread.v2/0" }, { admin: true, graph: { ...g, seriesByJoinUrl: async () => ({ ...mates, eventId: "E-mate2", joinUrl: "https://teams.microsoft.com/l/meetup-join/19%3ameeting_other%40thread.v2/0" }) } as unknown as MeetingsClient })).meeting;
+    expect(b.source).toBe("automatic");
+  });
+
+  // The review pass's findings.
+  it("fails closed when the client list can't be read, never falling back to the admin's settings", async () => {
+    const { act } = await setup();
+    for (const action of ["meeting.list", "meeting.candidates"] as const) expect(await act(ADMIN, action, { clientKey: "contoso" }, { admin: true, clientsDown: true })).toMatchObject({ ok: false, status: 503, error: /couldn't read the client list/ });
+  });
+
+  it("refuses a non-admin before looking up the client", async () => {
+    const { act } = await setup();
+    for (const action of ["meeting.list", "meeting.candidates"] as const) expect(await act(LEAD, action, { clientKey: "tailspin" })).toMatchObject({ ok: false, status: 403 });
+    expect(await act(LEAD, "meeting.register", { clientKey: "tailspin", role: "status", eventId: "E-contoso" })).toMatchObject({ ok: false, status: 403 });
+  });
+
+  it("never answers bad request for an unexpected failure", async () => {
+    const { act } = await setup();
+    const r = await act(ADMIN, "meeting.list", { clientKey: "contoso" }, { admin: true, usersFail: true });
+    expect(r).toMatchObject({ ok: false, status: 500, code: "failed" });
+    expect(!r.ok && r.error).toMatch(/FocusTime couldn't finish that/);
+  });
+
+  it("asks a signed-out admin who pasted a link to sign in, or for the pattern", async () => {
+    const { act } = await setup();
+    const r = await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", joinUrl: JOIN }, { admin: true, graph: null });
+    expect(r).toMatchObject({ ok: false, status: 422, code: "signin" });
+    expect(!r.ok && r.error).toMatch(/^Sign in with Microsoft again.*weekday, start time and length/);
+  });
+
+  it("refuses the same call registered again, however the link was copied, and hides it from another admin's candidates", async () => {
+    const { act, meetings, graph, candidate } = await setup();
+    data(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true }));
+    const variant = JOIN.replace("%3a", "%3A") + "?context=%7b%22Tid%22%7d";
+    expect(await act(LEAD, "meeting.register", { clientKey: "contoso", role: "status", joinUrl: variant, weekday: 2, start: "10:00", minutes: 60 }, { admin: true })).toMatchObject({ ok: false, status: 409, error: "That meeting is already registered" });
+    // Another admin's own copy of the series has another event id.
+    const theirs = { ...graph, seriesOnMyCalendar: async () => [candidate({ eventId: "E-their-copy" })] } as unknown as MeetingsClient;
+    expect(data<{ candidates: unknown[] }>(await act(LEAD, "meeting.candidates", { clientKey: "contoso" }, { admin: true, graph: theirs })).candidates).toEqual([]);
+    // Two admins at once: the store refuses the second inside its transaction.
+    const base = { clientKey: "fabrikam", name: "x", role: "status" as const, source: "upload" as const, detected: "upload" as const, organizer: "unknown" as const, joinUrl: CLIENT_HOSTED, eventId: null, registrantId: ADMIN, weekday: 4, start: "14:00", minutes: 30, zone: "UTC", interval: 1, reviewers: [ADMIN], attendees: [] };
+    const both = await Promise.allSettled([meetings.addSeries(base), meetings.addSeries({ ...base, registrantId: LEAD, joinUrl: CLIENT_HOSTED.toUpperCase().replace("HTTPS://TEAMS.MICROSOFT.COM", "https://teams.microsoft.com") })]);
+    expect(both.map((x) => x.status).sort()).toEqual(["fulfilled", "rejected"]);
   });
 });
