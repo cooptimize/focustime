@@ -77,6 +77,7 @@ import { moveFromOldName } from "../host/local/rename.ts";
 import { createDemoContext, seedDemo, type DemoControl, type DemoRealAi } from "./demo.ts";
 import { buildInfo } from "./buildinfo.ts";
 import { backgroundPolicy } from "../config/background-policy.ts";
+import { backgroundStatusSource } from "./background-status.ts";
 import { execFileSync } from "node:child_process";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { userZone } from "../week/zone.ts";
@@ -961,7 +962,8 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     devopsNotes,
     devopsStored: async (k, v) => devopsPoller?.reads.stored?.(k, v),
     team,
-    meetings: { store: meetingStore, users: meetingUsers },
+    // ENV-1: Check now looks once with this person's sign-in (the job below; production and test sites alike).
+    meetings: { store: meetingStore, users: meetingUsers, checkNow: (seriesId, uid) => meetings.checkNow(seriesId, uid) },
     account: accountFor(who),
     photoCache: host.photos,
     push,
@@ -1210,6 +1212,9 @@ if (devopsPoller) statusRows.register(devopsStatusSource(devopsPoller));
 statusRows.register(clientAccountsStatusSource({ accounts: () => org.clientAccounts(), refreshedAt: () => adminStore.directoryRefreshedAt(), refresh: () => refreshPeople() }));
 // HK-1: telemetry's own health in Admin › Status: one row, a warning once anything was dropped or refused.
 if (telemetry) statusRows.register(telemetryStatusSource(telemetry));
+// ENV-1: on a test site, what runs only on a button, and a declared chat watch period (production: nothing added).
+const backgroundRows = backgroundStatusSource(background);
+if (backgroundRows) statusRows.register(backgroundRows);
 
 // ADM-1: the one-time move of team settings out of people's own settings, at the first start of this build.
 // ADM-2: once at start, so a guest who signed in before this build is signed out.
