@@ -92,3 +92,12 @@ Fit is never red. QT-1: Day, Week and the block panel never say a person planned
 - **"2 done · 1 not done"**, **"Nothing planned"**: a past day's folded card.
 - Retired from visible copy on Day, Week and the panel: Full, a little over, about N hours over, Too much planned, Fits, Room for … more, Keep open for walk-ins, Plan up to, the client chips. The midday check-in, the assistant and Ahead still use their own fit words (not changed in QT-1).
 
+
+## WP-1 words (Nov 11)
+
+- **DevOps patterns**: the page's name, in the command menu and its heading. **DevOps patterns (preview)**: the switch in Admin › People.
+- **Run inventory**, **Estimate**, **Run classification (N items, about $X)**, **Resume inventory**, **Resume classification**: the page's buttons. Run classification always names the estimate it runs for.
+- **Stopped: the server restarted or scaled down**, **Waiting for DevOps budget**, **Giving way to FocusTime's own DevOps check**, **DevOps asked FocusTime to wait**, **DevOps is delaying requests**: a run's states in plain words.
+- **Allow AI is off for this client (Admin › AI)**: a client the estimate and the classification skip.
+- **Request type**, **layer**, **readiness as written**, **missing**, **confidence**, **feature shape** (the layers a parent's children touch, in order): the classification's words. **Check by hand**: 30 items with their labels, only for clients you're on.
+- **Platform**: Azure, Fabric, Both or Not set, set on the page.

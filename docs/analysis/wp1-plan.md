@@ -74,3 +74,16 @@ App tables, added by one migration: runs, a snapshot per client per run, items (
 ## Removing it
 
 Turn the switch off for everyone (nothing runs without a press). Then remove `ui/patterns/`, `actions/patterns*.ts`, `plan/patterns/`, `store/patterns-store.ts`, the registry entries and the Admin column; the tables go in a later release with a `safe-drop` migration (D468).
+
+## What was built (Nov 11)
+
+As planned, with these details settled while building:
+
+- Ten items per classification request; a refused or malformed batch is retried one item at a time, and an item with no valid answer is counted, not shown.
+- The estimate reads only the store (the lengths kept from the inventory), so it is free; Run classification carries its total and the server re-estimates before starting.
+- The cost stop is checked after a batch's labels are saved, so what was paid for is kept.
+- A classification Resume asks for a new estimate first.
+- The page asks for status every 5 seconds while a run goes.
+- The reader's freshness check uses the poller's own `freshness` (its next check per client).
+- The skipped-client words name where to change it: "Allow AI is off for this client (Admin › AI)".
+- Screenshots: `docs/ux/wp1/` (1440×900, light and dark, fictional data).

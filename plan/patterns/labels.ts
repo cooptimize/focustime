@@ -141,17 +141,13 @@ const shortText = (v: unknown, max: number): string | null => {
  */
 export function parseLabels(raw: unknown, refs: readonly string[], list: TypeList): { labels: Map<string, Labels>; dropped: number } {
   const out = new Map<string, Labels>();
-  let dropped = 0;
   const items = raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown }).items) ? (raw as { items: unknown[] }).items : null;
   if (!items) return { labels: out, dropped: refs.length };
   const names = list.types.map((t) => t.name);
   for (const it of items) {
     const o = it && typeof it === "object" ? (it as Record<string, unknown>) : null;
     const ref = o && typeof o.ref === "string" ? o.ref : null;
-    if (!o || !ref || !refs.includes(ref) || out.has(ref)) {
-      dropped++;
-      continue;
-    }
+    if (!o || !ref || !refs.includes(ref) || out.has(ref)) continue;
     const type = inList(names, o.request_type);
     const layers = Array.isArray(o.layers) ? o.layers.map((l) => inList(LAYERS, l)) : null;
     const missing = Array.isArray(o.missing) ? o.missing.map((l) => inList(MISSING, l)) : null;
@@ -160,14 +156,10 @@ export function parseLabels(raw: unknown, refs: readonly string[], list: TypeLis
     const otherName = type === OTHER ? shortText(o.other_name, 60) : null;
     const otherMeaning = type === OTHER ? shortText(o.other_meaning, 200) : null;
     const okList = (l: (string | null)[] | null) => !!l && l.length > 0 && l.every(Boolean) && new Set(l).size === l.length && (!l.includes("none") || l.length === 1);
-    if (!type || !readiness || !confidence || !okList(layers) || !okList(missing) || (type === OTHER && (!otherName || !otherMeaning))) {
-      dropped++;
-      continue;
-    }
+    if (!type || !readiness || !confidence || !okList(layers) || !okList(missing) || (type === OTHER && (!otherName || !otherMeaning))) continue;
     out.set(ref, { requestType: type, otherName, otherMeaning, layers: layers as string[], readiness, missing: missing as string[], confidence });
   }
   // Dropped: every item asked for that has no valid answer (a malformed one, a duplicate, or none at all).
-  void dropped;
   return { labels: out, dropped: refs.filter((r) => !out.has(r)).length };
 }
 

@@ -659,3 +659,14 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - The Settings switch is hidden by `/version`'s env label, which is lowercased and trimmed, while the server's policy needs exactly `prod`. With a misspelled `FOCUSTIME_ENV` such as `Prod`, the label says prod and the switch is hidden while the server treats it as a test site: nothing is sent, the safe side. Fix the label too, or leave it?
 - The DevOps store on a test site runs only while someone is active there, so the first screen after a quiet night reads from a store up to a night old until the next poll (seconds). Acceptable?
 - Not run here: a live Bicep what-if against Azure (the step's rules allow nothing against Azure). The compiled parameters were compared offline (`az bicep build-params`); deploy-dev prints the real what-if on merge.
+
+## WP-1
+
+- A monthly inventory, production only, could keep the numbers fresh. Not built: nothing in this step runs on its own.
+- The prompt asked for e2e tests "in the demo". The demo has no app-level DevOps reader, and a demo reader would mean a demo source for every client's history; the e2e runs in the live harness (real sessions, fake DevOps and the stub AI, fictional data) instead. Say if a demo seed is wanted.
+- DP-2's `data_platform` client rule overlaps the page's Platform. The page keeps its own (Azure, Fabric, Both) and shows DP-2's as a hint when not set. Should one feed the other?
+- The Flex tier isn't used: a classification runs on the standard tier so the estimate and the cost stop mean the same thing. Flex could halve the cost.
+- The person's monthly AI cap applies to a classification, like any request they start. A large first run may need a raised cap for that person (Admin › AI).
+- Dev scales to zero: a run lives only while the replica does. The page asks for status every 5 seconds while open, which keeps it up; a closed tab can let it scale down, and the run then shows Stopped with Resume. Fine for a preview?
+- Only the inventory's own reads are paced against the poller; the estimate reads only the store. A Resume of a classification needs a fresh estimate (the cost may have changed).
+- The history sample (200 closed items per client) reads one request per item. With 30 clients that is up to 6,000 requests on a first run, paced; later runs read it again (history isn't kept between runs). Keep it, or keep the booleans per item and revision?
