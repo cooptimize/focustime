@@ -12,7 +12,7 @@ import { DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { BreakDownButton } from "./BreakDownPanel.tsx";
 import { blockWord, removeRule, storiesUnder, toPlaceCount, toPlaceLine, toPlaceShort, type ToPlace as ToPlaceCounts } from "../plan/addwork.ts";
-import { addList, draftParents, meetingsWords, moveHighlight, onBlock, panelClient, panelMode, panelTitle, panelWhen, placedMap, searchPanel, type AddList, type FeatureLine, type NewRow, type PanelMode, type Result } from "../plan/blockpanel.ts";
+import { addList, draftParents, meetingsWords, moveHighlight, onBlock, panelClient, panelMode, panelTitle, panelWhen, placedMap, searchPanel, takeOffRule, type AddList, type FeatureLine, type NewRow, type PanelMode, type Result } from "../plan/blockpanel.ts";
 import { FoldLine } from "./plan/FoldLine.tsx";
 import { planMinutes } from "../plan/fit.ts";
 import { freeMinutes } from "../week/free.ts";
@@ -67,7 +67,7 @@ type Ctx = {
   /** Adds a row to the selected block, or moves it there when it is on another one (Week's drop rule, with Undo). */
   place: (d: Dragged) => Promise<void>;
   /** Where a row's thing is this week: here, or on another block (with its to-do's id), or nowhere. */
-  where: (key: string) => { here: boolean; label: string; pickId: number } | null;
+  where: (key: string) => { here: boolean; label: string; pickId: number; done: boolean } | null;
   /** The client's blocks this week (a feature's ⋯ › Pin to a block). */
   places: { date: IsoDate; half: "AM" | "PM"; label: string }[];
   /** A past week is a review. */
@@ -187,7 +187,7 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
         place,
         where: (key) => {
           const p = placed.get(key);
-          return p ? { here: p.here, label: p.here ? "On this block" : blockWord(p.date, p.half, wholeOf(p.date)), pickId: p.pickId } : null;
+          return p ? { here: p.here, label: p.here ? "On this block" : blockWord(p.date, p.half, wholeOf(p.date)), pickId: p.pickId, done: p.done } : null;
         },
         places: week.days.flatMap((d) => (d.kind !== "work" || d.pto ? [] : (["AM", "PM"] as const).filter((h) => (h === "AM" ? d.am : d.pm).focus.some((f) => f.clientKey === clientKey)).map((h) => ({ date: d.date, half: h, label: blockWord(d.date, h) })))),
         past: week.weekStart < thisWeek,
@@ -367,8 +367,12 @@ function TakeOffZone() {
   useEffect(() => {
     if (!d) setOver(false);
   }, [d]);
+  const pv = useContext(PlanCtx);
   if (!dnd || !d || d.pickId === undefined) return null;
   const pickId = d.pickId;
+  // Only for a to-do that can come off (not a past day's, a done one or a deployment).
+  const p = Object.values(pv.week ?? {}).flatMap((x) => x.picks).find((x) => x.id === pickId);
+  if (!p || !takeOffRule(p, pv.today ?? "").ok) return null;
   return (
     <div
       className={`bp-takeoff${over || dnd.hover === "takeoff" ? " over" : ""}`}
@@ -409,7 +413,7 @@ function AddBox({ ctx, list, drafts, followUps, work, clientName, focusAdd, onCl
   const busy = useRef(false);
   const input = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  useEffect(() => (setQuery(""), setHl(0)), [clientKey, at.date, at.half]);
+  useEffect(() => (setQuery(""), setHl(0), setParent(null)), [clientKey, at.date, at.half]);
   // "+ Add" and A put the cursor in the box (each press; opening by a click on the block doesn't).
   useEffect(() => {
     if (focusAdd) input.current?.focus({ preventScroll: true });
@@ -421,29 +425,34 @@ function AddBox({ ctx, list, drafts, followUps, work, clientName, focusAdd, onCl
     listRef.current?.querySelector(".hl")?.scrollIntoView({ block: "nearest" });
   }, [hl]);
   const parents = draftParents(list.features);
+  // Only a feature the select shows now (the week's list can change under it).
+  const under = parents.some((p) => p.id === parent) ? parent : null;
 
   const add = async (key: string, d: Dragged) => {
     const w = ctx.where(key);
-    if (w?.here) say(`${d.title} is already on this block`);
+    if (w?.here || w?.done) say(w.here ? `${d.title} is already on this block` : `${d.title} is done on ${w.label}`);
     else await ctx.place(w ? { ...d, pickId: w.pickId } : d);
   };
   const take = async (r: Result<FollowUpView> | NewRow) => {
     if (busy.current) return;
     busy.current = true;
+    // The box clears at once, so what is typed next while this one saves isn't wiped; a failure puts the words back.
+    const typed = query;
+    setQuery("");
     try {
       if (r.kind === "story") await add(r.key, { clientKey, itemId: r.item.id, size: null, title: r.item.title });
       else if (r.kind === "promise") await add(r.key, { clientKey, itemId: addKey({ followUpId: r.followUp.id }), size: null, title: r.followUp.what, add: { followUpId: r.followUp.id } });
       else if (r.kind === "todo") await ctx.place({ clientKey, itemId: addKey({ intention: r.text }), size: null, title: r.text, add: { intention: r.text } });
       else if ("draft" in r) await add(r.key, { clientKey, itemId: addKey({ draftId: r.draft.id }), size: r.draft.size, title: r.draft.title, add: { draftId: r.draft.id } });
       else {
-        const made = await call<{ draft: { id: number } }>("draft.add_story", { clientKey, parentItemId: parent, title: r.text });
+        const made = await call<{ draft: { id: number } }>("draft.add_story", { clientKey, parentItemId: under, title: r.text });
         await ctx.place({ clientKey, itemId: addKey({ draftId: made.draft.id }), size: null, title: r.text, add: { draftId: made.draft.id } });
         onChanged();
       }
-      setQuery("");
       input.current?.focus({ preventScroll: true });
     } catch (e) {
       say(errText(e));
+      setQuery((q) => q || typed);
     } finally {
       busy.current = false;
     }
@@ -456,7 +465,7 @@ function AddBox({ ctx, list, drafts, followUps, work, clientName, focusAdd, onCl
         type="text"
         role="combobox"
         aria-expanded={!!model}
-        aria-controls="bp-results"
+        aria-controls={model ? "bp-results" : undefined}
         aria-autocomplete="list"
         aria-activedescendant={model && rows[hl] ? `bp-row-${hl}` : undefined}
         value={query}
@@ -479,7 +488,7 @@ function AddBox({ ctx, list, drafts, followUps, work, clientName, focusAdd, onCl
           } else if (e.key === "Enter") {
             e.preventDefault();
             e.stopPropagation();
-            const r = rows[hl];
+            const r = rows[Math.min(hl, rows.length - 1)];
             if (r) void take(r);
           }
         }}
@@ -508,7 +517,7 @@ function AddBox({ ctx, list, drafts, followUps, work, clientName, focusAdd, onCl
                 <span className="aw-plus" aria-hidden="true">+</span>
                 <span className="aw-row-title">{n.label}</span>
                 {n.kind === "draft" && parents.length > 1 && (
-                  <select className="bp-parent" value={parent ?? ""} aria-label="Under which feature" title="The feature the draft story goes under" onClick={(e) => e.stopPropagation()} onChange={(e) => setParent(e.target.value ? Number(e.target.value) : null)}>
+                  <select className="bp-parent" value={under ?? ""} aria-label="Under which feature" title="The feature the draft story goes under" onClick={(e) => e.stopPropagation()} onChange={(e) => setParent(e.target.value ? Number(e.target.value) : null)}>
                     {parents.map((p) => (
                       <option key={p.id ?? "none"} value={p.id ?? ""}>
                         {p.id === null ? p.title : `under ${p.title}`}
@@ -738,13 +747,14 @@ function useToPlaceCounts(weekStart: IsoDate, thisWeek: boolean, version: unknow
  */
 function AddRow({ ctx, k, d, children, menu, promise, focused = false }: { ctx: Ctx; k: string; d: Dragged; children: ReactNode; menu?: ReturnType<typeof useMenu> | undefined; promise?: number; focused?: boolean }) {
   const w = ctx.where(k);
-  const here = !!w?.here;
+  // On this block, or done on another one: a check, nothing to add or move.
+  const here = !!w && (w.here || w.done);
   const dd = w && !here ? { ...d, pickId: w.pickId } : d;
   const drag = useDragSource(here ? null : dd);
   return (
     <li className={`aw-row${here ? " placed" : ""}${focused ? " dp-focused" : ""}`} data-promise={promise} onContextMenu={menu?.onContextMenu} {...drag} title={here ? undefined : "Drag onto a block to place it there"}>
       {here ? (
-        <span className="aw-plus done" role="img" aria-label="On this block" title="On this block">✓</span>
+        <span className="aw-plus done" role="img" aria-label={w!.here ? "On this block" : `Done on ${w!.label}`} title={w!.here ? "On this block" : `Done on ${w!.label}`}>✓</span>
       ) : (
         <button type="button" className="aw-plus" onClick={() => void ctx.place(dd)} aria-label={w ? `Move ${d.title} here from ${w.label}` : `Add ${d.title}`} title={w ? `Move it here from ${w.label}` : "Add to this block"}>+</button>
       )}

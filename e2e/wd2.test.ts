@@ -26,7 +26,7 @@ async function week(page: Page) {
   // By its address, not the 2 key: after a reload the key can land before the app listens (Day has cards too).
   await page.evaluate(() => (location.hash = "#/week"));
   await page.locator(".week-head").waitFor({ timeout: 30_000 });
-  await page.locator("main.grid:not(.day-only) .half.card").first().waitFor({ timeout: 30_000 });
+  await page.locator("main.grid .half.card").first().waitFor({ timeout: 30_000 });
 }
 async function day(page: Page, date?: string) {
   await page.evaluate((d) => (location.hash = d ? `#/day/${d}` : "#/day"), date ?? null);
@@ -367,8 +367,9 @@ describe.skipIf(!CHROMIUM)("WD-2: one panel, one Day (browser, demo)", () => {
       await page.keyboard.press("a");
       seen.push(await one());
       await expect.poll(() => inBox(page)).toBe(true);
-      // With it open, arrowing to another block moves it there.
+      // With it open, arrowing from the block to another block moves it there (the arrows do nothing from inside the panel).
       await panel(page).locator(".bp-title h2").click();
+      await card.focus();
       await page.keyboard.press(screen === "week" ? "ArrowUp" : "ArrowLeft");
       await expect.poll(() => at(page)).toBe(`${MON}|AM`);
       await page.keyboard.press("Escape");
@@ -378,6 +379,32 @@ describe.skipIf(!CHROMIUM)("WD-2: one panel, one Day (browser, demo)", () => {
     for (const s of seen) expect(s).toEqual(seen[0]);
     expect(seen[0]).toMatchObject({ title: "Northwind · Mon PM", box: true });
     expect(seen[0]!.sections).toEqual(["On this block", "meetings", "Add"]);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("review: inside the panel the block keys stay out of the way: Space ticks a to-do's checkbox, the arrows don't move the panel, and typing a doesn't reopen it", async () => {
+    const { page, errors } = await freshPage(h);
+    expect((await call(page, "pick.add", { date: MON, half: "PM", clientKey: "Northwind", intention: "Tidy the export notes" })).ok).toBe(true);
+    await page.reload();
+    await day(page);
+    await page.locator(`.day-view [data-drop="${MON}:PM"] .card-when`).click();
+    const box = panel(page).locator(".bp-on li.pick-row input[type=checkbox]").first();
+    await box.focus();
+    await page.keyboard.press("Space");
+    await expect.poll(() => panel(page).locator(".bp-on li.pick-row.done").count()).toBe(1);
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowUp");
+    await page.waitForTimeout(300);
+    expect(await at(page)).toBe(`${MON}|PM`);
+    // The text typed while the first to-do saves is kept.
+    const input = panel(page).locator("input.bp-box");
+    await input.click();
+    await page.keyboard.type("a plain one");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("and the next");
+    await expect.poll(() => cardTitles(page, MON, "PM")).toContain("a plain one");
+    expect(await input.inputValue()).toBe("and the next");
     expect(errors).toEqual([]);
     await page.close();
   }, T);

@@ -21,7 +21,7 @@ import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
-export const PLAN_ACTIONS = ["planday.start", "planday.carry", "planday.commit", "pick.add", "pick.remove", "pick.take_off", "pick.set_size", "pick.move", "pick.mark_done", "deploy.add", "pick.set_kind", "pick.uncarry", "pick.undrop", "planday.carry_hint", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
+export const PLAN_ACTIONS = ["planday.start", "planday.carry", "planday.commit", "pick.add", "pick.remove", "pick.take_off", "pick.put_back", "pick.set_size", "pick.move", "pick.mark_done", "deploy.add", "pick.set_kind", "pick.uncarry", "pick.undrop", "planday.carry_hint", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
 /** UI-B: the marker kind for the suggested-cards hint, dismissed once. */
 export const CARRY_HINT = "carry_hint";
 
@@ -410,17 +410,35 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         if (before.todoKind === "deployment") return bad("A deployment keeps its window. Move it or drop it instead", 409);
         const boxes = (await plan.timeboxesBetween(before.date, before.date)).filter((t) => t.pickId === pid && !t.removedAt);
         if (boxes.some((t) => t.outlook)) return bad("Its timebox is on Outlook. Remove the timebox first, then take the to-do off", 409);
-        for (const t of boxes) await plan.removeTimebox(t.id);
         const at = { date: before.date, half: before.half, clientKey: before.clientKey, ...(before.size ? { size: before.size } : {}) };
         const plain = before.kind === "intention" && before.followUpId === null;
         const kind = plain ? "plain" : before.followUpId !== null ? "promise" : before.kind === "draft" ? "draft" : "item";
+        // The row goes first (it refuses one with time on it or carried on), so nothing else changes on a refusal.
+        await plan.takeOffPick(pid);
+        for (const t of boxes) await plan.removeTimebox(t.id);
         const draft = plain ? await plan.addDraft({ clientKey: before.clientKey, parentItemId: null, title: before.title, size: before.size ?? "M" }) : null;
-        const r = await plan.removePick(pid);
-        const undo =
-          r.result === "dropped"
-            ? { undrop: pid }
-            : { add: { ...at, ...(plain ? { intention: before.title } : before.followUpId !== null ? { followUpId: before.followUpId } : before.kind === "draft" ? { draftId: before.draftId } : { itemId: before.itemId }) }, ...(draft ? { draftId: draft.id } : {}) };
-        return { ok: true, data: { result: r.result, kind, title: before.title, timeboxes: boxes.length, draftId: draft?.id ?? null, undo, state: await state(ctx, plan, before.date) } };
+        const undo = {
+          add: { ...at, ...(plain ? { intention: before.title } : before.followUpId !== null ? { followUpId: before.followUpId } : before.kind === "draft" ? { draftId: before.draftId } : { itemId: before.itemId }) },
+          ...(draft ? { draftId: draft.id } : {}),
+          ...(before.carriedFrom !== null ? { carriedFrom: before.carriedFrom } : {}),
+        };
+        return { ok: true, data: { result: "deleted", kind, title: before.title, timeboxes: boxes.length, draftId: draft?.id ?? null, undo, state: await state(ctx, plan, before.date) } };
+      }
+      case "pick.put_back": {
+        // WD-2: Undo of Take off the plan, from what pick.take_off answered: the to-do is added to its block again by
+        // pick.add's own rules, a plain to-do's kept draft goes, and a carried one is linked to where it came from.
+        const u = fields(fields(input, ["undo"]).undo, ["add"], ["draftId", "carriedFrom"]);
+        const again = await planAction(ctx, "pick.add", u.add);
+        if (!again.ok) return again;
+        const pick = (again.data as { pick: Pick }).pick;
+        if (u.draftId !== undefined) {
+          const d = id(u.draftId, "draftId");
+          // Only the draft this take off made: one with no feature, with the to-do's own words, not on a block.
+          const kept = (await plan.drafts()).find((x) => x.id === d);
+          if (kept && kept.parentItemId === null && kept.title === pick.title && pick.kind === "intention") await plan.removeDraft(d).catch(() => undefined);
+        }
+        if (u.carriedFrom !== undefined) await plan.relinkCarried(pick.id, id(u.carriedFrom, "carriedFrom")).catch(() => undefined);
+        return { ok: true, data: { pick: (await plan.getPick(pick.id)) ?? pick, state: await state(ctx, plan, pick.date) } };
       }
       case "pick.set_size": {
         const o = fields(input, ["id", "size"]);

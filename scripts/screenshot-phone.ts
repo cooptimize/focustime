@@ -100,9 +100,9 @@ try {
       await go("#/week");
       await shot("week");
       await page.locator(".grid.narrow .half .card-client").first().click();
-      await page.waitForSelector(".detail-panel");
+      await page.waitForSelector(".block-panel");
       await shot("detail");
-      await page.locator(".dp-back").click();
+      await page.locator(".block-panel").getByRole("button", { name: /Close/ }).first().click();
       await page.locator(".bottom-bar .bb-tab", { hasText: "Capture" }).click();
       await page.waitForSelector(".cap-dialog");
       await page.locator(".cap-dialog input").first().fill("Send Harbor the release notes by Thursday");

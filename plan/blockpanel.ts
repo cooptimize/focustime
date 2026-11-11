@@ -81,16 +81,16 @@ export function onBlock<P extends { date: IsoDate; half: Half; status: string; p
 const keyOf = (p: PickLike) => (p.itemId !== null ? `i${p.clientKey}:${p.itemId}` : p.draftId !== null ? `d${p.draftId}` : p.followUpId !== null ? `f${p.followUpId}` : null);
 
 /** Where each placed thing is this week: its key to the block it is on (the selected block first, else the earliest). */
-export function placedMap(weekPicks: readonly PickLike[], at: { date: IsoDate; half: Half }): Map<string, { date: IsoDate; half: Half; pickId: number; here: boolean }> {
+export function placedMap(weekPicks: readonly PickLike[], at: { date: IsoDate; half: Half }): Map<string, { date: IsoDate; half: Half; pickId: number; here: boolean; done: boolean }> {
   const rank = { AM: 0, PM: 1, EVE: 2 } as const;
-  const out = new Map<string, { date: IsoDate; half: Half; pickId: number; here: boolean }>();
+  const out = new Map<string, { date: IsoDate; half: Half; pickId: number; here: boolean; done: boolean }>();
   const sorted = weekPicks.filter(live).sort((a, b) => a.date.localeCompare(b.date) || rank[a.half] - rank[b.half]);
   for (const p of sorted) {
     const k = keyOf(p);
     if (!k) continue;
     const here = p.date === at.date && p.half === at.half;
     const had = out.get(k);
-    if (!had || (here && !had.here)) out.set(k, { date: p.date, half: p.half, pickId: p.id, here });
+    if (!had || (here && !had.here)) out.set(k, { date: p.date, half: p.half, pickId: p.id, here, done: p.status === "done" });
   }
   return out;
 }
@@ -176,10 +176,12 @@ export function searchPanel<F extends FollowLike>(i: { clientKey: string; work: 
   const pool = i.work ? [...new Map([...i.work.items, ...i.work.children].map((x) => [x.id, x])).values()] : [];
   const title = new Map([...pool, ...(i.work?.committed ?? [])].map((x) => [x.id, x.title]));
   const q = text.toLowerCase().replace(/^#/, "");
+  // "#" alone (or "#12") is a number search: it matches work items only, never every draft and promise.
+  const words = !text.startsWith("#") && q.length > 0;
   const all: Result<F>[] = [
-    ...pool.filter((x) => isPickable(x) && matches(text, x)).map((item): Result<F> => ({ kind: "story", key: `i${i.clientKey}:${item.id}`, item, under: item.parentId != null ? title.get(item.parentId) ?? null : null })),
-    ...i.drafts.filter((d) => d.clientKey === i.clientKey && d.level === "story" && d.devopsId == null && d.title.toLowerCase().includes(q)).map((draft): Result<F> => ({ kind: "draft", key: `d${draft.id}`, draft })),
-    ...i.followUps.filter((f) => f.clientKey === i.clientKey && `${f.hasWho ? f.who ?? "" : ""} ${f.what}`.toLowerCase().includes(q)).map((followUp): Result<F> => ({ kind: "promise", key: `f${followUp.id}`, followUp })),
+    ...pool.filter((x) => isPickable(x) && q.length > 0 && matches(text, x)).map((item): Result<F> => ({ kind: "story", key: `i${i.clientKey}:${item.id}`, item, under: item.parentId != null ? title.get(item.parentId) ?? null : null })),
+    ...i.drafts.filter((d) => d.clientKey === i.clientKey && d.level === "story" && d.devopsId == null && words && d.title.toLowerCase().includes(q)).map((draft): Result<F> => ({ kind: "draft", key: `d${draft.id}`, draft })),
+    ...i.followUps.filter((f) => f.clientKey === i.clientKey && words && `${f.hasWho ? f.who ?? "" : ""} ${f.what}`.toLowerCase().includes(q)).map((followUp): Result<F> => ({ kind: "promise", key: `f${followUp.id}`, followUp })),
   ];
   const results = all.slice(0, RESULT_LIMIT);
   return {

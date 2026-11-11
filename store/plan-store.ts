@@ -1837,6 +1837,28 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       });
     },
     /**
+     * WD-2: Take off the plan. The to-do's row goes and nothing is marked dropped. One that was carried or moved here
+     * leaves the to-do it came from settled as moved (it is not planned again on its old day). Refused for one with
+     * time on it or one carried on from here: those keep their record and move instead.
+     */
+    async takeOffPick(id: number): Promise<Pick> {
+      return tx(async () => {
+        const p = await mustPick(id);
+        if (p.status !== "planned") throw new PlanError("Only a planned to-do can be taken off the plan");
+        if (p.itemId !== null && ((p.spentMinutes ?? 0) > 0 || (p.remainingMinutes ?? 0) > 0)) throw new PlanError("It has time on it. Move it to another block instead, so its time stays with it");
+        if (await db.get("SELECT 1 FROM picks WHERE carried_from = ?", id)) throw new PlanError("It was carried on to another day. Move it instead");
+        await db.run("DELETE FROM picks WHERE id = ?", id);
+        return p;
+      });
+    },
+    /** WD-2: Undo of Take off the plan for a carried to-do: the new row is linked to the one it came from again. */
+    async relinkCarried(id: number, from: number): Promise<void> {
+      await tx(async () => {
+        const origin = await mustPick(from);
+        if (origin.status === "moved") await db.run("UPDATE picks SET carried_from = ? WHERE id = ?", from, id);
+      });
+    },
+    /**
      * UI-B: Undo of Keep or Move on an unfinished pick: the carried copy is deleted and the pick it came from is planned
      * again. Refused once the copy has been worked on (focus time, a timebox, borrowed time, carried on again).
      */

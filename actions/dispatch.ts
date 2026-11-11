@@ -1547,7 +1547,7 @@ async function publishOnce(ctx: ActionContext, r: ActionResponse): Promise<Actio
  * published for teammates and the status report at once (publishWeek), never a past week. Was: on Confirm week.
  */
 export const WEEK_CHANGES = new Set<string>([
-  "pick.add", "pick.move", "pick.remove", "pick.take_off", "weekplan.add", "weekplan.remove", "weekplan.place", "weekplan.load",
+  "pick.add", "pick.move", "pick.remove", "pick.take_off", "pick.put_back", "weekplan.add", "weekplan.remove", "weekplan.place", "weekplan.load",
   "weekplan.carry_decide", "weekplan.carry_accept_all", "weekplan.watch_checkin", "weekplan.watch_remove",
   "send.accept", "priority.add_to_week", "weekplan.set_feature",
 ]);
@@ -2423,6 +2423,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "pick.add":
     case "pick.remove":
     case "pick.take_off":
+    case "pick.put_back":
     case "pick.set_size":
     case "pick.move":
     case "pick.mark_done":

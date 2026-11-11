@@ -158,9 +158,10 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
   if (only !== undefined && week.days[only])
     return (
       <TierCtx.Provider value={null}>
-        <main className={`grid day-only${timeline ? "" : " no-timeline"}`} role="group" aria-label="The day's blocks. Arrow keys move between them, Enter opens one.">
+        {/* Day is the page's main; this is its blocks. */}
+        <div className={`grid day-only${timeline ? "" : " no-timeline"}`} role="group" aria-label="The day's blocks. Arrow keys move between them, Enter opens one.">
           {column(week.days[only]!, only)}
-        </main>
+        </div>
       </TierCtx.Provider>
     );
   if (layout === "narrow") {

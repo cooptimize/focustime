@@ -794,7 +794,8 @@ export function App() {
 
   /** WD-2: Day's own screen (no flow open): its date, and whether its block panel was left open on this device. */
   // A Guide tour runs over the real screen, so the panel stays where it is under one.
-  const underTour = !loc.overlay || loc.overlay.kind === "tour";
+  // WD-2 review: nor does it go while a story card is open over it (its chosen client and typed text stay).
+  const underTour = !loc.overlay || loc.overlay.kind === "tour" || loc.overlay.kind === "item";
   const dayOn = nav.tab === "today" && !nav.flow && underTour;
   const dayDate: IsoDate | null = dayOn && data ? (dayShown ?? data.planDay.date) : null;
   const [dayPanelKept, setDayPanelKept] = useState(() => readDayPanel());
@@ -1338,7 +1339,17 @@ export function App() {
       if (!(onDay || (nav.tab === "week" && nav.mode !== "team")) || focusOpen || guideAt || docsAt || meetingAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || captureOpen || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
+      // WD-2 review: never from inside the block panel, a link, a checkbox or a menu (Space ticks, Enter follows).
+      const from = e.target as HTMLElement | null;
+      if (from?.closest?.(".block-panel, a, input, select, [role='menu'], [role='listbox']")) return;
       const days = data.week.days;
+      if (onDay) {
+        // Day: only its own day's blocks (a date outside the loaded week has none here), and only from the cards or
+        // with nothing focused, so the arrows and Space still scroll the page from anywhere else. A works anywhere.
+        if (days[sel.dayIndex]?.date !== dayDate) return;
+        const letterA = e.key === "a" || e.key === "A";
+        if (!letterA && !from?.closest(".grid.day-only")) return;
+      }
       const halvesOf = (i: number): Half[] => (days[i] ? cardHalves(days[i]) : ["AM", "PM"]);
       const move = (dayIndex: number, half: Half) => {
         e.preventDefault();

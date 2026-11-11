@@ -103,6 +103,9 @@ describe("the Add list before typing", () => {
     expect(m.get("icontoso:12")).toMatchObject({ here: true, pickId: 7 });
     expect(placedMap(weekPicks, AT).get("icontoso:12")).toMatchObject({ here: false, date: "2026-11-12", half: "PM", pickId: 2 });
     expect(m.has("icontoso:99")).toBe(false);
+    // Done on another block: named, and marked done (the row shows a check, not a + that would try to move it).
+    expect(placedMap([pick(8, { itemId: 13, date: "2026-11-10", status: "done" })], AT).get("icontoso:13")).toMatchObject({ here: false, done: true });
+    expect(m.get("icontoso:11")).toMatchObject({ done: false });
   });
 });
 
@@ -121,6 +124,12 @@ describe("the search", () => {
     // A resolved story and a feature aren't to-dos.
     expect(searchPanel(base, "Item 14")!.results).toEqual([]);
     expect(searchPanel(base, "Feature 1")!.results).toEqual([]);
+  });
+  it("\"#\" is a number search: alone it matches nothing (never every draft and promise); special characters are plain text", () => {
+    expect(searchPanel(base, "#")!.results).toEqual([]);
+    expect(searchPanel(base, "#1")!.results.every((r) => r.kind === "story")).toBe(true);
+    expect(searchPanel(base, "(.*)")!.results).toEqual([]);
+    expect(searchPanel(base, "(.*)")!.news[0].label).toBe("New to-do: (.*)");
   });
   it("always ends with New to-do and New draft story, carrying the text", () => {
     const s = searchPanel(base, "  Call the vendor ")!;

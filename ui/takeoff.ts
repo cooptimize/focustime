@@ -6,7 +6,7 @@ import { takenOffWords } from "../plan/blockpanel.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
 
-type TakeOff = { result: string; kind: string; title: string; timeboxes: number; draftId: number | null; undo: { undrop?: number; add?: Record<string, unknown> & { date: IsoDate; half: Half }; draftId?: number } };
+type TakeOff = { result: string; kind: string; title: string; timeboxes: number; draftId: number | null; undo: { add: { date: IsoDate; half: Half } & Record<string, unknown>; draftId?: number; carriedFrom?: number } };
 
 /** Takes the to-do off, tells the screen to read again, and says what happened with Undo. A refusal is said plainly. */
 export async function takeOffPick(pickId: number, at: { date: IsoDate; half: Half } | null, o: { changed: () => void; note: (text: string, undo: (() => Promise<void>) | null) => void }): Promise<boolean> {
@@ -14,15 +14,15 @@ export async function takeOffPick(pickId: number, at: { date: IsoDate; half: Hal
     const r = await call<TakeOff>("pick.take_off", { id: pickId });
     o.changed();
     const u = r.undo;
+    let ran = false;
     const back = async () => {
-      if (u.undrop !== undefined) await call("pick.undrop", { id: u.undrop });
-      else if (u.add) {
-        await call("pick.add", u.add);
-        if (u.draftId !== undefined) await call("draft.remove", { id: u.draftId }).catch(() => undefined);
-      }
+      // Once: a second press would add it twice.
+      if (ran) return;
+      ran = true;
+      await call("pick.put_back", { undo: u });
       o.changed();
     };
-    const where = at ?? (u.add ? { date: u.add.date, half: u.add.half } : null);
+    const where = at ?? { date: u.add.date, half: u.add.half };
     o.note(where ? takenOffWords(r.title, where.date, where.half, r) : `Taken off the plan: ${r.title}`, back);
     return true;
   } catch (e) {

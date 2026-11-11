@@ -17,6 +17,7 @@ import type { MenuItem, MenuStep } from "./menu.ts";
 import { PV_BREAKDOWN_EVENT } from "./menu.ts";
 import { usePhone } from "./viewport.ts";
 import { takeOffPick } from "./takeoff.ts";
+import { takeOffRule } from "../plan/blockpanel.ts";
 
 /** The drag type for a story or a planned pick moving between Week's blocks. */
 export const STORY_DRAG = "application/x-focustime-story";
@@ -148,7 +149,8 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
   useEffect(() => {
     if (dragPick === undefined) return;
     const p = picks.find((x) => x.id === dragPick);
-    if (p && p.status === "planned") onPickDrag?.({ date: p.date, half: p.half });
+    // Only for a to-do that can come off the plan (a past day's or a deployment never does).
+    if (p && takeOffRule(p, data.planDay.date).ok) onPickDrag?.({ date: p.date, half: p.half });
     return () => onPickDrag?.(null);
   }, [dragPick]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -259,7 +261,7 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
         <div className="undo-toast" role="status" aria-live="polite">
           <span>{toast.text}</span>
           {toast.undo && (
-            <button type="button" className="mini" onClick={() => void toast.undo!().then(() => setToast({ id: Date.now(), text: "Undone", undo: null }), (e: unknown) => setToast({ id: Date.now(), text: errText(e), undo: null }))}>
+            <button type="button" className="mini" onClick={() => { const u = toast.undo!; setToast({ ...toast, undo: null }); void u().then(() => setToast({ id: Date.now(), text: "Undone", undo: null }), (e: unknown) => setToast({ id: Date.now(), text: errText(e), undo: null })); }}>
               Undo
             </button>
           )}

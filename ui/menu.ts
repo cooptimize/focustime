@@ -1182,6 +1182,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "pick.mark_done": return { next: () => choosePick(env, "Mark which to-do done or not done?", (p) => () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" })) };
     case "pick.remove": return { next: () => choosePick(env, "Drop which to-do?", (p) => () => env.runPlan("pick.remove", { id: p.id })) };
     case "pick.take_off": return { next: () => choosePick(env, "Take which to-do off the plan?", (p) => () => (env.takeOff ? env.takeOff(p) : void env.runPlan("pick.take_off", { id: p.id }))) };
+    case "pick.put_back": return { disabled: "Use Undo right after Take off the plan" };
     case "deploy.add": return { next: () => deployForm(env, env.selection.date >= env.today ? { date: env.selection.date } : {}) };
     case "deploy.items":
     case "deploy.config_save": return { disabled: "Set in Admin › Clients, or the client's page in Settings" };
