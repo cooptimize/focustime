@@ -46,7 +46,7 @@ describe.skipIf(!CHROMIUM)("Meetings on Day and Week (browser, demo mode)", () =
     await fold.click();
     await expect.poll(() => card.locator(".card-events li", { hasText: "Proposal review" }).count()).toBe(1);
     await card.locator(".card-when").click();
-    const agenda = page.locator('aside.detail-panel section[aria-label="Agenda"]');
+    const agenda = page.locator('aside.block-panel section[aria-label="Agenda"]');
     await agenda.locator("li", { hasText: "Proposal review" }).waitFor();
     await expect(agenda.locator("li.ag-free").count()).resolves.toBeGreaterThan(0);
     expect(await showTimelines(true)).toBe(true);

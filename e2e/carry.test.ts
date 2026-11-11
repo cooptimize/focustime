@@ -20,7 +20,7 @@ describe.skipIf(!CHROMIUM)("From last week and Watching (PL-1)", () => {
     // WD-1: From last week is in Add work › To place.
     await page.evaluate(() => (location.hash = "#/week/add"));
     await unfoldAddWork(page);
-    const flw = page.locator("aside.add-work-panel section.carry", { hasText: "From last week" }).first();
+    const flw = page.locator("aside.block-panel section.carry", { hasText: "From last week" }).first();
     await flw.waitFor({ timeout: 30_000 });
     // Folded to one line until Review.
     if (!(await flw.locator(".carry-row").count())) await flw.getByRole("button", { name: /to place|Review/ }).first().click();
@@ -48,10 +48,10 @@ describe.skipIf(!CHROMIUM)("From last week and Watching (PL-1)", () => {
     // Next week's Add work proposes from this week's list.
     await page.evaluate(() => (location.hash = "#/week/2026-11-09/add"));
     // WD-1 review: To place is one folded line there too (folded again for the new week); opening it shows the proposal.
-    const line = page.locator("aside.add-work-panel .aw-toplace-line");
+    const line = page.locator("aside.block-panel .aw-toplace-line");
     await expect.poll(() => line.getAttribute("aria-expanded").catch(() => null), { timeout: 30_000 }).toBe("false");
     await line.click();
-    const next = page.locator("aside.add-work-panel section.carry", { hasText: "From last week" }).first();
+    const next = page.locator("aside.block-panel section.carry", { hasText: "From last week" }).first();
     await next.waitFor({ timeout: 30_000 });
     await expect(next.locator(".carry-row", { hasText: "Supplier onboarding" }).textContent()).resolves.toContain("Needs stories");
     expect(errors).toEqual([]);

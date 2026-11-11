@@ -24,7 +24,7 @@ export const RulerCtx = createContext<RulerCtxValue>({ layout: "wide", promises:
 export const LiveOnCard = createContext<ReadonlyMap<string, CoworkChatView[]>>(new Map());
 
 /**
- * WD-1: the Add work panel's state, for the cards: the selected block while it is open (null: closed), and opening it
+ * WD-1: the block panel's state, for the cards: the selected block while it is open (null: closed), and opening it
  * on a block ("+ Add" on a card).
  */
 export type AddPanelApi = { at: { date: IsoDate; half: Half } | null; open: (date: IsoDate, half: Half) => void };

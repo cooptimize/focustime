@@ -181,13 +181,14 @@ export async function timelineOn(page: Page, on = true): Promise<void> {
 }
 
 /**
- * WD-1 review: Add work keeps To place folded to one line (open only from the notice's Review) and You sent at the
- * bottom folded. Opens both, once the panel has its sections.
+ * WD-2: the block panel keeps To place and You sent folded at the bottom (To place opens only from the notice's Review)
+ * and Other work assigned to you folded in its Add list. Opens all three, once the panel has its sections.
  */
 export async function unfoldAddWork(page: Page): Promise<void> {
-  const panel = page.locator("aside.add-work-panel");
-  await panel.locator(".aw-toplace-line, .aw-sends > .pl-fold").first().waitFor({ timeout: 30_000 });
-  for (const sel of [".aw-toplace-line", ".aw-sends > .pl-fold"]) {
+  const panel = page.locator("aside.block-panel");
+  await panel.locator(".bp-addbox, .aw-toplace-line, .aw-sends > .pl-fold").first().waitFor({ timeout: 30_000 });
+  await page.waitForTimeout(150);
+  for (const sel of [".aw-toplace-line", ".aw-sends > .pl-fold", ".bp-other > .pl-fold"]) {
     const b = panel.locator(sel).first();
     if ((await b.count()) && (await b.getAttribute("aria-expanded")) === "false") await b.click();
   }
@@ -212,17 +213,17 @@ export async function sameSession(h: Harness, page: Page, opts: Parameters<Brows
   return ctx;
 }
 
-/** WD-1: Week with the Add work panel on today's first block that can take work (P from anywhere but Ahead). */
+/** WD-2: Week with the block panel on today's first block that can take work (P from anywhere but Ahead). */
 export async function openPlanDay(page: Page): Promise<void> {
   await page.keyboard.press("2");
   await page.keyboard.press("p");
-  await page.locator("aside.add-work-panel").waitFor();
+  await page.locator("aside.block-panel").waitFor();
 }
 
-/** WD-1: moves the open Add work panel to today's (Monday's) block for this client: a click on its card. */
+/** WD-2: moves the open block panel to today's (Monday's) block for this client: a click on its card's header. */
 export async function selectBlock(page: Page, client: string, date = "2026-11-02"): Promise<void> {
   await page.locator(`[data-drop^="${date}:"]`, { has: page.locator(".card-client", { hasText: client }) }).first().locator(".card-client").first().click();
-  await page.locator("aside.add-work-panel .aw-title", { hasText: client }).waitFor();
+  await page.locator("aside.block-panel .bp-title", { hasText: client }).waitFor();
 }
 
 /** WD-1: the titles of the to-dos on that client's Week card on a day (Monday by default). */

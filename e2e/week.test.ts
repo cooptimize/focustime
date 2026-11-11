@@ -125,7 +125,7 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     const { mon } = await seed(page);
     const card = page.locator(".half.card", { hasText: "Cooptimize" }).first();
     await card.locator(".card-when").click();
-    const panel = page.locator(".detail-panel");
+    const panel = page.locator(".block-panel");
     await panel.waitFor();
     await expect(panel.locator("h2").textContent()).resolves.toContain("Cooptimize");
     await expect(panel.locator(".dp-risks").textContent()).resolves.toContain("Dentist");
@@ -162,10 +162,10 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     await go(page, "#/today");
     await page.waitForSelector(".today-block");
     await page.locator(".today-block").first().locator("header").click();
-    await page.locator(".detail-panel").waitFor();
-    await expect(page.locator(".detail-panel h2").textContent()).resolves.toContain("Cooptimize");
+    await page.locator(".block-panel").waitFor();
+    await expect(page.locator(".block-panel h2").textContent()).resolves.toContain("Cooptimize");
     await page.keyboard.press("Escape");
-    await expect.poll(() => page.locator(".detail-panel").count()).toBe(0);
+    await expect.poll(() => page.locator(".block-panel").count()).toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

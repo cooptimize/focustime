@@ -56,9 +56,9 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     // 2. Add work (WD-1): P opens Week with the panel; drag Filter orders by date range onto Northwind's Monday
     // afternoon (CF-1: nothing to confirm).
     await page.keyboard.press("p");
-    await page.locator("aside.add-work-panel").waitFor({ timeout: 30_000 });
+    await page.locator("aside.block-panel").waitFor({ timeout: 30_000 });
     await selectBlock(page, "Northwind");
-    const row = page.locator("aside.add-work-panel .aw-row[draggable=true]", { hasText: "Filter orders by date range" }).first();
+    const row = page.locator("aside.block-panel .aw-row[draggable=true]", { hasText: "Filter orders by date range" }).first();
     await row.waitFor({ timeout: 15_000 });
     const nwMon = page.locator('[data-drop^="2026-11-02:"]', { has: page.locator(".card-client", { hasText: "Northwind" }) }).first();
     await row.dragTo(nwMon);
@@ -208,9 +208,9 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
 
     // 10. Send to someone's week: Supplier onboarding to Sam as a Must, from its ⋯ in Add work (WD-1).
     await go(page, "#/week/add");
-    await page.locator("aside.add-work-panel").waitFor({ timeout: 30_000 });
+    await page.locator("aside.block-panel").waitFor({ timeout: 30_000 });
     await selectBlock(page, "Northwind");
-    const srow = page.locator("aside.add-work-panel .aw-feature", { has: page.locator(":scope > .aw-feat-head .aw-feat-name", { hasText: "Supplier onboarding" }) }).first();
+    const srow = page.locator("aside.block-panel .aw-feature", { has: page.locator(":scope > .aw-feat-head .aw-feat-name", { hasText: "Supplier onboarding" }) }).first();
     await srow.locator(":scope > .aw-feat-head").getByRole("button", { name: /^More for / }).click();
     await page.locator(".popup-menu .menu-item", { hasText: "Send to…" }).click();
     const dlg = page.getByRole("dialog", { name: "Send to… Supplier onboarding" });

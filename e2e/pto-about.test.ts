@@ -17,7 +17,7 @@ describe.skipIf(!CHROMIUM)("PTO on Week, and About (S1)", () => {
     const { page, errors } = await freshPage(h);
     // WD-1: Plan the week's grid is gone; the old address opens Week with Add work on that week.
     await page.evaluate(() => (location.hash = "#/week/plan/2026-11-09"));
-    await page.locator("aside.add-work-panel").waitFor({ timeout: 30_000 });
+    await page.locator("aside.block-panel").waitFor({ timeout: 30_000 });
     const thu = page.locator("section.day").nth(3);
     // One cell over both halves, no + Add on it.
     await expect(thu.locator(".half.whole.pto").count()).resolves.toBe(1);

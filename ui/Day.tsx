@@ -34,12 +34,12 @@ import { TimeboxCheckin } from "./TimeboxCheckin.tsx";
 import { FlexOfferBar, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
 import { MoreButton, PopupMenu } from "./Menus.tsx";
 import { planMyDay } from "../plan/agenda.ts";
-import { TodayTimeline, type Proposals } from "./TodayTimeline.tsx";
+import { DayTimeline, type Proposals } from "./DayTimeline.tsx";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import { updatedAgo } from "./refresh.ts";
 import { usePhone } from "./viewport.ts";
 import { PhoneFollowUps } from "./Phone.tsx";
-import { PhoneNextUp, PhoneNowCard, PhoneTodos, phoneNowOf } from "./PhoneToday.tsx";
+import { PhoneNextUp, PhoneNowCard, PhoneTodos, phoneNowOf } from "./PhoneDay.tsx";
 import { WeekDnd } from "./WeekStories.tsx";
 import { VmCtx, VmToday, vmNeedsToday } from "./Account.tsx";
 import { WeekGrid } from "./WeekGrid.tsx";
@@ -485,7 +485,7 @@ export function Day(props: Props) {
       ) : mode === "now" && timelineShown ? (
         <div className="today-body with-tl">
           <div className="today-main">
-            <TodayTimeline
+            <DayTimeline
               day={day}
               blocks={blocks}
               data={data}

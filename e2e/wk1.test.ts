@@ -21,7 +21,7 @@ async function fits(page: Page): Promise<void> {
   const m = await page.evaluate(() => {
     const de = document.documentElement;
     const grid = document.querySelector<HTMLElement>("main.grid")!;
-    const panel = document.querySelector("aside.detail-panel")?.getBoundingClientRect() ?? null;
+    const panel = document.querySelector("aside.block-panel")?.getBoundingClientRect() ?? null;
     const days = [...grid.querySelectorAll<HTMLElement>(":scope > section.day")].map((d) => {
       const b = d.getBoundingClientRect();
       return { label: d.getAttribute("aria-label"), left: b.left, right: b.right, width: b.width };
@@ -79,8 +79,8 @@ async function openPanel(page: Page): Promise<Locator> {
 }
 
 async function closePanel(page: Page): Promise<void> {
-  await page.locator("aside.detail-panel").getByRole("button", { name: /Close/ }).first().click();
-  await page.locator("aside.detail-panel").waitFor({ state: "detached" });
+  await page.locator("aside.block-panel").getByRole("button", { name: /Close/ }).first().click();
+  await page.locator("aside.block-panel").waitFor({ state: "detached" });
 }
 
 const pickIn = (page: Page, sel: string) => page.locator(`main.grid ${sel} li[draggable='true']`).first();
@@ -193,7 +193,7 @@ describe.skipIf(!CHROMIUM)("WK-1: unfinished suggestions at every tier (Wednesda
       await expect(card.isVisible()).resolves.toBe(true);
       // Open the panel on Wednesday PM (today, where the suggestion sits): still in view beside it.
       await page.locator('main.grid [data-drop="2026-11-04:PM"]').click({ position: { x: 14, y: 12 } });
-      await page.locator("aside.detail-panel").waitFor();
+      await page.locator("aside.block-panel").waitFor();
       await expect(card.isVisible()).resolves.toBe(true);
       await fits(page);
       expect(errors).toEqual([]);

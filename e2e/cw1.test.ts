@@ -50,7 +50,7 @@ describe.skipIf(!CHROMIUM)("co-working calls (browser, demo mode)", () => {
 
     // The block's detail panel: Join, and Start a call for the other chat.
     await card.locator(".card-head").click();
-    const panel = page.locator(".detail-panel .dp-calls");
+    const panel = page.locator(".block-panel .dp-calls");
     await panel.waitFor();
     await expect(panel.locator(".lc-start").textContent()).resolves.toBe("Start a call in Northwind Customer Collaboration (Cooptimize)");
     await page.keyboard.press("Escape");

@@ -748,18 +748,31 @@ function AddRow({ ctx, k, d, children, menu, promise, focused = false }: { ctx: 
   );
 }
 
-/** A DevOps item to add, with its type's icon and, outside this week's features, "Add to this week" in its ⋯. */
-function ItemAdd({ item, ctx, onAddToWeek }: { item: WorkItem; ctx: Ctx; onAddToWeek?: (() => void) | undefined }) {
+/**
+ * A DevOps item to add, with its type's icon and, outside this week's features, "Add to this week" in its ⋯. Under one
+ * of this week's features a teammate's open story says whose it is and offers Take one (PV-1: assign it to me in
+ * DevOps, after its preview, with Undo), when I can write to that client's DevOps.
+ */
+function ItemAdd({ item, ctx, onAddToWeek, take = false }: { item: WorkItem; ctx: Ctx; onAddToWeek?: (() => void) | undefined; take?: boolean }) {
+  const dw = useDevOpsWrite();
+  const dnd = useContext(WeekDnd);
   const menu = useMenu((env) => {
     const base = itemMenu(env, ctx.clientKey, item);
     return onAddToWeek && "items" in base ? { ...base, items: [{ id: "add-week", label: "Add to this week", action: "weekplan.add", run: onAddToWeek }, ...base.items] } : base;
   });
+  const theirs = take && item.assignedToMe === false;
   return (
     <AddRow ctx={ctx} k={`i${ctx.clientKey}:${item.id}`} d={{ clientKey: ctx.clientKey, itemId: item.id, size: null, title: item.title }} menu={menu}>
       <TypeIcon clientKey={ctx.clientKey} type={item.type} />
       <span className="aw-row-title" title={`${item.type} ${item.id} · ${item.state}`}>
         <WorkLink clientKey={ctx.clientKey} url={item.url}>{item.title}</WorkLink>
       </span>
+      {theirs && <span className="aw-who" title="Who it is assigned to in DevOps">{item.assignedTo ?? "Unassigned"}</span>}
+      {theirs && dw?.can(ctx.clientKey) && (
+        <button type="button" className="mini ps-take" title="Assign it to me in DevOps (after its preview)" onClick={() => void dw.begin(ctx.clientKey, [{ kind: "assign", itemId: item.id }], ({ confirmed }) => (confirmed ? dnd?.refresh() : undefined))}>
+          Take one
+        </button>
+      )}
     </AddRow>
   );
 }
@@ -804,7 +817,7 @@ function Feature({ f, ctx, onRemove, menuOf }: { f: Line; ctx: Ctx; onRemove: ()
       </div>
       {(p.stories.length > 0 || p.drafts.length > 0) && (
         <ul>
-          {p.stories.map((k) => <ItemAdd key={k.id} item={k} ctx={ctx} />)}
+          {p.stories.map((k) => <ItemAdd key={k.id} item={k} ctx={ctx} take />)}
           {p.drafts.map((d) => (
             <AddRow key={`d${d.id}`} ctx={ctx} k={`d${d.id}`} d={{ clientKey: ctx.clientKey, itemId: addKey({ draftId: d.id }), size: d.size, title: d.title, add: { draftId: d.id } }}>
               <DraftTitle draft={d} className="aw-row-title" />

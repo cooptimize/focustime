@@ -120,7 +120,7 @@ describe.skipIf(!CHROMIUM)("RF-1: tab order, Status's dot, the top of Day", () =
       expect(await page.locator(".today-view").getByRole("button", { name: /^Plan\b/ }).count()).toBe(0);
       expect(await page.locator(".today-view").getByRole("link", { name: /^Plan\b/ }).count()).toBe(0);
       await page.locator(".today-other").getByRole("button", { name: "Add work", exact: true }).click();
-      await page.locator("aside.add-work-panel").waitFor();
+      await page.locator("aside.block-panel").waitFor();
       await expect.poll(() => hash(page)).toMatch(/^#\/week\/day\/2026-11-11/);
       expect(errors).toEqual([]);
       await page.close();

@@ -8,7 +8,7 @@ import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
 
 const T = 120_000;
 const block = (page: Page, date: string, half: string) => page.locator(`[data-drop="${date}:${half}"]`).first();
-const panel = (page: Page) => page.locator("aside.add-work-panel");
+const panel = (page: Page) => page.locator("aside.block-panel");
 const section = (page: Page, label: string) => panel(page).locator(".aw-sec").filter({ has: page.locator(".pl-label, h4, h3", { hasText: new RegExp(`^${label}`, "i") }) }).first();
 const cardTitles = (page: Page, date: string, half: string) => block(page, date, half).locator(".pr-title").allInnerTexts();
 async function openOn(page: Page, date: string, half: string) {
@@ -190,7 +190,7 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
     await openOn(page, "2026-11-02", "PM");
     const seen = await page.evaluate(() => {
       const out = new Set<string>();
-      for (const el of document.querySelectorAll<HTMLElement>(".wd1-head *, .half.card *, aside.add-work-panel *")) {
+      for (const el of document.querySelectorAll<HTMLElement>(".wd1-head *, .half.card *, aside.block-panel *")) {
         if (!el.childNodes.length || ![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent!.trim())) continue;
         const s = getComputedStyle(el);
         out.add(`${s.fontSize} ${s.fontWeight}`);

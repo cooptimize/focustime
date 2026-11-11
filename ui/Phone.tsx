@@ -2,17 +2,13 @@
 // planning screens, Today's Now card, its due follow-ups and the iPhone install how-to. Planning stays on a bigger
 // screen (D476).
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
-import type { IsoDate, Slot } from "../week/types.ts";
-import type { Pick } from "../plan/types.ts";
+import type { IsoDate } from "../week/types.ts";
 import { urgentFollowUps } from "../plan/today.ts";
 import { captureClients } from "./Capture.tsx";
 import { FollowUpRow } from "./FollowUps.tsx";
-import { clientColor, slotRange } from "./labels.ts";
-import { countdown, timerLeft } from "./NowStrip.tsx";
 import { userZone } from "../week/zone.ts";
-import { LiveCalls, liveOf, useCoworkData } from "./cowork.tsx";
 
 /**
  * MB-1: the phone's bar: Today, Week, Capture (the raised + in the middle), Inbox and Ask. Ahead is made for a bigger
@@ -127,67 +123,6 @@ export function PhoneReadOnly({ children, onBack, backLabel = "Back", line = PHO
         {children}
       </div>
     </div>
-  );
-}
-
-/**
- * Today › Now on the phone: the block under way (or the next one today), its next pick with Start focus or the running
- * timer, and Mark done. One primary action, as on desktop. Nothing to plan from here.
- */
-export function PhoneNow({ data, block, pick, nowMs, nameOf, onStart, onTimer, onFocusScreen, onDone }: {
-  data: WeekLoadData;
-  block: Slot | null;
-  pick: Pick | null;
-  nowMs: number;
-  nameOf: (k: string) => string;
-  onStart: (p: Pick) => void;
-  onTimer: (a: "timer.done" | "timer.extend") => void;
-  onFocusScreen: () => void;
-  /** Null while the day isn't committed (picks are drafts until then). */
-  onDone: ((p: Pick) => void) | null;
-}) {
-  const t = data.timer;
-  const tz = userZone(data);
-  const cowork = useCoworkData();
-  if (!block && !t) return null;
-  const client = block?.focus[0]?.clientKey ?? pick?.clientKey ?? null;
-  const running = t && (!pick || t.pickId === pick.id);
-  const title = client ? nameOf(client) : block?.open ? "Open" : "Focus";
-  return (
-    <section className="phone-now" data-tour="today-next" aria-label="Now" style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties}>
-      <header>
-        <span className="pn-tag">{running ? "Focusing" : "Now"}</span>
-        <h2>{title}</h2>
-        {block && <span className="pn-when">{slotRange(block, tz)}</span>}
-      </header>
-      {/* CW-1: a call live in this client's delivery chat, with Join. */}
-      <LiveCalls chats={liveOf(cowork, client)} zone={tz} className="now-live" />
-      {pick ? <p className="pn-pick">{pick.title}</p> : !running && <p className="pn-pick muted">Nothing planned for this block.</p>}
-      {running && t ? (
-        <div className="pn-timer">
-          <button type="button" className="pn-count" onClick={onFocusScreen} aria-label="Open the focus screen">
-            {t.ended ? "Time's up" : countdown(timerLeft(t, nowMs))}
-          </button>
-          <button type="button" className="primary" onClick={() => onTimer("timer.done")}>
-            Done
-          </button>
-          <button type="button" onClick={() => onTimer("timer.extend")} aria-label="Add 15 minutes">
-            +15
-          </button>
-        </div>
-      ) : pick ? (
-        <div className="pn-acts">
-          <button type="button" className="primary" onClick={() => onStart(pick)}>
-            Start focus
-          </button>
-          {onDone && (
-            <button type="button" onClick={() => onDone(pick)}>
-              Mark done
-            </button>
-          )}
-        </div>
-      ) : null}
-    </section>
   );
 }
 

@@ -194,7 +194,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     // Add work: the draft's row title opens the same editor.
     await openPlanDay(page);
     await selectBlock(page, "Northwind");
-    const t = page.locator("aside.add-work-panel .draft-title", { hasText: "Plan-it draft" });
+    const t = page.locator("aside.block-panel .draft-title", { hasText: "Plan-it draft" });
     if (await t.count()) {
       await t.first().click();
       await expect(page.locator(".draft-editor").count()).resolves.toBe(1);
@@ -210,7 +210,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     const card = page.locator('[data-drop^="2026-11-02:"]', { has: page.locator(".card-client", { hasText: "Northwind" }) }).first();
     const todos = card.locator(".pr-title");
     const before = await todos.count();
-    const look = page.locator("aside.add-work-panel .aw-box input");
+    const look = page.locator("aside.block-panel .aw-box input");
     await look.fill("export");
     await look.press("ArrowDown");
     await look.press("Enter");

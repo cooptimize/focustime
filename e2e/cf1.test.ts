@@ -60,7 +60,7 @@ describe.skipIf(!CHROMIUM)("CF-1: no confirm, no musts (browser, demo mode)", ()
     await card.waitFor({ timeout: 30_000 });
     expect(oldWords(await page.locator(".today-view").innerText())).toEqual([]);
     await page.locator(".today-view").getByRole("button", { name: "Add work" }).first().click();
-    const panel = page.locator("aside.add-work-panel");
+    const panel = page.locator("aside.block-panel");
     await panel.waitFor({ timeout: 30_000 });
     await panel.locator(".aw-row:not(.placed) button.aw-plus").first().click();
     await panel.locator(".aw-row.placed").first().waitFor();
@@ -93,7 +93,7 @@ describe.skipIf(!CHROMIUM)("CF-1: no confirm, no musts (browser, demo mode)", ()
       await page.keyboard.press("Escape");
     }
     await page.locator('[data-drop="2026-11-02:PM"] .add-work.add-row').first().click();
-    await page.locator("aside.add-work-panel").waitFor();
+    await page.locator("aside.block-panel").waitFor();
     await page.waitForTimeout(500);
     await look("Add work");
     await page.keyboard.press("Escape");

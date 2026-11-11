@@ -55,11 +55,11 @@ export type Tour = {
   end: { line: string; tryIt: string };
 };
 
-// WD-1: Plan the week's tour became Add work's: Week is one screen, and work goes onto blocks from the panel.
+// WD-1, WD-2: Plan the week's tour became adding work: Week is one screen, and work goes onto blocks from the block panel.
 const PLAN_WEEK: Tour = {
   id: "plan-week",
   title: "Add work to your week",
-  summary: "Put features, stories and promises on your blocks from one panel beside Week.",
+  summary: "Put features, stories and promises on your blocks from the one panel beside Week.",
   // Opens with the panel on the block under way (or the next one), so its steps have something to point at.
   start: { tab: "week", mode: "board", week: null, add: { date: null, half: null } },
   section: "week",
@@ -67,26 +67,26 @@ const PLAN_WEEK: Tour = {
     {
       target: "wk-add",
       title: "+ Add",
-      text: "Opens the Add work panel on the block under way, or the next one. Each block also has its own + Add at the bottom, and A opens it on the selected block.",
-      phone: { text: "+ Add on a block opens Add work as a sheet." },
+      text: "Opens the block's panel on the block under way, or the next one, with the cursor in its Add box. Each block also has its own + Add at the bottom, and A opens it on the selected block.",
+      phone: { text: "+ Add on a block opens its panel as a sheet." },
     },
     {
       target: "aw-panel",
-      title: "Add to one block",
-      text: "The panel says which block it adds to and how much room is left. Click another block and it follows; Esc closes it.",
+      title: "One panel for a block",
+      text: "The panel says which block it is on, its hours and how much room is left, then what's on the block and its meetings. Click another block and it follows; Esc closes it.",
       phone: "skip",
     },
     {
       target: "aw-features",
       title: "This week's features",
-      text: "This week's features, in the client's backlog order. Placing a story adds its feature to the week for you. + puts a row on this block, or drag it onto any block.",
+      text: "This week's features, in the client's backlog order, each with its stories and where they are. + puts a row on this block, or drag it onto any block. Drag a to-do from a block back onto the panel to take it off the plan.",
       example: "todo-drag",
       phone: "skip",
     },
     {
       target: "aw-box",
-      title: "Type it",
-      text: "Not in DevOps yet? Type a story and press Enter for a draft story, or Shift+Enter for a plain to-do.",
+      title: "One box to add",
+      text: "Type to search this client's work and your promises. Up and Down move, Enter takes the highlighted row. The last rows are always New to-do and New draft story, so with no match Enter makes a to-do.",
       phone: "skip",
     },
   ],
@@ -100,30 +100,29 @@ const BOARD: Tour = {
   start: { tab: "week", mode: "board", week: null, add: null },
   section: "week",
   steps: [
-    { target: "wk-block", title: "A block", text: "Week shows this week's half-day blocks, Monday to Friday, with Friday as catch-up. Each is half a day for one client, from Focus Time in Dataverse. It says when it's at risk and why, like a dentist at noon. Click it for that client's stories.", phone: { text: "Half a day for one client, from Focus Time in Dataverse. It says when it's at risk and why. Tap it for that client's stories." } },
+    { target: "wk-block", title: "A block", text: "Week shows this week's half-day blocks, Monday to Friday, with Friday as catch-up. Each is half a day for one client, from Focus Time in Dataverse. It says when it's at risk and why, like a dentist at noon. Click it to open its panel.", phone: { text: "Half a day for one client, from Focus Time in Dataverse. It says when it's at risk and why. Tap it for that client's stories." } },
     { target: "wk-timeline", title: "Timeline", text: "Shows or hides the hours beside each block: meetings, free time and the line for now. B does the same.", phone: "skip" },
     { target: "wk-todo", title: "Put a to-do on a block", text: "Drag a story from a block's list onto any of that client's blocks this week. The block shows the fit as you drag; each drop has Undo.", example: "todo-drag", phone: { text: "Tap a block, then Add to… on a story. Long-press a to-do to move it." } },
     { title: "Check it off", text: "Tick a to-do when it's done. When it has a DevOps item you can change, FocusTime asks whether to set it done there too: Confirm, or Not now.", example: "done-offer" },
-    { target: "wk-carry", title: "To place", text: "The line above the week counts what's waiting: unfinished work, last week's and anything a teammate sent. Review opens it in Add work. Nothing moves until you place it." },
+    { target: "wk-carry", title: "To place", text: "The line above the week counts what's waiting: unfinished work, last week's and anything a teammate sent. Review opens it in the block's panel. Nothing moves until you place it." },
   ],
-  end: { line: "That's Week. One screen, with Add work beside it.", tryIt: "Try it yourself: the Guide's Week section has a block to drag stories onto." },
+  end: { line: "That's Week. One screen, with a block's panel beside it.", tryIt: "Try it yourself: the Guide's Week section has a block to drag stories onto." },
 };
 
 const TODAY: Tour = {
   id: "today",
   title: "Day, focus and close out",
-  summary: "What's next, what's urgent and the moment of the day.",
+  summary: "What's urgent, the moment of the day and the day's blocks.",
   start: { tab: "today", flow: null, date: null },
   section: "today",
   steps: [
-    { target: "today-next", title: "What's next", text: "The block you're in and its next to-do, with the one Start focus button. Focus sets your Teams status to Busy and counts the time." },
     { target: "today-urgent", title: "The urgent strip", text: "What needs you now: requests sorted as urgent, promises late or due within 2 hours, and work sent to you. The 3 most urgent, then N more in Inbox.", example: "urgent" },
-    { target: "today-moment", title: "The moment card", text: "One card for the moment of the day: Add work, then Midday check-in after lunch, then Close out. Each opens its flow; nothing is forced." },
-    { target: "today-blocks", title: "The day's blocks", text: "Each block's meetings and to-dos in time order, with the line for now. Tick a to-do when it's done." },
+    { target: "today-moment", title: "The moment card", text: "One card for the moment of the day: Nothing on today yet (with + Add), then Midday check-in after lunch, then Close out. Each opens its flow; nothing is forced." },
+    { target: "today-blocks", title: "The day's blocks", text: "The same block cards as Week. The next to-do has the one Start focus button; focus sets your Teams status to Busy and counts the time. + Add on a block, or a click on it, opens its panel. Tick a to-do when it's done.", phone: { text: "Your to-dos by block. + Add under a block opens its panel as a sheet. Tick a to-do when it's done." } },
     { title: "Close out", text: "At the end of the day: one line per client on where you left off, the DevOps updates you owe and the promises due. Then Done.", example: "closeout" },
-    { target: "today-days", title: "Any day", text: "‹ › step to another day, read only. Back to today comes back.", phone: "skip" },
+    { target: "today-days", title: "Any day", text: "‹ › step to another day, and Today comes back. Today and later take work; a past day lets you tick what got done and move the rest forward.", phone: "skip" },
   ],
-  end: { line: "That's Day. Most days it's the only screen you need.", tryIt: "Try it yourself: the Add work card opens Week with the panel on today." },
+  end: { line: "That's Day. Most days it's the only screen you need.", tryIt: "Try it yourself: + Add on one of today's blocks." },
 };
 
 const INBOX: Tour = {

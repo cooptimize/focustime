@@ -54,7 +54,7 @@ describe.skipIf(!CHROMIUM)("row menu headers (D459)", () => {
     const { page, errors } = await freshPage(h);
     await openPlanDay(page);
     await selectBlock(page, "Northwind");
-    const feats = page.locator("aside.add-work-panel .aw-feature");
+    const feats = page.locator("aside.block-panel .aw-feature");
     const more = ':scope > .aw-feat-head button[aria-label^="More for "]';
     await aThenB(page, feats, more, ":scope > .aw-feat-head .aw-feat-name");
 
@@ -111,7 +111,7 @@ describe.skipIf(!CHROMIUM)("row menu headers (D459)", () => {
     await page.keyboard.press("2");
     const card = page.locator(".half.card", { hasText: "Northwind" }).first();
     await card.locator(".card-when").click();
-    const panel = page.locator(".detail-panel");
+    const panel = page.locator(".block-panel");
     await panel.waitFor();
     await aThenB(page, panel.locator(".ps-row"), ".ps-more", ".ps-title");
     expect(errors).toEqual([]);

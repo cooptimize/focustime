@@ -138,7 +138,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
     const before = await fontOf(page, ".settings .set-hint");
     await page.getByRole("radio", { name: "Larger" }).check();
     await expect.poll(() => fontOf(page, ".settings .set-hint")).toBe(before + 4);
-    for (const [hash, sel] of [["#/today", ".today-block"], ["#/week/2026-11-02", ".half.card .card-client"], ["#/week/2026-11-09/add", "aside.add-work-panel .aw-title"], ["#/ahead", ".ah-col-item"], ["#/inbox/promises", ".ib-row-title"]] as const) {
+    for (const [hash, sel] of [["#/today", ".today-block"], ["#/week/2026-11-02", ".half.card .card-client"], ["#/week/2026-11-09/add", "aside.block-panel .bp-title"], ["#/ahead", ".ah-col-item"], ["#/inbox/promises", ".ib-row-title"]] as const) {
       await go(page, hash);
       await page.locator(sel).first().waitFor({ timeout: 30_000 });
       expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--text-base").trim()), hash).toBe("17px");

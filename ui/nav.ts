@@ -19,7 +19,7 @@ export type TodayFlow = (typeof TODAY_FLOWS)[number];
 export const FLOW_NAMES: Record<TodayFlow, string> = { checkin: "Midday check-in", closeout: "Close out" };
 /**
  * WD-1: Week is one screen with no mode switch; Team (SW-1) is hidden but keeps its address (#/week/team). Plan mode
- * and Plan the day are gone: adding work is the Add work panel beside the week.
+ * and Plan the day are gone: adding work is the block panel beside the week.
  */
 export type WeekMode = "board" | "team";
 /** AH-1 (D653): Ahead is one model in three modes: Grid (was Roadmap), Gantt (was Plan ahead) and Fix next. */
@@ -37,7 +37,7 @@ const viewOfSlug = (slug: string): InboxPlace | null => (Object.keys(INBOX_VIEW_
 const ITEM_KEY = /^[vcfskd][1-9]\d{0,9}$/;
 
 /**
- * WD-1: the Add work panel open on Week, on one block. `date` null: the current block, or the next one that isn't over
+ * WD-1: the block panel open on Week, on one block. `date` null: the current block, or the next one that isn't over
  * (App picks it once the week is loaded); `half` null: that day's first block.
  */
 export type AddAt = { date: IsoDate | null; half: Half | null };
@@ -45,7 +45,7 @@ export type AddAt = { date: IsoDate | null; half: Half | null };
 /**
  * One place. Day's `flow` is a card's flow open over the page (`date`: Close out's day, null for today); with no
  * flow, `date` is the day Day shows (QF-1, #/day/<date>; null: today). Week's `week` is its Monday (null: this
- * week); `add` is the Add work panel open on a block (WD-1). Status is its own tab (WD-1, was Week › Status).
+ * week); `add` is the block panel open on a block (WD-1). Status is its own tab (WD-1, was Week › Status).
  */
 export type Nav =
   | { tab: "today"; flow: TodayFlow | null; date: IsoDate | null; /** WD-2: the block panel open on this half of `date` (#/day/<date>/<half>). */ half?: Half | null }
@@ -75,9 +75,9 @@ export const navOf = {
   /** WD-2: Day on a date with the block panel open on one of its blocks (#/day/<date>/<half>). */
   dayBlock: (date: IsoDate, half: Half): Nav => ({ tab: "today", flow: null, date, half }),
   week: (mode: WeekMode = "board", week: IsoDate | null = null): Nav => ({ tab: "week", mode, week, add: null }),
-  /** WD-1: Week with the Add work panel on a block (null date: the current block, or the next one not over). */
+  /** WD-1: Week with the block panel on a block (null date: the current block, or the next one not over). */
   addWork: (date: IsoDate | null = null, half: Half | null = null): Nav => ({ tab: "week", mode: "board", week: null, add: { date, half: date ? half : null } }),
-  /** WD-1: a week with the Add work panel open (the old Plan the week addresses land here). */
+  /** WD-1: a week with the block panel open (the old Plan the week addresses land here). */
   weekAdd: (week: IsoDate | null = null): Nav => ({ tab: "week", mode: "board", week: week === null ? null : mondayOf(week), add: { date: null, half: null } }),
   /** WD-1: the Status tab (was Week › Status). */
   status: (): Nav => ({ tab: "status" }),
@@ -109,7 +109,7 @@ export const HOME: Loc = { nav: navOf.today(), overlay: null };
 
 /** The mode a tab opens in. */
 export const defaultNav = (tab: Tab): Nav => (tab === "today" ? navOf.today() : tab === "week" ? navOf.week() : tab === "ahead" ? navOf.ahead() : tab === "status" ? navOf.status() : navOf.inbox());
-/** WD-1: the Add work panel's block on Week (null: closed). */
+/** WD-1: the block panel's block on Week (null: closed). */
 export const addOf = (n: Nav): AddAt | null => (n.tab === "week" && n.mode === "board" ? n.add : null);
 
 /** Day's flows are planning places (Esc goes back, Done returns). WD-1: Week has none; its panel closes on Esc. */
@@ -117,7 +117,7 @@ export const isPlanning = (n: Nav): boolean => (n.tab === "today" ? n.flow !== n
 
 /**
  * P: on Ahead, Grid and Gantt (Ahead's own planning mode); on Day, back to Day from a flow. WD-1: everywhere else P
- * opens Week with the Add work panel, and on Week it opens or closes the panel.
+ * opens Week with the block panel, and on Week it opens or closes the panel.
  */
 export function toggleP(n: Nav): Nav {
   if (n.tab === "today" && n.flow) return navOf.today();
@@ -236,7 +236,7 @@ export function parseHash(full: string): Loc | null {
   const [tab, a, b, c, ...rest] = parts;
   if (rest.length) return null;
   const plain = (nav: Nav): Loc => ({ nav, overlay: null });
-  /** WD-1: a day's block with the Add work panel open on it: [date] or [date, half] (was Plan the day). */
+  /** WD-1: a day's block with the block panel open on it: [date] or [date, half] (was Plan the day). */
   const day = (d: string | undefined, h: string | undefined): Loc | null => {
     if (d === undefined) return h === undefined ? plain(navOf.addWork()) : null;
     if (!validDate(d)) return null;
@@ -245,14 +245,14 @@ export function parseHash(full: string): Loc | null {
   };
   /** A week: [] or [monday]. */
   const week = (mode: WeekMode, w: string | undefined, extra: string | undefined): Loc | null => (extra !== undefined ? null : w === undefined ? plain(navOf.week(mode)) : validDate(w) ? plain(navOf.week(mode, w)) : null);
-  /** WD-1: a week with the Add work panel open (the old Plan the week addresses). */
+  /** WD-1: a week with the block panel open (the old Plan the week addresses). */
   const weekAdd = (w: string | undefined, extra: string | undefined): Loc | null => (extra !== undefined ? null : w === undefined ? plain(navOf.weekAdd()) : validDate(w) ? plain(navOf.weekAdd(w)) : null);
   /** Day and its flows: [] , [checkin], [closeout, date?], [plan, …] (before NV-1) or [date] (QF-1). */
   const dayTab = (): Loc | null => {
     if (a === undefined) return plain(navOf.today());
     if (a === "checkin") return b === undefined ? plain(navOf.today("checkin")) : null;
     if (a === "closeout") return c !== undefined ? null : b === undefined ? plain(navOf.today("closeout")) : validDate(b) ? plain(navOf.today("closeout", b)) : null;
-    // Before NV-1: Today › Plan; WD-1: Week with the Add work panel on that day.
+    // Before NV-1: Today › Plan; WD-1: Week with the block panel on that day.
     if (a === "plan") return day(b, c);
     // QF-1: one day.
     if (validDate(a) && b === undefined) return plain(navOf.todayOn(a));
@@ -376,7 +376,7 @@ export const sameLoc = (a: Loc, b: Loc) => hashOf(a) === hashOf(b);
 
 /**
  * A notification's route (step 15.5) as a place. WD-1: Plan the day and Plan the week (and Look ahead) open Week with
- * the Add work panel (on that week), Check-in and Close out open their flow on Day, Plan ahead and the Direction
+ * the block panel (on that week), Check-in and Close out open their flow on Day, Plan ahead and the Direction
  * review open Ahead's Gantt, follow-ups the Inbox, the timer and meetings the focus screen, the VM Day with the VM menu
  * open, expiring secrets Settings, Status the Status tab. Team is hidden: its route opens Week. Stored routes keep
  * their names.
@@ -430,7 +430,7 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
     case "gaps": return { nav: navOf.ahead("fix"), overlay: null };
     // BH-1: the stack-ranked backlog across clients.
     case "backlog": return { nav: navOf.ahead("backlog"), overlay: null };
-    // WD-1: the old planning places are Week with the Add work panel.
+    // WD-1: the old planning places are Week with the block panel.
     case "planday": return { nav: navOf.addWork(), overlay: null };
     case "planweek":
     case "commit": return { nav: navOf.weekAdd(), overlay: null };
@@ -459,7 +459,7 @@ export function stepWeekday(date: IsoDate, dir: 1 | -1, weekend: (d: IsoDate) =>
 export const weekendStops = (o: { showWeekend: boolean; days: readonly { date: IsoDate; kind: string }[] }) => (d: IsoDate) =>
   o.showWeekend || o.days.some((x) => x.date === d && x.kind === "weekend");
 
-/** WD-1: "+ Add" on a block, and a day's header: Week with the Add work panel on that day (and block). */
+/** WD-1: "+ Add" on a block, and a day's header: Week with the block panel on that day (and block). */
 export const addWorkNav = (date: IsoDate, half: Half | null = null): Nav => navOf.addWork(date, half);
 
 /** F1: the place's plain name for "Include where I am" ("Week › Add work", "Day › Midday check-in", "Settings: connections", "Guide"). */
@@ -468,7 +468,7 @@ export function viewName(loc: Loc): string {
   const place =
     n.tab === "today" ? (n.flow ? `${TAB_NAMES.today} › ${FLOW_NAMES[n.flow]}` : TAB_NAMES.today)
     : n.tab === "status" ? TAB_NAMES.status
-    : n.tab === "week" ? (n.mode === "team" ? `${TAB_NAMES.week} › Team` : n.add ? `${TAB_NAMES.week} › Add work` : TAB_NAMES.week)
+    : n.tab === "week" ? (n.mode === "team" ? `${TAB_NAMES.week} › Team` : n.add ? `${TAB_NAMES.week} › Block` : TAB_NAMES.week)
     : n.tab === "ahead" ? `${TAB_NAMES.ahead} › ${MODE_NAMES[n.mode]}`
     : n.view ? `${TAB_NAMES.inbox} › ${INBOX_VIEW_NAMES[n.view]}` : TAB_NAMES.inbox;
   const o = loc.overlay;

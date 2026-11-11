@@ -30,7 +30,7 @@ describe.skipIf(!CHROMIUM)("TD-1 to-do, not pick (browser, demo mode)", () => {
     // Not confirmed yet: Week with Add work's own words (WD-1); then confirmed for Day.
     await page.evaluate((d) => (location.hash = `#/week/day/${d}`), TODAY);
     await page.reload();
-    await page.locator("aside.add-work-panel .aw-sec").first().waitFor();
+    await page.locator("aside.block-panel .aw-sec").first().waitFor();
     await page.locator(".half.card li.pick-row").first().waitFor();
     expect(await pickLines(page)).toEqual([]);
     await shotBoth(page, "td1-plan-today");

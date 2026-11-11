@@ -100,7 +100,7 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
     await teammate(page, "Northwind", { id: 1112, title: "Filter orders by a date range", state: "Active" });
     await poll(page);
     await stories.getByText("Filter orders by a date range").waitFor({ timeout: 10_000 });
-    await expect(page.locator(".detail-panel").count()).resolves.toBe(1);
+    await expect(page.locator(".block-panel").count()).resolves.toBe(1);
     await page.keyboard.press("Escape");
     await page.evaluate(() => (location.hash = "#/ahead"));
     await page.locator(".ah-pending").waitFor({ timeout: 30_000 });

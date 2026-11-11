@@ -76,7 +76,7 @@ function eatNextClick() {
 type TrayDrag = { pick: Pick; x: number; y: number; over: Span | null };
 type SheetTarget = { pick: Pick | null; timebox: TimeboxView | null; slot: Slot };
 
-export function TodayTimeline(props: Props) {
+export function DayTimeline(props: Props) {
   const { day, blocks, data, picks, now, tz, editable, phone, proposals, setProposals } = props;
   const env = useTimeboxes();
   const dnd = useContext(WeekDnd);

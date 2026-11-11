@@ -1,30 +1,22 @@
-// PV-1 (D569 to D574): Week plans stories into blocks.
-// - The block panel's "Your stories for <client>": only my open stories for that client, grouped under their feature,
-//   ranked by this week's plan then DevOps backlog order (plan/blockstories.ts). Features are headers, never rows.
-// - A feature on this week's plan with no stories of mine: Add a story for me (a draft under it, planned here, then
-//   created in DevOps through the write framework in one go), Break down, and Take one on a teammate's story.
-// - Drag and drop onto the Week's blocks (native drag, a long press on touch, "Add to…" and "Move to…" from the
-//   keyboard), with the fit shown on the target and Undo after each drop (plan/weekdrop.ts).
+// PV-1 (D569 to D574), WD-2: Week (and Day) plan stories into blocks by drag and drop.
+// - Drag onto a block (native drag, a long press on touch, "Add to…" and "Move to…" from the keyboard), with the fit
+//   shown on the target and Undo after each drop (plan/weekdrop.ts).
+// - WD-2: a to-do dragged from a block onto the block panel comes off the plan (Take off the plan), with Undo; the
+//   panel opens as the drop area when it was closed.
+// (The Week panel's "Your stories" list went with the Details panel in WD-2; the block panel is ui/BlockPanel.tsx.)
 import { userZone } from "../week/zone.ts";
-import { openSend } from "./send-event.ts";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type HTMLAttributes, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
-import { blockLabel, blockStories, groupLine, type StoryGroup, type StoryRow } from "../plan/blockstories.ts";
-import { STORY_SIZES, type StorySize } from "../plan/estimate.ts";
+import { blockLabel } from "../plan/blockstories.ts";
 import { dropCheck, type Dragged, type DropCheck } from "../plan/weekdrop.ts";
 import type { Pick } from "../plan/types.ts";
-import type { ClientWork, Day, Half, IsoDate, Slot, Week, WorkItem } from "../week/types.ts";
-import { ActionRefusal, call, planAction } from "./api.ts";
-import { useDevOpsWrite } from "./DevOpsWrite.tsx";
+import type { Day, Half, IsoDate, Slot, Week } from "../week/types.ts";
+import { ActionRefusal, planAction } from "./api.ts";
 import { MenuCtx } from "./Menus.tsx";
 import type { MenuItem, MenuStep } from "./menu.ts";
-import { COPY_LINK, PV_BREAKDOWN_EVENT, rowHead } from "./menu.ts";
-import { SizeChip } from "./plan/Estimate.tsx";
-import { Avatar, usePhotos } from "./Presence.tsx";
-import { TypeIcon } from "./TypeIcon.tsx";
+import { PV_BREAKDOWN_EVENT } from "./menu.ts";
 import { usePhone } from "./viewport.ts";
 import { takeOffPick } from "./takeoff.ts";
-import { WorkLink } from "./WorkLink.tsx";
 
 /** The drag type for a story or a planned pick moving between Week's blocks. */
 export const STORY_DRAG = "application/x-focustime-story";
@@ -34,7 +26,6 @@ export const openBreakdown = (clientKey: string, itemId: number) => window.dispa
 /** One of the week's blocks a story can go to. */
 export type Block = { date: IsoDate; half: Half; label: string; slot: Slot; ptoDay: boolean; catchUp: boolean };
 const keyOf = (b: { date: IsoDate; half: Half }) => `${b.date}:${b.half}`;
-const live = (p: Pick) => p.status === "planned" || p.status === "done";
 
 type Toast = { id: number; text: string; undo: (() => Promise<void>) | null };
 
@@ -349,234 +340,4 @@ export function MoveTo({ pick }: { pick: Pick }) {
 function openAt(e: ReactMouseEvent | ReactKeyboardEvent, open: (at: { x: number; y: number }, s: MenuStep) => void, step: MenuStep) {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
   open({ x: r.left, y: r.bottom + 4 }, step);
-}
-
-// ---------- the panel's "Your stories for <client>" ----------
-
-export function YourStories({ data, work, clientName, slot, onChanged }: { data: WeekLoadData; work: ClientWork; clientName: string; slot: Slot; onChanged: () => void }) {
-  const weekPicks = useMemo(() => Object.values(data.plan ?? {}).flatMap((d) => d.picks).filter(live), [data.plan]);
-  const weekStart = data.weekStart;
-  const groups = useMemo(() => blockStories({ sizes: data.planning.sizes, work, list: data.weekFeatures, weekStart, picks: weekPicks, date: slot.date, half: slot.half }), [work, data.weekFeatures, weekStart, weekPicks, slot.date, slot.half]);
-  const emails = [...new Set(groups.flatMap((g) => g.others.map((o) => o.assignedToEmail).filter((e): e is string => !!e)))];
-  const photos = usePhotos({ emails });
-  return (
-    <section className="dp-section ps" aria-label={`Your stories for ${clientName}`} data-panel-focus="features">
-      <h3>Your stories for {clientName}</h3>
-      {!groups.length && <p className="dp-empty">No open stories assigned to you for {clientName}.</p>}
-      {groups.map((g) => (
-        <StoryGroupView key={g.feature?.id ?? "none"} g={g} work={work} clientName={clientName} slot={slot} onChanged={onChanged} photoFor={photos.photoFor} />
-      ))}
-    </section>
-  );
-}
-
-function StoryGroupView({ g, work, clientName, slot, onChanged, photoFor }: { g: StoryGroup; work: ClientWork; clientName: string; slot: Slot; onChanged: () => void; photoFor: (email?: string | null) => string | null }) {
-  const f = g.feature;
-  const empty = !!f && g.committed && !g.stories.length;
-  return (
-    <div className={`ps-group${g.committed ? " committed" : ""}`} role="group" aria-label={f ? `${f.type} #${f.id} ${f.title}` : "No feature"}>
-      <div className="ps-head">
-        {f ? (
-          <>
-            <TypeIcon clientKey={work.clientKey} type={f.type} />
-            <WorkLink clientKey={work.clientKey} url={f.url} className="ps-feat" title={`#${f.id} ${f.title}`}>
-              {f.title}
-            </WorkLink>
-            {g.committed && <span className="ps-tag" title="On this week's plan">This week</span>}
-          </>
-        ) : (
-          <span className="ps-feat muted">No feature</span>
-        )}
-        {g.stories.length > 0 && <span className="ps-line">{groupLine(g)}</span>}
-      </div>
-      {g.stories.length > 0 && (
-        <ul className="ps-rows">
-          {g.stories.map((r) => (
-            <StoryRowView key={r.item.id} r={r} work={work} slot={slot} clientName={clientName} />
-          ))}
-        </ul>
-      )}
-      {empty && <NoStoriesYet feature={f!} others={g.others} work={work} clientName={clientName} slot={slot} onChanged={onChanged} photoFor={photoFor} />}
-    </div>
-  );
-}
-
-function StoryRowView({ r, work, slot, clientName }: { r: StoryRow; work: ClientWork; slot: Slot; clientName: string }) {
-  const dnd = useContext(WeekDnd);
-  const { open, env: menuEnv } = useContext(MenuCtx);
-  const { item } = r;
-  const d: Dragged = { clientKey: work.clientKey, itemId: item.id, size: r.size, title: item.title };
-  const drag = useDragSource(r.here ? null : d);
-  const block = dnd?.blocks.find((b) => b.date === slot.date && b.half === slot.half) ?? null;
-  const canHere = !!dnd && !!block && !r.here && dnd.check(d, block).ok;
-  const moving = r.here ?? r.elsewhere;
-  const more = (e: ReactMouseEvent): void => {
-    e.stopPropagation();
-    const items: MenuItem[] = [
-      ...(menuEnv ? [{ id: "copy", label: COPY_LINK, run: () => menuEnv.copyLink(work.clientKey, item.url) } as MenuItem] : []),
-      ...(dnd ? [{ id: "add", label: "Add to…", action: "pick.add", next: () => dnd.menuFor(d, `#${item.id}`) } as MenuItem] : []),
-      ...(dnd && moving ? [{ id: "move", label: `Move from ${blockLabel(moving)} to…`, action: "pick.move", next: () => dnd.menuFor({ ...d, pickId: moving.pickId }, `#${item.id}`) } as MenuItem] : []),
-      // SW-1: hand it to a teammate's week.
-      { id: "send", label: "Send to…", hint: "a teammate's week", action: "send.create", run: () => openSend({ clientKey: work.clientKey, clientName, itemId: item.id, level: "story", title: item.title, itemType: item.type, url: item.url, parentId: item.parentId }) } as MenuItem,
-    ];
-    openAt(e, open, { title: `#${item.id}: ${item.title}`, items, head: rowHead({ id: item.id, title: item.title, client: clientName }) });
-  };
-  return (
-    <li className={`ps-row${r.here ? " here" : ""}`} data-story={item.id} {...drag}>
-      {!r.here && dnd && (
-        <button type="button" className="drag-handle" aria-label={`Drag #${item.id} to a block, or press Enter to choose one`} title="Drag to a block on the week" onClick={(e) => (e.stopPropagation(), openAt(e, open, dnd.menuFor(d, `#${item.id}`)))}>
-          ⋮⋮
-        </button>
-      )}
-      <TypeIcon clientKey={work.clientKey} type={item.type} />
-      <span className="ps-id">#{item.id}</span>
-      <WorkLink clientKey={work.clientKey} url={item.url} className="ps-title" title={item.title}>
-        {item.title}
-      </WorkLink>
-      <SizeChip size={r.size} title={item.title} wide />
-      <span className="ps-state">{item.state}</span>
-      {r.here ? (
-        <span className="ps-here">In this block</span>
-      ) : r.elsewhere ? (
-        <button type="button" className="link-btn ps-planned" onClick={(e) => (e.stopPropagation(), dnd?.openSlot(r.elsewhere!.date, r.elsewhere!.half))} title="Open that block">
-          Planned · {blockLabel(r.elsewhere)}
-        </button>
-      ) : null}
-      {canHere && (
-        <button type="button" className="mini ps-add" onClick={(e) => (e.stopPropagation(), void dnd!.place(d, block!))}>
-          Add to this block
-        </button>
-      )}
-      <button type="button" className="more-btn ps-more" aria-label={`More for #${item.id}`} aria-haspopup="menu" onClick={more}>
-        ⋯
-      </button>
-    </li>
-  );
-}
-
-function NoStoriesYet({ feature, others, work, clientName, slot, onChanged, photoFor }: { feature: WorkItem; others: readonly WorkItem[]; work: ClientWork; clientName: string; slot: Slot; onChanged: () => void; photoFor: (email?: string | null) => string | null }) {
-  const env = useDevOpsWrite();
-  const dnd = useContext(WeekDnd);
-  const can = !!env?.can(work.clientKey);
-  const people = [...new Map(others.filter((o) => o.assignedTo).map((o) => [(o.assignedToEmail ?? o.assignedTo!).toLowerCase(), o])).values()];
-  return (
-    <div className="ps-empty">
-      <p className="ps-none">No stories for you yet</p>
-      {can ? (
-        <AddStoryForMe feature={feature} work={work} slot={slot} onChanged={onChanged} />
-      ) : (
-        <p className="ps-nopat">
-          <button type="button" className="link-btn" onClick={() => env?.enable(work.clientKey)}>
-            Add DevOps write access for {clientName} in Settings
-          </button>
-        </p>
-      )}
-      <div className="ps-actions">
-        <button type="button" className="link-btn ps-breakdown" onClick={() => openBreakdown(work.clientKey, feature.id)}>
-          Break down
-        </button>
-      </div>
-      {others.length > 0 && (
-        <div className="ps-others">
-          <div className="ps-others-head">
-            <span className="ps-faces" aria-hidden="true">
-              {people.slice(0, 4).map((o) => (
-                <Avatar key={o.id} name={o.assignedTo!} photo={photoFor(o.assignedToEmail)} size={20} />
-              ))}
-            </span>
-            <span>
-              {others.length} open {others.length === 1 ? "story" : "stories"} by {people.length === 1 ? people[0]!.assignedTo : people.length ? `${people.length} teammates` : "nobody yet"}
-            </span>
-          </div>
-          <ul className="ps-rows">
-            {others.map((o) => (
-              <li key={o.id} className="ps-row other">
-                <TypeIcon clientKey={work.clientKey} type={o.type} />
-                <span className="ps-id">#{o.id}</span>
-                <WorkLink clientKey={work.clientKey} url={o.url} className="ps-title" title={o.title}>
-                  {o.title}
-                </WorkLink>
-                <span className="ps-state">{o.assignedTo ?? "Unassigned"}</span>
-                {can && env ? (
-                  <button type="button" className="mini ps-take" onClick={() => void env.begin(work.clientKey, [{ kind: "assign", itemId: o.id }], ({ confirmed }) => (confirmed ? (dnd ? dnd.refresh() : onChanged()) : undefined))}>
-                    Take one
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * "Add a story for me": a title (and an optional size), then Enter: a draft story under the feature, planned in this
- * block, and the create preview for it (the parent type's default child, assigned to me). Confirm makes it a DevOps
- * item in the plan; a cancel before anything is sent removes the draft and its pick, so nothing is left behind.
- */
-function AddStoryForMe({ feature, work, slot, onChanged }: { feature: WorkItem; work: ClientWork; slot: Slot; onChanged: () => void }) {
-  const env = useDevOpsWrite();
-  const dnd = useContext(WeekDnd);
-  const [title, setTitle] = useState("");
-  const [size, setSize] = useState<StorySize | null>(null);
-  const [busy, setBusy] = useState(false);
-  const childType = work.types?.find((t) => t.name === feature.type)?.defaultChild ?? null;
-  const submit = async () => {
-    const t = title.trim();
-    if (!t || !env || busy) return;
-    setBusy(true);
-    try {
-      const { draft } = await call<{ draft: { id: number } }>("draft.add_story", { clientKey: work.clientKey, parentItemId: feature.id, title: t, ...(size ? { size } : {}) });
-      let pickId: number | null = null;
-      try {
-        pickId = (await planAction("pick.add", { date: slot.date, half: slot.half, clientKey: work.clientKey, draftId: draft.id, ...(size ? { size } : {}) })).pick?.id ?? null;
-      } catch (e) {
-        await call("draft.remove", { id: draft.id }).catch(() => undefined);
-        throw e;
-      }
-      setTitle("");
-      setSize(null);
-      await env.begin(work.clientKey, [{ kind: "create", draftId: draft.id, ...(childType ? { type: childType } : {}) }], ({ confirmed, sent }) => {
-        if (!confirmed && !sent)
-          void (async () => {
-            if (pickId !== null) await planAction("pick.remove", { id: pickId }).catch(() => undefined);
-            await call("draft.remove", { id: draft.id }).catch(() => undefined);
-            onChanged();
-          })();
-        else if (confirmed) (dnd ? dnd.refresh() : onChanged());
-        else onChanged();
-      });
-    } catch (e) {
-      dnd?.note(errText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="ps-addme" role="group" aria-label={`Add a story for me under #${feature.id}`}>
-      <input
-        type="text"
-        className="ps-addme-box"
-        value={title}
-        maxLength={200}
-        disabled={busy}
-        placeholder="Add a story for me, then Enter"
-        aria-label={`New story title under ${feature.title}`}
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") (e.preventDefault(), void submit());
-          e.stopPropagation();
-        }}
-      />
-      <span className="ps-sizes" role="radiogroup" aria-label="Size (optional)">
-        {STORY_SIZES.map((s) => (
-          <button key={s} type="button" role="radio" aria-checked={size === s} className={`size-chip${size === s ? "" : " unsized"}`} onClick={() => setSize(size === s ? null : s)}>
-            {s}
-          </button>
-        ))}
-      </span>
-    </div>
-  );
 }

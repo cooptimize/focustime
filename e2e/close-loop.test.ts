@@ -94,7 +94,7 @@ describe.skipIf(!CHROMIUM)("IB-1: Close the loop never overflows", () => {
       await form.getByRole("button", { name: "Cancel" }).click();
       await go(page, "#/week");
       await page.locator(".half.card", { hasText: "Northwind" }).first().locator(".card-when").click();
-      await openAndCheck(page, ".detail-panel", "Send the export spec", ".detail-panel");
+      await openAndCheck(page, ".block-panel", "Send the export spec", ".block-panel");
       await page.keyboard.press("Escape");
       await go(page, "#/today/closeout");
       await openAndCheck(page, ".closeout-panel", "Reply about the proposal timeline", ".closeout-panel");
@@ -138,7 +138,7 @@ describe.skipIf(!CHROMIUM)("IB-1: Close the loop never overflows", () => {
       const tag = theme.endsWith("dark") ? "dark" : "light";
       await go(page, "#/week");
       await page.locator(".half.card", { hasText: "Northwind" }).first().locator(".card-when").click();
-      const panelRow = page.locator(".detail-panel .follow-up", { hasText: "Send the export spec" }).first();
+      const panelRow = page.locator(".block-panel .follow-up", { hasText: "Send the export spec" }).first();
       await panelRow.getByRole("button", { name: "Close the loop", exact: true }).click();
       await shotBoth(page, `ib1-close-loop-panel-${tag}`, panelRow);
       await page.keyboard.press("Escape");

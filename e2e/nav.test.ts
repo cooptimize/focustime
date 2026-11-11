@@ -42,17 +42,17 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.reload();
     await page.getByRole("region", { name: "Nothing on today yet" }).waitFor();
     await page.keyboard.press("p");
-    await page.locator("aside.add-work-panel").waitFor();
+    await page.locator("aside.block-panel").waitFor();
     expect(await hash(page)).toBe("#/week/add");
     await expect.poll(() => tab(page)).toBe("Week");
     // Back in the browser returns to Day; forward to the panel.
     await page.goBack();
     await expect.poll(() => hash(page)).toBe("#/day");
     await page.goForward();
-    await page.locator("aside.add-work-panel").waitFor();
+    await page.locator("aside.block-panel").waitFor();
     // Add one to-do (CF-1: nothing to confirm): Day's morning card is gone.
-    await page.locator("aside.add-work-panel .aw-row:not(.placed) button.aw-plus").first().click();
-    await page.locator("aside.add-work-panel .aw-row.placed").first().waitFor();
+    await page.locator("aside.block-panel .aw-row:not(.placed) button.aw-plus").first().click();
+    await page.locator("aside.block-panel .aw-row.placed").first().waitFor();
     await page.keyboard.press("1");
     await page.locator(".today-view").waitFor();
     await expect.poll(() => page.getByRole("region", { name: "Nothing on today yet" }).count()).toBe(0);
@@ -81,7 +81,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await expect.poll(() => hash(page)).toBe("#/week/add");
     await page.keyboard.press("]");
     await expect.poll(() => hash(page)).toBe("#/week/2026-11-09/add");
-    await page.locator("aside.add-work-panel").waitFor();
+    await page.locator("aside.block-panel").waitFor();
     await page.keyboard.press("p");
     await expect.poll(() => hash(page)).toBe("#/week/2026-11-09");
     await page.close();
@@ -97,7 +97,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await expect.poll(() => hash(page)).toMatch(/^#\/week\/day\/2026-11-03/);
     await expect.poll(() => tab(page)).toBe("Week");
     await page.reload();
-    await expect.poll(() => page.locator("aside.add-work-panel").getAttribute("data-add-panel")).toMatch(/^2026-11-03\|/);
+    await expect.poll(() => page.locator("aside.block-panel").getAttribute("data-add-panel")).toMatch(/^2026-11-03\|/);
     await page.close();
   }, T);
 
@@ -106,7 +106,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.keyboard.press("2");
     const card = page.locator(".half", { hasText: "Northwind" }).first();
     await card.locator(".add-work.add-row").click();
-    await page.locator("aside.add-work-panel").waitFor();
+    await page.locator("aside.block-panel").waitFor();
     expect(await hash(page)).toMatch(/^#\/week\/day\/2026-11-0\d\/(AM|PM)$/);
     await page.close();
   }, T);

@@ -24,7 +24,7 @@ export type Dragged = {
   /** TX-1: what is left of it, once there is progress. */
   remainingMinutes?: number | null | undefined;
   /**
-   * WD-1: an Add work panel row that isn't a DevOps item (a draft story or a promise): pick.add takes these fields in
+   * WD-1: an block panel row that isn't a DevOps item (a draft story or a promise): pick.add takes these fields in
    * place of itemId, and itemId is a negative key that never matches a real item in the "already planned here" check.
    */
   add?: { draftId?: number; followUpId?: number; /** WD-2: a new plain to-do typed in the block panel. */ intention?: string } | undefined;

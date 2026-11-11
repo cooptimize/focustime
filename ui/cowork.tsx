@@ -70,28 +70,3 @@ export function LiveCalls({ chats, zone, tabIndex, className = "" }: { chats: re
   );
 }
 
-/**
- * The block's detail panel: each of its client's chats, live ones as "Call live … · Join" (today only), the others as
- * "Start a call in <chat>", opening the chat in Teams ready to start one.
- */
-export function BlockCalls({ chats, zone, today }: { chats: readonly CoworkChatView[]; zone: string; today: boolean }) {
-  if (!chats.length) return null;
-  const live = today ? chats.filter((c) => c.live) : [];
-  const idle = chats.filter((c) => !live.includes(c));
-  return (
-    <section className="dp-section dp-calls" aria-label="Teams calls">
-      <LiveCalls chats={live} zone={zone} />
-      {idle.length > 0 && (
-        <ul className="lc-starts">
-          {idle.map((c) => (
-            <li key={c.chatId}>
-              <a className="lc-start" href={c.link} target="_blank" rel="noreferrer" title={`Opens ${c.name} in Teams, ready to start a call. FocusTime doesn't start it or post anything`}>
-                Start a call in {c.name}
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}

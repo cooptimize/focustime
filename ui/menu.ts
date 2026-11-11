@@ -182,8 +182,8 @@ export type MenuEnv = {
   showTimelines: boolean;
   saveShowTimelines: (show: boolean) => void;
   /** TY-1: Today's Timeline switch. */
-  todayTimeline: boolean;
-  saveTodayTimeline: (show: boolean) => void;
+  dayTimeline: boolean;
+  saveDayTimeline: (show: boolean) => void;
   /** WK-3: Saturday and Sunday on Week always (remembered per viewer in this browser), not only when something is there. */
   showWeekend?: boolean;
   saveShowWeekend?: (show: boolean) => void;
@@ -1203,7 +1203,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       return { run: () => env.setView("inbox") };
     case "ui.set_show_personal": return { run: () => env.saveShowPersonal(!env.showPersonal) };
     case "ui.set_show_timelines": return { run: () => env.saveShowTimelines(!env.showTimelines) };
-    case "ui.set_today_timeline": return { run: () => env.saveTodayTimeline(!env.todayTimeline) };
+    case "ui.set_today_timeline": return { run: () => env.saveDayTimeline(!env.dayTimeline) };
     case "ui.first_launch": return { disabled: "Runs on its own the first time FocusTime opens" };
     case "ui.tour_offer": return { run: () => env.showGuide() };
     case "guide.checklist": return { run: () => env.showGuide("first-day") };

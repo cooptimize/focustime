@@ -8,8 +8,8 @@ import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
 
 const T = 180_000;
 const block = (page: Page, date: string, half: string) => page.locator(`[data-drop="${date}:${half}"]`).first();
-const panel = (page: Page) => page.locator("aside.add-work-panel");
-const panelTitle = (page: Page) => panel(page).locator(".aw-title").innerText();
+const panel = (page: Page) => page.locator("aside.block-panel");
+const panelTitle = (page: Page) => panel(page).locator(".bp-title").innerText();
 const room = (page: Page) => panel(page).locator(".aw-room").first().innerText();
 const hash = (page: Page) => page.evaluate(() => location.hash);
 async function openWeek(page: Page) {
@@ -235,7 +235,7 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     const card = page.locator(".half.card", { has: page.locator(".add-work.add-row") }).nth(1);
     await card.waitFor({ timeout: 30_000 });
     await card.locator(".add-work.add-row").click();
-    const sheet = page.locator("aside.add-work-panel.sheet");
+    const sheet = page.locator("aside.block-panel.sheet");
     await sheet.waitFor();
     const at = (await sheet.getAttribute("data-add-panel"))!.split("|");
     const row = sheet.locator(".aw-sec .aw-row:not(.placed)").filter({ has: page.locator("button.aw-plus") }).first();

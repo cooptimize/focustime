@@ -64,8 +64,8 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     };
     await expectView("checkin", "main.mode-checkin");
     await expectView("closeout", ".closeout-panel");
-    await expectView("planday", "aside.add-work-panel");
-    await expectView("planweek:2026-11-09", "aside.add-work-panel");
+    await expectView("planday", "aside.block-panel");
+    await expectView("planweek:2026-11-09", "aside.block-panel");
     await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/week/2026-11-09/add");
     await expectView("focus", ".focus-screen");
     await expectView("inbox", 'main[aria-label="Inbox"]');

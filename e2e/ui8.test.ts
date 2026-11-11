@@ -71,7 +71,7 @@ describe.skipIf(!CHROMIUM)("UI-8 bug round", () => {
       await mon.click({ position: { x: 60, y: 140 } });
       const panel = page.getByRole("region", { name: "Your stories for Cooptimize" });
       await panel.waitFor();
-      const box = await page.locator("aside.detail-panel").boundingBox();
+      const box = await page.locator("aside.block-panel").boundingBox();
       expect(overlaps(box!, (await friday.boundingBox())!)).toBe(false);
       await expect(uncovered(friday)).resolves.toBe(true);
       if (vp.width === 1920) await shots(page, "ui8-friday-panel");
@@ -92,7 +92,7 @@ describe.skipIf(!CHROMIUM)("UI-8 bug round", () => {
       await page.locator(".undo-toast").getByRole("button", { name: "Dismiss" }).click();
       await page.evaluate(() => document.documentElement.setAttribute("data-text-size", "larger"));
       await page.waitForTimeout(150);
-      expect(overlaps((await page.locator("aside.detail-panel").boundingBox())!, (await friday.boundingBox())!)).toBe(false);
+      expect(overlaps((await page.locator("aside.block-panel").boundingBox())!, (await friday.boundingBox())!)).toBe(false);
       await expect(uncovered(friday)).resolves.toBe(true);
       expect(errors).toEqual([]);
       await page.close();

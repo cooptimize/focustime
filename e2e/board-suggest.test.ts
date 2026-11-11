@@ -24,7 +24,7 @@ describe.skipIf(!CHROMIUM)("Unfinished picks suggested in the next block (UI-B)"
     await page.getByRole("button", { name: "Week", exact: true }).first().click();
     await page.evaluate(() => (location.hash = "#/week/add"));
     await unfoldAddWork(page);
-    const summary = page.locator("aside.add-work-panel section.carry-summary");
+    const summary = page.locator("aside.block-panel section.carry-summary");
     await summary.waitFor({ timeout: 30_000 });
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/board-first-1920.png` });
     // Thursday is PTO and Friday catch-up: only Northwind (Wed PM) has a block left; the rest are in the list.

@@ -18,14 +18,14 @@ async function larger(page: Page, on: boolean) {
 const commit = async (page: Page) => {
   await page.evaluate((w) => (location.hash = `#/week/commit/${w}`), THIS_WEEK);
   await unfoldAddWork(page);
-  await page.locator("aside.add-work-panel section.team-group").first().waitFor({ timeout: 30_000 });
+  await page.locator("aside.block-panel section.team-group").first().waitFor({ timeout: 30_000 });
   // The panel lists the selected block's client's features: Northwind's (Monday PM).
   await selectBlock(page, "Northwind");
   await unfoldAddWork(page);
 };
 /** WD-1: a feature on this week's list, in Add work › This week's features. */
 async function weekRow(page: Page, text: string) {
-  const row = page.locator("aside.add-work-panel .aw-feature", { has: page.locator(":scope > .aw-feat-head .aw-feat-name", { hasText: text }) }).first();
+  const row = page.locator("aside.block-panel .aw-feature", { has: page.locator(":scope > .aw-feat-head .aw-feat-name", { hasText: text }) }).first();
   await row.waitFor({ timeout: 20_000 });
   return row;
 }
@@ -64,8 +64,8 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
     await page.locator(".ib-pane .ib-detail-title", { hasText: "Loyalty points" }).waitFor();
     await commit(page);
     // WD-1 review: sends to answer are under To place, You sent in the folded group at the bottom; both unfolded.
-    await page.locator("aside.add-work-panel .aw-sends section.team-group").waitFor({ timeout: 30_000 });
-    const group = page.locator("aside.add-work-panel");
+    await page.locator("aside.block-panel .aw-sends section.team-group").waitFor({ timeout: 30_000 });
+    const group = page.locator("aside.block-panel");
 
     // Accept: it leaves From your team and joins Northwind's list as a must (the demo has no DevOps writes, so untick).
     const loyalty = group.locator(".send-row", { hasText: "Loyalty points" });

@@ -133,7 +133,7 @@ function planCheck(ctx: AnswerContext, link: LinkFn): Composed {
   const reply = count
     ? `For ${ctx.period.label}, ${plural(count, "thing")} to look at${ctx.clients.length > 1 ? `, by client` : ""}.`
     : `Nothing stands out for ${ctx.period.label}: no overloaded blocks, late promises, readiness gaps, deployments or missing updates${ctx.unknown.length ? ", though some of it couldn't be read" : ""}.`;
-  const links = [link("#/week/add", "Open Add work")];
+  const links = [link("#/week/add", "Open Week")];
   if (ctx.gaps.length) links.push(link("#/ahead/fix", "Open Gaps"));
   if (ctx.statusMissing?.length) links.push(link("#/status", "Open Status"));
   return { reply, sections, suggestions: suggestions.slice(0, 3), refs: refsOf(ctx, usedTodos, itemRefs, promiseRefs), links };

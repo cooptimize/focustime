@@ -202,7 +202,7 @@ describe("entry points", () => {
     expect(viewName(HOME)).toBe("Day");
     expect(viewName(loc(navOf.today("checkin")))).toBe("Day › Midday check-in");
     expect(viewName(loc(navOf.week()))).toBe("Week");
-    expect(viewName(loc(navOf.addWork("2026-11-03")))).toBe("Week › Add work");
+    expect(viewName(loc(navOf.addWork("2026-11-03")))).toBe("Week › Block");
     expect(viewName(loc(navOf.status()))).toBe("Status");
     expect(viewName(loc(navOf.ahead()))).toBe("Ahead › Grid");
     expect(viewName(loc(navOf.ahead("gantt")))).toBe("Ahead › Gantt");

@@ -28,7 +28,7 @@ const toggle = (page: Page) => page.locator(".week-head .tl-toggle");
 
 async function openPanel(page: Page): Promise<void> {
   await page.locator(`main.grid ${MON_AM}`).click({ position: { x: 14, y: 12 } });
-  await page.locator("aside.detail-panel").waitFor();
+  await page.locator("aside.block-panel").waitFor();
   await page.waitForTimeout(300);
 }
 
@@ -169,7 +169,7 @@ describe.skipIf(!CHROMIUM)("WK-2: the Board's Timeline toggle and per-column tie
     await expect(lines.first().locator(".ce-time").textContent()).resolves.toMatch(/^\d{1,2}:\d\d–\d{1,2}:\d\d$/);
     // Drag a story from the detail panel onto Friday (today), as with the timeline shown.
     await openPanel(page);
-    const pick = page.locator("aside.detail-panel .ps-row[data-story][draggable='true']").first();
+    const pick = page.locator("aside.block-panel .ps-row[data-story][draggable='true']").first();
     await pick.waitFor();
     // As WK-1's drag (D858): over each day, nudging the pointer while it rests, so the target answers.
     const a = (await pick.boundingBox())!;

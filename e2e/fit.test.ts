@@ -73,8 +73,8 @@ describe.skipIf(!CHROMIUM)("Today and Week fit (U5.1)", () => {
     expect(await paintsOutside(page, ".half.card")).toEqual([]);
     expect(await paintsOutside(page, ".half.whole")).toEqual([]);
     await go(page, `#/week/day/${MON}/AM`);
-    await page.locator("aside.add-work-panel .aw-sec").first().waitFor();
-    expect(await paintsOutside(page, "aside.add-work-panel")).toEqual([]);
+    await page.locator("aside.block-panel .aw-sec").first().waitFor();
+    expect(await paintsOutside(page, "aside.block-panel")).toEqual([]);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

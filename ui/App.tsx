@@ -308,7 +308,7 @@ export function App() {
   const asksOpen = nav.tab === "inbox";
   const roadmapOpen = nav.tab === "ahead";
   const checkInOpen = nav.tab === "today" && nav.flow === "checkin";
-  /** WD-1: the Add work panel's asked-for block (null: closed). */
+  /** WD-1: the block panel's asked-for block (null: closed). */
   const addAt = addOf(nav);
   /** Settings (step 6b) at a section, or closed (back to the place under it). */
   const setSettingsAt = useCallback((section: string | null, setting: string | null = null) => go((l) => ({ nav: l.nav, overlay: section !== null ? { kind: "settings", section, setting } : null })), [go]);
@@ -414,7 +414,7 @@ export function App() {
   /** Close out's day (Today › Close out), and Plan the week's week (Week › Plan the week: next week unless asked). */
   const closeOutAt: IsoDate | null = nav.tab === "today" && nav.flow === "closeout" && data ? (nav.date ?? data.planDay.date) : null;
   /** QF-1: the day Today shows (#/today/<date>); null is today. */
-  const todayAt: IsoDate | null = nav.tab === "today" && !nav.flow && data && nav.date && nav.date !== data.planDay.date ? nav.date : null;
+  const dayShown: IsoDate | null = nav.tab === "today" && !nav.flow && data && nav.date && nav.date !== data.planDay.date ? nav.date : null;
 
   // Theme: the config's value once loaded; a change applies at once and is saved, and reverts if saving fails.
   const [theme, setThemeState] = useState<Theme>(initialTheme);
@@ -563,19 +563,19 @@ export function App() {
     }
   }, []);
   // TY-1: Today's Timeline switch; the phone keeps its own, off until asked, so it keeps MB-1's layout.
-  const [todayTimeline, setTodayTimeline] = useState(false);
-  const todayTimelineRef = useRef(todayTimeline);
-  todayTimelineRef.current = todayTimeline;
-  const savedTodayTimeline = phone ? data?.ui.todayTimelinePhone : data?.ui.todayTimeline;
+  const [dayTimeline, setDayTimeline] = useState(false);
+  const dayTimelineRef = useRef(dayTimeline);
+  dayTimelineRef.current = dayTimeline;
+  const savedDayTimeline = phone ? data?.ui.todayTimelinePhone : data?.ui.todayTimeline;
   useEffect(() => {
-    if (savedTodayTimeline !== undefined) setTodayTimeline(savedTodayTimeline);
-  }, [savedTodayTimeline]);
-  const saveTodayTimeline = useCallback(async (show: boolean) => {
-    setTodayTimeline(show);
+    if (savedDayTimeline !== undefined) setDayTimeline(savedDayTimeline);
+  }, [savedDayTimeline]);
+  const saveDayTimeline = useCallback(async (show: boolean) => {
+    setDayTimeline(show);
     try {
       await call("ui.set_today_timeline", { show, phone });
     } catch (e) {
-      setTodayTimeline(!show);
+      setDayTimeline(!show);
       setNotice(`Not saved: ${e instanceof Error ? e.message : "unknown error"}`);
     }
   }, [phone]);
@@ -757,7 +757,7 @@ export function App() {
   const changeWeek = useCallback(
     (n: number) => {
       if (!data) return;
-      // WD-1: the Add work panel stays open on the other week (on its first open block).
+      // WD-1: the block panel stays open on the other week (on its first open block).
       const w = addWeeks(data.weekStart, n);
       goNav(addAt ? navOf.weekAdd(w) : navOf.week("board", w));
     },
@@ -794,7 +794,7 @@ export function App() {
 
   /** WD-2: Day's own screen (no flow open): its date, and whether its block panel was left open on this device. */
   const dayOn = nav.tab === "today" && !nav.flow && !loc.overlay;
-  const dayDate: IsoDate | null = dayOn && data ? (todayAt ?? data.planDay.date) : null;
+  const dayDate: IsoDate | null = dayOn && data ? (dayShown ?? data.planDay.date) : null;
   const [dayPanelKept, setDayPanelKept] = useState(() => readDayPanel());
   const keepDayPanel = useCallback((open: boolean) => {
     setDayPanelKept(open);
@@ -905,7 +905,7 @@ export function App() {
     setPanelFocus(null);
     if (nav.tab === "today") {
       keepDayPanel(false);
-      goNav(navOf.todayOn(todayAt));
+      goNav(navOf.todayOn(dayShown));
     } else goNav(closeAddNav());
     const el = cellRefs.current.get(`${sel.dayIndex}${sel.half}`);
     requestAnimationFrame(() => el?.focus({ preventScroll: true }));
@@ -962,8 +962,8 @@ export function App() {
     [reloadQuiet],
   );
 
-  // The week each place shows: Week its week (this week by default; the Add work panel's block's week), Day and its flows the day's.
-  const wantWeek = !data ? null : nav.tab === "week" ? (nav.week ?? (addAt?.date ? mondayOf(addAt.date) : data.today.weekStart)) : nav.tab === "today" && !loc.overlay ? (todayAt ? mondayOf(todayAt) : data.today.weekStart) : null;
+  // The week each place shows: Week its week (this week by default; the block panel's block's week), Day and its flows the day's.
+  const wantWeek = !data ? null : nav.tab === "week" ? (nav.week ?? (addAt?.date ? mondayOf(addAt.date) : data.today.weekStart)) : nav.tab === "today" && !loc.overlay ? (dayShown ? mondayOf(dayShown) : data.today.weekStart) : null;
   useEffect(() => {
     if (!data || !wantWeek || wantWeek === weekRef.current) return;
     void load({ weekStart: wantWeek }, { selectToday: wantWeek === data.today.weekStart });
@@ -1029,7 +1029,7 @@ export function App() {
     [load],
   );
 
-  /** The old Plan the week entry points: Week with the Add work panel on that week. */
+  /** The old Plan the week entry points: Week with the block panel on that week. */
   // A week opens with the panel on its block under way (or its first one), never pinned to its Monday.
   const openPlanWeek = useCallback(
     (w: IsoDate) => {
@@ -1153,7 +1153,7 @@ export function App() {
   }, [clock]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    // WD-1: not while the Add work panel has focus (its search and type box keep it).
+    // WD-1: not while the block panel has focus (its search and type box keep it).
     if (!cmdOpen && !keysOpen && !document.activeElement?.closest(".add-work-panel")) cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
   }, [sel, data?.weekStart, layout, cmdOpen, keysOpen]);
 
@@ -1295,13 +1295,13 @@ export function App() {
       } else if ((k === "b" || k === "B") && free && settingsAt === null && !loc.overlay && nav.tab === "today" && !nav.flow && !e.ctrlKey && !e.metaKey && !e.altKey) {
         // TY-1: Today's Timeline switch.
         e.preventDefault();
-        void saveTodayTimeline(!todayTimelineRef.current);
+        void saveDayTimeline(!dayTimelineRef.current);
       } else if ((k === "l" || k === "L") && free && settingsAt === null) {
         e.preventDefault();
         openTab("inbox");
       } else if ((k === "w" || k === "W") && free && settingsAt === null) {
         e.preventDefault();
-        // WD-1: W opens Week with the Add work panel (again: closes it).
+        // WD-1: W opens Week with the block panel (again: closes it).
         addAt ? goNav(closeAddNav()) : addWork();
       } else if ((k === "e" || k === "E") && free && settingsAt === null) {
         e.preventDefault();
@@ -1400,12 +1400,12 @@ export function App() {
       if (e.key !== "[" && e.key !== "]") return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       e.preventDefault();
-      const next = stepWeekday(todayAt ?? data.planDay.date, e.key === "]" ? 1 : -1, weekendStops({ showWeekend: weekendRef.current, days: data.week.days }));
+      const next = stepWeekday(dayShown ?? data.planDay.date, e.key === "]" ? 1 : -1, weekendStops({ showWeekend: weekendRef.current, days: data.week.days }));
       goNav(navOf.todayOn(next === data.planDay.date ? null : next));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [base, nav, loc.overlay, cmdOpen, keysOpen, captureOpen, settingsAt, data, todayAt, goNav]);
+  }, [base, nav, loc.overlay, cmdOpen, keysOpen, captureOpen, settingsAt, data, dayShown, goNav]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
   const weekItems = useMemo(() => (data?.weekFeatures ?? []).filter((f) => f.weekStart === data?.weekStart).map((f) => ({ clientKey: f.clientKey, itemId: f.itemId })), [data?.weekFeatures, data?.weekStart]);
@@ -1424,7 +1424,7 @@ export function App() {
       cowork,
       openChat,
       week: data.week,
-      // Step 15.2, WD-1: the selected block (the Add work panel's while it is open) is the selection.
+      // Step 15.2, WD-1: the selected block (the block panel's while it is open) is the selection.
       selection: (() => {
         const at = { d: day, half: sel.half };
         return { date: at.d.date, half: at.half, clientKey: (at.half === "AM" ? at.d.am : at.half === "PM" ? at.d.pm : at.d.eve)?.focus[0]?.clientKey ?? null };
@@ -1478,8 +1478,8 @@ export function App() {
       saveShowPersonal: (show) => void saveShowPersonal(show),
       showTimelines,
       saveShowTimelines: (show) => void saveShowTimelines(show),
-      todayTimeline,
-      saveTodayTimeline: (show) => void saveTodayTimeline(show),
+      dayTimeline,
+      saveDayTimeline: (show) => void saveDayTimeline(show),
       showWeekend,
       saveShowWeekend,
       undoable: (text, undo) => setUndoToast({ id: Date.now(), text, undo }),
@@ -1985,13 +1985,13 @@ export function App() {
         <CarryProvider active={data.weekStart === data.today.weekStart} version={data} week={week} now={now ?? new Date(clock).toISOString()} onChanged={reloadQuiet}>
         <AddPanelCtx.Provider value={{ at: shownPanel, open: (d, h) => openBlock(d, h, { add: true }) }}>
         <Day
-          viewDate={todayAt}
+          viewDate={dayShown}
           showWeekend={showWeekend}
           onDay={(d) => goNav(navOf.todayOn(d && d !== data.planDay.date ? d : null))}
           onTimebox={(d) => void timeboxDay(d)}
           timeboxAsk={timeboxAsk}
-          timeline={todayTimeline}
-          onTimeline={(show) => void saveTodayTimeline(show)}
+          timeline={dayTimeline}
+          onTimeline={(show) => void saveDayTimeline(show)}
           onCloseOutOn={(d) => goNav(navOf.today("closeout", d))}
           data={shownData ?? data}
           strip={strip}

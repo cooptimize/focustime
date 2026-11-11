@@ -1,4 +1,4 @@
-// U6, WD-1: a section of the Add work panel with its uppercase label, and the type box's one-line hint.
+// U6, WD-1: a section of the block panel with its uppercase label, and the type box's one-line hint.
 import type { ReactNode } from "react";
 
 /** A section in the right pane with its uppercase label. */
