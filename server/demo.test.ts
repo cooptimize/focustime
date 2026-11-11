@@ -145,3 +145,24 @@ describe("No confirm (CF-1)", () => {
     expect(await ok(ctx, "planday.commit", { date: "2026-11-02" })).toMatchObject({ unchanged: true });
   });
 });
+
+describe("CF-1 review: a week planned before CF-1 reaches teammates on the first load", () => {
+  it("week.load publishes this week and next once; later changes publish as they happen", async () => {
+    // The seed loads the week (this week and next get their once-mark); a week later, the week after is new.
+    let now = NOW;
+    const ctx = createDemoContext({ now: () => now, demo: { on: true, set: async () => {} } });
+    await seedDemo(ctx);
+    now = "2026-11-09T14:30:00Z";
+    const LATER = "2026-11-16";
+    // Put on that week straight in the store, as a week planned before CF-1 (never published).
+    await ctx.plan!.addWeekItem({ weekStart: LATER, clientKey: "Northwind", itemId: 1140, title: "Loyalty points", itemType: "Feature", url: null, level: "feature" });
+    const shared = async () => (await ctx.team!.commitments(["Northwind"], LATER)).map((c) => c.itemId);
+    expect(await shared()).not.toContain(1140);
+    await ok(ctx, "week.load", {});
+    expect(await shared()).toContain(1140);
+    // Once only: a second store-only change waits for the next real change.
+    await ctx.plan!.addWeekItem({ weekStart: LATER, clientKey: "Northwind", itemId: 1141, title: "Earn points", itemType: "Feature", url: null, level: "feature" });
+    await ok(ctx, "week.load", {});
+    expect(await shared()).not.toContain(1141);
+  });
+});

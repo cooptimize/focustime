@@ -56,3 +56,13 @@ describe("planning words (UI-7)", () => {
     for (const q of ["commit", "confirm"]) expect(filterCommands(items, q).map((i) => i.label).filter((l) => /^Confirm (the )?(week|day|today)/i.test(l))).toEqual([]);
   });
 });
+
+describe("CF-1 review: the Guide and the menus never use the retired words", () => {
+  it("no confirming a plan, no musts, no nice to haves in the Guide", async () => {
+    const { readFileSync } = await import("node:fs");
+    const guide = readFileSync(new URL("./guide/content.ts", import.meta.url), "utf8");
+    expect(guide).not.toMatch(/confirming today|Confirm today|Confirm week|nice to haves?\b|\bmusts\b/i);
+    const menu = readFileSync(new URL("./menu.ts", import.meta.url), "utf8");
+    expect(menu).not.toMatch(/"as a nice to have"/);
+  });
+});

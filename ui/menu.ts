@@ -1857,7 +1857,7 @@ export function roadmapRowMenu(f: RoadmapRowFacts, ops: RoadmapRowOps): MenuStep
       { id: "copy", label: COPY_LINK, ...(f.hasLink ? {} : { disabled: "No link for this item" }), run: ops.copy },
       { id: "brief", label: "Copy Coop brief", action: "feature.brief", ...(epic ? { disabled: "Briefs are for features" } : { hint: f.open ? `${f.open} open ${f.open === 1 ? "story" : "stories"} already` : "ask Coop for stories" }), run: ops.brief },
       { id: "help", label: "Ask to collaborate", hint: "who is free", action: "collab.candidates", run: ops.help },
-      { id: "week", label: "Add to this week's plan", action: "weekplan.add", ...(epic ? { disabled: "Add its features instead" } : f.onWeek ? { disabled: "Already on this week's plan" } : { hint: "as a nice to have" }), run: ops.addToWeek },
+      { id: "week", label: "Add to this week's plan", action: "weekplan.add", ...(epic ? { disabled: "Add its features instead" } : f.onWeek ? { disabled: "Already on this week's plan" } : {}), run: ops.addToWeek },
       { id: "target", label: f.targetDate ? "Change target date" : "Set target date", action: "devops.preview", ...(f.owned === false ? { disabled: "Only on features and epics assigned to you" } : f.canWrite ? {} : { hint: "Enable DevOps writes first" }), run: f.canWrite ? ops.targetDate : ops.enableWrites },
     ],
   };

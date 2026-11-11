@@ -66,10 +66,12 @@ const COMMANDS: Link = { label: "Open the command menu", href: "#/commands" };
 
 /** CF-1: "confirm my day", "lock in my week": a request to confirm a plan, which FocusTime no longer has; null otherwise. */
 export function asksToConfirm(text: string): "day" | "week" | null {
-  const s = text.toLowerCase();
-  if (!/\b(confirm|lock in|commit)\b/.test(s) || /#\d/.test(s)) return null;
-  if (/\bweek('s)?\b/.test(s)) return "week";
-  return /\b(day|today|tomorrow|plan|monday|tuesday|wednesday|thursday|friday)('s)?\b/.test(s) ? "day" : null;
+  // Only a confirm verb that starts the request and whose object is my plan; anything else goes to the model (which has
+  // no confirm tool). "Did I commit to…" or "…, I'll confirm" are ordinary requests (CF-1 review).
+  const s = text.toLowerCase().trim().replace(/[.!?]+$/, "");
+  const m = s.match(/^(?:(?:please|can you|could you)\s+)?(?:confirm|lock in|commit)\s+(?:to\s+)?(?:(?:my|the|this|next|today's|tomorrow's)\s+)*(day|today|tomorrow|plan|day's plan|week|week's plan|monday|tuesday|wednesday|thursday|friday)(?:'s plan| plan)?(?:\s+(?:for\s+)?(?:today|tomorrow|this week|next week))?$/);
+  if (!m) return null;
+  return /week/.test(m[0]) ? "week" : "day";
 }
 
 /** AS-2: FocusTime's own words, in both rounds' fixed instructions. */

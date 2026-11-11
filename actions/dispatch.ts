@@ -1501,17 +1501,38 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
   const r = await dispatchAction(ctx, req);
   const after = req.action === "pick.add" || req.action === "pick.move" ? await afterPick(ctx, req.action, req.input, r) : r;
   const changed = req.action === "weekplan.place" || req.action === "pick.add" ? await afterPlanChange(ctx, req.action, req.input, after) : after;
+  if (req.action === "week.load") return publishOnce(ctx, changed);
   return typeof req.action === "string" && WEEK_CHANGES.has(req.action) ? publishAfter(ctx, req.input, changed) : changed;
+}
+
+/** The marker of a week published once on load (CF-1): weeks planned before CF-1 (confirmed or not) reach teammates. */
+export const PUBLISHED_ON_LOAD = "cf1_published";
+
+/**
+ * CF-1 review: a week planned before CF-1 was published only on Confirm, so after the deploy Team and the status report
+ * would show it empty or stale until the person's next change. The first week.load publishes this week and next once
+ * (a marker per week); every change after that publishes as it happens.
+ */
+async function publishOnce(ctx: ActionContext, r: ActionResponse): Promise<ActionResponse> {
+  if (!r.ok || !ctx.team || !ctx.plan) return r;
+  try {
+    const cfg = await configured(ctx);
+    const thisWeek = mondayOf(localToday(ctx.now(), cfg ? userZone(cfg) : "UTC"));
+    for (const w of [thisWeek, Temporal.PlainDate.from(thisWeek).add({ days: 7 }).toString()]) if (await ctx.plan.markOnce(PUBLISHED_ON_LOAD, w)) await publishWeek(teamCtx(ctx), w);
+  } catch {
+    // Nothing is lost: the next change publishes.
+  }
+  return r;
 }
 
 /**
  * CF-1 (D1): the actions that can change which features are on a week. After one succeeds, the weeks it touched are
  * published for teammates and the status report at once (publishWeek), never a past week. Was: on Confirm week.
  */
-const WEEK_CHANGES = new Set<string>([
+export const WEEK_CHANGES = new Set<string>([
   "pick.add", "pick.move", "pick.remove", "weekplan.add", "weekplan.remove", "weekplan.place", "weekplan.load",
   "weekplan.carry_decide", "weekplan.carry_accept_all", "weekplan.watch_checkin", "weekplan.watch_remove",
-  "send.accept", "priority.add_to_week",
+  "send.accept", "priority.add_to_week", "weekplan.set_feature",
 ]);
 
 /** The Mondays an action's input or answer names (a week, a date, a to-do's day, a week list row's week). */
