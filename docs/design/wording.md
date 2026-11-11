@@ -26,12 +26,16 @@ Fit is never red. Being over plan is a choice to make, not a failure.
 | commit, committed, uncommitted | Done, Planned, not planned yet |
 | slot, half-day slot | morning, afternoon, evening, block |
 | capacity, free share | free time, "4h 30m free" |
-| carry target, carry-over target | the next day that isn't planned yet |
+| carry target, carry-over target | the next day that can take work (CF-1) |
 | unprocessed capture | capture to sort |
 | resume note | where you left off |
 | ignition | Add work (WD-1; was Plan the day) |
 | Board (Week's view) | Week (WD-1) |
-| Commit, Plan (Week's mode) | Add work, and Confirm week in Week's header (WD-1) |
+| Commit, Plan (Week's mode) | Add work (WD-1; CF-1: nothing to confirm) |
+| Confirm week, Confirm again, Confirmed, Draft (a week) | nothing: what's on the week is the plan (CF-1) |
+| Confirm today, Confirm <day>, Confirm and timebox | nothing; "Timebox my day" (CF-1) |
+| Today isn't planned yet | "Nothing on today yet", only when today has no to-dos (CF-1) |
+| Must, Nice to have, musts done, musts left, Still realistic? | nothing: every feature on the week counts the same (CF-1). A send's own Must or Suggested stays |
 | Plan the week | Add work to the week (WD-1) |
 | Plan the day, Plan today | Add work to today, or to a day (WD-1) |
 | Today (the tab) | Day (WD-1; the moment card still says "today") |
@@ -52,5 +56,5 @@ Fit is never red. Being over plan is a choice to make, not a failure.
 - **Day**: the first tab (was Today). Inside it, "today" stays a plain word ("Add work to today", "Back to today").
 - **Add work**: the panel beside Week on one block ("Add to Northwind · Tue AM"), its "+ Add" buttons, and the command menu's "Add work to today", "Add work to a day…" and "Add work to the week".
 - **To place**: what waits for a block in the panel, and the line above the grid ("3 to place: 1 unfinished, 2 from last week").
-- **Confirm week**, **Confirm Tue, Nov 3**: finishing a plan, in Week's header and a day header's ⋯. "Confirm again" once it changed since.
+- ~~**Confirm week**, **Confirm Tue, Nov 3**~~: retired in CF-1 (Nov 11). Work comes on and off freely; "Confirm" is only on an external write's preview.
 - Retired from visible copy: Board, Commit, Plan the week, Plan the day, Plan today. The command menu still finds them by those words.

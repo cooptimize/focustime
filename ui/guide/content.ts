@@ -48,7 +48,7 @@ export const DEVOPS = {
   // WT-1: levels come from each client's DevOps process, not type names; the icon is the type's usual DevOps icon.
   ladder: [
     { level: "Top", icon: "icon_crown", text: "Epics (or whatever the top level is called). Live in Ahead. Need features before they reach a week." },
-    { level: "Parent", icon: "icon_trophy", text: "Features, and any type at the same level. Go on a week as a must or nice to have." },
+    { level: "Parent", icon: "icon_trophy", text: "Features, and any type at the same level. Go on a week once something of them is placed." },
     { level: "Needs stories", text: "A feature with no stories can't go on a day yet. {b:Break down} or send a {b:Coop brief}. An admin can turn this off for a type that's worked directly.", flag: true },
     { level: "Child", icon: "icon_book", text: "Stories, and bugs and tasks where the team tracks them. Go on a day, get a size, get done." },
     { level: "Done", text: "Tick it and FocusTime offers to set its item done in DevOps ({b:Confirm} or {b:Not now}); Close out asks once for the day's. Resolved in DevOps means no hours left; it drops off planning lists." },
@@ -181,7 +181,7 @@ export const TEAM = {
   items: [
     { q: "How do I send work to someone?", a: "On any feature or story (a feature in Add work, a story in Your stories, an item Break down just created), ⋯ then Send to…. Pick who (people on that client who use FocusTime; anyone not on it yet shows as Not on FocusTime yet and can't be picked), this week or next, Suggested or Must, and an optional note. Tick Ask them to take it in DevOps if it should be theirs there too." },
     { q: "Who can send a Must?", a: "Only that client's leads. Anyone on the client can send a Suggested. Levels are guidance everywhere else in FocusTime; the Must label is the one exception, because it asks for the week to change." },
-    { q: "What do I do with something sent to me?", a: "It shows in From your team in Add work (the line over Week counts it), as one line on Day, and as a notification. Accept puts it on your week as a must; Accept and schedule also opens Add work on the client's first block. Pass to… hands it to someone else on the client (who sent it stays the sender). Can't this week asks for a reason, which the sender sees. Nothing counts against your hours until you accept." },
+    { q: "What do I do with something sent to me?", a: "It shows in From your team in Add work (the line over Week counts it), as one line on Day, and as a notification. Accept puts it on your week; Accept and schedule also opens Add work on the client's first block. Pass to… hands it to someone else on the client (who sent it stays the sender). Can't this week asks for a reason, which the sender sees. Nothing counts against your hours until you accept." },
     { q: "What if I can't take a Must?", a: "Say why. The sender sees Can't: <your reason>, and the client's other leads get a quiet note with it. The Must stays as a conflict, marked in amber for both of you, until the sender passes it on or withdraws it, or you accept it after all." },
     { q: "Does Accept change DevOps?", a: "Only if you leave Also assign to me in DevOps ticked. It's ticked when the sender asked you to take it, and unticked otherwise. Then the usual DevOps write runs: a preview, the item assigned to you, read back, in the audit log with Undo, and a quiet note to whoever had it." },
     { q: "How do I see what I sent?", a: "You sent, in the folded group at the bottom of Add work on Week: Waiting (Cancel while it waits), Accepted, Scheduled, Passed to <name>, Can't: <reason>, Done once DevOps resolves the item, or Not answered when its week ended with no answer." },
@@ -202,7 +202,7 @@ export const TEAMS_BOT = {
   items: [
     { q: "How do I start?", a: "Add FocusTime from Apps in Teams and send it any message, like \"what's next\". It answers only you, only in that 1:1 chat. It does what Ask does, with the same previews and Confirm. Ask it what it can do; what's next and today work even without AI." },
     { q: "Can FocusTime message me first?", a: "Only if you ask it to. Settings › Notifications › In Teams: turn on Let FocusTime message me in Teams, then tick what you want: Morning brief, Midday check-in, Close out, Nudges, Client calls to review. All are off until you turn them on. They come only in your own chat with FocusTime, never on weekends or PTO days, never in quiet hours, and wait while focus runs. Friday only with Also on Fridays. Send me a test now sends one at once so you can see it." },
-    { q: "What's in each one?", a: "The morning brief (at the start of your day, or a time you set): today's blocks, meetings, to-dos, promises due and work sent to you, with Confirm today and Move…. The midday check-in (12:00 unless you change it): this morning's to-dos with Done and Not yet, and Move the rest. Done on a to-do with a DevOps item asks, in the card, whether to set it done in DevOps too; nothing is written until you Confirm. Close out (30 minutes before your day ends unless you change it): today's to-dos; tick what got done or just tell it. Nudges: a promise due tonight that's still open, work sent to you waiting over half a day, or someone taking over an item assigned to you, together in one message, at most one an hour." },
+    { q: "What's in each one?", a: "The morning brief (at the start of your day, or a time you set): today's blocks, meetings, to-dos, promises due and work sent to you, with Move…. The midday check-in (12:00 unless you change it): this morning's to-dos with Done and Not yet, and Move the rest. Done on a to-do with a DevOps item asks, in the card, whether to set it done in DevOps too; nothing is written until you Confirm. Close out (30 minutes before your day ends unless you change it): today's to-dos; tick what got done or just tell it. Nudges: a promise due tonight that's still open, work sent to you waiting over half a day, or someone taking over an item assigned to you, together in one message, at most one an hour." },
     { q: "Does tapping a button change things right away?", a: "Done and Not yet on a to-do change only your own plan, at once, exactly like the buttons in the app, with Undo on the card. Anything bigger (moving to-dos, confirming today, closing out the day) shows the change first, with Confirm and Cancel, and nothing happens until you Confirm. Nothing in DevOps, Outlook or anywhere outside FocusTime changes without a Confirm." },
     { q: "Can I just tell it what I got done?", a: "Yes. While today's Close out is waiting, reply in your own words: \"all but the export\", \"1 and 3\", \"fixed the login timeout\". The card above fills in what it understood: the to-dos done, where the rest move (each to its client's next block, or the unfinished list when there's none this week) and the day closed out. One Confirm does all of it. FocusTime matches your words to the to-dos itself; no AI reads them." },
     { q: "How do I capture something from Teams?", a: "Start the message with capture: (or c:), for example \"capture: call Dana about the export\". It goes to the Inbox's Captures and drafts exactly as typed, to sort later, with Undo on the reply. Anything else you write goes to the assistant." },
@@ -313,7 +313,7 @@ export const START = {
   week: {
     title: "Your week, in three",
     steps: [
-      { name: "Add work", where: "Week", text: "Thursday or Friday: open next week and place its features and stories on your blocks, then Confirm week.", tour: "plan-week" },
+      { name: "Add work", where: "Week", text: "Thursday or Friday: open next week and place its features and stories on your blocks. What's on your week is your plan.", tour: "plan-week" },
       { name: "Your blocks", where: "Week", text: "Your half-day blocks and their to-dos. Timeline shows each block's hours.", tour: "board" },
       { name: "Status", where: "Status", text: "Before Monday's status report, write a line per feature. It goes to DevOps as a comment.", tour: "status" },
     ] as { name: string; where: string; text: string; tour: string | null }[],
@@ -358,7 +358,7 @@ export const TOUR_EXAMPLES = {
     { title: "Order history export", hint: "3 of your stories open", action: "Carry over" },
     { title: "Supplier onboarding", hint: "Finished last week", action: "Keep" },
   ],
-  card: { client: "Northwind", color: "teal" as ExampleColor, fit: "9h planned · 11h free", musts: [{ title: "Order history export", hours: "about 6h" }, { title: "Invoice totals", hours: "3h" }], nice: "Nice to have · 1" },
+  card: { client: "Northwind", color: "teal" as ExampleColor, fit: "9h planned · 11h free", features: [{ title: "Order history export", hours: "about 6h" }, { title: "Invoice totals", hours: "3h" }, { title: "Loyalty points", hours: "1h" }] },
   add: { client: "Northwind", rows: ["#4120 Returns dashboard", "#4133 Price list import", "#4158 Shipping labels"], box: "Type a feature for Northwind, then Enter" },
   next: { label: "Next client: Harbor ›" },
   /** UI-5: the other tours' drawings, each one small card: a heading, rows and the buttons it would have. */
@@ -387,7 +387,7 @@ export { SECTIONS, SECTION_GROUPS, type SectionId } from "./sections.ts";
 const NEW_QUESTIONS = [
   { q: "How do I see who's set up?", a: "If you're a FocusTime admin: Admin › People shows every Cooptimizer with yes or no for Signed in, DevOps connected, Calendar connected and, where the Teams app is set up, Teams app added. Filter by Not signed in or Set up partly. It shows only these marks, never anyone's plan." },
   { q: "How do I invite a teammate?", a: "In Admin › People, Invite on their row (or tick several and Invite several) opens a message to edit, with FocusTime's link and the first three steps. Open in Teams starts a chat with them, Open in Outlook starts an email, or Copy message, and you send it. Where your sign-in allows it, Send in Teams (one 1:1 chat each) or Create Outlook draft or Send now sends it from FocusTime as you, after a preview of who gets it and the final text; if someone isn't reached, Retry tries only them. The row then shows when and how you invited them, and you can invite them again any time. In {key:Ctrl K}: Invite, or Who's set up." },
-  { q: "What is the moment card?", a: "Day's one card for the moment of the day: Add work until the day is confirmed, Midday check-in once your afternoon starts, and Close out near the end of your day. Each opens its flow; once it's done it's a small line with Reopen. Nothing is forced: skip any of them." },
+  { q: "What is the moment card?", a: "Day's one card for the moment of the day: Nothing on today yet (with Add work) while today's blocks have no to-dos, Midday check-in once your afternoon starts, and Close out near the end of your day. Each opens its flow; once it's done it's a small line with Reopen. Nothing is forced: skip any of them." },
   { q: "Can I look at another day?", a: "Yes. ‹ and › (or [ and ]) step to another day, and Back to today comes back. Other days are read only. A PTO day says you're off, with nothing nagging." },
   { q: "Does the assistant ever change something on its own?", a: "No. Every change is a proposal with the same preview as the button, and runs only when you Confirm. What it reads from chats, DevOps or captures is information for it, never instructions." },
   { q: "Can it change several things at once?", a: "Yes. It can move several to-dos at once, across clients (\"Push everything from today to tomorrow\"), with one Confirm and one Undo. On one item it can do up to three things in one card, like mark it done and add a comment. Any it can't put back because you worked on them since are listed." },
@@ -462,8 +462,8 @@ export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "capture" | "a
     lead: "Week is your half-day blocks for the week, with Add work beside them to place what you will do.",
     does: [
       { title: "Your blocks", text: "Each block is a half-day for one client: its to-dos, a line for its meetings, and + Add at the bottom. Click a title for its story card. Timeline ({key:ui.set_show_timelines}) shows a slim hour rail beside each block. A call live in the client's delivery chat shows on its block with Join; ⋯ › Start a call opens the chat in Teams.", go: { href: "#/week", label: "Open Week" }, tour: "board" },
-      { title: "Add work", text: "+ Add on a block, + Add in the header or {key:ui.add_work} opens the panel beside Week: what's left to place, this week's features (the star makes one a must), promises, More from DevOps and a type box. + puts a row on the block, or drag it onto any block. Placing a story adds its feature to the week.", go: { href: "#/week/add", label: "Open Add work" }, tour: "plan-week" },
-      { title: "Confirm week", text: "The header says Draft, Confirmed or Changed since you confirmed. Confirm week saves the plan; change it and confirm again any time." },
+      { title: "Add work", text: "+ Add on a block, + Add in the header or {key:ui.add_work} opens the panel beside Week: what's left to place, this week's features in backlog order, promises, More from DevOps and a type box. + puts a row on the block, or drag it onto any block. Placing a story adds its feature to the week.", go: { href: "#/week/add", label: "Open Add work" }, tour: "plan-week" },
+      { title: "Nothing to confirm", text: "What's on your week is your plan. Add work or take it off any time; teammates and Monday's status report see the change." },
       { title: "Send work to someone", text: "⋯ › Send to… on a feature or story, for this week or next. They answer from From your team in Add work." },
     ],
     extras: ["ladder"],
@@ -667,7 +667,7 @@ export const FIRST_DAY = {
     calendars: { title: "Your personal calendar", text: "Optional. Connect Google Calendar, or add any calendar by its link (iCloud, Outlook, school apps), so personal events count against your free time.", go: { href: "#/settings/connections/sources", label: "Open Accounts and calendars" } },
     devops: { title: "DevOps write access", text: "A personal access token per client lets FocusTime update DevOps when you confirm. Without one, that client stays read only.", go: { href: "#/settings/devops/devops-write", label: "Open DevOps" } },
     notify: { title: "Notifications", text: "Turn on Notify this device, or let FocusTime message you in Teams.", go: { href: "#/settings/notifications/devices", label: "Open Notifications" } },
-    week: { title: "Plan your week", text: "Week with Add work: place features and stories on your blocks, then Confirm week.", go: { href: "#/week/add", label: "Open Add work" }, tour: "plan-week" },
+    week: { title: "Plan your week", text: "Week with Add work: place features and stories on your blocks.", go: { href: "#/week/add", label: "Open Add work" }, tour: "plan-week" },
     today: { title: "Add work to today", text: "Put stories on today's blocks from Add work.", go: { href: "#/week", label: "Open Week" }, tour: "board" },
   } satisfies Record<string, { title: string; text: string; go: { href: string; label: string }; tour?: string }>,
   states: { done: "Done", todo: "To do", skipped: "Skipped in setup", unknown: "" },
@@ -690,7 +690,7 @@ export const RENAMED = {
     ["Coopilot", "FocusTime"],
     ["Today (the tab)", "Day"],
     ["Plan the day, Plan today", "Add work, on Week"],
-    ["Week › Plan (Plan the week, Commit)", "Add work, and Confirm week in Week's header"],
+    ["Week › Plan (Plan the week, Commit)", "Add work (nothing to confirm since CF-1)"],
     ["Week › Board", "Week"],
     ["Week › Status", "Status (its own tab)"],
     ["Roadmap", "Ahead, and its Grid"],
