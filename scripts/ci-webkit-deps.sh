@@ -5,7 +5,7 @@
 # Needs Playwright's WebKit browser already installed (or restored from its cache).
 #
 # 1. Offline first: when the cache was written on this same runner image and Playwright version and every file in it
-#    matches its manifest, install exactly those .deb files with no network at all (`apt-get --no-download`). Installing
+#    matches its manifest, install exactly those .deb files with no network at all (`dpkg -i`). Installing
 #    the cached files themselves, not what apt's lists call newest, is the point: on Nov 11 an exact cache hit still
 #    failed because the lists named a newer libsoup than the cache held, and apt went to a mirror it couldn't reach.
 # 2. Otherwise (no cache, another image or Playwright version, a damaged cache, or the offline install isn't complete):
@@ -121,9 +121,11 @@ install_cached() {
   mapfile -t debs < <(pick_debs "$cache/debs")
   count=${#debs[@]}
   ((count)) || return 0
-  # --no-download: apt may use only these files and what is installed; anything else fails before dpkg runs.
-  if ! "${apt[@]}" install --no-install-recommends --no-download -o Acquire::Retries=0 "${debs[@]}" > /tmp/ci2-offline.log 2>&1; then
-    tail -5 /tmp/ci2-offline.log
+  # dpkg itself, not apt: apt weighs the local files against its lists, and on Ubuntu 26.04 the lists' amd64v3 builds of
+  # the same versions won and apt went to fetch them even with --no-download (the first proof run). dpkg reads only these
+  # files and what is installed, so it can't reach the network; it unpacks them all, then configures them in order.
+  if ! sudo DEBIAN_FRONTEND=noninteractive dpkg -i --force-confold "${debs[@]}" > /tmp/ci2-offline.log 2>&1; then
+    grep -E '^dpkg|depends on|error|Errors were' /tmp/ci2-offline.log | tail -15
     log "the install from the cache failed"
     repair
     return 1
