@@ -1,4 +1,4 @@
-// WP-1: the DevOps patterns store, six app tables (store/migrations/20261130T0900_devops_patterns.ts). Written only by
+// WP-1: the DevOps patterns store, six app tables (store/migrations/20261130T1100_devops_patterns.ts). Written only by
 // the patterns run and the page's own actions (actions/patterns.ts), which decide who may see what. No description,
 // acceptance or comment text, no person's name: items keep ids, type, state, dates, parent, title and numbers. Every
 // write is one transaction.

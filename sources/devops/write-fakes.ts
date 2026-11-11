@@ -21,6 +21,7 @@ const STATES: Record<string, { name: string; category: string }[]> = {
   Bug: [{ name: "New", category: "Proposed" }, { name: "Active", category: "InProgress" }, { name: "Resolved", category: "Resolved" }, { name: "Closed", category: "Completed" }, { name: "Removed", category: "Removed" }],
   Issue: [{ name: "To Do", category: "Proposed" }, { name: "Done", category: "Completed" }],
   Recurring: [{ name: "New", category: "Proposed" }, { name: "Recurring", category: "InProgress" }, { name: "Closed", category: "Completed" }],
+  Domain: [{ name: "New", category: "Proposed" }, { name: "Active", category: "InProgress" }, { name: "Closed", category: "Completed" }],
 };
 const PC = {
   requirementBacklog: { name: "Stories", defaultWorkItemType: { name: "User Story" }, workItemTypes: [{ name: "User Story" }] },
@@ -40,7 +41,7 @@ const FIELDS = [
   { referenceName: "Microsoft.VSTS.Scheduling.Effort", name: "Effort", type: "double" },
 ];
 
-export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string, { id: string; name: string; email: string }>; acceptance?: boolean; startDate?: boolean; now?: () => string; /** TX-1: the work item types that have Remaining Work. */ remainingWork?: readonly string[]; /** BD-1: Recurring sits beside Feature at parent level (Cooptimize's internal process). */ recurring?: boolean; /** AH-1: the size field stories have (Story Points by default; Effort like a Scrum process; none). */ sizeField?: "Microsoft.VSTS.Scheduling.StoryPoints" | "Microsoft.VSTS.Scheduling.Effort" | null } = {}) {
+export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string, { id: string; name: string; email: string }>; acceptance?: boolean; startDate?: boolean; now?: () => string; /** TX-1: the work item types that have Remaining Work. */ remainingWork?: readonly string[]; /** BD-1: Recurring sits beside Feature at parent level (Cooptimize's internal process). */ recurring?: boolean; /** AH-1: the size field stories have (Story Points by default; Effort like a Scrum process; none). */ sizeField?: "Microsoft.VSTS.Scheduling.StoryPoints" | "Microsoft.VSTS.Scheduling.Effort" | null; /** QC-1: a portfolio level above Epics (Domain). */ domain?: boolean; /** QC-1: fields a type always requires, with no default (the create is refused without them). */ required?: Record<string, readonly string[]> } = {}) {
   const clock = opts.now ?? (() => new Date().toISOString());
   const org = opts.org ?? "cooptimize";
   const identities = opts.identities ?? { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "avery@cooptimize.example" }, [basic(OTHER_PAT)]: { id: "22222222-2222-4222-8222-222222222222", name: "Dana Ruiz", email: "dana@cooptimize.example" } };
@@ -90,7 +91,10 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
     };
     if (path === `/${org}/_apis/connectionData`) return json({ authenticatedUser: { id: who.id, providerDisplayName: who.name, properties: { Account: { $type: "System.String", $value: who.email } } } });
     const rest = path.split("/").slice(3).map(decodeURIComponent).join("/");
-    if (rest === "_apis/work/processconfiguration") return json(opts.recurring ? { ...PC, portfolioBacklogs: [PC.portfolioBacklogs[0], { ...PC.portfolioBacklogs[1]!, workItemTypes: [{ name: "Feature" }, { name: "Recurring" }] }] } : PC);
+    if (rest === "_apis/work/processconfiguration") {
+      const pc = opts.recurring ? { ...PC, portfolioBacklogs: [PC.portfolioBacklogs[0], { ...PC.portfolioBacklogs[1]!, workItemTypes: [{ name: "Feature" }, { name: "Recurring" }] }] } : PC;
+      return json(opts.domain ? { ...pc, portfolioBacklogs: [{ name: "Domains", defaultWorkItemType: { name: "Domain" }, workItemTypes: [{ name: "Domain" }] }, ...pc.portfolioBacklogs] } : pc);
+    }
     if (rest === "_apis/wit/fields") return json({ value: FIELDS });
     // CV-4: an attachment upload (raw bytes, application/octet-stream), at the org level as the docs' samples are.
     if (path === `/${org}/_apis/wit/attachments` && method === "POST") {
@@ -103,7 +107,7 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
     let m = rest.match(/^_apis\/wit\/workitemtypes\/(.+)\/states$/);
     if (m) return json({ value: STATES[m[1]!] ?? [] });
     m = rest.match(/^_apis\/wit\/workitemtypes\/(.+)\/fields$/);
-    if (m) return json({ value: [{ referenceName: "System.Title" }, ...(opts.remainingWork?.includes(decodeURIComponent(m[1]!)) ? [{ referenceName: "Microsoft.VSTS.Scheduling.RemainingWork" }] : []), ...(m[1] === "Feature" || m[1] === "Epic" ? [{ referenceName: "Microsoft.VSTS.Scheduling.TargetDate" }, ...(opts.startDate !== false ? [{ referenceName: "Microsoft.VSTS.Scheduling.StartDate" }] : [])] : []), ...(m[1] === "User Story" && opts.acceptance !== false ? [{ referenceName: "Microsoft.VSTS.Common.AcceptanceCriteria" }] : []), ...(m[1] === "User Story" && opts.sizeField !== null ? [{ referenceName: opts.sizeField ?? "Microsoft.VSTS.Scheduling.StoryPoints" }] : []), ...(m[1] === "Bug" ? [{ referenceName: "Microsoft.VSTS.TCM.ReproSteps" }] : [])] });
+    if (m) return json({ value: [{ referenceName: "System.Title", alwaysRequired: true }, ...(opts.required?.[decodeURIComponent(m[1]!)] ?? []).map((r) => ({ referenceName: r, name: r.split(".").pop(), alwaysRequired: true })), ...(opts.remainingWork?.includes(decodeURIComponent(m[1]!)) ? [{ referenceName: "Microsoft.VSTS.Scheduling.RemainingWork" }] : []), ...(m[1] === "Feature" || m[1] === "Epic" ? [{ referenceName: "Microsoft.VSTS.Scheduling.TargetDate" }, ...(opts.startDate !== false ? [{ referenceName: "Microsoft.VSTS.Scheduling.StartDate" }] : [])] : []), ...(m[1] === "User Story" && opts.acceptance !== false ? [{ referenceName: "Microsoft.VSTS.Common.AcceptanceCriteria" }] : []), ...(m[1] === "User Story" && opts.sizeField !== null ? [{ referenceName: opts.sizeField ?? "Microsoft.VSTS.Scheduling.StoryPoints" }] : []), ...(m[1] === "Bug" ? [{ referenceName: "Microsoft.VSTS.TCM.ReproSteps" }] : [])] });
     if (rest === "_apis/wit/wiql") {
       const q = String(body.query);
       const pm = q.match(/\[System\.Parent\] = (\d+)/);
@@ -114,6 +118,10 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
     }
     m = rest.match(/^_apis\/wit\/workitems\/\$(.+)$/);
     if (m && method === "POST") {
+      const sent = new Set((body as { path: string }[]).map((o) => o.path.replace(/^\/fields\//, "")));
+      const missing = (opts.required?.[m[1]!] ?? []).find((r) => !sent.has(r));
+      if (missing) return json({ message: `TF401320: Rule Error for field ${missing.split(".").pop()}. Error code: Required, HasValues, LimitedToValues, AllowsOldValue, InvalidEmpty.` }, 400);
+      if (!STATES[m[1]!] && m[1] !== "Task") return json({ message: `TF401326: Invalid work item type ${m[1]}` }, 400);
       const it: FakeItem = { id: nextId++, rev: 1, fields: { "System.WorkItemType": m[1], "System.State": "New", "System.CreatedBy": who.email }, relations: [] };
       for (const op of body as { op: string; path: string; value: unknown }[]) {
         if (op.path.startsWith("/fields/")) {

@@ -15,7 +15,6 @@ import { ItemLookup, NO_ITEM, parentPool, type ItemValue } from "./ItemLookup.ts
 import { MenuCtx } from "./Menus.tsx";
 import { addStep } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
-import { CreateDraftCtx } from "./createdraft-ctx.ts";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
@@ -58,7 +57,6 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
     if (chosen && parent.title === null) setParent({ itemId: chosen.id, title: chosen.title, url: chosen.url ?? null, text: "" });
   }, [chosen, parent.title]);
   const { env, open: openMenu } = useContext(MenuCtx);
-  const openCreate = useContext(CreateDraftCtx);
   const back = useRef<HTMLElement | null>(document.activeElement as HTMLElement | null);
   const first = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -229,9 +227,7 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
               onRun={async (w) => {
                 const d = await save();
                 if (!d) return;
-                // CP-1: a captured draft with an AI version opens the side by side preview (it asks for a parent there).
-                if (openCreate && d.ai) return void (onClose(), openCreate(d.id));
-                if (d.parentItemId === null) return void setError(`Choose a parent ${parentWord} first: area and iteration come from it`);
+                // QC-1: straight to the preview; a parent is optional (no parent: the project's default area and iteration).
                 onClose();
                 w.create(d.clientKey, [d]);
               }}

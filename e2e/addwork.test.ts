@@ -118,9 +118,9 @@ describe.skipIf(!CHROMIUM)("Add work: the moved Plan scenarios (browser, demo)",
     // The list is replaced while typing.
     await expect(section(page, "Assigned to you").count()).resolves.toBe(0);
     await expect(results.locator(".bp-result", { hasText: first }).count()).resolves.toBeGreaterThan(0);
-    await expect(results.locator(".bp-result").last().innerText()).resolves.toMatch(/^\+?\s*New draft story: /);
+    await expect(results.locator(".bp-result").last().innerText()).resolves.toMatch(/^\+?\s*New feature: /);
     await box.fill("zzzz no such item");
-    await expect(results.locator(".bp-result").count()).resolves.toBe(2);
+    await expect(results.locator(".bp-result").count()).resolves.toBe(3);
     await expect(results.locator(".bp-result.hl").innerText()).resolves.toContain("New to-do: zzzz no such item");
     await box.press("Escape");
     await expect(box.inputValue()).resolves.toBe("");

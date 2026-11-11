@@ -117,7 +117,7 @@ export function buildRows(load: AheadLoad, c: LoadClient): Row[] {
 }
 
 /** The rows the filters keep, with their ancestors as context so the tree still reads. */
-export function filterRows(rows: readonly Row[], c: LoadClient, f: AheadFilters, o: { stories: boolean; /** AH-6: for the Dates quick picks and Stale. */ today?: string; staleWeeks?: number }): Row[] {
+export function filterRows(rows: readonly Row[], c: LoadClient, f: AheadFilters, o: { stories: boolean; /** AH-6: for the Dates quick picks and Stale. */ today?: string; staleWeeks?: number; /** QC-1: rows I just created, shown whatever the filters say until I leave Ahead. */ keep?: ReadonlySet<string> }): Row[] {
   const byId = new Map(rows.map((r) => [r.item.id, r]));
   const parentOf = (r: Row) => (r.item.parentId !== null ? byId.get(r.item.parentId) ?? null : null);
   const ancestors = (r: Row) => {
@@ -132,6 +132,7 @@ export function filterRows(rows: readonly Row[], c: LoadClient, f: AheadFilters,
   const dates = o.today ? rangeDates(f, o.today) : f.from || f.to ? { from: f.from, to: f.to } : null;
   const mineIds = new Set(rows.filter((r) => r.mine).map((r) => r.item.id));
   const pick = (r: Row): boolean => {
+    if (o.keep?.has(r.key)) return true;
     if (!o.stories && r.tier === "story") return false;
     if (owner === "mine" && !(r.mine || ancestors(r).some((a) => mineIds.has(a.item.id) && a.tier !== "story"))) return false;
     // Contributing (as Roadmap had it): the features and epics my stories are under, with those stories.
@@ -163,8 +164,8 @@ export function filterRows(rows: readonly Row[], c: LoadClient, f: AheadFilters,
 }
 
 /** Clients the client filter keeps, each with its filtered rows; clients that failed keep their message. */
-export function groups(load: AheadLoad, f: AheadFilters, o: { stories: boolean }): Group[] {
-  return load.clients.filter((c) => !f.clients.length || f.clients.includes(c.clientKey)).map((c) => ({ client: c, rows: c.status === "ok" ? filterRows(buildRows(load, c), c, f, { today: load.today, ...(load.staleWeeks !== undefined ? { staleWeeks: load.staleWeeks } : {}), ...o }) : [] }));
+export function groups(load: AheadLoad, f: AheadFilters, o: { stories: boolean; keep?: ReadonlySet<string> }): Group[] {
+  return load.clients.filter((c) => !f.clients.length || f.clients.includes(c.clientKey) || [...(o.keep ?? [])].some((k) => k.startsWith(`${c.clientKey}:`))).map((c) => ({ client: c, rows: c.status === "ok" ? filterRows(buildRows(load, c), c, f, { today: load.today, ...(load.staleWeeks !== undefined ? { staleWeeks: load.staleWeeks } : {}), ...o }) : [] }));
 }
 
 /** The epics a client filter offers (key, title), across the shown clients. */
@@ -212,4 +213,29 @@ export function fixGroups(load: AheadLoad, o: { readOnly: boolean; skipped?: Rea
       const unkinded = group.entries.filter((e) => kept.has(e.itemId));
       return { client: c, group: { ...group, entries: group.entries.filter(keep), skipped: (group.skipped ?? []).filter(keep) }, rows, total: group.entries.filter((e) => !e.leaving).length, unkinded };
     });
+}
+
+/**
+ * QC-1: which of my filters would hide a row ("Assigned to me", "Clients"), each tried alone, so a create's
+ * confirmation can say why the new item won't stay on screen once I leave Ahead. Empty: nothing hides it.
+ */
+export function hiddenBy(load: AheadLoad, f: AheadFilters, key: string): string[] {
+  const c = load.clients.find((x) => key.startsWith(`${x.clientKey}:`));
+  if (!c) return [];
+  const rows = buildRows(load, c);
+  if (!rows.some((r) => r.key === key)) return [];
+  const base: AheadFilters = { ...DEFAULT_FILTERS, owner: { [c.clientKey]: "all" } };
+  const shows = (g: AheadFilters) => filterRows(rows, c, g, { stories: true, today: load.today, ...(load.staleWeeks !== undefined ? { staleWeeks: load.staleWeeks } : {}) }).some((r) => r.key === key && !r.context);
+  const out: string[] = [];
+  if (f.clients.length && !f.clients.includes(c.clientKey)) out.push("Clients");
+  const owner = ownerOf(f, c);
+  if (owner !== "all" && !shows({ ...base, owner: { [c.clientKey]: owner } })) out.push(owner === "mine" ? "Assigned to me" : "Contributing");
+  if (f.epic && !shows({ ...base, epic: f.epic })) out.push("Epic");
+  if ((f.gaps || f.kinds?.length) && !shows({ ...base, gaps: f.gaps, ...(f.kinds ? { kinds: f.kinds } : {}) })) out.push("Not ready only");
+  if ((f.from || f.to || f.range) && !shows({ ...base, from: f.from, to: f.to, ...(f.range ? { range: f.range } : {}) })) out.push("Dates");
+  if (f.stale && !shows({ ...base, stale: true })) out.push("Stale");
+  if (f.q.trim() && !shows({ ...base, q: f.q })) out.push("Search");
+  const r = rows.find((x) => x.key === key)!;
+  if (r.item.inScope === false && !f.whole) out.push("Cooptimize's scope (Show the whole project)");
+  return out;
 }

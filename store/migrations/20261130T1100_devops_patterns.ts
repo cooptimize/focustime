@@ -14,7 +14,7 @@
 import type { NamedMigration } from "./named.ts";
 
 export const devopsPatterns: NamedMigration = {
-  name: "20261130T0900_devops_patterns",
+  name: "20261130T1100_devops_patterns",
   sqlite: `CREATE TABLE patterns_runs (
      id INTEGER PRIMARY KEY AUTOINCREMENT,
      kind TEXT NOT NULL CHECK (kind IN ('inventory', 'classify')),

@@ -141,13 +141,28 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
   };
 
   if (action === "ahead.load") {
-    const o = obj(input, ["refresh", "lastChanges"]);
-    if (!o || (o.refresh !== undefined && typeof o.refresh !== "boolean") || (o.lastChanges !== undefined && typeof o.lastChanges !== "boolean")) return bad("ahead.load takes { refresh?, lastChanges? }");
+    const o = obj(input, ["refresh", "lastChanges", "keep"]);
+    const keepOk = o?.keep === undefined || (Array.isArray(o.keep) && o.keep.length <= 50 && o.keep.every((k) => !!k && typeof k === "object" && isKey((k as { clientKey?: unknown }).clientKey) && Number.isSafeInteger((k as { id?: unknown }).id)));
+    if (!o || !keepOk || (o.refresh !== undefined && typeof o.refresh !== "boolean") || (o.lastChanges !== undefined && typeof o.lastChanges !== "boolean")) return bad("ahead.load takes { refresh?, lastChanges?, keep? }");
     const refs = await ctx.clients(cfg, mondayOf(today), o.refresh === true);
     const read = ctx.devops(cfg).aheadItems;
     // AH-2: "Show the whole project" is remembered with my filters; without it, only Cooptimize's scope (and my items).
     const whole = (await plan.getState<AheadFilters>(FILTERS_KEY))?.whole === true;
     const clients = read && refs.length ? await read(refs, { ...(o.refresh === true ? { refresh: true } : {}), ...(whole ? { whole: true } : {}) }) : [];
+    // QC-1: items I just created (this page asks for them) show even outside Cooptimize's scope, until I leave Ahead.
+    // Only my own confirmed creates, from my write log; they come marked as outside the scope, as the whole project shows them.
+    const keep = ((o.keep as { clientKey: string; id: number }[] | undefined) ?? []).filter((k) => clients.some((c) => c.clientKey === k.clientKey && !c.items.some((i) => i.id === k.id)));
+    if (keep.length && read) {
+      const log = await plan.devopsWriteLog(200);
+      const mine = keep.filter((k) => log.some((e) => e.op === "create" && e.status === "confirmed" && e.undoneBy === null && e.clientKey === k.clientKey && e.itemId === k.id));
+      for (const key of new Set(mine.map((k) => k.clientKey))) {
+        const ref = refs.find((r) => r.clientKey === key);
+        const c = clients.find((x) => x.clientKey === key);
+        if (!ref || !c) continue;
+        const [w] = await read([ref], { whole: true }).catch(() => []);
+        for (const i of w?.items ?? []) if (mine.some((k) => k.clientKey === key && k.id === i.id) && !c.items.some((x) => x.id === i.id)) c.items.push(i);
+      }
+    }
     const hints = await hintsOf(plan, today, cfg.plan.sizes);
     const out: AheadLoad["clients"] = [];
     const fr = (await ctx.fixRules?.().catch(() => null)) ?? { topN: TOP_N, gaps: () => [...GAP_KINDS] };

@@ -249,12 +249,18 @@ describe("the search", () => {
     expect(searchPanel(base, "#")!.results).toEqual([]);
     expect(searchPanel(base, "#1")!.results.every((r) => r.kind === "story")).toBe(true);
     expect(searchPanel(base, "(.*)")!.results).toEqual([]);
-    expect(searchPanel(base, "(.*)")!.news[0].label).toBe("New to-do: (.*)");
+    expect(searchPanel(base, "(.*)")!.news[0]!.label).toBe("New to-do: (.*)");
   });
   it("always ends with New to-do and New draft story, carrying the text", () => {
     const s = searchPanel(base, "  Call the vendor ")!;
     expect(s.news.map((n) => n.label)).toEqual(["New to-do: Call the vendor", "New draft story: Call the vendor"]);
     expect(s.news.map((n) => n.kind)).toEqual(["todo", "draft"]);
+  });
+  it("QC-1: adds New <feature type> in the process's own word when the New form is offered", () => {
+    const s = searchPanel(base, "Billing export", "Capability")!;
+    expect(s.news.map((n) => n.label)).toEqual(["New to-do: Billing export", "New draft story: Billing export", "New capability: Billing export"]);
+    expect(s.news[2]).toMatchObject({ kind: "feature", key: "new-feature", text: "Billing export" });
+    expect(searchPanel(base, "Billing export", null)!.news).toHaveLength(2);
   });
   it("with no match the highlight starts on New to-do; with matches, on the first", () => {
     const none = searchPanel(base, "zzz")!;
