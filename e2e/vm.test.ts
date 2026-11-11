@@ -54,7 +54,7 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("D475: the chip shows the auto-shutdown time read only; its menu has no Stop, Delay, Skip tonight or Restore", async () => {
+  it("D475: the chip shows the auto-shutdown time read only; its menu has no Delay, Skip tonight or Restore (VM-2: Stop while running)", async () => {
     const { page, errors } = await freshPage(h);
     const actions: string[] = [];
     page.on("request", (r) => {
@@ -76,8 +76,8 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
     await expect.poll(() => chip.textContent(), { timeout: 45_000, interval: 1000 }).toContain("Running · off at 7:00 PM");
     await chip.click();
     await menu.waitFor();
-    await expect(menu.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringMatching(/^Refresh/), expect.stringMatching(/^Choose another VM/)]);
-    for (const gone of [/Stop/, /Delay/, /Skip tonight/, /Restore/, /Auto-shutdown/]) await expect(menu.getByRole("menuitem", { name: gone }).count()).resolves.toBe(0);
+    await expect(menu.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringMatching(/^Stop/), expect.stringMatching(/^Refresh/), expect.stringMatching(/^Choose another VM/)]);
+    for (const gone of [/Delay/, /Skip tonight/, /Restore/, /Auto-shutdown/, /Auto-start/]) await expect(menu.getByRole("menuitem", { name: gone }).count()).resolves.toBe(0);
     await shotBoth(page, "vm-chip-menu");
     await page.keyboard.press("Escape");
     // Nothing the window sent asked for anything but status, find or start.

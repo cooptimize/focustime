@@ -7,10 +7,17 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pat } from "../sources/devops/pat.ts";
 import { WriteFailure } from "../sources/devops/write.ts";
 import { CHROMIUM } from "./harness.ts";
+import { IDENTITY_KEY, type MicrosoftAccount } from "../actions/account.ts";
+import { createAzureClient } from "../sources/azure/client.ts";
+import { fakeArm } from "../sources/azure/fake-arm.ts";
 import { liveBrowser, liveContext, T, type LiveBrowser } from "./live.ts";
 import { shotBoth } from "./shots.ts";
 
 const GOOD = "good-write-pat-0000";
+// VM-2: a fictional person and VM on the fake Azure Resource Manager, for setup's Your VM step.
+const PERSON = { oid: "0f0f0f0f-4444-4222-8333-444455556666", tid: "t", name: "Sam Tester", username: "sam@contoso.example", email: "sam@contoso.example" };
+const SUB = "00000000-0000-4000-8000-0000000000ad";
+const VM_ID = `/subscriptions/${SUB}/resourceGroups/rg-e2e/providers/Microsoft.Compute/virtualMachines/vm-sam-e2e`;
 
 describe.skipIf(!CHROMIUM)("first-run setup", () => {
   let lb: LiveBrowser;
@@ -21,8 +28,11 @@ describe.skipIf(!CHROMIUM)("first-run setup", () => {
     await lb?.close();
   }, T);
 
-  it("a new person goes through the four screens, resumes after a reload, and Day has no line once through (RF-1)", async () => {
+  it("a new person goes through the five screens, resumes after a reload, and Day has no line once through (RF-1)", async () => {
     const saved = new Map<string, string>();
+    const arm = fakeArm({ now: () => Date.now(), transitionMs: 20_000 });
+    arm.addVm({ id: VM_ID, name: "vm-sam-e2e", resourceGroup: "rg-e2e", subscriptionId: SUB, location: "eastus", tags: { Owner: PERSON.username }, power: "deallocated" }, { time: "1900" });
+    const account: MicrosoftAccount = { signIn: async () => ({ status: "connected", identity: PERSON }), identity: async () => PERSON, armToken: async () => "FAKE-ARM", writeAccess: async () => ({ status: "read_only", message: "x" }), signOut: async () => {} };
     const ctx = await liveContext({
       setupDone: false,
       extra: {
@@ -34,8 +44,11 @@ describe.skipIf(!CHROMIUM)("first-run setup", () => {
           },
         } as never,
         writePats: { get: async (k) => new Pat(saved.get(k) ?? ""), set: async (k, v) => void saved.set(k, v), clear: async (k) => void saved.delete(k) },
+        account: () => account,
+        azure: (token) => createAzureClient({ fetch: arm.fetch, token, log: () => {} }),
       },
     });
+    await ctx.plan!.setAccountState(IDENTITY_KEY, { ...PERSON, systemUserId: null });
     const app = await lb.start(ctx);
     try {
       const page = await app.page();
@@ -99,11 +112,36 @@ describe.skipIf(!CHROMIUM)("first-run setup", () => {
       await focusIn("Calendars");
       await page.keyboard.press("Enter");
 
+      // 5. Your VM (VM-2): Find my VM finds it by its Owner tag; this is my VM; the same controls as Settings.
+      await dialog.getByRole("heading", { name: "Your VM" }).waitFor();
+      await focusIn("Your VM");
+      await dialog.getByRole("button", { name: "Skip" }).waitFor();
+      await dialog.getByRole("button", { name: "Find my VM" }).click();
+      await dialog.getByText("vm-sam-e2e").waitFor();
+      await dialog.getByRole("button", { name: "This is my VM" }).click();
+      await dialog.getByText("Start without a preview").first().waitFor();
+      await dialog.getByText("Start my VM before my day").first().waitFor();
+      await shot("setup-5-vm");
+      const vm2 = process.env.VM2_SHOTS;
+      if (vm2) {
+        // VM-2's own screenshots: 1440x900, light and dark (docs/ux/vm2).
+        const size = page.viewportSize();
+        await page.setViewportSize({ width: 1440, height: 900 });
+        for (const theme of ["light", "dark"] as const) {
+          await page.emulateMedia({ colorScheme: theme });
+          await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t === "light" ? "cooptimize-light" : "cooptimize-dark"), theme);
+          await page.waitForTimeout(250);
+          await page.screenshot({ path: `${vm2}/setup-vm-${theme}.png` });
+        }
+        if (size) await page.setViewportSize(size);
+      }
+      await dialog.getByRole("button", { name: "Continue" }).click();
+
       // Done: Add work to your week (WD-2; was Plan your week), and the Guide.
       await dialog.getByRole("heading", { name: "You're set up" }).waitFor();
       await dialog.getByText("2 setup steps left").waitFor();
       await dialog.getByRole("link", { name: "Guide" }).waitFor();
-      await shot("setup-5-done");
+      await shot("setup-6-done");
       await dialog.getByRole("button", { name: "Add work to your week" }).click();
       await page.waitForURL(/#\/week\/(commit|add|day)/);
 
@@ -114,7 +152,7 @@ describe.skipIf(!CHROMIUM)("first-run setup", () => {
       await page.waitForTimeout(1500);
       expect(await page.locator(".setup-line").count()).toBe(0);
       expect(await dialog.count()).toBe(0);
-      expect(await ctx.plan!.setupState()).toEqual({ day: "done", clients: "done", blocks: "skipped", calendars: "skipped" });
+      expect(await ctx.plan!.setupState()).toEqual({ day: "done", clients: "done", blocks: "skipped", calendars: "skipped", vm: "done" });
       // Settings › Setup still says what's left, and Finish setup opens the flow at the first step left.
       await page.evaluate(() => (location.hash = "#/settings/you"));
       await page.getByText("2 setup steps left.").waitFor({ timeout: 60_000 });

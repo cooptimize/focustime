@@ -388,7 +388,7 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
           </button>
           <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>Cancel</button>
         </div>
-        <p className="set-hint">Logged in Settings &gt; Data. FocusTime never changes your VM's auto-shutdown.</p>
+        <p className="set-hint">Logged in Settings › Activity. FocusTime never changes your VM's auto-shutdown.</p>
       </div>
     </div>
   );
@@ -578,10 +578,22 @@ export function YouAccount({ part }: { part: "account" | "vm" }) {
               )}
             </div>
           )}
-          <form className="vm-manual" onSubmit={(e) => (e.preventDefault(), manual.trim() && void choose(manual.trim()))}>
-            <input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="/subscriptions/…/resourceGroups/…/providers/Microsoft.Compute/virtualMachines/…" aria-label="VM resource ID" spellCheck={false} />
-            <button type="submit" className="mini" disabled={busy || !manual.trim()}>Use this VM</button>
-          </form>
+          {/* VM-2: a group, not a form: setup's screen is a form already (forms can't nest). Enter here uses the ID. */}
+          <div className="vm-manual" role="group" aria-label="Use a VM by its resource ID">
+            <input
+              value={manual}
+              onChange={(e) => setManual(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" || !manual.trim()) return;
+                e.preventDefault();
+                void choose(manual.trim());
+              }}
+              placeholder="/subscriptions/…/resourceGroups/…/providers/Microsoft.Compute/virtualMachines/…"
+              aria-label="VM resource ID"
+              spellCheck={false}
+            />
+            <button type="button" className="mini" disabled={busy || !manual.trim()} onClick={() => void choose(manual.trim())}>Use this VM</button>
+          </div>
           <span className="set-hint">Found by the VM's Owner tag.</span>
         </div>
       )}
@@ -809,9 +821,12 @@ export function VmStartForm() {
   const [error, setError] = useState<string | null>(null);
   /** Turning it on for a VM with no auto-shutdown waits for one more tick. */
   const [confirmNoShutdown, setConfirmNoShutdown] = useState(false);
+  /** What I just changed, shown at once while it saves (the boxes would otherwise wait for the server). */
+  const [pending, setPending] = useState<Record<string, unknown>>({});
   const save = async (values: Record<string, unknown>, what: string, field: "preview" | "auto" = "auto") => {
     setBusy(true);
     setError(null);
+    setPending(values);
     try {
       await call("settings.save", { section: "vm", values });
       setSaved({ field, text: what });
@@ -819,6 +834,7 @@ export function VmStartForm() {
     } catch (e) {
       setError(errText(e));
     } finally {
+      setPending({});
       setBusy(false);
     }
   };
@@ -828,13 +844,16 @@ export function VmStartForm() {
     setConfirmNoShutdown(false);
     void save({ autoStart: on }, on ? "Auto-start on" : "Auto-start off");
   };
-  const off = new Set(a.offDays);
+  const on = typeof pending.autoStart === "boolean" ? pending.autoStart : a.on;
+  const off = new Set(Array.isArray(pending.autoStartOffDays) ? (pending.autoStartOffDays as string[]) : a.offDays);
+  const minutes = typeof pending.autoStartMinutes === "number" ? pending.autoStartMinutes : a.minutes;
+  const withoutPreview = typeof pending.startWithoutAsking === "boolean" ? pending.startWithoutAsking : s.startWithoutAsking;
   return (
     <div className="set-grid set-vm-start">
       <div className="set-field" data-setting="vm-start">
         <span className="set-label">Start without a preview</span>
         <label className="set-check">
-          <input type="checkbox" checked={s.startWithoutAsking} disabled={busy} onChange={(e) => void save({ startWithoutAsking: e.target.checked }, "Saved", "preview")} /> Start without a preview
+          <input type="checkbox" checked={withoutPreview} disabled={busy} onChange={(e) => void save({ startWithoutAsking: e.target.checked }, "Saved", "preview")} /> Start without a preview
         </label>
         <span className="set-hint">Pressing Start in the morning starts the VM at once.</span>
         {saved?.field === "preview" && !error && <span className="muted vm-saved" role="status">{saved.text}</span>}
@@ -842,9 +861,9 @@ export function VmStartForm() {
       <div className="set-field vm-auto" data-setting="vm-autostart">
         <span className="set-label">Start my VM before my day</span>
         <label className="set-check">
-          <input type="checkbox" checked={a.on || confirmNoShutdown} disabled={busy} onChange={(e) => turnOn(e.target.checked)} /> Start my VM before my day
+          <input type="checkbox" checked={on || confirmNoShutdown} disabled={busy} onChange={(e) => turnOn(e.target.checked)} /> Start my VM before my day
         </label>
-        {a.prodOnly && (a.on || confirmNoShutdown) && <p className="vm-prod-only" role="note">Auto-start runs only on the production FocusTime. Here it never starts your VM.</p>}
+        {a.prodOnly && (on || confirmNoShutdown) && <p className="vm-prod-only" role="note">Auto-start runs only on the production FocusTime. Here it never starts your VM.</p>}
         {confirmNoShutdown && !a.on && (
           <div className="vm-warning" role="alert">
             <p>This VM has no auto-shutdown. Once started it runs until you stop it.</p>
@@ -858,7 +877,7 @@ export function VmStartForm() {
             <span className="set-hint">{s.schedule ? (s.schedule.status === "Disabled" ? "Its auto-shutdown is off, so once started it runs until you stop it." : `Its auto-shutdown: ${s.schedule.label.replace(/^Auto-shutdown /, "off at ")} (read only; FocusTime never changes it).`) : s.noShutdown ? "This VM has no auto-shutdown. Once started it runs until you stop it." : ""}</span>
             <label className="set-inline">
               <span>Minutes before my day starts</span>{" "}
-              <select value={a.minutes} disabled={busy} aria-label="Minutes before my day starts" onChange={(e) => void save({ autoStartMinutes: Number(e.target.value) }, "Saved")}>
+              <select value={minutes} disabled={busy} aria-label="Minutes before my day starts" onChange={(e) => void save({ autoStartMinutes: Number(e.target.value) }, "Saved")}>
                 {AUTO_MINUTES.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </label>

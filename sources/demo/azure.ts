@@ -40,10 +40,13 @@ export function demoPresence(): PresenceClient & { mineSet: () => string | null 
 
 export const DEMO_PERSON = { oid: "00000000-0000-4000-8000-0000000000e1", tid: "00000000-0000-4000-8000-0000000000d1", name: "Alex Rivera", username: "you@example.com", email: "you@example.com" };
 export const DEMO_VM_ID = "/subscriptions/00000000-0000-4000-8000-0000000000f1/resourceGroups/rg-demo-dev/providers/Microsoft.Compute/virtualMachines/vm-demo-alex";
+/** VM-2: a second fictional VM with no auto-shutdown and no Owner tag (Find my VM doesn't list it; its ID can be typed). */
+export const DEMO_VM_NO_SHUTDOWN_ID = "/subscriptions/00000000-0000-4000-8000-0000000000f1/resourceGroups/rg-demo-dev/providers/Microsoft.Compute/virtualMachines/vm-demo-spare";
 
 export function createDemoAzure() {
   const arm = fakeArm({ now: () => Date.now(), transitionMs: 20_000 });
   arm.addVm({ id: DEMO_VM_ID, name: "vm-demo-alex", resourceGroup: "rg-demo-dev", subscriptionId: "00000000-0000-4000-8000-0000000000f1", location: "eastus", tags: { Owner: DEMO_PERSON.name }, power: "deallocated" }, { time: "1900", timeZoneId: "Eastern Standard Time" });
+  arm.addVm({ id: DEMO_VM_NO_SHUTDOWN_ID, name: "vm-demo-spare", resourceGroup: "rg-demo-dev", subscriptionId: "00000000-0000-4000-8000-0000000000f1", location: "eastus", tags: {}, power: "deallocated" });
   const account: MicrosoftAccount = {
     signIn: async () => ({ status: "connected", identity: DEMO_PERSON }),
     identity: async () => DEMO_PERSON,
