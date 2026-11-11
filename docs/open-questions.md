@@ -530,3 +530,15 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - Close out's batch has a comment per row but no Suggest and no feature status line. Worth adding, or are those sheet-only?
 - Should the story card show Coop brief status (C1) once that merges?
 - Should Wrap it up open for a story whose client has no write PAT, to record Made progress on the plan with a nudge to turn writes on? Today the tick is plain.
+
+## WD-1
+
+- The wide layout keeps its hour Timeline on each card; only the compact layout (1440 and below) gets the slim 56 px rail. Is the slim rail wanted on wide screens too?
+- Reordering features inside the panel is Move up and Move down in a feature's ⋯, not drag. Is drag to reorder in the panel needed?
+- The heads-up offer when a confirmed must is dropped or demoted (D147) was Plan the week's; the panel doesn't offer it yet. Bring it back in the panel's notice line?
+- Plan the week's draft feature from the type box and "Epic needs features" aren't in the panel (the type box makes stories; draft features come from Capture). Is that enough?
+- J and K between clients and "N of M clients planned" are gone with Plan mode. Does anyone miss them?
+- Team is hidden but its address still works. When it comes back, as a tab or inside Week?
+- Status's tab count is SR-3's "need your update" count. Should it show only from Friday, like the nudge?
+- "This week's features: the selected block's client first, then the others": the panel lists the selected block's client's features in full and every other client as one line ("Atlas · 2 features") that moves the panel to that client's next block, since + adds to the selected block and another client's block refuses the drop. Full lists for every client instead?
+- DevOps health's Mark as being broken down and Ask the client about priorities aren't on Week any more (Break down is in the client chip's popover, dates and owners in Ahead › Readiness). Bring them into the chip's popover?

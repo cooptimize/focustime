@@ -33,31 +33,32 @@ and nothing leaves FocusTime. `e2e/demo-script.test.ts` walks these same steps i
 
 Each step: **Click** what to do · **Say** one line · **Expect** what appears · **If not** the fallback.
 
-### 1. Today (1 min)
+### 1. Day (1 min)
 
-- **Click**: nothing. You open on Today.
-- **Say**: "Today is one screen: what's next, what's urgent, and the one thing to do now."
+- **Click**: nothing. You open on Day.
+- **Say**: "Day is one screen: what's next, what's urgent, and the one thing to do now."
 - **Expect**: the Now card; the urgent strip's three most urgent lines: the two late promises ("was due Wed, Nov 4 ·
   Send Marcus the updated export spec" first) and Priya's Must (**Sent to you · Must**), then "… more in Inbox"
-  (the rest of Needs you); each line opens its item in the Inbox; the **Plan today** card; the Cooptimize and Northwind blocks with "At risk ·
+  (the rest of Needs you); each line opens its item in the Inbox; the **Add work** card; the Cooptimize and Northwind blocks with "At risk ·
   Dentist 12:00".
-- **If not**: Settings › Demo › Reset demo, which brings you back to Today.
+- **If not**: Settings › Demo › Reset demo, which brings you back to Day.
 
-### 2. Plan today (1.5 min)
+### 2. Add work (1.5 min)
 
-- **Click**: **Plan today** (or P). Pick the Northwind block, then drag **Filter orders by date range** from
-  "Add to Northwind afternoon" onto it. Then **Confirm today**.
-- **Say**: "Planning is dragging this week's stories into today's real free time. From last week sits at the top."
-- **Expect**: the to-do lands in Northwind's block with its size and the fit ("Fits · 30m spare"). From last week
-  lists three unfinished to-dos.
+- **Click**: **Add work** (or P). Week opens with the Add work panel. Click Monday's Northwind block, then drag
+  **Filter orders by date range** from the panel onto it. Then Monday's day header ⋯ › **Confirm Mon, Nov 2**.
+- **Say**: "Planning is dragging this week's stories onto your real free time, right on the week. What's left from
+  last week waits in To place."
+- **Expect**: the to-do lands in Northwind's block with its size, and the panel's room line drops ("1h 30m free").
+  The line above the week says what's to place.
 - **If not**: use the row's **+** instead of dragging.
 
 ### 3. Week (1.5 min)
 
 - **Click**: **Week**.
 - **Say**: "The week is half-day blocks with meetings on the rail. Risk always says why."
-- **Expect**: "From last week · 2 to plan · 3 unfinished to-dos from last week". Wednesday afternoon "At risk · Out:
-  school event 1:30". Thursday is a hatched **PTO** day, Friday a dashed **Catch-up** column. (Neither is ever today:
+- **Expect**: the line above the week, "8 to place: 6 from last week, 2 sent to you", with Review. Wednesday afternoon
+  "At risk" (hover: "Out: school event 1:30"). Thursday is a hatched **PTO** day, Friday a dashed **Catch-up** column. (Neither is ever today:
   on a Wednesday the afternoon out is Tuesday's, and on a Thursday Friday is the PTO day.) The now line sits on
   today with its time.
 - **If not**: the arrows in the header bring the week back to this week.
@@ -134,11 +135,11 @@ Each step: **Click** what to do · **Say** one line · **Expect** what appears �
 
 ### 10. Send to someone's week (1 min)
 
-- **Click**: **Week** › **Plan**. On **Supplier onboarding**, open ⋯ › **Send to…**, choose **Sam Ortiz**, **Must**,
-  **Send**, **Done**.
+- **Click**: **Week**, then **+ Add** on a Northwind block. In the panel, on **Supplier onboarding**, open ⋯ ›
+  **Send to…**, choose **Sam Ortiz**, **Must**, **Send**, **Done**.
 - **Say**: "A lead sends work to someone's week. They accept it in their own plan."
 - **Expect**: the send dialog, then it closes and You sent shows it as waiting.
-- **If not**: the row's ⋯ appears on hover over the title.
+- **If not**: the feature's ⋯ is at the end of its row.
 
 ### 11. Close out (0.5 min)
 

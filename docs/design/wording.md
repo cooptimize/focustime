@@ -29,7 +29,12 @@ Fit is never red. Being over plan is a choice to make, not a failure.
 | carry target, carry-over target | the next day that isn't planned yet |
 | unprocessed capture | capture to sort |
 | resume note | where you left off |
-| ignition | Plan the day |
+| ignition | Add work (WD-1; was Plan the day) |
+| Board (Week's view) | Week (WD-1) |
+| Commit, Plan (Week's mode) | Add work, and Confirm week in Week's header (WD-1) |
+| Plan the week | Add work to the week (WD-1) |
+| Plan the day, Plan today | Add work to today, or to a day (WD-1) |
+| Today (the tab) | Day (WD-1; the moment card still says "today") |
 | loop (for a follow-up) | follow-up ("Close the loop" stays as the action) |
 | em dashes | a comma, a period or a middle dot (·) |
 
@@ -41,3 +46,11 @@ Fit is never red. Being over plan is a choice to make, not a failure.
 - Times: "9:00 AM–12:30 PM" in headings, "9:00–11:00" on pick rows.
 - Empty states say what to do next in one line: "Nothing yet. Add from the right."
 - Disabled menu items say why in a few words: "Enable DevOps writes first".
+
+## WD-1 words (Nov 10)
+
+- **Day**: the first tab (was Today). Inside it, "today" stays a plain word ("Add work to today", "Back to today").
+- **Add work**: the panel beside Week on one block ("Add to Northwind · Tue AM"), its "+ Add" buttons, and the command menu's "Add work to today", "Add work to a day…" and "Add work to the week".
+- **To place**: what waits for a block in the panel, and the line above the grid ("3 to place: 1 unfinished, 2 from last week").
+- **Confirm week**, **Confirm Tue, Nov 3**: finishing a plan, in Week's header and a day header's ⋯. "Confirm again" once it changed since.
+- Retired from visible copy: Board, Commit, Plan the week, Plan the day, Plan today. The command menu still finds them by those words.
