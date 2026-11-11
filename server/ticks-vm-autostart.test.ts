@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { IDENTITY_KEY, type MicrosoftAccount } from "../actions/account.ts";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { AUTOSTART_KEY, clearVmState, settled, vmKey } from "../actions/vm-actions.ts";
+import { backgroundPolicy } from "../config/background-policy.ts";
 import { setValue } from "../config/edit.ts";
 import { parseConfig } from "../config/schema.ts";
 import { starterToml } from "../config/starter.ts";
@@ -20,7 +21,7 @@ const VM = `/subscriptions/${SUB}/resourceGroups/rg-dev/providers/Microsoft.Comp
 const OID = "0f0f0f0f-3333-4222-8333-444455556666";
 const MEDIA = { status: async () => ({ players: false, spotify: false }), transition: async () => null, open: async () => {}, endSound: () => {} } as unknown as HostMedia;
 
-async function person(env: string | undefined) {
+async function person(env: string | undefined, policyEnv: string | undefined = env) {
   clearVmState();
   // Mon Nov 2, 2026, 8:54 AM in New York; the starter's day starts at 9:00, auto-start 5 minutes before.
   let at = Temporal.Instant.from("2026-11-02T13:54:00Z");
@@ -49,7 +50,9 @@ async function person(env: string | undefined) {
     azure: (token: () => Promise<string>) => createAzureClient({ fetch: arm.fetch, token, log: () => {} }),
     ...(env !== undefined ? { autoStartEnv: env } : {}),
   } as unknown as ActionContext;
-  const ticks = personTicks({ log: () => {}, now: () => at, notifications, media: MEDIA, openRoute: () => {} }, plan, ctx, { zone: NY });
+  // ENV-1: the policy follows the same environment, so a test site is refused twice (the part never runs there).
+  const policy = backgroundPolicy({ FOCUSTIME_ENV: policyEnv });
+  const ticks = personTicks({ policy, log: () => {}, now: () => at, notifications, media: MEDIA, openRoute: () => {} }, plan, ctx, { zone: NY });
   return { ticks, arm, shown, tokens: () => tokens, plan, advance: (m: number) => void (at = at.add({ minutes: m })), now: () => at };
 }
 
@@ -79,6 +82,18 @@ describe("VM-2 in the real tick", () => {
       expect(p.shown.filter((n) => n.key.startsWith("vm_auto")), String(env)).toEqual([]);
       expect(await p.plan.azureWriteLog()).toEqual([]);
     }
+  });
+
+  it("ENV-1: a test site's policy alone keeps it off, even if the gate were handed \"prod\" (no start, no wake)", async () => {
+    const p = await person("prod", "dev");
+    expect(Temporal.Instant.compare(await p.ticks.wake!(), Temporal.Instant.from("2026-11-02T13:55:00Z"))).toBeGreaterThan(0);
+    for (let i = 0; i < 5; i++) {
+      p.advance(1);
+      await p.ticks.slow();
+    }
+    await p.ticks.settled!();
+    expect(p.arm.calls.filter((c) => c.method !== "GET")).toEqual([]);
+    expect(await p.plan.azureWriteLog()).toEqual([]);
   });
 
   it("the idle rule: an idle scheduler wakes for the planned start in prod, not in dev", async () => {

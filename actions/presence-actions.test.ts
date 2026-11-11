@@ -10,6 +10,7 @@ import { createPlanStore } from "../store/plan-store.ts";
 import { IDENTITY_KEY, type MicrosoftAccount } from "./account.ts";
 import { dispatch, presenceContext, type ActionContext } from "./dispatch.ts";
 import { syncTeamsStatus, TEAMS_STATUS_KEY, type PresencePeopleData, type TeamsStatusView } from "./presence-actions.ts";
+import { backgroundPolicy, type BackgroundPolicy } from "../config/background-policy.ts";
 
 const ME = { oid: "0f0f0f0f-1111-4222-8333-444455556666", tid: "11111111-1111-4111-8111-111111111111", name: "Pat Example", username: "pat@example.com", email: "pat@example.com" };
 const TOML = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"').replace(/(\[outlook\]\ntenant_id = "[^"]*"\n)client_id = ""/, '$1client_id = "44444444-4444-4444-8444-444444444444"');
@@ -20,7 +21,7 @@ const TEAM = [
   { id: "d3", name: "Sam Ortiz", email: "sam.ortiz@example.com", aadId: null },
 ];
 
-async function setup(o: { toml?: string; signedIn?: boolean; fail?: unknown } = {}) {
+async function setup(o: { toml?: string; signedIn?: boolean; fail?: unknown; background?: BackgroundPolicy } = {}) {
   let t = Date.parse("2026-11-02T15:00:00Z");
   const clock = { now: () => new Date(t).toISOString(), advance: (min: number) => void (t += min * 60_000) };
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(clock.now()).toZonedDateTimeISO("America/New_York") });
@@ -60,6 +61,7 @@ async function setup(o: { toml?: string; signedIn?: boolean; fail?: unknown } = 
     now: clock.now,
     plan,
     account: () => account,
+    ...(o.background ? { background: o.background } : {}),
   };
   const run = async <T = unknown>(action: string, input?: unknown): Promise<T> => {
     const r = await dispatch(c, { action, input });
@@ -231,5 +233,44 @@ describe("teammates' presence", () => {
       const r = await dispatch(s.c, { action: "presence.people", input: bad });
       expect(r.ok, JSON.stringify(bad).slice(0, 40)).toBe(false);
     }
+  });
+});
+
+// ENV-1: outside production the focus timer never sets, clears or reads Teams status, from the tick or a button.
+describe("ENV-1: a test site never changes Teams status", () => {
+  const DEV = backgroundPolicy({ FOCUSTIME_ENV: "dev" });
+  const PROD = backgroundPolicy({ FOCUSTIME_ENV: "prod" });
+
+  it("start, +15 and stop on a test site make no presence call; the status view says why", async () => {
+    const s = await setup({ background: DEV });
+    await s.run("timer.start", { minutes: 50 });
+    await s.sync();
+    s.clock.advance(10);
+    await s.run("timer.extend");
+    await s.run("timer.stop");
+    await s.sync();
+    expect(s.calls).toEqual([]);
+    expect(await s.plan.teamsStatusLog()).toEqual([]);
+    expect(await s.run<TeamsStatusView>("presence.status", { check: true })).toMatchObject({ testSite: true, set: null });
+    expect(s.calls).toEqual([]);
+  });
+
+  it("two builds, one person: prod sets Busy; the timer ending on dev makes no presence call and forgets the set status", async () => {
+    const prod = await setup({ background: PROD });
+    await prod.run("timer.start", { minutes: 50 });
+    await prod.sync();
+    expect(prod.writes()).toEqual([{ op: "set", oid: ME.oid, status: "Busy", minutes: 55 }]);
+    // The same person's store as dev sees it: dev's own build, the timer ends there.
+    const dev = { ...prod, c: { ...prod.c, background: DEV } };
+    await dispatch(dev.c, { action: "timer.stop", input: {} });
+    await syncTeamsStatus(await presenceContext(dev.c));
+    expect(prod.writes()).toHaveLength(1);
+    expect(prod.calls.filter((x) => x.op === "mine")).toEqual([]);
+    expect((await prod.plan.accountState<{ set: string | null }>(TEAMS_STATUS_KEY))?.set ?? null).toBeNull();
+  });
+
+  it("production's presence context still writes", async () => {
+    expect((await presenceContext((await setup({ background: PROD })).c)).writes).toBe(true);
+    expect((await presenceContext((await setup({ background: DEV })).c)).writes).toBe(false);
   });
 });

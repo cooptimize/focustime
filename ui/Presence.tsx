@@ -74,6 +74,8 @@ export function TeamsFocusLine({ sessionKey }: { sessionKey: string }) {
       window.clearInterval(every);
     };
   }, [sessionKey]);
+  // ENV-1: a test site never changes Teams status; say so instead of a status.
+  if (v?.testSite) return <p className="teams-line" role="status">Teams status isn't changed from the test site.</p>;
   if (!v?.enabled) return null;
   let text: React.ReactNode;
   if (v.manual) text = <>Teams: left as you set it</>;

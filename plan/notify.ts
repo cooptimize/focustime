@@ -82,7 +82,12 @@ export type QuietMode = "outside_hours" | "off";
  * it may send (brief, check-in, close out, nudges, each off by default) and their times; nothing is sent unless both
  * this switch and the kind's are on.
  */
-export type NotifySettings = { kinds: Record<NotifyKind, boolean>; quiet: QuietMode; quietPto: boolean; pushDetails: boolean; asksThroughFocus: boolean; teamsMessages: boolean; teams: TeamsRhythm; status: StatusTimes };
+/**
+ * fromTestSite (ENV-1): "Send me reminders and Teams messages from this test site", shown and read only outside
+ * production; off by default. On, the person gets reminders, notices, Web Push and the Teams bot's messages as
+ * production would send them. Never chat reading, meeting capture, background AI or Teams status.
+ */
+export type NotifySettings = { kinds: Record<NotifyKind, boolean>; quiet: QuietMode; quietPto: boolean; pushDetails: boolean; asksThroughFocus: boolean; teamsMessages: boolean; fromTestSite: boolean; teams: TeamsRhythm; status: StatusTimes };
 /** SR-1: kinds that start off (every other kind starts on). */
 export const OFF_BY_DEFAULT: readonly NotifyKind[] = ["status_report"];
 export const DEFAULT_NOTIFY: NotifySettings = {
@@ -92,6 +97,7 @@ export const DEFAULT_NOTIFY: NotifySettings = {
   pushDetails: false,
   asksThroughFocus: false,
   teamsMessages: false,
+  fromTestSite: false,
   teams: DEFAULT_TEAMS_RHYTHM,
   status: DEFAULT_STATUS_TIMES,
 };

@@ -188,3 +188,51 @@ describe("meeting capture job (MC-1)", () => {
     expect(await t.store.occurrencesOf(s.id)).toEqual([]);
   });
 });
+
+// ENV-1: Check now (Admin › Clients › <client> › Meetings) looks once for one call, with the presser's sign-in only,
+// and schedules nothing; it is how capture is tried on a test site, where the job itself doesn't run.
+describe("Check now (ENV-1)", () => {
+  it("reads the call once with the presser's sign-in only and leaves the schedule as it was", async () => {
+    const t = setup();
+    const s = await t.store.addSeries(series());
+    t.setNow("2026-11-10T16:30:00Z"); // the call ended at 16:00
+    t.setTranscripts([{ id: "tr-1", createdAt: "2026-11-10T16:02:00Z", endAt: null }]);
+    expect(await t.job.checkNow(s.id, REV)).toBe("found");
+    expect(new Set(t.calls.map((c) => c.who))).toEqual(new Set([REV]));
+    const [occ] = await t.store.occurrencesOf(s.id);
+    expect(occ).toMatchObject({ state: "ready", lastRead: { kind: "found", by: REV } });
+    // The job's own wake and run were never asked for.
+    expect(await t.job.wake()).toBeNull();
+  });
+
+  it("not there yet: says so, keeps the next check and the count", async () => {
+    const t = setup();
+    const s = await t.store.addSeries(series());
+    await t.job.run(); // the schedule laid out the occurrence (next check 16:05, 0 checks)
+    t.calls.length = 0;
+    t.setNow("2026-11-10T16:30:00Z");
+    expect(await t.job.checkNow(s.id, REG)).toBe("not_yet");
+    const [occ] = await t.store.occurrencesOf(s.id);
+    expect(occ).toMatchObject({ state: "waiting", nextCheckAt: "2026-11-10T16:05:00.000Z", checks: 0 });
+    expect(t.calls.every((c) => c.who === REG)).toBe(true);
+  });
+
+  it("the presser's sign-in refused: no other reviewer is tried", async () => {
+    const t = setup();
+    const s = await t.store.addSeries(series());
+    t.setNow("2026-11-10T16:30:00Z");
+    t.signedOut.add(REV);
+    expect(await t.job.checkNow(s.id, REV)).toBe("no_token");
+    expect(t.calls.some((c) => c.who === REG && c.op !== "instances")).toBe(false);
+  });
+
+  it("an Upload call and a call with nothing ended have nothing to look for", async () => {
+    const t = setup();
+    const up = await t.store.addSeries(series({ source: "upload", joinUrl: "https://teams.microsoft.com/l/meetup-join/u", eventId: null }));
+    expect(await t.job.checkNow(up.id, REG)).toBe("upload");
+    const s = await t.store.addSeries(series());
+    t.setNow("2026-11-08T12:00:00Z");
+    expect(await t.job.checkNow(s.id, REG)).toBe("none");
+    expect(await t.job.checkNow(999, REG)).toBe("not_found");
+  });
+});

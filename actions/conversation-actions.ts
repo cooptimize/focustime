@@ -787,7 +787,7 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         return { ok: true as const, data: await counts(ctx, cfg) };
       case "conversations.refresh":
         if (!only(input, [])) return bad("conversations.refresh takes {}");
-        if (v?.chats.length && ctx.requests) await ctx.requests.refresh(v.chats.map((c) => c.chatId));
+        if (v?.chats.length && ctx.requests) await ctx.requests.refresh(v.chats.map((c) => c.chatId), await ctx.me());
         return respond();
       case "conversations.messages": {
         // CV-2: as Teams shows them, the latest MESSAGE_PAGE first and "Show earlier" for the page before `before`.

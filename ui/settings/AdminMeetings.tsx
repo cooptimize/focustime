@@ -69,6 +69,14 @@ export function MeetingsField({ clientKey, clientName }: { clientKey: string; cl
 
 function SeriesCard({ m, people, act }: { m: SeriesView; people: ListData["people"]; act: (action: string, input: Record<string, unknown>, done: string) => Promise<boolean> }) {
   const [add, setAdd] = useState("");
+  // ENV-1: Check now looks once for the latest call's transcript with my own sign-in (how capture is tried on a test site).
+  const [checking, setChecking] = useState(false);
+  const [checked, setChecked] = useState<string | null>(null);
+  const checkNow = () => {
+    setChecking(true);
+    setChecked(null);
+    call<{ message: string }>("meeting.check_now", { seriesId: m.id }).then((r) => setChecked(r.message), (e: unknown) => setChecked(errText(e))).finally(() => setChecking(false));
+  };
   const others = people.filter((p) => !m.reviewers.some((r) => r.id === p.id));
   const reviewers = (ids: string[]) => void act("meeting.update", { seriesId: m.id, reviewers: ids }, "Reviewers saved");
   return (
@@ -113,6 +121,12 @@ function SeriesCard({ m, people, act }: { m: SeriesView; people: ListData["peopl
         </select>
         <span className="set-hint">Reviewers confirm the proposals. Cooptimize attendees ({m.attendees}) can look, not confirm.</span>
       </div>
+      {m.source === "automatic" && (
+        <div className="mtg-check-now">
+          <button type="button" className="mini" disabled={checking} onClick={checkNow} title="Looks once for the last call's transcript with your own Microsoft sign-in">{checking ? "Checking…" : "Check now"}</button>
+          {checked && <span className="set-hint" role="status">{checked}</span>}
+        </div>
+      )}
       <button type="button" className="mini quiet dchat-purge" onClick={() => window.confirm(`Stop reading ${m.name}? Stored transcripts go at 30 days as usual; what was confirmed stays.`) && void act("meeting.remove", { seriesId: m.id }, `Stopped reading ${m.name}`)}>
         Stop reading
       </button>

@@ -20,6 +20,9 @@ import { keepRoute, takeRoute } from "./open-route.ts";
 import { createScheduler } from "./scheduler.ts";
 import { wakeStoreOn } from "../store/wake-store.ts";
 import { personTicks } from "./ticks.ts";
+import { backgroundPolicy } from "../config/background-policy.ts";
+
+const PRODUCTION = backgroundPolicy({ FOCUSTIME_ENV: "prod" });
 
 const NY = "America/New_York";
 const MEDIA: HostMedia = { status: async () => ({ players: false, spotify: false }), transition: async () => null, open: async () => {}, endSound: () => {} } as unknown as HostMedia;
@@ -62,8 +65,8 @@ async function machine(d: DriverCase) {
       makeOutlook: () => { throw new Error("no Outlook here"); },
       makeGoogle: () => { throw new Error("no Google here"); },
     } as unknown as ActionContext;
-    const ticks = personTicks({ log: () => {}, now: () => at, notifications, media: MEDIA, openRoute: () => {} }, plan, ctx, { zone: NY });
-    const scheduler = createScheduler({ people: () => [ticks], log: () => {}, now: () => at, wakeStore: wakeStoreOn(db, () => at), ...(o.active ? { active: o.active } : {}) });
+    const ticks = personTicks({ policy: PRODUCTION, log: () => {}, now: () => at, notifications, media: MEDIA, openRoute: () => {} }, plan, ctx, { zone: NY });
+    const scheduler = createScheduler({ policy: PRODUCTION, people: () => [ticks], log: () => {}, now: () => at, wakeStore: wakeStoreOn(db, () => at), ...(o.active ? { active: o.active } : {}) });
     const passes = async () => {
       await scheduler.pass("fast");
       await scheduler.pass("slow");
@@ -210,7 +213,7 @@ describe("the scheduler (A2)", () => {
     const failing = { fast: async () => { throw new Error("x"); }, slow: async () => {} };
     const ok = { fast: async () => void ran.push("c"), slow: async () => {} };
     const logs: unknown[] = [];
-    const s = createScheduler({ people: () => [slowJob, failing, ok], log: (r) => logs.push(r) });
+    const s = createScheduler({ policy: PRODUCTION, people: () => [slowJob, failing, ok], log: (r) => logs.push(r) });
     const p = s.pass("fast");
     expect(await s.pass("fast")).toBe(0);
     expect(await s.pass("slow")).toBe(3);

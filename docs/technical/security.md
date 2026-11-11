@@ -1,6 +1,6 @@
 # Security
 
-For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `d25c148` on Nov 7, 2026 (SR-2 parts against its own branch); the assistant's context against `1e74410` with AS-3 (`feat/assistant-answers`). The standards repo (KB-1) against `feat/coop-standards` on Nov 8. Calendar links (CAL-1) against `feat/ics-calendars` on Nov 10. The VM (VM-2) against `feat/vm2-stop-autostart` on Nov 11.
+For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `d25c148` on Nov 7, 2026 (SR-2 parts against its own branch); the assistant's context against `1e74410` with AS-3 (`feat/assistant-answers`). The standards repo (KB-1) against `feat/coop-standards` on Nov 8. Calendar links (CAL-1) against `feat/ics-calendars` on Nov 10. The VM (VM-2) against `feat/vm2-stop-autostart` on Nov 11. Test sites (ENV-1) against `feat/env1-background-policy` on Nov 11.
 
 ## In short
 
@@ -9,6 +9,7 @@ For IT first: this is the page to read before approving FocusTime. Engineers cha
 - Every outside write is a named action with a preview, a confirm, a read back, an audit log and an undo. The few exceptions are listed below.
 - One client's data stays in that client's views, drafts, AI requests and DevOps writes; Cooptimize Internal is the one exception. Where another client's name could reach a client's eyes, FocusTime holds it back, replaces it, or flags it first (the client boundary, GD-2).
 - Secrets live in Key Vault, set by scripts, never in the UI, the image, the repo, GitHub or logs.
+- Outside production, nothing happens on its own (ENV-1): the test site doesn't read chats, calendars for capture or transcripts on a schedule, run AI in the background, change Teams status or message anyone unless that person switched it on for themselves. Production is `FOCUSTIME_ENV` exactly `prod`; anything else is a test site.
 
 ## How data moves
 
@@ -150,6 +151,10 @@ Nothing writes to Dataverse, Google, calendar links, other Teams data or any oth
 - **Calendars.** FocusTime edits only what it created or what only you can see. A meeting with anyone else on it is never edited: an RSVP calls only Graph's accept, tentativelyAccept or decline, never PATCH, DELETE or cancel. FocusTime refuses to change an event without its marker, and never adds the marker to your own events.
 - **Teammates.** From free/busy, only free or busy and working hours; never subjects, locations or other details. Time off shows only as "away".
 - **Meeting capture.** Only client calls an admin registered (Admin › Clients › Meetings) are read: found from their join link, transcripts read with a reviewer's own delegated token, read only, kept 30 days, shown only to the call's reviewers and attendees. Any other meeting is refused before a request is sent (`sources/graph/meetings.ts`). Proposals from a call write to DevOps only after a reviewer's Confirm.
+
+## Test sites (ENV-1)
+
+Dev shares the Entra registration, Dataverse, the DevOps read PAT, the Graph tenant and the Azure subscription with prod, so a background job on dev would act on the same people and client data a second time (read a client transcript into dev's database, clear the Teams status prod set, send a second reminder). `config/background-policy.ts` is the one place that decides what runs from the environment, and it fails safe: a missing or misspelled `FOCUSTIME_ENV` is a test site. On a test site, a button acts only for the person who pressed it: Refresh reads chats with that person's sign-in and nobody else's, and Check now looks for one call's transcript with theirs. The chat poll's `FOCUSTIME_REQUESTS_POLL=on` is the one override, for a declared watch period, and Admin › Status says so while it is on. The full list is in [Operations](operations.md#what-runs-on-its-own-env-1).
 
 ## The VM and its auto-shutdown
 
