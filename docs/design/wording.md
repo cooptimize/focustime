@@ -40,6 +40,11 @@ Fit is never red. Being over plan is a choice to make, not a failure.
 | Plan the day, Plan today | Add work to today, or to a day (WD-1) |
 | Today (the tab) | Day (WD-1; the moment card still says "today") |
 | loop (for a follow-up) | follow-up ("Close the loop" stays as the action) |
+| Details (a panel, a menu entry) | nothing: a block opens its panel (WD-2) |
+| Add work… , Add an intention, Add a work item (a block's ⋯) | "+ Add" on the block; the Add box in its panel (WD-2) |
+| Add work (the panel's name), "Add to <client> · Tue AM" | "<client> · Tue AM": the panel is the block (WD-2) |
+| Back to today | Today (a button beside the date, WD-2) |
+| This week (Day's chips), A day ahead: its plan so far | nothing: the panel's feature list, and "+ Add" on a day ahead's blocks (WD-2) |
 | em dashes | a comma, a period or a middle dot (·) |
 
 ## Patterns
@@ -58,3 +63,18 @@ Fit is never red. Being over plan is a choice to make, not a failure.
 - **To place**: what waits for a block in the panel, and the line above the grid ("3 to place: 1 unfinished, 2 from last week").
 - ~~**Confirm week**, **Confirm Tue, Nov 3**~~: retired in CF-1 (Nov 11). Work comes on and off freely; "Confirm" is only on an external write's preview.
 - Retired from visible copy: Board, Commit, Plan the week, Plan the day, Plan today. The command menu still finds them by those words.
+
+## WD-2 words (Nov 11)
+
+- **+ Add**: the button, on every block that can take work (Week, Day's cards and timeline, the phone) and in Week's and Day's header. It opens the block's panel with the cursor in its Add box.
+- **A block's panel**: how the Guide and messages name the one side panel ("opens its panel", "in a block's panel"). In code and the glossary it is the block panel. Its title is the block, "<client> · Wed AM", never "Add to" or "Details".
+- **On this block**, **Add**, **To place**, **You sent**: the panel's section labels. "Nothing here yet." when the block is empty.
+- **New to-do: <text>**, **New draft story: <text>**: the last two rows while typing in the Add box.
+- **Other work assigned to you**: the folded list after this week's features and Promises (was More from DevOps).
+- **2 of 3 on**: a feature's stories that are on a block this week (was "N of M placed").
+- **Take off the plan**: off its block and back to not placed, with Undo. Never "Drop", which marks a to-do dropped. The notice reads "Taken off Wed AM: <title>".
+- **Today** as a button beside Day's date comes back to today (was "Back to today"); on today it is a chip.
+- **Cards | Timeline**: Day's two views.
+- **Open**: the block's ⋯ entry and the command "Open the selected block" (they answer to details and add work).
+- Still plain words, not names: "Add work to today", "Add work to your week" (Setup's last button, was "Plan your week").
+- Retired from visible copy: Details (as a name), Add work… , Add an intention, Add a work item, More from DevOps, Also this week, This week (Day's chips), A day ahead, Back to today, What's next (as a card on Day).

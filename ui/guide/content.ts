@@ -97,7 +97,7 @@ export const SHORTCUTS = {
     { label: "Capture a thought", keys: [{ command: "capture.add" }], all: true },
     { label: "Midday check-in", keys: [{ command: "view.checkin" }] },
     { label: "Close out", keys: [{ command: "closeout.load" }] },
-    { label: "Open a block", keys: [{ command: "ui.block" }, { command: "view.planweek" }] },
+    { label: "Open a block (A puts the cursor in Add)", keys: [{ command: "ui.block" }, { command: "view.planweek" }] },
     { label: "Every action", keys: [{ key: "Ctrl K" }] },
     { label: "Ask the assistant", keys: [{ command: "assistant.ask" }], all: true },
     { label: "Next or previous client", keys: [{ key: "J" }], all: true },
@@ -449,14 +449,13 @@ export const AREA_UI = {
 
 export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "capture" | "assistant" | "ask" | "teams" | "calls" | "settings", AreaBody> = {
   today: {
-    lead: "Day is one day on one screen: what's urgent, the moment of the day, and the day's blocks, the same cards as Week.",
+    lead: "Day is one day on one screen: what's urgent, the moment of the day, and the day's blocks.",
     does: [
-      { title: "The day's blocks", text: "Each block is the same card as on Week: its to-dos, a line for its meetings, and + Add at the bottom. The next to-do has the one Start focus button. Focus sets your Teams status to Busy and counts the time.", go: { href: "#/day", label: "Open Day" }, tour: "today" },
-      { title: "A block's panel", text: "+ Add on a block, a click on it, or {key:ui.block} opens its panel on the right, the same one as on Week: what's on the block, its meetings, and one box to add. Whether you left it open is remembered on that device." },
-      { title: "The urgent strip", text: "At the top: conversations that need you now, promises late or due within 2 hours, and work sent to you. It shows the 3 most urgent, then \"N more in Inbox\"." },
-      { title: "One moment card", text: "Nothing on today yet (with + Add) in the morning, Midday check-in after lunch, Close out at the end of the day. Each opens its flow; done, it's a small line with Reopen." },
-      { title: "Any day", text: "‹ › step to other days, and Today comes back. Today and later take work. A past day lets you tick what got done and move the rest forward. A PTO day just says you're off." },
-      { title: "The timeline", text: "Cards | Timeline at the top right, or {key:ui.set_today_timeline}, shows the day as hours, like Week. Each block's to-dos are listed beside its hours with their checkboxes, the ones with a time first. Drag one from Not timeboxed yet onto the hours, move or resize it, or drag it back to take its time off, each with Undo. Timebox my day adds dashed suggestions to accept." },
+      { title: "The day's blocks", text: "The same cards as Week. The next to-do has the one Start focus button; focus sets your Teams status to Busy and counts the time. + Add, a click or {key:ui.block} opens a block's panel.", go: { href: "#/day", label: "Open Day" }, tour: "today" },
+      { title: "The urgent strip", text: "At the top: conversations that need you now, promises late or due within 2 hours, and work sent to you. The 3 most urgent, then \"N more in Inbox\"." },
+      { title: "One moment card", text: "Nothing on today yet (with + Add), Midday check-in after lunch, Close out at the end of the day. Each opens its flow; done, it's a small line with Reopen." },
+      { title: "Any day", text: "‹ › step to other days, and Today comes back. Today and later take work; a past day ticks and moves work forward. A PTO day just says you're off." },
+      { title: "The timeline", text: "Timeline at the top right, or {key:ui.set_today_timeline}, shows the day as hours, like Week. Each block's to-dos are listed beside its hours with their checkboxes, the ones with a time first. Drag one from Not timeboxed yet onto the hours, move or resize it, or drag it back to take its time off, each with Undo. Timebox my day adds dashed suggestions to accept." },
     ],
     extras: ["urgent"],
     faqs: ["Timeboxes and check-ins: how do they work?", "How do I use the timeline with the keyboard?", "How does the timeline work on a phone?", "Does Timebox my day write to my calendar?", "What is the moment card?", "What's on Today on a phone?", "What's in Today's urgent strip?", "Can I look at another day?", "Does checking off a to-do change DevOps?", "How do I wrap up a story?", "What is a story card?", "What is the line across today?", "How does FocusTime know I'm off?", "Why can't I move some of my old timeboxes?"],
@@ -694,11 +693,8 @@ export const RENAMED = {
   rows: [
     ["Coopilot", "FocusTime"],
     ["Today (the tab)", "Day"],
-    ["Plan the day, Plan today", "+ Add on a block, on Day or Week"],
-    ["Week › Plan (Plan the week, Commit)", "+ Add on a block (nothing to confirm since CF-1)"],
-    ["Details (the panel), Add work (the panel)", "A block's panel: + Add, a click on the block, A or Enter"],
-    ["Add an intention, Add a work item (a block's ⋯)", "The Add box in a block's panel"],
-    ["This week chips on Day", "This week's features in a block's panel"],
+    ["Plan the day, Plan today, Week › Plan (Commit)", "+ Add on a block"],
+    ["Details, Add work (panels)", "A block's panel"],
     ["Week › Board", "Week"],
     ["Week › Status", "Status (its own tab)"],
     ["Roadmap", "Ahead, and its Grid"],
