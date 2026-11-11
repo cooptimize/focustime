@@ -10,8 +10,6 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import type { DevOpsLogView, DevOpsPreview, DevOpsResult } from "../actions/types.ts";
 import type { StateInfo } from "../plan/devopswrite.ts";
 import type { DraftStory } from "../plan/types.ts";
-import { parentChoices } from "../plan/devopswrite.ts";
-import { DevOpsWork } from "./work.ts";
 import { ActionRefusal, call } from "./api.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 
@@ -22,6 +20,8 @@ export type DevOpsChange =
   | { kind: "state"; itemId: number; state: string; comment?: string; followUpId?: number }
   | { kind: "comment"; itemId: number; text: string }
   | { kind: "create"; draftId: number; /** PV-1: the story's type (the parent type's default child), when the parent takes it. */ type?: string }
+  /** QC-1: the New form's create, at any level: everything optional but the title (a draft's values fill the rest). */
+  | { kind: "new_item"; title?: string; type?: string; parentId?: number | null; assignTo?: string | null; date?: string | null; description?: string | null; size?: number | null; draftId?: number }
   /** PV-1: Take one: a teammate's open story assigned to me. */
   | { kind: "assign"; itemId: number }
   /** AH-1: my pending changes in Ahead for one item (dates, size, assignee), one patch. */
@@ -47,7 +47,7 @@ export type DevOpsWriteEnv = {
    * Preview one change or several (at most 10), then the dialog. PV-1: `settled` hears how it ended once: confirmed
    * (every change confirmed), or not, and whether anything was sent to DevOps (a cancel before Confirm sends nothing).
    */
-  begin: (clientKey: string, changes: DevOpsChange[], settled?: Settled) => Promise<void>;
+  begin: (clientKey: string, changes: DevOpsChange[], settled?: Settled, opts?: { /** QC-1: a refused preview goes to `settled` (the caller shows it) instead of a toast. */ inline?: boolean }) => Promise<void>;
   /** The state picker for "Mark done in DevOps". */
   markDone: (t: { clientKey: string; itemId: number; title: string; followUpId?: number }) => void;
   /** The create preview, with the draft's saved values (step 15.3: edited in the draft editor). */
@@ -63,7 +63,7 @@ export const DevOpsWriteCtx = createContext<DevOpsWriteEnv | null>(null);
 export const useDevOpsWrite = () => useContext(DevOpsWriteCtx);
 
 type Row = { preview: DevOpsPreview; result: DevOpsResult | { error: string; status: number } | null };
-export type Settled = (r: { confirmed: boolean; sent: boolean }) => void;
+export type Settled = (r: { confirmed: boolean; sent: boolean; /** QC-1: why no preview opened (inline begins only). */ error?: string; /** QC-1: what was created, once confirmed. */ created?: { itemId: number; url: string | null }[] }) => void;
 type Flow = { clientKey: string; changes: DevOpsChange[]; rows: Row[]; busy: boolean; error: string | null; settled?: Settled | undefined };
 /** CP-1: how the preview names and colors a client. */
 type ClientLook = { name: (clientKey: string) => string; color: (clientKey: string) => string | undefined };
@@ -79,14 +79,18 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
   const { onDone: reload, openSettings } = o;
   const onDone = useCallback(() => (setVersion((v) => v + 1), reload()), [reload]);
   const begin = useCallback(
-    async (clientKey: string, changes: DevOpsChange[], settled?: Settled) => {
+    async (clientKey: string, changes: DevOpsChange[], settled?: Settled, opts?: { inline?: boolean }) => {
       try {
         const r = await call<{ previews: DevOpsPreview[]; nothing: string[]; refused?: { itemId: number | null; error: string }[] }>("devops.preview", { clientKey, changes });
         // AH-1: items of a change set that were refused (a conflict, no right) are said once; the rest go on.
         if (r.refused?.length) notify(r.refused.length === 1 ? r.refused[0]!.error : `${r.refused.length} items weren't previewed: ${r.refused.map((x) => (x.itemId ? `#${x.itemId}` : "one")).join(", ")}. See the review.`);
-        if (!r.previews.length) return void (r.refused?.length ? null : notify(r.nothing[0] ?? "Nothing to change in DevOps"), settled?.({ confirmed: false, sent: false }));
+        if (!r.previews.length) {
+          if (opts?.inline && !r.refused?.length) return void settled?.({ confirmed: false, sent: false, error: r.nothing[0] ?? "Nothing to change in DevOps" });
+          return void (r.refused?.length ? null : notify(r.nothing[0] ?? "Nothing to change in DevOps"), settled?.({ confirmed: false, sent: false }));
+        }
         setFlow({ clientKey, changes, rows: r.previews.map((preview) => ({ preview, result: null })), busy: false, error: null, settled });
       } catch (e) {
+        if (opts?.inline) return void settled?.({ confirmed: false, sent: false, error: errText(e) });
         settled?.({ confirmed: false, sent: false });
         if (e instanceof ActionRefusal && e.code === "no_write_pat") return void notify(`${e.message}.`);
         notify(errText(e));
@@ -117,7 +121,8 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
         const ok = rows.filter((r) => r.result && "confirmed" in r.result && r.result.confirmed);
         if (ok.length === rows.length) {
           setFlow(null);
-          f.settled?.({ confirmed: true, sent: true });
+          const created = rows.flatMap((r) => (r.preview.op === "create" && r.result && "confirmed" in r.result && r.result.itemId ? [{ itemId: r.result.itemId, url: r.result.url ?? null }] : []));
+          f.settled?.({ confirmed: true, sent: true, ...(created.length ? { created } : {}) });
           notify(ok.length === 1 ? (ok[0]!.result as DevOpsResult).message : `${ok.length} changes made in DevOps`);
         } else setFlow({ ...f, rows, busy: false, error: null });
       } catch (e) {
@@ -130,7 +135,8 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
     can: (k) => o.allowed.includes(k),
     begin,
     markDone: (t) => setAsk({ kind: "state", ...t }),
-    create: (clientKey, drafts) => void begin(clientKey, drafts.slice(0, 10).map((d) => ({ kind: "create" as const, draftId: d.id }))),
+    // QC-1: a draft's Create in DevOps opens the preview straight away, at any level, with or without a parent.
+    create: (clientKey, drafts) => void begin(clientKey, drafts.slice(0, 10).map((d) => ({ kind: "new_item" as const, draftId: d.id }))),
     targetDate: (t) => setAsk({ kind: "target", ...t }),
     enable: () => openSettings(),
     version,
@@ -416,49 +422,14 @@ export function DevOpsAction({ clientKey, label, onRun, className = "mini" }: { 
 }
 
 /**
- * "Create in DevOps" for one draft (or several under one parent). A draft with no parent first asks for one (D257):
- * that client's open features for a story, open epics for a draft feature. Nothing is created without a parent.
+ * "Create in DevOps" for one draft (or several): QC-1 opens the write preview straight away, at any level. A parent is
+ * optional (DevOps never needs one; the project's default area and iteration then); the preview says what it will be.
  */
 export function CreateInDevOps({ drafts, label }: { drafts: DraftStory[]; label?: string }): ReactNode {
   const env = useDevOpsWrite();
-  const work = useContext(DevOpsWork);
-  const [choosing, setChoosing] = useState(false);
   const d0 = drafts[0];
   if (!env || !d0) return null;
-  const loose = drafts.filter((d) => d.parentItemId === null);
-  if (loose.length && drafts.length > 1) return null;
-  if (!loose.length) return <DevOpsAction clientKey={d0.clientKey} label={label ?? "Create in DevOps"} onRun={(w) => w.create(d0.clientKey, drafts)} />;
-  const kind = d0.level === "feature" ? "epic" : "feature";
-  if (!choosing) return <DevOpsAction clientKey={d0.clientKey} label={label ?? "Create in DevOps"} onRun={() => setChoosing(true)} />;
-  const options = parentChoices(work.get(d0.clientKey)?.items ?? [], d0.level === "feature" ? "feature" : "story");
-  const choose = async (parentItemId: number) => {
-    try {
-      const r = await call<{ draft: DraftStory }>("draft.set_parent", { id: d0.id, parentItemId });
-      setChoosing(false);
-      env.create(d0.clientKey, [r.draft]);
-    } catch (e) {
-      notify(errText(e));
-    }
-  };
-  return (
-    <span className="dw-parent" role="group" aria-label={`Choose a parent for ${d0.title}`}>
-      {options.length ? (
-        <select autoFocus aria-label={`Parent ${kind}`} value="" onChange={(e) => e.target.value && void choose(Number(e.target.value))}>
-          <option value="">Choose a parent {kind}…</option>
-          {options.map((i) => (
-            <option key={i.id} value={i.id}>
-              #{i.id} {i.title}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <span className="muted dw-hint">No open {kind}s for this client in DevOps yet. Add one there first</span>
-      )}
-      <button type="button" className="mini quiet" onClick={() => setChoosing(false)}>
-        Cancel
-      </button>
-    </span>
-  );
+  return <DevOpsAction clientKey={d0.clientKey} label={label ?? "Create in DevOps"} onRun={(w) => w.create(d0.clientKey, drafts)} />;
 }
 
 const OP_WORD: Record<string, string> = { state: "State changed", comment: "Comment added", create: "Created", target_date: "Target date set", undo_state: "Undo: state put back", undo_comment: "Undo: comment deleted", undo_create: "Undo: set to Removed", undo_target_date: "Undo: target date put back", description: "Description changed", undo_description: "Undo: description put back", fields: "Dates, size or owner changed", undo_fields: "Undo: dates, size and owner put back", feedback: "Feedback sent" };

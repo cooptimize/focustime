@@ -115,6 +115,7 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["5", "L"], does: "Inbox: what needs you, in one list with views (Needs you, Promises, Waiting on, Captures and drafts and more)", command: "view.inbox" },
   { keys: ["P"], does: "Week with the block panel open (again: closed); on Ahead, Grid and Gantt (I also works)", command: "view.plan" },
   { keys: ["N", "C"], does: "Quick capture from anywhere: one line, saved at once; then sort it into a promise, a draft story or a draft feature", command: "capture.add" },
+  { keys: ["Shift N"], does: "New work item in DevOps: a story, feature, epic or any level the client's process has, from one form (Enter in the title opens the preview). On an Ahead row: new under that row", command: "ui.new_item" },
   { keys: ["W"], does: "Week with the block panel open; again to close it", command: "view.planweek" },
   { keys: ["Drag"], does: "Work from the block panel onto a block: it goes on. A to-do from a block onto the panel: it comes off the plan" },
   { keys: ["↑", "↓", "Enter"], does: "In the block panel's Add box: move through the matches and take one. With no match, Enter makes a new to-do" },

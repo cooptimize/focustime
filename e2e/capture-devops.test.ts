@@ -1,8 +1,8 @@
 // CP-1 Capture to DevOps, the main path in a real (not demo) session on fake sources, a fake DevOps (read and write)
 // and a fake AI provider behind the real ai/ service: the box (Shift+Enter, ↵, Enter), the Saved toast naming the
 // client with Undo, the chip staying put after a save, a leftover @word never moving a capture, the AI version in the
-// background ("Ready to create" in the Drafts list), the side by side preview (Use this, edit, the parent), the write
-// framework's preview naming the client, then the create; and Ctrl+Enter opening the preview at once. Edge cases are
+// background ("Ready to create" in the Drafts list), Create in DevOps going straight to the write framework's preview
+// naming the client, then the create; and Ctrl+Enter opening the New form with the AI version offered (QC-1). Edge cases are
 // unit tests (actions/draft-prepare.test.ts, store/capture-undo.test.ts, actions/devops-write.test.ts, plan/ and ui/).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
@@ -48,7 +48,7 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
     await lb?.close();
   }, T);
 
-  it("capture, Undo, the AI version in the background, the side by side preview, and the create", async () => {
+  it("capture, Undo, the AI version in the background, the straight preview, the New form, and the create", async () => {
     const dv = fakeDevOpsWrite({ org: "contoso", identities: { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "me@contoso.example" } } });
     const pats = new Map([["Adatum", WRITE_PAT]]);
     let prepares = 0;
@@ -133,52 +133,42 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
       // The parent DevOps will check, as the fake read side offers it.
       dv.add(d.ai!.parentId!, { "System.WorkItemType": "Feature", "System.Title": "Feature I own", "System.State": "Active", "System.AssignedTo": { uniqueName: "me@contoso.example" } });
 
-      // Create in DevOps: the client at the top, mine and the AI version side by side.
+      // QC-1: Create in DevOps on a draft's row goes straight to the write framework's preview, in my own words.
       await row.click();
       await page.locator(".ib-pane").getByRole("button", { name: "Create in DevOps" }).click();
-      const dialog = page.getByRole("dialog", { name: "Creating in Adatum's DevOps" });
-      await dialog.waitFor();
-      const ai = dialog.getByRole("region", { name: "AI version" });
-      const mine = dialog.getByRole("region", { name: "Yours" });
-      await expect(ai.locator(".cd-using").count()).resolves.toBe(1);
-      await expect(ai.getByLabel("Title").inputValue()).resolves.toMatch(/^Export invoices as CSV/);
-      await expect(mine.textContent()).resolves.toContain("Invoice export for finance");
-      await expect(dialog.locator(".cd-why").textContent()).resolves.toContain("It belongs with the export work");
-      await shotBoth(page, "cp1-preview-side-by-side", dialog);
-      // UI-7: Prepare again in the preview, once more.
-      const inPreview = prepares;
-      await ai.getByRole("button", { name: "Prepare again" }).click();
-      await expect.poll(() => prepares).toBe(inPreview + 1);
-      await expect.poll(() => ai.getByRole("button", { name: "Prepare again" }).isEnabled()).toBe(true);
-      await expect(ai.getByLabel("Title").inputValue()).resolves.toMatch(/^Export invoices as CSV/);
-      // Keep mine, then back to the AI version, and edit it.
-      await mine.getByRole("button", { name: "Use this" }).click();
-      await expect(mine.getByLabel("Title").inputValue()).resolves.toBe("Invoice export for finance as csv");
-      await ai.getByRole("button", { name: "Use this" }).click();
-      await ai.getByLabel("Title").fill("Export the invoice list as CSV");
-      await dialog.getByRole("button", { name: "Preview in DevOps" }).click();
-
-      // The write framework's preview names the client; nothing is written before Create.
       const preview = page.getByRole("dialog", { name: "Create a DevOps item" });
       await preview.waitFor();
       await expect(preview.locator(".dw-client").textContent()).resolves.toContain("Creating in Adatum's DevOps");
       await expect(preview.locator(".wd-where").textContent()).resolves.toContain("DevOps · Adatum · contoso");
-      await expect(preview.textContent()).resolves.toContain("Export the invoice list as CSV");
+      await expect(preview.textContent()).resolves.toContain("Invoice export for finance as csv");
       expect(dv.writes().filter((w) => w.method === "POST")).toEqual([]);
       await shotBoth(page, "cp1-write-preview", preview);
       await preview.getByRole("button", { name: "Create in DevOps" }).click();
       await expect.poll(() => dv.writes().filter((w) => w.method === "POST").length).toBe(1);
       await expect.poll(async () => (await drafts(page)).some((x) => x.id === d.id)).toBe(false);
 
-      // Ctrl+Enter: saves and opens the preview at once (AI still writing, or ready).
+      // Ctrl+Enter: saves and opens the New form; the AI version is offered under More once it lands, never required.
       await page.locator(".ib-capture .cap-box .cap-kinds [role=radio]", { hasText: "Draft story" }).click();
       await box(page).fill("story: retry failed syncs");
       await page.locator(".ib-capture .cap-box .cap-kinds [role=radio]", { hasText: "Draft story" }).click();
       await box(page).press("Control+Enter");
-      const fast = page.getByRole("dialog", { name: "Creating in Adatum's DevOps" });
-      await fast.waitFor();
-      await expect.poll(() => fast.getByRole("region", { name: "AI version" }).getByLabel("Title").inputValue().catch(() => ""), { timeout: 30_000 }).toMatch(/^Export invoices as CSV/);
-      await fast.getByRole("button", { name: "Not now" }).click();
+      const form = page.getByRole("dialog", { name: /^New in .*DevOps$/ });
+      await form.waitFor();
+      await expect.poll(() => form.locator("#nf-title").inputValue()).toBe("Retry failed syncs");
+      await form.getByRole("button", { name: /More: description and size/ }).click();
+      const useAi = form.getByRole("button", { name: "Use the AI version" });
+      await expect.poll(() => useAi.count(), { timeout: 30_000 }).toBe(1);
+      await useAi.click();
+      await expect(form.locator("#nf-title").inputValue()).resolves.toMatch(/^Export invoices as CSV/);
+      await shotBoth(page, "cp1-new-form-ai", form);
+      await form.locator("#nf-title").fill("Export the invoice list as CSV");
+      await form.locator("#nf-title").press("Enter");
+      const second = page.getByRole("dialog", { name: "Create a DevOps item" });
+      await second.waitFor();
+      await expect(second.textContent()).resolves.toContain("Export the invoice list as CSV");
+      expect(dv.writes().filter((w) => w.method === "POST")).toHaveLength(1);
+      await second.getByRole("button", { name: "Create in DevOps" }).click();
+      await expect.poll(() => dv.writes().filter((w) => w.method === "POST").length).toBe(2);
 
       if (SHOTS) {
         // The phone (390 wide, a 17px root font as on iPhone): the capture sheet with ↵ and the toast, the preview stacked.
@@ -196,7 +186,7 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
         await page.keyboard.press("Escape");
         await page.locator(".dw-drafts-section .cap-item").first().getByRole("button", { name: "Create in DevOps" }).click();
-        const ph = page.getByRole("dialog", { name: "Creating in Adatum's DevOps" });
+        const ph = page.getByRole("dialog", { name: "Create a DevOps item" });
         await ph.waitFor();
         await page.waitForTimeout(400);
         await page.screenshot({ path: `${SHOTS}/cp1-phone-preview.png` });

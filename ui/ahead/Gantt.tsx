@@ -28,6 +28,7 @@ import { MenuCtx } from "../Menus.tsx";
 import { HoursStepper } from "../plan/Estimate.tsx";
 import { placePopover } from "../popover-place.ts";
 import { TypeIcon } from "../TypeIcon.tsx";
+import { NewUnder } from "./NewUnder.tsx";
 import { WorkLink } from "../WorkLink.tsx";
 import { ganttLabelW, useWindowScale } from "./layout.ts";
 import { useAhead } from "./Ahead.tsx";
@@ -605,6 +606,7 @@ function GanttRow({ node, open, kids, bar: b, sum, callouts, env, freeze, runFix
             {r.item.title}
           </WorkLink>
         </span>
+        <NewUnder clientKey={r.clientKey} item={r.item} />
       </div>
       <div className="pa-track" role="gridcell" aria-label={barLabel || `${r.item.title}: no dates`}>
         {capL && <span className={`pa-capmark before${early ? " early" : ""}`} title={capL} aria-label={capL} role="img" />}

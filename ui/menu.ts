@@ -59,6 +59,7 @@ export type MenuItem = {
   next?: () => MenuStep;
 };
 /** FN-1: the one label for copying a work item's link, in every item's ⋯ menu. */
+import { newWords } from "../plan/quick-create.ts";
 export const COPY_LINK = "Copy DevOps link";
 /** A row menu's header: a label naming the row it was opened from, never an action (D459). */
 export type MenuHead = { text: string; full: string };
@@ -229,6 +230,12 @@ export type MenuEnv = {
   /** Quick capture (step 9): the capture box anywhere, and the Capture view (inbox and notes). */
   openCapture: (kind?: import("../plan/capture.ts").BoxKind) => void;
   openCaptures: () => void;
+  /** QC-1: the New form, opened from the command menu (a type by the process's own name, or the default). */
+  openNew?: ((o: { type?: string }) => void) | undefined;
+  /** QC-1: a draft's Create in DevOps, straight to the write preview (or Enable DevOps writes without my PAT). */
+  createDraft?: ((clientKey: string, draftId: number) => void) | undefined;
+  /** QC-1: the types the current client's process can create, top-down ("New feature", "New epic"). */
+  newTypes?: readonly string[] | undefined;
   /** The Plan button (step 10): the ritual for the moment. */
   openRitual: () => void;
   planWeekOpen: IsoDate | null;
@@ -400,6 +407,8 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
     title: p.title,
     head: rowHead({ id: p.itemId, title: p.title, client: clientNameOf(env, p.clientKey) }),
     items: [
+      // QC-1: a draft's row: Create in DevOps opens the write preview; created, the item takes its place here.
+      ...(p.kind === "draft" && p.draftId !== null && env.createDraft ? [{ id: "create", label: "Create in DevOps", action: "devops.preview", run: () => env.createDraft!(p.clientKey, p.draftId!) } satisfies MenuItem] : []),
       // FN-1: the title opens the story card; the menu copies the DevOps link (no Open in DevOps).
       { id: "copy", label: COPY_LINK, ...(p.itemUrl ? {} : { disabled: p.kind === "intention" ? "An intention has no work item" : "A draft story isn't in DevOps yet" }), run: () => { if (p.itemUrl) env.copyLink(p.clientKey, p.itemUrl); } },
       { id: "size", label: "Set size", hint: p.size ?? "Size?", action: "pick.set_size", ...(past ? { disabled: PAST } : {}), next: () => sizeStep(env, p) },
@@ -1625,6 +1634,11 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "draft.prepare":
     case "draft.get":
       return { run: env.openCaptures };
+    // QC-1: the New form; its own Save as draft saves.
+    case "new.options":
+    case "draft.add":
+    case "draft.save":
+      return env.openNew ? { run: () => env.openNew!({}) } : { disabled: "Sign in to create work in DevOps" };
   }
 }
 
@@ -1697,6 +1711,9 @@ function uiCommands(env: MenuEnv): MenuItem[] {
       hint: "O",
       ...(env.focusedItem ? { run: () => env.openLink(env.focusedItem!.clientKey, env.focusedItem!.url) } : { disabled: "Focus a work item first (Tab to it)" }),
     },
+    // QC-1: "New feature", "New epic", "New story", one per level of the current client's process, by its own names.
+    ...(env.openNew ? (env.newTypes ?? []).map((t) => ({ id: `ui.new.${t}`, action: "ui.new_item", group: "Work items", label: newWords(t), aka: ["create", "add", "new item", "devops"], run: () => env.openNew!({ type: t }) })) : []),
+    { id: "ui.new_item", action: "ui.new_item", group: "Work items", label: "New work item in DevOps", aka: ["create", "new feature", "new epic", "new story", "add to devops"], hint: "Shift N", ...(env.openNew ? { run: () => env.openNew!({}) } : { disabled: "Sign in to create work in DevOps" }) },
     { id: "ui.guide", action: "ui.guide", group: "Help", label: "Guide: start here, your first day and every area", hint: "?", run: () => env.showGuide() },
     // UI-5: each tour by name ("Show me: Plan your week"), and each Guide section ("Guide: Ahead").
     ...TOURS.map((t) => ({ id: `ui.tour.${t.id}`, action: "ui.guide", group: "Help", label: `Show me: ${t.title}`, aka: ["tour"], ...(env.startTour ? { run: () => env.startTour!(t.id) } : { disabled: "Sign in to see it on your own screens" }) })),

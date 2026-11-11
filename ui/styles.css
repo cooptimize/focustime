@@ -4645,35 +4645,11 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .dw-draft-state { margin-left: 8px; font-size: var(--fs-2); font-weight: 500; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap; }
 .dw-draft-state.ready { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 50%, var(--border)); }
 .dw-draft-state.needs_parent, .dw-draft-state.writing, .dw-draft-state.no_pat { color: var(--watch); border-color: color-mix(in oklab, var(--watch) 50%, var(--border)); }
-/* The create dialog: the client at the top in its color, my text and the AI version side by side. */
-.create-draft { width: min(1040px, 100%); }
+/* A write dialog's head: the client at the top in its color (the New form, the write preview). */
 .cd-client { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-4); font-weight: 600; }
 .cd-client .swatch { width: 12px; height: 12px; border-radius: 3px; background: var(--c, var(--client-none)); flex: none; }
 .dw-client { padding: 6px 10px; border-left: 4px solid var(--c, var(--client-none)); background: color-mix(in oklab, var(--c, var(--client-none)) 10%, var(--surface)); border-radius: 6px; }
 .cd-head { border-bottom: 3px solid var(--c, var(--border)); padding-bottom: 8px; }
-.cd-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.cd-side { display: grid; gap: 8px; align-content: start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--raised); min-width: 0; }
-.cd-side.chosen { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--surface); }
-.cd-side-head { display: flex; align-items: center; gap: 8px; }
-.cd-side-head h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
-.cd-side-head > :last-child { margin-left: auto; }
-.cd-using { font-size: var(--fs-2); color: var(--accent); font-weight: 500; }
-.cd-side .set-field { display: grid; gap: 4px; }
-.cd-side textarea { font: inherit; font-size: var(--fs-3); color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 8px; }
-.cd-side textarea:focus-visible, .cd-side input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.cd-read { margin: 0; display: grid; gap: 2px 0; font-size: var(--fs-3); }
-.cd-read dt { font-size: var(--fs-2); color: var(--text-muted); margin-top: 6px; }
-.cd-read dd { margin: 0; overflow-wrap: anywhere; }
-.cd-pre { white-space: pre-line; }
-.cd-type, .cd-ai-note { margin: 0; font-size: var(--fs-2); }
-.cd-parent { display: grid; gap: 4px; }
-.cd-parent .item-lookup:not(.linked) { display: block; }
-.cd-parent .item-lookup input { width: 100%; }
-.cd-why { font-size: var(--fs-2); }
-.cd-nopat { display: grid; gap: 8px; justify-items: start; }
-@media (max-width: 900px) {
-  .cd-sides { grid-template-columns: minmax(0, 1fr); }
-}
 @media (max-width: 599.98px) {
   .cap-input { --cap-line: max(var(--tap), calc(var(--fs-4) * 1.4 + 18px)); }
   .cap-box.large .cap-input { --cap-line: max(var(--tap), calc(var(--fs-4) * 1.4 + 26px)); }
@@ -6558,3 +6534,33 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .tt-add { margin: 6px 0 0; }
 .ph-add { margin: 6px 0 0; width: 100%; }
 @media (max-width: 1100px) { .today-view.day-view.with-panel { padding-right: calc(var(--aw-w) + 16px); } }
+
+/* QC-1: the one New form. Labels on the left, one control per row; More folds description and size. */
+.new-form { width: min(640px, 100%); }
+.nf-backdrop[hidden] { display: none; }
+.nf-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 14px; align-items: center; }
+.nf-grid > .set-label { justify-self: start; }
+.nf-title, .nf-parent, .nf-date, .nf-size, .nf-people, .nf-types { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.nf-title input { flex: 1 1 100%; min-width: 0; font-size: var(--fs-4); padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); }
+.nf-title input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.nf-size input { width: 8ch; padding: 4px 6px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); }
+.nf-select { min-width: 0; max-width: 100%; }
+.nf-fixed { font-weight: 500; }
+.nf-why, .nf-reading { font-size: var(--fs-2); }
+.nf-line { flex-basis: 100%; }
+.nf-more { justify-self: start; }
+.nf-more-body textarea { width: 100%; }
+.nf-ai { display: block; margin-top: 4px; font-size: var(--fs-2); }
+.nf-nopat { margin: 0; padding: 6px 10px; border-left: 3px solid var(--watch); background: color-mix(in oklab, var(--watch) 10%, var(--surface)); border-radius: 6px; }
+@media (max-width: 640px) {
+  .nf-grid { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .nf-grid > .set-label { margin-top: 6px; }
+}
+/* Ahead: "+ New" beside Refresh, and "+ New under" on a row, shown on hover or focus within. */
+.ah-new-under { visibility: hidden; margin-left: 6px; font-size: var(--fs-2); }
+/* In Gantt's label column it takes no space, so titles and bars keep their rows (AH-6). */
+.pa-label { position: relative; }
+.pa-label .ah-new-under { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); margin: 0; background: var(--surface); box-shadow: 0 0 0 4px var(--surface); }
+.ah-row:is(:hover, :focus-within) .ah-new-under, .pa-row:is(:hover, :focus-within) .ah-new-under, .bl-row:is(:hover, :focus-within) .ah-new-under, .ah-new-under:focus-visible { visibility: visible; }
+@media (hover: none) { .ah-new-under { visibility: visible; } }
+.bd-by-hand { margin-right: auto; }

@@ -38,6 +38,7 @@ import { openSend } from "./send-event.ts";
 import { DEFAULT_FEATURE_MINUTES } from "../plan/estimate.ts";
 import { AddSection } from "./plan/AddPane.tsx";
 import { CloseButton } from "./CloseButton.tsx";
+import { useOpenNew } from "./NewItem.tsx";
 import { WeekDnd, pickDragged, useDragSource } from "./WeekStories.tsx";
 import { FromYourTeam, useTeamCommit } from "./Team.tsx";
 import { CarryCtx, CarrySummary } from "./Carry.tsx";
@@ -478,7 +479,10 @@ function AddBox({ ctx, groups, drafts, followUps, work, more, onTyping, clientNa
   useEffect(() => {
     if (focusAdd) input.current?.focus({ preventScroll: true });
   }, [focusAdd, at.date, at.half]);
-  const model = useMemo(() => searchPanel({ clientKey, work, followUps, drafts, ...(more ? { more } : {}) }, query), [clientKey, work, followUps, drafts, more, query]);
+  // QC-1: "New feature: <text>" in the process's own word, when the New form is here and the day isn't past.
+  const openNew = useOpenNew();
+  const featureWord = openNew && !ctx.past ? ((work as { types?: { name: string; level: string | null }[] } | undefined)?.types?.find((t) => t.level === "parent")?.name ?? "feature") : null;
+  const model = useMemo(() => searchPanel({ clientKey, work, followUps, drafts, ...(more ? { more } : {}) }, query, featureWord), [clientKey, work, followUps, drafts, more, query, featureWord]);
   const { open: openMenu } = useContext(MenuCtx);
   const rows: (Result<FollowUpView> | NewRow)[] = model ? [...model.results, ...model.news] : [];
   useEffect(() => setHl(0), [query]);
@@ -505,7 +509,12 @@ function AddBox({ ctx, groups, drafts, followUps, work, more, onTyping, clientNa
       else if (r.kind === "promise") await add(r.key, { clientKey, itemId: addKey({ followUpId: r.followUp.id }), size: null, title: r.followUp.what, add: { followUpId: r.followUp.id } });
       else if (r.kind === "todo") await ctx.place({ clientKey, itemId: addKey({ intention: r.text }), size: null, title: r.text, add: { intention: r.text } });
       else if ("draft" in r) await add(r.key, { clientKey, itemId: addKey({ draftId: r.draft.id }), size: r.draft.size, title: r.draft.title, add: { draftId: r.draft.id } });
-      else {
+      else if (r.kind === "feature") {
+        // QC-1: the New form, on the feature tier with this title; what it saves goes on this block first, so the
+        // created feature is the one on the block (cancelled, it stays there as a draft).
+        openNew?.({ from: "panel", clientKey, title: r.text, at: { date: at.date, half: at.half } }, { place: async (d) => (await ctx.place({ clientKey, itemId: addKey({ draftId: d.id }), size: null, title: d.title, add: { draftId: d.id } }), onChanged()) });
+        return;
+      } else {
         const made = await call<{ draft: { id: number } }>("draft.add_story", { clientKey, parentItemId: under, title: r.text });
         await ctx.place({ clientKey, itemId: addKey({ draftId: made.draft.id }), size: null, title: r.text, add: { draftId: made.draft.id } });
         onChanged();

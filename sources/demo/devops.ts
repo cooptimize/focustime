@@ -61,13 +61,13 @@ export function parseTeammate(v: unknown): TeammateChange | null {
 type DemoComment = { id: number; text: string; isDeleted: boolean; createdBy: string; createdDate: string; /** SR-1 */ createdByName?: string; modifiedDate?: string };
 
 export const STATES: Record<string, { name: string; category: string }[]> = Object.fromEntries(
-  ["Epic", "Feature", "User Story", "Task", "Bug"].map((t) => [t, [{ name: "New", category: "Proposed" }, { name: "Active", category: "InProgress" }, { name: "Resolved", category: "Resolved" }, { name: "Closed", category: "Completed" }, { name: "Removed", category: "Removed" }]]),
+  ["Domain", "Epic", "Feature", "User Story", "Task", "Bug"].map((t) => [t, [{ name: "New", category: "Proposed" }, { name: "Active", category: "InProgress" }, { name: "Resolved", category: "Resolved" }, { name: "Closed", category: "Completed" }, { name: "Removed", category: "Removed" }]]),
 );
 const T = "Microsoft.VSTS.Scheduling.TargetDate";
 const S = "Microsoft.VSTS.Scheduling.StartDate";
 const AC = "Microsoft.VSTS.Common.AcceptanceCriteria";
 export const sizeRefOf = (k: DemoClientKey) => (k === "Harbor" ? "Microsoft.VSTS.Scheduling.Effort" : "Microsoft.VSTS.Scheduling.StoryPoints");
-const PORTFOLIO = new Set(["Epic", "Feature"]);
+const PORTFOLIO = new Set(["Domain", "Epic", "Feature"]);
 const typeFields = (k: DemoClientKey, type: string) => ["System.Title", "System.Description", "System.AssignedTo", "System.State", T, ...(PORTFOLIO.has(type) ? [S] : [AC, sizeRefOf(k)]), /* TX-1: one client whose stories have Remaining Work, and others that take a comment instead. */ ...(k === "Cooptimize" && !PORTFOLIO.has(type) ? ["Microsoft.VSTS.Scheduling.RemainingWork"] : []), ...(type === "Bug" ? ["Microsoft.VSTS.TCM.ReproSteps"] : [])];
 const FIELDS = [
   { referenceName: "System.Title", name: "Title", type: "string" },
@@ -86,6 +86,9 @@ const PC = {
     { name: "Features", defaultWorkItemType: { name: "Feature" }, workItemTypes: [{ name: "Feature" }] },
   ],
 };
+
+/** QC-1: Cooptimize's demo process has Domain above Epic (the read side's demoProcess says the same). */
+const pcOf = (k: DemoClientKey) => (k === "Cooptimize" ? { ...PC, portfolioBacklogs: [{ name: "Domains", defaultWorkItemType: { name: "Domain" }, workItemTypes: [{ name: "Domain" }] }, ...PC.portfolioBacklogs] } : PC);
 
 /** Where an item lives, as a URL (the demo's fictional orgs; nothing is ever fetched from it). */
 export const itemUrlOf = (k: DemoClientKey, id: number) => {
@@ -190,7 +193,7 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
       return json({ id, url: `https://dev.azure.com/${org}/_apis/wit/attachments/${id}?fileName=${encodeURIComponent(url.searchParams.get("fileName") ?? "file")}` }, 201);
     }
     const rest = url.pathname.split("/").slice(3).map(decodeURIComponent).join("/");
-    if (rest === "_apis/work/processconfiguration") return json(PC);
+    if (rest === "_apis/work/processconfiguration") return json(pcOf(clientKey));
     if (rest === "_apis/wit/fields") return json({ value: FIELDS });
     let m = /^_apis\/wit\/workitemtypes\/(.+)\/states$/.exec(rest);
     if (m) return json({ value: STATES[m[1]!] ?? [] });
