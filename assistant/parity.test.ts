@@ -294,7 +294,7 @@ describe("TB-3 parity: the same result and the same writes through Teams", () =>
       note: { kind: "note", text: "A note", link },
       section: { kind: "section", title: "A section", lines: [{ text: "A line", link }] },
       item: { kind: "item", clientKey: "c", clientName: "C", id: 1, title: "An item", type: "Feature", state: "Active", owner: null, start: null, target: null, children: [], link, devopsUrl: "https://dev.azure.com/contoso/p/_workitems/edit/1" },
-      block: { kind: "block", clientKey: "c", clientName: "C", date: "2026-11-05", half: "AM", time: "9:00 to 12:00", status: "Fits", picks: [], link },
+      block: { kind: "block", clientKey: "c", clientName: "C", date: "2026-11-05", half: "AM", time: "9:00 to 12:00", status: "0 of 0 done", picks: [], link },
       pick: { kind: "pick", id: 1, clientKey: "c", clientName: "C", title: "A to-do", date: "2026-11-05", half: "AM", time: null, done: false, link },
       send: { kind: "send", id: 1, clientKey: "c", clientName: "C", title: "A send", to: "Dana", from: "Sam", tier: "suggested", weekStart: "2026-11-02", state: "Open", link },
       promise: { kind: "promise", id: 1, clientKey: "c", clientName: "C", who: "You", what: "A promise", toWhom: null, due: null, link },

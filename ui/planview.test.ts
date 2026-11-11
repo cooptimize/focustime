@@ -6,7 +6,6 @@ import { config } from "../week/test-helpers.ts";
 import type { WorkItem } from "../week/types.ts";
 import { cardPlan, resumeSlots, featuresOn } from "./planview.ts";
 import { noStanding, pattern } from "../week/test-helpers.ts";
-import { fitLabel } from "./planday.ts";
 
 // Mon Nov 2 AM, 9:00–12:30 with no meetings: 3h 30m free. The clock is before the block starts.
 const slot = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config }).days[0]!.am;
@@ -30,12 +29,11 @@ describe("a card's plan (step 6.1)", () => {
     const cp = cardPlan(plan([pick({ itemId: 2, size: "M" }), pick({ kind: "intention", itemId: null, size: "S" })]), slot, "Adatum", ITEMS, NOW, SIZE_MINUTES);
     expect(cp.picks).toHaveLength(2);
     expect(cp.fit).toEqual({ kind: "fits", spare: 30 }); // 210 free − (120 + 60)
-    expect(fitLabel(cp.fit!)).toBe("fits, 30m to spare");
     expect(cp.collapsed).toBe(true);
   });
 
   it("over by the excess; an unsized pick counts as 1h by default (SZ-1; L is 4h)", () => {
-    expect(fitLabel(cardPlan(plan([pick({ size: "L" })]), slot, "Adatum", ITEMS, NOW, SIZE_MINUTES).fit!)).toBe("too much: 30m more than the free time"); // 240 of 210
+    expect(cardPlan(plan([pick({ size: "L" })]), slot, "Adatum", ITEMS, NOW, SIZE_MINUTES).fit).toEqual({ kind: "over", by: 30 }); // 240 of 210
     expect(cardPlan(plan([pick({ size: null }), pick({ itemId: 3, size: "S" })]), slot, "Adatum", ITEMS, NOW, SIZE_MINUTES).fit).toEqual({ kind: "fits", spare: 90 });
   });
 

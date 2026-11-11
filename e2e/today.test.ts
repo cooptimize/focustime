@@ -123,26 +123,26 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     await page.close();
   }, T);
 
-  it("Check-in: done picks are a count; each pick that doesn't fit has exactly one suggested move; fit is never the risk color", async () => {
+  it("Check-in: done picks are a count; every unfinished to-do has exactly one move; no fit words, nothing in the risk color", async () => {
     const { page, errors } = await freshPage(h);
     await seed(page);
     await go(page, "#/today/checkin");
     await page.waitForSelector("main.mode-checkin .today-block");
     await expect(page.locator("main.mode-checkin .pick-row.done").count()).resolves.toBe(0);
     await expect(page.locator(".today-block", { hasText: "Cooptimize" }).locator(".tb-count").textContent()).resolves.toBe("1 done");
-    const nofit = page.locator(".pick-row.nofit");
-    expect(await nofit.count()).toBeGreaterThan(0);
-    for (const row of await nofit.all()) await expect(row.locator(".ci-move").count()).resolves.toBe(1);
-    // The risk color, resolved, against every fit word, amber line and non-fitting row edge.
+    // QT-2: no "fits" or "doesn't fit", no dashed amber edge; each unfinished to-do has its one move.
+    expect(await page.locator(".pick-row.nofit, .pr-fit").count()).toBe(0);
+    const rows = page.locator("main.mode-checkin .today-block .pick-row:not(.done)");
+    expect(await rows.count()).toBeGreaterThan(0);
+    for (const row of await rows.all()) await expect(row.locator(".ci-move").count()).resolves.toBe(1);
+    // The risk color, resolved, against every line and move button.
     const colors = await page.evaluate(() => {
       const probe = document.createElement("span");
       probe.style.color = "var(--risk)";
       document.body.appendChild(probe);
       const risk = getComputedStyle(probe).color;
       probe.remove();
-      const used = [...document.querySelectorAll(".pr-fit, .tb-line, .ci-move")].map((e) => getComputedStyle(e).color);
-      const edges = [...document.querySelectorAll(".pick-row.nofit")].map((e) => getComputedStyle(e).borderTopColor);
-      return { risk, used: [...used, ...edges] };
+      return { risk, used: [...document.querySelectorAll(".tb-line, .ci-move")].map((e) => getComputedStyle(e).color) };
     });
     expect(colors.used.length).toBeGreaterThan(0);
     expect(colors.used).not.toContain(colors.risk);

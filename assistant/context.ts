@@ -244,7 +244,7 @@ export function forClient(ctx: AnswerContext, client: string): string {
   const out = {
     period: ctx.period.label,
     today: ctx.today,
-    days: ctx.days.map((x) => ({ date: x.date, pto: x.pto, meetingMinutes: x.meetingMinutes, freeMinutes: x.freeMinutes, blocks: x.blocks.filter((b) => b.clientKey === client).map((b) => ({ half: b.half, freeMinutes: b.freeMinutes, plannedMinutes: b.plannedMinutes, risk: b.risk })) })),
+    days: ctx.days.map((x) => ({ date: x.date, pto: x.pto, meetingMinutes: x.meetingMinutes, freeMinutes: x.freeMinutes, blocks: x.blocks.filter((b) => b.clientKey === client).map((b) => ({ half: b.half, freeMinutes: b.freeMinutes, risk: b.risk })) })),
     todos: ctx.todos.filter((t) => t.clientKey === client).map((t) => ({ pickId: t.pickId, title: q(t.title), date: t.date, half: t.half, done: t.done, minutes: t.minutes, itemId: t.itemId, feature: t.feature ? { id: t.feature.id, title: q(t.feature.title) } : null, deployment: t.deployment })),
     promises: ctx.promises.filter((p) => p.clientKey === client).map((p) => ({ id: p.id, what: q(p.what), to: p.to, due: p.due, late: p.late })),
     waiting: ctx.waiting.filter((w) => w.clientKey === client).map((w) => ({ title: q(w.title), who: w.who, due: w.due, late: w.late })),

@@ -76,7 +76,8 @@ export type AssistantService = {
 /** Proposals expire after this long (AS-1); a card past it shows Expired. */
 export const PROPOSAL_MINUTES = 15;
 
-function proposalOf(p: AsProposal): Proposal {
+/** A proposal as the bot draws it (exported for QT-2's word check). */
+export function proposalOf(p: AsProposal): Proposal {
   const note = p.preview.notes.join(" ");
   return { id: String(p.id), title: p.clientName ? `${p.title} (${p.clientName})` : p.title, whoSees: p.whoSees, changes: p.preview.rows.map((r) => ({ field: r.label, before: r.before, after: r.after })), note: note || null, expiresAt: p.expiresAt, summary: p.preview.summary, target: p.preview.target, system: p.preview.system, identity: p.preview.identity, editable: p.editable, turnId: p.turnId ?? null };
 }

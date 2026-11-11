@@ -35,7 +35,7 @@
 .guide-blockviz .q.fill { border-style: solid; border-color: transparent; background: var(--c); }
 .guide-blockviz .q.fill.alt { background: color-mix(in oklab, var(--c) 75%, var(--surface)); }
 .guide-blockviz .spill { display: flex; gap: 4px; min-height: 14px; }
-.guide-blockviz .spill i { height: 10px; border-radius: 3px; background: var(--watch); opacity: 0.75; width: calc(25% - 3px); }
+.guide-blockviz .spill i { height: 10px; border-radius: 3px; background: var(--text-muted); opacity: 0.35; width: calc(25% - 3px); } /* QT-2: hours past the free time, neutral */
 .guide-blockviz .foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
 .guide-blockviz .fitword { font-size: calc(var(--fs-4) + 3px); font-weight: 600; color: var(--ok); }
 .guide-blockviz .fitword.watch { color: var(--watch); }

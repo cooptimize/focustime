@@ -23,7 +23,7 @@ const MOVE: HandleResult = {
       { label: "Harbor Health · Validate date of birth", before: "Mon, Nov 2 afternoon", after: "Tue, Nov 3 afternoon" },
       { label: "Northwind Foods · Filter orders by date range", before: "Mon, Nov 2 morning", after: "Tue, Nov 3 morning" },
       { label: "Northwind Foods · Fix login timeout on mobile", before: "Mon, Nov 2 morning", after: "Tue, Nov 3 morning" },
-    ], notes: ["Over your Tuesday AM hours by 1h", "\"Order export API endpoint\" stays: it's already planned there"] },
+    ], notes: ["Tuesday AM: 1h free", "\"Order export API endpoint\" stays: it's already planned there"] },
     whoSees: "Only you", before: {}, after: {}, expiresAt: "2026-11-02T14:45:00Z", editable: [], state: "open",
   }],
 };

@@ -195,6 +195,8 @@ export function Day(props: Props) {
   const [tlForced, setTlForced] = useState(false);
   const clearNotice = useCallback(() => setNotice(null), []);
   const nextDay = data.week.days.find((d) => d.date > date && d.hours.segments.length > 0 && !d.pto)?.date ?? null;
+  // QT-2: the check-in's Move to… needs a day even when this week has none left (next week's first workday).
+  const checkinTo = nextDay ?? nextWorkingDay(date, (d) => hoursOn(data.hours, d).segments.length > 0, (d) => data.ptoAhead.includes(d) || !!data.week.days.find((x) => x.date === d)?.pto);
 
   const act = useCallback(
     async (action: string, input: Record<string, unknown>) => {
@@ -548,7 +550,7 @@ export function Day(props: Props) {
                   (() => {
                     const c = check.find((x) => x.half === s.half);
                     return c ? (
-                      <CheckinBlock key={s.half} slot={s} data={data} check={c} picks={picks.filter((p) => p.half === s.half)} tickable={tickable} ended={ended(s)} later={blocks.filter((b) => b.half !== s.half && !ended(b) && ms(b.start) > ms(s.start)).map((b) => ({ half: b.half, clientKey: b.focus[0]?.clientKey ?? null }))} carryTo={nextDay} nameOf={nameOf} act={act} makeUp={makeUp} />
+                      <CheckinBlock key={s.half} slot={s} data={data} check={c} picks={picks.filter((p) => p.half === s.half)} tickable={tickable} ended={ended(s)} later={blocks.filter((b) => b.half !== s.half && !ended(b) && ms(b.start) > ms(s.start)).map((b) => ({ half: b.half, clientKey: b.focus[0]?.clientKey ?? null }))} carryTo={checkinTo} nameOf={nameOf} act={act} makeUp={makeUp} />
                     ) : null;
                   })()
                 ) : (
@@ -716,7 +718,7 @@ export function stripLine(l: UrgentLine, o: { today: IsoDate; tz: string; client
 
 const MOMENTS = {
   plan: { title: "Nothing on today yet", body: "Put this week's stories into today's blocks.", button: "+ Add" },
-  checkin: { title: "Midday check-in", body: "What still fits this afternoon, with one suggested move each.", button: "Check in" },
+  checkin: { title: "Midday check-in", body: "What's done, what's left, and the free time this afternoon.", button: "Check in" },
   closeout: { title: "Close out", body: "What got done, where you left off, DevOps updates and promises.", button: "Close out" },
 } as const;
 

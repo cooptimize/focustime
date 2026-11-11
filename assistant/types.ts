@@ -72,7 +72,7 @@ export type BlockCard = {
   half: "AM" | "PM";
   /** "9:00 to 12:00". */
   time: string;
-  /** "At risk · Dentist 12:00", "Fits", "Too much planned". */
+  /** "2 of 3 done" (QT-2: never a fit word such as "Fits" or "Too much planned"). */
   status: string;
   picks: { id: number; title: string; done: boolean; size: string }[];
   link: Link;
