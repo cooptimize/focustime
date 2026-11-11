@@ -250,7 +250,7 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         const nudges = nudgesFor(me, mine, occs).map((n) => ({ ...n, clientName: nameOf(n.clientKey), dateLabel: Temporal.PlainDate.from(n.date).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" }) }));
         return { ok: true, data: { meetings: mine.map((s) => viewOf(s, nameOf(s.clientKey), users, me)), occurrences: occs.map((o) => occView(o, counts.get(o.id))), nudges } };
       }
-      case "meeting.review": return await review(ctx, store, cfg, me, input);
+      case "meeting.review": return await review(ctx, store, me, input);
       case "meeting.edit": {
         // Edit or skip one proposal (a reviewer); a decided one stays as it is.
         const o = obj(input, ["proposalId"], ["skip", "title", "description", "parentId", "type", "what", "due", "text"]);
@@ -391,7 +391,7 @@ function edited(b: ProposalBody, o: Record<string, unknown>): ProposalBody {
 }
 
 /** The review screen: the call, the occurrence, its proposals in order with quotes, and what I may do. */
-async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, input: unknown): Promise<ActionResponse> {
+async function review(ctx: MeetingContext, store: MeetingStore, me: string, input: unknown): Promise<ActionResponse> {
   const o = obj(input, ["occurrenceId"]);
   const v = store.viewer(me);
   const r = await v.occurrence(id(o.occurrenceId, "occurrenceId"));

@@ -115,8 +115,8 @@ export function meetingJob(d: MeetingJobDeps) {
       let outcome: LastRead["kind"] = "no_token";
       let by: string | null = null;
       // MC-1c: why each person's sign-in couldn't read it; the first one tried is what Admin's line says.
-      let first: { kind: "no_token" | "consent" | "missing"; by: string } | null = null;
-      const note = (kind: "no_token" | "consent" | "missing", uid: string) => void (first ??= { kind, by: uid });
+      const tried: { first: { kind: "no_token" | "consent" | "missing"; by: string } | null } = { first: null };
+      const note = (kind: "no_token" | "consent" | "missing", uid: string) => void (tried.first ??= { kind, by: uid });
       for (const uid of order(s)) {
         const p = await who(uid);
         if (!p?.graph) {
@@ -162,6 +162,7 @@ export function meetingJob(d: MeetingJobDeps) {
         }
       }
       // Who has to sign in again when nobody's sign-in could: the registrant (theirs is tried first).
+      const first = tried.first;
       if (outcome === "no_token" && first) await d.store.updateOccurrence(occ.id, { lastRead: { kind: first.kind, by: first.by, at: now.toString() } });
       else if (outcome !== "found") await d.store.updateOccurrence(occ.id, { lastRead: { kind: outcome, by: outcome === "no_token" ? s.registrantId : by, at: now.toString() } });
       if (outcome === "not_yet" || outcome === "no_token" || outcome === "busy") {
